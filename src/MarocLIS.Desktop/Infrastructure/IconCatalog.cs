@@ -46,6 +46,7 @@ public static class IconCatalog
         ["Admin.SavePermissions"] = Glyph.Save,
         ["Admin.SiteAccess"] = Glyph.Building2,
         ["Admin.Unlock"] = Glyph.LockOpen,
+        ["BenchSheet.Open"] = Glyph.Printer,
         ["Billing.CreditNote"] = Glyph.FileMinus,
         ["Billing.IssueInvoice"] = Glyph.FileCheck,
         ["Billing.PrintInvoice"] = Glyph.Printer,

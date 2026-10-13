@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Results;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Catalog;
@@ -26,6 +27,9 @@ namespace MarocLIS.Desktop.Views;
 /// technician never wonders why the LDL will not accept a value.</item>
 /// <item><b>Flags are glyphs in their own column</b>, not colour alone — colour-blind operators
 /// and monochrome screens both exist.</item>
+/// <item><b>The fiche de paillasse is printed from here</b>, because this is where the values on it
+/// come back to be keyed in: the technician prints the bench's pending work, measures, writes, and
+/// returns to the same screen with the sheet in hand.</item>
 /// </list>
 /// </summary>
 public sealed class ResultEntryView : LocalizedView
@@ -39,12 +43,16 @@ public sealed class ResultEntryView : LocalizedView
     private const string ColumnComment = "comment";
 
     private readonly ResultEntryService _entry;
+    private readonly BenchWorksheetService _benchSheets;
+    private readonly IBenchWorksheetRenderer _benchSheetRenderer;
+    private readonly IDocumentOutput _documents;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<ResultEntryView>? _logger;
 
     private readonly TextBox _scan = UiTheme.Input(260);
     private readonly Label _scanLabel = new();
     private readonly Button _load = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _benchSheet = UiTheme.SecondaryButton(string.Empty);
     private readonly Panel _patientBar = new();
     private readonly Label _patientName = new();
     private readonly Label _patientDetail = new();
@@ -57,12 +65,19 @@ public sealed class ResultEntryView : LocalizedView
     private ResultEntrySheet? _sheet;
     private readonly Dictionary<Guid, ResultEntryRow> _rowsById = [];
 
-    public ResultEntryView(ResultEntryService entry, IUserDialogs dialogs,
-                           ILocalizer localizer, ICultureManager cultureManager,
+    /// <summary>The department last printed for, offered again: a technician prints for their own bench.</summary>
+    private Guid? _lastBenchDepartmentId;
+
+    public ResultEntryView(ResultEntryService entry, BenchWorksheetService benchSheets,
+                           IBenchWorksheetRenderer benchSheetRenderer, IDocumentOutput documents,
+                           IUserDialogs dialogs, ILocalizer localizer, ICultureManager cultureManager,
                            ILogger<ResultEntryView>? logger = null)
         : base(localizer, cultureManager)
     {
         _entry = entry;
+        _benchSheets = benchSheets;
+        _benchSheetRenderer = benchSheetRenderer;
+        _documents = documents;
         _dialogs = dialogs;
         _logger = logger;
 
@@ -106,7 +121,15 @@ public sealed class ResultEntryView : LocalizedView
 
         _load.Bounds = new Rectangle(270, 21, 110, UiTheme.ButtonHeight);
 
-        scanBar.Controls.AddRange([_scanLabel, _scan, _load]);
+        // At the far end of the scan bar, away from the scan box: it is used once a run, not once a
+        // tube, and must not be what an Enter or a stray click lands on mid-entry.
+        _benchSheet.Size = new Size(200, UiTheme.ButtonHeight);
+        _benchSheet.TabStop = false;
+
+        scanBar.Controls.AddRange([_scanLabel, _scan, _load, _benchSheet]);
+        scanBar.Resize += (_, _) =>
+            _benchSheet.Location = new Point(
+                Math.Max(_load.Right + UiTheme.Gutter, scanBar.ClientSize.Width - _benchSheet.Width), 21);
 
         // --- patient context --------------------------------------------------------------------
 
@@ -253,6 +276,7 @@ public sealed class ResultEntryView : LocalizedView
     private void WireBehaviour()
     {
         _load.Click += async (_, _) => await LoadAsync(_scan.Text);
+        _benchSheet.Click += async (_, _) => await PrintBenchSheetAsync();
 
         // A barcode scanner ends its scan with Enter, so Enter in the scan box loads the order.
         _scan.KeyDown += async (_, e) =>
@@ -343,6 +367,7 @@ public sealed class ResultEntryView : LocalizedView
     {
         _scanLabel.Text = $"{T("Order.AccessionNumber")} / {T("Sample.Barcode")}";
         _load.Text = T("Action.Open");
+        _benchSheet.Text = T("BenchSheet.Open");
         _save.Text = T("Action.Save");
         _validate.Text = T("Validation.Technical");
 
@@ -506,6 +531,75 @@ public sealed class ResultEntryView : LocalizedView
         }
 
         _scan.Focus();
+    }
+
+    // ---- Bench worksheet ---------------------------------------------------------------------------
+
+    private async Task PrintBenchSheetAsync()
+    {
+        var title = T("BenchSheet.Title");
+
+        _benchSheet.Enabled = false;
+        Cursor = Cursors.WaitCursor;
+
+        try
+        {
+            var options = await _benchSheets.GetOptionsAsync();
+
+            if (options.IsFailure)
+            {
+                _dialogs.ShowFailure(options, title);
+                return;
+            }
+
+            Cursor = Cursors.Default;
+
+            using var dialog = new BenchWorksheetDialog(Localizer, _dialogs, options.Value,
+                                                        _lastBenchDepartmentId);
+
+            if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+            var request = dialog.Request;
+            _lastBenchDepartmentId = request.DepartmentId;
+
+            Cursor = Cursors.WaitCursor;
+
+            var worksheet = await _benchSheets.GetWorksheetAsync(request);
+
+            if (worksheet.IsFailure)
+            {
+                _dialogs.ShowFailure(worksheet, title);
+                return;
+            }
+
+            var language = Localizer.CurrentLanguage;
+
+            // QuestPDF lays out synchronously; off the UI thread so a long backlog does not freeze
+            // the screen while it renders.
+            var bytes = await Task.Run(() => _benchSheetRenderer.Render(worksheet.Value, language));
+
+            var opened = await _documents.OpenAsync(bytes, "pdf");
+
+            if (opened.IsFailure)
+            {
+                _dialogs.ShowFailure(opened, title);
+                return;
+            }
+
+            _status.ForeColor = UiTheme.TextSecondary;
+            _status.Text = $"{title} — {T("Print.RowCount", worksheet.Value.Lines.Count)}";
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Printing the bench worksheet failed.");
+            _dialogs.Warn(T("Message.UnexpectedError"), title);
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+            _benchSheet.Enabled = true;
+            _scan.Focus();
+        }
     }
 
     // ---- Submission ----------------------------------------------------------------------------

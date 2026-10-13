@@ -219,9 +219,14 @@ internal abstract class MasterDataEditor : Form
 
     private readonly ToolTip _tips = new() { AutoPopDelay = 20_000 };
 
-    protected void Buttons(int y, int width)
+    /// <param name="acceptKey">
+    /// The confirming button's caption. "Enregistrer" by default, which is what nearly every editor
+    /// does; a dialog that prints rather than saves says so, because an operator who reads "Save"
+    /// on a print dialog reasonably wonders what is being stored.
+    /// </param>
+    protected void Buttons(int y, int width, string acceptKey = "Action.Save")
     {
-        var ok = UiTheme.PrimaryButton(Localizer["Action.Save"]);
+        var ok = UiTheme.PrimaryButton(Localizer[acceptKey]);
         ok.Bounds = new Rectangle(20, y, (width - 60) / 2, UiTheme.ButtonHeight);
         ok.Click += (_, _) => Accept();
 
