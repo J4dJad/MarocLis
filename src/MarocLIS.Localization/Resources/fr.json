@@ -355,6 +355,9 @@
   },
 
   "Order": {
+    "SharedAnalyses": "{0} analyse(s) déjà comptée(s)",
+    "MergedIntoPanel": "{0} : déjà compris dans le profil « {1} », retiré de la liste pour ne pas être compté deux fois.",
+    "AlreadyInPanel": "{0} est déjà comprise dans le profil « {1} » : elle n'est pas ajoutée une seconde fois.",
     "NoReportYet": "Aucun compte rendu n'a encore été diffusé pour ce dossier.",
     "PrintReport": "Compte rendu (PDF)",
     "Title": "Dossier",

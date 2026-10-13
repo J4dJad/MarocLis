@@ -150,6 +150,7 @@ public abstract class LocalizedForm : Form
         base.OnLoad(e);
         ApplyTexts();
         RtlLayout.Apply(this, _cultureManager.CurrentLanguage);
+        ButtonIcons.Apply(this, Localizer);
         BarReflow.SizeUnsizedLabels(this);
     }
 
@@ -169,6 +170,7 @@ public abstract class LocalizedForm : Form
         {
             ApplyTexts();
             RtlLayout.Apply(this, e.Language);
+            ButtonIcons.Apply(this, Localizer);
         }
         finally
         {
@@ -227,6 +229,7 @@ public abstract class LocalizedView : UserControl
         base.OnLoad(e);
         ApplyTexts();
         RtlLayout.Apply(this, _cultureManager.CurrentLanguage);
+        ButtonIcons.Apply(this, Localizer);
 
         // After the texts: a strip is only too wide once its buttons carry their real labels.
         BarReflow.SizeUnsizedLabels(this);
@@ -248,6 +251,7 @@ public abstract class LocalizedView : UserControl
         {
             ApplyTexts();
             RtlLayout.Apply(this, e.Language);
+            ButtonIcons.Apply(this, Localizer);
         }
         finally
         {

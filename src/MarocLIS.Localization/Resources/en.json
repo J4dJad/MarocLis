@@ -355,6 +355,9 @@
   },
 
   "Order": {
+    "SharedAnalyses": "{0} analysis(es) already counted",
+    "MergedIntoPanel": "{0}: already part of the profile \"{1}\", removed from the list so it is not counted twice.",
+    "AlreadyInPanel": "{0} is already part of the profile \"{1}\" and is not added a second time.",
     "NoReportYet": "No report has been released for this file yet.",
     "PrintReport": "Report (PDF)",
     "Title": "Order",

@@ -576,9 +576,42 @@ public sealed class OrderRegistrationView : LocalizedView
             return;
         }
 
+        // The order holds each analysis once, however many times it was chosen. An analysis
+        // already inside a chosen panel is therefore not added again, and choosing a panel takes
+        // out the analyses chosen on their own that it contains — otherwise the list showed them
+        // twice and the counter total ran above the amount registered and invoiced.
+        if (!item.IsPanel
+            && _selected.FirstOrDefault(s => s.IsPanel && Members(s).Contains(item.Id)) is { } covering)
+        {
+            _status.ForeColor = UiTheme.Abnormal;
+            _status.Text = T("Order.AlreadyInPanel", item.Code, covering.Name.For(Localizer.CurrentLanguage));
+            return;
+        }
+
+        _status.Text = string.Empty;
+
+        if (item.IsPanel)
+        {
+            var members = Members(item);
+            var absorbed = _selected.Where(s => !s.IsPanel && members.Contains(s.Id)).ToList();
+
+            if (absorbed.Count > 0)
+            {
+                foreach (var analysis in absorbed) _selected.Remove(analysis);
+
+                _status.ForeColor = UiTheme.Abnormal;
+                _status.Text = T("Order.MergedIntoPanel",
+                                 string.Join(", ", absorbed.Select(a => a.Code)),
+                                 item.Name.For(Localizer.CurrentLanguage));
+            }
+        }
+
         _selected.Add(item);
         RenderBasket();
     }
+
+    private static HashSet<Guid> Members(CatalogPickerItem panel) =>
+        [.. (panel.Components ?? []).Select(c => c.AnalysisTestId)];
 
     private void RemoveFromBasket(int basketRowIndex)
     {
@@ -596,10 +629,17 @@ public sealed class OrderRegistrationView : LocalizedView
         _basket.SuspendLayout();
         _basket.Rows.Clear();
 
+        var counted = new HashSet<Guid>();
+
         foreach (var item in _selected)
         {
             var notes = new List<string>();
             if (item.IsPanel) notes.Add(T("Catalog.Panel"));
+
+            // Two panels can share members; the shared ones are billed once, on the first.
+            var members = item.IsPanel ? Members(item) : [item.Id];
+            var shared = members.Count(id => !counted.Add(id));
+            if (shared > 0) notes.Add(T("Order.SharedAnalyses", shared));
             if (item.FastingHours is { } fasting) notes.Add($"{fasting} h");
             if (item.ConsentRequirement != Domain.Catalog.ConsentRequirement.None)
                 notes.Add(T("Consent.Required"));
@@ -628,7 +668,18 @@ public sealed class OrderRegistrationView : LocalizedView
     /// </summary>
     private void RefreshTotals()
     {
-        var gross = Money.Of(_selected.Sum(s => s.Price));
+        // Counted per analysis, as the order is priced: two panels sharing a glycaemia bill it once.
+        var prices = new Dictionary<Guid, decimal>();
+
+        foreach (var item in _selected)
+        {
+            if (!item.IsPanel) prices[item.Id] = item.Price;
+            else
+                foreach (var member in item.Components ?? [])
+                    prices.TryAdd(member.AnalysisTestId, member.Price);
+        }
+
+        var gross = Money.Of(prices.Values.Sum());
 
         var maxFasting = _selected.Select(s => s.FastingHours ?? 0).DefaultIfEmpty(0).Max();
         var needsConsent = _selected.Any(
@@ -637,7 +688,7 @@ public sealed class OrderRegistrationView : LocalizedView
         var lines = new List<string>
         {
             $"{T("Billing.Gross"),-28} {gross.Format(Localizer.CurrentLanguage),16}",
-            $"{T("Catalog.Analyses"),-28} {_selected.Count,16}"
+            $"{T("Catalog.Analyses"),-28} {prices.Count,16}"
         };
 
         if (maxFasting > 0)

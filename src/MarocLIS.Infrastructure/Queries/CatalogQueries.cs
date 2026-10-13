@@ -29,7 +29,11 @@ public sealed record CatalogPickerItem(
     bool IsSubcontracted,
     string? ContainerName,
     string? ContainerColourHex,
-    int ComponentCount);
+    int ComponentCount,
+    IReadOnlyList<PickerComponent>? Components = null);
+
+/// <summary>A mandatory member of a panel and the price it is billed at.</summary>
+public sealed record PickerComponent(Guid AnalysisTestId, decimal Price);
 
 public sealed record DepartmentOption(Guid Id, string Code, MultilingualText Name, int DisplayOrder);
 
@@ -130,19 +134,24 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
                 p.Id,
                 p.Code,
                 p.Name,
-                p.PackagePrice,
                 ComponentCount = p.Items.Count(i => !i.IsOptional),
-                // A panel's price is either its package price or the sum of its components', which
-                // is what the operator has to be able to quote at the counter.
-                ComponentTotal = p.Items
+                // The members and their prices, not only their total: the counter has to know which
+                // analyses a panel already contains, so one chosen twice — on its own and inside
+                // the panel — is counted once, as the order itself counts it.
+                Components = p.Items
                     .Where(i => !i.IsOptional)
-                    .Sum(i => i.AnalysisTest!.Tariffs
-                        .Where(f => f.PayerId == null
-                                    && f.ValidFrom <= on
-                                    && (f.ValidUntil == null || f.ValidUntil >= on))
-                        .OrderByDescending(f => f.ValidFrom)
-                        .Select(f => (decimal?)f.Price)
-                        .FirstOrDefault() ?? 0m),
+                    .Select(i => new
+                    {
+                        i.AnalysisTestId,
+                        Price = i.AnalysisTest!.Tariffs
+                            .Where(f => f.PayerId == null
+                                        && f.ValidFrom <= on
+                                        && (f.ValidUntil == null || f.ValidUntil >= on))
+                            .OrderByDescending(f => f.ValidFrom)
+                            .Select(f => (decimal?)f.Price)
+                            .FirstOrDefault() ?? 0m
+                    })
+                    .ToList(),
                 // A panel inherits the strictest requirement of its members: if any component
                 // needs twelve hours' fasting or a specific consent, the panel does.
                 MaxFasting = p.Items
@@ -162,7 +171,10 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
         items.AddRange(panelRows.Select(p => new CatalogPickerItem(
             p.Id, IsPanel: true, p.Code, p.Name,
             DepartmentCode: null, DepartmentName: null,
-            Price: p.PackagePrice ?? p.ComponentTotal,
+            // What registration bills: each member at its own tariff. The order is priced act by
+            // act, as the AMO settles it, so a package price is not what the patient is charged
+            // and quoting it here made the counter total disagree with the registered one.
+            Price: p.Components.Sum(c => c.Price),
             FastingHours: p.MaxFasting is > 0 ? p.MaxFasting : null,
             TurnaroundHours: p.MaxTurnaround ?? 24,
             IsAvailableUrgently: false,
@@ -172,7 +184,8 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
                 : ConsentRequirement.None,
             IsSubcontracted: false,
             ContainerName: null, ContainerColourHex: null,
-            ComponentCount: p.ComponentCount)));
+            ComponentCount: p.ComponentCount,
+            Components: [.. p.Components.Select(c => new PickerComponent(c.AnalysisTestId, c.Price))])));
 
         items.AddRange(analysisRows.Select(t => new CatalogPickerItem(
             t.Id, IsPanel: false, t.Code, t.Name,

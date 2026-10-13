@@ -53,6 +53,9 @@ public static class BarReflow
         }
     }
 
+    /// <summary>Whether the control sits in a strip this class lays out, and so may be widened.</summary>
+    public static bool Manages(Control control) => control.Parent is { } parent && IsEligible(parent);
+
     private static bool IsEligible(Control control)
     {
         if (control.GetType() != typeof(Panel)) return false;
@@ -210,7 +213,8 @@ public static class BarReflow
 
         var needed = TextRenderer.MeasureText(button.Text, button.Font, Size.Empty,
                          TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width
-                     + button.Padding.Horizontal + 12;
+                     + button.Padding.Horizontal + 12
+                     + (button.Image is { } image ? image.Width + 2 : 0);
 
         return Math.Max(width, needed);
     }

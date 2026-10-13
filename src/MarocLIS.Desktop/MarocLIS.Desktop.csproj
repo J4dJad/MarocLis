@@ -47,6 +47,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Lucide icon font (ISC licence, see the licence file beside it), subset to the icons used. -->
+    <EmbeddedResource Include="Resources\Icons\lucide.ttf" />
+    <None Include="Resources\Icons\LICENSE-lucide.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

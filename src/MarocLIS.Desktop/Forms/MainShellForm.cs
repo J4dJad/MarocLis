@@ -132,6 +132,7 @@ public sealed class MainShellForm : LocalizedForm
         _print.Height = 28;
         _print.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         _print.Click += async (_, _) => await PrintCurrentListAsync();
+        ButtonIcons.Set(_print, Glyph.Printer);
 
         _header.Controls.AddRange([brand, _viewTitle, _userInfo, _siteInfo, _clock, _print,
                                    _languagePicker]);
@@ -294,6 +295,12 @@ public sealed class MainShellForm : LocalizedForm
         RenderNavigation();
     }
 
+    // Narrower than the column by the width of its scroll bar. The entries are taller than a
+    // laptop screen, so the vertical bar appears, and entries as wide as the whole column then
+    // overflowed it and brought up a horizontal bar under the menu as well.
+    private static int NavigationWidth =>
+        UiTheme.SidebarWidth - UiTheme.GutterTight - SystemInformation.VerticalScrollBarWidth - 2;
+
     private void RenderNavigation()
     {
         _sidebar.SuspendLayout();
@@ -319,7 +326,7 @@ public sealed class MainShellForm : LocalizedForm
                     Font = UiTheme.SmallBold,
                     ForeColor = UiTheme.TextMuted,
                     AutoSize = false,
-                    Bounds = new Rectangle(UiTheme.Gutter, y + 10, UiTheme.SidebarWidth - 24, 18)
+                    Bounds = new Rectangle(UiTheme.Gutter, y + 10, NavigationWidth - UiTheme.GutterTight, 18)
                 };
                 _sidebar.Controls.Add(header);
                 y += 32;
@@ -330,8 +337,7 @@ public sealed class MainShellForm : LocalizedForm
             {
                 Text = T(entry.LabelKey),
                 Tag = entry.Key,
-                Bounds = new Rectangle(UiTheme.GutterTight, y,
-                                       UiTheme.SidebarWidth - UiTheme.Gutter - 6, 32),
+                Bounds = new Rectangle(UiTheme.GutterTight, y, NavigationWidth, 32),
                 FlatStyle = FlatStyle.Flat,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(UiTheme.Gutter, 0, 0, 0),
@@ -345,6 +351,9 @@ public sealed class MainShellForm : LocalizedForm
             button.FlatAppearance.BorderSize = 0;
             button.FlatAppearance.MouseOverBackColor = UiTheme.AccentSubtle;
 
+            if (IconCatalog.Navigation.TryGetValue(entry.Key, out var glyph))
+                ButtonIcons.Set(button, glyph, always: true);
+
             var captured = entry;
             button.Click += async (_, _) => await ActivateAsync(captured);
 
@@ -356,8 +365,7 @@ public sealed class MainShellForm : LocalizedForm
 
         // Sign-out sits at the bottom, away from the working entries.
         var signOut = UiTheme.SecondaryButton(T("Action.Logout"));
-        signOut.Bounds = new Rectangle(UiTheme.GutterTight, y + UiTheme.Gutter,
-                                       UiTheme.SidebarWidth - UiTheme.Gutter - 6,
+        signOut.Bounds = new Rectangle(UiTheme.GutterTight, y + UiTheme.Gutter, NavigationWidth,
                                        UiTheme.ButtonHeight);
         signOut.FlatAppearance.BorderColor = UiTheme.Border;
         signOut.Click += (_, _) => SignOut();
