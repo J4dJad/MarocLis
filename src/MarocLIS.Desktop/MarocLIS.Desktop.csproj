@@ -48,7 +48,7 @@
 
   <ItemGroup>
     <!-- Lucide icon font (ISC licence, see the licence file beside it), subset to the icons used. -->
-    <EmbeddedResource Include="Resources\Icons\lucide.ttf" />
+    <EmbeddedResource Include="Resources\Icons\icons.png" />
     <None Include="Resources\Icons\LICENSE-lucide.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

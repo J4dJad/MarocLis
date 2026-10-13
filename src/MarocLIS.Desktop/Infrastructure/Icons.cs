@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Drawing.Drawing2D;
-using System.Drawing.Text;
+using System.Drawing.Imaging;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using MarocLIS.Localization;
@@ -17,61 +17,81 @@ namespace MarocLIS.Desktop.Infrastructure;
 /// </summary>
 public static class Icons
 {
-    private static readonly Lazy<FontFamily?> Family = new(LoadFamily);
-    private static readonly ConcurrentDictionary<(Glyph, int, int), Bitmap> Cache = new();
-
-    // Kept for the life of the process: GDI+ reads the font from this memory, not from a copy.
-    private static IntPtr _fontMemory;
-
+    // The glyphs are drawn once, at build time, from the Lucide font into one sheet of 64-pixel
+    // white masks (Resources/Icons/icons.png), in ascending code-point order, 16 to a row. Loading
+    // the font itself through GDI+ worked under test but drew nothing on a real Windows desktop:
+    // a memory font is only as reliable as the collection that owns it, and the sheet removes the
+    // font machinery from the running application altogether.
+    private const int Cell = 64;
+    private const int Columns = 16;
     private const int Margin = 3;
 
-    /// <summary>The glyph as a bitmap of <paramref name="pixels"/> square, or null if the font is unavailable.</summary>
+    private static readonly Lazy<Bitmap?> Sheet = new(LoadSheet);
+    private static readonly Lazy<Dictionary<Glyph, int>> Index = new(() =>
+        Enum.GetValues<Glyph>().Distinct().OrderBy(g => (int)g)
+            .Select((glyph, i) => (glyph, i)).ToDictionary(p => p.glyph, p => p.i));
+
+    private static readonly ConcurrentDictionary<(Glyph, int, int), Bitmap> Cache = new();
+    private static readonly Lock Gate = new();
+
+    /// <summary>The glyph as a bitmap of <paramref name="pixels"/> square, or null if the sheet is unavailable.</summary>
     public static Bitmap? Render(Glyph glyph, Color color, int pixels)
     {
-        if (Family.Value is not { } family) return null;
+        if (Sheet.Value is not { } sheet || !Index.Value.TryGetValue(glyph, out var index)) return null;
 
         return Cache.GetOrAdd((glyph, color.ToArgb(), pixels), key =>
         {
+            var source = new Rectangle(index % Columns * Cell, index / Columns * Cell, Cell, Cell);
+
+            using var tinted = new Bitmap(Cell, Cell, PixelFormat.Format32bppArgb);
+
+            lock (Gate)
+            {
+                using var graphics = Graphics.FromImage(tinted);
+
+                // The mask is white; scaling its colour channels to the wanted colour tints it, and
+                // its alpha is kept, scaled by the colour's own (a greyed icon is a lighter one).
+                using var attributes = new ImageAttributes();
+                attributes.SetColorMatrix(new ColorMatrix(
+                [
+                    [color.R / 255f, 0, 0, 0, 0],
+                    [0, color.G / 255f, 0, 0, 0],
+                    [0, 0, color.B / 255f, 0, 0],
+                    [0, 0, 0, color.A / 255f, 0],
+                    [0, 0, 0, 0, 1]
+                ]));
+
+                graphics.DrawImage(sheet, new Rectangle(0, 0, Cell, Cell),
+                                   source.X, source.Y, Cell, Cell, GraphicsUnit.Pixel, attributes);
+            }
+
             // Transparent margin on both sides: a button puts its picture flush against the caption,
             // and the margin is the gap between them whichever side the caption is on (Arabic).
-            var bitmap = new Bitmap(key.Item3 + 2 * Margin, key.Item3);
+            var bitmap = new Bitmap(key.Item3 + 2 * Margin, key.Item3, PixelFormat.Format32bppArgb);
 
-            using var graphics = Graphics.FromImage(bitmap);
-            using var font = new Font(family, key.Item3 * 0.92f, GraphicsUnit.Pixel);
-            using var brush = new SolidBrush(Color.FromArgb(key.Item2));
-            using var format = new StringFormat(StringFormat.GenericTypographic)
+            using (var graphics = Graphics.FromImage(bitmap))
             {
-                Alignment = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center
-            };
-
-            graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            graphics.TextRenderingHint = TextRenderingHint.AntiAlias;
-            graphics.DrawString(((char)(int)key.Item1).ToString(), font, brush,
-                                new RectangleF(Margin, 0, key.Item3, key.Item3), format);
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.DrawImage(tinted, new Rectangle(Margin, 0, key.Item3, key.Item3));
+            }
 
             return bitmap;
         });
     }
 
-    private static FontFamily? LoadFamily()
+    private static Bitmap? LoadSheet()
     {
         try
         {
             using var stream = typeof(Icons).Assembly
-                .GetManifestResourceStream("MarocLIS.Desktop.Resources.Icons.lucide.ttf");
+                .GetManifestResourceStream("MarocLIS.Desktop.Resources.Icons.icons.png");
             if (stream is null) return null;
 
-            var bytes = new byte[stream.Length];
-            stream.ReadExactly(bytes);
-
-            _fontMemory = Marshal.AllocCoTaskMem(bytes.Length);
-            Marshal.Copy(bytes, 0, _fontMemory, bytes.Length);
-
-            var collection = new PrivateFontCollection();
-            collection.AddMemoryFont(_fontMemory, bytes.Length);
-
-            return collection.Families.FirstOrDefault();
+            // Copied off the stream: a GDI+ bitmap keeps reading the stream it was created from.
+            using var decoded = new Bitmap(stream);
+            return new Bitmap(decoded);
         }
         catch (Exception ex) when (ex is ExternalException or ArgumentException or IOException)
         {
