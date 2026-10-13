@@ -2,6 +2,7 @@ using MarocLIS.Application.Quality;
 using MarocLIS.Desktop.Controls;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Quality;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -247,6 +248,11 @@ public sealed class QualityControlView : LocalizedView
         _reviewAction.Click += async (_, _) => await ReviewSelectedAsync();
         _establishLimits.Click += async (_, _) => await EstablishLimitsAsync();
         _editRules.Click += async (_, _) => await EditRulesAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Quality.EnterQc, _submit);
+        PermissionGate.Require(Permissions.Quality.ReviewQc, _reviewAction);
+        PermissionGate.Require(Permissions.Quality.ManageQcRules, _establishLimits, _editRules);
 
         _entry.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadChartAsync());
         _review.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadChartForReviewAsync());

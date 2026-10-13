@@ -2,6 +2,7 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Orders;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Infrastructure.Queries;
 using MarocLIS.Localization;
@@ -346,6 +347,9 @@ public sealed class OrderRegistrationView : LocalizedView
         _patientSearch.TextChanged += (_, _) => { _debounce.Stop(); _debounce.Start(); };
         _patientPicker.SelectedIndexChanged += (_, _) => OnPatientSelected();
         _newPatient.Click += async (_, _) => await RegisterNewPatientAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Patients.Create, _newPatient);
 
         _catalogSearch.TextChanged += async (_, _) => await SearchCatalogueAsync();
 

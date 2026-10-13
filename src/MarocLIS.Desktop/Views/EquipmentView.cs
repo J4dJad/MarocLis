@@ -2,6 +2,7 @@ using MarocLIS.Application.Inventory;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
 
@@ -148,6 +149,11 @@ public sealed class EquipmentView : LocalizedView
         _maintenance.Click += async (_, _) => await RecordMaintenanceAsync();
         _calibration.Click += async (_, _) => await RecordCalibrationAsync();
         _status.Click += async (_, _) => await ChangeStatusAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Equipment.RecordMaintenance, _maintenance);
+        PermissionGate.Require(Permissions.Equipment.Calibrate, _calibration);
+        PermissionGate.Require(Permissions.Equipment.Manage, _status);
     }
 
     private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)

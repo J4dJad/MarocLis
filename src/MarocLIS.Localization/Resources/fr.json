@@ -2662,6 +2662,7 @@
   "Result_CalculatedCannotBeEntered": "Le paramètre {0} est calculé : sa valeur ne se saisit pas.",
   "Result_NotANumber": "« {0} » n'est pas une valeur numérique valide.",
   "Result_InvalidOperator": "Opérateur « {0} » non reconnu ; utilisez <, >, ≤ ou ≥.",
+  "Result_ModifyRequiresPermission": "{0} : ce résultat est déjà validé techniquement, le modifier demande le droit « modifier un résultat ».",
   "BenchSheet_DepartmentNotFound": "Le secteur choisi est introuvable.",
   "BenchSheet_InstrumentNotFound": "L'automate choisi est introuvable sur ce site.",
   "BenchSheet_NothingPending": "Aucune analyse en attente de saisie pour cette sélection.",

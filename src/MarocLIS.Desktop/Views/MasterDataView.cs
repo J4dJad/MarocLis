@@ -2,6 +2,7 @@ using System.Globalization;
 using MarocLIS.Application.Administration;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Equipment;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Inventory;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
@@ -433,8 +434,16 @@ public sealed class MasterDataView : LocalizedView
 
         _payers.CellDoubleClick += async (_, e) =>
         {
-            if (e.RowIndex >= 0) await EditPayerAsync(_payers.CurrentRow?.Tag as PayerRow);
+            if (e.RowIndex >= 0 && _editPayer.Enabled) await EditPayerAsync(_payers.CurrentRow?.Tag as PayerRow);
         };
+
+        // Each tab is kept by its own right; greyed out for a user without it, as the service
+        // refuses them in any case.
+        PermissionGate.Require(Permissions.Equipment.Manage, _newInstrument, _editInstrument);
+        PermissionGate.Require(Permissions.Quality.ManageQcRules, _newMaterial, _editMaterial, _newTarget, _editTarget);
+        PermissionGate.Require(Permissions.Inventory.ManagePurchaseOrders, _newStock, _editStock, _newSupplier, _editSupplier);
+        PermissionGate.Require(Permissions.Catalog.Manage, _newPrescriber, _editPrescriber);
+        PermissionGate.Require(Permissions.Billing.ManageTariffs, _newPayer, _editPayer);
     }
 
     // ---- Conditional formatting ---------------------------------------------------------------------

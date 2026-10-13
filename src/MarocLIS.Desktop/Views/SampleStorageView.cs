@@ -1,5 +1,6 @@
 using MarocLIS.Application.Samples;
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Samples;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -150,6 +151,10 @@ public sealed class SampleStorageView : LocalizedView
         _aliquot.Click += async (_, _) => await AliquotAsync();
         _discard.Click += async (_, _) => await DiscardAsync();
         _purge.Click += async (_, _) => await PurgeAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Samples.Receive, _shelve, _aliquot);
+        PermissionGate.Require(Permissions.Samples.Reject, _discard, _purge);
 
         _grid.SelectionChanged += (_, _) => RefreshActions();
         _grid.CellFormatting += OnCellFormatting;

@@ -111,6 +111,11 @@ public sealed class ValidationService(
     public async Task<Result<ValidationOutcome>> ValidateAsync(
         Guid orderId, IReadOnlyList<ValidationDecision> decisions, CancellationToken ct = default)
     {
+        // Checked before anything is read: the per-department check below only runs for the
+        // results being validated, so a batch of refusals went through with no permission at all.
+        var permitted = guard.Require(Permissions.Results.BiologicalValidate);
+        if (permitted.IsFailure) return Result.Failure<ValidationOutcome>(permitted.FirstError);
+
         var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
         if (order is null) return Result.Failure<ValidationOutcome>(Error.NotFound("Order_NotFound"));
 

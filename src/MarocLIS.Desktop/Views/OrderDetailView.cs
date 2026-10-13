@@ -936,7 +936,7 @@ public sealed class OrderDetailView : LocalizedView
         _printLabels.Enabled = detail is { IsCancelled: false }
                                && _currentUser.Has(Permissions.Samples.Reprint);
 
-        _printReport.Enabled = detail is not null && _currentUser.Has(Permissions.Reports.View);
+        _printReport.Enabled = detail is not null && _currentUser.Has(Permissions.Reports.ReprintValidated);
 
         _cancelItem.Enabled = item is { CanCancel: true }
                               && _currentUser.Has(Permissions.Orders.Cancel);

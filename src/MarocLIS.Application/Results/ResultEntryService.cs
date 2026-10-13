@@ -298,6 +298,15 @@ public sealed class ResultEntryService(
                 continue;
             }
 
+            // Correcting one's own entry before it is checked is part of entering; changing a value
+            // that was already technically validated is a modification, and needs that right.
+            if (result.Status == TestResultStatus.TechnicallyValidated
+                && !currentUser.Has(Permissions.Results.Modify))
+            {
+                rejected.Add(Error.Forbidden("Result_ModifyRequiresPermission", parameter.Code));
+                continue;
+            }
+
             var applied = ApplyEntry(result, parameter, entry, now);
             if (applied.IsFailure)
             {

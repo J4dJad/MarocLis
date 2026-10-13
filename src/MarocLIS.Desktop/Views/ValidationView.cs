@@ -3,6 +3,7 @@ using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Results;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -263,6 +264,12 @@ public sealed class ValidationView : LocalizedView
         _communicate.Click += async (_, _) => await CommunicateCriticalAsync();
         _release.Click += async (_, _) => await ReleaseReportAsync();
         _unvalidate.Click += async (_, _) => await UnvalidateSelectedAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Results.BiologicalValidate, _validate);
+        PermissionGate.Require(Permissions.Results.EnterCritical, _communicate);
+        PermissionGate.Require(Permissions.Reports.Print, _release);
+        PermissionGate.Require(Permissions.Results.Unvalidate, _unvalidate);
 
         _details.CellFormatting += OnDetailFormatting;
         _worklist.CellFormatting += OnWorklistFormatting;

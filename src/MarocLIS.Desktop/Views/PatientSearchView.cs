@@ -1,6 +1,7 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Audit;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Infrastructure.Queries;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -72,6 +73,11 @@ public sealed class PatientSearchView : LocalizedView
         _merge.Click += async (_, _) => await MergeAsync();
         _anonymize.Click += async (_, _) => await AnonymizeAsync();
 
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Patients.Create, _newPatient);
+        PermissionGate.Require(Permissions.Patients.Merge, _merge);
+        PermissionGate.Require(Permissions.Patients.Anonymize, _anonymize);
+
         _results.SelectionChanged += (_, _) => RefreshActions();
 
         _debounce.Tick += async (_, _) =>
@@ -94,6 +100,7 @@ public sealed class PatientSearchView : LocalizedView
         _history.CellDoubleClick += async (_, e) =>
         {
             if (e.RowIndex < 0 || _history.Rows[e.RowIndex].Tag is not Guid orderId) return;
+            if (!PermissionGate.Allows(Permissions.Orders.View)) return;
 
             await _navigation.NavigateToAsync<OrderDetailView>(view => view.OrderId = orderId);
         };

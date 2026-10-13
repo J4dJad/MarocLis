@@ -1,6 +1,7 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Infrastructure.Queries;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -146,6 +147,26 @@ public sealed class DashboardView : LocalizedView
         }
     }
 
+    // The right each figure belongs to. The dashboard is open to everyone signed in, and showing the
+    // cashier the critical results waiting, or the technician the unpaid invoices, is telling them
+    // about work the rest of the application keeps from them.
+    private static readonly Dictionary<string, string> TileRights = new(StringComparer.Ordinal)
+    {
+        ["Dashboard.OrdersToday"] = Permissions.Orders.View,
+        ["Dashboard.OverdueOrders"] = Permissions.Orders.View,
+        ["Dashboard.AwaitingCollection"] = Permissions.Samples.View,
+        ["SampleStatus.Rejected"] = Permissions.Samples.View,
+        ["Dashboard.AwaitingValidation"] = Permissions.Results.View,
+        ["Dashboard.CriticalPending"] = Permissions.Results.View,
+        ["Report.Plural"] = Permissions.Reports.View,
+        ["Dashboard.QcAlerts"] = Permissions.Quality.View,
+        ["Dashboard.OpenNonConformities"] = Permissions.Quality.View,
+        ["Equipment.NextCalibration"] = Permissions.Equipment.View,
+        ["Inventory.ToReorder"] = Permissions.Inventory.View,
+        ["Inventory.ExpiringSoon"] = Permissions.Inventory.View,
+        ["Dashboard.Receivables"] = Permissions.Billing.View
+    };
+
     private void Render(FlowLayoutPanel host, IReadOnlyList<DashboardMetric> metrics)
     {
         host.SuspendLayout();
@@ -154,7 +175,9 @@ public sealed class DashboardView : LocalizedView
 
         // Urgent first, then attention, then the quiet ones — so the eye lands on what matters
         // without having to read every tile.
-        foreach (var metric in metrics.OrderByDescending(m => m.Severity)
+        foreach (var metric in metrics.Where(m => !TileRights.TryGetValue(m.LabelKey, out var right)
+                                                  || PermissionGate.Allows(right))
+                                      .OrderByDescending(m => m.Severity)
                                       .ThenByDescending(m => m.Value))
             host.Controls.Add(BuildTile(metric));
 

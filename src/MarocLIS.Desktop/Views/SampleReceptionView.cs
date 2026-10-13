@@ -1,6 +1,7 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Samples;
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Samples;
 using MarocLIS.Localization;
@@ -307,6 +308,10 @@ public sealed class SampleReceptionView : LocalizedView
         _accept.Click += async (_, _) => await AcceptAsync(withReservation: false);
         _acceptReserved.Click += async (_, _) => await AcceptAsync(withReservation: true);
         _reject.Click += async (_, _) => await RejectAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Samples.Receive, _accept, _acceptReserved);
+        PermissionGate.Require(Permissions.Samples.Reject, _reject);
 
         _awaiting.CellDoubleClick += async (_, e) =>
         {

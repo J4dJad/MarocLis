@@ -2661,6 +2661,7 @@
   "Result_CalculatedCannotBeEntered": "المؤشر {0} محسوب: لا تُدخل قيمته يدويًا.",
   "Result_NotANumber": "«{0}» ليست قيمة رقمية صحيحة.",
   "Result_InvalidOperator": "المُعامل «{0}» غير معروف؛ استعمل < أو > أو ≤ أو ≥.",
+  "Result_ModifyRequiresPermission": "{0}: هذه النتيجة مصادق عليها تقنيًا، وتعديلها يتطلب صلاحية « تعديل نتيجة ».",
   "BenchSheet_DepartmentNotFound": "القسم المختار غير موجود.",
   "BenchSheet_InstrumentNotFound": "الجهاز المختار غير موجود في هذا الموقع.",
   "BenchSheet_NothingPending": "لا توجد تحاليل في انتظار الإدخال لهذا الاختيار.",

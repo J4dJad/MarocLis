@@ -201,7 +201,7 @@ public sealed class ReportRegisterView : LocalizedView
 
         _register.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDeliveriesAsync());
         _register.CellFormatting += OnRegisterFormatting;
-        _register.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await ReprintAsync(); };
+        _register.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _reprint.Enabled) await ReprintAsync(); };
 
         _reprint.Click += async (_, _) => await ReprintAsync();
         _recordDelivery.Click += async (_, _) => await RecordDeliveryAsync();

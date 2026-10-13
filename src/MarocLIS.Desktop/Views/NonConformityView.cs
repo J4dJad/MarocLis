@@ -1,6 +1,7 @@
 using MarocLIS.Application.Quality;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Quality;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -242,6 +243,9 @@ public sealed class NonConformityView : LocalizedView
         _dismiss.Click += async (_, _) => await DismissAsync();
         _startAction.Click += async (_, _) => await StartActionAsync();
         _cancelAction.Click += async (_, _) => await CancelActionAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Quality.ManageNonConformity, _open, _addAction, _completeAction, _analysis, _close, _reopen, _dismiss, _startAction, _cancelAction);
 
         _actions.SelectionChanged += (_, _) => RefreshActionButtons();
 

@@ -699,7 +699,8 @@ public sealed class SampleWorkflowService(
     public async Task<Result> DiscardAsync(Guid sampleId, string note,
                                             CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Samples.Receive);
+        // Destroying a specimen is final, and goes with the right to reject one.
+        var permitted = guard.Require(Permissions.Samples.Reject);
         if (permitted.IsFailure) return permitted;
 
         if (string.IsNullOrWhiteSpace(note))

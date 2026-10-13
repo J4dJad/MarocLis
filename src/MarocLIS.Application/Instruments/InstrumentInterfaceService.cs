@@ -164,7 +164,8 @@ public sealed class InstrumentInterfaceService(
     /// <summary>The frame exactly as it went over the wire — the evidence, not a rendering of it.</summary>
     public async Task<Result<string>> GetRawMessageAsync(Guid logId, CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Instruments.View);
+        // The raw frame carries the patient's identity and results, not only the link's health.
+        var permitted = guard.RequireAll(Permissions.Instruments.View, Permissions.Results.View);
         if (permitted.IsFailure) return Result.Failure<string>(permitted.FirstError);
 
         var entry = await messageLog.GetByIdAsync(logId, ct);

@@ -191,7 +191,8 @@ public sealed class InventoryService(
     public async Task<Result> ReleaseLotAsync(Guid reagentLotId, string evidence,
                                                CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Inventory.Receive);
+        // A quality decision, taken by whoever reviews the controls, not by whoever unpacked the box.
+        var permitted = guard.Require(Permissions.Quality.ReviewQc);
         if (permitted.IsFailure) return permitted;
 
         var lot = await queries.GetLotEntityAsync(reagentLotId, ct);

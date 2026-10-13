@@ -1,6 +1,7 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Samples;
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Localization;
 using MarocLIS.Reporting;
@@ -276,6 +277,11 @@ public sealed class CollectionView : LocalizedView
         _record.Click += async (_, _) => await RecordAsync(dispatch: false);
         _dispatch.Click += async (_, _) => await RecordAsync(dispatch: true);
         _reprint.Click += async (_, _) => await ReprintAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Samples.Collect, _record);
+        PermissionGate.Require(Permissions.Samples.Dispatch, _dispatch);
+        PermissionGate.Require(Permissions.Samples.Reprint, _reprint);
 
         _tubes.CellPainting += OnTubeCellPainting;
         _patients.CellFormatting += OnPatientFormatting;

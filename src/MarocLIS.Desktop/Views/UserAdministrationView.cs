@@ -99,6 +99,11 @@ public sealed class UserAdministrationView : LocalizedView
 
         _tabs.TabPages.AddRange([_usersTab, _rolesTab, _securityTab]);
 
+        // The security log is the audit trail's, and opened with an error for whoever may manage
+        // accounts without reading it.
+        if (!PermissionGate.Allows(Permissions.Administration.ViewAuditTrail))
+            _tabs.TabPages.Remove(_securityTab);
+
         Controls.Add(_tabs);
     }
 
@@ -331,6 +336,16 @@ public sealed class UserAdministrationView : LocalizedView
         _newRole.Click += async (_, _) => await CreateRoleAsync();
         _toggleRole.Click += async (_, _) => await ToggleRoleActiveAsync();
         _savePermissions.Click += async (_, _) => await SaveRolePermissionsAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Administration.ManageUsers, _newUser, _editUser, _siteAccess, _resetPassword, _unlock, _toggleActive);
+        PermissionGate.Require(Permissions.Administration.ManageRoles, _assignRoles, _newRole, _toggleRole, _savePermissions);
+
+        // The list of a role's rights stays readable, and scrollable, for whoever may only look.
+        _permissions.BeforeCheck += (_, e) =>
+        {
+            if (!PermissionGate.Allows(Permissions.Administration.ManageRoles)) e.Cancel = true;
+        };
 
         _refreshEvents.Click += async (_, _) => await LoadEventsAsync();
         _onlySelectedUser.CheckedChanged += async (_, _) => await LoadEventsAsync();

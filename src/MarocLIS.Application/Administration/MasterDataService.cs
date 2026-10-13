@@ -636,7 +636,7 @@ public sealed class MasterDataService(
     public async Task<Result<Guid>> SaveStockItemAsync(StockItemRequest request,
                                                         CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Inventory.Receive);
+        var permitted = guard.Require(Permissions.Inventory.ManagePurchaseOrders);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
         var errors = new List<Error>();
@@ -734,7 +734,7 @@ public sealed class MasterDataService(
     public async Task<Result<Guid>> SaveSupplierAsync(SupplierRequest request,
                                                        CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Inventory.Receive);
+        var permitted = guard.Require(Permissions.Inventory.ManagePurchaseOrders);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
         var errors = new List<Error>();
@@ -924,7 +924,7 @@ public sealed class MasterDataService(
     public async Task<Result<Guid>> SavePrescriberAsync(PrescriberRequest request,
                                                          CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Orders.Edit);
+        var permitted = guard.Require(Permissions.Catalog.Manage);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
         Prescriber prescriber;

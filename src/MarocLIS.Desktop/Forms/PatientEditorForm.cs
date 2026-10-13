@@ -2,6 +2,7 @@ using MarocLIS.Application.Patients;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Desktop.Views;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Morocco;
 using MarocLIS.Domain.Patients;
 using MarocLIS.Infrastructure.Queries;
@@ -641,6 +642,11 @@ public sealed class PatientEditorForm : LocalizedForm
 
         _save.Click += async (_, _) => await SaveAsync();
         _cancel.DialogResult = DialogResult.Cancel;
+
+        // A file opened by someone who may only read it shows everything and changes nothing.
+        PermissionGate.Require(_patientId is null ? Permissions.Patients.Create : Permissions.Patients.Edit, _save);
+        PermissionGate.Require(Permissions.Patients.Edit, _addCoverage, _endCoverage, _addConsent,
+                               _withdrawConsent, _addAlert);
     }
 
     protected override void ApplyTexts()

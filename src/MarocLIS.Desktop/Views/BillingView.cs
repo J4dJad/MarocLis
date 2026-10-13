@@ -264,6 +264,13 @@ public sealed class BillingView : LocalizedView
         _claimOutcome.Click += async (_, _) => await RecordClaimOutcomeAsync();
         _creditNote.Click += async (_, _) => await IssueCreditNoteAsync();
         _submitClaim.Click += async (_, _) => await SubmitClaimAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Billing.CreateInvoice, _issue);
+        PermissionGate.Require(Permissions.Billing.RecordPayment, _pay, _bounced);
+        PermissionGate.Require(Permissions.Billing.CreditNote, _refund);
+        PermissionGate.Require(Permissions.Billing.ExportAccounting, _claimOutcome, _submitClaim);
+        PermissionGate.Require(Permissions.Billing.CreditNote, _creditNote);
         _printInvoice.Click += async (_, _) => await PrintAsync(receipt: false);
         _printReceipt.Click += async (_, _) => await PrintAsync(receipt: true);
 

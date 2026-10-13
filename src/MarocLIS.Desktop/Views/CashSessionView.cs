@@ -1,6 +1,7 @@
 using MarocLIS.Application.Billing;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
 
@@ -194,6 +195,10 @@ public sealed class CashSessionView : LocalizedView
         _close.Click += async (_, _) => await CloseSessionAsync();
         _refresh.Click += async (_, _) => await ActivateAsync();
         _withdraw.Click += async (_, _) => await WithdrawAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Billing.RecordPayment, _open);
+        PermissionGate.Require(Permissions.Billing.CloseCashSession, _close, _withdraw);
 
         _counted.TextChanged += (_, _) => RefreshVariance();
     }

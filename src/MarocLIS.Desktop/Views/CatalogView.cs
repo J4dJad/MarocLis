@@ -438,12 +438,13 @@ public sealed class CatalogView : LocalizedView
         _reflex.CellFormatting += OnReflexFormatting;
         _panels.CellFormatting += OnPanelFormatting;
 
-        _analyses.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditAnalysisAsync(); };
-        _parameters.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditParameterAsync(); };
-        _ranges.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditRangeAsync(); };
-        _panels.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditPanelAsync(); };
-        _reflex.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditReflexAsync(); };
-        _nomenclature.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditNomenclatureAsync(); };
+        // A double-click does what the Edit button beside the grid does, and only when it may.
+        _analyses.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _editAnalysis.Enabled) await EditAnalysisAsync(); };
+        _parameters.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _editParameter.Enabled) await EditParameterAsync(); };
+        _ranges.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _editRange.Enabled) await EditRangeAsync(); };
+        _panels.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _editPanel.Enabled) await EditPanelAsync(); };
+        _reflex.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _editReflex.Enabled) await EditReflexAsync(); };
+        _nomenclature.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _editNomenclature.Enabled) await EditNomenclatureAsync(); };
 
         _newAnalysis.Click += async (_, _) => await EditAnalysisAsync(create: true);
         _editAnalysis.Click += async (_, _) => await EditAnalysisAsync();

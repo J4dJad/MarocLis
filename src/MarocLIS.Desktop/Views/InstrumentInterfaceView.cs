@@ -225,7 +225,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         _links.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDetailAsync());
         _links.CellFormatting += OnLinkFormatting;
-        _links.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditLinkAsync(); };
+        _links.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _editLink.Enabled) await EditLinkAsync(); };
 
         _mappings.CellFormatting += OnMappingFormatting;
         _messages.CellFormatting += OnMessageFormatting;

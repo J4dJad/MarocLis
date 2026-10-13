@@ -1,5 +1,6 @@
 using MarocLIS.Application.Inventory;
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Inventory;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -224,6 +225,12 @@ public sealed class InventoryView : LocalizedView
         _clearRejection.Click += async (_, _) => await ClearRejectionAsync();
         _recall.Click += async (_, _) => await RecallAsync();
         _writeOff.Click += async (_, _) => await WriteOffAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Inventory.Receive, _receive, _rejectLot);
+        PermissionGate.Require(Permissions.Quality.ReviewQc, _release);
+        PermissionGate.Require(Permissions.Inventory.Issue, _issue);
+        PermissionGate.Require(Permissions.Inventory.Adjust, _clearRejection, _recall, _writeOff);
 
         _stock.CellFormatting += OnStockFormatting;
         _lots.CellFormatting += OnLotFormatting;

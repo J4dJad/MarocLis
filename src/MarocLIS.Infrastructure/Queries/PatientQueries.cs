@@ -1,5 +1,6 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Morocco;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
@@ -182,11 +183,22 @@ public interface IPatientQueries
     static string NormaliseForSearch(string? value) => PatientSearchKey.Normalise(value);
 }
 
-public sealed class PatientQueries(LisDbContext db, IClock clock) : IPatientQueries
+public sealed class PatientQueries(LisDbContext db, IClock clock, IPermissionGuard guard) : IPatientQueries
 {
+    // Every read of a patient's file passes here. The screens call these queries directly, not
+    // through a service, so without it anyone signed in could search and read every file at the
+    // site; the menu hiding the patient screens was the only thing in the way.
+    private LisDbContext PatientData()
+    {
+        var permitted = guard.Require(Permissions.Patients.View);
+        if (permitted.IsFailure) throw new UnauthorizedAccessException(permitted.FirstError.ResourceKey);
+        return db;
+    }
+
     public async Task<PagedResult<PatientSearchRow>> SearchAsync(
         string? term, Guid siteId, int page = 1, int pageSize = 50, CancellationToken ct = default)
     {
+        PatientData();
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 10, 200);
 
@@ -270,7 +282,7 @@ public sealed class PatientQueries(LisDbContext db, IClock clock) : IPatientQuer
 
     public async Task<IReadOnlyList<PatientOrderRow>> GetOrderHistoryAsync(
         Guid patientId, int take = 30, CancellationToken ct = default) =>
-        await db.LabOrders.AsNoTracking()
+        await PatientData().LabOrders.AsNoTracking()
             .Where(o => o.PatientId == patientId)
             .OrderByDescending(o => o.RegisteredAt)
             .Take(take)
@@ -302,6 +314,7 @@ public sealed class PatientQueries(LisDbContext db, IClock clock) : IPatientQuer
     public async Task<IReadOnlyList<CoverageRow>> GetCoveragesAsync(
         Guid patientId, CancellationToken ct = default)
     {
+        PatientData();
         var today = clock.Today;
 
         var rows = await db.Patients.AsNoTracking()
@@ -357,7 +370,7 @@ public sealed class PatientQueries(LisDbContext db, IClock clock) : IPatientQuer
     public async Task<IReadOnlyList<ConsentRow>> GetConsentsAsync(
         Guid patientId, CancellationToken ct = default)
     {
-        var rows = await db.Patients.AsNoTracking()
+        var rows = await PatientData().Patients.AsNoTracking()
             .Where(p => p.Id == patientId)
             .SelectMany(p => p.Consents)
             .Select(c => new
@@ -389,7 +402,7 @@ public sealed class PatientQueries(LisDbContext db, IClock clock) : IPatientQuer
     public async Task<IReadOnlyList<AlertRow>> GetAlertsAsync(
         Guid patientId, CancellationToken ct = default)
     {
-        var rows = await db.Patients.AsNoTracking()
+        var rows = await PatientData().Patients.AsNoTracking()
             .Where(p => p.Id == patientId)
             .SelectMany(p => p.Alerts)
             .Select(a => new AlertRow(a.Id, a.Severity, a.Message, a.ExpiresOn))
@@ -408,7 +421,7 @@ public sealed class PatientQueries(LisDbContext db, IClock clock) : IPatientQuer
     }
 
     public Task<PatientDetail?> GetDetailAsync(Guid patientId, CancellationToken ct = default) =>
-        db.Patients.AsNoTracking()
+        PatientData().Patients.AsNoTracking()
             .Where(p => p.Id == patientId)
             .Select(p => new PatientDetail(
                 p.Id, p.MedicalRecordNumber, p.LastName, p.FirstName,

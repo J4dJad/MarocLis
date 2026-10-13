@@ -2,6 +2,7 @@ using System.Globalization;
 using MarocLIS.Domain.Common;
 using MarocLIS.Application.Inventory;
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Inventory;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -184,6 +185,11 @@ public sealed class PurchaseOrderView : LocalizedView
         _send.Click += async (_, _) => await SendAsync();
         _receive.Click += async (_, _) => await ReceiveAsync();
         _cancel.Click += async (_, _) => await CancelAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Inventory.ManagePurchaseOrders, _newOrder, _addLine, _send, _cancel);
+        PermissionGate.Require(Permissions.Inventory.ApprovePurchaseOrders, _approve);
+        PermissionGate.Require(Permissions.Inventory.Receive, _receive);
     }
 
     private void OnOrderFormatting(object? sender, DataGridViewCellFormattingEventArgs e)

@@ -635,7 +635,7 @@ public sealed class ClaimBatchView : LocalizedView
         _selectClaimable.Enabled = _candidateRows.Any(c => c.IsClaimable);
 
         _recordOutcome.Enabled = SelectedBatch is not null
-                                 && _currentUser.Has(Permissions.Billing.CreateInvoice);
+                                 && _currentUser.Has(Permissions.Billing.ExportAccounting);
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------

@@ -2,6 +2,7 @@ using System.Globalization;
 using MarocLIS.Application.Quality;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Quality;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -147,6 +148,10 @@ public sealed class EqaView : LocalizedView
         _register.Click += async (_, _) => await RegisterRoundAsync();
         _submission.Click += async (_, _) => await RecordSubmissionAsync();
         _evaluation.Click += async (_, _) => await RecordEvaluationAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Quality.ReviewQc, _register, _evaluation);
+        PermissionGate.Require(Permissions.Quality.EnterQc, _submission);
     }
 
     private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)

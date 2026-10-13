@@ -3,6 +3,7 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Results;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Catalog;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Results;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -495,6 +496,10 @@ public sealed class ResultEntryView : LocalizedView
 
         _save.Click += async (_, _) => await SubmitAsync();
         _validate.Click += async (_, _) => await TechnicallyValidateAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Results.Enter, _save);
+        PermissionGate.Require(Permissions.Results.TechnicalValidate, _validate);
 
         // Enter commits the cell and steps down the column, which is how values are actually
         // entered. The grid's default — move right — would land in a read-only unit cell.

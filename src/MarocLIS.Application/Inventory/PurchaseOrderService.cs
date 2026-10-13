@@ -216,7 +216,8 @@ public sealed class PurchaseOrderService(
     }
 
     public Task<Result> ApproveAsync(Guid purchaseOrderId, CancellationToken ct = default) =>
-        ApplyAsync(purchaseOrderId, o => o.Approve(clock.Now, currentUser.UserId), "Approbation", ct);
+        ApplyAsync(purchaseOrderId, o => o.Approve(clock.Now, currentUser.UserId), "Approbation", ct,
+                   Permissions.Inventory.ApprovePurchaseOrders);
 
     public Task<Result> SendAsync(Guid purchaseOrderId, CancellationToken ct = default) =>
         ApplyAsync(purchaseOrderId, o => o.Send(clock.Now), "Envoi", ct);
@@ -292,9 +293,10 @@ public sealed class PurchaseOrderService(
     }
 
     private async Task<Result> ApplyAsync(Guid purchaseOrderId, Func<PurchaseOrder, Result> step,
-                                          string label, CancellationToken ct)
+                                          string label, CancellationToken ct,
+                                          string permission = Permissions.Inventory.ManagePurchaseOrders)
     {
-        var permitted = guard.Require(Permissions.Inventory.ManagePurchaseOrders);
+        var permitted = guard.Require(permission);
         if (permitted.IsFailure) return permitted;
 
         var order = await orders.GetByIdWithDetailsAsync(purchaseOrderId, ct);

@@ -92,6 +92,9 @@ public static class Permissions
         public const string Issue = "inventory.issue";
         public const string Adjust = "inventory.adjust";
         public const string ManagePurchaseOrders = "inventory.po.manage";
+
+        /// <summary>Approves a purchase order: committing the laboratory's money is not the buyer's call.</summary>
+        public const string ApprovePurchaseOrders = "inventory.po.approve";
     }
 
     public static class Equipment

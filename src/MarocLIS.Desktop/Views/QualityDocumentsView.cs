@@ -2,6 +2,7 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Quality;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Quality;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -199,6 +200,10 @@ public sealed class QualityDocumentsView : LocalizedView
         _open.Click += async (_, _) => await OpenAsync();
         _acknowledge.Click += async (_, _) => await AcknowledgeAsync();
         _withdraw.Click += async (_, _) => await ToggleActiveAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Quality.ManageDocuments, _newDocument, _newVersion, _submit, _review);
+        PermissionGate.Require(Permissions.Quality.ApproveDocument, _approve, _makeEffective, _withdraw);
     }
 
     private void OnDocumentFormatting(object? sender, DataGridViewCellFormattingEventArgs e)

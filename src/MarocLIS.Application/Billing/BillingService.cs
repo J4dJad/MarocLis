@@ -538,7 +538,8 @@ public sealed class BillingService(
     public async Task<Result> RefundPaymentAsync(Guid invoiceId, Guid paymentId, string reason,
                                                   CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Billing.RecordPayment);
+        // Giving money back is the credit-note holder's decision, not every cashier's.
+        var permitted = guard.Require(Permissions.Billing.CreditNote);
         if (permitted.IsFailure) return permitted;
 
         var invoice = await invoices.GetByIdWithDetailsAsync(invoiceId, ct);
@@ -581,7 +582,8 @@ public sealed class BillingService(
     public async Task<Result> RecordCashWithdrawalAsync(decimal amount, string reason,
                                                          CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Billing.RecordPayment);
+        // Taking cash out of the drawer belongs with closing it, not with taking payments.
+        var permitted = guard.Require(Permissions.Billing.CloseCashSession);
         if (permitted.IsFailure) return permitted;
 
         if (amount <= 0m) return Result.Failure(Error.Validation("Payment_AmountMustBePositive"));

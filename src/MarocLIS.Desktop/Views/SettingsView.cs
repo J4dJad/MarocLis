@@ -3,6 +3,7 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Orders;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Morocco;
 using MarocLIS.Domain.Organization;
 using MarocLIS.Localization;
@@ -657,6 +658,10 @@ public sealed class SettingsView : LocalizedView
         _settings.SelectionChanged += (_, _) => RefreshSettingActions();
         _editSetting.Click += async (_, _) => await EditSettingAsync();
         _addSetting.Click += async (_, _) => await AddSettingAsync();
+
+        // Greyed out for a user without the right; the service refuses them in any case.
+        PermissionGate.Require(Permissions.Administration.ManageSites, _saveSite, _chooseLogo, _removeLogo);
+        PermissionGate.Require(Permissions.Administration.ManageSettings, _editFormat, _toggleClosed, _editSetting, _addSetting);
 
         _sequences.CellFormatting += OnSequenceFormatting;
         _settings.CellFormatting += OnSettingFormatting;

@@ -2661,6 +2661,7 @@
   "Result_CalculatedCannotBeEntered": "Parameter {0} is calculated; its value is not entered by hand.",
   "Result_NotANumber": "\"{0}\" is not a valid numeric value.",
   "Result_InvalidOperator": "Operator \"{0}\" is not recognised; use <, >, u{2264} or u{2265}.",
+  "Result_ModifyRequiresPermission": "{0}: this result is already technically validated; changing it needs the \"modify a result\" right.",
   "BenchSheet_DepartmentNotFound": "The selected department cannot be found.",
   "BenchSheet_InstrumentNotFound": "The selected analyser cannot be found on this site.",
   "BenchSheet_NothingPending": "No analysis is awaiting entry for this selection.",

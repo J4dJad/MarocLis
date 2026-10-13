@@ -159,7 +159,8 @@ public sealed class EqaService(
                                                     DateOnly submittedOn,
                                                     CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Quality.ReviewQc);
+        // Sending the value measured is entry work; judging the evaluation stays with the review.
+        var permitted = guard.Require(Permissions.Quality.EnterQc);
         if (permitted.IsFailure) return permitted;
 
         if (submittedOn > clock.Today)

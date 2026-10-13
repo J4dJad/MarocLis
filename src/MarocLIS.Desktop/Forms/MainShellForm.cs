@@ -79,6 +79,7 @@ public sealed class MainShellForm : LocalizedForm
         _lists = lists;
         _documents = documents;
         _currentUser = currentUser;
+        PermissionGate.User = currentUser;
         _navigation = navigation;
         _cultureManager = cultureManager;
         _dialogs = dialogs;
@@ -312,7 +313,9 @@ public sealed class MainShellForm : LocalizedForm
 
             new("masterdata", "Nav.MasterData", [Permissions.Equipment.Manage,
                                               Permissions.Quality.ManageQcRules,
-                                              Permissions.Inventory.Receive],
+                                              Permissions.Inventory.ManagePurchaseOrders,
+                                              Permissions.Catalog.Manage,
+                                              Permissions.Billing.ManageTariffs],
                 n => n.NavigateToAsync<MasterDataView>()),
 
             new("settings", "Nav.Settings", [Permissions.Administration.ManageSites,

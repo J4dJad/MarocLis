@@ -463,6 +463,7 @@ internal static class RolePermissionSets
              Permissions.Instruments.View, Permissions.Instruments.Configure,
              Permissions.Instruments.StartStop, Permissions.Instruments.ReplayMessages,
              Permissions.Inventory.View, Permissions.Inventory.Receive, Permissions.Inventory.Issue,
+             Permissions.Inventory.ApprovePurchaseOrders,
              Permissions.Billing.View,
              Permissions.Statistics.View, Permissions.Statistics.EpidemiologicalDeclaration,
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail
@@ -542,6 +543,7 @@ internal static class RolePermissionSets
              Permissions.Equipment.RecordMaintenance, Permissions.Equipment.Calibrate,
              Permissions.Instruments.View,
              Permissions.Inventory.View, Permissions.Inventory.Receive, Permissions.Inventory.Adjust,
+             Permissions.Inventory.ApprovePurchaseOrders,
              Permissions.Statistics.View,
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail
          ]),
