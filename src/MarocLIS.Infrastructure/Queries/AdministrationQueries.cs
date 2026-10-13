@@ -285,7 +285,8 @@ public sealed class AdministrationQueries(LisDbContext db) : IAdministrationQuer
                 s.Phone, s.Fax, s.Email, s.Website,
                 s.LogoPng != null, s.IsActive,
                 [.. s.ValidateForInvoicing().Errors.Select(e => e.ResourceKey)],
-                [.. s.ValidateForOperation(today).Errors.Select(e => e.ResourceKey)]))
+                [.. s.ValidateForOperation(today).Errors.Select(e => e.ResourceKey)],
+                s.LogoPng))
         ];
     }
 

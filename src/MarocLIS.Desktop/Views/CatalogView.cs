@@ -159,7 +159,7 @@ public sealed class CatalogView : LocalizedView
 
         // Analyses on the left, the selected analysis's parameters top right, the selected
         // parameter's intervals bottom right.
-        var outer = new SplitContainer
+        var outer = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
@@ -168,7 +168,7 @@ public sealed class CatalogView : LocalizedView
             BackColor = UiTheme.Surface
         };
 
-        var inner = new SplitContainer
+        var inner = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
@@ -227,7 +227,7 @@ public sealed class CatalogView : LocalizedView
 
         BuildPanelColumns();
 
-        var split = new SplitContainer
+        var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,

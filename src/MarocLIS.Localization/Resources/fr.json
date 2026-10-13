@@ -1804,6 +1804,11 @@
   },
 
   "Site": {
+    "LogoInvalid": "Ce fichier n'est pas une image lisible. Choisissez un fichier PNG, JPG ou BMP.",
+    "LogoHint": "PNG, JPG ou BMP. Imprimé en tête des comptes rendus et des factures avec l'identité ci-dessus. Pris en compte à l'enregistrement.",
+    "RemoveLogo": "Retirer le logo",
+    "ChooseLogo": "Choisir le logo…",
+    "Logo": "Logo du laboratoire",
     "Title": "Site",
     "Kind": "Type de site",
     "LegalIdentity": "Identité légale (mentions obligatoires sur facture)",

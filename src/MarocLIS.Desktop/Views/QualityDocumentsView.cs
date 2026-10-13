@@ -86,7 +86,7 @@ public sealed class QualityDocumentsView : LocalizedView
 
         bar.Controls.AddRange([_heading, _includeInactive, _refresh, _newDocument]);
 
-        var split = new SplitContainer
+        var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,

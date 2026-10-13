@@ -75,7 +75,7 @@ public sealed class QualityControlView : LocalizedView
     {
         Padding = new Padding(UiTheme.Gutter);
 
-        var outerSplit = new SplitContainer
+        var outerSplit = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
@@ -86,7 +86,7 @@ public sealed class QualityControlView : LocalizedView
 
         // --- top: entry plus chart, side by side ----------------------------------------------------
 
-        var topSplit = new SplitContainer
+        var topSplit = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,

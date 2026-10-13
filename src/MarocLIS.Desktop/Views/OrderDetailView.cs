@@ -165,7 +165,7 @@ public sealed class OrderDetailView : LocalizedView
         BuildItemColumns();
         BuildSampleColumns();
 
-        var split = new SplitContainer
+        var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,

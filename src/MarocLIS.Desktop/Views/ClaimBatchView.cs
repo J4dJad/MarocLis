@@ -99,7 +99,7 @@ public sealed class ClaimBatchView : LocalizedView
         BuildBatchColumns();
         BuildInvoiceColumns();
 
-        var outer = new SplitContainer
+        var outer = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
@@ -111,7 +111,7 @@ public sealed class ClaimBatchView : LocalizedView
         outer.Panel1.Controls.Add(Pane(_candidateHeading, _candidates,
                                         [_selectClaimable, _submit]));
 
-        var inner = new SplitContainer
+        var inner = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,

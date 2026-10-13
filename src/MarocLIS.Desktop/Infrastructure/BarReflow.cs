@@ -99,7 +99,7 @@ public static class BarReflow
                     foreach (var (control, bounds) in live)
                         if (control.Bounds != bounds) control.Bounds = bounds;
 
-                    if (panel.Height != originalHeight) panel.Height = originalHeight;
+                    SetHeight(originalHeight);
                     return;
                 }
 
@@ -160,13 +160,32 @@ public static class BarReflow
                 }
 
                 var wanted = Math.Max(originalHeight, bottom + (originalHeight - originalContentBottom));
-                if (panel.Height != wanted) panel.Height = wanted;
+                SetHeight(wanted);
             }
             finally
             {
                 panel.ResumeLayout(performLayout: true);
                 busy = false;
             }
+        }
+
+        // The strip's height usually changes from inside its parent's layout pass — the parent
+        // docked the strip, which resized it, which reflowed it. The parent places a bottom strip
+        // from the height it had when the pass started and does not look again, so a strip that
+        // was tall while the window was still narrow stayed parked above the panel's top edge,
+        // with its buttons out of sight, until something else (switching tabs) laid it out anew.
+        // The parent is therefore asked for one more pass once the current one has finished.
+        void SetHeight(int height)
+        {
+            if (panel.Height == height) return;
+
+            panel.Height = height;
+
+            if (panel.Parent is { } parent && parent.IsHandleCreated && !parent.IsDisposed)
+                parent.BeginInvoke(() =>
+                {
+                    if (!parent.IsDisposed) parent.PerformLayout();
+                });
         }
 
         panel.Resize += (_, _) => Apply();

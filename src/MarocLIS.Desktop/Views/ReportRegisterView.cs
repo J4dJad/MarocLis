@@ -104,7 +104,7 @@ public sealed class ReportRegisterView : LocalizedView
         BuildRegisterColumns();
         BuildDeliveryColumns();
 
-        var split = new SplitContainer
+        var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,

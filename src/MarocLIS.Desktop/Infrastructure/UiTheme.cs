@@ -155,18 +155,35 @@ public static class UiTheme
 
     // ---- Control helpers ------------------------------------------------------------------------
 
-    public static Button PrimaryButton(string text) => new()
+    public static Button PrimaryButton(string text)
     {
-        Text = text,
-        Height = ButtonHeight,
-        FlatStyle = FlatStyle.Flat,
-        BackColor = Accent,
-        ForeColor = TextOnAccent,
-        Font = BodyBold,
-        Cursor = Cursors.Hand,
-        UseVisualStyleBackColor = false,
-        Padding = new Padding(10, 0, 10, 0)
-    };
+        var button = new Button
+        {
+            Text = text,
+            Height = ButtonHeight,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Accent,
+            ForeColor = TextOnAccent,
+            Font = BodyBold,
+            Cursor = Cursors.Hand,
+            UseVisualStyleBackColor = false,
+            Padding = new Padding(10, 0, 10, 0)
+        };
+
+        // Windows paints a disabled flat button's caption in its own dark grey and ignores
+        // ForeColor, which on the accent blue left "Prélever" and "Revue du contrôle" unreadable
+        // whenever there was nothing selected. A disabled primary button is shown on a pale fill
+        // instead, where that grey caption reads and plainly looks unavailable.
+        button.EnabledChanged += (_, _) =>
+        {
+            button.BackColor = button.Enabled ? Accent : DisabledFill;
+            button.FlatAppearance.BorderColor = button.Enabled ? Accent : Border;
+        };
+
+        return button;
+    }
+
+    private static readonly Color DisabledFill = Color.FromArgb(226, 231, 237);
 
     public static Button SecondaryButton(string text) => new()
     {

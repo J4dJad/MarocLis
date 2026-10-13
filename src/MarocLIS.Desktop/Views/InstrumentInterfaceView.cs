@@ -101,7 +101,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
         BuildMappingColumns();
         BuildMessageColumns();
 
-        var outer = new SplitContainer
+        var outer = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
@@ -113,7 +113,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
         outer.Panel1.Controls.Add(Pane(_linkHeading, _links,
                                         [_newLink, _editLink, _toggleLink]));
 
-        var inner = new SplitContainer
+        var inner = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,

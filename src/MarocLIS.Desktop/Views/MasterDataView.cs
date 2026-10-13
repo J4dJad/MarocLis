@@ -200,7 +200,7 @@ public sealed class MasterDataView : LocalizedView
         _qcTab.BackColor = UiTheme.Surface;
         _qcTab.Padding = new Padding(UiTheme.Gutter);
 
-        var split = new SplitContainer
+        var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
             SplitterDistance = 240, SplitterWidth = 6, BackColor = UiTheme.Surface

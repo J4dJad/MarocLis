@@ -28,11 +28,40 @@ public class Repository<T>(LisDbContext context, IClock clock) : IRepository<T>
     protected LisDbContext Context { get; } = context;
     protected IClock Clock { get; } = clock;
 
-    public virtual Task<T?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
+    public async Task<T?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        await RefreshTrackedAsync(id, ct);
+        return await Context.Set<T>().FirstOrDefaultAsync(e => e.Id == id, ct);
+    }
+
+    public async Task<T?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default)
+    {
+        await RefreshTrackedAsync(id, ct);
+        return await LoadWithDetailsAsync(id, ct);
+    }
+
+    protected virtual Task<T?> LoadWithDetailsAsync(Guid id, CancellationToken ct) =>
         Context.Set<T>().FirstOrDefaultAsync(e => e.Id == id, ct);
 
-    public virtual Task<T?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
-        GetByIdAsync(id, ct);
+    /// <summary>
+    /// Re-reads an aggregate this context already tracks before handing it out again.
+    /// <para>
+    /// A screen keeps one context for as long as it is open. An aggregate it loaded and saved an
+    /// hour ago is still tracked, and a query hands back that tracked instance as it was — values
+    /// and row version included — even when another screen or workstation has saved it since.
+    /// The next save then fails as a concurrency conflict that nobody caused: an analyser edited in
+    /// "Équipements" could no longer be saved from "Données de référence". An unchanged instance
+    /// is reloaded; one this operation has already modified is left alone.
+    /// </para>
+    /// </summary>
+    private async Task RefreshTrackedAsync(Guid id, CancellationToken ct)
+    {
+        var tracked = Context.Set<T>().Local.FirstOrDefault(e => e.Id == id);
+        if (tracked is null) return;
+
+        var entry = Context.Entry(tracked);
+        if (entry.State == EntityState.Unchanged) await entry.ReloadAsync(ct);
+    }
 
     public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default) =>
         Context.Set<T>().AnyAsync(e => e.Id == id, ct);
@@ -72,7 +101,7 @@ public class Repository<T>(LisDbContext context, IClock clock) : IRepository<T>
 public sealed class LabOrderRepository(LisDbContext context, IClock clock)
     : Repository<LabOrder>(context, clock)
 {
-    public override Task<LabOrder?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+    protected override Task<LabOrder?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
         Context.LabOrders
                .Include(o => o.Patient)
                .Include(o => o.Prescriber)
@@ -89,7 +118,7 @@ public sealed class LabOrderRepository(LisDbContext context, IClock clock)
 public sealed class PatientRepository(LisDbContext context, IClock clock)
     : Repository<Patient>(context, clock), IPatientDuplicateFinder
 {
-    public override Task<Patient?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+    protected override Task<Patient?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
         Context.Patients
                .Include(p => p.Coverages).ThenInclude(c => c.Payer)
                .Include(p => p.Consents)
@@ -121,7 +150,7 @@ public sealed class PatientRepository(LisDbContext context, IClock clock)
 public sealed class SampleRepository(LisDbContext context, IClock clock)
     : Repository<Sample>(context, clock)
 {
-    public override Task<Sample?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+    protected override Task<Sample?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
         Context.Samples
                .Include(s => s.Events)
                .Include(s => s.Aliquots)
@@ -140,7 +169,7 @@ public sealed class SampleRepository(LisDbContext context, IClock clock)
 public sealed class AnalysisTestRepository(LisDbContext context, IClock clock)
     : Repository<AnalysisTest>(context, clock)
 {
-    public override Task<AnalysisTest?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+    protected override Task<AnalysisTest?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
         Context.AnalysisTests
                .Include(t => t.Department)
                .Include(t => t.SpecimenType)
@@ -173,7 +202,7 @@ public sealed class AppUserRepository(LisDbContext context, IClock clock)
     /// Roles and site access included: administration edits them as collections, and revoking a
     /// role from a navigation that was never loaded is a silent no-op rather than an error.
     /// </summary>
-    public override Task<AppUser?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+    protected override Task<AppUser?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
         Context.Users
                .Include(u => u.Roles)
                .Include(u => u.SiteAccess)
@@ -203,7 +232,7 @@ public sealed class InvoiceRepository(LisDbContext context, IClock clock)
     /// receivables report.
     /// </para>
     /// </summary>
-    public override Task<Invoice?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+    protected override Task<Invoice?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
         Context.Invoices
                .Include(i => i.Lines)
                .Include(i => i.Payments)
@@ -218,7 +247,7 @@ public sealed class RoleRepository(LisDbContext context, IClock clock)
     /// Permissions included: the role editor replaces the whole set, and
     /// <see cref="Role.ReplacePermissions"/> clears a collection it must therefore have seen.
     /// </summary>
-    public override Task<Role?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+    protected override Task<Role?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
         Context.Roles
                .Include(r => r.Permissions)
                .FirstOrDefaultAsync(r => r.Id == id, ct);
@@ -233,7 +262,7 @@ public sealed class InstrumentInterfaceRepository(LisDbContext context, IClock c
     /// catalogue parameter; loaded without it, every inbound result would look unmapped and the
     /// transmission would be rejected wholesale.
     /// </summary>
-    public override Task<InstrumentInterface?> GetByIdWithDetailsAsync(
+    protected override Task<InstrumentInterface?> LoadWithDetailsAsync(
         Guid id, CancellationToken ct = default) =>
         Context.InstrumentInterfaces
                .Include(i => i.Mappings)
@@ -353,7 +382,7 @@ public sealed class TestPanelRepository(LisDbContext context, IClock clock)
     /// edited once would lose every analysis it already had — and the loss shows up not here but at
     /// the counter, on the first order that selects it.
     /// </summary>
-    public override Task<TestPanel?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+    protected override Task<TestPanel?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
         Context.TestPanels
                .Include(p => p.Items).ThenInclude(i => i.AnalysisTest)
                .FirstOrDefaultAsync(p => p.Id == id, ct);
@@ -367,7 +396,7 @@ public sealed class StockItemRepository(LisDbContext context, IClock clock)
     /// set would silently issue from the wrong lot — the one failure lot traceability exists to
     /// prevent.
     /// </summary>
-    public override Task<StockItem?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+    protected override Task<StockItem?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
         Context.StockItems
                .Include(i => i.Lots)
                .FirstOrDefaultAsync(i => i.Id == id, ct);
@@ -380,7 +409,7 @@ public sealed class InstrumentRepository(LisDbContext context, IClock clock)
     /// Maintenance and calibration history included: the aggregate derives its last-intervention
     /// dates from those records when a new one is added.
     /// </summary>
-    public override Task<Instrument?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+    protected override Task<Instrument?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
         Context.Instruments
                .Include(i => i.MaintenanceRecords)
                .Include(i => i.Calibrations)
@@ -442,13 +471,33 @@ public sealed class UnitOfWork(LisDbContext context) : IUnitOfWork
         }
         catch (DbUpdateConcurrencyException ex)
         {
+            Abandon();
             throw new ConcurrencyConflictException("Message.ConcurrencyConflict", ex);
+        }
+        catch (DbUpdateException)
+        {
+            Abandon();
+            throw;
         }
         finally
         {
             // The reason belongs to one save only; leaving it set would mislabel the next one.
             AuditReason = null;
         }
+    }
+
+    /// <summary>
+    /// Forgets the changes of a save that failed.
+    /// <para>
+    /// The screen's context outlives the operation. Left tracked, the rejected changes ride along
+    /// with the next unrelated save on that screen and fail it again, so one refused save turned
+    /// every later one into the same error until the screen was closed. Inside a transaction the
+    /// caller owns the rollback and the tracker is left to it.
+    /// </para>
+    /// </summary>
+    private void Abandon()
+    {
+        if (_transaction is null) context.ChangeTracker.Clear();
     }
 
     public async Task<IAsyncDisposable> BeginTransactionAsync(CancellationToken ct = default)
@@ -505,7 +554,7 @@ public sealed class ControlledDocumentRepository(LisDbContext context, IClock cl
     /// Versions and acknowledgements included: the aggregate decides which version is in force and
     /// numbers the next one from that list, so a partial load would number a draft wrongly.
     /// </summary>
-    public override Task<ControlledDocument?> GetByIdWithDetailsAsync(Guid id,
+    protected override Task<ControlledDocument?> LoadWithDetailsAsync(Guid id,
                                                                       CancellationToken ct = default) =>
         Context.ControlledDocuments
                .Include(d => d.Versions)
@@ -518,7 +567,7 @@ public sealed class PurchaseOrderRepository(LisDbContext context, IClock clock)
     : Repository<PurchaseOrder>(context, clock)
 {
     /// <summary>Lines included: approval, receipt and the totals all work across them.</summary>
-    public override Task<PurchaseOrder?> GetByIdWithDetailsAsync(Guid id,
+    protected override Task<PurchaseOrder?> LoadWithDetailsAsync(Guid id,
                                                                  CancellationToken ct = default) =>
         Context.PurchaseOrders
                .Include(o => o.Lines)

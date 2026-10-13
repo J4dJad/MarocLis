@@ -79,7 +79,7 @@ public sealed class PurchaseOrderView : LocalizedView
 
         bar.Controls.AddRange([_heading, _onlyOpen, _refresh, _newOrder]);
 
-        var split = new SplitContainer
+        var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,

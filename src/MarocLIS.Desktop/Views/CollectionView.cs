@@ -83,7 +83,7 @@ public sealed class CollectionView : LocalizedView
     {
         Padding = new Padding(UiTheme.Gutter);
 
-        var split = new SplitContainer
+        var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,

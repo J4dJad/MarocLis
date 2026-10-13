@@ -191,7 +191,7 @@ public sealed class OrderRegistrationView : LocalizedView
 
         // --- catalogue and basket -----------------------------------------------------------------
 
-        var split = new SplitContainer
+        var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,

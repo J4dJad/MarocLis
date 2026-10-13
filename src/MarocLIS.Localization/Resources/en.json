@@ -1803,6 +1803,11 @@
   },
 
   "Site": {
+    "LogoInvalid": "This file is not a readable image. Choose a PNG, JPG or BMP file.",
+    "LogoHint": "PNG, JPG or BMP. Printed at the head of reports and invoices with the identity above. Applied on save.",
+    "RemoveLogo": "Remove logo",
+    "ChooseLogo": "Choose logo…",
+    "Logo": "Laboratory logo",
     "Title": "Site",
     "Kind": "Site type",
     "LegalIdentity": "Legal identity (mandatory on every invoice)",

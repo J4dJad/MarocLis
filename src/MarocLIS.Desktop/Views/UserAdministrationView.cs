@@ -193,7 +193,7 @@ public sealed class UserAdministrationView : LocalizedView
         _rolesTab.BackColor = UiTheme.Surface;
         _rolesTab.Padding = new Padding(UiTheme.Gutter);
 
-        var split = new SplitContainer
+        var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,

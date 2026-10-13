@@ -63,7 +63,7 @@ public sealed class EquipmentView : LocalizedView
     {
         Padding = new Padding(UiTheme.Gutter);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = UiTheme.Surface };
+        var bar = new Panel { Dock = DockStyle.Top, Height = 74, BackColor = UiTheme.Surface };
 
         _heading.Font = UiTheme.PageTitle;
         _heading.ForeColor = UiTheme.TextPrimary;
@@ -73,12 +73,12 @@ public sealed class EquipmentView : LocalizedView
         _onlyDue.Font = UiTheme.Small;
         _onlyDue.ForeColor = UiTheme.TextSecondary;
         _onlyDue.AutoSize = true;
-        _onlyDue.Location = new Point(120, 32);
+        _onlyDue.Location = new Point(120, 44);
         _onlyDue.Checked = true;   // The overdue list is the reason the screen exists.
 
         // Before the tick box, not after it: the tick box sizes itself to its sentence, which ran
         // under a button placed at a fixed position to its right.
-        _refresh.Bounds = new Rectangle(0, 26, 110, UiTheme.ButtonHeight);
+        _refresh.Bounds = new Rectangle(0, 38, 110, UiTheme.ButtonHeight);
 
         bar.Controls.AddRange([_heading, _onlyDue, _refresh]);
 

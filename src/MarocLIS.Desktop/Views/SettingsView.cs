@@ -63,6 +63,12 @@ public sealed class SettingsView : LocalizedView
     private readonly TextBox _fax = UiTheme.Input(160);
     private readonly TextBox _email = UiTheme.Input(240);
     private readonly TextBox _website = UiTheme.Input(240);
+    private readonly PictureBox _logo = new();
+    private readonly Button _chooseLogo = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _removeLogo = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _logoHint = new();
+    private byte[]? _pendingLogo;
+    private bool _logoRemoved;
     private readonly Button _saveSite = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _reloadSite = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _siteStatus = new();
@@ -317,6 +323,21 @@ public sealed class SettingsView : LocalizedView
 
         y += 62;
 
+        // The logo is printed at the head of every report and invoice, beside the identity above.
+        Field(body, "Site.Logo", y, 0);
+        _logo.Bounds = new Rectangle(0, y + 18, 220, 90);
+        _logo.SizeMode = PictureBoxSizeMode.Zoom;
+        _logo.BorderStyle = BorderStyle.FixedSingle;
+        _logo.BackColor = Color.White;
+        _chooseLogo.Bounds = new Rectangle(232, y + 18, 200, UiTheme.ButtonHeight);
+        _removeLogo.Bounds = new Rectangle(232, y + 56, 200, UiTheme.ButtonHeight);
+        _logoHint.Font = UiTheme.Small;
+        _logoHint.ForeColor = UiTheme.TextSecondary;
+        _logoHint.AutoSize = false;
+        _logoHint.Bounds = new Rectangle(444, y + 24, 520, 60);
+
+        y += 124;
+
         _saveSite.Bounds = new Rectangle(0, y, 260, 34);
         _reloadSite.Bounds = new Rectangle(270, y, 150, 34);
 
@@ -329,6 +350,7 @@ public sealed class SettingsView : LocalizedView
                                 _ministryDate, _responsible, _accreditationNumber,
                                 _accreditationUntil, _addressFr, _addressAr, _city, _region,
                                 _postalCode, _phone, _fax, _email, _website,
+                                _logo, _chooseLogo, _removeLogo, _logoHint,
                                 _saveSite, _reloadSite, _siteStatus]);
 
         _siteTab.Controls.Add(body);
@@ -443,6 +465,13 @@ public sealed class SettingsView : LocalizedView
         };
 
         _saveSite.Click += async (_, _) => await SaveSiteAsync();
+        _chooseLogo.Click += (_, _) => ChooseLogo();
+        _removeLogo.Click += (_, _) =>
+        {
+            _pendingLogo = null;
+            _logoRemoved = true;
+            ShowLogo(null);
+        };
         _reloadSite.Click += async (_, _) => await ActivateAsync();
 
         _sequences.SelectionChanged += (_, _) => RefreshSequenceActions();
@@ -504,6 +533,9 @@ public sealed class SettingsView : LocalizedView
         _accredited.Text = T("Site.IsAccredited");
 
         _saveSite.Text = T("Action.Save");
+        _chooseLogo.Text = T("Site.ChooseLogo");
+        _removeLogo.Text = T("Site.RemoveLogo");
+        _logoHint.Text = T("Site.LogoHint");
         _reloadSite.Text = T("Action.Refresh");
 
         _editFormat.Text = T("Admin.EditSequenceFormat");
@@ -522,7 +554,8 @@ public sealed class SettingsView : LocalizedView
                      "Site.Inpe", "Site.MinistryAuthorization", "Site.ResponsibleBiologist",
                      "Site.AccreditationNumber", "Site.AccreditationValidUntil",
                      "Patient.Address", "Field.DescriptionAr", "Patient.City", "Patient.Region",
-                     "Patient.PostalCode", "Site.Phone", "Site.Fax", "Field.Email", "Site.Website"
+                     "Patient.PostalCode", "Site.Phone", "Site.Fax", "Field.Email", "Site.Website",
+                     "Site.Logo"
                  })
         {
             SetText(_siteTab, "lbl_" + key, T(key));
@@ -672,11 +705,46 @@ public sealed class SettingsView : LocalizedView
         _email.Text = site.Email ?? string.Empty;
         _website.Text = site.Website ?? string.Empty;
 
+        _pendingLogo = null;
+        _logoRemoved = false;
+        ShowLogo(site.LogoPng);
+
         // The site code is a prefix inside accession and invoice numbers, so once documents exist
         // it is frozen — renaming it would split one series into two that no longer sort together.
         _code.Enabled = true;
 
         RenderBanners(site.InvoicingBlockers, site.OperationBlockers);
+    }
+
+    private void ChooseLogo()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = T("Site.ChooseLogo"),
+            Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif"
+        };
+
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+        var png = LogoImage.ToPng(dialog.FileName);
+
+        if (png is null)
+        {
+            _dialogs.Warn(T("Site.LogoInvalid"), T("Site.Logo"));
+            return;
+        }
+
+        _pendingLogo = png;
+        _logoRemoved = false;
+        ShowLogo(png);
+    }
+
+    private void ShowLogo(byte[]? png)
+    {
+        var previous = _logo.Image;
+        _logo.Image = png is { Length: > 0 } ? LogoImage.Load(png) : null;
+        previous?.Dispose();
+        _removeLogo.Enabled = _logo.Image is not null;
     }
 
     /// <summary>
@@ -757,6 +825,8 @@ public sealed class SettingsView : LocalizedView
             Fax = _fax.Text,
             Email = _email.Text,
             Website = _website.Text,
+            LogoPng = _pendingLogo,
+            RemoveLogo = _logoRemoved && _pendingLogo is null,
             IsActive = site.IsActive
         };
 

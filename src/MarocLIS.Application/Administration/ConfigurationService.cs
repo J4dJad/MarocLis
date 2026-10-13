@@ -50,6 +50,9 @@ public sealed record SiteRequest
 
     public byte[]? LogoPng { get; init; }
 
+    /// <summary>Removes the stored logo; an absent <see cref="LogoPng"/> alone keeps it.</summary>
+    public bool RemoveLogo { get; init; }
+
     public bool IsActive { get; init; } = true;
 }
 
@@ -84,7 +87,8 @@ public sealed record SiteDetail(
     bool HasLogo,
     bool IsActive,
     IReadOnlyList<string> InvoicingBlockers,
-    IReadOnlyList<string> OperationBlockers);
+    IReadOnlyList<string> OperationBlockers,
+    byte[]? LogoPng = null);
 
 public sealed record SequenceRow(
     Guid SequenceId,
@@ -257,7 +261,8 @@ public sealed class ConfigurationService(
         site.Website = Blank(request.Website);
         site.IsActive = request.IsActive;
 
-        if (request.LogoPng is { Length: > 0 }) site.LogoPng = request.LogoPng;
+        if (request.RemoveLogo) site.LogoPng = null;
+        else if (request.LogoPng is { Length: > 0 }) site.LogoPng = request.LogoPng;
 
         sites.Update(site);
 

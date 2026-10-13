@@ -135,7 +135,7 @@ public sealed class PatientSearchView : LocalizedView
         searchBar.Controls.AddRange([_searchLabel, _search, _resultCount, _newPatient,
                                      _editPatient, _merge, _anonymize, _status]);
 
-        var split = new SplitContainer
+        var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
