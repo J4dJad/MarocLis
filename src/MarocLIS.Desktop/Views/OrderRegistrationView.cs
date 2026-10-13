@@ -341,6 +341,23 @@ public sealed class OrderRegistrationView : LocalizedView
 
         _catalogSearch.TextChanged += async (_, _) => await SearchCatalogueAsync();
 
+        // Typing a code or a name and pressing Enter adds the analysis without touching the mouse;
+        // the down arrow moves into the list to choose another match.
+        _catalogSearch.KeyDown += async (_, e) =>
+        {
+            if (e.KeyCode == Keys.Down && _catalog.Rows.Count > 0)
+            {
+                e.SuppressKeyPress = true;
+                _catalog.Focus();
+                _catalog.SelectFirstRow();
+                return;
+            }
+
+            if (e.KeyCode != Keys.Enter) return;
+            e.SuppressKeyPress = true;
+            await AddFromSearchAsync();
+        };
+
         // Double-click, or Enter, adds to the basket. Both, because a clerk working at speed uses
         // the keyboard and one working with a patient at the counter uses the mouse.
         _catalog.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) AddToBasket(e.RowIndex); };
@@ -575,12 +592,55 @@ public sealed class OrderRegistrationView : LocalizedView
 
     // ---- Catalogue ---------------------------------------------------------------------------------
 
+    private async Task AddFromSearchAsync()
+    {
+        var term = _catalogSearch.Text.Trim();
+        if (term.Length == 0) return;
+
+        // Enter can arrive before the search started by the last keystroke has answered.
+        await SearchCatalogueAsync();
+
+        // An exact code wins ("NFS" is the blood count, not every analysis whose name holds "nfs"),
+        // then a code that starts with what was typed, then the first match by name.
+        var match =
+            _catalogItems.FirstOrDefault(i => string.Equals(i.Code, term, StringComparison.OrdinalIgnoreCase))
+            ?? _catalogItems.FirstOrDefault(i => i.Code.StartsWith(term, StringComparison.OrdinalIgnoreCase))
+            ?? _catalogItems.FirstOrDefault();
+
+        if (match is null)
+        {
+            _status.ForeColor = UiTheme.Abnormal;
+            _status.Text = T("App.NoData");
+            return;
+        }
+
+        var row = _catalog.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Tag is Guid id && id == match.Id);
+        if (row is null) return;
+
+        AddToBasket(row.Index);
+
+        // Cleared only when the analysis went in, so a refusal ("already in the panel") leaves
+        // the text for the clerk to correct.
+        if (_selected.Any(x => x.Id == match.Id && x.IsPanel == match.IsPanel))
+        {
+            _catalogSearch.Clear();
+            _catalogSearch.Focus();
+        }
+    }
+
+    private int _catalogSearchVersion;
+
     private async Task SearchCatalogueAsync(CancellationToken ct = default)
     {
+        var version = ++_catalogSearchVersion;
+
         try
         {
             var items = await _catalogQueries.SearchPickerAsync(
                 _catalogSearch.Text, payerId: null, _clock.Today, ct: ct);
+
+            // Each keystroke starts a search; only the latest one may fill the list.
+            if (version != _catalogSearchVersion) return;
 
             _catalogItems.Clear();
             _catalogItems.AddRange(items);

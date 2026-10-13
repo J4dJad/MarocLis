@@ -62,13 +62,16 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
         string? term, Guid? payerId, DateOnly on, int take = 60, CancellationToken ct = default)
     {
         var pattern = string.IsNullOrWhiteSpace(term) ? null : $"%{term.Trim()}%";
+        // Codes are stored upper-case in a case-sensitive column: "nfs" typed at the counter has
+        // to find NFS.
+        var codePattern = pattern?.ToUpperInvariant();
 
         var analyses = db.AnalysisTests.AsNoTracking().Where(t => t.IsActive);
 
         if (pattern is not null)
         {
             analyses = analyses.Where(t =>
-                EF.Functions.Like(t.Code, pattern)
+                EF.Functions.Like(t.Code, codePattern!)
                 || EF.Functions.Like(t.Name.Fr, pattern)
                 || (t.Name.Ar != null && EF.Functions.Like(t.Name.Ar, pattern))
                 || (t.Name.En != null && EF.Functions.Like(t.Name.En, pattern))
@@ -119,7 +122,7 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
         if (pattern is not null)
         {
             panels = panels.Where(p =>
-                EF.Functions.Like(p.Code, pattern)
+                EF.Functions.Like(p.Code, codePattern!)
                 || EF.Functions.Like(p.Name.Fr, pattern)
                 || (p.Name.Ar != null && EF.Functions.Like(p.Name.Ar, pattern))
                 || (p.Name.En != null && EF.Functions.Like(p.Name.En, pattern))
