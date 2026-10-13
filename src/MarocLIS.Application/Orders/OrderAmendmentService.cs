@@ -127,6 +127,19 @@ public sealed record OrderSampleDetail(
     string? StorageLocation,
     int AnalysisCount);
 
+/// <summary>
+/// One order in the file screen's list: enough to recognise the file and pick it, nothing more.
+/// The full file is loaded only for the row the operator selects.
+/// </summary>
+public sealed record OrderListRow(
+    Guid OrderId,
+    string AccessionNumber,
+    string PatientName,
+    DateTimeOffset RegisteredAt,
+    LabOrderStatus Status,
+    OrderPriority Priority,
+    int AnalysisCount);
+
 /// <summary>What the file screen can change about an order's header.</summary>
 public sealed record AmendOrderHeaderRequest
 {
@@ -218,6 +231,32 @@ public sealed class OrderAmendmentService(
 
         return Result.Success(
             await queries.ResolveOrderIdAsync(term.Trim(), currentUser.SiteId, ct));
+    }
+
+    /// <summary>
+    /// The most recent orders of the current site, newest first, optionally filtered by accession
+    /// number, patient name, CIN or file number.
+    /// <para>
+    /// The file screen opens on this list rather than on an empty search box: an operator who is
+    /// asked about "the file from this morning" rarely has its number to hand, and a screen that
+    /// shows nothing until an exact number is typed reads as broken. Capped, because the list is
+    /// for picking a recent file, not for browsing the archive — a search narrows it to the rest.
+    /// </para>
+    /// <para>
+    /// Not logged as a consultation: the list shows who has a file, not what is in it. Opening a
+    /// row goes through <see cref="GetDetailAsync"/>, which is.
+    /// </para>
+    /// </summary>
+    public async Task<Result<IReadOnlyList<OrderListRow>>> SearchOrdersAsync(
+        string? term, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Orders.View);
+        if (permitted.IsFailure)
+            return Result.Failure<IReadOnlyList<OrderListRow>>(permitted.FirstError);
+
+        return Result.Success(await queries.SearchAsync(
+            string.IsNullOrWhiteSpace(term) ? null : term.Trim(), currentUser.SiteId,
+            IOrderQueries.ListPageSize, ct));
     }
 
     // ---- Adding analyses -----------------------------------------------------------------------
@@ -587,4 +626,16 @@ public interface IOrderQueries
     /// only; returns null when nothing matches.
     /// </summary>
     Task<Guid?> ResolveOrderIdAsync(string term, Guid siteId, CancellationToken ct = default);
+
+    /// <summary>How many rows the file screen's list shows at most.</summary>
+    const int ListPageSize = 200;
+
+    /// <summary>
+    /// The site's orders, newest first, at most <paramref name="take"/> of them. With a term, only
+    /// those whose accession number, patient name (through the patient's search key, so accents and
+    /// case do not matter), CIN or file number contains it.
+    /// </summary>
+    Task<IReadOnlyList<OrderListRow>> SearchAsync(string? term, Guid siteId,
+                                                  int take = ListPageSize,
+                                                  CancellationToken ct = default);
 }

@@ -373,6 +373,8 @@
   },
 
   "Order": {
+    "ListTruncated": "Les {0} dossiers les plus récents — affinez la recherche pour les autres",
+    "ListCount": "{0} dossier(s)",
     "SharedAnalyses": "{0} analyse(s) déjà comptée(s)",
     "MergedIntoPanel": "{0} : déjà compris dans le profil « {1} », retiré de la liste pour ne pas être compté deux fois.",
     "AlreadyInPanel": "{0} est déjà comprise dans le profil « {1} » : elle n'est pas ajoutée une seconde fois.",
@@ -411,7 +413,7 @@
     "InpeNotice": "Sans INPE, une facture en tiers payant portant l'ordonnance de ce prescripteur ne peut pas être transmise.",
     "CriticalPhoneNotice": "Un résultat critique doit être communiqué à une personne nommée, sur un numéro que quelqu'un a enregistré.",
     "DeliveryContactNotice": "Le mode de transmission choisi exige une adresse de courriel, un mobile ou un fax renseigné.",
-    "SearchPlaceholder": "N° de dossier ou code-barres du tube",
+    "SearchPlaceholder": "N° de dossier, code-barres, nom du patient, CIN ou n° de fiche",
     "NotFoundForTerm": "Aucun dossier ne correspond à « {0} ».",
     "NoPrescriber": "non renseigné",
     "NotFasted": "patient non à jeun",

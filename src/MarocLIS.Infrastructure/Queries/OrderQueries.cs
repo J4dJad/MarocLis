@@ -1,6 +1,8 @@
 using MarocLIS.Application.Orders;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Orders;
+using MarocLIS.Domain.Patients;
 using MarocLIS.Domain.Results;
 using MarocLIS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +19,55 @@ public sealed class OrderQueries(LisDbContext db, IResultQueries results) : IOrd
     public Task<Guid?> ResolveOrderIdAsync(string term, Guid siteId,
                                             CancellationToken ct = default) =>
         results.ResolveOrderIdAsync(term, siteId, ct);
+
+    /// <summary>
+    /// The file screen's list.
+    /// <para>
+    /// The name is matched through the patient's stored search key, normalised exactly as
+    /// <see cref="PatientQueries.SearchAsync"/> does it, so "benani" finds "BÉNANI" and "Benani"
+    /// alike, and a name finds the same patients here as on the patient screen. The numbers — accession,
+    /// CIN, file number — are compared upper-cased with spaces removed, which is how they are
+    /// stored and how they get read out over a counter.
+    /// </para>
+    /// <para>
+    /// A <c>LIKE</c> here, unlike in <see cref="ResolveOrderIdAsync"/>: this only narrows a list
+    /// the operator then picks from, it never attaches anything to anything.
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<OrderListRow>> SearchAsync(string? term, Guid siteId,
+                                                               int take = IOrderQueries.ListPageSize,
+                                                               CancellationToken ct = default)
+    {
+        take = Math.Clamp(take, 1, IOrderQueries.ListPageSize);
+
+        var query = db.LabOrders.AsNoTracking().Where(o => o.SiteId == siteId);
+
+        if (!string.IsNullOrWhiteSpace(term))
+        {
+            var raw = term.Trim();
+            var normalised = PatientSearchKey.Normalise(raw);
+            var upper = raw.Replace(" ", string.Empty).ToUpperInvariant();
+
+            query = query.Where(o =>
+                o.AccessionNumber.Contains(upper)
+                || (normalised.Length > 0 && o.Patient!.SearchKey.Contains(normalised))
+                || o.Patient!.MedicalRecordNumber.Contains(upper)
+                || (o.Patient!.Cin != null && o.Patient.Cin.Contains(upper)));
+        }
+
+        return await query
+            .OrderByDescending(o => o.RegisteredAt)
+            .Take(take)
+            .Select(o => new OrderListRow(
+                o.Id,
+                o.AccessionNumber,
+                o.Patient != null ? o.Patient.LastName + " " + o.Patient.FirstName : string.Empty,
+                o.RegisteredAt,
+                o.Status,
+                o.Priority,
+                o.Items.Count(i => i.Status != LabOrderItemStatus.Cancelled)))
+            .ToListAsync(ct);
+    }
 
     /// <summary>
     /// The whole file for the order screen.

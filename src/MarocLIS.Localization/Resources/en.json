@@ -373,6 +373,8 @@
   },
 
   "Order": {
+    "ListTruncated": "The {0} most recent orders — refine the search to find older ones",
+    "ListCount": "{0} order(s)",
     "SharedAnalyses": "{0} analysis(es) already counted",
     "MergedIntoPanel": "{0}: already part of the profile \"{1}\", removed from the list so it is not counted twice.",
     "AlreadyInPanel": "{0} is already part of the profile \"{1}\" and is not added a second time.",
@@ -411,7 +413,7 @@
     "InpeNotice": "Without an INPE, a third-party claim carrying this prescriber's prescription cannot be submitted.",
     "CriticalPhoneNotice": "A critical result has to be communicated to a named person, on a number somebody recorded.",
     "DeliveryContactNotice": "The chosen delivery method needs an e-mail address, a mobile number or a fax on file.",
-    "SearchPlaceholder": "Accession number or tube barcode",
+    "SearchPlaceholder": "Accession number, barcode, patient name, CIN or file number",
     "NotFoundForTerm": "No order matches \"{0}\".",
     "NoPrescriber": "not recorded",
     "NotFasted": "patient not fasting",
