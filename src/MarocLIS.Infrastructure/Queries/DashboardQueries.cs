@@ -120,6 +120,17 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
                              && !l.IsRejected && !l.IsRecalled
                              && l.ExpiryDate <= expiryHorizon, ct);
 
+        // Items at or under their reorder point, counting only what can be used: a lot still in
+        // quarantine, expired or past its open stability does not fill a rack.
+        var toReorder = await db.StockItems.AsNoTracking()
+            .CountAsync(i => i.Lots
+                .Where(l => !l.IsQuarantined && !l.IsRejected && !l.IsRecalled
+                            && l.ExpiryDate >= todayOnly
+                            && (l.OpenedOn == null
+                                || l.StabilityAfterOpeningDays == null
+                                || l.OpenedOn.Value.AddDays(l.StabilityAfterOpeningDays.Value) >= todayOnly))
+                .Sum(l => l.QuantityRemaining) <= i.ReorderPoint, ct);
+
         // Computed in SQL from the interval rather than read from a stored "next due" column: a
         // stored date would go stale the moment an interval is changed, and an instrument silently
         // considered in-calibration is precisely the failure this metric exists to catch.
@@ -166,6 +177,9 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
                     calibrationOverdue > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral),
                 new("Dashboard.OpenNonConformities", openNonConformities,
                     openNonConformities > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
+                new("Inventory.ToReorder", toReorder,
+                    toReorder > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "inventory"),
                 new("Inventory.ExpiringSoon", expiringLots,
                     expiringLots > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
                 new("SampleStatus.Rejected", rejectedSamplesToday,

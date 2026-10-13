@@ -221,14 +221,18 @@ public sealed class ResultEntryView : LocalizedView
         _worklistTitle.AutoSize = true;
         _worklistTitle.Location = new Point(0, 8);
 
-        _refreshWorklist.Size = new Size(110, UiTheme.ButtonHeight - 4);
+        _refreshWorklist.Size = new Size(140, UiTheme.ButtonHeight - 4);
         _refreshWorklist.TabStop = false;
 
         worklistBar.Controls.AddRange([_worklistTitle, _refreshWorklist]);
-        worklistBar.Resize += (_, _) =>
+        // Placed again when the title changes too: "À saisir (12)" is wider than the first caption.
+        void PlaceRefresh() =>
             _refreshWorklist.Location = new Point(
                 Math.Max(_worklistTitle.Right + UiTheme.Gutter,
                          worklistBar.ClientSize.Width - _refreshWorklist.Width - UiTheme.GutterTight), 4);
+
+        worklistBar.Resize += (_, _) => PlaceRefresh();
+        _worklistTitle.SizeChanged += (_, _) => PlaceRefresh();
 
         BuildWorklistColumns();
 

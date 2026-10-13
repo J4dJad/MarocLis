@@ -66,7 +66,7 @@ public class IsolatedQueryProxy<TQueries> : DispatchProxy where TQueries : class
             throw new OperationCanceledException();
         }
 
-        if (!isAsync || shared.Database.CurrentTransaction is not null)
+        if (!isAsync || shared.Database.CurrentTransaction is not null || ReturnsEntity(returnType))
         {
             return Call(targetMethod, _sharedInstance ??= _factory(_scoped), args);
         }
@@ -93,6 +93,21 @@ public class IsolatedQueryProxy<TQueries> : DispatchProxy where TQueries : class
                 .MakeGenericMethod(t));
 
         return awaiter.Invoke(null, [result, scope]);
+    }
+
+    // A query that hands back a domain entity loads it for a service to change and save. Loaded on
+    // a context of its own, the entity was saved by nobody: releasing a reagent lot from
+    // quarantine reported success and the lot stayed in quarantine. Such calls use the screen's
+    // context, the one the service saves.
+    private static bool ReturnsEntity(Type returnType)
+    {
+        if (!returnType.IsGenericType) return false;
+
+        var result = returnType.GetGenericArguments()[0];
+        if (result.IsGenericType && result.GetGenericArguments() is [var element]) result = element;
+
+        return result.Namespace?.StartsWith("MarocLIS.Domain", StringComparison.Ordinal) == true
+               && !result.IsEnum && !result.IsValueType;
     }
 
     private static object? Call(MethodInfo method, TQueries target, object?[]? args)

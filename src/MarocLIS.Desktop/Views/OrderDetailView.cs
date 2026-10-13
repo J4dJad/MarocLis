@@ -149,7 +149,7 @@ public sealed class OrderDetailView : LocalizedView
         _search.Font = UiTheme.Body;
         _search.Location = new Point(0, 4);
 
-        _refresh.Size = new Size(110, UiTheme.ButtonHeight - 4);
+        _refresh.Size = new Size(140, UiTheme.ButtonHeight - 4);
 
         _listCount.Font = UiTheme.Small;
         _listCount.ForeColor = UiTheme.TextMuted;

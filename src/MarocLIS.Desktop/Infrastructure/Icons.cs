@@ -180,6 +180,31 @@ public static class ButtonIcons
         if (Decorated.TryGetValue(button, out var state)) Paint(button, state.Current);
     }
 
+    // Widens a button to fit its icon and caption when nothing sits in the way, on the side away
+    // from its anchor; a button docked or boxed in by its neighbours is left as it is.
+    private static bool TryWiden(Button button, int width)
+    {
+        if (button.Dock != DockStyle.None || button.Parent is not { } parent) return false;
+
+        var growLeft = (button.Anchor & AnchorStyles.Right) != 0 && (button.Anchor & AnchorStyles.Left) == 0;
+        var wanted = growLeft
+            ? new Rectangle(button.Right - width, button.Top, width, button.Height)
+            : new Rectangle(button.Left, button.Top, width, button.Height);
+
+        if (wanted.Left < 0 || (parent.ClientSize.Width > 0 && wanted.Right > parent.ClientSize.Width))
+            return false;
+
+        foreach (Control sibling in parent.Controls)
+        {
+            if (sibling == button || !sibling.Visible) continue;
+            if (sibling.Bounds.IntersectsWith(wanted) && !sibling.Bounds.IntersectsWith(button.Bounds))
+                return false;
+        }
+
+        button.Bounds = wanted;
+        return true;
+    }
+
     private static void Paint(Button button, Glyph? glyph)
     {
         if (glyph is null)
@@ -191,11 +216,16 @@ public static class ButtonIcons
         // A button sized for its caption alone keeps its caption: a cut-off word is worse than a
         // missing picture. Strips that reflow widen their buttons to fit both.
         var size = Size(button);
+
+        // The button draws its own border and a few pixels of margin round the content, which the
+        // measure did not count: "Actualiser" with its icon measured 108 in a 110 button and came
+        // out as "Actualise" with the icon pushed under the text.
         var needed = TextRenderer.MeasureText(button.Text, button.Font).Width
-                     + size + 6 + button.Padding.Horizontal + 8;
+                     + size + 6 + button.Padding.Horizontal + 20;
 
         if (!button.AutoSize && needed > button.Width && !BarReflow.Manages(button)
-            && !(Decorated.TryGetValue(button, out var state) && state.Always))
+            && !(Decorated.TryGetValue(button, out var state) && state.Always)
+            && !TryWiden(button, needed))
         {
             if (button.Image is not null) button.Image = null;
             return;

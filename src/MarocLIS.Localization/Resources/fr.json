@@ -1175,6 +1175,7 @@
   },
 
   "Inventory": {
+    "ToReorder": "Articles à commander",
     "Title": "Stocks",
     "Item": "Article",
     "Items": "Articles",
