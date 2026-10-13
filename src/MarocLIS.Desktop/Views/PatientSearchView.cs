@@ -393,10 +393,12 @@ public sealed class PatientSearchView : LocalizedView
         }
     }
 
-    public override Task ActivateAsync(CancellationToken ct = default)
+    // The screen opens on the patient list (an empty search returns the first page) rather than on
+    // an empty grid the clerk had to type into before anything appeared.
+    public override async Task ActivateAsync(CancellationToken ct = default)
     {
         _search.Focus();
-        return Task.CompletedTask;
+        await SearchAsync();
     }
 
     private async Task SearchAsync()

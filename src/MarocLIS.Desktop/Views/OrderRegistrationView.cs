@@ -391,6 +391,7 @@ public sealed class OrderRegistrationView : LocalizedView
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
         await SearchCatalogueAsync(ct);
+        if (_patientId is null && _patientPicker.Items.Count == 0) await SearchPatientsAsync();
         _patientSearch.Focus();
     }
 
@@ -400,7 +401,9 @@ public sealed class OrderRegistrationView : LocalizedView
     {
         var term = _patientSearch.Text.Trim();
 
-        if (term.Length < 3)
+        // One or two characters match too much to be useful; an empty box lists the patients so the
+        // picker is never an empty drop-down, but nobody is selected until the clerk chooses.
+        if (term.Length is > 0 and < 3)
         {
             _patientPicker.Items.Clear();
             return;
@@ -408,7 +411,8 @@ public sealed class OrderRegistrationView : LocalizedView
 
         try
         {
-            var page = await _patientQueries.SearchAsync(term, _currentUser.SiteId, pageSize: 25);
+            var page = await _patientQueries.SearchAsync(term, _currentUser.SiteId,
+                                                          pageSize: term.Length == 0 ? 100 : 25);
             _patients = page.Items;
 
             _patientPicker.BeginUpdate();
@@ -423,7 +427,7 @@ public sealed class OrderRegistrationView : LocalizedView
                     (patient.PayerName is { Length: > 0 } ? $"  [{patient.PayerName}]" : string.Empty)));
             }
 
-            if (_patientPicker.Items.Count > 0) _patientPicker.SelectedIndex = 0;
+            if (_patientPicker.Items.Count > 0 && term.Length > 0) _patientPicker.SelectedIndex = 0;
             _patientPicker.EndUpdate();
         }
         catch (Exception ex)
