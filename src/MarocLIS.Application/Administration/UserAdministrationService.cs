@@ -313,11 +313,20 @@ public sealed class UserAdministrationService(
 
         // Downgrading a qualification while the user still holds a validating role would leave a
         // biologist role attached to someone the law no longer lets validate. Checked against the
-        // roles the user actually has, not against the ones being set.
-        var roleCheck = await CheckRolesAgainstQualificationAsync(
-            [.. user.Roles.Select(r => r.RoleId)], request.Qualification,
-            request.ProfessionalOrderNumber, ct);
-        if (roleCheck.IsFailure) return roleCheck;
+        // roles the user actually has, not against the ones being set. Only when the qualification
+        // or its registration actually changes: correcting the telephone number of the seeded
+        // administrator, whose role carries every permission, must not be refused for a
+        // qualification nobody touched. Validation itself re-checks the qualification regardless.
+        var qualificationChanged = request.Qualification != user.Qualification
+                                   || Blank(request.ProfessionalOrderNumber) != user.ProfessionalOrderNumber;
+
+        if (qualificationChanged)
+        {
+            var roleCheck = await CheckRolesAgainstQualificationAsync(
+                [.. user.Roles.Select(r => r.RoleId)], request.Qualification,
+                request.ProfessionalOrderNumber, ct);
+            if (roleCheck.IsFailure) return roleCheck;
+        }
 
         user.FullName = request.FullName.Trim();
         user.FullNameArabic = Blank(request.FullNameArabic);
@@ -357,8 +366,11 @@ public sealed class UserAdministrationService(
         var wanted = roleIds.Distinct().ToList();
         var existing = user.Roles.Select(r => r.RoleId).ToList();
 
+        // Only the roles being attached are checked: a role the user already holds was checked
+        // when it was given, and re-checking it would stop the seeded administrator — whose role
+        // carries every permission — from ever having a role added or removed.
         var qualified = await CheckRolesAgainstQualificationAsync(
-            wanted, user.Qualification, user.ProfessionalOrderNumber, ct);
+            [.. wanted.Except(existing)], user.Qualification, user.ProfessionalOrderNumber, ct);
         if (qualified.IsFailure) return qualified;
 
         var granted = await queries.GetPermissionsForRolesAsync(wanted, ct);

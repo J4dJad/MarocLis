@@ -72,7 +72,7 @@ public sealed class QuestPdfReportRenderer : IReportRenderer
         Initialise(options);
     }
 
-    private static void Initialise(ReportingOptions options)
+    internal static void Initialise(ReportingOptions options)
     {
         lock (InitLock)
         {

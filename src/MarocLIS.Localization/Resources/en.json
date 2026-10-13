@@ -1,6 +1,11 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
 
+  "Print": {
+    "RowCount": "{0} row(s)",
+    "NothingToPrint": "This screen shows no list to print."
+  },
+
   "App": {
     "Title": "Laboratory Information System",
     "ShortTitle": "MarocLIS",
@@ -350,6 +355,8 @@
   },
 
   "Order": {
+    "NoReportYet": "No report has been released for this file yet.",
+    "PrintReport": "Report (PDF)",
     "Title": "Order",
     "Plural": "Orders",
     "AccessionNumber": "Accession no.",
@@ -1295,6 +1302,7 @@
   },
 
   "Interface": {
+    "PickInstrumentNotice": "A link belongs to an analyser. Only analysers that do not have a link yet are offered.",
     "New": "New interface",
     "Edit": "Edit the interface",
     "Enable": "Enable the link",
@@ -1924,6 +1932,7 @@
   },
 
   "Login": {
+    "CapsLockOn": "Caution: Caps Lock is on.",
     "Title": "Sign in",
     "Subtitle": "Medical biology laboratory information system",
     "UserName": "User name",
@@ -2239,8 +2248,9 @@
   "Label_PrintFailed": "Printing the labels failed. Check the stock and the print queue.",
   "Document_Empty": "The document is empty: nothing to open.",
   "Document_WriteFailed": "The document could not be written on this workstation.",
-  "Document_NoViewer": "No PDF reader is associated on this workstation. The document is here: {0}",
+  "Document_NoViewer": "No application is associated with this file type on this workstation (PDF reader, spreadsheet…). The document is here: {0}",
   "Interface_InstrumentRequired": "An interface belongs to an analyser: create it from the equipment screen.",
+  "Interface_NoInstrumentAvailable": "No analyser without a link: first create the analyser in Reference data › Analysers.",
   "Interface_AlreadyExistsForInstrument": "Analyser {0} already has an interface: two links would both claim the same results.",
   "Interface_StateChangeReasonRequired": "Give the reason: taking a link off the air stops results arriving, and the next shift needs to know whether that was deliberate.",
   "Interface_AutoAcceptNeedsMappings": "Auto-acceptance needs a populated mapping table: without one every result would arrive under an unknown code.",
@@ -2750,7 +2760,7 @@
     "ToApprove": "to approve",
     "Late": "late",
     "TotalsLine": "Total excl. VAT {0} MAD · VAT {1} MAD · Total incl. VAT {2} MAD",
-    "NoApprovedSupplier": "No approved supplier. Approve a supplier first in Master data.",
+    "NoApprovedSupplier": "No approved supplier. Open Reference data › Suppliers, edit the supplier and tick “Approved”, then come back here.",
     "SendQuestion": "Confirm that order {0} has been sent to {1}?",
     "CancelPrompt": "Reason for cancelling order {0}:",
     "ApprovalNotice": "The order must be approved by someone other than you before it can be sent.",

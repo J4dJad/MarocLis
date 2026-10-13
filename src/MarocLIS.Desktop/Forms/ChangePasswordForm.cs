@@ -88,6 +88,11 @@ public sealed class ChangePasswordForm : LocalizedForm
     {
         var y = 20;
 
+        // Sized to their text: a label built in code is 100 x 23 by default, which cut
+        // "Nouveau mot de passe" down to "Nouveau mot".
+        foreach (var label in new[] { _currentLabel, _newLabel, _confirmLabel })
+            label.AutoSize = true;
+
         _currentLabel.Location = new Point(24, y);
         _current.Location = new Point(24, y + 18);
 

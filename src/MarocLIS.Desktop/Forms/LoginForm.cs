@@ -61,6 +61,11 @@ public sealed class LoginForm : LocalizedForm
         BuildLayout();
 
         _signIn.Click += async (_, _) => await SignInAsync();
+
+        // A password typed with Caps Lock on is the commonest "my password is refused" at a shared
+        // counter; saying so before the attempt saves a lockout.
+        _password.KeyUp += (_, _) => ShowCapsLock();
+        _password.Enter += (_, _) => ShowCapsLock();
         AcceptButton = _signIn;
 
         _language.SelectedIndexChanged += OnLanguageSelected;
@@ -83,6 +88,11 @@ public sealed class LoginForm : LocalizedForm
         _subtitle.Bounds = new Rectangle(28, 58, 384, 32);
 
         var y = 104;
+
+        // Sized to their text: a label built in code is 100 x 23 by default, which clips a longer
+        // caption and lets its blank lower edge paint over the top border of the field below.
+        foreach (var label in new[] { _userNameLabel, _passwordLabel, _siteLabel, _languageLabel })
+            label.AutoSize = true;
 
         _userNameLabel.Location = new Point(28, y);
         _userName.Location = new Point(28, y + 18);
@@ -217,6 +227,15 @@ public sealed class LoginForm : LocalizedForm
         };
 
         if (language != _cultureManager.CurrentLanguage) _cultureManager.SetLanguage(language);
+    }
+
+    private void ShowCapsLock()
+    {
+        var on = IsKeyLocked(Keys.CapsLock);
+        var warning = T("Login.CapsLockOn");
+
+        if (on) _status.Text = warning;
+        else if (_status.Text == warning) _status.Text = string.Empty;
     }
 
     private async Task SignInAsync()

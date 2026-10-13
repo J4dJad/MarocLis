@@ -1,6 +1,11 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
 
+  "Print": {
+    "RowCount": "{0} ligne(s)",
+    "NothingToPrint": "Cet écran n'affiche aucune liste à imprimer."
+  },
+
   "App": {
     "Title": "Système de gestion de laboratoire",
     "ShortTitle": "MarocLIS",
@@ -350,6 +355,8 @@
   },
 
   "Order": {
+    "NoReportYet": "Aucun compte rendu n'a encore été diffusé pour ce dossier.",
+    "PrintReport": "Compte rendu (PDF)",
     "Title": "Dossier",
     "Plural": "Dossiers",
     "AccessionNumber": "N° de dossier",
@@ -1296,6 +1303,7 @@
   },
 
   "Interface": {
+    "PickInstrumentNotice": "Une liaison appartient à un automate. Seuls les automates qui n'ont pas encore de liaison sont proposés.",
     "New": "Nouvelle interface",
     "Edit": "Modifier l'interface",
     "Enable": "Activer la liaison",
@@ -1925,6 +1933,7 @@
   },
 
   "Login": {
+    "CapsLockOn": "Attention : le verrouillage des majuscules est activé.",
     "Title": "Connexion",
     "Subtitle": "Système de gestion de laboratoire d'analyses de biologie médicale",
     "UserName": "Identifiant",
@@ -2240,8 +2249,9 @@
   "Label_PrintFailed": "L'impression des étiquettes a échoué. Vérifiez le papier et la file d'impression.",
   "Document_Empty": "Le document est vide : rien à ouvrir.",
   "Document_WriteFailed": "Impossible d'écrire le document sur ce poste.",
-  "Document_NoViewer": "Aucun lecteur PDF n'est associé sur ce poste. Le document est ici : {0}",
+  "Document_NoViewer": "Aucune application n'est associée à ce type de fichier sur ce poste (lecteur PDF, tableur…). Le document est ici : {0}",
   "Interface_InstrumentRequired": "Une interface se rattache à un automate : créez-la depuis l'écran des équipements.",
+  "Interface_NoInstrumentAvailable": "Aucun automate sans liaison : créez d'abord l'automate dans Données de référence › Automates (type « Automate »).",
   "Interface_AlreadyExistsForInstrument": "L'automate {0} possède déjà une interface : deux liaisons revendiqueraient les mêmes résultats.",
   "Interface_StateChangeReasonRequired": "Indiquez le motif : couper une liaison arrête l'arrivée des résultats, et l'équipe suivante doit savoir si c'était volontaire.",
   "Interface_AutoAcceptNeedsMappings": "L'acceptation automatique exige une table de correspondance renseignée : sans elle, chaque résultat arriverait avec un code inconnu.",
@@ -2751,7 +2761,7 @@
     "ToApprove": "à approuver",
     "Late": "en retard",
     "TotalsLine": "Total HT {0} MAD · TVA {1} MAD · Total TTC {2} MAD",
-    "NoApprovedSupplier": "Aucun fournisseur approuvé. Approuvez d'abord un fournisseur dans Données de référence.",
+    "NoApprovedSupplier": "Aucun fournisseur approuvé. Ouvrez Données de référence › Fournisseurs, modifiez le fournisseur et cochez « Approuvé », puis revenez ici.",
     "SendQuestion": "Confirmez-vous l'envoi de la commande {0} à {1} ?",
     "CancelPrompt": "Motif de l'annulation de la commande {0} :",
     "ApprovalNotice": "La commande devra être approuvée par une autre personne que vous avant de pouvoir être envoyée.",

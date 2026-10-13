@@ -21,6 +21,29 @@ public static class BarReflow
     private const int Gap = 10;
     private const int LineGap = 6;
 
+    /// <summary>
+    /// Lets a label nobody sized fit its text.
+    /// <para>
+    /// A <see cref="Label"/> created in code is 100 x 23 pixels and does not grow: "Nouveau mot de
+    /// passe" became "Nouveau mot", and the blank lower edge of a field caption painted over the
+    /// top border of the box beneath it. A label still at exactly that default size, and not
+    /// docked, was never given one, so it is switched to sizing itself.
+    /// </para>
+    /// </summary>
+    public static void SizeUnsizedLabels(Control root)
+    {
+        foreach (Control child in root.Controls)
+        {
+            if (child is Label { AutoSize: false, Dock: DockStyle.None } label
+                && label.Size == DefaultLabelSize)
+                label.AutoSize = true;
+
+            SizeUnsizedLabels(child);
+        }
+    }
+
+    private static readonly Size DefaultLabelSize = new Label().Size;
+
     public static void AttachAll(Control root)
     {
         foreach (Control child in root.Controls)

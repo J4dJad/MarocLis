@@ -29,6 +29,7 @@ public static class DesktopServiceCollectionExtensions
         // Singletons: both renderers are stateless after font registration, and registering fonts
         // per report would be wasteful on a reception workstation printing continuously.
         services.AddSingleton<IReportRenderer, QuestPdfReportRenderer>();
+        services.AddSingleton<IListPdfRenderer, ListPdfRenderer>();
 
         // Resolved once: the installed font set does not change while the application runs, and the
         // report screen would otherwise pay to enumerate it on every release.

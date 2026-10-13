@@ -5,6 +5,8 @@ using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Localization;
 
+using MarocLIS.Reporting;
+
 namespace MarocLIS.Desktop.Forms;
 
 /// <summary>
@@ -31,6 +33,9 @@ public sealed class MainShellForm : LocalizedForm
     private readonly Label _userInfo = new();
     private readonly Label _siteInfo = new();
     private readonly ComboBox _languagePicker = new();
+    private readonly Button _print = UiTheme.SecondaryButton(string.Empty);
+    private readonly IListPdfRenderer _lists;
+    private readonly IDocumentOutput _documents;
     private readonly Label _clock = new();
     private readonly System.Windows.Forms.Timer _clockTimer = new() { Interval = 30_000 };
     private readonly System.Windows.Forms.Timer _idleTimer = new();
@@ -42,9 +47,12 @@ public sealed class MainShellForm : LocalizedForm
 
     public MainShellForm(ICurrentUser currentUser, INavigationService navigation,
                          ILocalizer localizer, ICultureManager cultureManager,
-                         IUserDialogs dialogs, PasswordPolicy policy)
+                         IUserDialogs dialogs, PasswordPolicy policy,
+                         IListPdfRenderer lists, IDocumentOutput documents)
         : base(localizer, cultureManager)
     {
+        _lists = lists;
+        _documents = documents;
         _currentUser = currentUser;
         _navigation = navigation;
         _cultureManager = cultureManager;
@@ -118,7 +126,15 @@ public sealed class MainShellForm : LocalizedForm
         _languagePicker.Width = 104;
         _languagePicker.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
-        _header.Controls.AddRange([brand, _viewTitle, _userInfo, _siteInfo, _clock, _languagePicker]);
+        // Printing lives in the header, beside the language, so it is in the same place on every
+        // screen: it prints whatever list the current screen is showing.
+        _print.Width = 120;
+        _print.Height = 28;
+        _print.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        _print.Click += async (_, _) => await PrintCurrentListAsync();
+
+        _header.Controls.AddRange([brand, _viewTitle, _userInfo, _siteInfo, _clock, _print,
+                                   _languagePicker]);
         _header.Resize += (_, _) => PositionHeaderItems();
 
         _sidebar.Dock = DockStyle.Left;
@@ -143,6 +159,9 @@ public sealed class MainShellForm : LocalizedForm
 
         _languagePicker.Location = new Point(right - _languagePicker.Width, 14);
         right -= _languagePicker.Width + UiTheme.Gutter;
+
+        _print.Location = new Point(right - _print.Width, 12);
+        right -= _print.Width + UiTheme.Gutter;
 
         _clock.Location = new Point(right - _clock.Width, 18);
         right -= _clock.Width + UiTheme.Gutter * 2;
@@ -380,6 +399,7 @@ public sealed class MainShellForm : LocalizedForm
         Text = $"{T("App.Title")} — {_currentUser.FullName}";
 
         _userInfo.Text = _currentUser.FullName;
+        _print.Text = T("Action.Print") + "  (Ctrl+P)";
         _siteInfo.Text = $"{T("App.Site")} : {_currentUser.SiteCode}   ·   " +
                          $"{T("App.Workstation")} : {_currentUser.Workstation}";
 
@@ -398,6 +418,37 @@ public sealed class MainShellForm : LocalizedForm
         if (_navButtons.Count > 0) RenderNavigation();
 
         PositionHeaderItems();
+    }
+
+    /// <summary>Prints the list the current screen is showing, as it is shown.</summary>
+    private async Task PrintCurrentListAsync()
+    {
+        if (_navigation.Current is not { } view) return;
+
+        var grid = ListPrinting.MainGrid(view);
+
+        if (grid is null || grid.Rows.Count == 0)
+        {
+            _dialogs.Info(T("Print.NothingToPrint"), T("Action.Print"));
+            return;
+        }
+
+        try
+        {
+            var caption = $"{T("App.Site")} : {_currentUser.SiteCode}   ·   {_currentUser.FullName}   ·   " +
+                          $"{DateTime.Now:g}   ·   {T("Print.RowCount", grid.Rows.Count)}";
+
+            var document = ListPrinting.Capture(grid, view.Title, caption,
+                                                _cultureManager.CurrentLanguage.IsRightToLeft());
+
+            var opened = await _documents.OpenAsync(_lists.Render(document), "pdf");
+
+            if (opened.IsFailure) _dialogs.ShowFailure(opened, T("Action.Print"));
+        }
+        catch (Exception ex)
+        {
+            _dialogs.Error(ex.Message, T("Action.Print"));
+        }
     }
 
     private void UpdateClock() => _clock.Text = DateTime.Now.ToString("dddd d MMMM yyyy   HH:mm");
@@ -424,6 +475,12 @@ public sealed class MainShellForm : LocalizedForm
         if (e.KeyCode == Keys.F5)
         {
             _ = _navigation.RefreshCurrentAsync();
+            e.Handled = true;
+        }
+
+        if (e is { Control: true, KeyCode: Keys.P })
+        {
+            _ = PrintCurrentListAsync();
             e.Handled = true;
         }
 

@@ -58,6 +58,10 @@ public sealed class OrderDetailView : LocalizedView
     private readonly Button _repeatItem = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _editHeader = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _cancelOrder = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _printLabels = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _printReport = UiTheme.SecondaryButton(string.Empty);
+    private readonly Application.Samples.SampleWorkflowService _samplesWorkflow;
+    private readonly Application.Reports.ReportReleaseService _reports;
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
 
@@ -75,6 +79,8 @@ public sealed class OrderDetailView : LocalizedView
     public Guid? OrderId { get; set; }
 
     public OrderDetailView(OrderAmendmentService orders, ICatalogQueries catalogQueries,
+                           Application.Samples.SampleWorkflowService samplesWorkflow,
+                           Application.Reports.ReportReleaseService reports,
                            ISampleLabelRenderer labels, ILabelPrinter labelPrinter,
                            IDocumentOutput documents, IUserDialogs dialogs,
                            ICurrentUser currentUser, IClock clock,
@@ -84,6 +90,8 @@ public sealed class OrderDetailView : LocalizedView
     {
         _orders = orders;
         _catalogQueries = catalogQueries;
+        _samplesWorkflow = samplesWorkflow;
+        _reports = reports;
         _labels = labels;
         _labelPrinter = labelPrinter;
         _documents = documents;
@@ -178,13 +186,15 @@ public sealed class OrderDetailView : LocalizedView
         _repeatItem.Bounds = new Rectangle(400, 10, 170, UiTheme.ButtonHeight);
         _editHeader.Bounds = new Rectangle(580, 10, 190, UiTheme.ButtonHeight);
         _cancelOrder.Bounds = new Rectangle(780, 10, 190, UiTheme.ButtonHeight);
+        _printLabels.Bounds = new Rectangle(980, 10, 190, UiTheme.ButtonHeight);
+        _printReport.Bounds = new Rectangle(1180, 10, 190, UiTheme.ButtonHeight);
 
         _status.Font = UiTheme.Small;
         _status.AutoSize = false;
-        _status.Bounds = new Rectangle(980, 16, 600, 20);
+        _status.Bounds = new Rectangle(1380, 16, 600, 20);
 
         actions.Controls.AddRange([_addAnalyses, _cancelItem, _repeatItem, _editHeader,
-                                   _cancelOrder, _status]);
+                                   _cancelOrder, _printLabels, _printReport, _status]);
 
         Controls.Add(split);
         Controls.Add(actions);
@@ -258,6 +268,8 @@ public sealed class OrderDetailView : LocalizedView
         _repeatItem.Click += async (_, _) => await RepeatItemAsync();
         _editHeader.Click += async (_, _) => await EditHeaderAsync();
         _cancelOrder.Click += async (_, _) => await CancelOrderAsync();
+        _printLabels.Click += async (_, _) => await ReprintLabelsAsync();
+        _printReport.Click += async (_, _) => await OpenReportAsync();
 
         _items.SelectionChanged += (_, _) => RefreshActions();
         _items.CellFormatting += OnItemFormatting;
@@ -313,6 +325,8 @@ public sealed class OrderDetailView : LocalizedView
         _repeatItem.Text = T("Order.RepeatAnalysis");
         _editHeader.Text = T("Order.EditHeader");
         _cancelOrder.Text = T("Order.CancelOrder");
+        _printLabels.Text = T("Action.PrintLabels");
+        _printReport.Text = T("Order.PrintReport");
         _refresh.Text = T("Action.Refresh");
 
         if (_items.Columns.Count > 0)
@@ -544,6 +558,11 @@ public sealed class OrderDetailView : LocalizedView
         _cancelOrder.Enabled = detail is { CanCancel: true }
                                && _currentUser.Has(Permissions.Orders.Cancel);
 
+        _printLabels.Enabled = detail is { IsCancelled: false }
+                               && _currentUser.Has(Permissions.Samples.Reprint);
+
+        _printReport.Enabled = detail is not null && _currentUser.Has(Permissions.Reports.View);
+
         _cancelItem.Enabled = item is { CanCancel: true }
                               && _currentUser.Has(Permissions.Orders.Cancel);
 
@@ -684,6 +703,72 @@ public sealed class OrderDetailView : LocalizedView
     /// Renders and opens the labels for tubes the addition created. A label failure must not lose
     /// the amendment — the analyses are on the order, and the labels can be reprinted.
     /// </summary>
+    /// <summary>
+    /// Reprints every label of the file, against a reason: a reprinted label is a second barcode
+    /// for the same tube, which is how two tubes end up carrying one identity, so it is recorded.
+    /// </summary>
+    private async Task ReprintLabelsAsync()
+    {
+        if (_detail is not { } detail) return;
+
+        var reason = _dialogs.PromptForReason(T("Sample.ReprintReasonPrompt"), T("Action.PrintLabels"));
+        if (reason is null) return;
+
+        try
+        {
+            var labels = await _samplesWorkflow.ReprintLabelsAsync(detail.OrderId, reason);
+
+            if (labels.IsFailure) { _dialogs.ShowFailure(labels, T("Action.PrintLabels")); return; }
+
+            await PrintLabelsAsync(detail.AccessionNumber, labels.Value);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Reprinting the labels of {Accession} failed.", detail.AccessionNumber);
+            _dialogs.Warn(T("Action.PrintLabels") + " — " + T("Message.UnexpectedError"));
+        }
+    }
+
+    /// <summary>
+    /// Opens the latest released report of the file, exactly as it was archived — a reprint shows
+    /// what the clinician was given, never a fresh rendering of today's data.
+    /// </summary>
+    private async Task OpenReportAsync()
+    {
+        if (_detail is not { } detail) return;
+
+        try
+        {
+            var register = await _reports.GetRegisterAsync(detail.AccessionNumber, withinDays: 3650);
+
+            if (register.IsFailure) { _dialogs.ShowFailure(register, _printReport.Text); return; }
+
+            var latest = register.Value
+                .Where(r => r.LabOrderId == detail.OrderId)
+                .OrderByDescending(r => r.VersionNumber)
+                .FirstOrDefault();
+
+            if (latest is null)
+            {
+                _dialogs.Info(T("Order.NoReportYet"), _printReport.Text);
+                return;
+            }
+
+            var pdf = await _reports.GetStoredPdfAsync(latest.ReportId);
+
+            if (pdf.IsFailure) { _dialogs.ShowFailure(pdf, _printReport.Text); return; }
+
+            var opened = await _documents.OpenAsync(pdf.Value, "pdf");
+
+            if (opened.IsFailure) _dialogs.ShowFailure(opened, _printReport.Text);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Opening the report of {Accession} failed.", detail.AccessionNumber);
+            _dialogs.Warn(_printReport.Text + " — " + T("Message.UnexpectedError"));
+        }
+    }
+
     private async Task PrintLabelsAsync(string accessionNumber, IReadOnlyList<SampleLabel> labels)
     {
         if (labels.Count == 0) return;
