@@ -83,11 +83,21 @@ public sealed class ControlledDocument : AuditableAggregateRoot, ISiteScoped
         if (version.Status != DocumentVersionStatus.Approved)
             return Result.Failure(Error.Regulatory("Document_MustBeApprovedBeforeEffective"));
 
-        foreach (var previous in _versions.Where(v => v.Status == DocumentVersionStatus.Effective))
-            previous.Withdraw(effectiveFrom.AddDays(-1), now);
+        WithdrawEffectiveVersion(effectiveFrom.AddDays(-1), now);
 
         version.MakeEffective(effectiveFrom, now, approvedByUserId);
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Withdraws the version in force, as the first half of replacing it. Public so that a caller
+    /// can persist the withdrawal before the replacement: the database admits one effective version
+    /// per document, and a single save leaves the order of the two updates to the provider.
+    /// </summary>
+    public void WithdrawEffectiveVersion(DateOnly on, DateTimeOffset now)
+    {
+        foreach (var previous in _versions.Where(v => v.Status == DocumentVersionStatus.Effective))
+            previous.Withdraw(on, now);
     }
 
     public void RecordAcknowledgement(Guid userId, int versionNumber, DateTimeOffset at) =>

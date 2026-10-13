@@ -81,6 +81,8 @@ public static class Permissions
         public const string ManageQcRules = "quality.qc.rules";
         public const string ManageNonConformity = "quality.nc.manage";
         public const string ApproveDocument = "quality.document.approve";
+        /// <summary>Drafting, submitting and reviewing controlled documents; approval stays separate.</summary>
+        public const string ManageDocuments = "quality.document.manage";
     }
 
     public static class Inventory

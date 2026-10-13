@@ -7,8 +7,9 @@ laboratories. C# / .NET 10, WinForms desktop client, SQL Server Express, LAN cli
 
 ## Build status
 
-**The solution builds clean and the test suite passes: 316 tests, 0 failures, 0 errors, 0 compiler
-warnings.** Verified with SDK 10.0.112 on 8 October 2026.
+**The solution builds clean and the test suite passes: 398 tests, 0 failures, 0 errors, 0 compiler
+warnings.** Verified with SDK 10.0.112 on 13 October 2026, and run against a real SQL Server 2022
+(see [Database](#database)).
 
 ```bash
 dotnet build MarocLIS.sln
@@ -22,10 +23,10 @@ dotnet test MarocLIS.sln
 |---|---|
 | `dotnet restore` | ✅ 8 projects, no vulnerability warnings |
 | `dotnet build` | ✅ 0 errors, 0 warnings |
-| `dotnet test` | ✅ 348 passed, 0 failed |
+| `dotnet test` | ✅ 398 passed, 0 failed |
 | EF migration generated, schema script produced | ✅ 65 application tables (66 with `__MigrationsHistory`), 116 indexes, 15 schemas, 4 triggers |
 | Application starts, DI graph resolves, EF model builds | ✅ |
-| Run against a live SQL Server | ⛔ no engine available on this machine |
+| Run against a live SQL Server | ✅ SQL Server 2022: migration, seeding, sign-in and the main write paths |
 
 The first compile was a real step with real work in it, as the previous version of this section
 predicted. It took about twenty-five distinct fixes over six rounds, with the raw error count
@@ -147,14 +148,36 @@ Three further things changed, all of them about the two setup paths disagreeing:
   trigger. Without the declaration every audit write would fail — and take down the write it was
   recording with it.
 
-### Not yet verified against a live engine
+### Verified against a live engine (13 October 2026)
 
-This machine has no SQL Server of any kind: no service, no instance, no LocalDB, no `sqlcmd`, no
-Docker. `winget` is blocked by group policy and the account is not a local administrator, so an
-engine cannot be installed from here. What that leaves unproven is everything that needs a server
-to answer: the migration applying, the gapless numbering lock under `UPDLOCK, HOLDLOCK`, the audit
-triggers actually refusing an update, the collations behaving as the name search expects, and the
-`HasTrigger` fix above.
+The migration was applied to an empty SQL Server 2022 database and the application's own services
+were driven against it: 66 tables, 116 indexes, the four triggers enabled and refusing `UPDATE` and
+`DELETE` on the audit tables, reference and demo seeding run twice without duplicates, `admin`
+sign-in, the dashboard, patient search, order registration, lot reception, and the four new screens'
+complete flows (document versions through to entry into force, an EQA round through to the
+non-conformity it opens, a purchase order through approval, sending and two partial receipts, and
+a year of statistics). `HasPendingModelChanges()` is false.
+
+Three defects only a real server could show were found and fixed:
+
+- **The migration could not be applied.** `ResultRevisions` had a cascading delete from
+  `TestResults`, and SQL Server refuses an `INSTEAD OF` trigger on a table that is the target of a
+  cascade, so `TR_ResultRevisions_NoUpdate` failed and the whole migration with it. The foreign key
+  is now `Restrict` (no code deletes a test result) in the configuration, the migration, its
+  designer, the snapshot and `db/MarocLIS-schema.sql`.
+- **Adding a child to a loaded aggregate failed as a concurrency conflict.** Keys are assigned in
+  the domain (`Guid.CreateVersion7()`), but EF took them for store-generated keys, so a new lot on a
+  stock item, a new version on a document or a new line on a purchase order was sent as an `UPDATE`
+  that matched nothing. Every `Guid` primary key is now `ValueGeneratedNever` (`LisDbContext`); the
+  schema is unchanged, only the snapshot lost its `ValueGeneratedOnAdd` lines.
+- **Every use case that opens a transaction threw.** `EnableRetryOnFailure` installs a strategy that
+  refuses user-initiated transactions, and all the gapless-number paths (order registration,
+  invoicing, credit notes, non-conformities, purchase orders) open one.
+  `TransactionAwareExecutionStrategy` keeps the retries outside a transaction and runs a save inside
+  one once, leaving a transient failure to roll the whole unit back.
+
+Not exercised yet: two workstations allocating numbers at the same instant (the `UPDLOCK, HOLDLOCK`
+path), and the report renderer, which needs the desktop's QuestPDF registration.
 
 ### Fixed: global query filters on required principals
 
@@ -336,7 +359,11 @@ MarocLIS.sln
 | Report register — reprint the stored original, record delivery, issue an amendment | complete |
 | Analyser interfacing — host, message sink, mapping editor, message log, replay | complete |
 | Third-party payment — claimable invoices, batch submission, outcomes, chasing | complete |
-| Test suite — QC rules, pricing, formulas, regulatory gates, protocols, amount-in-words | written, **never executed** |
+| Quality documents — register, versions, review, approval, entry into force, acknowledgement | complete |
+| External quality assessment — rounds, submissions, Z-score and bias, automatic non-conformity | complete |
+| Purchase orders — lines, approval by a second person, sending, receipt straight into stock | complete |
+| Activity statistics — volumes, turnaround, on-time rate, money, by department/test/payer/day, CSV | complete |
+| Test suite — QC rules, pricing, formulas, regulatory gates, protocols, amount-in-words, statistics, documents, purchase orders | 398 passed |
 
 ## Gap register — what a user cannot reach
 
@@ -551,12 +578,18 @@ editable afterwards from the order file.
 
 ### Screens not written
 
-Claim batches, quality documents (SOP version control), external quality assessment, purchase
-orders, statistics, audit-trail viewer, payer maintenance, multi-site administration.
+Multi-site administration.
 
-Of these, the **claim-batch screen** is the priority: AMO reimbursement is where a Moroccan
-laboratory's cash actually comes from, and `BillingService.SubmitClaimBatchAsync` is still reachable
-only from code.
+Quality documents, external quality assessment, purchase orders and statistics were written on
+13 October 2026 (`QualityDocumentsView`, `EqaView`, `PurchaseOrderView`, `StatisticsView`, with
+`DocumentControlService`, `EqaService`, `PurchaseOrderService` and `StatisticsService` behind them).
+Two decisions in them are worth knowing:
+
+- Drafting a document needs the new permission `quality.document.manage`; bringing it into force
+  needs `quality.document.approve`. The biologist in charge and the quality manager receive both on
+  the next start, through the role seeding.
+- Receiving a purchase-order line asks for the lot number and expiry and creates the lot, in
+  quarantine, in the same save, so a delivery is never typed twice.
 
 ---
 

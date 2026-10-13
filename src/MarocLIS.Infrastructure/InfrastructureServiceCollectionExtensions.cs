@@ -73,7 +73,9 @@ public static class InfrastructureServiceCollectionExtensions
             builder.UseSqlServer(BuildConnectionString(options), sql =>
             {
                 sql.CommandTimeout(options.CommandTimeoutSeconds);
-                sql.EnableRetryOnFailure(options.MaxRetryCount, TimeSpan.FromSeconds(5), null);
+                // Retries transient failures, but not inside the transactions the use cases open
+                // around gapless numbering; see TransactionAwareExecutionStrategy.
+                sql.ExecutionStrategy(d => new TransactionAwareExecutionStrategy(d, options.MaxRetryCount));
                 sql.MigrationsHistoryTable("__MigrationsHistory", "cfg");
             });
 
@@ -108,6 +110,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<StockItemRepository>();
         services.AddScoped<InstrumentRepository>();
         services.AddScoped<QcResultRepository>();
+        services.AddScoped<ControlledDocumentRepository>();
+        services.AddScoped<PurchaseOrderRepository>();
 
         // The specialised repositories also satisfy the generic contract, so a use case can depend
         // on IRepository<LabOrder> and still get the detail-loading override.
@@ -132,6 +136,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IRepository<StockItem>>(sp => sp.GetRequiredService<StockItemRepository>());
         services.AddScoped<IRepository<Instrument>>(sp => sp.GetRequiredService<InstrumentRepository>());
         services.AddScoped<IRepository<QcResult>>(sp => sp.GetRequiredService<QcResultRepository>());
+        services.AddScoped<IRepository<ControlledDocument>>(
+            sp => sp.GetRequiredService<ControlledDocumentRepository>());
+        services.AddScoped<IRepository<PurchaseOrder>>(
+            sp => sp.GetRequiredService<PurchaseOrderRepository>());
 
         services.AddScoped<Application.Administration.IConfigurationWriter, ConfigurationWriter>();
 

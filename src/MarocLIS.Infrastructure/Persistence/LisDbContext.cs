@@ -16,6 +16,7 @@ using MarocLIS.Domain.Results;
 using MarocLIS.Domain.Samples;
 using MarocLIS.Domain.Sequencing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace MarocLIS.Infrastructure.Persistence;
 
@@ -179,6 +180,17 @@ public class LisDbContext : DbContext
                 builder.Entity(entity.ClrType)
                        .Property(nameof(Entity.RowVersion))
                        .IsRowVersion();
+            }
+
+            // Keys are assigned in the domain (Guid version 7, at construction), never by the
+            // server. Left to the default convention, EF treats a Guid key as store-generated and
+            // so takes any new child that already carries an Id — a lot added to a stock item, a
+            // version added to a document — for an existing row: it issues an UPDATE, matches
+            // nothing, and the save fails as a concurrency conflict.
+            if (entity.FindPrimaryKey() is { Properties: [{ ClrType: var keyType } key] }
+                && keyType == typeof(Guid))
+            {
+                key.ValueGenerated = ValueGenerated.Never;
             }
 
             foreach (var property in entity.GetProperties())

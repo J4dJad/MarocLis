@@ -35,8 +35,12 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Billing.BillingService>();
         services.AddScoped<Quality.QualityControlService>();
         services.AddScoped<Quality.NonConformityService>();
+        services.AddScoped<Quality.DocumentControlService>();
+        services.AddScoped<Quality.EqaService>();
         services.AddScoped<Inventory.InventoryService>();
         services.AddScoped<Inventory.EquipmentService>();
+        services.AddScoped<Inventory.PurchaseOrderService>();
+        services.AddScoped<Statistics.StatisticsService>();
         services.AddScoped<Administration.UserAdministrationService>();
         services.AddScoped<Administration.ConfigurationService>();
         services.AddScoped<Administration.MasterDataService>();

@@ -25,7 +25,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Audit.AuditEntry", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("AggregateId")
@@ -117,7 +116,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Audit.DataAccessLog", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("BreakGlassJustification")
@@ -196,7 +194,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Audit.SecurityEvent", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AttemptedUserName")
@@ -261,7 +258,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Billing.CashSession", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("CardReceipts")
@@ -344,7 +340,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Billing.Invoice", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AmountInWords")
@@ -527,7 +522,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Billing.InvoiceLine", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("AllocatedDiscount")
@@ -620,7 +614,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Billing.Payment", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Amount")
@@ -714,7 +707,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.AnalysisTest", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Code")
@@ -833,7 +825,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.AnalysisTestTariff", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("AnalysisTestId")
@@ -896,7 +887,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.CodedResultOption", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Code")
@@ -937,7 +927,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.ContainerType", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("CapColourHex")
@@ -998,7 +987,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.Department", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Code")
@@ -1048,7 +1036,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.MeasurementUnit", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Code")
@@ -1109,7 +1096,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.ReferenceRange", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int?>("AgeFromDays")
@@ -1190,7 +1176,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.ReflexRule", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("AddAutomatically")
@@ -1249,7 +1234,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.SpecimenType", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Code")
@@ -1293,7 +1277,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.TestPanel", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Code")
@@ -1364,7 +1347,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.TestPanelItem", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("AnalysisTestId")
@@ -1398,7 +1380,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Catalog.TestParameter", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("AlwaysShowOnReport")
@@ -1500,7 +1481,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Equipment.CalibrationRecord", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateOnly?>("CalibratorExpiryDate")
@@ -1589,7 +1569,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Equipment.Instrument", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int?>("CalibrationIntervalDays")
@@ -1720,7 +1699,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentInterface", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("AcknowledgementTimeoutSeconds")
@@ -1851,7 +1829,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentMessageLog", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Direction")
@@ -1916,7 +1893,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentTestMapping", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("CodedValueMap")
@@ -1977,7 +1953,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Equipment.MaintenanceRecord", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<byte[]>("AttachedReport")
@@ -2055,7 +2030,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Identity.AppUser", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AuthorizedDepartmentCodesCsv")
@@ -2168,7 +2142,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Identity.Role", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Code")
@@ -2258,7 +2231,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Inventory.PurchaseOrder", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset?>("ApprovedAt")
@@ -2334,7 +2306,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Inventory.PurchaseOrderLine", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Description")
@@ -2382,7 +2353,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Inventory.ReagentLot", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AcceptanceEvidence")
@@ -2498,7 +2468,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Inventory.StockItem", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Code")
@@ -2619,7 +2588,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Inventory.StockMovement", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal?>("BalanceAfter")
@@ -2692,7 +2660,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Inventory.Supplier", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AddressLine")
@@ -2806,7 +2773,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Orders.LabOrder", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AccessionNumber")
@@ -2989,7 +2955,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Orders.LabOrderItem", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("AddedByReflexRuleId")
@@ -3136,7 +3101,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Orders.Prescriber", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AddressLine")
@@ -3281,7 +3245,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Organization.AppSetting", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -3334,7 +3297,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Organization.LabSite", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AccreditationNumber")
@@ -3480,7 +3442,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Patients.Patient", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AddressLine")
@@ -3688,7 +3649,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Patients.PatientAlert", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateOnly?>("ExpiresOn")
@@ -3715,7 +3675,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Patients.PatientConsent", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Channel")
@@ -3804,7 +3763,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Patients.PatientCoverage", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -3893,7 +3851,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Patients.Payer", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AddressLine")
@@ -3986,7 +3943,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Quality.ControlledDocument", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -4049,7 +4005,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Quality.CorrectiveAction", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("CompletedByUserId")
@@ -4107,7 +4062,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Quality.DocumentAcknowledgement", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("AcknowledgedAt")
@@ -4139,7 +4093,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Quality.DocumentVersion", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset?>("ApprovedAt")
@@ -4224,7 +4177,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Quality.EqaParticipation", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal?>("AssignedValue")
@@ -4313,7 +4265,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Quality.NonConformity", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int?>("AffectedPatientCount")
@@ -4435,7 +4386,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Quality.QcMaterial", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("CatalogueReference")
@@ -4509,7 +4459,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Quality.QcResult", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("CalibrationRecordId")
@@ -4619,7 +4568,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Quality.QcTarget", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("ActiveRules")
@@ -4690,7 +4638,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Reports.LabReport", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AccessToken")
@@ -4806,7 +4753,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Reports.LabReportDelivery", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("AttemptCount")
@@ -4887,7 +4833,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Results.CriticalResultNotification", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("AttemptNumber")
@@ -4986,7 +4931,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Results.ResultRevision", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("PreviousCodedValue")
@@ -5058,7 +5002,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Results.TestResult", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("AppliedDecimals")
@@ -5221,7 +5164,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Samples.Sample", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Barcode")
@@ -5383,7 +5325,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Samples.SampleAliquot", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Barcode")
@@ -5428,7 +5369,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Samples.SampleEvent", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("ByUserId")
@@ -5470,7 +5410,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Sequencing.NumberSequence", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset?>("ClosedAt")
@@ -5520,7 +5459,6 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Infrastructure.Persistence.PasswordHistoryEntry", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("ChangedAt")

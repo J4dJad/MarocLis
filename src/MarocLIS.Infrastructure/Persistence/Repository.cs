@@ -488,3 +488,30 @@ public sealed class ConcurrencyConflictException(string resourceKey, Exception i
 {
     public string ResourceKey { get; } = resourceKey;
 }
+
+public sealed class ControlledDocumentRepository(LisDbContext context, IClock clock)
+    : Repository<ControlledDocument>(context, clock)
+{
+    /// <summary>
+    /// Versions and acknowledgements included: the aggregate decides which version is in force and
+    /// numbers the next one from that list, so a partial load would number a draft wrongly.
+    /// </summary>
+    public override Task<ControlledDocument?> GetByIdWithDetailsAsync(Guid id,
+                                                                      CancellationToken ct = default) =>
+        Context.ControlledDocuments
+               .Include(d => d.Versions)
+               .Include(d => d.Acknowledgements)
+               .AsSplitQuery()
+               .FirstOrDefaultAsync(d => d.Id == id, ct);
+}
+
+public sealed class PurchaseOrderRepository(LisDbContext context, IClock clock)
+    : Repository<PurchaseOrder>(context, clock)
+{
+    /// <summary>Lines included: approval, receipt and the totals all work across them.</summary>
+    public override Task<PurchaseOrder?> GetByIdWithDetailsAsync(Guid id,
+                                                                 CancellationToken ct = default) =>
+        Context.PurchaseOrders
+               .Include(o => o.Lines)
+               .FirstOrDefaultAsync(o => o.Id == id, ct);
+}

@@ -169,6 +169,9 @@ public sealed class MainShellForm : LocalizedForm
             new("dashboard", "Nav.Dashboard", [],
                 n => n.NavigateToAsync<DashboardView>()),
 
+            new("statistics", "Nav.Statistics", [Permissions.Statistics.View],
+                n => n.NavigateToAsync<StatisticsView>()),
+
             new("group.reception", "Nav.Reception", [Permissions.Patients.View],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 
@@ -225,12 +228,21 @@ public sealed class MainShellForm : LocalizedForm
                                                             Permissions.Quality.View],
                 n => n.NavigateToAsync<NonConformityView>()),
 
+            new("eqa", "Nav.Eqa", [Permissions.Quality.View],
+                n => n.NavigateToAsync<EqaView>()),
+
+            new("documents", "Nav.Documents", [Permissions.Quality.View],
+                n => n.NavigateToAsync<QualityDocumentsView>()),
+
             new("group.logistics", "Nav.Inventory", [Permissions.Inventory.View,
                                                       Permissions.Equipment.View],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 
             new("inventory", "Nav.Inventory", [Permissions.Inventory.View],
                 n => n.NavigateToAsync<InventoryView>()),
+
+            new("purchaseorders", "Nav.PurchaseOrders", [Permissions.Inventory.View],
+                n => n.NavigateToAsync<PurchaseOrderView>()),
 
             new("equipment", "Nav.Equipment", [Permissions.Equipment.View],
                 n => n.NavigateToAsync<EquipmentView>()),
