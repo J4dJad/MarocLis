@@ -44,7 +44,16 @@ public class Repository<T>(LisDbContext context, IClock clock) : IRepository<T>
     public async Task AddAsync(T entity, CancellationToken ct = default) =>
         await Context.Set<T>().AddAsync(entity, ct);
 
-    public void Update(T entity) => Context.Set<T>().Update(entity);
+    public void Update(T entity)
+    {
+        // A service creates an aggregate with AddAsync and then runs the same "apply the request
+        // and Update" path as an edit. Update on an entity still in the Added state would turn it
+        // into Modified, and the UPDATE of a row that does not exist yet fails as a concurrency
+        // conflict: no new analyser could ever be saved. An added entity is left as it is.
+        if (Context.Entry(entity).State == EntityState.Added) return;
+
+        Context.Set<T>().Update(entity);
+    }
 
     public void SoftDelete(T entity, Guid byUserId, string reason)
     {
