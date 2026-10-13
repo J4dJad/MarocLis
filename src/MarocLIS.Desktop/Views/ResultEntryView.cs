@@ -278,7 +278,26 @@ public sealed class ResultEntryView : LocalizedView
         _worklist.Columns["patient"]!.MinimumWidth = 130;
     }
 
+    // The worklist, a click on it and a scan all read through this screen's one database
+    // context, which refuses a second query while one is running: a click raised both
+    // SelectionChanged and CellClick, and the second load failed with "A second operation was
+    // started on this context instance". Every load now waits for the one before it.
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
+
     private async Task LoadWorklistAsync(CancellationToken ct = default)
+    {
+        await _loadGate.WaitAsync(CancellationToken.None);
+        try
+        {
+            await LoadWorklistCoreAsync(ct);
+        }
+        finally
+        {
+            _loadGate.Release();
+        }
+    }
+
+    private async Task LoadWorklistCoreAsync(CancellationToken ct)
     {
         try
         {
@@ -451,14 +470,14 @@ public sealed class ResultEntryView : LocalizedView
             if (_worklist.CurrentRow?.Tag is not string accession) return;
             if (_sheet?.AccessionNumber == accession) return;
 
-            await LoadAsync(accession);
+            await LoadAsync(accession, skipIfOpen: true);
         };
         _worklist.CellClick += async (_, e) =>
         {
             if (e.RowIndex < 0 || _worklist.Rows[e.RowIndex].Tag is not string accession) return;
             if (_sheet?.AccessionNumber == accession) return;
 
-            await LoadAsync(accession);
+            await LoadAsync(accession, skipIfOpen: true);
         };
         _benchSheet.Click += async (_, _) => await PrintBenchSheetAsync();
 
@@ -597,9 +616,25 @@ public sealed class ResultEntryView : LocalizedView
 
     // ---- Loading -----------------------------------------------------------------------------------
 
-    private async Task LoadAsync(string term)
+    private async Task LoadAsync(string term, bool skipIfOpen = false)
     {
         if (string.IsNullOrWhiteSpace(term)) return;
+
+        await _loadGate.WaitAsync();
+        try
+        {
+            // The same click arrives twice (selection, then click); the second finds it open.
+            if (skipIfOpen && _sheet?.AccessionNumber == term) return;
+            await LoadCoreAsync(term);
+        }
+        finally
+        {
+            _loadGate.Release();
+        }
+    }
+
+    private async Task LoadCoreAsync(string term)
+    {
 
         _status.ForeColor = UiTheme.TextSecondary;
         _status.Text = T("App.Loading");

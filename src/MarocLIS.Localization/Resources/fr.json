@@ -1,6 +1,23 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
 
+  "Shortcut": {
+    "ShiftKey": "Maj",
+    "Screen": "Ouvrir : {0}",
+    "Refresh": "Actualiser l'écran",
+    "Print": "Imprimer la liste de l'écran",
+    "Search": "Aller à la recherche de l'écran",
+    "Help": "Raccourcis clavier (cette liste)",
+    "SaveFailed": "Les raccourcis n'ont pas pu être enregistrés.",
+    "Moved": "{0} était le raccourci de « {1} », qui n'en a plus.",
+    "NeedsModifier": "Utilisez Ctrl ou Alt avec une touche, ou une touche F1 à F12.",
+    "Restore": "Rétablir les raccourcis par défaut",
+    "Hint": "Choisissez une ligne puis appuyez sur la combinaison voulue (avec Ctrl ou Alt, ou une touche F1 à F12). Suppr retire le raccourci. Dans chaque fenêtre, Alt + la lettre soulignée active le bouton ou le champ.",
+    "Keys": "Raccourci",
+    "Action": "Action",
+    "Title": "Raccourcis clavier"
+  },
+
   "ResultEntry": {
     "Departments": "Secteurs",
     "Received": "Reçu",

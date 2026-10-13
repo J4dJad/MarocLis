@@ -1,6 +1,23 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
 
+  "Shortcut": {
+    "ShiftKey": "Shift",
+    "Screen": "Open: {0}",
+    "Refresh": "Refresh the screen",
+    "Print": "Print the screen's list",
+    "Search": "Go to the screen's search",
+    "Help": "Keyboard shortcuts (this list)",
+    "SaveFailed": "The shortcuts could not be saved.",
+    "Moved": "{0} was the shortcut of \"{1}\", which now has none.",
+    "NeedsModifier": "Use Ctrl or Alt with a key, or a key F1 to F12.",
+    "Restore": "Restore the default shortcuts",
+    "Hint": "Select a line, then press the keys you want (with Ctrl or Alt, or a key F1 to F12). Delete removes the shortcut. In each window, Alt + the underlined letter activates the button or field.",
+    "Keys": "Shortcut",
+    "Action": "Action",
+    "Title": "Keyboard shortcuts"
+  },
+
   "ResultEntry": {
     "Departments": "Sections",
     "Received": "Received",

@@ -45,6 +45,31 @@ public sealed class MainShellForm : LocalizedForm
     private string _activeKey = string.Empty;
     private DateTimeOffset _lastActivity = DateTimeOffset.Now;
 
+    // Screens with a shortcut out of the box: the counter and bench workflow, in the order a file
+    // goes through the laboratory. Every other screen can be given one in the shortcuts dialog.
+    private static readonly Dictionary<string, Keys> DefaultScreenKeys = new(StringComparer.Ordinal)
+    {
+        ["patients"] = Keys.Control | Keys.D1,
+        ["orders"] = Keys.Control | Keys.D2,
+        ["orderdetail"] = Keys.Control | Keys.D3,
+        ["collection"] = Keys.Control | Keys.D4,
+        ["reception"] = Keys.Control | Keys.D5,
+        ["entry"] = Keys.Control | Keys.D6,
+        ["validation"] = Keys.Control | Keys.D7,
+        ["reports"] = Keys.Control | Keys.D8,
+        ["billing"] = Keys.Control | Keys.D9,
+        ["cash"] = Keys.Control | Keys.D0
+    };
+
+    private const string ActionSave = "action.save";
+    private const string ActionSearch = "action.search";
+    private const string ActionPrint = "action.print";
+    private const string ActionRefresh = "action.refresh";
+    private const string ActionHelp = "action.help";
+
+    private readonly KeyboardShortcuts _shortcuts;
+    private readonly ToolTip _navTips = new();
+
     public MainShellForm(ICurrentUser currentUser, INavigationService navigation,
                          ILocalizer localizer, ICultureManager cultureManager,
                          IUserDialogs dialogs, PasswordPolicy policy,
@@ -57,6 +82,7 @@ public sealed class MainShellForm : LocalizedForm
         _navigation = navigation;
         _cultureManager = cultureManager;
         _dialogs = dialogs;
+        _shortcuts = new KeyboardShortcuts(currentUser.UserId);
 
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1180, 720);
@@ -65,6 +91,8 @@ public sealed class MainShellForm : LocalizedForm
 
         BuildLayout();
         BuildNavigation();
+        DefineShortcuts();
+        RenderNavigation();   // again, now that the shortcuts it shows are known
 
         _navigation.Attach(_content, view => _viewTitle.Text = view.Title);
 
@@ -306,6 +334,7 @@ public sealed class MainShellForm : LocalizedForm
         _sidebar.SuspendLayout();
         _sidebar.Controls.Clear();
         _navButtons.Clear();
+        _navTips.RemoveAll();
 
         var y = UiTheme.GutterTight;
 
@@ -356,6 +385,9 @@ public sealed class MainShellForm : LocalizedForm
 
             var captured = entry;
             button.Click += async (_, _) => await ActivateAsync(captured);
+            button.Paint += (_, e) => PaintShortcut(button, captured.Key, e);
+            if (_shortcuts.For(ScreenAction(entry.Key)) is var navKeys and not Keys.None)
+                _navTips.SetToolTip(button, $"{T(entry.LabelKey)} ({KeyboardShortcuts.Format(navKeys, Localizer)})");
 
             _sidebar.Controls.Add(button);
             _navButtons[entry.Key] = button;
@@ -363,9 +395,18 @@ public sealed class MainShellForm : LocalizedForm
             y += 34;
         }
 
+        // The shortcuts list is one key away (F1), and also here for whoever does not know that.
+        var shortcuts = UiTheme.SecondaryButton(ShortcutsButtonText());
+        shortcuts.Bounds = new Rectangle(UiTheme.GutterTight, y + UiTheme.Gutter, NavigationWidth,
+                                         UiTheme.ButtonHeight);
+        shortcuts.FlatAppearance.BorderColor = UiTheme.Border;
+        shortcuts.Click += (_, _) => ShowShortcuts();
+        _sidebar.Controls.Add(shortcuts);
+        y = shortcuts.Bottom;
+
         // Sign-out sits at the bottom, away from the working entries.
         var signOut = UiTheme.SecondaryButton(T("Action.Logout"));
-        signOut.Bounds = new Rectangle(UiTheme.GutterTight, y + UiTheme.Gutter, NavigationWidth,
+        signOut.Bounds = new Rectangle(UiTheme.GutterTight, y + UiTheme.GutterTight, NavigationWidth,
                                        UiTheme.ButtonHeight);
         signOut.FlatAppearance.BorderColor = UiTheme.Border;
         signOut.Click += (_, _) => SignOut();
@@ -407,7 +448,7 @@ public sealed class MainShellForm : LocalizedForm
         Text = $"{T("App.Title")} — {_currentUser.FullName}";
 
         _userInfo.Text = _currentUser.FullName;
-        _print.Text = T("Action.Print") + "  (Ctrl+P)";
+        _print.Text = WithShortcut(T("Action.Print"), ActionPrint);
         _siteInfo.Text = $"{T("App.Site")} : {_currentUser.SiteCode}   ·   " +
                          $"{T("App.Workstation")} : {_currentUser.Workstation}";
 
@@ -479,20 +520,161 @@ public sealed class MainShellForm : LocalizedForm
     {
         _lastActivity = DateTimeOffset.Now;
 
-        // F5 refreshes the active view — the shortcut every operator tries first.
-        if (e.KeyCode == Keys.F5)
+        if (_shortcuts.Find(e.KeyData) is { } action && RunShortcut(action))
         {
-            _ = _navigation.RefreshCurrentAsync();
             e.Handled = true;
-        }
-
-        if (e is { Control: true, KeyCode: Keys.P })
-        {
-            _ = PrintCurrentListAsync();
-            e.Handled = true;
+            e.SuppressKeyPress = true;
         }
 
         base.OnKeyDown(e);
+    }
+
+    // ---- Keyboard shortcuts -----------------------------------------------------------------------
+
+    private void DefineShortcuts()
+    {
+        foreach (var entry in _entries.Where(e => !e.IsGroupHeader))
+            _shortcuts.Define(ScreenAction(entry.Key), DefaultScreenKeys.GetValueOrDefault(entry.Key));
+
+        _shortcuts.Define(ActionSave, Keys.Control | Keys.S);
+        _shortcuts.Define(ActionSearch, Keys.Control | Keys.F);
+        _shortcuts.Define(ActionPrint, Keys.Control | Keys.P);
+        _shortcuts.Define(ActionRefresh, Keys.F5);
+        _shortcuts.Define(ActionHelp, Keys.F1);
+    }
+
+    private static string ScreenAction(string key) => "screen." + key;
+
+    // The actions this user can see: a screen they have no permission for is not offered.
+    private List<ShortcutAction> ShortcutActions()
+    {
+        var actions = new List<ShortcutAction>
+        {
+            new(ActionHelp, T("Shortcut.Help"), _shortcuts.Default(ActionHelp)),
+            new(ActionSave, T("Action.Save"), _shortcuts.Default(ActionSave)),
+            new(ActionSearch, T("Shortcut.Search"), _shortcuts.Default(ActionSearch)),
+            new(ActionPrint, T("Shortcut.Print"), _shortcuts.Default(ActionPrint)),
+            new(ActionRefresh, T("Shortcut.Refresh"), _shortcuts.Default(ActionRefresh))
+        };
+
+        actions.AddRange(_entries
+            .Where(e => !e.IsGroupHeader && _navButtons.ContainsKey(e.Key))
+            .Select(e => new ShortcutAction(ScreenAction(e.Key), T("Shortcut.Screen", T(e.LabelKey)),
+                                            _shortcuts.Default(ScreenAction(e.Key)))));
+        return actions;
+    }
+
+    private bool RunShortcut(string action)
+    {
+        switch (action)
+        {
+            case ActionHelp:
+                ShowShortcuts();
+                return true;
+            case ActionRefresh:
+                _ = _navigation.RefreshCurrentAsync();
+                return true;
+            case ActionPrint:
+                _ = PrintCurrentListAsync();
+                return true;
+            case ActionSearch:
+                return FocusSearch();
+            case ActionSave:
+                return ClickSave();
+        }
+
+        if (!action.StartsWith("screen.", StringComparison.Ordinal)) return false;
+
+        var key = action["screen.".Length..];
+        if (!_navButtons.ContainsKey(key)) return false;   // not permitted for this user
+
+        var entry = _entries.First(e => e.Key == key);
+        _ = ActivateAsync(entry);
+        return true;
+    }
+
+    // The first box the operator can type in, in tab order: on every screen that is its search.
+    private bool FocusSearch()
+    {
+        if (_navigation.Current is not { } view) return false;
+
+        var box = Ordered(view).OfType<TextBoxBase>()
+            .FirstOrDefault(b => b is { Visible: true, Enabled: true, ReadOnly: false } && IsShowing(b));
+        if (box is null) return false;
+
+        box.Focus();
+        box.SelectAll();
+        return true;
+    }
+
+    // The screen's own Save button, when it has one and it can be pressed.
+    private bool ClickSave()
+    {
+        if (_navigation.Current is not { } view) return false;
+
+        var save = Mnemonics.Plain(T("Action.Save"));
+        var button = Ordered(view).OfType<Button>()
+            .FirstOrDefault(b => b.Enabled && IsShowing(b)
+                                 && string.Equals(Mnemonics.Plain(b.Text).Trim(), save,
+                                                  StringComparison.CurrentCultureIgnoreCase));
+        if (button is null) return false;
+
+        button.PerformClick();
+        return true;
+    }
+
+    private static bool IsShowing(Control control)
+    {
+        for (var c = control; c is not null; c = c.Parent)
+            if (!c.Visible) return false;
+        return true;
+    }
+
+    private static IEnumerable<Control> Ordered(Control parent)
+    {
+        foreach (var child in parent.Controls.Cast<Control>().OrderBy(c => c.TabIndex))
+        {
+            yield return child;
+            foreach (var nested in Ordered(child)) yield return nested;
+        }
+    }
+
+    private void ShowShortcuts()
+    {
+        using var dialog = new ShortcutsDialog(_shortcuts, ShortcutActions(), Localizer, _cultureManager);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        // The labels that show a shortcut follow the new choice.
+        _print.Text = WithShortcut(T("Action.Print"), ActionPrint);
+        RenderNavigation();
+    }
+
+    private string WithShortcut(string text, string action) =>
+        _shortcuts.For(action) is var keys and not Keys.None
+            ? $"{text}  ({KeyboardShortcuts.Format(keys, Localizer)})"
+            : text;
+
+    private string ShortcutsButtonText() => WithShortcut(T("Shortcut.Title"), ActionHelp);
+
+    private void PaintShortcut(Button button, string key, PaintEventArgs e)
+    {
+        var keys = _shortcuts.For(ScreenAction(key));
+        if (keys == Keys.None) return;
+
+        // A long screen name keeps the whole width: the key then shows in the tooltip only.
+        var shortcut = KeyboardShortcuts.Format(keys, Localizer);
+        var used = button.Padding.Left + (button.Image?.Width ?? 0) + 8
+                   + TextRenderer.MeasureText(button.Text, button.Font).Width;
+        if (used + TextRenderer.MeasureText(shortcut, UiTheme.Small).Width + UiTheme.Gutter > button.Width)
+            return;
+
+        var bounds = new Rectangle(0, 0, button.Width - UiTheme.GutterTight, button.Height);
+        var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+                    | (button.RightToLeft == RightToLeft.Yes ? TextFormatFlags.Left : TextFormatFlags.Right);
+        if (button.RightToLeft == RightToLeft.Yes) bounds.X += UiTheme.GutterTight;
+
+        TextRenderer.DrawText(e.Graphics, shortcut, UiTheme.Small,
+                              bounds, UiTheme.TextMuted, flags);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)

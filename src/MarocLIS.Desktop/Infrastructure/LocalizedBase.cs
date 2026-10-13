@@ -115,6 +115,9 @@ public static class UiTags
 
     /// <summary>A docked panel that sizes its own children and must not be reflowed as a button strip.</summary>
     public const string OwnLayout = "own-layout";
+
+    /// <summary>A button whose caption must stay exactly as written, without an Alt+letter mark.</summary>
+    public const string NoMnemonic = "no-mnemonic";
 }
 
 /// <summary>
@@ -155,6 +158,7 @@ public abstract class LocalizedForm : Form
         RtlLayout.Apply(this, _cultureManager.CurrentLanguage);
         ButtonIcons.Apply(this, Localizer);
         GridColumns.Apply(this);
+        if (this is not Forms.MainShellForm) Mnemonics.Apply(this);
         BarReflow.SizeUnsizedLabels(this);
     }
 
@@ -176,6 +180,7 @@ public abstract class LocalizedForm : Form
             RtlLayout.Apply(this, e.Language);
             ButtonIcons.Apply(this, Localizer);
             GridColumns.Apply(this);
+            if (this is not Forms.MainShellForm) Mnemonics.Apply(this);
         }
         finally
         {
@@ -236,6 +241,7 @@ public abstract class LocalizedView : UserControl
         RtlLayout.Apply(this, _cultureManager.CurrentLanguage);
         ButtonIcons.Apply(this, Localizer);
         GridColumns.Apply(this);
+        Mnemonics.Apply(this);
 
         // After the texts: a strip is only too wide once its buttons carry their real labels.
         BarReflow.SizeUnsizedLabels(this);
@@ -259,6 +265,7 @@ public abstract class LocalizedView : UserControl
             RtlLayout.Apply(this, e.Language);
             ButtonIcons.Apply(this, Localizer);
             GridColumns.Apply(this);
+            Mnemonics.Apply(this);
         }
         finally
         {

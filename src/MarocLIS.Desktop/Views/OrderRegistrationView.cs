@@ -252,28 +252,36 @@ public sealed class OrderRegistrationView : LocalizedView
 
         // --- totals and actions -------------------------------------------------------------------
 
+        // Totals on the left, the two actions side by side on the right, the message between them:
+        // one line, so the buttons stay aligned whatever the width of the window.
         var footer = new Panel
         {
             Dock = DockStyle.Bottom, Height = 92,
-            BackColor = UiTheme.SurfaceRaised, Padding = new Padding(UiTheme.Gutter)
+            BackColor = UiTheme.SurfaceRaised, Padding = new Padding(UiTheme.Gutter, 8, UiTheme.Gutter, 8)
         };
 
         _totals.Font = UiTheme.Monospace;
         _totals.ForeColor = UiTheme.TextPrimary;
         _totals.AutoSize = false;
-        _totals.Bounds = new Rectangle(UiTheme.Gutter, 8, 620, 72);
+        _totals.Dock = DockStyle.Left;
+        _totals.Width = 420;
 
-        _register.Bounds = new Rectangle(660, 12, 240, UiTheme.ButtonHeight + 6);
+        var actions = new Panel { Dock = DockStyle.Right, Width = 400, Tag = UiTags.OwnLayout };
+
+        _clear.Bounds = new Rectangle(0, 18, 150, UiTheme.ButtonHeight + 6);
+        _register.Bounds = new Rectangle(162, 18, 238, UiTheme.ButtonHeight + 6);
         _register.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+        actions.Controls.AddRange([_clear, _register]);
 
-        _clear.Bounds = new Rectangle(660, 54, 240, UiTheme.ButtonHeight - 4);
-
-        _status.Bounds = new Rectangle(920, 20, 520, 48);
+        _status.Dock = DockStyle.Fill;
+        _status.Padding = new Padding(UiTheme.Gutter, 0, UiTheme.Gutter, 0);
+        _status.TextAlign = ContentAlignment.MiddleLeft;
         _status.Font = UiTheme.Small;
         _status.ForeColor = UiTheme.TextSecondary;
         _status.AutoSize = false;
 
-        footer.Controls.AddRange([_totals, _register, _clear, _status]);
+        // Fill first, so it docks last and takes what the two sides leave.
+        footer.Controls.AddRange([_status, actions, _totals]);
 
         Controls.Add(split);
         Controls.Add(footer);

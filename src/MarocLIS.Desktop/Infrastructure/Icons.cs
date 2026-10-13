@@ -155,7 +155,7 @@ public static class ButtonIcons
                     var state = Decorated.GetValue(button, Track);
 
                     // An explicitly set icon stands for a caption the catalogue does not know.
-                    state.Current = byText.TryGetValue(button.Text.Trim(), out var found)
+                    state.Current = byText.TryGetValue(Mnemonics.Plain(button.Text).Trim(), out var found)
                         ? found
                         : state.Explicit;
 
