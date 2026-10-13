@@ -1,0 +1,278 @@
+﻿using MarocLIS.Application.Abstractions;
+using MarocLIS.Domain.Audit;
+using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
+using MarocLIS.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace MarocLIS.Infrastructure.Security;
+
+/// <summary>
+/// Signs operators in and enforces the password policy.
+/// <para>
+/// Two behaviours are deliberate. First, a failed sign-in returns the same generic error whether
+/// the account exists or not, so the login screen cannot be used to enumerate staff — but the
+/// security log records exactly which it was, because an administrator investigating an incident
+/// needs the distinction. Second, the lockout counter is persisted rather than kept in memory:
+/// a laboratory runs several workstations against one database, and an in-memory counter would let
+/// an attacker get five attempts per machine.
+/// </para>
+/// </summary>
+public sealed class AuthenticationService(
+    LisDbContext db,
+    IPasswordHasher passwordHasher,
+    PasswordPolicy policy,
+    CurrentUserAccessor currentUser,
+    ISecurityAuditor securityAuditor,
+    IClock clock,
+    ILogger<AuthenticationService>? logger = null) : IAuthenticationService
+{
+    public async Task<Result<AuthenticatedSession>> SignInAsync(string userName, string password,
+                                                                Guid? siteId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrEmpty(password))
+            return await FailAsync(userName, "Auth_InvalidCredentials", ct);
+
+        var normalised = userName.Trim().ToLowerInvariant();
+
+        // The site filter must not apply while authenticating: nobody is signed in yet, so there
+        // is no scope. IgnoreQueryFilters also lets a deactivated account be found and reported
+        // properly instead of silently behaving like a wrong password.
+        var user = await db.Users
+            .IgnoreQueryFilters()
+            .Include(u => u.Roles).ThenInclude(r => r.Role).ThenInclude(r => r!.Permissions)
+            .Include(u => u.SiteAccess)
+            .FirstOrDefaultAsync(u => u.UserName == normalised, ct);
+
+        if (user is null)
+            return await FailAsync(normalised, "Auth_InvalidCredentials", ct);
+
+        // IsActive alone: an account is deactivated, never deleted. AppUser stopped being
+        // ISoftDeletable because UserRole depends on it as a required navigation, and the two
+        // checks were always the same decision anyway.
+        if (!user.IsActive)
+            return await FailAsync(normalised, "Auth_AccountInactive", ct);
+
+        if (user.IsLockedOut(clock.Now))
+        {
+            await securityAuditor.LogAsync(SecurityEventKind.LoginFailed, false, normalised,
+                                           "Auth_AccountLockedOut", ct: ct);
+            return Result.Failure<AuthenticatedSession>(
+                Error.Forbidden("Auth_AccountLockedOut", user.LockedOutUntil!.Value));
+        }
+
+        if (!passwordHasher.Verify(password, user.PasswordHash))
+        {
+            user.RegisterFailedLogin(clock.Now, policy.MaxFailedAttempts, policy.LockoutDuration);
+            await db.SaveChangesAsync(ct);
+
+            var lockedOutNow = user.IsLockedOut(clock.Now);
+
+            await securityAuditor.LogAsync(
+                lockedOutNow ? SecurityEventKind.AccountLockedOut : SecurityEventKind.LoginFailed,
+                false, normalised, "Auth_InvalidCredentials",
+                details: $"Attempt {user.FailedLoginAttempts} of {policy.MaxFailedAttempts}", ct: ct);
+
+            return Result.Failure<AuthenticatedSession>(
+                lockedOutNow
+                    ? Error.Forbidden("Auth_AccountLockedOut", user.LockedOutUntil!.Value)
+                    : Error.Forbidden("Auth_InvalidCredentials"));
+        }
+
+        // Resolve the working site: the one asked for, the user's default, or their only one.
+        var accessibleSiteIds = user.SiteAccess.Select(a => a.SiteId).ToList();
+
+        if (accessibleSiteIds.Count == 0)
+            return await FailAsync(normalised, "Auth_SiteNotAuthorized", ct, discloseReason: true);
+
+        var resolvedSiteId = siteId
+            ?? user.SiteAccess.FirstOrDefault(a => a.IsDefaultSite)?.SiteId
+            ?? accessibleSiteIds[0];
+
+        if (!accessibleSiteIds.Contains(resolvedSiteId))
+            return await FailAsync(normalised, "Auth_SiteNotAuthorized", ct, discloseReason: true);
+
+        var site = await db.Sites
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == resolvedSiteId && !s.IsDeleted, ct);
+
+        if (site is null || !site.IsActive)
+            return await FailAsync(normalised, "Auth_SiteNotAuthorized", ct, discloseReason: true);
+
+        // Transparently upgrade a hash produced under an older work factor.
+        if (passwordHasher.NeedsRehash(user.PasswordHash))
+        {
+            user.SetPassword(passwordHasher.Hash(password), clock.Now, user.MustChangePassword);
+            logger?.LogInformation("Rehashed the password for {UserName} at the current work factor.",
+                                   normalised);
+        }
+
+        user.RegisterSuccessfulLogin(clock.Now, currentUser.Workstation);
+        await db.SaveChangesAsync(ct);
+
+        var permissions = user.Roles
+            .Select(r => r.Role)
+            .Where(r => r is { IsActive: true })
+            .SelectMany(r => r!.Permissions.Select(p => p.Permission))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var session = new AuthenticatedSession(
+            user.Id,
+            user.UserName,
+            user.FullName,
+            site.Id,
+            site.Code,
+            user.PreferredLanguage,
+            user.Qualification,
+            permissions,
+            accessibleSiteIds,
+            user.AuthorizedDepartmentCodes,
+            user.MustChangePassword || IsPasswordExpired(user));
+
+        currentUser.Apply(session);
+
+        await securityAuditor.LogAsync(SecurityEventKind.LoginSucceeded, true, normalised, ct: ct);
+
+        return Result.Success(session);
+    }
+
+    public async Task SignOutAsync(CancellationToken ct = default)
+    {
+        if (currentUser.IsAuthenticated)
+            await securityAuditor.LogAsync(SecurityEventKind.Logout, true, currentUser.UserName, ct: ct);
+
+        currentUser.Clear();
+    }
+
+    public async Task<Result> ChangePasswordAsync(Guid userId, string currentPassword,
+                                                  string newPassword, CancellationToken ct = default)
+    {
+        var user = await db.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null) return Result.Failure(Error.NotFound("Auth_InvalidCredentials"));
+
+        if (!passwordHasher.Verify(currentPassword, user.PasswordHash))
+        {
+            await securityAuditor.LogAsync(SecurityEventKind.PasswordChanged, false, user.UserName,
+                                           "Auth_InvalidCredentials", ct: ct);
+            return Result.Failure(Error.Forbidden("Auth_InvalidCredentials"));
+        }
+
+        var strength = policy.Validate(newPassword);
+        if (strength.IsFailure) return strength;
+
+        var reuse = await CheckReuseAsync(user, newPassword, ct);
+        if (reuse.IsFailure) return reuse;
+
+        await ApplyNewPasswordAsync(user, newPassword, mustChangeAtNextLogon: false, ct);
+
+        await securityAuditor.LogAsync(SecurityEventKind.PasswordChanged, true, user.UserName,
+                                       targetUserId: user.Id, ct: ct);
+        return Result.Success();
+    }
+
+    public async Task<Result> ResetPasswordAsync(Guid userId, string newPassword,
+                                                 CancellationToken ct = default)
+    {
+        var user = await db.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null) return Result.Failure(Error.NotFound("Auth_InvalidCredentials"));
+
+        var strength = policy.Validate(newPassword);
+        if (strength.IsFailure) return strength;
+
+        // An administrative reset always forces a change at next sign-in, so the administrator
+        // never holds a working credential for someone else's account.
+        await ApplyNewPasswordAsync(user, newPassword, mustChangeAtNextLogon: true, ct);
+
+        await securityAuditor.LogAsync(SecurityEventKind.PasswordReset, true,
+                                       targetUserId: user.Id,
+                                       details: $"Reset for {user.UserName}", ct: ct);
+        return Result.Success();
+    }
+
+    public async Task<Result> SwitchSiteAsync(Guid siteId, CancellationToken ct = default)
+    {
+        if (!currentUser.IsAuthenticated)
+            return Result.Failure(Error.Forbidden("Message.SessionExpired"));
+
+        if (!currentUser.AccessibleSiteIds.Contains(siteId))
+            return Result.Failure(Error.Forbidden("Auth_SiteNotAuthorized"));
+
+        var site = await db.Sites.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == siteId && !s.IsDeleted && s.IsActive, ct);
+
+        if (site is null) return Result.Failure(Error.NotFound("Auth_SiteNotAuthorized"));
+
+        currentUser.SetSite(site.Id, site.Code);
+        return Result.Success();
+    }
+
+    private bool IsPasswordExpired(AppUser user) =>
+        policy.ExpiryDays > 0 &&
+        (user.PasswordChangedAt is null ||
+         user.PasswordChangedAt.Value.AddDays(policy.ExpiryDays) < clock.Now);
+
+    private async Task<Result> CheckReuseAsync(AppUser user, string newPassword, CancellationToken ct)
+    {
+        if (policy.HistoryLength <= 0) return Result.Success();
+
+        if (passwordHasher.Verify(newPassword, user.PasswordHash))
+            return Result.Failure(Error.Validation("Auth_PasswordReused"));
+
+        var history = await db.PasswordHistory
+            .AsNoTracking()
+            .Where(h => h.UserId == user.Id)
+            .OrderByDescending(h => h.ChangedAt)
+            .Take(policy.HistoryLength)
+            .ToListAsync(ct);
+
+        return history.Any(h => passwordHasher.Verify(newPassword, h.PasswordHash))
+            ? Result.Failure(Error.Validation("Auth_PasswordReused"))
+            : Result.Success();
+    }
+
+    private async Task ApplyNewPasswordAsync(AppUser user, string newPassword,
+                                             bool mustChangeAtNextLogon, CancellationToken ct)
+    {
+        if (policy.HistoryLength > 0 && !string.IsNullOrEmpty(user.PasswordHash))
+            db.PasswordHistory.Add(new PasswordHistoryEntry(user.Id, user.PasswordHash, clock.Now));
+
+        user.SetPassword(passwordHasher.Hash(newPassword), clock.Now, mustChangeAtNextLogon);
+
+        await db.SaveChangesAsync(ct);
+
+        // Keep the history bounded; there is no value in retaining hashes beyond the policy window.
+        var stale = await db.PasswordHistory
+            .Where(h => h.UserId == user.Id)
+            .OrderByDescending(h => h.ChangedAt)
+            .Skip(policy.HistoryLength)
+            .ToListAsync(ct);
+
+        if (stale.Count > 0)
+        {
+            db.PasswordHistory.RemoveRange(stale);
+            await db.SaveChangesAsync(ct);
+        }
+    }
+
+    /// <summary>
+    /// Records a failed sign-in and produces the error the caller sees.
+    /// <para>
+    /// Before the password has been verified the caller is told only "invalid credentials",
+    /// whatever the real reason, so the login screen cannot be used to discover which accounts
+    /// exist; the real reason goes to the security log. Once the password <em>has</em> been
+    /// verified the person at the keyboard is the account holder, and withholding the reason from
+    /// them helps nobody — pass <paramref name="discloseReason"/> there.
+    /// </para>
+    /// </summary>
+    private async Task<Result<AuthenticatedSession>> FailAsync(string userName, string reasonKey,
+                                                               CancellationToken ct,
+                                                               bool discloseReason = false)
+    {
+        await securityAuditor.LogAsync(SecurityEventKind.LoginFailed, false, userName, reasonKey, ct: ct);
+
+        return Result.Failure<AuthenticatedSession>(
+            Error.Forbidden(discloseReason ? reasonKey : "Auth_InvalidCredentials"));
+    }
+}

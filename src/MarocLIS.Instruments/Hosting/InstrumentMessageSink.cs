@@ -1,0 +1,797 @@
+using System.Globalization;
+using MarocLIS.Application.Abstractions;
+using MarocLIS.Domain.Catalog;
+using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Equipment;
+using MarocLIS.Domain.Orders;
+using MarocLIS.Domain.Patients;
+using MarocLIS.Domain.Quality;
+using MarocLIS.Domain.Results;
+using MarocLIS.Domain.Samples;
+using MarocLIS.Instruments.Drivers;
+using MarocLIS.Instruments.Protocol;
+using Microsoft.Extensions.Logging;
+
+namespace MarocLIS.Instruments.Hosting;
+
+/// <summary>
+/// Where a driver's parsed messages become stored results.
+/// <para>
+/// This is the component the whole interfacing project was missing. Drivers, transports and parsers
+/// were written and compiled, but nothing implemented this contract — so the project was unreachable
+/// at runtime and every result still arrived in the laboratory by hand.
+/// </para>
+/// <para>
+/// Five rules govern it, and each exists because of a specific way an analyser interface produces a
+/// wrong patient result:
+/// </para>
+/// <list type="number">
+/// <item>A specimen identifier that does not resolve to exactly one tube is never guessed at. One
+/// barcode matching two tubes, or none, is logged and dropped — attaching a value to the wrong tube
+/// is the single worst thing a LIS can do.</item>
+/// <item>A control specimen never enters a patient file. Analysers transmit controls down the same
+/// link as patients, and telling them apart at the boundary is what stops a control value being
+/// reported as somebody's potassium.</item>
+/// <item>An unmapped instrument code is never inferred from its name. "NA" is sodium on one
+/// analyser and not-applicable on another; an unrecognised code is an issue on the transmission,
+/// not a guess.</item>
+/// <item>A validated result is never overwritten. The domain refuses it, and the refusal is
+/// surfaced as an issue rather than swallowed — a corrected value after validation has to go
+/// through the amendment path so the clinician holding the report learns of the change.</item>
+/// <item>Results are attributed to a named service account with the from-instrument flag set, never
+/// to whichever operator happened to be signed in. A record saying a technician entered a value
+/// they never saw is a falsified record.</item>
+/// </list>
+/// </summary>
+public sealed class InstrumentMessageSink(
+    IRepository<InstrumentInterface> interfaces,
+    IRepository<Sample> samples,
+    IRepository<LabOrder> orders,
+    IRepository<AnalysisTest> analyses,
+    IRepository<TestResult> results,
+    IRepository<Patient> patients,
+    IRepository<QcTarget> qcTargets,
+    IRepository<QcResult> qcResults,
+    IInstrumentMessageLogStore messageLog,
+    IUnitOfWork unitOfWork,
+    IClock clock,
+    IInstrumentServiceAccount serviceAccount,
+    ILogger<InstrumentMessageSink>? logger = null)
+    : IInstrumentMessageSink, IInstrumentResultReplayer
+{
+    public async Task<bool> HandleAsync(Guid interfaceId, InstrumentMessage message,
+                                         CancellationToken ct = default)
+    {
+        var link = await interfaces.GetByIdWithDetailsAsync(interfaceId, ct);
+
+        if (link is null)
+        {
+            logger?.LogError("Message for unknown interface {Interface} discarded.", interfaceId);
+            return false;
+        }
+
+        var now = clock.Now;
+
+        // The frame is recorded first and on its own. A transmission that cannot be imported must
+        // still be on record: it is the evidence of what the analyser sent, and it is what a replay
+        // re-imports once the missing mapping is added.
+        var logId = await messageLog.RecordAsync(
+            new InstrumentMessageLog(link.Id, link.SiteId, MessageDirection.Inbound,
+                                      message.RawText ?? string.Empty, now)
+            {
+                SpecimenIds = string.Join(", ", message.Specimens
+                    .Select(s => s.SpecimenId)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))),
+                ResultCount = message.Specimens.Sum(s => s.Results.Count)
+            }, ct);
+
+        var issues = new List<string>();
+
+        foreach (var issue in message.Issues)
+            issues.Add(Describe(issue.ResourceKey, issue.Detail));
+
+        if (message.HasBlockingIssues)
+        {
+            await CloseAsync(logId, InstrumentMessageProcessingStatus.Failed, message, 0, issues, ct);
+            return false;
+        }
+
+        if (message.Kind != InstrumentMessageKind.Results)
+        {
+            await CloseAsync(logId, InstrumentMessageProcessingStatus.Ignored, message, 0, issues, ct);
+            return true;
+        }
+
+        // Auto-acceptance off means a technician reviews the transmission before it reaches a
+        // patient file. The frame is held in the log, not partially applied: half-imported results
+        // are harder to reason about than none, and the replay path exists precisely for this.
+        if (!link.AutoAcceptResults)
+        {
+            issues.Add("Interface_HeldForAcceptance");
+
+            await CloseAsync(logId, InstrumentMessageProcessingStatus.AwaitingAcceptance,
+                              message, 0, issues, ct);
+            return true;
+        }
+
+        var imported = await ImportAsync(link, message, issues, ct);
+
+        var status = imported == 0
+            ? InstrumentMessageProcessingStatus.Failed
+            : issues.Count == 0
+                ? InstrumentMessageProcessingStatus.Imported
+                : InstrumentMessageProcessingStatus.PartiallyImported;
+
+        await CloseAsync(logId, status, message, imported, issues, ct);
+
+        link.LastMessageAt = now;
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return imported > 0;
+    }
+
+    /// <summary>
+    /// Re-imports a frame already in the log, after a mapping was added or auto-acceptance was
+    /// granted. The frame is not re-received; it is re-read, which is what makes a lost transmission
+    /// a re-import rather than a redraw.
+    /// <para>
+    /// Every precondition is checked here rather than only in the screen that offers the button. A
+    /// replay re-parses stored text and writes patient values: it is exactly the kind of operation
+    /// that must refuse, not merely be hidden.
+    /// </para>
+    /// </summary>
+    public async Task<Result<int>> ReplayAsync(Guid logId, Guid byUserId,
+                                                CancellationToken ct = default)
+    {
+        var entry = await messageLog.GetByIdAsync(logId, ct);
+        if (entry is null) return Result.Failure<int>(Error.NotFound("Interface_MessageNotFound"));
+
+        // Outbound frames are what we sent. Replaying one would mean re-importing our own worklist
+        // as though an analyser had reported it.
+        if (entry.Direction != MessageDirection.Inbound)
+            return Result.Failure<int>(Error.Validation("Interface_OnlyInboundReplayable"));
+
+        if (entry.Status is not (InstrumentMessageProcessingStatus.Failed
+                                 or InstrumentMessageProcessingStatus.PartiallyImported
+                                 or InstrumentMessageProcessingStatus.AwaitingAcceptance))
+            return Result.Failure<int>(
+                Error.Conflict("Interface_StatusNotReplayable", entry.Status));
+
+        if (string.IsNullOrWhiteSpace(entry.RawContent))
+            return Result.Failure<int>(Error.Validation("Interface_RawFrameEmpty"));
+
+        // Checked before the interface is loaded, not after. Without a resolved service account the
+        // import would attribute every value to Guid.Empty, so this refusal is absolute and does not
+        // depend on anything the link says — and a refusal that first reads the database has already
+        // done work it had no business doing.
+        if (!await serviceAccount.EnsureResolvedAsync(ct))
+            return Result.Failure<int>(Error.Regulatory("Interface_ServiceAccountMissing"));
+
+        var link = await interfaces.GetByIdWithDetailsAsync(entry.InstrumentInterfaceId, ct);
+        if (link is null) return Result.Failure<int>(Error.NotFound("Interface_NotFound"));
+
+        var reparsed = Reparse(link.Protocol, entry.RawContent);
+
+        if (reparsed is null)
+            return Result.Failure<int>(
+                Error.Validation("Interface_ProtocolNotReplayable", link.Protocol));
+
+        if (reparsed.HasBlockingIssues)
+            return Result.Failure<int>(Error.Validation(
+                "Interface_RawFrameStillUnparsable",
+                string.Join("; ", reparsed.Issues.Where(i => i.IsBlocking)
+                                                  .Select(i => i.ResourceKey))));
+
+        return await ReplayParsedAsync(logId, link, reparsed, byUserId, ct);
+    }
+
+    /// <summary>
+    /// Re-parses a stored frame. ASTM stores its records joined by CR and HL7 stores the message
+    /// verbatim, so each protocol is undone the way <see cref="InstrumentMessage.RawText"/> was
+    /// built — not by a shared guess at the line ending.
+    /// </summary>
+    private static InstrumentMessage? Reparse(InstrumentProtocol protocol, string raw) =>
+        protocol switch
+        {
+            InstrumentProtocol.AstmE1394 => AstmMessageParser.Parse(
+                raw.Split('\r', StringSplitOptions.RemoveEmptyEntries)),
+            InstrumentProtocol.Hl7V2 => Hl7ResultParser.Parse(raw),
+            _ => null
+        };
+
+    private async Task<Result<int>> ReplayParsedAsync(Guid logId, InstrumentInterface link,
+                                                       InstrumentMessage message, Guid byUserId,
+                                                       CancellationToken ct)
+    {
+        var issues = new List<string>();
+        var imported = await ImportAsync(link, message, issues, ct);
+
+        await messageLog.MarkProcessedAsync(
+            logId,
+            imported == 0 ? InstrumentMessageProcessingStatus.Failed
+                          : issues.Count == 0 ? InstrumentMessageProcessingStatus.Imported
+                                              : InstrumentMessageProcessingStatus.PartiallyImported,
+            message.Specimens.Sum(s => s.Results.Count), imported,
+            issues.Count == 0 ? null : string.Join(Environment.NewLine, issues),
+            clock.Now, ct);
+
+        await messageLog.MarkReplayedAsync(logId, byUserId, clock.Now, ct);
+
+        return Result.Success(imported);
+    }
+
+    // ---- Import --------------------------------------------------------------------------------
+
+    private async Task<int> ImportAsync(InstrumentInterface link, InstrumentMessage message,
+                                         List<string> issues, CancellationToken ct)
+    {
+        var imported = 0;
+
+        foreach (var specimen in message.Specimens)
+        {
+            if (string.IsNullOrWhiteSpace(specimen.SpecimenId))
+            {
+                issues.Add("Interface_SpecimenIdMissing");
+                continue;
+            }
+
+            if (specimen.IsControl)
+            {
+                imported += await ImportControlAsync(link, specimen, issues, ct);
+                continue;
+            }
+
+            imported += await ImportPatientAsync(link, specimen, issues, ct);
+        }
+
+        if (imported > 0)
+        {
+            unitOfWork.AuditReason =
+                $"Résultats reçus de l'automate ({link.Protocol}) — {imported} valeur(s)";
+
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+
+        return imported;
+    }
+
+    private async Task<int> ImportPatientAsync(InstrumentInterface link,
+                                                InstrumentSpecimenResults specimen,
+                                                List<string> issues, CancellationToken ct)
+    {
+        var barcode = specimen.SpecimenId!.Trim();
+
+        // Exact match, and exactly one. A barcode that matches two tubes is a configuration fault
+        // the laboratory has to see; silently taking the first would attach results at random.
+        var matches = await samples.ListAsync(s => s.Barcode == barcode, ct);
+
+        if (matches.Count == 0)
+        {
+            // Almost always a tube drawn without an order, or a tube from another site. Worth
+            // logging loudly: the analyser has already consumed the specimen.
+            issues.Add(Describe("Interface_SpecimenUnknown", barcode));
+            return 0;
+        }
+
+        if (matches.Count > 1)
+        {
+            issues.Add(Describe("Interface_SpecimenAmbiguous", barcode));
+            return 0;
+        }
+
+        var sample = matches[0];
+
+        if (sample.Status is SampleStatus.Rejected or SampleStatus.Discarded)
+        {
+            // The tube was refused or thrown away, and the analyser ran it anyway. The value is not
+            // reportable: whatever made the tube unacceptable has not gone away.
+            issues.Add(Describe("Interface_SpecimenNotUsable", $"{barcode} / {sample.Status}"));
+            return 0;
+        }
+
+        var order = await orders.GetByIdWithDetailsAsync(sample.LabOrderId, ct);
+        if (order is null) { issues.Add(Describe("Interface_OrderNotFound", barcode)); return 0; }
+
+        if (order.Status == LabOrderStatus.Cancelled)
+        {
+            issues.Add(Describe("Interface_OrderCancelled", order.AccessionNumber));
+            return 0;
+        }
+
+        // The patient's demographics decide which reference interval applies, so they are loaded
+        // once per specimen rather than per result.
+        var patient = await patients.GetByIdAsync(order.PatientId, ct);
+
+        var stored = await results.ListAsync(r => r.LabOrderId == order.Id, ct);
+
+        var imported = 0;
+
+        foreach (var incoming in specimen.Results)
+        {
+            var mapping = link.Mappings.FirstOrDefault(
+                m => m.IsEnabled
+                     && string.Equals(m.InstrumentTestCode, incoming.InstrumentTestCode,
+                                       StringComparison.Ordinal));
+
+            if (mapping is null)
+            {
+                // Never inferred. The same three letters mean different measurands on different
+                // analysers, and a guess puts a potassium value in a sodium field.
+                if (link.RaiseIssueOnUnmappedCode)
+                    issues.Add(Describe("Interface_UnmappedCode", incoming.InstrumentTestCode));
+
+                continue;
+            }
+
+            var target = stored.FirstOrDefault(r => r.TestParameterId == mapping.TestParameterId);
+
+            if (target is null)
+            {
+                // The analyser ran a test nobody ordered on this tube. Reported rather than
+                // stored: an unordered result is unbilled, unvalidated and clinically unexplained.
+                issues.Add(Describe("Interface_ResultNotOrdered",
+                                     $"{incoming.InstrumentTestCode} / {order.AccessionNumber}"));
+                continue;
+            }
+
+            var applied = await ApplyAsync(link, mapping, incoming, target, order, patient,
+                                            issues, ct);
+
+            if (applied) imported++;
+        }
+
+        if (imported > 0)
+        {
+            // The items the analyser produced for move to result-entered, so the technical
+            // validation worklist picks them up instead of them sitting in "received" forever.
+            foreach (var item in order.Items.Where(i => !i.IsCancelled && i.SampleId == sample.Id))
+                item.MarkResultEntered(clock.Now);
+
+            order.RecomputeStatus();
+        }
+
+        return imported;
+    }
+
+    private async Task<bool> ApplyAsync(InstrumentInterface link, InstrumentTestMapping mapping,
+                                         InstrumentResult incoming, TestResult target,
+                                         LabOrder order, Patient? patient,
+                                         List<string> issues, CancellationToken ct)
+    {
+        var parameter = await ResolveParameterAsync(order, target, mapping.TestParameterId, ct);
+
+        if (parameter is null)
+        {
+            issues.Add(Describe("Interface_ParameterNotFound", mapping.InstrumentTestCode));
+            return false;
+        }
+
+        if (target.IsValidated)
+        {
+            // The domain refuses this, and the refusal is the point: a value corrected after
+            // biological validation has to be issued as an amended report, so the clinician who
+            // already has the result learns that it changed.
+            issues.Add(Describe(incoming.IsCorrection
+                                    ? "Interface_CorrectionAfterValidation"
+                                    : "Interface_ResultAlreadyValidated",
+                                $"{parameter.Code} / {order.AccessionNumber}"));
+            return false;
+        }
+
+        if (incoming.IsNotDone)
+        {
+            // The analyser says it could not produce this value. Recorded as not done rather than
+            // left awaited: an awaited row keeps the order open forever, and the report prints
+            // "non fait" against the parameter, which is the truth.
+            var notDone = target.MarkNotDone(
+                incoming.Comments.Count > 0 ? incoming.Comments[0] : "Interface_AnalyserReportedNotDone",
+                clock.Now, serviceAccount.UserId);
+
+            if (notDone.IsFailure)
+            {
+                issues.Add(Describe(notDone.FirstError.ResourceKey, parameter.Code));
+                return false;
+            }
+
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(incoming.Value))
+        {
+            issues.Add(Describe("Interface_EmptyValue", parameter.Code));
+            return false;
+        }
+
+        var at = incoming.MeasuredAt ?? clock.Now;
+        var raw = incoming.Value.Trim();
+
+        var outcome = parameter.ValueType switch
+        {
+            ResultValueType.Numeric or ResultValueType.NumericWithOperator =>
+                ApplyNumeric(parameter, mapping, raw, at, target, issues),
+
+            ResultValueType.Coded or ResultValueType.SemiQuantitative =>
+                target.EnterCoded(parameter, mapping.TranslateCode(raw), at,
+                                   serviceAccount.UserId, fromInstrument: true),
+
+            ResultValueType.Text =>
+                target.EnterText(raw, at, serviceAccount.UserId, fromInstrument: true),
+
+            _ => Result.Failure(Error.Validation("Interface_ValueTypeNotTransmittable",
+                                                   parameter.ValueType))
+        };
+
+        if (outcome.IsFailure)
+        {
+            issues.Add(Describe(outcome.FirstError.ResourceKey, $"{parameter.Code} = {raw}"));
+            return false;
+        }
+
+        target.InstrumentId = link.InstrumentId;
+        target.RawInstrumentValue = raw;
+
+        if (incoming.DilutionFactor is { } dilution and > 1m)
+            target.DilutionFactor = dilution;
+
+        // Interpreted here, against this patient's own demographics and this analyser. A value
+        // stored without an interval is a number nobody can act on, and a method-dependent interval
+        // is the norm for hormones and immunoassays — so the instrument is part of the selection.
+        if (patient is not null && parameter.ValueType is ResultValueType.Numeric
+                                                       or ResultValueType.NumericWithOperator)
+        {
+            var context = ReferenceRangeContext.For(patient, clock.Today, link.InstrumentId);
+            var range = parameter.ResolveRange(context);
+
+            target.ApplyInterpretation(parameter, range, order.ReportLanguage,
+                                        parameter.Unit?.DisplaySymbol);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Applies a numeric value, honouring the mapping's unit conversion and the analyser's censoring
+    /// operator.
+    /// <para>
+    /// The conversion is the most dangerous line in this file: a wrong factor is a hundredfold error
+    /// on a report, which is why it is an explicit configured number rather than inferred from the
+    /// unit strings the analyser happens to send.
+    /// </para>
+    /// </summary>
+    private Result ApplyNumeric(TestParameter parameter, InstrumentTestMapping mapping, string raw,
+                                 DateTimeOffset at, TestResult target, List<string> issues)
+    {
+        var text = raw;
+        string? censoring = null;
+
+        if (text.StartsWith('<') || text.StartsWith('>'))
+        {
+            censoring = text[..1];
+            text = text[1..].Trim();
+        }
+
+        if (!decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            && !decimal.TryParse(text, NumberStyles.Float, CultureInfo.GetCultureInfo("fr-FR"),
+                                  out value))
+        {
+            // Not a number at all. Some analysers send "SEE COMMENT" or "ERROR" in a numeric field,
+            // and storing that as text under a numeric parameter would make the column unreadable.
+            issues.Add(Describe("Interface_NonNumericValue", $"{parameter.Code} = {raw}"));
+            return Result.Failure(Error.Validation("Interface_NonNumericValue", raw));
+        }
+
+        var converted = mapping.Convert(value);
+
+        // A censored value stays censored, through the domain method that exists for it: reporting
+        // "< 0,01" as a bare 0,01 asserts a precision the method does not have.
+        return censoring is null
+            ? target.EnterNumeric(parameter, converted, at, serviceAccount.UserId,
+                                   fromInstrument: true, rawValue: raw)
+            : target.EnterCensoredNumeric(parameter, converted, censoring, at,
+                                           serviceAccount.UserId, fromInstrument: true,
+                                           rawValue: raw);
+    }
+
+    /// <summary>
+    /// Records a control result against its target, keeping it out of every patient file.
+    /// <para>
+    /// The point is stored with the from-instrument flag and left pending review: the Westgard
+    /// evaluation and the decision about whether patient results may flow belong to the quality
+    /// control screen, where a biologist sees the chart. Evaluating it here and acting on the
+    /// verdict silently would make a rejection invisible.
+    /// </para>
+    /// </summary>
+    private async Task<int> ImportControlAsync(InstrumentInterface link,
+                                                InstrumentSpecimenResults specimen,
+                                                List<string> issues, CancellationToken ct)
+    {
+        if (!link.RouteControlResultsToQc)
+        {
+            // Explicitly configured not to take them. Logged, never stored as a patient result.
+            issues.Add(Describe("Interface_ControlNotRouted", specimen.ControlIdentifier
+                                                              ?? specimen.SpecimenId));
+            return 0;
+        }
+
+        var lot = specimen.ControlIdentifier?.Trim();
+
+        if (string.IsNullOrWhiteSpace(lot))
+        {
+            issues.Add("Interface_ControlLotMissing");
+            return 0;
+        }
+
+        var imported = 0;
+
+        foreach (var incoming in specimen.Results)
+        {
+            var mapping = link.Mappings.FirstOrDefault(
+                m => m.IsEnabled
+                     && string.Equals(m.InstrumentTestCode, incoming.InstrumentTestCode,
+                                       StringComparison.Ordinal));
+
+            if (mapping is null)
+            {
+                if (link.RaiseIssueOnUnmappedCode)
+                    issues.Add(Describe("Interface_UnmappedCode", incoming.InstrumentTestCode));
+
+                continue;
+            }
+
+            if (!decimal.TryParse(incoming.Value?.TrimStart('<', '>').Trim(), NumberStyles.Float,
+                                   CultureInfo.InvariantCulture, out var value))
+            {
+                issues.Add(Describe("Interface_NonNumericValue", incoming.InstrumentTestCode));
+                continue;
+            }
+
+            // The target is the laboratory's assigned mean and SD for this material, parameter and
+            // analyser. Without one there is nothing to judge the point against, so it is not
+            // stored: an unanchored control point on a chart is worse than a gap.
+            var targets = await qcTargets.ListAsync(
+                t => t.TestParameterId == mapping.TestParameterId
+                     && t.InstrumentId == link.InstrumentId
+                     && t.IsActive, ct);
+
+            var target = targets.Count > 0 ? targets[0] : null;
+
+            if (target is null)
+            {
+                issues.Add(Describe("Interface_QcTargetNotFound",
+                                     $"{incoming.InstrumentTestCode} / {lot}"));
+                continue;
+            }
+
+            var point = new QcResult(target.Id, mapping.TestParameterId, link.InstrumentId,
+                                      link.SiteId, mapping.Convert(value),
+                                      incoming.MeasuredAt ?? clock.Now, serviceAccount.UserId)
+            {
+                IsAutoTransmitted = true,
+                TargetMean = target.AssignedMean,
+                TargetSd = target.AssignedSd
+            };
+
+            await qcResults.AddAsync(point, ct);
+            imported++;
+        }
+
+        if (imported > 0)
+        {
+            unitOfWork.AuditReason =
+                $"Contrôle interne reçu de l'automate — lot {lot}, {imported} niveau(x)";
+
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+
+        return imported;
+    }
+
+    // ---- Query answering -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Answers an analyser that has scanned a tube and wants to know what to run on it.
+    /// <para>
+    /// Only analyses mapped on this interface are sent down: telling an analyser to run a test it
+    /// has no channel for produces an error frame, and telling it to run one the laboratory does
+    /// not map means the result comes back unmappable.
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<InstrumentOrderDownload>> ResolveQueryAsync(
+        Guid interfaceId, IReadOnlyList<string> specimenIds, CancellationToken ct = default)
+    {
+        var link = await interfaces.GetByIdWithDetailsAsync(interfaceId, ct);
+        if (link is null) return [];
+
+        var downloads = new List<InstrumentOrderDownload>(specimenIds.Count);
+
+        foreach (var specimenId in specimenIds)
+        {
+            var barcode = specimenId.Trim();
+
+            var matches = await samples.ListAsync(s => s.Barcode == barcode, ct);
+
+            if (matches.Count != 1)
+            {
+                // An unknown barcode is itself worth recording: it usually means a tube was drawn
+                // without an order, and the analyser is about to consume the specimen.
+                await messageLog.RecordAsync(
+                    new InstrumentMessageLog(link.Id, link.SiteId, MessageDirection.Inbound,
+                                              $"[QUERY] {barcode}", clock.Now)
+                    {
+                        SpecimenIds = barcode,
+                        Status = InstrumentMessageProcessingStatus.Failed,
+                        Issues = Describe(matches.Count == 0 ? "Interface_SpecimenUnknown"
+                                                             : "Interface_SpecimenAmbiguous",
+                                           barcode)
+                    }, ct);
+
+                continue;
+            }
+
+            var sample = matches[0];
+
+            var order = await orders.GetByIdWithDetailsAsync(sample.LabOrderId, ct);
+            if (order is null || order.Status == LabOrderStatus.Cancelled) continue;
+
+            var patient = await patients.GetByIdAsync(order.PatientId, ct);
+
+            var wanted = new List<string>();
+
+            foreach (var item in order.Items.Where(i => !i.IsCancelled && i.SampleId == sample.Id))
+            {
+                var analysis = await analyses.GetByIdWithDetailsAsync(item.AnalysisTestId, ct);
+                if (analysis is null) continue;
+
+                foreach (var parameter in analysis.Parameters.Where(p => p.IsActive))
+                {
+                    var mapping = link.Mappings.FirstOrDefault(
+                        m => m.IsEnabled && m.TestParameterId == parameter.Id);
+
+                    if (mapping is not null) wanted.Add(mapping.InstrumentTestCode);
+                }
+            }
+
+            if (wanted.Count == 0) continue;
+
+            downloads.Add(new InstrumentOrderDownload
+            {
+                SpecimenId = sample.Barcode,
+                InstrumentTestCodes = [.. wanted.Distinct(StringComparer.Ordinal)],
+                PatientId = patient?.MedicalRecordNumber,
+                PatientName = patient?.FullName,
+                Sex = patient?.Gender switch
+                {
+                    Gender.Male => "M",
+                    Gender.Female => "F",
+                    _ => "U"
+                },
+                DateOfBirth = patient?.DateOfBirth,
+                Priority = order.IsUrgent ? "S" : "R",
+                CollectedAt = sample.CollectedAt,
+                ClinicalInformation = order.ClinicalInformation,
+                RackPosition = null
+            });
+        }
+
+        return downloads;
+    }
+
+    // ---- Logging and link state ----------------------------------------------------------------
+
+    public Task LogRawAsync(Guid interfaceId, MessageDirection direction, string content,
+                             CancellationToken ct = default) =>
+        RecordRawAsync(interfaceId, direction, content, ct);
+
+    private async Task RecordRawAsync(Guid interfaceId, MessageDirection direction, string content,
+                                       CancellationToken ct)
+    {
+        var link = await interfaces.GetByIdAsync(interfaceId, ct);
+        if (link is null) return;
+
+        await messageLog.RecordAsync(
+            new InstrumentMessageLog(link.Id, link.SiteId, direction, content, clock.Now)
+            {
+                Status = InstrumentMessageProcessingStatus.Received
+            }, ct);
+    }
+
+    public async Task ReportConnectionStateAsync(Guid interfaceId, bool connected, string? error,
+                                                  CancellationToken ct = default)
+    {
+        var link = await interfaces.GetByIdAsync(interfaceId, ct);
+        if (link is null) return;
+
+        if (connected)
+        {
+            link.LastConnectedAt = clock.Now;
+            link.LastError = null;
+        }
+        else
+        {
+            link.LastError = error;
+        }
+
+        await unitOfWork.SaveChangesAsync(ct);
+    }
+
+    // ---- Helpers -------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Loads the catalogue parameter behind a result row.
+    /// <para>
+    /// Reached through the row's own order item rather than looked up on its own, because a
+    /// parameter is not an aggregate root and has no repository: going via its analysis is what
+    /// keeps the reference intervals and coded options attached, and both are needed by the entry
+    /// methods — the intervals to interpret the value and the options to validate a coded one.
+    /// </para>
+    /// <para>
+    /// Cached per message: one transmission commonly carries twenty results from the same analysis,
+    /// and loading the whole catalogue graph twenty times would turn one import into twenty.
+    /// </para>
+    /// </summary>
+    private async Task<TestParameter?> ResolveParameterAsync(LabOrder order, TestResult target,
+                                                              Guid parameterId,
+                                                              CancellationToken ct)
+    {
+        if (_parameterCache.TryGetValue(parameterId, out var cached)) return cached;
+
+        var item = order.Items.FirstOrDefault(i => i.Id == target.LabOrderItemId);
+        if (item is null) return null;
+
+        var analysis = await analyses.GetByIdWithDetailsAsync(item.AnalysisTestId, ct);
+
+        var parameter = analysis?.Parameters.FirstOrDefault(p => p.Id == parameterId);
+
+        if (parameter is not null) _parameterCache[parameterId] = parameter;
+
+        return parameter;
+    }
+
+    private readonly Dictionary<Guid, TestParameter> _parameterCache = [];
+
+    private async Task CloseAsync(Guid logId, InstrumentMessageProcessingStatus status,
+                                   InstrumentMessage message, int imported, List<string> issues,
+                                   CancellationToken ct) =>
+        await messageLog.MarkProcessedAsync(
+            logId, status,
+            message.Specimens.Sum(s => s.Results.Count), imported,
+            issues.Count == 0 ? null : string.Join(Environment.NewLine, issues),
+            clock.Now, ct);
+
+    /// <summary>
+    /// Issues are stored as a resource key with its detail, not as a sentence. The log is read in
+    /// whichever language the operator is using, and a French sentence written here would be
+    /// untranslatable afterwards.
+    /// </summary>
+    private static string Describe(string resourceKey, object? detail) =>
+        detail is null ? resourceKey : $"{resourceKey}\t{detail}";
+
+    private static string Describe(string resourceKey) => resourceKey;
+}
+
+/// <summary>
+/// The non-interactive account results arriving from an analyser are attributed to.
+/// <para>
+/// Resolved once at start-up and refused when absent. A machine write needs an accountable identity
+/// for the same reason a manual one does, and borrowing whichever operator happened to be signed in
+/// would put a technician's name against a measurement they never saw.
+/// </para>
+/// </summary>
+public interface IInstrumentServiceAccount
+{
+    Guid UserId { get; }
+
+    bool IsResolved { get; }
+
+    /// <summary>
+    /// Resolves the account if it has not been resolved yet, and reports whether it now is.
+    /// <para>
+    /// On the workstation that drives the hardware the host has already done this at start-up. On
+    /// every other workstation it has not — the host returns immediately when
+    /// <c>EnableInstrumentHost</c> is false — and a replay launched from a bench would otherwise
+    /// store values against <see cref="Guid.Empty"/>. Resolving on demand is what lets a technician
+    /// accept a held transmission from wherever they are standing.
+    /// </para>
+    /// </summary>
+    Task<bool> EnsureResolvedAsync(CancellationToken ct = default);
+}

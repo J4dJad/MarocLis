@@ -1,0 +1,70 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="Microsoft.Extensions / EF Core">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
+    <!--
+      EF Core 10's SqlServer provider requires at least 6.1.1, so 6.0.2 was a downgrade NuGet
+      refuses outright (NU1109). Pinned at the newest 6.1.x rather than the 7.x line: 7.0 is a major
+      version of the driver that carries this application's every read and write, and taking that
+      step unforced — to satisfy a constraint 6.1 already meets — is not a trade a clinical system
+      should make on a restore error.
+    -->
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.7" />
+
+    <!--
+      The serial transport the instrument drivers use. It lives here rather than inline in
+      MarocLIS.Instruments.csproj because central package management forbids a version on a
+      PackageReference (NU1008) — the point of the mechanism being that one file decides every
+      version.
+    -->
+    <PackageVersion Include="System.IO.Ports" Version="10.0.0" />
+
+    <!--
+      Arrives transitively and carried eight known high-severity advisories at 9.0.0 (NU1903).
+      Pinned forward rather than left to whatever a dependency asks for: transitive pinning is
+      enabled above, so naming it here is what actually moves it.
+    -->
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup Label="Third party">
+    <PackageVersion Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageVersion Include="QuestPDF" Version="2025.7.0" />
+    <PackageVersion Include="ZXing.Net" Version="0.16.10" />
+    <!--
+      SkiaSharp arrives transitively through QuestPDF, but the barcode renderer uses it directly,
+      so it is referenced explicitly. An implicit transitive dependency that a package upgrade can
+      silently move is not something a label printer should rest on.
+    -->
+    <PackageVersion Include="SkiaSharp" Version="3.119.0" />
+    <PackageVersion Include="ClosedXML" Version="0.105.0" />
+    <PackageVersion Include="Serilog.Extensions.Hosting" Version="9.0.0" />
+    <PackageVersion Include="Serilog.Settings.Configuration" Version="9.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageVersion Include="Serilog.Sinks.MSSqlServer" Version="8.1.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Test">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.0" />
+    <PackageVersion Include="FluentAssertions" Version="7.2.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,117 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup />
+  <ItemGroup>
+    <Compile Update="Controls\LeveyJenningsChart.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Forms\ChangePasswordForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Forms\LoginForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Forms\MainShellForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Forms\PatientEditorDialogs.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Forms\PatientEditorForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Forms\PatientMergeDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Views\AuditTrailView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\BillingCorrectionDialogs.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Views\BillingView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\CashSessionView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\CatalogEditors.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Views\CatalogView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\ClaimBatchView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\CollectionView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\DashboardView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\EquipmentView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\InstrumentInterfaceDialogs.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Views\InstrumentInterfaceView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\InventoryView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\MasterDataEditors.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Views\MasterDataView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\NonConformityView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\OrderDetailDialogs.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Views\OrderDetailView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\OrderRegistrationView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\PatientSearchView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\QualityControlView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\ReportRegisterDialogs.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Views\ReportRegisterView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\ResultEntryView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\SampleReceptionView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\SampleStorageView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\SettingsView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\UserAdministrationView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\ValidationView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Views\WestgardRuleDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+  </ItemGroup>
+</Project>

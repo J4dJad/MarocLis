@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MarocLIS.Reporting</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="QuestPDF" />
+    <PackageReference Include="ZXing.Net" />
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="ClosedXML" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MarocLIS.Application\MarocLIS.Application.csproj" />
+    <ProjectReference Include="..\MarocLIS.Domain\MarocLIS.Domain.csproj" />
+    <ProjectReference Include="..\MarocLIS.Localization\MarocLIS.Localization.csproj" />
+  </ItemGroup>
+
+  <!--
+    Arabic report rendering needs a Naskh font with full Arabic glyph coverage.
+    Drop Amiri-Regular.ttf / Amiri-Bold.ttf (SIL OFL) into Assets\Fonts\
+    and they are copied next to the executable.
+  -->
+  <ItemGroup>
+    <None Include="Assets\Fonts\**\*.ttf" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

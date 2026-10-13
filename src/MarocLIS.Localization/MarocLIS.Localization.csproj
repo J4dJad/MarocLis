@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MarocLIS.Localization</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MarocLIS.Domain\MarocLIS.Domain.csproj" />
+  </ItemGroup>
+
+  <!--
+    Translations ship as plain JSON next to the executable rather than as compiled .resx satellite
+    assemblies. A laboratory can correct a French wording or complete an Arabic term by editing the
+    file, and a new language is a new file — no rebuild, no Visual Studio. The files are also the
+    unit a translator can be handed.
+  -->
+  <ItemGroup>
+    <None Include="Resources\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Resources\*.json" />
+  </ItemGroup>
+
+</Project>

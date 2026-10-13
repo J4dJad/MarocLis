@@ -1,0 +1,727 @@
+using MarocLIS.Application.Quality;
+using MarocLIS.Desktop.Controls;
+using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Quality;
+using MarocLIS.Localization;
+using Microsoft.Extensions.Logging;
+
+namespace MarocLIS.Desktop.Views;
+
+/// <summary>
+/// Internal quality control: entry, the Levey-Jennings chart, and review of rejections.
+/// <para>
+/// The three are on one screen because they are one task. A technician runs the controls, looks at
+/// where the points landed, and — if one is out — records what they did about it. Splitting that
+/// across three screens is how the review step gets skipped, and an unreviewed rejection is an
+/// ISO 15189 §5.6 finding waiting to happen.
+/// </para>
+/// <para>
+/// Values are submitted as a <b>run</b>, all levels together, because the multi-level Westgard
+/// rules (2₂ₛ within run, R₄ₛ) compare the levels against each other. Saving one level at a time
+/// would leave those two rules unevaluable.
+/// </para>
+/// </summary>
+public sealed class QualityControlView : LocalizedView
+{
+    private const string ColParameter = "parameter";
+    private const string ColLevel = "level";
+    private const string ColLot = "lot";
+    private const string ColInstrument = "instrument";
+    private const string ColValue = "value";
+    private const string ColTarget = "target";
+    private const string ColLast = "last";
+    private const string ColRules = "rules";
+
+    private readonly QualityControlService _qc;
+    private readonly IUserDialogs _dialogs;
+    private readonly ILogger<QualityControlView>? _logger;
+
+    private readonly DataGridView _entry = UiTheme.Grid();
+    private readonly LeveyJenningsChart _chart = new();
+    private readonly DataGridView _review = UiTheme.Grid();
+
+    private readonly Label _entryHeading = new();
+    private readonly Label _chartHeading = new();
+    private readonly Label _reviewHeading = new();
+    private readonly Button _submit = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _reviewAction = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _establishLimits = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _editRules = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _status = new();
+
+    private IReadOnlyList<QcEntryRow> _rows = [];
+    private IReadOnlyList<QcReviewRow> _pendingReview = [];
+
+    public QualityControlView(QualityControlService qc, IUserDialogs dialogs,
+                              ILocalizer localizer, ICultureManager cultureManager,
+                              ILogger<QualityControlView>? logger = null)
+        : base(localizer, cultureManager)
+    {
+        _qc = qc;
+        _dialogs = dialogs;
+        _logger = logger;
+
+        BuildLayout();
+        WireBehaviour();
+    }
+
+    public override string Title => T("Nav.QualityControl");
+
+    // ---- Layout ------------------------------------------------------------------------------------
+
+    private void BuildLayout()
+    {
+        Padding = new Padding(UiTheme.Gutter);
+
+        var outerSplit = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Horizontal,
+            SplitterDistance = 300,
+            SplitterWidth = 6,
+            BackColor = UiTheme.Surface
+        };
+
+        // --- top: entry plus chart, side by side ----------------------------------------------------
+
+        var topSplit = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            SplitterDistance = 640,
+            SplitterWidth = 6,
+            BackColor = UiTheme.Surface
+        };
+
+        var entryPanel = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+
+        _entryHeading.Font = UiTheme.SectionTitle;
+        _entryHeading.ForeColor = UiTheme.TextPrimary;
+        _entryHeading.Dock = DockStyle.Top;
+        _entryHeading.Height = 26;
+
+        BuildEntryColumns();
+
+        var entryHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        entryHost.Controls.Add(_entry);
+
+        var entryActions = new Panel
+        {
+            Dock = DockStyle.Bottom, Height = 42, BackColor = UiTheme.Surface
+        };
+
+        _submit.Bounds = new Rectangle(0, 8, 220, UiTheme.ButtonHeight);
+        _refresh.Bounds = new Rectangle(230, 8, 110, UiTheme.ButtonHeight);
+        entryActions.Controls.AddRange([_submit, _refresh]);
+
+        entryPanel.Controls.Add(entryHost);
+        entryPanel.Controls.Add(entryActions);
+        entryPanel.Controls.Add(_entryHeading);
+
+        var chartPanel = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+
+        _chartHeading.Font = UiTheme.SectionTitle;
+        _chartHeading.ForeColor = UiTheme.TextPrimary;
+        _chartHeading.Dock = DockStyle.Top;
+        _chartHeading.Height = 26;
+
+        _chart.Dock = DockStyle.Fill;
+
+        var chartActions = new Panel
+        {
+            Dock = DockStyle.Bottom, Height = 42, BackColor = UiTheme.Surface
+        };
+
+        _establishLimits.Bounds = new Rectangle(0, 8, 300, UiTheme.ButtonHeight);
+        _editRules.Bounds = new Rectangle(310, 8, 240, UiTheme.ButtonHeight);
+        chartActions.Controls.AddRange([_establishLimits, _editRules]);
+
+        chartPanel.Controls.Add(_chart);
+        chartPanel.Controls.Add(chartActions);
+        chartPanel.Controls.Add(_chartHeading);
+
+        topSplit.Panel1.Controls.Add(entryPanel);
+        topSplit.Panel2.Controls.Add(chartPanel);
+
+        // --- bottom: rejections awaiting review -------------------------------------------------------
+
+        var reviewPanel = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+
+        _reviewHeading.Font = UiTheme.SectionTitle;
+        _reviewHeading.ForeColor = UiTheme.TextPrimary;
+        _reviewHeading.Dock = DockStyle.Top;
+        _reviewHeading.Height = 26;
+
+        BuildReviewColumns();
+
+        var reviewHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        reviewHost.Controls.Add(_review);
+
+        var reviewActions = new Panel
+        {
+            Dock = DockStyle.Bottom, Height = 46, BackColor = UiTheme.Surface
+        };
+
+        _reviewAction.Bounds = new Rectangle(0, 10, 280, UiTheme.ButtonHeight);
+
+        _status.Bounds = new Rectangle(292, 16, 760, 20);
+        _status.Font = UiTheme.Small;
+        _status.ForeColor = UiTheme.TextSecondary;
+        _status.AutoSize = false;
+
+        reviewActions.Controls.AddRange([_reviewAction, _status]);
+
+        reviewPanel.Controls.Add(reviewHost);
+        reviewPanel.Controls.Add(reviewActions);
+        reviewPanel.Controls.Add(_reviewHeading);
+
+        outerSplit.Panel1.Controls.Add(topSplit);
+        outerSplit.Panel2.Controls.Add(reviewPanel);
+
+        Controls.Add(outerSplit);
+    }
+
+    private void BuildEntryColumns()
+    {
+        _entry.Columns.Clear();
+        _entry.ReadOnly = false;
+        _entry.EditMode = DataGridViewEditMode.EditOnEnter;
+
+        void Add(string name, int weight, Font? font = null, bool readOnly = true,
+                 DataGridViewContentAlignment align = DataGridViewContentAlignment.MiddleLeft)
+            => _entry.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = name, FillWeight = weight, ReadOnly = readOnly,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Font = font ?? UiTheme.Body, Alignment = align
+                }
+            });
+
+        Add(ColParameter, 22);
+        Add(ColLevel, 10, UiTheme.Small);
+        Add(ColLot, 14, UiTheme.Monospace);
+        Add(ColInstrument, 11, UiTheme.Small);
+        Add(ColValue, 12, UiTheme.MonospaceBold, readOnly: false,
+            DataGridViewContentAlignment.MiddleRight);
+        Add(ColTarget, 15, UiTheme.Monospace, align: DataGridViewContentAlignment.MiddleRight);
+        Add(ColLast, 8, UiTheme.Monospace, align: DataGridViewContentAlignment.MiddleRight);
+        Add(ColRules, 8, UiTheme.Small);
+    }
+
+    private void BuildReviewColumns()
+    {
+        _review.Columns.Clear();
+
+        void Add(string name, int weight, Font? font = null,
+                 DataGridViewContentAlignment align = DataGridViewContentAlignment.MiddleLeft)
+            => _review.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = name, FillWeight = weight, ReadOnly = true,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Font = font ?? UiTheme.Body, Alignment = align
+                }
+            });
+
+        Add("measured", 12, UiTheme.Monospace);
+        Add("parameter", 18);
+        Add("instrument", 11, UiTheme.Small);
+        Add("lot", 12, UiTheme.Monospace);
+        Add("level", 8, UiTheme.Small);
+        Add("value", 9, UiTheme.MonospaceBold, DataGridViewContentAlignment.MiddleRight);
+        Add("z", 7, UiTheme.MonospaceBold, DataGridViewContentAlignment.MiddleRight);
+        Add("rules", 14, UiTheme.SmallBold);
+        Add("affected", 9, UiTheme.MonospaceBold, DataGridViewContentAlignment.MiddleRight);
+    }
+
+    private void WireBehaviour()
+    {
+        _refresh.Click += async (_, _) => await ActivateAsync();
+        _submit.Click += async (_, _) => await SubmitAsync();
+        _reviewAction.Click += async (_, _) => await ReviewSelectedAsync();
+        _establishLimits.Click += async (_, _) => await EstablishLimitsAsync();
+        _editRules.Click += async (_, _) => await EditRulesAsync();
+
+        _entry.SelectionChanged += async (_, _) => await LoadChartAsync();
+        _review.SelectionChanged += async (_, _) => await LoadChartForReviewAsync();
+
+        _entry.CellFormatting += OnEntryFormatting;
+        _review.CellFormatting += OnReviewFormatting;
+
+        // Enter commits and steps down the column, the same convention as result entry.
+        _entry.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter) return;
+
+            e.SuppressKeyPress = true;
+            _entry.EndEdit();
+
+            var next = (_entry.CurrentCell?.RowIndex ?? -1) + 1;
+
+            if (next < _entry.Rows.Count)
+                _entry.CurrentCell = _entry.Rows[next].Cells[ColValue];
+            else
+                _submit.Focus();
+        };
+
+        _chart.PointSelected += (_, point) =>
+        {
+            _status.ForeColor = point.Outcome == QcOutcome.Rejected
+                ? UiTheme.Critical
+                : UiTheme.TextSecondary;
+
+            _status.Text = $"{point.MeasuredAt:dd/MM/yyyy HH:mm} · {point.Value:N3} · " +
+                           $"Z {point.ZScore:N2}" +
+                           (point.ViolatedRules == WestgardRule.None
+                               ? string.Empty
+                               : $" · {point.ViolatedRules}");
+        };
+    }
+
+    private void OnEntryFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.RowIndex >= _entry.Rows.Count) return;
+        if (_entry.Rows[e.RowIndex].Tag is not QcEntryRow row) return;
+
+        // An unusable control lot is flagged on the row, not hidden in a tooltip: running an
+        // expired control produces a verdict nobody can rely on.
+        if (!row.MaterialUsable)
+        {
+            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
+            e.CellStyle.ForeColor = UiTheme.Critical;
+        }
+        else if (row.UsingAssignedStatistics)
+        {
+            // Manufacturer's limits rather than the laboratory's own — worth seeing, because
+            // ISO 15189 expects the laboratory to establish its own.
+            if (_entry.Columns[e.ColumnIndex].Name == ColTarget)
+                e.CellStyle!.ForeColor = UiTheme.Abnormal;
+        }
+
+        if (_entry.Columns[e.ColumnIndex].Name == ColLast && row.LastOutcome is { } outcome)
+        {
+            e.CellStyle!.ForeColor = outcome switch
+            {
+                QcOutcome.Rejected => UiTheme.Critical,
+                QcOutcome.Warning => UiTheme.Abnormal,
+                _ => UiTheme.TextSecondary
+            };
+        }
+    }
+
+    private void OnReviewFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.RowIndex >= _review.Rows.Count) return;
+        if (_review.Rows[e.RowIndex].Tag is not QcReviewRow row) return;
+
+        e.CellStyle!.BackColor = UiTheme.CriticalBackground;
+        e.CellStyle.ForeColor = UiTheme.Critical;
+
+        // A rejection that has already blocked patient results is the more urgent file.
+        if (row.AffectedResultCount > 0
+            && _review.Columns[e.ColumnIndex].Name == "affected")
+            e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
+    }
+
+    protected override void ApplyTexts()
+    {
+        _entryHeading.Text = T("Quality.QualityControlEntry");
+        _chartHeading.Text = T("Quality.LeveyJennings");
+        _reviewHeading.Text = T("Quality.PendingReview");
+        _submit.Text = T("Action.Save");
+        _refresh.Text = T("Action.Refresh");
+        _reviewAction.Text = T("Quality.Review");
+        _establishLimits.Text = T("Quality.EstablishLimits");
+        _editRules.Text = T("Quality.EditRules");
+
+        if (_entry.Columns.Count > 0)
+        {
+            _entry.Column(ColParameter).HeaderText = T("Result.Parameter");
+            _entry.Column(ColLevel).HeaderText = T("Quality.QcLevel");
+            _entry.Column(ColLot).HeaderText = T("Quality.QcLot");
+            _entry.Column(ColInstrument).HeaderText = T("Result.Instrument");
+            _entry.Column(ColValue).HeaderText = T("Result.Value");
+            _entry.Column(ColTarget).HeaderText = T("Quality.Target");
+            _entry.Column(ColLast).HeaderText = T("Result.Previous");
+            _entry.Column(ColRules).HeaderText = T("Quality.Rules");
+        }
+
+        if (_review.Columns.Count > 0)
+        {
+            _review.Column("measured").HeaderText = T("Result.MeasuredAt");
+            _review.Column("parameter").HeaderText = T("Result.Parameter");
+            _review.Column("instrument").HeaderText = T("Result.Instrument");
+            _review.Column("lot").HeaderText = T("Quality.QcLot");
+            _review.Column("level").HeaderText = T("Quality.QcLevel");
+            _review.Column("value").HeaderText = T("Result.Value");
+            _review.Column("z").HeaderText = T("Quality.ZScore");
+            _review.Column("rules").HeaderText = T("Quality.Rules");
+            _review.Column("affected").HeaderText = T("NonConformity.AffectedResults");
+        }
+
+        if (_rows.Count > 0) RenderEntry();
+        if (_pendingReview.Count > 0) RenderReview();
+    }
+
+    // ---- Loading -------------------------------------------------------------------------------------
+
+    public override async Task ActivateAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var sheet = await _qc.GetEntrySheetAsync(ct: ct);
+
+            if (sheet.IsFailure)
+            {
+                _dialogs.ShowFailure(sheet);
+                return;
+            }
+
+            _rows = sheet.Value;
+            RenderEntry();
+
+            var review = await _qc.GetPendingReviewAsync(ct);
+
+            if (review.IsSuccess)
+            {
+                _pendingReview = review.Value;
+                RenderReview();
+            }
+
+            await LoadChartAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Loading the quality control screen failed.");
+            _dialogs.Error(T("Message.UnexpectedError"));
+        }
+    }
+
+    private void RenderEntry()
+    {
+        _entry.SuspendLayout();
+        _entry.Rows.Clear();
+
+        foreach (var row in _rows)
+        {
+            var target = row.TargetMean is { } mean && row.TargetSd is { } sd
+                ? $"{mean.ToString("N" + row.Decimals)} ± {sd.ToString("N" + row.Decimals)}"
+                : T("Qc_NoTargetEstablished");
+
+            var index = _entry.Rows.Add(
+                row.ParameterName.For(Localizer.CurrentLanguage),
+                T($"QcLevel.{row.Level}"),
+                row.MaterialLotNumber,
+                row.InstrumentCode,
+                string.Empty,
+                target,
+                row.LastValue?.ToString("N" + row.Decimals) ?? string.Empty,
+                // Abbreviated rule set: the full flags string would not fit and is on hover.
+                row.ActiveRules == WestgardRule.None ? "—" : $"{CountRules(row.ActiveRules)}");
+
+            var gridRow = _entry.Rows[index];
+            gridRow.Tag = row;
+
+            var tooltip = new List<string> { row.ActiveRules.ToString() };
+
+            if (row.CvPercent is { } cv)
+            {
+                tooltip.Add($"CV {cv:N2} %" +
+                            (row.MaxAcceptableCvPercent is { } max ? $" / {max:N2} %" : string.Empty));
+            }
+
+            tooltip.Add($"{row.PointCount} {T("Quality.PointCount").ToLowerInvariant()}");
+
+            if (!row.MaterialUsable)
+                tooltip.Add(Localizer.Format("Qc_MaterialExpired", row.MaterialLotNumber));
+
+            gridRow.Cells[ColRules].ToolTipText = string.Join(Environment.NewLine, tooltip);
+        }
+
+        _entry.ResumeLayout(performLayout: true);
+
+        _entryHeading.Text = $"{T("Quality.QualityControlEntry")} — {_rows.Count}";
+    }
+
+    private static int CountRules(WestgardRule rules) =>
+        Enum.GetValues<WestgardRule>().Count(r => r != WestgardRule.None && rules.HasFlag(r));
+
+    private void RenderReview()
+    {
+        _review.SuspendLayout();
+        _review.Rows.Clear();
+
+        foreach (var row in _pendingReview)
+        {
+            var index = _review.Rows.Add(
+                row.MeasuredAt.ToString("dd/MM HH:mm"),
+                row.ParameterName.For(Localizer.CurrentLanguage),
+                row.InstrumentCode,
+                row.MaterialLotNumber,
+                T($"QcLevel.{row.Level}"),
+                row.Value.ToString("N3"),
+                row.ZScore?.ToString("N2") ?? string.Empty,
+                row.ViolatedRules.ToString(),
+                row.AffectedResultCount > 0 ? row.AffectedResultCount.ToString() : string.Empty);
+
+            _review.Rows[index].Tag = row;
+        }
+
+        _review.ResumeLayout(performLayout: true);
+
+        _reviewHeading.Text = $"{T("Quality.PendingReview")} — {_pendingReview.Count}";
+
+        _reviewAction.Enabled = _pendingReview.Count > 0;
+    }
+
+    private async Task LoadChartAsync()
+    {
+        if (_entry.CurrentRow?.Tag is not QcEntryRow row) return;
+        await ShowChartAsync(row.QcTargetId);
+    }
+
+    private async Task LoadChartForReviewAsync()
+    {
+        if (_review.CurrentRow?.Tag is not QcReviewRow row) return;
+        await ShowChartAsync(row.QcTargetId);
+    }
+
+    private async Task ShowChartAsync(Guid qcTargetId)
+    {
+        try
+        {
+            var chart = await _qc.GetChartAsync(qcTargetId);
+
+            _chart.SetSeries(chart.IsSuccess ? chart.Value : null);
+
+            if (chart.IsSuccess)
+            {
+                _chartHeading.Text = $"{T("Quality.LeveyJennings")} — " +
+                                     $"{chart.Value.ParameterCode} · {chart.Value.MaterialLotNumber}";
+
+                _establishLimits.Enabled = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Loading the Levey-Jennings chart failed.");
+            _chart.SetSeries(null);
+        }
+    }
+
+    // ---- Actions ---------------------------------------------------------------------------------------
+
+    private async Task SubmitAsync()
+    {
+        _entry.EndEdit();
+
+        var entries = new List<QcEntry>();
+
+        foreach (DataGridViewRow gridRow in _entry.Rows)
+        {
+            if (gridRow.Tag is not QcEntryRow row) continue;
+
+            var typed = gridRow.Cells[ColValue].Value?.ToString()?.Trim();
+
+            if (string.IsNullOrWhiteSpace(typed)) continue;
+
+            if (!decimal.TryParse(typed.Replace(',', '.'),
+                                  System.Globalization.NumberStyles.Float,
+                                  System.Globalization.CultureInfo.InvariantCulture,
+                                  out var value))
+            {
+                _dialogs.Warn(Localizer.Format("Result_NotANumber", typed));
+                _entry.CurrentCell = gridRow.Cells[ColValue];
+                return;
+            }
+
+            entries.Add(new QcEntry(row.QcTargetId, value));
+        }
+
+        if (entries.Count == 0)
+        {
+            _status.ForeColor = UiTheme.TextSecondary;
+            _status.Text = T("Message.NothingSelected");
+            return;
+        }
+
+        _submit.Enabled = false;
+        Cursor = Cursors.WaitCursor;
+
+        try
+        {
+            var result = await _qc.SubmitAsync(entries);
+
+            if (result.IsFailure)
+            {
+                _dialogs.ShowFailure(result);
+                return;
+            }
+
+            var outcome = result.Value;
+
+            // A rejection is announced as a modal: patient results covered by the run are now
+            // blocked, and that has to be acted on rather than noticed later.
+            if (outcome.AnyRejected)
+            {
+                var lines = outcome.Results
+                    .Where(r => r.Outcome == QcOutcome.Rejected)
+                    .Select(r => $"• {r.ParameterCode} : {r.Value:N3} (Z {r.ZScore:N2}) — " +
+                                 Localizer.Describe(
+                                     r.ViolationKeys.Select(k => Error.Regulatory(k)).ToList()));
+
+                _dialogs.Warn(
+                    $"{T("QcOutcome.Rejected")}\n\n{string.Join('\n', lines)}\n\n" +
+                    T("Qc_RejectionRequiresCorrectiveAction"),
+                    T("Nav.QualityControl"));
+            }
+
+            if (outcome.Warnings.Count > 0)
+                _dialogs.Info(Localizer.Describe(outcome.Warnings), T("Nav.QualityControl"));
+
+            var accepted = outcome.Results.Count(r => r.Outcome == QcOutcome.Accepted);
+
+            _status.ForeColor = outcome.AnyRejected ? UiTheme.Critical : UiTheme.Normal;
+            _status.Text = $"{accepted}/{outcome.Results.Count} {T("QcOutcome.Accepted").ToLowerInvariant()}";
+
+            await ActivateAsync();
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+            _submit.Enabled = true;
+        }
+    }
+
+    /// <summary>
+    /// Reviews a rejected control. The corrective action is mandatory, and the reviewer is asked
+    /// whether to open a non-conformity — pre-answered yes when patient results were affected,
+    /// because at that point a departure has demonstrably occurred.
+    /// </summary>
+    private async Task ReviewSelectedAsync()
+    {
+        if (_review.CurrentRow?.Tag is not QcReviewRow row)
+        {
+            _status.Text = T("Message.NothingSelected");
+            return;
+        }
+
+        var action = _dialogs.PromptForReason(
+            $"{row.ParameterName.For(Localizer.CurrentLanguage)} · {row.ViolatedRules}\n\n" +
+            T("Quality.CorrectiveActionPrompt"),
+            T("Quality.CorrectiveAction"), minimumLength: 15);
+
+        if (action is null) return;
+
+        var openNonConformity = row.AffectedResultCount > 0
+            || _dialogs.Confirm(T("Quality.OpenNonConformityQuestion"), T("NonConformity.Title"));
+
+        var result = await _qc.ReviewAsync(row.QcResultId, action, openNonConformity);
+
+        if (result.IsFailure)
+        {
+            _dialogs.ShowFailure(result);
+            return;
+        }
+
+        _status.ForeColor = UiTheme.Normal;
+        _status.Text = T("Message.Saved");
+
+        await ActivateAsync();
+    }
+
+    /// <summary>
+    /// Establishes the laboratory's own control limits from a chosen window.
+    /// <para>
+    /// Deliberately a window and not "all history": a laboratory that has explained and corrected
+    /// a bad period should be able to exclude it, and recomputing over everything would bake that
+    /// period's scatter into the limits permanently.
+    /// </para>
+    /// </summary>
+    /// <summary>
+    /// Chooses which Westgard rules apply to the selected control.
+    /// <para>
+    /// Not a preference. The rule set is the analytical control strategy: 1₃ₛ alone on a
+    /// high-precision assay under-detects systematic error, while running every rule on a noisy one
+    /// produces so many false rejections that the bench learns to override them — which is worse
+    /// than no rules at all. The laboratory has to be able to choose per control, and until now it
+    /// was stuck with whatever the seeder set.
+    /// </para>
+    /// </summary>
+    private async Task EditRulesAsync()
+    {
+        if (_entry.CurrentRow?.Tag is not QcEntryRow row)
+        {
+            _status.ForeColor = UiTheme.TextSecondary;
+            _status.Text = T("Message.NothingSelected");
+            return;
+        }
+
+        using var dialog = new WestgardRuleDialog(
+            Localizer, row.ParameterCode, row.MaterialLotNumber, row.ActiveRules);
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (dialog.Rules == row.ActiveRules) return;
+
+        var result = await _qc.SetActiveRulesAsync(row.QcTargetId, dialog.Rules);
+
+        if (result.IsFailure)
+        {
+            _dialogs.ShowFailure(result, T("Quality.EditRules"));
+            return;
+        }
+
+        _status.ForeColor = UiTheme.Normal;
+        _status.Text = T("Message.Saved");
+
+        await ActivateAsync();
+    }
+
+    private async Task EstablishLimitsAsync()
+    {
+        if (_entry.CurrentRow?.Tag is not QcEntryRow row)
+        {
+            _status.Text = T("Message.NothingSelected");
+            return;
+        }
+
+        var answer = _dialogs.PromptForText(
+            T("Quality.EstablishLimitsPrompt", QcTarget.MinimumPointsForLaboratoryStatistics),
+            T("Quality.EstablishLimits"), "60");
+
+        if (answer is null) return;
+
+        if (!int.TryParse(answer.Trim(), out var days) || days < 1)
+        {
+            _dialogs.Warn(Localizer.Format("Result_NotANumber", answer));
+            return;
+        }
+
+        var to = DateOnly.FromDateTime(DateTime.Today);
+        var from = to.AddDays(-days);
+
+        var result = await _qc.RecomputeStatisticsAsync(row.QcTargetId, from, to);
+
+        if (result.IsFailure)
+        {
+            _dialogs.ShowFailure(result);
+            return;
+        }
+
+        var (mean, sd, points) = result.Value;
+
+        _dialogs.Info(
+            $"{T("Quality.LaboratoryMean")} : {mean:N4}\n" +
+            $"{T("Quality.LaboratorySd")} : {sd:N4}\n" +
+            $"{T("Quality.PointCount")} : {points}",
+            T("Quality.EstablishLimits"));
+
+        await ActivateAsync();
+    }
+}

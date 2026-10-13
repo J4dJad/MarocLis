@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MarocLIS.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    The Domain layer has ZERO external dependencies on purpose.
+    Business invariants (biologist validation, Westgard rules, TNR billing,
+    retention periods) must be testable without a database or UI.
+  -->
+
+</Project>

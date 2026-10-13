@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>MarocLIS.Tests</RootNamespace>
+    <!--
+      CA1707 forbids underscores in identifiers. Test names here are deliberately
+      Subject_StatesTheExpectedBehaviour, because the runner prints the method name and that is the
+      one place a sentence is more useful than a camel-cased phrase. 210 warnings saying so drown
+      out the ones worth reading.
+    -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MarocLIS.Application\MarocLIS.Application.csproj" />
+    <ProjectReference Include="..\..\src\MarocLIS.Domain\MarocLIS.Domain.csproj" />
+    <!--
+      Infrastructure is referenced so the shipped role definitions can be asserted against what
+      actually seeds, rather than against a copy of them restated in the test.
+    -->
+    <ProjectReference Include="..\..\src\MarocLIS.Infrastructure\MarocLIS.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\MarocLIS.Instruments\MarocLIS.Instruments.csproj" />
+    <ProjectReference Include="..\..\src\MarocLIS.Localization\MarocLIS.Localization.csproj" />
+  </ItemGroup>
+
+</Project>

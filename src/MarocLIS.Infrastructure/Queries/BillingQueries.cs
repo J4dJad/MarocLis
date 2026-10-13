@@ -1,0 +1,369 @@
+using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Billing;
+using MarocLIS.Domain.Billing;
+using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Orders;
+using MarocLIS.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
+namespace MarocLIS.Infrastructure.Queries;
+
+public sealed class BillingQueries(LisDbContext db) : IBillingQueries
+{
+    /// <summary>
+    /// Orders with billable acts and no invoice yet.
+    /// <para>
+    /// Cancelled orders are excluded, and so are cancelled items within a live order — a patient
+    /// is not billed for an analysis the laboratory withdrew, and a tube the laboratory itself
+    /// rejected is re-requested at zero price.
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<BillableOrderRow>> GetUninvoicedOrdersAsync(
+        Guid siteId, CancellationToken ct = default) =>
+        await db.LabOrders.AsNoTracking()
+            .Where(o => o.SiteId == siteId
+                        && o.InvoiceId == null
+                        && o.Status != LabOrderStatus.Cancelled
+                        && o.Status != LabOrderStatus.Draft
+                        && o.Items.Any(i => i.Status != LabOrderItemStatus.Cancelled
+                                            && i.ChargedPrice > 0m))
+            .Join(db.Patients.AsNoTracking(), o => o.PatientId, p => p.Id,
+                  (o, p) => new { Order = o, Patient = p })
+            .Select(x => new BillableOrderRow(
+                x.Order.Id,
+                x.Order.AccessionNumber,
+                x.Patient.Id,
+                x.Patient.LastName + " " + x.Patient.FirstName,
+                x.Order.RegisteredAt,
+                x.Order.PayerId == null
+                    ? null
+                    : db.Payers.Where(y => y.Id == x.Order.PayerId)
+                               .Select(y => y.Name.Fr).FirstOrDefault(),
+                x.Order.PayerId,
+                x.Order.Items.Where(i => i.Status != LabOrderItemStatus.Cancelled)
+                             .Sum(i => i.ChargedPrice),
+                x.Order.Items.Where(i => i.Status != LabOrderItemStatus.Cancelled)
+                             .Sum(i => i.PayerShare),
+                x.Order.Items.Where(i => i.Status != LabOrderItemStatus.Cancelled)
+                             .Sum(i => i.PatientShare),
+                x.Order.Items.Count(i => i.Status != LabOrderItemStatus.Cancelled),
+                x.Order.Status))
+            .OrderBy(r => r.RegisteredAt)
+            .Take(500)
+            .ToListAsync(ct);
+
+    public async Task<PagedResult<InvoiceRow>> GetInvoicesAsync(
+        Guid siteId, InvoiceStatus? status, string? search, int page, int pageSize,
+        DateOnly today, CancellationToken ct = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 10, 200);
+
+        var query = db.Invoices.AsNoTracking()
+            .Where(i => i.SiteId == siteId && i.Status != InvoiceStatus.Draft);
+
+        if (status is { } wanted) query = query.Where(i => i.Status == wanted);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var pattern = $"%{search.Trim()}%";
+
+            query = query.Where(i =>
+                EF.Functions.Like(i.Number, pattern)
+                || EF.Functions.Like(i.BilledToName, pattern)
+                || (i.CoveredOrderNumbersCsv != null
+                    && EF.Functions.Like(i.CoveredOrderNumbersCsv, pattern)));
+        }
+
+        var total = await query.CountAsync(ct);
+
+        var rows = await query
+            // Newest first: the billing desk works on today's invoices, not on 2024's.
+            .OrderByDescending(i => i.IssueDate).ThenByDescending(i => i.Number)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(i => new
+            {
+                i.Id,
+                i.Number,
+                i.Kind,
+                i.Status,
+                i.IssueDate,
+                i.DueDate,
+                i.BilledToName,
+                i.TotalAmount,
+                i.PaidAmount,
+                i.ClaimStatus,
+                i.CoveredOrderNumbersCsv
+            })
+            .ToListAsync(ct);
+
+        var mapped = rows.Select(r => new InvoiceRow(
+            r.Id,
+            r.Number,
+            r.Kind,
+            r.Status,
+            r.IssueDate,
+            r.DueDate,
+            r.BilledToName,
+            r.TotalAmount,
+            r.PaidAmount,
+            Money.Round(r.TotalAmount - r.PaidAmount),
+            // Ageing computed here rather than stored, so it is never stale.
+            r.DueDate is { } due && due < today
+                && r.Status is InvoiceStatus.Issued or InvoiceStatus.PartiallyPaid
+                    ? today.DayNumber - due.DayNumber
+                    : 0,
+            r.ClaimStatus,
+            r.CoveredOrderNumbersCsv)).ToList();
+
+        return new PagedResult<InvoiceRow>(mapped, total, page, pageSize);
+    }
+
+    /// <summary>
+    /// The operator's open till session, tracked because the caller accumulates onto it.
+    /// </summary>
+    public async Task<IReadOnlyList<PaymentRow>> GetPaymentsAsync(
+        Guid invoiceId, CancellationToken ct = default) =>
+        await db.Payments.AsNoTracking()
+            .Where(p => p.InvoiceId == invoiceId)
+            // Correctable settlements first: the operator is here to fix one, and a list led by
+            // already-refunded entries makes them hunt for the row they want.
+            .OrderByDescending(p => p.Status == PaymentStatus.Settled)
+            .ThenByDescending(p => p.PaymentDate)
+            .Select(p => new PaymentRow(
+                p.Id, p.Amount, p.Method, p.Status, p.PaymentDate,
+                db.Users.Where(u => u.Id == p.ReceivedByUserId)
+                        .Select(u => u.FullName).FirstOrDefault() ?? string.Empty,
+                p.Reference, p.BankName, p.MaturityDate))
+            .ToListAsync(ct);
+
+    public Task<CashSession?> GetOpenCashSessionAsync(Guid operatorUserId,
+                                                       CancellationToken ct = default) =>
+        db.CashSessions
+            .FirstOrDefaultAsync(s => s.OperatorUserId == operatorUserId
+                                      && s.Status == CashSessionStatus.Open, ct);
+
+    /// <summary>
+    /// The till summary for the closing screen.
+    /// <para>
+    /// The receipt totals are re-derived from the settled payments rather than read from the
+    /// session's running counters. The counters exist for speed; the money has to reconcile against
+    /// the payments themselves, and a drift between the two is exactly what the closing check is
+    /// for.
+    /// </para>
+    /// </summary>
+    public async Task<CashSessionSummary?> GetCashSessionSummaryAsync(
+        Guid operatorUserId, CancellationToken ct = default)
+    {
+        var session = await db.CashSessions.AsNoTracking()
+            .Where(s => s.OperatorUserId == operatorUserId && s.Status == CashSessionStatus.Open)
+            .Select(s => new
+            {
+                s.Id,
+                s.OperatorUserId,
+                s.OpenedAt,
+                s.OpeningFloat,
+                s.CashRefunds,
+                s.CashWithdrawals
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (session is null) return null;
+
+        var byMethod = await db.Payments.AsNoTracking()
+            .Where(p => p.CashSessionId == session.Id && p.Status == PaymentStatus.Settled)
+            .GroupBy(p => p.Method)
+            .Select(g => new { Method = g.Key, Total = g.Sum(p => p.Amount), Count = g.Count() })
+            .ToListAsync(ct);
+
+        decimal TotalFor(PaymentMethod method) =>
+            byMethod.FirstOrDefault(x => x.Method == method)?.Total ?? 0m;
+
+        var operatorName = await db.Users.AsNoTracking()
+            .Where(u => u.Id == session.OperatorUserId)
+            .Select(u => u.FullName)
+            .FirstOrDefaultAsync(ct) ?? string.Empty;
+
+        var cash = TotalFor(PaymentMethod.Cash);
+
+        return new CashSessionSummary(
+            session.Id,
+            session.OperatorUserId,
+            operatorName,
+            session.OpenedAt,
+            session.OpeningFloat,
+            cash,
+            TotalFor(PaymentMethod.Cheque),
+            TotalFor(PaymentMethod.Card),
+            TotalFor(PaymentMethod.BankTransfer),
+            session.CashRefunds,
+            session.CashWithdrawals,
+            Money.Round(session.OpeningFloat + cash - session.CashRefunds - session.CashWithdrawals),
+            byMethod.Sum(x => x.Count));
+    }
+    // ---- Claims ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The claim batches, aggregated from the invoices that carry each reference.
+    /// <para>
+    /// There is no batch table, and deliberately so: a batch is the set of invoices sharing a
+    /// reference, and a separate header row would be a second place for the same fact to live and
+    /// eventually disagree. The aggregation costs one grouped query and cannot drift from what was
+    /// actually submitted.
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<ClaimBatchRow>> GetClaimBatchesAsync(
+        Guid siteId, DateOnly since, DateOnly today, CancellationToken ct = default)
+    {
+        var rows = await db.Invoices.AsNoTracking()
+            .Where(i => i.SiteId == siteId
+                        && i.ClaimReference != null
+                        && i.ClaimSubmittedOn != null
+                        && i.ClaimSubmittedOn >= since)
+            .Select(i => new
+            {
+                Reference = i.ClaimReference!,
+                i.PayerId,
+                SubmittedOn = i.ClaimSubmittedOn!.Value,
+                i.ClaimStatus,
+                i.NetAmount,
+                i.PayerShareAmount,
+                i.PaidAmount,
+                PayerName = db.Payers.Where(p => p.Id == i.PayerId)
+                                      .Select(p => p.Name.Fr).FirstOrDefault(),
+                LastOutcomeOn = db.Payments
+                    .Where(p => p.InvoiceId == i.Id && p.Status == PaymentStatus.Settled)
+                    .Max(p => (DateOnly?)p.PaymentDate)
+            })
+            .ToListAsync(ct);
+
+        return
+        [
+            .. rows
+                .GroupBy(r => new { r.Reference, r.PayerId })
+                .Select(g => new ClaimBatchRow(
+                    g.Key.Reference,
+                    g.Key.PayerId,
+                    g.First().PayerName ?? string.Empty,
+                    g.Min(r => r.SubmittedOn),
+                    g.Count(),
+                    Money.Round(g.Sum(r => r.NetAmount)),
+                    Money.Round(g.Sum(r => r.PayerShareAmount)),
+                    Money.Round(g.Sum(r => r.PaidAmount)),
+                    g.Count(r => r.ClaimStatus == ClaimStatus.Accepted
+                                 || r.ClaimStatus == ClaimStatus.Settled),
+                    g.Count(r => r.ClaimStatus == ClaimStatus.Rejected
+                                 || r.ClaimStatus == ClaimStatus.PartiallyAccepted),
+                    g.Count(r => r.ClaimStatus == ClaimStatus.Submitted
+                                 || r.ClaimStatus == ClaimStatus.Resubmitted),
+                    g.Max(r => r.LastOutcomeOn)))
+                // Needs chasing first, then unanswered, then newest. The screen opens on the money
+                // somebody has to go and ask about.
+                .OrderByDescending(b => b.NeedsChasing(today))
+                .ThenByDescending(b => b.IsAwaitingOutcome)
+                .ThenByDescending(b => b.SubmittedOn)
+        ];
+    }
+
+    public async Task<IReadOnlyList<ClaimInvoiceRow>> GetClaimInvoicesAsync(
+        string claimReference, CancellationToken ct = default)
+    {
+        var rows = await db.Invoices.AsNoTracking()
+            .Where(i => i.ClaimReference == claimReference)
+            .Select(i => new
+            {
+                i.Id,
+                i.Number,
+                i.IssueDate,
+                i.BilledToName,
+                i.PrescriberInpe,
+                i.NetAmount,
+                i.PayerShareAmount,
+                i.PaidAmount,
+                i.ClaimStatus,
+                i.ClaimRejectionReason,
+                i.CoveredOrderNumbersCsv,
+                PatientName = db.Patients.Where(p => p.Id == i.PatientId)
+                    .Select(p => p.LastName + " " + p.FirstName).FirstOrDefault()
+            })
+            .ToListAsync(ct);
+
+        return
+        [
+            .. rows
+                .Select(i => new ClaimInvoiceRow(
+                    i.Id, i.Number, i.IssueDate,
+                    i.PatientName ?? i.BilledToName ?? string.Empty,
+                    i.PrescriberInpe,
+                    Money.Round(i.NetAmount), Money.Round(i.PayerShareAmount), Money.Round(i.PaidAmount),
+                    i.ClaimStatus, i.ClaimRejectionReason, i.CoveredOrderNumbersCsv))
+                // Refused first: those are the rows that need a decision, correct and resend or
+                // write off.
+                .OrderByDescending(i => i.WasRejected)
+                .ThenBy(i => i.Number, StringComparer.Ordinal)
+        ];
+    }
+
+    /// <summary>
+    /// Issued invoices with a payer, not yet in a batch, with the blockers resolved per invoice.
+    /// <para>
+    /// The INPE requirement is read from the payer rather than assumed: every AMO scheme requires
+    /// one and a private insurer generally does not, so a single rule would either block claims
+    /// that are fine or pass ones that will be refused.
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<ClaimCandidateRow>> GetClaimCandidatesAsync(
+        Guid siteId, CancellationToken ct = default)
+    {
+        var rows = await db.Invoices.AsNoTracking()
+            .Where(i => i.SiteId == siteId
+                        && i.ClaimReference == null
+                        && i.PayerId != null
+                        && i.Status != InvoiceStatus.Draft
+                        && i.Status != InvoiceStatus.Cancelled
+                        && i.Kind == InvoiceKind.Invoice
+                        && i.PayerShareAmount > 0m)
+            .Select(i => new
+            {
+                i.Id,
+                i.Number,
+                i.IssueDate,
+                PayerId = i.PayerId!.Value,
+                i.BilledToName,
+                i.NetAmount,
+                i.PayerShareAmount,
+                HasBiologistInpe = i.BiologistInpe != null && i.BiologistInpe != "",
+                HasPrescriberInpe = i.PrescriberInpe != null && i.PrescriberInpe != "",
+                Payer = db.Payers.Where(p => p.Id == i.PayerId)
+                    .Select(p => new { p.Name, p.RequiresInpeOnClaim, p.RequiresPrescription,
+                                       p.ThirdPartyPaymentAgreement })
+                    .FirstOrDefault(),
+                PatientName = db.Patients.Where(p => p.Id == i.PatientId)
+                    .Select(p => p.LastName + " " + p.FirstName).FirstOrDefault()
+            })
+            .ToListAsync(ct);
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        return
+        [
+            .. rows
+                // Only payers the laboratory actually bills directly. Without a third-party
+                // agreement the patient pays and reclaims, so there is no batch to send.
+                .Where(i => i.Payer is { ThirdPartyPaymentAgreement: true })
+                .Select(i => new ClaimCandidateRow(
+                    i.Id, i.Number, i.IssueDate, i.PayerId,
+                    i.Payer!.Name.Fr,
+                    i.PatientName ?? i.BilledToName ?? string.Empty,
+                    Money.Round(i.NetAmount), Money.Round(i.PayerShareAmount),
+                    i.Payer.RequiresInpeOnClaim, i.HasBiologistInpe,
+                    i.Payer.RequiresPrescription, i.HasPrescriberInpe,
+                    today.DayNumber - i.IssueDate.DayNumber))
+                // Oldest first: an unsent claim is money ageing, and the payer's own deadline runs
+                // from the date of the act rather than from the date somebody got round to it.
+                .OrderBy(i => i.PayerName, StringComparer.CurrentCulture)
+                .ThenByDescending(i => i.DaysSinceIssue)
+        ];
+    }
+}

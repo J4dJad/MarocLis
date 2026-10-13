@@ -1,0 +1,50 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors>CS8600;CS8602;CS8603;CS8618</WarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+
+    <!--
+      Rules suppressed solution-wide, with the reason each does not apply here. Everything not
+      listed stays on: the point of a short warning list is that what remains gets read.
+
+      CA1848  LoggerMessage delegates instead of ILogger extension methods. The benefit is avoiding
+              boxing and template parsing in hot logging paths, and this application has none: the
+              desktop client logs on user actions, and the instrument host logs per analyser
+              message, which is bounded by a serial line. Eighty source-generated delegates would
+              add real indirection to buy nothing measurable.
+      CA1873  The same family — "this log argument may be expensive if logging is disabled".
+              The genuinely expensive one, a double enumeration in DatabaseInitializer, is fixed;
+              the rest pass a string or an int that is already in hand.
+      CA1716  Identifiers clashing with reserved words in other CLS languages (Error, Get, To,
+              Option). This is a C#-only solution with no public API, and Error is the name the
+              Result pattern uses throughout.
+      CA1711  Type names ending in Permission or Flag. RolePermission is a role's permission and
+              ResultFlag is a result flag; renaming them to satisfy a suffix list would make the
+              domain read worse.
+      CA1000  Static members on generic types, i.e. Result<T>'s factory methods. That is the
+              idiomatic shape of the pattern and the alternative is a second non-generic helper.
+    -->
+    <NoWarn>$(NoWarn);CA1848;CA1873;CA1716;CA1711;CA1000</NoWarn>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <NeutralLanguage>fr</NeutralLanguage>
+    <Company>Laboratoire</Company>
+    <Product>MarocLIS</Product>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Copyright>© 2026</Copyright>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!-- Arabic/French/English satellite assemblies are always produced. -->
+  <PropertyGroup>
+    <SatelliteResourceLanguages>fr;en;ar</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+</Project>

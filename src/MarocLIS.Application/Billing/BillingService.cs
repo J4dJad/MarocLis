@@ -1,0 +1,1188 @@
+using System.Globalization;
+using MarocLIS.Application.Abstractions;
+using MarocLIS.Domain.Billing;
+using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Orders;
+using MarocLIS.Domain.Organization;
+using MarocLIS.Domain.Patients;
+using MarocLIS.Domain.Sequencing;
+
+namespace MarocLIS.Application.Billing;
+
+/// <summary>An order awaiting invoicing, as the billing desk sees it.</summary>
+public sealed record BillableOrderRow(
+    Guid LabOrderId,
+    string AccessionNumber,
+    Guid PatientId,
+    string PatientName,
+    DateTimeOffset RegisteredAt,
+    string? PayerName,
+    Guid? PayerId,
+    decimal Total,
+    decimal PayerShare,
+    decimal PatientShare,
+    int AnalysisCount,
+    LabOrderStatus Status);
+
+/// <summary>One invoice in the ledger view.</summary>
+public sealed record InvoiceRow(
+    Guid InvoiceId,
+    string Number,
+    InvoiceKind Kind,
+    InvoiceStatus Status,
+    DateOnly IssueDate,
+    DateOnly? DueDate,
+    string BilledToName,
+    decimal Total,
+    decimal Paid,
+    decimal Outstanding,
+    int DaysOverdue,
+    ClaimStatus ClaimStatus,
+    string? CoveredOrders);
+
+public sealed record CashSessionSummary(
+    Guid CashSessionId,
+    Guid OperatorUserId,
+    string OperatorName,
+    DateTimeOffset OpenedAt,
+    decimal OpeningFloat,
+    decimal CashReceipts,
+    decimal ChequeReceipts,
+    decimal CardReceipts,
+    decimal TransferReceipts,
+    decimal CashRefunds,
+    decimal CashWithdrawals,
+    decimal ExpectedClosingCash,
+    int PaymentCount);
+
+public sealed record RecordPaymentRequest(
+    Guid InvoiceId,
+    decimal Amount,
+    PaymentMethod Method,
+    string? Reference,
+    string? BankName,
+    DateOnly? MaturityDate,
+    string? Notes);
+
+/// <summary>
+/// Invoicing, settlement and the till.
+/// <para>
+/// Three constraints from Moroccan tax law shape every method here, and none of them is a
+/// preference:
+/// </para>
+/// <list type="number">
+/// <item>The invoice number is allocated at <b>issue</b>, from a gapless per-site per-year
+/// sequence, inside the same transaction as the document. An abandoned draft therefore leaves no
+/// hole in the series.</item>
+/// <item>An issued invoice is immutable. There is no code path back to draft; a correction is a
+/// credit note that references the original.</item>
+/// <item>The site's legal identifiers must be complete before anything can be issued, because an
+/// invoice without a valid ICE is not a lawful invoice.</item>
+/// </list>
+/// </summary>
+public sealed class BillingService(
+    IRepository<Invoice> invoices,
+    IRepository<LabOrder> orders,
+    IRepository<Patient> patients,
+    IRepository<Payer> payers,
+    IRepository<LabSite> sites,
+    IRepository<AppUser> users,
+    IRepository<CashSession> cashSessions,
+    IBillingQueries queries,
+    ISequenceAllocator sequences,
+    IUnitOfWork unitOfWork,
+    IPermissionGuard guard,
+    ICurrentUser currentUser,
+    IClock clock)
+{
+    // ---- Reading -------------------------------------------------------------------------------
+
+    public async Task<Result<IReadOnlyList<BillableOrderRow>>> GetUninvoicedOrdersAsync(
+        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.View);
+        if (permitted.IsFailure)
+            return Result.Failure<IReadOnlyList<BillableOrderRow>>(permitted.FirstError);
+
+        return Result.Success(
+            await queries.GetUninvoicedOrdersAsync(currentUser.SiteId, ct));
+    }
+
+    public async Task<Result<PagedResult<InvoiceRow>>> GetInvoicesAsync(
+        InvoiceStatus? status = null, string? search = null, int page = 1,
+        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.View);
+        if (permitted.IsFailure) return Result.Failure<PagedResult<InvoiceRow>>(permitted.FirstError);
+
+        return Result.Success(
+            await queries.GetInvoicesAsync(currentUser.SiteId, status, search, page, 50,
+                                            clock.Today, ct));
+    }
+
+    // ---- Issuing -------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Creates and issues an invoice for one or more orders in a single transaction.
+    /// <para>
+    /// Draft and issue are not separate operations exposed to the UI: a draft that is never issued
+    /// would still have had to be explained, and holding a number across two user actions is how a
+    /// gap appears in the series. The lines are built from the order items' <b>frozen</b> prices,
+    /// not by re-pricing — a tariff revision must not alter what a patient was told they owed.
+    /// </para>
+    /// </summary>
+    public async Task<Result<Guid>> IssueInvoiceAsync(
+        IReadOnlyList<Guid> labOrderIds, Guid? payerIdOverride = null,
+        decimal? discountAmount = null, string? discountReason = null,
+        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.CreateInvoice);
+        if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
+
+        if (labOrderIds.Count == 0)
+            return Result.Failure<Guid>(Error.Validation("Invoice_NoLines"));
+
+        if (discountAmount is > 0m)
+        {
+            var allowed = guard.Require(Permissions.Billing.ApplyDiscount);
+            if (allowed.IsFailure) return Result.Failure<Guid>(allowed.FirstError);
+
+            if (string.IsNullOrWhiteSpace(discountReason))
+                return Result.Failure<Guid>(Error.Validation("Invoice_DiscountReasonRequired"));
+        }
+
+        var site = await sites.GetByIdAsync(currentUser.SiteId, ct);
+        if (site is null) return Result.Failure<Guid>(Error.NotFound("Report_SiteNotFound"));
+
+        // ICE, IF and address must be present. An invoice without them is not lawful, so this is
+        // checked before a number is burned rather than after the document exists.
+        var invoiceable = site.ValidateForInvoicing();
+        if (invoiceable.IsFailure) return Result.Failure<Guid>(invoiceable.Errors);
+
+        var loaded = new List<LabOrder>(labOrderIds.Count);
+
+        foreach (var orderId in labOrderIds)
+        {
+            var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
+
+            if (order is null)
+                return Result.Failure<Guid>(Error.NotFound("Order_NotFound", orderId));
+
+            if (order.InvoiceId is not null)
+                return Result.Failure<Guid>(Error.Conflict("Invoice_OrderAlreadyInvoiced",
+                                                            order.AccessionNumber));
+
+            loaded.Add(order);
+        }
+
+        // Grouping several orders onto one invoice only makes sense for a single customer.
+        var patientIds = loaded.Select(o => o.PatientId).Distinct().ToList();
+
+        if (patientIds.Count > 1)
+            return Result.Failure<Guid>(Error.Validation("Invoice_MultiplePatients"));
+
+        var patient = await patients.GetByIdWithDetailsAsync(patientIds[0], ct);
+        if (patient is null) return Result.Failure<Guid>(Error.NotFound("Order_PatientNotFound"));
+
+        var payerId = payerIdOverride ?? loaded[0].PayerId;
+        var payer = payerId is { } id ? await payers.GetByIdAsync(id, ct) : null;
+
+        var today = clock.Today;
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
+
+        var invoice = new Invoice(string.Empty, currentUser.SiteId, InvoiceKind.Invoice,
+                                   today, currentUser.UserId)
+        {
+            PatientId = patient.Id,
+            PayerId = payer?.Id,
+            CoveredOrderNumbersCsv = string.Join(", ", loaded.Select(o => o.AccessionNumber)),
+            DueDate = payer is null ? today : today.AddDays(payer.PaymentTermsDays)
+        };
+
+        // Billing identity frozen at issue: a later correction to the payer or patient record must
+        // not change what this document says.
+        if (payer is not null)
+        {
+            invoice.BilledToName = payer.Name.Fr;
+            invoice.BilledToIce = payer.Ice;
+            invoice.BilledToAddress = payer.AddressLine;
+            invoice.BilledToCity = payer.City;
+        }
+        else
+        {
+            invoice.BilledToName = patient.FullName;
+            invoice.BilledToAddress = patient.AddressLine;
+            invoice.BilledToCity = patient.City;
+        }
+
+        var coverage = patient.PrimaryCoverage(today);
+        var rate = coverage is not null && payer is not null
+            ? coverage.EffectiveRate(today, payer.DefaultReimbursementRate)
+            : 0m;
+
+        invoice.PrescriberInpe = loaded[0].Prescriber?.Inpe;
+        invoice.PrescriberName = loaded[0].Prescriber?.FullName ?? loaded[0].PrescriberFreeText;
+        invoice.ClaimStatus = payer is { ThirdPartyPaymentAgreement: true }
+            ? ClaimStatus.Prepared
+            : ClaimStatus.NotApplicable;
+
+        // The executing biologist's INPE, frozen onto the document.
+        //
+        // This line was missing, and its absence was a showstopper rather than an omission:
+        // SubmitClaimBatchAsync refuses a claim whose BiologistInpe is blank whenever the payer
+        // requires one, and every AMO scheme seeded by this application does — CNSS, CNOPS, Tadamon
+        // and Achamil alike. So no AMO claim could ever be submitted on any installation, which is
+        // where a Moroccan laboratory's cash actually comes from.
+        //
+        // Taken from the site's responsible biologist rather than from whoever is at the counter: an
+        // AMO claim identifies the biologist accountable for the acts, and that is a standing
+        // appointment under loi 12-01, not whichever clerk issued the invoice.
+        invoice.BiologistInpe = await ResolveBiologistInpeAsync(site, ct);
+
+        foreach (var order in loaded)
+        {
+            foreach (var item in order.Items.Where(i => !i.IsCancelled && i.ChargedPrice > 0m))
+            {
+                var line = new InvoiceLine(
+                    item.AnalysisTest?.Name.Fr ?? item.BilledActCode ?? "-",
+                    item.ChargedPrice)
+                {
+                    DescriptionArabic = item.AnalysisTest?.Name.Ar,
+                    LabOrderId = order.Id,
+                    LabOrderItemId = item.Id,
+                    AnalysisTestId = item.AnalysisTestId,
+                    AnalysisCode = item.AnalysisTest?.Code,
+                    NationalActCode = item.BilledActCode,
+                    LetterKey = item.BilledLetterKey,
+                    Coefficient = item.BilledCoefficient,
+                    ReferenceTariffBase = item.ReferenceTariffBase,
+                    ServiceDate = DateOnly.FromDateTime(order.RegisteredAt.Date),
+                    // Medical biology acts are VAT-exempt in Morocco.
+                    IsVatExempt = true,
+                    VatRate = 0m
+                };
+
+                var added = invoice.AddLine(line);
+                if (added.IsFailure) return Result.Failure<Guid>(added.Errors);
+
+                if (payer is not null && rate > 0m)
+                    line.SetCoverageSplit(rate, payer.UsesNationalReferenceTariff);
+            }
+        }
+
+        if (discountAmount is { } discount and > 0m)
+        {
+            var applied = invoice.ApplyDiscount(discount, discountReason!);
+            if (applied.IsFailure) return Result.Failure<Guid>(applied.Errors);
+        }
+
+        var number = await sequences.NextAsync(
+            SequencePurpose.Invoice, currentUser.SiteId, today.Year, ct);
+
+        if (number.IsFailure) return Result.Failure<Guid>(number.FirstError);
+
+        var issued = invoice.Issue(number.Value, clock.Now,
+                                    AmountInWords.Render(invoice.TotalAmount, currentUser.Language));
+
+        if (issued.IsFailure) return Result.Failure<Guid>(issued.Errors);
+
+        await invoices.AddAsync(invoice, ct);
+
+        foreach (var order in loaded) order.InvoiceId = invoice.Id;
+
+        unitOfWork.AuditReason = $"Émission de la facture {invoice.Number}";
+        await unitOfWork.SaveChangesAsync(ct);
+        await unitOfWork.CommitAsync(ct);
+
+        return Result.Success(invoice.Id);
+    }
+
+    /// <summary>
+    /// Issues a credit note against an invoice.
+    /// <para>
+    /// The only lawful way to correct an issued invoice. It gets its own gapless series, references
+    /// the original by number as well as by identifier, and requires a reason — which is the audit
+    /// trail for the reversal and the first thing an inspection asks for.
+    /// </para>
+    /// </summary>
+    public async Task<Result<Guid>> IssueCreditNoteAsync(
+        Guid originalInvoiceId, string reason, decimal? partialAmount = null,
+        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.CreditNote);
+        if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
+
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Failure<Guid>(Error.Validation("Invoice_CorrectionReasonRequired"));
+
+        var original = await invoices.GetByIdWithDetailsAsync(originalInvoiceId, ct);
+        if (original is null) return Result.Failure<Guid>(Error.NotFound("Invoice_NotFound"));
+
+        if (!original.IsIssued)
+            return Result.Failure<Guid>(Error.Conflict("Invoice_CreditNoteRequiresIssued"));
+
+        if (partialAmount is { } amount && (amount <= 0m || amount > original.TotalAmount))
+            return Result.Failure<Guid>(
+                Error.Validation("Invoice_CreditNoteAmountOutOfRange", original.TotalAmount));
+
+        var today = clock.Today;
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
+
+        var creditNote = new Invoice(string.Empty, original.SiteId, InvoiceKind.CreditNote,
+                                      today, currentUser.UserId)
+        {
+            PatientId = original.PatientId,
+            PayerId = original.PayerId,
+            BilledToName = original.BilledToName,
+            BilledToIce = original.BilledToIce,
+            BilledToFiscalId = original.BilledToFiscalId,
+            BilledToAddress = original.BilledToAddress,
+            BilledToCity = original.BilledToCity,
+            CorrectsInvoiceId = original.Id,
+            CorrectsInvoiceNumber = original.Number,
+            CorrectionReason = reason,
+            CoveredOrderNumbersCsv = original.CoveredOrderNumbersCsv
+        };
+
+        if (partialAmount is { } partial)
+        {
+            // A partial reversal is one line for the agreed amount, described by its reason.
+            var added = creditNote.AddLine(new InvoiceLine($"Avoir partiel — {reason}", partial));
+            if (added.IsFailure) return Result.Failure<Guid>(added.Errors);
+        }
+        else
+        {
+            // A full reversal mirrors every line, so the two documents reconcile line by line.
+            foreach (var line in original.Lines.OrderBy(l => l.LineNumber))
+            {
+                var mirrored = new InvoiceLine(line.Description, line.UnitPrice, line.Quantity)
+                {
+                    DescriptionArabic = line.DescriptionArabic,
+                    LabOrderId = line.LabOrderId,
+                    LabOrderItemId = line.LabOrderItemId,
+                    AnalysisTestId = line.AnalysisTestId,
+                    AnalysisCode = line.AnalysisCode,
+                    NationalActCode = line.NationalActCode,
+                    LetterKey = line.LetterKey,
+                    Coefficient = line.Coefficient,
+                    ReferenceTariffBase = line.ReferenceTariffBase,
+                    ServiceDate = line.ServiceDate,
+                    IsVatExempt = line.IsVatExempt,
+                    VatRate = line.VatRate
+                };
+
+                var added = creditNote.AddLine(mirrored);
+                if (added.IsFailure) return Result.Failure<Guid>(added.Errors);
+            }
+        }
+
+        var number = await sequences.NextAsync(
+            SequencePurpose.CreditNote, original.SiteId, today.Year, ct);
+
+        if (number.IsFailure) return Result.Failure<Guid>(number.FirstError);
+
+        var issued = creditNote.Issue(number.Value, clock.Now,
+            AmountInWords.Render(creditNote.TotalAmount, currentUser.Language));
+
+        if (issued.IsFailure) return Result.Failure<Guid>(issued.Errors);
+
+        await invoices.AddAsync(creditNote, ct);
+        original.MarkCreditNoteIssued();
+
+        unitOfWork.AuditReason =
+            $"Avoir {creditNote.Number} sur la facture {original.Number} : {reason}";
+
+        await unitOfWork.SaveChangesAsync(ct);
+        await unitOfWork.CommitAsync(ct);
+
+        return Result.Success(creditNote.Id);
+    }
+
+    // ---- Settlement -----------------------------------------------------------------------------
+
+    /// <summary>
+    /// Records a settlement. Cash is bound to the operator's open till session, so the shift can be
+    /// reconciled; a cash payment with no open session is refused by the domain.
+    /// </summary>
+    public async Task<Result> RecordPaymentAsync(RecordPaymentRequest request,
+                                                  CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.RecordPayment);
+        if (permitted.IsFailure) return permitted;
+
+        var invoice = await invoices.GetByIdWithDetailsAsync(request.InvoiceId, ct);
+        if (invoice is null) return Result.Failure(Error.NotFound("Invoice_NotFound"));
+
+        CashSession? session = null;
+
+        if (request.Method == PaymentMethod.Cash)
+        {
+            session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+
+            if (session is null)
+                return Result.Failure(Error.Validation("Payment_CashRequiresOpenSession"));
+        }
+
+        var payment = new Payment(request.Amount, request.Method, clock.Today,
+                                   currentUser.UserId, currentUser.SiteId)
+        {
+            Reference = request.Reference,
+            BankName = request.BankName,
+            MaturityDate = request.MaturityDate,
+            CashSessionId = session?.Id,
+            Notes = request.Notes
+        };
+
+        var valid = payment.Validate();
+        if (valid.IsFailure) return valid;
+
+        var recorded = invoice.RecordPayment(payment);
+        if (recorded.IsFailure) return recorded;
+
+        session?.Accumulate(request.Method, request.Amount);
+
+        unitOfWork.AuditReason =
+            $"Règlement de {request.Amount:N2} DH ({request.Method}) sur {invoice.Number}";
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// The settlements recorded against an invoice, so a correction can be pointed at one of them.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<PaymentRow>>> GetPaymentsAsync(
+        Guid invoiceId, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.View);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<PaymentRow>>(permitted.FirstError);
+
+        return Result.Success(await queries.GetPaymentsAsync(invoiceId, ct));
+    }
+
+    /// <summary>
+    /// Marks a cheque or a bill of exchange as returned unpaid.
+    /// <para>
+    /// The bank telling the laboratory a cheque bounced is an everyday event, and until this existed
+    /// the only way to reflect it was a credit note — which says the laboratory withdrew the charge,
+    /// not that the patient's payment failed. The two are different things to an accountant and to
+    /// the patient, who still owes the money.
+    /// </para>
+    /// <para>
+    /// The invoice's paid total is recomputed, so the balance goes back to outstanding and the
+    /// receivables ageing picks it up again.
+    /// </para>
+    /// </summary>
+    public async Task<Result> MarkPaymentBouncedAsync(Guid invoiceId, Guid paymentId, string reason,
+                                                       CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.RecordPayment);
+        if (permitted.IsFailure) return permitted;
+
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Failure(Error.Validation("Payment_BounceReasonRequired"));
+
+        var invoice = await invoices.GetByIdWithDetailsAsync(invoiceId, ct);
+        if (invoice is null) return Result.Failure(Error.NotFound("Invoice_NotFound"));
+
+        var payment = invoice.Payments.FirstOrDefault(p => p.Id == paymentId);
+        if (payment is null) return Result.Failure(Error.NotFound("Payment_NotFound"));
+
+        var bounced = payment.MarkBounced(clock.Now, reason);
+        if (bounced.IsFailure) return bounced;
+
+        invoice.Recalculate();
+
+        unitOfWork.AuditReason =
+            $"Impayé de {payment.Amount:N2} DH ({payment.Method}) sur {invoice.Number} : {reason}";
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Refunds a settled payment.
+    /// <para>
+    /// A cash refund also has to reach the till: the shift's expected cash is the float plus what
+    /// came in minus what went out, and a refund paid from the drawer that the session never heard
+    /// about shows up at closing as an unexplained shortfall.
+    /// </para>
+    /// </summary>
+    public async Task<Result> RefundPaymentAsync(Guid invoiceId, Guid paymentId, string reason,
+                                                  CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.RecordPayment);
+        if (permitted.IsFailure) return permitted;
+
+        var invoice = await invoices.GetByIdWithDetailsAsync(invoiceId, ct);
+        if (invoice is null) return Result.Failure(Error.NotFound("Invoice_NotFound"));
+
+        var payment = invoice.Payments.FirstOrDefault(p => p.Id == paymentId);
+        if (payment is null) return Result.Failure(Error.NotFound("Payment_NotFound"));
+
+        var refunded = payment.Refund(clock.Now, reason);
+        if (refunded.IsFailure) return refunded;
+
+        if (payment.Method == PaymentMethod.Cash)
+        {
+            var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+
+            if (session is null)
+                return Result.Failure(Error.Validation("Payment_CashRefundRequiresOpenSession"));
+
+            session.RecordCashRefund(payment.Amount);
+        }
+
+        invoice.Recalculate();
+
+        unitOfWork.AuditReason =
+            $"Remboursement de {payment.Amount:N2} DH ({payment.Method}) sur {invoice.Number} : {reason}";
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Records cash taken out of the till mid-shift and banked.
+    /// <para>
+    /// A laboratory counter does not hold a day's takings in the drawer. Without this the expected
+    /// cash at closing includes money that is already at the bank, and every shift that banked
+    /// anything closes on a large unexplained variance.
+    /// </para>
+    /// </summary>
+    public async Task<Result> RecordCashWithdrawalAsync(decimal amount, string reason,
+                                                         CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.RecordPayment);
+        if (permitted.IsFailure) return permitted;
+
+        if (amount <= 0m) return Result.Failure(Error.Validation("Payment_AmountMustBePositive"));
+
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Failure(Error.Validation("Payment_WithdrawalReasonRequired"));
+
+        var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+        if (session is null) return Result.Failure(Error.Conflict("CashSession_NotOpen"));
+
+        session.RecordWithdrawal(amount);
+
+        unitOfWork.AuditReason = $"Prélèvement de caisse de {amount:N2} DH : {reason}";
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Records what the payer answered on a submitted claim.
+    /// <para>
+    /// Until this existed <c>ClaimStatus</c> froze at <c>Submitted</c> for ever: the laboratory
+    /// could send a claim and never record that it was paid, short-paid or refused. Since AMO
+    /// reimbursement is where most of the revenue comes from, that made the receivables figure
+    /// meaningless — everything submitted stayed outstanding on the books regardless of what the
+    /// payer actually did.
+    /// </para>
+    /// </summary>
+    public async Task<Result> RecordClaimOutcomeAsync(IReadOnlyList<Guid> invoiceIds,
+                                                       ClaimStatus outcome,
+                                                       string? rejectionReason = null,
+                                                       CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.ExportAccounting);
+        if (permitted.IsFailure) return permitted;
+
+        if (invoiceIds.Count == 0)
+            return Result.Failure(Error.Validation("Billing.SelectOneInvoice"));
+
+        if (outcome is not (ClaimStatus.Accepted or ClaimStatus.PartiallyAccepted
+                         or ClaimStatus.Rejected or ClaimStatus.Resubmitted
+                         or ClaimStatus.Settled))
+            return Result.Failure(Error.Validation("Claim_OutcomeNotRecordable", outcome));
+
+        // A refusal without its reason is unusable: the reason is what decides whether the claim
+        // is corrected and resubmitted or written off, and the payer only states it once.
+        if (outcome is ClaimStatus.Rejected or ClaimStatus.PartiallyAccepted
+            && string.IsNullOrWhiteSpace(rejectionReason))
+            return Result.Failure(Error.Validation("Claim_RejectionReasonRequired"));
+
+        var errors = new List<Error>();
+        var updated = 0;
+
+        foreach (var invoiceId in invoiceIds.Distinct())
+        {
+            var invoice = await invoices.GetByIdAsync(invoiceId, ct);
+
+            if (invoice is null)
+            {
+                errors.Add(Error.NotFound("Invoice_NotFound"));
+                continue;
+            }
+
+            if (invoice.ClaimStatus is ClaimStatus.NotApplicable or ClaimStatus.Prepared)
+            {
+                errors.Add(Error.Validation("Claim_NotSubmitted", invoice.Number));
+                continue;
+            }
+
+            invoice.ClaimStatus = outcome;
+
+            invoice.ClaimRejectionReason =
+                outcome is ClaimStatus.Rejected or ClaimStatus.PartiallyAccepted
+                    ? rejectionReason
+                    : null;
+
+            invoices.Update(invoice);
+            updated++;
+        }
+
+        if (updated == 0) return Result.Failure(errors.Count > 0
+            ? errors
+            : [Error.Validation("Billing.SelectOneInvoice")]);
+
+        unitOfWork.AuditReason = $"Retour tiers payant {outcome} sur {updated} facture(s)"
+                                 + (rejectionReason is null ? string.Empty : $" : {rejectionReason}");
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
+    }
+
+    // ---- Till -----------------------------------------------------------------------------------
+
+    public async Task<Result<Guid>> OpenCashSessionAsync(decimal openingFloat,
+                                                          CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.RecordPayment);
+        if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
+
+        var existing = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+
+        if (existing is not null)
+            return Result.Failure<Guid>(Error.Conflict("CashSession_AlreadyOpenForUser"));
+
+        var session = new CashSession(currentUser.SiteId, currentUser.UserId,
+                                       clock.Now, openingFloat)
+        {
+            Workstation = currentUser.Workstation
+        };
+
+        await cashSessions.AddAsync(session, ct);
+
+        unitOfWork.AuditReason = $"Ouverture de caisse — fond de {openingFloat:N2} DH";
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success(session.Id);
+    }
+
+    public async Task<Result<CashSessionSummary>> GetOpenCashSessionAsync(
+        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.View);
+        if (permitted.IsFailure) return Result.Failure<CashSessionSummary>(permitted.FirstError);
+
+        var summary = await queries.GetCashSessionSummaryAsync(currentUser.UserId, ct);
+
+        return summary is null
+            ? Result.Failure<CashSessionSummary>(Error.NotFound("CashSession_NotOpen"))
+            : Result.Success(summary);
+    }
+
+    /// <summary>
+    /// Closes the till.
+    /// <para>
+    /// A variance beyond tolerance must be explained before the session will close. An unexplained
+    /// shortfall that can simply be clicked away is not a control, and the variance by operator is
+    /// exactly what an internal audit looks at.
+    /// </para>
+    /// </summary>
+    public async Task<Result<decimal>> CloseCashSessionAsync(
+        decimal countedCash, string? explanation, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.CloseCashSession);
+        if (permitted.IsFailure) return Result.Failure<decimal>(permitted.FirstError);
+
+        var open = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+        if (open is null) return Result.Failure<decimal>(Error.NotFound("CashSession_NotOpen"));
+
+        var session = await cashSessions.GetByIdAsync(open.Id, ct);
+        if (session is null) return Result.Failure<decimal>(Error.NotFound("CashSession_NotOpen"));
+
+        var closed = session.Close(clock.Now, currentUser.UserId, countedCash, explanation);
+        if (closed.IsFailure) return Result.Failure<decimal>(closed.Errors);
+
+        unitOfWork.AuditReason =
+            $"Clôture de caisse — écart de {session.Variance:N2} DH" +
+            (string.IsNullOrWhiteSpace(explanation) ? string.Empty : $" : {explanation}");
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success(session.Variance ?? 0m);
+    }
+
+    /// <summary>
+    /// The INPE of the biologist accountable for the acts on an invoice.
+    /// <para>
+    /// Returns null rather than throwing when the site has no responsible biologist or that
+    /// biologist has no INPE recorded. The invoice is still lawful without it — a self-paying
+    /// patient's invoice needs no INPE at all — and refusing to issue one here would block the
+    /// counter over a claim that may never be made. The refusal belongs at submission, which is
+    /// where <see cref="SubmitClaimBatchAsync"/> puts it and where the operator can act on it.
+    /// </para>
+    /// </summary>
+    private async Task<string?> ResolveBiologistInpeAsync(LabSite site, CancellationToken ct)
+    {
+        if (site.ResponsibleBiologistUserId is not { } biologistId) return null;
+
+        var biologist = await users.GetByIdAsync(biologistId, ct);
+
+        return string.IsNullOrWhiteSpace(biologist?.Inpe) ? null : biologist.Inpe;
+    }
+
+    // ---- Claims ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The claim batches, newest first: what was sent to which payer, what it was worth, and what
+    /// came back.
+    /// <para>
+    /// A batch is the unit a Moroccan laboratory chases. The payer answers per batch, settles per
+    /// batch and rejects per invoice inside one, so "which batch is this invoice in and what
+    /// happened to it?" is the question the accounts office asks every week — and it had no screen
+    /// that could answer it.
+    /// </para>
+    /// </summary>
+    public async Task<Result<IReadOnlyList<ClaimBatchRow>>> GetClaimBatchesAsync(
+        int withinDays = 180, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.View);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<ClaimBatchRow>>(permitted.FirstError);
+
+        return Result.Success(await queries.GetClaimBatchesAsync(
+            currentUser.SiteId, clock.Today.AddDays(-Math.Max(1, withinDays)), clock.Today, ct));
+    }
+
+    /// <summary>The invoices inside one batch, with the reason for any that was refused.</summary>
+    public async Task<Result<IReadOnlyList<ClaimInvoiceRow>>> GetClaimInvoicesAsync(
+        string claimReference, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.View);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<ClaimInvoiceRow>>(permitted.FirstError);
+
+        return Result.Success(await queries.GetClaimInvoicesAsync(claimReference, ct));
+    }
+
+    /// <summary>
+    /// Invoices ready to go into a batch, grouped by payer, with whatever still blocks each one.
+    /// <para>
+    /// The blockers are computed here rather than discovered at submission. A claim rejected by the
+    /// payer for a missing INPE comes back weeks later as a letter, by which time the laboratory has
+    /// done the work, spent the reagent and has nothing to invoice twice.
+    /// </para>
+    /// </summary>
+    public async Task<Result<IReadOnlyList<ClaimCandidateRow>>> GetClaimCandidatesAsync(
+        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.View);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<ClaimCandidateRow>>(permitted.FirstError);
+
+        return Result.Success(await queries.GetClaimCandidatesAsync(currentUser.SiteId, ct));
+    }
+
+    /// <summary>
+    /// Marks a batch of invoices as submitted to a third-party payer.
+    /// <para>
+    /// A claim that omits the biologist's INPE is rejected by the payer, so the requirement is
+    /// checked here and reported per invoice rather than discovered weeks later on a rejection
+    /// notice.
+    /// </para>
+    /// </summary>
+    public async Task<Result<string>> SubmitClaimBatchAsync(
+        IReadOnlyList<Guid> invoiceIds, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.ExportAccounting);
+        if (permitted.IsFailure) return Result.Failure<string>(permitted.FirstError);
+
+        if (invoiceIds.Count == 0)
+            return Result.Failure<string>(Error.Validation("Message.NothingSelected"));
+
+        var today = clock.Today;
+        var problems = new List<Error>();
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
+
+        var reference = await sequences.NextAsync(
+            SequencePurpose.ClaimBatch, currentUser.SiteId, today.Year, ct);
+
+        if (reference.IsFailure) return Result.Failure<string>(reference.FirstError);
+
+        foreach (var invoiceId in invoiceIds)
+        {
+            var invoice = await invoices.GetByIdAsync(invoiceId, ct);
+
+            if (invoice is null)
+            {
+                problems.Add(Error.NotFound("Invoice_NotFound"));
+                continue;
+            }
+
+            if (invoice.PayerId is not { } payerId)
+            {
+                problems.Add(Error.Validation("Invoice_ClaimRequiresPayer", invoice.Number));
+                continue;
+            }
+
+            var payer = await payers.GetByIdAsync(payerId, ct);
+
+            if (payer?.RequiresInpeOnClaim == true && string.IsNullOrWhiteSpace(invoice.BiologistInpe))
+            {
+                problems.Add(Error.Regulatory("Invoice_ClaimRequiresInpe", invoice.Number));
+                continue;
+            }
+
+            invoice.ClaimReference = reference.Value;
+            invoice.ClaimSubmittedOn = today;
+            invoice.ClaimStatus = ClaimStatus.Submitted;
+        }
+
+        unitOfWork.AuditReason = $"Transmission du dossier tiers payant {reference.Value}";
+        await unitOfWork.SaveChangesAsync(ct);
+        await unitOfWork.CommitAsync(ct);
+
+        return problems.Count == 0
+            ? Result.Success(reference.Value)
+            : Result.Failure<string>(problems);
+    }
+}
+
+/// <summary>
+/// Renders a monetary amount in words.
+/// <para>
+/// A customary mention on a Moroccan invoice, and a real fraud control: the figure can be altered
+/// on a printed document, the words are much harder to.
+/// </para>
+/// </summary>
+public static class AmountInWords
+{
+    public static string Render(decimal amount, AppLanguage language)
+    {
+        var dirhams = (long)Math.Truncate(Math.Abs(amount));
+        var centimes = (int)Math.Round((Math.Abs(amount) - dirhams) * 100m,
+                                        MidpointRounding.AwayFromZero);
+
+        return language switch
+        {
+            AppLanguage.Arabic => RenderArabic(dirhams, centimes),
+            AppLanguage.English => RenderEnglish(dirhams, centimes),
+            _ => RenderFrench(dirhams, centimes)
+        };
+    }
+
+    private static string RenderFrench(long dirhams, int centimes)
+    {
+        var number = FrenchNumber(dirhams);
+
+        // "un million de dirhams", but "un million deux cents dirhams" — the "de" appears only when
+        // the multiplier noun is the last word. Worth getting right: this line is read aloud at a
+        // counter and reproduced verbatim on a document an inspector examines.
+        var separator = number.EndsWith("million", StringComparison.Ordinal)
+                        || number.EndsWith("millions", StringComparison.Ordinal)
+            ? " de "
+            : " ";
+
+        var text = number + separator + "dirham" + (dirhams > 1 ? "s" : string.Empty);
+
+        if (centimes > 0)
+            text += " et " + FrenchNumber(centimes) + " centime" + (centimes > 1 ? "s" : string.Empty);
+
+        return char.ToUpperInvariant(text[0]) + text[1..];
+    }
+
+    private static string RenderEnglish(long dirhams, int centimes)
+    {
+        // Invariant culture, not the operator's: the wording on an issued invoice must not change
+        // because the workstation's regional settings differ from the server's.
+        var text = dirhams.ToString("N0", CultureInfo.InvariantCulture)
+                   + " dirham" + (dirhams == 1 ? string.Empty : "s");
+
+        if (centimes > 0) text += $" and {centimes} centime" + (centimes == 1 ? string.Empty : "s");
+
+        return text;
+    }
+
+    private static string RenderArabic(long dirhams, int centimes)
+    {
+        // Arabic number agreement is genuinely complex (dual forms, case endings that vary with
+        // the counted noun). Rendering the figure with the noun is unambiguous and correct, and
+        // is what Moroccan invoices in Arabic commonly do.
+        //
+        // Western digits, as everywhere else in the application: a laboratory transcribes these
+        // between systems, and Eastern Arabic numerals invite a transcription error.
+        var text = dirhams.ToString("N0", CultureInfo.InvariantCulture) + " درهم";
+        if (centimes > 0) text += $" و {centimes} سنتيم";
+        return text;
+    }
+
+    /// <summary>
+    /// Zero to nineteen, spelled out.
+    /// <para>
+    /// Runs to nineteen rather than sixteen because the vigesimal tens need it:
+    /// <c>soixante-dix-sept</c> is built from "soixante" plus the word for seventeen, so
+    /// <c>Units[17]</c> has to exist.
+    /// </para>
+    /// </summary>
+    private static readonly string[] Units =
+    [
+        "zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf",
+        "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize",
+        "dix-sept", "dix-huit", "dix-neuf"
+    ];
+
+    private static readonly string[] Tens =
+    [
+        "", "dix", "vingt", "trente", "quarante", "cinquante",
+        "soixante", "soixante", "quatre-vingt", "quatre-vingt"
+    ];
+
+    /// <summary>
+    /// French number words, including the vigesimal forms (soixante-dix, quatre-vingts) and the
+    /// plural-on-"cent"/"vingt" rules. Written out rather than taken from a library because the
+    /// rules are short, fixed, and this is the only place they are needed.
+    /// </summary>
+    /// <param name="multiplierOfMille">
+    /// True when this number is being rendered as the multiplier of <c>mille</c>. <c>cent</c> and
+    /// <c>quatre-vingt</c> lose their plural s in that position — "deux cent mille", not "deux cents
+    /// mille" — whereas before <c>millions</c>, which is an ordinary noun, they keep it.
+    /// </param>
+    private static string FrenchNumber(long value, bool multiplierOfMille = false)
+    {
+        if (value < 0) return "moins " + FrenchNumber(-value);
+        if (value < Units.Length) return Units[value];
+
+        if (value < 100)
+        {
+            var tens = (int)(value / 10);
+            var remainder = (int)(value % 10);
+
+            // 70-79 and 90-99 are built on soixante and quatre-vingt.
+            if (tens is 7 or 9) return FrenchTensSeventyNinety(tens, remainder);
+
+            var word = Tens[tens];
+
+            if (remainder == 0)
+                return tens == 8 && !multiplierOfMille ? word + "s" : word;   // quatre-vingts
+
+            // "et un" for 21, 31 … 61; hyphen otherwise.
+            return remainder == 1 && tens != 8
+                ? word + " et un"
+                : word + "-" + Units[remainder];
+        }
+
+        if (value < 1000)
+        {
+            var hundreds = (int)(value / 100);
+            var remainder = value % 100;
+
+            var word = hundreds == 1 ? "cent" : Units[hundreds] + " cent";
+
+            // "cents" only when nothing follows, and never before mille.
+            if (remainder == 0 && hundreds > 1 && !multiplierOfMille) word += "s";
+
+            // The flag propagates into the remainder: in "deux cent quatre-vingt mille" it is the
+            // quatre-vingt at the tail that must lose its s, not the cent.
+            return remainder == 0
+                ? word
+                : word + " " + FrenchNumber(remainder, multiplierOfMille);
+        }
+
+        if (value < 1_000_000)
+        {
+            var thousands = value / 1000;
+            var remainder = value % 1000;
+
+            var word = thousands == 1
+                ? "mille"
+                : FrenchNumber(thousands, multiplierOfMille: true) + " mille";
+
+            return remainder == 0 ? word : word + " " + FrenchNumber(remainder);
+        }
+
+        var millions = value / 1_000_000;
+        var rest = value % 1_000_000;
+
+        var millionWord = FrenchNumber(millions) + (millions == 1 ? " million" : " millions");
+
+        return rest == 0 ? millionWord : millionWord + " " + FrenchNumber(rest);
+    }
+
+    private static string FrenchTensSeventyNinety(int tens, int remainder)
+    {
+        var baseWord = tens == 7 ? "soixante" : "quatre-vingt";
+        var offset = remainder + 10;
+
+        if (remainder == 0) return baseWord + "-dix";
+
+        return remainder == 1 && tens == 7
+            ? baseWord + " et onze"
+            : baseWord + "-" + Units[offset];
+    }
+}
+
+/// <summary>One settlement against an invoice, as the correction pickers list them.</summary>
+public sealed record PaymentRow(
+    Guid PaymentId,
+    decimal Amount,
+    PaymentMethod Method,
+    PaymentStatus Status,
+    DateOnly PaymentDate,
+    string ReceivedByName,
+    string? Reference,
+    string? BankName,
+    DateOnly? MaturityDate)
+{
+    /// <summary>Only a settled payment can be refunded or returned unpaid.</summary>
+    public bool IsCorrectable => Status == PaymentStatus.Settled;
+
+    /// <summary>A bounce only applies to an instrument that can be returned by a bank.</summary>
+    public bool CanBounce =>
+        IsCorrectable && Method is PaymentMethod.Cheque or PaymentMethod.BillOfExchange;
+}
+
+/// <summary>One claim batch sent to a third-party payer.</summary>
+public sealed record ClaimBatchRow(
+    string ClaimReference,
+    Guid? PayerId,
+    string PayerName,
+    DateOnly SubmittedOn,
+    int InvoiceCount,
+    decimal TotalClaimed,
+    decimal PayerShareClaimed,
+    decimal Settled,
+    int AcceptedCount,
+    int RejectedCount,
+    int PendingCount,
+    DateOnly? LastOutcomeOn)
+{
+    /// <summary>Nothing has come back yet. After sixty days that is itself the finding.</summary>
+    public bool IsAwaitingOutcome => PendingCount == InvoiceCount;
+
+    public int DaysOutstanding(DateOnly today) => today.DayNumber - SubmittedOn.DayNumber;
+
+    /// <summary>
+    /// A batch with no answer after sixty days. Payers answer in weeks, so silence past that point
+    /// usually means the batch was never received — and the laboratory has to ask rather than wait.
+    /// </summary>
+    public bool NeedsChasing(DateOnly today) =>
+        IsAwaitingOutcome && DaysOutstanding(today) > 60;
+
+    public decimal Unsettled => Math.Max(0m, PayerShareClaimed - Settled);
+}
+
+/// <summary>One invoice inside a claim batch.</summary>
+public sealed record ClaimInvoiceRow(
+    Guid InvoiceId,
+    string Number,
+    DateOnly IssueDate,
+    string PatientName,
+    string? PrescriberInpe,
+    decimal Total,
+    decimal PayerShare,
+    decimal Paid,
+    ClaimStatus ClaimStatus,
+    string? ClaimRejectionReason,
+    string? CoveredOrders)
+{
+    public bool WasRejected =>
+        ClaimStatus is ClaimStatus.Rejected or ClaimStatus.PartiallyAccepted;
+
+    /// <summary>
+    /// Rejected and never resubmitted. This is money the laboratory has earned and abandoned, and
+    /// it is the row the accounts office exists to find.
+    /// </summary>
+    public bool IsAbandoned => ClaimStatus == ClaimStatus.Rejected;
+}
+
+/// <summary>An invoice that could join a batch, with whatever still stops it.</summary>
+public sealed record ClaimCandidateRow(
+    Guid InvoiceId,
+    string Number,
+    DateOnly IssueDate,
+    Guid PayerId,
+    string PayerName,
+    string PatientName,
+    decimal Total,
+    decimal PayerShare,
+    bool RequiresInpe,
+    bool HasBiologistInpe,
+    bool RequiresPrescription,
+    bool HasPrescriberInpe,
+    int DaysSinceIssue)
+{
+    /// <summary>
+    /// Why this invoice cannot be claimed yet, as resource keys. Returned rather than a boolean so
+    /// the screen can say which field is missing instead of "not claimable".
+    /// <para>
+    /// These are short, parameter-free <c>Claim.*</c> keys, not the <c>Invoice_*</c> errors the
+    /// submission path raises. The two are resolved differently and cannot be shared: the
+    /// submission error is built with <c>Error.Regulatory(key, invoice.Number)</c> and its text
+    /// carries a <c>{0}</c>, whereas the claims grid resolves a blocker through
+    /// <c>Localizer[key]</c> with no arguments — so pointing the grid at the submission key printed
+    /// a literal "{0}" in the blockers column. The other half of the pair,
+    /// <c>Invoice_ClaimRequiresPrescriberInpe</c>, was never in any catalogue at all and rendered
+    /// as its own raw key.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<string> Blockers
+    {
+        get
+        {
+            var blockers = new List<string>(2);
+
+            if (RequiresInpe && !HasBiologistInpe) blockers.Add("Claim.RequiresBiologistInpe");
+            if (RequiresPrescription && !HasPrescriberInpe)
+                blockers.Add("Claim.RequiresPrescriberInpe");
+
+            return blockers;
+        }
+    }
+
+    public bool IsClaimable => Blockers.Count == 0;
+}
+
+/// <summary>Read-side queries for the billing screens.</summary>
+public interface IBillingQueries
+{
+    /// <summary>Claim batches submitted since a date, newest first.</summary>
+    Task<IReadOnlyList<ClaimBatchRow>> GetClaimBatchesAsync(Guid siteId, DateOnly since,
+                                                             DateOnly today,
+                                                             CancellationToken ct = default);
+
+    Task<IReadOnlyList<ClaimInvoiceRow>> GetClaimInvoicesAsync(string claimReference,
+                                                                CancellationToken ct = default);
+
+    /// <summary>Issued, payer-covered invoices not yet in a batch.</summary>
+    Task<IReadOnlyList<ClaimCandidateRow>> GetClaimCandidatesAsync(Guid siteId,
+                                                                    CancellationToken ct = default);
+
+    Task<IReadOnlyList<BillableOrderRow>> GetUninvoicedOrdersAsync(
+        Guid siteId, CancellationToken ct = default);
+
+    Task<PagedResult<InvoiceRow>> GetInvoicesAsync(
+        Guid siteId, InvoiceStatus? status, string? search, int page, int pageSize,
+        DateOnly today, CancellationToken ct = default);
+
+    /// <summary>
+    /// The settlements recorded against one invoice, so a refund or a returned cheque can be
+    /// pointed at the right one. An invoice is frequently settled in two or three parts — part
+    /// cash at the counter, the balance by transfer — so "the payment" is not a single thing.
+    /// </summary>
+    Task<IReadOnlyList<PaymentRow>> GetPaymentsAsync(Guid invoiceId, CancellationToken ct = default);
+
+    Task<CashSession?> GetOpenCashSessionAsync(Guid operatorUserId, CancellationToken ct = default);
+
+    Task<CashSessionSummary?> GetCashSessionSummaryAsync(Guid operatorUserId,
+                                                          CancellationToken ct = default);
+}

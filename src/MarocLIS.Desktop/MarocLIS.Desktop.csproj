@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationVisualStyles>true</ApplicationVisualStyles>
+    <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
+    <ApplicationDefaultFont>Segoe UI, 9pt</ApplicationDefaultFont>
+    <RootNamespace>MarocLIS.Desktop</RootNamespace>
+    <AssemblyName>MarocLIS</AssemblyName>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!--
+      CA1305 asks for an explicit IFormatProvider on every ToString and interpolation. In this
+      project the implicit one is the correct one: CultureManager.SetLanguage assigns
+      CultureInfo.CurrentCulture, CurrentUICulture and both DefaultThreadCurrent* properties when
+      the operator switches language, so the ambient culture *is* their chosen language and screen
+      text is supposed to follow it. Passing InvariantCulture at these 140 sites would print French
+      decimal separators to an Arabic-speaking operator.
+
+      Suppressed here only. Everywhere a value crosses a boundary where culture must not vary — the
+      numbering series, the ASTM checksum, a TCP port, and the report renderers, which take the
+      requested language and format against its culture explicitly — the provider is passed and the
+      rule stays on.
+    -->
+    <NoWarn>$(NoWarn);CA1305</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MarocLIS.Application\MarocLIS.Application.csproj" />
+    <ProjectReference Include="..\MarocLIS.Domain\MarocLIS.Domain.csproj" />
+    <ProjectReference Include="..\MarocLIS.Infrastructure\MarocLIS.Infrastructure.csproj" />
+    <ProjectReference Include="..\MarocLIS.Instruments\MarocLIS.Instruments.csproj" />
+    <ProjectReference Include="..\MarocLIS.Localization\MarocLIS.Localization.csproj" />
+    <ProjectReference Include="..\MarocLIS.Reporting\MarocLIS.Reporting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

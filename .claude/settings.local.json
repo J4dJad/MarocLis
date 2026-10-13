@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File \"$env:TEMP\\\\lis-ui\\\\serve.ps1\")",
+      "PowerShell(Copy-Item \"docs\\\\ui-mockup.html\" \"$env:TEMP\\\\lis-ui\\\\index.html\" -Force; \"copied\")",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Desktop\\\\Views\\\\OrderRegistrationView.cs\" -Pattern 'private void WireBehaviour|_patientSearch\\\\.TextChanged|_patientPicker\\\\.SelectedIndexChanged|private async Task SearchPatientsAsync|_patientSearchLabel\\\\.Text =|ApplyTexts\\\\\\(\\\\\\)' | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File \"scripts\\\\check-resource-keys.ps1\" 2>$null | Select-String \"^  FAIL\" | ForEach-Object { \\($_ -split \"'\"\\)[1] } | Where-Object { $_ } | Sort-Object -Unique)",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Localization\\\\Resources\\\\ar.json\" -Pattern 'Patient_DuplicateSuspected' | ForEach-Object { $_.Line })",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File \"scripts\\\\check-resource-keys.ps1\")",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File \"scripts\\\\check-resource-keys.ps1\" 2>$null | Select-Object -Skip 27)",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Infrastructure\\\\Persistence\\\\LisDbContext.cs\" -Pattern 'DbSet<\\(NumberSequence|AppSetting|Invoice|LabOrder\\)>' | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Desktop\\\\Views\\\\NonConformityView.cs\" -Pattern '_close\\\\.Click|_close\\\\.Text|_completeAction\\\\.Click|_completeAction\\\\.Text|RefreshActions|_close\\\\.Enabled|private async Task CloseAsync|private async Task CompleteActionAsync|_actions\\\\.CurrentRow' | ForEach-Object { \"L$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Application\\\\Quality\\\\NonConformityService.cs\" -Pattern 'record \\(NonConformityRow|CorrectiveActionRow\\)' -Context 0,16 | ForEach-Object { $_.Line; $_.Context.PostContext | ForEach-Object { \"    $\\($_.Trim\\(\\)\\)\" } })",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File \"scripts\\\\check-resource-keys.ps1\" 2>$null | Select-String \"^  FAIL\" | ForEach-Object { $_.ToString\\(\\).Trim\\(\\).Substring\\(0,[Math]::Min\\(300,$_.ToString\\(\\).Trim\\(\\).Length\\)\\) })",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Desktop\\\\Views\\\\BillingView.cs\" -Pattern 'private readonly Button|_pay\\\\.Bounds|_creditNote\\\\.Bounds|_submitClaim\\\\.Bounds|_status\\\\.Bounds|ledgerActions|_pay\\\\.Click|_pay\\\\.Text|private async Task PayAsync|private async Task IssueAsync|SelectedInvoices|_ledger\\\\.CurrentRow' | ForEach-Object { \"L$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Desktop\\\\Views\\\\BillingView.cs\" -Pattern 'private async Task Load\\\\w+Async|private List<T> Selected<T>|private IReadOnlyList<T> Selected' | ForEach-Object { \"L$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Desktop\\\\Views\\\\BillingView.cs\" -Pattern 'Selected<' | ForEach-Object { \"L$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" } | Select-Object -First 4)",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Desktop\\\\Views\\\\ValidationView.cs\" -Pattern 'private async Task ValidateAsync' -Context 0,22 | ForEach-Object { $_.Line; $_.Context.PostContext })",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Domain\\\\Quality\\\\WestgardEvaluator.cs\" -Pattern 'TwelveX|EightX = ' -Context 0,4 | ForEach-Object { $_.Line; $_.Context.PostContext })",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File \"scripts\\\\check-resource-keys.ps1\" 2>$null | Select-String \"^  FAIL\" | ForEach-Object { $_.ToString\\(\\).Trim\\(\\) })",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Localization\\\\Resources\\\\ar.json\" -Pattern '\"Report_Header_Patient\"' | ForEach-Object { $_.Line })",
+      "PowerShell(Select-String -Path \"src\\\\MarocLIS.Domain\\\\Samples\\\\Sample.cs\" -Pattern 'public \\(Guid|string|DateTimeOffset|DateOnly|SampleStatus|decimal|bool|int\\)[\\\\?]? \\\\w+ \\\\{|IsPastKeepUntil|public SampleDefect' | ForEach-Object { \"L$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" } | Select-Object -First 30)",
+      "PowerShell(Get-Content 'src\\\\MarocLIS.Localization\\\\Resources\\\\fr.json' -TotalCount 12 -Encoding UTF8; \"---\"; \\(Get-Content 'src\\\\MarocLIS.Localization\\\\Resources\\\\fr.json' -Raw -Encoding UTF8 | Select-String -Pattern '\"Sample_StorageLocationRequired\"' -AllMatches\\).Matches.Count)",
+      "PowerShell(Select-String -Path 'src\\\\MarocLIS.Localization\\\\Resources\\\\en.json','src\\\\MarocLIS.Localization\\\\Resources\\\\ar.json' -Pattern '\"SampleReception\"|\"ConfirmRejection\"' | ForEach-Object { \"$\\($_.Filename\\):$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(\\(Get-Content 'src\\\\MarocLIS.Desktop\\\\Views\\\\BillingCorrectionDialogs.cs' | Measure-Object -Line\\).Lines; Get-Content 'src\\\\MarocLIS.Desktop\\\\Views\\\\BillingCorrectionDialogs.cs' -Tail 6)",
+      "PowerShell(Select-String -Path 'src\\\\MarocLIS.Localization\\\\Resources\\\\en.json','src\\\\MarocLIS.Localization\\\\Resources\\\\ar.json' -Pattern '\"PaymentTerms\"' | ForEach-Object { \"$\\($_.Filename\\):$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\\\check-resource-keys.ps1)",
+      "PowerShell(Select-String -Path 'src\\\\MarocLIS.Localization\\\\Resources\\\\en.json' -Pattern '\"Plural\": \"Results\"|\"Order_HasValidatedItemsCannotCancel\"' | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\\\check-resource-keys.ps1 2>&1 | Select-Object -Skip 20)",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\\\check-resource-keys.ps1 2>&1 | Select-Object -Last 14)"
+    ]
+  }
+}
