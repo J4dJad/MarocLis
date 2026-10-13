@@ -627,6 +627,22 @@ public sealed class CatalogMaintenanceQueries(LisDbContext db) : ICatalogMainten
                 .Select(s => new PartnerSiteOption(s.Id, s.Code, s.Name))
                 .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<TariffPayerOption>> GetPayerOptionsAsync(
+        CancellationToken ct = default) =>
+        await db.Payers.AsNoTracking()
+                .Where(p => p.IsActive && p.Kind != Domain.Patients.PayerKind.SelfPay)
+                .OrderBy(p => p.Code)
+                .Select(p => new TariffPayerOption(p.Id, p.Code, p.Name))
+                .ToListAsync(ct);
+
+    public async Task<decimal?> GetLatestLetterKeyValueAsync(string letterKey,
+        CancellationToken ct = default) =>
+        await db.Tariffs.AsNoTracking()
+                .Where(t => t.LetterKey == letterKey && t.LetterKeyValue > 0m)
+                .OrderByDescending(t => t.ValidFrom)
+                .Select(t => (decimal?)t.LetterKeyValue)
+                .FirstOrDefaultAsync(ct);
+
     /// <summary>
     /// Analysers only, and decommissioned ones excluded. A reference interval tied to an analyser
     /// the laboratory no longer owns can never match a result, so offering one would be offering a

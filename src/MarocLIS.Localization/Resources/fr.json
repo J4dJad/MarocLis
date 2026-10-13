@@ -1534,6 +1534,12 @@
   },
 
   "Catalog": {
+    "AnalysisPriceSaved": "{0} enregistrée ; prix du laboratoire appliqué à partir du {1}.",
+    "LabPrice": "Prix laboratoire",
+    "LabPriceSection": "Prix du laboratoire (patients payants) : une modification s'applique à partir d'aujourd'hui.",
+    "TariffCorrectionNotice": "Correction d'une erreur de saisie : l'organisme et les dates restent ceux du tarif. Les dossiers et factures déjà établis gardent le prix auquel ils ont été facturés ; l'ancienne valeur reste dans le journal d'audit. Pour un nouveau prix à partir d'une autre date, créez un nouveau tarif.",
+    "TariffCorrected": "Tarif corrigé.",
+    "EditTariff": "Modifier le tarif",
     "Analysis": "Analyse",
     "Analyses": "Analyses",
     "Parameter": "Paramètre",
@@ -2441,6 +2447,7 @@
   "Tariff_CodedActNeedsBase": "L'acte {0} porte un code de la nomenclature : sans coefficient ni valeur de lettre-clé, la base de remboursement serait nulle et le patient serait facturé en totalité d'un acte remboursable.",
   "Tariff_NotAfterCurrent": "Une révision doit prendre effet après le {0}, date du tarif en vigueur.",
   "Tariff_AlreadyStartsOnDate": "Un tarif prend déjà effet au {0} pour ce payeur.",
+  "Tariff_NotFound": "Ce tarif n'existe plus. Actualisez la liste.",
 
   "Panel_NotFound": "Profil introuvable.",
   "Panel_CodeRequired": "Le code du profil est obligatoire.",
@@ -2695,6 +2702,7 @@
   "Interface_MappingsRequiredForBidirectional": "Une interface bidirectionnelle exige au moins une correspondance de code.",
   "Interface_MappingCodeTaken": "Le code automate « {0} » est déjà relié à un autre paramètre de cet automate (même désactivé). Choisissez un autre code.",
   "Order_NotFoundForScan": "Aucun dossier ne correspond à « {0} » sur ce site.",
+  "Order_AnalysisWithoutTariff": "L'analyse {0} n'a pas de tarif en vigueur aujourd'hui, ni pour ce tiers payant ni dans la liste de prix du laboratoire. Ajoutez-lui un tarif dans le Catalogue des analyses, onglet Tarifs.",
 
   "Report_NotFound": "Compte rendu introuvable.",
   "Report_SiteNotFound": "Site du dossier introuvable.",

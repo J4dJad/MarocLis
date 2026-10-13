@@ -340,6 +340,9 @@ public sealed class OrderAmendmentService(
             DirectBilling = order.PayerId is not null
         };
 
+        var tariffFailures = OrderComposer.CheckTariffs(selected, order.PayerId, today);
+        if (tariffFailures.Count > 0) return Result.Failure<OrderAmendment>(tariffFailures);
+
         var pricing = ActPricingCalculator.Price(
             OrderComposer.BuildPricingInputs(selected, order.PayerId, today),
             coverage,

@@ -67,6 +67,7 @@ public sealed class CatalogView : LocalizedView
     private readonly DataGridView _tariffs = UiTheme.Grid();
     private readonly Label _tariffHeading = new();
     private readonly Button _newTariff = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _editTariff = UiTheme.SecondaryButton(string.Empty);
 
     // Panels tab
     private readonly DataGridView _panels = UiTheme.Grid();
@@ -216,7 +217,7 @@ public sealed class CatalogView : LocalizedView
 
         notice.Name = "tariffNotice";
 
-        page.Controls.Add(Section(_tariffHeading, _tariffs, [_newTariff]));
+        page.Controls.Add(Section(_tariffHeading, _tariffs, [_newTariff, _editTariff]));
         page.Controls.Add(notice);
 
         return page;
@@ -454,6 +455,12 @@ public sealed class CatalogView : LocalizedView
         _editRange.Click += async (_, _) => await EditRangeAsync();
         _reviewRange.Click += async (_, _) => await ReviewRangeAsync();
         _newTariff.Click += async (_, _) => await AddTariffAsync();
+        _editTariff.Click += async (_, _) => await AddTariffAsync(SelectedTariff);
+        _tariffs.SelectionChanged += (_, _) => RefreshActions();
+        _tariffs.CellDoubleClick += async (_, e) =>
+        {
+            if (e.RowIndex >= 0 && _editTariff.Enabled) await AddTariffAsync(SelectedTariff);
+        };
         _newPanel.Click += async (_, _) => await EditPanelAsync(create: true);
         _editPanel.Click += async (_, _) => await EditPanelAsync();
         _newReflex.Click += async (_, _) => await EditReflexAsync(create: true);
@@ -488,6 +495,7 @@ public sealed class CatalogView : LocalizedView
         _editRange.Text = T("Catalog.EditRange");
         _reviewRange.Text = T("Catalog.RecordReview");
         _newTariff.Text = T("Catalog.NewTariff");
+        _editTariff.Text = T("Catalog.EditTariff");
         _newPanel.Text = T("Catalog.NewPanel");
         _editPanel.Text = T("Catalog.EditPanel");
         _newReflex.Text = T("Catalog.NewReflexRule");
@@ -1127,6 +1135,8 @@ public sealed class CatalogView : LocalizedView
     private AnalysisRow? SelectedAnalysis => _analyses.CurrentRow?.Tag as AnalysisRow;
     private ParameterRow? SelectedParameter => _parameters.CurrentRow?.Tag as ParameterRow;
     private ReferenceRangeRow? SelectedRange => _ranges.CurrentRow?.Tag as ReferenceRangeRow;
+
+    private TariffRow? SelectedTariff => _tariffs.CurrentRow?.Tag as TariffRow;
     private PanelRow? SelectedPanel => _panels.CurrentRow?.Tag as PanelRow;
     private ReflexRuleRow? SelectedReflex => _reflex.CurrentRow?.Tag as ReflexRuleRow;
     private NomenclatureRow? SelectedNomenclature => _nomenclature.CurrentRow?.Tag as NomenclatureRow;
@@ -1168,6 +1178,7 @@ public sealed class CatalogView : LocalizedView
         _reviewRange.Enabled = ranges && SelectedRange is not null;
 
         _newTariff.Enabled = tariffs && SelectedAnalysis is not null;
+        _editTariff.Enabled = tariffs && SelectedAnalysis is not null && SelectedTariff is not null;
 
         _newPanel.Enabled = manage;
         _editPanel.Enabled = manage && SelectedPanel is not null;
@@ -1187,7 +1198,31 @@ public sealed class CatalogView : LocalizedView
 
         if (!create && existing is null) return;
 
-        using var dialog = new AnalysisEditorDialog(Localizer, _dialogs, _lookups, existing);
+        var today = _clock.Today;
+        var canPrice = _currentUser.Has(Permissions.Billing.ManageTariffs);
+
+        // The laboratory price-list tariff in force is edited here with the analysis; the letter-key
+        // value is national, so a first tariff starts from the latest one known on any analysis.
+        TariffRow? labTariff = null;
+        decimal? knownLetterKeyValue = null;
+
+        if (existing is not null)
+        {
+            var tariffs = await _catalog.GetTariffsAsync(existing.Id);
+            if (tariffs.IsFailure) { _dialogs.ShowFailure(tariffs); return; }
+
+            labTariff = tariffs.Value.Where(t => t.PayerId is null && t.IsInForce(today))
+                                     .MaxBy(t => t.ValidFrom);
+        }
+
+        if (labTariff is not { LetterKeyValue: > 0m })
+        {
+            var known = await _catalog.GetLatestLetterKeyValueAsync(labTariff?.LetterKey ?? "B");
+            if (known.IsSuccess) knownLetterKeyValue = known.Value;
+        }
+
+        using var dialog = new AnalysisEditorDialog(Localizer, _dialogs, _lookups, existing,
+                                                    labTariff, knownLetterKeyValue, canPrice);
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;
 
@@ -1200,6 +1235,28 @@ public sealed class CatalogView : LocalizedView
         }
 
         Saved(dialog.Request.Code);
+
+        if (dialog.PriceRequest is { } price)
+        {
+            var request = price with { AnalysisTestId = existing?.Id ?? result.Value, ValidFrom = today };
+
+            // A price set earlier today is corrected in place; otherwise the new price starts today
+            // and the previous one closes yesterday, so orders already billed keep their price.
+            Result priced = labTariff is not null && labTariff.ValidFrom == today
+                ? await _catalog.UpdateTariffAsync(labTariff.Id, request)
+                : await _catalog.AddTariffAsync(request);
+
+            if (priced.IsFailure)
+            {
+                _dialogs.ShowFailure(priced, dialog.Text);
+            }
+            else
+            {
+                _status.ForeColor = UiTheme.Normal;
+                _status.Text = T("Catalog.AnalysisPriceSaved", dialog.Request.Code,
+                                 today.ToString("dd/MM/yyyy"));
+            }
+        }
 
         await LoadAnalysesAsync();
     }
@@ -1275,18 +1332,37 @@ public sealed class CatalogView : LocalizedView
         await LoadRangesAsync();
     }
 
-    private async Task AddTariffAsync()
+    /// <summary>Enters a new tariff, or corrects <paramref name="editing"/> in place.</summary>
+    private async Task AddTariffAsync(TariffRow? editing = null)
     {
         if (SelectedAnalysis is not { } analysis) return;
 
         var current = await _catalog.GetTariffsAsync(analysis.Id);
-
         if (current.IsFailure) { _dialogs.ShowFailure(current); return; }
 
+        var payers = await _catalog.GetPayerOptionsAsync();
+        if (payers.IsFailure) { _dialogs.ShowFailure(payers); return; }
+
+        var national = await _catalog.GetLatestLetterKeyValueAsync("B");
+
         using var dialog = new TariffEditorDialog(Localizer, _dialogs, _lookups, analysis,
-                                                   current.Value, _clock.Today);
+                                                   current.Value, _clock.Today, payers.Value,
+                                                   editing, national.IsSuccess ? national.Value : null);
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;
+
+        if (dialog.EditingId is { } tariffId)
+        {
+            var corrected = await _catalog.UpdateTariffAsync(tariffId, dialog.Request);
+            if (corrected.IsFailure) { _dialogs.ShowFailure(corrected, dialog.Text); return; }
+
+            _status.ForeColor = UiTheme.Normal;
+            _status.Text = T("Catalog.TariffCorrected");
+
+            await LoadTariffsAsync();
+            await LoadAnalysesAsync();
+            return;
+        }
 
         var result = await _catalog.AddTariffAsync(dialog.Request);
 

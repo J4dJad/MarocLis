@@ -34,7 +34,11 @@ public sealed class OrderComposer(
     IClock clock,
     OrderRegistrationOptions options)
 {
-    public sealed record SelectedAnalysis(AnalysisTest Test, Guid? PanelId);
+    /// <param name="PanelPackagePrice">
+    /// The package price of the panel this analysis came in with, when the panel has one: the
+    /// members are then billed that price between them rather than their own tariffs.
+    /// </param>
+    public sealed record SelectedAnalysis(AnalysisTest Test, Guid? PanelId, decimal? PanelPackagePrice = null);
 
     public sealed record ResolvedCoverage(
         Guid? PayerId, Guid? CoverageId, string? PriorAgreementNumber, CoverageContext Context);
@@ -49,6 +53,7 @@ public sealed class OrderComposer(
         CancellationToken ct = default)
     {
         var wanted = new Dictionary<Guid, Guid?>();
+        var packages = new Dictionary<Guid, decimal>();
 
         foreach (var id in analysisTestIds)
             wanted.TryAdd(id, null);
@@ -60,9 +65,20 @@ public sealed class OrderComposer(
                 return Result.Failure<List<SelectedAnalysis>>(Error.NotFound("Order_PanelNotFound", panelId));
 
             // An analysis already chosen individually keeps its individual pricing; a panel does
-            // not silently add a second copy of it.
-            foreach (var analysisId in panel.MandatoryAnalysisIds)
-                wanted.TryAdd(analysisId, panel.Id);
+            // not silently add a second copy of it. A panel sold at a package price is the
+            // exception: it claims its members, since the package already pays for them and
+            // billing one of them again on its own would charge it twice.
+            if (panel.PackagePrice is { } package)
+            {
+                packages[panel.Id] = package;
+                foreach (var analysisId in panel.MandatoryAnalysisIds)
+                    wanted[analysisId] = panel.Id;
+            }
+            else
+            {
+                foreach (var analysisId in panel.MandatoryAnalysisIds)
+                    wanted.TryAdd(analysisId, panel.Id);
+            }
         }
 
         var selected = new List<SelectedAnalysis>(wanted.Count);
@@ -75,7 +91,9 @@ public sealed class OrderComposer(
             if (!test.IsActive)
                 return Result.Failure<List<SelectedAnalysis>>(Error.Validation("Order_AnalysisInactive", test.Code));
 
-            selected.Add(new SelectedAnalysis(test, panelId));
+            selected.Add(new SelectedAnalysis(
+                test, panelId,
+                panelId is { } p && packages.TryGetValue(p, out var price) ? price : null));
         }
 
         return Result.Success(selected);
@@ -186,6 +204,20 @@ public sealed class OrderComposer(
             });
     }
 
+    /// <summary>
+    /// Refuses an analysis with no tariff in force for the payer or on the laboratory's own list.
+    /// It used to be priced at nothing without a word, and the first anyone heard of it was an
+    /// invoice short by the price of the analysis. A member of a panel sold at a package price
+    /// needs no tariff of its own: the package pays for it.
+    /// </summary>
+    public static List<Error> CheckTariffs(IReadOnlyList<SelectedAnalysis> selected,
+                                           Guid? payerId, DateOnly today) =>
+    [
+        .. selected
+            .Where(a => a.PanelPackagePrice is null && a.Test.TariffFor(payerId, today) is null)
+            .Select(a => Error.Validation("Order_AnalysisWithoutTariff", a.Test.Code))
+    ];
+
     public static List<ActPricingInput> BuildPricingInputs(IReadOnlyList<SelectedAnalysis> selected,
                                                      Guid? payerId, DateOnly today)
     {
@@ -214,7 +246,47 @@ public sealed class OrderComposer(
             });
         }
 
+        ApplyPackagePrices(inputs, selected);
+
         return inputs;
+    }
+
+    /// <summary>
+    /// Bills a panel sold at a package price at that price, spread over its members in proportion
+    /// to their own prices so each invoice line stays meaningful; members with no price of their
+    /// own share it equally. The rounding remainder goes to the last member, so the lines add up
+    /// to the package exactly. The reference base is left alone: the payer reimburses each act on
+    /// the nomenclature, whatever the laboratory charges for the package.
+    /// </summary>
+    private static void ApplyPackagePrices(List<ActPricingInput> inputs,
+                                           IReadOnlyList<SelectedAnalysis> selected)
+    {
+        var groups = selected
+            .Select((analysis, index) => (analysis, index))
+            .Where(x => x.analysis.PanelId is not null && x.analysis.PanelPackagePrice is not null)
+            .GroupBy(x => x.analysis.PanelId);
+
+        foreach (var group in groups)
+        {
+            var members = group.ToList();
+            var package = Math.Round(members[0].analysis.PanelPackagePrice!.Value, 2);
+            var own = members.Sum(m => inputs[m.index].ChargedUnitPrice);
+            var allocated = 0m;
+
+            for (var i = 0; i < members.Count; i++)
+            {
+                var index = members[i].index;
+
+                var share = i == members.Count - 1
+                    ? package - allocated
+                    : Math.Round(own > 0m
+                                     ? package * inputs[index].ChargedUnitPrice / own
+                                     : package / members.Count, 2);
+
+                allocated += share;
+                inputs[index] = inputs[index] with { ChargedUnitPrice = share };
+            }
+        }
     }
 
     /// <summary>

@@ -808,18 +808,31 @@ public sealed class OrderRegistrationView : LocalizedView
     /// </summary>
     private void RefreshTotals()
     {
-        // Counted per analysis, as the order is priced: two panels sharing a glycaemia bill it once.
+        // Counted per analysis, as the order is priced: two panels sharing a glycaemia bill it
+        // once. The same rules as registration, in the same order: analyses chosen on their own
+        // first, then each panel adds the members not yet counted — except a panel sold at a
+        // package price, which takes its members over and is billed its package.
         var prices = new Dictionary<Guid, decimal>();
+        var owner = new Dictionary<Guid, CatalogPickerItem?>();
 
-        foreach (var item in _selected)
+        foreach (var item in _selected.Where(i => !i.IsPanel))
         {
-            if (!item.IsPanel) prices[item.Id] = item.Price;
-            else
-                foreach (var member in item.Components ?? [])
-                    prices.TryAdd(member.AnalysisTestId, member.Price);
+            prices[item.Id] = item.Price;
+            owner[item.Id] = null;
         }
 
-        var gross = Money.Of(prices.Values.Sum());
+        foreach (var panel in _selected.Where(i => i.IsPanel))
+            foreach (var member in panel.Components ?? [])
+            {
+                if (panel.PackagePrice is not null || !owner.ContainsKey(member.AnalysisTestId))
+                    owner[member.AnalysisTestId] = panel;
+                prices.TryAdd(member.AnalysisTestId, member.Price);
+            }
+
+        var gross = Money.Of(
+            owner.Where(o => o.Value?.PackagePrice is null).Sum(o => prices[o.Key])
+            + owner.Values.OfType<CatalogPickerItem>().Where(p => p.PackagePrice is not null)
+                   .Distinct().Sum(p => p.PackagePrice!.Value));
 
         var maxFasting = _selected.Select(s => s.FastingHours ?? 0).DefaultIfEmpty(0).Max();
         var needsConsent = _selected.Any(

@@ -27,14 +27,31 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
     private readonly NumericUpDown _routine, _urgent, _fasting, _stabilityRoom, _stabilityFridge,
                                     _displayOrder;
     private readonly CheckBox _accredited, _subcontracted, _urgentAvailable, _notifiable, _active;
+    private readonly TextBox _letterKey, _coefficient, _letterKeyValue, _price;
+    private readonly Label _computed;
+    private readonly TariffRow? _labTariff;
+    private readonly bool _canPrice;
 
     internal AnalysisRequest? Request { get; private set; }
 
+    /// <summary>
+    /// The laboratory price-list tariff as entered, or null when the price was left alone (or the
+    /// operator may not set prices). The analysis id is filled in by the caller once it is saved.
+    /// </summary>
+    internal TariffRequest? PriceRequest { get; private set; }
+
+    /// <param name="labTariff">The laboratory price-list tariff in force, if any.</param>
+    /// <param name="knownLetterKeyValue">The latest letter-key value known, to prefill a first tariff.</param>
+    /// <param name="canPrice">Whether the operator may set tariffs; the price fields are read-only otherwise.</param>
     internal AnalysisEditorDialog(ILocalizer localizer, IUserDialogs dialogs,
-                                  CatalogLookups lookups, AnalysisRow? existing)
+                                  CatalogLookups lookups, AnalysisRow? existing,
+                                  TariffRow? labTariff = null, decimal? knownLetterKeyValue = null,
+                                  bool canPrice = false)
         : base(localizer, dialogs, existing is null ? "Catalog.NewAnalysis" : "Catalog.EditAnalysis",
-               existing?.Code, 760, 690)
+               existing?.Code, 760, 764)
     {
+        _labTariff = labTariff;
+        _canPrice = canPrice;
         _id = existing?.Id;
         _isNew = existing is null;
 
@@ -121,17 +138,124 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         _clinicalInfo = TextField("Catalog.RequiredClinicalInformation", 20, 540, 692, null);
 
-        _active = Check("Field.Active", 20, 592, existing?.IsActive ?? true, bold: true);
+        // --- price ------------------------------------------------------------------------------
+        // The laboratory's own price list (patients paying themselves, and the fallback for any
+        // payer without a tariff of its own). Payer tariffs stay on the Tarifs tab.
+
+        Notice(20, 588, 692, 20, "Catalog.LabPriceSection", UiTheme.Accent);
+
+        _letterKey = TextField("Billing.LetterKey", 20, 612, 70, labTariff?.LetterKey ?? "B",
+                               latin: true, mono: true);
+        _letterKey.CharacterCasing = CharacterCasing.Upper;
+
+        _coefficient = TextField("Billing.Coefficient", 102, 612, 100,
+                                 labTariff?.Coefficient.ToString("0.##"),
+                                 latin: true, right: true, mono: true);
+
+        _letterKeyValue = TextField("Catalog.LetterKeyValue", 214, 612, 120,
+                                    (labTariff is { LetterKeyValue: > 0m }
+                                         ? labTariff.LetterKeyValue
+                                         : knownLetterKeyValue)?.ToString("0.####"),
+                                    latin: true, right: true, mono: true);
+
+        _price = TextField("Catalog.LabPrice", 346, 612, 130,
+                           labTariff?.Price.ToString("0.00"),
+                           latin: true, right: true, mono: true);
+
+        _computed = Notice(488, 626, 224, 44, "Catalog.TariffComputedNotice", UiTheme.Accent);
+
+        foreach (var box in new[] { _letterKey, _coefficient, _letterKeyValue, _price })
+        {
+            box.TextChanged += (_, _) => RefreshComputed();
+
+            if (canPrice) continue;
+            box.ReadOnly = true;
+            box.BackColor = UiTheme.SurfaceSunken;
+        }
+
+        RefreshComputed();
+
+        _active = Check("Field.Active", 20, 670, existing?.IsActive ?? true, bold: true);
 
         // Pre-fill the fields the row does not carry. The grid row is a summary, so the editor
         // opens on what it knows and leaves the rest blank rather than inventing values — an
         // operator correcting a turnaround must not silently clear a stability window.
         if (existing is not null)
-            Notice(200, 588, 512, 34, "Catalog.PartialEditNotice", UiTheme.Abnormal);
+            Notice(200, 666, 512, 34, "Catalog.PartialEditNotice", UiTheme.Abnormal);
 
         RefreshSubcontracting();
 
-        Buttons(636, 760);
+        Buttons(710, 760);
+    }
+
+    private void RefreshComputed()
+    {
+        var reference = Math.Round((DecimalOrNull(_coefficient) ?? 0m)
+                                   * (DecimalOrNull(_letterKeyValue) ?? 0m), 2);
+        var excess = Math.Max(0m, (DecimalOrNull(_price) ?? 0m) - reference);
+
+        var language = Localizer.CurrentLanguage;
+
+        _computed.ForeColor = excess > 0m ? UiTheme.Abnormal : UiTheme.Accent;
+        _computed.Text = Localizer.Format("Catalog.TariffComputedNotice",
+                                          Money.Of(reference).Format(language),
+                                          Money.Of(excess).Format(language));
+    }
+
+    /// <summary>
+    /// Reads the price fields. False when they are invalid (the operator has been told); true with
+    /// a null request when there is nothing to save.
+    /// </summary>
+    private bool TryReadPrice(out TariffRequest? request)
+    {
+        request = null;
+
+        if (!_canPrice) return true;
+
+        var price = DecimalOrNull(_price);
+
+        // Left blank on an analysis that has no price yet: nothing to record.
+        if (price is null && string.IsNullOrWhiteSpace(_price.Text) && _labTariff is null) return true;
+
+        if (price is null or < 0m)
+        {
+            Dialogs.Warn(Localizer["Tariff_NegativePrice"], Text);
+            _price.Focus();
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_letterKey.Text))
+        {
+            Dialogs.Warn(Localizer["Tariff_LetterKeyRequired"], Text);
+            _letterKey.Focus();
+            return false;
+        }
+
+        var letterKey = _letterKey.Text.Trim().ToUpperInvariant();
+        var coefficient = DecimalOrNull(_coefficient) ?? 0m;
+        var letterKeyValue = DecimalOrNull(_letterKeyValue) ?? 0m;
+
+        if (_labTariff is not null
+            && _labTariff.LetterKey == letterKey
+            && _labTariff.Coefficient == coefficient
+            && _labTariff.LetterKeyValue == letterKeyValue
+            && _labTariff.Price == price.Value)
+            return true;
+
+        request = new TariffRequest
+        {
+            AnalysisTestId = _id ?? Guid.Empty,
+            PayerId = null,
+            ValidFrom = DateOnly.MinValue,
+            LetterKey = letterKey,
+            Coefficient = coefficient,
+            LetterKeyValue = letterKeyValue,
+            Price = price.Value,
+            IsVatExempt = _labTariff?.IsVatExempt ?? true,
+            VatRate = _labTariff?.VatRate ?? 0m
+        };
+
+        return true;
     }
 
     private void RefreshSubcontracting()
@@ -175,6 +299,10 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
                           Text);
             return;
         }
+
+        if (!TryReadPrice(out var priceRequest)) return;
+
+        PriceRequest = priceRequest;
 
         Request = new AnalysisRequest
         {
@@ -959,6 +1087,7 @@ internal sealed class TariffEditorDialog : MasterDataEditor
 {
     private readonly Guid _analysisId;
     private readonly IReadOnlyList<TariffRow> _existing;
+    private readonly TariffRow? _editing;
 
     private readonly ComboBox _payer;
     private readonly TextBox _letterKey, _coefficient, _letterKeyValue, _price, _vatRate;
@@ -968,24 +1097,36 @@ internal sealed class TariffEditorDialog : MasterDataEditor
 
     internal TariffRequest? Request { get; private set; }
 
+    /// <summary>The tariff being corrected, or null when a new one is entered.</summary>
+    internal Guid? EditingId => _editing?.Id;
+
     internal TariffEditorDialog(ILocalizer localizer, IUserDialogs dialogs,
                                 CatalogLookups lookups, AnalysisRow analysis,
-                                IReadOnlyList<TariffRow> existing, DateOnly today)
-        : base(localizer, dialogs, "Catalog.NewTariff", analysis.Code, 620, 470)
+                                IReadOnlyList<TariffRow> existing, DateOnly today,
+                                IReadOnlyList<TariffPayerOption> payerOptions,
+                                TariffRow? editing = null, decimal? nationalLetterKeyValue = null)
+        : base(localizer, dialogs, editing is null ? "Catalog.NewTariff" : "Catalog.EditTariff",
+               analysis.Code, 620, 470)
     {
         _analysisId = analysis.Id;
         _existing = existing;
+        _editing = editing;
 
-        // The payers on offer are the ones this analysis already has a tariff for, plus the default
-        // list. A payer-specific tariff for a payer with no agreement is a price nothing will use,
-        // and the list of payers belongs to the billing screens rather than here.
-        var payers = existing.Where(t => t.PayerId is not null)
-                             .GroupBy(t => t.PayerId!.Value)
-                             .Select(g => (g.Key, g.First().PayerName ?? g.Key.ToString()))
-                             .ToList();
+        // Every active payer, plus any this analysis already has a tariff for (one since switched
+        // off still has its history here). Offering only the latter meant the first tariff for a
+        // payer could never be entered.
+        var language = localizer.CurrentLanguage;
+        var payers = payerOptions
+            .Select(p => (p.Id, $"{p.Code} — {p.Name.For(language)}"))
+            .Concat(existing.Where(t => t.PayerId is not null
+                                        && payerOptions.All(p => p.Id != t.PayerId))
+                            .GroupBy(t => t.PayerId!.Value)
+                            .Select(g => (g.Key, g.First().PayerName ?? g.Key.ToString())))
+            .ToList();
 
-        _payer = Lookup("Coverage.Payer", 20, 16, 280, payers, null);
+        _payer = Lookup("Coverage.Payer", 20, 16, 280, payers, editing?.PayerId);
         _payer.Items[0] = new LookupChoice(null, localizer["Catalog.DefaultPriceList"]);
+        if (editing is { PayerId: null }) _payer.SelectedIndex = 0;
 
         Label("Catalog.ValidFrom", 312, 16);
 
@@ -993,34 +1134,59 @@ internal sealed class TariffEditorDialog : MasterDataEditor
         {
             Bounds = new Rectangle(312, 34, 180, UiTheme.InputHeight),
             Format = DateTimePickerFormat.Short,
-            Value = today.ToDateTime(TimeOnly.MinValue)
+            Value = (editing?.ValidFrom ?? today).ToDateTime(TimeOnly.MinValue)
         };
 
         Controls.Add(_validFrom);
 
         _currentTariff = Notice(20, 66, 580, 34, "Catalog.NoCurrentTariff", UiTheme.TextSecondary);
 
-        _letterKey = TextField("Billing.LetterKey", 20, 110, 80, "B", latin: true, mono: true);
+        // The letter-key value is national, the same for every analysis: it is taken from the
+        // most recent tariff that has one, so a new tariff does not start with a reimbursement
+        // base of zero and the whole price shown as excess.
+        var knownLetterKeyValue = editing?.LetterKeyValue
+            ?? existing.Where(t => t.LetterKeyValue > 0m)
+                       .OrderByDescending(t => t.ValidFrom)
+                       .Select(t => (decimal?)t.LetterKeyValue)
+                       .FirstOrDefault()
+            ?? nationalLetterKeyValue;
+
+        _letterKey = TextField("Billing.LetterKey", 20, 110, 80, editing?.LetterKey ?? "B",
+                               latin: true, mono: true);
         _letterKey.CharacterCasing = CharacterCasing.Upper;
 
         _coefficient = TextField("Billing.Coefficient", 112, 110, 120,
-                            analysis.CurrentCoefficient?.ToString("0.##"),
+                            (editing?.Coefficient ?? analysis.CurrentCoefficient)?.ToString("0.##"),
                             latin: true, right: true, mono: true);
 
-        _letterKeyValue = TextField("Catalog.LetterKeyValue", 244, 110, 120, null,
+        _letterKeyValue = TextField("Catalog.LetterKeyValue", 244, 110, 120,
+                               knownLetterKeyValue?.ToString("0.####"),
                                latin: true, right: true, mono: true);
 
-        _price = TextField("Field.Price", 376, 110, 140, analysis.CurrentPrice?.ToString("0.00"),
+        _price = TextField("Field.Price", 376, 110, 140,
+                      (editing?.Price ?? analysis.CurrentPrice)?.ToString("0.00"),
                       latin: true, right: true, mono: true);
 
         _computed = Notice(20, 158, 580, 44, "Catalog.TariffComputedNotice", UiTheme.Accent);
 
-        _vatExempt = Check("Billing.VatExempt", 20, 214, true, bold: true);
-        _vatRate = TextField("Billing.Vat", 240, 196, 100, null, latin: true, right: true);
+        // The rate box sits clear of the check box's caption, which is long and bold.
+        _vatExempt = Check("Billing.VatExempt", 20, 214, editing?.IsVatExempt ?? true, bold: true);
+        _vatRate = TextField("Billing.Vat", 440, 206, 100,
+                             editing is { IsVatExempt: false } ? editing.VatRate.ToString("0.####") : null,
+                             latin: true, right: true);
 
         Notice(20, 244, 580, 44, "Catalog.VatNotice");
 
-        Notice(20, 296, 580, 60, "Catalog.TariffVersioningNotice", UiTheme.Abnormal);
+        Notice(20, 296, 580, 60,
+               editing is null ? "Catalog.TariffVersioningNotice" : "Catalog.TariffCorrectionNotice",
+               UiTheme.Abnormal);
+
+        // A correction keeps its payer and its dates: a new price from another day is a new tariff.
+        if (editing is not null)
+        {
+            _payer.Enabled = false;
+            _validFrom.Enabled = false;
+        }
 
         _vatExempt.CheckedChanged += (_, _) => RefreshVat();
         _payer.SelectedIndexChanged += (_, _) => RefreshCurrent();
@@ -1050,7 +1216,8 @@ internal sealed class TariffEditorDialog : MasterDataEditor
     {
         var payerId = SelectedId(_payer);
 
-        var current = _existing.FirstOrDefault(t => t.PayerId == payerId && t.ValidUntil is null);
+        var current = _editing
+                      ?? _existing.FirstOrDefault(t => t.PayerId == payerId && t.ValidUntil is null);
 
         if (current is null)
         {
@@ -1067,7 +1234,8 @@ internal sealed class TariffEditorDialog : MasterDataEditor
             current.ValidFrom.ToString("dd/MM/yyyy"),
             $"{current.LetterKey} {current.Coefficient:0.##}");
 
-        if (_validFrom.Value.Date <= current.ValidFrom.ToDateTime(TimeOnly.MinValue))
+        if (_editing is null
+            && _validFrom.Value.Date <= current.ValidFrom.ToDateTime(TimeOnly.MinValue))
             _validFrom.Value = current.ValidFrom.AddDays(1).ToDateTime(TimeOnly.MinValue);
     }
 

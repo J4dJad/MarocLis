@@ -30,7 +30,8 @@ public sealed record CatalogPickerItem(
     string? ContainerName,
     string? ContainerColourHex,
     int ComponentCount,
-    IReadOnlyList<PickerComponent>? Components = null);
+    IReadOnlyList<PickerComponent>? Components = null,
+    decimal? PackagePrice = null);
 
 /// <summary>A mandatory member of a panel and the price it is billed at.</summary>
 public sealed record PickerComponent(Guid AnalysisTestId, decimal Price);
@@ -138,6 +139,7 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
                 p.Code,
                 p.Name,
                 ComponentCount = p.Items.Count(i => !i.IsOptional),
+                p.PackagePrice,
                 // The members and their prices, not only their total: the counter has to know which
                 // analyses a panel already contains, so one chosen twice — on its own and inside
                 // the panel — is counted once, as the order itself counts it.
@@ -146,13 +148,23 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
                     .Select(i => new
                     {
                         i.AnalysisTestId,
+                        // The payer's tariff first, as for an analysis on its own: quoting the
+                        // laboratory's list here put a different figure on the screen from the
+                        // one registration bills an insured patient.
                         Price = i.AnalysisTest!.Tariffs
-                            .Where(f => f.PayerId == null
+                            .Where(f => f.PayerId == payerId
                                         && f.ValidFrom <= on
                                         && (f.ValidUntil == null || f.ValidUntil >= on))
                             .OrderByDescending(f => f.ValidFrom)
                             .Select(f => (decimal?)f.Price)
-                            .FirstOrDefault() ?? 0m
+                            .FirstOrDefault()
+                            ?? i.AnalysisTest!.Tariffs
+                                .Where(f => f.PayerId == null
+                                            && f.ValidFrom <= on
+                                            && (f.ValidUntil == null || f.ValidUntil >= on))
+                                .OrderByDescending(f => f.ValidFrom)
+                                .Select(f => (decimal?)f.Price)
+                                .FirstOrDefault() ?? 0m
                     })
                     .ToList(),
                 // A panel inherits the strictest requirement of its members: if any component
@@ -174,10 +186,9 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
         items.AddRange(panelRows.Select(p => new CatalogPickerItem(
             p.Id, IsPanel: true, p.Code, p.Name,
             DepartmentCode: null, DepartmentName: null,
-            // What registration bills: each member at its own tariff. The order is priced act by
-            // act, as the AMO settles it, so a package price is not what the patient is charged
-            // and quoting it here made the counter total disagree with the registered one.
-            Price: p.Components.Sum(c => c.Price),
+            // What registration bills: the package price when the panel has one, otherwise each
+            // member at its own tariff.
+            Price: p.PackagePrice ?? p.Components.Sum(c => c.Price),
             FastingHours: p.MaxFasting is > 0 ? p.MaxFasting : null,
             TurnaroundHours: p.MaxTurnaround ?? 24,
             IsAvailableUrgently: false,
@@ -188,7 +199,8 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
             IsSubcontracted: false,
             ContainerName: null, ContainerColourHex: null,
             ComponentCount: p.ComponentCount,
-            Components: [.. p.Components.Select(c => new PickerComponent(c.AnalysisTestId, c.Price))])));
+            Components: [.. p.Components.Select(c => new PickerComponent(c.AnalysisTestId, c.Price))],
+            PackagePrice: p.PackagePrice)));
 
         items.AddRange(analysisRows.Select(t => new CatalogPickerItem(
             t.Id, IsPanel: false, t.Code, t.Name,

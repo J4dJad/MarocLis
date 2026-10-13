@@ -130,6 +130,9 @@ public sealed class OrderRegistrationService(
         var coverage = await composer.ResolveCoverageAsync(
             patient, request.PatientCoverageId, request.BillDirectlyToPatient, today, ct);
 
+        var tariffFailures = OrderComposer.CheckTariffs(selected, coverage.PayerId, today);
+        if (tariffFailures.Count > 0) return Result.Failure<RegisteredOrder>(tariffFailures);
+
         var pricing = ActPricingCalculator.Price(
             OrderComposer.BuildPricingInputs(selected, coverage.PayerId, today),
             coverage.Context,

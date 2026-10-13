@@ -463,6 +463,32 @@ public sealed class CatalogMaintenanceService(
     }
 
     /// <summary>
+    /// The payers a tariff can be entered for: every active one but self-pay, whose price is the
+    /// laboratory's own list.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<TariffPayerOption>>> GetPayerOptionsAsync(
+        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Catalog.View);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<TariffPayerOption>>(permitted.FirstError);
+
+        return Result.Success(await queries.GetPayerOptionsAsync(ct));
+    }
+
+    /// <summary>
+    /// The most recent value entered for a letter key on any analysis. The value is national (one B
+    /// for the whole nomenclature), so a first tariff starts from it rather than from zero.
+    /// </summary>
+    public async Task<Result<decimal?>> GetLatestLetterKeyValueAsync(string letterKey,
+        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Catalog.View);
+        if (permitted.IsFailure) return Result.Failure<decimal?>(permitted.FirstError);
+
+        return Result.Success(await queries.GetLatestLetterKeyValueAsync(letterKey, ct));
+    }
+
+    /// <summary>
     /// The analysers a reference interval can be restricted to.
     /// <para>
     /// Method-dependent intervals are the norm for hormones and immunoassays: two analysers
@@ -1089,6 +1115,61 @@ public sealed class CatalogMaintenanceService(
         return Result.Success(tariff.Id);
     }
 
+    /// <summary>
+    /// Corrects a tariff in place: a slip in the price, the coefficient or the letter-key value.
+    /// <para>
+    /// The payer and the dates stay as they are; a new price from a later date is still a new
+    /// tariff, so the history of what was charged when stays readable. Correcting is safe for
+    /// what was already billed: each order item and each invoice line keeps the price it was
+    /// charged at, and the audit trail keeps the values the correction replaced.
+    /// </para>
+    /// </summary>
+    public async Task<Result> UpdateTariffAsync(Guid tariffId, TariffRequest request,
+                                                CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.ManageTariffs);
+        if (permitted.IsFailure) return permitted;
+
+        var analysis = await analyses.GetByIdWithDetailsAsync(request.AnalysisTestId, ct);
+        if (analysis is null) return Result.Failure(Error.NotFound("Test_NotFound"));
+
+        var tariff = analysis.Tariffs.FirstOrDefault(t => t.Id == tariffId);
+        if (tariff is null) return Result.Failure(Error.NotFound("Tariff_NotFound"));
+
+        var errors = new List<Error>();
+
+        if (string.IsNullOrWhiteSpace(request.LetterKey))
+            errors.Add(Error.Validation("Tariff_LetterKeyRequired"));
+        if (request.Price < 0m) errors.Add(Error.Validation("Tariff_NegativePrice"));
+        if (request.Coefficient < 0m) errors.Add(Error.Validation("Tariff_NegativeCoefficient"));
+        if (request.LetterKeyValue < 0m) errors.Add(Error.Validation("Tariff_NegativeLetterKeyValue"));
+        if (!request.IsVatExempt && request.VatRate <= 0m)
+            errors.Add(Error.Validation("Tariff_VatRateRequired"));
+
+        if (!string.IsNullOrWhiteSpace(analysis.NationalActCode)
+            && (request.Coefficient <= 0m || request.LetterKeyValue <= 0m))
+            errors.Add(Error.Regulatory("Tariff_CodedActNeedsBase", analysis.NationalActCode));
+
+        if (errors.Count > 0) return Result.Failure(errors);
+
+        var before = $"{tariff.Price:0.00} MAD ({tariff.LetterKey} {tariff.Coefficient:0.##} × {tariff.LetterKeyValue:0.####})";
+
+        tariff.LetterKey = request.LetterKey.Trim().ToUpperInvariant();
+        tariff.Coefficient = request.Coefficient;
+        tariff.LetterKeyValue = request.LetterKeyValue;
+        tariff.Price = request.Price;
+        tariff.IsVatExempt = request.IsVatExempt;
+        tariff.VatRate = request.IsVatExempt ? 0m : request.VatRate;
+
+        unitOfWork.AuditReason =
+            $"Tarif de {analysis.Code} du {tariff.ValidFrom:dd/MM/yyyy} corrigé : {before} → "
+            + $"{tariff.Price:0.00} MAD ({tariff.LetterKey} {tariff.Coefficient:0.##} × {tariff.LetterKeyValue:0.####})";
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success();
+    }
+
     // ---- Panels --------------------------------------------------------------------------------
 
     public async Task<Result<Guid>> SavePanelAsync(PanelRequest request,
@@ -1530,6 +1611,8 @@ public sealed record AnalysisSummary(Guid Id, string Code, bool IsActive);
 /// <summary>A laboratory a subcontracted analysis can be sent to.</summary>
 public sealed record PartnerSiteOption(Guid Id, string Code, MultilingualText Name);
 
+public sealed record TariffPayerOption(Guid Id, string Code, MultilingualText Name);
+
 /// <summary>An analyser a method-dependent reference interval can be restricted to.</summary>
 public sealed record InstrumentOption(Guid Id, string Code, MultilingualText Name);
 
@@ -1558,6 +1641,10 @@ public interface ICatalogMaintenanceQueries
 
     /// <summary>Active referral partners — the only sites a subcontracted analysis may name.</summary>
     Task<IReadOnlyList<PartnerSiteOption>> GetPartnerSitesAsync(CancellationToken ct = default);
+
+    Task<IReadOnlyList<TariffPayerOption>> GetPayerOptionsAsync(CancellationToken ct = default);
+
+    Task<decimal?> GetLatestLetterKeyValueAsync(string letterKey, CancellationToken ct = default);
 
     /// <summary>Analysers in service, for a method-dependent reference interval.</summary>
     Task<IReadOnlyList<InstrumentOption>> GetInstrumentOptionsAsync(CancellationToken ct = default);

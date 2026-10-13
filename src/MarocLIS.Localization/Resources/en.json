@@ -1533,6 +1533,12 @@
   },
 
   "Catalog": {
+    "AnalysisPriceSaved": "{0} saved; laboratory price applies from {1}.",
+    "LabPrice": "Laboratory price",
+    "LabPriceSection": "Laboratory price (self-paying patients): a change applies from today.",
+    "TariffCorrectionNotice": "Correcting an entry error: the payer and dates stay as they are. Orders and invoices already issued keep the price they were billed at; the previous value stays in the audit trail. For a new price from another date, enter a new tariff.",
+    "TariffCorrected": "Tariff corrected.",
+    "EditTariff": "Edit tariff",
     "Analysis": "Analysis",
     "Analyses": "Analyses",
     "Parameter": "Parameter",
@@ -2440,6 +2446,7 @@
   "Tariff_CodedActNeedsBase": "Act {0} carries a nomenclature code: with no coefficient or letter-key value the reimbursement base would be zero and the patient charged in full for a reimbursable act.",
   "Tariff_NotAfterCurrent": "A revision must take effect after {0}, the date of the tariff in force.",
   "Tariff_AlreadyStartsOnDate": "A tariff already takes effect on {0} for this payer.",
+  "Tariff_NotFound": "This tariff no longer exists. Refresh the list.",
 
   "Panel_NotFound": "Panel not found.",
   "Panel_CodeRequired": "The panel code is required.",
@@ -2694,6 +2701,7 @@
   "Interface_MappingsRequiredForBidirectional": "A bidirectional interface requires at least one code mapping.",
   "Interface_MappingCodeTaken": "Analyser code \"{0}\" is already linked to another parameter of this analyser (even if disabled). Choose another code.",
   "Order_NotFoundForScan": "No order matches \"{0}\" on this site.",
+  "Order_AnalysisWithoutTariff": "Analysis {0} has no tariff in force today, neither for this payer nor on the laboratory's price list. Add one in the analysis catalogue, Tariffs tab.",
 
   "Report_NotFound": "Report not found.",
   "Report_SiteNotFound": "The order's site was not found.",
