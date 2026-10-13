@@ -465,6 +465,28 @@ public sealed class BillingService(
     }
 
     /// <summary>
+    /// The printable content of an invoice and of its payment receipt.
+    /// <para>
+    /// Guarded like the payment list: anyone who may see the ledger may reprint what is in it.
+    /// A draft has no number and is not a document anybody can be handed, so it is refused.
+    /// </para>
+    /// </summary>
+    public async Task<Result<InvoiceDocument>> GetInvoiceDocumentAsync(
+        Guid invoiceId, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.View);
+        if (permitted.IsFailure) return Result.Failure<InvoiceDocument>(permitted.FirstError);
+
+        var document = await queries.GetInvoiceDocumentAsync(invoiceId, ct);
+        if (document is null) return Result.Failure<InvoiceDocument>(Error.NotFound("Invoice_NotFound"));
+
+        if (document.Status == InvoiceStatus.Draft)
+            return Result.Failure<InvoiceDocument>(Error.Conflict("Invoice_NotIssued"));
+
+        return Result.Success(document);
+    }
+
+    /// <summary>
     /// Marks a cheque or a bill of exchange as returned unpaid.
     /// <para>
     /// The bank telling the laboratory a cheque bounced is an everyday event, and until this existed
@@ -1180,6 +1202,12 @@ public interface IBillingQueries
     /// cash at the counter, the balance by transfer — so "the payment" is not a single thing.
     /// </summary>
     Task<IReadOnlyList<PaymentRow>> GetPaymentsAsync(Guid invoiceId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Everything needed to print one invoice or its payment receipt, or null when the invoice
+    /// does not exist (or is outside the operator's site).
+    /// </summary>
+    Task<InvoiceDocument?> GetInvoiceDocumentAsync(Guid invoiceId, CancellationToken ct = default);
 
     Task<CashSession?> GetOpenCashSessionAsync(Guid operatorUserId, CancellationToken ct = default);
 

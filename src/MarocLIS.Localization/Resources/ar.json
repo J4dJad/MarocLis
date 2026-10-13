@@ -761,6 +761,8 @@
   },
 
   "Billing": {
+    "PrintReceipt": "طباعة الوصل",
+    "PrintInvoice": "طباعة الفاتورة",
     "Invoice": "فاتورة",
     "Invoices": "الفواتير",
     "CreditNote": "فاتورة إشعار بالدين",
@@ -2419,6 +2421,7 @@
   "Invoice_MustBeIssuedBeforePayment": "يجب إصدار الفاتورة قبل تسجيل أداء.",
   "Invoice_Cancelled": "هذه الفاتورة ملغاة.",
   "Invoice_IssuedRequiresCreditNote": "لا تُلغى فاتورة صادرة: أصدر فاتورة إشعار بالدين للحفاظ على تسلسل الترقيم.",
+  "Invoice_NotIssued": "هذه الفاتورة لم تُصدر بعد ولا يمكن طباعتها.",
 
   "Payment_AmountMustBePositive": "مبلغ الأداء يجب أن يكون موجبًا.",
   "Payment_ExceedsOutstanding": "المبلغ يتجاوز الباقي ({0}).",

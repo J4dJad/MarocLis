@@ -761,6 +761,8 @@
   },
 
   "Billing": {
+    "PrintReceipt": "Print receipt",
+    "PrintInvoice": "Print invoice",
     "Invoice": "Invoice",
     "Invoices": "Invoices",
     "CreditNote": "Credit note",
@@ -2419,6 +2421,7 @@
   "Invoice_MustBeIssuedBeforePayment": "The invoice must be issued before a payment can be recorded.",
   "Invoice_Cancelled": "This invoice is cancelled.",
   "Invoice_IssuedRequiresCreditNote": "An issued invoice is not cancelled: issue a credit note so the numbering stays unbroken.",
+  "Invoice_NotIssued": "This invoice has not been issued yet and cannot be printed.",
 
   "Payment_AmountMustBePositive": "The payment amount must be positive.",
   "Payment_ExceedsOutstanding": "The amount exceeds the outstanding balance ({0}).",

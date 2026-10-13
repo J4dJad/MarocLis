@@ -30,6 +30,7 @@
     <ProjectReference Include="..\..\src\MarocLIS.Infrastructure\MarocLIS.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\MarocLIS.Instruments\MarocLIS.Instruments.csproj" />
     <ProjectReference Include="..\..\src\MarocLIS.Localization\MarocLIS.Localization.csproj" />
+    <ProjectReference Include="..\..\src\MarocLIS.Reporting\MarocLIS.Reporting.csproj" />
   </ItemGroup>
 
 </Project>

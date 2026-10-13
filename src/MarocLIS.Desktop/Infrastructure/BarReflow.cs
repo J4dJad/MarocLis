@@ -132,6 +132,10 @@ public static class BarReflow
                                                 : WidthFor(control, bounds.Width);
                         }
 
+                        // A control wider than the whole strip is narrowed to it rather than
+                        // left hanging off the edge where it cannot be clicked.
+                        if (!stretchable && width > available - x) width = Math.Max(40, available - x);
+
                         var height = bounds.Height;
 
                         if (control is Label { AutoSize: false } label && width > 0)

@@ -140,6 +140,163 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                 p.Reference, p.BankName, p.MaturityDate))
             .ToListAsync(ct);
 
+    /// <summary>
+    /// The printable content of one invoice.
+    /// <para>
+    /// Read as plain columns and shaped in memory: the line amounts are computed on the entity and
+    /// never stored, and EF cannot order on a member of a record built through its constructor, so
+    /// every ordering happens on the entity before anything is projected.
+    /// </para>
+    /// </summary>
+    public async Task<InvoiceDocument?> GetInvoiceDocumentAsync(
+        Guid invoiceId, CancellationToken ct = default)
+    {
+        var invoice = await db.Invoices.AsNoTracking()
+            .Where(i => i.Id == invoiceId)
+            .Select(i => new
+            {
+                i.Id,
+                i.Number,
+                i.Kind,
+                i.Status,
+                i.IssueDate,
+                i.DueDate,
+                i.SiteId,
+                i.PatientId,
+                i.PayerId,
+                i.BilledToName,
+                i.BilledToIce,
+                i.BilledToFiscalId,
+                i.BilledToAddress,
+                i.BilledToCity,
+                i.CoveredOrderNumbersCsv,
+                i.PrescriberName,
+                i.CorrectsInvoiceNumber,
+                i.CorrectionReason,
+                i.GrossAmount,
+                i.DiscountAmount,
+                i.DiscountReason,
+                i.NetAmount,
+                i.VatAmount,
+                i.TotalAmount,
+                i.PayerShareAmount,
+                i.PatientShareAmount,
+                i.PaidAmount,
+                i.AmountInWords
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (invoice is null) return null;
+
+        var site = await db.Sites.AsNoTracking()
+            .Where(s => s.Id == invoice.SiteId)
+            .Select(s => new
+            {
+                Name = s.Name.Fr,
+                s.LegalName,
+                Address = s.AddressLine.Fr,
+                s.City,
+                s.PostalCode,
+                s.Phone,
+                s.Email,
+                s.Ice,
+                s.FiscalId,
+                s.CommercialRegisterNumber,
+                s.CommercialRegisterCourt,
+                s.ProfessionalTaxNumber,
+                s.CnssAffiliationNumber,
+                s.Inpe,
+                s.LogoPng
+            })
+            .FirstOrDefaultAsync(ct);
+
+        var patient = invoice.PatientId is { } patientId
+            ? await db.Patients.AsNoTracking()
+                .Where(p => p.Id == patientId)
+                .Select(p => new { Name = p.LastName + " " + p.FirstName, p.MedicalRecordNumber })
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var payerName = invoice.PayerId is { } payerId
+            ? await db.Payers.AsNoTracking()
+                .Where(p => p.Id == payerId)
+                .Select(p => p.Name.Fr)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        // Entities, not a projection: net, VAT and patient share are computed properties.
+        var lines = await db.InvoiceLines.AsNoTracking()
+            .Where(l => l.InvoiceId == invoiceId)
+            .OrderBy(l => l.LineNumber)
+            .ToListAsync(ct);
+
+        // Oldest first: a receipt reads as the history of how the invoice was settled.
+        var payments = await db.Payments.AsNoTracking()
+            .Where(p => p.InvoiceId == invoiceId)
+            .OrderBy(p => p.PaymentDate).ThenBy(p => p.CreatedAt)
+            .Select(p => new { p.PaymentDate, p.Method, p.Status, p.Amount, p.Reference, p.BankName })
+            .ToListAsync(ct);
+
+        var issuer = site is null
+            ? new InvoiceIssuer(string.Empty, string.Empty, null, null, null, null, null, null,
+                                null, null, null, null, null, null, null)
+            : new InvoiceIssuer(site.Name, site.LegalName, site.Address, site.City, site.PostalCode,
+                                site.Phone, site.Email, site.Ice, site.FiscalId,
+                                site.CommercialRegisterNumber, site.CommercialRegisterCourt,
+                                site.ProfessionalTaxNumber, site.CnssAffiliationNumber, site.Inpe,
+                                site.LogoPng);
+
+        return new InvoiceDocument(
+            invoice.Id,
+            invoice.Number,
+            invoice.Kind,
+            invoice.Status,
+            invoice.IssueDate,
+            invoice.DueDate,
+            issuer,
+            invoice.BilledToName,
+            invoice.BilledToIce,
+            invoice.BilledToFiscalId,
+            invoice.BilledToAddress,
+            invoice.BilledToCity,
+            patient?.Name,
+            patient?.MedicalRecordNumber,
+            payerName,
+            invoice.CoveredOrderNumbersCsv,
+            invoice.PrescriberName,
+            invoice.CorrectsInvoiceNumber,
+            invoice.CorrectionReason,
+            invoice.GrossAmount,
+            invoice.DiscountAmount,
+            invoice.DiscountReason,
+            invoice.NetAmount,
+            invoice.VatAmount,
+            invoice.TotalAmount,
+            invoice.PayerShareAmount,
+            invoice.PatientShareAmount,
+            invoice.PaidAmount,
+            invoice.AmountInWords,
+            [
+                .. lines.Select(l => new InvoiceDocumentLine(
+                    l.LineNumber,
+                    l.AnalysisCode ?? l.NationalActCode,
+                    l.Description,
+                    l.Quantity,
+                    l.UnitPrice,
+                    l.NetAmount,
+                    l.VatAmount,
+                    l.TotalAmount,
+                    l.PayerShare,
+                    l.PatientShare,
+                    l.IsVatExempt,
+                    l.VatRate))
+            ],
+            [
+                .. payments.Select(p => new InvoiceDocumentPayment(
+                    p.PaymentDate, p.Method, p.Status, p.Amount, p.Reference, p.BankName))
+            ]);
+    }
+
     public Task<CashSession?> GetOpenCashSessionAsync(Guid operatorUserId,
                                                        CancellationToken ct = default) =>
         db.CashSessions

@@ -762,6 +762,8 @@
   },
 
   "Billing": {
+    "PrintReceipt": "Imprimer le reçu",
+    "PrintInvoice": "Imprimer la facture",
     "Invoice": "Facture",
     "Invoices": "Factures",
     "CreditNote": "Facture d'avoir",
@@ -2420,6 +2422,7 @@
   "Invoice_MustBeIssuedBeforePayment": "La facture doit être émise avant d'enregistrer un règlement.",
   "Invoice_Cancelled": "Cette facture est annulée.",
   "Invoice_IssuedRequiresCreditNote": "Une facture émise ne s'annule pas : émettez une facture d'avoir afin de préserver la continuité de la numérotation.",
+  "Invoice_NotIssued": "Cette facture n'est pas encore émise et ne peut pas être imprimée.",
 
   "Payment_AmountMustBePositive": "Le montant du règlement doit être positif.",
   "Payment_ExceedsOutstanding": "Le montant dépasse le reste à payer ({0}).",

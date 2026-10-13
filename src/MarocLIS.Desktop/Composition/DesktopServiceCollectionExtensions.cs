@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Billing;
 using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
 using MarocLIS.Desktop.Forms;
@@ -30,6 +31,7 @@ public static class DesktopServiceCollectionExtensions
         // per report would be wasteful on a reception workstation printing continuously.
         services.AddSingleton<IReportRenderer, QuestPdfReportRenderer>();
         services.AddSingleton<IListPdfRenderer, ListPdfRenderer>();
+        services.AddSingleton<IInvoiceRenderer, QuestPdfInvoiceRenderer>();
 
         // Resolved once: the installed font set does not change while the application runs, and the
         // report screen would otherwise pay to enumerate it on every release.
