@@ -140,7 +140,10 @@ public sealed class OrderDetailView : LocalizedView
 
         // --- the list of files, on the left ----------------------------------------------------
 
-        var searchBar = new Panel { Dock = DockStyle.Top, Height = 54, BackColor = UiTheme.Surface };
+        var searchBar = new Panel
+        {
+            Dock = DockStyle.Top, Height = 54, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout
+        };
 
         _search.Tag = UiTags.LatinValue;
         _search.Font = UiTheme.Body;

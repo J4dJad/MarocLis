@@ -573,8 +573,17 @@ public sealed class ResultEntryView : LocalizedView
     {
         await LoadWorklistAsync(ct);
 
-        if (InitialOrderId is { } orderId) await LoadOrderAsync(orderId, ct);
-        else _scan.Focus();
+        if (InitialOrderId is { } orderId)
+        {
+            await LoadOrderAsync(orderId, ct);
+        }
+        else
+        {
+            // The first dossier waiting (urgent first) is opened, so the screen starts on work
+            // rather than on an empty grid; scanning a tube still jumps straight to it.
+            if (_sheet is null && _pending.Count > 0) await LoadAsync(_pending[0].AccessionNumber);
+            _scan.Focus();
+        }
     }
 
     // ---- Loading -----------------------------------------------------------------------------------
