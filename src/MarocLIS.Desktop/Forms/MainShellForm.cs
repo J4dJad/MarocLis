@@ -128,7 +128,7 @@ public sealed class MainShellForm : LocalizedForm
 
         // Printing lives in the header, beside the language, so it is in the same place on every
         // screen: it prints whatever list the current screen is showing.
-        _print.Width = 120;
+        _print.Width = 160;
         _print.Height = 28;
         _print.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         _print.Click += async (_, _) => await PrintCurrentListAsync();

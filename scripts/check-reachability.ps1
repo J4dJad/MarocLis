@@ -257,7 +257,8 @@ $referenced = [regex]::Matches(
     Sort-Object -Unique
 
 $unresolved = @($referenced | Where-Object {
-    $_ -notmatch '^MarocLIS' -and -not $declaredSet.Contains($_)
+    # TextRenderer is WinForms' own text measurer; it only shares the *Renderer suffix.
+    $_ -notmatch '^MarocLIS' -and $_ -ne 'TextRenderer' -and -not $declaredSet.Contains($_)
 })
 
 Write-Note "$($referenced.Count) static type references checked"
