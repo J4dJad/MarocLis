@@ -524,3 +524,18 @@ public sealed class PurchaseOrderRepository(LisDbContext context, IClock clock)
                .Include(o => o.Lines)
                .FirstOrDefaultAsync(o => o.Id == id, ct);
 }
+
+public sealed class NonConformityRepository(LisDbContext context, IClock clock)
+    : Repository<NonConformity>(context, clock)
+{
+    /// <summary>
+    /// Actions included: starting, completing or cancelling an action looks it up in the
+    /// aggregate, and closure checks that every action is done. Loaded without them, every action
+    /// step answered "action not found" and no non-conformity could ever be closed.
+    /// </summary>
+    public override Task<NonConformity?> GetByIdWithDetailsAsync(Guid id,
+                                                                 CancellationToken ct = default) =>
+        Context.NonConformities
+               .Include(n => n.Actions)
+               .FirstOrDefaultAsync(n => n.Id == id, ct);
+}

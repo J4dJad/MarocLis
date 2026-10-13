@@ -1,5 +1,6 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Domain.Common;
+using MarocLIS.Infrastructure.Persistence.Demo;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -32,7 +33,8 @@ public sealed class DatabaseInitializer(
     LisDbContext context,
     IPasswordHasher passwordHasher,
     IClock clock,
-    ILogger<DatabaseInitializer>? logger = null)
+    ILogger<DatabaseInitializer>? logger = null,
+    DemoDataSeeder? demoDataSeeder = null)
 {
     /// <summary>
     /// Ensures the database exists, has the current schema, and holds the reference data the
@@ -63,8 +65,17 @@ public sealed class DatabaseInitializer(
 
             await ReferenceDataSeeder.SeedAsync(context, passwordHasher, clock, ct);
 
+            // Demonstration data only on explicit request (Application:SeedDemoDataOnFirstRun),
+            // which must be false on any installation holding real patients — see DemoDataSeeder.
+            // It runs at every start while the flag is on and completes whatever is missing; a
+            // section it cannot complete is logged, never fatal.
             if (seedDemoData)
-                await DemoDataSeeder.SeedAsync(context, clock, ct);
+            {
+                if (demoDataSeeder is null)
+                    logger?.LogWarning("Demonstration data requested but no DemoDataSeeder is registered.");
+                else
+                    await demoDataSeeder.SeedAsync(ct);
+            }
 
             return Result.Success();
         }

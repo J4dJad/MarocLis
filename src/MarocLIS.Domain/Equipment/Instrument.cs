@@ -10,7 +10,10 @@ namespace MarocLIS.Domain.Equipment;
 /// </summary>
 public sealed class Instrument : AuditableAggregateRoot, ISoftDeletable, ISiteScoped
 {
-    private readonly List<MaintenanceRecord> _maintenance = [];
+    // Named after the navigation on purpose: EF Core finds a collection's backing field by name,
+    // and under any other name it materialises the records into the read-only wrapper and throws,
+    // which made every instrument with a maintenance entry impossible to load for an update.
+    private readonly List<MaintenanceRecord> _maintenanceRecords = [];
     private readonly List<CalibrationRecord> _calibrations = [];
 
     private Instrument() { }
@@ -76,7 +79,7 @@ public sealed class Instrument : AuditableAggregateRoot, ISoftDeletable, ISiteSc
     public Guid? DeletedByUserId { get; set; }
     public string? DeletionReason { get; set; }
 
-    public IReadOnlyCollection<MaintenanceRecord> MaintenanceRecords => _maintenance.AsReadOnly();
+    public IReadOnlyCollection<MaintenanceRecord> MaintenanceRecords => _maintenanceRecords.AsReadOnly();
     public IReadOnlyCollection<CalibrationRecord> Calibrations => _calibrations.AsReadOnly();
 
     // ---- Derived -------------------------------------------------------------------------------
@@ -159,7 +162,7 @@ public sealed class Instrument : AuditableAggregateRoot, ISoftDeletable, ISiteSc
     public MaintenanceRecord AddMaintenance(MaintenanceRecord record)
     {
         record.AttachTo(Id);
-        _maintenance.Add(record);
+        _maintenanceRecords.Add(record);
 
         if (record.Kind == MaintenanceKind.Preventive &&
             (LastPreventiveMaintenanceOn is null || record.PerformedOn > LastPreventiveMaintenanceOn))
