@@ -98,7 +98,7 @@ public static class UiTheme
     public const int RowHeight = 24;
     public const int InputHeight = 26;
     public const int ButtonHeight = 30;
-    public const int SidebarWidth = 220;
+    public const int SidebarWidth = 240;
 
     // ---- Clinical state → appearance ------------------------------------------------------------
 

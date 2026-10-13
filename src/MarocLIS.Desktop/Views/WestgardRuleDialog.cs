@@ -93,11 +93,11 @@ internal sealed class WestgardRuleDialog : Form
         _summary.AutoSize = false;
 
         var classic = UiTheme.SecondaryButton(localizer["Quality.ClassicMultirule"]);
-        classic.Bounds = new Rectangle(20, 356, 280, UiTheme.ButtonHeight);
+        classic.Bounds = new Rectangle(20, 356, 350, UiTheme.ButtonHeight);
         classic.Click += (_, _) => Apply(ClassicMultirule);
 
         var minimal = UiTheme.SecondaryButton(localizer["Quality.SingleRuleOnly"]);
-        minimal.Bounds = new Rectangle(310, 356, 290, UiTheme.ButtonHeight);
+        minimal.Bounds = new Rectangle(380, 356, 220, UiTheme.ButtonHeight);
         minimal.Click += (_, _) => Apply(WestgardRule.OneThreeS);
 
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);

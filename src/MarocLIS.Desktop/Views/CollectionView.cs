@@ -87,7 +87,7 @@ public sealed class CollectionView : LocalizedView
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
-            SplitterDistance = 460,
+            SplitterDistance = 540,
             SplitterWidth = 6,
             BackColor = UiTheme.Surface
         };
@@ -203,6 +203,9 @@ public sealed class CollectionView : LocalizedView
         Add("priority", 14);
         Add("tubes", 8, UiTheme.Body, DataGridViewContentAlignment.MiddleRight);
         Add("waiting", 16, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight);
+
+        // The name is what the operator reads aloud to identify the patient: never just "Bena…".
+        _patients.Columns["patient"]!.MinimumWidth = 140;
     }
 
     private void BuildTubeColumns()
@@ -395,6 +398,8 @@ public sealed class CollectionView : LocalizedView
 
     private void RenderPatients()
     {
+        var previous = SelectedOrderId();
+
         _patients.SuspendLayout();
         _patients.Rows.Clear();
 
@@ -431,13 +436,30 @@ public sealed class CollectionView : LocalizedView
         _status.Text = $"{byOrder.Count} {T("Patient.Plural").ToLowerInvariant()} · " +
                        $"{_entries.Count} {T("Sample.Plural").ToLowerInvariant()}";
 
-        if (_patients.Rows.Count > 0) _patients.Rows[0].Selected = true;
-        else ClearPatientPanel();
+        if (_patients.Rows.Count == 0)
+        {
+            ClearPatientPanel();
+            return;
+        }
+
+        // Keep the patient being drawn selected across a refresh; otherwise the first one. Setting
+        // Selected alone highlighted the row without making it current, so the tube panel stayed
+        // empty and "Prélever" disabled until the operator clicked the row again.
+        var row = _patients.Rows.Cast<DataGridViewRow>()
+                      .FirstOrDefault(r => r.Tag is Guid id && id == previous)
+                  ?? _patients.Rows[0];
+
+        _patients.CurrentCell = row.Cells[0];
+        row.Selected = true;
+        ShowSelectedPatient();
     }
+
+    private Guid? SelectedOrderId() =>
+        (_patients.CurrentRow ?? _patients.SelectedRows.Cast<DataGridViewRow>().FirstOrDefault())?.Tag as Guid?;
 
     private void ShowSelectedPatient()
     {
-        if (_patients.CurrentRow?.Tag is not Guid orderId)
+        if (SelectedOrderId() is not { } orderId)
         {
             ClearPatientPanel();
             return;
