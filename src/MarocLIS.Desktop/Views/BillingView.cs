@@ -27,6 +27,8 @@ public sealed class BillingView : LocalizedView
     private const string ColSelected = "selected";
 
     private readonly BillingService _billing;
+    private readonly IInvoiceRenderer _invoiceRenderer;
+    private readonly IDocumentOutput _documents;
     private readonly IUserDialogs _dialogs;
     private readonly ICurrentUser _currentUser;
     private readonly ILogger<BillingView>? _logger;
@@ -46,18 +48,23 @@ public sealed class BillingView : LocalizedView
     private readonly Button _refund = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _bounced = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _printInvoice = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _printReceipt = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
 
     private IReadOnlyList<BillableOrderRow> _pendingRows = [];
     private Application.Abstractions.PagedResult<InvoiceRow> _ledgerPage =
         Application.Abstractions.PagedResult<InvoiceRow>.Empty();
 
-    public BillingView(BillingService billing, IUserDialogs dialogs, ICurrentUser currentUser,
+    public BillingView(BillingService billing, IInvoiceRenderer invoiceRenderer,
+                       IDocumentOutput documents, IUserDialogs dialogs, ICurrentUser currentUser,
                        ILocalizer localizer, ICultureManager cultureManager,
                        ILogger<BillingView>? logger = null)
         : base(localizer, cultureManager)
     {
         _billing = billing;
+        _invoiceRenderer = invoiceRenderer;
+        _documents = documents;
         _dialogs = dialogs;
         _currentUser = currentUser;
         _logger = logger;
@@ -147,6 +154,8 @@ public sealed class BillingView : LocalizedView
         _refund.Bounds = new Rectangle(210, 4, 180, UiTheme.ButtonHeight);
         _bounced.Bounds = new Rectangle(400, 4, 200, UiTheme.ButtonHeight);
         _creditNote.Bounds = new Rectangle(610, 4, 190, UiTheme.ButtonHeight);
+        _printInvoice.Bounds = new Rectangle(810, 4, 170, UiTheme.ButtonHeight);
+        _printReceipt.Bounds = new Rectangle(990, 4, 170, UiTheme.ButtonHeight);
 
         _submitClaim.Bounds = new Rectangle(0, 40, 230, UiTheme.ButtonHeight);
         _claimOutcome.Bounds = new Rectangle(240, 40, 250, UiTheme.ButtonHeight);
@@ -156,8 +165,8 @@ public sealed class BillingView : LocalizedView
         _status.ForeColor = UiTheme.TextSecondary;
         _status.AutoSize = false;
 
-        ledgerActions.Controls.AddRange([_pay, _refund, _bounced, _creditNote, _submitClaim,
-                                         _claimOutcome, _status]);
+        ledgerActions.Controls.AddRange([_pay, _refund, _bounced, _creditNote, _printInvoice,
+                                         _printReceipt, _submitClaim, _claimOutcome, _status]);
 
         bottom.Controls.Add(ledgerHost);
         bottom.Controls.Add(ledgerActions);
@@ -255,8 +264,22 @@ public sealed class BillingView : LocalizedView
         _claimOutcome.Click += async (_, _) => await RecordClaimOutcomeAsync();
         _creditNote.Click += async (_, _) => await IssueCreditNoteAsync();
         _submitClaim.Click += async (_, _) => await SubmitClaimAsync();
+        _printInvoice.Click += async (_, _) => await PrintAsync(receipt: false);
+        _printReceipt.Click += async (_, _) => await PrintAsync(receipt: true);
 
         _ledger.CellFormatting += OnLedgerFormatting;
+
+        // The print buttons follow the selection. A ticked box only reaches the cell's value once
+        // the edit is committed, so the commit happens as soon as the box is clicked.
+        _ledger.CurrentCellDirtyStateChanged += (_, _) =>
+        {
+            if (_ledger.IsCurrentCellDirty
+                && _ledger.CurrentCell?.OwningColumn?.Name == ColSelected)
+                _ledger.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        };
+        _ledger.CellValueChanged += (_, _) => UpdatePrintButtons();
+        _ledger.SelectionChanged += (_, _) => UpdatePrintButtons();
+        UpdatePrintButtons();
     }
 
     private void OnLedgerFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -298,6 +321,8 @@ public sealed class BillingView : LocalizedView
         _claimOutcome.Text = T("Billing.RecordClaimOutcome");
         _creditNote.Text = T("Billing.CreditNote");
         _submitClaim.Text = T("Billing.SubmitClaim");
+        _printInvoice.Text = T("Billing.PrintInvoice");
+        _printReceipt.Text = T("Billing.PrintReceipt");
         _refresh.Text = T("Action.Refresh");
 
         var selected = _statusFilter.SelectedIndex;
@@ -454,6 +479,7 @@ public sealed class BillingView : LocalizedView
         }
 
         _ledger.ResumeLayout(performLayout: true);
+        UpdatePrintButtons();
 
         var outstanding = Money.Of(_ledgerPage.Items.Sum(r => r.Outstanding));
 
@@ -772,6 +798,93 @@ public sealed class BillingView : LocalizedView
         _dialogs.Info(T("Billing.ClaimReference") + " : " + result.Value, T("Billing.SubmitClaim"));
 
         await LoadLedgerAsync();
+    }
+
+    // ---- Printing ------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The invoice the print buttons act on: the single ticked row when exactly one is ticked, or the
+    /// highlighted row when none is. Several ticked rows print nothing — which of them was meant is
+    /// not something to guess with an accounting document.
+    /// </summary>
+    private InvoiceRow? PrintTarget()
+    {
+        var ticked = Selected<InvoiceRow>(_ledger);
+
+        return ticked.Count switch
+        {
+            1 => ticked[0],
+            0 => _ledger.CurrentRow?.Tag as InvoiceRow,
+            _ => null
+        };
+    }
+
+    private void UpdatePrintButtons()
+    {
+        var enabled = PrintTarget() is not null;
+        _printInvoice.Enabled = enabled;
+        _printReceipt.Enabled = enabled;
+    }
+
+    /// <summary>
+    /// Renders the selected invoice, or its payment receipt, and opens it in the PDF viewer where
+    /// the operator prints it.
+    /// </summary>
+    private async Task PrintAsync(bool receipt)
+    {
+        _ledger.EndEdit();
+
+        var title = T(receipt ? "Billing.PrintReceipt" : "Billing.PrintInvoice");
+
+        if (PrintTarget() is not { } invoice)
+        {
+            _status.Text = T("Billing.SelectOneInvoice");
+            return;
+        }
+
+        var button = receipt ? _printReceipt : _printInvoice;
+        button.Enabled = false;
+        Cursor = Cursors.WaitCursor;
+
+        try
+        {
+            var document = await _billing.GetInvoiceDocumentAsync(invoice.InvoiceId);
+
+            if (document.IsFailure)
+            {
+                _dialogs.ShowFailure(document, title);
+                return;
+            }
+
+            var language = Localizer.CurrentLanguage;
+
+            // QuestPDF lays out synchronously; off the UI thread so a long invoice does not freeze
+            // the screen while it renders.
+            var bytes = await Task.Run(() => receipt
+                ? _invoiceRenderer.RenderReceipt(document.Value, language)
+                : _invoiceRenderer.RenderInvoice(document.Value, language));
+
+            var opened = await _documents.OpenAsync(bytes, "pdf");
+
+            if (opened.IsFailure)
+            {
+                _dialogs.ShowFailure(opened, title);
+                return;
+            }
+
+            _status.ForeColor = UiTheme.TextSecondary;
+            _status.Text = $"{invoice.Number} — {title}";
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Printing invoice {Number} failed.", invoice.Number);
+            _dialogs.Warn(T("Message.UnexpectedError"), title);
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+            UpdatePrintButtons();
+        }
     }
 
     private sealed record StatusChoice(InvoiceStatus? Value, string Display)

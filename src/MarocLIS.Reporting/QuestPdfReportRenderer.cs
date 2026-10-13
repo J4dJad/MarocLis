@@ -72,7 +72,11 @@ public sealed class QuestPdfReportRenderer : IReportRenderer
         Initialise(options);
     }
 
-    private static void Initialise(ReportingOptions options)
+    /// <summary>
+    /// Sets the licence and registers the fonts, once per process. Shared with
+    /// <see cref="QuestPdfInvoiceRenderer"/> so the two renderers cannot disagree on either.
+    /// </summary>
+    internal static void Initialise(ReportingOptions options)
     {
         lock (InitLock)
         {
