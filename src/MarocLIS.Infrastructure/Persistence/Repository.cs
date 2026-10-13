@@ -582,8 +582,7 @@ public sealed class NonConformityRepository(LisDbContext context, IClock clock)
     /// aggregate, and closure checks that every action is done. Loaded without them, every action
     /// step answered "action not found" and no non-conformity could ever be closed.
     /// </summary>
-    public override Task<NonConformity?> GetByIdWithDetailsAsync(Guid id,
-                                                                 CancellationToken ct = default) =>
+    protected override Task<NonConformity?> LoadWithDetailsAsync(Guid id, CancellationToken ct) =>
         Context.NonConformities
                .Include(n => n.Actions)
                .FirstOrDefaultAsync(n => n.Id == id, ct);
