@@ -1175,6 +1175,7 @@
   },
 
   "Inventory": {
+    "ReorderDrafted": "Seuil atteint : bon de commande prioritaire {0} préparé ({1})",
     "ToReorder": "Articles à commander",
     "Title": "Stocks",
     "Item": "Article",
@@ -2838,6 +2839,9 @@
   },
 
   "PurchaseOrders": {
+    "PriorityAutomatic": "Prioritaire (auto)",
+    "PriorityFlag": "Prioritaire",
+    "Priority": "Priorité",
     "Title": "Bons de commande",
     "OnlyOpen": "Commandes en cours seulement",
     "NewOrder": "Nouvelle commande",

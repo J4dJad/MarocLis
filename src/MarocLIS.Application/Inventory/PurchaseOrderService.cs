@@ -20,7 +20,9 @@ public sealed record PurchaseOrderRow(
     string RaisedByName,
     string? ApprovedByName,
     string? SupplierReference,
-    bool IsOverdue);
+    bool IsOverdue,
+    bool IsPriority = false,
+    bool RaisedAutomatically = false);
 
 /// <summary>One line of a purchase order, with what is still to be delivered.</summary>
 public sealed record PurchaseOrderLineRow(
@@ -326,4 +328,26 @@ public interface IPurchaseOrderQueries
                                                               CancellationToken ct = default);
 
     Task<bool> IsSupplierApprovedAsync(Guid supplierId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Active items at or under their reorder point that no open order already covers.
+    /// </summary>
+    Task<IReadOnlyList<ReorderCandidate>> GetReorderCandidatesAsync(Guid siteId, DateOnly today,
+                                                                     CancellationToken ct = default);
+
+    /// <summary>The automatic draft still open for this supplier, to add to rather than start another.</summary>
+    Task<Guid?> FindAutomaticDraftAsync(Guid siteId, Guid supplierId, CancellationToken ct = default);
 }
+
+/// <summary>An item that has fallen to its reorder point and is not on any open order.</summary>
+public sealed record ReorderCandidate(
+    Guid StockItemId,
+    string Code,
+    string UnitOfMeasure,
+    Guid? PreferredSupplierId,
+    bool SupplierApproved,
+    decimal Usable,
+    decimal ReorderPoint,
+    decimal ReorderQuantity,
+    decimal? MaximumStock,
+    decimal? LastUnitPriceMad);

@@ -1174,6 +1174,7 @@
   },
 
   "Inventory": {
+    "ReorderDrafted": "Reorder point reached: priority purchase order {0} drafted ({1})",
     "ToReorder": "Items to reorder",
     "Title": "Inventory",
     "Item": "Item",
@@ -2837,6 +2838,9 @@
   },
 
   "PurchaseOrders": {
+    "PriorityAutomatic": "Priority (auto)",
+    "PriorityFlag": "Priority",
+    "Priority": "Priority",
     "Title": "Purchase orders",
     "OnlyOpen": "Open orders only",
     "NewOrder": "New order",

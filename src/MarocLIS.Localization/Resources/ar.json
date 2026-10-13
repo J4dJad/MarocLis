@@ -1174,6 +1174,7 @@
   },
 
   "Inventory": {
+    "ReorderDrafted": "تم بلوغ حد إعادة الطلب: أُعدّ أمر الشراء ذو الأولوية {0} ({1})",
     "ToReorder": "أصناف يجب طلبها",
     "Title": "المخزون",
     "Item": "المادة",
@@ -2837,6 +2838,9 @@
   },
 
   "PurchaseOrders": {
+    "PriorityAutomatic": "ذو أولوية (تلقائي)",
+    "PriorityFlag": "ذو أولوية",
+    "Priority": "الأولوية",
     "Title": "طلبيات الشراء",
     "OnlyOpen": "الطلبيات الجارية فقط",
     "NewOrder": "طلبية جديدة",

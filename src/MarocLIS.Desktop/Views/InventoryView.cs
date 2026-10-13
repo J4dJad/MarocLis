@@ -324,8 +324,33 @@ public sealed class InventoryView : LocalizedView
 
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
+        // Lots that expired since the last pass lower the usable stock without any operation, so
+        // the reorder check also runs whenever the screen is shown.
+        ShowReorder(await _inventory.RaiseReorderDraftsAsync(ct), append: false);
+
         await LoadStockAsync(ct);
         await LoadLotsAsync(ct);
+    }
+
+    // Says which priority purchase order the items that reached their reorder point went on.
+    private void ShowReorder(ReorderOutcome outcome, bool append)
+    {
+        if (!outcome.Any) return;
+
+        var message = T("Inventory.ReorderDrafted", string.Join(", ", outcome.PurchaseOrders),
+                        string.Join(", ", outcome.DraftedItems));
+
+        _status.ForeColor = UiTheme.Critical;
+        _status.Text = append && !string.IsNullOrEmpty(_status.Text) ? $"{_status.Text}  ·  {message}" : message;
+    }
+
+    // After an operation that lowered the stock: the drafting it triggered, shown once the screen
+    // has reloaded.
+    private async Task ReloadAfterStockOutAsync()
+    {
+        var drafted = _inventory.LastReorder;
+        await ActivateAsync();
+        ShowReorder(drafted, append: true);
     }
 
     private async Task LoadStockAsync(CancellationToken ct = default)
@@ -547,7 +572,7 @@ public sealed class InventoryView : LocalizedView
         _status.ForeColor = UiTheme.Normal;
         _status.Text = $"{T("Inventory.Issue")} — {T("Inventory.Lot").ToLowerInvariant()} {result.Value}";
 
-        await ActivateAsync();
+        await ReloadAfterStockOutAsync();
     }
 
     private async Task ReleaseAsync()
@@ -656,7 +681,7 @@ public sealed class InventoryView : LocalizedView
             _dialogs.Info(T("Inventory.RecallNoResults"), T("Inventory.Recall"));
         }
 
-        await ActivateAsync();
+        await ReloadAfterStockOutAsync();
     }
 
     private async Task WriteOffAsync()
@@ -682,7 +707,8 @@ public sealed class InventoryView : LocalizedView
             return;
         }
 
-        await ActivateAsync();
+        _status.Text = string.Empty;
+        await ReloadAfterStockOutAsync();
     }
 }
 

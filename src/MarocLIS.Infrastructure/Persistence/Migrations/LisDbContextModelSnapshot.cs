@@ -2248,6 +2248,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("ExpectedDeliveryDate")
                         .HasColumnType("date");
 
+                    b.Property<bool>("IsPriority")
+                        .HasColumnType("bit");
+
                     b.Property<DateTimeOffset?>("ModifiedAt")
                         .HasColumnType("datetimeoffset(3)");
 
@@ -2266,6 +2269,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<DateOnly>("OrderDate")
                         .HasColumnType("date");
+
+                    b.Property<bool>("RaisedAutomatically")
+                        .HasColumnType("bit");
 
                     b.Property<Guid>("RaisedByUserId")
                         .HasColumnType("uniqueidentifier");

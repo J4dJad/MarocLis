@@ -139,7 +139,8 @@ public sealed class PurchaseOrderView : LocalizedView
 
         _grid.Columns.Clear();
         AddColumn(_grid, "number", 11, UiTheme.MonospaceBold);
-        AddColumn(_grid, "supplier", 20);
+        AddColumn(_grid, "priority", 12, UiTheme.SmallBold);
+        AddColumn(_grid, "supplier", 17);
         AddColumn(_grid, "date", 8, UiTheme.Monospace);
         AddColumn(_grid, "expected", 9, UiTheme.Monospace);
         AddColumn(_grid, "status", 11, UiTheme.SmallBold);
@@ -190,7 +191,12 @@ public sealed class PurchaseOrderView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count) return;
         if (_grid.Rows[e.RowIndex].Tag is not PurchaseOrderRow row) return;
 
-        if (row.IsOverdue)
+        if (IsPendingPriority(row))
+        {
+            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
+            if (_grid.Columns[e.ColumnIndex].Name == "priority") e.CellStyle.ForeColor = UiTheme.Critical;
+        }
+        else if (row.IsOverdue)
         {
             e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
             e.CellStyle.ForeColor = UiTheme.Abnormal;
@@ -200,6 +206,9 @@ public sealed class PurchaseOrderView : LocalizedView
             e.CellStyle!.ForeColor = UiTheme.TextMuted;
         }
     }
+
+    private static bool IsPendingPriority(PurchaseOrderRow row) =>
+        row.IsPriority && row.Status is not (PurchaseOrderStatus.Received or PurchaseOrderStatus.Cancelled);
 
     protected override void ApplyTexts()
     {
@@ -215,6 +224,7 @@ public sealed class PurchaseOrderView : LocalizedView
         if (_grid.Columns.Count > 0)
         {
             _grid.Column("number").HeaderText = T("PurchaseOrders.Number");
+            _grid.Column("priority").HeaderText = T("PurchaseOrders.Priority");
             _grid.Column("supplier").HeaderText = T("Inventory.Supplier");
             _grid.Column("date").HeaderText = T("Field.Date");
             _grid.Column("expected").HeaderText = T("PurchaseOrders.ExpectedDelivery");
@@ -286,10 +296,15 @@ public sealed class PurchaseOrderView : LocalizedView
         _grid.SuspendLayout();
         _grid.Rows.Clear();
 
-        foreach (var row in _rows)
+        // The priority orders still to be dealt with come first: they are the ones that stop a
+        // consumable from running out.
+        foreach (var row in _rows.OrderByDescending(IsPendingPriority))
         {
             var index = _grid.Rows.Add(
                 row.Number,
+                row.IsPriority
+                    ? T(row.RaisedAutomatically ? "PurchaseOrders.PriorityAutomatic" : "PurchaseOrders.PriorityFlag")
+                    : string.Empty,
                 row.SupplierName,
                 row.OrderDate.ToString("dd/MM/yy"),
                 row.ExpectedDeliveryDate is { } expected

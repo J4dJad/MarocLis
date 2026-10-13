@@ -46,6 +46,12 @@ public sealed class PurchaseOrder : AuditableAggregateRoot, ISiteScoped
 
     public string? Notes { get; set; }
 
+    /// <summary>To be dealt with first: raised because an item fell to its reorder point.</summary>
+    public bool IsPriority { get; set; }
+
+    /// <summary>Drafted by the application, not by a person, when stock reached its reorder point.</summary>
+    public bool RaisedAutomatically { get; set; }
+
     public decimal TotalExcludingVat => Money.Round(_lines.Sum(l => l.LineTotalExcludingVat));
     public decimal TotalVat => Money.Round(_lines.Sum(l => l.VatAmount));
     public decimal TotalIncludingVat => Money.Round(TotalExcludingVat + TotalVat);

@@ -198,7 +198,11 @@ public sealed class ResultEntryService(
                 // A calculated parameter is never typed into, and a validated one needs the
                 // revision path rather than the entry grid.
                 IsReadOnly = parameter.IsCalculated || result.IsValidated,
-                CurrentValue = result.FormatValue(currentUser.Language),
+                // Empty until something is entered: FormatValue's "-" placeholder in the cell read
+                // as a value, and the cursor skipped the row as already filled.
+                CurrentValue = result.HasValue || result.Flags.HasFlag(ResultFlag.NotDone)
+                    ? result.FormatValue(currentUser.Language)
+                    : null,
                 NumericValue = result.NumericValue,
                 ValueOperator = result.ValueOperator,
                 ReferenceRangeText = range?.Format(currentUser.Language, parameter.Decimals),

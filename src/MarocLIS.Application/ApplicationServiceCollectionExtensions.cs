@@ -38,6 +38,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Quality.NonConformityService>();
         services.AddScoped<Quality.DocumentControlService>();
         services.AddScoped<Quality.EqaService>();
+        services.AddScoped<Inventory.ReorderPlanner>();
         services.AddScoped<Inventory.InventoryService>();
         services.AddScoped<Inventory.EquipmentService>();
         services.AddScoped<Inventory.PurchaseOrderService>();

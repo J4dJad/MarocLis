@@ -29,12 +29,16 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
         // order the rows happen to come back.
         var ordered =
             from r in query
-            join p in db.TestParameters.AsNoTracking() on r.TestParameterId equals p.Id
-            join t in db.AnalysisTests.AsNoTracking() on p.AnalysisTestId equals t.Id
+            join p in db.TestParameters on r.TestParameterId equals p.Id
+            join t in db.AnalysisTests on p.AnalysisTestId equals t.Id
             orderby t.DisplayOrder, t.Code, p.DisplayOrder, p.Code
             select r;
 
-        return await ordered.ToListAsync(ct);
+        // AsTracking, and no AsNoTracking on the joined tables: EF applies a no-tracking marker to
+        // the whole query, wherever it sits. With it on the joins the results came back untracked,
+        // so an entry was reported saved and nothing reached the database. Only the results are
+        // selected, so the joins track nothing of their own.
+        return await ordered.AsTracking().ToListAsync(ct);
     }
 
     /// <summary>

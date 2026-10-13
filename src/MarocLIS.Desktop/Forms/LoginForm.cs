@@ -21,14 +21,15 @@ public sealed class LoginForm : LocalizedForm
     private readonly ICultureManager _cultureManager;
     private readonly IUserDialogs _dialogs;
 
+    private readonly PictureBox _logo = new();
     private readonly Label _subtitle = new();
     private readonly Label _userNameLabel = new();
     private readonly Label _passwordLabel = new();
     private readonly Label _siteLabel = new();
     private readonly Label _languageLabel = new();
 
-    private readonly TextBox _userName = UiTheme.Input(280);
-    private readonly TextBox _password = UiTheme.Input(280);
+    private readonly TextBox _userName = UiTheme.Input();
+    private readonly TextBox _password = UiTheme.Input();
     private readonly ComboBox _site = new();
     private readonly ComboBox _language = new();
     private readonly CheckBox _rememberUser = new();
@@ -69,23 +70,33 @@ public sealed class LoginForm : LocalizedForm
         AcceptButton = _signIn;
 
         _language.SelectedIndexChanged += OnLanguageSelected;
+        _site.SelectedIndexChanged += (_, _) => ShowLogo();
     }
 
     private void BuildLayout()
     {
+        // Every field, the tick box and the button share one left edge and one width, the full
+        // width of the window less its margins, so their right edges line up as well.
+        const int left = 28;
+        var width = ClientSize.Width - 2 * left;
+
+        _logo.Bounds = new Rectangle(left, 22, 56, 56);
+        _logo.SizeMode = PictureBoxSizeMode.Zoom;
+        _logo.Image = AppMark(56);
+
         var title = new Label
         {
             Text = "MarocLIS",
             Font = UiTheme.PageTitle,
             ForeColor = UiTheme.Accent,
             AutoSize = true,
-            Location = new Point(28, 26)
+            Location = new Point(left + 68, 22)
         };
 
         _subtitle.Font = UiTheme.Small;
         _subtitle.ForeColor = UiTheme.TextSecondary;
         _subtitle.AutoSize = false;
-        _subtitle.Bounds = new Rectangle(28, 58, 384, 32);
+        _subtitle.Bounds = new Rectangle(left + 68, 54, width - 68, 32);
 
         var y = 104;
 
@@ -94,41 +105,44 @@ public sealed class LoginForm : LocalizedForm
         foreach (var label in new[] { _userNameLabel, _passwordLabel, _siteLabel, _languageLabel })
             label.AutoSize = true;
 
-        _userNameLabel.Location = new Point(28, y);
-        _userName.Location = new Point(28, y + 18);
+        _userNameLabel.Location = new Point(left, y);
+        _userName.Bounds = new Rectangle(left, y + 18, width, UiTheme.InputHeight);
 
         y += 54;
-        _passwordLabel.Location = new Point(28, y);
-        _password.Location = new Point(28, y + 18);
+        _passwordLabel.Location = new Point(left, y);
+        _password.Bounds = new Rectangle(left, y + 18, width, UiTheme.InputHeight);
 
         y += 54;
-        _siteLabel.Location = new Point(28, y);
-        _site.Bounds = new Rectangle(28, y + 18, 280, UiTheme.InputHeight);
+        _siteLabel.Location = new Point(left, y);
+        _site.Bounds = new Rectangle(left, y + 18, width, UiTheme.InputHeight);
         _site.DropDownStyle = ComboBoxStyle.DropDownList;
         _site.Font = UiTheme.Body;
-        _site.FlatStyle = FlatStyle.Flat;
+        _site.FlatStyle = FlatStyle.Standard;
 
         y += 54;
-        _languageLabel.Location = new Point(28, y);
-        _language.Bounds = new Rectangle(28, y + 18, 280, UiTheme.InputHeight);
+        _languageLabel.Location = new Point(left, y);
+        _language.Bounds = new Rectangle(left, y + 18, width, UiTheme.InputHeight);
         _language.DropDownStyle = ComboBoxStyle.DropDownList;
         _language.Font = UiTheme.Body;
-        _language.FlatStyle = FlatStyle.Flat;
+        _language.FlatStyle = FlatStyle.Standard;
+
+        // A flat drop-down list draws no border on Windows until it has the focus, so it looked
+        // narrower and shifted next to the boxes above it; the standard one is framed like them.
 
         y += 52;
-        _rememberUser.Bounds = new Rectangle(28, y, 280, 22);
+        _rememberUser.Bounds = new Rectangle(left, y, width, 22);
         _rememberUser.Font = UiTheme.Small;
         _rememberUser.ForeColor = UiTheme.TextSecondary;
 
         y += 30;
-        _signIn.Bounds = new Rectangle(28, y, 280, UiTheme.ButtonHeight);
+        _signIn.Bounds = new Rectangle(left, y, width, UiTheme.ButtonHeight);
 
-        _status.Bounds = new Rectangle(28, y + 38, 384, 32);
+        _status.Bounds = new Rectangle(left, y + 38, width, 32);
         _status.Font = UiTheme.Small;
         _status.ForeColor = UiTheme.Critical;
         _status.AutoSize = false;
 
-        Controls.AddRange([title, _subtitle, _userNameLabel, _userName, _passwordLabel, _password,
+        Controls.AddRange([_logo, title, _subtitle, _userNameLabel, _userName, _passwordLabel, _password,
                            _siteLabel, _site, _languageLabel, _language, _rememberUser,
                            _signIn, _status]);
     }
@@ -215,6 +229,42 @@ public sealed class LoginForm : LocalizedForm
         }
 
         _site.EndUpdate();
+    }
+
+    // The selected site's own logo, as set in the settings; the application's mark when it has none.
+    private void ShowLogo()
+    {
+        var site = _site.SelectedItem is SiteChoice choice ? _sites.FirstOrDefault(s => s.Id == choice.Id) : null;
+        var logo = site?.LogoPng is { Length: > 0 } png ? LogoImage.Load(png) : null;
+
+        var previous = _logo.Image;
+        _logo.Image = logo ?? AppMark(_logo.Width);
+        previous?.Dispose();
+    }
+
+    // A flask on the accent colour, in a rounded square.
+    private static Bitmap AppMark(int size)
+    {
+        var mark = new Bitmap(size, size);
+        using var graphics = Graphics.FromImage(mark);
+        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        using var path = new System.Drawing.Drawing2D.GraphicsPath();
+        var radius = size / 4;
+        path.AddArc(0, 0, 2 * radius, 2 * radius, 180, 90);
+        path.AddArc(size - 1 - 2 * radius, 0, 2 * radius, 2 * radius, 270, 90);
+        path.AddArc(size - 1 - 2 * radius, size - 1 - 2 * radius, 2 * radius, 2 * radius, 0, 90);
+        path.AddArc(0, size - 1 - 2 * radius, 2 * radius, 2 * radius, 90, 90);
+        path.CloseFigure();
+
+        using var fill = new SolidBrush(UiTheme.Accent);
+        graphics.FillPath(fill, path);
+
+        var glyphSize = size * 5 / 8;
+        if (Icons.Render(Glyph.FlaskConical, Color.White, glyphSize) is { } glyph)
+            graphics.DrawImage(glyph, (size - glyph.Width) / 2, (size - glyph.Height) / 2);
+
+        return mark;
     }
 
     private void OnLanguageSelected(object? sender, EventArgs e)

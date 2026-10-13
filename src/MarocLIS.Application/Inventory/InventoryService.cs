@@ -85,8 +85,26 @@ public sealed class InventoryService(
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
     ICurrentUser currentUser,
-    IClock clock)
+    IClock clock,
+    ReorderPlanner? reorder = null)
 {
+    /// <summary>
+    /// What the last stock operation drafted on the priority purchase orders, so the screen can say
+    /// so. Empty when nothing reached its reorder point.
+    /// </summary>
+    public ReorderOutcome LastReorder { get; private set; } = ReorderOutcome.None;
+
+    /// <summary>
+    /// Drafts the priority purchase orders for every item at or below its reorder point. Run after
+    /// each operation that lowers the stock, and when the stock screen opens, so that lots expiring
+    /// overnight are caught too.
+    /// </summary>
+    public async Task<ReorderOutcome> RaiseReorderDraftsAsync(CancellationToken ct = default)
+    {
+        LastReorder = reorder is null ? ReorderOutcome.None : await reorder.RaiseDraftsAsync(ct);
+        return LastReorder;
+    }
+
     public async Task<Result<IReadOnlyList<StockRow>>> GetStockAsync(
         bool onlyAlerts = false, CancellationToken ct = default)
     {
@@ -266,6 +284,8 @@ public sealed class InventoryService(
 
         await unitOfWork.SaveChangesAsync(ct);
 
+        await RaiseReorderDraftsAsync(ct);
+
         return Result.Success(affected);
     }
 
@@ -330,6 +350,8 @@ public sealed class InventoryService(
 
         await unitOfWork.SaveChangesAsync(ct);
 
+        await RaiseReorderDraftsAsync(ct);
+
         return Result.Success(string.Join(", ", consumedFrom));
     }
 
@@ -384,6 +406,8 @@ public sealed class InventoryService(
 
         unitOfWork.AuditReason = $"{kind} de {applied} sur le lot {lot.LotNumber} : {reason}";
         await unitOfWork.SaveChangesAsync(ct);
+
+        await RaiseReorderDraftsAsync(ct);
 
         return Result.Success();
     }

@@ -31,7 +31,9 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
                                        .Select(u => u.FullName).FirstOrDefault(),
                 ApprovedByName = db.Users.Where(u => u.Id == o.ApprovedByUserId)
                                          .Select(u => u.FullName).FirstOrDefault(),
-                o.SupplierReference
+                o.SupplierReference,
+                o.IsPriority,
+                o.RaisedAutomatically
             })
             .ToListAsync(ct);
 
@@ -48,7 +50,8 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
                 o.Status, o.Lines.Count, totalExcluding, Money.Round(totalExcluding + vat),
                 o.RaisedByName ?? "?", o.ApprovedByName, o.SupplierReference,
                 o.Status is PurchaseOrderStatus.Sent or PurchaseOrderStatus.PartiallyReceived
-                    && o.ExpectedDeliveryDate is { } expected && expected < today);
+                    && o.ExpectedDeliveryDate is { } expected && expected < today,
+                o.IsPriority, o.RaisedAutomatically);
         }).ToList();
     }
 
@@ -111,4 +114,52 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
 
     public Task<bool> IsSupplierApprovedAsync(Guid supplierId, CancellationToken ct = default) =>
         db.Suppliers.AsNoTracking().AnyAsync(s => s.Id == supplierId && s.IsActive && s.IsApproved, ct);
+
+    public async Task<IReadOnlyList<ReorderCandidate>> GetReorderCandidatesAsync(
+        Guid siteId, DateOnly today, CancellationToken ct = default)
+    {
+        var open = new[]
+        {
+            PurchaseOrderStatus.Draft, PurchaseOrderStatus.Approved, PurchaseOrderStatus.Sent,
+            PurchaseOrderStatus.PartiallyReceived
+        };
+
+        var rows = await db.StockItems.AsNoTracking()
+            .Where(i => i.SiteId == siteId && i.IsActive && i.ReorderPoint > 0m)
+            // Already being ordered: the stock will come back up when that delivery arrives.
+            .Where(i => !db.PurchaseOrderLines.Any(l => l.StockItemId == i.Id
+                && l.QuantityReceived < l.QuantityOrdered
+                && db.PurchaseOrders.Any(o => o.Id == l.PurchaseOrderId && open.Contains(o.Status))))
+            .Select(i => new
+            {
+                i.Id, i.Code, i.UnitOfMeasure, i.PreferredSupplierId, i.ReorderPoint,
+                i.ReorderQuantity, i.MaximumStock, i.LastUnitPriceMad,
+                SupplierApproved = db.Suppliers.Any(s => s.Id == i.PreferredSupplierId
+                                                         && s.IsActive && s.IsApproved),
+                // Usable only, as on the stock screen: released, in date, within open stability.
+                Usable = i.Lots
+                    .Where(l => !l.IsQuarantined && !l.IsRejected && !l.IsRecalled
+                                && l.ExpiryDate >= today
+                                && (l.OpenedOn == null
+                                    || l.StabilityAfterOpeningDays == null
+                                    || l.OpenedOn.Value.AddDays(l.StabilityAfterOpeningDays.Value) >= today))
+                    .Sum(l => l.QuantityRemaining)
+            })
+            .ToListAsync(ct);
+
+        return rows.Where(r => r.Usable <= r.ReorderPoint)
+                   .Select(r => new ReorderCandidate(r.Id, r.Code, r.UnitOfMeasure, r.PreferredSupplierId,
+                                                     r.SupplierApproved, r.Usable, r.ReorderPoint,
+                                                     r.ReorderQuantity, r.MaximumStock, r.LastUnitPriceMad))
+                   .ToList();
+    }
+
+    public async Task<Guid?> FindAutomaticDraftAsync(Guid siteId, Guid supplierId,
+                                                     CancellationToken ct = default) =>
+        await db.PurchaseOrders.AsNoTracking()
+            .Where(o => o.SiteId == siteId && o.SupplierId == supplierId && o.RaisedAutomatically
+                        && o.Status == PurchaseOrderStatus.Draft)
+            .OrderByDescending(o => o.OrderDate)
+            .Select(o => (Guid?)o.Id)
+            .FirstOrDefaultAsync(ct);
 }
