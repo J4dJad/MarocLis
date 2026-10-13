@@ -19,6 +19,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class QualityDocumentsView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private readonly DocumentControlService _documents;
     private readonly IDocumentOutput _output;
     private readonly IUserDialogs _dialogs;
@@ -182,7 +183,7 @@ public sealed class QualityDocumentsView : LocalizedView
         _refresh.Click += async (_, _) => await ActivateAsync();
         _includeInactive.CheckedChanged += async (_, _) => await LoadAsync();
 
-        _grid.SelectionChanged += async (_, _) => await LoadVersionsAsync();
+        _grid.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadVersionsAsync());
         _grid.CellFormatting += OnDocumentFormatting;
         _versions.SelectionChanged += (_, _) => RefreshButtons();
 

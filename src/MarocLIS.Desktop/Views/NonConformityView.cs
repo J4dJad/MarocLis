@@ -22,6 +22,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class NonConformityView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private readonly NonConformityService _service;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<NonConformityView>? _logger;
@@ -230,7 +231,7 @@ public sealed class NonConformityView : LocalizedView
         _onlyOpen.CheckedChanged += async (_, _) => await ActivateAsync();
         _categoryFilter.SelectedIndexChanged += async (_, _) => await ActivateAsync();
 
-        _register.SelectionChanged += async (_, _) => await LoadDetailAsync();
+        _register.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDetailAsync());
 
         _open.Click += async (_, _) => await OpenNewAsync();
         _addAction.Click += async (_, _) => await AddActionAsync();
@@ -421,7 +422,7 @@ public sealed class NonConformityView : LocalizedView
         _registerHeading.Text = $"{T("NonConformity.Plural")} — {_rows.Count}" +
                                 (overdue > 0 ? $" · {overdue} {T("Order.Overdue").ToLowerInvariant()}" : string.Empty);
 
-        if (_register.Rows.Count > 0) _register.Rows[0].Selected = true;
+        if (_register.Rows.Count > 0) _register.SelectFirstRow();
         else ClearDetail();
     }
 

@@ -90,7 +90,7 @@ internal sealed class PaymentPickerDialog : Form
 
         CancelButton = cancel;
 
-        if (_grid.Rows.Count > 0) _grid.Rows[0].Selected = true;
+        if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
 
         _grid.SelectionChanged += (_, _) => _ok.Enabled = _grid.CurrentRow?.Tag is PaymentRow;
         _grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) Accept(); };

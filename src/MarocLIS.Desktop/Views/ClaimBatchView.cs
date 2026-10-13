@@ -28,6 +28,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class ClaimBatchView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private readonly BillingService _billing;
     private readonly IUserDialogs _dialogs;
     private readonly ICurrentUser _currentUser;
@@ -241,7 +242,7 @@ public sealed class ClaimBatchView : LocalizedView
         _refresh.Click += async (_, _) => await ActivateAsync();
         _window.SelectedIndexChanged += async (_, _) => await LoadBatchesAsync();
 
-        _batches.SelectionChanged += async (_, _) => await LoadInvoicesAsync();
+        _batches.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadInvoicesAsync());
 
         _candidates.CellFormatting += OnCandidateFormatting;
         _batches.CellFormatting += OnBatchFormatting;
@@ -454,7 +455,7 @@ public sealed class ClaimBatchView : LocalizedView
             }
         }
 
-        if (_batches.CurrentRow is null && _batches.Rows.Count > 0) _batches.Rows[0].Selected = true;
+        if (_batches.CurrentRow is null && _batches.Rows.Count > 0) _batches.SelectFirstRow();
 
         var chasing = _batchRows.Count(b => b.NeedsChasing(today));
         var unsettled = Money.Of(_batchRows.Sum(b => b.Unsettled)).Format(language);

@@ -27,6 +27,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class InstrumentInterfaceView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private readonly InstrumentInterfaceService _interfaces;
     private readonly MarocLIS.Application.Administration.MasterDataService _masterData;
     private readonly InstrumentLinkMonitor _monitor;
@@ -222,7 +223,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
     {
         _refresh.Click += async (_, _) => await ActivateAsync();
 
-        _links.SelectionChanged += async (_, _) => await LoadDetailAsync();
+        _links.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDetailAsync());
         _links.CellFormatting += OnLinkFormatting;
         _links.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditLinkAsync(); };
 
@@ -416,7 +417,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
             }
         }
 
-        if (_links.CurrentRow is null && _links.Rows.Count > 0) _links.Rows[0].Selected = true;
+        if (_links.CurrentRow is null && _links.Rows.Count > 0) _links.SelectFirstRow();
 
         _linkHeading.Text = $"{T("Nav.Instruments")} — {_rows.Count}";
 

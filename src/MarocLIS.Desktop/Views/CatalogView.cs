@@ -35,6 +35,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class CatalogView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private readonly CatalogMaintenanceService _catalog;
     private readonly IUserDialogs _dialogs;
     private readonly ICurrentUser _currentUser;
@@ -427,8 +428,8 @@ public sealed class CatalogView : LocalizedView
         _departmentFilter.SelectedIndexChanged += async (_, _) => await LoadAnalysesAsync();
         _includeInactive.CheckedChanged += async (_, _) => await LoadAnalysesAsync();
 
-        _analyses.SelectionChanged += async (_, _) => await OnAnalysisSelectedAsync();
-        _parameters.SelectionChanged += async (_, _) => await LoadRangesAsync();
+        _analyses.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => OnAnalysisSelectedAsync());
+        _parameters.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadRangesAsync());
         _panels.SelectionChanged += (_, _) => RenderPanelMembers();
 
         _analyses.CellFormatting += OnAnalysisFormatting;
@@ -816,7 +817,7 @@ public sealed class CatalogView : LocalizedView
 
         _ranges.ResumeLayout(performLayout: true);
 
-        if (_ranges.Rows.Count > 0) _ranges.Rows[0].Selected = true;
+        if (_ranges.Rows.Count > 0) _ranges.SelectFirstRow();
 
         _rangeHeading.Text = SelectedParameter is { } parameter
             ? $"{T("Result.ReferenceRange")} — {parameter.Code}"
@@ -986,7 +987,7 @@ public sealed class CatalogView : LocalizedView
 
         _reflex.ResumeLayout(performLayout: true);
 
-        if (_reflex.Rows.Count > 0 && _reflex.CurrentRow is null) _reflex.Rows[0].Selected = true;
+        if (_reflex.Rows.Count > 0 && _reflex.CurrentRow is null) _reflex.SelectFirstRow();
 
         RefreshActions();
     }
@@ -1049,7 +1050,7 @@ public sealed class CatalogView : LocalizedView
         _nomenclature.ResumeLayout(performLayout: true);
 
         if (_nomenclature.Rows.Count > 0 && _nomenclature.CurrentRow is null)
-            _nomenclature.Rows[0].Selected = true;
+            _nomenclature.SelectFirstRow();
 
         RefreshActions();
     }
@@ -1137,7 +1138,7 @@ public sealed class CatalogView : LocalizedView
     {
         if (id is null)
         {
-            if (grid.Rows.Count > 0) grid.Rows[0].Selected = true;
+            if (grid.Rows.Count > 0) grid.SelectFirstRow();
             return;
         }
 
@@ -1146,7 +1147,7 @@ public sealed class CatalogView : LocalizedView
             if (identify(row.Tag) == id) { row.Selected = true; return; }
         }
 
-        if (grid.Rows.Count > 0) grid.Rows[0].Selected = true;
+        if (grid.Rows.Count > 0) grid.SelectFirstRow();
     }
 
     private void RefreshActions()

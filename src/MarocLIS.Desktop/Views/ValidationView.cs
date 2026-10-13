@@ -25,6 +25,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class ValidationView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private const string ColumnSelected = "selected";
     private const string ColumnParameter = "parameter";
     private const string ColumnValue = "value";
@@ -130,6 +131,12 @@ public sealed class ValidationView : LocalizedView
 
         top.Controls.AddRange([worklistHost, _worklistHeading, _onlyUrgent, _refresh]);
 
+        // The host is first so that it docks last and fills what is left, which also puts it in
+        // front: the heading, the tick box and the refresh button sat behind it, invisible.
+        _worklistHeading.BringToFront();
+        _onlyUrgent.BringToFront();
+        _refresh.BringToFront();
+
         // --- detail ------------------------------------------------------------------------------
 
         var bottom = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
@@ -165,6 +172,7 @@ public sealed class ValidationView : LocalizedView
         actions.Controls.AddRange([_selectAll, _validate, _communicate, _release, _unvalidate, _status]);
 
         bottom.Controls.AddRange([detailHost, actions, _detailHeading]);
+        _detailHeading.BringToFront();
 
         split.Panel1.Controls.Add(top);
         split.Panel2.Controls.Add(bottom);
@@ -248,7 +256,7 @@ public sealed class ValidationView : LocalizedView
         _refresh.Click += async (_, _) => await ActivateAsync();
         _onlyUrgent.CheckedChanged += async (_, _) => await ActivateAsync();
 
-        _worklist.SelectionChanged += async (_, _) => await LoadSelectedAsync();
+        _worklist.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadSelectedAsync());
 
         _selectAll.Click += (_, _) => ToggleAll();
         _validate.Click += async (_, _) => await ValidateSelectedAsync();
@@ -413,7 +421,7 @@ public sealed class ValidationView : LocalizedView
         _status.ForeColor = UiTheme.TextSecondary;
         _status.Text = $"{_entries.Count} {T("Order.Plural").ToLowerInvariant()}";
 
-        if (_worklist.Rows.Count > 0) _worklist.Rows[0].Selected = true;
+        if (_worklist.Rows.Count > 0) _worklist.SelectFirstRow();
         else ClearDetails();
     }
 

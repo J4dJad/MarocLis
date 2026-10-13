@@ -28,6 +28,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class MasterDataView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private readonly MasterDataService _master;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<MasterDataView>? _logger;
@@ -420,7 +421,7 @@ public sealed class MasterDataView : LocalizedView
 
         // Targets follow the selected material: a laboratory runs two or three levels of the same
         // control, and seeing every target for every lot at once is unreadable.
-        _qcMaterials.SelectionChanged += async (_, _) => await LoadTargetsAsync();
+        _qcMaterials.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadTargetsAsync());
 
         _instruments.CellFormatting += OnInstrumentFormatting;
         _qcMaterials.CellFormatting += OnMaterialFormatting;
@@ -797,7 +798,7 @@ public sealed class MasterDataView : LocalizedView
         }
 
         _editMaterial.Enabled = _qcMaterials.Rows.Count > 0;
-        if (_qcMaterials.Rows.Count > 0) _qcMaterials.Rows[0].Selected = true;
+        if (_qcMaterials.Rows.Count > 0) _qcMaterials.SelectFirstRow();
     }
 
     private void RenderTargets()

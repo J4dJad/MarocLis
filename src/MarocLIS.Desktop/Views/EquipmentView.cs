@@ -256,7 +256,7 @@ public sealed class EquipmentView : LocalizedView
             ? $"{T("Equipment.Title")} — {_rows.Count} · {T("Equipment.Overdue")} {overdue}"
             : $"{T("Equipment.Title")} — {_rows.Count}";
 
-        if (_grid.Rows.Count > 0) _grid.Rows[0].Selected = true;
+        if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
 
         ShowDetail();
     }

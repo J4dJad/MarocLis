@@ -117,8 +117,10 @@ public sealed class PatientSearchView : LocalizedView
 
         _resultCount.Font = UiTheme.Small;
         _resultCount.ForeColor = UiTheme.TextMuted;
-        _resultCount.AutoSize = true;
-        _resultCount.Location = new Point(378, 28);
+        // A fixed width: an auto-sized count grows as the page fills and ran under the create button.
+        _resultCount.AutoSize = false;
+        _resultCount.TextAlign = ContentAlignment.MiddleLeft;
+        _resultCount.Bounds = new Rectangle(378, 24, 110, 24);
 
         // The create button sits beside the search box on purpose: the clerk searches first and
         // registers only when the search comes back empty, which is the order that avoids a
@@ -477,7 +479,7 @@ public sealed class PatientSearchView : LocalizedView
             ? T("App.NoData")
             : $"{_page.Items.Count} / {_page.TotalCount}";
 
-        if (_results.Rows.Count > 0) _results.Rows[0].Selected = true;
+        if (_results.Rows.Count > 0) _results.SelectFirstRow();
         else _history.Rows.Clear();
     }
 

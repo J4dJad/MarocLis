@@ -262,7 +262,7 @@ public sealed class EqaView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         RenderHeading();
 
-        if (_grid.Rows.Count > 0) _grid.Rows[0].Selected = true;
+        if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
         ShowDetail();
     }
 

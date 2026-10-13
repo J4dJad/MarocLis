@@ -31,6 +31,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class ReportRegisterView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private readonly ReportReleaseService _reports;
     private readonly IDocumentOutput _documents;
     private readonly IUserDialogs _dialogs;
@@ -198,7 +199,7 @@ public sealed class ReportRegisterView : LocalizedView
         _window.SelectedIndexChanged += async (_, _) => await ActivateAsync();
         _refresh.Click += async (_, _) => await ActivateAsync();
 
-        _register.SelectionChanged += async (_, _) => await LoadDeliveriesAsync();
+        _register.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDeliveriesAsync());
         _register.CellFormatting += OnRegisterFormatting;
         _register.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await ReprintAsync(); };
 
@@ -374,7 +375,7 @@ public sealed class ReportRegisterView : LocalizedView
         }
 
         if (_register.CurrentRow is null && _register.Rows.Count > 0)
-            _register.Rows[0].Selected = true;
+            _register.SelectFirstRow();
 
         var undelivered = _rows.Count(r => r.AwaitingDelivery);
         var urgent = _rows.Count(r => r.IsUrgentToDeliver);

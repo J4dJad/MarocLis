@@ -18,6 +18,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class PurchaseOrderView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private readonly PurchaseOrderService _orders;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<PurchaseOrderView>? _logger;
@@ -172,7 +173,7 @@ public sealed class PurchaseOrderView : LocalizedView
         _refresh.Click += async (_, _) => await ActivateAsync();
         _onlyOpen.CheckedChanged += async (_, _) => await LoadAsync();
 
-        _grid.SelectionChanged += async (_, _) => await LoadLinesAsync();
+        _grid.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadLinesAsync());
         _grid.CellFormatting += OnOrderFormatting;
         _lines.SelectionChanged += (_, _) => RefreshButtons();
 

@@ -24,6 +24,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class QualityControlView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private const string ColParameter = "parameter";
     private const string ColLevel = "level";
     private const string ColLot = "lot";
@@ -247,8 +248,8 @@ public sealed class QualityControlView : LocalizedView
         _establishLimits.Click += async (_, _) => await EstablishLimitsAsync();
         _editRules.Click += async (_, _) => await EditRulesAsync();
 
-        _entry.SelectionChanged += async (_, _) => await LoadChartAsync();
-        _review.SelectionChanged += async (_, _) => await LoadChartForReviewAsync();
+        _entry.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadChartAsync());
+        _review.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadChartForReviewAsync());
 
         _entry.CellFormatting += OnEntryFormatting;
         _review.CellFormatting += OnReviewFormatting;

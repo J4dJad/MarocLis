@@ -554,7 +554,7 @@ public sealed class UserAdministrationView : LocalizedView
             : null;
 
         if (restored is not null) restored.Selected = true;
-        else if (_users.Rows.Count > 0) _users.Rows[0].Selected = true;
+        else if (_users.Rows.Count > 0) _users.SelectFirstRow();
 
         RefreshUserActions();
     }
@@ -591,7 +591,7 @@ public sealed class UserAdministrationView : LocalizedView
 
         _roles.ResumeLayout(performLayout: true);
 
-        if (_roles.Rows.Count > 0) _roles.Rows[0].Selected = true;
+        if (_roles.Rows.Count > 0) _roles.SelectFirstRow();
 
         ShowRolePermissions();
     }

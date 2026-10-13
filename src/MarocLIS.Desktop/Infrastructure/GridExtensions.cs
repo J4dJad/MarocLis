@@ -29,4 +29,38 @@ public static class GridExtensions
             $"The grid has no column named '{name}'. The column names set up in the view's grid " +
             "construction and the ones its ApplyTexts override translates have diverged.",
             nameof(name));
+
+    /// <summary>
+    /// Makes the first row the current one, not only the highlighted one.
+    /// <para>
+    /// <c>Rows[0].Selected = true</c> paints the row but leaves <see cref="DataGridView.CurrentRow"/>
+    /// unset, so a detail panel that follows the current row stayed empty under a row that looked
+    /// chosen: the patient list opened with its first patient highlighted and no history beside it.
+    /// </para>
+    /// </summary>
+    public static void SelectFirstRow(this DataGridView grid)
+    {
+        if (grid.Rows.Count == 0) return;
+
+        var row = grid.Rows[0];
+        var cell = row.Cells.Cast<DataGridViewCell>().FirstOrDefault(c => c.Visible);
+
+        try
+        {
+            if (cell is not null)
+            {
+                // The first row added already became current while its Tag was still empty, and
+                // setting the same cell again raises nothing: step off it so the views that load
+                // details on SelectionChanged see the row with its data.
+                if (grid.CurrentCell == cell) grid.CurrentCell = null;
+                grid.CurrentCell = cell;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // Raised when the grid is mid-edit or mid-layout; the highlight below still applies.
+        }
+
+        row.Selected = true;
+    }
 }

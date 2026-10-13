@@ -20,6 +20,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class InventoryView : LocalizedView
 {
+    private readonly SelectionLoads _selectionLoads = new();
     private readonly InventoryService _inventory;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<InventoryView>? _logger;
@@ -214,7 +215,7 @@ public sealed class InventoryView : LocalizedView
         _onlyAlerts.CheckedChanged += async (_, _) => await LoadStockAsync();
         _onlyQuarantined.CheckedChanged += async (_, _) => await LoadLotsAsync();
 
-        _stock.SelectionChanged += async (_, _) => await LoadLotsAsync();
+        _stock.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadLotsAsync());
 
         _receive.Click += async (_, _) => await ReceiveAsync();
         _issue.Click += async (_, _) => await IssueAsync();
@@ -391,7 +392,7 @@ public sealed class InventoryView : LocalizedView
         _stockHeading.Text = $"{T("Inventory.Title")} — {_stockRows.Count}" +
                              (alertCount > 0 ? $" · {alertCount} {T("Inventory.BelowMinimum").ToLowerInvariant()}" : string.Empty);
 
-        if (_stock.Rows.Count > 0) _stock.Rows[0].Selected = true;
+        if (_stock.Rows.Count > 0) _stock.SelectFirstRow();
     }
 
     private async Task LoadLotsAsync(CancellationToken ct = default)

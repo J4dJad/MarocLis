@@ -275,7 +275,7 @@ public sealed class SampleStorageView : LocalizedView
 
         _heading.Text = $"{T("Nav.SerumBank")} — {string.Join(" · ", parts)}";
 
-        if (_grid.Rows.Count > 0) _grid.Rows[0].Selected = true;
+        if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
 
         RefreshActions();
     }

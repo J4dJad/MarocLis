@@ -635,7 +635,7 @@ internal sealed class DuplicateWarningForm : Form
         // No AcceptButton: neither choice should be reachable by a reflexive Enter.
         CancelButton = cancel;
 
-        if (_grid.Rows.Count > 0) _grid.Rows[0].Selected = true;
+        if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
 
         _reason.TextChanged += (_, _) => RefreshButtons();
         RefreshButtons();
