@@ -24,15 +24,28 @@ public sealed class SelectionLoads
         var key = load.Method;
         var version = _versions[key] = _versions.GetValueOrDefault(key) + 1;
 
+        // The loads are the view's own methods, so the delegate's target is the view. Leaving a
+        // screen disposes it, and its grids lose their columns; a load still in flight then came
+        // back to fill a grid that no longer had any and failed with "cannot add a row to a
+        // DataGridView without columns". A load for a screen that is gone has nobody to show to.
+        var owner = load.Target as Control;
+
         await _gate.WaitAsync();
         try
         {
-            if (_versions[key] != version) return;
+            if (_versions[key] != version || IsGone(owner)) return;
             await load();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException
+                                   && IsGone(owner))
+        {
+            // The screen was closed while the load ran: there is nothing left to fill.
         }
         finally
         {
             _gate.Release();
         }
     }
+
+    private static bool IsGone(Control? owner) => owner is { IsDisposed: true } or { Disposing: true };
 }

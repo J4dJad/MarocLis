@@ -229,13 +229,16 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         _mappings.CellFormatting += OnMappingFormatting;
         _messages.CellFormatting += OnMessageFormatting;
-        _messages.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await ViewRawAsync(); };
+        _messages.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _viewRaw.Enabled) await ViewRawAsync(); };
 
         _newLink.Click += async (_, _) => await EditLinkAsync(create: true);
         _editLink.Click += async (_, _) => await EditLinkAsync();
         _toggleLink.Click += async (_, _) => await ToggleAsync();
         _editMappings.Click += async (_, _) => await EditMappingsAsync();
         _viewRaw.Click += async (_, _) => await ViewRawAsync();
+
+        // The raw message carries patient results, so reading it takes the results right as well.
+        PermissionGate.Require(Permissions.Results.View, _viewRaw);
         _replay.Click += async (_, _) => await ReplayAsync();
         _purgeLog.Click += async (_, _) => await PurgeLogAsync();
 
@@ -695,7 +698,8 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         if (current.IsFailure) { _dialogs.ShowFailure(current); return; }
 
-        using var dialog = new InstrumentMappingDialog(Localizer, _dialogs, row, current.Value);
+        using var dialog = new InstrumentMappingDialog(Localizer, _dialogs, row, current.Value,
+                                                     search => _interfaces.GetMappableParametersAsync(search));
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
 

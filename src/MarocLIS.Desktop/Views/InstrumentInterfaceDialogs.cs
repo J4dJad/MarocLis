@@ -1,6 +1,7 @@
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Instruments;
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
 using MarocLIS.Localization;
 
@@ -324,6 +325,8 @@ internal sealed class InstrumentMappingDialog : Form
 {
     private readonly ILocalizer _localizer;
     private readonly IUserDialogs _dialogs;
+    private readonly InterfaceRow _link;
+    private readonly Func<string?, Task<Result<IReadOnlyList<MappableParameter>>>> _searchParameters;
 
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly Label _summary = new();
@@ -331,10 +334,13 @@ internal sealed class InstrumentMappingDialog : Form
     internal IReadOnlyList<MappingRequest> Mappings { get; private set; } = [];
 
     internal InstrumentMappingDialog(ILocalizer localizer, IUserDialogs dialogs,
-                                     InterfaceRow link, IReadOnlyList<MappingRow> existing)
+                                     InterfaceRow link, IReadOnlyList<MappingRow> existing,
+                                     Func<string?, Task<Result<IReadOnlyList<MappableParameter>>>> searchParameters)
     {
         _localizer = localizer;
         _dialogs = dialogs;
+        _link = link;
+        _searchParameters = searchParameters;
 
         Text = $"{localizer["Interface.EditMappings"]} — {link.InstrumentCode}";
         FormBorderStyle = FormBorderStyle.Sizable;
@@ -359,7 +365,9 @@ internal sealed class InstrumentMappingDialog : Form
 
         _grid.Dock = DockStyle.None;
         _grid.Bounds = new Rectangle(16, 64, 928, 390);
-        _grid.AllowUserToAddRows = true;
+        // New codes come in through "Add parameters", which ties each to a catalogue parameter.
+        // A blank line typed at the bottom of the grid had no parameter and was dropped on save.
+        _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = true;
         _grid.EditMode = DataGridViewEditMode.EditOnEnter;
 
@@ -385,21 +393,82 @@ internal sealed class InstrumentMappingDialog : Form
         _summary.AutoSize = false;
         _summary.Bounds = new Rectangle(16, 462, 928, 20);
 
+        var add = UiTheme.SecondaryButton(localizer["Interface.AddParameters"]);
+        add.Bounds = new Rectangle(16, 492, 300, UiTheme.ButtonHeight);
+        add.Click += async (_, _) => await AddParametersAsync();
+
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
-        ok.Bounds = new Rectangle(16, 492, 456, UiTheme.ButtonHeight);
+        ok.Bounds = new Rectangle(332, 492, 298, UiTheme.ButtonHeight);
         ok.Click += (_, _) => Accept();
 
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
-        cancel.Bounds = new Rectangle(488, 492, 456, UiTheme.ButtonHeight);
+        cancel.Bounds = new Rectangle(646, 492, 298, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
-        Controls.AddRange([notice, _grid, _summary, ok, cancel]);
+        add.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
+        ok.Anchor = cancel.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
+        _summary.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+        _grid.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top | AnchorStyles.Bottom;
+        notice.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
+
+        Controls.AddRange([notice, _grid, _summary, add, ok, cancel]);
 
         CancelButton = cancel;
 
         _grid.CellFormatting += OnFormatting;
 
         RefreshSummary();
+    }
+
+    /// <summary>
+    /// Links catalogue parameters to this analyser: each one picked comes in as a new line whose
+    /// analyser code starts as the laboratory's own code, to be overwritten with the code the
+    /// analyser actually transmits.
+    /// </summary>
+    private async Task AddParametersAsync()
+    {
+        var mapped = _grid.Rows.Cast<DataGridViewRow>()
+            .Where(r => r.Tag is MappingRow && r.Cells["enabled"].Value is true)
+            .Select(r => ((MappingRow)r.Tag!).TestParameterId)
+            .ToHashSet();
+
+        using var picker = new MappableParameterPicker(_localizer, _dialogs, _searchParameters, mapped);
+
+        if (picker.ShowDialog(this) != DialogResult.OK || picker.Picked.Count == 0) return;
+
+        var language = _localizer.CurrentLanguage;
+        DataGridViewRow? first = null;
+
+        foreach (var parameter in picker.Picked)
+        {
+            var index = _grid.Rows.Add(
+                parameter.ParameterCode,
+                $"{parameter.AnalysisCode}/{parameter.ParameterCode}  {parameter.ParameterName.For(language)}",
+                string.Empty,
+                parameter.UnitSymbol ?? string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                true);
+
+            var row = _grid.Rows[index];
+            row.Tag = new MappingRow(
+                Guid.Empty, _link.Id, parameter.ParameterCode, parameter.TestParameterId,
+                parameter.ParameterCode, parameter.ParameterName, parameter.AnalysisCode,
+                parameter.ValueType, parameter.UnitSymbol, null, null, null, null, true);
+
+            // The code to check: it is the laboratory's, not yet the analyser's.
+            row.Cells["code"].Style.BackColor = UiTheme.AbnormalBackground;
+            first ??= row;
+        }
+
+        RefreshSummary();
+
+        if (first is null) return;
+
+        _grid.FirstDisplayedScrollingRowIndex = first.Index;
+        _grid.CurrentCell = first.Cells["code"];
+        _grid.BeginEdit(selectAll: true);
     }
 
     private void BuildColumns()
@@ -562,6 +631,207 @@ internal sealed class InstrumentMappingDialog : Form
 
         value = parsed;
         return true;
+    }
+}
+
+/// <summary>
+/// Picks the catalogue parameters to link to an analyser.
+/// <para>
+/// Searched rather than listed: the catalogue holds several hundred parameters. Typing an
+/// analysis code brings all of its parameters at once, which is how an analyser is set up in
+/// practice: the blood count of a haematology analyser, the ionogram of a chemistry one.
+/// Parameters this analyser already maps are shown but cannot be ticked, since one parameter
+/// takes one code.
+/// </para>
+/// </summary>
+internal sealed class MappableParameterPicker : Form
+{
+    private readonly ILocalizer _localizer;
+    private readonly IUserDialogs _dialogs;
+    private readonly Func<string?, Task<Result<IReadOnlyList<MappableParameter>>>> _search;
+    private readonly HashSet<Guid> _alreadyMapped;
+
+    private readonly TextBox _query = UiTheme.Input(300);
+    private readonly DataGridView _grid = UiTheme.Grid();
+    private readonly Button _ok = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _all = UiTheme.SecondaryButton(string.Empty);
+    private readonly System.Windows.Forms.Timer _debounce = new() { Interval = 300 };
+
+    internal IReadOnlyList<MappableParameter> Picked { get; private set; } = [];
+
+    internal MappableParameterPicker(ILocalizer localizer, IUserDialogs dialogs,
+                                     Func<string?, Task<Result<IReadOnlyList<MappableParameter>>>> search,
+                                     HashSet<Guid> alreadyMapped)
+    {
+        _localizer = localizer;
+        _dialogs = dialogs;
+        _search = search;
+        _alreadyMapped = alreadyMapped;
+
+        Text = localizer["Interface.AddParameters"];
+        FormBorderStyle = FormBorderStyle.Sizable;
+        StartPosition = FormStartPosition.CenterParent;
+        MinimizeBox = MaximizeBox = false;
+        ShowInTaskbar = false;
+        ClientSize = new Size(760, 520);
+        MinimumSize = new Size(620, 400);
+        BackColor = UiTheme.SurfaceRaised;
+        Font = UiTheme.Body;
+
+        var prompt = new Label
+        {
+            Text = localizer["Interface.AddParametersPrompt"],
+            Font = UiTheme.Small,
+            ForeColor = UiTheme.TextSecondary,
+            AutoSize = false,
+            Bounds = new Rectangle(16, 12, 728, 20),
+            Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+        };
+
+        _query.Bounds = new Rectangle(16, 38, 568, UiTheme.InputHeight);
+        _query.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
+        _query.PlaceholderText = localizer["Interface.AddParametersSearch"];
+
+        // The usual case is the whole analysis: every parameter of the blood count at once.
+        _all.Text = localizer["Interface.TickAll"];
+        _all.Bounds = new Rectangle(594, 37, 150, UiTheme.ButtonHeight);
+        _all.Anchor = AnchorStyles.Right | AnchorStyles.Top;
+        _all.Click += (_, _) => TickAll();
+
+        _grid.Dock = DockStyle.None;
+        _grid.Bounds = new Rectangle(16, 78, 728, 378);
+        _grid.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top | AnchorStyles.Bottom;
+        _grid.MultiSelect = true;
+        BuildColumns();
+
+        _ok.Text = localizer["Interface.AddParametersConfirm"];
+        _ok.Bounds = new Rectangle(16, 468, 356, UiTheme.ButtonHeight);
+        _ok.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
+        _ok.Click += (_, _) => Accept();
+
+        var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
+        cancel.Bounds = new Rectangle(388, 468, 356, UiTheme.ButtonHeight);
+        cancel.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
+        cancel.DialogResult = DialogResult.Cancel;
+
+        Controls.AddRange([prompt, _query, _all, _grid, _ok, cancel]);
+        CancelButton = cancel;
+        AcceptButton = _ok;
+
+        _query.TextChanged += (_, _) => { _debounce.Stop(); _debounce.Start(); };
+        _debounce.Tick += async (_, _) => { _debounce.Stop(); await LoadAsync(); };
+        _grid.CellContentClick += (_, e) => { if (e.ColumnIndex == 0) _grid.CommitEdit(DataGridViewDataErrorContexts.Commit); };
+        _grid.CellValueChanged += (_, _) => RefreshOk();
+        _grid.CellFormatting += OnFormatting;
+
+        Shown += async (_, _) => { _query.Focus(); await LoadAsync(); };
+        RefreshOk();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _debounce.Dispose();
+        base.Dispose(disposing);
+    }
+
+    private void BuildColumns()
+    {
+        _grid.Columns.Clear();
+        _grid.ReadOnly = false;
+
+        _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "pick", HeaderText = string.Empty, FillWeight = 5 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "analysis", HeaderText = _localizer["Catalog.Analysis"], FillWeight = 12, ReadOnly = true,
+            DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.MonospaceBold }
+        });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "code", HeaderText = _localizer["Field.Code"], FillWeight = 12, ReadOnly = true,
+            DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.Monospace }
+        });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "name", HeaderText = _localizer["Catalog.Parameter"], FillWeight = 40, ReadOnly = true
+        });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "unit", HeaderText = _localizer["Interface.CatalogueUnit"], FillWeight = 12, ReadOnly = true,
+            DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.Monospace }
+        });
+    }
+
+    private async Task LoadAsync()
+    {
+        if (IsDisposed) return;
+
+        var result = await _search(_query.Text);
+        if (IsDisposed) return;
+
+        if (result.IsFailure) { _dialogs.ShowFailure(result, Text); return; }
+
+        var ticked = Ticked().Select(p => p.TestParameterId).ToHashSet();
+        var language = _localizer.CurrentLanguage;
+
+        _grid.SuspendLayout();
+        _grid.Rows.Clear();
+
+        foreach (var parameter in result.Value)
+        {
+            var mapped = _alreadyMapped.Contains(parameter.TestParameterId);
+            var index = _grid.Rows.Add(
+                !mapped && ticked.Contains(parameter.TestParameterId),
+                parameter.AnalysisCode,
+                parameter.ParameterCode,
+                mapped
+                    ? $"{parameter.ParameterName.For(language)}  ({_localizer["Interface.AlreadyMapped"]})"
+                    : parameter.ParameterName.For(language),
+                parameter.UnitSymbol ?? string.Empty);
+
+            var row = _grid.Rows[index];
+            row.Tag = parameter;
+            row.Cells["pick"].ReadOnly = mapped;
+        }
+
+        _grid.ResumeLayout();
+        RefreshOk();
+    }
+
+    private void OnFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not MappableParameter parameter) return;
+        if (_alreadyMapped.Contains(parameter.TestParameterId)) e.CellStyle!.ForeColor = UiTheme.TextMuted;
+    }
+
+    private void TickAll()
+    {
+        _grid.EndEdit();
+        foreach (DataGridViewRow row in _grid.Rows)
+            if (!row.Cells["pick"].ReadOnly) row.Cells["pick"].Value = true;
+        RefreshOk();
+    }
+
+    private IEnumerable<MappableParameter> Ticked() =>
+        _grid.Rows.Cast<DataGridViewRow>()
+             .Where(r => r.Cells["pick"].Value is true && r.Tag is MappableParameter)
+             .Select(r => (MappableParameter)r.Tag!);
+
+    private void RefreshOk()
+    {
+        var count = Ticked().Count();
+        _ok.Enabled = count > 0;
+        _ok.Text = count > 0
+            ? $"{_localizer["Interface.AddParametersConfirm"]} ({count})"
+            : _localizer["Interface.AddParametersConfirm"];
+    }
+
+    private void Accept()
+    {
+        Picked = [.. Ticked()];
+        if (Picked.Count == 0) return;
+
+        DialogResult = DialogResult.OK;
+        Close();
     }
 }
 

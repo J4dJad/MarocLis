@@ -498,7 +498,7 @@ public sealed class ResultEntryView : LocalizedView
         _validate.Click += async (_, _) => await TechnicallyValidateAsync();
 
         // Greyed out for a user without the right; the service refuses them in any case.
-        PermissionGate.Require(Permissions.Results.Enter, _save);
+        PermissionGate.Require(Permissions.Results.Enter, _save, _benchSheet);
         PermissionGate.Require(Permissions.Results.TechnicalValidate, _validate);
 
         // Enter commits the cell and steps down the column, which is how values are actually

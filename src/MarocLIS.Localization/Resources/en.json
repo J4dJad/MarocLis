@@ -63,6 +63,8 @@
   },
 
   "Nav": {
+    "ExpandGroup": "Expand this group",
+    "CollapseGroup": "Collapse this group",
     "Dashboard": "Dashboard",
     "Reception": "Reception / Registration",
     "Patients": "Patients",
@@ -1398,6 +1400,12 @@
   },
 
   "Interface": {
+    "TickAll": "Tick all",
+    "AlreadyMapped": "already linked",
+    "AddParametersConfirm": "Add to the mapping",
+    "AddParametersSearch": "Analysis or parameter: CBC, GLU, HGB…",
+    "AddParametersPrompt": "Type the analysis code (e.g. CBC) or a parameter, then tick the ones to link to this analyser.",
+    "AddParameters": "Add parameters…",
     "PickInstrumentNotice": "A link belongs to an analyser. Only analysers that do not have a link yet are offered.",
     "New": "New interface",
     "Edit": "Edit the interface",
@@ -2684,6 +2692,7 @@
   "Interface_PortInvalid": "The TCP port must be between 1 and 65535.",
   "Interface_InboundDirectoryRequired": "The inbound folder is required for a file-drop interface.",
   "Interface_MappingsRequiredForBidirectional": "A bidirectional interface requires at least one code mapping.",
+  "Interface_MappingCodeTaken": "Analyser code \"{0}\" is already linked to another parameter of this analyser (even if disabled). Choose another code.",
   "Order_NotFoundForScan": "No order matches \"{0}\" on this site.",
 
   "Report_NotFound": "Report not found.",

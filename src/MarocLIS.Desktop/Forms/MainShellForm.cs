@@ -68,6 +68,7 @@ public sealed class MainShellForm : LocalizedForm
     private const string ActionHelp = "action.help";
 
     private readonly KeyboardShortcuts _shortcuts;
+    private readonly CollapsedNavigationGroups _collapsedGroups;
     private readonly ToolTip _navTips = new();
 
     public MainShellForm(ICurrentUser currentUser, INavigationService navigation,
@@ -84,6 +85,7 @@ public sealed class MainShellForm : LocalizedForm
         _cultureManager = cultureManager;
         _dialogs = dialogs;
         _shortcuts = new KeyboardShortcuts(currentUser.UserId);
+        _collapsedGroups = new CollapsedNavigationGroups(currentUser.UserId);
 
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1180, 720);
@@ -340,30 +342,60 @@ public sealed class MainShellForm : LocalizedForm
         _navTips.RemoveAll();
 
         var y = UiTheme.GutterTight;
+        var scroll = _sidebar.AutoScrollPosition;
+        string? group = null;
 
         foreach (var entry in _entries)
         {
-            // An entry the user has no permission for is not rendered at all. A disabled button
-            // would still tell them the feature exists and that they are not trusted with it,
-            // which is noise on a screen that has to stay scannable.
-            if (entry.RequiredPermissions.Length > 0
-                && !entry.RequiredPermissions.Any(_currentUser.Has))
-                continue;
-
             if (entry.IsGroupHeader)
             {
+                group = entry.Key;
+
+                // A group is shown when the user can open at least one of its screens, whatever
+                // the header itself was declared with: a phlebotomist has Collection without
+                // Results.View, and the technical header used to vanish above the entry it held.
+                if (!GroupEntries(entry.Key).Any(IsPermitted)) continue;
+
+                var collapsed = _collapsedGroups.IsCollapsed(entry.Key);
                 var header = new Label
                 {
                     Text = T(entry.LabelKey).ToUpperInvariant(),
                     Font = UiTheme.SmallBold,
                     ForeColor = UiTheme.TextMuted,
                     AutoSize = false,
-                    Bounds = new Rectangle(UiTheme.Gutter, y + 10, NavigationWidth - UiTheme.GutterTight, 18)
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Cursor = Cursors.Hand,
+                    Bounds = new Rectangle(UiTheme.GutterTight, y + 6, NavigationWidth, 24),
+                    Padding = new Padding(UiTheme.Gutter + 8, 0, 0, 0)
                 };
+
+                // The chevron is drawn rather than typed: the arrow characters are missing from
+                // the fonts of some workstations and came out as empty boxes.
+                header.Paint += (_, e) => PaintChevron(e.Graphics, header, collapsed);
+
+                var key = entry.Key;
+                header.Click += (_, _) =>
+                {
+                    _collapsedGroups.Toggle(key);
+                    RenderNavigation();
+                };
+                header.MouseEnter += (_, _) => header.ForeColor = UiTheme.Accent;
+                header.MouseLeave += (_, _) => header.ForeColor = UiTheme.TextMuted;
+                _navTips.SetToolTip(header, T(collapsed ? "Nav.ExpandGroup" : "Nav.CollapseGroup"));
+
                 _sidebar.Controls.Add(header);
                 y += 32;
                 continue;
             }
+
+            // An entry the user has no permission for is not rendered at all. A disabled button
+            // would still tell them the feature exists and that they are not trusted with it,
+            // which is noise on a screen that has to stay scannable.
+            if (!IsPermitted(entry)) continue;
+
+            // A folded group keeps its buttons, hidden: the keyboard shortcuts and the shortcut
+            // list go by the buttons the user was given.
+            var folded = group is not null && _collapsedGroups.IsCollapsed(group);
 
             var button = new Button
             {
@@ -392,10 +424,11 @@ public sealed class MainShellForm : LocalizedForm
             if (_shortcuts.For(ScreenAction(entry.Key)) is var navKeys and not Keys.None)
                 _navTips.SetToolTip(button, $"{T(entry.LabelKey)} ({KeyboardShortcuts.Format(navKeys, Localizer)})");
 
+            button.Visible = !folded;
             _sidebar.Controls.Add(button);
             _navButtons[entry.Key] = button;
 
-            y += 34;
+            if (!folded) y += 34;
         }
 
         // The shortcuts list is one key away (F1), and also here for whoever does not know that.
@@ -417,11 +450,53 @@ public sealed class MainShellForm : LocalizedForm
 
         _sidebar.ResumeLayout(performLayout: true);
 
+        // Folding a group at the bottom of a scrolled menu must not throw the user back to the top.
+        _sidebar.AutoScrollPosition = new Point(-scroll.X, -scroll.Y);
+
         HighlightActive();
+    }
+
+    // A small triangle left of a group's name: pointing right when folded, down when open.
+    private static void PaintChevron(Graphics graphics, Label header, bool collapsed)
+    {
+        var x = UiTheme.Gutter - 2;
+        var y = header.Height / 2;
+
+        Point[] points = collapsed
+            ? [new(x, y - 4), new(x + 5, y), new(x, y + 4)]
+            : [new(x - 1, y - 2), new(x + 7, y - 2), new(x + 3, y + 3)];
+
+        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using var brush = new SolidBrush(header.ForeColor);
+        graphics.FillPolygon(brush, points);
+    }
+
+    private bool IsPermitted(NavigationEntry entry) =>
+        entry.RequiredPermissions.Length == 0 || entry.RequiredPermissions.Any(_currentUser.Has);
+
+    // The entries listed under a group header, up to the next header.
+    private IEnumerable<NavigationEntry> GroupEntries(string groupKey) =>
+        _entries.SkipWhile(e => e.Key != groupKey).Skip(1).TakeWhile(e => !e.IsGroupHeader);
+
+    // The group an entry is listed under, or null for the entries above the first header.
+    private string? GroupOf(string key)
+    {
+        string? group = null;
+        foreach (var entry in _entries)
+        {
+            if (entry.IsGroupHeader) group = entry.Key;
+            else if (entry.Key == key) return group;
+        }
+        return null;
     }
 
     private async Task ActivateAsync(NavigationEntry entry)
     {
+        // A screen opened by its shortcut from a folded group unfolds it, so the highlighted
+        // entry is in sight.
+        if (GroupOf(entry.Key) is { } group && _collapsedGroups.Expand(group))
+            RenderNavigation();
+
         _activeKey = entry.Key;
         HighlightActive();
         await entry.Navigate(_navigation);

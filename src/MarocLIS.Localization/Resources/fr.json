@@ -63,6 +63,8 @@
   },
 
   "Nav": {
+    "ExpandGroup": "Déplier ce groupe",
+    "CollapseGroup": "Replier ce groupe",
     "Dashboard": "Tableau de bord",
     "Reception": "Accueil / Enregistrement",
     "Patients": "Patients",
@@ -1399,6 +1401,12 @@
   },
 
   "Interface": {
+    "TickAll": "Tout cocher",
+    "AlreadyMapped": "déjà relié",
+    "AddParametersConfirm": "Ajouter à la correspondance",
+    "AddParametersSearch": "Analyse ou paramètre : NFS, GLY, HGB…",
+    "AddParametersPrompt": "Tapez le code de l'analyse (ex. NFS) ou d'un paramètre, cochez ceux à relier à cet automate.",
+    "AddParameters": "Ajouter des paramètres…",
     "PickInstrumentNotice": "Une liaison appartient à un automate. Seuls les automates qui n'ont pas encore de liaison sont proposés.",
     "New": "Nouvelle interface",
     "Edit": "Modifier l'interface",
@@ -2685,6 +2693,7 @@
   "Interface_PortInvalid": "Le port TCP doit être compris entre 1 et 65535.",
   "Interface_InboundDirectoryRequired": "Le dossier de dépôt est obligatoire pour une interface par fichiers.",
   "Interface_MappingsRequiredForBidirectional": "Une interface bidirectionnelle exige au moins une correspondance de code.",
+  "Interface_MappingCodeTaken": "Le code automate « {0} » est déjà relié à un autre paramètre de cet automate (même désactivé). Choisissez un autre code.",
   "Order_NotFoundForScan": "Aucun dossier ne correspond à « {0} » sur ce site.",
 
   "Report_NotFound": "Compte rendu introuvable.",

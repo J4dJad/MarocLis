@@ -63,6 +63,8 @@
   },
 
   "Nav": {
+    "ExpandGroup": "توسيع هذه المجموعة",
+    "CollapseGroup": "طي هذه المجموعة",
     "Dashboard": "لوحة القيادة",
     "Reception": "الاستقبال والتسجيل",
     "Patients": "المرضى",
@@ -1398,6 +1400,12 @@
   },
 
   "Interface": {
+    "TickAll": "تحديد الكل",
+    "AlreadyMapped": "مرتبط مسبقًا",
+    "AddParametersConfirm": "إضافة إلى جدول المطابقة",
+    "AddParametersSearch": "تحليل أو معيار: NFS، GLY، HGB…",
+    "AddParametersPrompt": "اكتب رمز التحليل (مثل NFS) أو رمز معيار، ثم حدد ما تريد ربطه بهذا الجهاز.",
+    "AddParameters": "إضافة معايير…",
     "PickInstrumentNotice": "الربط تابع لجهاز تحليل. تُعرض فقط الأجهزة التي ليس لها ربط بعد.",
     "New": "واجهة جديدة",
     "Edit": "تعديل الواجهة",
@@ -2684,6 +2692,7 @@
   "Interface_PortInvalid": "منفذ TCP يجب أن يكون بين 1 و65535.",
   "Interface_InboundDirectoryRequired": "مجلد الإيداع إلزامي في الواجهة بالملفات.",
   "Interface_MappingsRequiredForBidirectional": "الواجهة ثنائية الاتجاه تتطلب مطابقة رمز واحدة على الأقل.",
+  "Interface_MappingCodeTaken": "رمز الجهاز «{0}» مرتبط بالفعل بمعيار آخر لهذا الجهاز (حتى لو كان معطلاً). اختر رمزًا آخر.",
   "Order_NotFoundForScan": "لا يوجد ملف يطابق «{0}» في هذا الموقع.",
 
   "Report_NotFound": "التقرير غير موجود.",

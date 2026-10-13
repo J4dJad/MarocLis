@@ -152,6 +152,19 @@ public sealed class InstrumentInterfaceService(
         return Result.Success(await queries.GetMappingsAsync(interfaceId, ct));
     }
 
+    /// <summary>
+    /// Catalogue parameters a new analyser code can be linked to, matched on the analysis code,
+    /// the parameter code or its name: "NFS" brings every parameter of the blood count.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<MappableParameter>>> GetMappableParametersAsync(
+        string? search, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Instruments.Configure);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<MappableParameter>>(permitted.FirstError);
+
+        return Result.Success(await queries.GetMappableParametersAsync(search, ct));
+    }
+
     public async Task<Result<IReadOnlyList<MessageLogRow>>> GetMessagesAsync(
         Guid? interfaceId, int take = 200, CancellationToken ct = default)
     {
@@ -406,6 +419,19 @@ public sealed class InstrumentInterfaceService(
 
         if (mappings.Any(m => m.ConversionFactor is 0m))
             errors.Add(Error.Validation("Interface_ConversionFactorZero"));
+
+        // A code already used, even by a mapping since switched off, stays tied to its parameter:
+        // the message log reads old frames through it. Reusing it for another parameter would
+        // otherwise be saved as an edit of the old mapping and quietly keep the old parameter.
+        foreach (var wanted in mappings)
+        {
+            var taken = link.Mappings.FirstOrDefault(
+                m => string.Equals(m.InstrumentTestCode, wanted.InstrumentTestCode.Trim(),
+                                   StringComparison.Ordinal));
+
+            if (taken is not null && taken.TestParameterId != wanted.TestParameterId)
+                errors.Add(Error.Validation("Interface_MappingCodeTaken", wanted.InstrumentTestCode.Trim()));
+        }
 
         if (errors.Count > 0) return Result.Failure(errors);
 

@@ -350,6 +350,7 @@ public sealed class OrderRegistrationView : LocalizedView
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Patients.Create, _newPatient);
+        PermissionGate.Require(Permissions.Orders.Create, _register);
 
         _catalogSearch.TextChanged += async (_, _) => await SearchCatalogueAsync();
 
