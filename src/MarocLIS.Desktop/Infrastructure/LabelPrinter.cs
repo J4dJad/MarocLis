@@ -35,8 +35,13 @@ public sealed class LabelPrinter(
     LabelPrintOptions printOptions,
     LabelOptions labelOptions,
     ISampleLabelRenderer renderer,
-    ILogger<LabelPrinter>? logger = null) : ILabelPrinter
+    ILogger<LabelPrinter>? logger = null,
+    WorkstationPrinters? workstation = null) : ILabelPrinter
 {
+    // Taken only so the workstation's printer choice is loaded, and overrides the configured
+    // printer, before the first label goes out.
+    private readonly WorkstationPrinters? _workstation = workstation;
+
     public string ConfiguredPrinter => printOptions.LabelPrinterName;
 
     public bool IsAvailable

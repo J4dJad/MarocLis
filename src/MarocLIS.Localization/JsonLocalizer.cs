@@ -159,8 +159,10 @@ public sealed class JsonLocalizer : ILocalizer
             ? string.Empty
             : Format(language, error.ResourceKey, error.Args);
 
+    // The same refusal for several tubes or lines is said once, not once per item.
     public string Describe(IEnumerable<Error> errors) =>
-        string.Join(Environment.NewLine, errors.Select(e => Describe(e)).Where(s => s.Length > 0));
+        string.Join(Environment.NewLine,
+                    errors.Select(e => Describe(e)).Where(s => s.Length > 0).Distinct(StringComparer.Ordinal));
 
     public bool Has(string key, AppLanguage? language = null) =>
         _catalogues.TryGetValue(language ?? CurrentLanguage, out var catalogue) &&

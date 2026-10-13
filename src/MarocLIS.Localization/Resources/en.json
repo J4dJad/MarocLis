@@ -1,6 +1,23 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
 
+  "Printers": {
+    "TestSent": "Test label sent to \"{0}\".",
+    "TestLabel": "Print a test label",
+    "SaveFailed": "Could not save the printer choice on this workstation.",
+    "Saved": "Printers saved for this workstation.",
+    "NoneInstalled": "No printer is installed on this workstation.",
+    "Missing": "not found on this workstation",
+    "LabelsAsPdf": "None: labels as PDF",
+    "WindowsDefault": "Windows default printer",
+    "Labels": "Tube labels (label printer)",
+    "PrintDirectlyHint": "Requires a PDF reader that can print directly (Adobe Acrobat Reader, SumatraPDF, Foxit). Otherwise the document opens on screen as usual.",
+    "PrintDirectly": "Print directly to this printer, without an on-screen preview",
+    "Documents": "Reports, invoices, bench worksheets (A4)",
+    "Intro": "Settings for this workstation only: each PC can have its own A4 printer and its own label printer.",
+    "Title": "Printers"
+  },
+
   "Print": {
     "RowCount": "{0} row(s)",
     "NothingToPrint": "This screen shows no list to print."
@@ -59,6 +76,7 @@
   },
 
   "Action": {
+    "CollectAndDispatch": "Collect and dispatch",
     "New": "New",
     "Open": "Open",
     "Save": "Save",
@@ -517,6 +535,8 @@
   },
 
   "Collection": {
+    "Registered": "Arrived",
+    "TubeCount": "Tubes",
     "ConfirmFasting": "to be confirmed with the patient",
     "FastingQuestion": "Does the patient declare having fasted for at least {0} hours?",
     "ProtectFromLight": "protect from light",
@@ -2294,7 +2314,7 @@
   "Interface_RetentionNotConfigured": "The log retention period is set to {0} day(s): correct it before purging.",
   "Label_NothingToPrint": "No label to print.",
   "Label_NoPrinterConfigured": "No label printer is configured.",
-  "Label_PrinterNotFound": "Windows does not recognise the printer \"{0}\": correct the name in appsettings.json, or remove it to produce a PDF instead.",
+  "Label_PrinterNotFound": "Windows does not recognise the printer \"{0}\": choose it in Settings › Printers, or choose \"None\" to produce a PDF instead.",
   "Label_PrintFailed": "Printing the labels failed. Check the stock and the print queue.",
   "Document_Empty": "The document is empty: nothing to open.",
   "Document_WriteFailed": "The document could not be written on this workstation.",

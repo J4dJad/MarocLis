@@ -120,14 +120,14 @@ public sealed class CollectionView : LocalizedView
         var right = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
 
         _bannerHost.Dock = DockStyle.Top;
-        _bannerHost.Height = 92;
+        _bannerHost.Height = 100;
         _bannerHost.BackColor = UiTheme.SurfaceRaised;
         _bannerHost.Padding = new Padding(UiTheme.Gutter, UiTheme.GutterTight, UiTheme.Gutter, 0);
 
         _patientBanner.Font = UiTheme.SectionTitle;
         _patientBanner.ForeColor = UiTheme.TextPrimary;
         _patientBanner.Dock = DockStyle.Top;
-        _patientBanner.Height = 26;
+        _patientBanner.Height = 48;   // two lines: the accession number must not be cut off
 
         // Fasting and alerts are their own full-width bands so they cannot be skimmed past.
         _fastingBanner.Font = UiTheme.BodyBold;
@@ -158,11 +158,11 @@ public sealed class CollectionView : LocalizedView
         var actions = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = UiTheme.Surface };
 
         _record.Bounds = new Rectangle(0, 10, 220, UiTheme.ButtonHeight);
-        _dispatch.Bounds = new Rectangle(230, 10, 170, UiTheme.ButtonHeight);
-        _reprint.Bounds = new Rectangle(410, 10, 190, UiTheme.ButtonHeight);
-        _refresh.Bounds = new Rectangle(610, 10, 110, UiTheme.ButtonHeight);
+        _dispatch.Bounds = new Rectangle(230, 10, 210, UiTheme.ButtonHeight);
+        _reprint.Bounds = new Rectangle(450, 10, 190, UiTheme.ButtonHeight);
+        _refresh.Bounds = new Rectangle(650, 10, 110, UiTheme.ButtonHeight);
 
-        _status.Bounds = new Rectangle(730, 16, 560, 20);
+        _status.Bounds = new Rectangle(770, 16, 520, 20);
         _status.Font = UiTheme.Small;
         _status.ForeColor = UiTheme.TextSecondary;
         _status.AutoSize = false;
@@ -265,8 +265,8 @@ public sealed class CollectionView : LocalizedView
 
         _patients.SelectionChanged += (_, _) => ShowSelectedPatient();
 
-        _record.Click += async (_, _) => await RecordAsync();
-        _dispatch.Click += async (_, _) => await DispatchAsync();
+        _record.Click += async (_, _) => await RecordAsync(dispatch: false);
+        _dispatch.Click += async (_, _) => await RecordAsync(dispatch: true);
         _reprint.Click += async (_, _) => await ReprintAsync();
 
         _tubes.CellPainting += OnTubeCellPainting;
@@ -340,7 +340,7 @@ public sealed class CollectionView : LocalizedView
         _onlyUrgent.Text = T("Priority.Urgent");
         _refresh.Text = T("Action.Refresh");
         _record.Text = T("Action.Collect");
-        _dispatch.Text = T("Action.Dispatch");
+        _dispatch.Text = T("Action.CollectAndDispatch");
         _reprint.Text = T("Action.PrintLabels");
 
         if (_patients.Columns.Count > 0)
@@ -349,8 +349,8 @@ public sealed class CollectionView : LocalizedView
             _patients.Column("patient").HeaderText = T("Patient.Title");
             _patients.Column("age").HeaderText = T("Patient.Age");
             _patients.Column("priority").HeaderText = T("Field.Priority");
-            _patients.Column("tubes").HeaderText = T("Sample.Plural");
-            _patients.Column("waiting").HeaderText = T("Order.RegisteredAt");
+            _patients.Column("tubes").HeaderText = T("Collection.TubeCount");
+            _patients.Column("waiting").HeaderText = T("Collection.Registered");
         }
 
         if (_tubes.Columns.Count > 0)
@@ -611,7 +611,10 @@ public sealed class CollectionView : LocalizedView
             .Select(r => (Guid)r.Tag!)
     ];
 
-    private async Task RecordAsync()
+    // The worklist only holds tubes still to be drawn, so "Expédier" on its own could never succeed
+    // here: every tube was refused with "must be collected before dispatch". At a collection point
+    // the tube is drawn and sent in one go, so the button now records the draw, then the dispatch.
+    private async Task RecordAsync(bool dispatch)
     {
         _tubes.EndEdit();
 
@@ -676,38 +679,29 @@ public sealed class CollectionView : LocalizedView
             _status.ForeColor = UiTheme.Normal;
             _status.Text = $"{requests.Count} {T("SampleStatus.Collected").ToLowerInvariant()}";
 
+            if (dispatch)
+            {
+                var sent = await _workflow.DispatchAsync([.. requests.Select(r => r.SampleId)]);
+
+                if (sent.IsFailure)
+                {
+                    _dialogs.ShowFailure(sent);
+                }
+                else
+                {
+                    _status.Text = $"{requests.Count} {T("SampleStatus.InTransit").ToLowerInvariant()}";
+                }
+            }
+
             await ActivateAsync();
         }
         finally
         {
             Cursor = Cursors.Default;
-            _record.Enabled = true;
+            _record.Enabled = _tubes.Rows.Count > 0;
         }
     }
 
-    private async Task DispatchAsync()
-    {
-        var selected = SelectedSampleIds();
-
-        if (selected.Count == 0)
-        {
-            _status.Text = T("Message.NothingSelected");
-            return;
-        }
-
-        var result = await _workflow.DispatchAsync(selected);
-
-        if (result.IsFailure)
-        {
-            _dialogs.ShowFailure(result);
-            return;
-        }
-
-        _status.ForeColor = UiTheme.Normal;
-        _status.Text = $"{selected.Count} {T("SampleStatus.InTransit").ToLowerInvariant()}";
-
-        await ActivateAsync();
-    }
 
     /// <summary>
     /// Reprints the patient's labels.

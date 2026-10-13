@@ -21,6 +21,7 @@ public static class IconCatalog
         ["Action.Confirm"] = Glyph.Check,
         ["Action.Delete"] = Glyph.Trash2,
         ["Action.Dispatch"] = Glyph.Truck,
+        ["Action.CollectAndDispatch"] = Glyph.Truck,
         ["Action.Edit"] = Glyph.Pencil,
         ["Action.Export"] = Glyph.Download,
         ["Action.Logout"] = Glyph.LogOut,

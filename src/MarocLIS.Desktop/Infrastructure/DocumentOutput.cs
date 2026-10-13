@@ -38,6 +38,7 @@ public sealed class SessionDocumentOutput : IDocumentOutput, IDisposable
     private readonly ILogger<SessionDocumentOutput>? _logger;
     private readonly string _sessionFolder;
     private readonly Func<string, bool> _open;
+    private readonly WorkstationPrinters? _printers;
     private readonly Lock _gate = new();
 
     private bool _disposed;
@@ -47,9 +48,11 @@ public sealed class SessionDocumentOutput : IDocumentOutput, IDisposable
     /// exercised the real one would launch a PDF reader on whoever ran it.
     /// </param>
     public SessionDocumentOutput(ILogger<SessionDocumentOutput>? logger = null,
-                                  Func<string, bool>? shellOpen = null)
+                                  Func<string, bool>? shellOpen = null,
+                                  WorkstationPrinters? printers = null)
     {
         _logger = logger;
+        _printers = printers;
         _open = shellOpen ?? ShellOpen;
 
         var root = Path.Combine(
@@ -86,6 +89,13 @@ public sealed class SessionDocumentOutput : IDocumentOutput, IDisposable
             return Result.Failure<string>(Error.Conflict("Document_WriteFailed"));
         }
 
+        // The workstation's A4 printer, when it is set to print without a preview. Falls back to the
+        // viewer when the PDF reader cannot print to a named printer, so a document is never lost.
+        if (_printers is { PrintDocumentsDirectly: true } printers
+            && extension.TrimStart('.').Equals("pdf", StringComparison.OrdinalIgnoreCase)
+            && PrintTo(path, printers.DocumentPrinter))
+            return Result.Success(path);
+
         if (!_open(path))
         {
             // The document exists and is readable; only the viewer is missing. The failure carries
@@ -96,6 +106,35 @@ public sealed class SessionDocumentOutput : IDocumentOutput, IDisposable
         }
 
         return Result.Success(path);
+    }
+
+    private bool PrintTo(string path, string printer)
+    {
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true };
+
+            // "printto" is the verb a PDF reader registers when it can print to a printer it is
+            // given (Adobe Acrobat Reader, SumatraPDF, Foxit). Edge, the Windows default, does not.
+            if (!start.Verbs.Contains("printto", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger?.LogInformation("The PDF reader cannot print directly; opening the document instead.");
+                return false;
+            }
+
+            start.Verb = "printto";
+            start.Arguments = $"\"{printer}\"";
+            start.CreateNoWindow = true;
+            start.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+
+            using var process = System.Diagnostics.Process.Start(start);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Printing directly to {Printer} failed; opening the document instead.", printer);
+            return false;
+        }
     }
 
     private static bool ShellOpen(string path)

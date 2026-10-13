@@ -48,6 +48,9 @@ public static class DesktopServiceCollectionExtensions
         services.AddSingleton(labelPrintOptions);
         services.AddSingleton<ILabelPrinter, LabelPrinter>();
 
+        // Per-workstation choice of the A4 and label printers; overrides Labels:LabelPrinterName.
+        services.AddSingleton<WorkstationPrinters>();
+
         // Singleton and disposable: it owns one folder for the life of the process and deletes it on
         // exit. Registered as the concrete type as well so the host disposes it — resolving only the
         // interface would still dispose it, but naming both makes the ownership explicit.

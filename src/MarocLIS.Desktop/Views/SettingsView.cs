@@ -1,4 +1,6 @@
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Orders;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Morocco;
@@ -29,6 +31,7 @@ public sealed class SettingsView : LocalizedView
     private readonly TabPage _siteTab = new();
     private readonly TabPage _numberingTab = new();
     private readonly TabPage _settingsTab = new();
+    private readonly TabPage _printersTab = new();
 
     // ---- Site tab ----
     private readonly ComboBox _sitePicker = new();
@@ -85,6 +88,21 @@ public sealed class SettingsView : LocalizedView
     private readonly Button _addSetting = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _settingsNotice = new();
 
+    // ---- Printers tab ----
+    private readonly WorkstationPrinters? _printers;
+    private readonly ILabelPrinter? _labelPrinter;
+    private readonly Label _printersIntro = new();
+    private readonly Label _documentPrinterLabel = new();
+    private readonly ComboBox _documentPrinter = new();
+    private readonly CheckBox _printDirectly = new();
+    private readonly Label _printDirectlyHint = new();
+    private readonly Label _labelPrinterLabel = new();
+    private readonly ComboBox _labelPrinterPicker = new();
+    private readonly Button _savePrinters = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _testLabel = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _reloadPrinters = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _printersStatus = new();
+
     private IReadOnlyList<SiteDetail> _sites = [];
     private IReadOnlyList<UserRow> _biologists = [];
     private IReadOnlyList<SequenceRow> _sequenceRows = [];
@@ -94,9 +112,13 @@ public sealed class SettingsView : LocalizedView
                         UserAdministrationService administration,
                         IUserDialogs dialogs, ILocalizer localizer,
                         ICultureManager cultureManager,
-                        ILogger<SettingsView>? logger = null)
+                        ILogger<SettingsView>? logger = null,
+                        WorkstationPrinters? printers = null,
+                        ILabelPrinter? labelPrinter = null)
         : base(localizer, cultureManager)
     {
+        _printers = printers;
+        _labelPrinter = labelPrinter;
         _configuration = configuration;
         _administration = administration;
         _dialogs = dialogs;
@@ -121,8 +143,9 @@ public sealed class SettingsView : LocalizedView
         BuildSiteTab();
         BuildNumberingTab();
         BuildSettingsTab();
+        BuildPrintersTab();
 
-        _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab]);
+        _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _printersTab]);
         Controls.Add(_tabs);
     }
 
@@ -443,6 +466,159 @@ public sealed class SettingsView : LocalizedView
         _settingsTab.Controls.Add(actions);
     }
 
+    private void BuildPrintersTab()
+    {
+        _printersTab.BackColor = UiTheme.Surface;
+        _printersTab.Padding = new Padding(UiTheme.Gutter);
+        _printersTab.AutoScroll = true;
+
+        Label Text(Label label, Font font, Color colour, Rectangle bounds)
+        {
+            label.Font = font;
+            label.ForeColor = colour;
+            label.AutoSize = false;
+            label.Bounds = bounds;
+            return label;
+        }
+
+        ComboBox Picker(ComboBox combo, int y)
+        {
+            combo.DropDownStyle = ComboBoxStyle.DropDownList;
+            combo.FlatStyle = FlatStyle.Flat;
+            combo.Bounds = new Rectangle(0, y, 420, UiTheme.InputHeight);
+            return combo;
+        }
+
+        Text(_printersIntro, UiTheme.Small, UiTheme.TextSecondary, new Rectangle(0, 0, 760, 36));
+
+        Text(_documentPrinterLabel, UiTheme.BodyBold, UiTheme.TextPrimary, new Rectangle(0, 48, 760, 22));
+        Picker(_documentPrinter, 72);
+
+        _printDirectly.Font = UiTheme.Body;
+        _printDirectly.AutoSize = false;
+        _printDirectly.Bounds = new Rectangle(0, 106, 760, 24);
+
+        Text(_printDirectlyHint, UiTheme.Small, UiTheme.TextSecondary, new Rectangle(20, 130, 740, 36));
+
+        Text(_labelPrinterLabel, UiTheme.BodyBold, UiTheme.TextPrimary, new Rectangle(0, 182, 760, 22));
+        Picker(_labelPrinterPicker, 206);
+
+        _savePrinters.Bounds = new Rectangle(0, 256, 180, UiTheme.ButtonHeight);
+        _testLabel.Bounds = new Rectangle(190, 256, 230, UiTheme.ButtonHeight);
+        _reloadPrinters.Bounds = new Rectangle(430, 256, 150, UiTheme.ButtonHeight);
+
+        Text(_printersStatus, UiTheme.SmallBold, UiTheme.TextSecondary, new Rectangle(0, 298, 760, 40));
+
+        _printersTab.Controls.AddRange(
+        [
+            _printersIntro, _documentPrinterLabel, _documentPrinter, _printDirectly, _printDirectlyHint,
+            _labelPrinterLabel, _labelPrinterPicker, _savePrinters, _testLabel, _reloadPrinters,
+            _printersStatus
+        ]);
+
+        _printDirectly.CheckedChanged += (_, _) => UpdatePrinterControls();
+        _documentPrinter.SelectedIndexChanged += (_, _) => UpdatePrinterControls();
+        _savePrinters.Click += (_, _) => SavePrinters();
+        _testLabel.Click += (_, _) => PrintTestLabel();
+        _reloadPrinters.Click += (_, _) => PopulatePrinters();
+    }
+
+    // The first entry of each list is "none": the Windows default printer for documents, a PDF for
+    // labels. A printer that was chosen earlier but is no longer installed stays in the list,
+    // marked, so the operator sees why it no longer prints instead of a silently changed choice.
+    private void PopulatePrinters()
+    {
+        var installed = WorkstationPrinters.Installed();
+
+        void Fill(ComboBox combo, string none, string current)
+        {
+            combo.Items.Clear();
+            combo.Items.Add(new PrinterChoice(string.Empty, none));
+
+            foreach (var name in installed) combo.Items.Add(new PrinterChoice(name, name));
+
+            if (current.Length > 0 && !installed.Contains(current, StringComparer.OrdinalIgnoreCase))
+                combo.Items.Add(new PrinterChoice(current, $"{current} — {T("Printers.Missing")}"));
+
+            combo.SelectedIndex = Math.Max(0, combo.Items.Cast<PrinterChoice>().ToList()
+                .FindIndex(c => c.Name.Equals(current, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        var defaultPrinter = WorkstationPrinters.DefaultPrinter();
+        var documentNone = defaultPrinter is null
+            ? T("Printers.WindowsDefault")
+            : $"{T("Printers.WindowsDefault")} ({defaultPrinter})";
+
+        Fill(_documentPrinter, documentNone, _printers?.DocumentPrinter ?? string.Empty);
+        Fill(_labelPrinterPicker, T("Printers.LabelsAsPdf"), _printers?.LabelPrinter ?? string.Empty);
+
+        _printDirectly.Checked = _printers?.PrintDocumentsDirectly ?? false;
+
+        _printersStatus.ForeColor = UiTheme.TextSecondary;
+        _printersStatus.Text = installed.Count == 0 ? T("Printers.NoneInstalled") : string.Empty;
+
+        UpdatePrinterControls();
+    }
+
+    private void UpdatePrinterControls()
+    {
+        var hasDocumentPrinter = _documentPrinter.SelectedItem is PrinterChoice { Name.Length: > 0 };
+
+        _printDirectly.Enabled = hasDocumentPrinter && _printers is not null;
+        if (!hasDocumentPrinter) _printDirectly.Checked = false;
+
+        _savePrinters.Enabled = _printers is not null;
+        _testLabel.Enabled = _labelPrinter is not null;
+    }
+
+    private void SavePrinters()
+    {
+        if (_printers is null) return;
+
+        var document = (_documentPrinter.SelectedItem as PrinterChoice)?.Name ?? string.Empty;
+        var label = (_labelPrinterPicker.SelectedItem as PrinterChoice)?.Name ?? string.Empty;
+
+        if (_printers.Save(document, _printDirectly.Checked, label))
+        {
+            _printersStatus.ForeColor = UiTheme.Normal;
+            _printersStatus.Text = T("Printers.Saved");
+        }
+        else
+        {
+            _printersStatus.ForeColor = UiTheme.Critical;
+            _printersStatus.Text = T("Printers.SaveFailed");
+        }
+    }
+
+    private void PrintTestLabel()
+    {
+        if (_labelPrinter is null) return;
+
+        // Saved first: the test must print on the printer shown, not on the one saved earlier.
+        SavePrinters();
+
+        var sample = new SampleLabel(
+            Guid.Empty, "0000000000", "TEST ÉTIQUETTE", null,
+            new DateOnly(2000, 1, 1), "0000-000000", "Test", "#888888",
+            1, 1, ["TEST"], false, DateTimeOffset.Now);
+
+        var result = _labelPrinter.Print([sample]);
+
+        if (result.IsFailure)
+        {
+            _dialogs.ShowFailure(result, T("Printers.TestLabel"));
+            return;
+        }
+
+        _printersStatus.ForeColor = UiTheme.Normal;
+        _printersStatus.Text = T("Printers.TestSent", _labelPrinter.ConfiguredPrinter);
+    }
+
+    private sealed record PrinterChoice(string Name, string Display)
+    {
+        public override string ToString() => Display;
+    }
+
     private void Field(Control parent, string key, int top, int left)
     {
         var label = UiTheme.FieldLabel(T(key));
@@ -524,6 +700,17 @@ public sealed class SettingsView : LocalizedView
         _siteTab.Text = T("Site.Title");
         _numberingTab.Text = T("Admin.Sequences");
         _settingsTab.Text = T("Nav.Settings");
+        _printersTab.Text = T("Printers.Title");
+
+        _printersIntro.Text = T("Printers.Intro");
+        _documentPrinterLabel.Text = T("Printers.Documents");
+        _printDirectly.Text = T("Printers.PrintDirectly");
+        _printDirectlyHint.Text = T("Printers.PrintDirectlyHint");
+        _labelPrinterLabel.Text = T("Printers.Labels");
+        _savePrinters.Text = T("Action.Save");
+        _testLabel.Text = T("Printers.TestLabel");
+        _reloadPrinters.Text = T("Action.Refresh");
+        PopulatePrinters();
 
         SetText(_siteTab, "legalHeading", T("Site.LegalIdentity"));
         SetText(_siteTab, "authHeading", T("Site.Authorization"));

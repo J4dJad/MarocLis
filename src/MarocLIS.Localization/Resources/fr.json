@@ -1,6 +1,23 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
 
+  "Printers": {
+    "TestSent": "Étiquette de test envoyée à « {0} ».",
+    "TestLabel": "Imprimer une étiquette de test",
+    "SaveFailed": "Impossible d'enregistrer le choix des imprimantes sur ce poste.",
+    "Saved": "Imprimantes enregistrées pour ce poste.",
+    "NoneInstalled": "Aucune imprimante n'est installée sur ce poste.",
+    "Missing": "introuvable sur ce poste",
+    "LabelsAsPdf": "Aucune : étiquettes en PDF",
+    "WindowsDefault": "Imprimante par défaut de Windows",
+    "Labels": "Étiquettes des tubes (imprimante d'étiquettes)",
+    "PrintDirectlyHint": "Nécessite un lecteur PDF capable d'imprimer directement (Adobe Acrobat Reader, SumatraPDF, Foxit). Sinon, le document s'ouvre à l'écran comme d'habitude.",
+    "PrintDirectly": "Imprimer directement sur cette imprimante, sans aperçu à l'écran",
+    "Documents": "Comptes rendus, factures, fiches de paillasse (A4)",
+    "Intro": "Choix propres à ce poste de travail : chaque PC peut avoir sa propre imprimante A4 et sa propre imprimante d'étiquettes.",
+    "Title": "Imprimantes"
+  },
+
   "Print": {
     "RowCount": "{0} ligne(s)",
     "NothingToPrint": "Cet écran n'affiche aucune liste à imprimer."
@@ -59,6 +76,7 @@
   },
 
   "Action": {
+    "CollectAndDispatch": "Prélever et expédier",
     "New": "Nouveau",
     "Open": "Ouvrir",
     "Save": "Enregistrer",
@@ -517,6 +535,8 @@
   },
 
   "Collection": {
+    "Registered": "Arrivée",
+    "TubeCount": "Tubes",
     "ConfirmFasting": "à confirmer auprès du patient",
     "FastingQuestion": "Le patient déclare-t-il être à jeun depuis au moins {0} heures ?",
     "ProtectFromLight": "à l'abri de la lumière",
@@ -2295,7 +2315,7 @@
   "Interface_RetentionNotConfigured": "La durée de conservation du journal est à {0} jour(s) : corrigez-la avant de purger.",
   "Label_NothingToPrint": "Aucune étiquette à imprimer.",
   "Label_NoPrinterConfigured": "Aucune imprimante d'étiquettes configurée.",
-  "Label_PrinterNotFound": "Windows ne reconnaît pas l'imprimante « {0} » : corrigez le nom dans appsettings.json, ou retirez-le pour produire un PDF.",
+  "Label_PrinterNotFound": "Windows ne reconnaît pas l'imprimante « {0} » : choisissez-la dans Paramètres › Imprimantes, ou choisissez « Aucune » pour produire un PDF.",
   "Label_PrintFailed": "L'impression des étiquettes a échoué. Vérifiez le papier et la file d'impression.",
   "Document_Empty": "Le document est vide : rien à ouvrir.",
   "Document_WriteFailed": "Impossible d'écrire le document sur ce poste.",
