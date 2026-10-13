@@ -27,11 +27,12 @@ public static class DesktopServiceCollectionExtensions
                                         .Get<LabelOptions>() ?? new LabelOptions();
         services.AddSingleton(labelOptions);
 
-        // Singletons: both renderers are stateless after font registration, and registering fonts
+        // Singletons: the renderers are stateless after font registration, and registering fonts
         // per report would be wasteful on a reception workstation printing continuously.
         services.AddSingleton<IReportRenderer, QuestPdfReportRenderer>();
         services.AddSingleton<IListPdfRenderer, ListPdfRenderer>();
         services.AddSingleton<IInvoiceRenderer, QuestPdfInvoiceRenderer>();
+        services.AddSingleton<IBenchWorksheetRenderer, QuestPdfBenchWorksheetRenderer>();
 
         // Resolved once: the installed font set does not change while the application runs, and the
         // report screen would otherwise pay to enumerate it on every release.
@@ -57,6 +58,7 @@ public static class DesktopServiceCollectionExtensions
 
         services.AddIsolatedQueries<IResultQueries, ResultQueries>();
         services.AddIsolatedQueries<IValidationQueries, ValidationQueries>();
+        services.AddIsolatedQueries<IBenchWorksheetQueries, BenchWorksheetQueries>();
         services.AddIsolatedQueries<IReportQueries, ReportQueries>();
         services.AddIsolatedQueries<IDashboardQueries, DashboardQueries>();
         services.AddIsolatedQueries<IPatientQueries, PatientQueries>();
