@@ -191,14 +191,19 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
             .Join(db.QcTargets.AsNoTracking(), x => x.Result.QcTargetId, t => t.Id,
                   (x, t) => new { x.Result, x.Parameter, x.Instrument, Target = t })
             .Join(db.QcMaterials.AsNoTracking(), x => x.Target.QcMaterialId, m => m.Id,
-                  (x, m) => new QcReviewRow(
+                  (x, m) => new { x.Result, x.Parameter, x.Instrument, x.Target, Material = m })
+            // Ordered and capped before the projection: EF cannot sort on a member of a row built
+            // through a constructor.
+            .OrderBy(x => x.Result.MeasuredAt)
+            .Take(300)
+            .Select(x => new QcReviewRow(
                       x.Result.Id,
                       x.Target.Id,
                       x.Parameter.Code,
                       x.Parameter.Name,
                       x.Instrument.Code,
-                      m.LotNumber,
-                      m.Level,
+                      x.Material.LotNumber,
+                      x.Material.Level,
                       x.Result.Value,
                       x.Result.ZScore,
                       x.Result.MeasuredAt,
@@ -207,8 +212,6 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
                       // How many patient results this rejection has already flagged — the figure
                       // that tells the reviewer how urgent the file is.
                       db.TestResults.Count(tr => tr.CoveringQcRunId == x.Result.QcRunId)))
-            .OrderBy(r => r.MeasuredAt)
-            .Take(300)
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<decimal>> GetAcceptedValuesAsync(

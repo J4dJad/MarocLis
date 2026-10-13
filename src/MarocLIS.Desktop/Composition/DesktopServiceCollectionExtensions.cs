@@ -52,26 +52,26 @@ public static class DesktopServiceCollectionExtensions
 
         // ---- Read-side queries -----------------------------------------------------------------
 
-        services.AddScoped<IResultQueries, ResultQueries>();
-        services.AddScoped<IValidationQueries, ValidationQueries>();
-        services.AddScoped<IReportQueries, ReportQueries>();
-        services.AddScoped<IDashboardQueries, DashboardQueries>();
-        services.AddScoped<IPatientQueries, PatientQueries>();
-        services.AddScoped<ICatalogQueries, CatalogQueries>();
-        services.AddScoped<Application.Orders.IOrderQueries, OrderQueries>();
-        services.AddScoped<Application.Catalog.ICatalogMaintenanceQueries, CatalogMaintenanceQueries>();
-        services.AddScoped<Application.Instruments.IInstrumentInterfaceQueries, InstrumentInterfaceQueries>();
-        services.AddScoped<Application.Samples.ISampleQueries, SampleQueries>();
-        services.AddScoped<Application.Billing.IBillingQueries, BillingQueries>();
-        services.AddScoped<Application.Quality.IQualityQueries, QualityQueries>();
-        services.AddScoped<Application.Inventory.IInventoryQueries, InventoryQueries>();
-        services.AddScoped<Application.Inventory.IPurchaseOrderQueries, PurchaseOrderQueries>();
-        services.AddScoped<Application.Quality.IDocumentControlQueries, DocumentControlQueries>();
-        services.AddScoped<Application.Quality.IEqaQueries, EqaQueries>();
-        services.AddScoped<Application.Statistics.IStatisticsQueries, StatisticsQueries>();
-        services.AddScoped<Application.Administration.IAdministrationQueries, AdministrationQueries>();
-        services.AddScoped<Application.Administration.IMasterDataQueries, MasterDataQueries>();
-        services.AddScoped<Application.Administration.IAuditQueries, AuditQueries>();
+        services.AddIsolatedQueries<IResultQueries, ResultQueries>();
+        services.AddIsolatedQueries<IValidationQueries, ValidationQueries>();
+        services.AddIsolatedQueries<IReportQueries, ReportQueries>();
+        services.AddIsolatedQueries<IDashboardQueries, DashboardQueries>();
+        services.AddIsolatedQueries<IPatientQueries, PatientQueries>();
+        services.AddIsolatedQueries<ICatalogQueries, CatalogQueries>();
+        services.AddIsolatedQueries<Application.Orders.IOrderQueries, OrderQueries>();
+        services.AddIsolatedQueries<Application.Catalog.ICatalogMaintenanceQueries, CatalogMaintenanceQueries>();
+        services.AddIsolatedQueries<Application.Instruments.IInstrumentInterfaceQueries, InstrumentInterfaceQueries>();
+        services.AddIsolatedQueries<Application.Samples.ISampleQueries, SampleQueries>();
+        services.AddIsolatedQueries<Application.Billing.IBillingQueries, BillingQueries>();
+        services.AddIsolatedQueries<Application.Quality.IQualityQueries, QualityQueries>();
+        services.AddIsolatedQueries<Application.Inventory.IInventoryQueries, InventoryQueries>();
+        services.AddIsolatedQueries<Application.Inventory.IPurchaseOrderQueries, PurchaseOrderQueries>();
+        services.AddIsolatedQueries<Application.Quality.IDocumentControlQueries, DocumentControlQueries>();
+        services.AddIsolatedQueries<Application.Quality.IEqaQueries, EqaQueries>();
+        services.AddIsolatedQueries<Application.Statistics.IStatisticsQueries, StatisticsQueries>();
+        services.AddIsolatedQueries<Application.Administration.IAdministrationQueries, AdministrationQueries>();
+        services.AddIsolatedQueries<Application.Administration.IMasterDataQueries, MasterDataQueries>();
+        services.AddIsolatedQueries<Application.Administration.IAuditQueries, AuditQueries>();
 
         // ---- Shell and dialogs -----------------------------------------------------------------
 

@@ -4,6 +4,7 @@ using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MarocLIS.Infrastructure.Security;
@@ -203,8 +204,15 @@ public sealed class PermissionGuard(
     }
 }
 
-/// <summary>Writes security events through the application's own context, in their own transaction.</summary>
-public sealed class SecurityAuditor(LisDbContext context, IClock clock, ICurrentUser? currentUser)
+/// <summary>
+/// Writes security events through a short-lived context of their own, in their own transaction.
+/// <para>
+/// Not the screen's context: an authorization denial is logged without being awaited, so it would
+/// otherwise run alongside whatever the screen does next on that same context, which EF refuses,
+/// and its save would also commit any edit the screen was still holding.
+/// </para>
+/// </summary>
+public sealed class SecurityAuditor(IServiceScopeFactory scopes, IClock clock, ICurrentUser? currentUser)
     : ISecurityAuditor
 {
     public async Task LogAsync(SecurityEventKind kind, bool succeeded, string? attemptedUserName = null,
@@ -224,6 +232,9 @@ public sealed class SecurityAuditor(LisDbContext context, IClock clock, ICurrent
             Details = details
         };
 
+        await using var scope = scopes.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<LisDbContext>();
+
         context.SecurityEvents.Add(entry);
         await context.SaveChangesAsync(ct);
     }
@@ -232,16 +243,32 @@ public sealed class SecurityAuditor(LisDbContext context, IClock clock, ICurrent
 /// <summary>
 /// Records consultations of personal health data, which change auditing cannot see.
 /// </summary>
-public sealed class DataAccessAuditor(LisDbContext db, IClock clock, ICurrentUser currentUser)
-    : IDataAccessAuditor
+/// <remarks>
+/// Each entry is written through its own short-lived context, never the screen's. A screen often
+/// loads twice in quick succession (a filter set during its first paint fires a second load), and
+/// both loads log their read: on a shared context the second log arrives while the first is still
+/// saving and EF refuses it. A separate context also keeps the log from sweeping up, or being swept
+/// up by, whatever unsaved edits the screen happens to be holding.
+/// </remarks>
+public sealed class DataAccessAuditor(IServiceScopeFactory scopes, IClock clock,
+                                     ICurrentUser currentUser) : IDataAccessAuditor
 {
+    private async Task SaveAsync(DataAccessLog entry, CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<LisDbContext>();
+
+        db.DataAccessLogs.Add(entry);
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task LogAsync(DataAccessKind kind, Guid? patientId = null, Guid? orderId = null,
                                string? context = null, int? recordCount = null,
                                string? queryDescription = null, CancellationToken ct = default)
     {
         if (!currentUser.IsAuthenticated) return;
 
-        db.DataAccessLogs.Add(new DataAccessLog(currentUser.UserId, kind, clock.Now)
+        await SaveAsync(new DataAccessLog(currentUser.UserId, kind, clock.Now)
         {
             UserName = currentUser.UserName,
             PatientId = patientId,
@@ -251,9 +278,7 @@ public sealed class DataAccessAuditor(LisDbContext db, IClock clock, ICurrentUse
             Context = Truncate(context, 150),
             Workstation = currentUser.Workstation,
             SiteId = currentUser.SiteId
-        });
-
-        await db.SaveChangesAsync(ct);
+        }, ct);
     }
 
     public async Task LogBreakGlassAsync(Guid patientId, string justification,
@@ -261,7 +286,7 @@ public sealed class DataAccessAuditor(LisDbContext db, IClock clock, ICurrentUse
     {
         if (!currentUser.IsAuthenticated) return;
 
-        db.DataAccessLogs.Add(new DataAccessLog(currentUser.UserId, DataAccessKind.ViewPatient, clock.Now)
+        await SaveAsync(new DataAccessLog(currentUser.UserId, DataAccessKind.ViewPatient, clock.Now)
         {
             UserName = currentUser.UserName,
             PatientId = patientId,
@@ -270,9 +295,7 @@ public sealed class DataAccessAuditor(LisDbContext db, IClock clock, ICurrentUse
             IsBreakGlass = true,
             BreakGlassJustification = Truncate(justification, 1000),
             Context = "BreakGlass"
-        });
-
-        await db.SaveChangesAsync(ct);
+        }, ct);
     }
 
     private static string? Truncate(string? value, int max) =>

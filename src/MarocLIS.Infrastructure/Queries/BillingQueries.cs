@@ -29,6 +29,10 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                                             && i.ChargedPrice > 0m))
             .Join(db.Patients.AsNoTracking(), o => o.PatientId, p => p.Id,
                   (o, p) => new { Order = o, Patient = p })
+            // Ordered and capped before the projection: EF cannot sort on a member of a row built
+            // through a constructor, and SQL Server rejected the query outright.
+            .OrderBy(x => x.Order.RegisteredAt)
+            .Take(500)
             .Select(x => new BillableOrderRow(
                 x.Order.Id,
                 x.Order.AccessionNumber,
@@ -48,8 +52,6 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                              .Sum(i => i.PatientShare),
                 x.Order.Items.Count(i => i.Status != LabOrderItemStatus.Cancelled),
                 x.Order.Status))
-            .OrderBy(r => r.RegisteredAt)
-            .Take(500)
             .ToListAsync(ct);
 
     public async Task<PagedResult<InvoiceRow>> GetInvoicesAsync(

@@ -33,7 +33,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
     internal AnalysisEditorDialog(ILocalizer localizer, IUserDialogs dialogs,
                                   CatalogLookups lookups, AnalysisRow? existing)
         : base(localizer, dialogs, existing is null ? "Catalog.NewAnalysis" : "Catalog.EditAnalysis",
-               existing?.Code, 760, 620)
+               existing?.Code, 760, 690)
     {
         _id = existing?.Id;
         _isNew = existing is null;
@@ -47,7 +47,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         if (!_isNew) _code.BackColor = UiTheme.SurfaceSunken;
         _code.CharacterCasing = CharacterCasing.Upper;
 
-        Notice(170, 34, 560, 20,
+        Notice(170, 34, 560, 26,
                _isNew ? "Catalog.CodeSetOnce" : "Catalog.CodeImmutableNotice",
                _isNew ? UiTheme.TextSecondary : UiTheme.Abnormal);
 
@@ -88,11 +88,11 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _methodFr = TextField("Catalog.Method", 20, 280, 340, null);
         _reagent = TextField("Catalog.ReagentReference", 372, 280, 340, null);
 
-        _accredited = Check("Catalog.Accredited", 20, 324, existing?.IsAccredited ?? false);
-        _subcontracted = Check("Catalog.Subcontracted", 176, 324, existing?.IsSubcontracted ?? false);
-        _notifiable = Check("Catalog.Notifiable", 20, 348, false);
+        _accredited = Check("Catalog.Accredited", 20, 334, existing?.IsAccredited ?? false);
+        _subcontracted = Check("Catalog.Subcontracted", 20, 358, existing?.IsSubcontracted ?? false);
+        _notifiable = Check("Catalog.Notifiable", 20, 382, false);
 
-        _subcontractor = Lookup("Catalog.SubcontractorSite", 352, 306, 360,
+        _subcontractor = Lookup("Catalog.SubcontractorSite", 372, 334, 340,
                                 lookups.PartnerSites.Select(s => (s.Id, $"{s.Code}  {s.Name.For(language)}")),
                                 null);
 
@@ -103,35 +103,35 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         // --- turnaround ------------------------------------------------------------------------
 
-        _routine = Number("Catalog.RoutineTurnaround", 20, 372, 120,
+        _routine = Number("Catalog.RoutineTurnaround", 20, 412, 140,
                           existing?.RoutineTurnaroundHours ?? 24, max: 8760);
 
-        _urgent = Number("Catalog.UrgentTurnaround", 152, 372, 120, 120, max: 10080);
+        _urgent = Number("Catalog.UrgentTurnaround", 180, 412, 140, 120, max: 10080);
 
-        _urgentAvailable = Check("Catalog.AvailableUrgently", 292, 392, true);
+        _urgentAvailable = Check("Catalog.AvailableUrgently", 340, 432, true);
 
-        Notice(20, 404, 692, 20, "Catalog.TurnaroundNotice");
+        Notice(20, 460, 692, 20, "Catalog.TurnaroundNotice");
 
         // --- pre-analytical --------------------------------------------------------------------
 
-        _fasting = Number("Catalog.FastingOverride", 20, 428, 120, null, max: 48);
-        _stabilityRoom = Number("Catalog.StabilityRoom", 152, 428, 120, null, max: 8760);
-        _stabilityFridge = Number("Catalog.StabilityFridge", 284, 428, 120, null, max: 8760);
-        _displayOrder = Number("Field.DisplayOrder", 416, 428, 100, 0, max: 9999);
+        _fasting = Number("Catalog.FastingOverride", 20, 488, 140, null, max: 48);
+        _stabilityRoom = Number("Catalog.StabilityRoom", 180, 488, 140, null, max: 8760);
+        _stabilityFridge = Number("Catalog.StabilityFridge", 340, 488, 140, null, max: 8760);
+        _displayOrder = Number("Field.DisplayOrder", 500, 488, 120, 0, max: 9999);
 
-        _clinicalInfo = TextField("Catalog.RequiredClinicalInformation", 20, 476, 692, null);
+        _clinicalInfo = TextField("Catalog.RequiredClinicalInformation", 20, 540, 692, null);
 
-        _active = Check("Field.Active", 20, 524, existing?.IsActive ?? true, bold: true);
+        _active = Check("Field.Active", 20, 592, existing?.IsActive ?? true, bold: true);
 
         // Pre-fill the fields the row does not carry. The grid row is a summary, so the editor
         // opens on what it knows and leaves the rest blank rather than inventing values — an
         // operator correcting a turnaround must not silently clear a stability window.
         if (existing is not null)
-            Notice(200, 520, 512, 34, "Catalog.PartialEditNotice", UiTheme.Abnormal);
+            Notice(200, 588, 512, 34, "Catalog.PartialEditNotice", UiTheme.Abnormal);
 
         RefreshSubcontracting();
 
-        Buttons(566, 760);
+        Buttons(636, 760);
     }
 
     private void RefreshSubcontracting()
@@ -312,7 +312,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _criticalLow = Bare(468, 200, 100, existing?.CriticalLow);
         _criticalHigh = Bare(576, 200, 100, existing?.CriticalHigh);
 
-        Notice(20, 234, 712, 20, "Catalog.LimitsNotice");
+        Notice(20, 234, 712, 26, "Catalog.LimitsNotice");
 
         // --- delta check -----------------------------------------------------------------------
 
@@ -715,7 +715,7 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
                                  i => (i.Id, $"{i.Code}  {i.Name.For(localizer.CurrentLanguage)}")),
                              existing?.InstrumentId);
 
-        Notice(388, 118, 280, 30, "Catalog.InstrumentRangeNotice");
+        Notice(388, 118, 280, 38, "Catalog.InstrumentRangeNotice");
 
         // --- the interval -----------------------------------------------------------------------
 
@@ -1637,7 +1637,7 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
         if (!_isNew) _code.BackColor = UiTheme.SurfaceSunken;
         _code.CharacterCasing = CharacterCasing.Upper;
 
-        Notice(192, 34, 408, 20,
+        Notice(192, 34, 408, 26,
                _isNew ? "Catalog.CodeSetOnce" : "Catalog.CodeImmutableNotice",
                _isNew ? UiTheme.TextSecondary : UiTheme.Abnormal);
 

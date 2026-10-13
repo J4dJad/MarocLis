@@ -226,6 +226,9 @@ public abstract class LocalizedView : UserControl
         base.OnLoad(e);
         ApplyTexts();
         RtlLayout.Apply(this, _cultureManager.CurrentLanguage);
+
+        // After the texts: a strip is only too wide once its buttons carry their real labels.
+        BarReflow.AttachAll(this);
     }
 
     private void OnLanguageChanged(object? sender, LanguageChangedEventArgs e)

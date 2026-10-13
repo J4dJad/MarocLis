@@ -223,12 +223,16 @@ public static class UiTheme
         AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
         Font = Body,
         GridColor = Border,
+        // Headers wrap onto a second line rather than ending in "…": "Lieu de conservation" cut
+        // to "Lieu de c…" is a column nobody can identify, and the grid is the whole screen.
+        ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
         ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
         {
             BackColor = SurfaceSunken,
             ForeColor = TextSecondary,
             Font = SmallBold,
             Alignment = DataGridViewContentAlignment.MiddleLeft,
+            WrapMode = DataGridViewTriState.True,
             Padding = new Padding(6, 0, 6, 0),
             SelectionBackColor = SurfaceSunken,
             SelectionForeColor = TextSecondary

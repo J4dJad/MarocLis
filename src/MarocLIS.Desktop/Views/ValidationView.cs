@@ -107,6 +107,17 @@ public sealed class ValidationView : LocalizedView
 
         _refresh.Bounds = new Rectangle(420, 0, 110, UiTheme.ButtonHeight - 4);
 
+        // The heading sizes itself to its text, which in French is longer than the gap left for
+        // it: the tick box and the button follow it instead of sitting at fixed positions under it.
+        void FollowHeading()
+        {
+            _onlyUrgent.Left = _worklistHeading.Right + 16;
+            _refresh.Left = Math.Max(420, _onlyUrgent.Right + 16);
+        }
+
+        _worklistHeading.SizeChanged += (_, _) => FollowHeading();
+        _onlyUrgent.SizeChanged += (_, _) => FollowHeading();
+
         BuildWorklistColumns();
 
         var worklistHost = new Panel

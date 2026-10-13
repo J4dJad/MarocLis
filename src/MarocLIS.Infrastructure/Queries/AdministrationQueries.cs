@@ -152,26 +152,37 @@ public sealed class AdministrationQueries(LisDbContext db) : IAdministrationQuer
         if (userId is { } id)
             query = query.Where(e => e.UserId == id || e.TargetUserId == id);
 
-        return await query
+        var rows = await query
             .OrderByDescending(e => e.OccurredAt)
             .Take(Math.Clamp(take, 1, 2000))
-            .Select(e => new SecurityEventRow(
+            .Select(e => new
+            {
                 e.Id,
                 e.OccurredAt,
                 e.Kind,
                 e.Succeeded,
-                // The attempted name is kept even when no such account exists, which is the whole
-                // point of recording it: a run of sign-ins against a name that was never valid is
-                // a different event from a user mistyping their own password.
-                e.AttemptedUserName ?? (e.UserId == null
+                e.AttemptedUserName,
+                // Fetched separately and coalesced below: the two name columns carry different
+                // collations, and SQL Server refuses to merge them inside one CASE expression.
+                AccountName = e.UserId == null
                     ? null
-                    : db.Users.Where(u => u.Id == e.UserId)
-                              .Select(u => u.UserName).FirstOrDefault()),
+                    : db.Users.Where(u => u.Id == e.UserId).Select(u => u.UserName).FirstOrDefault(),
                 e.Workstation,
                 e.OsUser,
                 e.FailureReasonKey,
-                e.Details))
+                e.Details
+            })
             .ToListAsync(ct);
+
+        // The attempted name is kept even when no such account exists, which is the whole point of
+        // recording it: a run of sign-ins against a name that was never valid is a different event
+        // from a user mistyping their own password.
+        return
+        [
+            .. rows.Select(e => new SecurityEventRow(
+                e.Id, e.OccurredAt, e.Kind, e.Succeeded, e.AttemptedUserName ?? e.AccountName,
+                e.Workstation, e.OsUser, e.FailureReasonKey, e.Details))
+        ];
     }
 
     public Task<bool> UserNameExistsAsync(string userName, CancellationToken ct = default) =>

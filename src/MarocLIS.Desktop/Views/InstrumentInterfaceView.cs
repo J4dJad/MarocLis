@@ -28,6 +28,7 @@ namespace MarocLIS.Desktop.Views;
 public sealed class InstrumentInterfaceView : LocalizedView
 {
     private readonly InstrumentInterfaceService _interfaces;
+    private readonly MarocLIS.Application.Administration.MasterDataService _masterData;
     private readonly InstrumentLinkMonitor _monitor;
     private readonly InstrumentHostOptions _options;
     private readonly IUserDialogs _dialogs;
@@ -59,6 +60,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
     private IReadOnlyList<InterfaceRow> _rows = [];
 
     public InstrumentInterfaceView(InstrumentInterfaceService interfaces,
+                                   MarocLIS.Application.Administration.MasterDataService masterData,
                                    InstrumentLinkMonitor monitor, InstrumentHostOptions options,
                                    IUserDialogs dialogs, ICurrentUser currentUser,
                                    ILocalizer localizer, ICultureManager cultureManager,
@@ -66,6 +68,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
         : base(localizer, cultureManager)
     {
         _interfaces = interfaces;
+        _masterData = masterData;
         _monitor = monitor;
         _options = options;
         _dialogs = dialogs;
@@ -641,7 +644,35 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         if (!create && existing is null) return;
 
-        using var dialog = new InstrumentInterfaceDialog(Localizer, _dialogs, existing);
+        (Guid Id, string Code)? instrument = null;
+
+        if (create)
+        {
+            // The analyser is chosen first, and an empty choice is reported here rather than after
+            // the operator has described a whole frame configuration for nothing.
+            var instruments = await _masterData.GetInstrumentsAsync();
+
+            if (instruments.IsFailure) { _dialogs.ShowFailure(instruments); return; }
+
+            var free = instruments.Value
+                .Where(i => !i.HasInterfaceConfigured && i.Kind == EquipmentKind.Analyser)
+                .OrderBy(i => i.Code)
+                .ToList();
+
+            if (free.Count == 0)
+            {
+                _dialogs.Warn(T("Interface_NoInstrumentAvailable"), T("Interface.New"));
+                return;
+            }
+
+            using var picker = new InterfaceInstrumentDialog(Localizer, _dialogs, free);
+
+            if (picker.ShowDialog(FindForm()) != DialogResult.OK || picker.Choice is null) return;
+
+            instrument = picker.Choice;
+        }
+
+        using var dialog = new InstrumentInterfaceDialog(Localizer, _dialogs, existing, instrument);
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;
 

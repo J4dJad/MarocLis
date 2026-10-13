@@ -1,3 +1,4 @@
+using MarocLIS.Application.Administration;
 using MarocLIS.Application.Instruments;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Equipment;
@@ -35,13 +36,18 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
     internal InterfaceRequest? Request { get; private set; }
 
+    /// <param name="newInstrument">
+    /// For a new link, the analyser it belongs to, chosen beforehand in
+    /// <see cref="InterfaceInstrumentDialog"/>.
+    /// </param>
     internal InstrumentInterfaceDialog(ILocalizer localizer, IUserDialogs dialogs,
-                                       InterfaceRow? existing)
+                                       InterfaceRow? existing,
+                                       (Guid Id, string Code)? newInstrument = null)
         : base(localizer, dialogs, existing is null ? "Interface.New" : "Interface.Edit",
-               existing?.InstrumentCode, 700, 620)
+               existing?.InstrumentCode ?? newInstrument?.Code, 700, 620)
     {
         _id = existing?.Id;
-        _instrumentId = existing?.InstrumentId ?? Guid.Empty;
+        _instrumentId = existing?.InstrumentId ?? newInstrument?.Id ?? Guid.Empty;
 
         _protocol = Choice("Interface.Protocol", 20, 16, 200,
                            existing?.Protocol ?? InstrumentProtocol.AstmE1394,
@@ -93,59 +99,59 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _listenAsServer = Check("Interface.ListenAsServer", 384, 164,
                                  existing?.ListenAsServer ?? false);
 
-        Notice(20, 180, 656, 30, "Interface.ListenNotice");
+        Notice(20, 190, 656, 30, "Interface.ListenNotice");
 
         // --- file drop -------------------------------------------------------------------------
 
-        _inbound = TextField("Interface.InboundDirectory", 20, 214, 320, existing?.InboundDirectory,
+        _inbound = TextField("Interface.InboundDirectory", 20, 226, 320, existing?.InboundDirectory,
                         latin: true);
-        _pattern = TextField("Interface.FilePattern", 352, 214, 120, existing?.FilePattern,
+        _pattern = TextField("Interface.FilePattern", 352, 226, 120, existing?.FilePattern,
                         latin: true, mono: true);
 
-        _processed = TextField("Interface.ProcessedDirectory", 484, 214, 192,
+        _processed = TextField("Interface.ProcessedDirectory", 484, 226, 192,
                           existing?.ProcessedDirectory, latin: true);
 
-        _outbound = TextField("Interface.OutboundDirectory", 20, 262, 320, existing?.OutboundDirectory,
+        _outbound = TextField("Interface.OutboundDirectory", 20, 274, 320, existing?.OutboundDirectory,
                          latin: true);
 
-        Notice(352, 280, 324, 30, "Interface.ProcessedNotice");
+        Notice(352, 292, 324, 30, "Interface.ProcessedNotice");
 
         // --- protocol settings -----------------------------------------------------------------
 
-        _encoding = Picker("Interface.Encoding", 20, 310, 160,
+        _encoding = Picker("Interface.Encoding", 20, 326, 160,
                            ["ISO-8859-1", "UTF-8", "ASCII", "Windows-1252", "Windows-1256"],
                            existing?.Encoding ?? "ISO-8859-1");
 
-        _ackTimeout = Number("Interface.AckTimeout", 192, 310, 100,
+        _ackTimeout = Number("Interface.AckTimeout", 196, 326, 160,
                               existing?.AcknowledgementTimeoutSeconds ?? 15, max: 300);
 
-        _maxRetries = Number("Interface.MaxRetries", 304, 310, 100, existing?.MaxRetries ?? 3,
+        _maxRetries = Number("Interface.MaxRetries", 372, 326, 120, existing?.MaxRetries ?? 3,
                               max: 10);
 
-        Notice(20, 358, 656, 30, "Interface.EncodingNotice");
+        Notice(20, 374, 656, 30, "Interface.EncodingNotice");
 
         // --- behaviour -------------------------------------------------------------------------
 
-        _raiseOnUnmapped = Check("Interface.RaiseOnUnmapped", 20, 396,
+        _raiseOnUnmapped = Check("Interface.RaiseOnUnmapped", 20, 410,
                                   existing?.RaiseIssueOnUnmappedCode ?? true);
 
-        _routeControls = Check("Interface.RouteControls", 20, 420,
+        _routeControls = Check("Interface.RouteControls", 20, 434,
                                 existing?.RouteControlResultsToQc ?? true);
 
-        _autoAccept = Check("Interface.AutoAccept", 20, 444, existing?.AutoAcceptResults ?? false,
+        _autoAccept = Check("Interface.AutoAccept", 20, 458, existing?.AutoAcceptResults ?? false,
                              bold: true);
 
-        Notice(20, 468, 656, 44, "Interface.AutoAcceptNotice", UiTheme.Abnormal);
+        Notice(20, 482, 656, 44, "Interface.AutoAcceptNotice", UiTheme.Abnormal);
 
-        _enabled = Check("Interface.Enabled", 20, 518, existing?.IsEnabled ?? false, bold: true);
+        _enabled = Check("Interface.Enabled", 20, 534, existing?.IsEnabled ?? false, bold: true);
 
-        Notice(180, 514, 496, 30, "Interface.EnabledNotice");
+        Notice(180, 530, 496, 30, "Interface.EnabledNotice");
 
         _transport.SelectedIndexChanged += (_, _) => RefreshTransport();
 
         RefreshTransport();
 
-        Buttons(558, 700);
+        Buttons(574, 700);
     }
 
     /// <summary>A fixed list of values, where free text would only be a way to mistype one.</summary>
@@ -668,5 +674,46 @@ internal sealed class InstrumentRawMessageDialog : Form
         }
 
         return builder.ToString();
+    }
+}
+
+/// <summary>
+/// Chooses the analyser a new link is for, before the link itself is described.
+/// <para>
+/// A link belongs to an analyser and cannot exist on its own, so the question comes first: asking
+/// it after the operator has filled in a whole frame configuration, and then refusing the save,
+/// wastes their work. Only analysers without a link are offered.
+/// </para>
+/// </summary>
+internal sealed class InterfaceInstrumentDialog : MasterDataEditor
+{
+    private readonly ComboBox _instrument;
+    private readonly IReadOnlyList<InstrumentMasterRow> _instruments;
+
+    internal (Guid Id, string Code)? Choice { get; private set; }
+
+    internal InterfaceInstrumentDialog(ILocalizer localizer, IUserDialogs dialogs,
+                                       IReadOnlyList<InstrumentMasterRow> instruments)
+        : base(localizer, dialogs, "Interface.New", null, 460, 190)
+    {
+        _instruments = instruments;
+
+        _instrument = Lookup("Instrument.Title", 20, 16, 420,
+                             instruments.Select(i => (i.InstrumentId,
+                                 $"{i.Code} — {i.Name.For(localizer.CurrentLanguage)}")),
+                             null, allowNone: false);
+
+        Notice(20, 66, 420, 44, "Interface.PickInstrumentNotice");
+
+        Buttons(130, 460);
+    }
+
+    protected override void Accept()
+    {
+        if (SelectedId(_instrument) is not { } id) return;
+
+        Choice = (id, _instruments.First(i => i.InstrumentId == id).Code);
+        DialogResult = DialogResult.OK;
+        Close();
     }
 }

@@ -165,6 +165,10 @@ internal abstract class MasterDataEditor : Form
     protected (CheckBox Toggle, DateTimePicker Picker) OptionalDate(
         string key, int x, int y, DateOnly? value, DateTime? min = null, DateTime? max = null)
     {
+        // DateOnly's default (01/01/0001) is what an unset non-nullable column reads back as, and
+        // DateTimePicker throws on anything before 1753. It means "no date", so it is shown as one.
+        if (value == default(DateOnly)) value = null;
+
         var toggle = Check(key, x, y, value is not null);
 
         var picker = new DateTimePicker
@@ -177,7 +181,13 @@ internal abstract class MasterDataEditor : Form
         if (min is { } lower) picker.MinDate = lower;
         if (max is { } upper) picker.MaxDate = upper;
 
-        if (value is { } date) picker.Value = date.ToDateTime(TimeOnly.MinValue);
+        if (value is { } date)
+        {
+            var wanted = date.ToDateTime(TimeOnly.MinValue);
+            picker.Value = wanted < picker.MinDate ? picker.MinDate
+                         : wanted > picker.MaxDate ? picker.MaxDate
+                         : wanted;
+        }
 
         toggle.CheckedChanged += (_, _) => picker.Enabled = toggle.Checked;
 
@@ -196,9 +206,18 @@ internal abstract class MasterDataEditor : Form
             Bounds = new Rectangle(x, y, width, height)
         };
 
+        // A notice that does not fit its box ends in "…" with the full text on hover, rather than
+        // spilling under the field below it: the space was sized for French, and the Arabic or
+        // English sentence can run a line longer.
+        label.AutoEllipsis = true;
+        label.TextChanged += (_, _) => _tips.SetToolTip(label, label.Text);
+        _tips.SetToolTip(label, label.Text);
+
         Controls.Add(label);
         return label;
     }
+
+    private readonly ToolTip _tips = new() { AutoPopDelay = 20_000 };
 
     protected void Buttons(int y, int width)
     {
@@ -318,13 +337,13 @@ internal sealed class InstrumentEditorDialog : MasterDataEditor
         _kindNotice = Notice(20, 326, 680, 32, "Equipment.CalibrationIntervalNotice",
                               UiTheme.Abnormal);
 
-        _maintenanceInterval = Number("Equipment.MaintenanceInterval", 20, 366, 120,
+        _maintenanceInterval = Number("Equipment.MaintenanceInterval", 20, 366, 180,
                                        row?.PreventiveMaintenanceIntervalDays, 3650);
 
-        _calibrationInterval = Number("Equipment.CalibrationInterval", 160, 366, 120,
+        _calibrationInterval = Number("Equipment.CalibrationInterval", 240, 366, 180,
                                        row?.CalibrationIntervalDays, 3650);
 
-        _verificationInterval = Number("Equipment.VerificationInterval", 300, 366, 120,
+        _verificationInterval = Number("Equipment.VerificationInterval", 460, 366, 180,
                                         row?.VerificationIntervalDays, 3650);
 
         _lastMaintenance = OptionalDate("Equipment.LastMaintenance", 20, 420, null,

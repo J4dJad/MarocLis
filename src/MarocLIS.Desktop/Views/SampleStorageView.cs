@@ -74,9 +74,11 @@ public sealed class SampleStorageView : LocalizedView
         _onlyExpired.Font = UiTheme.Small;
         _onlyExpired.ForeColor = UiTheme.TextSecondary;
         _onlyExpired.AutoSize = true;
-        _onlyExpired.Location = new Point(296, 34);
+        _onlyExpired.Location = new Point(416, 34);
 
-        _refresh.Bounds = new Rectangle(560, 27, 110, UiTheme.ButtonHeight - 4);
+        // Before the tick box, not after it: the tick box sizes itself to its sentence, which in
+        // French ran under a button placed at a fixed position to its right.
+        _refresh.Bounds = new Rectangle(296, 27, 110, UiTheme.ButtonHeight - 4);
 
         bar.Controls.AddRange([_heading, _search, _onlyExpired, _refresh]);
 

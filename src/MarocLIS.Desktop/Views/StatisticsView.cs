@@ -106,7 +106,7 @@ public sealed class StatisticsView : LocalizedView
         var figures = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 112,
+            Height = 136,
             ColumnCount = 4,
             RowCount = 2,
             BackColor = UiTheme.Surface,
