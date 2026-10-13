@@ -330,6 +330,7 @@ internal sealed class InstrumentMappingDialog : Form
 
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly Label _summary = new();
+    private readonly int _retired;
 
     internal IReadOnlyList<MappingRequest> Mappings { get; private set; } = [];
 
@@ -371,9 +372,19 @@ internal sealed class InstrumentMappingDialog : Form
         _grid.AllowUserToDeleteRows = true;
         _grid.EditMode = DataGridViewEditMode.EditOnEnter;
 
+        // The shared grid style is read-only with whole-row selection, which left every code on
+        // this screen impossible to type or correct. Cells are edited here, one at a time.
+        _grid.ReadOnly = false;
+        _grid.SelectionMode = DataGridViewSelectionMode.CellSelect;
+        _grid.MultiSelect = true;
+
         var language = localizer.CurrentLanguage;
 
-        foreach (var mapping in existing)
+        // A removed code is kept, switched off, so old messages can still be read through it; it
+        // is not shown again. Re-adding the parameter under the same code brings it back.
+        _retired = existing.Count(m => !m.IsEnabled);
+
+        foreach (var mapping in existing.Where(m => m.IsEnabled))
         {
             var index = _grid.Rows.Add(
                 mapping.InstrumentTestCode,
@@ -382,8 +393,7 @@ internal sealed class InstrumentMappingDialog : Form
                 mapping.CatalogueUnit ?? string.Empty,
                 mapping.ConversionFactor?.ToString("0.######") ?? string.Empty,
                 mapping.ConversionOffset?.ToString("0.######") ?? string.Empty,
-                mapping.CodedValueMap ?? string.Empty,
-                mapping.IsEnabled);
+                mapping.CodedValueMap ?? string.Empty);
 
             _grid.Rows[index].Tag = mapping;
         }
@@ -394,28 +404,51 @@ internal sealed class InstrumentMappingDialog : Form
         _summary.Bounds = new Rectangle(16, 462, 928, 20);
 
         var add = UiTheme.SecondaryButton(localizer["Interface.AddParameters"]);
-        add.Bounds = new Rectangle(16, 492, 300, UiTheme.ButtonHeight);
+        add.Bounds = new Rectangle(16, 492, 240, UiTheme.ButtonHeight);
         add.Click += async (_, _) => await AddParametersAsync();
 
+        var remove = UiTheme.SecondaryButton(localizer["Interface.RemoveMapping"]);
+        remove.Bounds = new Rectangle(268, 492, 200, UiTheme.ButtonHeight);
+        remove.Click += (_, _) => RemoveSelected();
+
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
-        ok.Bounds = new Rectangle(332, 492, 298, UiTheme.ButtonHeight);
+        ok.Bounds = new Rectangle(536, 492, 200, UiTheme.ButtonHeight);
         ok.Click += (_, _) => Accept();
 
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
-        cancel.Bounds = new Rectangle(646, 492, 298, UiTheme.ButtonHeight);
+        cancel.Bounds = new Rectangle(744, 492, 200, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
-        add.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
+        add.Anchor = remove.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
         ok.Anchor = cancel.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _summary.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
         _grid.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top | AnchorStyles.Bottom;
         notice.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
 
-        Controls.AddRange([notice, _grid, _summary, add, ok, cancel]);
+        Controls.AddRange([notice, _grid, _summary, add, remove, ok, cancel]);
 
         CancelButton = cancel;
 
         _grid.CellFormatting += OnFormatting;
+        _grid.UserDeletedRow += (_, _) => RefreshSummary();
+
+        RefreshSummary();
+    }
+
+    /// <summary>Takes the lines holding a selected cell out of the table; saving switches them off.</summary>
+    private void RemoveSelected()
+    {
+        if (_grid.IsCurrentCellInEditMode) _grid.EndEdit();
+
+        var rows = _grid.SelectedCells.Cast<DataGridViewCell>()
+                        .Select(c => c.OwningRow)
+                        .Where(r => r is not null && !r.IsNewRow)
+                        .Distinct()
+                        .ToList();
+
+        if (rows.Count == 0 && _grid.CurrentRow is { IsNewRow: false } current) rows.Add(current);
+
+        foreach (var row in rows) _grid.Rows.Remove(row!);
 
         RefreshSummary();
     }
@@ -428,7 +461,7 @@ internal sealed class InstrumentMappingDialog : Form
     private async Task AddParametersAsync()
     {
         var mapped = _grid.Rows.Cast<DataGridViewRow>()
-            .Where(r => r.Tag is MappingRow && r.Cells["enabled"].Value is true)
+            .Where(r => r.Tag is MappingRow)
             .Select(r => ((MappingRow)r.Tag!).TestParameterId)
             .ToHashSet();
 
@@ -448,8 +481,7 @@ internal sealed class InstrumentMappingDialog : Form
                 parameter.UnitSymbol ?? string.Empty,
                 string.Empty,
                 string.Empty,
-                string.Empty,
-                true);
+                string.Empty);
 
             var row = _grid.Rows[index];
             row.Tag = new MappingRow(
@@ -528,11 +560,6 @@ internal sealed class InstrumentMappingDialog : Form
             Name = "codeMap", HeaderText = _localizer["Interface.CodedValueMap"], FillWeight = 12,
             DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.Monospace }
         });
-
-        _grid.Columns.Add(new DataGridViewCheckBoxColumn
-        {
-            Name = "enabled", HeaderText = _localizer["Field.Active"], FillWeight = 6
-        });
     }
 
     private void OnFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -557,19 +584,13 @@ internal sealed class InstrumentMappingDialog : Form
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
         }
-        else if (row.Cells["enabled"].Value is false)
-        {
-            e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        }
     }
 
     private void RefreshSummary()
     {
         var total = _grid.Rows.Cast<DataGridViewRow>().Count(r => !r.IsNewRow);
-        var enabled = _grid.Rows.Cast<DataGridViewRow>()
-                                .Count(r => !r.IsNewRow && r.Cells["enabled"].Value is true);
 
-        _summary.Text = _localizer.Format("Interface.MappingSummary", total, enabled);
+        _summary.Text = _localizer.Format("Interface.MappingSummary", total, _retired);
     }
 
     private void Accept()
@@ -609,7 +630,7 @@ internal sealed class InstrumentMappingDialog : Form
                 factor,
                 offset,
                 row.Cells["codeMap"].Value?.ToString(),
-                row.Cells["enabled"].Value is true));
+                true));
         }
 
         Mappings = mappings;
