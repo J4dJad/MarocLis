@@ -175,7 +175,12 @@ public sealed class OrderDetailView : LocalizedView
 
         // --- header ----------------------------------------------------------------------------
 
-        var header = new Panel { Dock = DockStyle.Top, Height = 118, BackColor = UiTheme.Surface };
+        // Its own Resize handler fits the lines to the width; reflowed as a button strip instead, the
+        // header stacked its lines down the panel and left no room for the analyses and tubes.
+        var header = new Panel
+        {
+            Dock = DockStyle.Top, Height = 118, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout
+        };
 
         _accession.Font = UiTheme.PageTitle;
         _accession.ForeColor = UiTheme.TextPrimary;
@@ -324,6 +329,9 @@ public sealed class OrderDetailView : LocalizedView
         Add("status", 17, UiTheme.Small);
         Add("priority", 12, UiTheme.Small);
         Add("count", 8, UiTheme.Monospace, right: true);
+
+        // The name is how the secretary recognises the dossier; it is never cut to "Squa…".
+        _list.Columns["patient"]!.MinimumWidth = 150;
     }
 
     private void BuildItemColumns()
@@ -714,7 +722,7 @@ public sealed class OrderDetailView : LocalizedView
                 var index = _list.Rows.Add(
                     row.AccessionNumber,
                     row.PatientName,
-                    row.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"),
+                    row.RegisteredAt.ToLocalTime().ToString("dd/MM HH:mm"),
                     T($"OrderStatus.{row.Status}"),
                     T($"Priority.{row.Priority}"),
                     row.AnalysisCount);
@@ -1154,11 +1162,15 @@ public sealed class OrderDetailView : LocalizedView
     {
         if (disposing)
         {
+            // Disposed twice — by the navigation, then by its scope — so each source is released
+            // once and forgotten.
             _debounce.Dispose();
             _listLoad?.Cancel();
             _listLoad?.Dispose();
+            _listLoad = null;
             _detailLoad?.Cancel();
             _detailLoad?.Dispose();
+            _detailLoad = null;
         }
 
         base.Dispose(disposing);

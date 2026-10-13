@@ -1,6 +1,13 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
 
+  "ResultEntry": {
+    "Departments": "Secteurs",
+    "Received": "Reçu",
+    "PendingShort": "Analyses",
+    "Worklist": "À saisir ({0})"
+  },
+
   "Printers": {
     "TestSent": "Étiquette de test envoyée à « {0} ».",
     "TestLabel": "Imprimer une étiquette de test",

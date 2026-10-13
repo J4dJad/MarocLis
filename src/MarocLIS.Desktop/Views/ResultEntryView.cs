@@ -62,6 +62,13 @@ public sealed class ResultEntryView : LocalizedView
     private readonly Button _validate = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
 
+    // ---- worklist: the dossiers with results to enter ----
+    private readonly Label _worklistTitle = new();
+    private readonly DataGridView _worklist = UiTheme.Grid();
+    private readonly Button _refreshWorklist = UiTheme.SecondaryButton(string.Empty);
+    private IReadOnlyList<PendingEntryOrder> _pending = [];
+    private bool _renderingWorklist;
+
     private ResultEntrySheet? _sheet;
     private readonly Dictionary<Guid, ResultEntryRow> _rowsById = [];
 
@@ -191,10 +198,160 @@ public sealed class ResultEntryView : LocalizedView
 
         actions.Controls.AddRange([_save, _validate, _status]);
 
-        Controls.Add(gridHost);
-        Controls.Add(actions);
-        Controls.Add(_patientBar);
-        Controls.Add(scanBar);
+        var entryHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        entryHost.Controls.Add(gridHost);
+        entryHost.Controls.Add(actions);
+        entryHost.Controls.Add(_patientBar);
+        entryHost.Controls.Add(scanBar);
+
+        // --- worklist ----------------------------------------------------------------------------
+        // The screen used to open on an empty grid and a scan box: without a tube in hand there was
+        // no way to see what was waiting. The dossiers with results to enter are listed on the left.
+
+        var worklistBar = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = UiTheme.Surface };
+
+        _worklistTitle.Font = UiTheme.SectionTitle;
+        _worklistTitle.ForeColor = UiTheme.TextPrimary;
+        _worklistTitle.AutoSize = true;
+        _worklistTitle.Location = new Point(0, 8);
+
+        _refreshWorklist.Size = new Size(110, UiTheme.ButtonHeight - 4);
+        _refreshWorklist.TabStop = false;
+
+        worklistBar.Controls.AddRange([_worklistTitle, _refreshWorklist]);
+        worklistBar.Resize += (_, _) =>
+            _refreshWorklist.Location = new Point(
+                Math.Max(_worklistTitle.Right + UiTheme.Gutter,
+                         worklistBar.ClientSize.Width - _refreshWorklist.Width - UiTheme.GutterTight), 4);
+
+        BuildWorklistColumns();
+
+        var worklistHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        worklistHost.Controls.Add(_worklist);
+        worklistHost.Controls.Add(worklistBar);
+
+        var split = new ProportionalSplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            SplitterDistance = 360,
+            SplitterWidth = 6,
+            BackColor = UiTheme.Surface
+        };
+
+        split.Panel1.Controls.Add(worklistHost);
+        split.Panel2.Controls.Add(entryHost);
+        split.Panel2.Padding = new Padding(UiTheme.GutterTight, 0, 0, 0);
+
+        Controls.Add(split);
+    }
+
+    private void BuildWorklistColumns()
+    {
+        _worklist.Columns.Clear();
+
+        void Add(string name, int weight, Font? font = null, bool right = false)
+            => _worklist.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = name, FillWeight = weight, ReadOnly = true,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Font = font ?? UiTheme.Body,
+                    Alignment = right ? DataGridViewContentAlignment.MiddleRight
+                                      : DataGridViewContentAlignment.MiddleLeft
+                }
+            });
+
+        Add("accession", 26, UiTheme.Monospace);
+        Add("patient", 40);
+        Add("pending", 10, UiTheme.MonospaceBold, right: true);
+        Add("received", 16, UiTheme.Monospace, right: true);
+        Add("departments", 14, UiTheme.Small);
+
+        _worklist.Columns["patient"]!.MinimumWidth = 130;
+    }
+
+    private async Task LoadWorklistAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var result = await _benchSheets.GetPendingOrdersAsync(ct);
+
+            if (result.IsFailure)
+            {
+                // Without the right to enter results the list stays empty; the scan box still works
+                // for the screens that only read.
+                _pending = [];
+            }
+            else
+            {
+                _pending = result.Value;
+            }
+
+            RenderWorklist();
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away mid-load.
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Loading the result entry worklist failed.");
+        }
+    }
+
+    private void RenderWorklist()
+    {
+        var current = _sheet?.AccessionNumber;
+
+        _renderingWorklist = true;
+
+        try
+        {
+            _worklist.SuspendLayout();
+            _worklist.Rows.Clear();
+
+            foreach (var order in _pending)
+            {
+                var index = _worklist.Rows.Add(
+                    order.AccessionNumber,
+                    order.PatientName,
+                    order.PendingAnalyses.ToString(),
+                    order.ReceivedAt?.ToLocalTime().ToString("dd/MM HH:mm") ?? string.Empty,
+                    order.Departments);
+
+                var row = _worklist.Rows[index];
+                row.Tag = order.AccessionNumber;
+
+                if (order.IsUrgent)
+                {
+                    row.DefaultCellStyle.ForeColor = UiTheme.Critical;
+                    row.DefaultCellStyle.Font = UiTheme.BodyBold;
+                }
+            }
+
+            _worklist.ResumeLayout(performLayout: true);
+            _worklist.ClearSelection();
+
+            if (current is not null)
+            {
+                var row = _worklist.Rows.Cast<DataGridViewRow>()
+                    .FirstOrDefault(r => r.Tag is string accession && accession == current);
+
+                if (row is not null)
+                {
+                    _worklist.CurrentCell = row.Cells[0];
+                    row.Selected = true;
+                }
+            }
+
+            _worklistTitle.Text = T("ResultEntry.Worklist", _pending.Count);
+        }
+        finally
+        {
+            _renderingWorklist = false;
+        }
     }
 
     private void BuildColumns()
@@ -276,6 +433,24 @@ public sealed class ResultEntryView : LocalizedView
     private void WireBehaviour()
     {
         _load.Click += async (_, _) => await LoadAsync(_scan.Text);
+        _refreshWorklist.Click += async (_, _) => await LoadWorklistAsync();
+
+        // A click (or the arrow keys) on a dossier opens it, as scanning its tube would.
+        _worklist.SelectionChanged += async (_, _) =>
+        {
+            if (_renderingWorklist || !_worklist.Focused) return;
+            if (_worklist.CurrentRow?.Tag is not string accession) return;
+            if (_sheet?.AccessionNumber == accession) return;
+
+            await LoadAsync(accession);
+        };
+        _worklist.CellClick += async (_, e) =>
+        {
+            if (e.RowIndex < 0 || _worklist.Rows[e.RowIndex].Tag is not string accession) return;
+            if (_sheet?.AccessionNumber == accession) return;
+
+            await LoadAsync(accession);
+        };
         _benchSheet.Click += async (_, _) => await PrintBenchSheetAsync();
 
         // A barcode scanner ends its scan with Enter, so Enter in the scan box loads the order.
@@ -367,6 +542,16 @@ public sealed class ResultEntryView : LocalizedView
     {
         _scanLabel.Text = $"{T("Order.AccessionNumber")} / {T("Sample.Barcode")}";
         _load.Text = T("Action.Open");
+        _refreshWorklist.Text = T("Action.Refresh");
+        _worklistTitle.Text = T("ResultEntry.Worklist", _pending.Count);
+        if (_worklist.Columns.Count > 0)
+        {
+            _worklist.Column("accession").HeaderText = T("Order.AccessionNumber");
+            _worklist.Column("patient").HeaderText = T("Patient.Title");
+            _worklist.Column("pending").HeaderText = T("ResultEntry.PendingShort");
+            _worklist.Column("received").HeaderText = T("ResultEntry.Received");
+            _worklist.Column("departments").HeaderText = T("ResultEntry.Departments");
+        }
         _benchSheet.Text = T("BenchSheet.Open");
         _save.Text = T("Action.Save");
         _validate.Text = T("Validation.Technical");
@@ -386,6 +571,8 @@ public sealed class ResultEntryView : LocalizedView
 
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
+        await LoadWorklistAsync(ct);
+
         if (InitialOrderId is { } orderId) await LoadOrderAsync(orderId, ct);
         else _scan.Focus();
     }
@@ -430,6 +617,7 @@ public sealed class ResultEntryView : LocalizedView
 
             _sheet = sheet.Value;
             RenderSheet(_sheet);
+            RenderWorklist();
 
             _status.ForeColor = UiTheme.TextSecondary;
             _status.Text = string.Empty;
@@ -660,6 +848,7 @@ public sealed class ResultEntryView : LocalizedView
             // Reload: calculated parameters, interpretations and flags are all recomputed server
             // side, and showing the pre-save grid would misrepresent what was stored.
             await LoadOrderAsync(_sheet.LabOrderId, CancellationToken.None);
+            await LoadWorklistAsync();
 
             if (result.CriticalFindings.Count > 0) ShowCriticalFindings(result);
 
@@ -727,6 +916,7 @@ public sealed class ResultEntryView : LocalizedView
             }
 
             await LoadOrderAsync(_sheet.LabOrderId, CancellationToken.None);
+            await LoadWorklistAsync();
 
             _status.ForeColor = UiTheme.Normal;
             _status.Text = T("Message.OperationSucceeded");

@@ -112,6 +112,9 @@ public static class UiTags
 {
     /// <summary>A field holding a Latin value — a barcode, a result, an accession number, a CIN.</summary>
     public const string LatinValue = "latin-value";
+
+    /// <summary>A docked panel that sizes its own children and must not be reflowed as a button strip.</summary>
+    public const string OwnLayout = "own-layout";
 }
 
 /// <summary>

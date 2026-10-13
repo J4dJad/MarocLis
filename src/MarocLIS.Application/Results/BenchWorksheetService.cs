@@ -111,6 +111,19 @@ public sealed record BenchWorksheetOptions(
     IReadOnlyList<BenchInstrumentOption> Instruments);
 
 /// <summary>A discipline, with the number of analyses waiting in it so an empty bench is visible before printing.</summary>
+/// <summary>A dossier with results still to enter, for the entry screen's worklist.</summary>
+public sealed record PendingEntryOrder(
+    string AccessionNumber,
+    string PatientName,
+    OrderPriority Priority,
+    DateTimeOffset? ReceivedAt,
+    DateTimeOffset? DueAt,
+    int PendingAnalyses,
+    string Departments)
+{
+    public bool IsUrgent => Priority != OrderPriority.Routine;
+}
+
 public sealed record BenchDepartmentOption(Guid Id, string Code, MultilingualText Name, int PendingCount);
 
 /// <summary>An analyser, with the discipline it belongs to so the choice can follow the department.</summary>
@@ -149,6 +162,40 @@ public sealed class BenchWorksheetService(
         if (permitted.IsFailure) return Result.Failure<BenchWorksheetOptions>(permitted.FirstError);
 
         return Result.Success(await queries.GetOptionsAsync(currentUser.SiteId, ct));
+    }
+
+    /// <summary>
+    /// The dossiers with results to enter, one row each, in the order the bench works: urgent
+    /// first, then by reception. Same selection as the bench sheet, so the screen and the paper
+    /// never disagree about what is outstanding.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<PendingEntryOrder>>> GetPendingOrdersAsync(
+        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Results.Enter);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<PendingEntryOrder>>(permitted.FirstError);
+
+        var (lines, _) = await queries.GetPendingWorkAsync(
+            currentUser.SiteId, null, null, false, clock.Today, MaximumParameterRows, ct);
+
+        IReadOnlyList<PendingEntryOrder> orders =
+        [
+            .. lines.GroupBy(l => l.AccessionNumber)
+                .Select(g =>
+                {
+                    var first = g.First();
+                    return new PendingEntryOrder(
+                        first.AccessionNumber,
+                        first.PatientName,
+                        g.Max(l => l.Priority),
+                        g.Min(l => l.ReceivedAt),
+                        g.Min(l => l.DueAt),
+                        g.Count(),
+                        string.Join(" ", g.Select(l => l.DepartmentCode).Distinct().Order()));
+                })
+        ];
+
+        return Result.Success(orders);
     }
 
     public async Task<Result<BenchWorksheet>> GetWorksheetAsync(BenchWorksheetRequest request,

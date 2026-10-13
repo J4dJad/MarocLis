@@ -59,6 +59,7 @@ public static class BarReflow
     private static bool IsEligible(Control control)
     {
         if (control.GetType() != typeof(Panel)) return false;
+        if (control.Tag is UiTags.OwnLayout) return false;
         if (control.Dock is not (DockStyle.Top or DockStyle.Bottom)) return false;
         if (((Panel)control).AutoScroll || control.Controls.Count == 0) return false;
 

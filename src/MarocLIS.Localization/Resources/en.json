@@ -1,6 +1,13 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
 
+  "ResultEntry": {
+    "Departments": "Sections",
+    "Received": "Received",
+    "PendingShort": "Tests",
+    "Worklist": "To enter ({0})"
+  },
+
   "Printers": {
     "TestSent": "Test label sent to \"{0}\".",
     "TestLabel": "Print a test label",
