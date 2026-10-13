@@ -535,6 +535,9 @@
   },
 
   "Collection": {
+    "AlreadyCollected": "The ticked tubes are already drawn: use \"Dispatch\".",
+    "ReadyToDispatch": "Drawn · to dispatch",
+    "ToDraw": "{0} to draw",
     "Registered": "Arrived",
     "TubeCount": "Tubes",
     "ConfirmFasting": "to be confirmed with the patient",

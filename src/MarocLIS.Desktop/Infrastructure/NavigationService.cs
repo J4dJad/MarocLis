@@ -66,6 +66,7 @@ public sealed class NavigationService(
         var previousView = Current;
 
         var scope = rootProvider.CreateScope();
+        var installed = false;
 
         try
         {
@@ -80,6 +81,7 @@ public sealed class NavigationService(
 
             Current = view;
             _currentScope = scope;
+            installed = true;
 
             _host.ResumeLayout(performLayout: true);
 
@@ -92,14 +94,18 @@ public sealed class NavigationService(
 
             await view.ActivateAsync(token);
         }
+        // Once the view is on screen its scope belongs to it, and is disposed with it by the next
+        // navigation. Disposing it here when its first load failed or was superseded left the
+        // screen displayed on a dead scope: every later click failed with "Cannot access a
+        // disposed object", and the screen looked empty for good.
         catch (OperationCanceledException)
         {
-            scope.Dispose();
+            if (!installed) scope.Dispose();
         }
         catch (Exception ex)
         {
             logger?.LogError(ex, "Navigation to {View} failed.", typeof(TView).Name);
-            scope.Dispose();
+            if (!installed) scope.Dispose();
             dialogs.Error(ex.Message);
         }
     }

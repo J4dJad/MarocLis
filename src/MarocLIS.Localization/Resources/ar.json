@@ -535,6 +535,9 @@
   },
 
   "Collection": {
+    "AlreadyCollected": "الأنابيب المحددة مسحوبة بالفعل: استعمل «إرسال».",
+    "ReadyToDispatch": "تم السحب · للإرسال",
+    "ToDraw": "{0} للسحب",
     "Registered": "الوصول",
     "TubeCount": "الأنابيب",
     "ConfirmFasting": "يجب التأكد من المريض",

@@ -30,7 +30,12 @@ public sealed class SampleQueries(LisDbContext db) : ISampleQueries
         if (onlyUrgent) orders = orders.Where(o => o.Priority != OrderPriority.Routine);
 
         var rows = await db.Samples.AsNoTracking()
-            .Where(s => s.SiteId == siteId && s.Status == SampleStatus.AwaitingCollection)
+            // Drawn tubes stay on the list until they are sent or received: the collection point
+            // still has to dispatch them, and a tube that vanished on "Prélever" left nothing for
+            // "Expédier" to act on.
+            .Where(s => s.SiteId == siteId
+                        && (s.Status == SampleStatus.AwaitingCollection
+                            || (s.Status == SampleStatus.Collected && s.DispatchedAt == null)))
             .Join(orders, s => s.LabOrderId, o => o.Id, (s, o) => new { Sample = s, Order = o })
             .Join(db.Patients.AsNoTracking(), x => x.Order.PatientId, p => p.Id,
                   (x, p) => new { x.Sample, x.Order, Patient = p })
@@ -43,6 +48,7 @@ public sealed class SampleQueries(LisDbContext db) : ISampleQueries
                 x.Sample.SpecimenTypeId,
                 x.Sample.ContainerTypeId,
                 x.Sample.CollectionLocation,
+                x.Sample.CollectedAt,
                 x.Order.AccessionNumber,
                 x.Order.Priority,
                 x.Order.RegisteredAt,
@@ -163,7 +169,8 @@ public sealed class SampleQueries(LisDbContext db) : ISampleQueries
                     PatientAlerts = alertLookup.GetValueOrDefault(r.PatientId, []),
                     RequiresLightProtection = r.Container?.RequiresProtectionFromLight ?? false,
                     RequiresIceTransport = r.Container?.RequiresIceTransport ?? false,
-                    CollectionLocation = r.CollectionLocation
+                    CollectionLocation = r.CollectionLocation,
+                    CollectedAt = r.CollectedAt
                 };
             })
             .OrderByDescending(e => e.Priority)

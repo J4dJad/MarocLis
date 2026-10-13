@@ -51,7 +51,22 @@ public class IsolatedQueryProxy<TQueries> : DispatchProxy where TQueries : class
         var isAsync = returnType == typeof(Task)
                       || (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>));
 
-        if (!isAsync || _scoped.GetRequiredService<LisDbContext>().Database.CurrentTransaction is not null)
+        LisDbContext shared;
+
+        try
+        {
+            shared = _scoped.GetRequiredService<LisDbContext>();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The screen this proxy belongs to was closed while one of its loads was still running
+            // (the operator moved to another screen). Reported as a cancellation, which every
+            // screen already ignores, rather than as an "unexpected error" about a screen that is
+            // no longer there.
+            throw new OperationCanceledException();
+        }
+
+        if (!isAsync || shared.Database.CurrentTransaction is not null)
         {
             return Call(targetMethod, _sharedInstance ??= _factory(_scoped), args);
         }

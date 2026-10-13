@@ -535,6 +535,9 @@
   },
 
   "Collection": {
+    "AlreadyCollected": "Les tubes cochés sont déjà prélevés : utilisez « Expédier ».",
+    "ReadyToDispatch": "Prélevé · à expédier",
+    "ToDraw": "{0} à prélever",
     "Registered": "Arrivée",
     "TubeCount": "Tubes",
     "ConfirmFasting": "à confirmer auprès du patient",

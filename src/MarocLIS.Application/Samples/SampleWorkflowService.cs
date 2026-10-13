@@ -31,6 +31,11 @@ public sealed record CollectionWorklistEntry
     public int TotalSamplesInOrder { get; init; }
 
     public required MultilingualText SpecimenTypeName { get; init; }
+
+    /// <summary>When the tube was drawn; null while it is still waiting to be.</summary>
+    public DateTimeOffset? CollectedAt { get; init; }
+
+    public bool IsCollected => CollectedAt is not null;
     public MultilingualText? ContainerName { get; init; }
     public string ContainerColourHex { get; init; } = "#FFFFFF";
 

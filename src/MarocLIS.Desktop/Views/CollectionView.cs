@@ -34,6 +34,7 @@ public sealed class CollectionView : LocalizedView
     private const string ColBarcode = "barcode";
     private const string ColVolume = "volume";
     private const string ColAnalyses = "analyses";
+    private const string ColState = "state";
 
     private readonly SampleWorkflowService _workflow;
     private readonly ISampleLabelRenderer _labels;
@@ -202,6 +203,7 @@ public sealed class CollectionView : LocalizedView
         Add("age", 8, UiTheme.Body, DataGridViewContentAlignment.MiddleRight);
         Add("priority", 14);
         Add("tubes", 8, UiTheme.Body, DataGridViewContentAlignment.MiddleRight);
+        Add("state", 16, UiTheme.SmallBold);
         Add("waiting", 16, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight);
 
         // The name is what the operator reads aloud to identify the patient: never just "Bena…".
@@ -253,6 +255,7 @@ public sealed class CollectionView : LocalizedView
         Add(ColTube, 20);
         Add(ColSpecimen, 18, UiTheme.Small);
         Add(ColBarcode, 16, UiTheme.Monospace);
+        Add(ColState, 14, UiTheme.Small);
         Add(ColVolume, 11, UiTheme.MonospaceBold, readOnly: false,
             DataGridViewContentAlignment.MiddleRight);
         Add(ColAnalyses, 20, UiTheme.Small);
@@ -340,7 +343,7 @@ public sealed class CollectionView : LocalizedView
         _onlyUrgent.Text = T("Priority.Urgent");
         _refresh.Text = T("Action.Refresh");
         _record.Text = T("Action.Collect");
-        _dispatch.Text = T("Action.CollectAndDispatch");
+        _dispatch.Text = T("Action.Dispatch");
         _reprint.Text = T("Action.PrintLabels");
 
         if (_patients.Columns.Count > 0)
@@ -350,6 +353,7 @@ public sealed class CollectionView : LocalizedView
             _patients.Column("age").HeaderText = T("Patient.Age");
             _patients.Column("priority").HeaderText = T("Field.Priority");
             _patients.Column("tubes").HeaderText = T("Collection.TubeCount");
+            _patients.Column("state").HeaderText = T("Field.Status");
             _patients.Column("waiting").HeaderText = T("Collection.Registered");
         }
 
@@ -361,6 +365,7 @@ public sealed class CollectionView : LocalizedView
             _tubes.Column(ColTube).HeaderText = T("Sample.ContainerType");
             _tubes.Column(ColSpecimen).HeaderText = T("Sample.SpecimenType");
             _tubes.Column(ColBarcode).HeaderText = T("Sample.Barcode");
+            _tubes.Column(ColState).HeaderText = T("Field.Status");
             _tubes.Column(ColVolume).HeaderText = T("Sample.Volume");
             _tubes.Column(ColAnalyses).HeaderText = T("Catalog.Analyses");
         }
@@ -425,9 +430,26 @@ public sealed class CollectionView : LocalizedView
                     ? string.Empty
                     : T($"Priority.{first.Priority}"),
                 group.Count().ToString(),
+                string.Empty,
                 first.RegisteredAt.ToString("HH:mm"));
 
-            _patients.Rows[index].Tag = first.LabOrderId;
+            var patientRow = _patients.Rows[index];
+            patientRow.Tag = first.LabOrderId;
+
+            var toDraw = group.Count(e => !e.IsCollected);
+            var stateCell = patientRow.Cells["state"];
+
+            if (toDraw > 0)
+            {
+                stateCell.Value = T("Collection.ToDraw", toDraw);
+                stateCell.Style.ForeColor = UiTheme.Abnormal;
+            }
+            else
+            {
+                stateCell.Value = T("Collection.ReadyToDispatch");
+                stateCell.Style.ForeColor = UiTheme.Normal;
+                patientRow.DefaultCellStyle.BackColor = UiTheme.NormalBackground;
+            }
         }
 
         _patients.ResumeLayout(performLayout: true);
@@ -536,6 +558,7 @@ public sealed class CollectionView : LocalizedView
         _tubes.Rows.Clear();
 
         var position = 1;
+        var anyAwaiting = _currentSet.Any(e => !e.IsCollected);
 
         foreach (var entry in _currentSet)
         {
@@ -543,18 +566,40 @@ public sealed class CollectionView : LocalizedView
             if (entry.RequiresLightProtection) handling.Add(T("Collection.ProtectFromLight"));
             if (entry.RequiresIceTransport) handling.Add(T("Collection.TransportOnIce"));
 
+            // Tubes still to draw are ticked; once they are all drawn, the drawn ones are ticked
+            // instead, ready for "Expédier".
+            var ticked = anyAwaiting ? !entry.IsCollected : true;
+
             var index = _tubes.Rows.Add(
-                true,                                   // all of the patient's tubes, by default
+                ticked,
                 position.ToString(),
                 string.Empty,                           // painted swatch
                 entry.ContainerName?.For(Localizer.CurrentLanguage) ?? "-",
                 entry.SpecimenTypeName.For(Localizer.CurrentLanguage),
                 entry.Barcode,
+                entry.CollectedAt is { } drawn
+                    ? $"{T("SampleStatus.Collected")} {drawn.ToLocalTime():HH:mm}"
+                    : T("SampleStatus.AwaitingCollection"),
                 entry.NominalVolumeMl?.ToString("N1") ?? string.Empty,
                 string.Join(" ", entry.AnalysisCodes));
 
             var row = _tubes.Rows[index];
             row.Tag = entry.SampleId;
+
+            // Drawn or not is the first thing read off the row: green band once drawn, amber
+            // label while it is still to draw.
+            if (entry.IsCollected)
+            {
+                row.DefaultCellStyle.BackColor = UiTheme.NormalBackground;
+                row.Cells[ColState].Style.ForeColor = UiTheme.Normal;
+                row.Cells[ColState].Style.Font = UiTheme.SmallBold;
+                row.Cells[ColVolume].ReadOnly = true;
+            }
+            else
+            {
+                row.Cells[ColState].Style.ForeColor = UiTheme.Abnormal;
+                row.Cells[ColState].Style.Font = UiTheme.SmallBold;
+            }
 
             var tooltip = new List<string>();
 
@@ -583,6 +628,7 @@ public sealed class CollectionView : LocalizedView
         _tubes.ResumeLayout(performLayout: true);
 
         SetActionsEnabled(_tubes.Rows.Count > 0);
+        _record.Enabled = anyAwaiting;
     }
 
     private void ClearPatientPanel()
@@ -611,9 +657,11 @@ public sealed class CollectionView : LocalizedView
             .Select(r => (Guid)r.Tag!)
     ];
 
-    // The worklist only holds tubes still to be drawn, so "Expédier" on its own could never succeed
-    // here: every tube was refused with "must be collected before dispatch". At a collection point
-    // the tube is drawn and sent in one go, so the button now records the draw, then the dispatch.
+    /// <summary>
+    /// "Prélever" records the draw of the ticked tubes; "Expédier" sends the ticked tubes, drawing
+    /// first any that were not drawn yet. Drawn tubes stay on the list until they are sent or
+    /// received, so the collection point can draw a series of patients and dispatch them together.
+    /// </summary>
     private async Task RecordAsync(bool dispatch)
     {
         _tubes.EndEdit();
@@ -627,12 +675,22 @@ public sealed class CollectionView : LocalizedView
             return;
         }
 
+        var collected = _currentSet.Where(e => e.IsCollected).Select(e => e.SampleId).ToHashSet();
+        var toDraw = selected.Where(id => !collected.Contains(id)).ToList();
+
+        if (!dispatch && toDraw.Count == 0)
+        {
+            _status.ForeColor = UiTheme.TextSecondary;
+            _status.Text = T("Collection.AlreadyCollected");
+            return;
+        }
+
         // Where fasting matters and the patient has not been asked, ask now — before the draw is
         // recorded, because afterwards the answer cannot honestly be obtained.
         bool? fasted = null;
         var requiredFasting = _currentSet.Max(e => e.RequiredFastingHours);
 
-        if (requiredFasting > 0 && _currentSet[0].PatientDeclaredFasted is null)
+        if (toDraw.Count > 0 && requiredFasting > 0 && _currentSet[0].PatientDeclaredFasted is null)
         {
             fasted = _dialogs.Confirm(
                 T("Collection.FastingQuestion", requiredFasting),
@@ -643,7 +701,7 @@ public sealed class CollectionView : LocalizedView
 
         foreach (DataGridViewRow row in _tubes.Rows)
         {
-            if (row.Tag is not Guid id || !selected.Contains(id)) continue;
+            if (row.Tag is not Guid id || !toDraw.Contains(id)) continue;
 
             var typed = row.Cells[ColVolume].Value?.ToString()?.Trim();
 
@@ -668,20 +726,23 @@ public sealed class CollectionView : LocalizedView
 
         try
         {
-            var result = await _workflow.RecordCollectionAsync(requests);
-
-            if (result.IsFailure)
+            if (requests.Count > 0)
             {
-                _dialogs.ShowFailure(result);
-                return;
-            }
+                var result = await _workflow.RecordCollectionAsync(requests);
 
-            _status.ForeColor = UiTheme.Normal;
-            _status.Text = $"{requests.Count} {T("SampleStatus.Collected").ToLowerInvariant()}";
+                if (result.IsFailure)
+                {
+                    _dialogs.ShowFailure(result);
+                    return;
+                }
+
+                _status.ForeColor = UiTheme.Normal;
+                _status.Text = $"{requests.Count} {T("SampleStatus.Collected").ToLowerInvariant()}";
+            }
 
             if (dispatch)
             {
-                var sent = await _workflow.DispatchAsync([.. requests.Select(r => r.SampleId)]);
+                var sent = await _workflow.DispatchAsync(selected);
 
                 if (sent.IsFailure)
                 {
@@ -689,7 +750,8 @@ public sealed class CollectionView : LocalizedView
                 }
                 else
                 {
-                    _status.Text = $"{requests.Count} {T("SampleStatus.InTransit").ToLowerInvariant()}";
+                    _status.ForeColor = UiTheme.Normal;
+                    _status.Text = $"{selected.Count} {T("SampleStatus.InTransit").ToLowerInvariant()}";
                 }
             }
 
