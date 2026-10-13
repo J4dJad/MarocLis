@@ -24,7 +24,17 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
         if (departmentId is { } department)
             query = query.Where(r => r.DepartmentId == department);
 
-        return await query.ToListAsync(ct);
+        // In catalogue order — analysis, then each analysis's parameters in their own order — so
+        // entry, validation and the report read the way the catalogue is laid out, not in the
+        // order the rows happen to come back.
+        var ordered =
+            from r in query
+            join p in db.TestParameters.AsNoTracking() on r.TestParameterId equals p.Id
+            join t in db.AnalysisTests.AsNoTracking() on p.AnalysisTestId equals t.Id
+            orderby t.DisplayOrder, t.Code, p.DisplayOrder, p.Code
+            select r;
+
+        return await ordered.ToListAsync(ct);
     }
 
     /// <summary>

@@ -162,9 +162,15 @@ public sealed class ResultEntryView : LocalizedView
         _orderDetail.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
         _patientBar.Controls.AddRange([_patientName, _patientDetail, _orderDetail]);
-        _patientBar.Resize += (_, _) =>
+        // Re-placed when its text changes as well: it sizes itself to the text, and placed from its
+        // previous width it ran off the right edge of the panel.
+        void PlaceOrderDetail() =>
             _orderDetail.Location = new Point(
-                _patientBar.ClientSize.Width - _orderDetail.Width - UiTheme.Gutter, 8);
+                Math.Max(_patientName.Right + UiTheme.Gutter,
+                         _patientBar.ClientSize.Width - _orderDetail.Width - UiTheme.Gutter), 8);
+
+        _patientBar.Resize += (_, _) => PlaceOrderDetail();
+        _orderDetail.SizeChanged += (_, _) => PlaceOrderDetail();
 
         // --- grid --------------------------------------------------------------------------------
 
@@ -428,6 +434,9 @@ public sealed class ResultEntryView : LocalizedView
             DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.Small },
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
+
+        // The parameter name is what the technician reads the value against: never "Polynucléaires …".
+        _grid.Columns[ColumnParameter]!.MinimumWidth = 210;
     }
 
     private void WireBehaviour()

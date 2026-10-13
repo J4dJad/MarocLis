@@ -208,6 +208,7 @@ public sealed class CollectionView : LocalizedView
 
         // The name is what the operator reads aloud to identify the patient: never just "Bena…".
         _patients.Columns["patient"]!.MinimumWidth = 140;
+        _patients.Columns["state"]!.MinimumWidth = 100;
     }
 
     private void BuildTubeColumns()
@@ -259,6 +260,10 @@ public sealed class CollectionView : LocalizedView
         Add(ColVolume, 11, UiTheme.MonospaceBold, readOnly: false,
             DataGridViewContentAlignment.MiddleRight);
         Add(ColAnalyses, 20, UiTheme.Small);
+
+        // Drawn or not, and which tube, must be readable without widening anything.
+        _tubes.Columns[ColState]!.MinimumWidth = 105;
+        _tubes.Columns[ColTube]!.MinimumWidth = 110;
     }
 
     private void WireBehaviour()
