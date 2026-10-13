@@ -28,6 +28,7 @@ public sealed class OrderRegistrationView : LocalizedView
 {
     private readonly OrderRegistrationService _registration;
     private readonly IPatientQueries _patientQueries;
+    private readonly Application.Administration.IMasterDataQueries _masterData;
     private readonly ICatalogQueries _catalogQueries;
     private readonly ISampleLabelRenderer _labelRenderer;
     private readonly ILabelPrinter _labelPrinter;
@@ -57,6 +58,8 @@ public sealed class OrderRegistrationView : LocalizedView
     private readonly ComboBox _origin = new();
     private readonly Label _priorityLabel = new();
     private readonly Label _originLabel = new();
+    private readonly ComboBox _prescriber = new();
+    private readonly Label _prescriberLabel = new();
     private readonly TextBox _clinicalInfo = UiTheme.Input(420);
     private readonly Label _clinicalInfoLabel = new();
     private readonly CheckBox _fasted = new();
@@ -80,6 +83,7 @@ public sealed class OrderRegistrationView : LocalizedView
                                  IDocumentOutput documents, ICurrentUser currentUser,
                                  IClock clock, IUserDialogs dialogs,
                                  Composition.PatientEditorFactory patientEditor,
+                                 Application.Administration.IMasterDataQueries masterData,
                                  ILocalizer localizer, ICultureManager cultureManager,
                                  ILogger<OrderRegistrationView>? logger = null)
         : base(localizer, cultureManager)
@@ -94,6 +98,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _clock = clock;
         _dialogs = dialogs;
         _patientEditor = patientEditor;
+        _masterData = masterData;
         _logger = logger;
 
         BuildLayout();
@@ -146,8 +151,11 @@ public sealed class OrderRegistrationView : LocalizedView
 
         var contextPanel = new Panel
         {
-            Dock = DockStyle.Top, Height = 104,
-            BackColor = UiTheme.Surface, Padding = new Padding(0, UiTheme.GutterTight, 0, 0)
+            Dock = DockStyle.Top, Height = 118,
+            BackColor = UiTheme.Surface, Padding = new Padding(0, UiTheme.GutterTight, 0, 0),
+            // Two fixed rows, each label above its field; the generic reflow separated the labels
+            // from their fields once the prescriber was added.
+            Tag = UiTags.OwnLayout
         };
 
         _priorityLabel.Font = UiTheme.Small;
@@ -168,25 +176,40 @@ public sealed class OrderRegistrationView : LocalizedView
         _origin.FlatStyle = FlatStyle.Flat;
         _origin.Bounds = new Rectangle(192, 22, 220, UiTheme.InputHeight);
 
+        // The prescriber accepts a doctor from the list or a name typed freely: a walk-in often
+        // brings a prescription from a doctor who is not yet in the directory, and registration
+        // must not wait for someone to create the doctor's file first.
+        _prescriberLabel.Font = UiTheme.Small;
+        _prescriberLabel.ForeColor = UiTheme.TextSecondary;
+        _prescriberLabel.AutoSize = true;
+        _prescriberLabel.Location = new Point(424, 4);
+
+        _prescriber.DropDownStyle = ComboBoxStyle.DropDown;
+        _prescriber.FlatStyle = FlatStyle.Flat;
+        _prescriber.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+        _prescriber.AutoCompleteSource = AutoCompleteSource.ListItems;
+        _prescriber.Bounds = new Rectangle(424, 22, 280, UiTheme.InputHeight);
+
         _clinicalInfoLabel.Font = UiTheme.Small;
         _clinicalInfoLabel.ForeColor = UiTheme.TextSecondary;
         _clinicalInfoLabel.AutoSize = true;
-        _clinicalInfoLabel.Location = new Point(424, 4);
+        _clinicalInfoLabel.Location = new Point(0, 58);
 
-        _clinicalInfo.Location = new Point(424, 22);
+        _clinicalInfo.Location = new Point(0, 76);
 
         _fasted.Font = UiTheme.Small;
         _fasted.ForeColor = UiTheme.TextSecondary;
         _fasted.AutoSize = true;
-        _fasted.Location = new Point(0, 60);
+        _fasted.Location = new Point(436, 80);
         _fasted.Checked = true;
 
         _selfPay.Font = UiTheme.Small;
         _selfPay.ForeColor = UiTheme.TextSecondary;
         _selfPay.AutoSize = true;
-        _selfPay.Location = new Point(192, 60);
+        _selfPay.Location = new Point(600, 80);
 
         contextPanel.Controls.AddRange([_priorityLabel, _priority, _originLabel, _origin,
+                                        _prescriberLabel, _prescriber,
                                         _clinicalInfoLabel, _clinicalInfo, _fasted, _selfPay]);
 
         // --- catalogue and basket -----------------------------------------------------------------
@@ -348,6 +371,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _basketHeading.Text = T("Order.Analyses");
         _priorityLabel.Text = T("Field.Priority");
         _originLabel.Text = T("Order.Origin");
+        _prescriberLabel.Text = T("Order.Prescriber");
         _clinicalInfoLabel.Text = T("Order.ClinicalInformation");
         _fasted.Text = T("Order.Fasted");
         _selfPay.Text = T("PayerKind.SelfPay");
@@ -391,8 +415,47 @@ public sealed class OrderRegistrationView : LocalizedView
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
         await SearchCatalogueAsync(ct);
+        if (_prescriber.Items.Count == 0) await LoadPrescribersAsync(ct);
         if (_patientId is null && _patientPicker.Items.Count == 0) await SearchPatientsAsync();
         _patientSearch.Focus();
+    }
+
+    private async Task LoadPrescribersAsync(CancellationToken ct)
+    {
+        try
+        {
+            var prescribers = await _masterData.GetPrescribersAsync(null, includeInactive: false, ct);
+
+            _prescriber.BeginUpdate();
+            _prescriber.Items.Clear();
+            foreach (var p in prescribers)
+            {
+                var speciality = p.Speciality?.For(Localizer.CurrentLanguage);
+                _prescriber.Items.Add(new PrescriberChoice(
+                    p.PrescriberId,
+                    string.IsNullOrWhiteSpace(speciality) ? p.FullName : $"{p.FullName} — {speciality}"));
+            }
+            _prescriber.EndUpdate();
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded.
+        }
+        catch (Exception ex)
+        {
+            // The list only helps typing; a name typed freely is still accepted without it.
+            _logger?.LogWarning(ex, "Loading the prescribers failed.");
+        }
+    }
+
+    // A doctor from the list, matched also when the name was typed out in full rather than picked.
+    private PrescriberChoice? ChosenPrescriber()
+    {
+        if (_prescriber.SelectedItem is PrescriberChoice chosen) return chosen;
+
+        var text = _prescriber.Text.Trim();
+        return _prescriber.Items.OfType<PrescriberChoice>()
+            .FirstOrDefault(c => string.Equals(c.Display, text, StringComparison.CurrentCultureIgnoreCase));
     }
 
     // ---- Patient ----------------------------------------------------------------------------------
@@ -711,6 +774,19 @@ public sealed class OrderRegistrationView : LocalizedView
     {
         if (_patientId is not { } patientId || _selected.Count == 0) return;
 
+        var origin = _origin.SelectedItem is EnumChoice<OrderOrigin> chosenOrigin
+            ? chosenOrigin.Value : OrderOrigin.Walkin;
+        var prescriber = ChosenPrescriber();
+        var prescriberText = _prescriber.Text.Trim();
+
+        // Checked here as well as on save so the clerk is taken to the field that is missing.
+        if (prescriber is null && prescriberText.Length == 0 && origin != OrderOrigin.PatientRequest)
+        {
+            _dialogs.Warn(T("Order_PrescriberRequired"));
+            _prescriber.Focus();
+            return;
+        }
+
         var request = new RegisterOrderRequest
         {
             PatientId = patientId,
@@ -718,8 +794,9 @@ public sealed class OrderRegistrationView : LocalizedView
             TestPanelIds = [.. _selected.Where(s => s.IsPanel).Select(s => s.Id)],
             Priority = _priority.SelectedItem is EnumChoice<OrderPriority> p
                 ? p.Value : OrderPriority.Routine,
-            Origin = _origin.SelectedItem is EnumChoice<OrderOrigin> o
-                ? o.Value : OrderOrigin.Walkin,
+            Origin = origin,
+            PrescriberId = prescriber?.Id,
+            PrescriberFreeText = prescriber is null && prescriberText.Length > 0 ? prescriberText : null,
             ClinicalInformation = string.IsNullOrWhiteSpace(_clinicalInfo.Text)
                 ? null : _clinicalInfo.Text.Trim(),
             PatientFasted = _fasted.Checked,
@@ -846,6 +923,8 @@ public sealed class OrderRegistrationView : LocalizedView
 
         if (_priority.Items.Count > 0) _priority.SelectedIndex = 0;
         if (_origin.Items.Count > 0) _origin.SelectedIndex = 0;
+        _prescriber.SelectedIndex = -1;
+        _prescriber.Text = string.Empty;
 
         _patientSearch.Focus();
     }
@@ -854,6 +933,11 @@ public sealed class OrderRegistrationView : LocalizedView
     {
         if (disposing) _debounce.Dispose();
         base.Dispose(disposing);
+    }
+
+    private sealed record PrescriberChoice(Guid Id, string Display)
+    {
+        public override string ToString() => Display;
     }
 
     private sealed record PatientChoice(Guid Id, string Display)
