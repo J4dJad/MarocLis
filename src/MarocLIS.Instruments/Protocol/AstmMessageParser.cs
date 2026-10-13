@@ -299,6 +299,25 @@ public static class AstmMessageParser
         return records;
     }
 
+    /// <summary>
+    /// The answer to a query the laboratory has nothing for: an unknown tube, or one whose
+    /// analyses are not mapped on this analyser. Termination code I, "no information available
+    /// from last query", lets the analyser move to the next tube instead of waiting out its
+    /// query timeout with the rack stopped.
+    /// </summary>
+    public static IReadOnlyList<string> BuildNoInformation(
+        string senderId, DateTimeOffset now, AstmDelimiters? delimiters = null)
+    {
+        var d = delimiters ?? AstmDelimiters.Default;
+        var f = d.Field;
+
+        return
+        [
+            $"H{f}{d.Repeat}{d.Component}{d.Escape}{f}{f}{f}{senderId}{f}{f}{f}{f}{f}{f}P{f}1{f}{Timestamp(now)}",
+            $"L{f}1{f}I"
+        ];
+    }
+
     /// <summary>Formats a timestamp in the ASTM <c>yyyyMMddHHmmss</c> form.</summary>
     public static string Timestamp(DateTimeOffset value) =>
         value.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);

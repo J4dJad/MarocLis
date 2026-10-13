@@ -223,7 +223,12 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
             && _config.Direction != InstrumentDirection.Unidirectional)
         {
             var orders = await _sink.ResolveQueryAsync(_config.Id, message.QueriedSpecimenIds, ct);
-            await SendOrdersAsync(orders, ct);
+
+            if (orders.Count == 0)
+                await SendRecordsAsync(
+                    AstmMessageParser.BuildNoInformation(senderId: "MAROCLIS", DateTimeOffset.Now), ct);
+            else
+                await SendOrdersAsync(orders, ct);
             return;
         }
 
@@ -252,17 +257,30 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
         var records = AstmMessageParser.BuildOrderDownload(
             orders, senderId: "MAROCLIS", DateTimeOffset.Now);
 
-        var frames = AstmControl.BuildFrames(records, _encoding);
+        var sent = await SendRecordsAsync(records, ct);
 
-        // Bid for the line.
-        await _transport.WriteAsync(new[] { AstmControl.Enq }, ct);
-
-        if (!await AwaitAckAsync(ct))
+        if (sent is false)
         {
             _logger?.LogWarning("Analyser {Interface} refused the line; worklist re-queued.", _config.Id);
             _outbound.Enqueue(orders);
             return false;
         }
+
+        return sent is true;
+    }
+
+    /// <summary>
+    /// Bids for the line and sends <paramref name="records"/> frame by frame. Null when the
+    /// line was taken but a frame went unacknowledged, false when the analyser refused the line.
+    /// </summary>
+    private async Task<bool?> SendRecordsAsync(IReadOnlyList<string> records, CancellationToken ct)
+    {
+        var frames = AstmControl.BuildFrames(records, _encoding);
+
+        // Bid for the line.
+        await _transport.WriteAsync(new[] { AstmControl.Enq }, ct);
+
+        if (!await AwaitAckAsync(ct)) return false;
 
         foreach (var frame in frames)
         {
@@ -281,7 +299,7 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
                 _logger?.LogError("Frame not acknowledged after {Attempts} attempts on {Interface}.",
                                   attempts, _config.Id);
                 await _transport.WriteAsync(new[] { AstmControl.Eot }, ct);
-                return false;
+                return null;
             }
         }
 

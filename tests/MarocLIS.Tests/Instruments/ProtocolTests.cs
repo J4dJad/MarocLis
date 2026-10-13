@@ -407,6 +407,17 @@ public sealed class AstmMessageParserTests
     }
 
     [Fact]
+    public void BuildNoInformation_TellsTheAnalyserToMoveOn()
+    {
+        var records = AstmMessageParser.BuildNoInformation(
+            "MAROCLIS", new DateTimeOffset(2026, 10, 13, 10, 0, 0, TimeSpan.Zero));
+
+        records.Should().HaveCount(2);
+        records[0].Should().StartWith("H|");
+        records[^1].Should().Be("L|1|I");
+    }
+
+    [Fact]
     public void Parse_OfAnEmptyMessage_IsBlocking()
     {
         var message = AstmMessageParser.Parse([]);
