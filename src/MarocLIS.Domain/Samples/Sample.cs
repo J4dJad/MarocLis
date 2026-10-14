@@ -157,7 +157,9 @@ public sealed class Sample : AuditableAggregateRoot, ISoftDeletable, ISiteScoped
     public Result Receive(DateTimeOffset at, Guid byUserId, SampleDefect observedDefects,
                           bool acceptWithReservation, decimal? temperatureCelsius, string? note)
     {
-        if (Status is SampleStatus.Rejected or SampleStatus.Discarded)
+        // Received twice would overwrite the first reception's time, operator and temperature.
+        if (Status is SampleStatus.Rejected or SampleStatus.Discarded
+                   or SampleStatus.Received or SampleStatus.InAnalysis or SampleStatus.Stored)
             return Result.Failure(Error.Conflict("Sample_CannotReceiveFromStatus", Status));
         if (CollectedAt is null)
             return Result.Failure(Error.Conflict("Sample_NotCollected"));
@@ -185,6 +187,10 @@ public sealed class Sample : AuditableAggregateRoot, ISoftDeletable, ISiteScoped
     {
         if (Status is SampleStatus.Discarded)
             return Result.Failure(Error.Conflict("Sample_CannotRejectFromStatus", Status));
+
+        // Refusing the same tube twice would issue a second replacement for one draw.
+        if (Status is SampleStatus.Rejected)
+            return Result.Failure(Error.Conflict("Sample_AlreadyRejected", Barcode));
 
         RejectedAt = at;
         RejectedByUserId = byUserId;
@@ -378,7 +384,10 @@ public enum SampleEventKind
     Discarded = 11,
     TemperatureRecorded = 12,
     /// <summary>Barcode reprinted — recorded because a duplicate label is a real safety risk.</summary>
-    LabelReprinted = 13
+    LabelReprinted = 13,
+
+    /// <summary>The patient was called or sent a message to come back for a new draw.</summary>
+    PatientRecalled = 14
 }
 
 /// <summary>A child tube split off a primary sample, with its own barcode.</summary>

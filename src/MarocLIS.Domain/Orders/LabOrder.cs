@@ -168,6 +168,44 @@ public sealed class LabOrder : AuditableAggregateRoot, ISoftDeletable, ISiteScop
     }
 
     /// <summary>
+    /// Swaps analyses bound to a refused tube for fresh ones on its replacement, in one step.
+    /// <para>
+    /// Cancelling first and adding afterwards does not work: when the refused tube carried every
+    /// analysis, the cancellations leave nothing live, the order closes as cancelled, and the
+    /// replacements are then refused. Here the replacements go in before the status is recomputed,
+    /// so the order stays open and waits for the new draw.
+    /// </para>
+    /// </summary>
+    public Result ReplaceItems(IReadOnlyList<(Guid OldItemId, LabOrderItem Replacement)> swaps,
+                               DateTimeOffset now, Guid byUserId, string reason)
+    {
+        if (Status == LabOrderStatus.Cancelled)
+            return Result.Failure(Error.Conflict("Order_ClosedCannotAddItem"));
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Failure(Error.Validation("Order_CancellationReasonRequired"));
+
+        foreach (var (oldItemId, _) in swaps)
+        {
+            var old = _items.FirstOrDefault(i => i.Id == oldItemId);
+            if (old is null) return Result.Failure(Error.NotFound("Order_ItemNotFound"));
+            if (old.Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported)
+                return Result.Failure(Error.Conflict("Order_ItemValidatedCannotCancel"));
+        }
+
+        foreach (var (oldItemId, replacement) in swaps)
+        {
+            var old = _items.First(i => i.Id == oldItemId);
+            if (!old.IsCancelled) old.Cancel(now, byUserId, reason);
+
+            replacement.AttachTo(Id);
+            _items.Add(replacement);
+        }
+
+        RecomputeStatus();
+        return Result.Success();
+    }
+
+    /// <summary>
     /// Cancels the whole order. Refused once anything has been biologically validated, because a
     /// validated result has already left the laboratory's sole control.
     /// </summary>

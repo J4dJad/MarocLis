@@ -30,6 +30,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Instruments.InstrumentInterfaceService>();
         services.AddScoped<Samples.SampleWorkflowService>();
         services.AddScoped<Samples.SubcontractingService>();
+        services.AddScoped<Samples.RecollectionService>();
         services.AddScoped<ResultEntryService>();
         services.AddScoped<ValidationService>();
         services.AddScoped<BenchWorksheetService>();

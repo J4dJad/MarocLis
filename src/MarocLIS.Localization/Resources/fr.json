@@ -1,5 +1,7 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Recollection_ContactNoteRequired": "Indiquez le résultat de l'appel.",
+  "Recollection_AlreadyDrawn": "Le tube {0} a déjà été prélevé ou retiré : la liste a été mise à jour.",
   "Messaging_EmailNotConfigured": "La messagerie (SMTP) n'est pas configurée.",
   "Messaging_InvalidEmail": "Adresse e-mail invalide : {0}",
   "Messaging_EmailFailed": "le serveur de messagerie a refusé l'envoi ({0}).",
@@ -20,6 +22,28 @@
   "Deposit_ExceedsOrderTotal": "L'acompte dépasse ce qui reste à couvrir sur le dossier ({0}).",
   "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
   "Deposit_NotFound": "Acompte introuvable.",
+
+  "Recollection": {
+    "SearchPlaceholder": "Dossier, patient, téléphone, code-barres…",
+    "Abandoned": "Re-prélèvement abandonné pour le dossier {0}.",
+    "AbandonPrompt": "Le patient du dossier {0} ne reviendra pas. Les analyses en attente du nouveau tube ({1}) seront annulées.\n\nMotif :",
+    "SmsSent": "SMS de rappel envoyé au {0}.",
+    "SmsPrompt": "SMS de rappel à {0}. Le message donne seulement le nom du laboratoire et le n° de dossier.\n\nNuméro :",
+    "CallRecorded": "Appel noté pour le dossier {0}.",
+    "CallPrompt": "Appel à {0} ({1}).\n\nRésultat de l'appel (par exemple « joint, passe demain matin » ou « pas de réponse ») :",
+    "SelectRow": "Sélectionnez un patient dans la liste.",
+    "NotContacted": "Pas encore contacté",
+    "LastContact": "Dernier contact",
+    "NewTube": "Nouveau tube",
+    "Reason": "Motif du refus",
+    "Analyses": "Analyses",
+    "Phone": "Téléphone",
+    "RejectedAt": "Refusé le",
+    "Abandon": "Abandonner",
+    "SendSms": "Envoyer un SMS",
+    "RecordCall": "Noter un appel",
+    "Heading": "Patients à rappeler pour un nouveau prélèvement — {0} (dont {1} pas encore contactés)"
+  },
 
   "Subcontract": {
     "SignaturePartner": "Reçu par le laboratoire partenaire (date, signature) :",
@@ -151,6 +175,7 @@
   },
 
   "Nav": {
+    "Recollections": "Re-prélèvements",
     "Subcontracting": "Sous-traitance",
     "ExpandGroup": "Déplier ce groupe",
     "CollapseGroup": "Replier ce groupe",
@@ -2891,6 +2916,8 @@
   "Sample_NotFound": "Échantillon introuvable ({0}).",
   "Sample_BarcodeUnknown": "Aucun échantillon ne porte le code-barres « {0} ».",
   "Sample_ReprintReasonRequired": "La réimpression d'une étiquette doit être motivée.",
+  "Sample_AlreadyRejected": "Le tube {0} est déjà refusé. Son remplacement, s'il a été demandé, existe déjà.",
+  "Sample_NothingToRecollect": "Le tube {0} n'a plus d'analyse en attente : toutes sont validées. Un nouveau prélèvement n'aurait rien à analyser. Décochez « Demander un nouveau prélèvement » pour refuser le tube seul.",
   "Formula_Empty": "La formule de calcul est vide.",
   "Formula_DivisionByZero": "Division par zéro dans la formule de calcul.",
   "Formula_Overflow": "Dépassement de capacité dans la formule de calcul.",

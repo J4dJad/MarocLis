@@ -5,6 +5,7 @@ using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
+using MarocLIS.Domain.Results;
 using MarocLIS.Domain.Samples;
 using MarocLIS.Domain.Sequencing;
 
@@ -177,6 +178,7 @@ public sealed class SampleWorkflowService(
     IRepository<LabOrder> orders,
     IRepository<AnalysisTest> analyses,
     IRepository<Patient> patients,
+    IRepository<TestResult> results,
     ISampleQueries queries,
     ISequenceAllocator sequences,
     IUnitOfWork unitOfWork,
@@ -448,6 +450,15 @@ public sealed class SampleWorkflowService(
 
                     var marked = item.MarkReceived(now, dueAt);
                     if (marked.IsFailure) problems.Add(marked.FirstError);
+
+                    // Replacement tubes issued before awaited rows were created with them have
+                    // none, and nothing could be entered on them: they get their rows here.
+                    if (test is not null
+                        && (await results.ListAsync(r => r.LabOrderItemId == item.Id, ct)).Count == 0)
+                    {
+                        var withParameters = await analyses.GetByIdWithDetailsAsync(test.Id, ct);
+                        if (withParameters is not null) await AddAwaitedResultsAsync(order, item, withParameters, ct);
+                    }
                 }
 
                 // The order's promise is the latest of its items'.
@@ -501,6 +512,29 @@ public sealed class SampleWorkflowService(
                 continue;
             }
 
+            if (sample.Status == SampleStatus.Rejected)
+            {
+                problems.Add(Error.Conflict("Sample_AlreadyRejected", sample.Barcode));
+                continue;
+            }
+
+            var order = await orders.GetByIdWithDetailsAsync(sample.LabOrderId, ct);
+
+            // Analyses the refusal takes off this tube: whatever a biologist has not signed yet.
+            var affected = order?.Items
+                .Where(i => i.SampleId == sample.Id && !i.IsCancelled
+                            && i.Status is not (LabOrderItemStatus.Validated
+                                                or LabOrderItemStatus.Reported))
+                .Select(i => i.Id)
+                .ToList() ?? [];
+
+            // A new draw for a tube whose analyses are all signed would have nothing to run.
+            if (request.RequestRecollection && affected.Count == 0)
+            {
+                problems.Add(Error.Conflict("Sample_NothingToRecollect", sample.Barcode));
+                continue;
+            }
+
             var refused = sample.Reject(now, currentUser.UserId, request.Reason,
                                          request.Comment, request.RequestRecollection);
 
@@ -510,8 +544,6 @@ public sealed class SampleWorkflowService(
                 continue;
             }
 
-            var order = await orders.GetByIdWithDetailsAsync(sample.LabOrderId, ct);
-
             if (order is not null)
             {
                 var reasonText = $"Échantillon refusé : {request.Reason}" +
@@ -519,25 +551,23 @@ public sealed class SampleWorkflowService(
                                      ? string.Empty
                                      : $" — {request.Comment}");
 
-                var affected = order.Items
-                    .Where(i => i.SampleId == sample.Id && !i.IsCancelled
-                                && i.Status != LabOrderItemStatus.Validated)
-                    .Select(i => i.Id)
-                    .ToList();
-
-                foreach (var itemId in affected)
+                if (request.RequestRecollection && affected.Count > 0)
                 {
-                    var cancelled = order.CancelItem(itemId, now, currentUser.UserId, reasonText);
-                    if (cancelled.IsFailure) problems.Add(cancelled.FirstError);
-                }
-
-                if (request.RequestRecollection)
-                {
-                    var replacement = await CreateReplacementAsync(order, sample, affected, ct);
+                    var replacement = await CreateReplacementAsync(order, sample, affected, reasonText, ct);
 
                     if (replacement.IsSuccess) replacementLabels.Add(replacement.Value);
                     else problems.Add(replacement.FirstError);
                 }
+                else
+                {
+                    foreach (var itemId in affected)
+                    {
+                        var cancelled = order.CancelItem(itemId, now, currentUser.UserId, reasonText);
+                        if (cancelled.IsFailure) problems.Add(cancelled.FirstError);
+                    }
+                }
+
+                orders.Update(order);
             }
 
             rejected++;
@@ -551,14 +581,23 @@ public sealed class SampleWorkflowService(
     }
 
     /// <summary>
-    /// Creates a fresh tube for a recollection, with a new barcode, and re-opens the analyses the
-    /// rejection cancelled.
+    /// Creates a fresh tube for a recollection, with a new barcode, and moves the refused tube's
+    /// analyses onto it.
+    /// <para>
+    /// A cancelled item is not revived, because its cancellation is part of the record: each one is
+    /// replaced by a new item on the new tube, with its own awaited result rows so the values can be
+    /// entered, and with the original price, so the patient pays once, for the analysis actually
+    /// done. The swap happens in one step on the order, which therefore stays open even when the
+    /// refused tube was its only one.
+    /// </para>
     /// </summary>
     private async Task<Result<SampleLabel>> CreateReplacementAsync(
-        LabOrder order, Sample rejected, IReadOnlyList<Guid> cancelledItemIds, CancellationToken ct)
+        LabOrder order, Sample rejected, IReadOnlyList<Guid> itemIds, string reason, CancellationToken ct)
     {
         var barcode = await sequences.NextAsync(SequencePurpose.SampleBarcode, null, null, ct);
         if (barcode.IsFailure) return Result.Failure<SampleLabel>(barcode.FirstError);
+
+        var now = clock.Now;
 
         var replacement = new Sample(barcode.Value, order.Id, rejected.SpecimenTypeId,
                                       currentUser.SiteId)
@@ -569,43 +608,46 @@ public sealed class SampleWorkflowService(
             KeepUntil = clock.Today.AddDays(options.SampleRetentionDays)
         };
 
-        replacement.AddEvent(SampleEventKind.LabelPrinted, clock.Now, currentUser.UserId,
+        replacement.AddEvent(SampleEventKind.LabelPrinted, now, currentUser.UserId,
                              $"Remplacement de {rejected.Barcode}",
                              workstation: currentUser.Workstation);
 
-        await samples.AddAsync(replacement, ct);
+        var swaps = new List<(Guid OldItemId, LabOrderItem Replacement)>();
+        var tests = new List<(LabOrderItem Item, AnalysisTest? Test)>();
 
-        rejected.LinkReplacement(replacement.Id);
-
-        // Re-request the cancelled analyses against the new tube. A cancelled item is not revived —
-        // its cancellation is part of the record — so a new item is added instead.
-        var analysisIds = order.Items
-            .Where(i => cancelledItemIds.Contains(i.Id))
-            .Select(i => (i.AnalysisTestId, i.DepartmentId, i.ChargedPrice, i.ReferenceTariffBase,
-                          i.PayerShare, i.PatientShare, i.BilledLetterKey, i.BilledCoefficient,
-                          i.BilledActCode))
-            .ToList();
-
-        foreach (var source in analysisIds)
+        foreach (var source in order.Items.Where(i => itemIds.Contains(i.Id)).ToList())
         {
+            var test = await analyses.GetByIdWithDetailsAsync(source.AnalysisTestId, ct);
+
             var reopened = new LabOrderItem(source.AnalysisTestId, order.Priority)
             {
                 SampleId = replacement.Id,
                 DepartmentId = source.DepartmentId,
-                // The patient is not charged twice for a tube the laboratory refused.
-                ChargedPrice = 0m,
+                TestPanelId = source.TestPanelId,
+                ChargedPrice = source.ChargedPrice,
                 ReferenceTariffBase = source.ReferenceTariffBase,
-                PayerShare = 0m,
-                PatientShare = 0m,
+                PayerShare = source.PayerShare,
+                PatientShare = source.PatientShare,
                 BilledLetterKey = source.BilledLetterKey,
                 BilledCoefficient = source.BilledCoefficient,
-                BilledActCode = source.BilledActCode
+                BilledActCode = source.BilledActCode,
+                IsSubcontracted = source.IsSubcontracted,
+                SubcontractorSiteId = source.SubcontractorSiteId,
+                DueAt = test?.ExpectedCompletion(now, order.IsUrgent) ?? source.DueAt
             };
 
-            order.AddItem(reopened);
+            swaps.Add((source.Id, reopened));
+            tests.Add((reopened, test));
         }
 
-        order.RecomputeStatus();
+        var swapped = order.ReplaceItems(swaps, now, currentUser.UserId, reason);
+        if (swapped.IsFailure) return Result.Failure<SampleLabel>(swapped.FirstError);
+
+        await samples.AddAsync(replacement, ct);
+        rejected.LinkReplacement(replacement.Id);
+
+        foreach (var (item, test) in tests)
+            if (test is not null) await AddAwaitedResultsAsync(order, item, test, ct);
 
         var patient = await patients.GetByIdAsync(order.PatientId, ct);
         var container = await queries.GetContainerDescriptionAsync(replacement.ContainerTypeId, ct);
@@ -621,9 +663,28 @@ public sealed class SampleWorkflowService(
             container?.ColourHex ?? "#FFFFFF",
             replacement.SequenceInOrder,
             replacement.SequenceInOrder,
-            [.. analysisIds.Select(a => a.BilledActCode ?? string.Empty).Where(c => c.Length > 0)],
+            [.. swaps.Select(s => s.Replacement.BilledActCode ?? string.Empty).Where(c => c.Length > 0)],
             order.IsUrgent,
-            clock.Now));
+            now));
+    }
+
+    /// <summary>The awaited result rows of one analysis, as order registration creates them.</summary>
+    private async Task AddAwaitedResultsAsync(LabOrder order, LabOrderItem item, AnalysisTest test,
+                                              CancellationToken ct)
+    {
+        foreach (var parameter in test.Parameters.Where(p => p.IsActive))
+        {
+            // A section heading carries no result and gets no row.
+            if (parameter.ValueType == ResultValueType.Heading) continue;
+
+            await results.AddAsync(
+                new TestResult(order.Id, item.Id, parameter.Id, currentUser.SiteId)
+                {
+                    DepartmentId = test.DepartmentId,
+                    AppliedDecimals = parameter.Decimals,
+                    AppliedUnitSymbol = parameter.Unit?.DisplaySymbol
+                }, ct);
+        }
     }
 
     // ---- Storage and disposal ------------------------------------------------------------------

@@ -244,6 +244,9 @@ public sealed class MainShellForm : LocalizedForm
             new("reception", "Nav.SampleReception", [Permissions.Samples.Receive],
                 n => n.NavigateToAsync<SampleReceptionView>()),
 
+            new("recollections", "Nav.Recollections", [Permissions.Orders.Edit, Permissions.Samples.Reject],
+                n => n.NavigateToAsync<RecollectionView>()),
+
             new("serumbank", "Nav.SerumBank", [Permissions.Samples.Receive],
                 n => n.NavigateToAsync<SampleStorageView>()),
 

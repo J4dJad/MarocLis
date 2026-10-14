@@ -562,6 +562,14 @@ public sealed class SampleReceptionView : LocalizedView
 
         SetActionsEnabled(true);
         RefreshActionAvailability();
+
+        // Scanned again after reception or after a refusal: say where the tube stands.
+        if (candidate.Status is not (SampleStatus.Collected or SampleStatus.InTransit
+                                     or SampleStatus.AwaitingCollection))
+        {
+            _status.ForeColor = UiTheme.Abnormal;
+            _status.Text = $"{candidate.Barcode} — {T("SampleStatus." + candidate.Status)}";
+        }
     }
 
     private void ClearCandidate()
@@ -600,6 +608,18 @@ public sealed class SampleReceptionView : LocalizedView
 
         _acceptReserved.ForeColor = hasDefects ? UiTheme.Abnormal : UiTheme.TextSecondary;
         _acceptReserved.Font = hasDefects ? UiTheme.BodyBold : UiTheme.Body;
+
+        // A tube already on the bench can still be refused (a clot found after centrifugation),
+        // but not received a second time; a refused or discarded tube admits neither.
+        if (_candidate.Status is SampleStatus.Received or SampleStatus.InAnalysis or SampleStatus.Stored)
+        {
+            _accept.Enabled = false;
+            _acceptReserved.Enabled = false;
+        }
+        else if (_candidate.Status is SampleStatus.Rejected or SampleStatus.Discarded)
+        {
+            SetActionsEnabled(false);
+        }
     }
 
     private SampleDefect SelectedDefects()
@@ -716,6 +736,13 @@ public sealed class SampleReceptionView : LocalizedView
             if (result.IsFailure)
             {
                 _dialogs.ShowFailure(result);
+                return;
+            }
+
+            // Refused by the rules (already refused, nothing left to redraw): nothing was recorded.
+            if (result.Value.Rejected == 0)
+            {
+                _dialogs.Warn(Localizer.Describe(result.Value.Problems), T("Action.Reject"));
                 return;
             }
 

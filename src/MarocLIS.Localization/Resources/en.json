@@ -1,5 +1,7 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Recollection_ContactNoteRequired": "Enter the outcome of the call.",
+  "Recollection_AlreadyDrawn": "Tube {0} has already been drawn or withdrawn: the list has been refreshed.",
   "Messaging_EmailNotConfigured": "E-mail (SMTP) is not configured.",
   "Messaging_InvalidEmail": "Invalid e-mail address: {0}",
   "Messaging_EmailFailed": "the mail server refused the message ({0}).",
@@ -20,6 +22,28 @@
   "Deposit_ExceedsOrderTotal": "The deposit exceeds what is left to cover on the request ({0}).",
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
+
+  "Recollection": {
+    "SearchPlaceholder": "Order, patient, phone, barcode…",
+    "Abandoned": "Recollection abandoned for order {0}.",
+    "AbandonPrompt": "The patient of order {0} will not come back. The analyses awaiting the new tube ({1}) will be cancelled.\n\nReason:",
+    "SmsSent": "Recall SMS sent to {0}.",
+    "SmsPrompt": "Recall SMS to {0}. The message gives only the laboratory's name and the order number.\n\nNumber:",
+    "CallRecorded": "Call recorded for order {0}.",
+    "CallPrompt": "Call to {0} ({1}).\n\nOutcome of the call (e.g. \"reached, coming tomorrow morning\" or \"no answer\"):",
+    "SelectRow": "Select a patient in the list.",
+    "NotContacted": "Not contacted yet",
+    "LastContact": "Last contact",
+    "NewTube": "New tube",
+    "Reason": "Refusal reason",
+    "Analyses": "Analyses",
+    "Phone": "Phone",
+    "RejectedAt": "Refused on",
+    "Abandon": "Abandon",
+    "SendSms": "Send an SMS",
+    "RecordCall": "Record a call",
+    "Heading": "Patients to call back for a new draw — {0} ({1} not contacted yet)"
+  },
 
   "Subcontract": {
     "SignaturePartner": "Received by partner lab (date, signature):",
@@ -151,6 +175,7 @@
   },
 
   "Nav": {
+    "Recollections": "Recollections",
     "Subcontracting": "Subcontracting",
     "ExpandGroup": "Expand this group",
     "CollapseGroup": "Collapse this group",
@@ -2890,6 +2915,8 @@
   "Sample_NotFound": "Sample not found ({0}).",
   "Sample_BarcodeUnknown": "No sample carries the barcode \"{0}\".",
   "Sample_ReprintReasonRequired": "Reprinting a label must be justified.",
+  "Sample_AlreadyRejected": "Tube {0} is already refused. Its replacement, if one was requested, already exists.",
+  "Sample_NothingToRecollect": "Tube {0} has no analysis left to run: all are validated. A new draw would have nothing to analyse. Untick \"recollection\" to refuse the tube alone.",
   "Formula_Empty": "The calculation formula is empty.",
   "Formula_DivisionByZero": "Division by zero in the calculation formula.",
   "Formula_Overflow": "Arithmetic overflow in the calculation formula.",
