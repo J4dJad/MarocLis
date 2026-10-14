@@ -67,6 +67,11 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddSingleton<IPasswordHasher>(_ => new BCryptPasswordHasher());
 
+        var messaging = configuration.GetSection(MessagingOptions.SectionName).Get<MessagingOptions>()
+                        ?? new MessagingOptions();
+        services.AddSingleton(messaging);
+        services.AddSingleton<IMessageSender, Messaging.MessageSender>();
+
         services.AddScoped<AuditSaveChangesInterceptor>();
 
         services.AddDbContext<LisDbContext>((sp, builder) =>

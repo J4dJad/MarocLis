@@ -599,7 +599,7 @@ public sealed partial class DemoDataSeeder
 
         if (!delivered)
         {
-            Check(await AsAsync<ReportReleaseService, Result>(DemoActor.Secretary,
+            Check(await AsAsync<ReportReleaseService, Result<DeliveryOutcome>>(DemoActor.Secretary,
                       s => s.RecordDeliveryAsync(reportId.Value, DeliveryChannel.PrintedAtCounter,
                                                  ReportRecipientKind.Patient, patientName, patientCin,
                                                  ct: ct), ct),

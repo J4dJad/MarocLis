@@ -678,19 +678,51 @@ public sealed class ReportRegisterView : LocalizedView
     {
         if (Selected is not { } row) return;
 
-        using var dialog = new ReportDeliveryDialog(Localizer, _dialogs, row);
+        var (emailReady, smsReady) = _reports.ElectronicChannels;
+
+        using var dialog = new ReportDeliveryDialog(Localizer, _dialogs, row, emailReady, smsReady);
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
 
-        var result = await _reports.RecordDeliveryAsync(
-            row.ReportId, dialog.Channel, dialog.RecipientKind, dialog.RecipientName,
-            dialog.RecipientIdentifier, dialog.BearerName, dialog.BearerCin,
-            dialog.AuthorizingConsentId);
+        Cursor = Cursors.WaitCursor;
+        Result<DeliveryOutcome> result;
+
+        try
+        {
+            result = await _reports.RecordDeliveryAsync(
+                row.ReportId, dialog.Channel, dialog.RecipientKind, dialog.RecipientName,
+                dialog.RecipientIdentifier, dialog.BearerName, dialog.BearerCin,
+                dialog.AuthorizingConsentId);
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+        }
 
         if (result.IsFailure) { _dialogs.ShowFailure(result, T("Report.RecordDelivery")); return; }
 
-        _status.ForeColor = UiTheme.Normal;
-        _status.Text = T("Report.DeliveryRecorded", row.AccessionNumber, row.VersionNumber);
+        switch (result.Value.Kind)
+        {
+            case DeliveryResultKind.Failed:
+                // The attempt is on record; the operator needs to know it did not go, and why.
+                var reason = result.Value.Failure is { } error ? T(error.ResourceKey, error.Args) : string.Empty;
+                _dialogs.Warn(T("Report.SendFailed", dialog.RecipientIdentifier, reason),
+                              T("Report.RecordDelivery"));
+                _status.ForeColor = UiTheme.Critical;
+                _status.Text = T("Report.SendFailedShort", row.AccessionNumber);
+                break;
+
+            case DeliveryResultKind.Sent:
+                _status.ForeColor = UiTheme.Normal;
+                _status.Text = T(dialog.Channel == DeliveryChannel.Email ? "Report.EmailSent" : "Report.SmsSent",
+                                 row.AccessionNumber, dialog.RecipientIdentifier);
+                break;
+
+            default:
+                _status.ForeColor = UiTheme.Normal;
+                _status.Text = T("Report.DeliveryRecorded", row.AccessionNumber, row.VersionNumber);
+                break;
+        }
 
         await ActivateAsync();
     }

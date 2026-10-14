@@ -21,6 +21,10 @@ namespace MarocLIS.Desktop.Views;
 internal sealed class ReportDeliveryDialog : MasterDataEditor
 {
     private readonly ReportRegisterRow _row;
+    private readonly bool _emailReady, _smsReady;
+
+    /// <summary>The last value this form filled in itself, so it is only replaced, never typed-over text.</summary>
+    private string? _autoFilled;
 
     private readonly ComboBox _channel, _recipientKind;
     private readonly TextBox _recipientName, _recipientIdentifier, _bearerName, _bearerCin,
@@ -43,11 +47,13 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
     internal Guid? AuthorizingConsentId { get; private set; }
 
     internal ReportDeliveryDialog(ILocalizer localizer, IUserDialogs dialogs,
-                                  ReportRegisterRow row)
+                                  ReportRegisterRow row, bool emailReady = false, bool smsReady = false)
         : base(localizer, dialogs, "Report.RecordDelivery",
                $"{row.AccessionNumber} v{row.VersionNumber}", 600, 470)
     {
         _row = row;
+        _emailReady = emailReady;
+        _smsReady = smsReady;
 
         var identity = new Label
         {
@@ -76,7 +82,7 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
                               row.PatientName);
 
         _recipientIdentifier = TextField("Report.RecipientIdentifier", 300, 120, 280,
-                                     row.PatientPhone, latin: true);
+                                     null, latin: true);
 
         Notice(20, 166, 560, 30, "Report.RecipientIdentifierNotice");
 
@@ -129,6 +135,28 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
 
         if (kind == ReportRecipientKind.Patient && _recipientName.Text.Length == 0)
             _recipientName.Text = _row.PatientName;
+
+        FillContact();
+    }
+
+    /// <summary>
+    /// Puts the address the chosen channel needs in the field: the patient's or the prescriber's
+    /// e-mail for an e-mail, the patient's mobile for an SMS. Whatever the operator typed is kept.
+    /// </summary>
+    private void FillContact()
+    {
+        var contact = (Channel, RecipientKind) switch
+        {
+            (DeliveryChannel.Email, ReportRecipientKind.Patient) => _row.PatientEmail,
+            (DeliveryChannel.Email, ReportRecipientKind.Prescriber) => _row.PrescriberEmail,
+            (DeliveryChannel.SmsLink or DeliveryChannel.PrintedAtCounter, ReportRecipientKind.Patient) => _row.PatientPhone,
+            _ => null
+        };
+
+        if (_recipientIdentifier.Text.Length > 0 && _recipientIdentifier.Text != _autoFilled) return;
+
+        _recipientIdentifier.Text = contact ?? string.Empty;
+        _autoFilled = _recipientIdentifier.Text;
     }
 
     private void RefreshForChannel()
@@ -138,8 +166,8 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
         _channelNotice.Text = Localizer[channel switch
         {
             DeliveryChannel.PrintedAtCounter => "Report.CounterChannelNotice",
-            DeliveryChannel.Email => "Report.EmailChannelNotice",
-            DeliveryChannel.SmsLink => "Report.SmsChannelNotice",
+            DeliveryChannel.Email => _emailReady ? "Report.EmailChannelLive" : "Report.EmailChannelNotConfigured",
+            DeliveryChannel.SmsLink => _smsReady ? "Report.SmsChannelLive" : "Report.SmsChannelNotConfigured",
             DeliveryChannel.Fax => "Report.FaxChannelNotice",
             DeliveryChannel.Courier => "Report.CourierChannelNotice",
             _ => "Report.InterfaceChannelNotice"

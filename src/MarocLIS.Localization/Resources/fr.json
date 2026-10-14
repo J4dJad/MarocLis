@@ -1,5 +1,11 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Messaging_EmailNotConfigured": "La messagerie (SMTP) n'est pas configurée.",
+  "Messaging_InvalidEmail": "Adresse e-mail invalide : {0}",
+  "Messaging_EmailFailed": "le serveur de messagerie a refusé l'envoi ({0}).",
+  "Messaging_SmsNotConfigured": "Le fournisseur SMS n'est pas configuré.",
+  "Messaging_InvalidPhone": "Numéro de téléphone invalide : {0}",
+  "Messaging_SmsFailed": "le fournisseur SMS a refusé l'envoi ({0}).",
   "Subcontract_NothingSelected": "Cochez au moins une analyse à envoyer.",
   "Subcontract_NoPartner": "Aucun laboratoire partenaire n'est désigné pour une des analyses : choisissez-en un dans la fenêtre d'envoi.",
   "Subcontract_SlipNotFound": "Bordereau {0} introuvable.",
@@ -820,6 +826,14 @@
   },
 
   "Report": {
+    "SmsSent": "{0} : SMS envoyé au {1}.",
+    "EmailSent": "{0} : compte rendu envoyé par e-mail à {1}.",
+    "SendFailedShort": "{0} : échec de l'envoi, voir le détail des remises.",
+    "SendFailed": "L'envoi à {0} a échoué : {1}\n\nLa tentative est enregistrée. Vérifiez l'adresse ou les réglages de messagerie, puis recommencez.",
+    "SmsChannelNotConfigured": "Le fournisseur SMS n'est pas configuré : la remise est seulement enregistrée.",
+    "SmsChannelLive": "SMS réel : le patient est prévenu que son compte rendu est prêt. Aucun résultat dans le message. Consentement à l'envoi électronique exigé.",
+    "EmailChannelNotConfigured": "La messagerie n'est pas configurée : la remise est seulement enregistrée, l'e-mail doit partir par vos propres moyens.",
+    "EmailChannelLive": "Envoi réel par e-mail : le compte rendu part en pièce jointe PDF. Pour le patient, son consentement à l'envoi électronique est exigé.",
     "Issued": "Compte rendu {0} v{1} émis",
     "LastValidatedAt": "Dernière validation",
     "AwaitingAnalyses": "Analyses en attente",
@@ -2869,6 +2883,8 @@
   "Report_ArabicFontMissing": "La police arabe « {0} » n'est pas installée sur ce poste. Un compte rendu arabe rendu sans elle sortirait en lettres isolées, illisible pour le patient : l'édition est refusée. Installez la police, ou éditez le compte rendu en français.",
   "Report_ArabicFontMissingWarning": "Police(s) de compte rendu absente(s) : {0}. Les comptes rendus en arabe ne pourront pas être édités depuis ce poste tant que la police arabe n'est pas installée.",
   "Report_LatinFontMissingWarning": "Police(s) de compte rendu absente(s) : {0}. Les comptes rendus seront édités dans une police de substitution : la mise en page sera dégradée, le contenu restera juste.",
+  "Report_ElectronicDeliveryRequiresConsent": "Le patient n'a pas donné son consentement à l'envoi électronique de ses résultats. Enregistrez-le dans sa fiche (Consentements) avant d'envoyer par e-mail ou SMS.",
+  "Report_NoStoredPdf": "Le PDF de ce compte rendu n'est pas conservé : réémettez-le avant de l'envoyer.",
 
   "Notification_NotFound": "Fiche de communication introuvable.",
   "Qc_RunNotFound": "Série de contrôle introuvable ({0}).",

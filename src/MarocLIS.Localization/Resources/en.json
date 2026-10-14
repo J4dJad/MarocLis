@@ -1,5 +1,11 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Messaging_EmailNotConfigured": "E-mail (SMTP) is not configured.",
+  "Messaging_InvalidEmail": "Invalid e-mail address: {0}",
+  "Messaging_EmailFailed": "the mail server refused the message ({0}).",
+  "Messaging_SmsNotConfigured": "The SMS provider is not configured.",
+  "Messaging_InvalidPhone": "Invalid phone number: {0}",
+  "Messaging_SmsFailed": "the SMS provider refused the message ({0}).",
   "Subcontract_NothingSelected": "Tick at least one analysis to send.",
   "Subcontract_NoPartner": "No partner laboratory is set for one of the analyses: choose one in the send window.",
   "Subcontract_SlipNotFound": "Slip {0} not found.",
@@ -820,6 +826,14 @@
   },
 
   "Report": {
+    "SmsSent": "{0}: SMS sent to {1}.",
+    "EmailSent": "{0}: report e-mailed to {1}.",
+    "SendFailedShort": "{0}: send failed, see the delivery details.",
+    "SendFailed": "Sending to {0} failed: {1}\n\nThe attempt is recorded. Check the address or the messaging settings, then try again.",
+    "SmsChannelNotConfigured": "The SMS provider is not configured: the delivery is only recorded.",
+    "SmsChannelLive": "Real SMS: the patient is told the report is ready. No result in the message. Consent to electronic delivery required.",
+    "EmailChannelNotConfigured": "E-mail is not configured: the delivery is only recorded, the e-mail must be sent by other means.",
+    "EmailChannelLive": "Real e-mail send: the report goes as a PDF attachment. For the patient, their consent to electronic delivery is required.",
     "Issued": "Report {0} v{1} issued",
     "LastValidatedAt": "Last validation",
     "AwaitingAnalyses": "Analyses pending",
@@ -2868,6 +2882,8 @@
   "Report_ArabicFontMissing": "The Arabic font \"{0}\" is not installed on this workstation. An Arabic report rendered without it would come out in isolated letters, unreadable to the patient, so the release is refused. Install the font, or release the report in French.",
   "Report_ArabicFontMissingWarning": "Report font(s) missing: {0}. Arabic reports cannot be released from this workstation until the Arabic font is installed.",
   "Report_LatinFontMissingWarning": "Report font(s) missing: {0}. Reports will be rendered in a substituted font: the layout will be degraded, the content will still be correct.",
+  "Report_ElectronicDeliveryRequiresConsent": "The patient has not consented to electronic delivery of their results. Record it on their file (Consents) before sending by e-mail or SMS.",
+  "Report_NoStoredPdf": "This report's PDF is not stored: reissue it before sending.",
 
   "Notification_NotFound": "Communication record not found.",
   "Qc_RunNotFound": "Control run not found ({0}).",

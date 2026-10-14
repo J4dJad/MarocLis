@@ -171,7 +171,8 @@ public sealed class ReportReleaseService(
     IPermissionGuard guard,
     ICurrentUser currentUser,
     IDataAccessAuditor accessAuditor,
-    IClock clock)
+    IClock clock,
+    IMessageSender messages)
 {
     /// <summary>
     /// Releases a report for the analyses validated so far.
@@ -403,25 +404,46 @@ public sealed class ReportReleaseService(
     }
 
     /// <summary>
-    /// Records a delivery. Handing a report over at the counter is a disclosure of health data, so
-    /// who took it — and on whose authority, when it is not the patient — is part of the record.
+    /// Records a delivery, and for e-mail and SMS actually sends it.
+    /// <para>
+    /// Handing a report over is a disclosure of health data, so who took it, and on whose
+    /// authority when it is not the patient, is part of the record. An e-mail carries the stored
+    /// PDF; an SMS only says the report is ready, never a result. Sending to the patient
+    /// electronically needs their consent to electronic delivery on file (loi 09-08). A failed
+    /// send is kept as a failed attempt, so the register shows it was tried and why it did not go.
+    /// When no e-mail or SMS account is configured the delivery is recorded as before, as a send
+    /// the operator made by other means.
+    /// </para>
     /// </summary>
-    public async Task<Result> RecordDeliveryAsync(
+    public async Task<Result<DeliveryOutcome>> RecordDeliveryAsync(
         Guid reportId, DeliveryChannel channel, ReportRecipientKind recipientKind,
         string? recipientName, string? recipientIdentifier,
         string? bearerName = null, string? bearerCin = null,
         Guid? authorizingConsentId = null, CancellationToken ct = default)
     {
         var permitted = guard.RequireAny(Permissions.Reports.Print, Permissions.Reports.Send);
-        if (permitted.IsFailure) return permitted;
+        if (permitted.IsFailure) return Result.Failure<DeliveryOutcome>(permitted.FirstError);
 
         var report = await reports.GetByIdWithDetailsAsync(reportId, ct);
-        if (report is null) return Result.Failure(Error.NotFound("Report_NotFound"));
+        if (report is null) return Result.Failure<DeliveryOutcome>(Error.NotFound("Report_NotFound"));
 
         // Release to anyone other than the patient or the prescriber needs the patient's explicit
         // third-party disclosure consent on file (loi 08-09).
         if (recipientKind == ReportRecipientKind.AuthorizedThirdParty && authorizingConsentId is null)
-            return Result.Failure(Error.Regulatory("Report_ThirdPartyRequiresConsent"));
+            return Result.Failure<DeliveryOutcome>(Error.Regulatory("Report_ThirdPartyRequiresConsent"));
+
+        var order = await orders.GetByIdAsync(report.LabOrderId, ct);
+        if (order is null) return Result.Failure<DeliveryOutcome>(Error.NotFound("Order_NotFound"));
+
+        var electronic = channel is DeliveryChannel.Email or DeliveryChannel.SmsLink;
+
+        if (electronic && recipientKind == ReportRecipientKind.Patient)
+        {
+            var patient = await patients.GetByIdWithDetailsAsync(order.PatientId, ct);
+
+            if (patient is null || !patient.HasConsent(ConsentPurpose.ElectronicDelivery))
+                return Result.Failure<DeliveryOutcome>(Error.Regulatory("Report_ElectronicDeliveryRequiresConsent"));
+        }
 
         var delivery = new LabReportDelivery(report.Id, channel, recipientKind, clock.Now)
         {
@@ -433,21 +455,93 @@ public sealed class ReportReleaseService(
             HandedOverByUserId = currentUser.UserId
         };
 
+        var outcome = DeliveryResultKind.Recorded;
+        string? failure = null;
+        Error? failureError = null;
+
+        if (channel == DeliveryChannel.Email && messages.CanSendEmail
+            || channel == DeliveryChannel.SmsLink && messages.CanSendSms)
+        {
+            if (string.IsNullOrWhiteSpace(recipientIdentifier))
+                return Result.Failure<DeliveryOutcome>(Error.Validation("Report_RecipientIdentifierRequired"));
+
+            var site = await sites.GetByIdAsync(order.SiteId, ct);
+            var laboratory = site?.Name.For(AppLanguage.French) ?? string.Empty;
+
+            Result sent;
+
+            if (channel == DeliveryChannel.Email)
+            {
+                if (report.RenderedPdf is not { Length: > 0 } pdf)
+                    return Result.Failure<DeliveryOutcome>(Error.Conflict("Report_NoStoredPdf"));
+
+                sent = await messages.SendEmailAsync(new EmailMessage(
+                    recipientIdentifier,
+                    $"Compte rendu d'analyses {order.AccessionNumber} — {laboratory}",
+                    EmailBody(recipientName, order.AccessionNumber, report.VersionNumber, laboratory, site?.Phone),
+                    [new EmailAttachment($"CR-{order.AccessionNumber}-v{report.VersionNumber}.pdf", pdf,
+                                         "application/pdf")]), ct);
+            }
+            else
+            {
+                sent = await messages.SendSmsAsync(recipientIdentifier,
+                    SmsText(order.AccessionNumber, laboratory, site?.Phone), ct);
+            }
+
+            if (sent.IsSuccess) outcome = DeliveryResultKind.Sent;
+            else
+            {
+                outcome = DeliveryResultKind.Failed;
+                failureError = sent.FirstError;
+                failure = string.Join(" ", new[] { sent.FirstError.ResourceKey }
+                                           .Concat(sent.FirstError.Args.Select(a => a?.ToString() ?? string.Empty)));
+            }
+        }
+
         // A counter hand-over is complete the moment it happens; an electronic send is only "sent"
         // until the channel confirms it.
-        if (channel == DeliveryChannel.PrintedAtCounter) delivery.MarkDelivered(clock.Now);
+        // An e-mail the server accepted carries the report itself, so it counts as delivered; an
+        // SMS only says the report is ready, and the report still has to be collected.
+        if (outcome == DeliveryResultKind.Failed) delivery.MarkFailed(clock.Now, failure!);
+        else if (channel == DeliveryChannel.PrintedAtCounter
+                 || outcome == DeliveryResultKind.Sent && channel == DeliveryChannel.Email)
+            delivery.MarkDelivered(clock.Now);
         else delivery.MarkSent(clock.Now);
 
         report.RecordDelivery(delivery);
 
-        unitOfWork.AuditReason = $"Remise du compte rendu v{report.VersionNumber} ({channel})";
+        unitOfWork.AuditReason = outcome == DeliveryResultKind.Failed
+            ? $"Échec d'envoi du compte rendu v{report.VersionNumber} ({channel}) : {failure}"
+            : $"Remise du compte rendu v{report.VersionNumber} ({channel})";
         await unitOfWork.SaveChangesAsync(ct);
 
-        await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.Transmit, null, report.LabOrderId,
-                                     $"Delivery/{channel}", ct: ct);
+        if (outcome != DeliveryResultKind.Failed)
+            await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.Transmit, null, report.LabOrderId,
+                                         $"Delivery/{channel}", ct: ct);
 
-        return Result.Success();
+        return Result.Success(new DeliveryOutcome(outcome, failureError));
     }
+
+    /// <summary>Whether e-mail and SMS are set up to really send, for the delivery form.</summary>
+    public (bool Email, bool Sms) ElectronicChannels => (messages.CanSendEmail, messages.CanSendSms);
+
+    private static string EmailBody(string? recipient, string accession, int version, string laboratory,
+                                    string? phone) =>
+        $"""
+        Bonjour{(string.IsNullOrWhiteSpace(recipient) ? string.Empty : " " + recipient)},
+
+        Veuillez trouver ci-joint le compte rendu d'analyses du dossier {accession} (version {version}).
+
+        Ce document contient des données de santé confidentielles. Si vous n'en êtes pas le
+        destinataire, merci de le supprimer et de nous en informer.
+
+        {laboratory}{(string.IsNullOrWhiteSpace(phone) ? string.Empty : "\nTél. " + phone)}
+        """;
+
+    /// <summary>No result in an SMS: it says the report is ready, nothing about what it contains.</summary>
+    private static string SmsText(string accession, string laboratory, string? phone) =>
+        $"{laboratory} : votre compte rendu d'analyses (dossier {accession}) est disponible."
+        + (string.IsNullOrWhiteSpace(phone) ? string.Empty : $" Tél. {phone}");
 
     /// <summary>
     /// Returns the stored PDF of a released version. Reprinting a validated report is a logged
@@ -756,6 +850,21 @@ public sealed record PendingReportRow(
     /// <summary>Versions already released for the order; above zero, this one completes a partial.</summary>
     int ReleasedVersions);
 
+public enum DeliveryResultKind
+{
+    /// <summary>Recorded only: handed over, or sent by other means.</summary>
+    Recorded = 0,
+
+    /// <summary>Sent by the application's e-mail or SMS account.</summary>
+    Sent = 1,
+
+    /// <summary>The send was attempted and failed; the attempt is on record.</summary>
+    Failed = 2
+}
+
+/// <summary>What became of a delivery; <see cref="Failure"/> says why a send did not go.</summary>
+public sealed record DeliveryOutcome(DeliveryResultKind Kind, Error? Failure = null);
+
 /// <summary>One released version in the register.</summary>
 public sealed record ReportRegisterRow(
     Guid ReportId,
@@ -783,7 +892,9 @@ public sealed record ReportRegisterRow(
     DateTimeOffset? LastDeliveredAt,
     string? PrescriberName,
     /// <summary>How the prescriber asked for it — which channel the operator should reach for.</summary>
-    ReportDeliveryPreference PrescriberPreference)
+    ReportDeliveryPreference PrescriberPreference,
+    string? PatientEmail = null,
+    string? PrescriberEmail = null)
 {
     public bool IsSuperseded => SupersededByReportId is not null;
 

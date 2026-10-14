@@ -460,6 +460,9 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
                             .Where(p => p.Id == o.PrescriberId)
                             .Select(p => (ReportDeliveryPreference?)p.DeliveryPreference)
                             .FirstOrDefault(),
+                        PrescriberEmail = db.Prescribers.Where(p => p.Id == o.PrescriberId)
+                                                         .Select(p => p.Email)
+                                                         .FirstOrDefault(),
                         o.PrescriberFreeText
                     })
                     .FirstOrDefault()
@@ -475,7 +478,8 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
             .Where(p => patientIds.Contains(p.Id))
             .Select(p => new
             {
-                p.Id, p.LastName, p.FirstName, p.LastNameArabic, p.FirstNameArabic, p.MobilePhone
+                p.Id, p.LastName, p.FirstName, p.LastNameArabic, p.FirstNameArabic, p.MobilePhone,
+                p.Email
             })
             .ToListAsync(ct);
 
@@ -516,7 +520,9 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
                     r.DeliveryCount,
                     r.LastDeliveredAt,
                     r.Order?.PrescriberName ?? r.Order?.PrescriberFreeText,
-                    r.Order?.PrescriberPreference ?? ReportDeliveryPreference.PatientCollects);
+                    r.Order?.PrescriberPreference ?? ReportDeliveryPreference.PatientCollects,
+                    patient?.Email,
+                    r.Order?.PrescriberEmail);
             })
             .Where(r => !onlyUndelivered || r.AwaitingDelivery)
             // Critical and undelivered first: ISO 15189 §5.9 makes reaching a clinician with a
