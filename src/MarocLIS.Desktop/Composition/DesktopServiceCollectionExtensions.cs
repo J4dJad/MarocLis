@@ -75,6 +75,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<Application.Billing.IBillingQueries, BillingQueries>();
         services.AddIsolatedQueries<Application.Quality.IQualityQueries, QualityQueries>();
         services.AddIsolatedQueries<Application.Inventory.IInventoryQueries, InventoryQueries>();
+        services.AddIsolatedQueries<Application.HumanResources.IPersonnelQueries, PersonnelQueries>();
         services.AddIsolatedQueries<Application.Inventory.IPurchaseOrderQueries, PurchaseOrderQueries>();
         services.AddIsolatedQueries<Application.Quality.IDocumentControlQueries, DocumentControlQueries>();
         services.AddIsolatedQueries<Application.Quality.IEqaQueries, EqaQueries>();
@@ -110,6 +111,9 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<NonConformityView>();
         services.AddTransient<InventoryView>();
         services.AddTransient<EquipmentView>();
+        services.AddTransient<PersonnelView>();
+        services.AddTransient<HabilitationView>();
+        services.AddTransient<PersonnelDeadlinesView>();
         services.AddTransient<PurchaseOrderView>();
         services.AddTransient<QualityDocumentsView>();
         services.AddTransient<EqaView>();

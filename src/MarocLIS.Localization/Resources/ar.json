@@ -1,5 +1,33 @@
 {
   "$comment": "الفهرس العربي — يُعرض من اليمين إلى اليسار. الأرقام تبقى بالصيغة اللاتينية (0-9) تفاديًا لأخطاء النقل في النتائج الطبية.",
+  "Habilitation_EmployeeExited": "غادر هذا المستخدم: لا يمكن منحه أي تأهيل.",
+  "Habilitation_SubjectRequired": "اختر الجهاز أو التخصص المعني.",
+  "Habilitation_ReviewBeforeGrant": "يجب أن تكون إعادة التقييم بعد القرار.",
+  "Habilitation_WithdrawReasonRequired": "اذكر سبب السحب.",
+  "Habilitation_NotFound": "التأهيل غير موجود.",
+  "Habilitation_AlreadyWithdrawn": "هذا التأهيل مسحوب بالفعل.",
+  "Habilitation_BiologistSignatureRequired": "لا يمكن إلا لبيولوجي تأهيل مستخدم للعمل بمفرده أو للتكوين. يمكنك وضعه «في طور التكوين».",
+  "Habilitation_BiologicalValidationBiologistOnly": "لا تُمنح المصادقة البيولوجية إلا لبيولوجي (القانون 12-01).",
+  "Habilitation_GrantInFuture": "لا يمكن أن يكون تاريخ القرار في المستقبل.",
+  "Credential_TitleRequired": "عنوان الوثيقة إلزامي.",
+  "Credential_ExpiryBeforeIssue": "تاريخ التجديد يسبق تاريخ الحصول.",
+  "Credential_NotFound": "الوثيقة غير موجودة.",
+  "Credential_FitnessRequired": "أدخل قرار الأهلية الصادر عن طبيب الشغل.",
+  "Credential_RemoveReasonRequired": "اذكر سبب سحب الوثيقة.",
+  "Employee_NotFound": "ملف المستخدم غير موجود.",
+  "Employee_NameRequired": "الاسم العائلي والشخصي إلزاميان.",
+  "Employee_ContractEndRequired": "هذا النوع من العقود (محدد المدة، أنابيك، تحفيز، تدريب) يتطلب تاريخ نهاية.",
+  "Employee_ContractEndBeforeHire": "نهاية العقد تسبق تاريخ التشغيل.",
+  "Employee_TrialBeforeHire": "نهاية فترة التجربة تسبق تاريخ التشغيل.",
+  "Employee_WeeklyHoursInvalid": "يجب أن تكون الساعات الأسبوعية بين 0 و60.",
+  "Employee_SalaryInvalid": "الأجر المدخل ليس مبلغًا صالحًا.",
+  "Employee_RibInvalid": "يجب أن يتكون رقم الحساب من 24 رقمًا بمفتاح صحيح.",
+  "Employee_ChildrenInvalid": "عدد الأطفال المتكفل بهم غير صالح.",
+  "Employee_AlreadyExited": "غادر هذا المستخدم بالفعل في {0}.",
+  "Employee_AlreadyActive": "هذا المستخدم نشط بالفعل.",
+  "Employee_ExitBeforeHire": "تاريخ المغادرة يسبق تاريخ التشغيل.",
+  "Employee_UserAlreadyLinked": "حساب النظام هذا مرتبط بملف مستخدم آخر.",
+  "Employee_CinAlreadyUsed": "البطاقة الوطنية {0} موجودة في ملف مستخدم آخر.",
   "Recollection_ContactNoteRequired": "أدخل نتيجة المكالمة.",
   "Recollection_AlreadyDrawn": "تم أخذ الأنبوب {0} أو سحبه: تم تحديث القائمة.",
   "Messaging_EmailNotConfigured": "البريد الإلكتروني (SMTP) غير مُعد.",
@@ -22,6 +50,191 @@
   "Deposit_ExceedsOrderTotal": "التسبيق يتجاوز المتبقي للتغطية في الملف ({0}).",
   "Deposit_OrderCancelled": "الملف {0} ملغى: لا يمكن سوى إرجاع التسبيق.",
   "Deposit_NotFound": "التسبيق غير موجود.",
+
+  "DeadlineKind": {
+    "MedicallyUnfit": "غير لائق طبيًا",
+    "MissingMedicalVisit": "غياب فحص التشغيل",
+    "MissingOrderRegistration": "غياب التسجيل في الهيئة",
+    "MissingConfidentialityClause": "بند السرية غير موقع",
+    "MissingHepatitisB": "غياب تلقيح التهاب الكبد ب",
+    "TrialPeriodEnd": "نهاية فترة التجربة",
+    "ContractEnd": "نهاية العقد",
+    "HabilitationReview": "إعادة تقييم التأهيل",
+    "CredentialExpiry": "وثيقة يجب تجديدها"
+  },
+
+  "HabilitationLevelShort": {
+    "Trainer": "م+",
+    "Authorized": "م",
+    "InTraining": "ت"
+  },
+
+  "HabilitationLevel": {
+    "Trainer": "مكوِّن",
+    "Authorized": "مؤهل",
+    "InTraining": "في طور التكوين"
+  },
+
+  "HabilitationActivity": {
+    "SampleReception": "استلام العينات",
+    "SpecimenTransport": "نقل العينات",
+    "BiologicalValidation": "المصادقة البيولوجية",
+    "TechnicalValidation": "المصادقة التقنية",
+    "ManualTechnique": "التقنيات اليدوية",
+    "InstrumentOperation": "تشغيل جهاز تحليل",
+    "HomeCollection": "أخذ العينات بالمنزل",
+    "PaediatricCollection": "أخذ العينات من الأطفال",
+    "AdultCollection": "أخذ العينات من البالغين"
+  },
+
+  "MedicalFitness": {
+    "Unfit": "غير لائق",
+    "FitWithRestrictions": "لائق مع تحفظات",
+    "Fit": "لائق"
+  },
+
+  "CredentialKind": {
+    "Other": "أخرى",
+    "ContinuingEducation": "تكوين مستمر",
+    "ResidencePermit": "بطاقة الإقامة",
+    "WorkPermit": "تأشيرة عقد الشغل (أجنبي)",
+    "SafetyTraining": "تكوين في السلامة",
+    "MedicalVisit": "فحص طبي",
+    "OtherVaccination": "تلقيح آخر",
+    "HepatitisBVaccination": "تلقيح التهاب الكبد ب",
+    "DrivingLicence": "رخصة السياقة",
+    "OrderRegistration": "التسجيل في الهيئة",
+    "Diploma": "شهادة"
+  },
+
+  "ExitReason": {
+    "EndOfTrialPeriod": "إنهاء خلال فترة التجربة",
+    "Death": "وفاة",
+    "Retirement": "تقاعد",
+    "MutualAgreement": "فسخ بالتراضي",
+    "DismissalForSeriousMisconduct": "فصل لخطأ جسيم",
+    "Dismissal": "فصل",
+    "EndOfFixedTerm": "نهاية العقد المحدد",
+    "Resignation": "استقالة"
+  },
+
+  "ContractType": {
+    "Partner": "شريك (غير أجير)",
+    "Temporary": "عمل مؤقت",
+    "PartTime": "عمل جزئي",
+    "Internship": "تدريب",
+    "Tahfiz": "تحفيز",
+    "Anapec": "أنابيك (إدماج)",
+    "FixedTerm": "عقد محدد المدة",
+    "Permanent": "عقد غير محدد المدة"
+  },
+
+  "FamilyStatus": {
+    "Widowed": "أرمل(ة)",
+    "Divorced": "مطلق(ة)",
+    "Married": "متزوج(ة)",
+    "Unmarried": "أعزب"
+  },
+
+  "EmployeeJob": {
+    "Support": "وظائف الدعم",
+    "Cleaner": "عون نظافة",
+    "Courier": "ساعي / سائق",
+    "Secretary": "كتابة / استقبال",
+    "Nurse": "ممرض / مكلف بأخذ العينات",
+    "Technician": "تقني",
+    "Biologist": "بيولوجي"
+  },
+
+  "Deadline": {
+    "InDays": "بعد {0} ي",
+    "Overdue": "متأخر",
+    "Missing": "ناقص",
+    "Subject": "التفاصيل",
+    "What": "المطلوب",
+    "DueOn": "الأجل",
+    "Horizon": "خلال {0} يومًا",
+    "Heading": "الآجال — {0} نقاط للمعالجة، منها {1} متأخرة أو ناقصة"
+  },
+
+  "Habilitation": {
+    "WithdrawPrompt": "سحب تأهيل «{0}» من {1}؟ اذكر السبب.",
+    "Empty": "لا يوجد أي تأهيل مسجل. اختر مستخدمًا ثم «منح تأهيل».",
+    "Detail": "{0} منذ {1}، وقعه {2} · إعادة التقييم: {3} · الإثباتات: {4}",
+    "Heading": "التأهيلات — {0} مستخدمين، {1} تأهيلات، {2} إعادة تقييم متأخرة",
+    "SignatureNotice": "«مؤهل» و«مكوِّن» بمثابة توقيع البيولوجي: لا يمنحهما إلا بيولوجي. المصادقة البيولوجية لا تُمنح إلا لبيولوجي (القانون 12-01).",
+    "Evidence": "الإثباتات (تكوين، تقييم…)",
+    "ReviewDue": "تاريخ إعادة التقييم",
+    "GrantedBy": "وقعه",
+    "GrantedOn": "تاريخ القرار",
+    "Level": "المستوى",
+    "Subject": "الجهاز أو التخصص",
+    "Activity": "النشاط",
+    "Export": "تصدير (CSV)",
+    "Withdraw": "سحب التأهيل",
+    "Grant": "منح تأهيل"
+  },
+
+  "Credential": {
+    "NoDiagnosisNotice": "في الفحص الطبي تُسجل الأهلية فقط، ولا يُسجل التشخيص أبدًا.",
+    "Fitness": "الأهلية (الفحص الطبي)",
+    "ExpiresOn": "تاريخ التجديد",
+    "ObtainedOn": "تاريخ الحصول",
+    "IssuedBy": "الجهة المسلمة",
+    "Reference": "الرقم",
+    "Title": "العنوان",
+    "Kind": "النوع",
+    "RemovePrompt": "سحب «{0}» من الملف؟ اذكر السبب (خطأ في الإدخال…).",
+    "Remove": "سحب الوثيقة",
+    "Add": "إضافة وثيقة"
+  },
+
+  "Personnel": {
+    "ExitNotice": "تنتهي تأهيلات المستخدم في هذا التاريخ. يبقى الملف قابلاً للاطلاع.",
+    "ExitReason": "السبب",
+    "ExitDate": "تاريخ المغادرة",
+    "SalaryHidden": "الأجر والحساب البنكي: مخصصان لمن لديهم صلاحية «hr.salary».",
+    "Bank": "البنك",
+    "Rib": "رقم الحساب البنكي (24 رقمًا)",
+    "BaseSalary": "الأجر الأساسي الإجمالي (درهم)",
+    "ContractEndNotice": "هذا النوع من العقود يتطلب تاريخ نهاية.",
+    "WeeklyHours": "ساعات / أسبوع",
+    "TrialEnd": "نهاية فترة التجربة",
+    "ContractEnd": "نهاية العقد",
+    "HireDate": "تاريخ التشغيل",
+    "ContractType": "نوع العقد",
+    "ConfidentialityClause": "تاريخ توقيع بند السرية",
+    "Exposed": "معرض للخطر البيولوجي",
+    "LinkedUser": "حساب النظام",
+    "JobTitle": "تسمية المنصب",
+    "Job": "المهنة",
+    "Address": "العنوان",
+    "City": "المدينة",
+    "Children": "الأطفال المتكفل بهم",
+    "FamilyStatus": "الحالة العائلية",
+    "Cnss": "رقم الضمان الاجتماعي",
+    "Cin": "البطاقة الوطنية",
+    "BirthDate": "تاريخ الازدياد",
+    "ArabicName": "الاسم بالعربية",
+    "FirstName": "الاسم الشخصي",
+    "LastName": "الاسم العائلي",
+    "Pay": "الأجر",
+    "Contract": "العقد",
+    "Position": "المنصب",
+    "Identity": "الهوية",
+    "Number": "رقم التسجيل",
+    "Saved": "تم حفظ الملف.",
+    "ExitedOn": "غادر في {0}",
+    "Heading": "المستخدمون — {0} نشطون",
+    "IncludeExited": "إظهار المغادرين",
+    "SearchPlaceholder": "الاسم أو الرقم أو الوظيفة…",
+    "RehirePrompt": "إعادة إدماج {0} ابتداءً من اليوم؟ يجب إدخال تواريخ العقد من جديد.",
+    "Rehire": "إعادة الإدماج",
+    "RecordExit": "تسجيل المغادرة",
+    "Documents": "وثائق الملف",
+    "Edit": "تعديل الملف",
+    "New": "ملف جديد"
+  },
 
   "Recollection": {
     "SearchPlaceholder": "الملف، المريض، الهاتف، الرمز الشريطي…",
@@ -175,6 +388,10 @@
   },
 
   "Nav": {
+    "PersonnelDeadlines": "آجال الموارد البشرية",
+    "Habilitations": "التأهيلات",
+    "Personnel": "ملفات المستخدمين",
+    "HumanResources": "المستخدمون",
     "Recollections": "إعادة أخذ العينات",
     "Subcontracting": "المناولة",
     "ExpandGroup": "توسيع هذه المجموعة",
@@ -2126,6 +2343,7 @@
   },
 
   "SequencePurpose": {
+    "EmployeeNumber": "رقم تسجيل المستخدم",
     "SubcontractDispatch": "جدول المناولة",
     "Accession": "رقم الملف",
     "MedicalRecord": "رقم المريض",
@@ -2142,6 +2360,7 @@
   },
 
   "PermissionModule": {
+    "hr": "الموارد البشرية",
     "patients": "المرضى",
     "orders": "الملفات",
     "samples": "العينات",

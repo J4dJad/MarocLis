@@ -131,6 +131,18 @@ public static class Permissions
         public const string RunMaintenance = "admin.maintenance.run";
     }
 
+    public static class HumanResources
+    {
+        /// <summary>Personnel list, habilitation matrix and deadlines; no salary, no bank details.</summary>
+        public const string View = "hr.view";
+        /// <summary>Creating and editing personnel files, documents and departures.</summary>
+        public const string Manage = "hr.manage";
+        /// <summary>Granting and withdrawing habilitations. The grant itself is reserved to a biologist.</summary>
+        public const string ManageHabilitations = "hr.habilitations";
+        /// <summary>Reading and changing salary and bank details.</summary>
+        public const string Salary = "hr.salary";
+    }
+
     public static class Statistics
     {
         public const string View = "statistics.view";

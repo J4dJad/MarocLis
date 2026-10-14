@@ -466,7 +466,9 @@ internal static class RolePermissionSets
              Permissions.Inventory.ApprovePurchaseOrders,
              Permissions.Billing.View,
              Permissions.Statistics.View, Permissions.Statistics.EpidemiologicalDeclaration,
-             Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail
+             Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,
+             Permissions.HumanResources.View, Permissions.HumanResources.Manage,
+             Permissions.HumanResources.ManageHabilitations, Permissions.HumanResources.Salary
          ]),
 
         (SystemRoles.Biologist,
@@ -547,7 +549,10 @@ internal static class RolePermissionSets
              Permissions.Inventory.View, Permissions.Inventory.Receive, Permissions.Inventory.Adjust,
              Permissions.Inventory.ApprovePurchaseOrders,
              Permissions.Statistics.View,
-             Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail
+             Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,
+             // The habilitation matrix is the quality manager's audit evidence; granting stays
+             // with the biologists.
+             Permissions.HumanResources.View
          ]),
 
         (SystemRoles.Accountant,

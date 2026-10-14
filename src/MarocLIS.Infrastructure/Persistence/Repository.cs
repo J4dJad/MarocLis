@@ -5,6 +5,7 @@ using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
+using MarocLIS.Domain.HumanResources;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Inventory;
 using MarocLIS.Domain.Orders;
@@ -415,6 +416,21 @@ public sealed class InstrumentRepository(LisDbContext context, IClock clock)
                .Include(i => i.Calibrations)
                .AsSplitQuery()
                .FirstOrDefaultAsync(i => i.Id == id, ct);
+}
+
+public sealed class EmployeeRepository(LisDbContext context, IClock clock)
+    : Repository<Employee>(context, clock)
+{
+    /// <summary>
+    /// Documents and habilitations included: a new habilitation closes the active one for the
+    /// same activity, which the aggregate can only do when it sees them.
+    /// </summary>
+    protected override Task<Employee?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+        Context.Employees
+               .Include(e => e.Credentials)
+               .Include(e => e.Habilitations)
+               .AsSplitQuery()
+               .FirstOrDefaultAsync(e => e.Id == id, ct);
 }
 
 public sealed class QcResultRepository(LisDbContext context, IClock clock)

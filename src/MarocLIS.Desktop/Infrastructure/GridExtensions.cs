@@ -63,4 +63,22 @@ public static class GridExtensions
 
         row.Selected = true;
     }
+
+    /// <summary>
+    /// Puts back the fill weights a screen declared, kept in each column's <see cref="DataGridViewColumn.Tag"/>.
+    /// <para>
+    /// WinForms rewrites a fill column's weight whenever its minimum width wins over its share. A
+    /// grid first laid out while its view is still small comes out of that with weights nobody
+    /// chose, and kept them at full size: the matricule column of the personnel list took a
+    /// quarter of the screen. Re-applied once the grid has its real width, the declared
+    /// proportions hold.
+    /// </para>
+    /// </summary>
+    public static void RestoreFillWeights(this DataGridView grid)
+    {
+        foreach (DataGridViewColumn column in grid.Columns)
+            if (column.Tag is int weight && column.AutoSizeMode is DataGridViewAutoSizeColumnMode.Fill
+                                                                  or DataGridViewAutoSizeColumnMode.NotSet)
+                column.FillWeight = weight;
+    }
 }

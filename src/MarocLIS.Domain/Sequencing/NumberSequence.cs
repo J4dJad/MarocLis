@@ -165,5 +165,8 @@ public enum SequencePurpose
     TransportRun = 11,
 
     /// <summary>Dispatch slip for analyses sent to a partner laboratory.</summary>
-    SubcontractDispatch = 12
+    SubcontractDispatch = 12,
+
+    /// <summary>Employee number (matricule).</summary>
+    EmployeeNumber = 13
 }

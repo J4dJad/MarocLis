@@ -5,6 +5,7 @@ using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
+using MarocLIS.Domain.HumanResources;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Inventory;
 using MarocLIS.Domain.Orders;
@@ -145,6 +146,12 @@ public class LisDbContext : DbContext
     public DbSet<InstrumentInterface> InstrumentInterfaces => Set<InstrumentInterface>();
     public DbSet<InstrumentTestMapping> InstrumentTestMappings => Set<InstrumentTestMapping>();
     public DbSet<InstrumentMessageLog> InstrumentMessageLog => Set<InstrumentMessageLog>();
+
+    // ---- Personnel ----------------------------------------------------------------------------
+
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<EmployeeCredential> EmployeeCredentials => Set<EmployeeCredential>();
+    public DbSet<EmployeeHabilitation> EmployeeHabilitations => Set<EmployeeHabilitation>();
 
     // ---- Traceability and sequences -----------------------------------------------------------
 

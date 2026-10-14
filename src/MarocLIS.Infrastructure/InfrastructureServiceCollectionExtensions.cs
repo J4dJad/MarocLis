@@ -115,6 +115,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<InstrumentInterfaceRepository>();
         services.AddScoped<StockItemRepository>();
         services.AddScoped<InstrumentRepository>();
+        services.AddScoped<EmployeeRepository>();
         services.AddScoped<QcResultRepository>();
         services.AddScoped<ControlledDocumentRepository>();
         services.AddScoped<PurchaseOrderRepository>();
@@ -142,6 +143,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IInstrumentMessageLogStore, InstrumentMessageLogStore>();
         services.AddScoped<IRepository<StockItem>>(sp => sp.GetRequiredService<StockItemRepository>());
         services.AddScoped<IRepository<Instrument>>(sp => sp.GetRequiredService<InstrumentRepository>());
+        services.AddScoped<IRepository<Domain.HumanResources.Employee>>(
+            sp => sp.GetRequiredService<EmployeeRepository>());
         services.AddScoped<IRepository<QcResult>>(sp => sp.GetRequiredService<QcResultRepository>());
         services.AddScoped<IRepository<ControlledDocument>>(
             sp => sp.GetRequiredService<ControlledDocumentRepository>());

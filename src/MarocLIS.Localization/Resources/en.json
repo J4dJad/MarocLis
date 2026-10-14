@@ -1,5 +1,33 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Habilitation_EmployeeExited": "This employee has left: no authorisation can be granted.",
+  "Habilitation_SubjectRequired": "Choose the analyser or discipline concerned.",
+  "Habilitation_ReviewBeforeGrant": "The review must be after the decision.",
+  "Habilitation_WithdrawReasonRequired": "Give the reason for withdrawal.",
+  "Habilitation_NotFound": "Authorisation not found.",
+  "Habilitation_AlreadyWithdrawn": "This authorisation is already withdrawn.",
+  "Habilitation_BiologistSignatureRequired": "Only a biologist can authorise someone to work alone or to train others. You can place them “In training”.",
+  "Habilitation_BiologicalValidationBiologistOnly": "Biological validation can only be granted to a biologist (law 12-01).",
+  "Habilitation_GrantInFuture": "The decision date cannot be in the future.",
+  "Credential_TitleRequired": "The document title is required.",
+  "Credential_ExpiryBeforeIssue": "The renewal date is before the date obtained.",
+  "Credential_NotFound": "Document not found.",
+  "Credential_FitnessRequired": "Give the fitness decision of the occupational physician.",
+  "Credential_RemoveReasonRequired": "Say why the document is removed.",
+  "Employee_NotFound": "Personnel file not found.",
+  "Employee_NameRequired": "Last name and first name are required.",
+  "Employee_ContractEndRequired": "This contract type (CDD, ANAPEC, Tahfiz, internship) needs an end date.",
+  "Employee_ContractEndBeforeHire": "The contract end is before the hire date.",
+  "Employee_TrialBeforeHire": "The trial period end is before the hire date.",
+  "Employee_WeeklyHoursInvalid": "Weekly hours must be between 0 and 60.",
+  "Employee_SalaryInvalid": "The salary entered is not a valid amount.",
+  "Employee_RibInvalid": "The RIB must have 24 digits with a correct key.",
+  "Employee_ChildrenInvalid": "The number of dependent children is not valid.",
+  "Employee_AlreadyExited": "This employee already left on {0}.",
+  "Employee_AlreadyActive": "This employee is already active.",
+  "Employee_ExitBeforeHire": "The departure date is before the hire date.",
+  "Employee_UserAlreadyLinked": "This LIS account is already linked to another personnel file.",
+  "Employee_CinAlreadyUsed": "National ID {0} is already in another personnel file.",
   "Recollection_ContactNoteRequired": "Enter the outcome of the call.",
   "Recollection_AlreadyDrawn": "Tube {0} has already been drawn or withdrawn: the list has been refreshed.",
   "Messaging_EmailNotConfigured": "E-mail (SMTP) is not configured.",
@@ -22,6 +50,191 @@
   "Deposit_ExceedsOrderTotal": "The deposit exceeds what is left to cover on the request ({0}).",
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
+
+  "DeadlineKind": {
+    "MedicallyUnfit": "Declared unfit",
+    "MissingMedicalVisit": "No hiring medical visit",
+    "MissingOrderRegistration": "No registration with the Order",
+    "MissingConfidentialityClause": "Secrecy clause not signed",
+    "MissingHepatitisB": "No hepatitis B vaccination",
+    "TrialPeriodEnd": "Trial period end",
+    "ContractEnd": "Contract end",
+    "HabilitationReview": "Authorisation review",
+    "CredentialExpiry": "Document to renew"
+  },
+
+  "HabilitationLevelShort": {
+    "Trainer": "A+",
+    "Authorized": "A",
+    "InTraining": "T"
+  },
+
+  "HabilitationLevel": {
+    "Trainer": "Trainer",
+    "Authorized": "Authorised",
+    "InTraining": "In training"
+  },
+
+  "HabilitationActivity": {
+    "SampleReception": "Sample reception",
+    "SpecimenTransport": "Specimen transport",
+    "BiologicalValidation": "Biological validation",
+    "TechnicalValidation": "Technical validation",
+    "ManualTechnique": "Manual techniques",
+    "InstrumentOperation": "Analyser operation",
+    "HomeCollection": "Home collection",
+    "PaediatricCollection": "Paediatric collection",
+    "AdultCollection": "Adult collection"
+  },
+
+  "MedicalFitness": {
+    "Unfit": "Unfit",
+    "FitWithRestrictions": "Fit with restrictions",
+    "Fit": "Fit"
+  },
+
+  "CredentialKind": {
+    "Other": "Other",
+    "ContinuingEducation": "Continuing education",
+    "ResidencePermit": "Residence permit",
+    "WorkPermit": "Work permit (foreign national)",
+    "SafetyTraining": "Safety training",
+    "MedicalVisit": "Medical visit",
+    "OtherVaccination": "Other vaccination",
+    "HepatitisBVaccination": "Hepatitis B vaccination",
+    "DrivingLicence": "Driving licence",
+    "OrderRegistration": "Registration with the Order",
+    "Diploma": "Diploma"
+  },
+
+  "ExitReason": {
+    "EndOfTrialPeriod": "Ended during trial period",
+    "Death": "Death",
+    "Retirement": "Retirement",
+    "MutualAgreement": "Mutual agreement",
+    "DismissalForSeriousMisconduct": "Dismissal for serious misconduct",
+    "Dismissal": "Dismissal",
+    "EndOfFixedTerm": "End of fixed term",
+    "Resignation": "Resignation"
+  },
+
+  "ContractType": {
+    "Partner": "Partner (not salaried)",
+    "Temporary": "Temporary (agency)",
+    "PartTime": "Part time",
+    "Internship": "Internship",
+    "Tahfiz": "Tahfiz",
+    "Anapec": "ANAPEC (Idmaj)",
+    "FixedTerm": "Fixed term (CDD)",
+    "Permanent": "Permanent (CDI)"
+  },
+
+  "FamilyStatus": {
+    "Widowed": "Widowed",
+    "Divorced": "Divorced",
+    "Married": "Married",
+    "Unmarried": "Single"
+  },
+
+  "EmployeeJob": {
+    "Support": "Support functions",
+    "Cleaner": "Cleaner",
+    "Courier": "Courier / driver",
+    "Secretary": "Secretary / reception",
+    "Nurse": "Nurse / phlebotomist",
+    "Technician": "Technician",
+    "Biologist": "Biologist"
+  },
+
+  "Deadline": {
+    "InDays": "In {0} d",
+    "Overdue": "Overdue",
+    "Missing": "Missing",
+    "Subject": "Detail",
+    "What": "Action",
+    "DueOn": "Due",
+    "Horizon": "Within {0} days",
+    "Heading": "Deadlines — {0} items, {1} overdue or missing"
+  },
+
+  "Habilitation": {
+    "WithdrawPrompt": "Withdraw the “{0}” authorisation from {1}? Give the reason.",
+    "Empty": "No authorisation recorded. Select an employee, then “Grant an authorisation”.",
+    "Detail": "{0} since {1}, signed by {2} · review: {3} · evidence: {4}",
+    "Heading": "Authorisations — {0} staff, {1} authorisations, {2} reviews overdue",
+    "SignatureNotice": "“Authorised” and “Trainer” are the biologist's signature: only a biologist can grant them. Biological validation is granted to biologists only (law 12-01).",
+    "Evidence": "Evidence (training, assessment…)",
+    "ReviewDue": "Review on",
+    "GrantedBy": "Signed by",
+    "GrantedOn": "Decided on",
+    "Level": "Level",
+    "Subject": "Analyser or discipline",
+    "Activity": "Activity",
+    "Export": "Export (CSV)",
+    "Withdraw": "Withdraw authorisation",
+    "Grant": "Grant an authorisation"
+  },
+
+  "Credential": {
+    "NoDiagnosisNotice": "For a medical visit only the fitness decision is recorded, never the diagnosis.",
+    "Fitness": "Fitness (medical visit)",
+    "ExpiresOn": "Renew by",
+    "ObtainedOn": "Obtained on",
+    "IssuedBy": "Issued by",
+    "Reference": "Number",
+    "Title": "Title",
+    "Kind": "Type",
+    "RemovePrompt": "Remove “{0}” from the file? Say why (entry error…).",
+    "Remove": "Remove document",
+    "Add": "Add a document"
+  },
+
+  "Personnel": {
+    "ExitNotice": "The employee's authorisations end on this date. The file remains readable.",
+    "ExitReason": "Reason",
+    "ExitDate": "Departure date",
+    "SalaryHidden": "Salary and RIB: restricted to users with the “hr.salary” right.",
+    "Bank": "Bank",
+    "Rib": "RIB (24 digits)",
+    "BaseSalary": "Gross base salary (MAD)",
+    "ContractEndNotice": "This contract type needs an end date.",
+    "WeeklyHours": "Hours / week",
+    "TrialEnd": "Trial period end",
+    "ContractEnd": "Contract end",
+    "HireDate": "Hire date",
+    "ContractType": "Contract type",
+    "ConfidentialityClause": "Secrecy clause signed on",
+    "Exposed": "Exposed to biological risk",
+    "LinkedUser": "LIS account",
+    "JobTitle": "Job title",
+    "Job": "Job",
+    "Address": "Address",
+    "City": "City",
+    "Children": "Dependent children",
+    "FamilyStatus": "Family status",
+    "Cnss": "CNSS number",
+    "Cin": "National ID (CIN)",
+    "BirthDate": "Date of birth",
+    "ArabicName": "Name in Arabic",
+    "FirstName": "First name",
+    "LastName": "Last name",
+    "Pay": "Pay",
+    "Contract": "Contract",
+    "Position": "Position",
+    "Identity": "Identity",
+    "Number": "Number",
+    "Saved": "File saved.",
+    "ExitedOn": "left on {0}",
+    "Heading": "Staff — {0} active",
+    "IncludeExited": "Show staff who have left",
+    "SearchPlaceholder": "Name, number or job…",
+    "RehirePrompt": "Rehire {0} from today? The contract dates will have to be entered again.",
+    "Rehire": "Rehire",
+    "RecordExit": "Record departure",
+    "Documents": "File documents",
+    "Edit": "Edit file",
+    "New": "New file"
+  },
 
   "Recollection": {
     "SearchPlaceholder": "Order, patient, phone, barcode…",
@@ -175,6 +388,10 @@
   },
 
   "Nav": {
+    "PersonnelDeadlines": "HR deadlines",
+    "Habilitations": "Authorisations",
+    "Personnel": "Personnel files",
+    "HumanResources": "Staff",
     "Recollections": "Recollections",
     "Subcontracting": "Subcontracting",
     "ExpandGroup": "Expand this group",
@@ -2126,6 +2343,7 @@
   },
 
   "SequencePurpose": {
+    "EmployeeNumber": "Employee number",
     "SubcontractDispatch": "Subcontracting slip",
     "Accession": "Accession number",
     "MedicalRecord": "Patient record number",
@@ -2142,6 +2360,7 @@
   },
 
   "PermissionModule": {
+    "hr": "Human resources",
     "patients": "Patients",
     "orders": "Orders",
     "samples": "Samples",

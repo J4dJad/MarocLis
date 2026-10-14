@@ -1,5 +1,33 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Habilitation_EmployeeExited": "Ce salarié est sorti : aucune habilitation ne peut lui être accordée.",
+  "Habilitation_SubjectRequired": "Choisissez l'automate ou la discipline concernés.",
+  "Habilitation_ReviewBeforeGrant": "La réévaluation doit être postérieure à la décision.",
+  "Habilitation_WithdrawReasonRequired": "Indiquez le motif du retrait.",
+  "Habilitation_NotFound": "Habilitation introuvable.",
+  "Habilitation_AlreadyWithdrawn": "Cette habilitation est déjà retirée.",
+  "Habilitation_BiologistSignatureRequired": "Seul un biologiste peut habiliter un salarié à travailler seul ou à former. Vous pouvez le placer « En formation ».",
+  "Habilitation_BiologicalValidationBiologistOnly": "La validation biologique ne peut être accordée qu'à un biologiste (loi 12-01).",
+  "Habilitation_GrantInFuture": "La date de décision ne peut pas être dans le futur.",
+  "Credential_TitleRequired": "L'intitulé de la pièce est obligatoire.",
+  "Credential_ExpiryBeforeIssue": "La date de renouvellement précède la date d'obtention.",
+  "Credential_NotFound": "Pièce introuvable.",
+  "Credential_FitnessRequired": "Indiquez l'aptitude décidée par le médecin du travail.",
+  "Credential_RemoveReasonRequired": "Indiquez pourquoi la pièce est retirée.",
+  "Employee_NotFound": "Dossier du personnel introuvable.",
+  "Employee_NameRequired": "Le nom et le prénom sont obligatoires.",
+  "Employee_ContractEndRequired": "Ce type de contrat (CDD, ANAPEC, Tahfiz, stage) doit avoir une date de fin.",
+  "Employee_ContractEndBeforeHire": "La fin du contrat précède la date d'embauche.",
+  "Employee_TrialBeforeHire": "La fin de la période d'essai précède la date d'embauche.",
+  "Employee_WeeklyHoursInvalid": "Les heures hebdomadaires doivent être comprises entre 0 et 60.",
+  "Employee_SalaryInvalid": "Le salaire saisi n'est pas un montant valide.",
+  "Employee_RibInvalid": "Le RIB doit compter 24 chiffres et sa clé doit être juste.",
+  "Employee_ChildrenInvalid": "Le nombre d'enfants à charge n'est pas valide.",
+  "Employee_AlreadyExited": "Ce salarié est déjà sorti le {0}.",
+  "Employee_AlreadyActive": "Ce salarié est déjà actif.",
+  "Employee_ExitBeforeHire": "La date de sortie précède la date d'embauche.",
+  "Employee_UserAlreadyLinked": "Ce compte SIL est déjà rattaché à un autre dossier du personnel.",
+  "Employee_CinAlreadyUsed": "La CIN {0} figure déjà dans un autre dossier du personnel.",
   "Recollection_ContactNoteRequired": "Indiquez le résultat de l'appel.",
   "Recollection_AlreadyDrawn": "Le tube {0} a déjà été prélevé ou retiré : la liste a été mise à jour.",
   "Messaging_EmailNotConfigured": "La messagerie (SMTP) n'est pas configurée.",
@@ -22,6 +50,191 @@
   "Deposit_ExceedsOrderTotal": "L'acompte dépasse ce qui reste à couvrir sur le dossier ({0}).",
   "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
   "Deposit_NotFound": "Acompte introuvable.",
+
+  "DeadlineKind": {
+    "MedicallyUnfit": "Déclaré inapte",
+    "MissingMedicalVisit": "Visite d'embauche absente",
+    "MissingOrderRegistration": "Inscription à l'Ordre absente",
+    "MissingConfidentialityClause": "Clause de secret non signée",
+    "MissingHepatitisB": "Vaccination hépatite B absente",
+    "TrialPeriodEnd": "Fin de période d'essai",
+    "ContractEnd": "Fin de contrat",
+    "HabilitationReview": "Réévaluation d'habilitation",
+    "CredentialExpiry": "Pièce à renouveler"
+  },
+
+  "HabilitationLevelShort": {
+    "Trainer": "H+",
+    "Authorized": "H",
+    "InTraining": "F"
+  },
+
+  "HabilitationLevel": {
+    "Trainer": "Formateur",
+    "Authorized": "Habilité",
+    "InTraining": "En formation"
+  },
+
+  "HabilitationActivity": {
+    "SampleReception": "Réception des échantillons",
+    "SpecimenTransport": "Transport d'échantillons",
+    "BiologicalValidation": "Validation biologique",
+    "TechnicalValidation": "Validation technique",
+    "ManualTechnique": "Techniques manuelles",
+    "InstrumentOperation": "Utilisation d'automate",
+    "HomeCollection": "Prélèvement à domicile",
+    "PaediatricCollection": "Prélèvement pédiatrique",
+    "AdultCollection": "Prélèvement adulte"
+  },
+
+  "MedicalFitness": {
+    "Unfit": "Inapte",
+    "FitWithRestrictions": "Apte avec réserves",
+    "Fit": "Apte"
+  },
+
+  "CredentialKind": {
+    "Other": "Autre",
+    "ContinuingEducation": "Formation continue",
+    "ResidencePermit": "Titre de séjour",
+    "WorkPermit": "Visa du contrat (étranger)",
+    "SafetyTraining": "Formation sécurité",
+    "MedicalVisit": "Visite médicale",
+    "OtherVaccination": "Autre vaccination",
+    "HepatitisBVaccination": "Vaccination hépatite B",
+    "DrivingLicence": "Permis de conduire",
+    "OrderRegistration": "Inscription à l'Ordre",
+    "Diploma": "Diplôme"
+  },
+
+  "ExitReason": {
+    "EndOfTrialPeriod": "Rupture en période d'essai",
+    "Death": "Décès",
+    "Retirement": "Retraite",
+    "MutualAgreement": "Rupture d'un commun accord",
+    "DismissalForSeriousMisconduct": "Licenciement pour faute grave",
+    "Dismissal": "Licenciement",
+    "EndOfFixedTerm": "Fin de CDD",
+    "Resignation": "Démission"
+  },
+
+  "ContractType": {
+    "Partner": "Associé (non salarié)",
+    "Temporary": "Intérim",
+    "PartTime": "Temps partiel",
+    "Internship": "Stage",
+    "Tahfiz": "Tahfiz",
+    "Anapec": "ANAPEC (Idmaj)",
+    "FixedTerm": "CDD",
+    "Permanent": "CDI"
+  },
+
+  "FamilyStatus": {
+    "Widowed": "Veuf / veuve",
+    "Divorced": "Divorcé(e)",
+    "Married": "Marié(e)",
+    "Unmarried": "Célibataire"
+  },
+
+  "EmployeeJob": {
+    "Support": "Fonctions support",
+    "Cleaner": "Agent d'entretien",
+    "Courier": "Coursier / chauffeur",
+    "Secretary": "Secrétariat / accueil",
+    "Nurse": "Infirmier / préleveur",
+    "Technician": "Technicien",
+    "Biologist": "Biologiste"
+  },
+
+  "Deadline": {
+    "InDays": "Dans {0} j",
+    "Overdue": "En retard",
+    "Missing": "Manquant",
+    "Subject": "Détail",
+    "What": "À traiter",
+    "DueOn": "Échéance",
+    "Horizon": "Dans les {0} jours",
+    "Heading": "Échéances — {0} points à traiter, dont {1} en retard ou manquants"
+  },
+
+  "Habilitation": {
+    "WithdrawPrompt": "Retirer l'habilitation « {0} » de {1} ? Indiquez le motif.",
+    "Empty": "Aucune habilitation enregistrée. Sélectionnez un salarié puis « Accorder une habilitation ».",
+    "Detail": "{0} depuis le {1}, signée par {2} · réévaluation : {3} · preuves : {4}",
+    "Heading": "Habilitations — {0} salariés, {1} habilitations, {2} réévaluations en retard",
+    "SignatureNotice": "« Habilité » et « Formateur » valent signature du biologiste : seul un biologiste peut les accorder. La validation biologique ne s'accorde qu'à un biologiste (loi 12-01).",
+    "Evidence": "Preuves (formation, évaluation…)",
+    "ReviewDue": "Réévaluation le",
+    "GrantedBy": "Signée par",
+    "GrantedOn": "Décidée le",
+    "Level": "Niveau",
+    "Subject": "Automate ou discipline",
+    "Activity": "Activité",
+    "Export": "Exporter (CSV)",
+    "Withdraw": "Retirer l'habilitation",
+    "Grant": "Accorder une habilitation"
+  },
+
+  "Credential": {
+    "NoDiagnosisNotice": "Pour une visite médicale, seule l'aptitude est enregistrée, jamais le diagnostic.",
+    "Fitness": "Aptitude (visite médicale)",
+    "ExpiresOn": "À renouveler le",
+    "ObtainedOn": "Obtenu le",
+    "IssuedBy": "Délivré par",
+    "Reference": "Numéro",
+    "Title": "Intitulé",
+    "Kind": "Type",
+    "RemovePrompt": "Retirer « {0} » du dossier ? Indiquez pourquoi (erreur de saisie…).",
+    "Remove": "Retirer la pièce",
+    "Add": "Ajouter une pièce"
+  },
+
+  "Personnel": {
+    "ExitNotice": "Les habilitations du salarié prennent fin à cette date. Le dossier reste consultable.",
+    "ExitReason": "Motif",
+    "ExitDate": "Date de sortie",
+    "SalaryHidden": "Salaire et RIB : réservés aux utilisateurs ayant le droit « hr.salary ».",
+    "Bank": "Banque",
+    "Rib": "RIB (24 chiffres)",
+    "BaseSalary": "Salaire de base brut (DH)",
+    "ContractEndNotice": "Ce type de contrat doit avoir une date de fin.",
+    "WeeklyHours": "Heures / semaine",
+    "TrialEnd": "Fin de période d'essai",
+    "ContractEnd": "Fin de contrat",
+    "HireDate": "Date d'embauche",
+    "ContractType": "Type de contrat",
+    "ConfidentialityClause": "Clause de secret signée le",
+    "Exposed": "Exposé au risque biologique",
+    "LinkedUser": "Compte SIL",
+    "JobTitle": "Intitulé du poste",
+    "Job": "Métier",
+    "Address": "Adresse",
+    "City": "Ville",
+    "Children": "Enfants à charge",
+    "FamilyStatus": "Situation familiale",
+    "Cnss": "N° CNSS",
+    "Cin": "CIN",
+    "BirthDate": "Date de naissance",
+    "ArabicName": "Nom en arabe",
+    "FirstName": "Prénom",
+    "LastName": "Nom",
+    "Pay": "Rémunération",
+    "Contract": "Contrat",
+    "Position": "Poste",
+    "Identity": "Identité",
+    "Number": "Matricule",
+    "Saved": "Dossier enregistré.",
+    "ExitedOn": "sorti le {0}",
+    "Heading": "Personnel — {0} actifs",
+    "IncludeExited": "Afficher les salariés sortis",
+    "SearchPlaceholder": "Nom, matricule ou fonction…",
+    "RehirePrompt": "Réintégrer {0} à compter d'aujourd'hui ? Les dates du contrat seront à saisir de nouveau.",
+    "Rehire": "Réintégrer",
+    "RecordExit": "Enregistrer la sortie",
+    "Documents": "Pièces du dossier",
+    "Edit": "Modifier le dossier",
+    "New": "Nouveau dossier"
+  },
 
   "Recollection": {
     "SearchPlaceholder": "Dossier, patient, téléphone, code-barres…",
@@ -175,6 +388,10 @@
   },
 
   "Nav": {
+    "PersonnelDeadlines": "Échéances RH",
+    "Habilitations": "Habilitations",
+    "Personnel": "Dossiers du personnel",
+    "HumanResources": "Personnel",
     "Recollections": "Re-prélèvements",
     "Subcontracting": "Sous-traitance",
     "ExpandGroup": "Déplier ce groupe",
@@ -2127,6 +2344,7 @@
   },
 
   "SequencePurpose": {
+    "EmployeeNumber": "Matricule du personnel",
     "SubcontractDispatch": "Bordereau de sous-traitance",
     "Accession": "Numéro de dossier",
     "MedicalRecord": "Numéro de patient",
@@ -2143,6 +2361,7 @@
   },
 
   "PermissionModule": {
+    "hr": "Ressources humaines",
     "patients": "Patients",
     "orders": "Dossiers",
     "samples": "Échantillons",

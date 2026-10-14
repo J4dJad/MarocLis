@@ -133,6 +133,7 @@ public sealed class SequenceAllocator(LisDbContext context, IClock clock, ICurre
         SequencePurpose.SampleBarcode => null,
         SequencePurpose.MedicalRecord => null,
         SequencePurpose.ControlledDocument => null,
+        SequencePurpose.EmployeeNumber => null,
         _ => today.Year
     };
 
@@ -151,6 +152,7 @@ public sealed class SequenceAllocator(LisDbContext context, IClock clock, ICurre
         SequencePurpose.ControlledDocument => "DOC-{SEQ:5}",
         SequencePurpose.TransportRun => "TR/{YEAR}/{SEQ:5}",
         SequencePurpose.SubcontractDispatch => "ST/{YEAR}/{SEQ:5}",
+        SequencePurpose.EmployeeNumber => "M{SEQ:4}",
         _ => "{SEQ:6}"
     };
 }
