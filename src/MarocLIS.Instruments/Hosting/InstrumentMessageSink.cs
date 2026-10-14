@@ -308,10 +308,7 @@ public sealed class InstrumentMessageSink(
 
         foreach (var incoming in specimen.Results)
         {
-            var mapping = link.Mappings.FirstOrDefault(
-                m => m.IsEnabled
-                     && string.Equals(m.InstrumentTestCode, incoming.InstrumentTestCode,
-                                       StringComparison.Ordinal));
+            var mapping = FindMapping(link.Mappings, incoming.InstrumentTestCode);
 
             if (mapping is null)
             {
@@ -525,10 +522,7 @@ public sealed class InstrumentMessageSink(
 
         foreach (var incoming in specimen.Results)
         {
-            var mapping = link.Mappings.FirstOrDefault(
-                m => m.IsEnabled
-                     && string.Equals(m.InstrumentTestCode, incoming.InstrumentTestCode,
-                                       StringComparison.Ordinal));
+            var mapping = FindMapping(link.Mappings, incoming.InstrumentTestCode);
 
             if (mapping is null)
             {
@@ -587,6 +581,33 @@ public sealed class InstrumentMessageSink(
     }
 
     // ---- Query answering -----------------------------------------------------------------------
+
+    /// <summary>
+    /// The enabled mapping for a code as the analyser sent it.
+    /// <para>
+    /// The exact code first. Failing that, and only then, the part before a slash: Roche cobas
+    /// analysers append the dilution to the code (<c>GLY/</c>, <c>767/5</c>), while another vendor's
+    /// code may genuinely contain one (<c>A/G</c>), which the exact match still finds.
+    /// </para>
+    /// </summary>
+    public static InstrumentTestMapping? FindMapping(IEnumerable<InstrumentTestMapping> mappings,
+                                                     string code)
+    {
+        var enabled = mappings.Where(m => m.IsEnabled).ToList();
+
+        var exact = enabled.FirstOrDefault(
+            m => string.Equals(m.InstrumentTestCode, code, StringComparison.Ordinal));
+
+        if (exact is not null) return exact;
+
+        var slash = code.IndexOf('/');
+        if (slash <= 0) return null;
+
+        var stem = code[..slash];
+
+        return enabled.FirstOrDefault(
+            m => string.Equals(m.InstrumentTestCode, stem, StringComparison.Ordinal));
+    }
 
     /// <summary>
     /// Answers an analyser that has scanned a tube and wants to know what to run on it.

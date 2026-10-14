@@ -223,9 +223,10 @@ public sealed class AstmMessageParserTests
     }
 
     [Fact]
-    public void Parse_DropsTheCobasDilutionSuffixFromTheTestCode()
+    public void Parse_KeepsTheCobasTestCodeAsTransmitted()
     {
-        // Captured from a cobas c 311: the code is followed by "/" and the dilution.
+        // Captured from a cobas c 311: the code is followed by "/" and the dilution. The parser
+        // keeps it whole; the mapping lookup is what reads past the slash.
         var message = AstmMessageParser.Parse(new[] {
             @"H|\^&|||cobas c 311^1|||||host|RSUPL^REAL|P|1",
             "P|1",
@@ -235,7 +236,31 @@ public sealed class AstmMessageParserTests
             "L|1|N" });
 
         message.Specimens.Single().Results.Select(r => r.InstrumentTestCode)
-               .Should().Equal("GLY", "767");
+               .Should().Equal("GLY/", "767/5");
+    }
+
+    [Theory]
+    [InlineData("GLY/", "GLY")]
+    [InlineData("767/5", "767")]
+    [InlineData("A/G", "A/G")]
+    [InlineData("GLY", "GLY")]
+    public void FindMapping_ReadsPastACobasDilutionButKeepsACodeWithASlash(string sent, string expected)
+    {
+        var parameter = Guid.NewGuid();
+        var mappings = new[] { "GLY", "767", "A/G", "A" }
+            .Select(code => new MarocLIS.Domain.Equipment.InstrumentTestMapping(code, parameter))
+            .ToList();
+
+        MarocLIS.Instruments.Hosting.InstrumentMessageSink.FindMapping(mappings, sent)!
+            .InstrumentTestCode.Should().Be(expected);
+    }
+
+    [Fact]
+    public void FindMapping_IgnoresASwitchedOffCode()
+    {
+        var mapping = new MarocLIS.Domain.Equipment.InstrumentTestMapping("GLY", Guid.NewGuid()) { IsEnabled = false };
+
+        MarocLIS.Instruments.Hosting.InstrumentMessageSink.FindMapping([mapping], "GLY/").Should().BeNull();
     }
 
     [Fact]
