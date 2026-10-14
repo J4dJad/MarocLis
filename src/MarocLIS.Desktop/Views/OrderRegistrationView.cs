@@ -46,6 +46,7 @@ public sealed class OrderRegistrationView : LocalizedView
     private readonly ComboBox _patientPicker = new();
     private readonly Label _patientSummary = new();
     private readonly Button _newPatient = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _emergencyPatient = UiTheme.SecondaryButton(string.Empty);
 
     // Request
     private readonly TextBox _catalogSearch = UiTheme.Input(300);
@@ -133,7 +134,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _patientPicker.DropDownStyle = ComboBoxStyle.DropDownList;
         _patientPicker.FlatStyle = FlatStyle.Flat;
         _patientPicker.Font = UiTheme.Body;
-        _patientPicker.Bounds = new Rectangle(UiTheme.Gutter + 312, 24, 420, UiTheme.InputHeight);
+        _patientPicker.Bounds = new Rectangle(UiTheme.Gutter + 312, 24, 356, UiTheme.InputHeight);
 
         _patientSummary.Font = UiTheme.SmallBold;
         _patientSummary.ForeColor = UiTheme.Accent;
@@ -143,10 +144,17 @@ public sealed class OrderRegistrationView : LocalizedView
         // A walk-in who has never been to the laboratory is registered here, at the counter, in
         // the same pass as their order. Sending the clerk to another screen is how a
         // half-registered file gets abandoned mid-queue.
-        _newPatient.Bounds = new Rectangle(UiTheme.Gutter + 744, 24, 190, UiTheme.ButtonHeight);
+        _newPatient.Bounds = new Rectangle(UiTheme.Gutter + 680, 24, 180, UiTheme.ButtonHeight);
+
+        // A patient who cannot be named yet — brought in unconscious, unaccompanied — still needs
+        // the sample drawn now. A provisional "X-URG" file is opened in one click; the identity is
+        // completed on the patient file later, and the audit trail records when.
+        _emergencyPatient.Bounds = new Rectangle(UiTheme.Gutter + 870, 24, 180, UiTheme.ButtonHeight);
+        _emergencyPatient.ForeColor = UiTheme.Critical;
 
         patientPanel.Controls.AddRange(
-            [_patientSearchLabel, _patientSearch, _patientPicker, _patientSummary, _newPatient]);
+            [_patientSearchLabel, _patientSearch, _patientPicker, _patientSummary, _newPatient,
+             _emergencyPatient]);
 
         // --- context -----------------------------------------------------------------------------
 
@@ -347,9 +355,11 @@ public sealed class OrderRegistrationView : LocalizedView
         _patientSearch.TextChanged += (_, _) => { _debounce.Stop(); _debounce.Start(); };
         _patientPicker.SelectedIndexChanged += (_, _) => OnPatientSelected();
         _newPatient.Click += async (_, _) => await RegisterNewPatientAsync();
+        _emergencyPatient.Click += async (_, _) => await RegisterEmergencyPatientAsync();
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Patients.Create, _newPatient);
+        PermissionGate.Require(Permissions.Patients.Create, _emergencyPatient);
         PermissionGate.Require(Permissions.Orders.Create, _register);
 
         _catalogSearch.TextChanged += async (_, _) => await SearchCatalogueAsync();
@@ -397,6 +407,7 @@ public sealed class OrderRegistrationView : LocalizedView
     {
         _patientSearchLabel.Text = T("App.SearchPlaceholder");
         _newPatient.Text = T("Patient.NewFile");
+        _emergencyPatient.Text = T("Patient.Provisional");
         _catalogSearchLabel.Text = $"{T("Catalog.Analyses")} / {T("Catalog.Panels")}";
         _basketHeading.Text = T("Order.Analyses");
         _priorityLabel.Text = T("Field.Priority");
@@ -542,6 +553,32 @@ public sealed class OrderRegistrationView : LocalizedView
         var created = _patientEditor.Show(FindForm());
         if (created is not { } id) return;
 
+        await SelectPatientAsync(id);
+    }
+
+    /// <summary>
+    /// Opens a provisional file and selects it, with the priority set to urgent: a patient who
+    /// cannot be named is, by construction, an emergency.
+    /// </summary>
+    private async Task RegisterEmergencyPatientAsync()
+    {
+        var created = await _patientEditor.CreateProvisionalAsync(FindForm());
+        if (created is not { } id) return;
+
+        await SelectPatientAsync(id);
+
+        for (var i = 0; i < _priority.Items.Count; i++)
+        {
+            if (_priority.Items[i] is EnumChoice<OrderPriority> { Value: OrderPriority.Urgent })
+            {
+                _priority.SelectedIndex = i;
+                break;
+            }
+        }
+    }
+
+    private async Task SelectPatientAsync(Guid id)
+    {
         var detail = await _patientQueries.GetDetailAsync(id);
         if (detail is null) return;
 

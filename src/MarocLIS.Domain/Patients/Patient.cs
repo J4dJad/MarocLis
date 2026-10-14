@@ -27,6 +27,41 @@ public sealed class Patient : AuditableAggregateRoot, ISoftDeletable, ISiteScope
         SiteId = siteId;
     }
 
+    /// <summary>Surname given to a file opened before the patient could be identified.</summary>
+    public const string ProvisionalLastName = "X-URG";
+
+    /// <summary>
+    /// Opens a file for a patient who cannot be identified yet — unconscious, brought in by the
+    /// emergency services, unable to give a name — so the sample can be drawn and analysed now.
+    /// <para>
+    /// The file number doubles as the provisional first name: "X-URG 000431" is unique, is printed
+    /// on every tube label, and is what the ward quotes on the telephone until somebody knows who
+    /// the patient is.
+    /// </para>
+    /// </summary>
+    public static Patient Provisional(string medicalRecordNumber, Gender gender, int estimatedAgeYears,
+                                      Guid siteId)
+    {
+        var digits = new string(medicalRecordNumber.Where(char.IsAsciiDigit).ToArray());
+        var suffix = digits.Length > 6 ? digits[^6..] : digits;
+
+        return new Patient(medicalRecordNumber, ProvisionalLastName,
+                           suffix.Length > 0 ? suffix : medicalRecordNumber, null, gender, siteId)
+        {
+            DeclaredAgeYears = estimatedAgeYears,
+            IsProvisionalIdentity = true
+        };
+    }
+
+    /// <summary>
+    /// True while the file carries a provisional identity. Cleared once the real identity is
+    /// entered; the change is audited like any identity correction.
+    /// </summary>
+    public bool IsProvisionalIdentity { get; private set; }
+
+    /// <summary>The real identity has been entered on a provisional file.</summary>
+    public void ConfirmIdentity() => IsProvisionalIdentity = false;
+
     /// <summary>Human-readable file number, unique per installation, e.g. "P-2026-000431".</summary>
     public string MedicalRecordNumber { get; private set; } = string.Empty;
 
@@ -182,7 +217,8 @@ public sealed class Patient : AuditableAggregateRoot, ISoftDeletable, ISiteScope
             errors.Add(Error.Validation("Patient_CinInvalid"));
         if (IsPregnant && Gender != Gender.Female)
             errors.Add(Error.Validation("Patient_PregnancyRequiresFemale"));
-        if (IsMinor(today) && string.IsNullOrWhiteSpace(GuardianFullName))
+        // A provisional file has no guardian to name: the patient arrived unidentified.
+        if (!IsProvisionalIdentity && IsMinor(today) && string.IsNullOrWhiteSpace(GuardianFullName))
             errors.Add(Error.Regulatory("Patient_MinorRequiresGuardian"));
 
         return errors.Count == 0 ? Result.Success() : Result.Failure(errors);

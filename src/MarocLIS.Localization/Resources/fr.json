@@ -211,6 +211,10 @@
   },
 
   "Patient": {
+    "ProvisionalCreate": "Ouvrir le dossier provisoire",
+    "EstimatedAge": "Âge estimé (ans)",
+    "ProvisionalHelp": "Patient non identifiable pour l'instant. Un dossier provisoire « X-URG » est ouvert pour prélever tout de suite ; complétez l'identité plus tard depuis la fiche patient.",
+    "Provisional": "Patient X urgence",
     "Title": "Patient",
     "Plural": "Patients",
     "RecordNumber": "N° de dossier",
@@ -2297,6 +2301,7 @@
   "Patient_AlreadyAnonymized": "Ce dossier est déjà anonymisé.",
   "Patient_AnonymizeJustificationRequired": "L'anonymisation doit être motivée : elle répond à une demande du patient et doit pouvoir être justifiée à la CNDP.",
   "Patient_RetentionNotExpired": "L'obligation de conservation court jusqu'au {0} : elle prime sur la demande de suppression.",
+  "Patient_EstimatedAgeInvalid": "L'âge estimé doit être compris entre 0 et 130 ans.",
 
   "Coverage_NotFound": "Couverture introuvable.",
 

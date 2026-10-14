@@ -211,6 +211,10 @@
   },
 
   "Patient": {
+    "ProvisionalCreate": "فتح الملف المؤقت",
+    "EstimatedAge": "السن التقديري (بالسنوات)",
+    "ProvisionalHelp": "مريض لا يمكن التعرف عليه حاليًا. يُفتح ملف مؤقت « X-URG » لأخذ العينة فورًا؛ أكمل الهوية لاحقًا من ملف المريض.",
+    "Provisional": "مريض مجهول الهوية (مستعجل)",
     "Title": "المريض",
     "Plural": "المرضى",
     "RecordNumber": "رقم الملف",
@@ -2296,6 +2300,7 @@
   "Patient_AlreadyAnonymized": "هذا الملف مجهول الهوية سابقاً.",
   "Patient_AnonymizeJustificationRequired": "إخفاء الهوية يجب تعليله: فهو استجابة لطلب المريض ويجب أن يكون قابلاً للتبرير أمام اللجنة الوطنية.",
   "Patient_RetentionNotExpired": "التزام الاحتفاظ ساري إلى غاية {0}: وهو يعلو على طلب المحو.",
+  "Patient_EstimatedAgeInvalid": "يجب أن يكون السن التقديري بين 0 و130 سنة.",
 
   "Coverage_NotFound": "التغطية غير موجودة.",
 

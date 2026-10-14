@@ -35,4 +35,25 @@ public sealed class PatientEditorFactory(
 
         return form.ShowDialog(owner) == DialogResult.OK ? form.ResultPatientId : null;
     }
+
+    /// <summary>
+    /// Opens a provisional "X-URG" file for a patient who cannot be identified yet, and returns
+    /// it, or null if the operator backed out or the creation failed (the failure is shown).
+    /// </summary>
+    public async Task<Guid?> CreateProvisionalAsync(IWin32Window? owner)
+    {
+        using var dialog = new ProvisionalPatientDialog(localizer);
+
+        if (dialog.ShowDialog(owner) != DialogResult.OK) return null;
+
+        var created = await service.RegisterProvisionalAsync(dialog.Gender, dialog.EstimatedAge);
+
+        if (created.IsFailure)
+        {
+            dialogs.ShowFailure(created, localizer["Patient.Provisional"]);
+            return null;
+        }
+
+        return created.Value;
+    }
 }

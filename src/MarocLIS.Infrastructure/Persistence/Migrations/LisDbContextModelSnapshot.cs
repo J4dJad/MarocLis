@@ -3569,6 +3569,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsPregnant")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsProvisionalIdentity")
+                        .HasColumnType("bit");
+
                     b.Property<string>("KnownAllergies")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");

@@ -274,6 +274,50 @@ public sealed class PatientRegistrationService(
         return Result.Success(new PatientRegistrationOutcome(patient.Id, []));
     }
 
+    /// <summary>
+    /// Opens a provisional file ("X-URG …") for a patient who cannot be identified yet, so the
+    /// request can be registered and the sample drawn at once. No duplicate check: there is no
+    /// identity to compare.
+    /// </summary>
+    public async Task<Result<Guid>> RegisterProvisionalAsync(Gender gender, int estimatedAgeYears,
+                                                             CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Patients.Create);
+        if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
+
+        if (estimatedAgeYears is < 0 or > 130)
+            return Result.Failure<Guid>(Error.Validation("Patient_EstimatedAgeInvalid"));
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
+
+        var number = await sequences.NextAsync(SequencePurpose.MedicalRecord, siteId: null, ct: ct);
+        if (number.IsFailure)
+        {
+            await unitOfWork.RollbackAsync(ct);
+            return Result.Failure<Guid>(number.FirstError);
+        }
+
+        var patient = Patient.Provisional(number.Value, gender, estimatedAgeYears, currentUser.SiteId);
+        patient.SearchKey = PatientSearchKey.Build(patient.LastName, patient.FirstName);
+
+        var valid = patient.Validate(clock.Today);
+        if (valid.IsFailure)
+        {
+            await unitOfWork.RollbackAsync(ct);
+            return Result.Failure<Guid>(valid.Errors);
+        }
+
+        await patients.AddAsync(patient, ct);
+
+        unitOfWork.AuditReason =
+            $"Création du dossier provisoire {patient.MedicalRecordNumber} ({patient.FullName}) : patient non identifié";
+
+        await unitOfWork.SaveChangesAsync(ct);
+        await unitOfWork.CommitAsync(ct);
+
+        return Result.Success(patient.Id);
+    }
+
     /// <summary>Updates the identity of an existing file. The file number is never reassigned.</summary>
     public async Task<Result> UpdateAsync(Guid patientId, PatientIdentityRequest identity,
                                            CancellationToken ct = default)
@@ -320,13 +364,22 @@ public sealed class PatientRegistrationService(
         patient.KnownAllergies = Blank(identity.KnownAllergies);
         patient.OptedOutOfSecondaryUse = identity.OptedOutOfSecondaryUse;
 
+        // A provisional file becomes a real one the moment it is given a name other than the
+        // provisional one; the audit line says so, because results already issued under "X-URG"
+        // now belong to a named person.
+        var completesProvisional = patient.IsProvisionalIdentity
+            && !string.Equals(patient.LastName, Patient.ProvisionalLastName, StringComparison.OrdinalIgnoreCase);
+
+        if (completesProvisional) patient.ConfirmIdentity();
+
         var valid = patient.Validate(clock.Today);
         if (valid.IsFailure) return valid;
 
         patients.Update(patient);
 
-        unitOfWork.AuditReason =
-            $"Modification du dossier {patient.MedicalRecordNumber} ({patient.FullName})";
+        unitOfWork.AuditReason = completesProvisional
+            ? $"Identité provisoire complétée : dossier {patient.MedicalRecordNumber} désormais au nom de {patient.FullName}"
+            : $"Modification du dossier {patient.MedicalRecordNumber} ({patient.FullName})";
 
         await unitOfWork.SaveChangesAsync(ct);
 

@@ -211,6 +211,10 @@
   },
 
   "Patient": {
+    "ProvisionalCreate": "Open provisional file",
+    "EstimatedAge": "Estimated age (years)",
+    "ProvisionalHelp": "Patient who cannot be identified yet. A provisional \"X-URG\" file is opened so the sample can be drawn now; complete the identity later from the patient file.",
+    "Provisional": "Unidentified patient",
     "Title": "Patient",
     "Plural": "Patients",
     "RecordNumber": "Record no.",
@@ -2296,6 +2300,7 @@
   "Patient_AlreadyAnonymized": "This record is already anonymised.",
   "Patient_AnonymizeJustificationRequired": "Anonymisation must be justified: it answers a patient request and has to be defensible to the CNDP.",
   "Patient_RetentionNotExpired": "The retention obligation runs until {0}, and outranks the erasure request.",
+  "Patient_EstimatedAgeInvalid": "The estimated age must be between 0 and 130 years.",
 
   "Coverage_NotFound": "Coverage not found.",
 
