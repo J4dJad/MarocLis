@@ -1,11 +1,49 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Subcontract_NothingSelected": "Cochez au moins une analyse à envoyer.",
+  "Subcontract_NoPartner": "Aucun laboratoire partenaire n'est désigné pour une des analyses : choisissez-en un dans la fenêtre d'envoi.",
+  "Subcontract_SlipNotFound": "Bordereau {0} introuvable.",
+  "Subcontract_ReferenceTooLong": "La référence ne doit pas dépasser 60 caractères.",
+  "Subcontract_NotSubcontracted": "Une analyse du dossier {0} n'est pas sous-traitée.",
+  "Subcontract_ItemCancelled": "Une analyse du dossier {0} est annulée.",
+  "Subcontract_AlreadySent": "Une analyse du dossier {0} est déjà partie en sous-traitance.",
+  "Subcontract_NotReceived": "Le tube du dossier {0} n'est pas encore réceptionné.",
   "Deposit_MethodNotAllowed": "Un acompte se règle en espèces, carte, chèque, virement, effet ou paiement mobile.",
   "Deposit_NotHeld": "Cet acompte n'est plus en attente : il a déjà été imputé ou remboursé.",
   "Deposit_ApplyAmountInvalid": "Le montant à imputer dépasse ce qui reste sur l'acompte.",
   "Deposit_ExceedsOrderTotal": "L'acompte dépasse ce qui reste à couvrir sur le dossier ({0}).",
   "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
   "Deposit_NotFound": "Acompte introuvable.",
+
+  "Subcontract": {
+    "SignaturePartner": "Reçu par le laboratoire partenaire (date, signature) :",
+    "SignatureCourier": "Remis au coursier (nom, signature) :",
+    "Priority": "Priorité",
+    "Container": "Tube",
+    "SexBirth": "Sexe, né(e) le",
+    "SlipCaption": "Site {0} → {1}   ·   Envoyé le {2} par {3}   ·   {4} analyse(s)",
+    "SlipTitle": "Bordereau d'envoi en sous-traitance",
+    "SelectSentRow": "Sélectionnez une analyse déjà envoyée.",
+    "NoPartner": "Aucun laboratoire désigné",
+    "DueAt": "Retour attendu",
+    "Slip": "Bordereau",
+    "SentAt": "Envoyé le",
+    "Sent": "Envoyé — bordereau(x) {0}",
+    "SendSummary": "{0} analyse(s) de {1} dossier(s) à envoyer :",
+    "PartnerFromCatalogue": "Laboratoire prévu au catalogue pour chaque analyse",
+    "PartnerReferencePrompt": "Numéro donné par {1} au dossier {0} :",
+    "PartnerReferenceShort": "Réf. partenaire",
+    "PartnerReference": "Référence du partenaire",
+    "ReprintSlip": "Réimprimer le bordereau",
+    "SendAndPrint": "Envoyer et imprimer",
+    "Send": "Envoyer en sous-traitance",
+    "Late": "En retard",
+    "StageAwaitingReturn": "En attente de retour",
+    "StageToSend": "À envoyer",
+    "StageAll": "Tout afficher",
+    "SearchPlaceholder": "Dossier, patient, code-barres, bordereau…",
+    "Heading": "Sous-traitance — {0} à envoyer · {1} en attente de retour · {2} en retard"
+  },
 
   "Deposit": {
     "Refunded": "Acompte remboursé sur {0}.",
@@ -107,6 +145,7 @@
   },
 
   "Nav": {
+    "Subcontracting": "Sous-traitance",
     "ExpandGroup": "Déplier ce groupe",
     "CollapseGroup": "Replier ce groupe",
     "Dashboard": "Tableau de bord",
@@ -2048,6 +2087,7 @@
   },
 
   "SequencePurpose": {
+    "SubcontractDispatch": "Bordereau de sous-traitance",
     "Accession": "Numéro de dossier",
     "MedicalRecord": "Numéro de patient",
     "SampleBarcode": "Code-barres d'échantillon",

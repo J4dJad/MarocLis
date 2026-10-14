@@ -236,6 +236,7 @@ public sealed class LabOrderItemConfiguration : IEntityTypeConfiguration<LabOrde
         builder.Property(e => e.BilledLetterKey).HasMaxLength(5);
         builder.Property(e => e.BilledActCode).HasMaxLength(30);
         builder.Property(e => e.SubcontractorReference).HasMaxLength(60);
+        builder.Property(e => e.SubcontractDispatchNumber).HasMaxLength(30);
         builder.Property(e => e.CancellationReason).HasMaxLength(500);
         builder.Property(e => e.RepeatReason).HasMaxLength(500);
 

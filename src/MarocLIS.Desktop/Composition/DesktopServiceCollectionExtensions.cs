@@ -70,6 +70,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<Application.Catalog.ICatalogMaintenanceQueries, CatalogMaintenanceQueries>();
         services.AddIsolatedQueries<Application.Instruments.IInstrumentInterfaceQueries, InstrumentInterfaceQueries>();
         services.AddIsolatedQueries<Application.Samples.ISampleQueries, SampleQueries>();
+        services.AddIsolatedQueries<Application.Samples.ISubcontractQueries, SubcontractQueries>();
         services.AddIsolatedQueries<Application.Billing.IBillingQueries, BillingQueries>();
         services.AddIsolatedQueries<Application.Quality.IQualityQueries, QualityQueries>();
         services.AddIsolatedQueries<Application.Inventory.IInventoryQueries, InventoryQueries>();
@@ -97,6 +98,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<SampleReceptionView>();
         services.AddTransient<SampleStorageView>();
         services.AddTransient<ResultEntryView>();
+        services.AddTransient<SubcontractingView>();
         services.AddTransient<ValidationView>();
         services.AddTransient<ReportRegisterView>();
         services.AddTransient<BillingView>();

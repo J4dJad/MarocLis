@@ -494,6 +494,8 @@ internal static class RolePermissionSets
              Permissions.Orders.View,
              Permissions.Samples.View, Permissions.Samples.Collect, Permissions.Samples.Receive,
              Permissions.Samples.Reject, Permissions.Samples.Reprint,
+             // Prepares the send-outs to partner laboratories.
+             Permissions.Samples.Dispatch,
              // Enter and technically validate, but never release: biological validation is
              // reserved to a biologist by loi n° 12-01, and the role does not carry the grant.
              Permissions.Results.View, Permissions.Results.Enter,

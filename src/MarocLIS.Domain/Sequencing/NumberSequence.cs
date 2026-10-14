@@ -162,5 +162,8 @@ public enum SequencePurpose
     ControlledDocument = 10,
 
     /// <summary>Transport run between a collection centre and the laboratory.</summary>
-    TransportRun = 11
+    TransportRun = 11,
+
+    /// <summary>Dispatch slip for analyses sent to a partner laboratory.</summary>
+    SubcontractDispatch = 12
 }

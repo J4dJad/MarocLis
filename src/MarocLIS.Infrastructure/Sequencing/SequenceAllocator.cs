@@ -150,6 +150,7 @@ public sealed class SequenceAllocator(LisDbContext context, IClock clock, ICurre
         SequencePurpose.ClaimBatch => "TP/{SITE}/{YEAR}/{SEQ:5}",
         SequencePurpose.ControlledDocument => "DOC-{SEQ:5}",
         SequencePurpose.TransportRun => "TR/{YEAR}/{SEQ:5}",
+        SequencePurpose.SubcontractDispatch => "ST/{YEAR}/{SEQ:5}",
         _ => "{SEQ:6}"
     };
 }

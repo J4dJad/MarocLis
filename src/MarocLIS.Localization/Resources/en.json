@@ -1,11 +1,49 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Subcontract_NothingSelected": "Tick at least one analysis to send.",
+  "Subcontract_NoPartner": "No partner laboratory is set for one of the analyses: choose one in the send window.",
+  "Subcontract_SlipNotFound": "Slip {0} not found.",
+  "Subcontract_ReferenceTooLong": "The reference must not exceed 60 characters.",
+  "Subcontract_NotSubcontracted": "An analysis on request {0} is not subcontracted.",
+  "Subcontract_ItemCancelled": "An analysis on request {0} is cancelled.",
+  "Subcontract_AlreadySent": "An analysis on request {0} has already been sent.",
+  "Subcontract_NotReceived": "The tube for request {0} has not been received yet.",
   "Deposit_MethodNotAllowed": "A deposit is paid by cash, card, cheque, transfer, bill of exchange or mobile payment.",
   "Deposit_NotHeld": "This deposit is no longer held: it has already been applied or refunded.",
   "Deposit_ApplyAmountInvalid": "The amount to apply exceeds what is left on the deposit.",
   "Deposit_ExceedsOrderTotal": "The deposit exceeds what is left to cover on the request ({0}).",
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
+
+  "Subcontract": {
+    "SignaturePartner": "Received by partner lab (date, signature):",
+    "SignatureCourier": "Handed to courier (name, signature):",
+    "Priority": "Priority",
+    "Container": "Tube",
+    "SexBirth": "Sex, born",
+    "SlipCaption": "Site {0} → {1}   ·   Sent on {2} by {3}   ·   {4} analysis(es)",
+    "SlipTitle": "Subcontracting dispatch slip",
+    "SelectSentRow": "Select an analysis that has been sent.",
+    "NoPartner": "No partner set",
+    "DueAt": "Expected back",
+    "Slip": "Slip",
+    "SentAt": "Sent on",
+    "Sent": "Sent — slip(s) {0}",
+    "SendSummary": "{0} analysis(es) from {1} request(s) to send:",
+    "PartnerFromCatalogue": "Partner set in the catalogue for each analysis",
+    "PartnerReferencePrompt": "Number given by {1} to request {0}:",
+    "PartnerReferenceShort": "Partner ref.",
+    "PartnerReference": "Partner reference",
+    "ReprintSlip": "Reprint slip",
+    "SendAndPrint": "Send and print",
+    "Send": "Send to partner lab",
+    "Late": "Late",
+    "StageAwaitingReturn": "Awaiting return",
+    "StageToSend": "To send",
+    "StageAll": "Show all",
+    "SearchPlaceholder": "Request, patient, barcode, slip…",
+    "Heading": "Subcontracting — {0} to send · {1} awaiting return · {2} late"
+  },
 
   "Deposit": {
     "Refunded": "Deposit refunded on {0}.",
@@ -107,6 +145,7 @@
   },
 
   "Nav": {
+    "Subcontracting": "Subcontracting",
     "ExpandGroup": "Expand this group",
     "CollapseGroup": "Collapse this group",
     "Dashboard": "Dashboard",
@@ -2047,6 +2086,7 @@
   },
 
   "SequencePurpose": {
+    "SubcontractDispatch": "Subcontracting slip",
     "Accession": "Accession number",
     "MedicalRecord": "Patient record number",
     "SampleBarcode": "Sample barcode",

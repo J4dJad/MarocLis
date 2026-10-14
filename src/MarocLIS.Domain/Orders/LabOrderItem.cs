@@ -71,7 +71,48 @@ public sealed class LabOrderItem : Entity, IAuditable
     public bool IsSubcontracted { get; set; }
     public Guid? SubcontractorSiteId { get; set; }
     public DateTimeOffset? SentToSubcontractorAt { get; set; }
+
+    /// <summary>The partner laboratory's own number for the request, entered when they give it.</summary>
     public string? SubcontractorReference { get; set; }
+
+    /// <summary>Number of the dispatch slip (bordereau d'envoi) the tube left with.</summary>
+    public string? SubcontractDispatchNumber { get; private set; }
+    public Guid? SubcontractSentByUserId { get; private set; }
+
+    /// <summary>When the partner's results were first entered here.</summary>
+    public DateTimeOffset? SubcontractReturnedAt { get; private set; }
+
+    public bool IsAwaitingSubcontractDispatch =>
+        IsSubcontracted && !IsCancelled && SentToSubcontractorAt is null && ResultEnteredAt is null;
+
+    /// <summary>
+    /// Records that the act left for the partner laboratory on a dispatch slip. The partner may be
+    /// changed at the time of sending, for instance when the usual one cannot take the sample.
+    /// </summary>
+    public Result SendToSubcontractor(Guid partnerSiteId, string dispatchNumber, DateTimeOffset at,
+                                      Guid byUserId)
+    {
+        if (!IsSubcontracted)
+            return Result.Failure(Error.Conflict("Subcontract_NotSubcontracted"));
+        if (IsCancelled)
+            return Result.Failure(Error.Conflict("Subcontract_ItemCancelled"));
+        if (SentToSubcontractorAt is not null)
+            return Result.Failure(Error.Conflict("Subcontract_AlreadySent"));
+        if (Status is LabOrderItemStatus.Pending or LabOrderItemStatus.Collected)
+            return Result.Failure(Error.Conflict("Subcontract_NotReceived"));
+
+        SubcontractorSiteId = partnerSiteId;
+        SubcontractDispatchNumber = dispatchNumber;
+        SentToSubcontractorAt = at;
+        SubcontractSentByUserId = byUserId;
+        return Result.Success();
+    }
+
+    /// <summary>Called when results are entered on a subcontracted act: the partner has answered.</summary>
+    public void MarkSubcontractReturned(DateTimeOffset at)
+    {
+        if (IsSubcontracted) SubcontractReturnedAt ??= at;
+    }
 
     // ---- Lifecycle ----------------------------------------------------------------------------
 

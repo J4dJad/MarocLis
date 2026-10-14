@@ -101,7 +101,9 @@ public sealed record ReportAnalysisBlock(
     bool IsAccredited,
     bool IsSubcontracted,
     DateTimeOffset? ValidatedAt,
-    IReadOnlyList<ReportLine> Lines);
+    IReadOnlyList<ReportLine> Lines,
+    /// <summary>The partner laboratory that performed a subcontracted analysis.</summary>
+    string? SubcontractorName = null);
 
 /// <summary>One printed line: a result, or a section heading within a panel.</summary>
 public sealed record ReportLine
@@ -515,6 +517,16 @@ public sealed class ReportReleaseService(
             foreach (var parameter in test.Parameters) catalogue[parameter.Id] = (test, parameter);
         }
 
+        // Partner laboratories named on the report, as ISO 15189 requires for subcontracted work.
+        var partnerNames = new Dictionary<Guid, string>();
+
+        foreach (var partnerId in order.Items.Where(i => i.IsSubcontracted)
+                                             .Select(i => i.SubcontractorSiteId).OfType<Guid>().Distinct())
+        {
+            if (await sites.GetByIdAsync(partnerId, ct) is { } partner)
+                partnerNames[partnerId] = partner.Name.For(language);
+        }
+
         var reservations = new List<string>();
         DateTimeOffset? earliestCollection = null;
         DateTimeOffset? earliestReception = null;
@@ -589,9 +601,12 @@ public sealed class ReportReleaseService(
                             analysisGroup.Key.Name,
                             analysisGroup.Key.Method,
                             analysisGroup.Key.IsAccredited,
-                            analysisGroup.Key.IsSubcontracted,
+                            item?.IsSubcontracted ?? analysisGroup.Key.IsSubcontracted,
                             item?.ValidatedAt,
-                            lines);
+                            lines,
+                            item is { IsSubcontracted: true, SubcontractorSiteId: { } partnerId }
+                                ? partnerNames.GetValueOrDefault(partnerId)
+                                : null);
                     })
                     .ToList();
 

@@ -1,11 +1,49 @@
 {
   "$comment": "الفهرس العربي — يُعرض من اليمين إلى اليسار. الأرقام تبقى بالصيغة اللاتينية (0-9) تفاديًا لأخطاء النقل في النتائج الطبية.",
+  "Subcontract_NothingSelected": "حدد تحليلا واحدا على الأقل للإرسال.",
+  "Subcontract_NoPartner": "لا يوجد مختبر شريك محدد لأحد التحاليل: اختر واحدا في نافذة الإرسال.",
+  "Subcontract_SlipNotFound": "الجدول {0} غير موجود.",
+  "Subcontract_ReferenceTooLong": "يجب ألا يتجاوز المرجع 60 حرفا.",
+  "Subcontract_NotSubcontracted": "أحد تحاليل الملف {0} ليس في المناولة.",
+  "Subcontract_ItemCancelled": "أحد تحاليل الملف {0} ملغى.",
+  "Subcontract_AlreadySent": "أحد تحاليل الملف {0} أرسل مسبقا.",
+  "Subcontract_NotReceived": "أنبوب الملف {0} لم يُستلم بعد.",
   "Deposit_MethodNotAllowed": "يُدفع التسبيق نقدا أو بالبطاقة أو بشيك أو بتحويل أو بكمبيالة أو بالأداء عبر الهاتف.",
   "Deposit_NotHeld": "هذا التسبيق لم يعد معلقا: تم خصمه أو إرجاعه.",
   "Deposit_ApplyAmountInvalid": "المبلغ المراد خصمه يتجاوز المتبقي من التسبيق.",
   "Deposit_ExceedsOrderTotal": "التسبيق يتجاوز المتبقي للتغطية في الملف ({0}).",
   "Deposit_OrderCancelled": "الملف {0} ملغى: لا يمكن سوى إرجاع التسبيق.",
   "Deposit_NotFound": "التسبيق غير موجود.",
+
+  "Subcontract": {
+    "SignaturePartner": "استلمه المختبر الشريك (التاريخ، التوقيع):",
+    "SignatureCourier": "سلم إلى الناقل (الاسم، التوقيع):",
+    "Priority": "الأولوية",
+    "Container": "الأنبوب",
+    "SexBirth": "الجنس، تاريخ الازدياد",
+    "SlipCaption": "الموقع {0} → {1}   ·   أرسل في {2} من طرف {3}   ·   {4} تحليل",
+    "SlipTitle": "جدول إرسال المناولة",
+    "SelectSentRow": "اختر تحليلا تم إرساله.",
+    "NoPartner": "لا يوجد مختبر محدد",
+    "DueAt": "العودة المتوقعة",
+    "Slip": "الجدول",
+    "SentAt": "أرسل في",
+    "Sent": "تم الإرسال — الجدول {0}",
+    "SendSummary": "{0} تحليل من {1} ملف للإرسال:",
+    "PartnerFromCatalogue": "المختبر المحدد في الدليل لكل تحليل",
+    "PartnerReferencePrompt": "الرقم الذي أعطاه {1} للملف {0}:",
+    "PartnerReferenceShort": "مرجع الشريك",
+    "PartnerReference": "مرجع الشريك",
+    "ReprintSlip": "إعادة طباعة الجدول",
+    "SendAndPrint": "إرسال وطباعة",
+    "Send": "إرسال إلى المختبر الشريك",
+    "Late": "متأخرة",
+    "StageAwaitingReturn": "في انتظار النتيجة",
+    "StageToSend": "للإرسال",
+    "StageAll": "عرض الكل",
+    "SearchPlaceholder": "ملف، مريض، رمز شريطي، جدول…",
+    "Heading": "المناولة — {0} للإرسال · {1} في انتظار النتيجة · {2} متأخرة"
+  },
 
   "Deposit": {
     "Refunded": "تم إرجاع التسبيق على {0}.",
@@ -107,6 +145,7 @@
   },
 
   "Nav": {
+    "Subcontracting": "المناولة",
     "ExpandGroup": "توسيع هذه المجموعة",
     "CollapseGroup": "طي هذه المجموعة",
     "Dashboard": "لوحة القيادة",
@@ -2047,6 +2086,7 @@
   },
 
   "SequencePurpose": {
+    "SubcontractDispatch": "جدول المناولة",
     "Accession": "رقم الملف",
     "MedicalRecord": "رقم المريض",
     "SampleBarcode": "الرمز الشريطي للعينة",

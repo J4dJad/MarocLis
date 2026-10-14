@@ -3195,6 +3195,16 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<string>("SubcontractDispatchNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTimeOffset?>("SubcontractReturnedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("SubcontractSentByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("SubcontractorReference")
                         .HasMaxLength(60)
                         .HasColumnType("nvarchar(60)");

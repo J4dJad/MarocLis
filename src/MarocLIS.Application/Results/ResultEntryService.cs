@@ -327,6 +327,14 @@ public sealed class ResultEntryService(
             // when the sample had to be diluted to bring it into the measuring range.
             if (entry.DilutionFactor is { } factor and > 1m) result.FlagDiluted(factor);
 
+            // A value on a subcontracted act is the partner's answer: the report must say who
+            // measured it, and the send-out list stops waiting for it.
+            if (order.Items.FirstOrDefault(i => i.Id == result.LabOrderItemId) is { IsSubcontracted: true } sent)
+            {
+                result.FlagSubcontracted();
+                sent.MarkSubcontractReturned(now);
+            }
+
             accepted++;
         }
 

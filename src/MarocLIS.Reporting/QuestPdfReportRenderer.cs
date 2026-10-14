@@ -372,7 +372,10 @@ public sealed class QuestPdfReportRenderer : IReportRenderer
                         // one report some analyses are in scope and others are not.
                         var markers = new List<string>();
                         if (analysis.IsAccredited) markers.Add("ISO 15189");
-                        if (analysis.IsSubcontracted) markers.Add(Label("Catalog.Subcontracted", model));
+                        if (analysis.IsSubcontracted)
+                            markers.Add(analysis.SubcontractorName is { Length: > 0 } partner
+                                ? $"{Label("Catalog.Subcontracted", model)} : {partner}"
+                                : Label("Catalog.Subcontracted", model));
 
                         if (markers.Count > 0)
                             row.AutoItem().AlignBottom()
