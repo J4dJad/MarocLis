@@ -391,6 +391,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
             var flags = new List<string>(4);
 
+            if (row.EquipmentBlockKey is { } blocked) flags.Add(T(blocked, row.InstrumentCode));
             if (!row.IsEnabled) flags.Add(T("Interface.Disabled"));
             if (row.IsUnusable) flags.Add(T("Interface.NoMappings"));
             if (row.AutoAcceptResults) flags.Add(T("Interface.AutoAccept"));
@@ -564,7 +565,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
         var live = _monitor.For(row.Id);
 
         if (live?.Status is InstrumentLinkStatus.Failed or InstrumentLinkStatus.Misconfigured
-            || row.IsUnusable)
+            || row.IsUnusable || row.EquipmentBlockKey is not null)
         {
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;

@@ -2,6 +2,7 @@
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
 
   "PreviewOutcome": {
+    "InstrumentNotUsable": "Retenu : automate pas en service",
     "NoResults": "Aucun résultat pour ce tube",
     "OrderNotUsable": "Refusé : dossier annulé ou introuvable",
     "SpecimenNotUsable": "Refusé : tube rejeté ou éliminé",
@@ -2767,6 +2768,13 @@
   "Interface_Poct1AInvalidXml": "Message POCT1-A illisible : le XML n'est pas valide.",
   "Interface_Poct1ARoleIgnored": "Événement POCT1-A de type « {0} » ignoré (seuls patients et contrôles sont importés).",
   "Interface_Poct1ANoObservation": "Message POCT1-A sans observation.",
+  "Interface_InstrumentNotOperational_OutOfService": "{0} est hors service : résultats retenus. Remettez l'équipement en service, puis réimportez.",
+  "Interface_InstrumentNotOperational_UnderMaintenance": "{0} est en maintenance : résultats retenus. Remettez l'équipement en service, puis réimportez.",
+  "Interface_InstrumentNotOperational_Commissioning": "{0} est en qualification : résultats retenus jusqu'à sa mise en service.",
+  "Interface_InstrumentNotOperational_Decommissioned": "{0} est réformé : ses résultats ne sont pas acceptés.",
+  "Interface_InstrumentNotOperational_Backup": "{0} est déclaré « secours » : résultats retenus. Passez-le en service pour les accepter.",
+  "Interface_InstrumentDecommissioned": "{0} a une date de réforme dépassée : ses résultats ne sont pas acceptés.",
+  "Interface_InstrumentCalibrationOverdue": "{0} a un étalonnage dépassé : résultats retenus. Enregistrez l'étalonnage, puis réimportez.",
   "Order_NotFoundForScan": "Aucun dossier ne correspond à « {0} » sur ce site.",
   "Order_AnalysisWithoutTariff": "L'analyse {0} n'a pas de tarif en vigueur aujourd'hui, ni pour ce tiers payant ni dans la liste de prix du laboratoire. Ajoutez-lui un tarif dans le Catalogue des analyses, onglet Tarifs.",
 

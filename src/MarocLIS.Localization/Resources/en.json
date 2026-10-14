@@ -2,6 +2,7 @@
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
 
   "PreviewOutcome": {
+    "InstrumentNotUsable": "Held: analyser not in service",
     "NoResults": "No result for this tube",
     "OrderNotUsable": "Refused: order cancelled or missing",
     "SpecimenNotUsable": "Refused: tube rejected or discarded",
@@ -2766,6 +2767,13 @@
   "Interface_Poct1AInvalidXml": "Unreadable POCT1-A message: the XML is not valid.",
   "Interface_Poct1ARoleIgnored": "POCT1-A event of type \"{0}\" ignored (only patients and controls are imported).",
   "Interface_Poct1ANoObservation": "POCT1-A message without any observation.",
+  "Interface_InstrumentNotOperational_OutOfService": "{0} is out of service: results held. Put the equipment back in service, then replay.",
+  "Interface_InstrumentNotOperational_UnderMaintenance": "{0} is under maintenance: results held. Put the equipment back in service, then replay.",
+  "Interface_InstrumentNotOperational_Commissioning": "{0} is being qualified: results held until it is put in service.",
+  "Interface_InstrumentNotOperational_Decommissioned": "{0} is decommissioned: its results are not accepted.",
+  "Interface_InstrumentNotOperational_Backup": "{0} is marked as backup: results held. Put it in service to accept them.",
+  "Interface_InstrumentDecommissioned": "{0} is past its decommissioning date: its results are not accepted.",
+  "Interface_InstrumentCalibrationOverdue": "{0} is overdue for calibration: results held. Record the calibration, then replay.",
   "Order_NotFoundForScan": "No order matches \"{0}\" on this site.",
   "Order_AnalysisWithoutTariff": "Analysis {0} has no tariff in force today, neither for this payer nor on the laboratory's price list. Add one in the analysis catalogue, Tariffs tab.",
 

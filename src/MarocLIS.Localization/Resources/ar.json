@@ -2,6 +2,7 @@
   "$comment": "الفهرس العربي — يُعرض من اليمين إلى اليسار. الأرقام تبقى بالصيغة اللاتينية (0-9) تفاديًا لأخطاء النقل في النتائج الطبية.",
 
   "PreviewOutcome": {
+    "InstrumentNotUsable": "محتجز: الجهاز ليس في الخدمة",
     "NoResults": "لا توجد نتيجة لهذا الأنبوب",
     "OrderNotUsable": "مرفوض: ملف ملغى أو غير موجود",
     "SpecimenNotUsable": "مرفوض: أنبوب مرفوض أو متلف",
@@ -2766,6 +2767,13 @@
   "Interface_Poct1AInvalidXml": "رسالة POCT1-A غير مقروءة: صيغة XML غير صالحة.",
   "Interface_Poct1ARoleIgnored": "تم تجاهل حدث POCT1-A من نوع «{0}» (تُستورد نتائج المرضى والمراقبة فقط).",
   "Interface_Poct1ANoObservation": "رسالة POCT1-A بدون أي نتيجة.",
+  "Interface_InstrumentNotOperational_OutOfService": "{0} خارج الخدمة: النتائج محتجزة. أعد الجهاز إلى الخدمة ثم أعد الاستيراد.",
+  "Interface_InstrumentNotOperational_UnderMaintenance": "{0} قيد الصيانة: النتائج محتجزة. أعد الجهاز إلى الخدمة ثم أعد الاستيراد.",
+  "Interface_InstrumentNotOperational_Commissioning": "{0} قيد التأهيل: النتائج محتجزة حتى وضعه في الخدمة.",
+  "Interface_InstrumentNotOperational_Decommissioned": "{0} مُخرج من الخدمة نهائيًا: لا تُقبل نتائجه.",
+  "Interface_InstrumentNotOperational_Backup": "{0} مصنّف كجهاز احتياطي: النتائج محتجزة. ضعه في الخدمة لقبولها.",
+  "Interface_InstrumentDecommissioned": "{0} تجاوز تاريخ إخراجه من الخدمة: لا تُقبل نتائجه.",
+  "Interface_InstrumentCalibrationOverdue": "{0} تجاوز موعد المعايرة: النتائج محتجزة. سجّل المعايرة ثم أعد الاستيراد.",
   "Order_NotFoundForScan": "لا يوجد ملف يطابق «{0}» في هذا الموقع.",
   "Order_AnalysisWithoutTariff": "التحليل {0} ليس له تعريفة سارية اليوم، لا لهذا الطرف الدافع ولا في قائمة أسعار المختبر. أضف له تعريفة في دليل التحاليل، تبويب التعريفات.",
 

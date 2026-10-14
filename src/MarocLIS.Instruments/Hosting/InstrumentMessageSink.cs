@@ -52,6 +52,7 @@ public sealed class InstrumentMessageSink(
     IRepository<Patient> patients,
     IRepository<QcTarget> qcTargets,
     IRepository<QcResult> qcResults,
+    IRepository<Instrument> instruments,
     IInstrumentMessageLogStore messageLog,
     IUnitOfWork unitOfWork,
     IClock clock,
@@ -100,6 +101,17 @@ public sealed class InstrumentMessageSink(
         {
             await CloseAsync(logId, InstrumentMessageProcessingStatus.Ignored, message, 0, issues, ct);
             return true;
+        }
+
+        // An analyser declared out of service, retired or out of calibration may not produce
+        // patient results. Held here, at reception, with the reason on the log line — not left to
+        // be discovered at biological validation, after the technician has already moved on. The
+        // frame stays replayable once the instrument is back in service.
+        if (await EquipmentBlockAsync(link, ct) is { } blocked)
+        {
+            issues.Add(blocked);
+            await CloseAsync(logId, InstrumentMessageProcessingStatus.Failed, message, 0, issues, ct);
+            return false;
         }
 
         // Auto-acceptance off means a technician reviews the transmission before it reaches a
@@ -170,6 +182,12 @@ public sealed class InstrumentMessageSink(
         var link = await interfaces.GetByIdWithDetailsAsync(entry.InstrumentInterfaceId, ct);
         if (link is null) return Result.Failure<int>(Error.NotFound("Interface_NotFound"));
 
+        if (await EquipmentBlockAsync(link, ct) is { } blocked)
+        {
+            var parts = blocked.Split('\t', 2);
+            return Result.Failure<int>(Error.Regulatory(parts[0], parts.Length > 1 ? parts[1] : null));
+        }
+
         var reparsed = Reparse(link.Protocol, entry.RawContent, link.MessageFormat);
 
         if (reparsed is null)
@@ -183,6 +201,17 @@ public sealed class InstrumentMessageSink(
                                                   .Select(i => i.ResourceKey))));
 
         return await ReplayParsedAsync(logId, link, reparsed, byUserId, ct);
+    }
+
+    /// <summary>The issue that holds the link's results back, or null when its analyser may produce them.</summary>
+    private async Task<string?> EquipmentBlockAsync(InstrumentInterface link, CancellationToken ct)
+    {
+        var instrument = await instruments.GetByIdAsync(link.InstrumentId, ct);
+        if (instrument is null) return Describe("Instrument_NotFound");
+
+        return instrument.ResultBlockKey(clock.Today) is { } key
+            ? Describe(key, instrument.Code)
+            : null;
     }
 
     /// <summary>

@@ -54,7 +54,11 @@ public sealed class InstrumentInterfaceQueries(LisDbContext db) : IInstrumentInt
                 i.FilePattern,
                 i.ProcessedDirectory,
                 Instrument = db.Instruments.Where(a => a.Id == i.InstrumentId)
-                    .Select(a => new { a.Code, a.Name }).FirstOrDefault(),
+                    .Select(a => new
+                    {
+                        a.Code, a.Name, a.Status, a.DecommissioningDate,
+                        a.LastCalibrationOn, a.CalibrationIntervalDays
+                    }).FirstOrDefault(),
                 MappingCount = db.InstrumentTestMappings.Count(m => m.InstrumentInterfaceId == i.Id),
                 EnabledMappingCount = db.InstrumentTestMappings.Count(
                     m => m.InstrumentInterfaceId == i.Id && m.IsEnabled),
@@ -114,6 +118,15 @@ public sealed class InstrumentInterfaceQueries(LisDbContext db) : IInstrumentInt
                     i.FilePattern,
                     i.ProcessedDirectory)
                 {
+                    EquipmentBlockKey = i.Instrument is null
+                        ? null
+                        : Instrument.ResultBlockKey(
+                            i.Instrument.Status, i.Instrument.DecommissioningDate,
+                            i.Instrument.LastCalibrationOn is { } last
+                            && i.Instrument.CalibrationIntervalDays is { } interval
+                                ? last.AddDays(interval)
+                                : null,
+                            today),
                     Format = new MessageFormatSettings(
                         i.FormatTestCodeComponent, i.FormatTestCodeSuffix, i.FormatSpecimenIdField,
                         i.FormatSpecimenIdComponent, i.FormatAcceptedResultTypes,

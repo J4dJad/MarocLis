@@ -361,3 +361,56 @@ public sealed class Poct1ATests
                                                CancellationToken ct = default) => Task.CompletedTask;
     }
 }
+
+public sealed class EquipmentBlockTests
+{
+    private static readonly DateOnly Today = new(2026, 10, 14);
+
+    [Theory]
+    [InlineData(EquipmentStatus.OutOfService, "Interface_InstrumentNotOperational_OutOfService")]
+    [InlineData(EquipmentStatus.UnderMaintenance, "Interface_InstrumentNotOperational_UnderMaintenance")]
+    [InlineData(EquipmentStatus.Operational, null)]
+    public void Status_DecidesWhetherResultsAreHeld(EquipmentStatus status, string? key) =>
+        Instrument.ResultBlockKey(status, null, null, Today).Should().Be(key);
+
+    [Fact]
+    public void OverdueCalibration_HoldsResults() =>
+        Instrument.ResultBlockKey(EquipmentStatus.Operational, null, Today.AddDays(-1), Today)
+            .Should().Be("Interface_InstrumentCalibrationOverdue");
+
+    [Fact]
+    public void PastDecommissioning_HoldsResults() =>
+        Instrument.ResultBlockKey(EquipmentStatus.Operational, Today, Today.AddDays(10), Today)
+            .Should().Be("Interface_InstrumentDecommissioned");
+}
+
+public sealed class TcpTransportTests
+{
+    [Fact]
+    public async Task PeerClosing_DropsTheLinkInsteadOfReadingNothingForever()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+
+        var link = new InstrumentInterface(Guid.NewGuid(), Guid.NewGuid(), InstrumentProtocol.AstmE1394,
+                                           InstrumentTransportKind.Tcp)
+        { Host = "127.0.0.1", TcpPort = port };
+
+        await using var transport = new TcpInstrumentTransport(link);
+        var dropped = 0;
+        transport.Disconnected += (_, _) => dropped++;
+
+        var accept = listener.AcceptTcpClientAsync();
+        (await transport.ConnectAsync()).Should().BeTrue();
+        using (var analyser = await accept) { }   // the analyser hangs up
+
+        var read = await transport.ReadAsync(new byte[64]);
+
+        read.Should().Be(0);
+        transport.IsConnected.Should().BeFalse();
+        dropped.Should().Be(1);
+
+        listener.Stop();
+    }
+}

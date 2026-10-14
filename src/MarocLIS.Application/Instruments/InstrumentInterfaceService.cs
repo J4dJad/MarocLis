@@ -108,6 +108,12 @@ public sealed record InterfaceRow(
 
     public bool HasRecentFailures => FailedToday > 0;
 
+    /// <summary>
+    /// Why the analyser itself may not produce results (out of service, retired, calibration
+    /// overdue), as a resource key — the link may be up while its results are all being held.
+    /// </summary>
+    public string? EquipmentBlockKey { get; init; }
+
     public MessageFormatSettings Format { get; init; } = MessageFormatSettings.Default;
 }
 

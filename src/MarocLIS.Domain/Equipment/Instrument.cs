@@ -122,6 +122,21 @@ public sealed class Instrument : AuditableAggregateRoot, ISoftDeletable, ISiteSc
         return Result.Success();
     }
 
+    /// <summary>
+    /// The same rule as <see cref="CanProduceResults"/>, from the bare facts, as the resource key an
+    /// analyser link reports when it holds results back — or null when the instrument may produce
+    /// them. Static so a screen reading a projection can say it without loading the entity.
+    /// </summary>
+    public static string? ResultBlockKey(EquipmentStatus status, DateOnly? decommissionedOn,
+                                         DateOnly? calibrationDue, DateOnly today) =>
+        status != EquipmentStatus.Operational ? $"Interface_InstrumentNotOperational_{status}"
+        : decommissionedOn is { } gone && gone <= today ? "Interface_InstrumentDecommissioned"
+        : calibrationDue is { } due && due < today ? "Interface_InstrumentCalibrationOverdue"
+        : null;
+
+    public string? ResultBlockKey(DateOnly today) =>
+        ResultBlockKey(Status, DecommissioningDate, NextCalibrationDue, today);
+
     // ---- Transitions ---------------------------------------------------------------------------
 
     public void PlaceOutOfService(string reason)

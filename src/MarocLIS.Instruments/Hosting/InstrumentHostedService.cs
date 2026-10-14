@@ -72,6 +72,11 @@ public sealed class InstrumentHostedService(
                 }
 
                 await ReconcileAsync(stoppingToken);
+
+                // A pass that went through clears the last failure. The host starts before the
+                // database is migrated, so the first pass after an update fails on the new
+                // columns; without this the banner kept that stale error for the whole session.
+                monitor.ClearHostError();
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -357,6 +362,11 @@ public sealed class InstrumentLinkMonitor
     internal void ReportHostError(string error)
     {
         lock (_gate) _hostError = error;
+    }
+
+    internal void ClearHostError()
+    {
+        lock (_gate) _hostError = null;
     }
 
     internal void ReportStarted(Guid interfaceId, string description)

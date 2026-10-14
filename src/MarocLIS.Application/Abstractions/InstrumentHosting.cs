@@ -74,6 +74,7 @@ public enum PreviewOutcome
     SpecimenAmbiguous,
     SpecimenNotUsable,
     OrderNotUsable,
+    InstrumentNotUsable,
     NoResults
 }
 

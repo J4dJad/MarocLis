@@ -29,7 +29,9 @@ public sealed partial class InstrumentMessagePreviewer(
     IRepository<LabOrder> orders,
     IRepository<AnalysisTest> analyses,
     IRepository<TestResult> results,
-    IRepository<Patient> patients)
+    IRepository<Patient> patients,
+    IRepository<Instrument> instruments,
+    IClock clock)
     : IInstrumentMessagePreviewer
 {
     public async Task<Result<MessagePreview>> PreviewAsync(
@@ -52,6 +54,11 @@ public sealed partial class InstrumentMessagePreviewer(
             .Select(i => i.Detail is null ? i.ResourceKey : $"{i.ResourceKey}\t{i.Detail}")
             .ToList();
 
+        // Said first: while the analyser itself may not produce results, nothing below is stored.
+        var instrument = await instruments.GetByIdAsync(link.InstrumentId, ct);
+        var blocked = instrument?.ResultBlockKey(clock.Today);
+        if (blocked is not null) issues.Insert(0, $"{blocked}\t{instrument!.Code}");
+
         if (message.Kind == InstrumentMessageKind.Query && message.QueriedSpecimenIds.Count > 0)
             issues.Add($"Interface_PreviewQuery\t{string.Join(", ", message.QueriedSpecimenIds)}");
 
@@ -59,6 +66,13 @@ public sealed partial class InstrumentMessagePreviewer(
 
         foreach (var specimen in message.Specimens)
             lines.AddRange(await PreviewSpecimenAsync(link, unmappedNonNumeric, specimen, ct));
+
+        if (blocked is not null)
+            lines = [.. lines.Select(l => l.Outcome is PreviewOutcome.WouldStore
+                                                  or PreviewOutcome.WouldStoreControl
+                                                  or PreviewOutcome.WouldMarkNotDone
+                ? l with { Outcome = PreviewOutcome.InstrumentNotUsable }
+                : l)];
 
         return Result.Success(new MessagePreview(issues, lines));
     }

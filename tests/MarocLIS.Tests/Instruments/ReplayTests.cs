@@ -200,6 +200,7 @@ public sealed class ReplayRefusalTests
             new ThrowingRepository<Patient>(),
             new ThrowingRepository<QcTarget>(),
             new ThrowingRepository<QcResult>(),
+            new ThrowingRepository<Instrument>(),
             log,
             new ThrowingUnitOfWork(),
             new FixedClock(),

@@ -128,6 +128,9 @@ public sealed class SerialInstrumentTransport : IInstrumentTransport
         catch (Exception ex) when (ex is IOException or InvalidOperationException
                                       or ObjectDisposedException)
         {
+            // Closed so the driver reopens it on its next pass, with back-off. Left open, an
+            // unplugged USB adapter threw on every read and the driver spun on it.
+            await DisconnectAsync();
             Disconnected?.Invoke(this, ex.Message);
             return 0;
         }
@@ -237,7 +240,7 @@ public sealed class TcpInstrumentTransport : IInstrumentTransport
         try
         {
             var read = await _stream.ReadAsync(buffer, ct);
-            if (read == 0) Disconnected?.Invoke(this, "Peer closed the connection");
+            if (read == 0) await DropAsync("Peer closed the connection");
             return read;
         }
         catch (OperationCanceledException)
@@ -246,9 +249,24 @@ public sealed class TcpInstrumentTransport : IInstrumentTransport
         }
         catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
         {
-            Disconnected?.Invoke(this, ex.Message);
+            await DropAsync(ex.Message);
             return 0;
         }
+    }
+
+    /// <summary>
+    /// Closes the socket when the analyser has gone, so the driver's next pass reconnects.
+    /// <para>
+    /// The socket used to be left open. <see cref="TcpClient.Connected"/> stays true after the
+    /// peer closes, so the driver kept reading a stream that returned nothing at once — a tight
+    /// loop that logged "link dropped" without pause and filled the disk with hundreds of
+    /// megabytes of log in an hour, every time an analyser closed its connection.
+    /// </para>
+    /// </summary>
+    private async Task DropAsync(string reason)
+    {
+        await DisconnectAsync();
+        Disconnected?.Invoke(this, reason);
     }
 
     public async Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
@@ -262,7 +280,7 @@ public sealed class TcpInstrumentTransport : IInstrumentTransport
         }
         catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
         {
-            Disconnected?.Invoke(this, ex.Message);
+            await DropAsync(ex.Message);
         }
     }
 
