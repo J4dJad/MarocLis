@@ -95,13 +95,25 @@ public sealed class LabelPrinter(
             document.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
             document.OriginAtMargins = false;
 
+            var label = new SizeF(widthHundredths, heightHundredths);
             var index = 0;
 
             document.PrintPage += (_, e) =>
             {
-                if (e.Graphics is not null) DrawLabel(e.Graphics, labels[index], e.PageBounds);
+                if (e.Graphics is null) { e.HasMorePages = false; return; }
 
-                index++;
+                // A label printer takes the custom size and gives one label per page. A printer that
+                // ignores it (an office printer, or "Microsoft Print to PDF") gives an A4 page; the
+                // labels then go down the page at their true size instead of one per sheet.
+                var slots = LabelSheet.Slots(e.PageBounds.Size, label);
+
+                foreach (var slot in slots)
+                {
+                    if (index >= labels.Count) break;
+                    DrawLabel(e.Graphics, labels[index], slot);
+                    index++;
+                }
+
                 e.HasMorePages = index < labels.Count;
             };
 
@@ -117,75 +129,161 @@ public sealed class LabelPrinter(
     }
 
     /// <summary>
-    /// Draws one label: barcode first, then the identity that lets a human check it.
+    /// Draws one label in <paramref name="area"/> (hundredths of an inch), with the layout of the
+    /// PDF labels: cap colour, patient, tube n/m, barcode, request number, analyses, container.
     /// <para>
-    /// The barcode gets the top two thirds because it is the part a scanner must read and the part
-    /// that degrades on a curved tube. The patient's name and date of birth are underneath because
-    /// they are the second identity check, performed by a person who is already holding the tube.
+    /// The two must look the same: an operator who prints a test label from the PDF and then from
+    /// the printer should not have to learn a second label.
     /// </para>
     /// </summary>
-    private void DrawLabel(Graphics graphics, SampleLabel label, Rectangle bounds)
+    private void DrawLabel(Graphics graphics, SampleLabel label, RectangleF area)
     {
-        graphics.Clear(Color.White);
+        graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
-        var barcodeHeight = (int)(bounds.Height * 0.52f);
-        var pad = Math.Max(2, (int)(bounds.Width * 0.02f));
+        using (var white = new SolidBrush(Color.White)) graphics.FillRectangle(white, area);
+
+        var pad = labelOptions.MarginMm / 25.4f * 100f;
+        var left = area.Left + pad;
+        var right = area.Right - pad;
+        var top = area.Top + pad;
+        var width = right - left;
+
+        using var nameFont = new Font("Arial", 7.5f, FontStyle.Bold);
+        using var smallFont = new Font("Arial", 6f);
+        using var markerFont = new Font("Arial", 7f, FontStyle.Bold);
+        using var urgentFont = new Font("Arial", 6.5f, FontStyle.Bold);
+        using var accessionFont = new Font("Arial", 6.5f, FontStyle.Bold);
+        using var detailFont = new Font("Arial", 5.5f);
+        using var grey = new SolidBrush(Color.FromArgb(0x61, 0x61, 0x61));
+
+        // Header: the cap colour, then the patient, then "tube n of m" on the right.
+        var marker = $"{label.SequenceInOrder}/{label.TotalSamples}";
+        var markerWidth = graphics.MeasureString(marker, markerFont).Width;
+        var showDob = labelOptions.PrintDateOfBirth && label.DateOfBirth is not null;
+        var headerHeight = LineHeight(nameFont) + (showDob ? LineHeight(smallFont) : 0f);
+
+        using (var cap = new SolidBrush(CapColour(label.ContainerColourHex)))
+            graphics.FillRectangle(cap, left, top, 3f / 25.4f * 100f, headerHeight);
+
+        var textLeft = left + 3f / 25.4f * 100f + 1.5f;
+        var textWidth = right - markerWidth - textLeft;
+
+        DrawLine(graphics, Shorten(label.PatientName, 26), nameFont, Brushes.Black, textLeft, top, textWidth);
+        if (showDob)
+            DrawLine(graphics, $"{label.DateOfBirth:dd/MM/yyyy}", smallFont, Brushes.Black,
+                     textLeft, top + LineHeight(nameFont), textWidth);
+
+        graphics.DrawString(marker, markerFont, Brushes.Black, right - markerWidth, top);
+        if (label.IsUrgent)
+        {
+            var urgentWidth = graphics.MeasureString("URGENT", urgentFont).Width;
+            graphics.DrawString("URGENT", urgentFont, Brushes.Black, right - urgentWidth,
+                                top + LineHeight(markerFont));
+        }
+
+        var y = top + headerHeight + 2f;
+
+        // Barcode at print resolution: a bitmap scaled up at draw time gets soft edges, and soft
+        // edges are what a scanner fails on.
+        var barcodeHeight = (labelOptions.PrintHumanReadableBarcode ? 8.5f : 7f) / 25.4f * 100f;
 
         try
         {
-            // Rendered at print resolution rather than screen resolution: a barcode bitmap scaled up
-            // at draw time gets soft edges, and soft edges are what a scanner fails on.
             var png = renderer.RenderBarcodeImage(label.Barcode,
-                                                   widthPx: Math.Max(bounds.Width - 2 * pad, 200),
-                                                   heightPx: Math.Max(barcodeHeight - pad, 60));
+                widthPx: Math.Max(200, (int)(width / 100f * graphics.DpiX)),
+                heightPx: Math.Max(60, (int)(barcodeHeight / 100f * graphics.DpiY)));
 
             using var stream = new MemoryStream(png);
             using var barcode = Image.FromStream(stream);
 
-            graphics.DrawImage(barcode, pad, pad, bounds.Width - 2 * pad, barcodeHeight - pad);
+            var interpolation = graphics.InterpolationMode;
+            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+            graphics.DrawImage(barcode, left, y, width, barcodeHeight);
+            graphics.InterpolationMode = interpolation;
         }
         catch (Exception ex)
         {
             // A label without a barcode is worse than useless — it looks valid and cannot be
             // scanned — so the failure is drawn onto the label itself rather than swallowed.
             logger?.LogError(ex, "Rendering the barcode for {Barcode} failed.", label.Barcode);
-
-            using var warningFont = new Font(FontFamily.GenericSansSerif, 6f, FontStyle.Bold);
-            graphics.DrawString("BARCODE ERROR", warningFont, Brushes.Black, pad, pad);
+            graphics.DrawString("BARCODE ERROR", accessionFont, Brushes.Black, left, y);
         }
 
-        var y = barcodeHeight;
+        y += barcodeHeight + 1f;
 
-        using var codeFont = new Font(FontFamily.GenericMonospace, 6.5f, FontStyle.Bold);
-        using var nameFont = new Font(FontFamily.GenericSansSerif, 6f, FontStyle.Bold);
-        using var detailFont = new Font(FontFamily.GenericSansSerif, 5.5f);
+        // Request number on the left, print time on the right.
+        var printed = $"{label.PrintedAt:dd/MM HH:mm}";
+        var printedWidth = graphics.MeasureString(printed, detailFont).Width;
 
-        // Latin script and digits throughout, deliberately: a label is transcribed by hand and read
-        // by a scanner, and both go wrong when the digits are not 0-9. This mirrors the rule the
-        // rest of the application applies to barcodes and record numbers.
-        graphics.DrawString(label.Barcode, codeFont, Brushes.Black, pad, y);
-        y += codeFont.Height - 1;
+        DrawLine(graphics, label.AccessionNumber, accessionFont, Brushes.Black, left, y, width - printedWidth);
+        graphics.DrawString(printed, detailFont, Brushes.Black, right - printedWidth, y + 1f);
+        y += LineHeight(accessionFont);
 
-        graphics.DrawString(Shorten(label.PatientName, 28), nameFont, Brushes.Black, pad, y);
-        y += nameFont.Height - 1;
-
-        var detail = label.DateOfBirth is { } dob
-            ? $"{dob:dd/MM/yyyy}  {label.SequenceInOrder}/{label.TotalSamples}  {label.ContainerName}"
-            : $"{label.SequenceInOrder}/{label.TotalSamples}  {label.ContainerName}";
-
-        graphics.DrawString(Shorten(detail, 34), detailFont, Brushes.Black, pad, y);
-
-        if (label.IsUrgent)
+        if (labelOptions.PrintAnalysisCodes && label.AnalysisCodes.Count > 0)
         {
-            using var urgentFont = new Font(FontFamily.GenericSansSerif, 6f, FontStyle.Bold);
-
-            var size = graphics.MeasureString("URGENT", urgentFont);
-
-            graphics.DrawString("URGENT", urgentFont, Brushes.Black,
-                                 bounds.Width - size.Width - pad, barcodeHeight);
+            DrawLine(graphics, Shorten(string.Join(" ", label.AnalysisCodes), 44), detailFont, grey, left, y, width);
+            y += LineHeight(detailFont);
         }
+
+        DrawLine(graphics, Shorten(label.ContainerName, 34), detailFont, Brushes.Black, left, y, width);
+    }
+
+    /// <summary>Line height in hundredths of an inch, which is the unit a printer page uses.</summary>
+    private static float LineHeight(Font font) => font.SizeInPoints / 72f * 100f * 1.18f;
+
+    private static void DrawLine(Graphics graphics, string text, Font font, Brush brush,
+                                 float x, float y, float width)
+    {
+        using var format = new StringFormat(StringFormatFlags.NoWrap) { Trimming = StringTrimming.EllipsisCharacter };
+        graphics.DrawString(text, font, brush, new RectangleF(x, y, Math.Max(1f, width), LineHeight(font) + 2f), format);
+    }
+
+    /// <summary>The tube cap colour from the catalogue, grey when it is missing or malformed.</summary>
+    internal static Color CapColour(string? hex)
+    {
+        var grey = Color.FromArgb(0x9E, 0x9E, 0x9E);
+        if (string.IsNullOrWhiteSpace(hex)) return grey;
+
+        var value = hex.Trim().TrimStart('#');
+        if (value.Length == 8) value = value[2..];
+        if (value.Length != 6) return grey;
+
+        return int.TryParse(value, System.Globalization.NumberStyles.HexNumber, null, out var rgb)
+            ? Color.FromArgb((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF)
+            : grey;
     }
 
     private static string Shorten(string value, int maximum) =>
         value.Length <= maximum ? value : value[..(maximum - 1)] + "…";
+}
+
+/// <summary>
+/// Where labels go on a printed page, in hundredths of an inch.
+/// </summary>
+internal static class LabelSheet
+{
+    /// <summary>Gap between labels, and the offset from the edge, on a sheet that is not label stock.</summary>
+    private const float SheetGap = 12f;
+
+    /// <summary>
+    /// One slot filling the page when the page is the label (the printer took the custom size);
+    /// otherwise as many label-sized slots as fit down the page, then across.
+    /// </summary>
+    internal static IReadOnlyList<RectangleF> Slots(SizeF page, SizeF label)
+    {
+        // Within a few millimetres of the label size: the printer honoured it.
+        if (page.Width < label.Width * 1.5f && page.Height < label.Height * 1.5f)
+            return [new RectangleF(0f, 0f, page.Width, page.Height)];
+
+        var slots = new List<RectangleF>();
+
+        for (var x = SheetGap * 2; x + label.Width <= page.Width - SheetGap; x += label.Width + SheetGap)
+        {
+            for (var y = SheetGap * 2; y + label.Height <= page.Height - SheetGap; y += label.Height + SheetGap)
+                slots.Add(new RectangleF(x, y, label.Width, label.Height));
+        }
+
+        // A page smaller than one label still gets one, rather than an endless run of blank pages.
+        return slots.Count > 0 ? slots : [new RectangleF(0f, 0f, page.Width, page.Height)];
+    }
 }
