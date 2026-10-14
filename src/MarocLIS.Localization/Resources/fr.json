@@ -758,6 +758,12 @@
   },
 
   "Report": {
+    "Issued": "Compte rendu {0} v{1} émis",
+    "LastValidatedAt": "Dernière validation",
+    "AwaitingAnalyses": "Analyses en attente",
+    "ValidatedResults": "Résultats validés",
+    "PendingRelease": "À émettre — {0} dossier(s) avec des résultats validés sur aucun compte rendu",
+    "Issue": "Émettre le compte rendu",
     "Title": "Compte rendu",
     "Plural": "Comptes rendus",
     "Version": "Version",

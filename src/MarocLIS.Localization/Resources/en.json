@@ -758,6 +758,12 @@
   },
 
   "Report": {
+    "Issued": "Report {0} v{1} issued",
+    "LastValidatedAt": "Last validation",
+    "AwaitingAnalyses": "Analyses pending",
+    "ValidatedResults": "Validated results",
+    "PendingRelease": "To issue — {0} order(s) with validated results on no report",
+    "Issue": "Issue report",
     "Title": "Report",
     "Plural": "Reports",
     "Version": "Version",

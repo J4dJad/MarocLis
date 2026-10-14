@@ -44,16 +44,22 @@ public sealed class ReportRegisterView : LocalizedView
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _heading = new();
 
+    private readonly DataGridView _pending = UiTheme.Grid();
+    private readonly Label _pendingHeading = new();
+    private readonly Panel _pendingSection = new() { Dock = DockStyle.Top, Height = 170 };
+
     private readonly DataGridView _register = UiTheme.Grid();
     private readonly DataGridView _deliveries = UiTheme.Grid();
     private readonly Label _deliveryHeading = new();
 
+    private readonly Button _issue = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _reprint = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _recordDelivery = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _amend = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
 
     private IReadOnlyList<ReportRegisterRow> _rows = [];
+    private IReadOnlyList<PendingReportRow> _pendingRows = [];
 
     public ReportRegisterView(ReportReleaseService reports, IDocumentOutput documents, IUserDialogs dialogs,
                               ICurrentUser currentUser,
@@ -102,6 +108,7 @@ public sealed class ReportRegisterView : LocalizedView
 
         bar.Controls.AddRange([_heading, _search, _onlyUndelivered, _window, _refresh]);
 
+        BuildPendingColumns();
         BuildRegisterColumns();
         BuildDeliveryColumns();
 
@@ -109,12 +116,30 @@ public sealed class ReportRegisterView : LocalizedView
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            SplitterDistance = 330,
+            SplitterDistance = 440,
             SplitterWidth = 6,
             BackColor = UiTheme.Surface
         };
 
+        // Validated results that no report carries yet, above the register: the validation worklist
+        // drops an order once nothing on it awaits a biologist, so this is the only place a partial
+        // validation can still be released. Hidden when there is nothing to release.
+        _pendingHeading.Font = UiTheme.SmallBold;
+        _pendingHeading.ForeColor = UiTheme.Abnormal;
+        _pendingHeading.Dock = DockStyle.Top;
+        _pendingHeading.Height = 22;
+
+        _pending.Dock = DockStyle.Fill;
+
+        var gap = new Panel { Dock = DockStyle.Bottom, Height = 8, BackColor = UiTheme.Surface };
+
+        _pendingSection.Controls.Add(_pending);
+        _pendingSection.Controls.Add(gap);
+        _pendingSection.Controls.Add(_pendingHeading);
+        _pendingSection.Visible = false;
+
         split.Panel1.Controls.Add(_register);
+        split.Panel1.Controls.Add(_pendingSection);
 
         _deliveryHeading.Font = UiTheme.SmallBold;
         _deliveryHeading.ForeColor = UiTheme.TextSecondary;
@@ -126,19 +151,44 @@ public sealed class ReportRegisterView : LocalizedView
 
         var actions = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = UiTheme.Surface };
 
-        _reprint.Bounds = new Rectangle(0, 10, 200, UiTheme.ButtonHeight);
-        _recordDelivery.Bounds = new Rectangle(210, 10, 220, UiTheme.ButtonHeight);
-        _amend.Bounds = new Rectangle(440, 10, 220, UiTheme.ButtonHeight);
+        _issue.Bounds = new Rectangle(0, 10, 220, UiTheme.ButtonHeight);
+        _reprint.Bounds = new Rectangle(230, 10, 200, UiTheme.ButtonHeight);
+        _recordDelivery.Bounds = new Rectangle(440, 10, 220, UiTheme.ButtonHeight);
+        _amend.Bounds = new Rectangle(670, 10, 220, UiTheme.ButtonHeight);
 
         _status.Font = UiTheme.Small;
         _status.AutoSize = false;
-        _status.Bounds = new Rectangle(672, 16, 700, 20);
+        _status.Bounds = new Rectangle(902, 16, 600, 20);
 
-        actions.Controls.AddRange([_reprint, _recordDelivery, _amend, _status]);
+        actions.Controls.AddRange([_issue, _reprint, _recordDelivery, _amend, _status]);
 
         Controls.Add(split);
         Controls.Add(actions);
         Controls.Add(bar);
+    }
+
+    private void BuildPendingColumns()
+    {
+        void Add(string name, int weight, Font? font = null, bool right = false)
+            => _pending.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = name, FillWeight = weight, ReadOnly = true,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Font = font ?? UiTheme.Body,
+                    Alignment = right ? DataGridViewContentAlignment.MiddleRight
+                                      : DataGridViewContentAlignment.MiddleLeft
+                }
+            });
+
+        Add("accession", 11, UiTheme.MonospaceBold);
+        Add("patient", 20);
+        Add("priority", 8, UiTheme.SmallBold);
+        Add("validated", 9, UiTheme.MonospaceBold, right: true);
+        Add("awaiting", 9, UiTheme.MonospaceBold, right: true);
+        Add("validatedat", 11, UiTheme.Monospace);
+        Add("kind", 14, UiTheme.SmallBold);
     }
 
     private void BuildRegisterColumns()
@@ -199,6 +249,10 @@ public sealed class ReportRegisterView : LocalizedView
         _window.SelectedIndexChanged += async (_, _) => await ActivateAsync();
         _refresh.Click += async (_, _) => await ActivateAsync();
 
+        _pending.SelectionChanged += (_, _) => RefreshActions();
+        _pending.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _issue.Enabled) await IssueAsync(); };
+        _issue.Click += async (_, _) => await IssueAsync();
+
         _register.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDeliveriesAsync());
         _register.CellFormatting += OnRegisterFormatting;
         _register.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _reprint.Enabled) await ReprintAsync(); };
@@ -242,6 +296,7 @@ public sealed class ReportRegisterView : LocalizedView
         _onlyUndelivered.Text = T("Report.OnlyUndelivered");
         _refresh.Text = T("Action.Refresh");
 
+        _issue.Text = T("Report.Issue");
         _reprint.Text = T("Report.Reprint");
         _recordDelivery.Text = T("Report.RecordDelivery");
         _amend.Text = T("Report.IssueAmendment");
@@ -263,6 +318,17 @@ public sealed class ReportRegisterView : LocalizedView
             _register.Column("flags").HeaderText = T("Field.Status");
         }
 
+        if (_pending.Columns.Count > 0)
+        {
+            _pending.Column("accession").HeaderText = T("Order.AccessionNumber");
+            _pending.Column("patient").HeaderText = T("Patient.Title");
+            _pending.Column("priority").HeaderText = T("Field.Priority");
+            _pending.Column("validated").HeaderText = T("Report.ValidatedResults");
+            _pending.Column("awaiting").HeaderText = T("Report.AwaitingAnalyses");
+            _pending.Column("validatedat").HeaderText = T("Report.LastValidatedAt");
+            _pending.Column("kind").HeaderText = T("Report.Completeness");
+        }
+
         if (_deliveries.Columns.Count > 0)
         {
             _deliveries.Column("when").HeaderText = T("Field.DateTime");
@@ -275,6 +341,7 @@ public sealed class ReportRegisterView : LocalizedView
         }
 
         if (_rows.Count > 0) Render();
+        RenderPending();
         RefreshActions();
     }
 
@@ -298,6 +365,12 @@ public sealed class ReportRegisterView : LocalizedView
     {
         try
         {
+            var search = string.IsNullOrWhiteSpace(_search.Text) ? null : _search.Text.Trim();
+            var pending = await _reports.GetPendingReleaseAsync(search, ct);
+
+            _pendingRows = pending.IsSuccess ? pending.Value : [];
+            RenderPending();
+
             var result = await _reports.GetRegisterAsync(
                 string.IsNullOrWhiteSpace(_search.Text) ? null : _search.Text.Trim(),
                 _onlyUndelivered.Checked, SelectedWindow, ct);
@@ -394,6 +467,60 @@ public sealed class ReportRegisterView : LocalizedView
         RefreshActions();
     }
 
+    private void RenderPending()
+    {
+        var language = Localizer.CurrentLanguage;
+        var selected = SelectedPending?.LabOrderId;
+
+        _pending.SuspendLayout();
+        _pending.Rows.Clear();
+
+        foreach (var row in _pendingRows)
+        {
+            var kind = T($"ReportCompleteness.{(row.AwaitingAnalyses == 0 ? "Final" : "Partial")}")
+                       + (row.ReleasedVersions > 0 ? $" · v{row.ReleasedVersions + 1}" : string.Empty);
+
+            var index = _pending.Rows.Add(
+                row.AccessionNumber,
+                language == AppLanguage.Arabic && row.PatientNameArabic is { Length: > 0 } arabic
+                    ? arabic
+                    : row.PatientName,
+                row.Priority == Domain.Orders.OrderPriority.Routine ? string.Empty : T($"Priority.{row.Priority}"),
+                row.ValidatedResults.ToString(),
+                row.AwaitingAnalyses.ToString(),
+                row.LastValidatedAt?.ToLocalTime().ToString("dd/MM/yy HH:mm") ?? string.Empty,
+                kind);
+
+            var grid = _pending.Rows[index];
+            grid.Tag = row;
+
+            if (row.Priority != Domain.Orders.OrderPriority.Routine)
+                grid.DefaultCellStyle.ForeColor = UiTheme.Critical;
+        }
+
+        _pending.ResumeLayout(performLayout: true);
+
+        if (selected is { } id)
+        {
+            foreach (DataGridViewRow row in _pending.Rows)
+            {
+                if (row.Tag is PendingReportRow candidate && candidate.LabOrderId == id)
+                {
+                    row.Selected = true;
+                    break;
+                }
+            }
+        }
+
+        _pendingHeading.Text = T("Report.PendingRelease", _pendingRows.Count);
+        _pendingSection.Visible = _pendingRows.Count > 0;
+
+        RefreshActions();
+    }
+
+    private PendingReportRow? SelectedPending =>
+        _pendingSection.Visible ? _pending.CurrentRow?.Tag as PendingReportRow : null;
+
     private async Task LoadDeliveriesAsync(CancellationToken ct = default)
     {
         _deliveries.Rows.Clear();
@@ -451,6 +578,8 @@ public sealed class ReportRegisterView : LocalizedView
 
     private void RefreshActions()
     {
+        _issue.Enabled = SelectedPending is not null && _currentUser.Has(Permissions.Reports.Print);
+
         var row = Selected;
 
         _reprint.Enabled = row is { HasStoredPdf: true }
@@ -494,6 +623,54 @@ public sealed class ReportRegisterView : LocalizedView
         {
             _logger?.LogError(ex, "Opening the stored report failed.");
             _dialogs.Warn(T("Message.UnexpectedError"), T("Report.Reprint"));
+        }
+    }
+
+    /// <summary>
+    /// Releases the selected order's validated results: partial while analyses are still awaited,
+    /// final once none are. The same release the validation screen offers.
+    /// </summary>
+    private async Task IssueAsync()
+    {
+        if (SelectedPending is not { } row) return;
+
+        if (!_dialogs.Confirm($"{T("Report.Title")} — {row.AccessionNumber}")) return;
+
+        _issue.Enabled = false;
+        UseWaitCursor = true;
+
+        try
+        {
+            var released = await _reports.ReleaseAsync(row.LabOrderId);
+
+            if (released.IsFailure) { _dialogs.ShowFailure(released, T("Report.Issue")); return; }
+
+            try
+            {
+                var opened = await _documents.OpenAsync(released.Value.Pdf, "pdf");
+
+                if (opened.IsFailure) _dialogs.ShowFailure(opened, T("Report.Issue"));
+            }
+            catch (Exception ex)
+            {
+                // The report exists either way; it can be reprinted from the register.
+                _logger?.LogError(ex, "Opening the released report failed.");
+            }
+
+            _status.ForeColor = UiTheme.Normal;
+            _status.Text = T("Report.Issued", row.AccessionNumber, released.Value.VersionNumber);
+
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Releasing the report failed.");
+            _dialogs.Error(T("Message.UnexpectedError"));
+        }
+        finally
+        {
+            UseWaitCursor = false;
+            RefreshActions();
         }
     }
 

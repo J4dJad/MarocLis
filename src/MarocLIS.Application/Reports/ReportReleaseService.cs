@@ -259,9 +259,15 @@ public sealed class ReportReleaseService(
         // A *partial* report is different: it is superseded by the complete one in the normal
         // course of a file finishing, and calling that an amendment would make every ordinary
         // two-stage release look like a correction.
+        //
+        // So a delivered partial followed by a version that carries newly validated results is the
+        // file completing, not a correction: the recipient's copy is not contradicted, only extended.
+        // Reissuing a delivered partial with nothing new on it is still a reissue.
+        var addsResults = releasable.Any(r => r.Status == TestResultStatus.Validated);
+
         if (amendmentKind == ReportAmendmentKind.None && previousVersion is not null
-            && (previousVersion.WasDelivered
-                || previousVersion.Completeness == ReportCompleteness.Final))
+            && (previousVersion.Completeness == ReportCompleteness.Final
+                || (previousVersion.WasDelivered && !addsResults)))
             return Result.Failure<ReleasedReport>(
                 Error.Regulatory("Report_ReissueRequiresAmendmentReason"));
 
@@ -356,6 +362,30 @@ public sealed class ReportReleaseService(
 
         await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.Search, recordCount: rows.Count,
                                       queryDescription: "Registre des comptes rendus", ct: ct);
+
+        return Result.Success(rows);
+    }
+
+    /// <summary>
+    /// Orders with biologically validated results that are on no report yet.
+    /// <para>
+    /// The validation worklist drops an order as soon as nothing on it awaits a biologist, so an
+    /// order validated in part, with its other analyses still on the bench, used to be on no screen
+    /// at all: validated, unreleased, and impossible to release until the rest caught up.
+    /// </para>
+    /// </summary>
+    public async Task<Result<IReadOnlyList<PendingReportRow>>> GetPendingReleaseAsync(
+        string? search = null, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Reports.View);
+        if (permitted.IsFailure)
+            return Result.Failure<IReadOnlyList<PendingReportRow>>(permitted.FirstError);
+
+        var rows = await reportQueries.GetPendingReleaseAsync(
+            currentUser.SiteId, string.IsNullOrWhiteSpace(search) ? null : search.Trim(), ct);
+
+        await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.Search, recordCount: rows.Count,
+                                      queryDescription: "Comptes rendus à émettre", ct: ct);
 
         return Result.Success(rows);
     }
@@ -685,10 +715,31 @@ public interface IReportQueries
                                                              bool onlyUndelivered, DateOnly from,
                                                              CancellationToken ct = default);
 
+    /// <summary>
+    /// Orders on a site carrying validated results that no report includes yet, urgent first.
+    /// </summary>
+    Task<IReadOnlyList<PendingReportRow>> GetPendingReleaseAsync(Guid siteId, string? search,
+                                                                 CancellationToken ct = default);
+
     /// <summary>The deliveries recorded against one report.</summary>
     Task<IReadOnlyList<ReportDeliveryRow>> GetDeliveriesAsync(Guid reportId,
                                                                CancellationToken ct = default);
 }
+
+/// <summary>An order with validated results waiting for a report.</summary>
+public sealed record PendingReportRow(
+    Guid LabOrderId,
+    string AccessionNumber,
+    string PatientName,
+    string? PatientNameArabic,
+    OrderPriority Priority,
+    /// <summary>Validated results not yet on a report.</summary>
+    int ValidatedResults,
+    /// <summary>Analyses still short of biological validation; zero means the report is final.</summary>
+    int AwaitingAnalyses,
+    DateTimeOffset? LastValidatedAt,
+    /// <summary>Versions already released for the order; above zero, this one completes a partial.</summary>
+    int ReleasedVersions);
 
 /// <summary>One released version in the register.</summary>
 public sealed record ReportRegisterRow(

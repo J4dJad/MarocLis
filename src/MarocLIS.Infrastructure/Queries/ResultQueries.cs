@@ -328,6 +328,67 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
                                       && r.AccessTokenExpiresAt != null
                                       && r.AccessTokenExpiresAt > now, ct);
 
+    public async Task<IReadOnlyList<PendingReportRow>> GetPendingReleaseAsync(
+        Guid siteId, string? search, CancellationToken ct = default)
+    {
+        var validated = db.TestResults.AsNoTracking()
+            .Where(r => r.SiteId == siteId && r.Status == TestResultStatus.Validated);
+
+        var orders = db.LabOrders.AsNoTracking()
+            .Where(o => o.SiteId == siteId && o.Status != LabOrderStatus.Cancelled
+                        && validated.Any(r => r.LabOrderId == o.Id));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var pattern = $"%{search.Trim()}%";
+
+            orders = orders.Where(o =>
+                EF.Functions.Like(o.AccessionNumber, pattern)
+                || db.Patients.Any(p => p.Id == o.PatientId
+                                        && (EF.Functions.Like(p.SearchKey, pattern)
+                                            || EF.Functions.Like(p.MedicalRecordNumber, pattern))));
+        }
+
+        var rows = await orders
+            .Join(db.Patients.AsNoTracking(), o => o.PatientId, p => p.Id, (o, p) => new
+            {
+                o.Id,
+                o.AccessionNumber,
+                o.Priority,
+                o.RegisteredAt,
+                p.LastName,
+                p.FirstName,
+                p.LastNameArabic,
+                p.FirstNameArabic,
+                ValidatedResults = validated.Count(r => r.LabOrderId == o.Id),
+                LastValidatedAt = validated.Where(r => r.LabOrderId == o.Id).Max(r => r.ValidatedAt),
+                AwaitingAnalyses = db.LabOrderItems.Count(i => i.LabOrderId == o.Id
+                                                              && i.Status != LabOrderItemStatus.Cancelled
+                                                              && i.Status != LabOrderItemStatus.Validated
+                                                              && i.Status != LabOrderItemStatus.Reported),
+                ReleasedVersions = db.LabReports.Count(r => r.LabOrderId == o.Id)
+            })
+            .OrderByDescending(x => x.Priority)
+            .ThenBy(x => x.RegisteredAt)
+            .Take(500)
+            .ToListAsync(ct);
+
+        return rows
+            .Select(x => new PendingReportRow(
+                x.Id,
+                x.AccessionNumber,
+                $"{x.LastName} {x.FirstName}".Trim(),
+                string.IsNullOrWhiteSpace(x.LastNameArabic) && string.IsNullOrWhiteSpace(x.FirstNameArabic)
+                    ? null
+                    : $"{x.LastNameArabic} {x.FirstNameArabic}".Trim(),
+                x.Priority,
+                x.ValidatedResults,
+                x.AwaitingAnalyses,
+                x.LastValidatedAt,
+                x.ReleasedVersions))
+            .ToList();
+    }
+
     /// <summary>
     /// The register of released versions.
     /// <para>
