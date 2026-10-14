@@ -529,7 +529,13 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
                 var text = Localizer[parts[0]];
 
-                return parts.Length == 2 ? $"{text} ({parts[1]})" : text;
+                if (parts.Length < 2) return text;
+
+                // A message that names its value ("La valeur {0} est…") takes the detail in place;
+                // the others get it after, in brackets.
+                return text.Contains("{0}", StringComparison.Ordinal)
+                    ? text.Replace("{0}", parts[1], StringComparison.Ordinal)
+                    : $"{text} ({parts[1]})";
             });
 
         return string.Join(" · ", lines);
