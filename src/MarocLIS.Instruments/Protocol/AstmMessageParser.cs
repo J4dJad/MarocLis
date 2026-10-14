@@ -172,7 +172,7 @@ public static class AstmMessageParser
                         RawTestId = Field(fields, 3),
                         ResultType = resultType,
                         IsExcluded = !format.Accepts(resultType),
-                        Value = Field(fields, 4)?.Trim(),
+                        Value = ValueFrom(Field(fields, 4), delimiters),
                         Unit = Field(fields, 5)?.Trim(),
                         ReferenceRange = Field(fields, 6)?.Trim(),
                         AbnormalFlag = Field(fields, 7)?.Trim(),
@@ -375,6 +375,22 @@ public static class AstmMessageParser
 
     private static string[] Component(string? field, AstmDelimiters delimiters) =>
         string.IsNullOrEmpty(field) ? [] : field.Split(delimiters.Component);
+
+    /// <summary>
+    /// The measurement from R-4. Usually the whole field, but Roche cobas e-series put components
+    /// in it: "119.67^" for a quantitative result, "-1^0.459" (interpretation, then cut-off index)
+    /// for a qualitative one. The first non-empty component is the value; read whole, "119.67^"
+    /// was refused as not a number.
+    /// </summary>
+    private static string? ValueFrom(string? field, AstmDelimiters delimiters)
+    {
+        if (field is null) return null;
+
+        var parts = Component(field, delimiters);
+        if (parts.Length <= 1) return field.Trim();
+
+        return parts.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p))?.Trim() ?? string.Empty;
+    }
 
     /// <summary>
     /// Pulls the test code out of a universal test identifier. The standard puts the local code in

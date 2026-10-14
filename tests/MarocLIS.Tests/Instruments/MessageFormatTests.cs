@@ -414,3 +414,27 @@ public sealed class TcpTransportTests
         listener.Stop();
     }
 }
+
+public sealed class RocheValueComponentTests
+{
+    [Theory]
+    [InlineData("119.67^", "119.67")]
+    [InlineData("-1^0.459", "-1")]
+    [InlineData("5.4", "5.4")]
+    public void E411_ValueIsTheFirstComponent(string field, string expected)
+    {
+        // Captured from a cobas e 411: "R|1|^^^GLY//pre-diluted|119.67^|||H||F||admin|||E1".
+        var message = AstmMessageParser.Parse(
+        [
+            @"H|\^&|||cobas-e411^1|||||host|RSUPL^REAL|P|1",
+            "P|1",
+            "O|1|0000000040|1^50001^001^^S1^SC|^^^GLY^|R||||||N||||1||||||20261014033728|||F",
+            $"R|1|^^^GLY//pre-diluted|{field}|||H||F||admin|||E1",
+            "L|1|N"
+        ], new InstrumentMessageFormat { TestCodeSuffix = "/" });
+
+        var result = message.Specimens.Single().Results.Single();
+        result.Value.Should().Be(expected);
+        result.InstrumentTestCode.Should().Be("GLY");
+    }
+}
