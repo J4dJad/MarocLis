@@ -29,6 +29,9 @@ public sealed record ResultEntryRow
     public bool IsCalculated { get; init; }
     public bool IsReadOnly { get; init; }
 
+    /// <summary>The tube this value comes from is not received yet: nothing can be entered.</summary>
+    public bool IsAwaitingSample { get; init; }
+
     public string? CurrentValue { get; init; }
     public decimal? NumericValue { get; init; }
     public string? ValueOperator { get; init; }
@@ -167,6 +170,7 @@ public sealed class ResultEntryService(
         var catalogue = await LoadCatalogueAsync(order, ct);
         var resultRows = await queries.GetResultsForOrderAsync(orderId, departmentId, ct);
         var sampleDefects = await LoadSampleDefectsAsync(order, ct);
+        var sampleStatuses = await LoadSampleStatusesAsync(order, ct);
 
         var today = clock.Today;
         var context = ReferenceRangeContext.For(patient, today);
@@ -184,6 +188,15 @@ public sealed class ResultEntryService(
 
             var item = order.Items.FirstOrDefault(i => i.Id == result.LabOrderItemId);
 
+            // A cancelled analysis is off the order: its rows, such as those of a refused tube,
+            // are not offered for entry.
+            if (item is null || item.IsCancelled) continue;
+
+            var awaitingSample = item.SampleId is { } tube
+                                 && sampleStatuses.TryGetValue(tube, out var tubeStatus)
+                                 && tubeStatus is not (SampleStatus.Received or SampleStatus.InAnalysis
+                                                       or SampleStatus.Stored);
+
             rows.Add(new ResultEntryRow
             {
                 TestResultId = result.Id,
@@ -200,7 +213,8 @@ public sealed class ResultEntryService(
                 IsCalculated = parameter.IsCalculated,
                 // A calculated parameter is never typed into, and a validated one needs the
                 // revision path rather than the entry grid.
-                IsReadOnly = parameter.IsCalculated || result.IsValidated,
+                IsReadOnly = parameter.IsCalculated || result.IsValidated || awaitingSample,
+                IsAwaitingSample = awaitingSample,
                 // Empty until something is entered: FormatValue's "-" placeholder in the cell read
                 // as a value, and the cursor skipped the row as already filled.
                 CurrentValue = result.HasValue || result.Flags.HasFlag(ResultFlag.NotDone)
@@ -273,6 +287,16 @@ public sealed class ResultEntryService(
         var accepted = 0;
         var now = clock.Now;
 
+        var tubeStatuses = new Dictionary<Guid, SampleStatus?>();
+
+        async Task<SampleStatus?> SampleStatusAsync(Guid sampleId)
+        {
+            if (!tubeStatuses.TryGetValue(sampleId, out var status))
+                tubeStatuses[sampleId] = status = (await samples.GetByIdAsync(sampleId, ct))?.Status;
+
+            return status;
+        }
+
         // --- 1. Store the raw values ------------------------------------------------------------
 
         foreach (var entry in entries)
@@ -299,6 +323,23 @@ public sealed class ResultEntryService(
             if (result.IsValidated)
             {
                 rejected.Add(Error.Conflict("Result_ValidatedRequiresRevision", parameter.Code));
+                continue;
+            }
+
+            // Nothing is entered on an analysis that no longer exists, nor on a tube the
+            // laboratory has not taken in: a value on it would have no sample behind it.
+            var owner = order.Items.FirstOrDefault(i => i.Id == result.LabOrderItemId);
+
+            if (owner is null || owner.IsCancelled)
+            {
+                rejected.Add(Error.Conflict("Result_ItemCancelled", parameter.Code));
+                continue;
+            }
+
+            if (owner.SampleId is { } tubeId && await SampleStatusAsync(tubeId) is { } tubeStatus
+                && tubeStatus is not (SampleStatus.Received or SampleStatus.InAnalysis or SampleStatus.Stored))
+            {
+                rejected.Add(Error.Conflict("Result_SampleNotReceived", parameter.Code));
                 continue;
             }
 
@@ -679,6 +720,19 @@ public sealed class ResultEntryService(
         }
 
         return defects;
+    }
+
+    private async Task<Dictionary<Guid, SampleStatus>> LoadSampleStatusesAsync(LabOrder order, CancellationToken ct)
+    {
+        var statuses = new Dictionary<Guid, SampleStatus>();
+
+        foreach (var sampleId in order.Items.Select(i => i.SampleId).OfType<Guid>().Distinct())
+        {
+            var sample = await samples.GetByIdAsync(sampleId, ct);
+            if (sample is not null) statuses[sampleId] = sample.Status;
+        }
+
+        return statuses;
     }
 }
 

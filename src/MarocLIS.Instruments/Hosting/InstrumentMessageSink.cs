@@ -320,6 +320,14 @@ public sealed class InstrumentMessageSink(
             return 0;
         }
 
+        if (sample.Status is SampleStatus.AwaitingCollection or SampleStatus.Collected or SampleStatus.InTransit)
+        {
+            // Run before the laboratory took the tube in: the value waits in the log, to be
+            // replayed once the tube is received.
+            issues.Add(Describe("Interface_SpecimenNotReceived", barcode));
+            return 0;
+        }
+
         var order = await orders.GetByIdWithDetailsAsync(sample.LabOrderId, ct);
         if (order is null) { issues.Add(Describe("Interface_OrderNotFound", barcode)); return 0; }
 

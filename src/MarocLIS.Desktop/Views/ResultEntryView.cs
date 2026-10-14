@@ -532,6 +532,14 @@ public sealed class ResultEntryView : LocalizedView
         if (_grid.Rows[e.RowIndex].Tag is not Guid id) return;
         if (!_rowsById.TryGetValue(id, out var row)) return;
 
+        if (row.IsAwaitingSample)
+        {
+            e.Cancel = true;
+            _status.ForeColor = UiTheme.Abnormal;
+            _status.Text = T("Result_SampleNotReceived", row.ParameterCode);
+            return;
+        }
+
         // A validated value cannot be edited in the grid: it needs the revision path, with a
         // recorded reason, because a released figure may already have been acted on.
         if (row.Status is TestResultStatus.Validated or TestResultStatus.Reported)
@@ -678,11 +686,12 @@ public sealed class ResultEntryView : LocalizedView
             }
 
             _sheet = sheet.Value;
-            RenderSheet(_sheet);
-            RenderWorklist();
 
             _status.ForeColor = UiTheme.TextSecondary;
             _status.Text = string.Empty;
+
+            RenderSheet(_sheet);
+            RenderWorklist();
         }
         catch (OperationCanceledException)
         {
@@ -746,7 +755,10 @@ public sealed class ResultEntryView : LocalizedView
 
             var locked = row.IsReadOnly || row.IsHeading;
             gridRow.Cells[ColumnValue].ReadOnly = locked;
-            gridRow.Cells[ColumnComment].ReadOnly = row.IsHeading;
+            gridRow.Cells[ColumnComment].ReadOnly = row.IsHeading || row.IsAwaitingSample;
+
+            if (row.IsAwaitingSample)
+                gridRow.Cells[ColumnValue].ToolTipText = T("Result_SampleNotReceived", row.ParameterCode);
 
             if (row.SampleDefects != Domain.Samples.SampleDefect.None)
             {
@@ -759,6 +771,14 @@ public sealed class ResultEntryView : LocalizedView
 
         // Technical validation only makes sense once something has been entered.
         _validate.Enabled = sheet.Rows.Any(r => r.Status == TestResultStatus.Entered);
+
+        // Said once on opening, rather than discovered row by row as cells refuse the cursor.
+        var awaiting = sheet.Rows.Where(r => r.IsAwaitingSample).Select(r => r.AnalysisCode).Distinct().ToList();
+        if (awaiting.Count > 0)
+        {
+            _status.ForeColor = UiTheme.Abnormal;
+            _status.Text = T("Result.AwaitingSample", string.Join(", ", awaiting));
+        }
 
         FocusFirstEditableCell();
     }

@@ -574,7 +574,7 @@ public sealed class OrderAmendmentService(
         }
 
         if (request.PrescriberId is null && string.IsNullOrWhiteSpace(request.PrescriberFreeText)
-            && order.Origin != OrderOrigin.Walkin)
+            && LabOrder.RequiresPrescriber(order.Origin))
             return Result.Failure(Error.Validation("Order_PrescriberRequired"));
 
         order.PrescriberId = request.PrescriberId;

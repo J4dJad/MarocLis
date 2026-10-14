@@ -738,6 +738,7 @@
   },
 
   "Result": {
+    "AwaitingSample": "Tube not received yet for: {0}. These rows are locked until reception.",
     "InstrumentFlags": "Analyser alarm",
     "Title": "Result",
     "Plural": "Results",
@@ -2854,6 +2855,8 @@
   "Result_NotANumber": "\"{0}\" is not a valid numeric value.",
   "Result_InvalidOperator": "Operator \"{0}\" is not recognised; use <, >, u{2264} or u{2265}.",
   "Result_ModifyRequiresPermission": "{0}: this result is already technically validated; changing it needs the \"modify a result\" right.",
+  "Result_ItemCancelled": "{0}: this analysis is cancelled, no result can be entered on it.",
+  "Result_SampleNotReceived": "{0}: the tube has not been received yet. Receive it before entering the result.",
   "BenchSheet_DepartmentNotFound": "The selected department cannot be found.",
   "BenchSheet_InstrumentNotFound": "The selected analyser cannot be found on this site.",
   "BenchSheet_NothingPending": "No analysis is awaiting entry for this selection.",
@@ -2892,6 +2895,7 @@
   "Interface_InstrumentNotOperational_Backup": "{0} is marked as backup: results held. Put it in service to accept them.",
   "Interface_InstrumentDecommissioned": "{0} is past its decommissioning date: its results are not accepted.",
   "Interface_InstrumentCalibrationOverdue": "{0} is overdue for calibration: results held. Record the calibration, then replay.",
+  "Interface_SpecimenNotReceived": "Tube {0} not received yet: the result waits in the log. Replay it after reception.",
   "Order_NotFoundForScan": "No order matches \"{0}\" on this site.",
   "Order_AnalysisWithoutTariff": "Analysis {0} has no tariff in force today, neither for this payer nor on the laboratory's price list. Add one in the analysis catalogue, Tariffs tab.",
 

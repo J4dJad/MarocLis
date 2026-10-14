@@ -327,6 +327,13 @@ public sealed class LabOrder : AuditableAggregateRoot, ISoftDeletable, ISiteScop
     /// Registration-time checks. Deliberately returns every problem at once so the reception clerk
     /// fixes the whole form in one pass instead of discovering issues one at a time.
     /// </summary>
+    /// <summary>
+    /// Every order names its prescriber except one the patient asked for themselves. One rule for
+    /// registration and for later edits: the two used to disagree, so a counter order could be
+    /// registered without a prescriber and then refused when anything else on it was corrected.
+    /// </summary>
+    public static bool RequiresPrescriber(OrderOrigin origin) => origin != OrderOrigin.PatientRequest;
+
     public Result ValidateForRegistration()
     {
         var errors = new List<Error>();
@@ -336,7 +343,7 @@ public sealed class LabOrder : AuditableAggregateRoot, ISoftDeletable, ISiteScop
         if (LiveItemCount == 0)
             errors.Add(Error.Validation("Order_AtLeastOneAnalysisRequired"));
         if (PrescriberId is null && string.IsNullOrWhiteSpace(PrescriberFreeText)
-            && Origin != OrderOrigin.PatientRequest)
+            && RequiresPrescriber(Origin))
             errors.Add(Error.Validation("Order_PrescriberRequired"));
         if (DiscountPercent is { } discount)
         {

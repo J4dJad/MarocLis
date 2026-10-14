@@ -903,7 +903,7 @@ public sealed class OrderRegistrationView : LocalizedView
         var prescriberText = _prescriber.Text.Trim();
 
         // Checked here as well as on save so the clerk is taken to the field that is missing.
-        if (prescriber is null && prescriberText.Length == 0 && origin != OrderOrigin.PatientRequest)
+        if (prescriber is null && prescriberText.Length == 0 && LabOrder.RequiresPrescriber(origin))
         {
             _dialogs.Warn(T("Order_PrescriberRequired"));
             _prescriber.Focus();

@@ -738,6 +738,7 @@
   },
 
   "Result": {
+    "AwaitingSample": "Tube pas encore réceptionné pour : {0}. Ces lignes sont verrouillées jusqu'à la réception.",
     "InstrumentFlags": "Alarme automate",
     "Title": "Résultat",
     "Plural": "Résultats",
@@ -2855,6 +2856,8 @@
   "Result_NotANumber": "« {0} » n'est pas une valeur numérique valide.",
   "Result_InvalidOperator": "Opérateur « {0} » non reconnu ; utilisez <, >, ≤ ou ≥.",
   "Result_ModifyRequiresPermission": "{0} : ce résultat est déjà validé techniquement, le modifier demande le droit « modifier un résultat ».",
+  "Result_ItemCancelled": "{0} : cette analyse est annulée, aucun résultat ne peut y être saisi.",
+  "Result_SampleNotReceived": "{0} : le tube n'est pas encore réceptionné. Réceptionnez-le avant de saisir le résultat.",
   "BenchSheet_DepartmentNotFound": "Le secteur choisi est introuvable.",
   "BenchSheet_InstrumentNotFound": "L'automate choisi est introuvable sur ce site.",
   "BenchSheet_NothingPending": "Aucune analyse en attente de saisie pour cette sélection.",
@@ -2893,6 +2896,7 @@
   "Interface_InstrumentNotOperational_Backup": "{0} est déclaré « secours » : résultats retenus. Passez-le en service pour les accepter.",
   "Interface_InstrumentDecommissioned": "{0} a une date de réforme dépassée : ses résultats ne sont pas acceptés.",
   "Interface_InstrumentCalibrationOverdue": "{0} a un étalonnage dépassé : résultats retenus. Enregistrez l'étalonnage, puis réimportez.",
+  "Interface_SpecimenNotReceived": "Tube {0} pas encore réceptionné : le résultat attend dans le journal. Rejouez-le après la réception.",
   "Order_NotFoundForScan": "Aucun dossier ne correspond à « {0} » sur ce site.",
   "Order_AnalysisWithoutTariff": "L'analyse {0} n'a pas de tarif en vigueur aujourd'hui, ni pour ce tiers payant ni dans la liste de prix du laboratoire. Ajoutez-lui un tarif dans le Catalogue des analyses, onglet Tarifs.",
 

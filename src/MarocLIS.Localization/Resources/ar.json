@@ -738,6 +738,7 @@
   },
 
   "Result": {
+    "AwaitingSample": "لم يتم استلام الأنبوب بعد لـ: {0}. هذه الأسطر مقفلة حتى الاستلام.",
     "InstrumentFlags": "تنبيه الجهاز",
     "Title": "النتيجة",
     "Plural": "النتائج",
@@ -2854,6 +2855,8 @@
   "Result_NotANumber": "«{0}» ليست قيمة رقمية صحيحة.",
   "Result_InvalidOperator": "المُعامل «{0}» غير معروف؛ استعمل < أو > أو ≤ أو ≥.",
   "Result_ModifyRequiresPermission": "{0}: هذه النتيجة مصادق عليها تقنيًا، وتعديلها يتطلب صلاحية « تعديل نتيجة ».",
+  "Result_ItemCancelled": "{0}: هذا التحليل ملغى، لا يمكن إدخال أي نتيجة له.",
+  "Result_SampleNotReceived": "{0}: لم يتم استلام الأنبوب بعد. استلمه قبل إدخال النتيجة.",
   "BenchSheet_DepartmentNotFound": "القسم المختار غير موجود.",
   "BenchSheet_InstrumentNotFound": "الجهاز المختار غير موجود في هذا الموقع.",
   "BenchSheet_NothingPending": "لا توجد تحاليل في انتظار الإدخال لهذا الاختيار.",
@@ -2892,6 +2895,7 @@
   "Interface_InstrumentNotOperational_Backup": "{0} مصنّف كجهاز احتياطي: النتائج محتجزة. ضعه في الخدمة لقبولها.",
   "Interface_InstrumentDecommissioned": "{0} تجاوز تاريخ إخراجه من الخدمة: لا تُقبل نتائجه.",
   "Interface_InstrumentCalibrationOverdue": "{0} تجاوز موعد المعايرة: النتائج محتجزة. سجّل المعايرة ثم أعد الاستيراد.",
+  "Interface_SpecimenNotReceived": "لم يتم استلام الأنبوب {0} بعد: النتيجة تنتظر في السجل. أعد تشغيلها بعد الاستلام.",
   "Order_NotFoundForScan": "لا يوجد ملف يطابق «{0}» في هذا الموقع.",
   "Order_AnalysisWithoutTariff": "التحليل {0} ليس له تعريفة سارية اليوم، لا لهذا الطرف الدافع ولا في قائمة أسعار المختبر. أضف له تعريفة في دليل التحاليل، تبويب التعريفات.",
 

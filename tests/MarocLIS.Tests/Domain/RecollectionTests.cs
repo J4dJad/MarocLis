@@ -79,3 +79,15 @@ public sealed class RecollectionTests
               .IsSuccess.Should().BeTrue();
     }
 }
+
+public sealed class PrescriberRuleTests
+{
+    [Theory]
+    [InlineData(OrderOrigin.Walkin, true)]
+    [InlineData(OrderOrigin.HomeCollection, true)]
+    [InlineData(OrderOrigin.PatientRequest, false)]
+    public void Registration_and_amendment_share_one_prescriber_rule(OrderOrigin origin, bool required)
+    {
+        LabOrder.RequiresPrescriber(origin).Should().Be(required);
+    }
+}
