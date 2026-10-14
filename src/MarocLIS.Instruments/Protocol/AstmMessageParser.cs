@@ -367,16 +367,27 @@ public static class AstmMessageParser
     /// Pulls the test code out of a universal test identifier. The standard puts the local code in
     /// the fourth component, but a good share of analysers send it in the first, so the fourth is
     /// preferred and the first non-empty component is the fallback.
+    /// <para>
+    /// Roche cobas analysers append the dilution to the code with a slash (<c>^^^767/</c>,
+    /// <c>^^^767/5</c>); the code is what precedes it. Kept whole, "767/" matched no mapping and
+    /// every cobas result was refused as an unknown code.
+    /// </para>
     /// </summary>
     private static string? TestCodeFrom(string? field, AstmDelimiters delimiters)
     {
         var components = Component(field, delimiters);
         if (components.Length == 0) return null;
 
-        if (components.Length >= 4 && !string.IsNullOrWhiteSpace(components[3]))
-            return components[3].Trim();
+        var code = components.Length >= 4 && !string.IsNullOrWhiteSpace(components[3])
+            ? components[3]
+            : components.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c));
 
-        return components.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c))?.Trim();
+        if (code is null) return null;
+
+        var slash = code.IndexOf('/');
+        if (slash > 0) code = code[..slash];
+
+        return code.Trim();
     }
 
     private static string? Coalesce(params string?[] candidates) =>

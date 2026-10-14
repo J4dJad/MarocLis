@@ -223,6 +223,22 @@ public sealed class AstmMessageParserTests
     }
 
     [Fact]
+    public void Parse_DropsTheCobasDilutionSuffixFromTheTestCode()
+    {
+        // Captured from a cobas c 311: the code is followed by "/" and the dilution.
+        var message = AstmMessageParser.Parse(new[] {
+            @"H|\^&|||cobas c 311^1|||||host|RSUPL^REAL|P|1",
+            "P|1",
+            @"O|1|0000000040|1^50001^001^^S1^SC|^^^GLY^|R||||||N||||1||||||20261014022702|||F",
+            "R|1|^^^GLY/|62.17|||N||F||admin|||P1",
+            "R|2|^^^767/5|4.1||||||F",
+            "L|1|N" });
+
+        message.Specimens.Single().Results.Select(r => r.InstrumentTestCode)
+               .Should().Equal("GLY", "767");
+    }
+
+    [Fact]
     public void Parse_ReadsTheTestCodeFromTheFourthComponent()
     {
         // The standard puts the local code in component four of the universal test identifier.
