@@ -337,6 +337,106 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("CashSessions", "bil");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Billing.Deposit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("AppliedAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset?>("AppliedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("AppliedInvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid?>("CashSessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("LabOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("MaturityDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Method")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("ReceivedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("RefundReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("RefundedAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset?>("RefundedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashSessionId")
+                        .HasDatabaseName("IX_Deposits_CashSession")
+                        .HasFilter("[CashSessionId] IS NOT NULL");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Deposits_Number");
+
+                    b.HasIndex("LabOrderId", "Status")
+                        .HasDatabaseName("IX_Deposits_Order_Status");
+
+                    b.ToTable("Deposits", "bil");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Billing.Invoice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -464,6 +564,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("PatientShareAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("PayerAcceptedAmount")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid?>("PayerId")
@@ -637,6 +740,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetimeoffset(3)");
 
                     b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("DepositId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("InvoiceId")

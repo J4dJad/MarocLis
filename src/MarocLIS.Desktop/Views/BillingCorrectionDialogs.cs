@@ -449,3 +449,152 @@ internal sealed class InvoiceIssueDialog : Form
         Close();
     }
 }
+
+/// <summary>
+/// The payer's answer on one invoice, in money rather than as a status.
+/// <para>
+/// The accepted amount is pre-filled with the whole share, since a claim paid in full is the
+/// common case. As soon as it is lowered the dialog asks what becomes of the difference — the
+/// patient pays it, or it is written off — and why, because an unexplained shortfall is exactly
+/// what the accountant will ask about at the year end.
+/// </para>
+/// </summary>
+internal sealed class PayerSettlementDialog : Form
+{
+    private readonly ILocalizer _localizer;
+    private readonly IUserDialogs _dialogs;
+    private readonly InvoiceRow _invoice;
+
+    private readonly TextBox _accepted = UiTheme.Input(160);
+    private readonly TextBox _remittance = UiTheme.Input(260);
+    private readonly RadioButton _patientPays = new();
+    private readonly RadioButton _writeOff = new();
+    private readonly TextBox _reason = UiTheme.Input(440);
+    private readonly Label _shortfall = new();
+
+    internal decimal AcceptedAmount { get; private set; }
+
+    internal PayerShortfallHandling Shortfall =>
+        _writeOff.Checked ? PayerShortfallHandling.WriteOff : PayerShortfallHandling.PatientPays;
+
+    internal string? Reason => string.IsNullOrWhiteSpace(_reason.Text) ? null : _reason.Text.Trim();
+
+    internal string? RemittanceReference =>
+        string.IsNullOrWhiteSpace(_remittance.Text) ? null : _remittance.Text.Trim();
+
+    internal PayerSettlementDialog(ILocalizer localizer, IUserDialogs dialogs, InvoiceRow invoice)
+    {
+        _localizer = localizer;
+        _dialogs = dialogs;
+        _invoice = invoice;
+
+        Text = $"{localizer["Claim.Settlement"]} — {invoice.Number}";
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        StartPosition = FormStartPosition.CenterParent;
+        MinimizeBox = MaximizeBox = false;
+        ShowInTaskbar = false;
+        ClientSize = new Size(500, 400);
+        BackColor = UiTheme.SurfaceRaised;
+        Font = UiTheme.Body;
+
+        var share = new Label
+        {
+            Text = $"{localizer["Billing.PayerShare"]} : " +
+                   Money.Of(invoice.PayerShare).Format(localizer.CurrentLanguage),
+            Font = UiTheme.SectionTitle,
+            ForeColor = UiTheme.Accent,
+            AutoSize = false,
+            Bounds = new Rectangle(20, 16, 460, 24)
+        };
+
+        var acceptedLabel = UiTheme.FieldLabel(localizer["Claim.AcceptedAmount"]);
+        acceptedLabel.Location = new Point(20, 52);
+
+        _accepted.Bounds = new Rectangle(20, 70, 160, UiTheme.InputHeight);
+        _accepted.Tag = UiTags.LatinValue;
+        _accepted.TextAlign = HorizontalAlignment.Right;
+        _accepted.Font = UiTheme.MonospaceBold;
+        _accepted.Text = invoice.PayerShare.ToString("0.00");
+
+        var remittanceLabel = UiTheme.FieldLabel(localizer["Claim.RemittanceReference"]);
+        remittanceLabel.Location = new Point(200, 52);
+        _remittance.Bounds = new Rectangle(200, 70, 280, UiTheme.InputHeight);
+        _remittance.Tag = UiTags.LatinValue;
+
+        _shortfall.Font = UiTheme.SmallBold;
+        _shortfall.ForeColor = UiTheme.Abnormal;
+        _shortfall.AutoSize = false;
+        _shortfall.Bounds = new Rectangle(20, 108, 460, 22);
+
+        _patientPays.Text = localizer["Claim.ShortfallPatientPays"];
+        _patientPays.Bounds = new Rectangle(20, 134, 460, 24);
+        _patientPays.Checked = true;
+
+        _writeOff.Text = localizer["Claim.ShortfallWriteOff"];
+        _writeOff.Bounds = new Rectangle(20, 160, 460, 24);
+
+        var reasonLabel = UiTheme.FieldLabel(localizer["Billing.ClaimRejectionReason"]);
+        reasonLabel.Location = new Point(20, 196);
+        _reason.Location = new Point(20, 214);
+
+        var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
+        ok.Bounds = new Rectangle(20, 340, 220, UiTheme.ButtonHeight);
+        ok.Click += (_, _) => Accept();
+
+        var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
+        cancel.Bounds = new Rectangle(250, 340, 230, UiTheme.ButtonHeight);
+        cancel.DialogResult = DialogResult.Cancel;
+
+        Controls.AddRange([share, acceptedLabel, _accepted, remittanceLabel, _remittance, _shortfall,
+                           _patientPays, _writeOff, reasonLabel, _reason, ok, cancel]);
+
+        AcceptButton = ok;
+        CancelButton = cancel;
+
+        _accepted.TextChanged += (_, _) => RefreshShortfall();
+        RefreshShortfall();
+    }
+
+    private bool TryParseAccepted(out decimal amount) =>
+        decimal.TryParse(_accepted.Text.Replace(',', '.'),
+                         System.Globalization.NumberStyles.Float,
+                         System.Globalization.CultureInfo.InvariantCulture, out amount);
+
+    private decimal Missing =>
+        TryParseAccepted(out var amount) ? Money.Round(_invoice.PayerShare - amount) : 0m;
+
+    private void RefreshShortfall()
+    {
+        var missing = Missing;
+        var any = missing > 0m;
+
+        _shortfall.Text = any
+            ? _localizer.Format("Claim.ShortfallAmount", Money.Of(missing).Format(_localizer.CurrentLanguage))
+            : string.Empty;
+
+        _patientPays.Enabled = _writeOff.Enabled = _reason.Enabled = any;
+        if (!any) _reason.Text = string.Empty;
+    }
+
+    private void Accept()
+    {
+        if (!TryParseAccepted(out var amount) || amount < 0m || amount > _invoice.PayerShare)
+        {
+            _dialogs.Warn(_localizer.Format("Claim_AcceptedAmountInvalid",
+                Money.Of(_invoice.PayerShare).Format(_localizer.CurrentLanguage)));
+            _accepted.Focus();
+            return;
+        }
+
+        if (Missing > 0m && string.IsNullOrWhiteSpace(_reason.Text))
+        {
+            _dialogs.Warn(_localizer["Claim_RejectionReasonRequired"]);
+            _reason.Focus();
+            return;
+        }
+
+        AcceptedAmount = Money.Round(amount);
+        DialogResult = DialogResult.OK;
+        Close();
+    }
+}

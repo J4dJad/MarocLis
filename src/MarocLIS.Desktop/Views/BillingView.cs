@@ -41,6 +41,9 @@ public sealed class BillingView : LocalizedView
     private readonly TextBox _search = UiTheme.Input(260);
     private readonly ComboBox _statusFilter = new();
     private readonly Button _issue = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _deposit = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _refundDeposit = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _payerSettlement = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _pay = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _creditNote = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _submitClaim = UiTheme.SecondaryButton(string.Empty);
@@ -110,7 +113,9 @@ public sealed class BillingView : LocalizedView
         };
 
         _issue.Bounds = new Rectangle(0, 8, 240, UiTheme.ButtonHeight);
-        pendingActions.Controls.Add(_issue);
+        _deposit.Bounds = new Rectangle(250, 8, 220, UiTheme.ButtonHeight);
+        _refundDeposit.Bounds = new Rectangle(480, 8, 220, UiTheme.ButtonHeight);
+        pendingActions.Controls.AddRange([_issue, _deposit, _refundDeposit]);
 
         top.Controls.Add(pendingHost);
         top.Controls.Add(pendingActions);
@@ -159,14 +164,16 @@ public sealed class BillingView : LocalizedView
 
         _submitClaim.Bounds = new Rectangle(0, 40, 230, UiTheme.ButtonHeight);
         _claimOutcome.Bounds = new Rectangle(240, 40, 250, UiTheme.ButtonHeight);
+        _payerSettlement.Bounds = new Rectangle(500, 40, 250, UiTheme.ButtonHeight);
 
-        _status.Bounds = new Rectangle(502, 44, 780, 20);
+        _status.Bounds = new Rectangle(762, 44, 600, 20);
         _status.Font = UiTheme.Small;
         _status.ForeColor = UiTheme.TextSecondary;
         _status.AutoSize = false;
 
         ledgerActions.Controls.AddRange([_pay, _refund, _bounced, _creditNote, _printInvoice,
-                                         _printReceipt, _submitClaim, _claimOutcome, _status]);
+                                         _printReceipt, _submitClaim, _claimOutcome, _payerSettlement,
+                                         _status]);
 
         bottom.Controls.Add(ledgerHost);
         bottom.Controls.Add(ledgerActions);
@@ -209,6 +216,7 @@ public sealed class BillingView : LocalizedView
         Add("total", 9, UiTheme.MonospaceBold, DataGridViewContentAlignment.MiddleRight);
         Add("payershare", 8, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight);
         Add("patientshare", 8, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight);
+        Add("deposit", 8, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight);
     }
 
     private void BuildLedgerColumns()
@@ -262,19 +270,24 @@ public sealed class BillingView : LocalizedView
         _refund.Click += async (_, _) => await RefundAsync();
         _bounced.Click += async (_, _) => await MarkBouncedAsync();
         _claimOutcome.Click += async (_, _) => await RecordClaimOutcomeAsync();
+        _deposit.Click += async (_, _) => await TakeDepositAsync();
+        _refundDeposit.Click += async (_, _) => await RefundDepositAsync();
+        _payerSettlement.Click += async (_, _) => await RecordPayerSettlementAsync();
         _creditNote.Click += async (_, _) => await IssueCreditNoteAsync();
         _submitClaim.Click += async (_, _) => await SubmitClaimAsync();
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Billing.CreateInvoice, _issue);
-        PermissionGate.Require(Permissions.Billing.RecordPayment, _pay, _bounced);
-        PermissionGate.Require(Permissions.Billing.CreditNote, _refund);
-        PermissionGate.Require(Permissions.Billing.ExportAccounting, _claimOutcome, _submitClaim);
+        PermissionGate.Require(Permissions.Billing.RecordPayment, _pay, _bounced, _deposit);
+        PermissionGate.Require(Permissions.Billing.CreditNote, _refund, _refundDeposit);
+        PermissionGate.Require(Permissions.Billing.ExportAccounting, _claimOutcome, _submitClaim,
+                               _payerSettlement);
         PermissionGate.Require(Permissions.Billing.CreditNote, _creditNote);
         _printInvoice.Click += async (_, _) => await PrintAsync(receipt: false);
         _printReceipt.Click += async (_, _) => await PrintAsync(receipt: true);
 
         _ledger.CellFormatting += OnLedgerFormatting;
+        _pending.CellFormatting += OnPendingFormatting;
 
         // The print buttons follow the selection. A ticked box only reaches the cell's value once
         // the edit is committed, so the commit happens as soon as the box is clicked.
@@ -317,6 +330,26 @@ public sealed class BillingView : LocalizedView
             e.CellStyle!.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Italic);
     }
 
+    /// <summary>
+    /// A cancelled request is listed only because it still holds a deposit to hand back; it is
+    /// greyed so nobody tries to invoice it.
+    /// </summary>
+    private void OnPendingFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.RowIndex >= _pending.Rows.Count) return;
+        if (_pending.Rows[e.RowIndex].Tag is not BillableOrderRow row) return;
+
+        if (row.Status == Domain.Orders.LabOrderStatus.Cancelled)
+        {
+            e.CellStyle!.ForeColor = UiTheme.TextMuted;
+            e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Strikeout);
+        }
+        else if (row.DepositHeld > 0m && _pending.Columns[e.ColumnIndex].Name == "deposit")
+        {
+            e.CellStyle!.ForeColor = UiTheme.Normal;
+        }
+    }
+
     protected override void ApplyTexts()
     {
         _pendingHeading.Text = T("Billing.Uninvoiced");
@@ -326,6 +359,9 @@ public sealed class BillingView : LocalizedView
         _refund.Text = T("Payment.Refund");
         _bounced.Text = T("Payment.MarkBounced");
         _claimOutcome.Text = T("Billing.RecordClaimOutcome");
+        _deposit.Text = T("Deposit.Take");
+        _refundDeposit.Text = T("Deposit.Refund");
+        _payerSettlement.Text = T("Claim.Settlement");
         _creditNote.Text = T("Billing.CreditNote");
         _submitClaim.Text = T("Billing.SubmitClaim");
         _printInvoice.Text = T("Billing.PrintInvoice");
@@ -356,6 +392,7 @@ public sealed class BillingView : LocalizedView
             _pending.Column("total").HeaderText = T("Billing.TotalDue");
             _pending.Column("payershare").HeaderText = T("Billing.PayerShare");
             _pending.Column("patientshare").HeaderText = T("Billing.PatientShare");
+            _pending.Column("deposit").HeaderText = T("Deposit.Title");
         }
 
         if (_ledger.Columns.Count > 0)
@@ -424,7 +461,10 @@ public sealed class BillingView : LocalizedView
                 row.PayerShare > 0m
                     ? Money.Of(row.PayerShare).Format(Localizer.CurrentLanguage)
                     : string.Empty,
-                Money.Of(row.PatientShare).Format(Localizer.CurrentLanguage));
+                Money.Of(row.PatientShare).Format(Localizer.CurrentLanguage),
+                row.DepositHeld > 0m
+                    ? Money.Of(row.DepositHeld).Format(Localizer.CurrentLanguage)
+                    : string.Empty);
 
             _pending.Rows[index].Tag = row;
         }
@@ -697,6 +737,168 @@ public sealed class BillingView : LocalizedView
         await LoadLedgerAsync();
     }
 
+    /// <summary>
+    /// Takes a deposit on one request before it is invoiced. It is turned into a settlement on the
+    /// invoice automatically when the invoice is issued.
+    /// </summary>
+    private async Task TakeDepositAsync()
+    {
+        _pending.EndEdit();
+
+        var selected = Selected<BillableOrderRow>(_pending);
+
+        if (selected.Count != 1)
+        {
+            _status.ForeColor = UiTheme.TextSecondary;
+            _status.Text = T("Deposit.SelectOneOrder");
+            return;
+        }
+
+        var order = selected[0];
+
+        if (order.Status == Domain.Orders.LabOrderStatus.Cancelled)
+        {
+            _dialogs.Warn(T("Deposit_OrderCancelled", order.AccessionNumber), T("Deposit.Take"));
+            return;
+        }
+
+        if (order.Total - order.DepositHeld <= 0m)
+        {
+            _dialogs.Info(T("Deposit.FullyCovered"), T("Deposit.Take"));
+            return;
+        }
+
+        using var dialog = PaymentDialog.ForDeposit(Localizer, _dialogs, order);
+
+        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.DepositRequest is null) return;
+
+        var result = await _billing.TakeDepositAsync(dialog.DepositRequest);
+
+        if (result.IsFailure)
+        {
+            _dialogs.ShowFailure(result, T("Deposit.Take"));
+            return;
+        }
+
+        _status.ForeColor = UiTheme.Normal;
+        _status.Text = T("Deposit.Taken", result.Value, order.AccessionNumber);
+
+        await LoadPendingAsync();
+    }
+
+    /// <summary>
+    /// Hands back everything still held on the selected request, usually because it was cancelled.
+    /// One reason covers all of its deposits.
+    /// </summary>
+    private async Task RefundDepositAsync()
+    {
+        _pending.EndEdit();
+
+        var selected = Selected<BillableOrderRow>(_pending);
+
+        if (selected.Count != 1)
+        {
+            _status.ForeColor = UiTheme.TextSecondary;
+            _status.Text = T("Deposit.SelectOneOrder");
+            return;
+        }
+
+        var order = selected[0];
+
+        var deposits = await _billing.GetDepositsAsync(order.LabOrderId);
+
+        if (deposits.IsFailure)
+        {
+            _dialogs.ShowFailure(deposits);
+            return;
+        }
+
+        var held = deposits.Value.Where(d => d.Status == DepositStatus.Held && d.Remaining > 0m).ToList();
+
+        if (held.Count == 0)
+        {
+            _dialogs.Info(T("Deposit.NoneHeld"), T("Deposit.Refund"));
+            return;
+        }
+
+        var reason = _dialogs.PromptForReason(
+            T("Deposit.RefundPrompt", order.AccessionNumber,
+              Money.Of(held.Sum(d => d.Remaining)).Format(Localizer.CurrentLanguage),
+              string.Join(", ", held.Select(d => $"{d.Number} ({T($"PaymentMethod.{d.Method}")})"))),
+            T("Deposit.Refund"));
+
+        if (reason is null) return;
+
+        foreach (var deposit in held)
+        {
+            var result = await _billing.RefundDepositAsync(deposit.DepositId, reason);
+
+            if (result.IsFailure)
+            {
+                _dialogs.ShowFailure(result, T("Deposit.Refund"));
+                break;
+            }
+        }
+
+        _status.ForeColor = UiTheme.Abnormal;
+        _status.Text = T("Deposit.Refunded", order.AccessionNumber);
+
+        await LoadPendingAsync();
+    }
+
+    /// <summary>
+    /// Records what the payer actually paid on one invoice's share, and what happens to the rest:
+    /// left for the patient, or written off.
+    /// </summary>
+    private async Task RecordPayerSettlementAsync()
+    {
+        _ledger.EndEdit();
+
+        var selected = Selected<InvoiceRow>(_ledger);
+
+        if (selected.Count != 1)
+        {
+            _status.Text = T("Billing.SelectOneInvoice");
+            return;
+        }
+
+        var invoice = selected[0];
+
+        if (invoice.PayerShare <= 0m
+            || invoice.ClaimStatus is ClaimStatus.NotApplicable or ClaimStatus.Prepared)
+        {
+            _dialogs.Warn(T("Billing.NoSubmittedClaims"), T("Claim.Settlement"));
+            return;
+        }
+
+        if (invoice.PayerAcceptedAmount is not null)
+        {
+            _dialogs.Warn(T("Claim_SettlementAlreadyRecorded", invoice.Number), T("Claim.Settlement"));
+            return;
+        }
+
+        using var dialog = new PayerSettlementDialog(Localizer, _dialogs, invoice);
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        var result = await _billing.RecordPayerSettlementAsync(
+            invoice.InvoiceId, dialog.AcceptedAmount, dialog.Shortfall, dialog.Reason,
+            dialog.RemittanceReference);
+
+        if (result.IsFailure)
+        {
+            _dialogs.ShowFailure(result, T("Claim.Settlement"));
+            return;
+        }
+
+        _status.ForeColor = dialog.AcceptedAmount < invoice.PayerShare ? UiTheme.Abnormal : UiTheme.Normal;
+        _status.Text = T("Claim.SettlementRecorded", invoice.Number,
+                         Money.Of(dialog.AcceptedAmount).Format(Localizer.CurrentLanguage),
+                         Money.Of(invoice.PayerShare).Format(Localizer.CurrentLanguage));
+
+        await LoadLedgerAsync();
+    }
+
     private async Task RecordPaymentAsync()
     {
         _ledger.EndEdit();
@@ -912,7 +1114,9 @@ public sealed class BillingView : LocalizedView
 internal sealed class PaymentDialog : Form
 {
     private readonly ILocalizer _localizer;
-    private readonly InvoiceRow _invoice;
+    private readonly Guid? _invoiceId;
+    private readonly decimal _ceiling;
+    private readonly string _ceilingCaption;
     private readonly IUserDialogs _dialogs;
 
     private readonly ComboBox _method = new();
@@ -927,13 +1131,38 @@ internal sealed class PaymentDialog : Form
 
     internal RecordPaymentRequest? Request { get; private set; }
 
+    /// <summary>Set when the dialog was opened for a deposit rather than an invoice.</summary>
+    internal TakeDepositRequest? DepositRequest { get; private set; }
+
+    private readonly Guid? _orderId;
+
     internal PaymentDialog(ILocalizer localizer, InvoiceRow invoice, IUserDialogs dialogs)
+        : this(localizer, dialogs, $"{localizer["Payment.Title"]} — {invoice.Number}",
+               localizer["Billing.Outstanding"], invoice.Outstanding, invoice.InvoiceId, null)
+    {
+    }
+
+    /// <summary>
+    /// A deposit on an order not yet invoiced. The ceiling is what the order still leaves to take:
+    /// its total less the deposits already held.
+    /// </summary>
+    internal static PaymentDialog ForDeposit(ILocalizer localizer, IUserDialogs dialogs,
+                                             BillableOrderRow order)
+        => new(localizer, dialogs, $"{localizer["Deposit.Take"]} — {order.AccessionNumber}",
+               localizer["Deposit.Available"], Money.Round(order.Total - order.DepositHeld),
+               null, order.LabOrderId);
+
+    private PaymentDialog(ILocalizer localizer, IUserDialogs dialogs, string title,
+                          string ceilingCaption, decimal ceiling, Guid? invoiceId, Guid? orderId)
     {
         _localizer = localizer;
-        _invoice = invoice;
         _dialogs = dialogs;
+        _ceilingCaption = ceilingCaption;
+        _ceiling = ceiling;
+        _invoiceId = invoiceId;
+        _orderId = orderId;
 
-        Text = $"{localizer["Payment.Title"]} — {invoice.Number}";
+        Text = title;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
@@ -955,8 +1184,8 @@ internal sealed class PaymentDialog : Form
     {
         var outstanding = new Label
         {
-            Text = $"{_localizer["Billing.Outstanding"]} : " +
-                   Money.Of(_invoice.Outstanding).Format(_localizer.CurrentLanguage),
+            Text = $"{_ceilingCaption} : " +
+                   Money.Of(_ceiling).Format(_localizer.CurrentLanguage),
             Font = UiTheme.SectionTitle,
             ForeColor = UiTheme.Accent,
             AutoSize = true,
@@ -986,7 +1215,7 @@ internal sealed class PaymentDialog : Form
         _amount.TextAlign = HorizontalAlignment.Right;
         _amount.Font = UiTheme.MonospaceBold;
         // Pre-filled with the balance: settling in full is by far the commonest case.
-        _amount.Text = _invoice.Outstanding.ToString("0.00");
+        _amount.Text = _ceiling.ToString("0.00");
 
         _referenceLabel.Location = new Point(20, 106);
         _reference.Bounds = new Rectangle(20, 124, 200, UiTheme.InputHeight);
@@ -1084,10 +1313,10 @@ internal sealed class PaymentDialog : Form
             return;
         }
 
-        if (amount > _invoice.Outstanding)
+        if (amount > _ceiling)
         {
-            _dialogs.Warn(_localizer.Format("Payment_ExceedsOutstanding",
-                Money.Of(_invoice.Outstanding).Format(_localizer.CurrentLanguage)));
+            _dialogs.Warn(_localizer.Format(_orderId is null ? "Payment_ExceedsOutstanding" : "Deposit_ExceedsOrderTotal",
+                Money.Of(_ceiling).Format(_localizer.CurrentLanguage)));
             _amount.Focus();
             return;
         }
@@ -1109,8 +1338,20 @@ internal sealed class PaymentDialog : Form
             return;
         }
 
+        var reference = string.IsNullOrWhiteSpace(_reference.Text) ? null : _reference.Text.Trim();
+        var bank = string.IsNullOrWhiteSpace(_bank.Text) ? null : _bank.Text.Trim();
+        DateOnly? maturity = _maturity.Visible ? DateOnly.FromDateTime(_maturity.Value.Date) : null;
+
+        if (_orderId is { } orderId)
+        {
+            DepositRequest = new TakeDepositRequest(orderId, amount, method, reference, bank, maturity);
+            DialogResult = DialogResult.OK;
+            Close();
+            return;
+        }
+
         Request = new RecordPaymentRequest(
-            _invoice.InvoiceId,
+            _invoiceId!.Value,
             amount,
             method,
             string.IsNullOrWhiteSpace(_reference.Text) ? null : _reference.Text.Trim(),

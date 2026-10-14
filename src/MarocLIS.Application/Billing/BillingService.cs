@@ -23,7 +23,9 @@ public sealed record BillableOrderRow(
     decimal PayerShare,
     decimal PatientShare,
     int AnalysisCount,
-    LabOrderStatus Status);
+    LabOrderStatus Status,
+    /// <summary>Deposits taken on the order and not yet turned into a settlement or refunded.</summary>
+    decimal DepositHeld = 0m);
 
 /// <summary>One invoice in the ledger view.</summary>
 public sealed record InvoiceRow(
@@ -39,7 +41,10 @@ public sealed record InvoiceRow(
     decimal Outstanding,
     int DaysOverdue,
     ClaimStatus ClaimStatus,
-    string? CoveredOrders);
+    string? CoveredOrders,
+    decimal PayerShare = 0m,
+    /// <summary>What the payer agreed to pay on its share; null until the settlement is recorded.</summary>
+    decimal? PayerAcceptedAmount = null);
 
 public sealed record CashSessionSummary(
     Guid CashSessionId,
@@ -55,6 +60,33 @@ public sealed record CashSessionSummary(
     decimal CashWithdrawals,
     decimal ExpectedClosingCash,
     int PaymentCount);
+
+public sealed record TakeDepositRequest(
+    Guid LabOrderId,
+    decimal Amount,
+    PaymentMethod Method,
+    string? Reference,
+    string? BankName,
+    DateOnly? MaturityDate);
+
+public sealed record DepositRow(
+    Guid DepositId,
+    string Number,
+    DateTimeOffset ReceivedAt,
+    decimal Amount,
+    decimal Remaining,
+    PaymentMethod Method,
+    DepositStatus Status);
+
+/// <summary>What happens to the part of the payer's share the payer did not accept.</summary>
+public enum PayerShortfallHandling
+{
+    /// <summary>Left outstanding on the invoice, for the patient to settle at the counter.</summary>
+    PatientPays = 0,
+
+    /// <summary>Closed as a loss with a write-off line.</summary>
+    WriteOff = 1
+}
 
 public sealed record RecordPaymentRequest(
     Guid InvoiceId,
@@ -89,6 +121,7 @@ public sealed class BillingService(
     IRepository<LabSite> sites,
     IRepository<AppUser> users,
     IRepository<CashSession> cashSessions,
+    IRepository<Deposit> deposits,
     IBillingQueries queries,
     ISequenceAllocator sequences,
     IUnitOfWork unitOfWork,
@@ -292,7 +325,12 @@ public sealed class BillingService(
 
         foreach (var order in loaded) order.InvoiceId = invoice.Id;
 
-        unitOfWork.AuditReason = $"Émission de la facture {invoice.Number}";
+        var depositsApplied = await ApplyDepositsAsync(invoice, loaded.Select(o => o.Id).ToList(), ct);
+        if (depositsApplied.IsFailure) return Result.Failure<Guid>(depositsApplied.Errors);
+
+        unitOfWork.AuditReason = depositsApplied.Value > 0m
+            ? $"Émission de la facture {invoice.Number}, acompte(s) imputé(s) : {depositsApplied.Value:N2} DH"
+            : $"Émission de la facture {invoice.Number}";
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);
 
@@ -399,6 +437,191 @@ public sealed class BillingService(
         await unitOfWork.CommitAsync(ct);
 
         return Result.Success(creditNote.Id);
+    }
+
+    // ---- Deposits -------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Takes an advance on a request that is not invoiced yet. Numbered in the receipt series and
+    /// counted into the till now; it becomes a settlement on the invoice when the invoice is issued.
+    /// </summary>
+    public async Task<Result<string>> TakeDepositAsync(TakeDepositRequest request,
+                                                       CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.RecordPayment);
+        if (permitted.IsFailure) return Result.Failure<string>(permitted.FirstError);
+
+        var order = await orders.GetByIdWithDetailsAsync(request.LabOrderId, ct);
+        if (order is null) return Result.Failure<string>(Error.NotFound("Order_NotFound", request.LabOrderId));
+
+        if (order.InvoiceId is not null)
+            return Result.Failure<string>(Error.Conflict("Invoice_OrderAlreadyInvoiced", order.AccessionNumber));
+
+        if (order.Status == LabOrderStatus.Cancelled)
+            return Result.Failure<string>(Error.Conflict("Deposit_OrderCancelled", order.AccessionNumber));
+
+        // Never more than the request is worth, deposits already held included: an overpayment
+        // would only have to be handed back.
+        var total = order.Items.Where(i => !i.IsCancelled).Sum(i => i.ChargedPrice);
+        var held = (await deposits.ListAsync(d => d.LabOrderId == order.Id
+                                                  && d.Status == DepositStatus.Held, ct))
+                   .Sum(d => d.Remaining);
+
+        if (Money.Round(held + request.Amount) > Money.Round(total))
+            return Result.Failure<string>(Error.Validation("Deposit_ExceedsOrderTotal",
+                                                           Money.Round(total - held)));
+
+        CashSession? session = null;
+
+        if (request.Method == PaymentMethod.Cash)
+        {
+            session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+
+            if (session is null)
+                return Result.Failure<string>(Error.Validation("Payment_CashRequiresOpenSession"));
+        }
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
+
+        var number = await sequences.NextAsync(SequencePurpose.Receipt, currentUser.SiteId,
+                                               clock.Today.Year, ct);
+        if (number.IsFailure)
+        {
+            await unitOfWork.RollbackAsync(ct);
+            return Result.Failure<string>(number.FirstError);
+        }
+
+        var deposit = new Deposit(number.Value, currentUser.SiteId, order.Id, order.PatientId,
+                                  request.Amount, request.Method, clock.Now, currentUser.UserId)
+        {
+            Reference = string.IsNullOrWhiteSpace(request.Reference) ? null : request.Reference.Trim(),
+            BankName = string.IsNullOrWhiteSpace(request.BankName) ? null : request.BankName.Trim(),
+            MaturityDate = request.MaturityDate,
+            CashSessionId = session?.Id
+        };
+
+        var valid = deposit.Validate();
+        if (valid.IsFailure)
+        {
+            await unitOfWork.RollbackAsync(ct);
+            return Result.Failure<string>(valid.Errors);
+        }
+
+        await deposits.AddAsync(deposit, ct);
+        session?.Accumulate(request.Method, request.Amount);
+
+        unitOfWork.AuditReason =
+            $"Acompte {deposit.Number} de {deposit.Amount:N2} DH ({deposit.Method}) sur {order.AccessionNumber}";
+
+        await unitOfWork.SaveChangesAsync(ct);
+        await unitOfWork.CommitAsync(ct);
+
+        return Result.Success(deposit.Number);
+    }
+
+    public async Task<Result<IReadOnlyList<DepositRow>>> GetDepositsAsync(Guid labOrderId,
+                                                                          CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.View);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<DepositRow>>(permitted.FirstError);
+
+        var rows = await deposits.ListAsync(d => d.LabOrderId == labOrderId, ct);
+
+        return Result.Success<IReadOnlyList<DepositRow>>(
+        [
+            .. rows.OrderBy(d => d.ReceivedAt)
+                   .Select(d => new DepositRow(d.Id, d.Number, d.ReceivedAt, d.Amount, d.Remaining,
+                                               d.Method, d.Status))
+        ]);
+    }
+
+    /// <summary>
+    /// Hands back what is still held on a deposit — the request was cancelled, or the invoice came
+    /// to less. Cash goes out of the operator's open till.
+    /// </summary>
+    public async Task<Result> RefundDepositAsync(Guid depositId, string reason,
+                                                 CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.CreditNote);
+        if (permitted.IsFailure) return permitted;
+
+        var deposit = await deposits.GetByIdAsync(depositId, ct);
+        if (deposit is null) return Result.Failure(Error.NotFound("Deposit_NotFound"));
+
+        var amount = deposit.Remaining;
+
+        CashSession? session = null;
+
+        if (deposit.Method == PaymentMethod.Cash)
+        {
+            session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+
+            if (session is null)
+                return Result.Failure(Error.Validation("Payment_CashRequiresOpenSession"));
+        }
+
+        var refunded = deposit.Refund(clock.Now, reason);
+        if (refunded.IsFailure) return refunded;
+
+        session?.RecordCashRefund(amount);
+        deposits.Update(deposit);
+
+        unitOfWork.AuditReason = $"Remboursement de l'acompte {deposit.Number} : {amount:N2} DH — {reason}";
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Turns the deposits held on the invoiced orders into settlements on the new invoice, up to
+    /// what the patient owes on it. Under a direct-billing agreement the payer's share is the
+    /// payer's to settle, so a deposit never covers it. What is not absorbed stays held, to be
+    /// refunded. Returns the amount applied.
+    /// </summary>
+    private async Task<Result<decimal>> ApplyDepositsAsync(Invoice invoice, IReadOnlyList<Guid> orderIds,
+                                                           CancellationToken ct)
+    {
+        var held = await deposits.ListAsync(d => orderIds.Contains(d.LabOrderId)
+                                                 && d.Status == DepositStatus.Held, ct);
+        if (held.Count == 0) return Result.Success(0m);
+
+        var payerPaysDirectly = invoice.ClaimStatus == ClaimStatus.Prepared;
+        var room = Money.Round(invoice.OutstandingAmount
+                               - (payerPaysDirectly ? invoice.PayerShareAmount : 0m));
+        var applied = 0m;
+
+        foreach (var deposit in held.OrderBy(d => d.ReceivedAt))
+        {
+            if (room <= 0m) break;
+
+            var amount = Math.Min(deposit.Remaining, room);
+            if (amount <= 0m) continue;
+
+            var payment = new Payment(amount, deposit.Method, DateOnly.FromDateTime(deposit.ReceivedAt.Date),
+                                      deposit.ReceivedByUserId, invoice.SiteId)
+            {
+                Reference = deposit.Reference ?? deposit.Number,
+                BankName = deposit.BankName,
+                MaturityDate = deposit.MaturityDate,
+                CashSessionId = deposit.CashSessionId,
+                DepositId = deposit.Id,
+                Notes = $"Acompte {deposit.Number}"
+            };
+
+            // Not accumulated into a till: the money entered the till when the deposit was taken.
+            var recorded = invoice.RecordPayment(payment);
+            if (recorded.IsFailure) return Result.Failure<decimal>(recorded.Errors);
+
+            var marked = deposit.ApplyTo(invoice.Id, amount, clock.Now);
+            if (marked.IsFailure) return Result.Failure<decimal>(marked.Errors);
+
+            deposits.Update(deposit);
+
+            room = Money.Round(room - amount);
+            applied = Money.Round(applied + amount);
+        }
+
+        return Result.Success(applied);
     }
 
     // ---- Settlement -----------------------------------------------------------------------------
@@ -674,6 +897,98 @@ public sealed class BillingService(
         await unitOfWork.SaveChangesAsync(ct);
 
         return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
+    }
+
+    /// <summary>
+    /// Records the amount the payer accepted on one invoice's payer share, and what becomes of the
+    /// rest.
+    /// <para>
+    /// The accepted amount is entered as the payer's settlement. The shortfall is either left on the
+    /// invoice for the patient to pay at the counter, or written off with its reason; the claim
+    /// status follows: settled, partly accepted or rejected.
+    /// </para>
+    /// </summary>
+    public async Task<Result> RecordPayerSettlementAsync(Guid invoiceId, decimal acceptedAmount,
+                                                         PayerShortfallHandling shortfall,
+                                                         string? reason, string? remittanceReference,
+                                                         CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.ExportAccounting);
+        if (permitted.IsFailure) return permitted;
+
+        var invoice = await invoices.GetByIdWithDetailsAsync(invoiceId, ct);
+        if (invoice is null) return Result.Failure(Error.NotFound("Invoice_NotFound"));
+
+        if (invoice.ClaimStatus is ClaimStatus.NotApplicable or ClaimStatus.Prepared)
+            return Result.Failure(Error.Validation("Claim_NotSubmitted", invoice.Number));
+
+        if (invoice.PayerAcceptedAmount is not null)
+            return Result.Failure(Error.Conflict("Claim_SettlementAlreadyRecorded", invoice.Number));
+
+        var accepted = Money.Round(acceptedAmount);
+
+        if (accepted < 0m || accepted > invoice.PayerShareAmount)
+            return Result.Failure(Error.Validation("Claim_AcceptedAmountInvalid",
+                                                   invoice.PayerShareAmount));
+
+        var missing = Money.Round(invoice.PayerShareAmount - accepted);
+
+        if (missing > 0m && string.IsNullOrWhiteSpace(reason))
+            return Result.Failure(Error.Validation("Claim_RejectionReasonRequired"));
+
+        var today = clock.Today;
+
+        if (accepted > 0m)
+        {
+            var settlement = new Payment(accepted, PaymentMethod.ThirdPartyPayer, today,
+                                         currentUser.UserId, invoice.SiteId)
+            {
+                RemittanceReference = string.IsNullOrWhiteSpace(remittanceReference)
+                    ? null : remittanceReference.Trim(),
+                Notes = "Règlement tiers payant"
+            };
+
+            var paid = invoice.RecordPayment(settlement);
+            if (paid.IsFailure) return paid;
+        }
+
+        if (missing > 0m && shortfall == PayerShortfallHandling.WriteOff)
+        {
+            // Never more than what is still owed: the patient may already have paid part of it.
+            var loss = Math.Min(missing, invoice.OutstandingAmount);
+
+            if (loss > 0m)
+            {
+                var writeOff = new Payment(loss, PaymentMethod.WriteOff, today, currentUser.UserId,
+                                           invoice.SiteId)
+                {
+                    Notes = $"Perte sur refus du tiers payant : {reason}"
+                };
+
+                var written = invoice.RecordPayment(writeOff);
+                if (written.IsFailure) return written;
+            }
+        }
+
+        invoice.PayerAcceptedAmount = accepted;
+        invoice.ClaimStatus = missing == 0m
+            ? ClaimStatus.Settled
+            : accepted == 0m ? ClaimStatus.Rejected : ClaimStatus.PartiallyAccepted;
+        invoice.ClaimRejectionReason = missing > 0m ? reason!.Trim() : null;
+
+        invoices.Update(invoice);
+
+        unitOfWork.AuditReason =
+            $"Tiers payant sur {invoice.Number} : {accepted:N2} DH acceptés sur {invoice.PayerShareAmount:N2} DH" +
+            (missing > 0m
+                ? shortfall == PayerShortfallHandling.WriteOff
+                    ? $", {missing:N2} DH passés en perte — {reason}"
+                    : $", {missing:N2} DH laissés à la charge du patient — {reason}"
+                : string.Empty);
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success();
     }
 
     // ---- Till -----------------------------------------------------------------------------------

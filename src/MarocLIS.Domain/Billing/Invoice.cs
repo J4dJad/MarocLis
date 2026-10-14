@@ -116,6 +116,13 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     public ClaimStatus ClaimStatus { get; set; } = ClaimStatus.NotApplicable;
     public string? ClaimRejectionReason { get; set; }
 
+    /// <summary>
+    /// What the payer actually agreed to pay on its share, once it has answered. Null until then.
+    /// The difference with <see cref="PayerShareAmount"/> is either left for the patient to pay or
+    /// written off, and the choice is recorded as a payment line either way.
+    /// </summary>
+    public decimal? PayerAcceptedAmount { get; set; }
+
     /// <summary>Biologist INPE carried on the claim, required by some payers.</summary>
     public string? BiologistInpe { get; set; }
 

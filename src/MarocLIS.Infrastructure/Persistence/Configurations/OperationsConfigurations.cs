@@ -117,6 +117,26 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
     }
 }
 
+public sealed class DepositConfiguration : IEntityTypeConfiguration<Deposit>
+{
+    public void Configure(EntityTypeBuilder<Deposit> builder)
+    {
+        builder.ToTable("Deposits", "bil");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Number).HasMaxLength(40).IsRequired();
+        builder.Property(e => e.Reference).HasMaxLength(60);
+        builder.Property(e => e.BankName).HasMaxLength(120);
+        builder.Property(e => e.RefundReason).HasMaxLength(500);
+        builder.Ignore(e => e.Remaining);
+
+        builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UX_Deposits_Number");
+        builder.HasIndex(e => new { e.LabOrderId, e.Status }).HasDatabaseName("IX_Deposits_Order_Status");
+        builder.HasIndex(e => e.CashSessionId)
+               .HasFilter("[CashSessionId] IS NOT NULL")
+               .HasDatabaseName("IX_Deposits_CashSession");
+    }
+}
+
 public sealed class CashSessionConfiguration : IEntityTypeConfiguration<CashSession>
 {
     public void Configure(EntityTypeBuilder<CashSession> builder)

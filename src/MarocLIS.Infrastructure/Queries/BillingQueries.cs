@@ -23,10 +23,14 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
         await db.LabOrders.AsNoTracking()
             .Where(o => o.SiteId == siteId
                         && o.InvoiceId == null
-                        && o.Status != LabOrderStatus.Cancelled
-                        && o.Status != LabOrderStatus.Draft
-                        && o.Items.Any(i => i.Status != LabOrderItemStatus.Cancelled
-                                            && i.ChargedPrice > 0m))
+                        && ((o.Status != LabOrderStatus.Cancelled
+                             && o.Status != LabOrderStatus.Draft
+                             && o.Items.Any(i => i.Status != LabOrderItemStatus.Cancelled
+                                                 && i.ChargedPrice > 0m))
+                            // A cancelled request still holding a deposit stays listed: the money
+                            // has to be handed back from somewhere.
+                            || db.Deposits.Any(d => d.LabOrderId == o.Id
+                                                    && d.Status == DepositStatus.Held)))
             .Join(db.Patients.AsNoTracking(), o => o.PatientId, p => p.Id,
                   (o, p) => new { Order = o, Patient = p })
             // Ordered and capped before the projection: EF cannot sort on a member of a row built
@@ -51,7 +55,9 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                 x.Order.Items.Where(i => i.Status != LabOrderItemStatus.Cancelled)
                              .Sum(i => i.PatientShare),
                 x.Order.Items.Count(i => i.Status != LabOrderItemStatus.Cancelled),
-                x.Order.Status))
+                x.Order.Status,
+                db.Deposits.Where(d => d.LabOrderId == x.Order.Id && d.Status == DepositStatus.Held)
+                           .Sum(d => d.Amount - d.AppliedAmount - d.RefundedAmount)))
             .ToListAsync(ct);
 
     public async Task<PagedResult<InvoiceRow>> GetInvoicesAsync(
@@ -96,7 +102,9 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                 i.TotalAmount,
                 i.PaidAmount,
                 i.ClaimStatus,
-                i.CoveredOrderNumbersCsv
+                i.CoveredOrderNumbersCsv,
+                i.PayerShareAmount,
+                i.PayerAcceptedAmount
             })
             .ToListAsync(ct);
 
@@ -117,7 +125,9 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                     ? today.DayNumber - due.DayNumber
                     : 0,
             r.ClaimStatus,
-            r.CoveredOrderNumbersCsv)).ToList();
+            r.CoveredOrderNumbersCsv,
+            Money.Round(r.PayerShareAmount),
+            r.PayerAcceptedAmount)).ToList();
 
         return new PagedResult<InvoiceRow>(mapped, total, page, pageSize);
     }

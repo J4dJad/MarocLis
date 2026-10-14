@@ -1,5 +1,24 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Deposit_MethodNotAllowed": "Un acompte se règle en espèces, carte, chèque, virement, effet ou paiement mobile.",
+  "Deposit_NotHeld": "Cet acompte n'est plus en attente : il a déjà été imputé ou remboursé.",
+  "Deposit_ApplyAmountInvalid": "Le montant à imputer dépasse ce qui reste sur l'acompte.",
+  "Deposit_ExceedsOrderTotal": "L'acompte dépasse ce qui reste à couvrir sur le dossier ({0}).",
+  "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
+  "Deposit_NotFound": "Acompte introuvable.",
+
+  "Deposit": {
+    "Refunded": "Acompte remboursé sur {0}.",
+    "RefundPrompt": "Rembourser {1} d'acompte sur le dossier {0} ({2}). Motif :",
+    "NoneHeld": "Aucun acompte en attente sur ce dossier.",
+    "Taken": "Acompte {0} encaissé sur {1}. Il sera imputé sur la facture à son émission.",
+    "FullyCovered": "Ce dossier est déjà entièrement couvert par les acomptes reçus.",
+    "SelectOneOrder": "Cochez un seul dossier.",
+    "Available": "Reste à couvrir",
+    "Refund": "Rembourser l'acompte",
+    "Take": "Encaisser un acompte",
+    "Title": "Acompte"
+  },
 
   "PreviewOutcome": {
     "InstrumentNotUsable": "Retenu : automate pas en service",
@@ -948,6 +967,13 @@
   },
 
   "Claim": {
+    "SettlementRecorded": "{0} : {1} acceptés sur {2}.",
+    "ShortfallWriteOff": "Passer en perte",
+    "ShortfallPatientPays": "Laisser à la charge du patient (reste sur la facture)",
+    "ShortfallAmount": "Non accepté : {0}. Que devient la différence ?",
+    "RemittanceReference": "Référence du virement ou bordereau",
+    "AcceptedAmount": "Montant accepté",
+    "Settlement": "Montant accepté par l'organisme",
     "Claimable": "À transmettre",
     "ClaimableSummary": "À transmettre — {0} facture(s), {1}",
     "ClaimableSummaryBlocked": "À transmettre — {0} facture(s), {1} · {2} bloquée(s)",
@@ -2332,6 +2358,8 @@
   "Claim_OutcomeNotRecordable": "Le statut « {0} » ne s'enregistre pas comme retour d'organisme.",
   "Claim_RejectionReasonRequired": "Un rejet ou un règlement partiel doit porter le motif communiqué par l'organisme : c'est lui qui décide si le dossier est corrigé et retransmis ou passé en perte.",
   "Claim_NotSubmitted": "La facture {0} n'a pas été transmise en tiers payant.",
+  "Claim_SettlementAlreadyRecorded": "Le montant accepté a déjà été saisi pour la facture {0}.",
+  "Claim_AcceptedAmountInvalid": "Le montant accepté doit être compris entre 0 et la part de l'organisme ({0}).",
 
   "Sample_StorageLocationRequired": "L'emplacement de rangement est obligatoire.",
   "Sample_DiscardNoteRequired": "L'élimination d'un échantillon doit être motivée : elle met fin à toute possibilité de reprise.",

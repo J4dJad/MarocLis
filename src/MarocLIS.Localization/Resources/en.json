@@ -1,5 +1,24 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Deposit_MethodNotAllowed": "A deposit is paid by cash, card, cheque, transfer, bill of exchange or mobile payment.",
+  "Deposit_NotHeld": "This deposit is no longer held: it has already been applied or refunded.",
+  "Deposit_ApplyAmountInvalid": "The amount to apply exceeds what is left on the deposit.",
+  "Deposit_ExceedsOrderTotal": "The deposit exceeds what is left to cover on the request ({0}).",
+  "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
+  "Deposit_NotFound": "Deposit not found.",
+
+  "Deposit": {
+    "Refunded": "Deposit refunded on {0}.",
+    "RefundPrompt": "Refund {1} of deposit on request {0} ({2}). Reason:",
+    "NoneHeld": "No deposit held on this request.",
+    "Taken": "Deposit {0} taken on {1}. It will be applied to the invoice when issued.",
+    "FullyCovered": "This request is already fully covered by the deposits received.",
+    "SelectOneOrder": "Tick a single request.",
+    "Available": "Left to cover",
+    "Refund": "Refund deposit",
+    "Take": "Take a deposit",
+    "Title": "Deposit"
+  },
 
   "PreviewOutcome": {
     "InstrumentNotUsable": "Held: analyser not in service",
@@ -947,6 +966,13 @@
   },
 
   "Claim": {
+    "SettlementRecorded": "{0}: {1} accepted out of {2}.",
+    "ShortfallWriteOff": "Write it off",
+    "ShortfallPatientPays": "Leave it for the patient to pay (stays on the invoice)",
+    "ShortfallAmount": "Not accepted: {0}. What happens to the difference?",
+    "RemittanceReference": "Transfer or remittance reference",
+    "AcceptedAmount": "Accepted amount",
+    "Settlement": "Amount accepted by the payer",
     "Claimable": "Ready to claim",
     "ClaimableSummary": "Ready to claim — {0} invoice(s), {1}",
     "ClaimableSummaryBlocked": "Ready to claim — {0} invoice(s), {1} · {2} blocked",
@@ -2331,6 +2357,8 @@
   "Claim_OutcomeNotRecordable": "Status \"{0}\" cannot be recorded as a payer response.",
   "Claim_RejectionReasonRequired": "A rejection or part-payment must carry the reason the payer gave: it is what decides whether the claim is corrected and resubmitted or written off.",
   "Claim_NotSubmitted": "Invoice {0} has not been submitted to a third-party payer.",
+  "Claim_SettlementAlreadyRecorded": "The accepted amount has already been recorded for invoice {0}.",
+  "Claim_AcceptedAmountInvalid": "The accepted amount must be between 0 and the payer's share ({0}).",
 
   "Sample_StorageLocationRequired": "The storage location is mandatory.",
   "Sample_DiscardNoteRequired": "Discarding a sample must be justified: it ends any possibility of a repeat.",

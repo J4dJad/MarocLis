@@ -45,6 +45,12 @@ public sealed class Payment : AuditableAggregateRoot, ISiteScoped
     /// <summary>Till session this cash movement belongs to.</summary>
     public Guid? CashSessionId { get; set; }
 
+    /// <summary>
+    /// Set when this settlement is a deposit taken before the invoice. The money already entered
+    /// the till when the deposit was taken, so this payment must not be counted into it again.
+    /// </summary>
+    public Guid? DepositId { get; set; }
+
     /// <summary>Set when the payer settled several invoices in one remittance.</summary>
     public string? RemittanceReference { get; set; }
 
