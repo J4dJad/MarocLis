@@ -154,7 +154,34 @@ public sealed class AstmFrameReader(Encoding? encoding = null)
     }
 
     /// <summary>Takes the next bare control character (ENQ, ACK, NAK, EOT), if one is pending.</summary>
-    public byte? TryDequeueControl() => _controls.Count > 0 ? _controls.Dequeue() : null;
+    /// <remarks>
+    /// Reads the bytes waiting ahead of any frame itself. Control characters used to be picked out
+    /// only while looking for a frame, so a lone ENQ or ACK sat unread until the next bytes came:
+    /// the analyser's bid for the line went unanswered until it timed out, and the analyser's ACK
+    /// to our own transmission was never seen at all.
+    /// </remarks>
+    public byte? TryDequeueControl()
+    {
+        if (_controls.Count == 0) DrainLeadingControls();
+
+        return _controls.Count > 0 ? _controls.Dequeue() : null;
+    }
+
+    /// <summary>Moves the control characters that precede the next frame start into the queue.</summary>
+    private void DrainLeadingControls()
+    {
+        var index = 0;
+
+        while (index < _buffer.Count && _buffer[index] != AstmControl.Stx)
+        {
+            var b = _buffer[index];
+            if (b is AstmControl.Enq or AstmControl.Ack or AstmControl.Nak or AstmControl.Eot)
+                _controls.Enqueue(b);
+            index++;
+        }
+
+        if (index > 0) _buffer.RemoveRange(0, index);
+    }
 
     /// <summary>
     /// Extracts the next complete frame. Returns null when more bytes are needed. Control

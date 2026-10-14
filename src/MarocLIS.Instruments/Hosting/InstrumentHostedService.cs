@@ -103,7 +103,13 @@ public sealed class InstrumentHostedService(
 
         var repository = scope.ServiceProvider.GetRequiredService<IRepository<InstrumentInterface>>();
 
-        var enabled = await repository.ListAsync(i => i.IsEnabled, ct);
+        // Loaded one by one with their mappings. The list query does not bring the mapping table,
+        // and validation reads it: a bidirectional link looked empty and was refused as
+        // misconfigured however many codes it had, so no bidirectional analyser ever started.
+        var enabled = new List<InstrumentInterface>();
+
+        foreach (var row in await repository.ListAsync(i => i.IsEnabled, ct))
+            if (await repository.GetByIdWithDetailsAsync(row.Id, ct) is { } full) enabled.Add(full);
 
         var wanted = enabled.ToDictionary(i => i.Id);
 

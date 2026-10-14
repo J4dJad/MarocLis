@@ -134,6 +134,32 @@ public sealed class AstmFramingTests
     }
 
     [Fact]
+    public void Reader_HandsOverALoneControlCharacterWithoutAFrameScan()
+    {
+        // The driver asks for controls first. A lone ENQ (the analyser bidding for the line) or
+        // ACK (the analyser accepting ours) must be seen straight away, not one read later.
+        var reader = new AstmFrameReader(Latin1);
+        reader.Feed([AstmControl.Enq]);
+
+        reader.TryDequeueControl().Should().Be(AstmControl.Enq);
+        reader.TryDequeueControl().Should().BeNull();
+    }
+
+    [Fact]
+    public void Reader_LeavesAFrameInProgressAloneWhenAskedForControls()
+    {
+        var frame = AstmControl.BuildFrame(1, "P|1\r", isLast: true, Latin1);
+
+        var reader = new AstmFrameReader(Latin1);
+        reader.Feed([AstmControl.Enq, .. frame, AstmControl.Eot]);
+
+        reader.TryDequeueControl().Should().Be(AstmControl.Enq);
+        reader.TryDequeueControl().Should().BeNull();
+        reader.TryReadFrame()!.ChecksumValid.Should().BeTrue();
+        reader.TryDequeueControl().Should().Be(AstmControl.Eot);
+    }
+
+    [Fact]
     public void Reader_PreservesControlCharactersThatPrecedeAFrame()
     {
         // ENQ then a frame in one read: the control must not be swallowed by the frame scan, or

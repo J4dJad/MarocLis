@@ -76,6 +76,13 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
 
     private readonly List<string> _sessionRecords = [];
     private bool _analyserHoldsLine;
+
+    /// <summary>
+    /// The analyser's message was closed by its terminator record, but the analyser has not yet
+    /// released the line with EOT. Bidding before that EOT arrives breaks E1381: the EOT is then
+    /// read as the answer to our ENQ and the reply is lost.
+    /// </summary>
+    private bool _awaitingEot;
     private DateTimeOffset _lineGrantedAt;
 
     /// <summary>Queue of worklists to push once the line is free.</summary>
@@ -102,6 +109,7 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
     {
         _logger?.LogWarning("Instrument link {Interface} dropped: {Reason}", _config.Id, reason);
         _analyserHoldsLine = false;
+        _awaitingEot = false;
         _sessionRecords.Clear();
         _reader.Reset();
     }
@@ -157,49 +165,75 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
 
     private async Task ProcessAsync(CancellationToken ct)
     {
-        // Control characters first: they carry the line state and must be honoured in order.
-        while (_reader.TryDequeueControl() is { } control)
+        // Control characters and frames are taken in the order they arrived, until the buffer
+        // holds nothing complete: an EOT that follows the last frame in the same read is honoured
+        // now, not when the analyser next sends something.
+        bool progressed;
+
+        do
         {
-            switch (control)
+            progressed = false;
+
+            while (_reader.TryDequeueControl() is { } control)
             {
-                case AstmControl.Enq:
-                    _analyserHoldsLine = true;
-                    _lineGrantedAt = DateTimeOffset.Now;
-                    _sessionRecords.Clear();
-                    await _transport.WriteAsync(new[] { AstmControl.Ack }, ct);
-                    break;
+                progressed = true;
+                await HandleControlAsync(control, ct);
+            }
 
-                case AstmControl.Eot:
-                    await FinishSessionAsync(ct);
-                    break;
-
-                case AstmControl.Ack:
-                case AstmControl.Nak:
-                    // Acknowledgements to our own transmission are consumed by the send path.
-                    break;
+            if (_reader.TryReadFrame() is { } frame)
+            {
+                progressed = true;
+                await HandleFrameAsync(frame, ct);
             }
         }
+        while (progressed);
+    }
 
-        while (_reader.TryReadFrame() is { } frame)
+    private async Task HandleControlAsync(byte control, CancellationToken ct)
+    {
+        switch (control)
         {
-            if (!frame.ChecksumValid)
-            {
-                // NAK asks the analyser to resend. Accepting a bad frame would mean storing a
-                // result whose digits may have been corrupted in transit.
-                _logger?.LogWarning("Bad ASTM checksum on {Interface}; requesting a resend.", _config.Id);
-                await _sink.LogRawAsync(_config.Id, MessageDirection.Inbound,
-                                        $"[CHECKSUM FAILED] {frame.Text}", ct);
-                await _transport.WriteAsync(new[] { AstmControl.Nak }, ct);
-                continue;
-            }
+            case AstmControl.Enq:
+                _analyserHoldsLine = true;
+                _lineGrantedAt = DateTimeOffset.Now;
+                _sessionRecords.Clear();
+                await _transport.WriteAsync(new[] { AstmControl.Ack }, ct);
+                break;
 
-            _sessionRecords.AddRange(frame.Records);
-            await _transport.WriteAsync(new[] { AstmControl.Ack }, ct);
-
-            // A terminator record closes the message even if EOT is slow to arrive; some analysers
-            // send the two far enough apart that waiting would delay the results noticeably.
-            if (frame.IsLast && frame.Records.Any(r => r.StartsWith('L')))
+            case AstmControl.Eot:
+                _awaitingEot = false;
                 await FinishSessionAsync(ct);
+                break;
+
+            case AstmControl.Ack:
+            case AstmControl.Nak:
+                // Acknowledgements to our own transmission are consumed by the send path.
+                break;
+        }
+    }
+
+    private async Task HandleFrameAsync(AstmFrame frame, CancellationToken ct)
+    {
+        if (!frame.ChecksumValid)
+        {
+            // NAK asks the analyser to resend. Accepting a bad frame would mean storing a
+            // result whose digits may have been corrupted in transit.
+            _logger?.LogWarning("Bad ASTM checksum on {Interface}; requesting a resend.", _config.Id);
+            await _sink.LogRawAsync(_config.Id, MessageDirection.Inbound,
+                                    $"[CHECKSUM FAILED] {frame.Text}", ct);
+            await _transport.WriteAsync(new[] { AstmControl.Nak }, ct);
+            return;
+        }
+
+        _sessionRecords.AddRange(frame.Records);
+        await _transport.WriteAsync(new[] { AstmControl.Ack }, ct);
+
+        // A terminator record closes the message even if EOT is slow to arrive; some analysers
+        // send the two far enough apart that waiting would delay the results noticeably.
+        if (frame.IsLast && frame.Records.Any(r => r.StartsWith('L')))
+        {
+            _awaitingEot = true;
+            await FinishSessionAsync(ct);
         }
     }
 
@@ -277,6 +311,8 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
     {
         var frames = AstmControl.BuildFrames(records, _encoding);
 
+        await AwaitLineReleaseAsync(ct);
+
         // Bid for the line.
         await _transport.WriteAsync(new[] { AstmControl.Enq }, ct);
 
@@ -350,6 +386,32 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Waits for the analyser's EOT after a message we have already acted on, so our ENQ follows
+    /// it. Bounded: an analyser that never sends EOT must not block the reply forever.
+    /// </summary>
+    private async Task AwaitLineReleaseAsync(CancellationToken ct)
+    {
+        if (!_awaitingEot) return;
+
+        var deadline = DateTimeOffset.Now.AddSeconds(Math.Min(3, _config.AcknowledgementTimeoutSeconds));
+        var buffer = new byte[64];
+
+        while (_awaitingEot && DateTimeOffset.Now < deadline && !ct.IsCancellationRequested)
+        {
+            while (_reader.TryDequeueControl() is { } control)
+                if (control == AstmControl.Eot) _awaitingEot = false;
+
+            if (!_awaitingEot) break;
+
+            var read = await _transport.ReadAsync(buffer, ct);
+            if (read > 0) _reader.Feed(buffer.AsSpan(0, read));
+            else await Task.Delay(50, ct);
+        }
+
+        _awaitingEot = false;
     }
 
     public async ValueTask DisposeAsync()
