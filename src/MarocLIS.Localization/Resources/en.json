@@ -1,6 +1,30 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
 
+  "PreviewOutcome": {
+    "NoResults": "No result for this tube",
+    "OrderNotUsable": "Refused: order cancelled or missing",
+    "SpecimenNotUsable": "Refused: tube rejected or discarded",
+    "SpecimenAmbiguous": "Refused: several tubes share this code",
+    "SpecimenUnknown": "Refused: unknown tube",
+    "SpecimenIdMissing": "Refused: no tube number in the frame",
+    "EmptyValue": "Refused: empty value",
+    "NotNumeric": "Refused: value not numeric",
+    "AlreadyValidated": "Refused: result already validated",
+    "NotOrdered": "Refused: parameter not ordered on this tube",
+    "UnmappedCode": "Refused: code not mapped",
+    "IgnoredNonNumeric": "Ignored: unknown non-numeric code",
+    "ExcludedType": "Ignored: result type not accepted",
+    "WouldMarkNotDone": "Marked \"not done\"",
+    "WouldStoreControl": "Sent to quality control",
+    "WouldStore": "Stored"
+  },
+
+  "UnmappedNonNumericHandling": {
+    "Ignore": "Ignore it (alarms, histograms)",
+    "Report": "Report it in the log"
+  },
+
   "Shortcut": {
     "ShiftKey": "Shift",
     "Screen": "Open: {0}",
@@ -620,6 +644,7 @@
   },
 
   "Result": {
+    "InstrumentFlags": "Analyser alarm",
     "Title": "Result",
     "Plural": "Results",
     "Run": "Run",
@@ -1400,6 +1425,38 @@
   },
 
   "Interface": {
+    "TestFrameSummary": "{0} of {1} result(s) would be stored",
+    "TestFrameControl": "Control",
+    "TestFrameOutcome": "What the LIS would do",
+    "TestFrameType": "Type",
+    "TestFrameStored": "LIS value",
+    "TestFrameValue": "Value received",
+    "TestFrameParameter": "Parameter",
+    "TestFrameCode": "Code read",
+    "TestFrameRawTest": "Raw test field",
+    "TestFrameOrder": "Order · patient",
+    "TestFrameSpecimen": "Tube",
+    "TestFrameNoMessage": "No result frame has been received on this link.",
+    "TestFrameLoadLast": "Load the last frame received",
+    "TestFrameRun": "Read the frame",
+    "TestFrameHelp": "Paste a frame (lines, <CR>, <STX>… accepted) or load the last one received. Nothing is stored: the screen shows what the LIS would do with each result.",
+    "TestFrameAfterSave": "Frame testing becomes available once the link is saved.",
+    "TestFrame": "Test a frame…",
+    "FormatNotice": "\"Auto\" follows the standard. Change a setting only when the analyser manual says so, then check with \"Test a frame\".",
+    "KeepInstrumentFlags": "Keep the analyser's alarms with the result",
+    "FormatUnmappedNonNumeric": "Unknown non-numeric code",
+    "FormatResultTypesNotice": "Empty = keep everything. Abbott sends the value (F) then the interpretation (I): \"F\" keeps only the value.",
+    "FormatResultTypes": "Accepted result types (e.g. F)",
+    "FormatSpecimenComponent": "Tube component",
+    "FormatSpecimenField": "Tube number field",
+    "FormatCodeSuffix": "Suffix to ignore",
+    "FormatCodeComponent": "Test code component",
+    "FormatProfile.Abbott": "Abbott Architect / Alinity",
+    "FormatProfile.RocheCobas": "Roche cobas (code followed by \"/\")",
+    "FormatProfile.Standard": "Standard (ASTM / HL7)",
+    "FormatProfile.Custom": "Custom",
+    "FormatProfile": "Vendor profile",
+    "FormatSection": "Message format",
     "TickAll": "Tick all",
     "AlreadyMapped": "already linked",
     "AddParametersConfirm": "Add to the mapping",
@@ -2701,6 +2758,14 @@
   "Interface_InboundDirectoryRequired": "The inbound folder is required for a file-drop interface.",
   "Interface_MappingsRequiredForBidirectional": "A bidirectional interface requires at least one code mapping.",
   "Interface_MappingCodeTaken": "Analyser code \"{0}\" is already linked to another parameter of this analyser (even if disabled). Choose another code.",
+  "Interface_PreviewQuery": "Worklist query for: {0}",
+  "Interface_FormatComponentRange": "A component must be between 1 and 9.",
+  "Interface_FormatSuffixTooLong": "The suffix to ignore cannot exceed 10 characters.",
+  "Interface_FormatTypesTooLong": "The result type list cannot exceed 60 characters.",
+  "Interface_FormatSpecimenFieldInvalid": "Field \"{0}\" does not exist for this protocol.",
+  "Interface_Poct1AInvalidXml": "Unreadable POCT1-A message: the XML is not valid.",
+  "Interface_Poct1ARoleIgnored": "POCT1-A event of type \"{0}\" ignored (only patients and controls are imported).",
+  "Interface_Poct1ANoObservation": "POCT1-A message without any observation.",
   "Order_NotFoundForScan": "No order matches \"{0}\" on this site.",
   "Order_AnalysisWithoutTariff": "Analysis {0} has no tariff in force today, neither for this payer nor on the laboratory's price list. Add one in the analysis catalogue, Tariffs tab.",
 

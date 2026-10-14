@@ -30,6 +30,13 @@ public sealed class InstrumentInterfaceQueries(LisDbContext db) : IInstrumentInt
                 i.AutoAcceptResults,
                 i.RaiseIssueOnUnmappedCode,
                 i.RouteControlResultsToQc,
+                i.FormatTestCodeComponent,
+                i.FormatTestCodeSuffix,
+                i.FormatSpecimenIdField,
+                i.FormatSpecimenIdComponent,
+                i.FormatAcceptedResultTypes,
+                i.UnmappedNonNumeric,
+                i.KeepInstrumentFlags,
                 i.LastConnectedAt,
                 i.LastMessageAt,
                 i.LastError,
@@ -105,7 +112,13 @@ public sealed class InstrumentInterfaceQueries(LisDbContext db) : IInstrumentInt
                     i.InboundDirectory,
                     i.OutboundDirectory,
                     i.FilePattern,
-                    i.ProcessedDirectory))
+                    i.ProcessedDirectory)
+                {
+                    Format = new MessageFormatSettings(
+                        i.FormatTestCodeComponent, i.FormatTestCodeSuffix, i.FormatSpecimenIdField,
+                        i.FormatSpecimenIdComponent, i.FormatAcceptedResultTypes,
+                        i.UnmappedNonNumeric, i.KeepInstrumentFlags)
+                })
         ];
     }
 

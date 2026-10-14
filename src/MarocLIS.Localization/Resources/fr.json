@@ -1,6 +1,30 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
 
+  "PreviewOutcome": {
+    "NoResults": "Aucun résultat pour ce tube",
+    "OrderNotUsable": "Refusé : dossier annulé ou introuvable",
+    "SpecimenNotUsable": "Refusé : tube rejeté ou éliminé",
+    "SpecimenAmbiguous": "Refusé : plusieurs tubes portent ce code",
+    "SpecimenUnknown": "Refusé : tube inconnu",
+    "SpecimenIdMissing": "Refusé : pas de n° de tube dans la trame",
+    "EmptyValue": "Refusé : valeur vide",
+    "NotNumeric": "Refusé : valeur non numérique",
+    "AlreadyValidated": "Refusé : résultat déjà validé",
+    "NotOrdered": "Refusé : paramètre non prescrit sur ce tube",
+    "UnmappedCode": "Refusé : code non correspondant",
+    "IgnoredNonNumeric": "Ignoré : code inconnu non numérique",
+    "ExcludedType": "Ignoré : type de résultat non accepté",
+    "WouldMarkNotDone": "Marqué « non fait »",
+    "WouldStoreControl": "Envoyé au contrôle qualité",
+    "WouldStore": "Enregistré"
+  },
+
+  "UnmappedNonNumericHandling": {
+    "Ignore": "L'ignorer (alarmes, histogrammes)",
+    "Report": "Le signaler dans le journal"
+  },
+
   "Shortcut": {
     "ShiftKey": "Maj",
     "Screen": "Ouvrir : {0}",
@@ -620,6 +644,7 @@
   },
 
   "Result": {
+    "InstrumentFlags": "Alarme automate",
     "Title": "Résultat",
     "Plural": "Résultats",
     "Run": "Passage n°",
@@ -1401,6 +1426,38 @@
   },
 
   "Interface": {
+    "TestFrameSummary": "{0} résultat(s) seraient enregistrés sur {1}",
+    "TestFrameControl": "Contrôle",
+    "TestFrameOutcome": "Ce que ferait le LIS",
+    "TestFrameType": "Type",
+    "TestFrameStored": "Valeur LIS",
+    "TestFrameValue": "Valeur reçue",
+    "TestFrameParameter": "Paramètre",
+    "TestFrameCode": "Code lu",
+    "TestFrameRawTest": "Champ test brut",
+    "TestFrameOrder": "Dossier · patient",
+    "TestFrameSpecimen": "Tube",
+    "TestFrameNoMessage": "Aucune trame de résultats reçue sur cette liaison.",
+    "TestFrameLoadLast": "Charger la dernière trame reçue",
+    "TestFrameRun": "Analyser la trame",
+    "TestFrameHelp": "Collez une trame (lignes, <CR>, <STX>… acceptés) ou chargez la dernière reçue. Rien n'est enregistré : l'écran montre ce que le LIS ferait de chaque résultat.",
+    "TestFrameAfterSave": "Le test de trame sera disponible après le premier enregistrement.",
+    "TestFrame": "Tester une trame…",
+    "FormatNotice": "« Auto » suit la norme. Changez un réglage seulement si le manuel de l'automate le demande, puis vérifiez avec « Tester une trame ».",
+    "KeepInstrumentFlags": "Garder les alarmes de l'automate avec le résultat",
+    "FormatUnmappedNonNumeric": "Code inconnu non numérique",
+    "FormatResultTypesNotice": "Vide = tout garder. Abbott envoie la valeur (F) puis l'interprétation (I) : « F » ne garde que la valeur.",
+    "FormatResultTypes": "Types de résultat acceptés (ex. F)",
+    "FormatSpecimenComponent": "Composant du tube",
+    "FormatSpecimenField": "Champ du n° de tube",
+    "FormatCodeSuffix": "Suffixe à ignorer",
+    "FormatCodeComponent": "Composant du code test",
+    "FormatProfile.Abbott": "Abbott Architect / Alinity",
+    "FormatProfile.RocheCobas": "Roche cobas (code suivi de « / »)",
+    "FormatProfile.Standard": "Standard (norme ASTM / HL7)",
+    "FormatProfile.Custom": "Personnalisé",
+    "FormatProfile": "Profil fabricant",
+    "FormatSection": "Format des messages",
     "TickAll": "Tout cocher",
     "AlreadyMapped": "déjà relié",
     "AddParametersConfirm": "Ajouter à la correspondance",
@@ -2702,6 +2759,14 @@
   "Interface_InboundDirectoryRequired": "Le dossier de dépôt est obligatoire pour une interface par fichiers.",
   "Interface_MappingsRequiredForBidirectional": "Une interface bidirectionnelle exige au moins une correspondance de code.",
   "Interface_MappingCodeTaken": "Le code automate « {0} » est déjà relié à un autre paramètre de cet automate (même désactivé). Choisissez un autre code.",
+  "Interface_PreviewQuery": "Demande de liste de travail pour : {0}",
+  "Interface_FormatComponentRange": "Un composant doit être compris entre 1 et 9.",
+  "Interface_FormatSuffixTooLong": "Le suffixe à ignorer ne doit pas dépasser 10 caractères.",
+  "Interface_FormatTypesTooLong": "La liste des types de résultat ne doit pas dépasser 60 caractères.",
+  "Interface_FormatSpecimenFieldInvalid": "Le champ « {0} » n'existe pas pour ce protocole.",
+  "Interface_Poct1AInvalidXml": "Message POCT1-A illisible : le XML n'est pas valide.",
+  "Interface_Poct1ARoleIgnored": "Événement POCT1-A de type « {0} » ignoré (seuls patients et contrôles sont importés).",
+  "Interface_Poct1ANoObservation": "Message POCT1-A sans observation.",
   "Order_NotFoundForScan": "Aucun dossier ne correspond à « {0} » sur ce site.",
   "Order_AnalysisWithoutTariff": "L'analyse {0} n'a pas de tarif en vigueur aujourd'hui, ni pour ce tiers payant ni dans la liste de prix du laboratoire. Ajoutez-lui un tarif dans le Catalogue des analyses, onglet Tarifs.",
 

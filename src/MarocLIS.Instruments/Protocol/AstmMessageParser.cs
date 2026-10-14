@@ -1,4 +1,5 @@
 using System.Globalization;
+using MarocLIS.Domain.Equipment;
 
 namespace MarocLIS.Instruments.Protocol;
 
@@ -41,8 +42,11 @@ public sealed record AstmDelimiters(char Field, char Repeat, char Component, cha
 /// </summary>
 public static class AstmMessageParser
 {
-    public static InstrumentMessage Parse(IEnumerable<string> records)
+    public static InstrumentMessage Parse(IEnumerable<string> records,
+                                          InstrumentMessageFormat? format = null)
     {
+        format ??= InstrumentMessageFormat.Auto;
+
         var list = records.Select(r => r.TrimEnd('\r', '\n')).Where(r => r.Length > 0).ToList();
 
         if (list.Count == 0)
@@ -110,7 +114,7 @@ public static class AstmMessageParser
                 {
                     CloseCurrent();
 
-                    var specimenId = Coalesce(Field(fields, 3), Field(fields, 4));
+                    var specimenId = SpecimenIdFrom(fields, delimiters, format);
                     if (string.IsNullOrWhiteSpace(specimenId))
                     {
                         issues.Add(InstrumentParseIssue.Blocking("Instruments_MissingSpecimenId", record));
@@ -149,16 +153,25 @@ public static class AstmMessageParser
                         break;
                     }
 
-                    var testCode = TestCodeFrom(Field(fields, 3), delimiters);
+                    var (testCode, codeIndex) = TestCodeFrom(Field(fields, 3), delimiters, format);
                     if (string.IsNullOrWhiteSpace(testCode))
                     {
                         issues.Add(InstrumentParseIssue.Warning("Instruments_MissingTestCode", record));
                         break;
                     }
 
+                    // The type after the code (Abbott's "^^^28^HBsAg^UNDILUTED^F"), else the status.
+                    var components = Component(Field(fields, 3), delimiters);
+                    var resultType = components.Skip(codeIndex + 1)
+                                               .LastOrDefault(c => !string.IsNullOrWhiteSpace(c))?.Trim()
+                                     ?? Field(fields, 9)?.Trim();
+
                     current.Results.Add(new InstrumentResult
                     {
                         InstrumentTestCode = testCode!,
+                        RawTestId = Field(fields, 3),
+                        ResultType = resultType,
+                        IsExcluded = !format.Accepts(resultType),
                         Value = Field(fields, 4)?.Trim(),
                         Unit = Field(fields, 5)?.Trim(),
                         ReferenceRange = Field(fields, 6)?.Trim(),
@@ -368,15 +381,53 @@ public static class AstmMessageParser
     /// the fourth component, but a good share of analysers send it in the first, so the fourth is
     /// preferred and the first non-empty component is the fallback.
     /// </summary>
-    private static string? TestCodeFrom(string? field, AstmDelimiters delimiters)
+    /// <para>
+    /// A link can name the component instead, and a suffix to drop (Roche's "/" dilution). Returns
+    /// the code and the index of the component it came from.
+    /// </para>
+    private static (string? Code, int Index) TestCodeFrom(string? field, AstmDelimiters delimiters,
+                                                         InstrumentMessageFormat format)
     {
         var components = Component(field, delimiters);
-        if (components.Length == 0) return null;
+        if (components.Length == 0) return (null, -1);
 
-        if (components.Length >= 4 && !string.IsNullOrWhiteSpace(components[3]))
-            return components[3].Trim();
+        int index;
 
-        return components.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c))?.Trim();
+        if (format.TestCodeComponent is { } wanted and > 0)
+            index = wanted - 1;
+        else if (components.Length >= 4 && !string.IsNullOrWhiteSpace(components[3]))
+            index = 3;
+        else
+            index = Array.FindIndex(components, c => !string.IsNullOrWhiteSpace(c));
+
+        var code = index >= 0 && index < components.Length ? components[index].Trim() : null;
+        if (string.IsNullOrWhiteSpace(code)) return (null, index);
+
+        return (format.StripSuffix(code).Trim(), index);
+    }
+
+    /// <summary>
+    /// The specimen number from an order record: field 3, else field 4, unless the link names the
+    /// field, and optionally the component (Sysmex puts the barcode inside field 4's components).
+    /// </summary>
+    private static string? SpecimenIdFrom(string[] fields, AstmDelimiters delimiters,
+                                          InstrumentMessageFormat format)
+    {
+        if (!int.TryParse(format.SpecimenIdField, out var fieldNumber) || fieldNumber < 1)
+        {
+            if (format.SpecimenIdComponent is not { } part)
+                return Coalesce(Field(fields, 3), Field(fields, 4));
+
+            return Coalesce(Component(Field(fields, 3), delimiters).ElementAtOrDefault(part - 1),
+                            Component(Field(fields, 4), delimiters).ElementAtOrDefault(part - 1));
+        }
+
+        var value = Field(fields, fieldNumber);
+
+        if (format.SpecimenIdComponent is { } component and > 0)
+            value = Component(value, delimiters).ElementAtOrDefault(component - 1);
+
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     private static string? Coalesce(params string?[] candidates) =>

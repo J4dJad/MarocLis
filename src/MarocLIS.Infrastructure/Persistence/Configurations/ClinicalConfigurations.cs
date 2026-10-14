@@ -348,6 +348,7 @@ public sealed class TestResultConfiguration : IEntityTypeConfiguration<TestResul
         builder.Property(e => e.AppliedReferenceRangeText).HasMaxLength(200);
         builder.Property(e => e.AppliedUnitSymbol).HasMaxLength(40);
         builder.Property(e => e.TechnicalComment).HasMaxLength(2000);
+        builder.Property(e => e.InstrumentFlags).HasMaxLength(500);
 
         builder.MapMultilingual(e => e.BiologistComment, "BiologistComment",
                                 frenchRequired: false, maxLength: 2000);

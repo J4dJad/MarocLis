@@ -48,6 +48,9 @@ public static class InstrumentsServiceCollectionExtensions
         services.AddScoped<IInstrumentResultReplayer>(
             sp => sp.GetRequiredService<InstrumentMessageSink>());
 
+        // Read-only: the "Tester une trame" window, on whatever workstation configures the link.
+        services.AddScoped<IInstrumentMessagePreviewer, InstrumentMessagePreviewer>();
+
         services.AddHostedService<InstrumentHostedService>();
 
         return services;

@@ -119,6 +119,12 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
     /// <summary>Technical note from the bench — not printed unless flagged for the report.</summary>
     public string? TechnicalComment { get; set; }
 
+    /// <summary>
+    /// The analyser's own flags and comments on this value (linearity exceeded, reagent alarm…), as
+    /// sent. Shown at validation: a value the analyser itself doubted must not be signed unseen.
+    /// </summary>
+    public string? InstrumentFlags { get; set; }
+
     /// <summary>The biologist's interpretive comment, printed under the result in three languages.</summary>
     public MultilingualText? BiologistComment { get; set; }
 

@@ -39,6 +39,21 @@ public sealed record InstrumentResult
     /// <summary>Comments attached to this result by the analyser.</summary>
     public IReadOnlyList<string> Comments { get; init; } = [];
 
+    /// <summary>The test identifier exactly as sent (ASTM R-3, HL7 OBX-3), for the message tester.</summary>
+    public string? RawTestId { get; init; }
+
+    /// <summary>
+    /// The result's type as the link's format reads it: the component after the code in ASTM (Abbott's
+    /// F or I), else the result status; in HL7 the value type and status (OBX-2/OBX-11).
+    /// </summary>
+    public string? ResultType { get; init; }
+
+    /// <summary>
+    /// Set when the link keeps only some result types and this is not one of them. Kept in the message
+    /// rather than dropped so the tester can show it; the import skips it.
+    /// </summary>
+    public bool IsExcluded { get; init; }
+
     /// <summary>True when the analyser marked the result as unusable ("X" status or equivalent).</summary>
     public bool IsNotDone =>
         string.Equals(ResultStatus, "X", StringComparison.OrdinalIgnoreCase);

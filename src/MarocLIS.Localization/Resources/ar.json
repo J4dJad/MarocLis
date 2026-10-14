@@ -1,6 +1,30 @@
 {
   "$comment": "الفهرس العربي — يُعرض من اليمين إلى اليسار. الأرقام تبقى بالصيغة اللاتينية (0-9) تفاديًا لأخطاء النقل في النتائج الطبية.",
 
+  "PreviewOutcome": {
+    "NoResults": "لا توجد نتيجة لهذا الأنبوب",
+    "OrderNotUsable": "مرفوض: ملف ملغى أو غير موجود",
+    "SpecimenNotUsable": "مرفوض: أنبوب مرفوض أو متلف",
+    "SpecimenAmbiguous": "مرفوض: عدة أنابيب تحمل هذا الرمز",
+    "SpecimenUnknown": "مرفوض: أنبوب غير معروف",
+    "SpecimenIdMissing": "مرفوض: لا يوجد رقم أنبوب في الرسالة",
+    "EmptyValue": "مرفوض: قيمة فارغة",
+    "NotNumeric": "مرفوض: قيمة غير رقمية",
+    "AlreadyValidated": "مرفوض: نتيجة مصادق عليها",
+    "NotOrdered": "مرفوض: معيار غير مطلوب على هذا الأنبوب",
+    "UnmappedCode": "مرفوض: رمز غير مربوط",
+    "IgnoredNonNumeric": "يُتجاهل: رمز غير معروف وغير رقمي",
+    "ExcludedType": "يُتجاهل: نوع نتيجة غير مقبول",
+    "WouldMarkNotDone": "يُسجّل «غير منجز»",
+    "WouldStoreControl": "يُرسل إلى مراقبة الجودة",
+    "WouldStore": "يُحفظ"
+  },
+
+  "UnmappedNonNumericHandling": {
+    "Ignore": "تجاهله (إنذارات، مخططات)",
+    "Report": "الإبلاغ عنه في السجل"
+  },
+
   "Shortcut": {
     "ShiftKey": "Shift",
     "Screen": "فتح: {0}",
@@ -620,6 +644,7 @@
   },
 
   "Result": {
+    "InstrumentFlags": "تنبيه الجهاز",
     "Title": "النتيجة",
     "Plural": "النتائج",
     "Run": "التمرير رقم",
@@ -1400,6 +1425,38 @@
   },
 
   "Interface": {
+    "TestFrameSummary": "سيتم حفظ {0} من {1} نتيجة",
+    "TestFrameControl": "مراقبة",
+    "TestFrameOutcome": "ما سيفعله النظام",
+    "TestFrameType": "النوع",
+    "TestFrameStored": "قيمة النظام",
+    "TestFrameValue": "القيمة المستلمة",
+    "TestFrameParameter": "المعيار",
+    "TestFrameCode": "الرمز المقروء",
+    "TestFrameRawTest": "حقل التحليل الخام",
+    "TestFrameOrder": "الملف · المريض",
+    "TestFrameSpecimen": "الأنبوب",
+    "TestFrameNoMessage": "لم تُستلم أي رسالة نتائج على هذا الربط.",
+    "TestFrameLoadLast": "تحميل آخر رسالة مستلمة",
+    "TestFrameRun": "تحليل الرسالة",
+    "TestFrameHelp": "ألصق رسالة (أسطر، <CR>، <STX>… مقبولة) أو حمّل آخر رسالة مستلمة. لا يُحفظ شيء: تعرض الشاشة ما سيفعله النظام بكل نتيجة.",
+    "TestFrameAfterSave": "يتاح اختبار الرسائل بعد أول حفظ للربط.",
+    "TestFrame": "اختبار رسالة…",
+    "FormatNotice": "«Auto» يتبع المعيار. غيّر الإعداد فقط إذا طلب دليل الجهاز ذلك، ثم تحقّق بـ «اختبار رسالة».",
+    "KeepInstrumentFlags": "الاحتفاظ بتنبيهات الجهاز مع النتيجة",
+    "FormatUnmappedNonNumeric": "رمز غير معروف وغير رقمي",
+    "FormatResultTypesNotice": "فارغ = الاحتفاظ بالكل. يرسل Abbott القيمة (F) ثم التفسير (I): «F» يحتفظ بالقيمة فقط.",
+    "FormatResultTypes": "أنواع النتائج المقبولة (مثال F)",
+    "FormatSpecimenComponent": "مكوّن الأنبوب",
+    "FormatSpecimenField": "حقل رقم الأنبوب",
+    "FormatCodeSuffix": "لاحقة يتم تجاهلها",
+    "FormatCodeComponent": "مكوّن رمز التحليل",
+    "FormatProfile.Abbott": "Abbott Architect / Alinity",
+    "FormatProfile.RocheCobas": "Roche cobas (رمز متبوع بـ «/»)",
+    "FormatProfile.Standard": "قياسي (ASTM / HL7)",
+    "FormatProfile.Custom": "مخصّص",
+    "FormatProfile": "ملف المصنّع",
+    "FormatSection": "صيغة الرسائل",
     "TickAll": "تحديد الكل",
     "AlreadyMapped": "مرتبط مسبقًا",
     "AddParametersConfirm": "إضافة إلى جدول المطابقة",
@@ -2701,6 +2758,14 @@
   "Interface_InboundDirectoryRequired": "مجلد الإيداع إلزامي في الواجهة بالملفات.",
   "Interface_MappingsRequiredForBidirectional": "الواجهة ثنائية الاتجاه تتطلب مطابقة رمز واحدة على الأقل.",
   "Interface_MappingCodeTaken": "رمز الجهاز «{0}» مرتبط بالفعل بمعيار آخر لهذا الجهاز (حتى لو كان معطلاً). اختر رمزًا آخر.",
+  "Interface_PreviewQuery": "طلب قائمة عمل لـ: {0}",
+  "Interface_FormatComponentRange": "يجب أن يكون المكوّن بين 1 و 9.",
+  "Interface_FormatSuffixTooLong": "يجب ألا تتجاوز اللاحقة 10 أحرف.",
+  "Interface_FormatTypesTooLong": "يجب ألا تتجاوز قائمة الأنواع 60 حرفًا.",
+  "Interface_FormatSpecimenFieldInvalid": "الحقل «{0}» غير موجود لهذا البروتوكول.",
+  "Interface_Poct1AInvalidXml": "رسالة POCT1-A غير مقروءة: صيغة XML غير صالحة.",
+  "Interface_Poct1ARoleIgnored": "تم تجاهل حدث POCT1-A من نوع «{0}» (تُستورد نتائج المرضى والمراقبة فقط).",
+  "Interface_Poct1ANoObservation": "رسالة POCT1-A بدون أي نتيجة.",
   "Order_NotFoundForScan": "لا يوجد ملف يطابق «{0}» في هذا الموقع.",
   "Order_AnalysisWithoutTariff": "التحليل {0} ليس له تعريفة سارية اليوم، لا لهذا الطرف الدافع ولا في قائمة أسعار المختبر. أضف له تعريفة في دليل التحاليل، تبويب التعريفات.",
 

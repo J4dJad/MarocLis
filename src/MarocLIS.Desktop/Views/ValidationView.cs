@@ -31,6 +31,7 @@ public sealed class ValidationView : LocalizedView
     private const string ColumnParameter = "parameter";
     private const string ColumnValue = "value";
     private const string ColumnFlag = "flag";
+    private const string ColumnAnalyser = "analyser";
     private const string ColumnUnit = "unit";
     private const string ColumnRange = "range";
     private const string ColumnPrevious = "previous";
@@ -250,6 +251,10 @@ public sealed class ValidationView : LocalizedView
         Add(ColumnRange, 18, UiTheme.Small, foreground: UiTheme.TextSecondary);
         Add(ColumnPrevious, 15, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight,
             UiTheme.TextSecondary);
+
+        // The analyser's own doubts (linearity, reagent, sample alarms): a value it flagged must not
+        // be signed without the biologist seeing why.
+        Add(ColumnAnalyser, 16, UiTheme.Small, foreground: UiTheme.Abnormal);
     }
 
     private void WireBehaviour()
@@ -362,6 +367,7 @@ public sealed class ValidationView : LocalizedView
             _details.Column(ColumnUnit).HeaderText = T("Result.Unit");
             _details.Column(ColumnRange).HeaderText = T("Result.ReferenceRange");
             _details.Column(ColumnPrevious).HeaderText = T("Result.Previous");
+            _details.Column(ColumnAnalyser).HeaderText = T("Result.InstrumentFlags");
         }
     }
 
@@ -489,7 +495,8 @@ public sealed class ValidationView : LocalizedView
                 row.PreviousValue is { } previous
                     ? $"{previous:N2}" +
                       (row.PreviousDate is { } date ? $"  {date:dd/MM/yy}" : string.Empty)
-                    : string.Empty);
+                    : string.Empty,
+                row.InstrumentFlags ?? string.Empty);
 
             var gridRow = _details.Rows[index];
             gridRow.Tag = row.TestResultId;

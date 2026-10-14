@@ -48,6 +48,9 @@ public sealed record ResultEntryRow
 
     public string? TechnicalComment { get; init; }
 
+    /// <summary>The analyser's own flags and comments on the value, as it sent them.</summary>
+    public string? InstrumentFlags { get; init; }
+
     /// <summary>Set when the sample this result came from was accepted with a documented defect.</summary>
     public SampleDefect SampleDefects { get; init; }
 
@@ -214,6 +217,7 @@ public sealed class ResultEntryService(
                 Flags = result.Flags,
                 Status = result.Status,
                 TechnicalComment = result.TechnicalComment,
+                InstrumentFlags = result.InstrumentFlags,
                 SampleDefects = item?.SampleId is { } sampleId
                     ? sampleDefects.GetValueOrDefault(sampleId)
                     : SampleDefect.None,

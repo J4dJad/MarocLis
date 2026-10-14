@@ -52,6 +52,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
     private readonly Button _toggleLink = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _editMappings = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _viewRaw = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _testFrame = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _replay = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _purgeLog = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
@@ -123,7 +124,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
             BackColor = UiTheme.Surface
         };
 
-        inner.Panel1.Controls.Add(Pane(_mappingHeading, _mappings, [_editMappings]));
+        inner.Panel1.Controls.Add(Pane(_mappingHeading, _mappings, [_editMappings, _testFrame]));
         inner.Panel2.Controls.Add(Pane(_messageHeading, _messages, [_viewRaw, _replay, _purgeLog]));
 
         outer.Panel2.Controls.Add(inner);
@@ -235,6 +236,11 @@ public sealed class InstrumentInterfaceView : LocalizedView
         _editLink.Click += async (_, _) => await EditLinkAsync();
         _toggleLink.Click += async (_, _) => await ToggleAsync();
         _editMappings.Click += async (_, _) => await EditMappingsAsync();
+        _testFrame.Click += async (_, _) =>
+        {
+            if (Selected is { } link)
+                await TestFrameAsync(FindForm(), link, link.Protocol, link.Format, SelectedMessage);
+        };
         _viewRaw.Click += async (_, _) => await ViewRawAsync();
 
         // The raw message carries patient results, so reading it takes the results right as well.
@@ -254,6 +260,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
         _newLink.Text = T("Interface.New");
         _editLink.Text = T("Interface.Edit");
         _editMappings.Text = T("Interface.EditMappings");
+        _testFrame.Text = T("Interface.TestFrame");
         _viewRaw.Text = T("Interface.ViewRaw");
         _replay.Text = T("Interface.Replay");
         _purgeLog.Text = T("Interface.PurgeLog");
@@ -629,6 +636,8 @@ public sealed class InstrumentInterfaceView : LocalizedView
         _newLink.Enabled = configure;
         _editLink.Enabled = configure && Selected is not null;
         _editMappings.Enabled = configure && Selected is not null;
+        _testFrame.Enabled = configure && Selected is not null
+                             && _currentUser.Has(Permissions.Results.View);
 
         _toggleLink.Enabled = Selected is not null
                               && _currentUser.Has(Permissions.Instruments.StartStop);
@@ -682,7 +691,11 @@ public sealed class InstrumentInterfaceView : LocalizedView
             instrument = picker.Choice;
         }
 
-        using var dialog = new InstrumentInterfaceDialog(Localizer, _dialogs, existing, instrument);
+        using var dialog = new InstrumentInterfaceDialog(
+            Localizer, _dialogs, existing, instrument,
+            existing is null || !_currentUser.Has(Permissions.Results.View)
+                ? null
+                : (owner, protocol, format) => _ = TestFrameAsync(owner, existing, protocol, format, null));
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;
 
@@ -718,6 +731,52 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         await LoadDetailAsync();
         await ActivateAsync();
+    }
+
+    /// <summary>
+    /// Opens "Tester une trame" for a link, with the protocol and format to try — the saved ones from
+    /// this screen, or the ones being edited from the configuration dialog. A selected inbound frame
+    /// is loaded and read straight away, which is the usual question: why did this one not import?
+    /// </summary>
+    private async Task TestFrameAsync(IWin32Window? owner, InterfaceRow link,
+                                      InstrumentProtocol protocol, MessageFormatSettings format,
+                                      MessageLogRow? message)
+    {
+        var mappings = await _interfaces.GetMappingsAsync(link.Id);
+        if (mappings.IsFailure) { _dialogs.ShowFailure(mappings); return; }
+
+        var parameters = mappings.Value
+            .GroupBy(m => m.TestParameterId)
+            .ToDictionary(g => g.Key, g => g.First().ParameterCode);
+
+        string? initial = null;
+
+        if (message is { Direction: MessageDirection.Inbound })
+        {
+            var raw = await _interfaces.GetRawMessageAsync(message.Id);
+            if (raw.IsSuccess) initial = raw.Value;
+        }
+
+        async Task<string?> LoadLastAsync()
+        {
+            var recent = await _interfaces.GetMessagesAsync(link.Id, 50);
+            if (recent.IsFailure) return null;
+
+            var inbound = recent.Value.FirstOrDefault(
+                m => m.Direction == MessageDirection.Inbound && (m.ResultCount ?? 0) > 0);
+            if (inbound is null) return null;
+
+            var raw = await _interfaces.GetRawMessageAsync(inbound.Id);
+            return raw.IsSuccess ? raw.Value : null;
+        }
+
+        using var dialog = new InstrumentFrameTestDialog(
+            Localizer, _dialogs,
+            $"{link.InstrumentCode} · {T($"InstrumentProtocol.{protocol}")}",
+            frame => _interfaces.PreviewMessageAsync(link.Id, protocol, format, frame),
+            LoadLastAsync, parameters, initial);
+
+        dialog.ShowDialog(owner);
     }
 
     /// <summary>

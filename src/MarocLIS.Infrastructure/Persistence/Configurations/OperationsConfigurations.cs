@@ -581,6 +581,11 @@ public sealed class InstrumentInterfaceConfiguration : IEntityTypeConfiguration<
         builder.Property(e => e.Encoding).HasMaxLength(30).IsRequired();
         builder.Property(e => e.LastError).HasMaxLength(1000);
 
+        builder.Property(e => e.FormatTestCodeSuffix).HasMaxLength(10);
+        builder.Property(e => e.FormatSpecimenIdField).HasMaxLength(10);
+        builder.Property(e => e.FormatAcceptedResultTypes).HasMaxLength(60);
+        builder.Ignore(e => e.MessageFormat);
+
         builder.HasMany(e => e.Mappings).WithOne()
                .HasForeignKey(m => m.InstrumentInterfaceId).OnDelete(DeleteBehavior.Cascade);
 

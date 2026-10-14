@@ -1731,6 +1731,24 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("nvarchar(60)");
 
+                    b.Property<string>("FormatAcceptedResultTypes")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int?>("FormatSpecimenIdComponent")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FormatSpecimenIdField")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int?>("FormatTestCodeComponent")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FormatTestCodeSuffix")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<string>("Handshake")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1748,6 +1766,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("KeepInstrumentFlags")
                         .HasColumnType("bit");
 
                     b.Property<DateTimeOffset?>("LastConnectedAt")
@@ -1815,6 +1836,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("Transport")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UnmappedNonNumeric")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -5060,6 +5084,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Flags")
                         .HasColumnType("int");
+
+                    b.Property<string>("InstrumentFlags")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<Guid?>("InstrumentId")
                         .HasColumnType("uniqueidentifier");

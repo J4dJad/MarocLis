@@ -35,17 +35,30 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
                               _routeControls;
     private readonly Label _transportNotice;
 
+    // --- message format: the right-hand column ---------------------------------------------------
+    private readonly ComboBox _profile, _codeComponent, _specimenField, _specimenComponent,
+                              _unmappedNonNumeric;
+    private readonly TextBox _codeSuffix, _resultTypes;
+    private readonly CheckBox _keepFlags;
+    private readonly Button _testFrame;
+    private bool _applyingProfile;
+
     internal InterfaceRequest? Request { get; private set; }
 
     /// <param name="newInstrument">
     /// For a new link, the analyser it belongs to, chosen beforehand in
     /// <see cref="InterfaceInstrumentDialog"/>.
     /// </param>
+    /// <param name="testFrame">
+    /// Opens the "Tester une trame" window with the protocol and format as they stand on this form,
+    /// saved or not. Null for a link not yet created: there is no mapping table to test against.
+    /// </param>
     internal InstrumentInterfaceDialog(ILocalizer localizer, IUserDialogs dialogs,
                                        InterfaceRow? existing,
-                                       (Guid Id, string Code)? newInstrument = null)
+                                       (Guid Id, string Code)? newInstrument = null,
+                                       Action<IWin32Window, InstrumentProtocol, MessageFormatSettings>? testFrame = null)
         : base(localizer, dialogs, existing is null ? "Interface.New" : "Interface.Edit",
-               existing?.InstrumentCode ?? newInstrument?.Code, 700, 620)
+               existing?.InstrumentCode ?? newInstrument?.Code, 1060, 620)
     {
         _id = existing?.Id;
         _instrumentId = existing?.InstrumentId ?? newInstrument?.Id ?? Guid.Empty;
@@ -53,9 +66,10 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _protocol = Choice("Interface.Protocol", 20, 16, 200,
                            existing?.Protocol ?? InstrumentProtocol.AstmE1394,
                            "InstrumentProtocol",
-                           // Only the two protocols this build has drivers for. Offering POCT1-A
-                           // with no driver behind it would be a setting that silently does nothing.
-                           [InstrumentProtocol.AstmE1394, InstrumentProtocol.Hl7V2]);
+                           // Only the protocols this build has drivers for. Offering one with no
+                           // driver behind it would be a setting that silently does nothing.
+                           [InstrumentProtocol.AstmE1394, InstrumentProtocol.Hl7V2,
+                            InstrumentProtocol.Poct1A]);
 
         _transport = Choice("Interface.Transport", 232, 16, 200,
                             existing?.Transport ?? InstrumentTransportKind.Serial,
@@ -148,11 +162,213 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
         Notice(180, 530, 496, 30, "Interface.EnabledNotice");
 
+        // --- message format ----------------------------------------------------------------------
+
+        var format = existing?.Format ?? MessageFormatSettings.Default;
+        const int fx = 712, fw = 328;
+
+        var section = new Label
+        {
+            Text = Localizer["Interface.FormatSection"],
+            Font = UiTheme.BodyBold,
+            ForeColor = UiTheme.Accent,
+            AutoSize = false,
+            Bounds = new Rectangle(fx, 16, fw, 20)
+        };
+        Controls.Add(section);
+        Controls.Add(new Label
+        {
+            BackColor = UiTheme.Border,
+            Bounds = new Rectangle(fx - 14, 16, 1, 540)
+        });
+
+        _profile = Picker("Interface.FormatProfile", fx, 40, fw,
+                          [.. FormatProfiles.Select(p => Localizer[p.Key])],
+                          Localizer[ProfileFor(format).Key]);
+        _profile.Font = UiTheme.Body;
+
+        _codeComponent = Picker("Interface.FormatCodeComponent", fx, 88, 150, Components(),
+                                Component(format.TestCodeComponent));
+        _codeSuffix = TextField("Interface.FormatCodeSuffix", fx + 162, 88, fw - 162,
+                                format.TestCodeSuffix, latin: true, mono: true);
+
+        _specimenField = Picker("Interface.FormatSpecimenField", fx, 136, 150, [Auto], Auto);
+        _specimenComponent = Picker("Interface.FormatSpecimenComponent", fx + 162, 136, fw - 162,
+                                    Components(), Component(format.SpecimenIdComponent));
+
+        _resultTypes = TextField("Interface.FormatResultTypes", fx, 184, fw,
+                                 format.AcceptedResultTypes, latin: true, mono: true);
+
+        Notice(fx, 230, fw, 46, "Interface.FormatResultTypesNotice");
+
+        _unmappedNonNumeric = Choice("Interface.FormatUnmappedNonNumeric", fx, 280, fw,
+                                     format.UnmappedNonNumeric, "UnmappedNonNumericHandling");
+
+        _keepFlags = Check("Interface.KeepInstrumentFlags", fx, 332, format.KeepInstrumentFlags);
+
+        Notice(fx, 356, fw, 76, "Interface.FormatNotice");
+
+        _testFrame = UiTheme.SecondaryButton(Localizer["Interface.TestFrame"]);
+        _testFrame.Bounds = new Rectangle(fx, 440, fw, UiTheme.ButtonHeight);
+        _testFrame.Visible = testFrame is not null;
+        _testFrame.Click += (_, _) =>
+            testFrame?.Invoke(this, Selected<InstrumentProtocol>(_protocol), CurrentFormat());
+        Controls.Add(_testFrame);
+
+        if (testFrame is null)
+            Notice(fx, 440, fw, 34, "Interface.TestFrameAfterSave");
+
+        RefreshSpecimenFields(format.SpecimenIdField);
+
+        _profile.SelectedIndexChanged += (_, _) => ApplyProfile();
+
+        foreach (var combo in new[] { _codeComponent, _specimenField, _specimenComponent })
+            combo.SelectedIndexChanged += (_, _) => SyncProfile();
+
+        _codeSuffix.TextChanged += (_, _) => SyncProfile();
+        _resultTypes.TextChanged += (_, _) => SyncProfile();
+
+        _protocol.SelectedIndexChanged += (_, _) =>
+        {
+            RefreshSpecimenFields(_specimenField.SelectedItem?.ToString());
+            SyncProfile();
+        };
+
         _transport.SelectedIndexChanged += (_, _) => RefreshTransport();
 
         RefreshTransport();
 
-        Buttons(574, 700);
+        Buttons(574, 1060);
+    }
+
+    // ---- message format -------------------------------------------------------------------------
+
+    private const string Auto = "Auto";
+
+    /// <summary>
+    /// Presets for the vendors whose layout is known to depart from the standard. A preset fills
+    /// the fields; the fields are what is saved, so a preset is never a hidden setting.
+    /// </summary>
+    private static readonly (string Key, MessageFormatSettings? Format)[] FormatProfiles =
+    [
+        ("Interface.FormatProfile.Custom", null),
+        ("Interface.FormatProfile.Standard", MessageFormatSettings.Default),
+        // cobas c 311 / c 501 / e 411: "^^^GLY/" — the dilution after the slash.
+        ("Interface.FormatProfile.RocheCobas", MessageFormatSettings.Default with { TestCodeSuffix = "/" }),
+        // Architect / Alinity: "^^^16^TSH^UNDILUTED^F" — keep the final value, not the
+        // interpretation (I) or the preliminary one (P).
+        ("Interface.FormatProfile.Abbott", MessageFormatSettings.Default with { AcceptedResultTypes = "F" })
+    ];
+
+    private static (string Key, MessageFormatSettings? Format) ProfileFor(MessageFormatSettings format)
+    {
+        foreach (var profile in FormatProfiles.Skip(1))
+        {
+            var p = profile.Format!;
+            if (p.TestCodeComponent == format.TestCodeComponent
+                && string.Equals(p.TestCodeSuffix ?? "", format.TestCodeSuffix ?? "", StringComparison.Ordinal)
+                && string.Equals(p.SpecimenIdField ?? "", format.SpecimenIdField ?? "", StringComparison.OrdinalIgnoreCase)
+                && p.SpecimenIdComponent == format.SpecimenIdComponent
+                && string.Equals(p.AcceptedResultTypes ?? "", format.AcceptedResultTypes ?? "", StringComparison.OrdinalIgnoreCase))
+                return profile;
+        }
+
+        return FormatProfiles[0];
+    }
+
+    private static string[] Components() => [Auto, "1", "2", "3", "4", "5", "6"];
+
+    private static string Component(int? value) => value?.ToString() ?? Auto;
+
+    private static int? ComponentOf(ComboBox combo) =>
+        int.TryParse(combo.SelectedItem?.ToString(), out var value) ? value : null;
+
+    private void RefreshSpecimenFields(string? current)
+    {
+        var protocol = Selected<InstrumentProtocol>(_protocol);
+        var fields = MessageFormatSettings.SpecimenFieldsFor(protocol);
+
+        _specimenField.Items.Clear();
+        _specimenField.Items.Add(Auto);
+
+        foreach (var field in fields)
+        {
+            // ASTM fields are named by their place in the O record, which is what the manuals print.
+            var index = _specimenField.Items.Add(protocol == InstrumentProtocol.AstmE1394 ? $"O-{field}" : field);
+            if (string.Equals(field, current?.Replace("O-", ""), StringComparison.OrdinalIgnoreCase))
+                _specimenField.SelectedIndex = index;
+        }
+
+        if (_specimenField.SelectedIndex < 0) _specimenField.SelectedIndex = 0;
+
+        // POCT1-A is XML: an element holds one value, so there is no component to choose.
+        var delimited = protocol != InstrumentProtocol.Poct1A;
+        _codeComponent.Enabled = _specimenComponent.Enabled = delimited;
+
+        if (!delimited)
+        {
+            Select(_codeComponent, Auto);
+            Select(_specimenComponent, Auto);
+        }
+    }
+
+    private void ApplyProfile()
+    {
+        if (_applyingProfile) return;
+
+        var format = FormatProfiles.ElementAtOrDefault(_profile.SelectedIndex).Format;
+        if (format is null) return;
+
+        _applyingProfile = true;
+        try
+        {
+            Select(_codeComponent, Component(format.TestCodeComponent));
+            _codeSuffix.Text = format.TestCodeSuffix ?? string.Empty;
+            Select(_specimenField, Auto);
+            Select(_specimenComponent, Component(format.SpecimenIdComponent));
+            _resultTypes.Text = format.AcceptedResultTypes ?? string.Empty;
+        }
+        finally
+        {
+            _applyingProfile = false;
+        }
+    }
+
+    /// <summary>A field changed by hand moves the preset to whichever one now matches, or "Personnalisé".</summary>
+    private void SyncProfile()
+    {
+        if (_applyingProfile) return;
+
+        _applyingProfile = true;
+        try
+        {
+            var index = Array.FindIndex(FormatProfiles, p => p.Key == ProfileFor(CurrentFormat()).Key);
+            if (index >= 0) _profile.SelectedIndex = index;
+        }
+        finally
+        {
+            _applyingProfile = false;
+        }
+    }
+
+    private static void Select(ComboBox combo, string value)
+    {
+        var index = combo.Items.IndexOf(value);
+        combo.SelectedIndex = index >= 0 ? index : 0;
+    }
+
+    private MessageFormatSettings CurrentFormat()
+    {
+        var field = _specimenField.SelectedItem?.ToString();
+
+        return new MessageFormatSettings(
+            ComponentOf(_codeComponent),
+            Blank(_codeSuffix),
+            field is null or Auto ? null : field.Replace("O-", ""),
+            ComponentOf(_specimenComponent),
+            Blank(_resultTypes),
+            Selected<UnmappedNonNumericHandling>(_unmappedNonNumeric),
+            _keepFlags.Checked);
     }
 
     /// <summary>A fixed list of values, where free text would only be a way to mistype one.</summary>
@@ -300,7 +516,9 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
             AutoAcceptResults = _autoAccept.Checked,
             RaiseIssueOnUnmappedCode = _raiseOnUnmapped.Checked,
-            RouteControlResultsToQc = _routeControls.Checked
+            RouteControlResultsToQc = _routeControls.Checked,
+
+            Format = CurrentFormat()
         };
 
         DialogResult = DialogResult.OK;

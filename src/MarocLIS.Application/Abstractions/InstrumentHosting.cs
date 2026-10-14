@@ -27,6 +27,57 @@ public interface IInstrumentResultReplayer
 }
 
 /// <summary>
+/// Reads a pasted or logged frame the way a link would, without storing anything.
+/// <para>
+/// What the "Tester une trame" window shows: for each result the code the parser extracted, the
+/// parameter it maps to, and what the import would do with it. The format is passed in rather than
+/// read from the link, so a setting can be tried before it is saved.
+/// </para>
+/// </summary>
+public interface IInstrumentMessagePreviewer
+{
+    Task<Result<MessagePreview>> PreviewAsync(Guid interfaceId, InstrumentProtocol protocol,
+                                              InstrumentMessageFormat format,
+                                              UnmappedNonNumericHandling unmappedNonNumeric,
+                                              string raw, CancellationToken ct = default);
+}
+
+/// <summary>What a frame would become. Issues are "Key\tdetail", like the message log's.</summary>
+public sealed record MessagePreview(IReadOnlyList<string> Issues, IReadOnlyList<PreviewLine> Lines)
+{
+    public int WouldStore => Lines.Count(l => l.Outcome is PreviewOutcome.WouldStore
+                                                       or PreviewOutcome.WouldStoreControl
+                                                       or PreviewOutcome.WouldMarkNotDone);
+}
+
+/// <summary>One result of the frame, with its specimen repeated so the grid reads flat.</summary>
+public sealed record PreviewLine(
+    string? SpecimenId, bool IsControl, string? AccessionNumber, string? PatientName,
+    string? RawTestId, string? Code, Guid? TestParameterId, string? ParameterCode,
+    string? Value, string? StoredValue, string? Unit, string? Flags, string? ResultType,
+    PreviewOutcome Outcome, string? Detail);
+
+public enum PreviewOutcome
+{
+    WouldStore,
+    WouldStoreControl,
+    WouldMarkNotDone,
+    ExcludedType,
+    IgnoredNonNumeric,
+    UnmappedCode,
+    NotOrdered,
+    AlreadyValidated,
+    NotNumeric,
+    EmptyValue,
+    SpecimenIdMissing,
+    SpecimenUnknown,
+    SpecimenAmbiguous,
+    SpecimenNotUsable,
+    OrderNotUsable,
+    NoResults
+}
+
+/// <summary>
 /// Append-only store for every frame exchanged with an analyser.
 /// <para>
 /// A narrow abstraction rather than a repository because <see cref="InstrumentMessageLog"/> is not

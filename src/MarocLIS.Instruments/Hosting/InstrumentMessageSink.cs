@@ -170,7 +170,7 @@ public sealed class InstrumentMessageSink(
         var link = await interfaces.GetByIdWithDetailsAsync(entry.InstrumentInterfaceId, ct);
         if (link is null) return Result.Failure<int>(Error.NotFound("Interface_NotFound"));
 
-        var reparsed = Reparse(link.Protocol, entry.RawContent);
+        var reparsed = Reparse(link.Protocol, entry.RawContent, link.MessageFormat);
 
         if (reparsed is null)
             return Result.Failure<int>(
@@ -190,12 +190,14 @@ public sealed class InstrumentMessageSink(
     /// verbatim, so each protocol is undone the way <see cref="InstrumentMessage.RawText"/> was
     /// built — not by a shared guess at the line ending.
     /// </summary>
-    private static InstrumentMessage? Reparse(InstrumentProtocol protocol, string raw) =>
+    internal static InstrumentMessage? Reparse(InstrumentProtocol protocol, string raw,
+                                               InstrumentMessageFormat format) =>
         protocol switch
         {
             InstrumentProtocol.AstmE1394 => AstmMessageParser.Parse(
-                raw.Split('\r', StringSplitOptions.RemoveEmptyEntries)),
-            InstrumentProtocol.Hl7V2 => Hl7ResultParser.Parse(raw),
+                raw.Split('\r', StringSplitOptions.RemoveEmptyEntries), format),
+            InstrumentProtocol.Hl7V2 => Hl7ResultParser.Parse(raw, format),
+            InstrumentProtocol.Poct1A => Poct1AResultParser.Parse(raw, format),
             _ => null
         };
 
@@ -308,10 +310,15 @@ public sealed class InstrumentMessageSink(
 
         foreach (var incoming in specimen.Results)
         {
+            // A result type the link does not keep (Abbott's interpretation beside its value).
+            if (incoming.IsExcluded) continue;
+
             var mapping = FindMapping(link.Mappings, incoming.InstrumentTestCode);
 
             if (mapping is null)
             {
+                if (IgnoredAsUnmappedNonNumeric(link, incoming)) continue;
+
                 // Never inferred. The same three letters mean different measurands on different
                 // analysers, and a guess puts a potassium value in a sodium field.
                 if (link.RaiseIssueOnUnmappedCode)
@@ -426,6 +433,7 @@ public sealed class InstrumentMessageSink(
 
         target.InstrumentId = link.InstrumentId;
         target.RawInstrumentValue = raw;
+        target.InstrumentFlags = link.KeepInstrumentFlags ? DescribeInstrumentFlags(incoming) : null;
 
         if (incoming.DilutionFactor is { } dilution and > 1m)
             target.DilutionFactor = dilution;
@@ -522,10 +530,15 @@ public sealed class InstrumentMessageSink(
 
         foreach (var incoming in specimen.Results)
         {
+            // A result type the link does not keep (Abbott's interpretation beside its value).
+            if (incoming.IsExcluded) continue;
+
             var mapping = FindMapping(link.Mappings, incoming.InstrumentTestCode);
 
             if (mapping is null)
             {
+                if (IgnoredAsUnmappedNonNumeric(link, incoming)) continue;
+
                 if (link.RaiseIssueOnUnmappedCode)
                     issues.Add(Describe("Interface_UnmappedCode", incoming.InstrumentTestCode));
 
@@ -788,6 +801,42 @@ public sealed class InstrumentMessageSink(
         detail is null ? resourceKey : $"{resourceKey}\t{detail}";
 
     private static string Describe(string resourceKey) => resourceKey;
+
+    /// <summary>
+    /// Unmapped and not a number: a haematology alarm ("Blasts?"), a histogram file name. Dropped
+    /// when the link says so, because such analysers send dozens per tube and burying the real
+    /// unknown codes under them is worse than not listing them.
+    /// </summary>
+    public static bool IgnoredAsUnmappedNonNumeric(InstrumentInterface link, InstrumentResult incoming) =>
+        IgnoredAsUnmappedNonNumeric(link.UnmappedNonNumeric, incoming);
+
+    public static bool IgnoredAsUnmappedNonNumeric(UnmappedNonNumericHandling handling,
+                                                   InstrumentResult incoming) =>
+        handling == UnmappedNonNumericHandling.Ignore
+        && !decimal.TryParse(incoming.Value?.TrimStart('<', '>').Trim(), NumberStyles.Float,
+                             CultureInfo.InvariantCulture, out _);
+
+    /// <summary>
+    /// The analyser's flag and comments on one value, as the biologist should see them. "N" (normal)
+    /// and an alarm code of 0 say nothing the interpretation does not, so they are left out.
+    /// </summary>
+    public static string? DescribeInstrumentFlags(InstrumentResult incoming)
+    {
+        var parts = new List<string>();
+
+        var flag = incoming.AbnormalFlag?.Trim();
+        if (!string.IsNullOrEmpty(flag) && !string.Equals(flag, "N", StringComparison.OrdinalIgnoreCase))
+            parts.Add(flag);
+
+        // Roche sends "C|1|I|0|I" after every result: alarm code 0, no alarm.
+        parts.AddRange(incoming.Comments.Select(c => c.Trim())
+                                        .Where(c => c.Length > 0 && c != "0"));
+
+        if (parts.Count == 0) return null;
+
+        var text = string.Join(" · ", parts);
+        return text.Length <= 500 ? text : text[..500];
+    }
 }
 
 /// <summary>

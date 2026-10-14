@@ -250,7 +250,7 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
         var raw = string.Join("\r", _sessionRecords);
         await _sink.LogRawAsync(_config.Id, MessageDirection.Inbound, raw, ct);
 
-        var message = AstmMessageParser.Parse(_sessionRecords);
+        var message = AstmMessageParser.Parse(_sessionRecords, _config.MessageFormat);
         _sessionRecords.Clear();
 
         if (message.Kind == InstrumentMessageKind.Query
@@ -500,7 +500,7 @@ public sealed class Hl7InstrumentDriver : IInstrumentDriver
         await _sink.LogRawAsync(_config.Id, MessageDirection.Inbound, text, ct);
 
         var parsed = Hl7Message.Parse(text);
-        var message = Hl7ResultParser.Parse(text);
+        var message = Hl7ResultParser.Parse(text, _config.MessageFormat);
 
         if (message.Kind == InstrumentMessageKind.Acknowledgement) return;
 

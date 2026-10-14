@@ -227,6 +227,7 @@ public sealed class InstrumentHostedService(
         {
             InstrumentProtocol.AstmE1394 => new AstmInstrumentDriver(link, transport, sink, logger),
             InstrumentProtocol.Hl7V2 => new Hl7InstrumentDriver(link, transport, sink, logger),
+            InstrumentProtocol.Poct1A => new Poct1AInstrumentDriver(link, transport, sink, logger),
             _ => null
         };
 
@@ -239,7 +240,9 @@ public sealed class InstrumentHostedService(
                      link.BaudRate, link.DataBits, link.Parity, link.StopBits, link.Handshake,
                      link.Host, link.TcpPort, link.ListenAsServer, link.InboundDirectory,
                      link.OutboundDirectory, link.FilePattern, link.ProcessedDirectory,
-                     link.Encoding, link.AcknowledgementTimeoutSeconds, link.MaxRetries);
+                     link.Encoding, link.AcknowledgementTimeoutSeconds, link.MaxRetries,
+                     // The parsers read the format from the link they were started with.
+                     link.MessageFormat);
 
     private async Task StopAllAsync()
     {

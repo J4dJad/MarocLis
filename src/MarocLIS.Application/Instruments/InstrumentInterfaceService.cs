@@ -42,6 +42,41 @@ public sealed record InterfaceRequest
     public bool AutoAcceptResults { get; init; }
     public bool RaiseIssueOnUnmappedCode { get; init; } = true;
     public bool RouteControlResultsToQc { get; init; } = true;
+
+    public MessageFormatSettings Format { get; init; } = MessageFormatSettings.Default;
+}
+
+/// <summary>
+/// How one analyser lays out its messages, where it departs from the textbook ASTM/HL7 layout:
+/// which component of the test field carries the code, a suffix to strip, which field carries the
+/// tube number, which result types to keep, and what to do with codes nobody mapped.
+/// </summary>
+public sealed record MessageFormatSettings(
+    int? TestCodeComponent, string? TestCodeSuffix, string? SpecimenIdField,
+    int? SpecimenIdComponent, string? AcceptedResultTypes,
+    UnmappedNonNumericHandling UnmappedNonNumeric, bool KeepInstrumentFlags)
+{
+    public static readonly MessageFormatSettings Default =
+        new(null, null, null, null, null, UnmappedNonNumericHandling.Report, true);
+
+    /// <summary>Field choices for the tube number, per protocol. Null means the protocol default.</summary>
+    public static IReadOnlyList<string> SpecimenFieldsFor(InstrumentProtocol protocol) => protocol switch
+    {
+        InstrumentProtocol.AstmE1394 => ["3", "4"],
+        InstrumentProtocol.Hl7V2 => ["SPM-2", "OBR-3", "OBR-2", "ORC-3"],
+        // POCT1-A: the specimen element, or the patient field a bedside device is scanned into.
+        InstrumentProtocol.Poct1A => ["SPC", "PT"],
+        _ => []
+    };
+
+    public InstrumentMessageFormat ToFormat() => new()
+    {
+        TestCodeComponent = TestCodeComponent,
+        TestCodeSuffix = TestCodeSuffix,
+        SpecimenIdField = SpecimenIdField,
+        SpecimenIdComponent = SpecimenIdComponent,
+        AcceptedResultTypes = AcceptedResultTypes
+    };
 }
 
 /// <summary>One analyser-code-to-parameter translation.</summary>
@@ -72,6 +107,8 @@ public sealed record InterfaceRow(
                       || (Direction != InstrumentDirection.Unidirectional && MappingCount == 0));
 
     public bool HasRecentFailures => FailedToday > 0;
+
+    public MessageFormatSettings Format { get; init; } = MessageFormatSettings.Default;
 }
 
 public sealed record MappingRow(
@@ -126,6 +163,7 @@ public sealed class InstrumentInterfaceService(
     IRepository<Instrument> instruments,
     IInstrumentMessageLogStore messageLog,
     IInstrumentResultReplayer replayer,
+    IInstrumentMessagePreviewer previewer,
     InstrumentHostOptions hostOptions,
     ISecurityAuditor securityAuditor,
     IInstrumentInterfaceQueries queries,
@@ -211,6 +249,21 @@ public sealed class InstrumentInterfaceService(
         return await replayer.ReplayAsync(logId, currentUser.UserId, ct);
     }
 
+    /// <summary>
+    /// What the link would make of a frame with the given format, saved or not. Nothing is stored;
+    /// the configuring right is asked because the answer names patients and their tubes.
+    /// </summary>
+    public async Task<Result<MessagePreview>> PreviewMessageAsync(
+        Guid interfaceId, InstrumentProtocol protocol, MessageFormatSettings format, string raw,
+        CancellationToken ct = default)
+    {
+        var permitted = guard.RequireAll(Permissions.Instruments.Configure, Permissions.Results.View);
+        if (permitted.IsFailure) return Result.Failure<MessagePreview>(permitted.FirstError);
+
+        return await previewer.PreviewAsync(interfaceId, protocol, format.ToFormat(),
+                                            format.UnmappedNonNumeric, raw, ct);
+    }
+
     // ---- Retention -----------------------------------------------------------------------------
 
     /// <summary>
@@ -293,6 +346,9 @@ public sealed class InstrumentInterfaceService(
 
         var instrument = await instruments.GetByIdAsync(request.InstrumentId, ct);
         if (instrument is null) return Result.Failure<Guid>(Error.NotFound("Instrument_NotFound"));
+
+        var format = ValidateFormat(request);
+        if (format.IsFailure) return Result.Failure<Guid>(format.FirstError);
 
         InstrumentInterface link;
 
@@ -377,6 +433,38 @@ public sealed class InstrumentInterfaceService(
         link.AutoAcceptResults = request.AutoAcceptResults;
         link.RaiseIssueOnUnmappedCode = request.RaiseIssueOnUnmappedCode;
         link.RouteControlResultsToQc = request.RouteControlResultsToQc;
+
+        var format = request.Format ?? MessageFormatSettings.Default;
+        link.FormatTestCodeComponent = format.TestCodeComponent;
+        link.FormatTestCodeSuffix = Trimmed(format.TestCodeSuffix);
+        link.FormatSpecimenIdField = Trimmed(format.SpecimenIdField)?.ToUpperInvariant();
+        link.FormatSpecimenIdComponent = format.SpecimenIdComponent;
+        link.FormatAcceptedResultTypes = Trimmed(format.AcceptedResultTypes);
+        link.UnmappedNonNumeric = format.UnmappedNonNumeric;
+        link.KeepInstrumentFlags = format.KeepInstrumentFlags;
+    }
+
+    private static Result ValidateFormat(InterfaceRequest request)
+    {
+        var format = request.Format ?? MessageFormatSettings.Default;
+        var errors = new List<Error>();
+
+        if (format.TestCodeComponent is < 1 or > 9 || format.SpecimenIdComponent is < 1 or > 9)
+            errors.Add(Error.Validation("Interface_FormatComponentRange"));
+
+        if (Trimmed(format.TestCodeSuffix) is { Length: > 10 })
+            errors.Add(Error.Validation("Interface_FormatSuffixTooLong"));
+
+        if (Trimmed(format.AcceptedResultTypes) is { Length: > 60 })
+            errors.Add(Error.Validation("Interface_FormatTypesTooLong"));
+
+        var field = Trimmed(format.SpecimenIdField);
+        if (field is not null
+            && !MessageFormatSettings.SpecimenFieldsFor(request.Protocol)
+                .Contains(field, StringComparer.OrdinalIgnoreCase))
+            errors.Add(Error.Validation("Interface_FormatSpecimenFieldInvalid", field));
+
+        return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
     }
 
     /// <summary>

@@ -98,6 +98,44 @@ public sealed class InstrumentInterface : AuditableAggregateRoot, ISiteScoped
     /// <summary>Whether control results are routed to the QC module automatically.</summary>
     public bool RouteControlResultsToQc { get; set; } = true;
 
+    // ---- Message format -------------------------------------------------------------------------
+    // Where this analyser puts things in its messages. Every vendor reads the same standard a little
+    // differently, so these are per link, and all null means "Auto": the parser's own fallbacks.
+
+    /// <summary>Component of the test identifier (ASTM R-3, HL7 OBX-3) holding the code, 1-based.</summary>
+    public int? FormatTestCodeComponent { get; set; }
+
+    /// <summary>Separator after which the code carries a suffix to drop, such as Roche's "/" dilution.</summary>
+    public string? FormatTestCodeSuffix { get; set; }
+
+    /// <summary>Where the specimen number is: ASTM order field "3" or "4"; HL7 "SPM-2", "OBR-3", "OBR-2" or "ORC-3".</summary>
+    public string? FormatSpecimenIdField { get; set; }
+
+    /// <summary>Component of that field holding the barcode, 1-based; null takes the field as a whole (ASTM) or its first component (HL7).</summary>
+    public int? FormatSpecimenIdComponent { get; set; }
+
+    /// <summary>
+    /// Result types or statuses kept, comma-separated (ASTM: the type after the code, such as Abbott's
+    /// F or I, else the result status; HL7: OBX-2 or OBX-11). Null keeps everything.
+    /// </summary>
+    public string? FormatAcceptedResultTypes { get; set; }
+
+    /// <summary>What to do with a result whose code is not mapped and whose value is not a number.</summary>
+    public UnmappedNonNumericHandling UnmappedNonNumeric { get; set; }
+
+    /// <summary>Whether the analyser's own flags and comments are kept with the result for validation.</summary>
+    public bool KeepInstrumentFlags { get; set; } = true;
+
+    /// <summary>The format settings as one value, for the parsers.</summary>
+    public InstrumentMessageFormat MessageFormat => new()
+    {
+        TestCodeComponent = FormatTestCodeComponent,
+        TestCodeSuffix = FormatTestCodeSuffix,
+        SpecimenIdField = FormatSpecimenIdField,
+        SpecimenIdComponent = FormatSpecimenIdComponent,
+        AcceptedResultTypes = FormatAcceptedResultTypes
+    };
+
     public DateTimeOffset? LastConnectedAt { get; set; }
     public DateTimeOffset? LastMessageAt { get; set; }
     public string? LastError { get; set; }
@@ -160,6 +198,56 @@ public enum InstrumentProtocol
 
     /// <summary>POCT1-A, for point-of-care devices.</summary>
     Poct1A = 5
+}
+
+/// <summary>An unmapped result that is not a number: an analyser alarm, a histogram file name.</summary>
+public enum UnmappedNonNumericHandling
+{
+    /// <summary>Reported as an unknown code, like any other.</summary>
+    Report = 0,
+
+    /// <summary>Dropped without a word: haematology analysers send dozens per tube.</summary>
+    Ignore = 1
+}
+
+/// <summary>
+/// Where an analyser puts the test code, the specimen number and the result type in its messages.
+/// All null is "Auto", which is the parsers' own reading of the standard.
+/// </summary>
+public sealed record InstrumentMessageFormat
+{
+    public static readonly InstrumentMessageFormat Auto = new();
+
+    public int? TestCodeComponent { get; init; }
+    public string? TestCodeSuffix { get; init; }
+    public string? SpecimenIdField { get; init; }
+    public int? SpecimenIdComponent { get; init; }
+    public string? AcceptedResultTypes { get; init; }
+
+    /// <summary>The accepted result types as a set, upper-cased; empty keeps everything.</summary>
+    public IReadOnlySet<string> AcceptedTypes =>
+        (AcceptedResultTypes ?? string.Empty)
+            .Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(t => t.ToUpperInvariant())
+            .ToHashSet();
+
+    /// <summary>The code with the configured suffix removed.</summary>
+    public string StripSuffix(string code)
+    {
+        if (string.IsNullOrEmpty(TestCodeSuffix)) return code;
+
+        var at = code.IndexOf(TestCodeSuffix, StringComparison.Ordinal);
+        return at > 0 ? code[..at] : code;
+    }
+
+    /// <summary>Whether a result of this type or status is kept. True when no filter is set.</summary>
+    public bool Accepts(params string?[] types)
+    {
+        var accepted = AcceptedTypes;
+        if (accepted.Count == 0) return true;
+
+        return types.Any(t => !string.IsNullOrWhiteSpace(t) && accepted.Contains(t.Trim().ToUpperInvariant()));
+    }
 }
 
 public enum InstrumentTransportKind

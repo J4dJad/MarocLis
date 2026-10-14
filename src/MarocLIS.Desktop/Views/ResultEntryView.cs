@@ -740,6 +740,10 @@ public sealed class ResultEntryView : LocalizedView
             var gridRow = _grid.Rows[index];
             gridRow.Tag = row.TestResultId;
 
+            // The analyser's own flags, on hover; the validation screen shows them as a column.
+            if (!string.IsNullOrEmpty(row.InstrumentFlags))
+                gridRow.Cells[ColumnFlag].ToolTipText = $"{T("Result.InstrumentFlags")} : {row.InstrumentFlags}";
+
             var locked = row.IsReadOnly || row.IsHeading;
             gridRow.Cells[ColumnValue].ReadOnly = locked;
             gridRow.Cells[ColumnComment].ReadOnly = row.IsHeading;

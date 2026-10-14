@@ -1,4 +1,5 @@
 using System.Text;
+using MarocLIS.Domain.Equipment;
 
 namespace MarocLIS.Instruments.Protocol;
 
@@ -77,8 +78,9 @@ public static class Mllp
 /// </summary>
 public static class Hl7ResultParser
 {
-    public static InstrumentMessage Parse(string text)
+    public static InstrumentMessage Parse(string text, InstrumentMessageFormat? format = null)
     {
+        format ??= InstrumentMessageFormat.Auto;
         var message = Hl7Message.Parse(text);
         var issues = new List<InstrumentParseIssue>();
 
@@ -121,6 +123,8 @@ public static class Hl7ResultParser
         string? patientId = null;
         string? patientName = null;
         string? specimenIdFromSpm = null;
+        string[]? lastSpm = null;
+        string[]? lastOrc = null;
 
         Builder? current = null;
 
@@ -149,7 +153,12 @@ public static class Hl7ResultParser
                     break;
                 }
 
+                case "ORC":
+                    lastOrc = segment;
+                    break;
+
                 case "SPM":
+                    lastSpm = segment;
                     // SPM-2 is the specimen identifier; it precedes the OBR it describes.
                     specimenIdFromSpm = message.Component(segment, 2, 1)
                                         ?? message.Component(segment, 2, 2)
@@ -160,13 +169,15 @@ public static class Hl7ResultParser
                 {
                     Close();
 
-                    var specimenId = specimenIdFromSpm
+                    var specimenId = ConfiguredSpecimenId(message, format, segment, lastSpm, lastOrc)
+                                     ?? specimenIdFromSpm
                                      ?? message.Component(segment, 3, 1)
                                      ?? message.Field(segment, 3)
                                      ?? message.Component(segment, 2, 1)
                                      ?? message.Field(segment, 2);
 
                     specimenIdFromSpm = null;
+                    lastSpm = null;
 
                     if (string.IsNullOrWhiteSpace(specimenId))
                     {
@@ -203,7 +214,8 @@ public static class Hl7ResultParser
                         break;
                     }
 
-                    var code = message.Component(segment, 3, 1);
+                    var code = message.Component(segment, 3, format.TestCodeComponent is > 0 and var c ? c : 1);
+                    if (!string.IsNullOrWhiteSpace(code)) code = format.StripSuffix(code.Trim());
                     if (string.IsNullOrWhiteSpace(code))
                     {
                         issues.Add(InstrumentParseIssue.Warning("Instruments_MissingTestCode",
@@ -216,9 +228,16 @@ public static class Hl7ResultParser
                         .Select(message.Unescape)
                         .Where(v => v.Length > 0));
 
+                    var valueType = message.Field(segment, 2);
+                    var status = message.Field(segment, 11);
+
                     current.Results.Add(new InstrumentResult
                     {
                         InstrumentTestCode = code!.Trim(),
+                        RawTestId = message.Field(segment, 3),
+                        ResultType = string.Join('/', new[] { valueType, status }
+                            .Where(t => !string.IsNullOrWhiteSpace(t))),
+                        IsExcluded = !format.Accepts(valueType, status),
                         Value = value.Length > 0 ? value : null,
                         Unit = message.Component(segment, 6, 1),
                         ReferenceRange = message.Field(segment, 7),
@@ -263,6 +282,34 @@ public static class Hl7ResultParser
             Issues = issues,
             RawText = text
         };
+    }
+
+    /// <summary>
+    /// The specimen number from the segment the link names ("SPM-2", "OBR-3", "OBR-2", "ORC-3"),
+    /// taking the named component or the first. Null when the link is on Auto or the field is empty,
+    /// so the usual fallbacks apply.
+    /// </summary>
+    private static string? ConfiguredSpecimenId(Hl7Message message, InstrumentMessageFormat format,
+                                                string[] obr, string[]? spm, string[]? orc)
+    {
+        var location = format.SpecimenIdField?.Trim().ToUpperInvariant();
+        if (string.IsNullOrEmpty(location)) return null;
+
+        var parts = location.Split('-', 2);
+        if (parts.Length != 2 || !int.TryParse(parts[1], out var field)) return null;
+
+        var segment = parts[0] switch
+        {
+            "SPM" => spm,
+            "ORC" => orc,
+            "OBR" => obr,
+            _ => null
+        };
+
+        if (segment is null) return null;
+
+        var value = message.Component(segment, field, format.SpecimenIdComponent is > 0 and var c ? c : 1);
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     private static InstrumentMessage ParseQuery(Hl7Message message, string text)
