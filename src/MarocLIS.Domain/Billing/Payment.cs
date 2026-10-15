@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using MarocLIS.Domain.Common;
 
 namespace MarocLIS.Domain.Billing;
@@ -68,6 +69,21 @@ public sealed class Payment : AuditableAggregateRoot, ISiteScoped
     /// </summary>
     public const decimal CashPaymentWarningThresholdMad = 20_000m;
 
+    /// <summary>
+    /// Money that actually came in: a settled payment that is not a write-off. A write-off is
+    /// recorded as a settlement so the receivable closes, but nobody paid it. An expression so the
+    /// statistics query and the domain share one definition.
+    /// </summary>
+    public static readonly Expression<Func<Payment, bool>> IsMoneyCollected =
+        p => p.Status == PaymentStatus.Settled && p.Method != PaymentMethod.WriteOff;
+
+    /// <summary>
+    /// What the third-party payer itself paid, as opposed to the patient at the counter or a
+    /// write-off of the refused share.
+    /// </summary>
+    public static readonly Expression<Func<Payment, bool>> IsPayerSettlement =
+        p => p.Status == PaymentStatus.Settled && p.Method == PaymentMethod.ThirdPartyPayer;
+
     public bool RequiresTraceableMethodWarning =>
         Method == PaymentMethod.Cash && Amount > CashPaymentWarningThresholdMad;
 
@@ -94,6 +110,22 @@ public sealed class Payment : AuditableAggregateRoot, ISiteScoped
         Status = PaymentStatus.Refunded;
         RefundedAt = at;
         RefundReason = reason;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Cancels a write-off whose reason no longer holds — the claim it closed was resubmitted.
+    /// The line stays on the invoice, cancelled, with the reason in its notes.
+    /// </summary>
+    public Result CancelWriteOff(string reason)
+    {
+        if (Method != PaymentMethod.WriteOff)
+            return Result.Failure(Error.Conflict("Payment_NotSettled"));
+        if (Status != PaymentStatus.Settled)
+            return Result.Failure(Error.Conflict("Payment_NotSettled"));
+
+        Status = PaymentStatus.Cancelled;
+        Notes = string.IsNullOrWhiteSpace(Notes) ? $"Annulé : {reason}" : $"{Notes} — annulé : {reason}";
         return Result.Success();
     }
 

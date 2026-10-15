@@ -61,9 +61,11 @@ public sealed class StatisticsQueries(LisDbContext db) : IStatisticsQueries
         var credited = await issued.Where(i => i.Kind == InvoiceKind.CreditNote)
                                    .SumAsync(i => (decimal?)Math.Abs(i.TotalAmount), ct) ?? 0m;
 
+        // A write-off is recorded as a settled payment so the receivable closes, but no money came
+        // in: counting it made a refused claim look like revenue collected.
         var collected = await db.Payments.AsNoTracking()
-            .Where(p => p.SiteId == siteId && p.PaymentDate >= from && p.PaymentDate <= to
-                        && p.Status == PaymentStatus.Settled)
+            .Where(p => p.SiteId == siteId && p.PaymentDate >= from && p.PaymentDate <= to)
+            .Where(Payment.IsMoneyCollected)
             .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
 
         return new FinanceTotals(Money.Round(invoiced), Money.Round(credited), Money.Round(collected));
