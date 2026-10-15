@@ -62,6 +62,21 @@ public sealed class FixedAsset : AuditableAggregateRoot, ISiteScoped
 
     public Guid? SupplierInvoiceId { get; set; }
 
+    /// <summary>
+    /// When the asset was linked to <see cref="SupplierInvoiceId"/>. An invoice whose purchases entry
+    /// had already been exported by then keeps that entry: the asset is capitalised by a
+    /// reclassification entry dated the day of the link.
+    /// </summary>
+    public DateTimeOffset? SupplierInvoiceLinkedAt { get; private set; }
+
+    /// <summary>Links the asset to a supplier invoice of the purchasing module, or removes the link.</summary>
+    public void LinkSupplierInvoice(Guid? invoiceId, DateTimeOffset now)
+    {
+        if (invoiceId == SupplierInvoiceId) return;
+        SupplierInvoiceId = invoiceId;
+        SupplierInvoiceLinkedAt = invoiceId is null ? null : now;
+    }
+
     /// <summary>The equipment record of the asset, when it is laboratory equipment.</summary>
     public Guid? InstrumentId { get; set; }
 
@@ -187,6 +202,75 @@ public sealed class FixedAssetDepreciationPosting : AggregateRoot
     public decimal AmountMad { get; private set; }
 
     public DateTimeOffset ExportedAt { get; private set; }
+
+    /// <summary>
+    /// The charge and depreciation accounts the month went out under, so that exporting it again
+    /// gives it on the same accounts after a change of category. Null on rows recorded before they
+    /// were kept.
+    /// </summary>
+    public string? ChargeAccount { get; private set; }
+
+    public string? DepreciationAccount { get; private set; }
+
+    public FixedAssetDepreciationPosting WithAccounts(string charge, string depreciation)
+    {
+        ChargeAccount = charge;
+        DepreciationAccount = depreciation;
+        return this;
+    }
+
+    public const int AccountMaxLength = 20;
+}
+
+/// <summary>
+/// A change of category of an asset already in the accounting software: its gross value moves from
+/// the old asset account to the new one, and the depreciation already exported from the old 28xxx
+/// to the new one. The next export covering <see cref="Date"/> carries the transfer entry; the
+/// months exported before keep their accounts.
+/// </summary>
+public sealed class FixedAssetTransfer : AggregateRoot
+{
+    private FixedAssetTransfer() { }
+
+    public FixedAssetTransfer(Guid fixedAssetId, DateOnly date, DateTimeOffset changedAt,
+                              FixedAssetCategory fromCategory, FixedAssetCategory toCategory,
+                              string fromAssetAccount, string fromDepreciationAccount, string fromChargeAccount,
+                              string toAssetAccount, string toDepreciationAccount,
+                              decimal grossMad, decimal depreciationMad)
+    {
+        FixedAssetId = fixedAssetId;
+        Date = date;
+        ChangedAt = changedAt;
+        FromCategory = fromCategory;
+        ToCategory = toCategory;
+        FromAssetAccount = fromAssetAccount;
+        FromDepreciationAccount = fromDepreciationAccount;
+        FromChargeAccount = fromChargeAccount;
+        ToAssetAccount = toAssetAccount;
+        ToDepreciationAccount = toDepreciationAccount;
+        GrossMad = Money.Round(grossMad);
+        DepreciationMad = Money.Round(depreciationMad);
+    }
+
+    public Guid FixedAssetId { get; private set; }
+
+    /// <summary>The day of the change: the date of the transfer entry.</summary>
+    public DateOnly Date { get; private set; }
+
+    public DateTimeOffset ChangedAt { get; private set; }
+    public FixedAssetCategory FromCategory { get; private set; }
+    public FixedAssetCategory ToCategory { get; private set; }
+    public string FromAssetAccount { get; private set; } = string.Empty;
+    public string FromDepreciationAccount { get; private set; } = string.Empty;
+    public string FromChargeAccount { get; private set; } = string.Empty;
+    public string ToAssetAccount { get; private set; } = string.Empty;
+    public string ToDepreciationAccount { get; private set; } = string.Empty;
+
+    /// <summary>The gross value on the books at the change.</summary>
+    public decimal GrossMad { get; private set; }
+
+    /// <summary>The depreciation exported up to the change.</summary>
+    public decimal DepreciationMad { get; private set; }
 }
 
 /// <summary>The categories of the register, each with its CGNC accounts (configurable).</summary>

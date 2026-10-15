@@ -71,7 +71,9 @@ public sealed class AccountingExportService(
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
     ICurrentUser currentUser,
-    IDataAccessAuditor accessAuditor)
+    IDataAccessAuditor accessAuditor,
+    IRepository<SupplierInvoiceExport>? invoiceExports = null,
+    IClock? clock = null)
 {
     private const string Right = Permissions.Accounting.Export;
 
@@ -148,8 +150,12 @@ public sealed class AccountingExportService(
             {
                 var invoices = await supplierQueries.GetAccountingInvoicesAsync(siteId, from, to, ct);
                 var payments = await supplierQueries.GetAccountingPaymentsAsync(siteId, from, to, ct);
+                var reclassified = await supplierQueries.GetAccountingReclassificationsAsync(siteId, from, to, ct);
                 entries.AddRange(AccountingExportCheck.Group(
-                    SupplierAccountingExport.BuildEntries(invoices, payments, purchasing),
+                    [
+                        .. SupplierAccountingExport.BuildEntries(invoices, payments, purchasing),
+                        .. SupplierAccountingExport.Reclassifications(reclassified, purchasing, from, to)
+                    ],
                     siteCodes.GetValueOrDefault(siteId, string.Empty)));
             }
         }
@@ -189,6 +195,26 @@ public sealed class AccountingExportService(
             foreach (var recorder in depreciationSources.OfType<IDepreciationExportRecorder>())
                 foreach (var siteId in request.SiteIds.Distinct())
                     await recorder.RecordExportedAsync(siteId, request.From, request.To, ct);
+
+        // The supplier invoices now in the accounting software: an asset linked to one of them later
+        // is reclassified rather than capitalised in an entry already imported (I7).
+        if (request.Journals.HasFlag(AccountingJournals.Purchases) && invoiceExports is not null)
+        {
+            var now = clock?.Now ?? DateTimeOffset.Now;
+            var added = 0;
+            foreach (var siteId in request.SiteIds.Distinct())
+                foreach (var invoice in await supplierQueries.GetAccountingInvoicesAsync(siteId, request.From, request.To, ct))
+                    if (!invoice.Exported && invoice.Id != Guid.Empty)
+                    {
+                        await invoiceExports.AddAsync(new SupplierInvoiceExport(invoice.Id, now), ct);
+                        added++;
+                    }
+            if (added > 0)
+            {
+                unitOfWork.AuditReason = $"Factures fournisseurs exportées du {request.From:dd/MM/yyyy} au {request.To:dd/MM/yyyy}";
+                await unitOfWork.SaveChangesAsync(ct);
+            }
+        }
         // The labels name the patients, and the file leaves the laboratory for the accounting firm:
         // recorded as the other exports of patient lists are (loi 09-08).
         await accessAuditor.LogAsync(DataAccessKind.Export, context: "Accounting/Export",
@@ -303,6 +329,7 @@ public sealed class AccountingExportService(
         Add(purchases, PurchasingSettings.SupplierAccountKey, "SupplierAccount", p.SupplierAccount);
         Add(purchases, PurchasingSettings.VatAccountKey, "RecoverableVat", p.VatAccount);
         Add(purchases, PurchasingSettings.AssetVatAccountKey, "AssetVat", p.AssetVatAccount);
+        Add(purchases, PurchasingSettings.AssetSupplierAccountKey, "AssetSuppliers", p.AssetSupplierAccount);
         Add(purchases, PurchasingSettings.BankAccountKey, "SupplierBankAccount", p.BankAccount);
         Add(purchases, PurchasingSettings.CashAccountKey, "SupplierCashAccount", p.CashAccount);
         foreach (var kind in Enum.GetValues<StockItemKind>())

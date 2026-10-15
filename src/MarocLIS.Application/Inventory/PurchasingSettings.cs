@@ -25,6 +25,7 @@ public sealed record PurchasingSettings
     public const string SupplierAccountKey = "Purchasing.Account.Suppliers";
     public const string VatAccountKey = "Purchasing.Account.RecoverableVat";
     public const string AssetVatAccountKey = "Purchasing.Account.AssetVat";
+    public const string AssetSupplierAccountKey = "Purchasing.Account.AssetSuppliers";
     public const string BankAccountKey = "Purchasing.Account.Bank";
     public const string CashAccountKey = "Purchasing.Account.Cash";
     public const string ChargeAccountKeyPrefix = "Purchasing.Account.Charge.";
@@ -65,6 +66,12 @@ public sealed record PurchasingSettings
     /// fixed asset of the register, when deducted.
     /// </summary>
     public string AssetVatAccount { get; init; } = "34551";
+
+    /// <summary>
+    /// CGNC 4481 Dettes sur acquisitions d'immobilisations: the supplier of an invoice capitalised as
+    /// a fixed asset, credited by the invoice and debited by its payments.
+    /// </summary>
+    public string AssetSupplierAccount { get; init; } = "4481";
 
     /// <summary>CGNC 5141 Banques.</summary>
     public string BankAccount { get; init; } = "5141";
@@ -126,6 +133,7 @@ public sealed record PurchasingSettings
             SupplierAccount = Code(SupplierAccountKey, d.SupplierAccount),
             VatAccount = Code(VatAccountKey, d.VatAccount),
             AssetVatAccount = Code(AssetVatAccountKey, d.AssetVatAccount),
+            AssetSupplierAccount = Code(AssetSupplierAccountKey, d.AssetSupplierAccount),
             BankAccount = Code(BankAccountKey, d.BankAccount),
             CashAccount = Code(CashAccountKey, d.CashAccount),
             ChargeAccounts = charges
@@ -151,6 +159,7 @@ public sealed record PurchasingSettings
             [SupplierAccountKey] = SupplierAccount,
             [VatAccountKey] = VatAccount,
             [AssetVatAccountKey] = AssetVatAccount,
+            [AssetSupplierAccountKey] = AssetSupplierAccount,
             [BankAccountKey] = BankAccount,
             [CashAccountKey] = CashAccount
         };

@@ -7,6 +7,7 @@ namespace MarocLIS.Application.Inventory;
 
 /// <summary>One supplier invoice as the purchases journal needs it.</summary>
 /// <param name="Assets">The fixed assets of the register linked to this invoice, if any.</param>
+/// <param name="Exported">Its purchases entry already went out in an accounting export file.</param>
 public sealed record AccountingInvoiceSource(
     string SupplierCode,
     string SupplierName,
@@ -14,13 +15,20 @@ public sealed record AccountingInvoiceSource(
     string InvoiceNumber,
     DateOnly InvoiceDate,
     IReadOnlyList<AccountingInvoiceLine> Lines,
-    IReadOnlyList<AccountingAssetShare>? Assets = null);
+    IReadOnlyList<AccountingAssetShare>? Assets = null,
+    Guid Id = default,
+    bool Exported = false);
 
 /// <summary>
 /// A fixed asset bought on a supplier invoice: its asset account (class 2, from its category), its
 /// cost excluding VAT and its VAT, and whether that VAT is deducted.
 /// </summary>
-public sealed record AccountingAssetShare(string AssetAccount, decimal ExcludingVat, decimal Vat, bool VatRecoverable);
+/// <param name="ReclassifiedOn">
+/// Set when the asset was linked after the invoice's purchases entry was exported: that entry stays
+/// as it went out, and a reclassification entry on this day moves the asset's share to its account.
+/// </param>
+public sealed record AccountingAssetShare(string AssetAccount, decimal ExcludingVat, decimal Vat, bool VatRecoverable,
+                                          DateOnly? ReclassifiedOn = null);
 
 /// <summary>An invoice line's amounts, with the category its charge account depends on.</summary>
 public sealed record AccountingInvoiceLine(StockItemKind Kind, decimal ExcludingVat, decimal Vat);
@@ -34,7 +42,8 @@ public sealed record AccountingPaymentSource(
     DateOnly PaidOn,
     decimal AmountMad,
     SupplierPaymentMethod Method,
-    string? Reference);
+    string? Reference,
+    bool AssetPurchase = false);
 
 /// <summary>One line of a journal entry.</summary>
 public sealed record AccountingEntry(
@@ -70,7 +79,14 @@ public enum AccountingExportLayout
 /// cost goes to its asset account (2332… by category) instead of the charge accounts, and its VAT
 /// to 34551 TVA récupérable sur immobilisations, or into the asset account when it is not deducted
 /// (an exempt laboratory, article 91 of the CGI). The register depreciates that same cost. What the
-/// invoice holds beyond the asset (consumables bought with it) stays a charge.
+/// invoice holds beyond the asset (consumables bought with it) stays a charge. Such an invoice is
+/// owed on 4481 Dettes sur acquisitions d'immobilisations, and its payments settle 4481.
+/// </para>
+/// <para>
+/// An asset linked to an invoice whose entry was already exported leaves that entry as it went out:
+/// <see cref="Reclassifications"/> moves the asset's share from the charges (and 34552) to the asset
+/// account (and 34551) on the day of the link. The supplier stays on 4411 then (to confirm with the
+/// accountant).
 /// </para>
 /// </summary>
 public static class SupplierAccountingExport
@@ -95,8 +111,10 @@ public static class SupplierAccountingExport
             var vat = Money.Round(invoice.Lines.Sum(l => l.Vat));
 
             decimal total = 0m;
-            if (invoice.Assets is { Count: > 0 } assets)
+            var supplier = settings.SupplierAccount;
+            if (OnInvoice(invoice) is { Count: > 0 } assets)
             {
+                supplier = settings.AssetSupplierAccount;
                 var capitalised = Capitalise(assets, byAccount, ref vat);
                 foreach (var (account, amount) in capitalised.AssetDebits)
                 {
@@ -128,7 +146,7 @@ public static class SupplierAccountingExport
                                                 null, label, invoice.InvoiceNumber, vat, 0m));
             }
 
-            entries.Add(new AccountingEntry(invoice.InvoiceDate, settings.PurchaseJournal, settings.SupplierAccount,
+            entries.Add(new AccountingEntry(invoice.InvoiceDate, settings.PurchaseJournal, supplier,
                                             thirdParty, label, invoice.InvoiceNumber, 0m, Money.Round(total)));
         }
 
@@ -140,11 +158,74 @@ public static class SupplierAccountingExport
             var piece = string.IsNullOrWhiteSpace(payment.Reference) ? payment.InvoiceNumber : payment.Reference;
             var label = $"Règl. {MethodLabel(payment.Method)} fact. {payment.InvoiceNumber} {payment.SupplierName}";
 
-            entries.Add(new AccountingEntry(payment.PaidOn, journal, settings.SupplierAccount,
+            entries.Add(new AccountingEntry(payment.PaidOn, journal,
+                                            payment.AssetPurchase ? settings.AssetSupplierAccount : settings.SupplierAccount,
                                             ThirdParty(payment.SupplierAccount, payment.SupplierCode),
                                             label, piece, payment.AmountMad, 0m));
             entries.Add(new AccountingEntry(payment.PaidOn, journal, treasury, null, label, piece,
                                             0m, payment.AmountMad));
+        }
+
+        return entries;
+    }
+
+    /// <summary>The assets capitalised in the invoice's own entry: those linked before it was exported.</summary>
+    private static IReadOnlyList<AccountingAssetShare> OnInvoice(AccountingInvoiceSource invoice) =>
+        [.. (invoice.Assets ?? []).Where(a => a.ReclassifiedOn is null)];
+
+    private static List<(string Account, decimal Amount)> Charges(AccountingInvoiceSource invoice,
+                                                                  PurchasingSettings settings) =>
+    [
+        .. invoice.Lines
+            .GroupBy(l => settings.ChargeAccountFor(l.Kind), StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => (Account: g.Key, Amount: Money.Round(g.Sum(l => l.ExcludingVat))))
+    ];
+
+    /// <summary>
+    /// The reclassification entries of the assets linked to an invoice after its purchases entry was
+    /// exported (I7), dated the day of the link when it falls within the period: the asset account
+    /// (cost, plus the VAT not deducted) and 34551 (the VAT deducted) in debit, the charge accounts
+    /// the export used and 34552 in credit, for the share the invoice still held after the assets
+    /// capitalised in its own entry.
+    /// </summary>
+    public static IReadOnlyList<AccountingEntry> Reclassifications(IEnumerable<AccountingInvoiceSource> invoices,
+                                                                   PurchasingSettings settings, DateOnly from,
+                                                                   DateOnly to)
+    {
+        var entries = new List<AccountingEntry>();
+
+        foreach (var invoice in invoices.OrderBy(i => i.InvoiceDate).ThenBy(i => i.InvoiceNumber, StringComparer.Ordinal))
+        {
+            var late = (invoice.Assets ?? []).Where(a => a.ReclassifiedOn is not null)
+                                             .OrderBy(a => a.ReclassifiedOn).ToList();
+            if (late.Count == 0) continue;
+
+            var charges = Charges(invoice, settings);
+            var vat = Money.Round(invoice.Lines.Sum(l => l.Vat));
+            if (OnInvoice(invoice) is { Count: > 0 } onInvoice) charges = Capitalise(onInvoice, charges, ref vat).Charges;
+
+            foreach (var asset in late)
+            {
+                var vatBefore = vat;
+                var moved = Capitalise([asset], charges, ref vat);
+                var credits = charges.Zip(moved.Charges, (b, a) => (b.Account, Amount: Money.Round(b.Amount - a.Amount)))
+                                     .Where(c => c.Amount != 0m).ToList();
+                charges = moved.Charges;
+
+                var date = asset.ReclassifiedOn!.Value;
+                if (date < from || date > to) continue;
+
+                var label = $"Reclass. immo. fact. {invoice.InvoiceNumber} {invoice.SupplierName}";
+                AccountingEntry Line(string account, decimal debit, decimal credit) =>
+                    new(date, settings.PurchaseJournal, account, null, label, invoice.InvoiceNumber, debit, credit);
+
+                foreach (var (account, amount) in moved.AssetDebits) entries.Add(Line(account, amount, 0m));
+                if (moved.RecoverableVat != 0m) entries.Add(Line(settings.AssetVatAccount, moved.RecoverableVat, 0m));
+                foreach (var (account, amount) in credits) entries.Add(Line(account, 0m, amount));
+                var vatMoved = Money.Round(vatBefore - vat);
+                if (vatMoved != 0m) entries.Add(Line(settings.VatAccount, 0m, vatMoved));
+            }
         }
 
         return entries;

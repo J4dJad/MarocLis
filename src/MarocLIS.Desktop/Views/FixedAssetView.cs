@@ -558,7 +558,9 @@ public sealed class FixedAssetView : LocalizedView
             $"{T("Assets.ReportCaption")} — {DateTime.Now:dd/MM/yyyy HH:mm}",
             [.. Headers().Take(columns)],
             [.. ReportLines(register).Select(l => (IReadOnlyList<string>)[.. l.Take(columns)])],
-            Localizer.CurrentLanguage == AppLanguage.Arabic);
+            Localizer.CurrentLanguage == AppLanguage.Arabic,
+            // Twenty columns do not fit A4 at equal widths: dates and amounts were cut in two (S9).
+            new ListLayout(FixedAssetRegisterReport.PdfColumnWidths, FixedAssetRegisterReport.PdfFontSize, A3: true));
 
         var opened = await _output.OpenAsync(_lists.Render(document), "pdf");
         if (opened.IsFailure) _dialogs.ShowFailure(opened, _pdf.Text);

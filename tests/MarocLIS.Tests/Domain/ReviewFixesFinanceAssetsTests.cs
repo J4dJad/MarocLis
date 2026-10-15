@@ -46,7 +46,7 @@ public sealed class ReviewFixesFinanceAssetsTests
 
         entries.Should().HaveCount(2);
         entries.Single(e => e.Account == "2332").Debit.Should().Be(360_000m);
-        entries.Single(e => e.Account == "4411").Credit.Should().Be(360_000m);
+        entries.Single(e => e.Account == "4481").Credit.Should().Be(360_000m, "a debt on a fixed asset (I11)");
         entries.Should().NotContain(e => e.Account.StartsWith('6') || e.Account.StartsWith("3455", StringComparison.Ordinal));
     }
 
@@ -81,7 +81,7 @@ public sealed class ReviewFixesFinanceAssetsTests
 
         entries.Single(e => e.Account == "2355").Debit.Should().Be(10_000m);
         entries.Single(e => e.Account == "34551").Debit.Should().Be(2_000m);
-        entries.Single(e => e.Account == "4411").Credit.Should().Be(12_000m);
+        entries.Single(e => e.Account == "4481").Credit.Should().Be(12_000m);
         entries.Should().HaveCount(3);
     }
 
