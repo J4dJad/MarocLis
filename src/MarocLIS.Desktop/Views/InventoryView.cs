@@ -1,3 +1,4 @@
+using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Inventory;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Identity;
@@ -47,14 +48,25 @@ public sealed class InventoryView : LocalizedView
     private IReadOnlyList<StockRow> _stockRows = [];
     private IReadOnlyList<LotRow> _lotRows = [];
 
+    // Purchasing quality: reception checks, lot certificates, recall list, lot comparison.
+    private readonly ReceptionService? _reception;
+    private readonly LotQualityService? _lotQuality;
+    private readonly IDocumentOutput? _output;
+    private readonly ContextMenuStrip _lotMenu = new();
+
     public InventoryView(InventoryService inventory, IUserDialogs dialogs,
                          ILocalizer localizer, ICultureManager cultureManager,
-                         ILogger<InventoryView>? logger = null)
+                         ILogger<InventoryView>? logger = null,
+                         ReceptionService? reception = null, LotQualityService? lotQuality = null,
+                         IDocumentOutput? output = null)
         : base(localizer, cultureManager)
     {
         _inventory = inventory;
         _dialogs = dialogs;
         _logger = logger;
+        _reception = reception;
+        _lotQuality = lotQuality;
+        _output = output;
 
         BuildLayout();
         WireBehaviour();
@@ -236,6 +248,73 @@ public sealed class InventoryView : LocalizedView
 
         _stock.CellFormatting += OnStockFormatting;
         _lots.CellFormatting += OnLotFormatting;
+
+        WireLotMenu();
+    }
+
+    /// <summary>
+    /// The lot's quality records, on a right click: the patient results it produced (the recall
+    /// list), its QC against the previous lot, and the certificates kept with it.
+    /// </summary>
+    private void WireLotMenu()
+    {
+        var results = new ToolStripMenuItem { Tag = "Recall.Menu" };
+        results.Click += async (_, _) => await RunBusyAsync(() => ShowRecallListAsync());
+        var compare = new ToolStripMenuItem { Tag = "LotComparison.Menu" };
+        compare.Click += async (_, _) => await RunBusyAsync(CompareLotsAsync);
+        var certificates = new ToolStripMenuItem { Tag = "Certificates.Menu" };
+        certificates.Click += (_, _) => ShowCertificates();
+
+        _lotMenu.Items.AddRange([results, compare, certificates]);
+        _lotMenu.Opening += (_, e) =>
+        {
+            foreach (ToolStripItem item in _lotMenu.Items) item.Text = T((string)item.Tag!);
+            var row = _lots.CurrentRow?.Tag as LotRow;
+            results.Enabled = row is not null && _lotQuality is not null
+                              && PermissionGate.Allows(Permissions.Results.View);
+            compare.Enabled = row is not null && _lotQuality is not null;
+            certificates.Enabled = row is not null && _reception is not null && _output is not null;
+            e.Cancel = row is null;
+        };
+
+        _lots.ContextMenuStrip = _lotMenu;
+        _lots.CellMouseDown += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Right && e.RowIndex >= 0 && e.RowIndex < _lots.Rows.Count)
+                _lots.CurrentCell = _lots.Rows[e.RowIndex].Cells[Math.Max(0, e.ColumnIndex)];
+        };
+    }
+
+    private async Task ShowRecallListAsync(LotRow? lot = null)
+    {
+        if ((lot ?? _lots.CurrentRow?.Tag as LotRow) is not { } row || _lotQuality is null || _output is null) return;
+
+        var list = await _lotQuality.GetRecallListAsync(row.ReagentLotId);
+        if (list.IsFailure) { _dialogs.ShowFailure(list, T("Recall.Menu")); return; }
+
+        using var dialog = new RecallListDialog(Localizer, _dialogs, _output, _lotQuality, row.ReagentLotId,
+                                                row.LotNumber, list.Value);
+        dialog.ShowDialog(this);
+    }
+
+    private async Task CompareLotsAsync()
+    {
+        if (_lots.CurrentRow?.Tag is not LotRow row || _lotQuality is null) return;
+
+        var comparison = await _lotQuality.CompareWithPreviousLotAsync(row.ReagentLotId);
+        if (comparison.IsFailure) { _dialogs.ShowFailure(comparison, T("LotComparison.Menu")); return; }
+
+        using var dialog = new LotComparisonDialog(Localizer, comparison.Value);
+        dialog.ShowDialog(this);
+    }
+
+    private void ShowCertificates()
+    {
+        if (_lots.CurrentRow?.Tag is not LotRow row || _reception is null || _output is null) return;
+
+        using var dialog = new LotCertificatesDialog(Localizer, _dialogs, _output, _reception,
+                                                     row.ReagentLotId, row.LotNumber);
+        dialog.ShowDialog(this);
     }
 
     private void OnStockFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -522,9 +601,22 @@ public sealed class InventoryView : LocalizedView
         var suppliers = await _inventory.GetSuppliersAsync();
 
         using var dialog = new ReceiveLotDialog(Localizer, _dialogs, item,
-            suppliers.IsSuccess ? suppliers.Value : []);
+            suppliers.IsSuccess ? suppliers.Value : [], _stockRows,
+            _reception is null ? null : gtin => _reception.FindByGtinAsync(gtin));
 
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Request is null) return;
+        var answer = dialog.ShowDialog(this);
+
+        // Refused at the door: nothing goes into stock, the refusal and its non-conformity are kept.
+        if (answer == DialogResult.Abort && dialog.Refusal is { } refusal && _reception is not null)
+        {
+            var refused = await _reception.RefuseDeliveryAsync(refusal);
+            if (refused.IsFailure) { _dialogs.ShowFailure(refused, T("Reception.Refuse")); return; }
+
+            _dialogs.Info(T("Reception.Refused", refused.Value), T("Reception.Refuse"));
+            return;
+        }
+
+        if (answer != DialogResult.OK || dialog.Request is null) return;
 
         var result = await _inventory.ReceiveLotAsync(dialog.Request);
 
@@ -595,6 +687,23 @@ public sealed class InventoryView : LocalizedView
         if (evidence is null) return;
 
         var result = await _inventory.ReleaseLotAsync(lot.ReagentLotId, evidence);
+
+        // Refused for want of conforming QC on the lot: a biologist may release it by derogation,
+        // with a justification that stays on the lot and in the audit trail.
+        var refusedForQc = result.IsFailure
+                           && result.FirstError.ResourceKey is "Lot_ReleaseNoQcRun" or "Lot_ReleaseQcRejected"
+                                                               or "Lot_ReleaseQcLevelsMissing";
+
+        if (refusedForQc && PermissionGate.Allows(Permissions.Results.BiologicalValidate))
+        {
+            var justification = _dialogs.PromptForReason(
+                $"{Describe(result)}\n\n{T("Lot.QcOverridePrompt", lot.LotNumber)}",
+                T("Lot.QcOverrideTitle"), minimumLength: 15);
+
+            if (justification is null) return;
+
+            result = await _inventory.ReleaseLotOverridingQcAsync(lot.ReagentLotId, evidence, justification);
+        }
 
         if (result.IsFailure)
         {
@@ -684,6 +793,10 @@ public sealed class InventoryView : LocalizedView
             _dialogs.Warn(
                 Localizer.Format("Inventory.RecallAffectedResults", result.Value, lot.LotNumber),
                 T("Inventory.Recall"));
+
+            // The count says how many; the list says who, which is what the recall needs.
+            if (_lotQuality is not null && PermissionGate.Allows(Permissions.Results.View))
+                await ShowRecallListAsync(lot);
         }
         else
         {
@@ -737,21 +850,36 @@ internal sealed class ReceiveLotDialog : Form
     private readonly TextBox _storage = UiTheme.Input(200);
     private readonly NumericUpDown _openStability = new();
 
+    // Reception checks and GS1 scan.
+    private StockRow _current;
+    private readonly IReadOnlyList<StockRow> _items;
+    private readonly Func<string, Task<GtinMatch?>>? _findByGtin;
+    private readonly ReceptionChecksPanel _checks;
+    private readonly Label _unitLabel = new();
+
     internal ReceiveLotRequest? Request { get; private set; }
 
+    /// <summary>Set when the delivery was refused as a whole; the dialog then closes with Abort.</summary>
+    internal RefuseDeliveryRequest? Refusal { get; private set; }
+
     internal ReceiveLotDialog(ILocalizer localizer, IUserDialogs dialogs, StockRow item,
-                              IReadOnlyList<Supplier> suppliers)
+                              IReadOnlyList<Supplier> suppliers, IReadOnlyList<StockRow>? items = null,
+                              Func<string, Task<GtinMatch?>>? findByGtin = null)
     {
         _localizer = localizer;
         _dialogs = dialogs;
         _item = item;
+        _current = item;
+        _items = items ?? [];
+        _findByGtin = findByGtin;
+        _checks = new ReceptionChecksPanel(localizer, item.StorageCondition);
 
         Text = $"{localizer["Inventory.ReceiveLot"]} — {item.Code}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(520, 400);
+        ClientSize = new Size(520, 620);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
@@ -782,15 +910,12 @@ internal sealed class ReceiveLotDialog : Form
         _quantity.TextAlign = HorizontalAlignment.Right;
         _quantity.Font = UiTheme.MonospaceBold;
 
-        var unitLabel = new Label
-        {
-            Text = item.UnitOfMeasure,
-            Font = UiTheme.Small,
-            ForeColor = UiTheme.TextSecondary,
-            AutoSize = true,
-            Location = new Point(168, y + 24)
-        };
-        Controls.Add(unitLabel);
+        _unitLabel.Text = item.UnitOfMeasure;
+        _unitLabel.Font = UiTheme.Small;
+        _unitLabel.ForeColor = UiTheme.TextSecondary;
+        _unitLabel.AutoSize = true;
+        _unitLabel.Location = new Point(168, y + 24);
+        Controls.Add(_unitLabel);
 
         Field("Inventory.Supplier", y, 240);
         _supplier.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -823,6 +948,12 @@ internal sealed class ReceiveLotDialog : Form
 
         y += 66;
 
+        _checks.Location = new Point(20, y);
+        _checks.Scanned += async data => await OnScannedAsync(data);
+        Controls.Add(_checks);
+
+        y += ReceptionChecksPanel.PanelHeight + 6;
+
         // Stated up front: the storeman needs to know the lot will not be usable yet.
         var notice = new Label
         {
@@ -835,15 +966,20 @@ internal sealed class ReceiveLotDialog : Form
         Controls.Add(notice);
 
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
-        ok.Bounds = new Rectangle(20, 350, 230, UiTheme.ButtonHeight);
+        ok.Bounds = new Rectangle(20, 570, 150, UiTheme.ButtonHeight);
         ok.Click += (_, _) => Accept();
 
+        var refuse = UiTheme.SecondaryButton(localizer["Reception.Refuse"]);
+        refuse.Bounds = new Rectangle(180, 570, 150, UiTheme.ButtonHeight);
+        refuse.Click += (_, _) => Refuse();
+        refuse.Enabled = findByGtin is not null;
+
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
-        cancel.Bounds = new Rectangle(260, 350, 230, UiTheme.ButtonHeight);
+        cancel.Bounds = new Rectangle(340, 570, 150, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
         Controls.AddRange([_lotNumber, _expiry, _quantity, _supplier, _deliveryNote,
-                           _unitPrice, _storage, _openStability, ok, cancel]);
+                           _unitPrice, _storage, _openStability, ok, refuse, cancel]);
 
         AcceptButton = ok;
         CancelButton = cancel;
@@ -865,9 +1001,13 @@ internal sealed class ReceiveLotDialog : Form
             return;
         }
 
+        var check = _checks.Build(_dialogs, Text);
+        if (check is null) return;
+
         Request = new ReceiveLotRequest
         {
-            StockItemId = _item.StockItemId,
+            Reception = check,
+            StockItemId = _current.StockItemId,
             LotNumber = _lotNumber.Text.Trim(),
             ExpiryDate = DateOnly.FromDateTime(_expiry.Value.Date),
             Quantity = quantity,
@@ -880,6 +1020,71 @@ internal sealed class ReceiveLotDialog : Form
         };
 
         DialogResult = DialogResult.OK;
+        Close();
+    }
+
+    /// <summary>
+    /// A DataMatrix read: the lot and expiry go into their fields, and a GTIN that designates
+    /// another article offers to receive that one instead — the box in hand decides.
+    /// </summary>
+    private async Task OnScannedAsync(Gs1Data data)
+    {
+        if (data.LotNumber is { } lot) _lotNumber.Text = lot;
+
+        if (data.ExpiryDate is { } expiry)
+        {
+            var date = expiry.ToDateTime(TimeOnly.MinValue);
+            if (date < _expiry.MinDate)
+                _dialogs.Warn(_localizer.Format("Lot_AlreadyExpired", expiry), Text);
+            else
+                _expiry.Value = date;
+        }
+
+        if (data.Gtin is not { } gtin || _findByGtin is null) return;
+
+        var match = await _findByGtin(gtin);
+
+        if (match is null)
+        {
+            _dialogs.Info(_localizer.Format("Reception.GtinUnknown", gtin), Text);
+            return;
+        }
+
+        if (match.StockItemId == _current.StockItemId) return;
+
+        var other = _items.FirstOrDefault(i => i.StockItemId == match.StockItemId);
+
+        if (other is not null
+            && _dialogs.Confirm(_localizer.Format("Reception.GtinOtherItem", match.Code, _current.Code), Text))
+        {
+            _current = other;
+            Text = $"{_localizer["Inventory.ReceiveLot"]} — {other.Code}";
+            _unitLabel.Text = other.UnitOfMeasure;
+            _checks.SetCondition(other.StorageCondition);
+        }
+        else if (other is null)
+        {
+            _dialogs.Warn(_localizer.Format("Reception.GtinOtherItem", match.Code, _current.Code), Text);
+        }
+    }
+
+    private void Refuse()
+    {
+        var reason = _dialogs.PromptForReason(_localizer["Reception.RefusePrompt"],
+                                              _localizer["Reception.Refuse"], minimumLength: 10);
+        if (reason is null) return;
+
+        Refusal = new RefuseDeliveryRequest
+        {
+            SupplierId = (_supplier.SelectedItem as SupplierChoice)?.Id,
+            StockItemId = _current.StockItemId,
+            Reason = reason,
+            ArrivalTemperatureCelsius = _checks.Temperature,
+            DeliveryNoteReference = string.IsNullOrWhiteSpace(_deliveryNote.Text) ? null : _deliveryNote.Text.Trim(),
+            LotNumber = string.IsNullOrWhiteSpace(_lotNumber.Text) ? null : _lotNumber.Text.Trim()
+        };
+
+        DialogResult = DialogResult.Abort;
         Close();
     }
 

@@ -2,6 +2,7 @@ using MarocLIS.Application.Administration;
 using MarocLIS.Application.Inventory;
 using MarocLIS.Application.Quality;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Inventory;
 using MarocLIS.Domain.Quality;
 using Microsoft.EntityFrameworkCore;
 
@@ -616,7 +617,8 @@ public sealed partial class DemoDataSeeder
                               LotNumber = "GLU-2611-207",
                               ExpiryDate = clock.Today.AddDays(300),
                               DeliveryNoteReference = "BL-DEMO-BIODIS-0412",
-                              StorageLocation = "Réfrigérateur réactifs R2"
+                              StorageLocation = "Réfrigérateur réactifs R2",
+                              Reception = new ReceptionCheck { ArrivalTemperatureCelsius = 4.8m }
                           }, ct), ct),
                       $"Réception {created.Value}");
             }

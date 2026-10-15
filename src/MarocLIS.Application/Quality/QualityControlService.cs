@@ -194,11 +194,24 @@ public sealed class QualityControlService(
         var created = new List<(QcResult Result, QcTarget Target, QcEntry Entry)>(entries.Count);
         var problems = new List<Error>();
 
+        // The reagent lot of each point: the one named for the run (a new lot being evaluated) or
+        // the one in use. Without it the QC that gates a lot's release could never be found.
+        var resolvedTargets = new Dictionary<Guid, QcTarget?>();
+        foreach (var entry in entries)
+            resolvedTargets[entry.QcTargetId] = await targets.GetByIdAsync(entry.QcTargetId, ct);
+
+        var parameterIds = resolvedTargets.Values.OfType<QcTarget>().Select(t => t.TestParameterId)
+                                          .Distinct().ToList();
+        var namedLot = entries.Select(e => e.ReagentLotId).FirstOrDefault(id => id is not null);
+        var lotsByParameter = parameterIds.Count == 0
+            ? null
+            : await queries.GetReagentLotsForQcAsync(parameterIds, namedLot, currentUser.SiteId, today, ct);
+
         // --- 1. Store the raw points -------------------------------------------------------------
 
         foreach (var entry in entries)
         {
-            var target = await targets.GetByIdAsync(entry.QcTargetId, ct);
+            var target = resolvedTargets[entry.QcTargetId];
 
             if (target is null)
             {
@@ -219,7 +232,9 @@ public sealed class QualityControlService(
                 TargetMean = target.EffectiveMean,
                 TargetSd = target.EffectiveSd,
                 ZScore = target.ZScore(entry.Value),
-                ReagentLotId = entry.ReagentLotId,
+                ReagentLotId = lotsByParameter is null
+                    ? entry.ReagentLotId
+                    : lotsByParameter.TryGetValue(target.TestParameterId, out var lotId) ? lotId : null,
                 Comment = entry.Comment
             };
 

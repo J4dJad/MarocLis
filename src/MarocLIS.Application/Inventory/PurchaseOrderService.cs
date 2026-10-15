@@ -90,6 +90,9 @@ public sealed record ReceivePurchaseOrderLineRequest
     public required DateOnly ExpiryDate { get; init; }
     public string? DeliveryNoteReference { get; init; }
     public string? StorageLocation { get; init; }
+
+    /// <summary>Temperature and checklist at the door; the temperature is required for cold-chain items.</summary>
+    public ReceptionCheck? Reception { get; init; }
 }
 
 /// <summary>
@@ -110,7 +113,8 @@ public sealed class PurchaseOrderService(
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
     ICurrentUser currentUser,
-    IClock clock)
+    IClock clock,
+    ReceptionService? reception = null)
 {
     public async Task<Result<IReadOnlyList<PurchaseOrderRow>>> GetOrdersAsync(
         bool onlyOpen = false, CancellationToken ct = default)
@@ -273,9 +277,16 @@ public sealed class PurchaseOrderService(
         if (item.Lots.Any(l => string.Equals(l.LotNumber, lotNumber, StringComparison.OrdinalIgnoreCase)))
             return Result.Failure(Error.Conflict("Lot_AlreadyReceived", lotNumber));
 
+        var assessment = ReceptionAssessment.Assess(item.StorageCondition, request.Reception);
+        if (assessment.IsFailure) return Result.Failure(assessment.Errors);
+
         var received = order.ReceiveLine(line.Id, request.Quantity);
         if (received.IsFailure) return received;
         line.LastReceivedOn = clock.Today;
+
+        await using var transaction = assessment.Value.NeedsNonConformity && reception is not null
+            ? await unitOfWork.BeginTransactionAsync(ct)
+            : null;
 
         var deliveryNote = Blank(request.DeliveryNoteReference) ?? order.Number;
 
@@ -287,8 +298,19 @@ public sealed class PurchaseOrderService(
             // Valued net of the line discount, at what the laboratory actually pays per unit.
             UnitPriceMad = line.NetUnitPriceMad,
             StorageLocation = Blank(request.StorageLocation) ?? item.DefaultStorageLocation,
-            ReceivedByUserId = currentUser.UserId
+            ReceivedByUserId = currentUser.UserId,
+            // The order the lot came on: what the supplier evaluation measures punctuality against.
+            PurchaseOrderId = order.Id
         });
+        if (request.Reception is { } check) lot.RecordReception(check);
+
+        if (assessment.Value.NeedsNonConformity && reception is not null)
+        {
+            var opened = await reception.OpenReceptionNonConformityAsync(
+                item, lot, order.SupplierId, assessment.Value, request.Reception?.ArrivalTemperatureCelsius, ct);
+            if (opened.IsFailure) return Result.Failure(opened.Errors);
+        }
+
         // The supplier's list price, not the net: the next purchase-order line is pre-filled with it
         // next to its own discount field, and a net price there had the discount taken off twice.
         item.LastUnitPriceMad = line.UnitPriceMad;
@@ -304,6 +326,7 @@ public sealed class PurchaseOrderService(
         unitOfWork.AuditReason =
             $"Réception sur {order.Number} : lot {lotNumber} de {item.Code} ({request.Quantity} {item.UnitOfMeasure})";
         await unitOfWork.SaveChangesAsync(ct);
+        if (transaction is not null) await unitOfWork.CommitAsync(ct);
 
         return Result.Success();
     }

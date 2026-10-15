@@ -56,11 +56,22 @@ public sealed class QualityControlView : LocalizedView
     private IReadOnlyList<QcEntryRow> _rows = [];
     private IReadOnlyList<QcReviewRow> _pendingReview = [];
 
+    // The reagent lot the run is recorded against: a new lot under evaluation, or (by default) the
+    // lot in use. The QC on a lot is what its release is gated on.
+    private readonly ComboBox _reagentLot = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        FlatStyle = FlatStyle.Flat
+    };
+    private readonly MarocLIS.Application.Inventory.LotQualityService? _lotQuality;
+
     public QualityControlView(QualityControlService qc, IUserDialogs dialogs,
                               ILocalizer localizer, ICultureManager cultureManager,
-                              ILogger<QualityControlView>? logger = null)
+                              ILogger<QualityControlView>? logger = null,
+                              MarocLIS.Application.Inventory.LotQualityService? lotQuality = null)
         : base(localizer, cultureManager)
     {
+        _lotQuality = lotQuality;
         _qc = qc;
         _dialogs = dialogs;
         _logger = logger;
@@ -116,7 +127,8 @@ public sealed class QualityControlView : LocalizedView
 
         _submit.Bounds = new Rectangle(0, 8, 220, UiTheme.ButtonHeight);
         _refresh.Bounds = new Rectangle(230, 8, 110, UiTheme.ButtonHeight);
-        entryActions.Controls.AddRange([_submit, _refresh]);
+        _reagentLot.Bounds = new Rectangle(350, 10, 280, UiTheme.InputHeight);
+        entryActions.Controls.AddRange([_submit, _refresh, _reagentLot]);
 
         entryPanel.Controls.Add(entryHost);
         entryPanel.Controls.Add(entryActions);
@@ -381,8 +393,40 @@ public sealed class QualityControlView : LocalizedView
 
     // ---- Loading -------------------------------------------------------------------------------------
 
+    private async Task LoadReagentLotsAsync(CancellationToken ct)
+    {
+        var keep = (_reagentLot.SelectedItem as LotChoice)?.Id;
+        _reagentLot.Items.Clear();
+        _reagentLot.Items.Add(new LotChoice(null, T("Qc.ReagentLotInUse")));
+
+        if (_lotQuality is not null && PermissionGate.Allows(Permissions.Quality.EnterQc))
+        {
+            var lots = await _lotQuality.GetLotsForQcAsync(ct);
+
+            if (lots.IsSuccess)
+            {
+                foreach (var lot in lots.Value)
+                {
+                    var label = $"{lot.ItemCode} · {lot.LotNumber}" +
+                                (lot.IsQuarantined ? $" ({T("Inventory.Quarantined").ToLowerInvariant()})" : string.Empty);
+                    var index = _reagentLot.Items.Add(new LotChoice(lot.ReagentLotId, label));
+                    if (lot.ReagentLotId == keep) _reagentLot.SelectedIndex = index;
+                }
+            }
+        }
+
+        if (_reagentLot.SelectedIndex < 0) _reagentLot.SelectedIndex = 0;
+    }
+
+    private sealed record LotChoice(Guid? Id, string Display)
+    {
+        public override string ToString() => Display;
+    }
+
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
+        await LoadReagentLotsAsync(ct);
+
         try
         {
             var sheet = await _qc.GetEntrySheetAsync(ct: ct);
@@ -593,7 +637,7 @@ public sealed class QualityControlView : LocalizedView
                 return;
             }
 
-            entries.Add(new QcEntry(row.QcTargetId, value));
+            entries.Add(new QcEntry(row.QcTargetId, value, (_reagentLot.SelectedItem as LotChoice)?.Id));
         }
 
         if (entries.Count == 0)

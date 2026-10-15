@@ -247,6 +247,7 @@ public static class IconCatalog
         ["purchaseorders"] = Glyph.ShoppingCart,
         ["quotes"] = Glyph.Calculator,
         ["supplierinvoices"] = Glyph.Receipt,
+        ["supplierevaluation"] = Glyph.BadgeCheck,
         ["equipment"] = Glyph.Wrench,
         ["contracts"] = Glyph.Signature,
         ["personnel"] = Glyph.UserCheck,

@@ -329,6 +329,14 @@ public sealed class ResultEntryService(
         var accepted = 0;
         var now = clock.Now;
 
+        // The lot each value was measured with, from the stock: opened, released, in date. Looked
+        // up once for the batch; an entry naming its own lot keeps it.
+        var entered = entries.Select(e => byId.TryGetValue(e.TestResultId, out var r) ? r.TestParameterId : Guid.Empty)
+                             .Where(id => id != Guid.Empty).Distinct().ToList();
+        var lotsInUse = entered.Count == 0
+            ? null
+            : await queries.GetReagentLotsInUseAsync(entered, currentUser.SiteId, clock.Today, ct);
+
         var tubeStatuses = new Dictionary<Guid, SampleStatus?>();
 
         async Task<SampleStatus?> SampleStatusAsync(Guid sampleId)
@@ -404,7 +412,12 @@ public sealed class ResultEntryService(
             result.TechnicalComment = entry.TechnicalComment ?? result.TechnicalComment;
             result.PrintTechnicalComment = entry.PrintTechnicalComment;
             result.InstrumentId = entry.InstrumentId ?? result.InstrumentId;
-            result.ReagentLotId = entry.ReagentLotId ?? result.ReagentLotId;
+            // A new value gets the lot of its own measurement: a re-run on a newer lot must not keep
+            // the lot of the value it replaces. Unknown stays unknown rather than being guessed.
+            result.ReagentLotId = entry.ReagentLotId
+                                  ?? (lotsInUse is not null && lotsInUse.TryGetValue(result.TestParameterId, out var inUse)
+                                          ? inUse
+                                          : null);
 
             // A dilution is disclosed on the report: the same figure means something different
             // when the sample had to be diluted to bring it into the measuring range.
@@ -699,6 +712,15 @@ public interface IResultQueries
     /// </summary>
     Task<IReadOnlyCollection<Guid>> GetCommunicatedCriticalResultIdsAsync(
         IReadOnlyCollection<Guid> testResultIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// The reagent lot in use on the site for each parameter's analysis, by the rule of
+    /// <see cref="Domain.Inventory.ReagentLotSelector"/>. A parameter whose lot the stock does not
+    /// name unambiguously is absent.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> GetReagentLotsInUseAsync(
+        IReadOnlyCollection<Guid> testParameterIds, Guid siteId, DateOnly today,
+        CancellationToken ct = default);
 }
 
 public sealed record PreviousValue(decimal Value, DateOnly Date, Guid TestResultId);

@@ -55,6 +55,9 @@ public sealed class NonConformity : AuditableAggregateRoot, ISiteScoped
     public Guid? ReagentLotId { get; set; }
     public Guid? QcResultId { get; set; }
 
+    /// <summary>The supplier at fault, so the file counts in that supplier's evaluation.</summary>
+    public Guid? SupplierId { get; set; }
+
     /// <summary>
     /// Whether results that had already left the laboratory were affected. If so, the clinical
     /// impact must be assessed and recipients informed — this is the field an auditor looks for.

@@ -450,6 +450,15 @@ public interface IQualityQueries
 
     Task<QcLevel> GetMaterialLevelAsync(Guid qcMaterialId, CancellationToken ct = default);
 
+    /// <summary>
+    /// The reagent lot each control point was measured with: the lot named for the run when the
+    /// parameter's analysis uses it (a new lot under evaluation), otherwise the lot in use on the
+    /// site. Parameters without an unambiguous lot are absent.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> GetReagentLotsForQcAsync(
+        IReadOnlyCollection<Guid> testParameterIds, Guid? namedLotId, Guid siteId, DateOnly today,
+        CancellationToken ct = default);
+
     // --- Non-conformities ----------------------------------------------------------------------
 
     Task<IReadOnlyList<NonConformityRow>> GetNonConformitiesAsync(

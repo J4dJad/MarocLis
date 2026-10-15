@@ -1,5 +1,12 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Gs1_Empty": "Nothing was scanned.",
+  "Gs1_Unreadable": "Unreadable GS1 code from \"{0}\".",
+  "Gs1_Truncated": "Truncated GS1 code: element ({0}) is incomplete.",
+  "Gs1_GtinInvalid": "Invalid GTIN \"{0}\" (8, 12, 13 or 14 digits with a correct check digit).",
+  "Gs1_DateInvalid": "Invalid GS1 date \"{0}\" (YYMMDD expected).",
+  "Reception_TemperatureRequired": "Cold-chain item ({0}): record the arrival temperature before saving the receipt.",
+  "Reception_RefusalReasonRequired": "Enter the reason the delivery is refused.",
   "SupplierPayment_AmountMustBePositive": "The payment amount must be greater than zero.",
   "SupplierPayment_ExceedsOutstanding": "The payment exceeds the amount outstanding ({0} MAD).",
   "SupplierPayment_BeforeInvoice": "The payment cannot be dated before the invoice.",
@@ -214,6 +221,89 @@
   "Deposit_ExceedsOrderTotal": "The deposit exceeds what is left to cover on the request ({0}).",
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
+
+  "SupplierEvaluation": {
+    "CurrentScore": "Current score",
+    "ProposedScore": "Proposed score",
+    "NonConformities": "NCs",
+    "Refused": "Refused",
+    "AverageDelay": "Average delay (d)",
+    "OnTime": "On time (%)",
+    "Deliveries": "Deliveries",
+    "ReportTitle": "Annual supplier evaluation {0}",
+    "Formula": "Proposed score /100 = 50 × on-time delivery rate + 30 × (1 − share of refused deliveries) + max(0; 20 − 5 × non-conformities).",
+    "Csv": "Export to CSV",
+    "Pdf": "Annual report PDF",
+    "ApplyPrompt": "Evaluation score for {0} (proposed: {1}/100):",
+    "Apply": "Apply the proposed score",
+    "Year": "Year"
+  },
+
+  "Lot": {
+    "QcOverrideTitle": "Release as an exception",
+    "QcOverridePrompt": "Release lot {0} as an exception? Justify the biologist's decision (at least 10 characters):"
+  },
+
+  "Certificates": {
+    "Open": "Open",
+    "Attach": "Attach a file…",
+    "Menu": "Certificates of analysis…",
+    "Title": "Certificates of lot {0}"
+  },
+
+  "LotComparison": {
+    "Notice": "Difference = (new mean − old mean) / old mean. Compare with the laboratory's acceptable difference.",
+    "NoData": "No QC points recorded on both lots for the same controls.",
+    "Difference": "Difference (%)",
+    "OldSd": "Old SD",
+    "OldMean": "Old mean",
+    "OldN": "Old n",
+    "NewSd": "New SD",
+    "NewMean": "New mean",
+    "NewN": "New n",
+    "Level": "Control",
+    "Menu": "Compare with the previous lot…",
+    "Title": "Lot comparison — {0}: {1} / {2}"
+  },
+
+  "Recall": {
+    "Validated": "Validated",
+    "ResultDate": "Result date",
+    "Parameter": "Parameter",
+    "Analysis": "Analysis",
+    "Order": "Order",
+    "MedicalRecord": "Record no.",
+    "Patient": "Patient",
+    "ExportCsv": "Export to CSV",
+    "No": "No",
+    "Yes": "Yes",
+    "Menu": "Results produced with this lot…",
+    "Title": "Results produced with lot {0} ({1})"
+  },
+
+  "Reception": {
+    "GtinNotOnLine": "The scanned code belongs to item {0}, not to item {1} on this line.",
+    "GtinOtherItem": "The scanned code belongs to item {0}, not {1}. Switch to item {0}?",
+    "GtinUnknown": "GTIN {0} is not linked to any item.",
+    "Refused": "Delivery refused; non-conformity {0} opened.",
+    "RefusePrompt": "Reason for refusing the delivery (at least 10 characters):",
+    "Refuse": "Refuse delivery",
+    "NonConformityQuestion": "The receipt has a discrepancy: a supplier non-conformity will be opened. Save the receipt?",
+    "AmbientWarning": "Temperature outside the ambient range ({0}): check the product.",
+    "RangeAdvisory": "Optional: expected {0}",
+    "RangeRequired": "Required: expected {0}",
+    "ChecklistNotice": "An unticked check or an out-of-range temperature opens a supplier non-conformity.",
+    "CertificateReceived": "Certificate of analysis received",
+    "FrenchLabelling": "French labelling",
+    "PackagingIntact": "Packaging intact",
+    "MatchesOrder": "Matches the order",
+    "ArrivalTemperature": "Arrival temperature (°C)",
+    "Scan": "Scan the GS1 DataMatrix"
+  },
+
+  "Supplier": {
+    "ContinueAnyway": "Continue anyway?"
+  },
 
   "AccountingExportLayout": {
     "Generic": "Generic CSV (ISO dates, decimal point)",
@@ -1202,6 +1292,7 @@
   },
 
   "Nav": {
+    "SupplierEvaluation": "Supplier evaluation",
     "SupplierInvoices": "Supplier invoices",
     "Contracts": "Instrument contracts",
     "Quotes": "Quotation requests",
@@ -2359,6 +2450,11 @@
   },
 
   "Inventory": {
+    "RegulatoryRegistrationValidUntil": "Registration valid until",
+    "RegulatoryRegistration": "AMMPS/DMP registration no.",
+    "GtinNotice": "The GTIN lets a DataMatrix scan at reception recognise the item.",
+    "IsCeMarked": "CE marked (IVD)",
+    "Gtin": "GTIN (GS1)",
     "ReorderDrafted": "Reorder point reached: priority purchase order {0} drafted ({1})",
     "ToReorder": "Items to reorder",
     "Title": "Inventory",
@@ -3343,6 +3439,7 @@
   },
 
   "Qc": {
+    "ReagentLotInUse": "Reagent lot in use (automatic)",
     "Rule_1_2s": "1₂ₛ — one point beyond ±2 SD (warning)",
     "Rule_1_3s": "1₃ₛ — one point beyond ±3 SD",
     "Rule_2_2s": "2₂ₛ — two consecutive points beyond the same ±2 SD limit",
@@ -3840,6 +3937,8 @@
   "Supplier_IceInvalid": "The supplier's ICE is invalid.",
   "Supplier_ScoreOutOfRange": "The evaluation score must be between 0 and 100.",
   "Supplier_PaymentTermsTooLong": "The agreed payment term cannot exceed {0} days (law 69-21). Without agreement it is 60 days from delivery.",
+  "Supplier_RegistrationExpired": "Supplier {0}'s AMMPS/DMP registration expired on {1}.",
+  "Supplier_RegistrationExpiredNotice": "Ordering from a supplier whose AMMPS/DMP registration has expired asks for confirmation.",
 
   "Lot_Rejected": "This lot was rejected.",
   "Lot_AcceptanceEvidenceRequired": "Releasing a lot requires evidence that it was verified.",
@@ -3853,6 +3952,12 @@
   "Lot_AlreadyExpired": "The expiry date entered ({0}) has already passed.",
   "Lot_AlreadyReceived": "Lot {0} has already been received for this item.",
   "Lot_RecallReferenceRequired": "The manufacturer recall reference is mandatory.",
+  "Lot_QcOverrideJustificationRequired": "Releasing a lot without conforming QC requires a written justification.",
+  "Lot_QcOverrideRequiresBiologist": "Only a biologist can release a lot as a QC exception.",
+  "Lot_ReleaseNoQcRun": "Lot {0} cannot be released: no quality control has been run on this lot.",
+  "Lot_ReleaseQcRejected": "Lot {0} cannot be released: no conforming QC run on this lot.",
+  "Lot_ReleaseQcLevelsMissing": "Lot {0} cannot be released: QC levels missing or not conforming ({1}).",
+  "Lot_CertificateNotFound": "Lot certificate not found.",
 
   "Stock_ItemNotFound": "Stock item not found.",
   "Stock_InsufficientUsableStock": "Insufficient usable stock for {0}: {1} available. A quarantined, expired or recalled lot cannot be issued.",
