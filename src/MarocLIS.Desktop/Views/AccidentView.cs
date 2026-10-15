@@ -380,7 +380,10 @@ public sealed class AccidentView : LocalizedView
             var people = await _accidents.GetEmployeesAsync();
             if (people.IsFailure) { _dialogs.ShowFailure(people); return; }
 
-            var choices = people.Value.Where(p => p.ExitDate is null || detail?.Request.EmployeeId == p.EmployeeId).ToList();
+            // Whoever serves a notice is still on the staff: a departure recorded ahead does not hide them.
+            var today = DateOnly.FromDateTime(_clock.Now.LocalDateTime);
+            var choices = people.Value.Where(p => AccidentService.IsDeclarableFor(p.ExitDate, today)
+                                                  || detail?.Request.EmployeeId == p.EmployeeId).ToList();
             if (choices.Count == 0) { _dialogs.Warn(T("Leave_NoEmployees"), _new.Text); return; }
 
             var insurer = detail is null ? await _accidents.LastInsurerAsync() : null;

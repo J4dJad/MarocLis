@@ -184,14 +184,15 @@ public sealed class ReviewFixesHrTests
         e.IsActiveOn(exit).Should().BeTrue("the exit date is the last day worked");
         e.IsActiveOn(exit.AddDays(1)).Should().BeFalse();
 
-        habilitation.WithdrawnOn.Should().Be(exit, "it ends with the departure, not when it is recorded");
+        habilitation.WithdrawnOn.Should().Be(exit.AddDays(1), "it ends with the departure, not when it is recorded");
         habilitation.IsActiveOn(Today).Should().BeTrue();
+        habilitation.IsActiveOn(exit).Should().BeTrue("the exit day is worked");
         habilitation.IsActiveOn(exit.AddDays(1)).Should().BeFalse();
 
-        // Granted during the notice, a habilitation ends with it; nothing is granted from the exit on.
+        // Granted during the notice, a habilitation ends with it; nothing is granted after the exit.
         e.Grant(HabilitationActivity.SampleReception, null, HabilitationLevel.Authorized, Today, null, Guid.NewGuid(), null)
-         .Value.WithdrawnOn.Should().Be(exit);
-        e.Grant(HabilitationActivity.HomeCollection, null, HabilitationLevel.Authorized, exit, null, Guid.NewGuid(), null)
+         .Value.WithdrawnOn.Should().Be(exit.AddDays(1));
+        e.Grant(HabilitationActivity.HomeCollection, null, HabilitationLevel.Authorized, exit.AddDays(1), null, Guid.NewGuid(), null)
          .FirstError.ResourceKey.Should().Be("Habilitation_EmployeeExited");
 
         // A withdrawal during the notice still applies at once.
@@ -295,8 +296,9 @@ public sealed class ReviewFixesHrTests
         printed.Year.Should().Be(2026);
 
         period.Reopen().IsSuccess.Should().BeTrue();
-        period.RatesSnapshot.Should().BeNull();
-        period.RatesForPrinting(rates).Should().BeSameAs(rates, "a draft follows the year's rates");
+        period.RatesSnapshot.Should().NotBeNull("a reopened month keeps the rates it was closed with");
+        period.RatesForPrinting(rates).AmoEmployeeRate.Should().Be(2.26m);
+        new PayrollPeriod(Site, 2026, 4).RatesForPrinting(rates).Should().BeSameAs(rates, "a draft follows the year's rates");
     }
 
     [Fact]
@@ -320,7 +322,7 @@ public sealed class ReviewFixesHrTests
 
         a.AbsenceDeduction.Should().Be(5200m);   // 5,400 − 5,400 × 1 / 27
         a.GrossTaxable.Should().Be(200m);
-        a.PaidDays.Should().Be(0.96m);           // 26 × 1 / 27
+        a.PaidDays.Should().Be(1m);              // the day worked, whole
     }
 
     [Fact]
@@ -394,21 +396,26 @@ public sealed class ReviewFixesHrTests
 
     // ---- Fakes ---------------------------------------------------------------------------------
 
-    private static InMemoryRepository<Employee> Repo(params Employee[] employees)
+    internal static InMemoryRepository<Employee> Repo(params Employee[] employees)
     {
         var repo = new InMemoryRepository<Employee>();
         repo.Items.AddRange(employees);
         return repo;
     }
 
-    private static PayrollService Payroll(FakePayrollQueries queries, PayrollPeriod[] periods, Employee[] employees,
-                                          PayrollParameters[] rates)
+    internal static PayrollService Payroll(FakePayrollQueries queries, PayrollPeriod[] periods, Employee[] employees,
+                                           PayrollParameters[] rates, InMemoryRepository<FinalSettlement>? settlements = null,
+                                           InMemoryRepository<LeaveLedgerEntry>? ledger = null,
+                                           FakeHrDocumentQueries? hrQueries = null)
     {
         var periodRepo = new InMemoryRepository<PayrollPeriod>();
         periodRepo.Items.AddRange(periods);
         var rateRepo = new InMemoryRepository<PayrollParameters>();
         rateRepo.Items.AddRange(rates);
-        return new PayrollService(periodRepo, rateRepo, Repo(employees), queries, new FakeUnitOfWork(), new AllowAll(),
+        return new PayrollService(periodRepo, rateRepo, Repo(employees), queries,
+                                  settlements ?? new InMemoryRepository<FinalSettlement>(),
+                                  ledger ?? new InMemoryRepository<LeaveLedgerEntry>(), hrQueries ?? new FakeHrDocumentQueries(),
+                                  new FakeUnitOfWork(), new AllowAll(),
                                   new FakeUser(Permissions.HumanResources.Salary), new FixedClock());
     }
 

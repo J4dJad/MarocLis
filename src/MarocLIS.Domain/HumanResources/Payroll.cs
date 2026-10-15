@@ -191,9 +191,9 @@ public sealed class PayrollPeriod : AuditableAggregateRoot, ISiteScoped
     public Guid? ClosedByUserId { get; private set; }
 
     /// <summary>
-    /// The rates the payslips were computed with, taken when the month is closed
-    /// (<see cref="PayrollParameters.ToSnapshot"/>). Null for a draft, and for a month closed before
-    /// it was kept.
+    /// The rates the payslips were computed with, taken when the month is first closed
+    /// (<see cref="PayrollParameters.ToSnapshot"/>). Null for a month never closed, and for a month
+    /// closed before it was kept. A reopened month keeps it: see <see cref="RatesFor"/>.
     /// </summary>
     public string? RatesSnapshot { get; private set; }
 
@@ -228,31 +228,56 @@ public sealed class PayrollPeriod : AuditableAggregateRoot, ISiteScoped
         return Result.Success();
     }
 
-    /// <param name="rates">The rates the payslips were computed with, kept with the month.</param>
+    /// <summary>
+    /// Closes the month. Every payslip is computed once more with the rates kept with it, so the
+    /// amounts stored and the rates printed beside them always agree: the rates of the first
+    /// closing for a month reopened since (see <see cref="RatesFor"/>), else
+    /// <paramref name="rates"/>, the year's current ones, which the drafts already follow.
+    /// </summary>
+    /// <param name="rates">The year's current rates.</param>
     public Result Close(DateTimeOffset now, Guid byUserId, PayrollParameters? rates = null)
     {
         if (IsClosed) return Result.Failure(Error.Conflict("Payroll_Closed"));
         if (_payslips.Count == 0) return Result.Failure(Error.Validation("Payroll_Empty"));
 
+        if (rates is not null)
+        {
+            var kept = RatesFor(rates);
+            foreach (var payslip in _payslips) payslip.Recompute(payslip.Variables, kept, LastDay);
+            RatesSnapshot = kept.ToSnapshot();
+        }
+
         Status = PayrollStatus.Closed;
         ClosedAt = now;
         ClosedByUserId = byUserId;
-        RatesSnapshot = rates?.ToSnapshot();
         return Result.Success();
     }
 
-    /// <summary>The rates to print the month with: those kept at closing, else <paramref name="current"/>.</summary>
-    public PayrollParameters RatesForPrinting(PayrollParameters current) =>
-        IsClosed && PayrollParameters.FromSnapshot(Year, RatesSnapshot) is { } kept ? kept : current;
+    /// <summary>
+    /// The rates the month is computed and printed with: those kept at its first closing, else
+    /// <paramref name="current"/>.
+    /// <para>
+    /// A month reopened to correct one payslip keeps the rates it was closed with: the
+    /// contributions of March are due at March's rates, and a rate changed since for the year
+    /// must not leave one payslip at the new rate beside the others at the old one.
+    /// </para>
+    /// </summary>
+    public PayrollParameters RatesFor(PayrollParameters current) =>
+        PayrollParameters.FromSnapshot(Year, RatesSnapshot) is { } kept ? kept : current;
 
-    /// <summary>Back to draft, to correct an error found after closing. The reason goes to the audit trail.</summary>
+    /// <summary>The rates to print the month with: see <see cref="RatesFor"/>.</summary>
+    public PayrollParameters RatesForPrinting(PayrollParameters current) => RatesFor(current);
+
+    /// <summary>
+    /// Back to draft, to correct an error found after closing. The reason goes to the audit trail.
+    /// The rates of the closing stay with the month: see <see cref="RatesFor"/>.
+    /// </summary>
     public Result Reopen()
     {
         if (!IsClosed) return Result.Failure(Error.Conflict("Payroll_NotClosed"));
         Status = PayrollStatus.Draft;
         ClosedAt = null;
         ClosedByUserId = null;
-        RatesSnapshot = null;
         return Result.Success();
     }
 }
@@ -530,7 +555,10 @@ public static class PayrollCalculator
         var earnedBase = Math.Max(0m, contractBase - unpaid);
         var absenceDeduction = input.BaseSalary - earnedBase;
 
-        var contractDays = v.IsProrated ? R(p.MonthlyWorkingDays * Math.Max(0m, v.ContractWorkingDays) / v.MonthWorkingDays)
+        // The days declared to the CNSS are the days worked, whole: those of the contract within
+        // the month, at most the 26 of a full month, less the unpaid ones. A day partly worked
+        // (half a day of unpaid leave) is a day worked.
+        var contractDays = v.IsProrated ? Math.Min(Math.Max(0m, Math.Ceiling(v.ContractWorkingDays)), p.MonthlyWorkingDays)
                                         : p.MonthlyWorkingDays;
 
         // Interns and insertion contracts receive a stipend, not a salary: no seniority, no overtime.
@@ -590,7 +618,7 @@ public static class PayrollCalculator
 
         return new PayslipAmounts
         {
-            PaidDays = Math.Max(0m, contractDays - absenceDays),
+            PaidDays = Math.Max(0m, Math.Ceiling(contractDays - absenceDays)),
             AbsenceDeduction = absenceDeduction,
             SeniorityRate = seniorityRate,
             SeniorityBonus = seniority,

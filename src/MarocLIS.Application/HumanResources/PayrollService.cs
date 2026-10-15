@@ -78,6 +78,9 @@ public sealed class PayrollService(
     IRepository<PayrollParameters> parameters,
     IRepository<Employee> employees,
     IPayrollQueries queries,
+    IRepository<FinalSettlement> settlements,
+    IRepository<LeaveLedgerEntry> ledger,
+    IHrDocumentQueries hrQueries,
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
     ICurrentUser currentUser,
@@ -148,7 +151,10 @@ public sealed class PayrollService(
         to.TransportExemptionCap = from.TransportExemptionCap;
     }
 
-    /// <summary>Saves the year's rates. Draft months of that year are recomputed with them.</summary>
+    /// <summary>
+    /// Saves the year's rates. Draft months of that year are recomputed with them, except a month
+    /// reopened after closing, which keeps the rates it was closed with (<see cref="PayrollPeriod.RatesFor"/>).
+    /// </summary>
     public async Task<Result> SaveParametersAsync(int year, Action<PayrollParameters> change, CancellationToken ct = default)
     {
         var permitted = Require();
@@ -169,7 +175,8 @@ public sealed class PayrollService(
         foreach (var id in await queries.DraftPeriodIdsAsync(year, ct))
             if (await periods.GetByIdWithDetailsAsync(id, ct) is { } period)
             {
-                foreach (var slip in period.Payslips) slip.Recompute(slip.Variables, current, period.LastDay);
+                var rates = period.RatesFor(current);
+                foreach (var slip in period.Payslips) slip.Recompute(slip.Variables, rates, period.LastDay);
                 periods.Update(period);
             }
 
@@ -214,7 +221,7 @@ public sealed class PayrollService(
         if (period is null) return Result.Failure<int>(Error.NotFound("Payroll_NotFound"));
         if (period.IsClosed) return Result.Failure<int>(Error.Conflict("Payroll_Closed"));
 
-        var rates = await ParametersForAsync(period.Year, ct);
+        var rates = period.RatesFor(await ParametersForAsync(period.Year, ct));
         var added = await FillAsync(period, rates, ct);
 
         periods.Update(period);
@@ -226,7 +233,7 @@ public sealed class PayrollService(
     private async Task<int> FillAsync(PayrollPeriod period, PayrollParameters rates, CancellationToken ct)
     {
         var added = 0;
-        var settlements = await queries.SettlementsAsync(period.FirstDay, period.LastDay, ct);
+        var settled = await queries.SettlementsAsync(period.FirstDay, period.LastDay, ct);
         var paid = new HashSet<Guid>();
         foreach (var candidate in await queries.CandidatesAsync(period.SiteId, period.FirstDay, period.LastDay,
                                                              rates.MonthlyWorkingDays, ct))
@@ -254,7 +261,7 @@ public sealed class PayrollService(
             // The leave-derived figures are taken again; what HR typed, the unpaid days entered by
             // hand included, stays.
             var variables = FromFiles(isNew ? new PayslipVariables() : slip.Variables, candidate,
-                                      settlements.GetValueOrDefault(employee.Id), employee.BaseSalary.Value);
+                                      settled.GetValueOrDefault(employee.Id), employee.BaseSalary.Value);
             slip.Recompute(variables, rates, period.LastDay);
 
             if (isNew)
@@ -265,12 +272,18 @@ public sealed class PayrollService(
         }
 
         // A draft month is rebuilt from the files: whoever is no longer on it is taken off rather
-        // than left with a full month's pay.
-        foreach (var gone in period.Payslips.Where(p => !paid.Contains(p.EmployeeId)).Select(p => p.EmployeeId).ToList())
+        // than left with a full month's pay. Never a payslip that pays a departure, though: the
+        // indemnities of a final settlement are paid with the month whatever the file now says.
+        foreach (var gone in period.Payslips.Where(p => !paid.Contains(p.EmployeeId) && !PaysDeparture(p, settled))
+                                    .Select(p => p.EmployeeId).ToList())
             period.Remove(gone);
 
         return added;
     }
+
+    private static bool PaysDeparture(Payslip slip, IReadOnlyDictionary<Guid, SettledAmounts> settled) =>
+        slip.Variables.LeaveIndemnity + slip.Variables.NoticeIndemnity + slip.Variables.SeverancePay > 0m
+        || (settled.GetValueOrDefault(slip.EmployeeId) is { } s && s.LeaveIndemnity + s.NoticeIndemnity + s.SeverancePay > 0m);
 
     /// <summary>
     /// The variables as the files give them: absences from the leave, days of the contract,
@@ -304,7 +317,7 @@ public sealed class PayrollService(
         var period = await periods.GetByIdWithDetailsAsync(periodId, ct);
         if (period is null) return Result.Failure<PayrollPeriodDetail>(Error.NotFound("Payroll_NotFound"));
 
-        var rates = await ParametersForAsync(period.Year, ct);
+        var rates = period.RatesFor(await ParametersForAsync(period.Year, ct));
         var row = (await queries.GetPeriodsAsync(period.SiteId, ct)).First(p => p.PeriodId == periodId);
 
         return Result.Success(new PayrollPeriodDetail(row,
@@ -362,7 +375,7 @@ public sealed class PayrollService(
             Note = string.IsNullOrWhiteSpace(variables.Note) ? null : variables.Note.Trim()
         };
 
-        var rates = await ParametersForAsync(period.Year, ct);
+        var rates = period.RatesFor(await ParametersForAsync(period.Year, ct));
         if (typed.TotalAbsenceDays > rates.MonthlyWorkingDays)
             return Result.Failure(Error.Validation("Payroll_TooManyAbsenceDays", rates.MonthlyWorkingDays));
         if (variables.OvertimeHours25 + variables.OvertimeHours50 + variables.OvertimeHours100 > 100m)
@@ -387,9 +400,14 @@ public sealed class PayrollService(
         if (period.Payslips.Any(p => p.Amounts.NetPay < 0))
             return Result.Failure(Error.Validation("Payroll_NegativeNetPay"));
 
-        // The year's rates as the payslips were computed with them, kept for every later reprint.
+        // The rates the payslips are computed with, kept for every later reprint: the year's, or
+        // those of the first closing for a month reopened since.
         var closed = period.Close(clock.Now, currentUser.UserId, await ParametersForAsync(period.Year, ct));
         if (closed.IsFailure) return closed;
+
+        // The leave indemnities of the month's departures are paid now: the days leave the
+        // account, whether or not the receipt is ever signed.
+        await SettlementService.WriteSettledLeaveAsync(period, settlements, employees, ledger, hrQueries, ct);
 
         periods.Update(period);
         unitOfWork.AuditReason = $"Paie {period.Month:00}/{period.Year} clôturée";
@@ -425,7 +443,7 @@ public sealed class PayrollService(
         var period = await periods.GetByIdWithDetailsAsync(periodId, ct);
         if (period is null) return Result.Failure<IReadOnlyList<PayslipDocument>>(Error.NotFound("Payroll_NotFound"));
 
-        // A closed month prints with the rates it was closed with, not the year's as since changed.
+        // A month prints with the rates it was closed with, not the year's as since changed.
         var rates = period.RatesForPrinting(await ParametersForAsync(period.Year, ct));
         var employer = await queries.EmployerAsync(period.SiteId, ct);
 

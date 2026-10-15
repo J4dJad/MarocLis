@@ -53,9 +53,13 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
                                                                        decimal monthlyWorkingDays,
                                                                        CancellationToken ct = default)
     {
+        // The current contract, or the one a re-hire ended, when either falls in the month: the
+        // days worked before the departure are paid with it, and its settlement too.
         var staff = await db.Employees.AsNoTracking()
-            .Where(e => e.SiteId == siteId && e.HireDate <= to && (e.ExitDate == null || e.ExitDate >= from))
-            .Select(e => new { e.Id, e.HireDate, e.ExitDate })
+            .Where(e => e.SiteId == siteId
+                        && ((e.HireDate <= to && (e.ExitDate == null || e.ExitDate >= from))
+                            || (e.PreviousHireDate <= to && e.PreviousExitDate >= from)))
+            .Select(e => new { e.Id, e.HireDate, e.ExitDate, e.PreviousHireDate, e.PreviousExitDate })
             .ToListAsync(ct);
         if (staff.Count == 0) return [];
 
@@ -90,30 +94,43 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
         [
             .. staff.Select(s =>
             {
-                // The days of the contract within the month: a hire or an exit during it is paid in
-                // proportion to them (PayrollCalculator.ContractBase), not as absences.
-                var first = s.HireDate > from ? s.HireDate : from;
-                var last = s.ExitDate is { } exit && exit < to ? exit : to;
-                var contractDays = Working(first, last);
-
-                // Then the unpaid leave inside the contract.
-                var days = 0m;
-                foreach (var r in unpaid.Where(r => r.EmployeeId == s.Id))
+                // The days of the contracts within the month, the one ended by a re-hire included:
+                // a hire or an exit during it is paid in proportion to them
+                // (PayrollCalculator.ContractBase), not as absences.
+                var stints = new List<(DateOnly First, DateOnly Last)>();
+                void Stint(DateOnly hire, DateOnly? exit)
                 {
-                    var start = r.StartDate < first ? first : r.StartDate;
-                    var end = r.EndDate > last ? last : r.EndDate;
-                    days += Working(start, end, r.StartsAfternoon && start == r.StartDate, r.EndsMorning && end == r.EndDate);
+                    var first = hire > from ? hire : from;
+                    var last = exit is { } end && end < to ? end : to;
+                    if (first <= last) stints.Add((first, last));
                 }
+                Stint(s.HireDate, s.ExitDate);
+                if (s.PreviousHireDate is { } previousHire && s.PreviousExitDate is { } previousExit)
+                    Stint(previousHire, previousExit);
 
-                // A stoppage withholds the salary of its working days; the allowance advanced under
-                // subrogation is due for every calendar day of it (loi 18-12).
+                var contractDays = stints.Sum(c => Working(c.First, c.Last));
+
+                // Then the unpaid leave inside the contracts.
+                var days = 0m;
                 decimal accident = 0m, subrogated = 0m;
-                foreach (var r in stoppages.Where(r => r.EmployeeId == s.Id))
+                foreach (var (first, last) in stints)
                 {
-                    var start = r.StartDate < first ? first : r.StartDate;
-                    var end = r.EndDate > last ? last : r.EndDate;
-                    accident += Working(start, end);
-                    if (r.Subrogation) subrogated += Calendar(start, end);
+                    foreach (var r in unpaid.Where(r => r.EmployeeId == s.Id))
+                    {
+                        var start = r.StartDate < first ? first : r.StartDate;
+                        var end = r.EndDate > last ? last : r.EndDate;
+                        days += Working(start, end, r.StartsAfternoon && start == r.StartDate, r.EndsMorning && end == r.EndDate);
+                    }
+
+                    // A stoppage withholds the salary of its working days; the allowance advanced
+                    // under subrogation is due for every calendar day of it (loi 18-12).
+                    foreach (var r in stoppages.Where(r => r.EmployeeId == s.Id))
+                    {
+                        var start = r.StartDate < first ? first : r.StartDate;
+                        var end = r.EndDate > last ? last : r.EndDate;
+                        accident += Working(start, end);
+                        if (r.Subrogation) subrogated += Calendar(start, end);
+                    }
                 }
 
                 var withheld = Math.Min(days + accident, monthlyWorkingDays);
