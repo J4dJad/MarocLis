@@ -237,12 +237,26 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 })
             .ToListAsync(ct);
 
-        // The dated deliveries of each line: the lots received on its order for its item.
+        // The dated deliveries of each line: the lots received on its order for its item, less what
+        // came on later deliveries of the same lot, and those later deliveries, each on its own order.
         var orderIds = rows.Select(l => (Guid?)l.PurchaseOrderId).Distinct().ToList();
-        var lots = await db.ReagentLots.IgnoreQueryFilters().AsNoTracking()
-                           .Where(l => l.PurchaseOrderId != null && orderIds.Contains(l.PurchaseOrderId))
-                           .Select(l => new { l.PurchaseOrderId, l.StockItemId, l.ReceivedOn, l.QuantityReceived })
-                           .ToListAsync(ct);
+        var firstLots = await db.ReagentLots.IgnoreQueryFilters().AsNoTracking()
+                                .Where(l => l.PurchaseOrderId != null && orderIds.Contains(l.PurchaseOrderId))
+                                .Select(l => new { l.Id, l.PurchaseOrderId, l.StockItemId, l.ReceivedOn, l.QuantityReceived })
+                                .ToListAsync(ct);
+        var lotIds = firstLots.Select(l => (Guid?)l.Id).ToList();
+        var later = await LaterLotReceipts.LoadAsync(
+            db, m => lotIds.Contains(m.ReagentLotId) || (m.PurchaseOrderId != null && orderIds.Contains(m.PurchaseOrderId)), ct);
+        var lots = firstLots
+            .Select(l => new
+            {
+                l.PurchaseOrderId, l.StockItemId, l.ReceivedOn,
+                QuantityReceived = l.QuantityReceived - later.Where(r => r.LotId == l.Id).Sum(r => r.Quantity)
+            })
+            .Concat(later.Where(r => r.PurchaseOrderId != null)
+                         .Select(r => new { r.PurchaseOrderId, r.StockItemId, ReceivedOn = r.On, QuantityReceived = r.Quantity }))
+            .Where(r => r.QuantityReceived > 0m)
+            .ToList();
         var billed = await (
                 from il in live
                 join si in db.SupplierInvoices.IgnoreQueryFilters() on il.SupplierInvoiceId equals si.Id
@@ -272,9 +286,7 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 from il in db.SupplierInvoiceLines.AsNoTracking()
                 join si in db.SupplierInvoices.IgnoreQueryFilters().AsNoTracking() on il.SupplierInvoiceId equals si.Id
                 where ids.Contains(il.PurchaseOrderLineId) && si.Id != exceptInvoiceId && si.InvoiceDate >= onOrAfter
-                      && (si.Status == SupplierInvoiceStatus.Pending || si.Status == SupplierInvoiceStatus.Blocked
-                          || si.Status == SupplierInvoiceStatus.ApprovedForPayment
-                          || si.Status == SupplierInvoiceStatus.PartiallyPaid)
+                      && si.Status != SupplierInvoiceStatus.Cancelled
                 select si.Id)
             .Distinct()
             .ToListAsync(ct);
@@ -300,8 +312,20 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
     public async Task<IReadOnlyList<LatePaymentSource>> GetLatePaymentSourcesAsync(
         Guid siteId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
+        // The declarations exported so far. A period already exported lists what was entered by
+        // then, so that exporting it again gives the file that was filed; an invoice entered later
+        // goes, with its whole delay, into the next declaration.
+        var declarations = await db.LatePaymentDeclarations.IgnoreQueryFilters().AsNoTracking()
+            .Where(d => d.SiteId == siteId && d.PeriodTo < from)
+            .ToListAsync(ct);
+        var filed = await db.LatePaymentDeclarations.IgnoreQueryFilters().AsNoTracking()
+            .Where(d => d.SiteId == siteId && d.PeriodFrom == from && d.PeriodTo == to)
+            .Select(d => (DateTimeOffset?)d.ExportedAt)
+            .FirstOrDefaultAsync(ct);
+
         var rows = await db.SupplierInvoices.AsNoTracking()
             .Where(i => i.SiteId == siteId && i.Status != SupplierInvoiceStatus.Cancelled
+                        && i.InvoiceDate <= to && (filed == null || i.CreatedAt <= filed)
                         && i.DueDate < to && (i.PaidOn == null || i.PaidOn >= from))
             .Select(i => new
             {
@@ -309,10 +333,12 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                              .Select(s => new { s.Name, s.Ice, s.FiscalId }).FirstOrDefault(),
                 i.InvoiceNumber,
                 i.InvoiceDate,
+                i.CreatedAt,
                 i.DeliveryDate,
                 i.DueDate,
                 Lines = i.Lines.Select(l => new LineAmounts(l.Quantity, l.UnitPriceMad, l.VatRate)).ToList(),
-                Payments = i.Payments.Select(p => new PaymentFact(p.PaidOn, p.AmountMad)).ToList()
+                Payments = i.Payments.Where(p => filed == null || p.RecordedAt <= filed)
+                            .Select(p => new PaymentFact(p.PaidOn, p.AmountMad)).ToList()
             })
             .AsSplitQuery()
             .ToListAsync(ct);
@@ -321,7 +347,9 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
         [
             .. rows.Select(i => new LatePaymentSource(
                 i.Supplier?.Name ?? "?", i.Supplier?.Ice, i.Supplier?.FiscalId, i.InvoiceNumber, i.InvoiceDate,
-                i.DeliveryDate, i.DueDate, Totals(i.Lines).IncludingVat, i.Payments))
+                i.DeliveryDate, i.DueDate, Totals(i.Lines).IncludingVat, i.Payments,
+                declarations.Where(d => d.Listed(i.InvoiceDate, i.CreatedAt))
+                            .Max(d => (DateOnly?)d.PeriodTo)))
         ];
     }
 
@@ -379,5 +407,40 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 select new AccountingPaymentSource(s.Code, s.Name, s.AccountingAccount, i.InvoiceNumber,
                                                    p.PaidOn, p.AmountMad, p.Method, p.Reference))
             .ToListAsync(ct);
+    }
+}
+
+/// <summary>
+/// The receipts of a lot after its first one: further deliveries of the same manufacturer lot (the
+/// backorder of a partial delivery), each with its own order, date and delivery note. The first
+/// receipt is the lot itself (<see cref="ReagentLot.ReceivedOn"/>, <see cref="ReagentLot.PurchaseOrderId"/>).
+/// </summary>
+internal static class LaterLotReceipts
+{
+    internal sealed record Receipt(Guid LotId, Guid StockItemId, Guid? PurchaseOrderId, DateOnly On, decimal Quantity,
+                                   string? Reference);
+
+    /// <summary>The later receipts of every lot with a receipt matching <paramref name="touching"/>.</summary>
+    public static async Task<IReadOnlyList<Receipt>> LoadAsync(LisDbContext db,
+                                                               System.Linq.Expressions.Expression<Func<StockMovement, bool>> touching,
+                                                               CancellationToken ct)
+    {
+        var receipts = db.StockMovements.IgnoreQueryFilters().AsNoTracking()
+                         .Where(m => m.Kind == StockMovementKind.Receipt && m.ReagentLotId != null);
+        var lots = receipts.Where(touching).Select(m => m.ReagentLotId);
+
+        var rows = await receipts
+            .Where(m => lots.Contains(m.ReagentLotId))
+            .Select(m => new { m.ReagentLotId, m.StockItemId, m.PurchaseOrderId, m.OccurredAt, m.CreatedAt, m.Quantity, m.Reference })
+            .ToListAsync(ct);
+
+        return
+        [
+            .. rows.GroupBy(r => r.ReagentLotId!.Value)
+                   .SelectMany(g => g.OrderBy(r => r.OccurredAt).ThenBy(r => r.CreatedAt).Skip(1)
+                                     .Select(r => new Receipt(g.Key, r.StockItemId, r.PurchaseOrderId,
+                                                              DateOnly.FromDateTime(r.OccurredAt.DateTime), r.Quantity,
+                                                              r.Reference)))
+        ];
     }
 }

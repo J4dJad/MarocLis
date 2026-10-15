@@ -378,3 +378,34 @@ public sealed class SupplierInvoiceFile : AuditableAggregateRoot
         Content = content;
     }
 }
+
+/// <summary>
+/// A late-payment declaration (loi n° 69-21) as exported for filing: its period and when it was
+/// exported. What it listed is what was entered by then; a later period deducts the fine already
+/// declared only for invoices a recorded declaration actually listed, and exporting the same period
+/// again lists the same invoices and payments.
+/// </summary>
+public sealed class LatePaymentDeclaration : AuditableAggregateRoot, ISiteScoped
+{
+    private LatePaymentDeclaration() { }
+
+    public LatePaymentDeclaration(Guid siteId, DateOnly periodFrom, DateOnly periodTo, DateTimeOffset exportedAt,
+                                  Guid exportedByUserId)
+    {
+        SiteId = siteId;
+        PeriodFrom = periodFrom;
+        PeriodTo = periodTo;
+        ExportedAt = exportedAt;
+        ExportedByUserId = exportedByUserId;
+    }
+
+    public Guid SiteId { get; set; }
+    public DateOnly PeriodFrom { get; private set; }
+    public DateOnly PeriodTo { get; private set; }
+    public DateTimeOffset ExportedAt { get; private set; }
+    public Guid ExportedByUserId { get; private set; }
+
+    /// <summary>Whether the declaration listed an invoice of that date entered at that time.</summary>
+    public bool Listed(DateOnly invoiceDate, DateTimeOffset enteredAt) =>
+        invoiceDate <= PeriodTo && enteredAt <= ExportedAt;
+}

@@ -259,17 +259,41 @@ public sealed class PurchasingQualityQueries(LisDbContext db) : IPurchasingQuali
             })
             .ToListAsync(ct);
 
-        var lots = await db.ReagentLots.AsNoTracking()
+        var firstLots = await db.ReagentLots.AsNoTracking()
             .Where(l => l.SupplierId != null && l.ReceivedOn >= from && l.ReceivedOn <= to)
             .Select(l => new { SupplierId = l.SupplierId!.Value, l.PurchaseOrderId, l.ReceivedOn, l.DeliveryNoteReference })
             .ToListAsync(ct);
 
-        var orderIds = lots.Where(l => l.PurchaseOrderId != null).Select(l => l.PurchaseOrderId!.Value).Distinct().ToList();
+        // A lot delivered again (the backorder of the same manufacturer lot) is a delivery of its own.
+        var later = (await LaterLotReceipts.LoadAsync(db, m => m.OccurredAt >= start && m.OccurredAt < end, ct))
+            .Where(r => r.On >= from && r.On <= to)
+            .ToList();
+        var laterLotIds = later.Select(r => r.LotId).Distinct().ToList();
+        var lotSuppliers = await db.ReagentLots.AsNoTracking()
+            .Where(l => laterLotIds.Contains(l.Id))
+            .Select(l => new { l.Id, l.SupplierId })
+            .ToDictionaryAsync(l => l.Id, l => l.SupplierId, ct);
+
+        var orderIds = firstLots.Where(l => l.PurchaseOrderId != null).Select(l => l.PurchaseOrderId!.Value)
+            .Concat(later.Where(r => r.PurchaseOrderId != null).Select(r => r.PurchaseOrderId!.Value))
+            .Distinct().ToList();
 
         var orders = await db.PurchaseOrders.AsNoTracking().IgnoreQueryFilters()
             .Where(o => orderIds.Contains(o.Id))
-            .Select(o => new { o.Id, o.OrderDate, o.ExpectedDeliveryDate })
+            .Select(o => new { o.Id, o.SupplierId, o.OrderDate, o.ExpectedDeliveryDate })
             .ToDictionaryAsync(o => o.Id, ct);
+
+        // A later receipt on an order is the order's supplier's; otherwise the lot's.
+        var lots = firstLots
+            .Concat(later.Select(r => new
+                {
+                    SupplierId = (r.PurchaseOrderId is { } po && orders.TryGetValue(po, out var o)
+                                     ? o.SupplierId
+                                     : lotSuppliers.GetValueOrDefault(r.LotId)) ?? Guid.Empty,
+                    r.PurchaseOrderId, ReceivedOn = r.On, DeliveryNoteReference = r.Reference
+                }))
+            .Where(l => l.SupplierId != Guid.Empty)
+            .ToList();
 
         var refusals = await db.Set<RefusedDelivery>().AsNoTracking()
             .Where(r => r.SupplierId != null && r.RefusedOn >= from && r.RefusedOn <= to)

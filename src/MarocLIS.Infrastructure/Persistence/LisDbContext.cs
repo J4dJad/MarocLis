@@ -169,6 +169,7 @@ public class LisDbContext : DbContext
     public DbSet<SupplierInvoiceVariance> SupplierInvoiceVariances => Set<SupplierInvoiceVariance>();
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
     public DbSet<SupplierInvoiceFile> SupplierInvoiceFiles => Set<SupplierInvoiceFile>();
+    public DbSet<LatePaymentDeclaration> LatePaymentDeclarations => Set<LatePaymentDeclaration>();
     public DbSet<Instrument> Instruments => Set<Instrument>();
     public DbSet<MaintenanceRecord> MaintenanceRecords => Set<MaintenanceRecord>();
     public DbSet<CalibrationRecord> CalibrationRecords => Set<CalibrationRecord>();
