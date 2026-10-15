@@ -100,6 +100,14 @@ public sealed class InvoiceLine : Entity
     /// </summary>
     public decimal PayerShare { get; private set; }
 
+    /// <summary>
+    /// The share as computed from the coverage, before it was capped on the line total. Kept in
+    /// memory while the draft is built so that removing a discount gives the payer its full share
+    /// back; a line read back from the database is issued and frozen, and falls back on the stored
+    /// share.
+    /// </summary>
+    private decimal? _coverageShare;
+
     public decimal PatientShare => Money.Round(TotalAmount - PayerShare);
 
     /// <summary>
@@ -115,15 +123,23 @@ public sealed class InvoiceLine : Entity
             ? Money.Round(ReferenceTariffBase * Quantity)
             : NetAmount;
 
-        var share = Money.Round(basis * reimbursementRate);
-        PayerShare = Math.Clamp(share, 0m, TotalAmount);
+        _coverageShare = Money.Round(basis * reimbursementRate);
+        CapPayerShareToTotal();
     }
 
     public void ClearCoverage()
     {
         ReimbursementRate = null;
+        _coverageShare = null;
         PayerShare = 0m;
     }
+
+    /// <summary>
+    /// Re-caps the payer share on the line's current total, which an invoice-level discount lowers
+    /// after the split was set.
+    /// </summary>
+    internal void CapPayerShareToTotal() =>
+        PayerShare = Math.Clamp(_coverageShare ?? PayerShare, 0m, Math.Max(0m, TotalAmount));
 
     /// <summary>Amount charged above the reference tariff, entirely on the patient.</summary>
     public decimal ExcessOverReferenceTariff =>

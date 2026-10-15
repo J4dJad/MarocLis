@@ -37,6 +37,12 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(e => e.RenderedPdf).HasColumnType("varbinary(max)");
         builder.Property(e => e.ContentHash).HasMaxLength(64);
 
+        // Total of the credit notes issued against the invoice; what is owed is derived from it.
+        builder.Property(e => e.CreditedAmount).HasColumnType("decimal(18,2)");
+        builder.Ignore(e => e.OutstandingAmount);
+        builder.Ignore(e => e.CreditableAmount);
+        builder.Ignore(e => e.IsFullyCredited);
+
         builder.HasMany(e => e.Lines).WithOne()
                .HasForeignKey(l => l.InvoiceId).OnDelete(DeleteBehavior.Cascade);
 

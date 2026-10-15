@@ -334,6 +334,11 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
 
                 TotalLine(totals, "Part patient", format.Money(doc.PatientShareAmount));
                 TotalLine(totals, "Montant payé", format.Money(doc.PaidAmount));
+
+                // A credit note reduces what is owed; without this line the balance would not add up.
+                if (doc.CreditedAmount > 0m)
+                    TotalLine(totals, "Avoirs émis", format.Money(doc.CreditedAmount));
+
                 TotalLine(totals, "Reste à payer", format.Money(doc.OutstandingAmount),
                           bold: true, rule: true);
             });
@@ -415,6 +420,10 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
                     }
 
                     TotalLine(totals, "Total payé", format.Money(doc.PaidAmount), bold: true, rule: true);
+
+                    if (doc.CreditedAmount > 0m)
+                        TotalLine(totals, "Avoirs émis", format.Money(doc.CreditedAmount));
+
                     TotalLine(totals, "Reste à payer", format.Money(doc.OutstandingAmount),
                               bold: true, rule: true);
                 });

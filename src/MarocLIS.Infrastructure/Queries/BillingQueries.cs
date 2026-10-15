@@ -101,6 +101,7 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                 i.BilledToName,
                 i.TotalAmount,
                 i.PaidAmount,
+                i.CreditedAmount,
                 i.ClaimStatus,
                 i.CoveredOrderNumbersCsv,
                 i.PayerShareAmount,
@@ -118,7 +119,8 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
             r.BilledToName,
             r.TotalAmount,
             r.PaidAmount,
-            Money.Round(r.TotalAmount - r.PaidAmount),
+            // Credit notes reduce what is owed; the same rule as the entity's.
+            Invoice.ComputeOutstanding(r.Kind, r.TotalAmount, r.PaidAmount, r.CreditedAmount),
             // Ageing computed here rather than stored, so it is never stale.
             r.DueDate is { } due && due < today
                 && r.Status is InvoiceStatus.Issued or InvoiceStatus.PartiallyPaid
@@ -127,7 +129,8 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
             r.ClaimStatus,
             r.CoveredOrderNumbersCsv,
             Money.Round(r.PayerShareAmount),
-            r.PayerAcceptedAmount)).ToList();
+            r.PayerAcceptedAmount,
+            r.CreditedAmount)).ToList();
 
         return new PagedResult<InvoiceRow>(mapped, total, page, pageSize);
     }
@@ -192,6 +195,7 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                 i.PayerShareAmount,
                 i.PatientShareAmount,
                 i.PaidAmount,
+                i.CreditedAmount,
                 i.AmountInWords
             })
             .FirstOrDefaultAsync(ct);
@@ -304,7 +308,10 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
             [
                 .. payments.Select(p => new InvoiceDocumentPayment(
                     p.PaymentDate, p.Method, p.Status, p.Amount, p.Reference, p.BankName))
-            ]);
+            ])
+        {
+            CreditedAmount = invoice.CreditedAmount
+        };
     }
 
     public Task<CashSession?> GetOpenCashSessionAsync(Guid operatorUserId,
@@ -492,7 +499,9 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                         && i.Status != InvoiceStatus.Draft
                         && i.Status != InvoiceStatus.Cancelled
                         && i.Kind == InvoiceKind.Invoice
-                        && i.PayerShareAmount > 0m)
+                        && i.PayerShareAmount > 0m
+                        // Wholly reversed by credit notes: there is nothing left to claim.
+                        && i.CreditedAmount < i.TotalAmount)
             .Select(i => new
             {
                 i.Id,

@@ -44,7 +44,14 @@ public sealed record InvoiceRow(
     string? CoveredOrders,
     decimal PayerShare = 0m,
     /// <summary>What the payer agreed to pay on its share; null until the settlement is recorded.</summary>
-    decimal? PayerAcceptedAmount = null);
+    decimal? PayerAcceptedAmount = null,
+    /// <summary>Total of the credit notes issued against the invoice.</summary>
+    decimal Credited = 0m)
+{
+    /// <summary>What a further credit note may still reverse; zero for anything but an invoice.</summary>
+    public decimal Creditable =>
+        Kind == InvoiceKind.Invoice ? Math.Max(0m, Money.Round(Total - Credited)) : 0m;
+}
 
 public sealed record CashSessionSummary(
     Guid CashSessionId,
@@ -358,12 +365,12 @@ public sealed class BillingService(
         var original = await invoices.GetByIdWithDetailsAsync(originalInvoiceId, ct);
         if (original is null) return Result.Failure<Guid>(Error.NotFound("Invoice_NotFound"));
 
-        if (!original.IsIssued)
-            return Result.Failure<Guid>(Error.Conflict("Invoice_CreditNoteRequiresIssued"));
-
-        if (partialAmount is { } amount && (amount <= 0m || amount > original.TotalAmount))
-            return Result.Failure<Guid>(
-                Error.Validation("Invoice_CreditNoteAmountOutOfRange", original.TotalAmount));
+        // Checked against what earlier credit notes already reversed, before a number is drawn:
+        // together the credit notes never reverse more than the invoice charged. A full reversal
+        // credits what is left.
+        var creditable = original.CreditableAmount;
+        var allowed = original.CanApplyCreditNote(partialAmount ?? creditable);
+        if (allowed.IsFailure) return Result.Failure<Guid>(allowed.Errors);
 
         var today = clock.Today;
 
@@ -391,31 +398,25 @@ public sealed class BillingService(
             var added = creditNote.AddLine(new InvoiceLine($"Avoir partiel — {reason}", partial));
             if (added.IsFailure) return Result.Failure<Guid>(added.Errors);
         }
+        else if (original.CreditedAmount > 0m)
+        {
+            // Part of the invoice was already reversed: mirroring every line again would credit it
+            // twice. The balance is credited as one line.
+            var added = creditNote.AddLine(
+                new InvoiceLine($"Avoir du solde de la facture {original.Number} — {reason}", creditable));
+            if (added.IsFailure) return Result.Failure<Guid>(added.Errors);
+        }
         else
         {
-            // A full reversal mirrors every line, so the two documents reconcile line by line.
-            foreach (var line in original.Lines.OrderBy(l => l.LineNumber))
-            {
-                var mirrored = new InvoiceLine(line.Description, line.UnitPrice, line.Quantity)
-                {
-                    DescriptionArabic = line.DescriptionArabic,
-                    LabOrderId = line.LabOrderId,
-                    LabOrderItemId = line.LabOrderItemId,
-                    AnalysisTestId = line.AnalysisTestId,
-                    AnalysisCode = line.AnalysisCode,
-                    NationalActCode = line.NationalActCode,
-                    LetterKey = line.LetterKey,
-                    Coefficient = line.Coefficient,
-                    ReferenceTariffBase = line.ReferenceTariffBase,
-                    ServiceDate = line.ServiceDate,
-                    IsVatExempt = line.IsVatExempt,
-                    VatRate = line.VatRate
-                };
-
-                var added = creditNote.AddLine(mirrored);
-                if (added.IsFailure) return Result.Failure<Guid>(added.Errors);
-            }
+            // A full reversal mirrors every line, and the original's discount with them, so the two
+            // documents reconcile line by line and to the dirham.
+            var mirrored = creditNote.MirrorLinesOf(original);
+            if (mirrored.IsFailure) return Result.Failure<Guid>(mirrored.Errors);
         }
+
+        // Refused here, before the number is drawn, should the mirrored lines not reconcile.
+        var fits = original.CanApplyCreditNote(creditNote.TotalAmount);
+        if (fits.IsFailure) return Result.Failure<Guid>(fits.Errors);
 
         var number = await sequences.NextAsync(
             SequencePurpose.CreditNote, original.SiteId, today.Year, ct);
@@ -428,7 +429,9 @@ public sealed class BillingService(
         if (issued.IsFailure) return Result.Failure<Guid>(issued.Errors);
 
         await invoices.AddAsync(creditNote, ct);
-        original.MarkCreditNoteIssued();
+
+        var applied = original.ApplyCreditNote(creditNote.TotalAmount);
+        if (applied.IsFailure) return Result.Failure<Guid>(applied.Errors);
 
         unitOfWork.AuditReason =
             $"Avoir {creditNote.Number} sur la facture {original.Number} : {reason}";
@@ -1158,13 +1161,29 @@ public sealed class BillingService(
 
         if (reference.IsFailure) return Result.Failure<string>(reference.FirstError);
 
-        foreach (var invoiceId in invoiceIds)
+        var submitted = 0;
+
+        foreach (var invoiceId in invoiceIds.Distinct())
         {
             var invoice = await invoices.GetByIdAsync(invoiceId, ct);
 
             if (invoice is null)
             {
                 problems.Add(Error.NotFound("Invoice_NotFound"));
+                continue;
+            }
+
+            // Re-read here, not trusted from the screen: an invoice already in a batch — a second
+            // click on Submit, or two operators — must not be moved into a second one.
+            if (invoice.ClaimStatus is not (ClaimStatus.Prepared or ClaimStatus.Rejected))
+            {
+                problems.Add(Error.Conflict("Claim_AlreadySubmitted", invoice.Number));
+                continue;
+            }
+
+            if (invoice.IsFullyCredited)
+            {
+                problems.Add(Error.Conflict("Invoice_AlreadyFullyCredited", invoice.Number));
                 continue;
             }
 
@@ -1185,7 +1204,11 @@ public sealed class BillingService(
             invoice.ClaimReference = reference.Value;
             invoice.ClaimSubmittedOn = today;
             invoice.ClaimStatus = ClaimStatus.Submitted;
+            submitted++;
         }
+
+        // Nothing went into the batch: rolled back, so the reference is not spent on an empty one.
+        if (submitted == 0) return Result.Failure<string>(problems);
 
         unitOfWork.AuditReason = $"Transmission du dossier tiers payant {reference.Value}";
         await unitOfWork.SaveChangesAsync(ct);

@@ -89,7 +89,34 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
 
     public decimal PaidAmount { get; private set; }
 
-    public decimal OutstandingAmount => Money.Round(TotalAmount - PaidAmount);
+    /// <summary>
+    /// Sum of the credit notes issued against this invoice. A credit note withdraws part of the
+    /// charge, so it reduces what is still owed exactly as a settlement does, without being one.
+    /// </summary>
+    public decimal CreditedAmount { get; private set; }
+
+    /// <summary>
+    /// What is still owed: the total less what was paid and what was credited. A credit note owes
+    /// nothing — it is a reversal, settled by its own issue.
+    /// </summary>
+    public decimal OutstandingAmount => ComputeOutstanding(Kind, TotalAmount, PaidAmount, CreditedAmount);
+
+    /// <summary>What a further credit note may still reverse.</summary>
+    public decimal CreditableAmount =>
+        Kind == InvoiceKind.Invoice ? Math.Max(0m, Money.Round(TotalAmount - CreditedAmount)) : 0m;
+
+    /// <summary>True once credit notes have reversed the whole total.</summary>
+    public bool IsFullyCredited => CreditedAmount > 0m && CreditedAmount >= TotalAmount;
+
+    /// <summary>
+    /// The outstanding rule, shared with the queries that read the stored columns and cannot call
+    /// <see cref="OutstandingAmount"/> in SQL.
+    /// </summary>
+    public static decimal ComputeOutstanding(InvoiceKind kind, decimal total, decimal paid,
+                                             decimal credited) =>
+        kind == InvoiceKind.CreditNote
+            ? 0m
+            : Math.Max(0m, Money.Round(total - paid - credited));
 
     /// <summary>Total in words, a customary mention on Moroccan invoices.</summary>
     public string? AmountInWords { get; set; }
@@ -227,10 +254,40 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
 
         VatAmount = Money.Round(_lines.Sum(l => l.VatAmount));
         TotalAmount = Money.Round(NetAmount + VatAmount);
+
+        // The coverage split is set before the discount is known. A payer never reimburses more
+        // than what the line finally costs, so the share is re-capped on the discounted total —
+        // otherwise the patient share goes negative.
+        foreach (var line in _lines) line.CapPayerShareToTotal();
+
         PayerShareAmount = Money.Round(_lines.Sum(l => l.PayerShare));
         PatientShareAmount = Money.Round(TotalAmount - PayerShareAmount);
         PaidAmount = Money.Round(_payments.Where(p => p.Status == PaymentStatus.Settled)
                                           .Sum(p => p.Amount));
+
+        DeriveStatus();
+    }
+
+    /// <summary>
+    /// Settlement status from the amounts. Called on every recomputation, so a refund or a bounced
+    /// cheque puts a paid invoice back to partly paid or unpaid. A draft, a cancelled draft and a
+    /// write-off keep their status: those are decisions, not arithmetic.
+    /// </summary>
+    private void DeriveStatus()
+    {
+        if (Status is InvoiceStatus.Draft or InvoiceStatus.Cancelled or InvoiceStatus.WrittenOff)
+            return;
+
+        // A credit note is settled by its own issue; nobody pays it.
+        if (Kind == InvoiceKind.CreditNote)
+        {
+            Status = InvoiceStatus.Paid;
+            return;
+        }
+
+        Status = OutstandingAmount <= 0m ? InvoiceStatus.Paid
+            : PaidAmount > 0m ? InvoiceStatus.PartiallyPaid
+            : InvoiceStatus.Issued;
     }
 
     /// <summary>
@@ -248,12 +305,13 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
         if (string.IsNullOrWhiteSpace(allocatedNumber))
             return Result.Failure(Error.Validation("Invoice_NumberRequired"));
 
-        Recalculate();
-
         Number = allocatedNumber;
         IssuedAt = now;
         AmountInWords = amountInWords;
-        Status = OutstandingAmount <= 0m ? InvoiceStatus.Paid : InvoiceStatus.Issued;
+        Status = InvoiceStatus.Issued;
+
+        // Recomputes the totals and derives the settlement status now that it is issued.
+        Recalculate();
         return Result.Success();
     }
 
@@ -265,22 +323,104 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
             return Result.Failure(Error.Conflict("Invoice_MustBeIssuedBeforePayment"));
         if (Status == InvoiceStatus.Cancelled)
             return Result.Failure(Error.Conflict("Invoice_Cancelled"));
+        // A credit note is money the laboratory owes back, and a quotation is not a charge: neither
+        // is settled. A receipt documents a cash payment and does carry one.
+        if (Kind is not (InvoiceKind.Invoice or InvoiceKind.Receipt))
+            return Result.Failure(Error.Conflict("Payment_KindNotPayable"));
         if (payment.Amount <= 0m)
             return Result.Failure(Error.Validation("Payment_AmountMustBePositive"));
-        if (Money.Round(PaidAmount + payment.Amount) > TotalAmount)
+        if (payment.Amount > OutstandingAmount)
             return Result.Failure(Error.Validation("Payment_ExceedsOutstanding", OutstandingAmount));
 
         payment.AttachTo(Id);
         _payments.Add(payment);
         Recalculate();
 
-        if (OutstandingAmount <= 0m) Status = InvoiceStatus.Paid;
-        else if (PaidAmount > 0m) Status = InvoiceStatus.PartiallyPaid;
+        return Result.Success();
+    }
+
+    // ---- Credit notes -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Fills a draft credit note with a mirror of every line of <paramref name="original"/>, for a
+    /// full reversal. The lines carry their gross price, so the original's discount is carried too:
+    /// the credit note reverses what was charged, not the list price, and its total equals the
+    /// original's.
+    /// </summary>
+    public Result MirrorLinesOf(Invoice original)
+    {
+        if (Kind != InvoiceKind.CreditNote)
+            return Result.Failure(Error.Conflict("Invoice_CannotCreditACreditNote"));
+
+        foreach (var line in original.Lines.OrderBy(l => l.LineNumber))
+        {
+            var mirrored = new InvoiceLine(line.Description, line.UnitPrice, line.Quantity)
+            {
+                DescriptionArabic = line.DescriptionArabic,
+                LabOrderId = line.LabOrderId,
+                LabOrderItemId = line.LabOrderItemId,
+                AnalysisTestId = line.AnalysisTestId,
+                AnalysisCode = line.AnalysisCode,
+                NationalActCode = line.NationalActCode,
+                LetterKey = line.LetterKey,
+                Coefficient = line.Coefficient,
+                ReferenceTariffBase = line.ReferenceTariffBase,
+                ServiceDate = line.ServiceDate,
+                IsVatExempt = line.IsVatExempt,
+                VatRate = line.VatRate
+            };
+
+            var added = AddLine(mirrored);
+            if (added.IsFailure) return added;
+        }
+
+        if (original.DiscountAmount > 0m)
+        {
+            var discounted = ApplyDiscount(
+                original.DiscountAmount,
+                string.IsNullOrWhiteSpace(original.DiscountReason)
+                    ? $"Remise de la facture {original.Number}"
+                    : original.DiscountReason!);
+            if (discounted.IsFailure) return discounted;
+        }
 
         return Result.Success();
     }
 
-    public void MarkCreditNoteIssued() => HasCreditNote = true;
+    /// <summary>
+    /// Checks that a credit note of <paramref name="amount"/> may be issued against this invoice:
+    /// the credit notes together never reverse more than the invoice charged.
+    /// </summary>
+    public Result CanApplyCreditNote(decimal amount)
+    {
+        if (Kind != InvoiceKind.Invoice)
+            return Result.Failure(Error.Conflict("Invoice_CannotCreditACreditNote"));
+        if (!IsIssued || Status == InvoiceStatus.Cancelled)
+            return Result.Failure(Error.Conflict("Invoice_CreditNoteRequiresIssued"));
+        if (CreditableAmount <= 0m)
+            return Result.Failure(Error.Conflict("Invoice_AlreadyFullyCredited", Number));
+        if (amount <= 0m)
+            return Result.Failure(Error.Validation("Invoice_CreditNoteAmountOutOfRange", CreditableAmount));
+        if (Money.Round(amount) > CreditableAmount)
+            return Result.Failure(Error.Validation("Invoice_CreditNoteExceedsBalance", CreditableAmount));
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Records a credit note issued against this invoice. The amount reduces what is owed and the
+    /// status follows: a fully credited invoice with nothing paid is settled. Money already paid
+    /// beyond the reduced total is not touched here — handing it back is a refund.
+    /// </summary>
+    public Result ApplyCreditNote(decimal amount)
+    {
+        var allowed = CanApplyCreditNote(amount);
+        if (allowed.IsFailure) return allowed;
+
+        CreditedAmount = Money.Round(CreditedAmount + amount);
+        HasCreditNote = true;
+        Recalculate();
+        return Result.Success();
+    }
 
     /// <summary>
     /// Cancels a draft. An issued invoice cannot be cancelled this way — the accounting series must
