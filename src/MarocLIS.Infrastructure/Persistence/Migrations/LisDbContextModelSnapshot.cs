@@ -3805,6 +3805,150 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("UserSiteAccess", "sec");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.InventoryCount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ClosedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("CountDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .UseCollation("Latin1_General_100_CS_AS_SC_UTF8");
+
+                    b.Property<Guid>("OpenedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StorageLocation")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InventoryCounts_Number");
+
+                    b.HasIndex("SiteId", "Status", "CountDate")
+                        .HasDatabaseName("IX_InventoryCounts_Site_Status");
+
+                    b.ToTable("InventoryCounts", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.InventoryCountLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AdjustmentMovementId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("CountedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CountedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("CountedQuantity")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal>("ExpectedQuantity")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateOnly>("ExpiryDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("InventoryCountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ItemCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .UseCollation("Latin1_General_100_CS_AS_SC_UTF8");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LotNumber")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .UseCollation("Latin1_General_100_CS_AS_SC_UTF8");
+
+                    b.Property<Guid>("ReagentLotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("StockItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("StorageLocation")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryCountId", "ReagentLotId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InventoryCountLines_Count_Lot");
+
+                    b.ToTable("InventoryCountLines", "inv");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Inventory.LotCertificateFile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4412,6 +4556,12 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("DeadVolumePercent")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal?>("DeadVolumeTestsPerOpening")
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<string>("DefaultStorageLocation")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -4481,6 +4631,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("ReorderPoint")
                         .HasColumnType("decimal(18,6)");
 
+                    b.Property<bool>("ReorderPointComputed")
+                        .HasColumnType("bit");
+
                     b.Property<decimal>("ReorderQuantity")
                         .HasColumnType("decimal(18,6)");
 
@@ -4492,6 +4645,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("SafetyDataSheetDocumentId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int?>("SafetyStockDays")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("SiteId")
                         .HasColumnType("uniqueidentifier");
 
@@ -4502,7 +4658,17 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("TestsPerCalibration")
+                        .HasColumnType("int");
+
                     b.Property<int?>("TestsPerPack")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TestsPerResultCsv")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("TypicalShelfLifeDays")
                         .HasColumnType("int");
 
                     b.Property<string>("UnitOfMeasure")
@@ -4597,6 +4763,68 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_StockMovements_Item_Occurred");
 
                     b.ToTable("StockMovements", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.StorageUnit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("MaximumCelsius")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal>("MinimumCelsius")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("ReadingsPerDay")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SerialNumber")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_StorageUnits_Site_Name");
+
+                    b.ToTable("StorageUnits", "inv");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Inventory.Supplier", b =>
@@ -5064,6 +5292,67 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("UX_SupplierQuoteLines_Quote_Item");
 
                     b.ToTable("SupplierQuoteLines", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.TemperatureReading", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Celsius")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsOutOfRange")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("NonConformityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("PeriodMaximumCelsius")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal?>("PeriodMinimumCelsius")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTimeOffset>("ReadAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("StorageUnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageUnitId", "ReadAt")
+                        .HasDatabaseName("IX_TemperatureReadings_Unit_ReadAt");
+
+                    b.ToTable("TemperatureReadings", "inv");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Orders.LabOrder", b =>
@@ -8759,6 +9048,15 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.InventoryCountLine", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.InventoryCount", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("InventoryCountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Inventory.LotCertificateFile", b =>
                 {
                     b.HasOne("MarocLIS.Domain.Inventory.ReagentLot", null)
@@ -8887,6 +9185,15 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .WithMany("Lines")
                         .HasForeignKey("SupplierQuoteId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.TemperatureReading", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.StorageUnit", null)
+                        .WithMany()
+                        .HasForeignKey("StorageUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -9718,6 +10025,11 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.Identity.Role", b =>
                 {
                     b.Navigation("Permissions");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.InventoryCount", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Inventory.PurchaseOrder", b =>
