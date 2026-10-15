@@ -74,9 +74,12 @@ public class IsolatedQueryProxy<TQueries> : DispatchProxy where TQueries : class
             throw new OperationCanceledException();
         }
 
+        var ct = args?.OfType<CancellationToken>().FirstOrDefault() ?? default;
+
         if (!isAsync || shared.Database.CurrentTransaction is not null || ReturnsEntity(returnType))
         {
-            return Call(targetMethod, _sharedInstance ??= _factory(_scoped), args);
+            var direct = Call(targetMethod, _sharedInstance ??= _factory(_scoped), args);
+            return isAsync && ct.CanBeCanceled ? Complete(returnType, direct, null, ct) : direct;
         }
 
         var scope = CreateScope();
@@ -93,14 +96,19 @@ public class IsolatedQueryProxy<TQueries> : DispatchProxy where TQueries : class
             throw;
         }
 
-        if (returnType == typeof(Task)) return DisposeAfter((Task)result!, scope);
+        return Complete(returnType, result, scope, ct);
+    }
+
+    private static object? Complete(Type returnType, object? result, IServiceScope? scope, CancellationToken ct)
+    {
+        if (returnType == typeof(Task)) return DisposeAfter((Task)result!, scope, ct);
 
         var awaiter = Awaiters.GetOrAdd(returnType.GetGenericArguments()[0], t =>
             typeof(IsolatedQueryProxy<TQueries>)
                 .GetMethod(nameof(DisposeAfterTyped), BindingFlags.NonPublic | BindingFlags.Static)!
                 .MakeGenericMethod(t));
 
-        return awaiter.Invoke(null, [result, scope]);
+        return awaiter.Invoke(null, [result, scope, ct]);
     }
 
     /// <summary>
@@ -154,16 +162,28 @@ public class IsolatedQueryProxy<TQueries> : DispatchProxy where TQueries : class
         }
     }
 
-    private static async Task DisposeAfter(Task task, IServiceScope scope)
+    // SQL Server reports a command cancelled by the screen (the operator moved to another screen
+    // while it loaded) as a SqlException, "Opération annulée par l'utilisateur", not as a
+    // cancellation: the payroll screen showed it as an unexpected error. Any failure once the
+    // caller's token is cancelled is reported as the cancellation every screen already ignores.
+    private static async Task DisposeAfter(Task task, IServiceScope? scope, CancellationToken ct)
     {
         try { await task; }
-        finally { scope.Dispose(); }
+        catch (Exception ex) when (ct.IsCancellationRequested && ex is not OperationCanceledException)
+        {
+            throw new OperationCanceledException(ct);
+        }
+        finally { scope?.Dispose(); }
     }
 
-    private static async Task<T> DisposeAfterTyped<T>(Task<T> task, IServiceScope scope)
+    private static async Task<T> DisposeAfterTyped<T>(Task<T> task, IServiceScope? scope, CancellationToken ct)
     {
         try { return await task; }
-        finally { scope.Dispose(); }
+        catch (Exception ex) when (ct.IsCancellationRequested && ex is not OperationCanceledException)
+        {
+            throw new OperationCanceledException(ct);
+        }
+        finally { scope?.Dispose(); }
     }
 }
 

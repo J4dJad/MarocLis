@@ -196,6 +196,11 @@ public sealed class MainShellForm : LocalizedForm
         _header.Controls.AddRange([brand, _viewTitle, _userInfo, _siteInfo, _clock, _print,
                                    _languagePicker]);
         _header.Resize += (_, _) => PositionHeaderItems();
+        // The clock, the print button and the user's name size themselves to their text: the clock
+        // was placed while still empty and then grew rightwards under the print button. Each
+        // change of size places the header items again.
+        foreach (var item in new Control[] { _clock, _print, _languagePicker, _userInfo, _siteInfo })
+            item.SizeChanged += (_, _) => PositionHeaderItems();
 
         _sidebar.Dock = DockStyle.Left;
         _sidebar.Width = UiTheme.SidebarWidth;
