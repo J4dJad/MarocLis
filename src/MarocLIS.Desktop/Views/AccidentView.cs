@@ -209,8 +209,10 @@ public sealed class AccidentView : LocalizedView
     {
         if (_pending > 0) return;
         _pending++;
+        // Reported to the navigation service too, so leaving the screen waits for the write.
+        BeginOperation();
         try { await action(); }
-        finally { _pending--; }
+        finally { _pending--; EndOperation(); }
     }
 
     protected override void ApplyTexts()

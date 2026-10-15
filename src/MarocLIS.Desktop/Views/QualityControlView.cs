@@ -244,10 +244,10 @@ public sealed class QualityControlView : LocalizedView
     private void WireBehaviour()
     {
         _refresh.Click += async (_, _) => await ActivateAsync();
-        _submit.Click += async (_, _) => await SubmitAsync();
-        _reviewAction.Click += async (_, _) => await ReviewSelectedAsync();
-        _establishLimits.Click += async (_, _) => await EstablishLimitsAsync();
-        _editRules.Click += async (_, _) => await EditRulesAsync();
+        _submit.Click += async (_, _) => await RunBusyAsync(SubmitAsync);
+        _reviewAction.Click += async (_, _) => await RunBusyAsync(ReviewSelectedAsync);
+        _establishLimits.Click += async (_, _) => await RunBusyAsync(EstablishLimitsAsync);
+        _editRules.Click += async (_, _) => await RunBusyAsync(EditRulesAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Quality.EnterQc, _submit);
@@ -371,7 +371,11 @@ public sealed class QualityControlView : LocalizedView
             _review.Column("affected").HeaderText = T("NonConformity.AffectedResults");
         }
 
-        if (_rows.Count > 0) RenderEntry();
+        if (_rows.Count > 0)
+        {
+            _entry.EndEdit();
+            RenderEntry(CaptureTyped());
+        }
         if (_pendingReview.Count > 0) RenderReview();
     }
 
@@ -389,8 +393,12 @@ public sealed class QualityControlView : LocalizedView
                 return;
             }
 
+            // A reload (refresh, a review, a rule change) keeps the values typed and not yet sent.
+            _entry.EndEdit();
+            var typed = CaptureTyped();
+
             _rows = sheet.Value;
-            RenderEntry();
+            RenderEntry(typed);
 
             var review = await _qc.GetPendingReviewAsync(ct);
 
@@ -410,7 +418,25 @@ public sealed class QualityControlView : LocalizedView
         }
     }
 
-    private void RenderEntry()
+    /// <summary>
+    /// The control values typed and not yet submitted, by control target. The value column starts
+    /// empty, so anything in it is pending. Rebuilding the grid — on a language change or any
+    /// reload — used to blank it.
+    /// </summary>
+    private TypedEdits<Guid> CaptureTyped()
+    {
+        var typed = new TypedEdits<Guid>();
+
+        foreach (DataGridViewRow gridRow in _entry.Rows)
+        {
+            if (gridRow.Tag is QcEntryRow row)
+                typed.Capture(row.QcTargetId, gridRow.Cells[ColValue].Value?.ToString(), null);
+        }
+
+        return typed;
+    }
+
+    private void RenderEntry(TypedEdits<Guid>? keep = null)
     {
         _entry.SuspendLayout();
         _entry.Rows.Clear();
@@ -434,6 +460,9 @@ public sealed class QualityControlView : LocalizedView
 
             var gridRow = _entry.Rows[index];
             gridRow.Tag = row;
+
+            if (keep is not null && keep.TryGet(row.QcTargetId, out var pending))
+                gridRow.Cells[ColValue].Value = pending;
 
             var tooltip = new List<string> { row.ActiveRules.ToString() };
 
@@ -593,6 +622,9 @@ public sealed class QualityControlView : LocalizedView
                 _dialogs.Info(Localizer.Describe(outcome.Warnings), T("Nav.QualityControl"));
 
             var accepted = outcome.Results.Count(r => r.Outcome == QcOutcome.Accepted);
+
+            // Submitted: the reload below must not carry these values over as still pending.
+            foreach (DataGridViewRow gridRow in _entry.Rows) gridRow.Cells[ColValue].Value = string.Empty;
 
             _status.ForeColor = outcome.AnyRejected ? UiTheme.Critical : UiTheme.Normal;
             _status.Text = $"{accepted}/{outcome.Results.Count} {T("QcOutcome.Accepted").ToLowerInvariant()}";

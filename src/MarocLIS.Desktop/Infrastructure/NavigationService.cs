@@ -89,8 +89,7 @@ public sealed class NavigationService(
 
             // Dispose the outgoing view and its scope only once the new one is in place, so a
             // failure leaves the operator looking at the old screen rather than an empty panel.
-            previousView?.Dispose();
-            previousScope?.Dispose();
+            Retire(previousView, previousScope);
 
             await view.ActivateAsync(token);
         }
@@ -110,9 +109,48 @@ public sealed class NavigationService(
         }
     }
 
+    /// <summary>
+    /// Disposes an outgoing view and its scope — at once if it is idle, otherwise only when the
+    /// write it is awaiting completes. Disposing the scope under a pending payment or cash close
+    /// failed it half-way, with "unexpected error" and nobody able to say whether it committed;
+    /// the detached view now finishes on its live scope and is disposed afterwards.
+    /// </summary>
+    private void Retire(LocalizedView? view, IServiceScope? scope)
+    {
+        if (view is not { IsBusy: true })
+        {
+            view?.Dispose();
+            scope?.Dispose();
+            return;
+        }
+
+        var host = _host;
+        EventHandler? onIdle = null;
+        onIdle = (_, _) =>
+        {
+            view.BecameIdle -= onIdle;
+
+            // Posted rather than run inline: the event fires inside the operation's finally block,
+            // and the click handler that awaited it still has a line or two to run on the view.
+            void Release()
+            {
+                view.Dispose();
+                scope?.Dispose();
+            }
+
+            if (host is { IsDisposed: false, IsHandleCreated: true }) host.BeginInvoke(Release);
+            else Release();
+        };
+        view.BecameIdle += onIdle;
+    }
+
     public async Task RefreshCurrentAsync()
     {
         if (Current is null) return;
+
+        // A reload on the same DbContext as a write still in flight fails with "a second operation
+        // was started on this context"; the write reloads the screen itself when it completes.
+        if (Current.IsBusy) return;
 
         _activation ??= new CancellationTokenSource();
 

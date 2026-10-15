@@ -14,6 +14,27 @@ namespace MarocLIS.Infrastructure.Queries;
 
 public sealed class ResultQueries(LisDbContext db) : IResultQueries
 {
+    /// <summary>
+    /// The same rule as <see cref="ValidationQueries.IsCriticalCommunicatedAsync"/>: acknowledged,
+    /// read back, and opened no earlier than the value's last entry.
+    /// </summary>
+    public async Task<IReadOnlyCollection<Guid>> GetCommunicatedCriticalResultIdsAsync(
+        IReadOnlyCollection<Guid> testResultIds, CancellationToken ct = default)
+    {
+        if (testResultIds.Count == 0) return [];
+
+        return await db.TestResults
+            .AsNoTracking()
+            .Where(r => testResultIds.Contains(r.Id)
+                        && db.CriticalResultNotifications.Any(
+                            n => n.TestResultId == r.Id
+                                 && n.Outcome == NotificationOutcome.Acknowledged
+                                 && n.ReadBackConfirmed
+                                 && (r.EnteredAt == null || n.AttemptedAt >= r.EnteredAt)))
+            .Select(r => r.Id)
+            .ToListAsync(ct);
+    }
+
     public async Task<IReadOnlyList<TestResult>> GetResultsForOrderAsync(
         Guid orderId, Guid? departmentId, CancellationToken ct = default)
     {

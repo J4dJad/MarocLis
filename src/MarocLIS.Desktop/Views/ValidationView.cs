@@ -512,8 +512,7 @@ public sealed class ValidationView : LocalizedView
 
         SetDetailActionsEnabled(_details.Rows.Count > 0);
 
-        var uncommunicated = sheet.Rows.Any(
-            r => r.Flags.HasFlag(ResultFlag.CriticalLow) || r.Flags.HasFlag(ResultFlag.CriticalHigh));
+        var uncommunicated = sheet.Rows.Any(r => r.NeedsCriticalCommunication);
 
         _communicate.Enabled = uncommunicated;
         _communicate.ForeColor = uncommunicated ? UiTheme.Critical : UiTheme.TextSecondary;
@@ -711,10 +710,8 @@ public sealed class ValidationView : LocalizedView
     {
         if (_sheet is null) return;
 
-        var critical = _sheet.Rows
-            .Where(r => r.Flags.HasFlag(ResultFlag.CriticalLow)
-                        || r.Flags.HasFlag(ResultFlag.CriticalHigh))
-            .ToList();
+        // Only the values not yet communicated: one already read back must not be called again.
+        var critical = _sheet.Rows.Where(r => r.NeedsCriticalCommunication).ToList();
 
         if (critical.Count == 0) return;
 

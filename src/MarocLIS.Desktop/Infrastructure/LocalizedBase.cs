@@ -234,6 +234,51 @@ public abstract class LocalizedView : UserControl
     /// </summary>
     public virtual Task ActivateAsync(CancellationToken ct = default) => Task.CompletedTask;
 
+    private int _operations;
+
+    /// <summary>
+    /// True while the view awaits a write it started — a payment, a cash close, a report issue.
+    /// The navigation service reads it before disposing the view: tearing down the DbContext under
+    /// a pending SaveChanges left the operator with "unexpected error" and no way to know whether
+    /// the money was recorded.
+    /// </summary>
+    public bool IsBusy => _operations > 0;
+
+    /// <summary>Raised when the last operation in flight ends.</summary>
+    public event EventHandler? BecameIdle;
+
+    /// <summary>
+    /// Runs one write operation, flagged busy for its whole duration. A second call while one is
+    /// already running is ignored and returns false: a double-click must not record two payments.
+    /// </summary>
+    protected async Task<bool> RunBusyAsync(Func<Task> operation)
+    {
+        if (IsBusy) return false;
+
+        BeginOperation();
+        try
+        {
+            await operation();
+            return true;
+        }
+        finally
+        {
+            EndOperation();
+        }
+    }
+
+    /// <summary>
+    /// Marks the start of an operation the view tracks itself (paired with <see cref="EndOperation"/>
+    /// in a finally block), for a view whose guard predates <see cref="RunBusyAsync"/>.
+    /// </summary>
+    protected void BeginOperation() => _operations++;
+
+    protected void EndOperation()
+    {
+        if (_operations == 0) return;
+        if (--_operations == 0) BecameIdle?.Invoke(this, EventArgs.Empty);
+    }
+
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);

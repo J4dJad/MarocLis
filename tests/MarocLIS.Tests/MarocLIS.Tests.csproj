@@ -39,6 +39,7 @@
       WinForms-free helpers are compiled in by link instead, so their conversions are tested.
     -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\EditorValues.cs" Link="Desktop\EditorValues.cs" />
+    <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\TypedEdits.cs" Link="Desktop\TypedEdits.cs" />
   </ItemGroup>
 
 </Project>

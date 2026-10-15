@@ -250,16 +250,33 @@ public sealed class ReportRegisterView : LocalizedView
         _refresh.Click += async (_, _) => await ActivateAsync();
 
         _pending.SelectionChanged += (_, _) => RefreshActions();
-        _pending.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _issue.Enabled) await IssueAsync(); };
-        _issue.Click += async (_, _) => await IssueAsync();
+        _pending.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _issue.Enabled) await RunActionAsync(IssueAsync); };
+        _issue.Click += async (_, _) => await RunActionAsync(IssueAsync);
 
         _register.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDeliveriesAsync());
         _register.CellFormatting += OnRegisterFormatting;
-        _register.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _reprint.Enabled) await ReprintAsync(); };
+        _register.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _reprint.Enabled) await RunActionAsync(ReprintAsync); };
 
-        _reprint.Click += async (_, _) => await ReprintAsync();
-        _recordDelivery.Click += async (_, _) => await RecordDeliveryAsync();
-        _amend.Click += async (_, _) => await AmendAsync();
+        _reprint.Click += async (_, _) => await RunActionAsync(ReprintAsync);
+        _recordDelivery.Click += async (_, _) => await RunActionAsync(RecordDeliveryAsync);
+        _amend.Click += async (_, _) => await RunActionAsync(AmendAsync);
+    }
+
+    /// <summary>
+    /// Runs one action with every action button held disabled until it ends. Disabling the clicked
+    /// button alone was not enough: the reload inside the action moves the selection, which
+    /// re-enabled the button mid-await, and a second click (or double-click) issued a second,
+    /// identical report version.
+    /// </summary>
+    private async Task RunActionAsync(Func<Task> action)
+    {
+        var ran = await RunBusyAsync(async () =>
+        {
+            RefreshActions();
+            await action();
+        });
+
+        if (ran && !IsDisposed) RefreshActions();
     }
 
     private void OnRegisterFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -578,19 +595,22 @@ public sealed class ReportRegisterView : LocalizedView
 
     private void RefreshActions()
     {
-        _issue.Enabled = SelectedPending is not null && _currentUser.Has(Permissions.Reports.Print);
+        // Nothing is offered while an action is in flight (see RunActionAsync).
+        var idle = !IsBusy;
+
+        _issue.Enabled = idle && SelectedPending is not null && _currentUser.Has(Permissions.Reports.Print);
 
         var row = Selected;
 
-        _reprint.Enabled = row is { HasStoredPdf: true }
+        _reprint.Enabled = idle && row is { HasStoredPdf: true }
                            && _currentUser.Has(Permissions.Reports.ReprintValidated);
 
-        _recordDelivery.Enabled = row is not null
+        _recordDelivery.Enabled = idle && row is not null
                                   && (_currentUser.Has(Permissions.Reports.Print)
                                       || _currentUser.Has(Permissions.Reports.Send));
 
         // An amendment supersedes the current version, so it is offered on that version only.
-        _amend.Enabled = row is { IsSuperseded: false }
+        _amend.Enabled = idle && row is { IsSuperseded: false }
                          && _currentUser.Has(Permissions.Reports.Amend);
     }
 
@@ -636,7 +656,6 @@ public sealed class ReportRegisterView : LocalizedView
 
         if (!_dialogs.Confirm($"{T("Report.Title")} — {row.AccessionNumber}")) return;
 
-        _issue.Enabled = false;
         UseWaitCursor = true;
 
         try

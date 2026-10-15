@@ -47,6 +47,22 @@ public sealed record ResultEntryRow
     public ResultFlag Flags { get; init; }
     public TestResultStatus Status { get; init; }
 
+    /// <summary>The value is beyond a critical threshold, low or high.</summary>
+    public bool IsCritical => (Flags & (ResultFlag.CriticalLow | ResultFlag.CriticalHigh)) != 0;
+
+    /// <summary>
+    /// An acknowledged, read-back notification covers the value the result holds now (the rule of
+    /// <see cref="CriticalResultNotification.Covers"/>). Only meaningful on a critical row.
+    /// </summary>
+    public bool IsCriticalCommunicated { get; init; }
+
+    /// <summary>
+    /// A critical value nobody has yet been told about. "Communicate critical" calls only these:
+    /// it used to raise a fresh notification for every critical row, including values already
+    /// read back, which put calls in the trail that were never made.
+    /// </summary>
+    public bool NeedsCriticalCommunication => IsCritical && !IsCriticalCommunicated;
+
     public IReadOnlyList<CodedOptionView> CodedOptions { get; init; } = [];
 
     public string? TechnicalComment { get; init; }
@@ -172,6 +188,15 @@ public sealed class ResultEntryService(
         var sampleDefects = await LoadSampleDefectsAsync(order, ct);
         var sampleStatuses = await LoadSampleStatusesAsync(order, ct);
 
+        // Asked only when there is something critical, which is rare: one round trip, not one per row.
+        var criticalIds = resultRows
+            .Where(r => (r.Flags & (ResultFlag.CriticalLow | ResultFlag.CriticalHigh)) != 0)
+            .Select(r => r.Id)
+            .ToList();
+        var communicated = criticalIds.Count == 0
+            ? (IReadOnlyCollection<Guid>)[]
+            : await queries.GetCommunicatedCriticalResultIdsAsync(criticalIds, ct);
+
         var today = clock.Today;
         var context = ReferenceRangeContext.For(patient, today);
         var rows = new List<ResultEntryRow>(resultRows.Count);
@@ -230,6 +255,7 @@ public sealed class ResultEntryService(
                 Interpretation = result.Interpretation,
                 Flags = result.Flags,
                 Status = result.Status,
+                IsCriticalCommunicated = communicated.Contains(result.Id),
                 TechnicalComment = result.TechnicalComment,
                 InstrumentFlags = result.InstrumentFlags,
                 SampleDefects = item?.SampleId is { } sampleId
@@ -760,6 +786,13 @@ public interface IResultQueries
     /// only; returns null when nothing matches.
     /// </summary>
     Task<Guid?> ResolveOrderIdAsync(string term, Guid siteId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Of the given results, those whose current value an acknowledged, read-back notification
+    /// covers — the rule of <see cref="CriticalResultNotification.Covers"/>, applied in SQL.
+    /// </summary>
+    Task<IReadOnlyCollection<Guid>> GetCommunicatedCriticalResultIdsAsync(
+        IReadOnlyCollection<Guid> testResultIds, CancellationToken ct = default);
 }
 
 public sealed record PreviousValue(decimal Value, DateOnly Date, Guid TestResultId);

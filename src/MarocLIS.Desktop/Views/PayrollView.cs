@@ -138,17 +138,17 @@ public sealed class PayrollView : LocalizedView
     private void WireBehaviour()
     {
         _period.SelectedIndexChanged += async (_, _) => { if (!_loading) await LoadPeriodAsync(); };
-        _open.Click += async (_, _) => await OpenMonthAsync();
+        _open.Click += async (_, _) => await RunBusyAsync(OpenMonthAsync);
         _refresh.Click += async (_, _) => await ActivateAsync();
-        _settings.Click += async (_, _) => await SettingsAsync();
-        _variables.Click += async (_, _) => await VariablesAsync();
-        _grid.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await VariablesAsync(); };
+        _settings.Click += async (_, _) => await RunBusyAsync(SettingsAsync);
+        _variables.Click += async (_, _) => await RunBusyAsync(VariablesAsync);
+        _grid.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await RunBusyAsync(VariablesAsync); };
         _payslip.Click += async (_, _) => await PrintAsync(single: true);
         _allPayslips.Click += async (_, _) => await PrintAsync(single: false);
         _journal.Click += async (_, _) => await ExportAsync(cnss: false);
         _cnss.Click += async (_, _) => await ExportAsync(cnss: true);
-        _update.Click += async (_, _) => await UpdateFromFilesAsync();
-        _close.Click += async (_, _) => await CloseOrReopenAsync();
+        _update.Click += async (_, _) => await RunBusyAsync(UpdateFromFilesAsync);
+        _close.Click += async (_, _) => await RunBusyAsync(CloseOrReopenAsync);
         _transferMenu.Items.Add(new ToolStripMenuItem(string.Empty, null, async (_, _) => await TransferAsync(file: false)));
         _transferMenu.Items.Add(new ToolStripMenuItem(string.Empty, null, async (_, _) => await TransferAsync(file: true)));
         _transfer.Click += (_, _) => _transferMenu.Show(_transfer, new Point(0, _transfer.Height));

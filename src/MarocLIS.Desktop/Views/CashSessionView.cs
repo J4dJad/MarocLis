@@ -191,10 +191,11 @@ public sealed class CashSessionView : LocalizedView
 
     private void WireBehaviour()
     {
-        _open.Click += async (_, _) => await OpenSessionAsync();
-        _close.Click += async (_, _) => await CloseSessionAsync();
+        // RunBusyAsync: one click, one write, and the screen is not torn down under a pending close.
+        _open.Click += async (_, _) => await RunBusyAsync(OpenSessionAsync);
+        _close.Click += async (_, _) => await RunBusyAsync(CloseSessionAsync);
         _refresh.Click += async (_, _) => await ActivateAsync();
-        _withdraw.Click += async (_, _) => await WithdrawAsync();
+        _withdraw.Click += async (_, _) => await RunBusyAsync(WithdrawAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Billing.RecordPayment, _open);
