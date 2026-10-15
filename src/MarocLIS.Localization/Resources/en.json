@@ -160,6 +160,8 @@
   "Payroll_SimplIrCodesRequired": "Enter the commune code and both rate codes from the Simpl-IR referential.",
   "Payroll_BdsDuplicateCnss": "The same CNSS number appears on several payslips of the month, and the BDS file would declare only one of them: {0}. Correct the number in the employees' files, then reopen the month, update it from the files and close it again.",
   "Payroll_BdsOtherSiteDraft": "The {0} payroll is not closed on: {1}. The BDS is the affiliate's, for all its sites: close it before producing the BDS.",
+  "Payroll_BdsOtherSiteNotOpened": "The {0} payroll has not been opened on: {1}, although it had salaried staff that month. The BDS is the affiliate's, for all its sites: open and close that payroll before producing the BDS.",
+  "Payroll_SimplIrMonthsNotOpened": "Some months of {0} have no payroll opened although the site had salaried staff: {1}. The 9421 return is the employer's, for all its sites: open and close those months before producing it.",
   "Planning_EmployeeNotEmployed": "The employee is not employed that day.",
   "Planning_HoursInvalid": "The end time must differ from the start.",
   "Planning_OnLeave": "The employee is on approved leave that day.",
@@ -323,7 +325,7 @@
   },
 
   "InventoryCount": {
-    "SheetTimeNotice": "To key in a paper sheet, tick \"Sheet counted at\" and enter the time of the count: the difference is measured against the stock at that time.",
+    "SheetTimeNotice": "To key in a paper sheet, tick \"Sheet counted at\" and enter the time of the count: the difference is measured against the stock at that time. The time applies only to lines not yet counted; correcting the figure of a line already counted keeps the time of its count.",
     "SheetTime": "Sheet counted at",
     "CountedAt": "Counted at",
     "StockAtCount": "Stock at count",
@@ -1385,6 +1387,7 @@
   },
 
   "Deposit": {
+    "RefundedPartly": "Order {0}: {1} of {2} deposit(s) refunded. The others are still held.",
     "Refunded": "Deposit refunded on {0}.",
     "RefundPrompt": "Refund {1} of deposit on request {0} ({2}). Reason:",
     "NoneHeld": "No deposit held on this request.",
@@ -2315,6 +2318,7 @@
   },
 
   "Billing": {
+    "UninvoicedTruncated": "only the {0} most recent orders are shown",
     "ReinvoiceToPayer": "This order is being invoiced again after a credit note. It was registered without third-party payment.\n\nAddress this invoice to the third-party payer {0} (its share claimed from it)?\n\nNo: the invoice is made out to the patient, for the full amount.",
     "InvoicedDepositToRefund": "Invoiced ({0}) — deposit to refund",
     "WrittenOffTooltip": "Not included in the amount paid: {0} written off",
@@ -2417,6 +2421,7 @@
   },
 
   "Payment": {
+    "PatientShareDue": "Due from the patient",
     "Title": "Payment",
     "Plural": "Payments",
     "Method": "Payment method",
@@ -3652,6 +3657,12 @@
   },
 
   "Qc": {
+    "EvaluationStopped": "Evaluation of lot {0} stopped: transmitted controls go back to the lot in use.",
+    "EvaluationStarted": "Evaluation of lot {0} started on {1}: the next control of each level the analyser transmits today will be credited to this lot.",
+    "StopEvaluation": "Stop evaluation",
+    "StartEvaluation": "Start evaluation",
+    "ChooseLotAnalyser": "Choose the analyser the chosen reagent lot is loaded on: the lot applies to that analyser's controls only.",
+    "LotAnalyser": "Lot's analyser…",
     "ReagentLotInUse": "Reagent lot in use (automatic)",
     "Rule_1_2s": "1₂ₛ — one point beyond ±2 SD (warning)",
     "Rule_1_3s": "1₃ₛ — one point beyond ±3 SD",
@@ -4085,6 +4096,8 @@
   "Invoice_AlreadyFullyCredited": "Invoice {0} has already been fully credited: there is nothing left to credit.",
   "Invoice_MultiplePayers": "Orders {0} were not registered with the same payer (or some are self-pay): each order keeps the split fixed at registration. Invoice them separately.",
   "Invoice_ClaimRequiresPrescriberInpe": "Invoice {0} must carry the prescriber's INPE to be sent to this payer.",
+  "Invoice_CreditNoteClaimSent": "Invoice {0} has already been sent to the payer, or settled by it: a credit note would have the same acts claimed a second time. Record the payer's rejection first, then issue the credit note.",
+  "Invoice_PayerAgreementNotValid": "{0} has no third-party payment agreement in force: the invoice cannot be addressed to it. Issue it in the patient's name.",
 
   "Payment_AmountMustBePositive": "The payment amount must be positive.",
   "Payment_ExceedsOutstanding": "The amount exceeds the outstanding balance ({0}).",
@@ -4096,6 +4109,7 @@
   "Payment_CashRequiresOpenSession": "A cash payment requires an open cash session.",
   "Payment_CashThresholdWarning": "A cash payment above {0} MAD attracts a tax penalty; prefer a traceable method.",
   "Payment_KindNotPayable": "Payments can only be recorded against an invoice: a credit note or a quotation is not settled.",
+  "Payment_ExceedsPatientShare": "The patient owes only {0} on this invoice: the rest is the payer's share, settled through the third-party claim.",
 
   "CashSession_NotOpen": "This cash session is not open.",
   "CashSession_VarianceExplanationRequired": "A till variance of {0} MAD must be explained before closing.",
@@ -4173,6 +4187,10 @@
   "Lot_ReleaseQcRejected": "Lot {0} cannot be released: no conforming QC run on this lot.",
   "Lot_ReleaseQcLevelsMissing": "Lot {0} cannot be released: QC levels missing or not conforming ({1}).",
   "Lot_CertificateNotFound": "Lot certificate not found.",
+  "Lot_NotAwaitingRelease": "Lot {0} is no longer awaiting release: its evaluation cannot be started.",
+  "Lot_ReceiveIntoRefusedLot": "Lot {0} of this item is rejected or recalled: a new delivery of this lot cannot enter the stock. Refuse the delivery.",
+  "Lot_ReceiveExpiryDiffers": "Lot {0} is already in stock with expiry {1:dd/MM/yyyy}: a new delivery of the same lot has the same expiry. Check the date or the lot number.",
+  "Lot_ReceiveNonConformingIntoReleased": "Lot {0} is already released: a non-conforming delivery of this lot cannot be added to released stock. Refuse the delivery.",
 
   "Stock_ItemNotFound": "Stock item not found.",
   "Stock_InsufficientUsableStock": "Insufficient usable stock for {0}: {1} available. A quarantined, expired or recalled lot cannot be issued.",
@@ -4287,6 +4305,7 @@
   "Interface_InstrumentCalibrationOverdue": "{0} is overdue for calibration: results held. Record the calibration, then replay.",
   "Interface_SpecimenNotReceived": "Tube {0} not received yet: the result waits in the log. Replay it after reception.",
   "Interface_ImportInterrupted": "The import of this transmission did not complete (an error, or the workstation stopped during processing); it can be replayed.",
+  "Interface_QcTargetAmbiguous": "Control received: several targets of this parameter on this analyser may match the lot or level sent; the point was not stored. Put the control material's lot number in the control sample identifier.",
   "Order_NotFoundForScan": "No order matches \"{0}\" on this site.",
   "Order_AnalysisWithoutTariff": "Analysis {0} has no tariff in force today, neither for this payer nor on the laboratory's price list. Add one in the analysis catalogue, Tariffs tab.",
   "Order_ItemPartlyReportedCannotCancel": "Some results of this analysis are already on an issued report: it can no longer be cancelled; issue an amended report.",
@@ -4310,6 +4329,7 @@
   "Notification_NotFound": "Communication record not found.",
   "Notification_ValueChangedSinceDisplayed": "{0}: the value has changed since the screen was loaded (analyser re-run or correction). Reload the file and communicate the current value.",
   "Qc_RunNotFound": "Control run not found ({0}).",
+  "Qc_NamedLotOneAnalyser": "The reagent lot chosen applies to the controls of one analyser only: enter the other analysers as routine controls or in another run.",
   "Sample_NotFound": "Sample not found ({0}).",
   "Sample_BarcodeUnknown": "No sample carries the barcode \"{0}\".",
   "Sample_ReprintReasonRequired": "Reprinting a label must be justified.",

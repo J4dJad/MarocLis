@@ -160,6 +160,8 @@
   "Payroll_SimplIrCodesRequired": "Saisissez le code de la commune et les deux codes de taux du référentiel Simpl-IR.",
   "Payroll_BdsDuplicateCnss": "Le même numéro CNSS figure sur plusieurs bulletins du mois, le fichier BDS n'en déclarerait qu'un : {0}. Corrigez le numéro dans les dossiers concernés, puis rouvrez le mois, reprenez les dossiers et clôturez à nouveau.",
   "Payroll_BdsOtherSiteDraft": "La paie de {0} n'est pas clôturée sur : {1}. Le BDS est celui de l'affilié pour tous ses sites : clôturez-la avant de le produire.",
+  "Payroll_BdsOtherSiteNotOpened": "La paie de {0} n'a pas été ouverte sur : {1}, qui a pourtant du personnel salarié ce mois-là. Le BDS est celui de l'affilié pour tous ses sites : ouvrez et clôturez cette paie avant de le produire.",
+  "Payroll_SimplIrMonthsNotOpened": "Des mois de {0} n'ont pas de paie ouverte alors que le site avait du personnel salarié : {1}. L'état 9421 est celui de l'employeur pour tous ses sites : ouvrez et clôturez ces mois avant de le produire.",
   "Planning_EmployeeNotEmployed": "Le salarié n'est pas en poste ce jour-là.",
   "Planning_HoursInvalid": "L'heure de fin doit différer de l'heure de début.",
   "Planning_OnLeave": "Le salarié est en congé validé ce jour-là.",
@@ -323,7 +325,7 @@
   },
 
   "InventoryCount": {
-    "SheetTimeNotice": "Pour saisir une feuille papier, cochez « Feuille comptée le » et indiquez l'heure du comptage : l'écart est calculé sur le stock à cette heure-là.",
+    "SheetTimeNotice": "Pour saisir une feuille papier, cochez « Feuille comptée le » et indiquez l'heure du comptage : l'écart est calculé sur le stock à cette heure-là. L'heure ne s'applique qu'aux lignes pas encore comptées ; corriger le chiffre d'une ligne déjà comptée garde l'heure de son comptage.",
     "SheetTime": "Feuille comptée le",
     "CountedAt": "Compté le",
     "StockAtCount": "Stock au comptage",
@@ -1385,6 +1387,7 @@
   },
 
   "Deposit": {
+    "RefundedPartly": "Dossier {0} : {1} acompte(s) remboursé(s) sur {2}. Les autres restent détenus.",
     "Refunded": "Acompte remboursé sur {0}.",
     "RefundPrompt": "Rembourser {1} d'acompte sur le dossier {0} ({2}). Motif :",
     "NoneHeld": "Aucun acompte en attente sur ce dossier.",
@@ -2316,6 +2319,7 @@
   },
 
   "Billing": {
+    "UninvoicedTruncated": "seuls les {0} dossiers les plus récents sont affichés",
     "ReinvoiceToPayer": "Ce dossier est refacturé après un avoir. Il avait été enregistré sans tiers payant.\n\nAdresser cette facture au tiers payant {0} (part de l'organisme réclamée à celui-ci) ?\n\nNon : la facture est établie au nom du patient, pour la totalité.",
     "InvoicedDepositToRefund": "Facturé ({0}) — acompte à rembourser",
     "WrittenOffTooltip": "Hors montant payé : {0} passés en perte",
@@ -2418,6 +2422,7 @@
   },
 
   "Payment": {
+    "PatientShareDue": "Reste à payer par le patient",
     "Title": "Règlement",
     "Plural": "Règlements",
     "Method": "Mode de règlement",
@@ -3653,6 +3658,12 @@
   },
 
   "Qc": {
+    "EvaluationStopped": "Évaluation du lot {0} arrêtée : les contrôles transmis reviennent au lot en cours.",
+    "EvaluationStarted": "Évaluation du lot {0} démarrée sur {1} : le prochain contrôle de chaque niveau transmis aujourd'hui par l'automate sera attribué à ce lot.",
+    "StopEvaluation": "Arrêter l'évaluation",
+    "StartEvaluation": "Démarrer l'évaluation",
+    "ChooseLotAnalyser": "Choisissez l'automate sur lequel le lot de réactif choisi est chargé : le lot ne s'applique qu'aux contrôles de cet automate.",
+    "LotAnalyser": "Automate du lot…",
     "ReagentLotInUse": "Lot de réactif en cours (automatique)",
     "Rule_1_2s": "1₂ₛ — un point au-delà de ±2 écarts-types (avertissement)",
     "Rule_1_3s": "1₃ₛ — un point au-delà de ±3 écarts-types",
@@ -4086,6 +4097,8 @@
   "Invoice_AlreadyFullyCredited": "La facture {0} est déjà entièrement annulée par avoir : il n'y a plus rien à créditer.",
   "Invoice_MultiplePayers": "Les dossiers {0} n'ont pas été enregistrés avec le même organisme payeur (ou certains sont sans tiers payant) : chaque dossier garde la répartition fixée à l'enregistrement. Facturez-les séparément.",
   "Invoice_ClaimRequiresPrescriberInpe": "La facture {0} doit porter l'INPE du prescripteur pour être transmise à cet organisme.",
+  "Invoice_CreditNoteClaimSent": "La facture {0} a déjà été transmise à l'organisme payeur, ou réglée par lui : un avoir ferait réclamer une seconde fois les mêmes actes. Enregistrez d'abord le rejet de l'organisme, puis émettez l'avoir.",
+  "Invoice_PayerAgreementNotValid": "{0} n'a pas de convention de tiers payant en cours de validité : la facture ne peut pas lui être adressée. Établissez-la au nom du patient.",
 
   "Payment_AmountMustBePositive": "Le montant du règlement doit être positif.",
   "Payment_ExceedsOutstanding": "Le montant dépasse le reste à payer ({0}).",
@@ -4097,6 +4110,7 @@
   "Payment_CashRequiresOpenSession": "Un règlement en espèces exige une session de caisse ouverte.",
   "Payment_CashThresholdWarning": "Un règlement en espèces supérieur à {0} DH expose à une sanction fiscale ; privilégiez un moyen de paiement traçable.",
   "Payment_KindNotPayable": "Un règlement ne s'enregistre que sur une facture : un avoir ou un devis ne se règle pas.",
+  "Payment_ExceedsPatientShare": "Le patient ne doit plus que {0} sur cette facture : le reste est la part de l'organisme, réglée par le tiers payant.",
 
   "CashSession_NotOpen": "Cette session de caisse n'est pas ouverte.",
   "CashSession_VarianceExplanationRequired": "Un écart de caisse de {0} DH doit être expliqué avant la clôture.",
@@ -4174,6 +4188,10 @@
   "Lot_ReleaseQcRejected": "Le lot {0} ne peut pas être libéré : aucune série de CQ conforme sur ce lot.",
   "Lot_ReleaseQcLevelsMissing": "Le lot {0} ne peut pas être libéré : niveaux de CQ manquants ou non conformes ({1}).",
   "Lot_CertificateNotFound": "Certificat de lot introuvable.",
+  "Lot_NotAwaitingRelease": "Le lot {0} n'est plus en attente de libération : son évaluation ne peut pas être démarrée.",
+  "Lot_ReceiveIntoRefusedLot": "Le lot {0} de cet article est refusé ou rappelé : une nouvelle livraison de ce lot ne peut pas entrer en stock. Refusez la livraison.",
+  "Lot_ReceiveExpiryDiffers": "Le lot {0} est déjà en stock avec la péremption {1:dd/MM/yyyy} : une nouvelle livraison du même lot a la même péremption. Vérifiez la date ou le numéro de lot.",
+  "Lot_ReceiveNonConformingIntoReleased": "Le lot {0} est déjà libéré : une livraison non conforme de ce lot ne peut pas être ajoutée au stock libéré. Refusez la livraison.",
 
   "Stock_ItemNotFound": "Article de stock introuvable.",
   "Stock_InsufficientUsableStock": "Stock utilisable insuffisant pour {0} : {1} disponible. Un lot en quarantaine, périmé ou rappelé ne peut pas être sorti.",
@@ -4288,6 +4306,7 @@
   "Interface_InstrumentCalibrationOverdue": "{0} a un étalonnage dépassé : résultats retenus. Enregistrez l'étalonnage, puis réimportez.",
   "Interface_SpecimenNotReceived": "Tube {0} pas encore réceptionné : le résultat attend dans le journal. Rejouez-le après la réception.",
   "Interface_ImportInterrupted": "L'import de cette transmission n'a pas abouti (erreur ou arrêt du poste pendant le traitement) ; elle peut être rejouée.",
+  "Interface_QcTargetAmbiguous": "Contrôle reçu : plusieurs cibles de ce paramètre sur cet automate peuvent correspondre au lot ou au niveau envoyé ; le point n'a pas été enregistré. Indiquez le numéro de lot du matériau de contrôle dans l'identifiant de l'échantillon de contrôle.",
   "Order_NotFoundForScan": "Aucun dossier ne correspond à « {0} » sur ce site.",
   "Order_AnalysisWithoutTariff": "L'analyse {0} n'a pas de tarif en vigueur aujourd'hui, ni pour ce tiers payant ni dans la liste de prix du laboratoire. Ajoutez-lui un tarif dans le Catalogue des analyses, onglet Tarifs.",
   "Order_ItemPartlyReportedCannotCancel": "Une partie des résultats de cette analyse figure déjà sur un compte rendu émis : elle ne peut plus être annulée ; émettez un compte rendu rectifié.",
@@ -4311,6 +4330,7 @@
   "Notification_NotFound": "Fiche de communication introuvable.",
   "Notification_ValueChangedSinceDisplayed": "{0} : la valeur a changé depuis l'affichage de l'écran (nouveau passage sur l'automate ou correction). Rechargez le dossier et communiquez la valeur actuelle.",
   "Qc_RunNotFound": "Série de contrôle introuvable ({0}).",
+  "Qc_NamedLotOneAnalyser": "Le lot de réactif choisi ne s'applique qu'aux contrôles d'un seul automate : saisissez les autres automates comme contrôles de routine ou dans une autre série.",
   "Sample_NotFound": "Échantillon introuvable ({0}).",
   "Sample_BarcodeUnknown": "Aucun échantillon ne porte le code-barres « {0} ».",
   "Sample_ReprintReasonRequired": "La réimpression d'une étiquette doit être motivée.",
