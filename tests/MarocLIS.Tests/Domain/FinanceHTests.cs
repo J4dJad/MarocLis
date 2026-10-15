@@ -241,10 +241,10 @@ public sealed class FinanceHTests
     {
         var rows = new[]
         {
-            new SurveyAnswerRow(At(2026, 10, 1), true, 5, "Très bien", At(2026, 10, 2)),
-            new SurveyAnswerRow(At(2026, 10, 1), true, 3, null, At(2026, 10, 2)),
-            new SurveyAnswerRow(At(2026, 10, 1), true, null, null, null),
-            new SurveyAnswerRow(At(2026, 10, 1), false, null, null, null)
+            new SurveyAnswerRow(At(2026, 10, 1), true, 5, "Très bien", At(2026, 10, 2), Guid.NewGuid()),
+            new SurveyAnswerRow(At(2026, 10, 1), true, 3, null, At(2026, 10, 2), Guid.NewGuid()),
+            new SurveyAnswerRow(At(2026, 10, 1), true, null, null, null, Guid.NewGuid()),
+            new SurveyAnswerRow(At(2026, 10, 1), false, null, null, null, Guid.NewGuid())
         };
 
         var results = PatientMessagingService.SummariseSurveys(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31), rows, Offset);

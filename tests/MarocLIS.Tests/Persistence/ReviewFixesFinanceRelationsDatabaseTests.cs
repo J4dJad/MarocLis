@@ -317,6 +317,14 @@ public sealed class ReviewFixesFinanceRelationsDatabaseTests(FinanceRelationsScr
             (await messaging.PreviewSurveysAsync(Today.AddDays(-7), Today)).Value
                 .Should().NotContain(c => c.OrderId == order.Id);
 
+            // Review 7, R14: the failed attempt and the resend are one order invited, delivered.
+            var rows = (await scope.ServiceProvider.GetRequiredService<IPatientMessagingQueries>()
+                .GetSurveyAnswersAsync(SiteA, At(Today.AddDays(-1)), At(Today.AddDays(1)))).Where(r => r.OrderId == order.Id).ToList();
+            rows.Should().HaveCount(2);
+            var summary = PatientMessagingService.SummariseSurveys(Today, Today, rows, Offset);
+            summary.Invited.Should().Be(1);
+            summary.Delivered.Should().Be(1);
+
             // R10: the export of a messaging list is in the data-access log.
             (await messaging.LogExportAsync("Relations/MessageLog", 2)).IsSuccess.Should().BeTrue();
         }
@@ -325,6 +333,37 @@ public sealed class ReviewFixesFinanceRelationsDatabaseTests(FinanceRelationsScr
             (await context.DataAccessLogs.AnyAsync(l => l.Kind == DataAccessKind.Export
                                                         && l.Context == "Relations/MessageLog" && l.RecordCount == 2))
                 .Should().BeTrue();
+    }
+
+    [SqlServerFact]
+    public async Task R11_reminded_orders_carry_their_latest_send_and_ignore_failed_ones()
+    {
+        var rule = Guid.NewGuid();
+        var order = Guid.NewGuid();
+        var failedOrder = Guid.NewGuid();
+        var patient = Guid.NewGuid();
+
+        PatientMessage Reminder(Guid source, DateOnly day) =>
+            new(SiteA, patient, PatientMessageKind.BilanReminder, Mobile(), "Rappel", At(day), Guid.NewGuid())
+            {
+                ReminderRuleId = rule,
+                SourceOrderId = source
+            };
+
+        var failed = Reminder(failedOrder, Today.AddDays(-1));
+        failed.MarkFailed("Sms_GatewayRefused");
+        await using (var context = database.Context())
+        {
+            context.PatientMessages.AddRange(Reminder(order, Today.AddDays(-40)), Reminder(order, Today.AddDays(-5)), failed);
+            await context.SaveChangesAsync();
+        }
+
+        await using var services = Services();
+        using var scope = services.CreateScope();
+        var reminded = await scope.ServiceProvider.GetRequiredService<IPatientMessagingQueries>().GetRemindedAsync(SiteA);
+
+        reminded.Where(r => r.RuleId == rule).Should().ContainSingle()
+            .Which.Should().Match<SentReminder>(r => r.OrderId == order && r.SentAt == At(Today.AddDays(-5)));
     }
 
     [SqlServerFact]

@@ -118,6 +118,8 @@ public sealed class PatientMessagingView : LocalizedView
         Controls.Add(_notice);
         Controls.Add(_bar);
 
+        // The lists read through the same database context as a send batch: nothing else queries it
+        // while one runs (EF refuses two operations at once, which would stop the batch half-way).
         _bar.Compute.Click += async (_, _) => await LoadAsync();
         _bar.Export.Click += async (_, _) => await ExportCurrentAsync();
         _tabs.SelectedIndexChanged += async (_, _) => { UpdateButtons(); await LoadAsync(); };
@@ -136,10 +138,12 @@ public sealed class PatientMessagingView : LocalizedView
     private Task<bool> WriteAsync(Func<Task> operation) =>
         RunBusyAsync(async () =>
         {
-            var buttons = new[] { _sendReminders, _newRule, _editRule, _sendSurveys, _recordAnswer, _importReplies, _settings };
-            foreach (var b in buttons) b.Enabled = false;
+            // The period bar (compute, export, dates, actions) and the tabs too: each would query the
+            // context the operation is using.
+            var controls = new Control[] { _bar, _tabs };
+            foreach (var c in controls) c.Enabled = false;
             try { await operation(); }
-            finally { foreach (var b in buttons) b.Enabled = true; }
+            finally { foreach (var c in controls) c.Enabled = true; }
         });
 
     public override string Title => T("Nav.PatientMessaging");
@@ -187,6 +191,7 @@ public sealed class PatientMessagingView : LocalizedView
     // their export is in the data-access log, like any patient list that leaves as a file.
     private async Task ExportCurrentAsync()
     {
+        if (IsBusy) return;
         var tab = _tabs.SelectedTab;
         var grid = tab?.Controls.OfType<DataGridView>().FirstOrDefault();
         var context = tab == _reminderPage ? "Relations/ReminderPreview"
@@ -203,7 +208,10 @@ public sealed class PatientMessagingView : LocalizedView
         await ExportAsync(grid, _output, _dialogs, _bar.Export.Text, Localizer);
     }
 
-    private async Task LoadAsync(CancellationToken ct = default)
+    // Nothing reads while a write runs (see WriteAsync); the write refreshes the list itself at its end.
+    private Task LoadAsync(CancellationToken ct = default) => IsBusy ? Task.CompletedTask : ReloadAsync(ct);
+
+    private async Task ReloadAsync(CancellationToken ct = default)
     {
         try
         {
@@ -311,7 +319,7 @@ public sealed class PatientMessagingView : LocalizedView
         var result = await _messaging.SendRemindersAsync(
             [.. picked.Select(c => new ReminderSelection(c.RuleId, c.PatientId, c.OrderId))]);
         Report(result, _sendReminders.Text);
-        await LoadAsync();
+        await ReloadAsync();
     }
 
     private async Task SendSurveysAsync()
@@ -323,7 +331,7 @@ public sealed class PatientMessagingView : LocalizedView
 
         var result = await _messaging.SendSurveysAsync(_bar.From, _bar.To, [.. picked.Select(c => c.OrderId)]);
         Report(result, _sendSurveys.Text);
-        await LoadAsync();
+        await ReloadAsync();
     }
 
     private void Report(Result<CampaignOutcome> result, string title)
@@ -382,7 +390,7 @@ public sealed class PatientMessagingView : LocalizedView
         });
 
         if (saved.IsFailure) { _dialogs.ShowFailure(saved, Title); return; }
-        await LoadAsync();
+        await ReloadAsync();
     }
 
     private async Task RecordAnswerAsync()
@@ -397,7 +405,7 @@ public sealed class PatientMessagingView : LocalizedView
                                                           SurveyAnswerChannel.Manual);
         if (recorded.IsFailure) { _dialogs.ShowFailure(recorded, _recordAnswer.Text); return; }
         _dialogs.Info(T("Message.Saved"), _recordAnswer.Text);
-        await LoadAsync();
+        await ReloadAsync();
     }
 
     private async Task ImportRepliesAsync()
@@ -415,7 +423,7 @@ public sealed class PatientMessagingView : LocalizedView
         var details = string.Join(Environment.NewLine, o.Refused.Concat(o.Unrecognised.Select(l => $"? {l}")).Take(20));
         _dialogs.Info(T("Messaging.ImportOutcome", o.Recorded, o.Refused.Count, o.Unrecognised.Count)
                       + (details.Length == 0 ? string.Empty : Environment.NewLine + details), _importReplies.Text);
-        await LoadAsync();
+        await ReloadAsync();
     }
 
     private async Task EditSettingsAsync()
@@ -440,6 +448,6 @@ public sealed class PatientMessagingView : LocalizedView
             SurveyIntervalDays = (int)interval.Value
         });
         if (saved.IsFailure) _dialogs.ShowFailure(saved, _settings.Text);
-        else await LoadAsync();
+        else await ReloadAsync();
     }
 }

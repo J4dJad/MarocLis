@@ -38,14 +38,14 @@ public sealed class ReviewFixesFinanceRelationsTests
             .Concat(ReminderPlanner.Plan(panelRule, sources, none, Today, Offset)).ToList();
         planned.Should().HaveCount(2);
 
-        var chosen = ReminderPlanner.OnePerPatient(planned, none, new HashSet<Guid> { panelRule.Id });
+        var chosen = ReminderPlanner.OnePerPatient(planned, [], new HashSet<Guid> { panelRule.Id }, Offset);
 
         chosen.Should().ContainSingle();
         chosen[0].RuleId.Should().Be(panelRule.Id);
     }
 
     [Fact]
-    public void R2_AnOrderAlreadyRemindedUnderAnotherRule_IsNotRemindedAgain()
+    public void R2_AnOrderJustRemindedUnderAnotherRule_IsNotRemindedAgain()
     {
         var first = Rule();
         var second = Rule();
@@ -57,7 +57,10 @@ public sealed class ReviewFixesFinanceRelationsTests
         var planned = ReminderPlanner.Plan(second, sources, sent, Today, Offset);
         planned.Should().ContainSingle();
 
-        ReminderPlanner.OnePerPatient(planned, sent, new HashSet<Guid>()).Should().BeEmpty();
+        // Sent under the first rule on its due date, which is this rule's too (review 7, R11: only
+        // a reminder sent at about the same time covers it).
+        ReminderPlanner.OnePerPatient(planned, [new SentReminder(first.Id, order, At(2026, 10, 10))],
+                                      new HashSet<Guid>(), Offset).Should().BeEmpty();
     }
 
     // ---- R6: the sources cover every site -----------------------------------------------------------
