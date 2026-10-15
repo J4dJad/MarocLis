@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MarocLIS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LisDbContext))]
-    [Migration("20261015205010_RevueFinance1")]
+    [Migration("20261015212331_RevueFinance1")]
     partial class RevueFinance1
     {
         /// <inheritdoc />
@@ -106,6 +106,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("SupplierInvoiceId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("SupplierInvoiceLinkedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
                     b.Property<int>("UsefulLifeYears")
                         .HasColumnType("int");
 
@@ -137,8 +140,16 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("AmountMad")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("ChargeAccount")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
+
+                    b.Property<string>("DepreciationAccount")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<DateTimeOffset>("ExportedAt")
                         .HasColumnType("datetimeoffset(3)");
@@ -164,6 +175,70 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("UX_FixedAssetDepreciationPostings_Asset_Month");
 
                     b.ToTable("FixedAssetDepreciationPostings", "fin");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Assets.FixedAssetTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("DepreciationMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("FixedAssetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FromAssetAccount")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("FromCategory")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FromChargeAccount")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("FromDepreciationAccount")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("GrossMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("ToAssetAccount")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("ToCategory")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ToDepreciationAccount")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FixedAssetId")
+                        .HasDatabaseName("IX_FixedAssetTransfers_Asset");
+
+                    b.ToTable("FixedAssetTransfers", "fin");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Audit.AuditEntry", b =>
@@ -2108,6 +2183,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("SupplierId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("TerminatedOn")
+                        .HasColumnType("date");
 
                     b.Property<string>("TrainingTerms")
                         .HasMaxLength(1000)
@@ -5335,6 +5413,31 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_SupplierInvoices_Site_Status_Due");
 
                     b.ToTable("SupplierInvoices", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierInvoiceExport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ExportedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SupplierInvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierInvoiceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SupplierInvoiceExports_Invoice");
+
+                    b.ToTable("SupplierInvoiceExports", "inv");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierInvoiceFile", b =>
@@ -9132,6 +9235,15 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Assets.FixedAssetTransfer", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Assets.FixedAsset", null)
+                        .WithMany()
+                        .HasForeignKey("FixedAssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Billing.CashWithdrawal", b =>
                 {
                     b.HasOne("MarocLIS.Domain.Billing.CashSession", null)
@@ -10187,6 +10299,15 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Name")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierInvoiceExport", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.SupplierInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("SupplierInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

@@ -791,6 +791,7 @@
   },
 
   "AccountingSetting": {
+    "AssetSuppliers": "Dettes sur acquisitions d'immobilisations (4481)",
     "AssetVat": "TVA récupérable sur immobilisations (34551)",
     "ChargeAccount": "Achats : {0}",
     "SupplierCashAccount": "Caisse des règlements fournisseurs (5161)",

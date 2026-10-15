@@ -791,6 +791,7 @@
   },
 
   "AccountingSetting": {
+    "AssetSuppliers": "Debts on fixed-asset acquisitions (4481)",
     "AssetVat": "Recoverable VAT on fixed assets (34551)",
     "ChargeAccount": "Purchases: {0}",
     "SupplierCashAccount": "Cash for supplier payments (5161)",

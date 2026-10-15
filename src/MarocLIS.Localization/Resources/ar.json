@@ -791,6 +791,7 @@
   },
 
   "AccountingSetting": {
+    "AssetSuppliers": "ديون اقتناء التثبيتات (4481)",
     "AssetVat": "الضريبة القابلة للاسترجاع على الأصول الثابتة (34551)",
     "ChargeAccount": "المشتريات: {0}",
     "SupplierCashAccount": "صندوق أداءات الموردين (5161)",
