@@ -93,6 +93,10 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
         builder.MapMultilingual(e => e.Name, "Name");
         builder.MapMultilingual(e => e.Description, "Description", frenchRequired: false, maxLength: 500);
 
+        // Permission codes are short and the shipped set is a few dozen; nvarchar(max) keeps a
+        // future larger catalogue from ever truncating the record.
+        builder.Property(e => e.SeededPermissions);
+
         builder.HasMany(e => e.Permissions)
                .WithOne(p => p.Role!)
                .HasForeignKey(p => p.RoleId)

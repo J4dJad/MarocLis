@@ -28,6 +28,14 @@ public sealed class Role : AuditableAggregateRoot
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// The shipped permissions the reference-data seeder has already offered this built-in role,
+    /// separated by <c>';'</c>. Lets a later version grant only the permissions it introduces,
+    /// so a permission an administrator deliberately removed is not silently granted back.
+    /// <c>null</c> on a role created before this was recorded, or on a custom role.
+    /// </summary>
+    public string? SeededPermissions { get; private set; }
+
     public IReadOnlyCollection<RolePermission> Permissions => _permissions.AsReadOnly();
 
     public void Grant(string permission)
@@ -56,6 +64,58 @@ public sealed class Role : AuditableAggregateRoot
     }
 
     public bool Has(string permission) => _permissions.Any(p => p.Permission == permission);
+
+    /// <summary>
+    /// Brings a built-in role up to date with the permission set shipped by this version.
+    /// <para>
+    /// Only permissions that were never offered before are granted; a shipped permission that was
+    /// offered earlier and is now missing was removed by an administrator and stays removed. When
+    /// nothing has been recorded yet (a role seeded by a version that did not keep track), the
+    /// current state is taken as the administrator's intent: the shipped set is recorded as
+    /// offered and nothing is granted.
+    /// </para>
+    /// </summary>
+    /// <returns>The permissions granted by this call.</returns>
+    public IReadOnlyList<string> ApplyShippedPermissions(IEnumerable<string> shipped)
+    {
+        var shippedSet = shipped.Distinct(StringComparer.Ordinal).ToList();
+        var granted = new List<string>();
+
+        if (SeededPermissions is not null)
+        {
+            var offered = ParseSeeded(SeededPermissions);
+            foreach (var permission in shippedSet.Where(p => !offered.Contains(p) && !Has(p)))
+            {
+                Grant(permission);
+                granted.Add(permission);
+            }
+        }
+
+        RecordSeeded(shippedSet);
+        return granted;
+    }
+
+    /// <summary>Grants the full shipped set to a role the seeder has just created and records it.</summary>
+    public void SeedShippedPermissions(IEnumerable<string> shipped)
+    {
+        var shippedSet = shipped.Distinct(StringComparer.Ordinal).ToList();
+        GrantRange(shippedSet);
+        RecordSeeded(shippedSet);
+    }
+
+    private void RecordSeeded(IEnumerable<string> shipped)
+    {
+        // Keep what was offered before too, so a permission dropped from one shipped set and
+        // re-added in a later one is not treated as new and forced back on.
+        var all = SeededPermissions is null ? new HashSet<string>(StringComparer.Ordinal)
+                                            : ParseSeeded(SeededPermissions);
+        all.UnionWith(shipped);
+        SeededPermissions = string.Join(';', all.OrderBy(p => p, StringComparer.Ordinal));
+    }
+
+    private static HashSet<string> ParseSeeded(string value) =>
+        new(value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            StringComparer.Ordinal);
 }
 
 public sealed class RolePermission

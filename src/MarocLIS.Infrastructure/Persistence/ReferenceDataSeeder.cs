@@ -275,15 +275,14 @@ public static class ReferenceDataSeeder
         {
             if (existing.TryGetValue(code, out var role))
             {
-                // Grant permissions a new version introduced, without taking away anything an
-                // administrator has deliberately added or removed on their own installation.
-                foreach (var permission in permissions.Where(p => !role.Has(p)))
-                    role.Grant(permission);
+                // Grant only the permissions a new version introduced (never offered before), so
+                // nothing an administrator deliberately added or removed is undone on restart.
+                role.ApplyShippedPermissions(permissions);
                 continue;
             }
 
             var created = new Role(code, name, isBuiltIn: true);
-            created.GrantRange(permissions);
+            created.SeedShippedPermissions(permissions);
             context.Roles.Add(created);
         }
 
