@@ -73,9 +73,11 @@ public static class SimplIrSalaryDeclaration
 
     public static byte[] Build(InvoiceIssuer employer, int year, IReadOnlyList<SimplIrPayslip> payslips, SimplIrCodes codes)
     {
+        // Each payslip goes to the list of its own contract: an ANAPEC contract turned into a CDI
+        // during the year gives one stagiaire row (the exempt months) and one permanent row.
         var people = payslips
             .Where(p => PayrollCalculator.IsOnPayroll(p.ContractType))
-            .GroupBy(p => p.EmployeeId)
+            .GroupBy(p => (p.EmployeeId, Stagiaire: IsStagiaire(p.ContractType)))
             .Select(g => new Person(g.OrderBy(p => p.Month).Last(), [.. g.OrderBy(p => p.Month)]))
             .OrderBy(p => p.Latest.LastName, StringComparer.Ordinal).ThenBy(p => p.Latest.FirstName, StringComparer.Ordinal)
             .ToList();
@@ -209,9 +211,16 @@ public static class SimplIrSalaryDeclaration
             E("mtBrutTraitementSalaire", Amount(p.Sum(a => a.GrossTaxable))),
             E("mtBrutIndemnites", Amount(p.Sum(a => a.ExemptAllowances))),
             E("mtRetenues", Amount(p.Sum(a => a.CnssEmployee + a.AmoEmployee))),
-            E("mtRevenuNetImposable", Amount(p.Sum(a => a.NetTaxable))),
+            E("mtRevenuNetImposable", Amount(p.Sum(StagiaireNetTaxable))),
             E("periode", Int(p.Days)));
     }
+
+    /// <summary>
+    /// The stipend of an internship or of an ANAPEC insertion contract is exempt (CGI art. 57-16°)
+    /// and not taxed by the payroll: nothing of it is taxable, whatever NetTaxable computed.
+    /// </summary>
+    private static decimal StagiaireNetTaxable(PayslipAmounts a) =>
+        a.Exemption is PayrollExemption.InsertionContract or PayrollExemption.Internship ? 0m : a.NetTaxable;
 
     /// <summary>
     /// The tax withheld each month. When and how it was paid to the DGI is not recorded in the

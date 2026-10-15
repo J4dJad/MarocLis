@@ -347,11 +347,12 @@ public sealed class PayrollService(
     public static IReadOnlyList<PayslipWarning> Warnings(Payslip p, PayrollParameters rates)
     {
         var warnings = new List<PayslipWarning>();
-        if (PayrollCalculator.ExemptionFor(p.ContractType) is PayrollExemption.None or PayrollExemption.Tahfiz)
-        {
-            if (p.BaseSalary < rates.SmigMonthly) warnings.Add(PayslipWarning.BelowMinimumWage);
-            if (string.IsNullOrWhiteSpace(p.CnssNumber)) warnings.Add(PayslipWarning.NoCnssNumber);
-        }
+        var exemption = PayrollCalculator.ExemptionFor(p.ContractType);
+        if (exemption is PayrollExemption.None or PayrollExemption.Tahfiz && p.BaseSalary < rates.SmigMonthly)
+            warnings.Add(PayslipWarning.BelowMinimumWage);
+        // Every payslip the BDS declares (all but an internship's, ANAPEC included) needs the number.
+        if (exemption != PayrollExemption.Internship && CnssBdsFile.Digits(p.CnssNumber).Length == 0)
+            warnings.Add(PayslipWarning.NoCnssNumber);
         if (string.IsNullOrWhiteSpace(p.Rib)) warnings.Add(PayslipWarning.NoRib);
         if (p.Amounts.NetPay < 0) warnings.Add(PayslipWarning.NegativeNet);
         return warnings;
@@ -725,6 +726,16 @@ public sealed class PayrollService(
                               .Select(d => $"{d.Payslip.Number} {d.Payslip.FullName} ({d.Payslip.CnssNumber})").ToList();
         if (invalid.Count > 0)
             return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_BdsCnssNumberInvalid", string.Join(", ", invalid)));
+
+        // The BDS has one line per insured number: two payslips under the same number (typed twice
+        // by mistake) would lose one salary from the declaration.
+        var duplicates = declared.GroupBy(d => long.Parse(CnssBdsFile.Digits(d.Payslip.CnssNumber), CultureInfo.InvariantCulture))
+                                 .Where(g => g.Count() > 1)
+                                 .OrderBy(g => g.Key)
+                                 .Select(g => $"{g.Key:000000000} ({string.Join(", ", g.Select(d => $"{d.Payslip.Number} {d.Payslip.FullName}"))})")
+                                 .ToList();
+        if (duplicates.Count > 0)
+            return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_BdsDuplicateCnss", string.Join("; ", duplicates)));
 
         var lastDay = new DateOnly(first.Year, first.Month, 1).AddMonths(1).AddDays(-1);
         var paid = declared.Select(d => d.Payslip.EmployeeId).ToList();
