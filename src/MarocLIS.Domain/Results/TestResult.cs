@@ -261,10 +261,44 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
         IsAutoTransmitted = fromInstrument;
         MeasuredAt ??= at;
         Status = TestResultStatus.Entered;
+        // A value replaces an earlier "not done": the flag would otherwise keep the report
+        // printing "Non fait" over the figure now entered.
+        Flags &= ~ResultFlag.NotDone;
         // A new value invalidates any previous technical check.
         TechnicallyValidatedAt = null;
         TechnicallyValidatedByUserId = null;
     }
+
+    /// <summary>
+    /// Withdraws the value of a result that no longer has one — a calculated parameter one of
+    /// whose inputs was removed. The result goes back to awaited, with its interpretation and the
+    /// flags that described the old value, so a stale LDL does not outlive the cholesterol it was
+    /// computed from. A released result is changed only through <see cref="Revise"/>.
+    /// </summary>
+    public Result ClearValue()
+    {
+        if (IsValidated)
+            return Result.Failure(Error.Conflict("Result_ValidatedRequiresRevision"));
+
+        NumericValue = null;
+        ValueOperator = null;
+        TextValue = null;
+        CodedValue = null;
+        TitreDenominator = null;
+        Interpretation = ResultInterpretation.NotInterpretable;
+        Flags &= ~(InterpretationFlags | ResultFlag.DeltaCheckFailed | ResultFlag.NotDone);
+        PreviousNumericValue = null;
+        PreviousResultDate = null;
+        Status = TestResultStatus.Awaited;
+        TechnicallyValidatedAt = null;
+        TechnicallyValidatedByUserId = null;
+        return Result.Success();
+    }
+
+    /// <summary>The flags <see cref="ApplyInterpretation"/> derives from the value and the interval.</summary>
+    private const ResultFlag InterpretationFlags =
+        ResultFlag.Low | ResultFlag.High | ResultFlag.CriticalLow | ResultFlag.CriticalHigh
+        | ResultFlag.Abnormal | ResultFlag.OutsideMeasuringRange;
 
     /// <summary>
     /// Replaces an already-validated value. Produces a revision holding the old value and the
@@ -320,6 +354,11 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
     /// Applies the reference interval and the parameter's thresholds, and freezes the interval text
     /// onto the result. Called at entry and again whenever the patient's demographics change,
     /// because a corrected sex or date of birth changes which interval applies.
+    /// <para>
+    /// The delta-check flag is cleared with the others: it described the value that was there
+    /// before, and a corrected value must be checked afresh — the caller runs the delta check
+    /// after interpreting, so a value that still fails it is flagged again.
+    /// </para>
     /// </summary>
     public void ApplyInterpretation(TestParameter parameter, ReferenceRange? range,
                                     AppLanguage language, string? unitSymbol)
@@ -331,8 +370,7 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
         AppliedLowerLimit = range?.LowerLimit;
         AppliedUpperLimit = range?.UpperLimit;
 
-        Flags &= ~(ResultFlag.Low | ResultFlag.High | ResultFlag.CriticalLow | ResultFlag.CriticalHigh
-                   | ResultFlag.Abnormal | ResultFlag.OutsideMeasuringRange);
+        Flags &= ~(InterpretationFlags | ResultFlag.DeltaCheckFailed);
 
         if (NumericValue is { } value)
         {

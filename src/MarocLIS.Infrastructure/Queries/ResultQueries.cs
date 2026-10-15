@@ -52,13 +52,18 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
     public async Task<PreviousValue?> GetPreviousValueAsync(
         Guid patientId, Guid parameterId, DateTimeOffset before, CancellationToken ct = default)
     {
+        // The files merged into this one are part of its history: a merge only points the duplicate
+        // at the survivor, it does not move the duplicate's orders, so joining on the survivor's id
+        // alone made the antériorité and the delta check vanish the moment two files were merged.
+        var patientIds = await WithMergedDuplicatesAsync(patientId, ct);
+
         var row = await db.TestResults
             .AsNoTracking()
             .Where(r => r.TestParameterId == parameterId
                         && r.NumericValue != null
                         && r.ValidatedAt != null
                         && r.ValidatedAt < before)
-            .Join(db.LabOrders.AsNoTracking().Where(o => o.PatientId == patientId),
+            .Join(db.LabOrders.AsNoTracking().Where(o => patientIds.Contains(o.PatientId)),
                   result => result.LabOrderId,
                   order => order.Id,
                   (result, order) => new { result.Id, result.NumericValue, result.ValidatedAt })
@@ -70,6 +75,34 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
             : new PreviousValue(row.NumericValue!.Value,
                                 DateOnly.FromDateTime(row.ValidatedAt!.Value.Date),
                                 row.Id);
+    }
+
+    /// <summary>
+    /// The patient plus every file merged into it, followed transitively. Merges can chain — a
+    /// file that already absorbed a duplicate may itself be merged later — so one level is not
+    /// enough. Only identifiers are read, across sites and soft deletion, since a duplicate
+    /// registered elsewhere is still the same person; the orders themselves stay site-filtered.
+    /// </summary>
+    private async Task<List<Guid>> WithMergedDuplicatesAsync(Guid patientId, CancellationToken ct)
+    {
+        var all = new HashSet<Guid> { patientId };
+        var frontier = new List<Guid> { patientId };
+
+        while (frontier.Count > 0)
+        {
+            var current = frontier;
+            var merged = await db.Patients
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(p => p.MergedIntoPatientId != null && current.Contains(p.MergedIntoPatientId.Value))
+                .Select(p => p.Id)
+                .ToListAsync(ct);
+
+            // The visited set stops a corrupt cycle from looping forever.
+            frontier = [.. merged.Where(all.Add)];
+        }
+
+        return [.. all];
     }
 
     public async Task<IReadOnlyList<ReflexRule>> GetActiveReflexRulesAsync(
@@ -91,9 +124,12 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
     public async Task<Guid?> ResolveOrderIdAsync(string term, Guid siteId,
                                                   CancellationToken ct = default)
     {
+        // Restricted to the bench's own site. The query filter lets through every site the user
+        // may see, and accession numbers and barcodes are only unique per site, so without this a
+        // scan could open another site's file of the same number.
         var byAccession = await db.LabOrders
             .AsNoTracking()
-            .Where(o => o.AccessionNumber == term)
+            .Where(o => o.AccessionNumber == term && o.SiteId == siteId)
             .Select(o => (Guid?)o.Id)
             .FirstOrDefaultAsync(ct);
 
@@ -101,7 +137,7 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
 
         var bySample = await db.Samples
             .AsNoTracking()
-            .Where(s => s.Barcode == term)
+            .Where(s => s.Barcode == term && s.SiteId == siteId)
             .Select(s => (Guid?)s.LabOrderId)
             .FirstOrDefaultAsync(ct);
 
@@ -110,7 +146,7 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
         return await db.SampleAliquots
             .AsNoTracking()
             .Where(a => a.Barcode == term)
-            .Join(db.Samples.AsNoTracking(), a => a.ParentSampleId, s => s.Id,
+            .Join(db.Samples.AsNoTracking().Where(s => s.SiteId == siteId), a => a.ParentSampleId, s => s.Id,
                   (a, s) => (Guid?)s.LabOrderId)
             .FirstOrDefaultAsync(ct);
     }
@@ -128,7 +164,8 @@ public sealed class ValidationQueries(LisDbContext db, IUnitOfWork unitOfWork) :
     /// </summary>
     public async Task<IReadOnlyList<ValidationWorklistEntry>> GetValidationWorklistAsync(
         Guid siteId, Guid? departmentId, IReadOnlySet<string> authorizedDepartmentCodes,
-        bool onlyUrgent, DateTimeOffset now, CancellationToken ct = default)
+        bool onlyUrgent, DateTimeOffset now, bool includeValidated = false,
+        CancellationToken ct = default)
     {
         var scopedDepartmentIds = authorizedDepartmentCodes.Count == 0
             ? null
@@ -139,7 +176,9 @@ public sealed class ValidationQueries(LisDbContext db, IUnitOfWork unitOfWork) :
 
         var results = db.TestResults.AsNoTracking()
             .Where(r => r.SiteId == siteId
-                        && r.Status == TestResultStatus.TechnicallyValidated);
+                        && (r.Status == TestResultStatus.TechnicallyValidated
+                            // Validated but not yet reported: what un-validation can still reach.
+                            || (includeValidated && r.Status == TestResultStatus.Validated)));
 
         if (departmentId is { } explicitDepartment)
             results = results.Where(r => r.DepartmentId == explicitDepartment);
@@ -170,7 +209,7 @@ public sealed class ValidationQueries(LisDbContext db, IUnitOfWork unitOfWork) :
             .Select(g => new
             {
                 LabOrderId = g.Key,
-                Awaiting = g.Count(),
+                Awaiting = g.Count(r => r.Status == TestResultStatus.TechnicallyValidated),
                 Abnormal = g.Count(r => r.Interpretation != ResultInterpretation.Normal
                                         && r.Interpretation != ResultInterpretation.NotInterpretable),
                 Critical = g.Count(r => (r.Flags & ResultFlag.CriticalLow) != 0

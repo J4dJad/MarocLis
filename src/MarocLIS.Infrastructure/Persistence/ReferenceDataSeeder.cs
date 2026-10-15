@@ -417,9 +417,34 @@ public static class ReferenceDataSeeder
     private static async Task SeedStarterCatalogueAsync(LisDbContext context, IClock clock,
                                                         CancellationToken ct)
     {
-        if (await context.AnalysisTests.IgnoreQueryFilters().AnyAsync(ct)) return;
+        if (await context.AnalysisTests.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            await UpgradeSeededFormulasAsync(context, ct);
+            return;
+        }
 
         await StarterCatalogue.SeedAsync(context, clock, ct);
+    }
+
+    /// <summary>
+    /// Replaces the Friedewald formula earlier releases seeded, which stored 0 — interpreted as a
+    /// normal LDL — when the triglycerides were at or above 4 g/L. Only a formula still reading
+    /// exactly as it was seeded is touched: one the laboratory edited is its own, validated by its
+    /// biologist, and is left alone.
+    /// </summary>
+    private static async Task UpgradeSeededFormulasAsync(LisDbContext context, CancellationToken ct)
+    {
+        var stale = await context.TestParameters
+            .IgnoreQueryFilters()
+            .Where(p => p.Code == "LDL" && p.CalculationFormula == StarterCatalogue.FormerFriedewaldLdlFormula)
+            .ToListAsync(ct);
+
+        if (stale.Count == 0) return;
+
+        foreach (var parameter in stale)
+            parameter.CalculationFormula = StarterCatalogue.FriedewaldLdlFormula;
+
+        await context.SaveChangesAsync(ct);
     }
 }
 

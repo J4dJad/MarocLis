@@ -474,6 +474,11 @@ public sealed class SampleWorkflowService(
             received++;
         }
 
+        // Nothing was taken in: there is nothing to save, and saving would commit whatever a
+        // refused reception may have touched.
+        if (received == 0)
+            return Result.Success(new ReceptionOutcome(0, 0, problems, []));
+
         unitOfWork.AuditReason = $"Réception de {received} tube(s)";
         await unitOfWork.SaveChangesAsync(ct);
 

@@ -15,8 +15,15 @@ namespace MarocLIS.Application.Calculations;
 /// <para>
 /// Grammar: parameter references in square brackets (<c>[CHOL]</c>), decimal literals, the
 /// operators <c>+ - * / ^</c> with conventional precedence, parentheses, and the functions
-/// <c>min max abs round sqrt ln log10 pow if</c>. <c>if(cond; a; b)</c> together with the
+/// <c>min max abs round sqrt ln log10 pow if nd</c>. <c>if(cond; a; b)</c> together with the
 /// comparisons <c>&lt; &lt;= &gt; &gt;= = &lt;&gt;</c> covers sex- or threshold-dependent formulas.
+/// </para>
+/// <para>
+/// <c>if</c> only evaluates the branch it takes, and <c>nd()</c> ("non déterminable") states that
+/// the formula has no answer for these inputs. Together they let a formula refuse rather than
+/// invent a figure: Friedewald is <c>if([TG]&lt;4; [CHOL]-[HDL]-[TG]/5; nd())</c>, because above
+/// 4 g/L of triglycerides the method does not hold and any number — a 0 included, which would be
+/// read as a normal LDL — is wrong. The calculation then reports the parameter as not calculable.
 /// </para>
 /// <para>
 /// Function arguments are separated by a <b>semicolon</b>, not a comma, and both <c>.</c> and
@@ -34,6 +41,13 @@ public static class FormulaEvaluator
     /// alongside the measured values; excluded from the "unknown parameter" check because they
     /// are not catalogue entries.
     /// </summary>
+    /// <summary>
+    /// The error key an evaluation fails with when the formula reached <c>nd()</c>: the inputs are
+    /// present but outside the formula's domain, so the parameter is not calculable rather than
+    /// merely awaited.
+    /// </summary>
+    public const string NotApplicableKey = "Formula_NotApplicable";
+
     public static class ContextVariables
     {
         /// <summary>Age in whole years at the date of sampling.</summary>
@@ -155,6 +169,7 @@ public static class FormulaEvaluator
 
         return evaluation.IsSuccess ||
                evaluation.FirstError.ResourceKey is "Formula_DivisionByZero" or "Formula_NotFinite"
+                                                     or NotApplicableKey
             ? Result.Success()
             : Result.Failure(evaluation.FirstError);
     }
@@ -213,6 +228,13 @@ public static class FormulaEvaluator
     private sealed class Parser(string text, IReadOnlyDictionary<string, decimal> values)
     {
         private int _position;
+
+        // Above zero while parsing the branch of an if() that is not taken. Such a branch is still
+        // parsed — a syntax error is an error wherever it sits — but its value is discarded, so what
+        // can only go wrong at evaluation (a missing input, a division by zero, nd()) is ignored.
+        private int _inert;
+
+        private bool Inert => _inert > 0;
 
         public decimal ParseExpression() => ParseComparison();
 
@@ -309,7 +331,13 @@ public static class FormulaEvaluator
                 }
                 else
                 {
-                    if (right == 0m) throw new DivideByZeroException();
+                    if (right == 0m)
+                    {
+                        if (!Inert) throw new DivideByZeroException();
+                        value = 0m;
+                        continue;
+                    }
+
                     value /= right;
                 }
             }
@@ -325,7 +353,15 @@ public static class FormulaEvaluator
             {
                 _position++;
                 var exponent = ParsePower();
-                return Pow(value, exponent);
+
+                try
+                {
+                    return Pow(value, exponent);
+                }
+                catch (FormulaException) when (Inert)
+                {
+                    return 0m;
+                }
             }
 
             return value;
@@ -385,7 +421,10 @@ public static class FormulaEvaluator
             if (code.Length == 0) throw new FormulaException("Formula_EmptyParameterReference");
 
             if (!values.TryGetValue(code, out var value))
+            {
+                if (Inert) return 0m;
                 throw new FormulaException("Formula_MissingValue", code);
+            }
 
             return value;
         }
@@ -418,6 +457,7 @@ public static class FormulaEvaluator
             Expect('(');
 
             var args = new List<decimal>();
+            var lazy = name == "if";
             SkipWhitespace();
 
             if (_position < text.Length && text[_position] == ')')
@@ -428,7 +468,25 @@ public static class FormulaEvaluator
             {
                 while (true)
                 {
-                    args.Add(ParseExpression());
+                    // if(cond; a; b): the second argument is only evaluated when the condition
+                    // holds, the third only when it does not.
+                    var skip = lazy && args.Count switch
+                    {
+                        1 => args[0] == 0m,
+                        2 => args[0] != 0m,
+                        _ => false
+                    };
+
+                    if (skip) _inert++;
+                    try
+                    {
+                        args.Add(ParseExpression());
+                    }
+                    finally
+                    {
+                        if (skip) _inert--;
+                    }
+
                     SkipWhitespace();
 
                     if (_position >= text.Length) throw new FormulaException("Formula_UnexpectedEnd");
@@ -448,7 +506,7 @@ public static class FormulaEvaluator
             return Apply(name, args);
         }
 
-        private static decimal Apply(string name, List<decimal> args)
+        private decimal Apply(string name, List<decimal> args)
         {
             void Arity(int expected)
             {
@@ -480,26 +538,37 @@ public static class FormulaEvaluator
 
                 case "sqrt":
                     Arity(1);
-                    if (args[0] < 0m) throw new FormulaException("Formula_InvalidArgument", "sqrt");
+                    if (args[0] < 0m) return Inert ? 0m : throw new FormulaException("Formula_InvalidArgument", "sqrt");
                     return (decimal)Math.Sqrt((double)args[0]);
 
                 case "ln":
                     Arity(1);
-                    if (args[0] <= 0m) throw new FormulaException("Formula_InvalidArgument", "ln");
+                    if (args[0] <= 0m) return Inert ? 0m : throw new FormulaException("Formula_InvalidArgument", "ln");
                     return (decimal)Math.Log((double)args[0]);
 
                 case "log10":
                     Arity(1);
-                    if (args[0] <= 0m) throw new FormulaException("Formula_InvalidArgument", "log10");
+                    if (args[0] <= 0m) return Inert ? 0m : throw new FormulaException("Formula_InvalidArgument", "log10");
                     return (decimal)Math.Log10((double)args[0]);
 
                 case "pow":
                     Arity(2);
-                    return Pow(args[0], args[1]);
+                    try
+                    {
+                        return Pow(args[0], args[1]);
+                    }
+                    catch (FormulaException) when (Inert)
+                    {
+                        return 0m;
+                    }
 
                 case "if":
                     Arity(3);
                     return args[0] != 0m ? args[1] : args[2];
+
+                case "nd":
+                    Arity(0);
+                    return Inert ? 0m : throw new FormulaException(NotApplicableKey);
 
                 default:
                     throw new FormulaException("Formula_UnknownFunction", name);

@@ -48,6 +48,7 @@ public sealed class ValidationView : LocalizedView
     private readonly Label _worklistHeading = new();
     private readonly Label _detailHeading = new();
     private readonly CheckBox _onlyUrgent = new();
+    private readonly CheckBox _showValidated = new();
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _selectAll = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _validate = UiTheme.PrimaryButton(string.Empty);
@@ -108,6 +109,14 @@ public sealed class ValidationView : LocalizedView
         _onlyUrgent.AutoSize = true;
         _onlyUrgent.Location = new Point(260, 4);
 
+        // Brings back the files and results already validated but not yet reported: the only way
+        // to reach a release in order to withdraw it, since the worklist otherwise drops a file the
+        // moment its last result is validated.
+        _showValidated.Font = UiTheme.Small;
+        _showValidated.ForeColor = UiTheme.TextSecondary;
+        _showValidated.AutoSize = true;
+        _showValidated.Location = new Point(340, 4);
+
         _refresh.Bounds = new Rectangle(420, 0, 110, UiTheme.ButtonHeight - 4);
 
         // The heading sizes itself to its text, which in French is longer than the gap left for
@@ -115,11 +124,13 @@ public sealed class ValidationView : LocalizedView
         void FollowHeading()
         {
             _onlyUrgent.Left = _worklistHeading.Right + 16;
-            _refresh.Left = Math.Max(420, _onlyUrgent.Right + 16);
+            _showValidated.Left = _onlyUrgent.Right + 16;
+            _refresh.Left = Math.Max(420, _showValidated.Right + 16);
         }
 
         _worklistHeading.SizeChanged += (_, _) => FollowHeading();
         _onlyUrgent.SizeChanged += (_, _) => FollowHeading();
+        _showValidated.SizeChanged += (_, _) => FollowHeading();
 
         BuildWorklistColumns();
 
@@ -131,12 +142,13 @@ public sealed class ValidationView : LocalizedView
         };
         worklistHost.Controls.Add(_worklist);
 
-        top.Controls.AddRange([worklistHost, _worklistHeading, _onlyUrgent, _refresh]);
+        top.Controls.AddRange([worklistHost, _worklistHeading, _onlyUrgent, _showValidated, _refresh]);
 
         // The host is first so that it docks last and fills what is left, which also puts it in
         // front: the heading, the tick box and the refresh button sat behind it, invisible.
         _worklistHeading.BringToFront();
         _onlyUrgent.BringToFront();
+        _showValidated.BringToFront();
         _refresh.BringToFront();
 
         // --- detail ------------------------------------------------------------------------------
@@ -261,6 +273,7 @@ public sealed class ValidationView : LocalizedView
     {
         _refresh.Click += async (_, _) => await ActivateAsync();
         _onlyUrgent.CheckedChanged += async (_, _) => await ActivateAsync();
+        _showValidated.CheckedChanged += async (_, _) => await ActivateAsync();
 
         _worklist.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadSelectedAsync());
 
@@ -326,6 +339,13 @@ public sealed class ValidationView : LocalizedView
                 e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Monospace, FontStyle.Bold);
         }
 
+        // Already released, listed only so it can be withdrawn: set apart from what awaits release.
+        if (IsReleased(row))
+        {
+            e.CellStyle!.ForeColor = UiTheme.TextSecondary;
+            e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Italic);
+        }
+
         if (row.IsHeading)
         {
             e.CellStyle!.BackColor = UiTheme.SurfaceSunken;
@@ -338,6 +358,7 @@ public sealed class ValidationView : LocalizedView
         _worklistHeading.Text = T("Validation.PendingBiological");
         _detailHeading.Text = T("Result.Plural");
         _onlyUrgent.Text = T("Priority.Urgent");
+        _showValidated.Text = T("Validation.ShowValidated");
         _refresh.Text = T("Action.Refresh");
         _selectAll.Text = T("Action.SelectAll");
         _validate.Text = T("Validation.Biological");
@@ -377,7 +398,9 @@ public sealed class ValidationView : LocalizedView
     {
         try
         {
-            var result = await _validation.GetWorklistAsync(onlyUrgent: _onlyUrgent.Checked, ct: ct);
+            var result = await _validation.GetWorklistAsync(onlyUrgent: _onlyUrgent.Checked,
+                                                            includeValidated: _showValidated.Checked,
+                                                            ct: ct);
 
             if (result.IsFailure)
             {
@@ -476,14 +499,19 @@ public sealed class ValidationView : LocalizedView
             _rowsById[row.TestResultId] = row;
 
             // Only what is awaiting release is listed: a biologist validating a file does not need
-            // to scroll past results they released last week.
+            // to scroll past results they released last week. Validated results come back on
+            // request, to be ticked for un-validation.
+            var withdrawable = _showValidated.Checked && !row.IsHeading
+                               && row.Status == TestResultStatus.Validated;
+
             if (row.Status is not (TestResultStatus.TechnicallyValidated or TestResultStatus.Entered)
-                && !row.IsHeading)
+                && !row.IsHeading && !withdrawable)
                 continue;
 
             // Only a technically validated value can be released. An entered one is listed so the
             // biologist sees the whole file, but it is neither pre-ticked nor tickable: the service
-            // refuses it until the technician has checked it.
+            // refuses it until the technician has checked it. A validated one is tickable for
+            // un-validation but never pre-ticked: withdrawing a release is a deliberate act.
             var releasable = !row.IsHeading && row.Status == TestResultStatus.TechnicallyValidated;
 
             var index = _details.Rows.Add(
@@ -505,7 +533,7 @@ public sealed class ValidationView : LocalizedView
 
             var gridRow = _details.Rows[index];
             gridRow.Tag = row.TestResultId;
-            gridRow.Cells[ColumnSelected].ReadOnly = !releasable;
+            gridRow.Cells[ColumnSelected].ReadOnly = !releasable && !withdrawable;
         }
 
         _details.ResumeLayout(performLayout: true);
@@ -546,13 +574,19 @@ public sealed class ValidationView : LocalizedView
 
     private void ToggleAll()
     {
-        var target = _details.Rows.Cast<DataGridViewRow>()
-            .Where(r => !r.Cells[ColumnSelected].ReadOnly)
-            .Any(r => r.Cells[ColumnSelected].Value is not true);
+        // Selects what awaits release; released rows are ticked one by one, on purpose.
+        var toggleable = _details.Rows.Cast<DataGridViewRow>()
+            .Where(r => !r.Cells[ColumnSelected].ReadOnly
+                        && !(r.Tag is Guid id && _rowsById.TryGetValue(id, out var row) && IsReleased(row)))
+            .ToList();
 
-        foreach (DataGridViewRow row in _details.Rows)
-            if (!row.Cells[ColumnSelected].ReadOnly) row.Cells[ColumnSelected].Value = target;
+        var target = toggleable.Any(r => r.Cells[ColumnSelected].Value is not true);
+
+        foreach (var row in toggleable) row.Cells[ColumnSelected].Value = target;
     }
+
+    private static bool IsReleased(ResultEntryRow row) =>
+        row.Status is TestResultStatus.Validated or TestResultStatus.Reported;
 
     // ---- Validation --------------------------------------------------------------------------------
 
@@ -584,6 +618,10 @@ public sealed class ValidationView : LocalizedView
             if (gridRow.Tag is not Guid id) continue;
             if (!_rowsById.TryGetValue(id, out var row) || row.IsHeading) continue;
             if (gridRow.Cells[ColumnSelected].Value is not true) continue;
+
+            // Only a released result has a validation to withdraw; the ticked rows awaiting
+            // release are what the Validate button is for.
+            if (!IsReleased(row)) continue;
 
             ids.Add(id);
         }
@@ -628,6 +666,9 @@ public sealed class ValidationView : LocalizedView
         {
             if (gridRow.Tag is not Guid id) continue;
             if (!_rowsById.TryGetValue(id, out var row) || row.IsHeading) continue;
+
+            // A released row is listed for un-validation only: validating it again means nothing.
+            if (IsReleased(row)) continue;
 
             var selected = gridRow.Cells[ColumnSelected].Value is true;
 

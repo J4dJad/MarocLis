@@ -1,4 +1,5 @@
 using System.Globalization;
+using MarocLIS.Domain.Catalog;
 
 namespace MarocLIS.Desktop.Infrastructure;
 
@@ -8,9 +9,6 @@ namespace MarocLIS.Desktop.Infrastructure;
 /// </summary>
 internal static class EditorValues
 {
-    private const int DaysPerMonth = 30;
-    private const int DaysPerYear = 365;
-
     /// <summary>
     /// Reads a number typed, pasted or pre-filled in any of the cultures the application runs in.
     /// <para>
@@ -67,15 +65,11 @@ internal static class EditorValues
     /// (30 days), the factors the editor multiplies by when saving, that holds both bounds exactly,
     /// otherwise days. "1 to 3 years" is 365 to 1095 days and must reopen as 1 to 3 years, not as
     /// 12 to 36 months that save back as 360 to 1080 days.
+    /// <para>
+    /// The rule is the domain's own: interval matching reads the bounds in the same unit — whole
+    /// years and months on the calendar — so the band the editor shows is the band that applies.
+    /// </para>
     /// </summary>
-    public static int AgeUnitDays(int? fromDays, int? toDays)
-    {
-        var from = fromDays ?? 0;
-        var to = toDays ?? 0;
-
-        if (from % DaysPerYear == 0 && to % DaysPerYear == 0) return DaysPerYear;
-        if (from % DaysPerMonth == 0 && to % DaysPerMonth == 0) return DaysPerMonth;
-
-        return 1;
-    }
+    public static int AgeUnitDays(int? fromDays, int? toDays) =>
+        ReferenceRange.AgeBandUnitDays(fromDays, toDays);
 }

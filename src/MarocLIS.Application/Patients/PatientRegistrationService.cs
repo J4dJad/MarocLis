@@ -1,8 +1,10 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Results;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Morocco;
+using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
 using MarocLIS.Domain.Sequencing;
 
@@ -144,7 +146,9 @@ public sealed class PatientRegistrationService(
     IPermissionGuard guard,
     ICurrentUser currentUser,
     IDataAccessAuditor dataAccessAuditor,
-    IClock clock)
+    IClock clock,
+    IRepository<LabOrder> orders,
+    ResultEntryService resultEntry)
 {
     /// <summary>
     /// Candidate duplicates for an identity the operator has typed but not yet saved.
@@ -331,6 +335,8 @@ public sealed class PatientRegistrationService(
         if (patient.IsAnonymized)
             return Result.Failure(Error.Regulatory("Patient_AnonymizedIsReadOnly"));
 
+        var demographicsBefore = Demographics(patient);
+
         patient.LastName = identity.LastName.Trim();
         patient.FirstName = identity.FirstName.Trim();
         patient.LastNameArabic = Blank(identity.LastNameArabic);
@@ -381,9 +387,51 @@ public sealed class PatientRegistrationService(
             ? $"Identité provisoire complétée : dossier {patient.MedicalRecordNumber} désormais au nom de {patient.FullName}"
             : $"Modification du dossier {patient.MedicalRecordNumber} ({patient.FullName})";
 
+        // Sex, age and pregnancy decide which reference interval applies and what an age- or
+        // sex-dependent formula yields. Results still on the bench are re-interpreted with the
+        // corrected file, in the same save; validated ones are left as released — a figure in a
+        // clinician's hands changes only through an amendment — and the audit line says how many
+        // were interpreted against the former demographics, so the biologist can review them.
+        if (Demographics(patient) != demographicsBefore)
+        {
+            var (reinterpreted, validated) = await ReinterpretResultsAsync(patient, ct);
+
+            if (reinterpreted > 0)
+                unitOfWork.AuditReason += $" ; {reinterpreted} résultat(s) non validé(s) réinterprété(s)";
+            if (validated > 0)
+                unitOfWork.AuditReason +=
+                    $" ; données démographiques modifiées : {validated} résultat(s) déjà validé(s) " +
+                    "interprété(s) selon les anciennes données, à revoir et à amender si nécessaire";
+        }
+
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success();
+    }
+
+    /// <summary>The facts about the patient that interpretation and calculation depend on.</summary>
+    private static (Gender, DateOnly?, int?, bool, DateOnly?, decimal?, decimal?) Demographics(Patient patient) =>
+        (patient.Gender, patient.DateOfBirth, patient.DeclaredAgeYears, patient.IsPregnant,
+         patient.LastMenstrualPeriod, patient.WeightKg, patient.HeightCm);
+
+    private async Task<(int Reinterpreted, int Validated)> ReinterpretResultsAsync(Patient patient,
+                                                                                   CancellationToken ct)
+    {
+        var patientId = patient.Id;
+        var files = await orders.ListAsync(o => o.PatientId == patientId
+                                                && o.Status != LabOrderStatus.Cancelled, ct);
+
+        var reinterpreted = 0;
+        var validated = 0;
+
+        foreach (var order in files)
+        {
+            var (pending, released) = await resultEntry.ReinterpretPendingAsync(order.Id, patient, ct);
+            reinterpreted += pending;
+            validated += released;
+        }
+
+        return (reinterpreted, validated);
     }
 
     // ---- Coverage ------------------------------------------------------------------------------
