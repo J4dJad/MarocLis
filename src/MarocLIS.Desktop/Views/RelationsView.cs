@@ -223,7 +223,7 @@ public sealed class RelationsView : LocalizedView
 
     private async Task EditVisitAsync(DelegateVisitRow? existing)
     {
-        var options = await _relations.GetOptionsAsync();
+        var options = await _relations.GetOptionsAsync(existing is null ? null : [existing.PrescriberId, existing.DelegateUserId]);
         if (options.IsFailure) { _dialogs.ShowFailure(options, Title); return; }
 
         ComboBox prescriber = null!, delegateUser = null!, purpose = null!;
@@ -242,9 +242,9 @@ public sealed class RelationsView : LocalizedView
 
         date = dialog.Date(T("Field.Date"), existing?.VisitDate);
         prescriber = dialog.Choice(T("Relations.Column.prescriber"),
-                                   options.Value.Prescribers.Select(p => (p.Id, p.Display)), existing?.PrescriberId ?? Guid.Empty);
+                                   options.Value.Prescribers.Select(p => (p.Id, Display(p))), existing?.PrescriberId ?? Guid.Empty);
         delegateUser = dialog.Choice(T("Relations.Column.delegate"),
-                                     options.Value.Staff.Select(s => (s.Id, s.Display)),
+                                     options.Value.Staff.Select(s => (s.Id, Display(s))),
                                      existing?.DelegateUserId ?? _currentUser.UserId);
         purpose = dialog.Choice(T("Relations.Column.purpose"),
                                 Enum.GetValues<VisitPurpose>().Select(p => (p, T($"VisitPurpose.{p}"))),
@@ -269,6 +269,10 @@ public sealed class RelationsView : LocalizedView
         await LoadAsync();
     }
 
+    // A record the visit or convention already names, since deactivated, stays selectable and says so.
+    private string Display(RelationLookup lookup) =>
+        lookup.IsActive ? lookup.Display : $"{lookup.Display} {T("Contracts.InactiveSuffix")}";
+
     private async Task DeleteVisitAsync()
     {
         if (SelectedVisit is not { } visit) return;
@@ -292,7 +296,7 @@ public sealed class RelationsView : LocalizedView
             existing = loaded.Value;
         }
 
-        var options = await _relations.GetOptionsAsync();
+        var options = await _relations.GetOptionsAsync(existing?.PrescriberId is { } linkedId ? [linkedId] : null);
         if (options.IsFailure) { _dialogs.ShowFailure(options, Title); return; }
 
         TextBox name = null!;
@@ -311,7 +315,7 @@ public sealed class RelationsView : LocalizedView
                                         Enum.GetValues<PartnerKind>().Select(k => (k, T($"PartnerKind.{k}"))),
                                         existing?.PartnerKind ?? PartnerKind.Clinic);
         var prescriber = dialog.Choice(T("Relations.LinkedPrescriber"),
-                                       new[] { (Guid.Empty, "—") }.Concat(options.Value.Prescribers.Select(p => (p.Id, p.Display))),
+                                       new[] { (Guid.Empty, "—") }.Concat(options.Value.Prescribers.Select(p => (p.Id, Display(p)))),
                                        existing?.PrescriberId ?? Guid.Empty);
         var kind = dialog.Choice(T("Relations.Column.kind"),
                                  Enum.GetValues<PartnershipKind>().Select(k => (k, T($"PartnershipKind.{k}"))),

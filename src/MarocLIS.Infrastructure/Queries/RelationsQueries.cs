@@ -1,4 +1,5 @@
 using MarocLIS.Application.Relations;
+using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
@@ -22,7 +23,11 @@ public sealed class PrescriberStatisticsQueries(LisDbContext db) : IPrescriberSt
             {
                 o.Id,
                 o.SiteId,
-                o.PrescriberId,
+                // A "self-referral" prescriber record is the patient asking on their own: no prescriber.
+                PrescriberId = db.Prescribers.IgnoreQueryFilters()
+                                 .Any(p => p.Id == o.PrescriberId && p.Kind == PrescriberKind.SelfReferral)
+                    ? null
+                    : o.PrescriberId,
                 o.RegisteredAt,
                 Tests = db.LabOrderItems.Count(i => i.LabOrderId == o.Id && i.Status != LabOrderItemStatus.Cancelled),
                 Revenue = db.LabOrderItems.Where(i => i.LabOrderId == o.Id && i.Status != LabOrderItemStatus.Cancelled)
@@ -39,7 +44,9 @@ public sealed class PrescriberStatisticsQueries(LisDbContext db) : IPrescriberSt
     {
         var ids = await db.LabOrders.AsNoTracking()
             .Where(o => siteIds.Contains(o.SiteId) && o.RegisteredAt >= start && o.RegisteredAt < end
-                        && o.Status != LabOrderStatus.Cancelled && o.PrescriberId != null)
+                        && o.Status != LabOrderStatus.Cancelled && o.PrescriberId != null
+                        && !db.Prescribers.IgnoreQueryFilters()
+                              .Any(p => p.Id == o.PrescriberId && p.Kind == PrescriberKind.SelfReferral))
             .Select(o => o.PrescriberId!.Value)
             .Distinct()
             .ToListAsync(ct);
@@ -117,19 +124,25 @@ public sealed class RelationsQueries(LisDbContext db) : IRelationsQueries
             r.NextVisitOn is { } next && next <= today)).ToList();
     }
 
-    public async Task<RelationOptions> GetOptionsAsync(Guid siteId, CancellationToken ct = default)
+    public async Task<RelationOptions> GetOptionsAsync(Guid siteId, IReadOnlyCollection<Guid> keep,
+                                                       CancellationToken ct = default)
     {
-        var prescribers = await db.Prescribers.AsNoTracking()
-            .Where(p => p.IsActive && p.Kind != PrescriberKind.SelfReferral)
+        // The records a visit or convention already names stay in the lists, even inactive, so that
+        // editing it does not lose or force a change of the link.
+        var kept = keep.ToList();
+
+        var prescribers = await db.Prescribers.AsNoTracking().IgnoreQueryFilters()
+            .Where(p => (p.IsActive && !p.IsDeleted && p.Kind != PrescriberKind.SelfReferral) || kept.Contains(p.Id))
             .OrderBy(p => p.Kind == PrescriberKind.Institution ? p.InstitutionName : p.LastName).ThenBy(p => p.FirstName)
-            .Select(p => new { p.Id, p.Kind, p.LastName, p.FirstName, p.InstitutionName, p.City })
+            .Select(p => new { p.Id, p.Kind, p.LastName, p.FirstName, p.InstitutionName, p.City, p.IsActive, p.IsDeleted })
             .ToListAsync(ct);
 
-        var staff = await db.Users.AsNoTracking()
-            .Where(u => u.IsActive && u.PrescriberId == null
-                        && db.UserSiteAccess.Any(a => a.UserId == u.Id && a.SiteId == siteId))
+        var staff = await db.Users.AsNoTracking().IgnoreQueryFilters()
+            .Where(u => (u.IsActive && u.PrescriberId == null
+                         && db.UserSiteAccess.Any(a => a.UserId == u.Id && a.SiteId == siteId))
+                        || kept.Contains(u.Id))
             .OrderBy(u => u.FullName)
-            .Select(u => new { u.Id, u.FullName })
+            .Select(u => new { u.Id, u.FullName, u.IsActive })
             .ToListAsync(ct);
 
         return new RelationOptions(
@@ -137,8 +150,9 @@ public sealed class RelationsQueries(LisDbContext db) : IRelationsQueries
                 (p.Kind == PrescriberKind.Institution
                     ? p.InstitutionName ?? p.LastName
                     : $"Dr {p.LastName} {p.FirstName}".Trim())
-                + (string.IsNullOrWhiteSpace(p.City) ? string.Empty : $" — {p.City}"))).ToList(),
-            staff.Select(u => new RelationLookup(u.Id, u.FullName)).ToList());
+                + (string.IsNullOrWhiteSpace(p.City) ? string.Empty : $" — {p.City}"),
+                p.IsActive && !p.IsDeleted)).ToList(),
+            staff.Select(u => new RelationLookup(u.Id, u.FullName, u.IsActive)).ToList());
     }
 
     public async Task<IReadOnlyList<PartnershipRow>> GetPartnershipsAsync(Guid siteId, bool includeInactive, DateOnly today,
@@ -210,8 +224,11 @@ public sealed class PatientMessagingQueries(LisDbContext db) : IPatientMessaging
         }
         else
         {
-            tests = tests.Where(t => t.IsActive);
-            panels = panels.Where(p => p.IsActive);
+            // Analyses under a specific consent are never offered for a reminder (loi 09-08).
+            tests = tests.Where(t => t.IsActive && t.ConsentRequirement == ConsentRequirement.None);
+            panels = panels.Where(p => p.IsActive
+                                       && !db.TestPanelItems.Any(i => i.TestPanelId == p.Id
+                                                                      && i.AnalysisTest!.ConsentRequirement != ConsentRequirement.None));
         }
 
         var analyses = await tests.Select(t => new { t.Id, t.Code, t.Name }).ToListAsync(ct);
@@ -229,12 +246,25 @@ public sealed class PatientMessagingQueries(LisDbContext db) : IPatientMessaging
           .AnyAsync(r => r.AnalysisTestId == analysisTestId && r.TestPanelId == testPanelId
                          && (exceptId == null || r.Id != exceptId), ct);
 
-    public async Task<IReadOnlyList<ReminderSourceRow>> GetReminderSourcesAsync(Guid siteId, Guid? analysisTestId,
+    public Task<bool> RequiresSpecificConsentAsync(Guid? analysisTestId, Guid? testPanelId,
+                                                   CancellationToken ct = default) =>
+        analysisTestId is { } test
+            ? db.AnalysisTests.AsNoTracking().IgnoreQueryFilters()
+                .AnyAsync(t => t.Id == test && t.ConsentRequirement != ConsentRequirement.None, ct)
+            : db.TestPanelItems.AsNoTracking().IgnoreQueryFilters()
+                .AnyAsync(i => i.TestPanelId == testPanelId
+                               && db.AnalysisTests.IgnoreQueryFilters()
+                                    .Any(t => t.Id == i.AnalysisTestId && t.ConsentRequirement != ConsentRequirement.None), ct);
+
+    public async Task<IReadOnlyList<ReminderSourceRow>> GetReminderSourcesAsync(Guid? analysisTestId,
                                                                                 Guid? testPanelId, DateTimeOffset since,
                                                                                 CancellationToken ct = default)
     {
-        var items = db.LabOrderItems.AsNoTracking()
-            .Where(i => i.LabOrder!.SiteId == siteId && i.LabOrder.RegisteredAt >= since
+        // Every site of the laboratory, outside the operator's site scope: a later order at another
+        // site means the patient is already back. Only dates are read, and only a result of the
+        // operator's own site is reminded (ReminderPlanner.Plan).
+        var items = db.LabOrderItems.AsNoTracking().IgnoreQueryFilters()
+            .Where(i => !i.LabOrder!.IsDeleted && i.LabOrder.RegisteredAt >= since
                         && i.LabOrder.Status != LabOrderStatus.Cancelled
                         && i.Status != LabOrderItemStatus.Cancelled);
 
@@ -248,6 +278,7 @@ public sealed class PatientMessagingQueries(LisDbContext db) : IPatientMessaging
             .Select(i => new
             {
                 i.LabOrder!.PatientId,
+                i.LabOrder.SiteId,
                 i.LabOrderId,
                 i.LabOrder.RegisteredAt,
                 i.ValidatedAt,
@@ -255,11 +286,49 @@ public sealed class PatientMessagingQueries(LisDbContext db) : IPatientMessaging
             })
             .ToListAsync(ct);
 
+        // A merge leaves the orders under the duplicate's file: they count for the surviving one.
+        var survivors = await SurvivorsAsync([.. rows.Select(r => r.PatientId).Distinct()], ct);
+
         return rows.GroupBy(r => (r.PatientId, r.LabOrderId))
                    .Select(g => new ReminderSourceRow(
-                       g.Key.PatientId, g.Key.LabOrderId, g.First().RegisteredAt,
-                       g.All(r => r.Validated && r.ValidatedAt is not null) ? g.Max(r => r.ValidatedAt) : null))
+                       survivors.GetValueOrDefault(g.Key.PatientId, g.Key.PatientId), g.Key.LabOrderId,
+                       g.First().RegisteredAt,
+                       g.All(r => r.Validated && r.ValidatedAt is not null) ? g.Max(r => r.ValidatedAt) : null,
+                       g.First().SiteId))
                    .ToList();
+    }
+
+    /// <summary>For each merged-away file among <paramref name="patientIds"/>, the file it ends up in.</summary>
+    private async Task<IReadOnlyDictionary<Guid, Guid>> SurvivorsAsync(IReadOnlyList<Guid> patientIds, CancellationToken ct)
+    {
+        var mergedInto = new Dictionary<Guid, Guid>();
+        var pending = patientIds;
+
+        // A merged file can itself be merged later on: followed until the pointers stop.
+        while (pending.Count > 0)
+        {
+            var next = new List<Guid>();
+            foreach (var slice in pending.Chunk(1000))
+            {
+                var rows = await db.Patients.AsNoTracking().IgnoreQueryFilters()
+                    .Where(p => slice.Contains(p.Id) && p.MergedIntoPatientId != null)
+                    .Select(p => new { p.Id, Into = p.MergedIntoPatientId!.Value })
+                    .ToListAsync(ct);
+                foreach (var r in rows.Where(r => mergedInto.TryAdd(r.Id, r.Into) && !mergedInto.ContainsKey(r.Into)))
+                    next.Add(r.Into);
+            }
+            pending = next;
+        }
+
+        var result = new Dictionary<Guid, Guid>();
+        foreach (var id in mergedInto.Keys)
+        {
+            var current = id;
+            var seen = new HashSet<Guid> { id };
+            while (mergedInto.TryGetValue(current, out var into) && seen.Add(into)) current = into;
+            result[id] = current;
+        }
+        return result;
     }
 
     public async Task<IReadOnlySet<(Guid RuleId, Guid OrderId)>> GetRemindedAsync(Guid siteId, CancellationToken ct = default)
@@ -328,8 +397,9 @@ public sealed class PatientMessagingQueries(LisDbContext db) : IPatientMessaging
         var result = new Dictionary<Guid, DateTimeOffset>();
         foreach (var slice in patientIds.Chunk(1000))
         {
+            // A survey the gateway refused never reached the patient: it does not count.
             var rows = await db.SurveyInvitations.AsNoTracking().IgnoreQueryFilters()
-                .Where(s => slice.Contains(s.PatientId))
+                .Where(s => slice.Contains(s.PatientId) && s.Delivered)
                 .GroupBy(s => s.PatientId)
                 .Select(g => new { PatientId = g.Key, Last = g.Max(s => s.InvitedAt) })
                 .ToListAsync(ct);
@@ -343,7 +413,7 @@ public sealed class PatientMessagingQueries(LisDbContext db) : IPatientMessaging
         var result = new HashSet<Guid>();
         foreach (var slice in orderIds.Chunk(1000))
             result.UnionWith(await db.SurveyInvitations.AsNoTracking().IgnoreQueryFilters()
-                .Where(s => slice.Contains(s.LabOrderId)).Select(s => s.LabOrderId).ToListAsync(ct));
+                .Where(s => slice.Contains(s.LabOrderId) && s.Delivered).Select(s => s.LabOrderId).ToListAsync(ct));
         return result;
     }
 

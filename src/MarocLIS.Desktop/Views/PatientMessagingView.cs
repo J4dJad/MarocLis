@@ -119,19 +119,28 @@ public sealed class PatientMessagingView : LocalizedView
         Controls.Add(_bar);
 
         _bar.Compute.Click += async (_, _) => await LoadAsync();
-        _bar.Export.Click += async (_, _) =>
-            await ExportAsync(_tabs.SelectedTab?.Controls.OfType<DataGridView>().FirstOrDefault(), _output, _dialogs,
-                              _bar.Export.Text, Localizer);
+        _bar.Export.Click += async (_, _) => await ExportCurrentAsync();
         _tabs.SelectedIndexChanged += async (_, _) => { UpdateButtons(); await LoadAsync(); };
-        _sendReminders.Click += async (_, _) => await SendRemindersAsync();
-        _newRule.Click += async (_, _) => await EditRuleAsync(null);
-        _editRule.Click += async (_, _) => { if (_rules.CurrentRow?.Tag is ReminderRuleRow r) await EditRuleAsync(r); };
-        _rules.CellDoubleClick += async (_, _) => { if (_rules.CurrentRow?.Tag is ReminderRuleRow r) await EditRuleAsync(r); };
-        _sendSurveys.Click += async (_, _) => await SendSurveysAsync();
-        _recordAnswer.Click += async (_, _) => await RecordAnswerAsync();
-        _importReplies.Click += async (_, _) => await ImportRepliesAsync();
-        _settings.Click += async (_, _) => await EditSettingsAsync();
+        // Every write runs as a busy operation: a second click is ignored while a batch is sending,
+        // and the shell waits for the batch before closing the screen.
+        _sendReminders.Click += async (_, _) => await WriteAsync(SendRemindersAsync);
+        _newRule.Click += async (_, _) => await WriteAsync(() => EditRuleAsync(null));
+        _editRule.Click += async (_, _) => { if (_rules.CurrentRow?.Tag is ReminderRuleRow r) await WriteAsync(() => EditRuleAsync(r)); };
+        _rules.CellDoubleClick += async (_, _) => { if (_rules.CurrentRow?.Tag is ReminderRuleRow r) await WriteAsync(() => EditRuleAsync(r)); };
+        _sendSurveys.Click += async (_, _) => await WriteAsync(SendSurveysAsync);
+        _recordAnswer.Click += async (_, _) => await WriteAsync(RecordAnswerAsync);
+        _importReplies.Click += async (_, _) => await WriteAsync(ImportRepliesAsync);
+        _settings.Click += async (_, _) => await WriteAsync(EditSettingsAsync);
     }
+
+    private Task<bool> WriteAsync(Func<Task> operation) =>
+        RunBusyAsync(async () =>
+        {
+            var buttons = new[] { _sendReminders, _newRule, _editRule, _sendSurveys, _recordAnswer, _importReplies, _settings };
+            foreach (var b in buttons) b.Enabled = false;
+            try { await operation(); }
+            finally { foreach (var b in buttons) b.Enabled = true; }
+        });
 
     public override string Title => T("Nav.PatientMessaging");
 
@@ -173,6 +182,26 @@ public sealed class PatientMessagingView : LocalizedView
     }
 
     public override Task ActivateAsync(CancellationToken ct = default) => LoadAsync(ct);
+
+    // The reminder, survey and log lists name patients, their mobile and the analyses in the texts:
+    // their export is in the data-access log, like any patient list that leaves as a file.
+    private async Task ExportCurrentAsync()
+    {
+        var tab = _tabs.SelectedTab;
+        var grid = tab?.Controls.OfType<DataGridView>().FirstOrDefault();
+        var context = tab == _reminderPage ? "Relations/ReminderPreview"
+            : tab == _surveyPage ? "Relations/SurveyPreview"
+            : tab == _logPage ? "Relations/MessageLog"
+            : null;
+
+        if (context is not null && grid is { Rows.Count: > 0 })
+        {
+            var logged = await _messaging.LogExportAsync(context, grid.Rows.Count);
+            if (logged.IsFailure) { _dialogs.ShowFailure(logged, _bar.Export.Text); return; }
+        }
+
+        await ExportAsync(grid, _output, _dialogs, _bar.Export.Text, Localizer);
+    }
 
     private async Task LoadAsync(CancellationToken ct = default)
     {
@@ -308,18 +337,24 @@ public sealed class PatientMessagingView : LocalizedView
     {
         if (_targets.Count == 0)
         {
-            var targets = await _messaging.GetTargetsAsync();
-            if (targets.IsFailure) { _dialogs.ShowFailure(targets, Title); return; }
-            _targets = targets.Value;
+            var loaded = await _messaging.GetTargetsAsync();
+            if (loaded.IsFailure) { _dialogs.ShowFailure(loaded, Title); return; }
+            _targets = loaded.Value;
         }
 
         var language = Localizer.CurrentLanguage;
         var current = existing?.AnalysisTestId ?? existing?.TestPanelId ?? Guid.Empty;
 
+        // A rule whose analysis is no longer offered (inactive, or under a specific consent) keeps
+        // it, so that the rule can still be switched off; the service refuses to keep it active.
+        var targets = _targets.ToList();
+        if (existing is not null && targets.All(t => t.Id != current))
+            targets.Add(new ReminderTarget(current, existing.TestPanelId is not null, existing.Code, existing.Name));
+
         using var dialog = new FieldDialog(Localizer, existing is null ? T("Messaging.NewRule") : T("Messaging.EditRule"),
                                            height: 600);
         var target = dialog.Choice(T("Messaging.Column.analysis"),
-            _targets.Select(t => (t.Id, $"{t.Code} — {t.Name.For(language)}{(t.IsPanel ? " (" + T("Messaging.Panel") + ")" : string.Empty)}")),
+            targets.Select(t => (t.Id, $"{t.Code} — {t.Name.For(language)}{(t.IsPanel ? " (" + T("Messaging.Panel") + ")" : string.Empty)}")),
             current);
         var delay = dialog.Number(T("Messaging.Column.delay"), existing?.DelayMonths ?? 3,
                                   ReminderRule.MinimumDelayMonths, ReminderRule.MaximumDelayMonths);
@@ -334,7 +369,7 @@ public sealed class PatientMessagingView : LocalizedView
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
         var id = FieldDialog.Selected<Guid>(target);
-        var chosen = _targets.FirstOrDefault(t => t.Id == id);
+        var chosen = targets.FirstOrDefault(t => t.Id == id);
         var saved = await _messaging.SaveRuleAsync(new SaveReminderRuleRequest
         {
             Id = existing?.Id,

@@ -34,9 +34,12 @@ public sealed record SaveReminderRuleRequest
 /// <summary>An analysis or a panel a rule can name.</summary>
 public sealed record ReminderTarget(Guid Id, bool IsPanel, string Code, MultilingualText Name);
 
-/// <summary>One occurrence of a rule's analysis in a patient's orders.</summary>
+/// <summary>
+/// One occurrence of a rule's analysis in a patient's orders, at any site of the laboratory. The
+/// patient is the surviving file when the order's file was merged into another.
+/// </summary>
 public sealed record ReminderSourceRow(Guid PatientId, Guid OrderId, DateTimeOffset RegisteredAt,
-                                       DateTimeOffset? ValidatedAt);
+                                       DateTimeOffset? ValidatedAt, Guid SiteId = default);
 
 /// <summary>The contact details and consents a message needs.</summary>
 public sealed record MessageRecipient(
@@ -156,11 +159,17 @@ public sealed record MessagingSettings
         string Text(string key, string fallback) =>
             values.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : fallback;
 
+        // A stored value that the messaging screen would refuse (promotional wording, no code, a link
+        // that is not HTTPS) is not sent: the default takes its place.
+        string Template(string key, string fallback) =>
+            Text(key, fallback) is var t && MessageWording.Validate(t).IsSuccess && HasCode(t) ? t : fallback;
+        var url = values.TryGetValue(SurveyUrlKey, out var stored) ? stored?.Trim() ?? string.Empty : string.Empty;
+
         return new MessagingSettings
         {
-            SurveyTemplateFr = Text(SurveyTemplateFrKey, d.SurveyTemplateFr),
-            SurveyTemplateAr = Text(SurveyTemplateArKey, d.SurveyTemplateAr),
-            SurveyUrl = values.TryGetValue(SurveyUrlKey, out var url) ? url?.Trim() ?? string.Empty : string.Empty,
+            SurveyTemplateFr = Template(SurveyTemplateFrKey, d.SurveyTemplateFr),
+            SurveyTemplateAr = Template(SurveyTemplateArKey, d.SurveyTemplateAr),
+            SurveyUrl = IsValidSurveyUrl(url) ? url : string.Empty,
             SurveyIntervalDays = values.TryGetValue(SurveyIntervalDaysKey, out var days)
                                  && int.TryParse(days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
                                  && n is >= 0 and <= 3650
@@ -168,6 +177,17 @@ public sealed record MessagingSettings
                 : d.SurveyIntervalDays
         };
     }
+
+    /// <summary>A survey message must carry the code or the link, or it can never be answered.</summary>
+    public static bool HasCode(string template) =>
+        template.Contains(MessageWording.Code, StringComparison.OrdinalIgnoreCase)
+        || template.Contains(MessageWording.Link, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Empty (answers by SMS), or an absolute HTTPS address.</summary>
+    public static bool IsValidSurveyUrl(string? url) =>
+        string.IsNullOrWhiteSpace(url)
+        || (Uri.TryCreate(url.Trim().Replace("{code}", "X", StringComparison.OrdinalIgnoreCase), UriKind.Absolute,
+                          out var uri) && uri.Scheme == Uri.UriSchemeHttps);
 
     public IReadOnlyDictionary<string, string> ToValues() => new Dictionary<string, string>
     {
@@ -184,11 +204,13 @@ public static class ReminderPlanner
     /// <summary>
     /// For each patient, the latest validated result of the rule's analysis starts the delay. No
     /// reminder when the patient has a later order for it (registered, even not yet validated), when
-    /// the window after the due date has passed, or when this result was already reminded.
+    /// the window after the due date has passed, or when this result was already reminded. The
+    /// sources cover every site, so a patient who came back elsewhere is not reminded; with
+    /// <paramref name="siteId"/>, only a latest result of that site is reminded (by that site).
     /// </summary>
     public static IReadOnlyList<PlannedReminder> Plan(ReminderRule rule, IEnumerable<ReminderSourceRow> sources,
                                                       IReadOnlySet<(Guid RuleId, Guid OrderId)> alreadySent,
-                                                      DateOnly today, TimeSpan offset)
+                                                      DateOnly today, TimeSpan offset, Guid? siteId = null)
     {
         var planned = new List<PlannedReminder>();
 
@@ -201,6 +223,7 @@ public static class ReminderPlanner
             // A later order for the same analysis means the patient is already back.
             if (patient.Any(s => s.OrderId != latestValidated.OrderId && s.RegisteredAt > latestValidated.RegisteredAt))
                 continue;
+            if (siteId is { } site && latestValidated.SiteId != site) continue;
 
             var resultDate = DateOnly.FromDateTime(latestValidated.ValidatedAt!.Value.ToOffset(offset).DateTime);
             if (!rule.IsInWindow(resultDate, today)) continue;
@@ -211,6 +234,25 @@ public static class ReminderPlanner
         }
 
         return planned;
+    }
+
+    /// <summary>
+    /// One reminder per patient per run, and none for an order already reminded under any rule: a
+    /// rule on an analysis and a rule on a panel containing it (or two rules on analyses of the same
+    /// order) would otherwise each send their SMS. A panel rule is preferred, as it names the whole
+    /// bilan, then the earliest due date. A patient with results of different orders due on the same
+    /// day gets the other reminder at a later run.
+    /// </summary>
+    public static IReadOnlyList<PlannedReminder> OnePerPatient(IEnumerable<PlannedReminder> planned,
+                                                               IReadOnlySet<(Guid RuleId, Guid OrderId)> alreadySent,
+                                                               IReadOnlySet<Guid> panelRuleIds)
+    {
+        var remindedOrders = alreadySent.Select(s => s.OrderId).ToHashSet();
+        return planned.Where(p => !remindedOrders.Contains(p.OrderId))
+                      .GroupBy(p => p.PatientId)
+                      .Select(g => g.OrderByDescending(p => panelRuleIds.Contains(p.RuleId))
+                                    .ThenBy(p => p.DueOn).ThenBy(p => p.RuleId).First())
+                      .ToList();
     }
 
     /// <summary>Oldest result the rule can still remind, to bound the query.</summary>
@@ -294,6 +336,12 @@ public sealed class PatientMessagingService(
         if (await queries.RuleExistsAsync(rule.AnalysisTestId, rule.TestPanelId, request.Id, ct))
             return Result.Failure<Guid>(Error.Conflict("Reminder_AlreadyExists"));
 
+        // An analysis under a specific consent (HIV, genetics, prenatal screening; loi 09-08) is never
+        // named in an SMS: no active rule on it, or on a panel containing it. An existing rule can
+        // still be switched off.
+        if (rule.IsActive && await queries.RequiresSpecificConsentAsync(rule.AnalysisTestId, rule.TestPanelId, ct))
+            return Result.Failure<Guid>(Error.Validation("Reminder_SpecificConsentAnalysis"));
+
         if (request.Id is null) await rules.AddAsync(rule, ct);
         else rules.Update(rule);
 
@@ -320,7 +368,13 @@ public sealed class PatientMessagingService(
     {
         var today = clock.Today;
         var offset = clock.Now.Offset;
-        var active = (await rules.ListAsync(r => r.IsActive, ct)).ToList();
+        var active = new List<ReminderRule>();
+        foreach (var rule in await rules.ListAsync(r => r.IsActive, ct))
+        {
+            // A rule saved before its analysis was put under a specific consent sends nothing.
+            if (!await queries.RequiresSpecificConsentAsync(rule.AnalysisTestId, rule.TestPanelId, ct))
+                active.Add(rule);
+        }
         if (active.Count == 0) return [];
 
         var sent = await queries.GetRemindedAsync(currentUser.SiteId, ct);
@@ -331,21 +385,26 @@ public sealed class PatientMessagingService(
         foreach (var rule in active)
         {
             var since = new DateTimeOffset(ReminderPlanner.EarliestResultDate(rule, today).ToDateTime(TimeOnly.MinValue), offset);
-            var sources = await queries.GetReminderSourcesAsync(currentUser.SiteId, rule.AnalysisTestId,
-                                                                rule.TestPanelId, since, ct);
-            planned.AddRange(ReminderPlanner.Plan(rule, sources, sent, today, offset));
+            var sources = await queries.GetReminderSourcesAsync(rule.AnalysisTestId, rule.TestPanelId, since, ct);
+            planned.AddRange(ReminderPlanner.Plan(rule, sources, sent, today, offset, currentUser.SiteId));
         }
 
         var recipients = await queries.GetRecipientsAsync([.. planned.Select(p => p.PatientId).Distinct()], today, ct);
         var byRule = active.ToDictionary(r => r.Id);
 
+        // The patients who may be written to first, then one reminder each: a patient left out for
+        // want of consent must not take the place of nobody.
+        var reachable = planned.Where(p => recipients.TryGetValue(p.PatientId, out var r) && r.HasFollowUpConsent
+                                           && !r.OptedOutOfSecondaryUse && !string.IsNullOrWhiteSpace(r.MobilePhone));
+        var chosen = ReminderPlanner.OnePerPatient(reachable, sent,
+                                                   active.Where(r => r.TestPanelId is not null).Select(r => r.Id).ToHashSet());
+
         var candidates = new List<ReminderCandidate>();
-        foreach (var plan in planned)
+        foreach (var plan in chosen)
         {
-            // The consent and a usable mobile number are required; nothing else will do.
-            if (!recipients.TryGetValue(plan.PatientId, out var recipient) || !recipient.HasFollowUpConsent
-                || string.IsNullOrWhiteSpace(recipient.MobilePhone))
-                continue;
+            // The consent and a usable mobile number are required, and an objection to any use of
+            // the data beyond the care (loi 08-09 art. 9) stops reminders as it stops surveys.
+            var recipient = recipients[plan.PatientId];
 
             var rule = byRule[plan.RuleId];
             var targetId = rule.AnalysisTestId ?? rule.TestPanelId!.Value;
@@ -409,23 +468,33 @@ public sealed class PatientMessagingService(
         return Result.Success(new CampaignOutcome(sent, failed, skipped));
     }
 
-    // Sends one message and saves its log row at once: a batch interrupted half-way must not send
-    // the first half again.
-    private async Task<bool> SendAsync(PatientMessage message, Guid? orderId, string context, CancellationToken ct)
+    // Saves the message's log row (as sent) BEFORE handing it to the gateway, then marks it failed
+    // if the gateway refuses it: a batch interrupted half-way (a second click, the screen closed, the
+    // application stopped) can then leave a message logged that never left, but never send one twice,
+    // since the next campaign sees the row. The send and its outcome are not cancelled midway.
+    private async Task<bool> SendAsync(PatientMessage message, Guid? orderId, string context, CancellationToken ct,
+                                       Action? onFailure = null)
     {
-        var result = await sender.SendSmsAsync(message.PhoneNumber, message.Text, ct);
-        if (result.IsFailure)
-            message.MarkFailed(string.Join(" ", new[] { result.FirstError.ResourceKey }
-                .Concat(result.FirstError.Args.Select(a => Convert.ToString(a, CultureInfo.InvariantCulture) ?? string.Empty))));
-
         await messages.AddAsync(message, ct);
         unitOfWork.AuditReason = message.Kind == PatientMessageKind.BilanReminder
             ? "Rappel de bilan envoyé par SMS"
             : "Enquête de satisfaction envoyée par SMS";
         await unitOfWork.SaveChangesAsync(ct);
 
-        if (result.IsSuccess)
-            await accessAuditor.LogAsync(DataAccessKind.Transmit, message.PatientId, orderId, context, ct: ct);
+        var result = await sender.SendSmsAsync(message.PhoneNumber, message.Text, CancellationToken.None);
+        if (result.IsFailure)
+        {
+            message.MarkFailed(string.Join(" ", new[] { result.FirstError.ResourceKey }
+                .Concat(result.FirstError.Args.Select(a => Convert.ToString(a, CultureInfo.InvariantCulture) ?? string.Empty))));
+            onFailure?.Invoke();
+            unitOfWork.AuditReason = "Échec de l'envoi d'un SMS au patient";
+            await unitOfWork.SaveChangesAsync(CancellationToken.None);
+        }
+        else
+        {
+            await accessAuditor.LogAsync(DataAccessKind.Transmit, message.PatientId, orderId, context,
+                                         ct: CancellationToken.None);
+        }
 
         return result.IsSuccess;
     }
@@ -450,13 +519,11 @@ public sealed class PatientMessagingService(
             if (valid.IsFailure) return valid;
         }
 
-        if (!HasCode(settings.SurveyTemplateFr) || !HasCode(settings.SurveyTemplateAr))
+        if (!MessagingSettings.HasCode(settings.SurveyTemplateFr) || !MessagingSettings.HasCode(settings.SurveyTemplateAr))
             return Result.Failure(Error.Validation("Survey_TemplateNeedsCode"));
         if (settings.SurveyIntervalDays is < 0 or > 3650)
             return Result.Failure(Error.Validation("Survey_IntervalOutOfRange"));
-        if (!string.IsNullOrWhiteSpace(settings.SurveyUrl)
-            && !(Uri.TryCreate(settings.SurveyUrl.Replace("{code}", "X", StringComparison.OrdinalIgnoreCase),
-                               UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps))
+        if (!MessagingSettings.IsValidSurveyUrl(settings.SurveyUrl))
             return Result.Failure(Error.Validation("Survey_UrlInvalid"));
 
         var changed = new List<string>();
@@ -483,10 +550,6 @@ public sealed class PatientMessagingService(
         unitOfWork.AuditReason = $"Paramètres des messages patients modifiés : {string.Join(", ", changed)}";
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success();
-
-        static bool HasCode(string template) =>
-            template.Contains(MessageWording.Code, StringComparison.OrdinalIgnoreCase)
-            || template.Contains(MessageWording.Link, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Orders first reported in the period whose patient may be surveyed.</summary>
@@ -580,7 +643,11 @@ public sealed class PatientMessagingService(
             }
 
             var code = await NewCodeAsync(ct);
-            var invitation = new SurveyInvitation(currentUser.SiteId, candidate.PatientId, orderId, code, clock.Now);
+            // Delivered until the gateway says otherwise, saved with the message before the send.
+            var invitation = new SurveyInvitation(currentUser.SiteId, candidate.PatientId, orderId, code, clock.Now)
+            {
+                Delivered = true
+            };
             await invitations.AddAsync(invitation, ct);
 
             var text = SurveyText(settings, recipients[candidate.PatientId].Language, signature, code);
@@ -591,13 +658,7 @@ public sealed class PatientMessagingService(
                 SurveyInvitationId = invitation.Id
             };
 
-            var ok = await SendAsync(message, orderId, "Relations/Survey", ct);
-            if (ok)
-            {
-                invitation.Delivered = true;
-                await unitOfWork.SaveChangesAsync(ct);
-                sent++;
-            }
+            if (await SendAsync(message, orderId, "Relations/Survey", ct, () => invitation.Delivered = false)) sent++;
             else failed++;
         }
 
@@ -722,6 +783,20 @@ public sealed class PatientMessagingService(
         return Result.Success(rows);
     }
 
+    /// <summary>
+    /// Records that a list of the messaging screen (patient names, mobiles, texts naming analyses) left
+    /// the application as a file. Refused, and nothing is to be exported, without the permission.
+    /// </summary>
+    public async Task<Result> LogExportAsync(string context, int count, CancellationToken ct = default)
+    {
+        var permitted = Require();
+        if (permitted.IsFailure) return permitted;
+
+        await accessAuditor.LogAsync(DataAccessKind.Export, context: context, recordCount: count,
+                                     queryDescription: $"Export CSV ({context})", ct: ct);
+        return Result.Success();
+    }
+
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
@@ -729,16 +804,26 @@ public interface IPatientMessagingQueries
 {
     Task<IReadOnlyList<ReminderRuleRow>> GetRulesAsync(CancellationToken ct = default);
 
-    /// <summary>Active analyses and panels a rule can name.</summary>
+    /// <summary>
+    /// Active analyses and panels a rule can name: an analysis under a specific consent, and a panel
+    /// containing one, are left out.
+    /// </summary>
     Task<IReadOnlyList<ReminderTarget>> GetTargetsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// True when the analysis, or an analysis of the panel, requires a specific consent (HIV,
+    /// genetics, prenatal screening).
+    /// </summary>
+    Task<bool> RequiresSpecificConsentAsync(Guid? analysisTestId, Guid? testPanelId, CancellationToken ct = default);
 
     Task<bool> RuleExistsAsync(Guid? analysisTestId, Guid? testPanelId, Guid? exceptId, CancellationToken ct = default);
 
     /// <summary>
-    /// Non-cancelled occurrences of the analysis (or of the panel) at the site in orders registered
-    /// since <paramref name="since"/>, with their validation time when validated.
+    /// Non-cancelled occurrences of the analysis (or of the panel) at every site of the laboratory in
+    /// orders registered since <paramref name="since"/>, with their site and their validation time when
+    /// validated. The patient is the surviving file when the order's file was merged into another.
     /// </summary>
-    Task<IReadOnlyList<ReminderSourceRow>> GetReminderSourcesAsync(Guid siteId, Guid? analysisTestId, Guid? testPanelId,
+    Task<IReadOnlyList<ReminderSourceRow>> GetReminderSourcesAsync(Guid? analysisTestId, Guid? testPanelId,
                                                                    DateTimeOffset since, CancellationToken ct = default);
 
     /// <summary>The (rule, order) pairs a reminder was already sent for at the site, failed sends excluded.</summary>

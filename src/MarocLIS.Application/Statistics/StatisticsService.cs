@@ -132,9 +132,12 @@ public sealed class StatisticsService(
         // summary, and nowhere else.
         var performed = items.Where(i => i.Status != LabOrderItemStatus.Cancelled).ToList();
 
+        // Orders and patients are those with at least one test performed, as the payer breakdown,
+        // the steering dashboard and the prescriber statistics count them: an order cancelled
+        // whole shows only in the cancelled tests.
         var summary = new StatisticsSummary(
-            OrderCount: items.Select(i => i.LabOrderId).Distinct().Count(),
-            PatientCount: items.Select(i => i.PatientId).Distinct().Count(),
+            OrderCount: performed.Select(i => i.LabOrderId).Distinct().Count(),
+            PatientCount: performed.Select(i => i.PatientId).Distinct().Count(),
             TestCount: performed.Count,
             CancelledTestCount: items.Count - performed.Count,
             ValidatedTestCount: performed.Count(IsValidated),
@@ -196,7 +199,8 @@ public sealed class StatisticsService(
         for (var day = from; day <= to; day = day.AddDays(1))
         {
             var rows = byDay.TryGetValue(day, out var found) ? found : [];
-            days.Add(new DailyVolume(day, rows.Select(i => i.LabOrderId).Distinct().Count(),
+            days.Add(new DailyVolume(day, rows.Where(i => i.Status != LabOrderItemStatus.Cancelled)
+                                              .Select(i => i.LabOrderId).Distinct().Count(),
                                      rows.Count(i => i.Status != LabOrderItemStatus.Cancelled)));
         }
 
