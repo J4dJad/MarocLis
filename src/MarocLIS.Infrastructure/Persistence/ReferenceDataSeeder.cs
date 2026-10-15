@@ -511,7 +511,9 @@ internal static class RolePermissionSets
              Permissions.HumanResources.RequestLeave, Permissions.HumanResources.ApproveLeave,
              Permissions.HumanResources.ManagePlanning, Permissions.HumanResources.Accidents,
              // The director hands the accountant the period's entries.
-             Permissions.Accounting.Export
+             Permissions.Accounting.Export,
+             // The director owns the laboratory's equipment, and its register.
+             Permissions.Assets.View, Permissions.Assets.Manage
          ]),
 
         (SystemRoles.Biologist,
@@ -610,7 +612,9 @@ internal static class RolePermissionSets
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,
              // The habilitation matrix is the quality manager's audit evidence; granting stays
              // with the biologists.
-             Permissions.HumanResources.View, Permissions.HumanResources.RequestLeave
+             Permissions.HumanResources.View, Permissions.HumanResources.RequestLeave,
+             // Reads the register beside the equipment file; the values are kept by accounting.
+             Permissions.Assets.View
          ]),
 
         (SystemRoles.Accountant,
@@ -630,7 +634,9 @@ internal static class RolePermissionSets
              Permissions.Inventory.EnterInvoices,
              Permissions.Statistics.View,
              Permissions.HumanResources.RequestLeave,
-             Permissions.Accounting.Export
+             Permissions.Accounting.Export,
+             // Keeps the fixed-assets register and its depreciation.
+             Permissions.Assets.View, Permissions.Assets.Manage
          ]),
 
         (SystemRoles.Prescriber,

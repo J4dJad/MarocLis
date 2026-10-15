@@ -394,6 +394,9 @@ public sealed class MainShellForm : LocalizedForm
             new("accountingsettings", "Nav.AccountingSettings", [Permissions.Accounting.Export],
                 n => n.NavigateToAsync<AccountingSettingsView>()),
 
+            new("fixedassets", "Nav.FixedAssets", [Permissions.Assets.View],
+                n => n.NavigateToAsync<FixedAssetView>()),
+
             new("group.administration", "Nav.Administration", [Permissions.Administration.ViewUsers],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 

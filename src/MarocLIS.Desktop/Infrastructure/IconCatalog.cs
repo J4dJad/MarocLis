@@ -268,5 +268,6 @@ public static class IconCatalog
         ["settings"] = Glyph.Settings,
         ["accountingexport"] = Glyph.FileSpreadsheet,
         ["accountingsettings"] = Glyph.Calculator,
+        ["fixedassets"] = Glyph.Archive,
     };
 }
