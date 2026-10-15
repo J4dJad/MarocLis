@@ -29,17 +29,19 @@ public class Repository<T>(LisDbContext context, IClock clock) : IRepository<T>
     protected LisDbContext Context { get; } = context;
     protected IClock Clock { get; } = clock;
 
-    public async Task<T?> GetByIdAsync(Guid id, CancellationToken ct = default)
-    {
-        await RefreshTrackedAsync(id, ct);
-        return await Context.Set<T>().FirstOrDefaultAsync(e => e.Id == id, ct);
-    }
+    public Task<T?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
+        Context.RunExclusiveAsync(async () =>
+        {
+            await RefreshTrackedAsync(id, ct);
+            return await Context.Set<T>().FirstOrDefaultAsync(e => e.Id == id, ct);
+        }, ct);
 
-    public async Task<T?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default)
-    {
-        await RefreshTrackedAsync(id, ct);
-        return await LoadWithDetailsAsync(id, ct);
-    }
+    public Task<T?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+        Context.RunExclusiveAsync(async () =>
+        {
+            await RefreshTrackedAsync(id, ct);
+            return await LoadWithDetailsAsync(id, ct);
+        }, ct);
 
     protected virtual Task<T?> LoadWithDetailsAsync(Guid id, CancellationToken ct) =>
         Context.Set<T>().FirstOrDefaultAsync(e => e.Id == id, ct);
@@ -65,11 +67,12 @@ public class Repository<T>(LisDbContext context, IClock clock) : IRepository<T>
     }
 
     public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default) =>
-        Context.Set<T>().AnyAsync(e => e.Id == id, ct);
+        Context.RunExclusiveAsync(() => Context.Set<T>().AnyAsync(e => e.Id == id, ct), ct);
 
-    public async Task<IReadOnlyList<T>> ListAsync(Expression<Func<T, bool>> predicate,
-                                                  CancellationToken ct = default) =>
-        await Context.Set<T>().Where(predicate).ToListAsync(ct);
+    public Task<IReadOnlyList<T>> ListAsync(Expression<Func<T, bool>> predicate,
+                                            CancellationToken ct = default) =>
+        Context.RunExclusiveAsync<IReadOnlyList<T>>(
+            async () => await Context.Set<T>().Where(predicate).ToListAsync(ct), ct);
 
     public async Task AddAsync(T entity, CancellationToken ct = default) =>
         await Context.Set<T>().AddAsync(entity, ct);
@@ -493,7 +496,7 @@ public sealed class UnitOfWork(LisDbContext context) : IUnitOfWork
     {
         try
         {
-            return await context.SaveChangesAsync(ct);
+            return await context.RunExclusiveAsync(() => context.SaveChangesAsync(ct), ct);
         }
         catch (DbUpdateConcurrencyException ex)
         {
@@ -530,14 +533,14 @@ public sealed class UnitOfWork(LisDbContext context) : IUnitOfWork
     {
         if (_transaction is not null) return new NoopScope();
 
-        _transaction = await context.Database.BeginTransactionAsync(ct);
+        _transaction = await context.RunExclusiveAsync(() => context.Database.BeginTransactionAsync(ct), ct);
         return new TransactionScope(this);
     }
 
     public async Task CommitAsync(CancellationToken ct = default)
     {
         if (_transaction is null) return;
-        await _transaction.CommitAsync(ct);
+        await context.RunExclusiveAsync(async () => { await _transaction.CommitAsync(ct); return 0; }, ct);
         await _transaction.DisposeAsync();
         _transaction = null;
     }
@@ -563,6 +566,25 @@ public sealed class UnitOfWork(LisDbContext context) : IUnitOfWork
     private sealed class NoopScope : IAsyncDisposable
     {
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+}
+
+internal static class OperationGateExtensions
+{
+    /// <summary>Runs <paramref name="operation"/> once no other operation is using the context.</summary>
+    internal static async Task<TResult> RunExclusiveAsync<TResult>(this LisDbContext context,
+                                                                  Func<Task<TResult>> operation,
+                                                                  CancellationToken ct)
+    {
+        await context.OperationGate.WaitAsync(ct);
+        try
+        {
+            return await operation();
+        }
+        finally
+        {
+            context.OperationGate.Release();
+        }
     }
 }
 

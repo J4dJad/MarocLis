@@ -36,6 +36,20 @@ public sealed class UserDialogs(ILocalizer localizer, ICultureManager cultureMan
     private string DefaultTitle => localizer["App.Title"];
 
     /// <summary>
+    /// Views pass a button's text as the title, so it may carry a mnemonic ("&amp;Demander…") that
+    /// a caption would show literally. "&amp;&amp;" stays a single ampersand; a trailing ellipsis goes.
+    /// </summary>
+    internal static string CaptionOf(string? title, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return fallback;
+        var caption = title.Replace("&&", "\0").Replace("&", "").Replace("\0", "&").Trim();
+        caption = caption.TrimEnd('…').TrimEnd('.').TrimEnd();
+        return caption.Length == 0 ? fallback : caption;
+    }
+
+    private string Caption(string? title) => CaptionOf(title, DefaultTitle);
+
+    /// <summary>
     /// Message boxes need their reading order and alignment flipped explicitly for Arabic; unlike
     /// a Form, a MessageBox does not inherit the thread's RTL setting.
     /// </summary>
@@ -44,15 +58,15 @@ public sealed class UserDialogs(ILocalizer localizer, ICultureManager cultureMan
         : (MessageBoxOptions)0;
 
     public void Info(string message, string? title = null) =>
-        MessageBox.Show(message, title ?? DefaultTitle, MessageBoxButtons.OK,
+        MessageBox.Show(message, Caption(title), MessageBoxButtons.OK,
                         MessageBoxIcon.Information, MessageBoxDefaultButton.Button1, Options);
 
     public void Warn(string message, string? title = null) =>
-        MessageBox.Show(message, title ?? DefaultTitle, MessageBoxButtons.OK,
+        MessageBox.Show(message, Caption(title), MessageBoxButtons.OK,
                         MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, Options);
 
     public void Error(string message, string? title = null) =>
-        MessageBox.Show(message, title ?? DefaultTitle, MessageBoxButtons.OK,
+        MessageBox.Show(message, Caption(title), MessageBoxButtons.OK,
                         MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, Options);
 
     public void ShowFailure(Result result, string? title = null)
@@ -70,7 +84,7 @@ public sealed class UserDialogs(ILocalizer localizer, ICultureManager cultureMan
     }
 
     public bool Confirm(string message, string? title = null) =>
-        MessageBox.Show(message, title ?? DefaultTitle, MessageBoxButtons.YesNo,
+        MessageBox.Show(message, Caption(title), MessageBoxButtons.YesNo,
                         MessageBoxIcon.Question,
                         // Default to "No": these confirmations guard cancellations and deletions,
                         // and a reflexive Enter should not be the one that goes through.
@@ -93,7 +107,7 @@ public sealed class UserDialogs(ILocalizer localizer, ICultureManager cultureMan
 
     public string? PromptForText(string prompt, string? title = null, string? initialValue = null)
     {
-        using var dialog = new TextPromptForm(prompt, title ?? DefaultTitle, initialValue,
+        using var dialog = new TextPromptForm(prompt, Caption(title), initialValue,
                                               cultureManager.IsRightToLeft,
                                               localizer["Action.Ok"], localizer["Action.Cancel"]);
 

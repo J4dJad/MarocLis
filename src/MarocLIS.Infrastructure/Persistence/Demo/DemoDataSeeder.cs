@@ -120,6 +120,7 @@ public sealed partial class DemoDataSeeder(
             await RunSectionAsync("Documents qualité", SeedDocumentsAsync, ct);
             await RunSectionAsync("Évaluation externe", SeedEqaAsync, ct);
             await RunSectionAsync("Bons de commande", SeedPurchaseOrdersAsync, ct);
+            await RunSectionAsync("Ressources humaines", SeedHumanResourcesAsync, ct);
         }
         finally
         {

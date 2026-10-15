@@ -275,7 +275,12 @@ public sealed class LeaveView : LocalizedView
 
             var own = await _leave.OwnEmployeeIdAsync();
             var people = _leave.CanActForOthers ? balances.Value : balances.Value.Where(b => b.EmployeeId == own).ToList();
-            if (people.Count == 0) { _dialogs.Warn(T("Leave_NoPersonnelFile"), _new.Text); return; }
+            if (people.Count == 0)
+            {
+                // HR acting for others with nobody on file needs another hint than an unlinked account.
+                _dialogs.Warn(T(_leave.CanActForOthers ? "Leave_NoEmployees" : "Leave_NoPersonnelFile"), _new.Text);
+                return;
+            }
 
             using var dialog = new LeaveRequestDialog(Localizer, _dialogs, _leave, people, own,
                                                       PermissionGate.Allows(Permissions.HumanResources.Manage));

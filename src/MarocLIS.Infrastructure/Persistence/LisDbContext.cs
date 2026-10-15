@@ -44,6 +44,14 @@ namespace MarocLIS.Infrastructure.Persistence;
 /// </summary>
 public class LisDbContext : DbContext
 {
+    /// <summary>
+    /// One database operation at a time on this context. A screen keeps one context, and two of its
+    /// handlers can overlap — a second click while a load is running, F5 during a save — which EF Core
+    /// refuses with "a second operation was started on this context instance". The repositories and
+    /// the unit of work queue behind this gate instead, so the second operation waits its turn.
+    /// </summary>
+    internal SemaphoreSlim OperationGate { get; } = new(1, 1);
+
     private readonly ICurrentUser? _currentUser;
 
     public LisDbContext(DbContextOptions<LisDbContext> options, ICurrentUser? currentUser = null)

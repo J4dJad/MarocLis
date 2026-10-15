@@ -179,7 +179,7 @@ public sealed partial class DemoDataSeeder
         foreach (var prescriber in prescribers.Where(p => !existing.Contains(p.LastName)))
         {
             var saved = await AsAsync<MasterDataService, Result<Guid>>(
-                DemoActor.Secretary, s => s.SavePrescriberAsync(prescriber, ct), ct);
+                DemoActor.Biologist, s => s.SavePrescriberAsync(prescriber, ct), ct);
 
             Check(saved, $"Prescripteur {prescriber.LastName}");
         }
@@ -276,7 +276,7 @@ public sealed partial class DemoDataSeeder
         foreach (var supplier in suppliers.Where(s => !existingSuppliers.ContainsKey(s.Code)))
         {
             var saved = await AsAsync<MasterDataService, Result<Guid>>(
-                DemoActor.QualityManager, s => s.SaveSupplierAsync(supplier, ct), ct);
+                DemoActor.Administrator, s => s.SaveSupplierAsync(supplier, ct), ct);
 
             Check(saved, $"Fournisseur {supplier.Code}");
         }
@@ -396,7 +396,7 @@ public sealed partial class DemoDataSeeder
                 };
 
                 var saved = await AsAsync<MasterDataService, Result<Guid>>(
-                    DemoActor.QualityManager, m => m.SaveStockItemAsync(request, ct), ct);
+                    DemoActor.Administrator, m => m.SaveStockItemAsync(request, ct), ct);
 
                 if (!Check(saved, $"Article {demo.Item.Code}")) continue;
 

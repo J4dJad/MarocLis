@@ -165,6 +165,8 @@ public sealed class PlanningService(
     {
         var permitted = guard.RequireAny(Permissions.HumanResources.View, Permissions.HumanResources.ManagePlanning);
         if (permitted.IsFailure) return Result.Failure<PlanningMonth>(permitted.FirstError);
+        if (month is < 1 or > 12 || year is < 2000 or > 2100)
+            return Result.Failure<PlanningMonth>(Error.Validation("Planning_MonthInvalid"));
 
         var from = new DateOnly(year, month, 1);
         var to = from.AddMonths(1).AddDays(-1);

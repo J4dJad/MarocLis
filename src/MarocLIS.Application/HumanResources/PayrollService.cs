@@ -90,17 +90,29 @@ public sealed class PayrollService(
     /// <summary>The year's rates; a new year starts from the previous one's, or from the 2026 law.</summary>
     private async Task<PayrollParameters> ParametersForAsync(int year, CancellationToken ct)
     {
-        var all = await parameters.ListAsync(p => p.Year <= year, ct);
-        if (all.FirstOrDefault(p => p.Year == year) is { } found) return found;
+        // Two handlers of the same screen asking for a year not created yet would each add it, and
+        // the second insert breaks the one-row-per-year index. One creation at a time per screen.
+        await _parametersGate.WaitAsync(ct);
+        try
+        {
+            var all = await parameters.ListAsync(p => p.Year <= year, ct);
+            if (all.FirstOrDefault(p => p.Year == year) is { } found) return found;
 
-        var created = new PayrollParameters(year);
-        if (all.OrderByDescending(p => p.Year).FirstOrDefault() is { } previous) CopyRates(previous, created);
+            var created = new PayrollParameters(year);
+            if (all.OrderByDescending(p => p.Year).FirstOrDefault() is { } previous) CopyRates(previous, created);
 
-        await parameters.AddAsync(created, ct);
-        unitOfWork.AuditReason = $"Paramètres de paie {year} créés";
-        await unitOfWork.SaveChangesAsync(ct);
-        return created;
+            await parameters.AddAsync(created, ct);
+            unitOfWork.AuditReason = $"Paramètres de paie {year} créés";
+            await unitOfWork.SaveChangesAsync(ct);
+            return created;
+        }
+        finally
+        {
+            _parametersGate.Release();
+        }
     }
+
+    private readonly SemaphoreSlim _parametersGate = new(1, 1);
 
     private static void CopyRates(PayrollParameters from, PayrollParameters to)
     {

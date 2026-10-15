@@ -40,7 +40,7 @@ internal sealed class InstrumentFrameTestDialog : Form
         _loadLast = loadLast;
         _parameters = parameters;
 
-        Text = $"{localizer["Interface.TestFrame"]} — {subtitle}";
+        Text = $"{localizer["Interface.TestFrame"].TrimEnd('…')} — {subtitle}";
         FormBorderStyle = FormBorderStyle.Sizable;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
