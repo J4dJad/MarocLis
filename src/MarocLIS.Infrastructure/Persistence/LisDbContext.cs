@@ -144,6 +144,13 @@ public class LisDbContext : DbContext
     public DbSet<CashSession> CashSessions => Set<CashSession>();
     public DbSet<Deposit> Deposits => Set<Deposit>();
 
+    // ---- Treasury -----------------------------------------------------------------------------
+
+    public DbSet<Domain.Treasury.BankAccount> BankAccounts => Set<Domain.Treasury.BankAccount>();
+    public DbSet<Domain.Treasury.BankStatementLine> BankStatementLines => Set<Domain.Treasury.BankStatementLine>();
+    public DbSet<Domain.Treasury.BankMatch> BankMatches => Set<Domain.Treasury.BankMatch>();
+    public DbSet<Domain.Treasury.TreasuryForecastItem> TreasuryForecastItems => Set<Domain.Treasury.TreasuryForecastItem>();
+
     // ---- Quality ------------------------------------------------------------------------------
 
     public DbSet<QcMaterial> QcMaterials => Set<QcMaterial>();

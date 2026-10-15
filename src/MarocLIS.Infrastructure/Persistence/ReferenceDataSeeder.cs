@@ -509,7 +509,10 @@ internal static class RolePermissionSets
              Permissions.HumanResources.View, Permissions.HumanResources.Manage,
              Permissions.HumanResources.ManageHabilitations, Permissions.HumanResources.Salary,
              Permissions.HumanResources.RequestLeave, Permissions.HumanResources.ApproveLeave,
-             Permissions.HumanResources.ManagePlanning, Permissions.HumanResources.Accidents
+             Permissions.HumanResources.ManagePlanning, Permissions.HumanResources.Accidents,
+             // The director signs the tills off and follows the bank and the cash forecast.
+             Permissions.Billing.ReconcileCashSession,
+             Permissions.Treasury.View, Permissions.Treasury.Manage
          ]),
 
         (SystemRoles.Biologist,
@@ -627,7 +630,10 @@ internal static class RolePermissionSets
              // Keys supplier invoices; releasing a blocked one and paying stay with the director.
              Permissions.Inventory.EnterInvoices,
              Permissions.Statistics.View,
-             Permissions.HumanResources.RequestLeave
+             Permissions.HumanResources.RequestLeave,
+             // Treasury: the bank reconciliation, the cash forecast and the tills' sign-off.
+             Permissions.Billing.ReconcileCashSession,
+             Permissions.Treasury.View, Permissions.Treasury.Manage
          ]),
 
         (SystemRoles.Prescriber,

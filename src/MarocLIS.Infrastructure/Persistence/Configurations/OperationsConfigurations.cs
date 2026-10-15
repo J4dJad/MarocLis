@@ -151,6 +151,7 @@ public sealed class CashSessionConfiguration : IEntityTypeConfiguration<CashSess
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Workstation).HasMaxLength(100);
         builder.Property(e => e.VarianceExplanation).HasMaxLength(1000);
+        builder.Property(e => e.ReconciliationComment).HasMaxLength(1000);
         builder.Ignore(e => e.ExpectedClosingCash);
         builder.Ignore(e => e.Variance);
         builder.Ignore(e => e.TotalReceipts);

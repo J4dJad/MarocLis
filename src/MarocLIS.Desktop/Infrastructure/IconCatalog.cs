@@ -266,5 +266,8 @@ public static class IconCatalog
         ["interfaces"] = Glyph.Cpu,
         ["masterdata"] = Glyph.Database,
         ["settings"] = Glyph.Settings,
+        ["bankreconciliation"] = Glyph.CheckCheck,
+        ["cashforecast"] = Glyph.HandCoins,
+        ["cashreview"] = Glyph.ClipboardCheck,
     };
 }

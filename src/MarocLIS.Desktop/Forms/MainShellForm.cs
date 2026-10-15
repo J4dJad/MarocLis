@@ -302,6 +302,21 @@ public sealed class MainShellForm : LocalizedForm
             new("claims", "Nav.Claims", [Permissions.Billing.View],
                 n => n.NavigateToAsync<ClaimBatchView>()),
 
+            // Finance: treasury (bank reconciliation, cash forecast) and the tills' sign-off. A
+            // group the other finance screens join; hidden altogether without any of its rights.
+            new("group.finance", "Nav.Finance", [Permissions.Treasury.View, Permissions.Treasury.Manage,
+                                                  Permissions.Billing.ReconcileCashSession],
+                _ => Task.CompletedTask, IsGroupHeader: true),
+
+            new("bankreconciliation", "Nav.BankReconciliation", [Permissions.Treasury.View, Permissions.Treasury.Manage],
+                n => n.NavigateToAsync<BankReconciliationView>()),
+
+            new("cashforecast", "Nav.CashForecast", [Permissions.Treasury.View, Permissions.Treasury.Manage],
+                n => n.NavigateToAsync<CashForecastView>()),
+
+            new("cashreview", "Nav.CashSessionReview", [Permissions.Billing.ReconcileCashSession],
+                n => n.NavigateToAsync<CashSessionReviewView>()),
+
             new("group.quality", "Nav.Quality", [Permissions.Quality.View],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 

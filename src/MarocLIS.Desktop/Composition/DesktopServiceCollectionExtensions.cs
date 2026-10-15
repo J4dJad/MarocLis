@@ -101,6 +101,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<Application.Administration.IAdministrationQueries, AdministrationQueries>();
         services.AddIsolatedQueries<Application.Administration.IMasterDataQueries, MasterDataQueries>();
         services.AddIsolatedQueries<Application.Administration.IAuditQueries, AuditQueries>();
+        services.AddIsolatedQueries<Application.Treasury.ITreasuryQueries, TreasuryQueries>();
 
         // ---- Shell and dialogs -----------------------------------------------------------------
 
@@ -152,6 +153,9 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<SettingsView>();
         services.AddTransient<MasterDataView>();
         services.AddTransient<CatalogView>();
+        services.AddTransient<BankReconciliationView>();
+        services.AddTransient<CashForecastView>();
+        services.AddTransient<CashSessionReviewView>();
         services.AddTransient<InstrumentInterfaceView>();
 
         // Scoped, not singleton: it constructs a form over a scoped application service, and a

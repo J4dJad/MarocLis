@@ -67,6 +67,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Administration.ConfigurationService>();
         services.AddScoped<Administration.MasterDataService>();
         services.AddScoped<Administration.AuditTrailService>();
+        services.AddScoped<Treasury.TreasuryService>();
+        services.AddScoped<Treasury.CashSessionReviewService>();
 
         return services;
     }

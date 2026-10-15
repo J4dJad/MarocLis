@@ -71,6 +71,9 @@ public static class Permissions
         public const string ManageTariffs = "billing.tariffs.manage";
         public const string CloseCashSession = "billing.cash.close";
         public const string ExportAccounting = "billing.export";
+
+        /// <summary>Signing a closed till off as checked (visa du responsable): never the operator's own.</summary>
+        public const string ReconcileCashSession = "billing.cash.reconcile";
     }
 
     public static class Quality
@@ -179,6 +182,14 @@ public static class Permissions
     {
         public const string View = "statistics.view";
         public const string EpidemiologicalDeclaration = "statistics.declaration";
+    }
+
+    public static class Treasury
+    {
+        /// <summary>Bank accounts, statements, the reconciliation and the cash forecast, read-only.</summary>
+        public const string View = "treasury.view";
+        /// <summary>Declaring bank accounts, importing statements, reconciling, entering forecast items.</summary>
+        public const string Manage = "treasury.manage";
     }
 
     private static readonly Lazy<IReadOnlyList<string>> AllLazy = new(Discover);

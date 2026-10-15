@@ -299,6 +299,35 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
         Status = CashSessionStatus.Closed;
         return Result.Success();
     }
+
+    // ---- Supervisor sign-off --------------------------------------------------------------------
+
+    public DateTimeOffset? ReconciledAt { get; private set; }
+    public Guid? ReconciledByUserId { get; private set; }
+
+    /// <summary>The supervisor's comment: the variance accepted, the deposit slip checked, the follow-up.</summary>
+    public string? ReconciliationComment { get; private set; }
+
+    /// <summary>
+    /// Signs a closed shift off (visa du responsable): the counted cash, the variance and its
+    /// explanation were checked by someone other than the operator. Four eyes is the point, so the
+    /// operator cannot sign their own till; a variance needs a comment saying what was decided.
+    /// </summary>
+    public Result Reconcile(DateTimeOffset at, Guid byUserId, string? comment)
+    {
+        if (Status != CashSessionStatus.Closed)
+            return Result.Failure(Error.Conflict("CashSession_NotClosed"));
+        if (byUserId == OperatorUserId)
+            return Result.Failure(Error.Forbidden("CashSession_ReconcilerIsOperator"));
+        if (Variance is { } variance && variance != 0m && string.IsNullOrWhiteSpace(comment))
+            return Result.Failure(Error.Validation("CashSession_ReconciliationCommentRequired", variance));
+
+        ReconciledAt = at;
+        ReconciledByUserId = byUserId;
+        ReconciliationComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+        Status = CashSessionStatus.Reconciled;
+        return Result.Success();
+    }
 }
 
 public enum CashSessionStatus
