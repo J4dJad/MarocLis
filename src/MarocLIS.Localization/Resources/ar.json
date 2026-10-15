@@ -1318,6 +1318,7 @@
   },
 
   "Sample": {
+    "ScanQueued": "تمت قراءة الأنبوب {0}: سيُعرض بمجرد تسجيل القرار الجاري.",
     "Title": "العينة",
     "Plural": "العينات",
     "Barcode": "الرمز الشريطي",
@@ -3135,6 +3136,7 @@
   "Claim_NotSubmitted": "الفاتورة {0} لم تُرسل في إطار الأداء من طرف ثالث.",
   "Claim_SettlementAlreadyRecorded": "تم تسجيل المبلغ المقبول مسبقا للفاتورة {0}.",
   "Claim_AcceptedAmountInvalid": "يجب أن يكون المبلغ المقبول بين 0 وحصة الجهة المؤدية ({0}).",
+  "Claim_AlreadySubmitted": "الفاتورة {0} أُرسلت سابقاً إلى الهيئة: لا يمكن إدراجها في جدول إرسال ثانٍ.",
 
   "Sample_StorageLocationRequired": "مكان الحفظ إلزامي.",
   "Sample_DiscardNoteRequired": "إتلاف عينة يجب تعليله: فهو يضع حداً لأي إمكانية إعادة.",
@@ -3410,6 +3412,8 @@
   "Invoice_Cancelled": "هذه الفاتورة ملغاة.",
   "Invoice_IssuedRequiresCreditNote": "لا تُلغى فاتورة صادرة: أصدر فاتورة إشعار بالدين للحفاظ على تسلسل الترقيم.",
   "Invoice_NotIssued": "هذه الفاتورة لم تُصدر بعد ولا يمكن طباعتها.",
+  "Invoice_CreditNoteExceedsBalance": "مبلغ الفاتورة الدائنة يتجاوز ما تبقى قابلاً للإلغاء من الفاتورة ({0}): لا يمكن أن يتجاوز مجموع الفواتير الدائنة المبلغ المفوتر.",
+  "Invoice_AlreadyFullyCredited": "الفاتورة {0} ملغاة كلياً بفاتورة دائنة: لم يتبق شيء للإلغاء.",
 
   "Payment_AmountMustBePositive": "مبلغ الأداء يجب أن يكون موجبًا.",
   "Payment_ExceedsOutstanding": "المبلغ يتجاوز الباقي ({0}).",
@@ -3420,6 +3424,7 @@
   "Payment_TransferReferenceRequired": "مرجع التحويل إلزامي.",
   "Payment_CashRequiresOpenSession": "الأداء نقدًا يستلزم جلسة صندوق مفتوحة.",
   "Payment_CashThresholdWarning": "الأداء نقدًا بما يتجاوز {0} درهم يُعرِّض لجزاء ضريبي؛ فضِّل وسيلة أداء قابلة للتتبع.",
+  "Payment_KindNotPayable": "لا يُسجَّل الأداء إلا على فاتورة: الفاتورة الدائنة أو عرض الأسعار لا يُؤدّى.",
 
   "CashSession_NotOpen": "جلسة الصندوق هذه غير مفتوحة.",
   "CashSession_VarianceExplanationRequired": "فارق صندوق بقيمة {0} درهم يجب تفسيره قبل الإقفال.",
@@ -3512,6 +3517,8 @@
   "User_CannotDeactivateSelf": "لا يمكنك تعطيل حسابك الخاص.",
   "User_NotLockedOut": "هذا الحساب غير مُقفل.",
   "User_WouldRemoveLastAdministrator": "عملية مرفوضة: {0} هو آخر حساب نشط مرخص له بتدبير المستعملين. إصلاح ذلك يقتضي تدخلاً مباشراً في قاعدة البيانات، خارج أي مراقبة.",
+  "User_CannotUnlockInactive": "الحساب {0} معطَّل ولا يمكن رفع القفل عنه. أعد تفعيله أولاً مع بيان السبب.",
+  "User_ResetPasswordExceedsOwnPermissions": "عملية مرفوضة: الحساب {0} يملك صلاحيات لا تملكها. لا يمكن إعادة تعيين كلمة مروره إلا لمستعمل له الصلاحيات نفسها على الأقل.",
 
   "Role_NotFound": "الدور غير موجود.",
   "Role_CodeRequired": "رمز الدور إلزامي.",

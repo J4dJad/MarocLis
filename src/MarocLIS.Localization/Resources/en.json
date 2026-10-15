@@ -1318,6 +1318,7 @@
   },
 
   "Sample": {
+    "ScanQueued": "Tube {0} scanned: it will be shown as soon as the current decision is recorded.",
     "Title": "Sample",
     "Plural": "Samples",
     "Barcode": "Barcode",
@@ -3135,6 +3136,7 @@
   "Claim_NotSubmitted": "Invoice {0} has not been submitted to a third-party payer.",
   "Claim_SettlementAlreadyRecorded": "The accepted amount has already been recorded for invoice {0}.",
   "Claim_AcceptedAmountInvalid": "The accepted amount must be between 0 and the payer's share ({0}).",
+  "Claim_AlreadySubmitted": "Invoice {0} has already been submitted to the payer: it cannot go into a second claim batch.",
 
   "Sample_StorageLocationRequired": "The storage location is mandatory.",
   "Sample_DiscardNoteRequired": "Discarding a sample must be justified: it ends any possibility of a repeat.",
@@ -3410,6 +3412,8 @@
   "Invoice_Cancelled": "This invoice is cancelled.",
   "Invoice_IssuedRequiresCreditNote": "An issued invoice is not cancelled: issue a credit note so the numbering stays unbroken.",
   "Invoice_NotIssued": "This invoice has not been issued yet and cannot be printed.",
+  "Invoice_CreditNoteExceedsBalance": "The credit note exceeds what remains creditable on the invoice ({0}): credit notes together cannot exceed the invoiced total.",
+  "Invoice_AlreadyFullyCredited": "Invoice {0} has already been fully credited: there is nothing left to credit.",
 
   "Payment_AmountMustBePositive": "The payment amount must be positive.",
   "Payment_ExceedsOutstanding": "The amount exceeds the outstanding balance ({0}).",
@@ -3420,6 +3424,7 @@
   "Payment_TransferReferenceRequired": "The transfer reference is required.",
   "Payment_CashRequiresOpenSession": "A cash payment requires an open cash session.",
   "Payment_CashThresholdWarning": "A cash payment above {0} MAD attracts a tax penalty; prefer a traceable method.",
+  "Payment_KindNotPayable": "Payments can only be recorded against an invoice: a credit note or a quotation is not settled.",
 
   "CashSession_NotOpen": "This cash session is not open.",
   "CashSession_VarianceExplanationRequired": "A till variance of {0} MAD must be explained before closing.",
@@ -3512,6 +3517,8 @@
   "User_CannotDeactivateSelf": "You cannot deactivate your own account.",
   "User_NotLockedOut": "This account is not locked.",
   "User_WouldRemoveLastAdministrator": "Refused: {0} is the last active account permitted to manage users. Restoring it would require a direct database change, outside any control.",
+  "User_CannotUnlockInactive": "Account {0} is deactivated and cannot be unlocked. Reactivate it first, giving the reason.",
+  "User_ResetPasswordExceedsOwnPermissions": "Refused: account {0} holds permissions you do not have. Only a user with at least the same rights can reset its password.",
 
   "Role_NotFound": "Role not found.",
   "Role_CodeRequired": "The role code is mandatory.",
