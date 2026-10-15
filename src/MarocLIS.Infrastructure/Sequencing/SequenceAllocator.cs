@@ -83,10 +83,23 @@ public sealed class SequenceAllocator(LisDbContext context, IClock clock, ICurre
     /// <summary>
     /// Reads the counter row under a pessimistic lock held to the end of the transaction. Raw SQL
     /// because the lock hints are the point of the query and EF has no expression for them.
+    /// <para>
+    /// The row read under the lock must also be the one used. A screen keeps its context open for
+    /// hours, and a tracking query hands back the instance already tracked, with the counter as
+    /// it was when this context last allocated: another workstation's numbers since then, or a
+    /// rolled-back increment, are not seen, and the number is reused or skipped. Any tracked copy
+    /// is therefore forgotten first, so the values come from the locked row.
+    /// </para>
     /// </summary>
     private async Task<NumberSequence?> LoadLockedAsync(SequencePurpose purpose, Guid? siteId,
                                                         int? year, CancellationToken ct)
     {
+        foreach (var stale in context.ChangeTracker.Entries<NumberSequence>()
+                                     .Where(e => e.State != EntityState.Added && e.Entity.Purpose == purpose
+                                                 && e.Entity.SiteId == siteId && e.Entity.Year == year)
+                                     .ToList())
+            stale.State = EntityState.Detached;
+
         // Two statements rather than one parameterised predicate: SQL Server cannot use the unique
         // index for an `IS NULL` comparison written as `= @p`, and the installation-wide sequences
         // (site-less, year-less) must hit the index too.

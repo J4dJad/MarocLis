@@ -557,12 +557,28 @@ public sealed class UnitOfWork(LisDbContext context) : IUnitOfWork
         _transaction = null;
     }
 
+    /// <summary>
+    /// Undoes the transaction, and forgets what the context tracked.
+    /// <para>
+    /// The saves made inside it are gone from the database but not from the tracker, which still
+    /// holds them as saved: a document number counter one ahead of its row, an invoice believed to
+    /// exist. Kept on a screen's long-lived context they would be taken as the truth by the next
+    /// operation, so the tracker is cleared and the next read goes back to the database.
+    /// </para>
+    /// </summary>
     public async Task RollbackAsync(CancellationToken ct = default)
     {
         if (_transaction is null) return;
-        await _transaction.RollbackAsync(ct);
-        await _transaction.DisposeAsync();
-        _transaction = null;
+        try
+        {
+            await _transaction.RollbackAsync(ct);
+            await _transaction.DisposeAsync();
+        }
+        finally
+        {
+            _transaction = null;
+            context.ChangeTracker.Clear();
+        }
     }
 
     private sealed class TransactionScope(UnitOfWork owner) : IAsyncDisposable

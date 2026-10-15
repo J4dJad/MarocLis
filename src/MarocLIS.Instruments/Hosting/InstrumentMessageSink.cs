@@ -76,10 +76,15 @@ public sealed class InstrumentMessageSink(
         // The frame is recorded first and on its own. A transmission that cannot be imported must
         // still be on record: it is the evidence of what the analyser sent, and it is what a replay
         // re-imports once the missing mapping is added.
+        // Recorded as failed until the outcome is known: an import that throws, or a workstation
+        // that stops half-way, then leaves a row that can be replayed and that the retention purge
+        // holds back — not a "received" one, which it deletes as history.
         var logId = await messageLog.RecordAsync(
             new InstrumentMessageLog(link.Id, link.SiteId, MessageDirection.Inbound,
                                       message.RawText ?? string.Empty, now)
             {
+                Status = InstrumentMessageProcessingStatus.Failed,
+                Issues = Describe("Interface_ImportInterrupted"),
                 SpecimenIds = string.Join(", ", message.Specimens
                     .Select(s => s.SpecimenId)
                     .Where(s => !string.IsNullOrWhiteSpace(s))),

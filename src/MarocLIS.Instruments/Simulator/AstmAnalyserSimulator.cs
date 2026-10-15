@@ -351,6 +351,7 @@ public sealed class AstmAnalyserSimulator(SimulatorOptions options, ILogger? log
     private async Task<IReadOnlyList<string>> ReceiveAsync(NetworkStream stream, CancellationToken ct)
     {
         var reader = new AstmFrameReader(_encoding);
+        var assembler = new AstmMessageAssembler();
         var records = new List<string>();
         var buffer = new byte[4096];
         var deadline = DateTimeOffset.Now.AddSeconds(30);
@@ -372,9 +373,10 @@ public sealed class AstmAnalyserSimulator(SimulatorOptions options, ILogger? log
 
             while (reader.TryReadFrame() is { } frame)
             {
-                if (frame.ChecksumValid)
+                var disposition = assembler.Accept(frame, out var message);
+                if (disposition is AstmFrameDisposition.Accepted or AstmFrameDisposition.Duplicate)
                 {
-                    records.AddRange(frame.Records);
+                    records.AddRange(message);
                     await stream.WriteAsync(new[] { AstmControl.Ack }, ct);
                 }
                 else

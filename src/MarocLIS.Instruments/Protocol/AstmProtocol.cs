@@ -125,11 +125,100 @@ public static class AstmControl
 /// <summary>A frame received from an analyser, once its integrity has been checked.</summary>
 public sealed record AstmFrame(int FrameNumber, string Text, bool IsLast, bool ChecksumValid)
 {
-    /// <summary>Records carried by the frame, split on CR and with empties dropped.</summary>
-    public IReadOnlyList<string> Records =>
-        [.. Text.Split('\r', StringSplitOptions.RemoveEmptyEntries)
+    /// <summary>
+    /// Records carried by this frame alone, split on CR and with empties dropped. Only whole when
+    /// the frame is a complete message: a record continued over an ETB frame is cut in two here,
+    /// which is why a receiver goes through <see cref="AstmMessageAssembler"/> instead.
+    /// </summary>
+    public IReadOnlyList<string> Records => SplitRecords(Text);
+
+    /// <summary>Splits message text into records on CR, dropping empties.</summary>
+    public static IReadOnlyList<string> SplitRecords(string text) =>
+        [.. text.Split('\r', StringSplitOptions.RemoveEmptyEntries)
                 .Select(r => r.TrimEnd('\n'))
                 .Where(r => r.Length > 0)];
+}
+
+/// <summary>What a receiver answers to a frame, and why.</summary>
+public enum AstmFrameDisposition
+{
+    /// <summary>The expected frame: its text is taken. ACK.</summary>
+    Accepted,
+
+    /// <summary>The previous frame sent again because our ACK was lost: already taken, so ACK only.</summary>
+    Duplicate,
+
+    /// <summary>Corrupted in transit. NAK, the sender resends.</summary>
+    ChecksumFailed,
+
+    /// <summary>Not the frame number expected next: a frame is missing. NAK.</summary>
+    OutOfSequence
+}
+
+/// <summary>
+/// Rebuilds the analyser's messages from the frames received, per E1381.
+/// <para>
+/// A message longer than a frame is sent as intermediate frames closed by ETB and a last one closed
+/// by ETX, and the cut falls anywhere — in the middle of a record, in the middle of a value. The
+/// frames' text is therefore joined first and split into records only once the ETX frame has
+/// arrived: split frame by frame, "R|1|^^^GLU|56" cut after the 5 became a result of 5 and a
+/// stray record.
+/// </para>
+/// <para>
+/// Frame numbers are checked too. When our ACK is lost the analyser sends the same frame again,
+/// with the same number; taking it a second time would duplicate its records, so it is
+/// acknowledged and dropped. Any other unexpected number means a frame is missing, and the frame
+/// is refused so the analyser resends rather than the message being stored with a hole in it.
+/// </para>
+/// </summary>
+public sealed class AstmMessageAssembler
+{
+    private readonly StringBuilder _text = new();
+    private int _expected = 1;
+    private int? _previous;
+
+    /// <summary>True while a message has intermediate frames taken and its ETX frame is still awaited.</summary>
+    public bool InProgress => _text.Length > 0;
+
+    /// <summary>
+    /// Takes a frame. <paramref name="records"/> holds the records of the message the frame
+    /// completed, and is empty until then and for any frame not accepted.
+    /// </summary>
+    public AstmFrameDisposition Accept(AstmFrame frame, out IReadOnlyList<string> records)
+    {
+        records = [];
+
+        if (!frame.ChecksumValid) return AstmFrameDisposition.ChecksumFailed;
+
+        if (frame.FrameNumber != _expected)
+        {
+            if (frame.FrameNumber == _previous) return AstmFrameDisposition.Duplicate;
+
+            // Some analysers number each message from 1 again; tolerated between messages only,
+            // never inside one, where it would mean frames went missing.
+            if (frame.FrameNumber != 1 || InProgress) return AstmFrameDisposition.OutOfSequence;
+        }
+
+        _text.Append(frame.Text);
+        _previous = frame.FrameNumber;
+        _expected = AstmControl.NextFrameNumber(frame.FrameNumber);
+
+        if (frame.IsLast)
+        {
+            records = AstmFrame.SplitRecords(_text.ToString());
+            _text.Clear();
+        }
+
+        return AstmFrameDisposition.Accepted;
+    }
+
+    /// <summary>Starts over, for a new transfer: the line was granted again or dropped.</summary>
+    public void Reset()
+    {
+        _text.Clear();
+        _expected = 1;
+        _previous = null;
+    }
 }
 
 /// <summary>

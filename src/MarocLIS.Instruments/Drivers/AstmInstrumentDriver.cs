@@ -73,6 +73,7 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
     private readonly ILogger? _logger;
     private readonly Encoding _encoding;
     private readonly AstmFrameReader _reader;
+    private readonly AstmMessageAssembler _assembler = new();
 
     private readonly List<string> _sessionRecords = [];
     private bool _analyserHoldsLine;
@@ -111,6 +112,7 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
         _analyserHoldsLine = false;
         _awaitingEot = false;
         _sessionRecords.Clear();
+        _assembler.Reset();
         _reader.Reset();
     }
 
@@ -197,6 +199,7 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
                 _analyserHoldsLine = true;
                 _lineGrantedAt = DateTimeOffset.Now;
                 _sessionRecords.Clear();
+                _assembler.Reset();
                 await _transport.WriteAsync(new[] { AstmControl.Ack }, ct);
                 break;
 
@@ -214,23 +217,35 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
 
     private async Task HandleFrameAsync(AstmFrame frame, CancellationToken ct)
     {
-        if (!frame.ChecksumValid)
+        switch (_assembler.Accept(frame, out var records))
         {
-            // NAK asks the analyser to resend. Accepting a bad frame would mean storing a
-            // result whose digits may have been corrupted in transit.
-            _logger?.LogWarning("Bad ASTM checksum on {Interface}; requesting a resend.", _config.Id);
-            await _sink.LogRawAsync(_config.Id, MessageDirection.Inbound,
-                                    $"[CHECKSUM FAILED] {frame.Text}", ct);
-            await _transport.WriteAsync(new[] { AstmControl.Nak }, ct);
-            return;
+            case AstmFrameDisposition.ChecksumFailed:
+                // NAK asks the analyser to resend. Accepting a bad frame would mean storing a
+                // result whose digits may have been corrupted in transit.
+                _logger?.LogWarning("Bad ASTM checksum on {Interface}; requesting a resend.", _config.Id);
+                await _sink.LogRawAsync(_config.Id, MessageDirection.Inbound,
+                                        $"[CHECKSUM FAILED] {frame.Text}", ct);
+                await _transport.WriteAsync(new[] { AstmControl.Nak }, ct);
+                return;
+
+            case AstmFrameDisposition.OutOfSequence:
+                _logger?.LogWarning("ASTM frame {Frame} out of sequence on {Interface}; requesting a resend.",
+                                    frame.FrameNumber, _config.Id);
+                await _transport.WriteAsync(new[] { AstmControl.Nak }, ct);
+                return;
+
+            case AstmFrameDisposition.Duplicate:
+                // Our ACK was lost and the analyser sent the frame again: already taken.
+                await _transport.WriteAsync(new[] { AstmControl.Ack }, ct);
+                return;
         }
 
-        _sessionRecords.AddRange(frame.Records);
+        _sessionRecords.AddRange(records);
         await _transport.WriteAsync(new[] { AstmControl.Ack }, ct);
 
         // A terminator record closes the message even if EOT is slow to arrive; some analysers
         // send the two far enough apart that waiting would delay the results noticeably.
-        if (frame.IsLast && frame.Records.Any(r => r.StartsWith('L')))
+        if (frame.IsLast && records.Any(r => r.StartsWith('L')))
         {
             _awaitingEot = true;
             await FinishSessionAsync(ct);
