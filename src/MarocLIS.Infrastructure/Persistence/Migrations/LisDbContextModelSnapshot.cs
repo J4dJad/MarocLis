@@ -2529,6 +2529,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("PreviousBaseSalary")
                         .HasColumnType("decimal(18,6)");
 
+                    b.Property<int?>("PreviousContractType")
+                        .HasColumnType("int");
+
                     b.Property<DateOnly?>("PreviousExitDate")
                         .HasColumnType("date");
 
