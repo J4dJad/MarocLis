@@ -714,7 +714,11 @@ public sealed class BillingService(
         var refunded = deposit.Refund(clock.Now, reason);
         if (refunded.IsFailure) return refunded;
 
-        if (deposit.Method == PaymentMethod.Cash) session?.RecordCashRefund(amount);
+        if (deposit.Method == PaymentMethod.Cash && session is not null)
+        {
+            session.RecordCashRefund(amount);
+            deposit.RefundSiteId = session.SiteId;
+        }
         else await ReverseOnTakingSessionAsync(deposit.CashSessionId, deposit.Method, amount, ct);
         deposits.Update(deposit);
 
@@ -942,7 +946,12 @@ public sealed class BillingService(
         var refunded = payment.Refund(clock.Now, reason);
         if (refunded.IsFailure) return refunded;
 
-        if (payment.Method == PaymentMethod.Cash) session?.RecordCashRefund(payment.Amount);
+        if (payment.Method == PaymentMethod.Cash && session is not null)
+        {
+            session.RecordCashRefund(payment.Amount);
+            // The cash leaves the refunder's drawer, which may be another site's: its cash account pays it.
+            payment.RefundSiteId = session.SiteId;
+        }
         else await ReverseOnTakingSessionAsync(payment.CashSessionId, payment.Method, payment.Amount, ct);
 
         invoice.Recalculate();
@@ -1155,7 +1164,8 @@ public sealed class BillingService(
             }
         }
 
-        invoice.PayerAcceptedAmount = accepted;
+        // Dated today: the share left to the patient moves in the accounts on the day of the answer.
+        invoice.RecordPayerAnswer(accepted, today);
         invoice.ClaimStatus = missing == 0m
             ? ClaimStatus.Settled
             : accepted == 0m ? ClaimStatus.Rejected : ClaimStatus.PartiallyAccepted;
@@ -1412,7 +1422,7 @@ public sealed class BillingService(
             if (invoice.ClaimStatus == ClaimStatus.Rejected)
             {
                 var reopened = invoice.ReopenRejectedClaim(
-                    $"renvoi au tiers payant (dossier {reference.Value})");
+                    $"renvoi au tiers payant (dossier {reference.Value})", today);
 
                 if (reopened.IsFailure)
                 {

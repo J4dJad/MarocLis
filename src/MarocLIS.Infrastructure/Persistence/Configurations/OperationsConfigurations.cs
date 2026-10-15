@@ -49,6 +49,10 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.HasMany(e => e.Payments).WithOne()
                .HasForeignKey(p => p.InvoiceId).OnDelete(DeleteBehavior.Restrict);
 
+        // The payer's refused shares left to the patient, dated on the answer (accounting export).
+        builder.HasMany(e => e.ShortfallTransfers).WithOne()
+               .HasForeignKey(t => t.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+
         // The accounting series must be unbroken and unambiguous. Filtered on issued invoices so a
         // draft, which has no number yet, does not collide with another draft.
         builder.HasIndex(e => new { e.SiteId, e.Kind, e.Number })
@@ -97,6 +101,18 @@ public sealed class InvoiceLineConfiguration : IEntityTypeConfiguration<InvoiceL
         builder.HasIndex(e => e.LabOrderItemId)
                .HasFilter("[LabOrderItemId] IS NOT NULL")
                .HasDatabaseName("IX_InvoiceLines_OrderItem");
+    }
+}
+
+public sealed class PayerShortfallTransferConfiguration : IEntityTypeConfiguration<PayerShortfallTransfer>
+{
+    public void Configure(EntityTypeBuilder<PayerShortfallTransfer> builder)
+    {
+        builder.ToTable("PayerShortfallTransfers", "bil");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+
+        builder.HasIndex(e => e.InvoiceId).HasDatabaseName("IX_PayerShortfallTransfers_Invoice");
     }
 }
 

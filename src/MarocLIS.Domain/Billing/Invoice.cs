@@ -13,6 +13,7 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
 {
     private readonly List<InvoiceLine> _lines = [];
     private readonly List<Payment> _payments = [];
+    private readonly List<PayerShortfallTransfer> _shortfallTransfers = [];
 
     private Invoice() { }
 
@@ -212,6 +213,9 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     public IReadOnlyCollection<InvoiceLine> Lines => _lines.AsReadOnly();
     public IReadOnlyCollection<Payment> Payments => _payments.AsReadOnly();
 
+    /// <summary>The payer's refused shares left to the patient, each dated on the payer's answer.</summary>
+    public IReadOnlyCollection<PayerShortfallTransfer> ShortfallTransfers => _shortfallTransfers.AsReadOnly();
+
     public bool IsIssued => Status is not InvoiceStatus.Draft;
 
     /// <summary>An issued invoice is frozen. Nothing in the domain reopens it.</summary>
@@ -388,6 +392,21 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     }
 
     /// <summary>
+    /// Records the payer's answer on its share: what it accepted, its settlement and any write-off
+    /// of the refusal being already on the invoice. What the payer refused and nobody wrote off is
+    /// left to the patient: that transfer is recorded on <paramref name="on"/>, the day of the
+    /// answer, so the accounts date it on the answer and not on the invoice's next change.
+    /// </summary>
+    public void RecordPayerAnswer(decimal accepted, DateOnly on)
+    {
+        PayerAcceptedAmount = Money.Round(accepted);
+
+        var leftToPatient = Money.Round(PayerShareAmount - PayerAcceptedAmount.Value - WrittenOffAmount);
+        if (leftToPatient > 0m)
+            _shortfallTransfers.Add(new PayerShortfallTransfer(Id, leftToPatient, on));
+    }
+
+    /// <summary>
     /// Puts a rejected claim back in the state it was before the payer's answer was recorded, so
     /// it can be corrected and sent again.
     /// <para>
@@ -398,7 +417,8 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     /// the payer's answer is cleared.
     /// </para>
     /// </summary>
-    public Result ReopenRejectedClaim(string reason)
+    /// <param name="on">The day of the reopening: a refused share left to the patient goes back to the payer that day.</param>
+    public Result ReopenRejectedClaim(string reason, DateOnly? on = null)
     {
         if (ClaimStatus != ClaimStatus.Rejected)
             return Result.Failure(Error.Conflict("Claim_AlreadySubmitted", Number));
@@ -416,6 +436,11 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
             var cancelled = writeOff.CancelWriteOff(reason);
             if (cancelled.IsFailure) return cancelled;
         }
+
+        // The refusal left to the patient is undone as well: the amount is the payer's again.
+        var reopenedOn = on ?? DateOnly.FromDateTime(DateTime.Today);
+        foreach (var transfer in _shortfallTransfers.Where(t => t.ReversedOn is null))
+            transfer.Reverse(reopenedOn);
 
         PayerAcceptedAmount = null;
         Recalculate();

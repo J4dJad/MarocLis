@@ -1,6 +1,7 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Inventory;
+using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -69,7 +70,8 @@ public sealed class AccountingExportService(
     IConfigurationWriter settingsWriter,
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    IDataAccessAuditor accessAuditor)
 {
     private const string Right = Permissions.Accounting.Export;
 
@@ -187,6 +189,13 @@ public sealed class AccountingExportService(
             foreach (var recorder in depreciationSources.OfType<IDepreciationExportRecorder>())
                 foreach (var siteId in request.SiteIds.Distinct())
                     await recorder.RecordExportedAsync(siteId, request.From, request.To, ct);
+        // The labels name the patients, and the file leaves the laboratory for the accounting firm:
+        // recorded as the other exports of patient lists are (loi 09-08).
+        await accessAuditor.LogAsync(DataAccessKind.Export, context: "Accounting/Export",
+                                     recordCount: preview.Value.Entries.Count,
+                                     queryDescription: $"Export comptable du {request.From:dd/MM/yyyy} au {request.To:dd/MM/yyyy} "
+                                                       + $"({request.Journals})",
+                                     ct: ct);
 
         return Result.Success(file);
     }

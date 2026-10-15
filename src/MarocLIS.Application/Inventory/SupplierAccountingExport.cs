@@ -220,15 +220,62 @@ public static class SupplierAccountingExport
 
         foreach (var e in entries)
         {
-            var label = sage && e.Label.Length > 35 ? e.Label[..35] : e.Label;
+            var (piece, label) = sage ? SageCells(e.Piece, e.Label) : (e.Piece, e.Label);
 
             text.AppendLine(string.Join(';',
                 sage ? e.Date.ToString("dd/MM/yyyy", Fr) : e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                Cell(e.Journal), Cell(e.Account), Cell(e.ThirdParty ?? string.Empty), Cell(label), Cell(e.Piece),
+                Cell(e.Journal), Cell(e.Account), Cell(e.ThirdParty ?? string.Empty), Cell(label), Cell(piece),
                 Amount(e.Debit, sage), Amount(e.Credit, sage)));
         }
 
         return Encode(text.ToString());
+    }
+
+    /// <summary>Sage's "N° pièce" holds 13 characters, its "Libellé" 35.</summary>
+    public const int SagePieceLength = 13;
+
+    private const int SageLabelLength = 35;
+
+    /// <summary>
+    /// The piece and label as Sage takes them. A piece longer than 13 characters is compacted rather
+    /// than cut: a number of the billing series, PREFIX/SITE/YEAR/SEQ ("FAC/CASA/2026/000318"),
+    /// becomes the prefix's initial, the site code cut to what is left, the year's last two digits
+    /// and the whole sequence ("FCASA26000318"), so each invoice keeps a piece of its own; anything
+    /// else loses its separators and keeps its last 13 characters. The full number is then put at
+    /// the head of the label when the label, cut to 35, does not already show it.
+    /// </summary>
+    internal static (string Piece, string Label) SageCells(string piece, string label)
+    {
+        piece = piece.Trim();
+        var cut = label.Length > SageLabelLength ? label[..SageLabelLength] : label;
+        if (piece.Length <= SagePieceLength) return (piece, cut);
+
+        var compact = SagePiece(piece);
+        if (!cut.Contains(piece, StringComparison.Ordinal))
+        {
+            cut = $"{piece} {label}";
+            if (cut.Length > SageLabelLength) cut = cut[..SageLabelLength].TrimEnd();
+        }
+        return (compact, cut);
+    }
+
+    public static string SagePiece(string piece)
+    {
+        piece = piece.Trim();
+        if (piece.Length <= SagePieceLength) return piece;
+
+        var parts = piece.Split(['/', '-', ' ', '.', '_'], StringSplitOptions.RemoveEmptyEntries);
+        if (parts is [var prefix, var site, var year, var sequence]
+            && prefix.All(char.IsAsciiLetter) && year.Length == 4 && year.All(char.IsAsciiDigit)
+            && sequence.All(char.IsAsciiDigit))
+        {
+            var room = SagePieceLength - 1 - 2 - sequence.Length;
+            if (room >= 1)
+                return $"{char.ToUpperInvariant(prefix[0])}{(site.Length > room ? site[..room] : site)}{year[2..]}{sequence}";
+        }
+
+        var joined = string.Concat(parts);
+        return joined.Length <= SagePieceLength ? joined : joined[^SagePieceLength..];
     }
 
     private static string Amount(decimal value, bool sage) =>
