@@ -1809,6 +1809,164 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("Instruments", "eqp");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentContract", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CommitmentBasis")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CommittedVolume")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("CountedAnalysisCodesCsv")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("DurationMonths")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExitConditions")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MaintenanceTerms")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("MaxInterventionDelayHours")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal?>("PenaltyAmountMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PenaltyTerms")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("PreventiveVisitsPerYear")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("SupplierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TrainingTerms")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "IsActive")
+                        .HasDatabaseName("IX_InstrumentContracts_Site_Active");
+
+                    b.HasIndex("SupplierId", "Reference")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InstrumentContracts_Supplier_Reference");
+
+                    b.ToTable("InstrumentContracts", "eqp");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentContractInstrument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("InstrumentContractId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("InstrumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstrumentId")
+                        .HasDatabaseName("IX_InstrumentContractInstruments_Instrument");
+
+                    b.HasIndex("InstrumentContractId", "InstrumentId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InstrumentContractInstruments_Contract_Instrument");
+
+                    b.ToTable("InstrumentContractInstruments", "eqp");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentContractReagent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("ContractPriceMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("CostPerTestMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("InstrumentContractId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("StockItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StockItemId")
+                        .HasDatabaseName("IX_InstrumentContractReagents_Item");
+
+                    b.HasIndex("InstrumentContractId", "StockItemId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InstrumentContractReagents_Contract_Item");
+
+                    b.ToTable("InstrumentContractReagents", "eqp");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentInterface", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2092,6 +2250,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("ArrivedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
                     b.Property<byte[]>("AttachedReport")
                         .HasColumnType("varbinary(max)");
 
@@ -2146,6 +2307,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("PostInterventionCheckPassed")
                         .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("RequestedAt")
+                        .HasColumnType("datetimeoffset(3)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -3641,6 +3805,53 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("UserSiteAccess", "sec");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.LotCertificateFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ReagentLotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReagentLotId")
+                        .HasDatabaseName("IX_LotCertificateFiles_Lot");
+
+                    b.ToTable("LotCertificateFiles", "inv");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Inventory.PurchaseOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3734,6 +3945,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("DiscountRate")
                         .HasColumnType("decimal(18,6)");
 
+                    b.Property<DateOnly?>("LastReceivedOn")
+                        .HasColumnType("date");
+
                     b.Property<int>("LineNumber")
                         .HasColumnType("int");
 
@@ -3769,6 +3983,207 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("PurchaseOrderLines", "inv");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.PurchasingDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("AttachedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("AttachedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("OwnerKind")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SizeBytes")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerKind", "OwnerId", "AttachedAt")
+                        .HasDatabaseName("IX_PurchasingDocuments_Owner");
+
+                    b.ToTable("PurchasingDocuments", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.QuoteRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AwardedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("AwardedOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("AwardedQuoteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .UseCollation("Latin1_General_100_CS_AS_SC_UTF8");
+
+                    b.Property<Guid?>("PurchaseOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("RaisedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("RequestedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ResponseDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UX_QuoteRequests_Number");
+
+                    b.HasIndex("SiteId", "Status", "RequestedOn")
+                        .HasDatabaseName("IX_QuoteRequests_Site_Status");
+
+                    b.ToTable("QuoteRequests", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.QuoteRequestItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<Guid>("QuoteRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("StockItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuoteRequestId", "StockItemId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_QuoteRequestItems_Request_Item");
+
+                    b.ToTable("QuoteRequestItems", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.QuoteRequestSupplier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("QuoteRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("SupplierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuoteRequestId", "SupplierId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_QuoteRequestSuppliers_Request_Supplier");
+
+                    b.ToTable("QuoteRequestSuppliers", "inv");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Inventory.ReagentLot", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3777,6 +4192,12 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<string>("AcceptanceEvidence")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal?>("ArrivalTemperatureCelsius")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<bool?>("CertificateOfAnalysisReceived")
+                        .HasColumnType("bit");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset(3)");
@@ -3818,6 +4239,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("PurchaseOrderId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("QcOverrideJustification")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<decimal>("QuantityReceived")
                         .HasColumnType("decimal(18,6)");
 
@@ -3837,6 +4262,15 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("ReceivedOn")
                         .HasColumnType("date");
 
+                    b.Property<bool?>("ReceptionFrenchLabelling")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("ReceptionMatchesOrder")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("ReceptionPackagingIntact")
+                        .HasColumnType("bit");
+
                     b.Property<string>("RejectionReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -3846,6 +4280,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<DateOnly?>("ReleasedOn")
                         .HasColumnType("date");
+
+                    b.Property<bool>("ReleasedWithQcOverride")
+                        .HasColumnType("bit");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -3874,6 +4311,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("PurchaseOrderId")
+                        .HasDatabaseName("IX_ReagentLots_PurchaseOrder")
+                        .HasFilter("[PurchaseOrderId] IS NOT NULL");
+
                     b.HasIndex("StockItemId", "ExpiryDate")
                         .HasDatabaseName("IX_ReagentLots_Item_Expiry");
 
@@ -3882,6 +4323,76 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("UX_ReagentLots_Item_Lot");
 
                     b.ToTable("ReagentLots", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.RefusedDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("ArrivalTemperatureCelsius")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeliveryNoteReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("LotNumber")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("NonConformityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PurchaseOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("RefusedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("RefusedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("RefusedOn")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("StockItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SupplierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierId", "RefusedOn")
+                        .HasDatabaseName("IX_RefusedDeliveries_Supplier_Date");
+
+                    b.ToTable("RefusedDeliveries", "inv");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Inventory.StockItem", b =>
@@ -3918,11 +4429,19 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("DepartmentId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Gtin")
+                        .HasMaxLength(14)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(14)");
+
                     b.Property<string>("HazardClass")
                         .HasMaxLength(60)
                         .HasColumnType("nvarchar(60)");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCeMarked")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsCritical")
@@ -4000,6 +4519,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.HasIndex("SiteId", "Code")
                         .IsUnique()
                         .HasDatabaseName("UX_StockItems_Site_Code");
+
+                    b.HasIndex("SiteId", "Gtin")
+                        .HasDatabaseName("IX_StockItems_Site_Gtin")
+                        .HasFilter("[Gtin] IS NOT NULL");
 
                     b.ToTable("StockItems", "inv");
                 });
@@ -4080,6 +4603,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountingAccount")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("AddressLine")
                         .HasMaxLength(400)
@@ -4175,6 +4702,13 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<int>("Region")
                         .HasColumnType("int");
 
+                    b.Property<string>("RegulatoryRegistrationNumber")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateOnly?>("RegulatoryRegistrationValidUntil")
+                        .HasColumnType("date");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -4187,6 +4721,349 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("UX_Suppliers_Code");
 
                     b.ToTable("Suppliers", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierInvoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("DeliveryDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("EnteredByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("InvoiceDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("InvoiceNumber")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateOnly?>("PaidOn")
+                        .HasColumnType("date");
+
+                    b.Property<int>("PaymentTermsDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("ScanFileName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SupplierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UnblockJustification")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("UnblockedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("UnblockedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierId", "InvoiceNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SupplierInvoices_Supplier_Number")
+                        .HasFilter("[Status] <> 9");
+
+                    b.HasIndex("SiteId", "Status", "DueDate")
+                        .HasDatabaseName("IX_SupplierInvoices_Site_Status_Due");
+
+                    b.ToTable("SupplierInvoices", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierInvoiceFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SupplierInvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierInvoiceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SupplierInvoiceFiles_Invoice");
+
+                    b.ToTable("SupplierInvoiceFiles", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierInvoiceLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PurchaseOrderLineId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("StockItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SupplierInvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("UnitPriceMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("VatRate")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PurchaseOrderLineId")
+                        .HasDatabaseName("IX_SupplierInvoiceLines_OrderLine");
+
+                    b.HasIndex("SupplierInvoiceId", "LineNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SupplierInvoiceLines_Invoice_Line");
+
+                    b.ToTable("SupplierInvoiceLines", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierInvoiceVariance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Actual")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal>("Expected")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SupplierInvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierInvoiceId")
+                        .HasDatabaseName("IX_SupplierInvoiceVariances_Invoice");
+
+                    b.ToTable("SupplierInvoiceVariances", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierPayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Method")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("PaidOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("RecordedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SupplierInvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaidOn")
+                        .HasDatabaseName("IX_SupplierPayments_Date");
+
+                    b.HasIndex("SupplierInvoiceId", "PaidOn")
+                        .HasDatabaseName("IX_SupplierPayments_Invoice_Date");
+
+                    b.ToTable("SupplierPayments", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierQuote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Conditions")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("DeliveryDelayDays")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("QuoteRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SupplierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SupplierReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateOnly?>("ValidUntil")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuoteRequestId", "SupplierId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SupplierQuotes_Request_Supplier");
+
+                    b.ToTable("SupplierQuotes", "inv");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierQuoteLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("DiscountRate")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<Guid>("QuoteRequestItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SupplierQuoteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("UnitPriceMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("VatRate")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierQuoteId", "QuoteRequestItemId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SupplierQuoteLines_Quote_Item");
+
+                    b.ToTable("SupplierQuoteLines", "inv");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Orders.LabOrder", b =>
@@ -5800,6 +6677,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("SupplierId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("TestResultId")
                         .HasColumnType("uniqueidentifier");
 
@@ -5808,6 +6688,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.HasIndex("Reference")
                         .IsUnique()
                         .HasDatabaseName("UX_NonConformities_Reference");
+
+                    b.HasIndex("SupplierId")
+                        .HasDatabaseName("IX_NonConformities_Supplier")
+                        .HasFilter("[SupplierId] IS NOT NULL");
 
                     b.HasIndex("Category", "Severity", "DetectedAt")
                         .HasDatabaseName("IX_NonConformities_Analysis");
@@ -7585,6 +8469,24 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentContractInstrument", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Equipment.InstrumentContract", null)
+                        .WithMany("Instruments")
+                        .HasForeignKey("InstrumentContractId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentContractReagent", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Equipment.InstrumentContract", null)
+                        .WithMany("Reagents")
+                        .HasForeignKey("InstrumentContractId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentTestMapping", b =>
                 {
                     b.HasOne("MarocLIS.Domain.Equipment.InstrumentInterface", null)
@@ -7857,11 +8759,38 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.LotCertificateFile", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.ReagentLot", null)
+                        .WithMany()
+                        .HasForeignKey("ReagentLotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Inventory.PurchaseOrderLine", b =>
                 {
                     b.HasOne("MarocLIS.Domain.Inventory.PurchaseOrder", null)
                         .WithMany("Lines")
                         .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.QuoteRequestItem", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.QuoteRequest", null)
+                        .WithMany("Items")
+                        .HasForeignKey("QuoteRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.QuoteRequestSupplier", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.QuoteRequest", null)
+                        .WithMany("Suppliers")
+                        .HasForeignKey("QuoteRequestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -7907,6 +8836,57 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Name")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierInvoiceLine", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.PurchaseOrderLine", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MarocLIS.Domain.Inventory.SupplierInvoice", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("SupplierInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierInvoiceVariance", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.SupplierInvoice", null)
+                        .WithMany("Variances")
+                        .HasForeignKey("SupplierInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierPayment", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.SupplierInvoice", null)
+                        .WithMany("Payments")
+                        .HasForeignKey("SupplierInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierQuote", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.QuoteRequest", null)
+                        .WithMany("Offers")
+                        .HasForeignKey("QuoteRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierQuoteLine", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Inventory.SupplierQuote", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("SupplierQuoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
@@ -8697,6 +9677,13 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Navigation("MaintenanceRecords");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentContract", b =>
+                {
+                    b.Navigation("Instruments");
+
+                    b.Navigation("Reagents");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Equipment.InstrumentInterface", b =>
                 {
                     b.Navigation("Mappings");
@@ -8738,9 +9725,32 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Navigation("Lines");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.QuoteRequest", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("Offers");
+
+                    b.Navigation("Suppliers");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Inventory.StockItem", b =>
                 {
                     b.Navigation("Lots");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierInvoice", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("Payments");
+
+                    b.Navigation("Variances");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.SupplierQuote", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Orders.LabOrder", b =>
