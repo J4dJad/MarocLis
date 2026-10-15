@@ -110,6 +110,10 @@
   "Employee_UserAlreadyLinked": "This LIS account is already linked to another personnel file.",
   "Employee_CinAlreadyUsed": "National ID {0} is already in another personnel file.",
   "Employee_RehireBeforeExit": "The rehire must come after the departure date ({0}).",
+  "Employee_NoDeparture": "No departure is recorded for this employee.",
+  "Employee_ExitAlreadyEffective": "The departure of {0} has already taken effect: it can no longer be corrected or withdrawn. Use the rehire.",
+  "Employee_ExitSettled": "The final settlement of the departure of {0} is signed or already paid (the month's payroll is closed): the departure can no longer be corrected or withdrawn.",
+  "Employee_ExitCancelReasonRequired": "A reason is required to withdraw the departure.",
   "Recollection_ContactNoteRequired": "Enter the outcome of the call.",
   "Recollection_AlreadyDrawn": "Tube {0} has already been drawn or withdrawn: the list has been refreshed.",
   "Messaging_EmailNotConfigured": "E-mail (SMTP) is not configured.",
@@ -665,6 +669,14 @@
   },
 
   "Personnel": {
+    "ExitNoticeAfterLastDay": "The exit date is the last day worked: habilitations end the day after. The file remains available.",
+    "RehireNotice": "The dates of the previous contract are kept for the payroll of its last month. The leave paid by the final settlement is debited from the account.",
+    "RehireDate": "Rehire date",
+    "LeavingOn": "leaving on {0}",
+    "CancelExitPrompt": "Withdraw the departure of {0} planned for {1}? The employee stays on the staff and keeps their habilitations. Give the reason (resignation withdrawn, entry error…).",
+    "CancelExit": "Withdraw the departure",
+    "CorrectExit": "Correct the departure",
+    "ChangeExit": "Change the departure",
     "Settlement": "Final settlement",
     "Letters": "Certificates",
     "ExitNotice": "The employee's authorisations end on this date. The file remains readable.",
@@ -1689,6 +1701,7 @@
   },
 
   "Billing": {
+    "WrittenOffTooltip": "Not included in the amount paid: {0} written off",
     "PrintReceipt": "Print receipt",
     "PrintInvoice": "Print invoice",
     "Invoice": "Invoice",
@@ -1745,6 +1758,7 @@
   },
 
   "Claim": {
+    "PartiallySubmitted": "Batch {0} sent with {1} invoice(s). {2} invoice(s) were not sent:",
     "SettlementRecorded": "{0}: {1} accepted out of {2}.",
     "ShortfallWriteOff": "Write it off",
     "ShortfallPatientPays": "Leave it for the patient to pay (stays on the invoice)",
@@ -3024,6 +3038,7 @@
   "Auth_PasswordReused": "This password has been used recently.",
   "Auth_PasswordMismatch": "The two passwords do not match.",
   "Auth_SessionRevoked": "Your account has been changed (deactivated, password reset or rights changed). The session is closed; please sign in again.",
+  "Auth_DemoAccountDisabled": "This demonstration account has been disabled: the database now holds real data and its password is published. Use a personal account.",
 
   "Site_LegalNameRequired": "The site's registered name is required in order to invoice.",
   "Site_IceInvalid": "The ICE must be exactly 15 digits.",
@@ -3147,6 +3162,7 @@
   "Claim_SettlementAlreadyRecorded": "The accepted amount has already been recorded for invoice {0}.",
   "Claim_AcceptedAmountInvalid": "The accepted amount must be between 0 and the payer's share ({0}).",
   "Claim_AlreadySubmitted": "Invoice {0} has already been submitted to the payer: it cannot go into a second claim batch.",
+  "Claim_OutcomeSkippedSettled": "Invoice {0} already has its payer settlement recorded: the batch-level answer does not change it.",
 
   "Sample_StorageLocationRequired": "The storage location is mandatory.",
   "Sample_DiscardNoteRequired": "Discarding a sample must be justified: it ends any possibility of a repeat.",
@@ -3424,6 +3440,7 @@
   "Invoice_NotIssued": "This invoice has not been issued yet and cannot be printed.",
   "Invoice_CreditNoteExceedsBalance": "The credit note exceeds what remains creditable on the invoice ({0}): credit notes together cannot exceed the invoiced total.",
   "Invoice_AlreadyFullyCredited": "Invoice {0} has already been fully credited: there is nothing left to credit.",
+  "Invoice_MultiplePayers": "Orders {0} were not registered with the same payer (or some are self-pay): each order keeps the split fixed at registration. Invoice them separately.",
 
   "Payment_AmountMustBePositive": "The payment amount must be positive.",
   "Payment_ExceedsOutstanding": "The amount exceeds the outstanding balance ({0}).",

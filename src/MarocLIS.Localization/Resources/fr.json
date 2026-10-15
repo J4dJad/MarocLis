@@ -110,6 +110,10 @@
   "Employee_UserAlreadyLinked": "Ce compte SIL est déjà rattaché à un autre dossier du personnel.",
   "Employee_CinAlreadyUsed": "La CIN {0} figure déjà dans un autre dossier du personnel.",
   "Employee_RehireBeforeExit": "La réembauche doit suivre la date de sortie ({0}).",
+  "Employee_NoDeparture": "Aucune sortie n'est enregistrée pour ce salarié.",
+  "Employee_ExitAlreadyEffective": "La sortie du {0} a déjà pris effet : elle ne peut plus être corrigée ni annulée. Utilisez la réintégration.",
+  "Employee_ExitSettled": "Le solde de tout compte de la sortie du {0} est signé ou déjà payé (paie du mois clôturée) : la sortie ne peut plus être corrigée ni annulée.",
+  "Employee_ExitCancelReasonRequired": "Le motif de l'annulation de la sortie est obligatoire.",
   "Recollection_ContactNoteRequired": "Indiquez le résultat de l'appel.",
   "Recollection_AlreadyDrawn": "Le tube {0} a déjà été prélevé ou retiré : la liste a été mise à jour.",
   "Messaging_EmailNotConfigured": "La messagerie (SMTP) n'est pas configurée.",
@@ -665,6 +669,14 @@
   },
 
   "Personnel": {
+    "ExitNoticeAfterLastDay": "La date de sortie est le dernier jour travaillé : les habilitations prennent fin le lendemain. Le dossier reste consultable.",
+    "RehireNotice": "Les dates du contrat précédent sont conservées pour la paie de son dernier mois. Les congés payés par le solde de tout compte sont débités du compte.",
+    "RehireDate": "Date de réintégration",
+    "LeavingOn": "sortie prévue le {0}",
+    "CancelExitPrompt": "Annuler la sortie de {0} prévue le {1} ? Le salarié reste dans l'effectif et retrouve ses habilitations. Indiquez le motif (démission retirée, erreur de saisie…).",
+    "CancelExit": "Annuler la sortie",
+    "CorrectExit": "Corriger la sortie",
+    "ChangeExit": "Modifier la sortie",
     "Settlement": "Solde de tout compte",
     "Letters": "Attestations",
     "ExitNotice": "Les habilitations du salarié prennent fin à cette date. Le dossier reste consultable.",
@@ -1690,6 +1702,7 @@
   },
 
   "Billing": {
+    "WrittenOffTooltip": "Hors montant payé : {0} passés en perte",
     "PrintReceipt": "Imprimer le reçu",
     "PrintInvoice": "Imprimer la facture",
     "Invoice": "Facture",
@@ -1746,6 +1759,7 @@
   },
 
   "Claim": {
+    "PartiallySubmitted": "Bordereau {0} transmis avec {1} facture(s). {2} facture(s) n'ont pas été transmises :",
     "SettlementRecorded": "{0} : {1} acceptés sur {2}.",
     "ShortfallWriteOff": "Passer en perte",
     "ShortfallPatientPays": "Laisser à la charge du patient (reste sur la facture)",
@@ -3025,6 +3039,7 @@
   "Auth_PasswordReused": "Ce mot de passe a déjà été utilisé récemment.",
   "Auth_PasswordMismatch": "Les deux mots de passe saisis ne correspondent pas.",
   "Auth_SessionRevoked": "Votre compte a été modifié (désactivation, mot de passe réinitialisé ou droits changés). La session est fermée ; reconnectez-vous.",
+  "Auth_DemoAccountDisabled": "Ce compte de démonstration a été désactivé : la base contient désormais des données réelles et son mot de passe est publié. Utilisez un compte nominatif.",
 
   "Site_LegalNameRequired": "La raison sociale du site est obligatoire pour facturer.",
   "Site_IceInvalid": "L'ICE doit comporter 15 chiffres.",
@@ -3148,6 +3163,7 @@
   "Claim_SettlementAlreadyRecorded": "Le montant accepté a déjà été saisi pour la facture {0}.",
   "Claim_AcceptedAmountInvalid": "Le montant accepté doit être compris entre 0 et la part de l'organisme ({0}).",
   "Claim_AlreadySubmitted": "La facture {0} a déjà été transmise à l'organisme : elle ne peut pas figurer dans un second bordereau.",
+  "Claim_OutcomeSkippedSettled": "La facture {0} a déjà son règlement organisme saisi : le retour global du bordereau ne la modifie pas.",
 
   "Sample_StorageLocationRequired": "L'emplacement de rangement est obligatoire.",
   "Sample_DiscardNoteRequired": "L'élimination d'un échantillon doit être motivée : elle met fin à toute possibilité de reprise.",
@@ -3425,6 +3441,7 @@
   "Invoice_NotIssued": "Cette facture n'est pas encore émise et ne peut pas être imprimée.",
   "Invoice_CreditNoteExceedsBalance": "Le montant de l'avoir dépasse ce qui reste à créditer sur la facture ({0}) : les avoirs cumulés ne peuvent pas excéder le total facturé.",
   "Invoice_AlreadyFullyCredited": "La facture {0} est déjà entièrement annulée par avoir : il n'y a plus rien à créditer.",
+  "Invoice_MultiplePayers": "Les dossiers {0} n'ont pas été enregistrés avec le même organisme payeur (ou certains sont sans tiers payant) : chaque dossier garde la répartition fixée à l'enregistrement. Facturez-les séparément.",
 
   "Payment_AmountMustBePositive": "Le montant du règlement doit être positif.",
   "Payment_ExceedsOutstanding": "Le montant dépasse le reste à payer ({0}).",

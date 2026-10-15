@@ -563,9 +563,20 @@ public sealed class MainShellForm : LocalizedForm
         if (GroupOf(entry.Key) is { } group && _collapsedGroups.Expand(group))
             RenderNavigation();
 
+        var previousKey = _activeKey;
+        var previousView = _navigation.Current;
+
         _activeKey = entry.Key;
         HighlightActive();
         await entry.Navigate(_navigation);
+
+        // The screen being left may refuse to go (results typed and not saved): the operator is
+        // still on it, so its entry stays highlighted.
+        if (previousView is not null && ReferenceEquals(_navigation.Current, previousView))
+        {
+            _activeKey = previousKey;
+            HighlightActive();
+        }
     }
 
     private void HighlightActive()
