@@ -548,9 +548,10 @@ public sealed class ReviewFixesCycle1ClinicalDatabaseTests(Cycle1ClinicalScratch
         refused.Reject("Colis chaud");
 
         var newLot = item.AddLot(new ReagentLot("GLU-L2", Today.AddDays(300), 4m, Today.AddDays(-1)));
-        newLot.StartEvaluationOn(analyser).Should().BeTrue();
+        // Its evaluation run started on the analyser this morning (cycle 3 K14: explicitly).
+        newLot.StartEvaluationOn(analyser, Now.AddHours(-1)).Should().BeTrue();
 
-        // The run entered on it today in the QC screen, which opens the evaluation session.
+        // The run entered on it today in the QC screen.
         var run = new QcResult(Guid.NewGuid(), parameter.Id, analyser, siteId, 100m, Now, Guid.NewGuid())
         {
             ReagentLotId = newLot.Id,
@@ -569,9 +570,10 @@ public sealed class ReviewFixesCycle1ClinicalDatabaseTests(Cycle1ClinicalScratch
 
         (await queries.GetReagentLotsInUseAsync([parameter.Id], siteId, Today))
             .Should().Equal(new Dictionary<Guid, Guid> { [parameter.Id] = inUse.Id });
-        (await queries.GetReagentLotsUnderEvaluationAsync([parameter.Id], siteId, analyser, Today))
-            .Should().Equal(new Dictionary<Guid, Guid> { [parameter.Id] = newLot.Id });
-        (await queries.GetReagentLotsUnderEvaluationAsync([parameter.Id], siteId, Guid.NewGuid(), Today))
+        var level = Guid.NewGuid();
+        (await queries.GetReagentLotsUnderEvaluationAsync(new Dictionary<Guid, Guid> { [level] = parameter.Id }, siteId, analyser, Today))
+            .Should().Equal(new Dictionary<Guid, Guid> { [level] = newLot.Id });
+        (await queries.GetReagentLotsUnderEvaluationAsync(new Dictionary<Guid, Guid> { [level] = parameter.Id }, siteId, Guid.NewGuid(), Today))
             .Should().BeEmpty("the new lot is loaded on another analyser only");
 
         // The QC screen naming the new lot still finds it, although it is neither opened nor released.

@@ -56,23 +56,25 @@ internal static class ReagentLotLookup
     }
 
     /// <summary>
-    /// For each parameter, the lot awaiting release loaded on the analyser for its acceptance QC.
-    /// Absent when there is none, or when two articles' lots would both claim the parameter.
+    /// For each control target (keyed by target, valued by its parameter), the lot awaiting release
+    /// whose evaluation run was started on the analyser. Absent when there is none, when two
+    /// articles' lots would both claim the parameter, or when the run already has that level.
     /// <para>
-    /// The evaluation is a session, not the whole quarantine: it lasts the day a control run on
-    /// the lot was entered on that analyser in the QC screen. The next morning the analyser runs
-    /// its routine QC with the lot in use again, and crediting that to the new lot took it away
-    /// from the lot actually measured and blocked the new lot's release on points nobody evaluated.
+    /// The run is explicit (<see cref="ReagentLot.EvaluationStartedAt"/>): started today, it takes
+    /// the first control of each level the analyser transmits after the start, and nothing more.
+    /// The routine QC run later the same day, or the next morning, stays on the lot in use. The
+    /// session guessed from a value typed in the QC screen sent the evaluation run itself to the
+    /// lot in use when it arrived first, and the afternoon's routine QC to the new lot.
     /// </para>
     /// </summary>
     public static async Task<IReadOnlyDictionary<Guid, Guid>> ResolveUnderEvaluationAsync(
-        LisDbContext db, IReadOnlyCollection<Guid> testParameterIds, Guid siteId, Guid instrumentId,
-        DateOnly today, CancellationToken ct)
+        LisDbContext db, IReadOnlyDictionary<Guid, Guid> parameterOfTarget, Guid siteId,
+        Guid instrumentId, DateOnly today, CancellationToken ct)
     {
-        if (testParameterIds.Count == 0) return new Dictionary<Guid, Guid>();
+        if (parameterOfTarget.Count == 0) return new Dictionary<Guid, Guid>();
 
         var midnight = today.ToDateTime(TimeOnly.MinValue);
-        var sessionStart = new DateTimeOffset(midnight, TimeZoneInfo.Local.GetUtcOffset(midnight));
+        var dayStart = new DateTimeOffset(midnight, TimeZoneInfo.Local.GetUtcOffset(midnight));
 
         var evaluated = await (
             from l in db.ReagentLots.AsNoTracking()
@@ -80,25 +82,44 @@ internal static class ReagentLotLookup
             where i.SiteId == siteId && i.IsActive && i.Kind == StockItemKind.Reagent
                   && i.UsedByAnalysisCodesCsv != null
                   && l.EvaluationInstrumentId == instrumentId
+                  && l.EvaluationStartedAt != null && l.EvaluationStartedAt >= dayStart
                   && l.IsQuarantined && !l.IsRejected && !l.IsRecalled && l.ReleasedOn == null
                   && l.ExpiryDate >= today
-                  && db.QcResults.Any(q => q.ReagentLotId == l.Id && q.IsLotEvaluation
-                                           && !q.IsAutoTransmitted && q.InstrumentId == instrumentId
-                                           && q.MeasuredAt >= sessionStart)
-            select new { l.Id, i.UsedByAnalysisCodesCsv })
+            select new { l.Id, i.UsedByAnalysisCodesCsv, StartedAt = l.EvaluationStartedAt!.Value })
             .ToListAsync(ct);
 
         var lots = new Dictionary<Guid, Guid>();
         if (evaluated.Count == 0) return lots;
 
-        foreach (var parameter in (await AnalysisCodesAsync(db, testParameterIds, ct)).Where(p => p.Code is not null))
+        // The levels each run already has: a transmitted acceptance point received since its start.
+        var lotIds = evaluated.Select(e => (Guid?)e.Id).ToList();
+        var targetIds = parameterOfTarget.Keys.ToList();
+        var received = await db.QcResults.AsNoTracking()
+            .Where(q => lotIds.Contains(q.ReagentLotId) && targetIds.Contains(q.QcTargetId)
+                        && q.IsLotEvaluation && q.IsAutoTransmitted && q.InstrumentId == instrumentId
+                        && q.CreatedAt >= dayStart)
+            .Select(q => new { q.ReagentLotId, q.QcTargetId, q.CreatedAt })
+            .ToListAsync(ct);
+
+        var codes = (await AnalysisCodesAsync(db, [.. parameterOfTarget.Values], ct))
+            .Where(p => p.Code is not null)
+            .ToDictionary(p => p.Id, p => p.Code!.Trim().ToUpperInvariant());
+
+        foreach (var (targetId, parameterId) in parameterOfTarget)
         {
-            var code = parameter.Code!.Trim().ToUpperInvariant();
+            if (!codes.TryGetValue(parameterId, out var code)) continue;
+
             var matching = evaluated
                 .Where(e => ReagentLotSelector.AnalysisCodes(e.UsedByAnalysisCodesCsv).Contains(code))
                 .ToList();
 
-            if (matching.Count == 1) lots[parameter.Id] = matching[0].Id;
+            if (matching.Count != 1) continue;
+
+            var run = matching[0];
+            if (received.Any(r => r.ReagentLotId == run.Id && r.QcTargetId == targetId && r.CreatedAt >= run.StartedAt))
+                continue;
+
+            lots[targetId] = run.Id;
         }
 
         return lots;

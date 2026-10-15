@@ -351,12 +351,19 @@ public sealed class ReagentLot : Entity, IAuditable
     public DateOnly? LastOpenedOn { get; private set; }
 
     /// <summary>
-    /// The analyser on which this quarantined lot is loaded for its acceptance QC, so the controls
-    /// that analyser transmits are credited to it rather than to the lot in routine use, on the
-    /// day a control run on the lot is entered in the QC screen only. Cleared when the lot is
-    /// released or rejected.
+    /// The analyser on which this quarantined lot is loaded for its acceptance QC. Cleared when the
+    /// lot is released or rejected, or when its evaluation is stopped.
     /// </summary>
     public Guid? EvaluationInstrumentId { get; private set; }
+
+    /// <summary>
+    /// When the evaluation run on <see cref="EvaluationInstrumentId"/> was explicitly started. The
+    /// controls that analyser transmits from then on, the same day and once per control level, are
+    /// the new lot's; every other transmission is routine QC of the lot in use. Null: the analyser's
+    /// transmissions are all routine. Guessing the session from what was typed in the QC screen
+    /// credited the evaluation run to the lot in use and the afternoon's routine QC to the new lot.
+    /// </summary>
+    public DateTimeOffset? EvaluationStartedAt { get; private set; }
     public int? StabilityAfterOpeningDays { get; set; }
 
     public string? StorageLocation { get; set; }
@@ -466,8 +473,32 @@ public sealed class ReagentLot : Entity, IAuditable
     public bool StartEvaluationOn(Guid instrumentId)
     {
         if (!IsAwaitingRelease) return false;
+
+        // Loaded on another analyser: a run started on the previous one no longer stands.
+        if (EvaluationInstrumentId != instrumentId) EvaluationStartedAt = null;
+
         EvaluationInstrumentId = instrumentId;
         return true;
+    }
+
+    /// <summary>
+    /// Starts an evaluation run of this lot on <paramref name="instrumentId"/> at
+    /// <paramref name="at"/>: the next control of each level the analyser transmits today for the
+    /// lot's analyses is credited to the lot (see <see cref="EvaluationStartedAt"/>). Started again
+    /// for each further run. False when the lot is no longer awaiting release.
+    /// </summary>
+    public bool StartEvaluationOn(Guid instrumentId, DateTimeOffset at)
+    {
+        if (!StartEvaluationOn(instrumentId)) return false;
+        EvaluationStartedAt = at;
+        return true;
+    }
+
+    /// <summary>Ends the evaluation: the analyser's transmissions are routine QC again.</summary>
+    public void StopEvaluation()
+    {
+        EvaluationInstrumentId = null;
+        EvaluationStartedAt = null;
     }
 
     public int DaysUntilExpiry(DateOnly today) => ExpiryDate.DayNumber - today.DayNumber;
@@ -482,7 +513,7 @@ public sealed class ReagentLot : Entity, IAuditable
         ReleasedOn = on;
         ReleasedByUserId = byUserId;
         AcceptanceEvidence = evidence;
-        EvaluationInstrumentId = null;
+        StopEvaluation();
         return Result.Success();
     }
 
@@ -494,7 +525,7 @@ public sealed class ReagentLot : Entity, IAuditable
         IsRejected = true;
         RejectionReason = reason;
         IsQuarantined = true;
-        EvaluationInstrumentId = null;
+        StopEvaluation();
         return Result.Success();
     }
 

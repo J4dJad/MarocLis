@@ -664,11 +664,12 @@ public sealed class InstrumentMessageSink(
             // The target is the laboratory's assigned mean and SD for this material, parameter and
             // analyser. Without one there is nothing to judge the point against, so it is not
             // stored: an unanchored control point on a chart is worse than a gap.
-            var target = await TargetForLotAsync(mapping.TestParameterId, link.InstrumentId, lot, ct);
+            var (target, candidates) = await TargetForControlAsync(
+                mapping.TestParameterId, link.InstrumentId, lot, specimen.SpecimenId, ct);
 
             if (target is null)
             {
-                issues.Add(Describe("Interface_QcTargetNotFound",
+                issues.Add(Describe(candidates > 1 ? "Interface_QcTargetAmbiguous" : "Interface_QcTargetNotFound",
                                      $"{incoming.InstrumentTestCode} / {lot}"));
                 continue;
             }
@@ -689,19 +690,22 @@ public sealed class InstrumentMessageSink(
 
         if (imported > 0)
         {
-            // The reagent lot measured: a new lot loaded on this analyser for its acceptance QC
-            // when there is one, otherwise the lot in use. Crediting a new lot's controls to the
-            // lot in use left the new lot without evidence and mixed its values into the old one.
-            // Only while the evaluation session lasts (see the query): the analyser's routine QC of
-            // the next days is measured with the lot in use and stays credited to it.
+            // The reagent lot measured: a new lot whose evaluation run was started on this analyser
+            // when it still expects this level, otherwise the lot in use. Crediting a new lot's
+            // controls to the lot in use left the new lot without evidence and mixed its values into
+            // the old one. Only the started run's own controls (see the query): the analyser's
+            // routine QC is measured with the lot in use and stays credited to it.
             var parameterIds = points.Select(p => p.Point.TestParameterId).Distinct().ToList();
+            var parameterOfTarget = points
+                .GroupBy(p => p.Target.Id)
+                .ToDictionary(g => g.Key, g => g.First().Point.TestParameterId);
             var evaluated = await pipeline.ReagentLotsUnderEvaluationAsync(
-                parameterIds, link.SiteId, link.InstrumentId, ct);
+                parameterOfTarget, link.SiteId, link.InstrumentId, ct);
             var lots = await pipeline.ReagentLotsInUseAsync(parameterIds, link.SiteId, ct);
 
             foreach (var (point, _) in points)
             {
-                if (evaluated.TryGetValue(point.TestParameterId, out var underEvaluation))
+                if (evaluated.TryGetValue(point.QcTargetId, out var underEvaluation))
                 {
                     point.ReagentLotId = underEvaluation;
                     point.IsLotEvaluation = true;
@@ -724,28 +728,49 @@ public sealed class InstrumentMessageSink(
     }
 
     /// <summary>
-    /// The target of the control material the analyser named. Several levels of one parameter on
-    /// one analyser are several targets, told apart by the control lot: taking the first one stored
-    /// a level-2 value against the level-1 mean. Null when no active target, or more than one,
-    /// has a material of that lot.
+    /// The target of the control the analyser sent. Several levels of one parameter on one analyser
+    /// are several targets, told apart by the control lot: taking the first one stored a level-2
+    /// value against the level-1 mean.
+    /// <para>
+    /// What the analyser sends is rarely the bare lot number: ASTM gives the specimen descriptor
+    /// ("CONTROL-NORMAL") with the lot in the sample identifier ("QC-LOT-882"), HL7 the whole
+    /// specimen source. So a material's lot matches when it stands in either one as a whole token;
+    /// failing that, a level word (LOW, NORMAL, HIGH) narrows the targets; and a parameter with a
+    /// single target on the analyser keeps it. Several targets left is no target: the point is not
+    /// stored against a guessed level. The count of targets left tells "ambiguous" from "none".
+    /// </para>
     /// </summary>
-    private async Task<QcTarget?> TargetForLotAsync(Guid testParameterId, Guid instrumentId,
-                                                    string controlLot, CancellationToken ct)
+    private async Task<(QcTarget? Target, int Candidates)> TargetForControlAsync(
+        Guid testParameterId, Guid instrumentId, string controlIdentifier, string? specimenId,
+        CancellationToken ct)
     {
         var targets = await qcTargets.ListAsync(
             t => t.TestParameterId == testParameterId && t.InstrumentId == instrumentId && t.IsActive, ct);
-        if (targets.Count == 0) return null;
+        if (targets.Count == 0) return (null, 0);
 
         var materialIds = targets.Select(t => t.QcMaterialId).Distinct().ToList();
-        var materials = await qcMaterials.ListAsync(m => materialIds.Contains(m.Id), ct);
+        var materials = (await qcMaterials.ListAsync(m => materialIds.Contains(m.Id), ct))
+            .ToDictionary(m => m.Id);
 
-        var ofLot = materials
-            .Where(m => string.Equals(m.LotNumber.Trim(), controlLot, StringComparison.OrdinalIgnoreCase))
-            .Select(m => m.Id)
-            .ToHashSet();
+        string[] sent = [.. new[] { controlIdentifier, specimenId }.Where(s => !string.IsNullOrWhiteSpace(s))
+                                                                     .Select(s => s!.Trim())];
 
-        var matching = targets.Where(t => ofLot.Contains(t.QcMaterialId)).ToList();
-        return matching.Count == 1 ? matching[0] : null;
+        var candidates = targets
+            .Where(t => materials.TryGetValue(t.QcMaterialId, out var m)
+                        && sent.Any(s => ControlLotMatcher.Names(s, m.LotNumber)))
+            .ToList();
+
+        if (candidates.Count == 0) candidates = [.. targets];
+
+        if (candidates.Count > 1 && sent.Select(ControlLotMatcher.LevelNamed).FirstOrDefault(l => l is not null) is { } level)
+        {
+            var ofLevel = candidates
+                .Where(t => materials.TryGetValue(t.QcMaterialId, out var m) && m.Level == level)
+                .ToList();
+            if (ofLevel.Count > 0) candidates = ofLevel;
+        }
+
+        return candidates.Count == 1 ? (candidates[0], 1) : (null, candidates.Count);
     }
 
     /// <summary>

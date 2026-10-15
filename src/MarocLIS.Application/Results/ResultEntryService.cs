@@ -736,12 +736,13 @@ public interface IResultQueries
         CancellationToken ct = default);
 
     /// <summary>
-    /// For each parameter, the lot awaiting release that is loaded on <paramref name="instrumentId"/>
-    /// for its acceptance QC (<see cref="Domain.Inventory.ReagentLot.EvaluationInstrumentId"/>).
-    /// A parameter with none, or with more than one, is absent.
+    /// For each control target (<paramref name="parameterOfTarget"/>: target to its parameter), the
+    /// lot awaiting release whose evaluation run was started today on <paramref name="instrumentId"/>
+    /// (<see cref="Domain.Inventory.ReagentLot.EvaluationStartedAt"/>) and has not yet received that
+    /// level. A target with none, or with more than one lot, is absent.
     /// </summary>
     Task<IReadOnlyDictionary<Guid, Guid>> GetReagentLotsUnderEvaluationAsync(
-        IReadOnlyCollection<Guid> testParameterIds, Guid siteId, Guid instrumentId, DateOnly today,
+        IReadOnlyDictionary<Guid, Guid> parameterOfTarget, Guid siteId, Guid instrumentId, DateOnly today,
         CancellationToken ct = default);
 }
 

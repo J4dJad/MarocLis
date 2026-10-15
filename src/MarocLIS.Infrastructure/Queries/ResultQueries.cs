@@ -20,9 +20,9 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
         ReagentLotLookup.ResolveAsync(db, testParameterIds, null, siteId, today, ct);
 
     public Task<IReadOnlyDictionary<Guid, Guid>> GetReagentLotsUnderEvaluationAsync(
-        IReadOnlyCollection<Guid> testParameterIds, Guid siteId, Guid instrumentId, DateOnly today,
+        IReadOnlyDictionary<Guid, Guid> parameterOfTarget, Guid siteId, Guid instrumentId, DateOnly today,
         CancellationToken ct = default) =>
-        ReagentLotLookup.ResolveUnderEvaluationAsync(db, testParameterIds, siteId, instrumentId, today, ct);
+        ReagentLotLookup.ResolveUnderEvaluationAsync(db, parameterOfTarget, siteId, instrumentId, today, ct);
 
     /// <summary>
     /// The same rule as <see cref="ValidationQueries.IsCriticalCommunicatedAsync"/>: acknowledged,
