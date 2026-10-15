@@ -1,3 +1,4 @@
+using MarocLIS.Application.Abstractions;
 using MarocLIS.Domain.Equipment;
 using MarocLIS.Instruments.Drivers;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,8 +21,14 @@ namespace MarocLIS.Instruments.Hosting;
 /// replayable; letting the exception climb into the driver would stop the link and leave the
 /// analyser's next results waiting for the host to restart it.
 /// </para>
+/// <para>
+/// Each scope works under the analyser service account and reads every site. The host runs on a
+/// bench workstation whose operator is signed in to one site; under that operator's identity a tube
+/// from another site was "unknown" and the audit trail named someone who never saw the value.
+/// </para>
 /// </summary>
-public sealed class ScopedInstrumentMessageSink(IServiceScopeFactory scopes, ILogger? logger = null)
+public sealed class ScopedInstrumentMessageSink(IServiceScopeFactory scopes, ILogger? logger = null,
+                                                ICurrentUser? identity = null)
     : IInstrumentMessageSink
 {
     public async Task<bool> HandleAsync(Guid interfaceId, InstrumentMessage message,
@@ -29,7 +36,7 @@ public sealed class ScopedInstrumentMessageSink(IServiceScopeFactory scopes, ILo
     {
         try
         {
-            await using var scope = scopes.CreateAsyncScope();
+            await using var scope = CreateScope();
             return await Sink(scope).HandleAsync(interfaceId, message, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
@@ -45,7 +52,7 @@ public sealed class ScopedInstrumentMessageSink(IServiceScopeFactory scopes, ILo
     {
         try
         {
-            await using var scope = scopes.CreateAsyncScope();
+            await using var scope = CreateScope();
             return await Sink(scope).ResolveQueryAsync(interfaceId, specimenIds, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
@@ -60,7 +67,7 @@ public sealed class ScopedInstrumentMessageSink(IServiceScopeFactory scopes, ILo
     {
         try
         {
-            await using var scope = scopes.CreateAsyncScope();
+            await using var scope = CreateScope();
             await Sink(scope).LogRawAsync(interfaceId, direction, content, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
@@ -74,13 +81,27 @@ public sealed class ScopedInstrumentMessageSink(IServiceScopeFactory scopes, ILo
     {
         try
         {
-            await using var scope = scopes.CreateAsyncScope();
+            await using var scope = CreateScope();
             await Sink(scope).ReportConnectionStateAsync(interfaceId, connected, error, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             logger?.LogError(ex, "Connection state of analyser link {Interface} could not be saved.", interfaceId);
         }
+    }
+
+    /// <summary>
+    /// A fresh scope, switched to the service identity before anything in it is resolved: a database
+    /// context created first would keep the operator's site filter.
+    /// </summary>
+    private AsyncServiceScope CreateScope()
+    {
+        var scope = scopes.CreateAsyncScope();
+
+        if (identity is not null)
+            scope.ServiceProvider.GetService<ScopeIdentity>()?.RunAs(identity, ignoreSiteScope: true);
+
+        return scope;
     }
 
     private static IInstrumentMessageSink Sink(AsyncServiceScope scope) =>

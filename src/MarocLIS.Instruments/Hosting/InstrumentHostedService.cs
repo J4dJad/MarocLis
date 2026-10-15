@@ -108,6 +108,11 @@ public sealed class InstrumentHostedService(
     {
         using var scope = scopes.CreateScope();
 
+        // Every enabled link, whatever site the operator signed in here works on. Under the
+        // operator's site filter, signing in stopped the other sites' analysers at the next pass.
+        scope.ServiceProvider.GetService<ScopeIdentity>()?.RunAs(serviceAccount.AsCurrentUser(),
+                                                                  ignoreSiteScope: true);
+
         var repository = scope.ServiceProvider.GetRequiredService<IRepository<InstrumentInterface>>();
 
         // Loaded one by one with their mappings. The list query does not bring the mapping table,
@@ -160,7 +165,9 @@ public sealed class InstrumentHostedService(
         try
         {
             var loggerFactory = scope.ServiceProvider.GetService<ILoggerFactory>();
-            var sink = new ScopedInstrumentMessageSink(scopes, loggerFactory?.CreateLogger("Instrument.Sink"));
+            // Under the service account, not the operator signed in here: see ScopedInstrumentMessageSink.
+            var sink = new ScopedInstrumentMessageSink(scopes, loggerFactory?.CreateLogger("Instrument.Sink"),
+                                                       serviceAccount.AsCurrentUser());
 
             var transport = BuildTransport(link, loggerFactory?.CreateLogger("Instrument.Transport"));
 
@@ -296,7 +303,14 @@ public sealed class InstrumentServiceAccount(IServiceScopeFactory scopes,
 {
     public Guid UserId { get; private set; }
 
+    public string UserName { get; private set; } = string.Empty;
+
+    public string FullName { get; private set; } = string.Empty;
+
     public bool IsResolved => UserId != Guid.Empty;
+
+    /// <summary>The identity the host's scopes work under; only meaningful once resolved.</summary>
+    public ICurrentUser AsCurrentUser() => new ServiceAccountUser(UserId, UserName, FullName);
 
     public Task<bool> EnsureResolvedAsync(CancellationToken ct = default) => ResolveAsync(ct);
 
@@ -318,6 +332,8 @@ public sealed class InstrumentServiceAccount(IServiceScopeFactory scopes,
 
             if (account is null) return false;
 
+            UserName = account.UserName;
+            FullName = account.FullName;
             UserId = account.Id;
             return true;
         }
