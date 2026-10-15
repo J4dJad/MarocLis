@@ -58,7 +58,11 @@ public sealed class AuditSaveChangesInterceptor(
         var userId = currentUser is { IsAuthenticated: true } ? currentUser.UserId : (Guid?)null;
         var userName = currentUser is { IsAuthenticated: true } ? currentUser.UserName : null;
         var workstation = currentUser?.Workstation ?? Environment.MachineName;
-        var siteId = currentUser is { IsAuthenticated: true } ? currentUser.SiteId : (Guid?)null;
+        // A service account (the analyser host) works for no site in particular: its entries take
+        // the site of the record they touch, or none.
+        var siteId = currentUser is { IsAuthenticated: true } && currentUser.SiteId != Guid.Empty
+            ? currentUser.SiteId
+            : (Guid?)null;
         var reason = (context as LisDbContext) is not null ? PendingReason : null;
 
         // One correlation identifier per save, so every entry written by a single use case can be

@@ -84,7 +84,20 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
     /// read as the answer to our ENQ and the reply is lost.
     /// </summary>
     private bool _awaitingEot;
-    private DateTimeOffset _lineGrantedAt;
+
+    /// <summary>
+    /// When the analyser last showed it was still sending — its ENQ or its last frame. A session
+    /// is abandoned when this grows old, not when the session itself does: a long run of frames
+    /// arriving steadily is a busy analyser, not a dead one.
+    /// </summary>
+    private DateTimeOffset _lastInboundAt;
+
+    /// <summary>
+    /// How long the main loop waits for bytes before looking up. Without a wake-up the read never
+    /// returned on a quiet line, so a queued worklist waited for the analyser's next transmission
+    /// and an abandoned session was never released.
+    /// </summary>
+    private static readonly TimeSpan IdleWake = TimeSpan.FromSeconds(1);
 
     /// <summary>Queue of worklists to push once the line is free.</summary>
     private readonly Queue<IReadOnlyList<InstrumentOrderDownload>> _outbound = new();
@@ -141,14 +154,16 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
                 backoff = TimeSpan.FromSeconds(2);
             }
 
-            var read = await _transport.ReadAsync(buffer, ct);
+            var read = await ReadAsync(buffer, IdleWake, ct);
+
+            if (ct.IsCancellationRequested) break;
 
             if (read == 0)
             {
                 // The line has gone quiet. If the analyser is still nominally holding it, the
                 // session was abandoned mid-transfer — release it rather than deadlocking.
                 if (_analyserHoldsLine &&
-                    DateTimeOffset.Now - _lineGrantedAt >
+                    DateTimeOffset.Now - _lastInboundAt >
                         TimeSpan.FromSeconds(_config.AcknowledgementTimeoutSeconds * 4))
                 {
                     _logger?.LogWarning("Abandoned ASTM session on {Interface}; releasing the line.",
@@ -196,11 +211,7 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
         switch (control)
         {
             case AstmControl.Enq:
-                _analyserHoldsLine = true;
-                _lineGrantedAt = DateTimeOffset.Now;
-                _sessionRecords.Clear();
-                _assembler.Reset();
-                await _transport.WriteAsync(new[] { AstmControl.Ack }, ct);
+                await GrantLineAsync(ct);
                 break;
 
             case AstmControl.Eot:
@@ -215,8 +226,20 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
         }
     }
 
+    /// <summary>Gives the line to the analyser: a new session, acknowledged.</summary>
+    private async Task GrantLineAsync(CancellationToken ct)
+    {
+        _analyserHoldsLine = true;
+        _lastInboundAt = DateTimeOffset.Now;
+        _sessionRecords.Clear();
+        _assembler.Reset();
+        await _transport.WriteAsync(new[] { AstmControl.Ack }, ct);
+    }
+
     private async Task HandleFrameAsync(AstmFrame frame, CancellationToken ct)
     {
+        _lastInboundAt = DateTimeOffset.Now;
+
         switch (_assembler.Accept(frame, out var records))
         {
             case AstmFrameDisposition.ChecksumFailed:
@@ -326,12 +349,26 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
     {
         var frames = AstmControl.BuildFrames(records, _encoding);
 
-        await AwaitLineReleaseAsync(ct);
+        if (!await AwaitLineReleaseAsync(ct)) return false;
 
         // Bid for the line.
         await _transport.WriteAsync(new[] { AstmControl.Enq }, ct);
 
-        if (!await AwaitAckAsync(ct)) return false;
+        switch (await AwaitReplyAsync(ct))
+        {
+            case LineReply.Contention:
+                // Both sides bid at once. E1381 gives the analyser priority: we abandon our
+                // transmission (the worklist is re-queued by the caller) and take its message.
+                // Its ENQ used to be read here as "not an ACK" and thrown away, so the analyser's
+                // results waited for its own timeout and retry.
+                _logger?.LogInformation("Line contention on {Interface}; yielding to the analyser.",
+                                        _config.Id);
+                await GrantLineAsync(ct);
+                return false;
+
+            case LineReply.Refused:
+                return false;
+        }
 
         foreach (var frame in frames)
         {
@@ -341,7 +378,7 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
             while (attempts <= _config.MaxRetries && !acknowledged)
             {
                 await _transport.WriteAsync(frame, ct);
-                acknowledged = await AwaitAckAsync(ct);
+                acknowledged = await AwaitReplyAsync(ct) == LineReply.Ack;
                 attempts++;
             }
 
@@ -377,39 +414,76 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
         await SendOrdersAsync(_outbound.Dequeue(), ct);
     }
 
+    private enum LineReply { Ack, Refused, Contention }
+
     /// <summary>
-    /// Waits for an ACK, treating NAK and timeout as failure. The timeout is the configured
+    /// Waits for the analyser's answer, treating NAK and timeout as refusal and an ENQ as the
+    /// analyser bidding for the line at the same moment. The timeout is the configured
     /// acknowledgement window, because analyser response times vary by an order of magnitude
     /// between vendors and a fixed value would either be too slow or spuriously fail.
+    /// <para>
+    /// The window is enforced on the read itself. The read used to block until a byte arrived, so
+    /// an analyser that never answered held the driver for as long as it stayed silent.
+    /// </para>
     /// </summary>
-    private async Task<bool> AwaitAckAsync(CancellationToken ct)
+    private async Task<LineReply> AwaitReplyAsync(CancellationToken ct)
     {
         var deadline = DateTimeOffset.Now.AddSeconds(_config.AcknowledgementTimeoutSeconds);
         var buffer = new byte[64];
 
-        while (DateTimeOffset.Now < deadline && !ct.IsCancellationRequested)
+        while (!ct.IsCancellationRequested)
         {
             while (_reader.TryDequeueControl() is { } control)
             {
-                if (control == AstmControl.Ack) return true;
-                if (control is AstmControl.Nak or AstmControl.Eot) return false;
+                if (control == AstmControl.Ack) return LineReply.Ack;
+                if (control == AstmControl.Enq) return LineReply.Contention;
+                if (control is AstmControl.Nak or AstmControl.Eot) return LineReply.Refused;
             }
 
-            var read = await _transport.ReadAsync(buffer, ct);
+            var remaining = deadline - DateTimeOffset.Now;
+            if (remaining <= TimeSpan.Zero || !_transport.IsConnected) break;
+
+            var read = await ReadAsync(buffer, remaining, ct);
             if (read > 0) _reader.Feed(buffer.AsSpan(0, read));
             else await Task.Delay(50, ct);
         }
 
-        return false;
+        return LineReply.Refused;
+    }
+
+    /// <summary>
+    /// Reads what arrives within <paramref name="wait"/>; zero when nothing did.
+    /// <para>
+    /// The wait is a token cancelled at the deadline, linked to the driver's own. Its firing is a
+    /// timeout and is reported as "nothing read"; only the driver's token means shutdown. Some
+    /// transports swallow the cancellation and return zero, others let it out — both end here.
+    /// </para>
+    /// </summary>
+    private async Task<int> ReadAsync(byte[] buffer, TimeSpan wait, CancellationToken ct)
+    {
+        if (wait <= TimeSpan.Zero) return 0;
+
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(wait);
+
+        try
+        {
+            return await _transport.ReadAsync(buffer, deadline.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return 0;
+        }
     }
 
     /// <summary>
     /// Waits for the analyser's EOT after a message we have already acted on, so our ENQ follows
-    /// it. Bounded: an analyser that never sends EOT must not block the reply forever.
+    /// it. Bounded: an analyser that never sends EOT must not block the reply forever. False when
+    /// the analyser bid for the line again straight after its EOT: it has it, and we wait.
     /// </summary>
-    private async Task AwaitLineReleaseAsync(CancellationToken ct)
+    private async Task<bool> AwaitLineReleaseAsync(CancellationToken ct)
     {
-        if (!_awaitingEot) return;
+        if (!_awaitingEot) return true;
 
         var deadline = DateTimeOffset.Now.AddSeconds(Math.Min(3, _config.AcknowledgementTimeoutSeconds));
         var buffer = new byte[64];
@@ -417,16 +491,24 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
         while (_awaitingEot && DateTimeOffset.Now < deadline && !ct.IsCancellationRequested)
         {
             while (_reader.TryDequeueControl() is { } control)
+            {
                 if (control == AstmControl.Eot) _awaitingEot = false;
+                else if (control == AstmControl.Enq && !_awaitingEot)
+                {
+                    await GrantLineAsync(ct);
+                    return false;
+                }
+            }
 
-            if (!_awaitingEot) break;
+            if (!_awaitingEot || !_transport.IsConnected) break;
 
-            var read = await _transport.ReadAsync(buffer, ct);
+            var read = await ReadAsync(buffer, deadline - DateTimeOffset.Now, ct);
             if (read > 0) _reader.Feed(buffer.AsSpan(0, read));
             else await Task.Delay(50, ct);
         }
 
         _awaitingEot = false;
+        return true;
     }
 
     public async ValueTask DisposeAsync()

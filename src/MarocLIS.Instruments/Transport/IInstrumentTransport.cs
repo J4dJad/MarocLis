@@ -49,6 +49,12 @@ public sealed class SerialInstrumentTransport : IInstrumentTransport
     private readonly ILogger? _logger;
     private SerialPort? _port;
 
+    /// <summary>
+    /// How often a read looks for bytes. At 9600 baud this is under twenty characters, well inside
+    /// what the port buffers and far below any analyser's acknowledgement window.
+    /// </summary>
+    private static readonly TimeSpan SerialPollInterval = TimeSpan.FromMilliseconds(15);
+
     public SerialInstrumentTransport(InstrumentInterface config, ILogger? logger = null)
     {
         _config = config;
@@ -75,7 +81,8 @@ public sealed class SerialInstrumentTransport : IInstrumentTransport
                 Parity = Enum.TryParse<Parity>(_config.Parity, true, out var parity) ? parity : Parity.None,
                 StopBits = Enum.TryParse<StopBits>(_config.StopBits, true, out var stop) ? stop : StopBits.One,
                 Handshake = Enum.TryParse<Handshake>(_config.Handshake, true, out var hs) ? hs : Handshake.None,
-                // No read timeout: the host loop owns the waiting and the cancellation.
+                // No read timeout: the driver owns the waiting, through the token it passes to
+                // ReadAsync, which waits for bytes without blocking on the port.
                 ReadTimeout = SerialPort.InfiniteTimeout,
                 WriteTimeout = 5000,
                 // Several analysers will not transmit unless these are asserted, and the symptom is
@@ -119,7 +126,14 @@ public sealed class SerialInstrumentTransport : IInstrumentTransport
 
         try
         {
-            return await _port.BaseStream.ReadAsync(buffer, ct);
+            // The port's stream does not observe the token once its read is pending, so a read
+            // on a silent line never returned and the driver's ACK timeout was never applied.
+            // Waiting here for bytes to arrive honours the token; the read then takes only what
+            // is already buffered and cannot block.
+            while (_port.BytesToRead == 0)
+                await Task.Delay(SerialPollInterval, ct);
+
+            return _port.Read(buffer, 0, Math.Min(buffer.Length, _port.BytesToRead));
         }
         catch (OperationCanceledException)
         {

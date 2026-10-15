@@ -63,18 +63,46 @@ public sealed class DatabaseInitializer(
 
             await WarnIfTraceabilityUnprotectedAsync(ct);
 
-            await ReferenceDataSeeder.SeedAsync(context, passwordHasher, clock, ct);
+            // One workstation at a time. The seeders check what exists and insert what does not,
+            // and two workstations started together both found the administrator missing: the
+            // second insert broke the unique index and that workstation refused to start. The
+            // lock is the session's, on a connection held open until seeding is over, so it also
+            // covers the demonstration seeder, which works through scopes of its own.
+            await context.Database.OpenConnectionAsync(ct);
 
-            // Demonstration data only on explicit request (Application:SeedDemoDataOnFirstRun),
-            // which must be false on any installation holding real patients — see DemoDataSeeder.
-            // It runs at every start while the flag is on and completes whatever is missing; a
-            // section it cannot complete is logged, never fatal.
-            if (seedDemoData)
+            try
             {
-                if (demoDataSeeder is null)
-                    logger?.LogWarning("Demonstration data requested but no DemoDataSeeder is registered.");
-                else
-                    await demoDataSeeder.SeedAsync(ct);
+                if (!await AcquireSeedingLockAsync(context.Database.GetDbConnection(), SeedingLockTimeout, ct))
+                {
+                    logger?.LogError("Another workstation has been initialising the database for {Minutes} minutes.",
+                                     SeedingLockTimeout.TotalMinutes);
+                    return Result.Failure(Error.Conflict("Db_InitializationFailed", "seeding lock timeout"));
+                }
+
+                try
+                {
+                    await SeedReferenceDataAsync(ct);
+
+                    // Demonstration data only on explicit request (Application:SeedDemoDataOnFirstRun),
+                    // which must be false on any installation holding real patients — see
+                    // DemoDataSeeder. It runs at every start while the flag is on and completes
+                    // whatever is missing; a section it cannot complete is logged, never fatal.
+                    if (seedDemoData)
+                    {
+                        if (demoDataSeeder is null)
+                            logger?.LogWarning("Demonstration data requested but no DemoDataSeeder is registered.");
+                        else
+                            await demoDataSeeder.SeedAsync(ct);
+                    }
+                }
+                finally
+                {
+                    await ReleaseSeedingLockAsync(context.Database.GetDbConnection());
+                }
+            }
+            finally
+            {
+                await context.Database.CloseConnectionAsync();
             }
 
             return Result.Success();
@@ -84,6 +112,109 @@ public sealed class DatabaseInitializer(
             logger?.LogError(ex, "Could not initialise the database.");
             return Result.Failure(Error.Conflict("Db_InitializationFailed", ex.Message));
         }
+        catch (DbUpdateException ex)
+        {
+            // Reported like any other database failure. It used to escape as an unexpected
+            // exception, and the operator saw only that the application could not start.
+            logger?.LogError(ex, "Could not initialise the database.");
+            return Result.Failure(Error.Conflict("Db_InitializationFailed", ex.GetBaseException().Message));
+        }
+    }
+
+    /// <summary>Name of the application lock that serialises seeding across workstations.</summary>
+    internal const string SeedingLockResource = "MarocLIS.Seeding";
+
+    /// <summary>
+    /// How long a workstation waits for another to finish seeding. Generous: a first run with the
+    /// demonstration data takes a while, and a lock left by a workstation that died goes with its
+    /// session.
+    /// </summary>
+    private static readonly TimeSpan SeedingLockTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// The reference data, tried a second time when it lost an insert race. The lock prevents the
+    /// race between workstations running this version; one still running an earlier version takes
+    /// no lock, and its duplicate is not a reason to refuse to start — on the second pass the row
+    /// it inserted is found and skipped.
+    /// </summary>
+    private async Task SeedReferenceDataAsync(CancellationToken ct)
+    {
+        try
+        {
+            await ReferenceDataSeeder.SeedAsync(context, passwordHasher, clock, ct);
+        }
+        catch (DbUpdateException ex) when (IsDuplicateKey(ex))
+        {
+            logger?.LogWarning(ex, "Reference data inserted concurrently by another workstation; seeding again.");
+
+            // The rejected inserts are still tracked and would be sent again.
+            context.ChangeTracker.Clear();
+            await ReferenceDataSeeder.SeedAsync(context, passwordHasher, clock, ct);
+        }
+    }
+
+    /// <summary>A unique index or primary key violation: SQL Server errors 2601 and 2627.</summary>
+    internal static bool IsDuplicateKey(DbUpdateException ex) =>
+        ex.GetBaseException() is SqlException sql && sql.Errors.Cast<SqlError>().Any(e => e.Number is 2601 or 2627);
+
+    /// <summary>
+    /// Takes the seeding lock for the connection's session; false when another session held it for
+    /// the whole of <paramref name="timeout"/>.
+    /// </summary>
+    internal static async Task<bool> AcquireSeedingLockAsync(System.Data.Common.DbConnection connection,
+                                                             TimeSpan timeout, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "sp_getapplock";
+        command.CommandType = System.Data.CommandType.StoredProcedure;
+        // Longer than the lock wait, or the command would be abandoned before SQL Server answers.
+        command.CommandTimeout = (int)timeout.TotalSeconds + 30;
+
+        AddParameter(command, "@Resource", SeedingLockResource);
+        AddParameter(command, "@LockMode", "Exclusive");
+        AddParameter(command, "@LockOwner", "Session");
+        AddParameter(command, "@LockTimeout", (int)timeout.TotalMilliseconds);
+
+        var status = command.CreateParameter();
+        status.ParameterName = "@Status";
+        status.DbType = System.Data.DbType.Int32;
+        status.Direction = System.Data.ParameterDirection.ReturnValue;
+        command.Parameters.Add(status);
+
+        await command.ExecuteNonQueryAsync(ct);
+
+        // 0 granted at once, 1 granted after waiting; negative is a timeout, a deadlock or an error.
+        return status.Value is int code && code >= 0;
+    }
+
+    /// <summary>
+    /// Releases the seeding lock. Never throws: a connection that broke has already released it
+    /// along with its session, and a failure here must not mask the outcome of the seeding.
+    /// </summary>
+    internal static async Task ReleaseSeedingLockAsync(System.Data.Common.DbConnection connection)
+    {
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                IF APPLOCK_MODE('public', @Resource, 'Session') <> 'NoLock'
+                    EXEC sp_releaseapplock @Resource = @Resource, @LockOwner = 'Session';
+                """;
+            AddParameter(command, "@Resource", SeedingLockResource);
+            await command.ExecuteNonQueryAsync();
+        }
+        catch (Exception)
+        {
+            // See above.
+        }
+    }
+
+    private static void AddParameter(System.Data.Common.DbCommand command, string name, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
     }
 
     public Task<bool> CanConnectAsync(CancellationToken ct = default) =>

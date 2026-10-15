@@ -226,7 +226,9 @@ public sealed class SecurityAuditor(IServiceScopeFactory scopes, IClock clock, I
                                 ?? (currentUser is { IsAuthenticated: true } ? currentUser.UserName : null),
             Workstation = currentUser?.Workstation ?? Environment.MachineName,
             OsUser = Environment.UserName,
-            SiteId = currentUser is { IsAuthenticated: true } ? currentUser.SiteId : null,
+            SiteId = currentUser is { IsAuthenticated: true } && currentUser.SiteId != Guid.Empty
+                ? currentUser.SiteId
+                : null,
             FailureReasonKey = failureReasonKey,
             TargetUserId = targetUserId,
             Details = details

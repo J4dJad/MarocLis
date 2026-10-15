@@ -73,8 +73,19 @@ public sealed class MessageSender(MessagingOptions options, ILogger<MessageSende
             if (!string.IsNullOrWhiteSpace(smtp.UserName))
                 client.Credentials = new NetworkCredential(smtp.UserName, smtp.Password);
 
-            await client.SendMailAsync(mail, ct);
+            // SmtpClient.Timeout applies to Send only, not to SendMailAsync: a server that accepted
+            // the connection and then stopped answering held the send — and the screen waiting on
+            // it — indefinitely. The limit is enforced with a token instead.
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, smtp.TimeoutSeconds)));
+
+            await client.SendMailAsync(mail, timeout.Token);
             return Result.Success();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            logger?.LogWarning("Sending e-mail to {Recipient} through {Host} timed out.", to.Address, smtp.Host);
+            return Result.Failure(Error.Validation("Messaging_EmailFailed", "timeout"));
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)

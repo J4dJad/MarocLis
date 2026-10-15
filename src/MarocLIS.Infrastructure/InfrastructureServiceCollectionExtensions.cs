@@ -17,6 +17,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace MarocLIS.Infrastructure;
 
@@ -72,7 +73,12 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton(messaging);
         services.AddSingleton<IMessageSender, Messaging.MessageSender>();
 
-        services.AddScoped<AuditSaveChangesInterceptor>();
+        // The identity a scope works under when it is not the signed-in operator: the analyser host
+        // sets the service account here. Every scoped consumer of ICurrentUser below is built
+        // through ScopedUser so it sees that identity, not the operator at the keyboard.
+        services.AddScoped<ScopeIdentity>();
+
+        services.AddScoped(sp => ActivatorUtilities.CreateInstance<AuditSaveChangesInterceptor>(sp, ScopedUser(sp)));
 
         services.AddDbContext<LisDbContext>((sp, builder) =>
         {
@@ -96,11 +102,22 @@ public static class InfrastructureServiceCollectionExtensions
             builder.UseQueryTrackingBehavior(QueryTrackingBehavior.TrackAll);
         });
 
+        // Built here rather than by AddDbContext's activator, so the context takes the scope's
+        // identity and, for the analyser host, reads every site.
+        services.Replace(ServiceDescriptor.Scoped(sp =>
+        {
+            var identity = sp.GetService<ScopeIdentity>();
+            return new LisDbContext(sp.GetRequiredService<DbContextOptions<LisDbContext>>(), ScopedUser(sp))
+            {
+                IgnoreSiteScope = identity?.IgnoreSiteScope ?? false
+            };
+        }));
+
         services.AddScoped<IUnitOfWork, UnitOfWork>();
-        services.AddScoped<ISequenceAllocator, SequenceAllocator>();
-        services.AddScoped<ISecurityAuditor, SecurityAuditor>();
-        services.AddScoped<IDataAccessAuditor, DataAccessAuditor>();
-        services.AddScoped<IPermissionGuard, PermissionGuard>();
+        services.AddScoped<ISequenceAllocator>(sp => ActivatorUtilities.CreateInstance<SequenceAllocator>(sp, ScopedUser(sp)));
+        services.AddScoped<ISecurityAuditor>(sp => ActivatorUtilities.CreateInstance<SecurityAuditor>(sp, ScopedUser(sp)));
+        services.AddScoped<IDataAccessAuditor>(sp => ActivatorUtilities.CreateInstance<DataAccessAuditor>(sp, ScopedUser(sp)));
+        services.AddScoped<IPermissionGuard>(sp => ActivatorUtilities.CreateInstance<PermissionGuard>(sp, ScopedUser(sp)));
         services.AddScoped<IAuthenticationService, AuthenticationService>();
 
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
@@ -166,6 +183,13 @@ public static class InfrastructureServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// The identity a scoped service works under: the one the scope set (the analyser host's service
+    /// account), otherwise the operator signed in at this workstation.
+    /// </summary>
+    private static ICurrentUser ScopedUser(IServiceProvider sp) =>
+        sp.GetService<ScopeIdentity>()?.User ?? sp.GetRequiredService<ICurrentUser>();
 
     /// <summary>
     /// Normalises the connection string and applies the settings a laboratory deployment needs
