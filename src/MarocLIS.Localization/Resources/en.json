@@ -47,6 +47,10 @@
   "Asset_SupplierProvided": "This instrument is provided by its supplier (contract {0}: placement, comodat or lease). It remains the supplier's property and cannot be capitalised or depreciated by the laboratory.",
   "Asset_UsefulLifeOutOfRange": "The useful life must be between 1 and {0} years.",
   "Asset_YearOutOfRange": "Invalid year.",
+  "Asset_LabelTooLong": "The description cannot exceed {0} characters.",
+  "Asset_InvoiceReferenceTooLong": "The invoice reference cannot exceed {0} characters.",
+  "Asset_NotesTooLong": "The notes cannot exceed {0} characters.",
+  "Asset_DisposalReasonTooLong": "The reason for the disposal cannot exceed {0} characters.",
   "Treasury_PeriodInvalid": "The end date is before the start date.",
   "TreasuryItem_AmountRequired": "Enter a non-zero amount: positive for money in, negative for money out.",
   "TreasuryItem_EndBeforeStart": "The end date is before the start date.",
@@ -583,6 +587,9 @@
   },
 
   "Assets": {
+    "ClosingGross": "Gross value, closing",
+    "DepreciationOut": "Disposals, depreciation",
+    "GrossOut": "Disposals, gross value",
     "AccountsNotice": "CGNC accounts: asset (class 2), depreciation (28…), charge (6193 by default). Replace them with your accounting firm's sub-accounts.",
     "ChargeAccount": "Charge",
     "DepreciationAccount": "Depreciation",
@@ -772,6 +779,7 @@
   },
 
   "AccountingSetting": {
+    "AssetVat": "Recoverable VAT on fixed assets (34551)",
     "ChargeAccount": "Purchases: {0}",
     "SupplierCashAccount": "Cash for supplier payments (5161)",
     "SupplierBankAccount": "Bank for supplier payments (5141)",

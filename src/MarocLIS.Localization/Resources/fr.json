@@ -47,6 +47,10 @@
   "Asset_SupplierProvided": "Cet équipement est mis à disposition par son fournisseur (contrat {0} : mise à disposition, comodat ou location). Il reste la propriété du fournisseur et ne peut être ni immobilisé ni amorti par le laboratoire.",
   "Asset_UsefulLifeOutOfRange": "La durée d'utilisation doit être comprise entre 1 et {0} ans.",
   "Asset_YearOutOfRange": "Exercice invalide.",
+  "Asset_LabelTooLong": "La désignation ne peut pas dépasser {0} caractères.",
+  "Asset_InvoiceReferenceTooLong": "La référence de la facture ne peut pas dépasser {0} caractères.",
+  "Asset_NotesTooLong": "Les notes ne peuvent pas dépasser {0} caractères.",
+  "Asset_DisposalReasonTooLong": "Le motif de la sortie ne peut pas dépasser {0} caractères.",
   "Treasury_PeriodInvalid": "La date de fin précède la date de début.",
   "TreasuryItem_AmountRequired": "Saisissez un montant non nul : positif pour une rentrée, négatif pour une sortie.",
   "TreasuryItem_EndBeforeStart": "La date de fin précède la date de début.",
@@ -583,6 +587,9 @@
   },
 
   "Assets": {
+    "ClosingGross": "Valeur brute fin",
+    "DepreciationOut": "Sorties amort.",
+    "GrossOut": "Sorties valeur brute",
     "AccountsNotice": "Comptes du CGNC : immobilisation (classe 2), amortissement (28…), dotation (6193 par défaut). Remplacez-les par les sous-comptes de votre cabinet comptable.",
     "ChargeAccount": "Dotation",
     "DepreciationAccount": "Amortissement",
@@ -772,6 +779,7 @@
   },
 
   "AccountingSetting": {
+    "AssetVat": "TVA récupérable sur immobilisations (34551)",
     "ChargeAccount": "Achats : {0}",
     "SupplierCashAccount": "Caisse des règlements fournisseurs (5161)",
     "SupplierBankAccount": "Banque des règlements fournisseurs (5141)",
