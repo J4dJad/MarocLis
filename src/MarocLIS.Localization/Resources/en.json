@@ -3599,6 +3599,7 @@
   "Interface_InstrumentDecommissioned": "{0} is past its decommissioning date: its results are not accepted.",
   "Interface_InstrumentCalibrationOverdue": "{0} is overdue for calibration: results held. Record the calibration, then replay.",
   "Interface_SpecimenNotReceived": "Tube {0} not received yet: the result waits in the log. Replay it after reception.",
+  "Interface_ImportInterrupted": "The import of this transmission did not complete (an error, or the workstation stopped during processing); it can be replayed.",
   "Order_NotFoundForScan": "No order matches \"{0}\" on this site.",
   "Order_AnalysisWithoutTariff": "Analysis {0} has no tariff in force today, neither for this payer nor on the laboratory's price list. Add one in the analysis catalogue, Tariffs tab.",
 

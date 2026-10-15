@@ -3600,6 +3600,7 @@
   "Interface_InstrumentDecommissioned": "{0} a une date de réforme dépassée : ses résultats ne sont pas acceptés.",
   "Interface_InstrumentCalibrationOverdue": "{0} a un étalonnage dépassé : résultats retenus. Enregistrez l'étalonnage, puis réimportez.",
   "Interface_SpecimenNotReceived": "Tube {0} pas encore réceptionné : le résultat attend dans le journal. Rejouez-le après la réception.",
+  "Interface_ImportInterrupted": "L'import de cette transmission n'a pas abouti (erreur ou arrêt du poste pendant le traitement) ; elle peut être rejouée.",
   "Order_NotFoundForScan": "Aucun dossier ne correspond à « {0} » sur ce site.",
   "Order_AnalysisWithoutTariff": "L'analyse {0} n'a pas de tarif en vigueur aujourd'hui, ni pour ce tiers payant ni dans la liste de prix du laboratoire. Ajoutez-lui un tarif dans le Catalogue des analyses, onglet Tarifs.",
 
