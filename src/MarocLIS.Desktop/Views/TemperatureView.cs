@@ -134,14 +134,16 @@ public sealed class TemperatureView : LocalizedView
         top.Controls.Add(_units);
         top.Controls.Add(bar);
 
-        var readingsBar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UiTheme.Surface };
+        var readingsBar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
         _readingsHeading.Font = UiTheme.SectionTitle;
         _readingsHeading.ForeColor = UiTheme.TextPrimary;
-        _readingsHeading.AutoSize = true;
-        _readingsHeading.Location = new Point(0, 10);
+        // Fixed width: the heading grows with the selection and must not run under the buttons.
+        _readingsHeading.AutoSize = false;
+        _readingsHeading.AutoEllipsis = true;
+        _readingsHeading.Bounds = new Rectangle(0, 10, 370, 26);
         _month.Bounds = new Rectangle(380, 8, 100, UiTheme.InputHeight);
-        _pdf.Bounds = new Rectangle(490, 6, 170, UiTheme.ButtonHeight);
-        _csv.Bounds = new Rectangle(670, 6, 150, UiTheme.ButtonHeight);
+        _pdf.Bounds = new Rectangle(490, 6, 200, UiTheme.ButtonHeight);
+        _csv.Bounds = new Rectangle(700, 6, 200, UiTheme.ButtonHeight);
         readingsBar.Controls.AddRange([_readingsHeading, _month, _pdf, _csv]);
 
         foreach (var (name, weight) in new[]

@@ -1127,10 +1127,10 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
         _specialityFr = TextField("Order.Speciality", 260, 68, 200, row?.Speciality?.Fr);
         _institution = TextField("Order.Institution", 480, 68, 220, row?.InstitutionName);
 
-        _order = TextField("Admin.OrderNumber", 20, 122, 180, row?.ProfessionalOrderNumber,
+        _order = TextField("Admin.OrderNumber", 20, 122, 200, row?.ProfessionalOrderNumber,
                        latin: true, mono: true);
-        _inpe = TextField("Site.Inpe", 220, 122, 180, row?.Inpe, latin: true, mono: true);
-        _ice = TextField("Site.Ice", 420, 122, 180, null, latin: true, mono: true);
+        _inpe = TextField("Site.Inpe", 240, 122, 170, row?.Inpe, latin: true, mono: true);
+        _ice = TextField("Site.Ice", 430, 122, 170, null, latin: true, mono: true);
 
         _inpeNotice = Notice(20, 174, 680, 30, "Order.InpeNotice", UiTheme.Abnormal);
 

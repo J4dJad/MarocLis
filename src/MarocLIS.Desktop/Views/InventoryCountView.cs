@@ -130,15 +130,17 @@ public sealed class InventoryCountView : LocalizedView
         top.Controls.Add(_list);
         top.Controls.Add(bar);
 
-        var linesBar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UiTheme.Surface };
+        var linesBar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
         _linesHeading.Font = UiTheme.SectionTitle;
         _linesHeading.ForeColor = UiTheme.TextPrimary;
-        _linesHeading.AutoSize = true;
-        _linesHeading.Location = new Point(0, 10);
+        // Fixed width: the heading grows with the selection and must not run under the buttons.
+        _linesHeading.AutoSize = false;
+        _linesHeading.AutoEllipsis = true;
+        _linesHeading.Bounds = new Rectangle(0, 10, 370, 26);
 
-        _sheet.Bounds = new Rectangle(380, 6, 170, UiTheme.ButtonHeight);
-        _sheetCsv.Bounds = new Rectangle(560, 6, 150, UiTheme.ButtonHeight);
-        _variances.Bounds = new Rectangle(720, 6, 190, UiTheme.ButtonHeight);
+        _sheet.Bounds = new Rectangle(380, 6, 220, UiTheme.ButtonHeight);
+        _sheetCsv.Bounds = new Rectangle(610, 6, 170, UiTheme.ButtonHeight);
+        _variances.Bounds = new Rectangle(790, 6, 220, UiTheme.ButtonHeight);
         linesBar.Controls.AddRange([_linesHeading, _sheet, _sheetCsv, _variances]);
 
         foreach (var (name, weight, editable) in new[]

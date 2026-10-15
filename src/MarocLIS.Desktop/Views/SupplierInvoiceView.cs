@@ -37,7 +37,7 @@ public sealed class SupplierInvoiceView : LocalizedView
     private readonly Label _summary = new();
     private readonly Label _detailHeading = new();
     private readonly Label _detailInfo = new();
-    private readonly ComboBox _filter = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _filter = new() { DropDownStyle = ComboBoxStyle.DropDownList, FormattingEnabled = true };
 
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _newInvoice = UiTheme.PrimaryButton(string.Empty);
@@ -197,8 +197,9 @@ public sealed class SupplierInvoiceView : LocalizedView
 
     private void WireBehaviour()
     {
-        foreach (var filter in Enum.GetValues<SupplierInvoiceFilter>()) _filter.Items.Add(filter);
+        // The formatter goes first: items added before it keep their raw enum name.
         _filter.Format += (_, e) => e.Value = e.ListItem is SupplierInvoiceFilter f ? T($"SupplierInvoiceFilter.{f}") : e.Value;
+        foreach (var filter in Enum.GetValues<SupplierInvoiceFilter>()) _filter.Items.Add(filter);
         _filter.SelectedIndex = 0;
         _filter.SelectedIndexChanged += async (_, _) => await LoadAsync();
 
