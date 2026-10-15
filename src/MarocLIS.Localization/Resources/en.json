@@ -3248,6 +3248,7 @@
   "Item_MustBeValidatedBeforeReporting": "An analysis must be biologically validated before it appears on a report.",
   "Item_CannotRepeatFromStatus": "Repeating is not possible from status \"{0}\".",
   "Item_RepeatReasonRequired": "State the reason for repeating.",
+  "Item_RepeatRequiresUnvalidation": "This analysis has biologically validated results: the validation must be withdrawn first (\"unvalidate\" right) before the analysis is repeated.",
 
   "Instrument_NotFound": "Analyser not found.",
   "Interface_NotFound": "Analyser interface not found.",
@@ -3631,6 +3632,7 @@
   "Interface_ImportInterrupted": "The import of this transmission did not complete (an error, or the workstation stopped during processing); it can be replayed.",
   "Order_NotFoundForScan": "No order matches \"{0}\" on this site.",
   "Order_AnalysisWithoutTariff": "Analysis {0} has no tariff in force today, neither for this payer nor on the laboratory's price list. Add one in the analysis catalogue, Tariffs tab.",
+  "Order_ItemPartlyReportedCannotCancel": "Some results of this analysis are already on an issued report: it can no longer be cancelled; issue an amended report.",
 
   "Report_NotFound": "Report not found.",
   "Report_SiteNotFound": "The order's site was not found.",
@@ -3648,6 +3650,7 @@
   "Report_NoStoredPdf": "This report's PDF is not stored: reissue it before sending.",
 
   "Notification_NotFound": "Communication record not found.",
+  "Notification_ValueChangedSinceDisplayed": "{0}: the value has changed since the screen was loaded (analyser re-run or correction). Reload the file and communicate the current value.",
   "Qc_RunNotFound": "Control run not found ({0}).",
   "Sample_NotFound": "Sample not found ({0}).",
   "Sample_BarcodeUnknown": "No sample carries the barcode \"{0}\".",

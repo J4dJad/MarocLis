@@ -3249,6 +3249,7 @@
   "Item_MustBeValidatedBeforeReporting": "Une analyse doit être validée biologiquement avant d'être portée sur un compte rendu.",
   "Item_CannotRepeatFromStatus": "Reprise impossible depuis le statut « {0} ».",
   "Item_RepeatReasonRequired": "Indiquez le motif de la reprise.",
+  "Item_RepeatRequiresUnvalidation": "Cette analyse comporte des résultats déjà validés biologiquement : la validation doit d'abord être retirée (droit « dévalider ») avant de reprendre l'analyse.",
 
   "Instrument_NotFound": "Automate introuvable.",
   "Interface_NotFound": "Interface automate introuvable.",
@@ -3632,6 +3633,7 @@
   "Interface_ImportInterrupted": "L'import de cette transmission n'a pas abouti (erreur ou arrêt du poste pendant le traitement) ; elle peut être rejouée.",
   "Order_NotFoundForScan": "Aucun dossier ne correspond à « {0} » sur ce site.",
   "Order_AnalysisWithoutTariff": "L'analyse {0} n'a pas de tarif en vigueur aujourd'hui, ni pour ce tiers payant ni dans la liste de prix du laboratoire. Ajoutez-lui un tarif dans le Catalogue des analyses, onglet Tarifs.",
+  "Order_ItemPartlyReportedCannotCancel": "Une partie des résultats de cette analyse figure déjà sur un compte rendu émis : elle ne peut plus être annulée ; émettez un compte rendu rectifié.",
 
   "Report_NotFound": "Compte rendu introuvable.",
   "Report_SiteNotFound": "Site du dossier introuvable.",
@@ -3649,6 +3651,7 @@
   "Report_NoStoredPdf": "Le PDF de ce compte rendu n'est pas conservé : réémettez-le avant de l'envoyer.",
 
   "Notification_NotFound": "Fiche de communication introuvable.",
+  "Notification_ValueChangedSinceDisplayed": "{0} : la valeur a changé depuis l'affichage de l'écran (nouveau passage sur l'automate ou correction). Rechargez le dossier et communiquez la valeur actuelle.",
   "Qc_RunNotFound": "Série de contrôle introuvable ({0}).",
   "Sample_NotFound": "Échantillon introuvable ({0}).",
   "Sample_BarcodeUnknown": "Aucun échantillon ne porte le code-barres « {0} ».",

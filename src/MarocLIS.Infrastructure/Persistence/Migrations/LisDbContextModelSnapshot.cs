@@ -1214,6 +1214,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<int?>("AgeToDays")
                         .HasColumnType("int");
 
+                    b.Property<int?>("AgeUnitDays")
+                        .HasColumnType("int");
+
                     b.Property<int>("AppliesToGender")
                         .HasColumnType("int");
 
@@ -2358,6 +2361,12 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Phone")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateOnly?>("PreviousExitDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("PreviousHireDate")
+                        .HasColumnType("date");
 
                     b.Property<string>("Rib")
                         .HasMaxLength(30)
