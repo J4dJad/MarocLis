@@ -64,10 +64,13 @@ public static class LotQcGate
 
         if (!anyConformingRun) return new LotQcVerdict(LotQcVerdictKind.NoConformingRun, []);
 
+        // The last point of each level that carries a verdict: a point recorded but never evaluated
+        // (no target statistics, or a transmission nobody judged) says nothing for or against the
+        // lot, and taking it as the last word blocked a release the evaluated points allowed.
         var failing = required
             .Where(level =>
             {
-                var last = points.Where(p => p.QcTargetId == level.QcTargetId)
+                var last = points.Where(p => p.QcTargetId == level.QcTargetId && p.Outcome != QcOutcome.Pending)
                                  .OrderByDescending(p => p.MeasuredAt)
                                  .FirstOrDefault();
                 return last is null || !Conforms(last.Outcome);

@@ -1,5 +1,6 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Quality;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
@@ -53,6 +54,8 @@ public sealed class InstrumentMessageSink(
     IRepository<Patient> patients,
     IRepository<QcTarget> qcTargets,
     IRepository<QcResult> qcResults,
+    IRepository<QcMaterial> qcMaterials,
+    IQualityQueries qualityQueries,
     IRepository<Instrument> instruments,
     ResultPostEntryPipeline pipeline,
     IInstrumentMessageLogStore messageLog,
@@ -605,6 +608,11 @@ public sealed class InstrumentMessageSink(
     /// control screen, where a biologist sees the chart. Evaluating it here and acting on the
     /// verdict silently would make a rejection invisible.
     /// </para>
+    /// <para>
+    /// A new lot's acceptance point is the exception: it is evaluated on the lot's own series, as
+    /// the QC screen does, because the release gate reads its verdict and flags no patient result.
+    /// Left pending, it blocked the lot's release for good.
+    /// </para>
     /// </summary>
     private async Task<int> ImportControlAsync(InstrumentInterface link,
                                                 InstrumentSpecimenResults specimen,
@@ -627,7 +635,7 @@ public sealed class InstrumentMessageSink(
         }
 
         var imported = 0;
-        var points = new List<QcResult>();
+        var points = new List<(QcResult Point, QcTarget Target)>();
 
         foreach (var incoming in specimen.Results)
         {
@@ -656,12 +664,7 @@ public sealed class InstrumentMessageSink(
             // The target is the laboratory's assigned mean and SD for this material, parameter and
             // analyser. Without one there is nothing to judge the point against, so it is not
             // stored: an unanchored control point on a chart is worse than a gap.
-            var targets = await qcTargets.ListAsync(
-                t => t.TestParameterId == mapping.TestParameterId
-                     && t.InstrumentId == link.InstrumentId
-                     && t.IsActive, ct);
-
-            var target = targets.Count > 0 ? targets[0] : null;
+            var target = await TargetForLotAsync(mapping.TestParameterId, link.InstrumentId, lot, ct);
 
             if (target is null)
             {
@@ -680,7 +683,7 @@ public sealed class InstrumentMessageSink(
             };
 
             await qcResults.AddAsync(point, ct);
-            points.Add(point);
+            points.Add((point, target));
             imported++;
         }
 
@@ -689,12 +692,14 @@ public sealed class InstrumentMessageSink(
             // The reagent lot measured: a new lot loaded on this analyser for its acceptance QC
             // when there is one, otherwise the lot in use. Crediting a new lot's controls to the
             // lot in use left the new lot without evidence and mixed its values into the old one.
-            var parameterIds = points.Select(p => p.TestParameterId).Distinct().ToList();
+            // Only while the evaluation session lasts (see the query): the analyser's routine QC of
+            // the next days is measured with the lot in use and stays credited to it.
+            var parameterIds = points.Select(p => p.Point.TestParameterId).Distinct().ToList();
             var evaluated = await pipeline.ReagentLotsUnderEvaluationAsync(
                 parameterIds, link.SiteId, link.InstrumentId, ct);
             var lots = await pipeline.ReagentLotsInUseAsync(parameterIds, link.SiteId, ct);
 
-            foreach (var point in points)
+            foreach (var (point, _) in points)
             {
                 if (evaluated.TryGetValue(point.TestParameterId, out var underEvaluation))
                 {
@@ -707,6 +712,8 @@ public sealed class InstrumentMessageSink(
                 }
             }
 
+            await EvaluateAcceptancePointsAsync([.. points.Where(p => p.Point.IsLotEvaluation)], ct);
+
             unitOfWork.AuditReason =
                 $"Contrôle interne reçu de l'automate — lot {lot}, {imported} niveau(x)";
 
@@ -714,6 +721,76 @@ public sealed class InstrumentMessageSink(
         }
 
         return imported;
+    }
+
+    /// <summary>
+    /// The target of the control material the analyser named. Several levels of one parameter on
+    /// one analyser are several targets, told apart by the control lot: taking the first one stored
+    /// a level-2 value against the level-1 mean. Null when no active target, or more than one,
+    /// has a material of that lot.
+    /// </summary>
+    private async Task<QcTarget?> TargetForLotAsync(Guid testParameterId, Guid instrumentId,
+                                                    string controlLot, CancellationToken ct)
+    {
+        var targets = await qcTargets.ListAsync(
+            t => t.TestParameterId == testParameterId && t.InstrumentId == instrumentId && t.IsActive, ct);
+        if (targets.Count == 0) return null;
+
+        var materialIds = targets.Select(t => t.QcMaterialId).Distinct().ToList();
+        var materials = await qcMaterials.ListAsync(m => materialIds.Contains(m.Id), ct);
+
+        var ofLot = materials
+            .Where(m => string.Equals(m.LotNumber.Trim(), controlLot, StringComparison.OrdinalIgnoreCase))
+            .Select(m => m.Id)
+            .ToHashSet();
+
+        var matching = targets.Where(t => ofLot.Contains(t.QcMaterialId)).ToList();
+        return matching.Count == 1 ? matching[0] : null;
+    }
+
+    /// <summary>
+    /// Evaluates the acceptance points of a lot under evaluation against that lot's own series,
+    /// with the target statistics the QC screen uses. The transmission is one run.
+    /// </summary>
+    private async Task EvaluateAcceptancePointsAsync(List<(QcResult Point, QcTarget Target)> points,
+                                                     CancellationToken ct)
+    {
+        if (points.Count == 0) return;
+
+        var runId = Guid.CreateVersion7();
+
+        foreach (var (point, target) in points)
+        {
+            point.QcRunId = runId;
+            point.TargetMean = target.EffectiveMean;
+            point.TargetSd = target.EffectiveSd;
+            point.ZScore = target.ZScore(point.Value);
+        }
+
+        foreach (var (point, target) in points)
+        {
+            if (point.ZScore is not { } z)
+            {
+                point.ApplyEvaluation(WestgardEvaluation.NotEvaluable);
+                continue;
+            }
+
+            var history = await qualityQueries.GetZScoreHistoryAsync(target.Id, 12, point.ReagentLotId, ct);
+            var series = new List<QcPoint>(history)
+            {
+                new(z, point.MeasuredAt, runId, await qualityQueries.GetMaterialLevelAsync(target.QcMaterialId, ct))
+            };
+
+            // The other levels of the same analyte on the same lot, sent in the same transmission.
+            var peers = points
+                .Where(x => x.Point.Id != point.Id && x.Point.ZScore is not null
+                            && x.Point.TestParameterId == point.TestParameterId
+                            && x.Point.ReagentLotId == point.ReagentLotId)
+                .Select(x => new QcPoint(x.Point.ZScore!.Value, x.Point.MeasuredAt, runId, QcLevel.Normal))
+                .ToList();
+
+            point.ApplyEvaluation(WestgardEvaluator.Evaluate(target.ActiveRules, series, peers));
+        }
     }
 
     // ---- Query answering -----------------------------------------------------------------------

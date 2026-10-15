@@ -530,6 +530,8 @@ public sealed class ReviewFixesClinical3Tests
                 patients,
                 Stub.Of<IRepository<QcTarget>>(),
                 Stub.Of<IRepository<QcResult>>(),
+                Stub.Of<IRepository<QcMaterial>>(),
+                Stub.Of<MarocLIS.Application.Quality.IQualityQueries>(),
                 Stub.Of<IRepository<Instrument>>(new()
                 {
                     ["GetByIdAsync"] = _ => Task.FromResult<Instrument?>(instrument)

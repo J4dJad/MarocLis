@@ -201,6 +201,8 @@ public sealed class ReplayRefusalTests
             new ThrowingRepository<Patient>(),
             new ThrowingRepository<QcTarget>(),
             new ThrowingRepository<QcResult>(),
+            new ThrowingRepository<QcMaterial>(),
+            null!,
             new ThrowingRepository<Instrument>(),
             new ResultPostEntryPipeline(new ThrowingRepository<AnalysisTest>(),
                                         new ThrowingRepository<Patient>(),

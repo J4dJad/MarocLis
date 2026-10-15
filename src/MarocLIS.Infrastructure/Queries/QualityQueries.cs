@@ -54,9 +54,10 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
 
         var targetIds = rows.Select(r => r.Target.Id).ToList();
 
-        // The previous point per target, so the technician sees where the series stood.
+        // The previous point per target, so the technician sees where the series stood. The routine
+        // series only: a new lot's acceptance point says nothing about the lot in use.
         var lastPoints = await db.QcResults.AsNoTracking()
-            .Where(r => targetIds.Contains(r.QcTargetId))
+            .Where(r => targetIds.Contains(r.QcTargetId) && !r.IsLotEvaluation)
             .GroupBy(r => r.QcTargetId)
             .Select(g => g.OrderByDescending(r => r.MeasuredAt)
                           .Select(r => new { r.QcTargetId, r.Value, r.MeasuredAt, r.Outcome })
@@ -165,8 +166,10 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
 
         if (header is null) return null;
 
+        // The routine chart: a new lot's acceptance points are judged on their own series, and
+        // drawn among the points of the lot in use they read as its own excursions.
         var points = await db.QcResults.AsNoTracking()
-            .Where(r => r.QcTargetId == qcTargetId && r.MeasuredAt >= from)
+            .Where(r => r.QcTargetId == qcTargetId && r.MeasuredAt >= from && !r.IsLotEvaluation)
             .OrderBy(r => r.MeasuredAt)
             .Select(r => new LeveyJenningsPoint(
                 r.Id, r.MeasuredAt, r.Value, r.ZScore, r.Outcome, r.ViolatedRules,

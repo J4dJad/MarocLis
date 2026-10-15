@@ -352,8 +352,9 @@ public sealed class ReagentLot : Entity, IAuditable
 
     /// <summary>
     /// The analyser on which this quarantined lot is loaded for its acceptance QC, so the controls
-    /// that analyser transmits are credited to it rather than to the lot in routine use. Cleared
-    /// when the lot is released or rejected.
+    /// that analyser transmits are credited to it rather than to the lot in routine use, on the
+    /// day a control run on the lot is entered in the QC screen only. Cleared when the lot is
+    /// released or rejected.
     /// </summary>
     public Guid? EvaluationInstrumentId { get; private set; }
     public int? StabilityAfterOpeningDays { get; set; }
