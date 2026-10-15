@@ -165,16 +165,17 @@ public sealed class InstrumentContractView : LocalizedView
         _grid.CellFormatting += OnContractFormatting;
         _grid.CellDoubleClick += async (_, e) =>
         {
-            if (e.RowIndex >= 0 && !PermissionGate.IsBlocked(_edit)) await EditAsync(SelectedContract?.Id);
+            if (e.RowIndex >= 0 && !PermissionGate.IsBlocked(_edit))
+                await RunActionAsync(() => EditAsync(SelectedContract?.Id));
         };
         _interventions.CellFormatting += OnInterventionFormatting;
         _interventions.SelectionChanged += (_, _) => RefreshButtons();
 
-        _new.Click += async (_, _) => await EditAsync(null);
-        _edit.Click += async (_, _) => await EditAsync(SelectedContract?.Id);
-        _attach.Click += async (_, _) => await AttachAsync();
+        _new.Click += async (_, _) => await RunActionAsync(() => EditAsync(null));
+        _edit.Click += async (_, _) => await RunActionAsync(() => EditAsync(SelectedContract?.Id));
+        _attach.Click += async (_, _) => await RunActionAsync(AttachAsync);
         _openFile.Click += async (_, _) => await OpenFileAsync();
-        _times.Click += async (_, _) => await RecordTimesAsync();
+        _times.Click += async (_, _) => await RunActionAsync(RecordTimesAsync);
 
         PermissionGate.Require(Permissions.Equipment.ManageContracts, _new, _edit, _attach);
         PermissionGate.Require(Permissions.Equipment.RecordMaintenance, _times);
@@ -418,10 +419,29 @@ public sealed class InstrumentContractView : LocalizedView
 
     private void RefreshButtons()
     {
-        _edit.Enabled = SelectedContract is not null;
-        _attach.Enabled = SelectedContract is not null;
-        _openFile.Enabled = SelectedContract is { FileName: not null };
-        _times.Enabled = SelectedIntervention is not null;
+        // Nothing that writes is offered while a write is in flight (see RunActionAsync).
+        var idle = !IsBusy;
+
+        _new.Enabled = idle;
+        _edit.Enabled = idle && SelectedContract is not null;
+        _attach.Enabled = idle && SelectedContract is not null;
+        _openFile.Enabled = idle && SelectedContract is { FileName: not null };
+        _times.Enabled = idle && SelectedIntervention is not null;
+    }
+
+    /// <summary>
+    /// Runs one write with every write button held disabled until it ends, and the view flagged busy
+    /// so that leaving the screen does not dispose its context under a pending save.
+    /// </summary>
+    private async Task RunActionAsync(Func<Task> action)
+    {
+        var ran = await RunBusyAsync(async () =>
+        {
+            RefreshButtons();
+            await action();
+        });
+
+        if (ran && !IsDisposed) RefreshButtons();
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -430,7 +450,7 @@ public sealed class InstrumentContractView : LocalizedView
     {
         try
         {
-            var options = await _contracts.GetOptionsAsync();
+            var options = await _contracts.GetOptionsAsync(contractId);
             if (options.IsFailure) { _dialogs.ShowFailure(options); return; }
 
             InstrumentContractDetail? detail = null;
@@ -545,12 +565,19 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
         : base(localizer, dialogs, detail is null ? "Contracts.New" : "Action.Edit", detail?.Reference, 940, 760)
     {
         _id = detail?.Id;
+        var language = localizer.CurrentLanguage;
+        var inactive = localizer["Contracts.InactiveSuffix"];
+        string Display(ContractLookup entry) =>
+            entry.IsActive
+                ? $"{entry.Code} — {entry.Name.For(language)}"
+                : $"{entry.Code} — {entry.Name.For(language)} {inactive}";
+
         _instrumentOptions = options.Instruments;
         _itemOptions = options.StockItems;
 
         _reference = TextField("Contracts.Reference", 20, 14, 180, detail?.Reference, latin: true);
         _supplier = Lookup("Inventory.Supplier", 220, 14, 300,
-                           options.Suppliers.Select(s => (s.Id, $"{s.Code} — {s.Name}")), detail?.SupplierId,
+                           options.Suppliers.Select(s => (s.Id, Display(s))), detail?.SupplierId,
                            allowNone: false);
         _kind = Choice("Contracts.Kind", 540, 14, 180, detail?.Kind ?? InstrumentContractKind.Placement,
                        "InstrumentContractKind");
@@ -586,7 +613,7 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
         _instruments.CheckOnClick = true;
         foreach (var instrument in options.Instruments)
         {
-            var index = _instruments.Items.Add($"{instrument.Code} — {instrument.Name}");
+            var index = _instruments.Items.Add(Display(instrument));
             if (detail?.InstrumentIds.Contains(instrument.Id) == true) _instruments.SetItemChecked(index, true);
         }
         Controls.Add(_instruments);
@@ -603,7 +630,7 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
             DisplayMember = nameof(ReagentChoice.Display), ValueMember = nameof(ReagentChoice.Id),
             FlatStyle = FlatStyle.Flat
         };
-        itemColumn.Items.AddRange([.. options.StockItems.Select(i => new ReagentChoice(i.Id, $"{i.Code} — {i.Name}"))]);
+        itemColumn.Items.AddRange([.. options.StockItems.Select(i => new ReagentChoice(i.Id, Display(i)))]);
         _reagents.Columns.Add(itemColumn);
         _reagents.Columns.Add(new DataGridViewTextBoxColumn { Name = "price", HeaderText = localizer["Contracts.ContractPrice"], FillWeight = 22 });
         _reagents.Columns.Add(new DataGridViewTextBoxColumn { Name = "costPerTest", HeaderText = localizer["Contracts.CostPerTest"], FillWeight = 22 });

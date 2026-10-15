@@ -30,13 +30,14 @@ public sealed class InventoryCountQueries(LisDbContext db) : IInventoryCountQuer
         var itemIds = count.Lines.Select(l => l.StockItemId).Distinct().ToList();
         var items = await db.StockItems.IgnoreQueryFilters().AsNoTracking()
             .Where(i => itemIds.Contains(i.Id))
-            .Select(i => new { i.Id, Name = i.Name.Fr, i.UnitOfMeasure })
+            .Select(i => new { i.Id, i.Name, i.UnitOfMeasure })
             .ToDictionaryAsync(i => i.Id, ct);
 
+        // In the operator's language, as the screen and the printed sheets around it are.
         var lines = count.Lines.OrderBy(l => l.LineNumber).Select(l =>
         {
             var item = items.GetValueOrDefault(l.StockItemId);
-            return new InventoryCountLineRow(l.Id, l.LineNumber, l.StockItemId, l.ItemCode, item?.Name ?? l.ItemCode,
+            return new InventoryCountLineRow(l.Id, l.LineNumber, l.StockItemId, l.ItemCode, item?.Name.Current ?? l.ItemCode,
                                              item?.UnitOfMeasure ?? string.Empty, l.ReagentLotId, l.LotNumber,
                                              l.ExpiryDate, l.StorageLocation, l.ExpectedQuantity, l.CountedQuantity,
                                              l.Variance, l.Comment);

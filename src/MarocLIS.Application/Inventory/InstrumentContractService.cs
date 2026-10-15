@@ -64,7 +64,12 @@ public sealed record ContractInterventionRow(
     bool DelayExceeded,
     string? Technician);
 
-public sealed record ContractLookup(Guid Id, string Code, string Name);
+/// <summary>
+/// One supplier, analyser or item the editor offers. <paramref name="IsActive"/> is false for an entry
+/// that is only offered because the contract being edited already uses it (inactive supplier,
+/// decommissioned analyser, deactivated item), so that saving does not silently drop it.
+/// </summary>
+public sealed record ContractLookup(Guid Id, string Code, MultilingualText Name, bool IsActive = true);
 
 /// <summary>What the contract editor offers to pick from.</summary>
 public sealed record ContractOptions(
@@ -140,12 +145,16 @@ public sealed class InstrumentContractService(
                                                                                  r.CostPerTestMad))]));
     }
 
-    public async Task<Result<ContractOptions>> GetOptionsAsync(CancellationToken ct = default)
+    /// <summary>
+    /// What the editor offers. When <paramref name="contractId"/> names the contract being edited, its
+    /// current supplier, analysers and reagents are offered too even if they are no longer active.
+    /// </summary>
+    public async Task<Result<ContractOptions>> GetOptionsAsync(Guid? contractId = null, CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Equipment.ManageContracts);
         if (permitted.IsFailure) return Result.Failure<ContractOptions>(permitted.FirstError);
 
-        return Result.Success(await queries.GetOptionsAsync(currentUser.SiteId, ct));
+        return Result.Success(await queries.GetOptionsAsync(currentUser.SiteId, contractId, ct));
     }
 
     public async Task<Result<Guid>> SaveAsync(SaveInstrumentContractRequest request, CancellationToken ct = default)
@@ -295,7 +304,11 @@ public interface IInstrumentContractQueries
 
     Task<IReadOnlyList<ContractInterventionRow>> GetInterventionsAsync(Guid contractId, CancellationToken ct = default);
 
-    Task<ContractOptions> GetOptionsAsync(Guid siteId, CancellationToken ct = default);
+    /// <summary>
+    /// Active suppliers, analysers and items of the site, plus those <paramref name="contractId"/>
+    /// already uses whatever their state (flagged inactive).
+    /// </summary>
+    Task<ContractOptions> GetOptionsAsync(Guid siteId, Guid? contractId, CancellationToken ct = default);
 
     Task<bool> ReferenceExistsAsync(Guid supplierId, string reference, Guid? exceptContractId,
                                     CancellationToken ct = default);

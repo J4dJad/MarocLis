@@ -238,6 +238,11 @@ $patterns = @(
     # in the operator's language. Those keys reach a screen exactly like a T(...) one does.
     '\bDescribe\("([^"]+)"',
 
+    # A key chosen by a ternary inside the lookup itself - T(enabling ? "X.EnablePrompt" :
+    # "X.DisablePrompt", code) - was invisible to the T("..." pattern, and both of those keys had
+    # never existed. Both arms are captured.
+    '(?:\bT\(|[Ll]ocalizer\[|[Ll]ocalizer\.(?:Get|Format)\()\s*[^;()"\[\]]*?\?\s*"([^"]+)"\s*:\s*"([^"]+)"',
+
     # The mock-up's own grid and label helpers: a column header given by key, a cell written as
     # "@Some.Key", and the sidebar's { key: ..., label: "Nav.X" } entries.
     '\bh:\s*"([^"]+)"',
@@ -360,6 +365,41 @@ $enumGroups = [ordered] @{
     'ActionKind'          = 'ActionKind'
     'PrescriberKind'      = 'PrescriberKind'
     'ReportDeliveryPreference' = 'ReportDeliveryPreference'
+
+    # Groups added after the third review found the audit trail showing "AuditOperation.Update":
+    # every prefix a view interpolates whose enum lives in the domain.
+    'AuditOperation'      = 'AuditOperation'
+    'DataAccessKind'      = 'DataAccessKind'
+    'SampleDefect'        = 'SampleDefect'
+    'DocumentKind'        = 'DocumentKind'
+    'DocumentVersionStatus' = 'DocumentVersionStatus'
+    'DetectionSource'     = 'DetectionSource'
+    'InvoiceStatus'       = 'InvoiceStatus'
+    'PurchaseOrderStatus' = 'PurchaseOrderStatus'
+    'QuoteRequestStatus'  = 'QuoteRequestStatus'
+    'SupplierInvoiceStatus' = 'SupplierInvoiceStatus'
+    'SupplierPaymentMethod' = 'SupplierPaymentMethod'
+    'InstrumentContractKind' = 'InstrumentContractKind'
+    'CommitmentBasis'     = 'CommitmentBasis'
+    'StorageUnitKind'     = 'StorageUnitKind'
+    'InventoryCountStatus' = 'InventoryCountStatus'
+    'ExpiryAlertLevel'    = 'ExpiryAlertLevel'
+    'AccidentEventKind'   = 'AccidentEventKind'
+    'AccidentKind'        = 'AccidentKind'
+    'ExposureType'        = 'ExposureType'
+    'ContractType'        = 'ContractType'
+    'CredentialKind'      = 'CredentialKind'
+    'EmployeeJob'         = 'EmployeeJob'
+    'ExitReason'          = 'ExitReason'
+    'HabilitationActivity' = 'HabilitationActivity'
+    'HabilitationLevel'   = 'HabilitationLevel'
+    'LeaveStatus'         = 'LeaveStatus'
+    'LeaveType'           = 'LeaveType'
+    'MedicalFitness'      = 'MedicalFitness'
+    'PayrollExemption'    = 'PayrollExemption'
+    'PayrollStatus'       = 'PayrollStatus'
+    'ShiftKind'           = 'ShiftKind'
+    'StaffCategory'       = 'StaffCategory'
 }
 
 foreach ($prefix in $enumGroups.Keys) {
@@ -376,6 +416,9 @@ foreach ($prefix in $enumGroups.Keys) {
     $lines = Get-Content $declaration.Path
     $members = @()
 
+    # A [Flags] enum's None is the absence of a value, never shown as a label (SampleDefect).
+    $isFlags = $declaration.LineNumber -ge 2 -and $lines[$declaration.LineNumber - 2].Trim() -eq '[Flags]'
+
     # Members are collected per comma-separated declarator, not per line. Several enums declare
     # more than one on a line - "OPositive = 1, ONegative = 2," - and a line-at-a-time reader
     # silently checked only the first of each, reporting BloodGroup as 5 members when it has 9.
@@ -389,7 +432,10 @@ foreach ($prefix in $enumGroups.Keys) {
 
         foreach ($declarator in $line.Split(',')) {
             $name = $declarator.Trim()
-            if ($name -match '^([A-Z]\w*)\s*(=.*)?$') { $members += $Matches[1] }
+            if ($name -match '^([A-Z]\w*)\s*(=.*)?$') {
+                if ($isFlags -and $Matches[1] -eq 'None') { continue }
+                $members += $Matches[1]
+            }
         }
     }
 

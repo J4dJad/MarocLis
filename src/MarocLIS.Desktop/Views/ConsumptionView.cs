@@ -197,7 +197,7 @@ public sealed class ConsumptionView : LocalizedView
 
         foreach (var row in _rows)
         {
-            var index = _grid.Rows.Add([.. StockCsv.ConsumptionCells(row)]);
+            var index = _grid.Rows.Add([.. StockCsv.ConsumptionCells(row, Localizer.CurrentLanguage)]);
             _grid.Rows[index].Tag = row;
         }
 
@@ -223,7 +223,7 @@ public sealed class ConsumptionView : LocalizedView
             T("Consumption.ReportTitle", Period()),
             $"{T("Consumption.Notice")} — {DateTime.Now:dd/MM/yyyy HH:mm}",
             Headers(),
-            [.. _rows.Select(StockCsv.ConsumptionCells)],
+            [.. _rows.Select(r => StockCsv.ConsumptionCells(r, Localizer.CurrentLanguage))],
             Localizer.CurrentLanguage == Domain.Common.AppLanguage.Arabic);
 
         var opened = await _output.OpenAsync(_lists.Render(document), "pdf");
@@ -232,7 +232,7 @@ public sealed class ConsumptionView : LocalizedView
 
     private async Task ExportAsync()
     {
-        var opened = await _output.OpenAsync(StockCsv.Table(Headers(), _rows.Select(StockCsv.ConsumptionCells)), "csv");
+        var opened = await _output.OpenAsync(StockCsv.Table(Headers(), _rows.Select(r => StockCsv.ConsumptionCells(r, Localizer.CurrentLanguage))), "csv");
         if (opened.IsFailure) _dialogs.ShowFailure(opened, _csv.Text);
     }
 
@@ -383,6 +383,7 @@ internal sealed class StockAlertsDialog : Form
         Font = UiTheme.Body;
 
         var culture = CultureInfo.CurrentCulture;
+        var language = localizer.CurrentLanguage;
         static string N(decimal v) => v.ToString("0.###", CultureInfo.CurrentCulture);
 
         var stockOuts = UiTheme.Grid();
@@ -394,7 +395,7 @@ internal sealed class StockAlertsDialog : Form
 
         foreach (var s in alerts.StockOuts)
         {
-            var index = stockOuts.Rows.Add(s.Code, s.Name.Fr, $"{N(s.Usable)} {s.UnitOfMeasure}", N(s.AverageDailyConsumption),
+            var index = stockOuts.Rows.Add(s.Code, s.Name.For(language), $"{N(s.Usable)} {s.UnitOfMeasure}", N(s.AverageDailyConsumption),
                                            s.StockOutDate.ToString("dd/MM/yyyy", culture),
                                            localizer.Format("Stock.Days", s.LeadTimeDays));
             stockOuts.Rows[index].DefaultCellStyle.ForeColor = UiTheme.Critical;
@@ -409,7 +410,7 @@ internal sealed class StockAlertsDialog : Form
 
         foreach (var l in alerts.ExpiringLots)
         {
-            var index = lots.Rows.Add(l.ItemCode, l.ItemName.Fr, l.LotNumber, l.ExpiryDate.ToString("dd/MM/yyyy", culture),
+            var index = lots.Rows.Add(l.ItemCode, l.ItemName.For(language), l.LotNumber, l.ExpiryDate.ToString("dd/MM/yyyy", culture),
                                       $"{N(l.QuantityRemaining)} {l.UnitOfMeasure}",
                                       localizer[$"ExpiryAlertLevel.{l.Level}"]);
             var urgent = l.Level is ExpiryAlertLevel.Critical or ExpiryAlertLevel.Expired;
