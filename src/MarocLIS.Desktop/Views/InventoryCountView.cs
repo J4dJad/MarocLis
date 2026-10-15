@@ -152,18 +152,18 @@ public sealed class InventoryCountView : LocalizedView
         // Fixed width: the heading grows with the selection and must not run under the buttons.
         _linesHeading.AutoSize = false;
         _linesHeading.AutoEllipsis = true;
-        _linesHeading.Bounds = new Rectangle(0, 10, 370, 26);
+        _linesHeading.Bounds = new Rectangle(0, 10, 250, 26);
 
-        _sheet.Bounds = new Rectangle(380, 6, 220, UiTheme.ButtonHeight);
-        _sheetCsv.Bounds = new Rectangle(610, 6, 170, UiTheme.ButtonHeight);
-        _variances.Bounds = new Rectangle(790, 6, 220, UiTheme.ButtonHeight);
+        _sheet.Bounds = new Rectangle(260, 6, 220, UiTheme.ButtonHeight);
+        _sheetCsv.Bounds = new Rectangle(490, 6, 170, UiTheme.ButtonHeight);
+        _variances.Bounds = new Rectangle(670, 6, 220, UiTheme.ButtonHeight);
 
         // Unticked, a figure is the shelf as it is now; ticked, the time the paper sheet was filled in.
         _sheetTimeLabel.Font = UiTheme.Small;
         _sheetTimeLabel.ForeColor = UiTheme.TextSecondary;
         _sheetTimeLabel.AutoSize = true;
-        _sheetTimeLabel.Location = new Point(1020, 0);
-        _sheetTime.Bounds = new Rectangle(1020, 16, 170, UiTheme.InputHeight);
+        _sheetTimeLabel.Location = new Point(900, 0);
+        _sheetTime.Bounds = new Rectangle(900, 16, 170, UiTheme.InputHeight);
         _sheetTime.Value = DateTime.Now;
         linesBar.Controls.AddRange([_linesHeading, _sheet, _sheetCsv, _variances, _sheetTimeLabel, _sheetTime]);
 
