@@ -11,7 +11,7 @@ namespace MarocLIS.Infrastructure.Queries;
 public sealed class BillingQueries(LisDbContext db) : IBillingQueries
 {
     /// <summary>
-    /// Orders with billable acts and no invoice yet.
+    /// Orders with billable acts and no invoice yet, and orders still holding a deposit.
     /// <para>
     /// Cancelled orders are excluded, and so are cancelled items within a live order — a patient
     /// is not billed for an analysis the laboratory withdrew, and a tube the laboratory itself
@@ -22,13 +22,14 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
         Guid siteId, CancellationToken ct = default) =>
         await db.LabOrders.AsNoTracking()
             .Where(o => o.SiteId == siteId
-                        && o.InvoiceId == null
-                        && ((o.Status != LabOrderStatus.Cancelled
+                        && ((o.InvoiceId == null
+                             && o.Status != LabOrderStatus.Cancelled
                              && o.Status != LabOrderStatus.Draft
                              && o.Items.Any(i => i.Status != LabOrderItemStatus.Cancelled
                                                  && i.ChargedPrice > 0m))
-                            // A cancelled request still holding a deposit stays listed: the money
-                            // has to be handed back from somewhere.
+                            // A request still holding a deposit stays listed, cancelled or already
+                            // invoiced: what the invoice did not absorb (an analysis withdrawn, a
+                            // discount at issue) has to be handed back from somewhere.
                             || db.Deposits.Any(d => d.LabOrderId == o.Id
                                                     && d.Status == DepositStatus.Held)))
             .Join(db.Patients.AsNoTracking(), o => o.PatientId, p => p.Id,
@@ -443,10 +444,11 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
     }
 
     public async Task<IReadOnlyList<ClaimInvoiceRow>> GetClaimInvoicesAsync(
-        string claimReference, CancellationToken ct = default)
+        string claimReference, Guid? payerId = null, CancellationToken ct = default)
     {
         var rows = await db.Invoices.AsNoTracking()
-            .Where(i => i.ClaimReference == claimReference)
+            .Where(i => i.ClaimReference == claimReference
+                        && (payerId == null || i.PayerId == payerId))
             .Select(i => new
             {
                 i.Id,

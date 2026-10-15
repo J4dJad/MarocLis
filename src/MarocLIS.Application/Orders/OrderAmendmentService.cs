@@ -335,13 +335,7 @@ public sealed class OrderAmendmentService(
         warnings.AddRange(OrderComposer.CheckFasting(order.PatientFasted,
                                                       order.DeclaredFastingHours, selected));
 
-        var coverage = new CoverageContext
-        {
-            PayerId = order.PayerId,
-            ReimbursementRate = order.ReimbursementRateAtRegistration ?? 0m,
-            UsesReferenceTariff = true,
-            DirectBilling = order.PayerId is not null
-        };
+        var coverage = await composer.RegisteredCoverageAsync(order, ct);
 
         var tariffFailures = OrderComposer.CheckTariffs(selected, order.PayerId, today);
         if (tariffFailures.Count > 0) return Result.Failure<OrderAmendment>(tariffFailures);

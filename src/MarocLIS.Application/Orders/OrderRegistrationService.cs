@@ -171,6 +171,7 @@ public sealed class OrderRegistrationService(
                 ? coverage.Context.ReimbursementRate
                 : null,
             PriorAgreementNumber = coverage.PriorAgreementNumber,
+            DirectBillingAtRegistration = coverage.Context is { IsCovered: true, DirectBilling: true },
             DiscountPercent = request.DiscountPercent,
             DiscountReason = request.DiscountReason
         };
