@@ -155,7 +155,7 @@ public sealed class DashboardView : LocalizedView
         ["Dashboard.OrdersToday"] = Permissions.Orders.View,
         ["Dashboard.OverdueOrders"] = Permissions.Orders.View,
         ["Dashboard.AwaitingCollection"] = Permissions.Samples.View,
-        ["SampleStatus.Rejected"] = Permissions.Samples.View,
+        ["Dashboard.RejectedSamplesToday"] = Permissions.Samples.View,
         ["Dashboard.AwaitingValidation"] = Permissions.Results.View,
         ["Dashboard.CriticalPending"] = Permissions.Results.View,
         ["Report.Plural"] = Permissions.Reports.View,

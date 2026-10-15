@@ -224,7 +224,7 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
                 new("Temperatures.DashboardMissing", unitsWithoutReading,
                     unitsWithoutReading > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
                     "temperatures"),
-                new("SampleStatus.Rejected", rejectedSamplesToday,
+                new("Dashboard.RejectedSamplesToday", rejectedSamplesToday,
                     rejectedSamplesToday > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
                 new("Dashboard.Receivables", unpaidInvoices,
                     unpaidInvoices > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),

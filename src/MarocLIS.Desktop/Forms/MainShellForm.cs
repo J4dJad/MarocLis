@@ -464,13 +464,17 @@ public sealed class MainShellForm : LocalizedForm
 
     private void RenderNavigation()
     {
+        var scroll = _sidebar.AutoScrollPosition;
         _sidebar.SuspendLayout();
         _sidebar.Controls.Clear();
         _navButtons.Clear();
         _navTips.RemoveAll();
 
+        // Bounds of a scrolled panel are taken from where it is scrolled to, not from its top: the
+        // menu is laid out from the top, then put back where the user had scrolled it. Laid out
+        // scrolled, a fold left an empty band above the first entry as tall as the scroll.
+        _sidebar.AutoScrollPosition = Point.Empty;
         var y = UiTheme.GutterTight;
-        var scroll = _sidebar.AutoScrollPosition;
         string? group = null;
 
         foreach (var entry in _entries)

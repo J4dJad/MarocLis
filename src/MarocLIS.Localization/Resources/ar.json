@@ -4224,6 +4224,7 @@
   },
 
   "Dashboard": {
+    "RejectedSamplesToday": "العينات المرفوضة اليوم",
     "OrdersToday": "ملفات اليوم",
     "AwaitingCollection": "في انتظار أخذ العينة",
     "AwaitingValidation": "في انتظار المصادقة",

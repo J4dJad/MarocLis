@@ -4224,6 +4224,7 @@
   },
 
   "Dashboard": {
+    "RejectedSamplesToday": "Samples rejected today",
     "OrdersToday": "Today's orders",
     "AwaitingCollection": "Awaiting collection",
     "AwaitingValidation": "Awaiting validation",

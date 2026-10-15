@@ -4225,6 +4225,7 @@
   },
 
   "Dashboard": {
+    "RejectedSamplesToday": "Échantillons refusés aujourd'hui",
     "OrdersToday": "Dossiers du jour",
     "AwaitingCollection": "À prélever",
     "AwaitingValidation": "À valider",
