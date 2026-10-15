@@ -352,7 +352,7 @@ public sealed class AchatsReceptionTests
     internal static IPermissionGuard Guard(params string[] denied) =>
         Stub<IPermissionGuard>.With(("Require", args =>
             denied.Contains((string)args![0]!)
-                ? Result.Failure(Error.Forbidden("Permission_Denied"))
+                ? Result.Failure(Error.Forbidden("Forbidden"))
                 : Result.Success()));
 
     internal sealed class Transaction : IAsyncDisposable
