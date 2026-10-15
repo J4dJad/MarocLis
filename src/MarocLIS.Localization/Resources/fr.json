@@ -22,6 +22,9 @@
   "InventoryCount_LinesNotCounted": "{0} lot(s) ne sont pas encore comptés : comptez-les (0 s'ils sont absents) avant de clôturer.",
   "InventoryCount_CancelReasonRequired": "Indiquez le motif de l'annulation.",
   "InventoryCount_LotsInOpenCount": "Des lots de ce périmètre sont déjà sur l'inventaire {0}, toujours en cours de comptage. Clôturez-le ou annulez-le avant de commencer celui-ci.",
+  "InventoryCount_CountedBeforeStart": "L'heure du comptage est antérieure au début du comptage de l'inventaire.",
+  "InventoryCount_CountedInFuture": "L'heure du comptage ne peut pas être dans le futur.",
+  "InventoryCount_LotsInOtherOpenCount": "Des lots de cet inventaire sont aussi sur l'inventaire {0}, toujours en cours de comptage : leurs écarts seraient passés deux fois. Annulez l'un des deux inventaires avant de clôturer.",
   "Gs1_Empty": "Aucun code scanné.",
   "Gs1_Unreadable": "Code GS1 illisible à partir de « {0} ».",
   "Gs1_Truncated": "Code GS1 tronqué : l'élément ({0}) est incomplet.",
@@ -320,6 +323,11 @@
   },
 
   "InventoryCount": {
+    "SheetTimeNotice": "Pour saisir une feuille papier, cochez « Feuille comptée le » et indiquez l'heure du comptage : l'écart est calculé sur le stock à cette heure-là.",
+    "SheetTime": "Feuille comptée le",
+    "CountedAt": "Compté le",
+    "StockAtCount": "Stock au comptage",
+    "ExpectedAtStart": "Attendu au démarrage",
     "VarianceCaption": "{0} lot(s) en écart sur {1}",
     "VarianceTitle": "Rapport des écarts — inventaire {0} du {1}",
     "SheetCaption": "Comptez chaque lot et notez la quantité trouvée ; signature du compteur : ____________",

@@ -22,6 +22,9 @@
   "InventoryCount_LinesNotCounted": "{0} lot(s) are not counted yet: count them (0 if absent) before closing.",
   "InventoryCount_CancelReasonRequired": "Give the reason for the cancellation.",
   "InventoryCount_LotsInOpenCount": "Some lots in this scope are already on inventory {0}, which is still being counted. Close or cancel it before starting this one.",
+  "InventoryCount_CountedBeforeStart": "The count time is before the stock count was started.",
+  "InventoryCount_CountedInFuture": "The count time cannot be in the future.",
+  "InventoryCount_LotsInOtherOpenCount": "Some lots of this stock count are also on stock count {0}, which is still being counted: their differences would be posted twice. Cancel one of the two counts before closing.",
   "Gs1_Empty": "Nothing was scanned.",
   "Gs1_Unreadable": "Unreadable GS1 code from \"{0}\".",
   "Gs1_Truncated": "Truncated GS1 code: element ({0}) is incomplete.",
@@ -320,6 +323,11 @@
   },
 
   "InventoryCount": {
+    "SheetTimeNotice": "To key in a paper sheet, tick \"Sheet counted at\" and enter the time of the count: the difference is measured against the stock at that time.",
+    "SheetTime": "Sheet counted at",
+    "CountedAt": "Counted at",
+    "StockAtCount": "Stock at count",
+    "ExpectedAtStart": "Expected at start",
     "VarianceCaption": "{0} lot(s) with a variance out of {1}",
     "VarianceTitle": "Variance report — stock count {0} of {1}",
     "SheetCaption": "Count each lot and write down the quantity found; counter's signature: ____________",
