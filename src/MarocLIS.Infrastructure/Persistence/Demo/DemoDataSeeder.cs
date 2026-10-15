@@ -1,5 +1,4 @@
 using MarocLIS.Application.Abstractions;
-using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Infrastructure.Security;
@@ -48,6 +47,9 @@ namespace MarocLIS.Infrastructure.Persistence.Demo;
 /// by mistake, so before anything else the seeder looks for a patient without the <c>DEMO-</c>
 /// prefix or an issued invoice that is not a demonstration patient's; if it finds one it logs a
 /// warning and creates nothing — no demonstration users, no invoice numbers taken from the series.
+/// Demonstration users created earlier, while the database was still empty, are deactivated by
+/// <see cref="DemoAccountGuard"/> once real data appears, as long as they keep their published
+/// passwords.
 /// </para>
 /// <para>
 /// <b>Idempotent per section, not per database.</b> It runs at every start while the flag is on, and
@@ -172,37 +174,14 @@ public sealed partial class DemoDataSeeder(
     }
 
     /// <summary>
-    /// Says what, if anything, shows that the database holds the laboratory's own data rather than
-    /// demonstration data: a patient whose record number does not carry <see cref="DemoPrefix"/>,
-    /// or an issued invoice that is not a demonstration patient's. Returns <c>null</c> on an empty
-    /// database or one holding demonstration data only.
-    /// <para>
-    /// Deleted and other sites' rows count too: a soft-deleted real patient is still a real
-    /// patient, and a demonstration must never land in a database that has ever held one.
-    /// </para>
+    /// Says what, if anything, shows that the database holds the laboratory's own data; see
+    /// <see cref="DemoAccountGuard.FindRealDataAsync"/>.
     /// </summary>
     private async Task<string?> FindRealDataAsync(CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<LisDbContext>();
-
-        var realPatients = await db.Patients.IgnoreQueryFilters().AsNoTracking()
-            .CountAsync(p => !p.MedicalRecordNumber.StartsWith(DemoPrefix), ct);
-        if (realPatients > 0)
-            return $"{realPatients} patient(s) hors démonstration";
-
-        // Every invoice the demonstration issues is a DEMO- patient's (and so is a credit note
-        // correcting one, which carries the original's patient); a draft has consumed no number.
-        var realInvoices = await db.Invoices.IgnoreQueryFilters().AsNoTracking()
-            .Where(i => i.Status != InvoiceStatus.Draft && i.Status != InvoiceStatus.Cancelled)
-            .CountAsync(i => i.PatientId == null
-                             || !db.Patients.IgnoreQueryFilters().Any(
-                                    p => p.Id == i.PatientId
-                                         && p.MedicalRecordNumber.StartsWith(DemoPrefix)), ct);
-        if (realInvoices > 0)
-            return $"{realInvoices} facture(s) émise(s) hors démonstration";
-
-        return null;
+        return await DemoAccountGuard.FindRealDataAsync(
+            scope.ServiceProvider.GetRequiredService<LisDbContext>(), ct);
     }
 
     // ---- Who does what -------------------------------------------------------------------------

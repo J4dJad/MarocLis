@@ -69,10 +69,15 @@ public sealed class Role : AuditableAggregateRoot
     /// Brings a built-in role up to date with the permission set shipped by this version.
     /// <para>
     /// Only permissions that were never offered before are granted; a shipped permission that was
-    /// offered earlier and is now missing was removed by an administrator and stays removed. When
-    /// nothing has been recorded yet (a role seeded by a version that did not keep track), the
-    /// current state is taken as the administrator's intent: the shipped set is recorded as
-    /// offered and nothing is granted.
+    /// offered earlier and is now missing was removed by an administrator and stays removed.
+    /// </para>
+    /// <para>
+    /// When nothing has been recorded yet (a role seeded by a version that did not keep track), the
+    /// whole shipped set is granted, once, and recorded. Those versions granted every missing
+    /// shipped permission back at each start, so no removal could last there: a shipped permission
+    /// missing from such a role is one its version did not have yet — the HR permissions on an
+    /// installation older than the HR module — and taking the current state as the administrator's
+    /// intent would have withheld every one of them for good. From then on removals are kept.
     /// </para>
     /// </summary>
     /// <returns>The permissions granted by this call.</returns>
@@ -81,14 +86,12 @@ public sealed class Role : AuditableAggregateRoot
         var shippedSet = shipped.Distinct(StringComparer.Ordinal).ToList();
         var granted = new List<string>();
 
-        if (SeededPermissions is not null)
+        var offered = SeededPermissions is null ? [] : ParseSeeded(SeededPermissions);
+
+        foreach (var permission in shippedSet.Where(p => !offered.Contains(p) && !Has(p)))
         {
-            var offered = ParseSeeded(SeededPermissions);
-            foreach (var permission in shippedSet.Where(p => !offered.Contains(p) && !Has(p)))
-            {
-                Grant(permission);
-                granted.Add(permission);
-            }
+            Grant(permission);
+            granted.Add(permission);
         }
 
         RecordSeeded(shippedSet);

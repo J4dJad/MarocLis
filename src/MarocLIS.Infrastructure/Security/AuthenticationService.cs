@@ -3,6 +3,7 @@ using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Infrastructure.Persistence;
+using MarocLIS.Infrastructure.Persistence.Demo;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -74,6 +75,22 @@ public sealed class AuthenticationService(
 
             return Result.Failure<AuthenticatedSession>(
                 LockedOutAnswer(passwordCorrect, user.LockedOutUntil!.Value));
+        }
+
+        // A demonstration account still on its published password, on a database that holds real
+        // data: switched off here rather than at the next start, which may be days after the first
+        // real patient. Said to the holder, since the password was right.
+        if (passwordCorrect && DemoAccountGuard.IsPublishedCredential(normalised, password)
+            && await DemoAccountGuard.FindRealDataAsync(db, ct) is { } realData)
+        {
+            user.Deactivate();
+            await db.SaveChangesAsync(ct);
+
+            await securityAuditor.LogAsync(SecurityEventKind.LoginFailed, false, normalised,
+                                           "Auth_DemoAccountDisabled",
+                                           details: $"Demonstration account deactivated: {realData}", ct: ct);
+
+            return Result.Failure<AuthenticatedSession>(Error.Forbidden("Auth_DemoAccountDisabled"));
         }
 
         if (!passwordCorrect)
@@ -191,11 +208,10 @@ public sealed class AuthenticationService(
         var reuse = await CheckReuseAsync(user, newPassword, ct);
         if (reuse.IsFailure) return reuse;
 
-        await ApplyNewPasswordAsync(user, newPassword, mustChangeAtNextLogon: false, ct);
-
         // The operator's own change rotates the stamp of the session they are in; it stays theirs.
-        if (currentUser.IsAuthenticated && currentUser.UserId == user.Id)
-            currentUser.RefreshSecurityStamp(user.SecurityStamp);
+        var ownSession = currentUser.IsAuthenticated && currentUser.UserId == user.Id;
+
+        await ApplyNewPasswordAsync(user, newPassword, mustChangeAtNextLogon: false, ct, ownSession);
 
         await securityAuditor.LogAsync(SecurityEventKind.PasswordChanged, true, user.UserName,
                                        targetUserId: user.Id, ct: ct);
@@ -288,15 +304,34 @@ public sealed class AuthenticationService(
             : Result.Success();
     }
 
+    /// <param name="ownSession">
+    /// The change is the signed-in operator's own: the session takes the new stamp. It is announced
+    /// to the session before the save and taken right after it, before anything else is awaited,
+    /// so the shell's periodic session check — which runs on the same thread during these awaits —
+    /// never sees the new stamp in the database against the old one in the session.
+    /// </param>
     private async Task ApplyNewPasswordAsync(AppUser user, string newPassword,
-                                             bool mustChangeAtNextLogon, CancellationToken ct)
+                                             bool mustChangeAtNextLogon, CancellationToken ct,
+                                             bool ownSession = false)
     {
         if (policy.HistoryLength > 0 && !string.IsNullOrEmpty(user.PasswordHash))
             db.PasswordHistory.Add(new PasswordHistoryEntry(user.Id, user.PasswordHash, clock.Now));
 
         user.SetPassword(passwordHasher.Hash(newPassword), clock.Now, mustChangeAtNextLogon);
 
-        await db.SaveChangesAsync(ct);
+        if (ownSession) currentUser.ExpectSecurityStamp(user.SecurityStamp);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            if (ownSession) currentUser.ForgetExpectedSecurityStamp();
+            throw;
+        }
+
+        if (ownSession) currentUser.RefreshSecurityStamp(user.SecurityStamp);
 
         // Keep the history bounded; there is no value in retaining hashes beyond the policy window.
         var stale = await db.PasswordHistory

@@ -62,14 +62,15 @@ public sealed class ReviewFixesSecurityTests
     }
 
     [Fact]
-    public void A_role_with_nothing_recorded_takes_its_current_state_as_intended()
+    public void A_role_with_nothing_recorded_gets_the_shipped_permissions_its_version_lacked()
     {
-        // A role seeded by a version that did not record what it offered.
+        // A role seeded by a version that did not record what it offered — and that granted every
+        // missing shipped permission back at each start, so a missing one is new, not removed.
         var role = new Role("X", new MultilingualText("X", "X", "X"), isBuiltIn: true);
         role.Grant(ViewUsers);
 
-        role.ApplyShippedPermissions([ViewUsers, ManageUsers]).Should().BeEmpty();
-        role.Has(ManageUsers).Should().BeFalse();
+        role.ApplyShippedPermissions([ViewUsers, ManageUsers]).Should().Equal(ManageUsers);
+        role.Has(ManageUsers).Should().BeTrue();
         role.SeededPermissions.Should().Contain(ManageUsers);
 
         // From then on, only what is new is granted.

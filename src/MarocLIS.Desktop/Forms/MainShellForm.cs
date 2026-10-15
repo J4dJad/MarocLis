@@ -834,11 +834,11 @@ public sealed class MainShellForm : LocalizedForm
 
         _idleTimer.Stop();
 
-        // The screen is cleared before the notice: the notice waits for a click, and whoever comes
-        // to the counter meanwhile must not see the patient file left open behind it.
-        _content.Visible = false;
-        _dialogs.Warn(T("Message.SessionExpired"));
-        _ = EndSessionAsync(SecurityEventKind.SessionTimeout, $"Idle for {timeout.TotalMinutes:0} min");
+        // Everything happens before the notice, which waits for a click: the screen and every
+        // dialog open over it are cleared, and the session is ended and logged at the moment it
+        // timed out — not whenever somebody comes to the counter and dismisses the notice.
+        _ = EndSessionAsync(SecurityEventKind.SessionTimeout, $"Idle for {timeout.TotalMinutes:0} min",
+                            notice: T("Message.SessionExpired"));
     }
 
     /// <summary>
@@ -868,13 +868,9 @@ public sealed class MainShellForm : LocalizedForm
 
         if (valid || _endingSession) return;
 
-        _sessionTimer.Stop();
-        _idleTimer.Stop();
-
-        // Cleared before the notice, as for the idle lock: the notice waits for a click.
-        _content.Visible = false;
-        _dialogs.Warn(T("Auth_SessionRevoked"));
-        await EndSessionAsync(SecurityEventKind.Logout, "Session ended: account changed since sign-in");
+        // As for the idle lock: cleared and ended before the notice, which waits for a click.
+        await EndSessionAsync(SecurityEventKind.Logout, "Session ended: account changed since sign-in",
+                              notice: T("Auth_SessionRevoked"));
     }
 
     /// <summary>Notes keyboard and mouse input in every window of the application, dialogs included.</summary>
@@ -908,15 +904,19 @@ public sealed class MainShellForm : LocalizedForm
     /// on disk, and the log was not flushed. The restart is now <see cref="Program"/>'s, once the
     /// host — and with it that folder — is disposed and the log closed.
     /// </para>
+    /// <para>
+    /// A <paramref name="notice"/> is shown only once the screen is concealed and the end of the
+    /// session recorded: it waits for a click, possibly for hours on an abandoned workstation.
+    /// </para>
     /// </summary>
-    private async Task EndSessionAsync(SecurityEventKind reason, string? details)
+    private async Task EndSessionAsync(SecurityEventKind reason, string? details, string? notice = null)
     {
         if (_endingSession) return;
         _endingSession = true;
 
         _idleTimer.Stop();
         _sessionTimer.Stop();
-        _content.Visible = false;
+        ConcealOpenWindows();
 
         try
         {
@@ -930,10 +930,75 @@ public sealed class MainShellForm : LocalizedForm
             _logger?.LogError(ex, "The end of the session could not be recorded.");
         }
 
+        if (notice is not null) _dialogs.Warn(notice);
+
         Program.RestartAfterExit = true;
 
         // Exit rather than Close: it also ends the loop of any dialog still open over the shell.
         System.Windows.Forms.Application.Exit();
+    }
+
+    /// <summary>
+    /// Clears the shell's screen and hides every other window of the application. A dialog opened
+    /// over the shell — the patient editor, an order file, a result entry — is a window of its
+    /// own, and hiding only the shell's content left it readable behind the notice. Hiding a modal
+    /// dialog ends its loop as a cancel would; nothing it held is saved.
+    /// </summary>
+    private void ConcealOpenWindows()
+    {
+        _content.Visible = false;
+
+        foreach (var form in System.Windows.Forms.Application.OpenForms.Cast<Form>()
+                     .Where(f => f != this && f.Visible).ToList())
+        {
+            try
+            {
+                form.Hide();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Could not hide {Form} when ending the session.", form.Name);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Records the end of the session when the window itself is closed — the title-bar cross,
+    /// Alt+F4, a Windows log-off — which is how most working days end. The other ways out go
+    /// through <see cref="EndSessionAsync"/>, which has recorded it already.
+    /// <para>
+    /// Waited for here, off the UI thread so the awaits inside cannot deadlock on it, and for a
+    /// bounded time: a database that does not answer must not keep the window from closing.
+    /// </para>
+    /// </summary>
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        if (!_endingSession)
+        {
+            _endingSession = true;
+            _idleTimer.Stop();
+            _sessionTimer.Stop();
+
+            var details = $"Application window closed ({e.CloseReason})";
+            try
+            {
+                var recorded = Task.Run(async () =>
+                {
+                    using var scope = _scopes.CreateScope();
+                    await scope.ServiceProvider.GetRequiredService<IAuthenticationService>()
+                               .SignOutAsync(SecurityEventKind.Logout, details);
+                });
+
+                if (!recorded.Wait(TimeSpan.FromSeconds(10)))
+                    _logger?.LogWarning("The end of the session was not recorded in time when the window closed.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "The end of the session could not be recorded.");
+            }
+        }
+
+        base.OnFormClosed(e);
     }
 
     protected override void Dispose(bool disposing)

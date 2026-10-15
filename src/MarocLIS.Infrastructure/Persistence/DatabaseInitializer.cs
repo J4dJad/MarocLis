@@ -83,6 +83,17 @@ public sealed class DatabaseInitializer(
                 {
                     await SeedReferenceDataAsync(ct);
 
+                    // Whatever the flag says: demonstration accounts with published passwords
+                    // left over from a start with the flag on are switched off once the
+                    // database holds real data — see DemoAccountGuard.
+                    var disabled = await DemoAccountGuard.DisableExposedAccountsAsync(context, passwordHasher, ct);
+                    if (disabled.Count > 0)
+                    {
+                        logger?.LogWarning(
+                            "Demonstration account(s) {Accounts} deactivated: the database holds real data " +
+                            "and they still had their published passwords.", string.Join(", ", disabled));
+                    }
+
                     // Demonstration data only on explicit request (Application:SeedDemoDataOnFirstRun),
                     // which must be false on any installation holding real patients — see
                     // DemoDataSeeder. It runs at every start while the flag is on and completes

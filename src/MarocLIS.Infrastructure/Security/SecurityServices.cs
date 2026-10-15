@@ -101,13 +101,31 @@ public sealed class CurrentUserAccessor : ICurrentUser
         PrescriberId = session.PrescriberId;
         IsPrescriberScoped = session.IsPrescriberScoped;
         SecurityStamp = session.SecurityStamp;
+        PendingSecurityStamp = null;
     }
 
     /// <summary>
     /// Takes the stamp the operator's own password change just produced, so changing one's own
     /// password does not read, a minute later, as a session revoked by somebody else.
     /// </summary>
-    internal void RefreshSecurityStamp(string stamp) => SecurityStamp = stamp;
+    internal void RefreshSecurityStamp(string stamp)
+    {
+        SecurityStamp = stamp;
+        PendingSecurityStamp = null;
+    }
+
+    /// <summary>
+    /// The stamp the operator's own password change is saving, accepted alongside
+    /// <see cref="SecurityStamp"/> while the save is in flight. The shell re-checks the session on
+    /// a timer that keeps running during those awaits; between the moment the new stamp reaches
+    /// the database and the moment the session takes it, the check would otherwise read the
+    /// operator's own change as a revocation and sign them out.
+    /// </summary>
+    internal string? PendingSecurityStamp { get; private set; }
+
+    internal void ExpectSecurityStamp(string stamp) => PendingSecurityStamp = stamp;
+
+    internal void ForgetExpectedSecurityStamp() => PendingSecurityStamp = null;
 
     internal void SetSite(Guid siteId, string siteCode)
     {
@@ -130,6 +148,7 @@ public sealed class CurrentUserAccessor : ICurrentUser
         PrescriberId = null;
         IsPrescriberScoped = false;
         SecurityStamp = null;
+        PendingSecurityStamp = null;
     }
 }
 
@@ -248,6 +267,7 @@ public sealed class SessionValidator(IServiceScopeFactory scopes, CurrentUserAcc
                 u.IsActive,
                 u.SecurityStamp,
                 u.PrescriberId,
+                u.Qualification,
                 Permissions = u.Roles
                     .Where(r => r.Role!.IsActive)
                     .SelectMany(r => r.Role!.Permissions.Select(p => p.Permission))
@@ -258,23 +278,35 @@ public sealed class SessionValidator(IServiceScopeFactory scopes, CurrentUserAcc
 
         return account is not null && Matches(currentUser, currentUser.SecurityStamp,
                                               account.IsActive, account.SecurityStamp,
-                                              account.PrescriberId, account.Permissions, account.Sites);
+                                              account.PrescriberId, account.Permissions, account.Sites,
+                                              account.Qualification, currentUser.PendingSecurityStamp);
     }
 
-    /// <summary>The comparison itself, separate so it can be tested without a database.</summary>
+    /// <summary>
+    /// The comparison itself, separate so it can be tested without a database.
+    /// <paramref name="qualification"/> is the account's, compared when given;
+    /// <paramref name="pendingStamp"/> is a stamp the session's own password change is saving.
+    /// </summary>
     public static bool Matches(ICurrentUser session, string? sessionStamp, bool isActive, string securityStamp,
                                  Guid? prescriberId, IEnumerable<string> permissions,
-                                 IEnumerable<Guid> sites)
+                                 IEnumerable<Guid> sites, ProfessionalQualification? qualification = null,
+                                 string? pendingStamp = null)
     {
         if (!isActive) return false;
 
         // A session opened before stamps were recorded has nothing to compare against; the other
         // checks still apply to it.
         if (sessionStamp is not null
-            && !string.Equals(sessionStamp, securityStamp, StringComparison.Ordinal))
+            && !string.Equals(sessionStamp, securityStamp, StringComparison.Ordinal)
+            && !string.Equals(pendingStamp, securityStamp, StringComparison.Ordinal))
             return false;
 
         if (session.PrescriberId != prescriberId) return false;
+
+        // The qualification is read from the session: it decides at sign-in whether the account is
+        // confined to its prescriber's patients, and who may grant a habilitation. Changing it does
+        // not move the stamp, so it is compared like the permissions.
+        if (qualification is { } current && session.Qualification != current) return false;
 
         // Compared as sets: a role edited or switched off changes what the account may do without
         // touching the account itself, so its stamp does not move.
