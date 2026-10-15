@@ -109,7 +109,13 @@ public enum ConsentPurpose
     ThirdPartyDisclosure = 7,
 
     /// <summary>Subcontracting of the analysis to a partner laboratory.</summary>
-    Subcontracting = 8
+    Subcontracting = 8,
+
+    /// <summary>
+    /// Follow-up SMS from the laboratory: reminders that a monitoring analysis is due, and the
+    /// short satisfaction survey. Never advertising; withdrawing it stops both.
+    /// </summary>
+    FollowUpMessages = 9
 }
 
 public enum ConsentChannel

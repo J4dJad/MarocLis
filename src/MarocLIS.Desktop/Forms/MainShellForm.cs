@@ -251,6 +251,11 @@ public sealed class MainShellForm : LocalizedForm
             new("statistics", "Nav.Statistics", [Permissions.Statistics.View],
                 n => n.NavigateToAsync<StatisticsView>()),
 
+            // The director's dashboard sits with the dashboard and the statistics: it reads every
+            // module, and belongs to none of the groups below.
+            new("steering", "Nav.Steering", [Permissions.Steering.View],
+                n => n.NavigateToAsync<SteeringView>()),
+
             new("group.reception", "Nav.Reception", [Permissions.Patients.View],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 
@@ -385,6 +390,18 @@ public sealed class MainShellForm : LocalizedForm
             new("accidents", "Nav.Accidents", [Permissions.HumanResources.Accidents, Permissions.HumanResources.View],
                 n => n.NavigateToAsync<AccidentView>()),
 
+            new("group.relations", "Nav.RelationsGroup", [Permissions.Relations.View, Permissions.Messaging.Campaign],
+                _ => Task.CompletedTask, IsGroupHeader: true),
+
+            new("prescriberstats", "Nav.PrescriberStatistics", [Permissions.Relations.View],
+                n => n.NavigateToAsync<PrescriberStatisticsView>()),
+
+            new("relations", "Nav.Relations", [Permissions.Relations.View],
+                n => n.NavigateToAsync<RelationsView>()),
+
+            new("patientmessaging", "Nav.PatientMessaging", [Permissions.Messaging.Campaign],
+                n => n.NavigateToAsync<PatientMessagingView>()),
+
             new("group.finance", "Nav.Finance", [Permissions.Accounting.Export],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 
@@ -405,6 +422,9 @@ public sealed class MainShellForm : LocalizedForm
 
             new("cashreview", "Nav.CashSessionReview", [Permissions.Billing.ReconcileCashSession],
                 n => n.NavigateToAsync<CashSessionReviewView>()),
+
+            new("costmargin", "Nav.CostMargin", [Permissions.Steering.View],
+                n => n.NavigateToAsync<CostMarginView>()),
 
             new("group.administration", "Nav.Administration", [Permissions.Administration.ViewUsers],
                 _ => Task.CompletedTask, IsGroupHeader: true),

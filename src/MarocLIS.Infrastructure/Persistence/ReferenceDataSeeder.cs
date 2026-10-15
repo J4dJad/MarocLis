@@ -516,7 +516,10 @@ internal static class RolePermissionSets
              Permissions.Assets.View, Permissions.Assets.Manage,
              // The director signs the tills off and follows the bank and the cash forecast.
              Permissions.Billing.ReconcileCashSession,
-             Permissions.Treasury.View, Permissions.Treasury.Manage
+             Permissions.Treasury.View, Permissions.Treasury.Manage,
+             // Direction: prescriber relations, patient follow-up messages and the steering screens.
+             Permissions.Relations.View, Permissions.Relations.Manage, Permissions.Messaging.Campaign,
+             Permissions.Steering.View, Permissions.Steering.ManageCosts
          ]),
 
         (SystemRoles.Biologist,
@@ -642,7 +645,9 @@ internal static class RolePermissionSets
              Permissions.Assets.View, Permissions.Assets.Manage,
              // Treasury: the bank reconciliation, the cash forecast and the tills' sign-off.
              Permissions.Billing.ReconcileCashSession,
-             Permissions.Treasury.View, Permissions.Treasury.Manage
+             Permissions.Treasury.View, Permissions.Treasury.Manage,
+             // Prescriber and convention volumes; the steering screens stay with the direction.
+             Permissions.Relations.View
          ]),
 
         (SystemRoles.Prescriber,

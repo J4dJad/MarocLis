@@ -272,5 +272,10 @@ public static class IconCatalog
         ["bankreconciliation"] = Glyph.CheckCheck,
         ["cashforecast"] = Glyph.HandCoins,
         ["cashreview"] = Glyph.ClipboardCheck,
+        ["steering"] = Glyph.Gauge,
+        ["prescriberstats"] = Glyph.ChartColumn,
+        ["relations"] = Glyph.Users,
+        ["patientmessaging"] = Glyph.Send,
+        ["costmargin"] = Glyph.Calculator,
     };
 }

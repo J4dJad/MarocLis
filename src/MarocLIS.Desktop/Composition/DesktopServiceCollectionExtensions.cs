@@ -99,6 +99,11 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<Application.Quality.IDocumentControlQueries, DocumentControlQueries>();
         services.AddIsolatedQueries<Application.Quality.IEqaQueries, EqaQueries>();
         services.AddIsolatedQueries<Application.Statistics.IStatisticsQueries, StatisticsQueries>();
+        services.AddIsolatedQueries<Application.Relations.IPrescriberStatisticsQueries, PrescriberStatisticsQueries>();
+        services.AddIsolatedQueries<Application.Relations.IRelationsQueries, RelationsQueries>();
+        services.AddIsolatedQueries<Application.Relations.IPatientMessagingQueries, PatientMessagingQueries>();
+        services.AddIsolatedQueries<Application.Steering.ICostQueries, CostQueries>();
+        services.AddIsolatedQueries<Application.Steering.ISteeringQueries, SteeringQueries>();
         services.AddIsolatedQueries<Application.Administration.IAdministrationQueries, AdministrationQueries>();
         services.AddIsolatedQueries<Application.Administration.IMasterDataQueries, MasterDataQueries>();
         services.AddIsolatedQueries<Application.Administration.IAuditQueries, AuditQueries>();
@@ -152,6 +157,11 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<QualityDocumentsView>();
         services.AddTransient<EqaView>();
         services.AddTransient<StatisticsView>();
+        services.AddTransient<SteeringView>();
+        services.AddTransient<PrescriberStatisticsView>();
+        services.AddTransient<RelationsView>();
+        services.AddTransient<PatientMessagingView>();
+        services.AddTransient<CostMarginView>();
         services.AddTransient<UserAdministrationView>();
         services.AddTransient<AuditTrailView>();
         services.AddTransient<SettingsView>();
