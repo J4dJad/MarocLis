@@ -159,13 +159,10 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
                     .FirstOrDefault(),
                 SupplierApproved = db.Suppliers.Any(s => s.Id == i.PreferredSupplierId
                                                          && s.IsActive && s.IsApproved),
-                // Usable only, as on the stock screen: released, in date, within open stability.
+                // Usable only, as on the stock screen: released, not rejected, not recalled, in date.
                 Usable = i.Lots
                     .Where(l => !l.IsQuarantined && !l.IsRejected && !l.IsRecalled
-                                && l.ExpiryDate >= today
-                                && (l.OpenedOn == null
-                                    || l.StabilityAfterOpeningDays == null
-                                    || l.OpenedOn.Value.AddDays(l.StabilityAfterOpeningDays.Value) >= today))
+                                && l.ExpiryDate >= today)
                     .Sum(l => l.QuantityRemaining)
             })
             .ToListAsync(ct);

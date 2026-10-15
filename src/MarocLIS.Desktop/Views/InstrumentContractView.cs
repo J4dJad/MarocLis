@@ -487,7 +487,7 @@ public sealed class InstrumentContractView : LocalizedView
         using var picker = new OpenFileDialog
         {
             Title = _attach.Text,
-            Filter = "PDF, images, Office (*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.doc;*.docx)|*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.doc;*.docx",
+            Filter = "PDF, images, Office (*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.docx)|*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.docx",
             CheckFileExists = true
         };
         if (picker.ShowDialog(this) != DialogResult.OK) return;

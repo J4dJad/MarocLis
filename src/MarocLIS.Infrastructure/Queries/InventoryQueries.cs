@@ -36,13 +36,11 @@ public sealed class InventoryQueries(LisDbContext db) : IInventoryQueries
                     ? null
                     : db.Suppliers.Where(s => s.Id == i.PreferredSupplierId)
                                   .Select(s => s.Name).FirstOrDefault(),
-                // Usable only: released, not rejected, not recalled, in date, within open stability.
+                // Usable only: released, not rejected, not recalled, in date. On-board stability applies to
+                // the opened kit, not to the sealed kits of the lot, so it does not reduce this quantity.
                 Usable = i.Lots
                     .Where(l => !l.IsQuarantined && !l.IsRejected && !l.IsRecalled
-                                && l.ExpiryDate >= today
-                                && (l.OpenedOn == null
-                                    || l.StabilityAfterOpeningDays == null
-                                    || l.OpenedOn.Value.AddDays(l.StabilityAfterOpeningDays.Value) >= today))
+                                && l.ExpiryDate >= today)
                     .Sum(l => l.QuantityRemaining),
                 LotCount = i.Lots.Count(l => l.QuantityRemaining > 0m),
                 QuarantinedLotCount = i.Lots.Count(l => l.IsQuarantined && !l.IsRejected
@@ -113,7 +111,7 @@ public sealed class InventoryQueries(LisDbContext db) : IInventoryQueries
                 x.Lot.QuantityReceived,
                 x.Lot.QuantityRemaining,
                 x.Lot.ReceivedOn,
-                x.Lot.OpenedOn,
+                OpenedOn = x.Lot.LastOpenedOn ?? x.Lot.OpenedOn,
                 x.Lot.StabilityAfterOpeningDays,
                 x.Lot.IsQuarantined,
                 x.Lot.IsRejected,

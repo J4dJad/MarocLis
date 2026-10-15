@@ -150,10 +150,7 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
         var toReorder = await db.StockItems.AsNoTracking()
             .CountAsync(i => i.Lots
                 .Where(l => !l.IsQuarantined && !l.IsRejected && !l.IsRecalled
-                            && l.ExpiryDate >= todayOnly
-                            && (l.OpenedOn == null
-                                || l.StabilityAfterOpeningDays == null
-                                || l.OpenedOn.Value.AddDays(l.StabilityAfterOpeningDays.Value) >= todayOnly))
+                            && l.ExpiryDate >= todayOnly)
                 .Sum(l => l.QuantityRemaining) <= i.ReorderPoint, ct);
 
         // Computed in SQL from the interval rather than read from a stored "next due" column: a

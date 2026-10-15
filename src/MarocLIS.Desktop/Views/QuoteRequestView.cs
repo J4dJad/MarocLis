@@ -872,7 +872,7 @@ internal sealed class QuoteOfferDialog : MasterDataEditor
         using var picker = new OpenFileDialog
         {
             Title = Localizer["Quotes.AttachFile"],
-            Filter = "PDF, images, Office (*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.doc;*.docx;*.xls;*.xlsx)|*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.doc;*.docx;*.xls;*.xlsx",
+            Filter = "PDF, images, Office (*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.docx;*.xlsx)|*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.docx;*.xlsx",
             CheckFileExists = true
         };
         if (picker.ShowDialog(this) != DialogResult.OK) return;

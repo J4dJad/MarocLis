@@ -44,10 +44,7 @@ public sealed class StockPlanningQueries(LisDbContext db) : IStockPlanningQuerie
                 Physical = i.Lots.Sum(l => (decimal?)l.QuantityRemaining) ?? 0m,
                 Usable = i.Lots
                     .Where(l => !l.IsQuarantined && !l.IsRejected && !l.IsRecalled
-                                && l.ExpiryDate >= today
-                                && (l.OpenedOn == null
-                                    || l.StabilityAfterOpeningDays == null
-                                    || l.OpenedOn.Value.AddDays(l.StabilityAfterOpeningDays.Value) >= today))
+                                && l.ExpiryDate >= today)
                     .Sum(l => (decimal?)l.QuantityRemaining) ?? 0m
             })
             .ToListAsync(ct);
