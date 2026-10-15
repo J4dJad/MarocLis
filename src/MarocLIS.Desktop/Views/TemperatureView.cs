@@ -32,6 +32,7 @@ public sealed class TemperatureView : LocalizedView
     private readonly Button _record = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _newUnit = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _editUnit = UiTheme.SecondaryButton(string.Empty);
+    private readonly CheckBox _includeInactive = new();
     private readonly DateTimePicker _month = new()
     {
         Format = DateTimePickerFormat.Custom, CustomFormat = "MM/yyyy", ShowUpDown = true
@@ -58,6 +59,9 @@ public sealed class TemperatureView : LocalizedView
 
         _units.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadReadingsAsync());
         _month.ValueChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadReadingsAsync());
+        // A unit taken out of service stays reachable: to reactivate it, and to print the sheets of
+        // the months it was in use for the ISO 15189 file.
+        _includeInactive.CheckedChanged += async (_, _) => await ActivateAsync();
         _record.Click += async (_, _) => await RunBusyAsync(RecordAsync);
         _units.CellDoubleClick += async (_, e) =>
         {
@@ -99,7 +103,11 @@ public sealed class TemperatureView : LocalizedView
         _record.Bounds = new Rectangle(0, 30, 200, UiTheme.ButtonHeight);
         _newUnit.Bounds = new Rectangle(210, 30, 170, UiTheme.ButtonHeight);
         _editUnit.Bounds = new Rectangle(390, 30, 170, UiTheme.ButtonHeight);
-        bar.Controls.AddRange([_heading, _record, _newUnit, _editUnit]);
+        _includeInactive.Font = UiTheme.Small;
+        _includeInactive.ForeColor = UiTheme.TextSecondary;
+        _includeInactive.AutoSize = true;
+        _includeInactive.Location = new Point(574, 36);
+        bar.Controls.AddRange([_heading, _record, _newUnit, _editUnit, _includeInactive]);
 
         foreach (var (name, weight) in new[]
                  {
@@ -118,7 +126,11 @@ public sealed class TemperatureView : LocalizedView
         _units.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _units.Rows[e.RowIndex].Tag is not StorageUnitRow row) return;
-            if (row.LastOutOfRange)
+            if (!row.IsActive)
+            {
+                e.CellStyle!.ForeColor = UiTheme.TextMuted;
+            }
+            else if (row.LastOutOfRange)
             {
                 e.CellStyle!.BackColor = UiTheme.CriticalBackground;
                 e.CellStyle.ForeColor = UiTheme.Critical;
@@ -197,6 +209,7 @@ public sealed class TemperatureView : LocalizedView
         _record.Text = T("Temperatures.Record");
         _newUnit.Text = T("Temperatures.NewUnit");
         _editUnit.Text = T("Temperatures.EditUnit");
+        _includeInactive.Text = T("Temperatures.IncludeInactive");
         _pdf.Text = T("Temperatures.MonthPdf");
         _csv.Text = T("Temperatures.MonthCsv");
 
@@ -218,7 +231,7 @@ public sealed class TemperatureView : LocalizedView
     {
         try
         {
-            var result = await _temperatures.GetUnitsAsync(false, ct);
+            var result = await _temperatures.GetUnitsAsync(_includeInactive.Checked, ct);
             if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 
             var selected = CurrentUnit?.StorageUnitId;
@@ -241,7 +254,8 @@ public sealed class TemperatureView : LocalizedView
         _units.Rows.Clear();
         foreach (var u in _unitRows)
         {
-            var state = u.LastOutOfRange ? T("Temperatures.OutOfRange")
+            var state = !u.IsActive ? T("Temperatures.Inactive")
+                      : u.LastOutOfRange ? T("Temperatures.OutOfRange")
                       : u.MissingToday ? T("Temperatures.MissingToday")
                       : T("Temperatures.InRange");
 

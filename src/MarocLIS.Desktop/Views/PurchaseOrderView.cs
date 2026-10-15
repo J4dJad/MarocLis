@@ -195,14 +195,14 @@ public sealed class PurchaseOrderView : LocalizedView
         _grid.CellFormatting += OnOrderFormatting;
         _lines.SelectionChanged += (_, _) => RefreshButtons();
 
-        _newOrder.Click += async (_, _) => await CreateOrderAsync();
-        _addLine.Click += async (_, _) => await AddLineAsync(SelectedOrder?.SupplierId);
+        _newOrder.Click += async (_, _) => await RunActionAsync(CreateOrderAsync);
+        _addLine.Click += async (_, _) => await RunActionAsync(() => AddLineAsync(SelectedOrder?.SupplierId));
         _printPdf.Click += async (_, _) => await PrintPdfAsync();
         _savePdf.Click += async (_, _) => await SavePdfAsync();
-        _approve.Click += async (_, _) => await ApproveAsync();
-        _send.Click += async (_, _) => await SendAsync();
-        _receive.Click += async (_, _) => await ReceiveAsync();
-        _cancel.Click += async (_, _) => await CancelAsync();
+        _approve.Click += async (_, _) => await RunActionAsync(ApproveAsync);
+        _send.Click += async (_, _) => await RunActionAsync(SendAsync);
+        _receive.Click += async (_, _) => await RunActionAsync(ReceiveAsync);
+        _cancel.Click += async (_, _) => await RunActionAsync(CancelAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Inventory.ManagePurchaseOrders, _newOrder, _addLine, _send, _cancel);
@@ -442,10 +442,29 @@ public sealed class PurchaseOrderView : LocalizedView
         RefreshButtons();
     }
 
+    /// <summary>
+    /// Runs one write with every write button held disabled until it ends, and the view flagged busy
+    /// so that leaving the screen does not dispose its context under it. The order is e-mailed before
+    /// it is saved as sent: a second click during a slow send mailed the supplier twice, and closing
+    /// the screen mid-send left the order approved, to be sent again later.
+    /// </summary>
+    private async Task RunActionAsync(Func<Task> action)
+    {
+        var ran = await RunBusyAsync(async () =>
+        {
+            RefreshButtons();
+            await action();
+        });
+
+        if (ran && !IsDisposed) RefreshButtons();
+    }
+
     private void RefreshButtons()
     {
-        var order = SelectedOrder;
+        // Nothing that writes is offered while a write is in flight (see RunActionAsync).
+        var order = IsBusy ? null : SelectedOrder;
 
+        _newOrder.Enabled = !IsBusy;
         _addLine.Enabled = order?.Status == PurchaseOrderStatus.Draft;
         _approve.Enabled = order is { Status: PurchaseOrderStatus.Draft, LineCount: > 0 };
         _send.Enabled = order?.Status == PurchaseOrderStatus.Approved;

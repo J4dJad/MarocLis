@@ -189,14 +189,14 @@ public sealed class QuoteRequestView : LocalizedView
         _suppliers.CellFormatting += OnSupplierFormatting;
         _comparison.CellFormatting += OnComparisonFormatting;
 
-        _new.Click += async (_, _) => await CreateAsync();
-        _sendEmail.Click += async (_, _) => await SendByEmailAsync();
-        _markSent.Click += async (_, _) => await MarkSentAsync();
-        _addSupplier.Click += async (_, _) => await AddSupplierAsync();
-        _recordOffer.Click += async (_, _) => await RecordOfferAsync();
+        _new.Click += async (_, _) => await RunActionAsync(CreateAsync);
+        _sendEmail.Click += async (_, _) => await RunActionAsync(SendByEmailAsync);
+        _markSent.Click += async (_, _) => await RunActionAsync(MarkSentAsync);
+        _addSupplier.Click += async (_, _) => await RunActionAsync(AddSupplierAsync);
+        _recordOffer.Click += async (_, _) => await RunActionAsync(RecordOfferAsync);
         _openFile.Click += async (_, _) => await OpenFileAsync();
-        _award.Click += async (_, _) => await AwardAsync();
-        _cancel.Click += async (_, _) => await CancelAsync();
+        _award.Click += async (_, _) => await RunActionAsync(AwardAsync);
+        _cancel.Click += async (_, _) => await RunActionAsync(CancelAsync);
 
         PermissionGate.Require(Permissions.Inventory.ManageQuotes, _new, _sendEmail, _markSent, _addSupplier,
                                _recordOffer, _cancel);
@@ -477,9 +477,27 @@ public sealed class QuoteRequestView : LocalizedView
         if (cell.IsFastest) e.CellStyle!.Font = UiTheme.MonospaceBold;
     }
 
+    /// <summary>
+    /// Runs one write with every write button held disabled until it ends, and the view flagged busy
+    /// so that leaving the screen does not dispose its context under it. The e-mails go out before
+    /// the "sent" dates are saved: a second click during a slow send mailed every supplier again,
+    /// and closing the screen mid-send lost the dates, so the request was sent again later.
+    /// </summary>
+    private async Task RunActionAsync(Func<Task> action)
+    {
+        var ran = await RunBusyAsync(async () =>
+        {
+            RefreshButtons();
+            await action();
+        });
+
+        if (ran && !IsDisposed) RefreshButtons();
+    }
+
     private void RefreshButtons()
     {
-        var open = _detail is { Status: QuoteRequestStatus.Open };
+        _new.Enabled = !IsBusy;
+        var open = !IsBusy && _detail is { Status: QuoteRequestStatus.Open };
         var supplier = SelectedSupplier;
         var offer = SelectedOffer;
 

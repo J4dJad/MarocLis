@@ -429,8 +429,11 @@ public static class StockCsv
         return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(csv.ToString())];
     }
 
-    /// <summary>The cells of one consumption line, shared by the grid, the CSV and the PDF.</summary>
-    public static IReadOnlyList<string> ConsumptionCells(ConsumptionRow r)
+    /// <summary>
+    /// The cells of one consumption line, shared by the grid, the CSV and the PDF, with the item's
+    /// name in <paramref name="language"/> (the screen's, as their headers are).
+    /// </summary>
+    public static IReadOnlyList<string> ConsumptionCells(ConsumptionRow r, AppLanguage language = AppLanguage.French)
     {
         var fr = CultureInfo.GetCultureInfo("fr-FR");
         var computable = r.Reconciliation.Computable;
@@ -438,7 +441,7 @@ public static class StockCsv
 
         return
         [
-            r.Code, r.Name.Fr, r.UnitOfMeasure,
+            r.Code, r.Name.For(language), r.UnitOfMeasure,
             N(r.Reconciliation.Opening),
             N(r.Reconciliation.Receipts),
             computable ? N(r.Breakdown.TotalTests) : "—",

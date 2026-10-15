@@ -314,24 +314,46 @@ public sealed class InstrumentContractQueries(LisDbContext db) : IInstrumentCont
             m.ExternalTechnicianName))];
     }
 
-    public async Task<ContractOptions> GetOptionsAsync(Guid siteId, CancellationToken ct = default)
+    public async Task<ContractOptions> GetOptionsAsync(Guid siteId, Guid? contractId, CancellationToken ct = default)
     {
-        var suppliers = await db.Suppliers.AsNoTracking()
-            .Where(s => s.IsActive)
-            .OrderBy(s => s.Name)
-            .Select(s => new ContractLookup(s.Id, s.Code, s.Name))
-            .ToListAsync(ct);
+        // What the edited contract already uses stays offered whatever its state: otherwise the editor
+        // would fall back to another supplier and drop a decommissioned analyser or a deactivated
+        // reagent on the next save.
+        var current = contractId is { } id
+            ? await db.InstrumentContracts.AsNoTracking()
+                .Where(c => c.Id == id)
+                .Select(c => new
+                {
+                    c.SupplierId,
+                    Instruments = c.Instruments.Select(i => i.InstrumentId).ToList(),
+                    Items = c.Reagents.Select(r => r.StockItemId).ToList()
+                })
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var supplierId = current?.SupplierId ?? Guid.Empty;
+        var instrumentIds = current?.Instruments ?? [];
+        var itemIds = current?.Items ?? [];
+
+        var suppliers = (await db.Suppliers.AsNoTracking()
+                .Where(s => s.IsActive || s.Id == supplierId)
+                .OrderBy(s => s.Name)
+                .Select(s => new { s.Id, s.Code, s.Name, s.IsActive })
+                .ToListAsync(ct))
+            .Select(s => new ContractLookup(s.Id, s.Code, MultilingualText.FromFrench(s.Name), s.IsActive))
+            .ToList();
 
         var instruments = await db.Instruments.AsNoTracking()
-            .Where(i => i.SiteId == siteId && i.Status != EquipmentStatus.Decommissioned)
+            .Where(i => i.SiteId == siteId
+                        && (i.Status != EquipmentStatus.Decommissioned || instrumentIds.Contains(i.Id)))
             .OrderBy(i => i.Code)
-            .Select(i => new ContractLookup(i.Id, i.Code, i.Name.Fr))
+            .Select(i => new ContractLookup(i.Id, i.Code, i.Name, i.Status != EquipmentStatus.Decommissioned))
             .ToListAsync(ct);
 
         var items = await db.StockItems.AsNoTracking()
-            .Where(i => i.SiteId == siteId && i.IsActive)
+            .Where(i => i.SiteId == siteId && (i.IsActive || itemIds.Contains(i.Id)))
             .OrderBy(i => i.Code)
-            .Select(i => new ContractLookup(i.Id, i.Code, i.Name.Fr))
+            .Select(i => new ContractLookup(i.Id, i.Code, i.Name, i.IsActive))
             .ToListAsync(ct);
 
         return new ContractOptions(suppliers, instruments, items);
