@@ -244,6 +244,24 @@
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
 
+  "DataAccessKind": {
+    "SubjectAccessRequest": "Data-subject access request answered",
+    "Transmit": "Sent outside the laboratory",
+    "Search": "Patient search",
+    "Export": "Export",
+    "Print": "Print",
+    "ViewReport": "Report viewed",
+    "ViewOrder": "Order viewed",
+    "ViewPatient": "Patient file viewed"
+  },
+
+  "AuditOperation": {
+    "Delete": "Permanent deletion",
+    "SoftDelete": "Logical deletion",
+    "Update": "Change",
+    "Insert": "Creation"
+  },
+
   "StorageUnitKind": {
     "Room": "Room / ambient",
     "Freezer80": "Freezer −80 °C",
@@ -252,6 +270,8 @@
   },
 
   "Temperatures": {
+    "Inactive": "Deactivated",
+    "IncludeInactive": "Show deactivated units",
     "SheetCaption": "{0}, range {1}, location {2} — {3} reading(s), {4} out of range, min. {5}, max. {6}",
     "SheetTitle": "Temperature readings — {0} — {1}",
     "ExcursionRecorded": "Temperature out of range for {0}: non-conformity {1} has been opened.",
@@ -591,6 +611,7 @@
   },
 
   "Contracts": {
+    "InactiveSuffix": "(inactive)",
     "EditorNotice": "Commitment in tests: counted on the results produced by the contract's analysers (one ordered analysis = one test). Commitment in money: counted on approved orders of the captive reagents from this supplier. A yearly commitment is measured per contract year.",
     "PenaltyTerms": "Penalties",
     "ExitConditions": "Exit conditions",
@@ -2855,6 +2876,8 @@
   },
 
   "Interface": {
+    "DisablePrompt": "Reason for disabling the link of {0} (for example: analyser in maintenance):",
+    "EnablePrompt": "Reason for re-enabling the link of {0}:",
     "TestFrameSummary": "{0} of {1} result(s) would be stored",
     "TestFrameControl": "Control",
     "TestFrameOutcome": "What the LIS would do",
@@ -4207,7 +4230,7 @@
   "Result_ParameterNotFound": "Parameter not found ({0}).",
   "Result_CalculatedCannotBeEntered": "Parameter {0} is calculated; its value is not entered by hand.",
   "Result_NotANumber": "\"{0}\" is not a valid numeric value.",
-  "Result_InvalidOperator": "Operator \"{0}\" is not recognised; use <, >, u{2264} or u{2265}.",
+  "Result_InvalidOperator": "Operator \"{0}\" is not recognised; use <, >, ≤ or ≥.",
   "Result_ModifyRequiresPermission": "{0}: this result is already technically validated; changing it needs the \"modify a result\" right.",
   "Result_ItemCancelled": "{0}: this analysis is cancelled, no result can be entered on it.",
   "Result_SampleNotReceived": "{0}: the tube has not been received yet. Receive it before entering the result.",

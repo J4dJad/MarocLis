@@ -244,6 +244,24 @@
   "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
   "Deposit_NotFound": "Acompte introuvable.",
 
+  "DataAccessKind": {
+    "SubjectAccessRequest": "Réponse à une demande d'accès (CNDP)",
+    "Transmit": "Transmission hors du laboratoire",
+    "Search": "Recherche de patients",
+    "Export": "Export",
+    "Print": "Impression",
+    "ViewReport": "Consultation du compte rendu",
+    "ViewOrder": "Consultation de la demande",
+    "ViewPatient": "Consultation du dossier patient"
+  },
+
+  "AuditOperation": {
+    "Delete": "Suppression définitive",
+    "SoftDelete": "Suppression logique",
+    "Update": "Modification",
+    "Insert": "Création"
+  },
+
   "StorageUnitKind": {
     "Room": "Pièce / ambiant",
     "Freezer80": "Congélateur −80 °C",
@@ -252,6 +270,8 @@
   },
 
   "Temperatures": {
+    "Inactive": "Désactivée",
+    "IncludeInactive": "Afficher les enceintes désactivées",
     "SheetCaption": "{0}, plage {1}, emplacement {2} — {3} relevé(s), {4} hors limites, min. {5}, max. {6}",
     "SheetTitle": "Relevés de température — {0} — {1}",
     "ExcursionRecorded": "Température hors limites pour {0} : la non-conformité {1} a été ouverte.",
@@ -591,6 +611,7 @@
   },
 
   "Contracts": {
+    "InactiveSuffix": "(inactif)",
     "EditorNotice": "Engagement en tests : compté sur les résultats produits par les automates du contrat (une analyse demandée = un test). Engagement en montant : compté sur les commandes approuvées des réactifs captifs à ce fournisseur. Un engagement annuel est mesuré par année de contrat.",
     "PenaltyTerms": "Pénalités",
     "ExitConditions": "Conditions de sortie",
@@ -2856,6 +2877,8 @@
   },
 
   "Interface": {
+    "DisablePrompt": "Motif de la désactivation de la liaison de {0} (par exemple : automate en maintenance) :",
+    "EnablePrompt": "Motif de la réactivation de la liaison de {0} :",
     "TestFrameSummary": "{0} résultat(s) seraient enregistrés sur {1}",
     "TestFrameControl": "Contrôle",
     "TestFrameOutcome": "Ce que ferait le LIS",
