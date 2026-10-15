@@ -550,9 +550,17 @@ public sealed class ReviewFixesCycle1ClinicalDatabaseTests(Cycle1ClinicalScratch
         var newLot = item.AddLot(new ReagentLot("GLU-L2", Today.AddDays(300), 4m, Today.AddDays(-1)));
         newLot.StartEvaluationOn(analyser).Should().BeTrue();
 
+        // The run entered on it today in the QC screen, which opens the evaluation session.
+        var run = new QcResult(Guid.NewGuid(), parameter.Id, analyser, siteId, 100m, Now, Guid.NewGuid())
+        {
+            ReagentLotId = newLot.Id,
+            IsLotEvaluation = true
+        };
+
         await using (var context = database.Context())
         {
             context.StockItems.Add(item);
+            context.QcResults.Add(run);
             await context.SaveChangesAsync();
         }
 

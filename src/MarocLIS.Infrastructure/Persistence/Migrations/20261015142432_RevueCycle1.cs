@@ -86,6 +86,18 @@ FROM inv.PurchaseOrderLines pl
 CROSS APPLY (SELECT MAX(l.ReceivedOn) AS ReceivedOn FROM inv.ReagentLots l
              WHERE l.PurchaseOrderId = pl.PurchaseOrderId AND l.StockItemId = pl.StockItemId) x
 WHERE pl.LastReceivedOn IS NULL AND x.ReceivedOn IS NOT NULL;");
+
+            // QC entered on a lot awaiting release is that lot's acceptance QC, kept out of the
+            // routine series: never released, or measured before the lot's release and before
+            // its first unit was issued.
+            migrationBuilder.Sql(@"
+UPDATE q SET IsLotEvaluation = 1
+FROM qc.QcResults q
+JOIN inv.ReagentLots l ON l.Id = q.ReagentLotId
+WHERE (l.ReleasedOn IS NULL AND l.IsQuarantined = 1)
+   OR (CAST(q.MeasuredAt AS date) <= l.ReleasedOn
+       AND NOT EXISTS (SELECT 1 FROM inv.StockMovements m
+                       WHERE m.ReagentLotId = l.Id AND m.Kind = 1 AND m.OccurredAt <= q.MeasuredAt));");
         }
 
         /// <inheritdoc />
