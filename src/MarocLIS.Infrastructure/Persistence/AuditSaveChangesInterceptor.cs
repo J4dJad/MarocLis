@@ -145,6 +145,9 @@ public sealed class AuditSaveChangesInterceptor(
             ? currentUser.SiteId
             : (Guid?)null;
         var reason = (context as LisDbContext) is not null ? PendingReason : null;
+        // The column holds 1000 characters; a reason listing many changed keys must not fail the
+        // save it describes, so it is shortened rather than refused.
+        if (reason is { Length: > 1000 }) reason = string.Concat(reason.AsSpan(0, 999), "…");
 
         // One correlation identifier per save, so every entry written by a single use case can be
         // pulled back together — a result revision touches the result, the item and the order.

@@ -155,7 +155,7 @@ public sealed class BankReconciliationView : LocalizedView
     internal static Label SectionLabel(Label label)
     {
         label.Dock = DockStyle.Top;
-        label.Height = 24;
+        label.Height = 34;
         label.Font = UiTheme.SectionTitle;
         label.ForeColor = UiTheme.TextPrimary;
         return label;

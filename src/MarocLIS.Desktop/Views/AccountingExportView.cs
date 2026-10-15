@@ -112,7 +112,7 @@ public sealed class AccountingExportView : LocalizedView
             {
                 AutoSize = true,
                 Checked = true,
-                Location = new Point(340 + i % 3 * 220, 110 + i / 3 * 26),
+                Location = new Point(340 + i % 3 * 255, 110 + i / 3 * 26),
                 Font = UiTheme.Body
             };
             _journals[journal] = box;

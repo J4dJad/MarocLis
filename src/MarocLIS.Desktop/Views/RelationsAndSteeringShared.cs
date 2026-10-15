@@ -29,7 +29,10 @@ internal sealed class PeriodBar : Panel
     internal Button Export { get; } = UiTheme.SecondaryButton(string.Empty);
 
     /// <summary>Further buttons, placed after the export button.</summary>
-    internal FlowLayoutPanel Extra { get; } = new() { AutoSize = true, WrapContents = false, BackColor = UiTheme.Surface };
+    internal FlowLayoutPanel Extra { get; } = new()
+    {
+        AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, BackColor = UiTheme.Surface
+    };
 
     internal DateOnly From => DateOnly.FromDateTime(_from.Value.Date);
     internal DateOnly To => DateOnly.FromDateTime(_to.Value.Date);
@@ -38,7 +41,7 @@ internal sealed class PeriodBar : Panel
     {
         _localizer = localizer;
         Dock = DockStyle.Top;
-        Height = 86;
+        Height = 92;
         BackColor = UiTheme.Surface;
 
         Heading.Font = UiTheme.PageTitle;
@@ -67,6 +70,14 @@ internal sealed class PeriodBar : Panel
         Compute.Bounds = new Rectangle(x, 50, 140, UiTheme.ButtonHeight);
         Export.Bounds = new Rectangle(x + 150, 50, 160, UiTheme.ButtonHeight);
         Extra.Location = new Point(x + 320, 48);
+        // On a narrow window the extra buttons would run off the bar: they move up beside the title.
+        Layout += (_, _) =>
+        {
+            var fits = x + 320 + Extra.Width <= ClientSize.Width;
+            Extra.Location = fits
+                ? new Point(x + 320, 48)
+                : new Point(Math.Max(Heading.Right + 16, ClientSize.Width - Extra.Width), 0);
+        };
 
         Controls.Add(Heading);
         if (withPeriod) Controls.AddRange([_preset, _fromLabel, _from, _toLabel, _to]);
