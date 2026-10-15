@@ -3933,6 +3933,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<decimal?>("StockAtCount")
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<Guid>("StockItemId")
                         .HasColumnType("uniqueidentifier");
 
@@ -4353,6 +4356,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("nvarchar(60)");
 
+                    b.Property<Guid?>("EvaluationInstrumentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateOnly>("ExpiryDate")
                         .HasColumnType("date");
 
@@ -4364,6 +4370,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsRejected")
                         .HasColumnType("bit");
+
+                    b.Property<DateOnly?>("LastOpenedOn")
+                        .HasColumnType("date");
 
                     b.Property<string>("LotNumber")
                         .IsRequired()
@@ -4999,6 +5008,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("PaidOn")
                         .HasColumnType("date");
 
+                    b.Property<int>("PaymentCount")
+                        .HasColumnType("int");
+
                     b.Property<int>("PaymentTermsDays")
                         .HasColumnType("int");
 
@@ -5409,6 +5421,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<string>("DiagnosisCode")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("DirectBillingAtRegistration")
+                        .HasColumnType("bit");
 
                     b.Property<decimal?>("DiscountPercent")
                         .HasColumnType("decimal(18,6)");
@@ -7093,6 +7108,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsAutoTransmitted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsLotEvaluation")
                         .HasColumnType("bit");
 
                     b.Property<DateTimeOffset>("MeasuredAt")
