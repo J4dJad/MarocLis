@@ -135,6 +135,12 @@ public sealed class LabOrderItem : Entity, IAuditable
     /// <summary>Why the analysis was repeated — quoted in the QC review and non-conformity file.</summary>
     public string? RepeatReason { get; private set; }
 
+    /// <summary>
+    /// When the analysis was last sent back to the bench. A value stored before it belongs to the
+    /// run that was set aside: until one is stored after it, the analysis is not complete again.
+    /// </summary>
+    public DateTimeOffset? RepeatedAt { get; private set; }
+
     public DateTimeOffset? CancelledAt { get; private set; }
     public Guid? CancelledByUserId { get; private set; }
     public string? CancellationReason { get; private set; }
@@ -296,7 +302,7 @@ public sealed class LabOrderItem : Entity, IAuditable
     /// withdraw it, and the analysis can then be repeated.
     /// </para>
     /// </summary>
-    public Result Repeat(string reason)
+    public Result Repeat(string reason, DateTimeOffset at)
     {
         if (Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported
                    or LabOrderItemStatus.Cancelled)
@@ -305,6 +311,7 @@ public sealed class LabOrderItem : Entity, IAuditable
             return Result.Failure(Error.Validation("Item_RepeatReasonRequired"));
 
         RepeatReason = reason;
+        RepeatedAt = at;
         TechnicallyValidatedAt = null;
         TechnicallyValidatedByUserId = null;
         ValidatedAt = null;

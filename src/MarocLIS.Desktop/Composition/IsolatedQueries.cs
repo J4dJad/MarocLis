@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using MarocLIS.Application.Abstractions;
 using MarocLIS.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,6 +21,13 @@ namespace MarocLIS.Desktop.Composition;
 /// service reading inside its own transaction must see its uncommitted rows, and a second
 /// connection would block on the very locks that transaction holds. Those calls stay on the
 /// shared context, as do members that do not return a Task.
+/// </para>
+/// <para>
+/// A call's own scope works under the same identity as the scope the proxy belongs to. The analyser
+/// host runs its imports under the interface service account, across every site; a history lookup
+/// sent to a fresh scope ran instead under whoever was signed in at the bench, so a tube from
+/// another site got no previous value and no delta check while a technician of one site was
+/// signed in, and got both while the workstation sat on the login screen.
 /// </para>
 /// </summary>
 public class IsolatedQueryProxy<TQueries> : DispatchProxy where TQueries : class
@@ -71,7 +79,7 @@ public class IsolatedQueryProxy<TQueries> : DispatchProxy where TQueries : class
             return Call(targetMethod, _sharedInstance ??= _factory(_scoped), args);
         }
 
-        var scope = _scopes.CreateScope();
+        var scope = CreateScope();
 
         object? result;
 
@@ -93,6 +101,29 @@ public class IsolatedQueryProxy<TQueries> : DispatchProxy where TQueries : class
                 .MakeGenericMethod(t));
 
         return awaiter.Invoke(null, [result, scope]);
+    }
+
+    /// <summary>
+    /// A scope of its own, switched to the identity of the proxy's scope before anything in it is
+    /// resolved: a context created first would keep the signed-in operator's site filter.
+    /// </summary>
+    private IServiceScope CreateScope()
+    {
+        var owner = _scoped.GetService<ScopeIdentity>();
+        var scope = _scopes.CreateScope();
+
+        try
+        {
+            if (owner?.User is { } user)
+                scope.ServiceProvider.GetService<ScopeIdentity>()?.RunAs(user, owner.IgnoreSiteScope);
+        }
+        catch
+        {
+            scope.Dispose();
+            throw;
+        }
+
+        return scope;
     }
 
     // A query that hands back a domain entity loads it for a service to change and save. Loaded on

@@ -837,6 +837,11 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
             _ageUnit.SelectedIndex = divisor switch { 1 => 0, 30 => 1, _ => 2 };
             _ageFrom.Value = (existing.AgeFromDays ?? 0) / divisor;
             _ageTo.Value = (existing.AgeToDays ?? 0) / divisor;
+
+            // Saved before the unit was kept: shown in the unit it is read in, which may not be
+            // the one it was written in. Saving confirms the unit chosen here.
+            if (existing.HasUnconfirmedAgeUnit)
+                Notice(20, 118, 356, 36, "Catalog.AgeUnitToConfirmNotice", UiTheme.Abnormal);
         }
 
         Controls.AddRange([_ageFrom, _ageTo, _ageUnit]);

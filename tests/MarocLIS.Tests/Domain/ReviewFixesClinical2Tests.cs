@@ -619,7 +619,10 @@ public sealed class ReviewFixesClinical2Tests
                 {
                     ["GetResultsForOrderAsync"] = _ => Task.FromResult<IReadOnlyList<TestResult>>(self._results.ToList()),
                     ["GetActiveReflexRulesAsync"] = _ => Task.FromResult<IReadOnlyList<ReflexRule>>([]),
-                    ["GetPreviousValueAsync"] = _ => Task.FromResult(self.Previous)
+                    ["GetPreviousValuesAsync"] = args => Task.FromResult<IReadOnlyDictionary<Guid, PreviousValue>>(
+                        self.Previous is { } previous
+                            ? ((IReadOnlyCollection<Guid>)args![1]!).ToDictionary(id => id, _ => previous)
+                            : new Dictionary<Guid, PreviousValue>())
                 }),
                 unitOfWork,
                 Stub.Of<IPermissionGuard>(),

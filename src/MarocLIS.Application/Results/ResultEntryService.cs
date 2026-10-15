@@ -193,7 +193,12 @@ public sealed class ResultEntryService(
         if (patient is null) return Result.Failure<ResultEntrySheet>(Error.NotFound("Order_PatientNotFound"));
 
         var catalogue = await _pipeline.LoadCatalogueAsync(order, ct);
-        var resultRows = await queries.GetResultsForOrderAsync(orderId, departmentId, ct);
+        var resultRows = await queries.GetCurrentResultsForOrderAsync(orderId, departmentId, ct);
+        var history = resultRows.Count == 0
+            ? new Dictionary<Guid, PreviousValue>()
+            : await queries.GetPreviousValuesAsync(
+                order.PatientId, [.. resultRows.Select(r => r.TestParameterId).Distinct()],
+                order.RegisteredAt, ct);
         var sampleDefects = await LoadSampleDefectsAsync(order, ct);
         var sampleStatuses = await LoadSampleStatusesAsync(order, ct);
 
@@ -218,8 +223,7 @@ public sealed class ResultEntryService(
             // The interval shown is the one the value is interpreted against: same instrument,
             // same day.
             var range = parameter.ResolveRange(ReferenceRangeContext.ForResult(patient, result, today));
-            var previous = await queries.GetPreviousValueAsync(order.PatientId, parameter.Id,
-                                                                order.RegisteredAt, ct);
+            var previous = history.GetValueOrDefault(parameter.Id);
 
             var item = order.Items.FirstOrDefault(i => i.Id == result.LabOrderItemId);
 
@@ -659,11 +663,26 @@ public interface IResultQueries
                                                              CancellationToken ct = default);
 
     /// <summary>
-    /// The patient's most recent validated value for a parameter before the current order — the
-    /// antériorité column on the report and the baseline for the delta check.
+    /// The order's results as the database holds them now, for a screen about to show them.
+    /// <para>
+    /// A screen keeps one context for its life, and a context hands back the copy it already
+    /// tracks rather than the row as it now stands: re-opening a file showed the potassium the
+    /// analyser had since replaced, and a critical call was dictated from it. Copies with no pending
+    /// change are read again; one with a change of its own is kept, and its save is then checked
+    /// against the row version it was read with.
+    /// </para>
     /// </summary>
-    Task<PreviousValue?> GetPreviousValueAsync(Guid patientId, Guid parameterId,
-                                                DateTimeOffset before, CancellationToken ct = default);
+    Task<IReadOnlyList<TestResult>> GetCurrentResultsForOrderAsync(Guid orderId, Guid? departmentId,
+                                                                    CancellationToken ct = default);
+
+    /// <summary>
+    /// The patient's most recent validated value for each parameter before the current order — the
+    /// antériorité column on the report and the baseline for the delta check. A parameter with no
+    /// history is absent. One lookup for a whole order, not one per value.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, PreviousValue>> GetPreviousValuesAsync(
+        Guid patientId, IReadOnlyCollection<Guid> parameterIds, DateTimeOffset before,
+        CancellationToken ct = default);
 
     Task<IReadOnlyList<ReflexRule>> GetActiveReflexRulesAsync(IReadOnlyList<Guid> triggerParameterIds,
                                                                CancellationToken ct = default);

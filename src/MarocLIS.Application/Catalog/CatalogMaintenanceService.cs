@@ -218,7 +218,8 @@ public sealed record AnalysisRow(
     int ParameterCount, int ActiveParameterCount, int RangeCount, int TariffCount,
     decimal? CurrentPrice, decimal? CurrentCoefficient, string? NationalActCode,
     int RoutineTurnaroundHours, bool IsAccredited, bool IsSubcontracted,
-    ConsentRequirement ConsentRequirement, bool IsActive, int OrderedCount)
+    ConsentRequirement ConsentRequirement, bool IsActive, int OrderedCount,
+    int UnconfirmedAgeBandCount = 0)
 {
     /// <summary>
     /// Orderable in practice. An analysis with no active parameter has nowhere to put a result, and
@@ -238,7 +239,7 @@ public sealed record ParameterRow(
     decimal? DeltaCheckPercent, int? DeltaCheckWindowDays,
     string? CalculationFormula, bool IsInternalOnly, bool AlwaysShowOnReport,
     int DisplayOrder, int IndentLevel, bool IsActive,
-    int RangeCount, int CodedOptionCount, int ResultCount)
+    int RangeCount, int CodedOptionCount, int ResultCount, int UnconfirmedAgeBandCount = 0)
 {
     public bool IsCalculated => !string.IsNullOrWhiteSpace(CalculationFormula);
 
@@ -273,6 +274,14 @@ public sealed record ReferenceRangeRow(
     /// </summary>
     public bool NeedsReview(DateOnly today) =>
         LastReviewedOn is null || LastReviewedOn < today.AddYears(-3);
+
+    /// <summary>
+    /// Saved before the age unit was kept, with bounds that read differently in days and in
+    /// months; see <see cref="ReferenceRange.HasUnconfirmedAgeUnit"/>. Re-saving it in the unit it
+    /// was written in clears it. A withdrawn interval is read by nothing and is not listed.
+    /// </summary>
+    public bool HasUnconfirmedAgeUnit =>
+        IsActive && ReferenceRange.HasUnconfirmedAgeUnit(AgeFromDays, AgeToDays, AgeUnitDays);
 }
 
 public sealed record TariffRow(

@@ -635,12 +635,19 @@ public sealed class PatientRegistrationService(
         if (surviving.MergedIntoPatientId is not null)
             return Result.Failure(Error.Conflict("Patient_SurvivorAlreadyMerged"));
 
-        // The duplicate's pending orders were interpreted with the duplicate's demographics; from
-        // now on they are the survivor's, which is the file that gets corrected. Read before the
+        // The duplicate's pending orders were interpreted with the duplicate's demographics and
+        // checked against the duplicate's history, which is usually none; from now on they are the
+        // survivor's, the file that gets corrected and holds the years of history. Read before the
         // pointer is set, while the duplicate's own merged files are still found under it.
-        var duplicateFiles = Demographics(duplicate) != Demographics(surviving)
-            ? await WithMergedDuplicatesAsync(duplicate.Id, ct)
-            : null;
+        var demographicsDiffer = Demographics(duplicate) != Demographics(surviving);
+        var duplicateFiles = await WithMergedDuplicatesAsync(duplicate.Id, ct);
+
+        // One transaction: the pointer is saved first, inside it, because the history lookup reads
+        // the database and finds the survivor's history only once the pointer is there. Run before
+        // the save, the re-interpretation still found nothing, and a true duplicate — same name,
+        // date of birth and sex — was not re-interpreted at all: a value entered on it before the
+        // merge was validated with no previous value and no delta check.
+        await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
 
         duplicate.MarkMergedInto(survivingPatientId);
 
@@ -650,19 +657,31 @@ public sealed class PatientRegistrationService(
             $"Fusion du dossier {duplicate.MedicalRecordNumber} dans " +
             $"{surviving.MedicalRecordNumber} : {reason}";
 
-        if (duplicateFiles is not null)
+        await unitOfWork.SaveChangesAsync(ct);
+
+        var (reinterpreted, validated) = await ReinterpretResultsAsync(surviving, duplicateFiles, ct);
+
+        if (reinterpreted > 0 || (demographicsDiffer && validated > 0))
         {
-            var (reinterpreted, validated) = await ReinterpretResultsAsync(surviving, duplicateFiles, ct);
+            unitOfWork.AuditReason =
+                $"Fusion du dossier {duplicate.MedicalRecordNumber} dans {surviving.MedicalRecordNumber}";
 
             if (reinterpreted > 0)
-                unitOfWork.AuditReason += $" ; {reinterpreted} résultat(s) non validé(s) réinterprété(s)";
-            if (validated > 0)
+                unitOfWork.AuditReason +=
+                    $" ; {reinterpreted} résultat(s) non validé(s) réinterprété(s) avec l'antériorité " +
+                    "du dossier conservé";
+
+            // Validated results were interpreted with the duplicate's sex or age; when the two
+            // files agree on those, nothing about them was wrong.
+            if (demographicsDiffer && validated > 0)
                 unitOfWork.AuditReason +=
                     $" ; {validated} résultat(s) déjà validé(s) interprété(s) selon les données " +
                     "du doublon, à revoir et à amender si nécessaire";
+
+            await unitOfWork.SaveChangesAsync(ct);
         }
 
-        await unitOfWork.SaveChangesAsync(ct);
+        await unitOfWork.CommitAsync(ct);
 
         return Result.Success();
     }
