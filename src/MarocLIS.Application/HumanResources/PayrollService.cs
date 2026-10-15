@@ -572,11 +572,9 @@ public sealed class PayrollService(
             null => string.Empty,
             decimal d => d.ToString("0.00", Fr),
             DateOnly date => date.ToString("dd/MM/yyyy", Fr),
-            _ => Quote(value.ToString() ?? string.Empty)
+            // Names, CIN and RIB go through the shared cell: these files open straight in Excel.
+            _ => Inventory.CsvCell.Of(value.ToString())
         };
-
-        static string Quote(string s) =>
-            s.IndexOfAny([';', '"', '\n', '\r']) >= 0 ? $"\"{s.Replace("\"", "\"\"")}\"" : s;
 
         var text = new StringBuilder();
         foreach (var row in rows) text.AppendLine(string.Join(';', row.Select(Cell)));

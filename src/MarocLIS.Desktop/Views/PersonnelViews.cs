@@ -783,9 +783,8 @@ public sealed class HabilitationView : LocalizedView
     {
         if (_matrix is null) return;
 
-        static string Csv(string? value) =>
-            value is null ? string.Empty
-            : value.IndexOfAny([';', '"', '\n']) >= 0 ? $"\"{value.Replace("\"", "\"\"")}\"" : value;
+        // Names and evidence are typed by users: the shared cell neutralises formulas for Excel.
+        static string Csv(string? value) => MarocLIS.Application.Inventory.CsvCell.Of(value);
 
         var csv = new StringBuilder();
         csv.AppendLine(string.Join(';', new[]

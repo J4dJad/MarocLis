@@ -404,7 +404,7 @@ public sealed partial class DemoDataSeeder
 
             var draft = await AsAsync<DocumentControlService, Result<int>>(DemoActor.QualityManager,
                 s => s.AddDraftAsync(id, new MultilingualText("Création du document."), pdf,
-                                     $"{doc.Reference}.pdf", "application/pdf", ct), ct);
+                                     $"{doc.Reference}.pdf", ct), ct);
 
             if (!Check(draft, $"Version {doc.Reference}")) continue;
 

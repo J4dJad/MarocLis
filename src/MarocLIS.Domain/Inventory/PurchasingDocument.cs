@@ -49,22 +49,8 @@ public sealed class PurchasingDocument : AggregateRoot, IAuditable
     public DateTimeOffset? ModifiedAt { get; set; }
     public Guid? ModifiedByUserId { get; set; }
 
-    /// <summary>
-    /// The content type of an accepted file, or null for any other kind. Opening a file hands it to
-    /// the Windows shell, so only documents that cannot run anything are kept: PDF, images, and
-    /// Word and Excel files without macros (.docm, .xlsm, the old .doc and .xls can carry them).
-    /// </summary>
-    public static string? ContentTypeFor(string fileName) =>
-        Path.GetExtension(fileName).ToLowerInvariant() switch
-        {
-            ".pdf" => "application/pdf",
-            ".png" => "image/png",
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".tif" or ".tiff" => "image/tiff",
-            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            _ => null
-        };
+    /// <summary>The content type of an accepted file, or null for any other kind (see <see cref="SafeDocumentFile"/>).</summary>
+    public static string? ContentTypeFor(string fileName) => SafeDocumentFile.ContentTypeFor(fileName);
 }
 
 public enum PurchasingDocumentOwner
