@@ -98,6 +98,11 @@ public static class Permissions
 
         /// <summary>Requests for quotation: sends them, records the answers, chooses the offer.</summary>
         public const string ManageQuotes = "inventory.quotes.manage";
+        /// <summary>Entering supplier invoices against purchase orders, and attaching their scan.</summary>
+        public const string EnterInvoices = "inventory.invoice.enter";
+
+        /// <summary>Releasing a blocked supplier invoice and recording supplier payments.</summary>
+        public const string ApprovePayments = "inventory.payment.approve";
     }
 
     public static class Equipment

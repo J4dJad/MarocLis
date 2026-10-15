@@ -164,6 +164,11 @@ public class LisDbContext : DbContext
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
     public DbSet<PurchaseOrderLine> PurchaseOrderLines => Set<PurchaseOrderLine>();
+    public DbSet<SupplierInvoice> SupplierInvoices => Set<SupplierInvoice>();
+    public DbSet<SupplierInvoiceLine> SupplierInvoiceLines => Set<SupplierInvoiceLine>();
+    public DbSet<SupplierInvoiceVariance> SupplierInvoiceVariances => Set<SupplierInvoiceVariance>();
+    public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
+    public DbSet<SupplierInvoiceFile> SupplierInvoiceFiles => Set<SupplierInvoiceFile>();
     public DbSet<Instrument> Instruments => Set<Instrument>();
     public DbSet<MaintenanceRecord> MaintenanceRecords => Set<MaintenanceRecord>();
     public DbSet<CalibrationRecord> CalibrationRecords => Set<CalibrationRecord>();

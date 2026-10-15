@@ -386,6 +386,7 @@ public sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
         builder.Property(e => e.AddressLine).HasMaxLength(400);
         builder.Property(e => e.City).HasMaxLength(100);
         builder.Property(e => e.Notes).HasMaxLength(1000);
+        builder.Property(e => e.AccountingAccount).HasMaxLength(20);
     }
 }
 

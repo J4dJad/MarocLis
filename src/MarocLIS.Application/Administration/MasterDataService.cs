@@ -132,7 +132,11 @@ public sealed record SupplierRequest
     public MoroccanRegion Region { get; init; }
 
     public int? LeadTimeDays { get; init; }
-    public int PaymentTermsDays { get; init; } = 30;
+    /// <summary>Loi n° 69-21: 60 days when nothing was agreed, at most 120 by agreement.</summary>
+    public int PaymentTermsDays { get; init; } = PaymentTerms.DefaultDays;
+
+    /// <summary>Auxiliary account in the accounting export; the supplier code when empty.</summary>
+    public string? AccountingAccount { get; init; }
 
     /// <summary>ISO 15189 §4.6 expects suppliers of critical items to be evaluated and approved.</summary>
     public bool IsApproved { get; init; }
@@ -249,7 +253,7 @@ public sealed record SupplierRow(
     Guid SupplierId, string Code, string Name, string? Ice, string? ContactName, string? Phone,
     string? Email, string? City, int LeadTimeDays, bool IsApproved,
     DateOnly? LastEvaluationDate, int? EvaluationScore, bool IsEvaluationOverdue, bool IsActive,
-    int StockItemCount);
+    int StockItemCount, int PaymentTermsDays = PaymentTerms.DefaultDays, string? AccountingAccount = null);
 
 /// <summary>
 /// A payer as the maintenance grid shows it.
@@ -751,6 +755,10 @@ public sealed class MasterDataService(
         if (request.EvaluationScore is < 0 or > 100)
             errors.Add(Error.Validation("Supplier_ScoreOutOfRange"));
 
+        // Loi n° 69-21 caps an agreed payment term at 120 days; a longer one cannot be agreed.
+        if (request.PaymentTermsDays is < 0 or > PaymentTerms.MaximumDays)
+            errors.Add(Error.Validation("Supplier_PaymentTermsTooLong", PaymentTerms.MaximumDays));
+
         // An approval with no evaluation behind it is the box-ticking ISO 15189 §4.6 exists to
         // prevent: the point is that the laboratory assessed the supplier, not that it said so.
         if (request.IsApproved && request.LastEvaluationDate is null)
@@ -793,6 +801,7 @@ public sealed class MasterDataService(
         supplier.Region = request.Region;
         supplier.LeadTimeDays = request.LeadTimeDays ?? 7;
         supplier.PaymentTermsDays = request.PaymentTermsDays;
+        supplier.AccountingAccount = Blank(request.AccountingAccount);
         supplier.IsApproved = request.IsApproved;
         supplier.LastEvaluationDate = request.LastEvaluationDate;
         supplier.EvaluationScore = request.EvaluationScore;

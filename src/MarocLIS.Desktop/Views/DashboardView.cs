@@ -164,7 +164,9 @@ public sealed class DashboardView : LocalizedView
         ["Equipment.NextCalibration"] = Permissions.Equipment.View,
         ["Inventory.ToReorder"] = Permissions.Inventory.View,
         ["Inventory.ExpiringSoon"] = Permissions.Inventory.View,
-        ["Dashboard.Receivables"] = Permissions.Billing.View
+        ["Dashboard.Receivables"] = Permissions.Billing.View,
+        ["SupplierInvoices.DashboardOverdue"] = Permissions.Inventory.EnterInvoices,
+        ["SupplierInvoices.DashboardDueSoon"] = Permissions.Inventory.EnterInvoices
     };
 
     private void Render(FlowLayoutPanel host, IReadOnlyList<DashboardMetric> metrics)

@@ -196,6 +196,12 @@ public sealed class PurchaseOrderLine : Entity
 
     public bool IsFullyReceived => QuantityReceived >= QuantityOrdered;
 
+    /// <summary>
+    /// Date of the latest delivery on this line. The legal payment term of the supplier's invoice
+    /// runs from the delivery (loi n° 69-21), so it is kept where the invoice can find it.
+    /// </summary>
+    public DateOnly? LastReceivedOn { get; set; }
+
     internal Result Receive(decimal quantity)
     {
         if (quantity <= 0m)

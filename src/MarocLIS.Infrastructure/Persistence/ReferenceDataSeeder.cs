@@ -498,6 +498,8 @@ internal static class RolePermissionSets
              Permissions.Inventory.View, Permissions.Inventory.Receive, Permissions.Inventory.Issue,
              Permissions.Inventory.ApprovePurchaseOrders,
              Permissions.Equipment.ViewContracts, Permissions.Equipment.ManageContracts,
+             // The laboratory's director releases blocked supplier invoices and pays them.
+             Permissions.Inventory.EnterInvoices, Permissions.Inventory.ApprovePayments,
              Permissions.Billing.View,
              Permissions.Statistics.View, Permissions.Statistics.EpidemiologicalDeclaration,
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,
@@ -611,6 +613,8 @@ internal static class RolePermissionSets
              Permissions.Inventory.View, Permissions.Inventory.ManagePurchaseOrders,
              Permissions.Inventory.ManageQuotes,
              Permissions.Equipment.ViewContracts, Permissions.Equipment.ManageContracts,
+             // Keys supplier invoices; releasing a blocked one and paying stay with the director.
+             Permissions.Inventory.EnterInvoices,
              Permissions.Statistics.View,
              Permissions.HumanResources.RequestLeave
          ]),

@@ -867,7 +867,7 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
 {
     private readonly Guid? _id;
     private readonly TextBox _code, _name, _ice, _fiscalId, _rc, _contact, _phone, _email,
-                             _address, _city, _notes;
+                             _address, _city, _notes, _account;
     private readonly ComboBox _region;
     private readonly NumericUpDown _lead, _terms, _score;
     private readonly CheckBox _approved, _active;
@@ -899,7 +899,12 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
                           "MoroccanRegion");
 
         _lead = Number("Inventory.LeadTime", 20, 230, 120, row?.LeadTimeDays ?? 7, 365);
-        _terms = Number("Billing.PaymentTerms", 160, 230, 120, 30, 365);
+        // Loi n° 69-21: 60 days by default, 120 at most by agreement; the field cannot go beyond.
+        _terms = Number("Billing.PaymentTerms", 160, 230, 120, row?.PaymentTermsDays ?? PaymentTerms.DefaultDays,
+                        PaymentTerms.MaximumDays);
+        _account = TextField("SupplierInvoices.SupplierAccount", 300, 230, 160, row?.AccountingAccount,
+                             latin: true, mono: true);
+        Notice(480, 236, 200, 50, "SupplierInvoices.PaymentTermsNotice");
 
         Notice(20, 294, 660, 30, "Inventory.SupplierEvaluationNotice", UiTheme.Accent);
 
@@ -967,6 +972,7 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
             Region = Selected<MoroccanRegion>(_region),
             LeadTimeDays = IntOrNull(_lead),
             PaymentTermsDays = (int)_terms.Value,
+            AccountingAccount = Blank(_account),
             IsApproved = _approved.Checked,
             LastEvaluationDate = DateOrNull(_evaluated.Toggle, _evaluated.Picker),
             EvaluationScore = IntOrNull(_score),
