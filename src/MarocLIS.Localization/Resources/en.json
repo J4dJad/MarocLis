@@ -47,6 +47,7 @@
   "Payroll_NegativeNetPay": "A payslip has a negative net: reduce its deductions before closing.",
   "Payroll_ReopenReasonRequired": "A reason for reopening is required.",
   "Payroll_TransferNotClosed": "Close the month first: only a closed payroll is sent to the bank.",
+  "Payroll_DepartureChanged": "The exit of {0} was corrected or cancelled after this month was prepared: use \"Update from files\" before closing, so that the prorata and the indemnities follow the current exit.",
   "Planning_EmployeeNotEmployed": "The employee is not employed that day.",
   "Planning_HoursInvalid": "The end time must differ from the start.",
   "Planning_OnLeave": "The employee is on approved leave that day.",
@@ -294,6 +295,7 @@
   },
 
   "Payroll": {
+    "ReopenCurrentRatesPrompt": "Recompute this month with the {0} payroll parameters as they stand now?\n\nNo (normal case): the month keeps the rates it was closed with.\nYes: only to correct a rate typed wrong and since corrected in the parameters. This choice is recorded in the audit trail.",
     "ProratedMonth": "Joined or left during the month: base salary paid for {0} of {1} working days.",
     "LeaveAbsenceIncluded": "Unpaid days taken from leave: {0} days, on top of those entered here.",
     "ManualAbsenceDays": "Other unpaid days",
@@ -2421,6 +2423,8 @@
   },
 
   "Catalog": {
+    "AgeUnitToConfirmNotice": "Band saved before its unit was stored: check the unit (days or months), then save to confirm it.",
+    "AgeUnitToConfirm": "age unit to confirm",
     "AnalysisPriceSaved": "{0} saved; laboratory price applies from {1}.",
     "LabPrice": "Laboratory price",
     "LabPriceSection": "Laboratory price (self-paying patients): a change applies from today.",

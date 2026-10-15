@@ -47,6 +47,7 @@
   "Payroll_NegativeNetPay": "Un bulletin a un net négatif : réduisez ses retenues avant de clôturer.",
   "Payroll_ReopenReasonRequired": "Le motif de réouverture est obligatoire.",
   "Payroll_TransferNotClosed": "Clôturez d'abord le mois : seule une paie clôturée est envoyée à la banque.",
+  "Payroll_DepartureChanged": "La sortie de {0} a été corrigée ou annulée depuis la préparation de ce mois : « Reprendre les dossiers » avant de clôturer, pour que le prorata et les indemnités suivent la sortie actuelle.",
   "Planning_EmployeeNotEmployed": "Le salarié n'est pas en poste ce jour-là.",
   "Planning_HoursInvalid": "L'heure de fin doit différer de l'heure de début.",
   "Planning_OnLeave": "Le salarié est en congé validé ce jour-là.",
@@ -294,6 +295,7 @@
   },
 
   "Payroll": {
+    "ReopenCurrentRatesPrompt": "Recalculer ce mois avec les paramètres de paie {0} tels qu'ils sont maintenant ?\n\nNon (cas normal) : le mois garde les taux de sa clôture.\nOui : uniquement pour corriger un taux mal saisi et rectifié depuis dans les paramètres. Ce choix est tracé dans l'audit.",
     "ProratedMonth": "Entrée ou sortie en cours de mois : salaire de base payé pour {0} j ouvrables sur {1}.",
     "LeaveAbsenceIncluded": "Jours non payés repris des congés : {0} j, en plus de ceux saisis ici.",
     "ManualAbsenceDays": "Autres jours non payés",
@@ -2422,6 +2424,8 @@
   },
 
   "Catalog": {
+    "AgeUnitToConfirmNotice": "Tranche enregistrée avant la mémorisation de l'unité : vérifiez l'unité (jours ou mois) puis enregistrez pour la confirmer.",
+    "AgeUnitToConfirm": "unité d'âge à confirmer",
     "AnalysisPriceSaved": "{0} enregistrée ; prix du laboratoire appliqué à partir du {1}.",
     "LabPrice": "Prix laboratoire",
     "LabPriceSection": "Prix du laboratoire (patients payants) : une modification s'applique à partir d'aujourd'hui.",
