@@ -490,6 +490,11 @@ public sealed class BillingView : LocalizedView
 
         _pendingHeading.Text = $"{T("Billing.Uninvoiced")} — {invoiceable.Count} · " +
                                total.Format(Localizer.CurrentLanguage);
+
+        // Capped at the most recent: said, so an older order missing from the list is not taken
+        // for one that needs no invoice.
+        if (_pendingRows.Count >= IBillingQueries.UninvoicedOrdersLimit)
+            _pendingHeading.Text += " — " + T("Billing.UninvoicedTruncated", IBillingQueries.UninvoicedOrdersLimit);
     }
 
     private async Task LoadLedgerAsync(CancellationToken ct = default)
@@ -609,10 +614,11 @@ public sealed class BillingView : LocalizedView
 
         // Invoiced again after a credit note reversed the first invoice, which went to the patient
         // although the order had a payer: the usual correction is a third-party box left unticked at
-        // registration, so the operator is offered to address this one to the payer.
+        // registration, so the operator is offered to address this one to the payer — when the
+        // payer has an agreement in force, without which its share cannot be claimed.
         Guid? payerOverride = null;
 
-        if (selected[0] is { PayerId: { } payerId, DirectBilling: false }
+        if (selected[0] is { PayerId: { } payerId, DirectBilling: false, PayerAgreementValid: true }
             && selected.Any(s => s.PreviouslyInvoiced)
             && _dialogs.Confirm(T("Billing.ReinvoiceToPayer", selected[0].PayerName ?? string.Empty),
                                 T("Billing.IssueInvoice")))
@@ -894,6 +900,8 @@ public sealed class BillingView : LocalizedView
 
         if (reason is null) return;
 
+        var refunded = 0;
+
         foreach (var deposit in held)
         {
             var result = await _billing.RefundDepositAsync(deposit.DepositId, reason);
@@ -903,10 +911,16 @@ public sealed class BillingView : LocalizedView
                 _dialogs.ShowFailure(result, T("Deposit.Refund"));
                 break;
             }
+
+            refunded++;
         }
 
+        // Said refunded only when every deposit was: a refusal (no open till, say) left the money
+        // held while the status bar announced it handed back.
         _status.ForeColor = UiTheme.Abnormal;
-        _status.Text = T("Deposit.Refunded", order.AccessionNumber);
+        _status.Text = refunded == held.Count
+            ? T("Deposit.Refunded", order.AccessionNumber)
+            : T("Deposit.RefundedPartly", order.AccessionNumber, refunded, held.Count);
 
         await LoadPendingAsync();
     }
@@ -984,6 +998,14 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
+        // What is left is the payer's share, settled through the claim.
+        if (invoice.PatientPayable <= 0m)
+        {
+            _dialogs.Info(T("Payment_ExceedsPatientShare",
+                            Money.Of(0m).Format(Localizer.CurrentLanguage)));
+            return;
+        }
+
         using var dialog = new PaymentDialog(Localizer, invoice, _dialogs);
 
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Request is null) return;
@@ -1034,6 +1056,14 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
+        // Sent to the payer or answered by it: refused by the service as well, said here before
+        // the reason is typed.
+        if (Invoice.ClaimBlocksCreditNote(invoice.ClaimStatus))
+        {
+            _dialogs.Warn(T("Invoice_CreditNoteClaimSent", invoice.Number));
+            return;
+        }
+
         var reason = _dialogs.PromptForReason(
             T("Billing.CreditNoteReasonPrompt", invoice.Number),
             T("Billing.CreditNote"), minimumLength: 10);
@@ -1057,7 +1087,8 @@ public sealed class BillingView : LocalizedView
             _status.ForeColor = UiTheme.Normal;
             _status.Text = T("Message.Saved");
 
-            await LoadLedgerAsync();
+            // Both lists: a full credit note frees its orders, which come back to be invoiced.
+            await ActivateAsync();
         }
         finally
         {
@@ -1247,8 +1278,12 @@ internal sealed class PaymentDialog : Form
     private readonly Guid? _orderId;
 
     internal PaymentDialog(ILocalizer localizer, InvoiceRow invoice, IUserDialogs dialogs)
+        // On an invoice whose payer share is claimed from the payer, the patient's part only: asked
+        // for the whole balance, the patient paid the payer's share too, and it was claimed again.
         : this(localizer, dialogs, $"{localizer["Payment.Title"]} — {invoice.Number}",
-               localizer["Billing.Outstanding"], invoice.Outstanding, invoice.InvoiceId, null)
+               localizer[invoice.PatientPayable < invoice.Outstanding
+                   ? "Payment.PatientShareDue" : "Billing.Outstanding"],
+               invoice.PatientPayable, invoice.InvoiceId, null)
     {
     }
 
