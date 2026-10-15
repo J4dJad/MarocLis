@@ -604,8 +604,8 @@ public sealed class PayrollService(
 
     /// <summary>
     /// What the CNSS declaration (DAMANCOM) needs, per employee and in total: days, gross, capped
-    /// base and each contribution. Typed or imported into DAMANCOM by hand; the e-BDS file format
-    /// itself is not produced.
+    /// base and each contribution, to check the declaration. The file DAMANCOM takes is
+    /// <see cref="ExportBdsAsync"/>.
     /// </summary>
     public async Task<Result<byte[]>> ExportCnssAsync(Guid periodId, CancellationToken ct = default)
     {
@@ -685,7 +685,149 @@ public sealed class PayrollService(
 
     private static byte[] Encode(string csv) =>
         [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(csv)];
+
+    // ---- Declarations ----------------------------------------------------------------------------
+
+    /// <summary>
+    /// The month's BDS for DAMANCOM (<see cref="CnssBdsFile"/>), built from the préétabli DAMANCOM
+    /// issued for it. Only a closed month is declared.
+    /// <para>
+    /// Declared: every payslip but an internship's (an intern is not insured; as in
+    /// <see cref="ExportCnssAsync"/>). ANAPEC insertion contracts are declared with their pay: the
+    /// beneficiary is insured, and the exemption of the contributions is the CNSS's to apply.
+    /// The salary is the gross subject to the CNSS, the days those paid (26 at most).
+    /// </para>
+    /// </summary>
+    public async Task<Result<PayrollExportFile>> ExportBdsAsync(Guid periodId, byte[] preestablished,
+                                                                CancellationToken ct = default)
+    {
+        var docs = await GetDocumentsAsync(periodId, null, ct);
+        if (docs.IsFailure) return Result.Failure<PayrollExportFile>(docs.FirstError);
+        if (docs.Value is []) return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_Empty"));
+
+        var first = docs.Value[0];
+        if (first.Status != PayrollStatus.Closed)
+            return Result.Failure<PayrollExportFile>(Error.Conflict("Payroll_BdsNotClosed"));
+
+        var file = CnssBdsFile.Parse(preestablished);
+        if (file.IsFailure) return Result.Failure<PayrollExportFile>(file.FirstError);
+        var matches = CnssBdsFile.Matches(file.Value, first.Employer.CnssAffiliationNumber, first.Year, first.Month);
+        if (matches.IsFailure) return Result.Failure<PayrollExportFile>(matches.FirstError);
+
+        var declared = docs.Value.Where(d => d.Payslip.Amounts.Exemption != PayrollExemption.Internship).ToList();
+
+        var missing = declared.Where(d => CnssBdsFile.Digits(d.Payslip.CnssNumber).Length == 0)
+                              .Select(d => $"{d.Payslip.Number} {d.Payslip.FullName}").ToList();
+        if (missing.Count > 0)
+            return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_BdsMissingCnss", string.Join(", ", missing)));
+
+        var invalid = declared.Where(d => CnssBdsFile.Digits(d.Payslip.CnssNumber).Length > 9)
+                              .Select(d => $"{d.Payslip.Number} {d.Payslip.FullName} ({d.Payslip.CnssNumber})").ToList();
+        if (invalid.Count > 0)
+            return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_BdsCnssNumberInvalid", string.Join(", ", invalid)));
+
+        var lastDay = new DateOnly(first.Year, first.Month, 1).AddMonths(1).AddDays(-1);
+        var paid = declared.Select(d => d.Payslip.EmployeeId).ToList();
+        var staff = await employees.ListAsync(e => e.CnssNumber != null || paid.Contains(e.Id), ct);
+        var byId = staff.ToDictionary(e => e.Id);
+
+        var salaries = declared.Select(d =>
+        {
+            var p = d.Payslip;
+            var a = p.Amounts;
+            return new BdsSalary(long.Parse(CnssBdsFile.Digits(p.CnssNumber), CultureInfo.InvariantCulture), p.FullName, p.Cin,
+                                 (int)a.PaidDays, a.GrossTaxable, Math.Min(a.GrossTaxable, d.Parameters.CnssCeiling),
+                                 BdsSituationOf(byId.GetValueOrDefault(p.EmployeeId), p, d.Parameters, lastDay));
+        }).ToList();
+
+        // An insured person the CNSS expects and the month does not pay has left (SO), or died.
+        var absent = new Dictionary<long, BdsSituation>();
+        foreach (var e in staff)
+            if (e.ExitReason == ExitReason.Death && e.ExitDate <= lastDay
+                && long.TryParse(CnssBdsFile.Digits(e.CnssNumber), NumberStyles.None, CultureInfo.InvariantCulture, out var number))
+                absent[number] = BdsSituation.Deceased;
+
+        var content = CnssBdsFile.Build(file.Value, salaries, absent);
+        var expected = file.Value.Insured.Select(i => i.InsuredNumber).ToHashSet();
+        var entrants = salaries.Select(s => s.InsuredNumber).Distinct().Count(n => !expected.Contains(n));
+        return Result.Success(new PayrollExportFile(
+            CnssBdsFile.FileName(file.Value.AffiliateNumber.Trim(), file.Value.Period), content,
+            expected.Count + entrants, entrants));
+    }
+
+    /// <summary>
+    /// The BDS situation of a payslip: SO for a departure in or before the month (DE for a death);
+    /// AT or CS for a month spent entirely on a work-accident stoppage or on unpaid leave, with no
+    /// day declared. Sick leave is paid here, so its days are declared and MS never arises.
+    /// </summary>
+    public static BdsSituation BdsSituationOf(Employee? employee, Payslip payslip, PayrollParameters rates, DateOnly lastDay)
+    {
+        if (employee?.ExitDate is { } exit && exit <= lastDay)
+            return employee.ExitReason == ExitReason.Death ? BdsSituation.Deceased : BdsSituation.Left;
+        if (payslip.Amounts.PaidDays > 0) return BdsSituation.Normal;
+        return payslip.Variables.WorkAccidentDays >= rates.MonthlyWorkingDays ? BdsSituation.WorkAccident
+                                                                              : BdsSituation.UnpaidLeave;
+    }
+
+    /// <summary>
+    /// The year's état 9421 for Simpl-IR (<see cref="SimplIrSalaryDeclaration"/>), from the site's
+    /// closed payslips of the year. Refused while a month of the year is still a draft.
+    /// </summary>
+    public async Task<Result<PayrollExportFile>> ExportSimplIrAsync(int year, SimplIrCodes codes, CancellationToken ct = default)
+    {
+        var permitted = Require();
+        if (permitted.IsFailure) return Result.Failure<PayrollExportFile>(permitted.FirstError);
+        if (year < 2000) return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_PeriodInvalid"));
+
+        var site = currentUser.SiteId;
+        var months = (await periods.ListAsync(p => p.SiteId == site && p.Year == year, ct)).OrderBy(p => p.Month).ToList();
+
+        var open = months.Where(p => !p.IsClosed).Select(p => $"{p.Month:00}/{p.Year}").ToList();
+        if (open.Count > 0)
+            return Result.Failure<PayrollExportFile>(Error.Conflict("Payroll_SimplIrOpenMonths", year, string.Join(", ", open)));
+        if (months.Count == 0) return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_SimplIrNothing", year));
+
+        var employer = await queries.EmployerAsync(site, ct);
+        if (string.IsNullOrWhiteSpace(employer.FiscalId))
+            return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_SimplIrNoFiscalId"));
+
+        var current = await ParametersForAsync(year, ct);
+        var slips = new List<(int Month, Payslip Slip, PayrollParameters Rates)>();
+        foreach (var month in months)
+        {
+            var period = await periods.GetByIdWithDetailsAsync(month.Id, ct) ?? month;
+            var rates = period.RatesFor(current);
+            slips.AddRange(period.Payslips.Select(p => (period.Month, p, rates)));
+        }
+
+        var ids = slips.Select(s => s.Slip.EmployeeId).Distinct().ToList();
+        var files = (await employees.ListAsync(e => ids.Contains(e.Id), ct)).ToDictionary(e => e.Id);
+
+        var lines = slips.Select(s =>
+        {
+            var (month, p, rates) = s;
+            var e = files.GetValueOrDefault(p.EmployeeId);
+            // As PayrollCalculator chose it: the low-income rate while the month's taxable pay,
+            // brought to the year, stays within the threshold.
+            var high = p.Amounts.GrossTaxable * 12m > rates.ProfessionalExpensesThreshold;
+            var address = e is null
+                ? null
+                : string.Join(", ", new[] { e.Address, e.City }.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!.Trim()));
+            return new SimplIrPayslip(month, p.EmployeeId, p.Number, e?.LastName ?? p.FullName, e?.FirstName ?? string.Empty,
+                                      address, p.Cin, p.CnssNumber, e?.FamilyStatus ?? FamilyStatus.Unmarried, p.ContractType,
+                                      p.DependentPersons, high, p.Amounts);
+        }).ToList();
+
+        return Result.Success(new PayrollExportFile(SimplIrSalaryDeclaration.FileName(employer.FiscalId, year),
+                                                    SimplIrSalaryDeclaration.Build(employer, year, lines, codes),
+                                                    ids.Count));
+    }
 }
+
+/// <summary>A declaration file, with the name the administration expects for it.</summary>
+/// <param name="Declared">The persons declared.</param>
+/// <param name="Entrants">For the BDS, of which not in the CNSS's préétabli.</param>
+public sealed record PayrollExportFile(string FileName, byte[] Content, int Declared = 0, int Entrants = 0);
 
 public interface IPayrollQueries
 {

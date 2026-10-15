@@ -10,7 +10,8 @@ namespace MarocLIS.Desktop.Views;
 
 /// <summary>
 /// The month's payroll: one line per payslip with gross, contributions, tax and net, the month's
-/// variables one double-click away, the payslips in PDF, and the journal and CNSS summary to export.
+/// variables one double-click away, the payslips in PDF, the journal and CNSS summary to export, and
+/// the declaration files: the month's BDS for DAMANCOM and the year's état 9421 for Simpl-IR.
 /// Reserved to the salary right.
 /// </summary>
 public sealed class PayrollView : LocalizedView
@@ -27,6 +28,7 @@ public sealed class PayrollView : LocalizedView
     private readonly Button _open = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _settings = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _simplIr = UiTheme.SecondaryButton(string.Empty);
     private readonly DataGridView _grid = UiTheme.Grid();
 
     private readonly Label _totals = new();
@@ -35,6 +37,7 @@ public sealed class PayrollView : LocalizedView
     private readonly Button _allPayslips = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _journal = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _cnss = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _bds = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _update = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _close = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _transfer = UiTheme.SecondaryButton(string.Empty);
@@ -82,8 +85,10 @@ public sealed class PayrollView : LocalizedView
         _open.Bounds = new Rectangle(272, 27, 190, UiTheme.ButtonHeight - 4);
         _refresh.Bounds = new Rectangle(472, 27, 130, UiTheme.ButtonHeight - 4);
         _settings.Bounds = new Rectangle(612, 27, 200, UiTheme.ButtonHeight - 4);
+        // The year's return, whichever month is shown.
+        _simplIr.Bounds = new Rectangle(822, 27, 220, UiTheme.ButtonHeight - 4);
 
-        bar.Controls.AddRange([_heading, _period, _open, _refresh, _settings]);
+        bar.Controls.AddRange([_heading, _period, _open, _refresh, _settings, _simplIr]);
 
         void Add(string name, int weight, Font? font = null, bool right = false)
             => _grid.Columns.Add(new DataGridViewTextBoxColumn
@@ -111,7 +116,7 @@ public sealed class PayrollView : LocalizedView
         var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
         host.Controls.Add(_grid);
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 76, BackColor = UiTheme.Surface };
+        var actions = new Panel { Dock = DockStyle.Bottom, Height = 112, BackColor = UiTheme.Surface };
 
         _totals.Font = UiTheme.SmallBold;
         _totals.ForeColor = UiTheme.TextSecondary;
@@ -127,8 +132,11 @@ public sealed class PayrollView : LocalizedView
         _update.Bounds = new Rectangle(870, 30, 190, UiTheme.ButtonHeight);
         _close.Bounds = new Rectangle(1070, 30, 170, UiTheme.ButtonHeight);
         _transfer.Bounds = new Rectangle(1250, 30, 150, UiTheme.ButtonHeight);
+        // Under the CNSS summary it is checked against.
+        _bds.Bounds = new Rectangle(700, 66, 220, UiTheme.ButtonHeight);
 
-        actions.Controls.AddRange([_totals, _variables, _payslip, _allPayslips, _journal, _cnss, _update, _close, _transfer]);
+        actions.Controls.AddRange([_totals, _variables, _payslip, _allPayslips, _journal, _cnss, _update, _close, _transfer,
+                                   _bds]);
 
         Controls.Add(host);
         Controls.Add(actions);
@@ -147,6 +155,8 @@ public sealed class PayrollView : LocalizedView
         _allPayslips.Click += async (_, _) => await PrintAsync(single: false);
         _journal.Click += async (_, _) => await ExportAsync(cnss: false);
         _cnss.Click += async (_, _) => await ExportAsync(cnss: true);
+        _bds.Click += async (_, _) => await RunBusyAsync(() => GuardedAsync(BdsAsync, "Building the CNSS BDS failed."));
+        _simplIr.Click += async (_, _) => await RunBusyAsync(() => GuardedAsync(SimplIrAsync, "Building the état 9421 failed."));
         _update.Click += async (_, _) => await RunBusyAsync(UpdateFromFilesAsync);
         _close.Click += async (_, _) => await RunBusyAsync(CloseOrReopenAsync);
         _transferMenu.Items.Add(new ToolStripMenuItem(string.Empty, null, async (_, _) => await TransferAsync(file: false)));
@@ -173,6 +183,8 @@ public sealed class PayrollView : LocalizedView
         _allPayslips.Text = T("Payroll.AllPayslips");
         _journal.Text = T("Payroll.Journal");
         _cnss.Text = T("Payroll.CnssSummary");
+        _bds.Text = T("Payroll.BdsFile");
+        _simplIr.Text = T("Payroll.SimplIr");
         _update.Text = T("Payroll.UpdateFromFiles");
         _transfer.Text = T("Payroll.Transfer");
         _transferMenu.Items[0].Text = T("Payroll.TransferOrder");
@@ -308,8 +320,8 @@ public sealed class PayrollView : LocalizedView
         _allPayslips.Enabled = _journal.Enabled = _cnss.Enabled = _close.Enabled = _detail is not null;
         _close.Text = _detail?.Period.Status == PayrollStatus.Closed ? T("Payroll.Reopen") : T("Payroll.Close");
 
-        // Only a closed month goes to the bank: its amounts no longer change.
-        _transfer.Enabled = _detail?.Period.Status == PayrollStatus.Closed;
+        // Only a closed month goes to the bank or to the CNSS: its amounts no longer change.
+        _transfer.Enabled = _bds.Enabled = _detail?.Period.Status == PayrollStatus.Closed;
     }
 
     private async Task TransferAsync(bool file)
@@ -440,6 +452,97 @@ public sealed class PayrollView : LocalizedView
         {
             _logger?.LogError(ex, "Exporting the payroll failed.");
             _dialogs.Error(T("Message.UnexpectedError"));
+        }
+    }
+
+    private async Task GuardedAsync(Func<Task> operation, string failure)
+    {
+        try
+        {
+            await operation();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "{Failure}", failure);
+            _dialogs.Error(T("Message.UnexpectedError"));
+        }
+    }
+
+    /// <summary>
+    /// The month's BDS: the préétabli DAMANCOM issued for the month is chosen, the BDS built from it
+    /// saved under the name DAMANCOM expects.
+    /// </summary>
+    private async Task BdsAsync()
+    {
+        if (_detail is not { Period.Status: PayrollStatus.Closed } d) return;
+
+        using var picker = new OpenFileDialog
+        {
+            Title = T("Payroll.BdsPickPreestablished"),
+            Filter = $"{T("Payroll.BdsFiles")} (AFFEBDS_*.txt)|AFFEBDS_*.txt|{T("Payroll.TextFiles")} (*.txt)|*.txt",
+            CheckFileExists = true
+        };
+        if (picker.ShowDialog(this) != DialogResult.OK) return;
+
+        byte[] preestablished;
+        try
+        {
+            preestablished = await File.ReadAllBytesAsync(picker.FileName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _dialogs.Warn($"{T("Documents.FileUnreadable")}\n{ex.Message}", _bds.Text);
+            return;
+        }
+
+        var built = await _payroll.ExportBdsAsync(d.Period.PeriodId, preestablished);
+        if (built.IsFailure) { _dialogs.ShowFailure(built, _bds.Text); return; }
+
+        var path = Save(built.Value, $"{T("Payroll.TextFiles")} (*.txt)|*.txt", _bds.Text,
+                        Path.GetDirectoryName(picker.FileName));
+        if (path is not null)
+            _dialogs.Info(T("Payroll.BdsSaved", path, built.Value.Declared, built.Value.Entrants), _bds.Text);
+    }
+
+    /// <summary>The year's état 9421: the DGI codes asked (and remembered on this workstation), then the XML saved.</summary>
+    private async Task SimplIrAsync()
+    {
+        var remembered = SimplIrCodesStore.Load(_logger);
+        using var dialog = new SimplIrDialog(Localizer, _dialogs, DateTime.Today.Year - 1, remembered);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        SimplIrCodesStore.Save(dialog.Codes, _logger);
+        var built = await _payroll.ExportSimplIrAsync(dialog.Year, dialog.Codes);
+        if (built.IsFailure) { _dialogs.ShowFailure(built, _simplIr.Text); return; }
+
+        var path = Save(built.Value, $"{T("Payroll.XmlFiles")} (*.xml)|*.xml", _simplIr.Text, null);
+        if (path is not null) _dialogs.Info(T("Payroll.SimplIrSaved", path, built.Value.Declared), _simplIr.Text);
+    }
+
+    /// <summary>Asks where to write a declaration file, under the name proposed; null when cancelled or not written.</summary>
+    private string? Save(PayrollExportFile file, string filter, string title, string? folder)
+    {
+        using var saver = new SaveFileDialog
+        {
+            Title = title,
+            FileName = file.FileName,
+            Filter = filter,
+            OverwritePrompt = true,
+            AddExtension = true
+        };
+        if (folder is not null) saver.InitialDirectory = folder;
+        if (saver.ShowDialog(this) != DialogResult.OK) return null;
+
+        try
+        {
+            File.WriteAllBytes(saver.FileName, file.Content);
+            return saver.FileName;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger?.LogWarning(ex, "Writing a declaration file failed.");
+            _dialogs.Warn($"{T("Document_WriteFailed")}\n{ex.Message}", title);
+            return null;
         }
     }
 
@@ -639,5 +742,89 @@ internal sealed class PayrollParametersDialog : MasterDataEditor
     {
         for (var i = 0; i < _fields.Length; i++) _fields[i].Set(target, _values[i]);
         target.IncomeTaxScale = _scale.Text.Trim();
+    }
+}
+
+/// <summary>
+/// The year of the état 9421 and the Simpl-IR referential codes the application does not hold.
+/// </summary>
+internal sealed class SimplIrDialog : MasterDataEditor
+{
+    private readonly NumericUpDown _year;
+    private readonly TextBox _commune, _lowRate, _highRate;
+
+    internal int Year => (int)_year.Value;
+    internal SimplIrCodes Codes => new(_commune.Text.Trim(), _lowRate.Text.Trim(), _highRate.Text.Trim());
+
+    internal SimplIrDialog(ILocalizer localizer, IUserDialogs dialogs, int year, SimplIrCodes remembered)
+        : base(localizer, dialogs, "Payroll.SimplIr", null, 560, 330)
+    {
+        _year = Number("Payroll.SimplIrYear", 20, 10, 120, year, max: 2100);
+        _year.Minimum = 2000;
+        _year.Value = Math.Clamp(year, 2000, 2100);
+        _commune = TextField("Payroll.SimplIrCommune", 160, 10, 380, remembered.Commune, latin: true, mono: true);
+        _lowRate = TextField("Payroll.SimplIrLowRateCode", 20, 62, 520, remembered.LowIncomeRateCode, latin: true, mono: true);
+        _highRate = TextField("Payroll.SimplIrHighRateCode", 20, 114, 520, remembered.HighIncomeRateCode, latin: true, mono: true);
+
+        Notice(20, 166, 520, 100, "Payroll.SimplIrNotice");
+        Buttons(276, 560, "Action.Export");
+    }
+
+    protected override void Accept()
+    {
+        foreach (var box in new[] { _commune, _lowRate, _highRate })
+            if (box.Text.Trim().Length == 0)
+            {
+                Dialogs.Warn(Localizer["Payroll_SimplIrCodesRequired"], Text);
+                box.Focus();
+                return;
+            }
+
+        DialogResult = DialogResult.OK;
+    }
+}
+
+/// <summary>
+/// The last Simpl-IR codes typed, kept for the next year in
+/// <c>%LOCALAPPDATA%\MarocLIS\simplir-codes.json</c>: referential codes, not data, so a file
+/// on the workstation rather than a column.
+/// </summary>
+internal static class SimplIrCodesStore
+{
+    private static string FilePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MarocLIS", "simplir-codes.json");
+
+    internal static SimplIrCodes Load(ILogger? logger)
+    {
+        var defaults = new SimplIrCodes(string.Empty, SimplIrCodes.DefaultLowIncomeRateCode, SimplIrCodes.DefaultHighIncomeRateCode);
+        try
+        {
+            if (!File.Exists(FilePath)) return defaults;
+            var stored = System.Text.Json.JsonSerializer.Deserialize<SimplIrCodes>(File.ReadAllText(FilePath));
+            return stored is null
+                ? defaults
+                : new SimplIrCodes(stored.Commune ?? string.Empty,
+                                   string.IsNullOrWhiteSpace(stored.LowIncomeRateCode) ? defaults.LowIncomeRateCode : stored.LowIncomeRateCode,
+                                   string.IsNullOrWhiteSpace(stored.HighIncomeRateCode) ? defaults.HighIncomeRateCode : stored.HighIncomeRateCode);
+        }
+        catch (Exception ex)
+        {
+            // A damaged file only costs the codes typed last time.
+            logger?.LogWarning(ex, "Reading the Simpl-IR codes failed.");
+            return defaults;
+        }
+    }
+
+    internal static void Save(SimplIrCodes codes, ILogger? logger)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+            File.WriteAllText(FilePath, System.Text.Json.JsonSerializer.Serialize(codes));
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Saving the Simpl-IR codes failed.");
+        }
     }
 }
