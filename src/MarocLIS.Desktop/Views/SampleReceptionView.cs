@@ -70,6 +70,11 @@ public sealed class SampleReceptionView : LocalizedView
 
     private SampleReceptionCandidate? _candidate;
 
+    // Set while an accept or reject for the displayed tube is being recorded. A scan arriving then
+    // is held and shown once the decision is in, rather than replacing the tube being decided.
+    private bool _deciding;
+    private string? _queuedScan;
+
     public SampleReceptionView(SampleWorkflowService workflow, ISampleLabelRenderer labels, ILabelPrinter labelPrinter, IDocumentOutput documents,
                               IUserDialogs dialogs, ILocalizer localizer,
                               ICultureManager cultureManager,
@@ -463,6 +468,15 @@ public sealed class SampleReceptionView : LocalizedView
     {
         if (string.IsNullOrWhiteSpace(barcode)) return;
 
+        if (_deciding)
+        {
+            _queuedScan = barcode.Trim();
+            _status.ForeColor = UiTheme.TextSecondary;
+            _status.Text = T("Sample.ScanQueued", _queuedScan);
+            _scan.SelectAll();
+            return;
+        }
+
         var result = await _workflow.ScanAsync(barcode);
 
         if (result.IsFailure)
@@ -478,6 +492,10 @@ public sealed class SampleReceptionView : LocalizedView
         }
 
         _candidate = result.Value;
+
+        // Every tube starts from blank inputs: the ticks, temperature and storage place entered for
+        // the previous one say nothing about this one.
+        ResetTubeInputs();
         ShowCandidate(_candidate);
 
         _scan.Clear();
@@ -577,12 +595,47 @@ public sealed class SampleReceptionView : LocalizedView
         _candidate = null;
         _detail.Visible = false;
 
+        ResetTubeInputs();
+
+        SetActionsEnabled(false);
+    }
+
+    /// <summary>
+    /// Puts the per-tube inputs back to their defaults. Not done in <see cref="ShowCandidate"/>,
+    /// which also re-renders the current tube after a language change and must keep what the
+    /// operator has entered for it.
+    /// </summary>
+    private void ResetTubeInputs()
+    {
         foreach (var check in _defectChecks.Values) check.Checked = false;
 
         _temperature.Clear();
+        _coldChain.Checked = true;
         _storage.Clear();
+        _requestRecollection.Checked = true;
 
-        SetActionsEnabled(false);
+        if (_rejectReason.Items.Count > 0) _rejectReason.SelectedIndex = 0;
+    }
+
+    /// <summary>
+    /// Ends a decision: re-enables the actions if the tube is still displayed (the decision was
+    /// refused), then shows a tube scanned in the meantime.
+    /// </summary>
+    private async Task EndDecisionAsync(SampleReceptionCandidate decided)
+    {
+        _deciding = false;
+
+        if (ReferenceEquals(_candidate, decided))
+        {
+            SetActionsEnabled(true);
+            RefreshActionAvailability();
+        }
+
+        if (_queuedScan is { } queued)
+        {
+            _queuedScan = null;
+            await ScanAsync(queued);
+        }
     }
 
     private void SetActionsEnabled(bool enabled)
@@ -636,7 +689,8 @@ public sealed class SampleReceptionView : LocalizedView
 
     private async Task AcceptAsync(bool withReservation)
     {
-        if (_candidate is null) return;
+        // The tube being decided, held locally: a scan may replace _candidate before this returns.
+        if (_deciding || _candidate is not { } candidate) return;
 
         var defects = SelectedDefects();
 
@@ -657,14 +711,15 @@ public sealed class SampleReceptionView : LocalizedView
 
         var request = new ReceiveSampleRequest
         {
-            SampleId = _candidate.SampleId,
+            SampleId = candidate.SampleId,
             ObservedDefects = defects,
             AcceptWithReservation = withReservation,
             TemperatureCelsius = temperature,
-            ColdChainRespected = _candidate.RequiresColdChain ? _coldChain.Checked : null,
+            ColdChainRespected = candidate.RequiresColdChain ? _coldChain.Checked : null,
             StorageLocation = string.IsNullOrWhiteSpace(_storage.Text) ? null : _storage.Text.Trim()
         };
 
+        _deciding = true;
         SetActionsEnabled(false);
         Cursor = Cursors.WaitCursor;
 
@@ -687,23 +742,25 @@ public sealed class SampleReceptionView : LocalizedView
             {
                 _status.ForeColor = withReservation ? UiTheme.Abnormal : UiTheme.Normal;
                 _status.Text = withReservation
-                    ? $"{_candidate.Barcode} — {T("Action.AcceptWithReservation")}"
-                    : $"{_candidate.Barcode} — {T("SampleStatus.Received")}";
+                    ? $"{candidate.Barcode} — {T("Action.AcceptWithReservation")}"
+                    : $"{candidate.Barcode} — {T("SampleStatus.Received")}";
             }
 
-            ClearCandidate();
+            if (ReferenceEquals(_candidate, candidate)) ClearCandidate();
             await RefreshAwaitingAsync();
         }
         finally
         {
             Cursor = Cursors.Default;
             _scan.Focus();
+            await EndDecisionAsync(candidate);
         }
     }
 
     private async Task RejectAsync()
     {
-        if (_candidate is null) return;
+        // The tube being decided, held locally: a scan may replace _candidate before this returns.
+        if (_deciding || _candidate is not { } candidate) return;
 
         if (_rejectReason.SelectedItem is not ReasonChoice reason)
         {
@@ -712,16 +769,17 @@ public sealed class SampleReceptionView : LocalizedView
         }
 
         var comment = _dialogs.PromptForText(
-            $"{_candidate.Barcode} — {reason.Display}\n\n{T("Field.Comment")}",
+            $"{candidate.Barcode} — {reason.Display}\n\n{T("Field.Comment")}",
             T("Action.Reject"));
 
         if (comment is null) return;
 
         if (!_dialogs.Confirm(
-                T("Sample.ConfirmRejection", _candidate.Barcode, reason.Display),
+                T("Sample.ConfirmRejection", candidate.Barcode, reason.Display),
                 T("Action.Reject")))
             return;
 
+        _deciding = true;
         SetActionsEnabled(false);
         Cursor = Cursors.WaitCursor;
 
@@ -729,7 +787,7 @@ public sealed class SampleReceptionView : LocalizedView
         {
             var result = await _workflow.RejectAsync(
             [
-                new RejectSampleRequest(_candidate.SampleId, reason.Value, comment,
+                new RejectSampleRequest(candidate.SampleId, reason.Value, comment,
                                         _requestRecollection.Checked)
             ]);
 
@@ -753,25 +811,26 @@ public sealed class SampleReceptionView : LocalizedView
                 await PrintReplacementLabelsAsync(result.Value.ReplacementLabels);
 
                 _status.ForeColor = UiTheme.Abnormal;
-                _status.Text = $"{_candidate.Barcode} — {T("SampleStatus.Rejected")} · " +
+                _status.Text = $"{candidate.Barcode} — {T("SampleStatus.Rejected")} · " +
                                T("Sample.ReplacementIssued");
             }
             else
             {
                 _status.ForeColor = UiTheme.Abnormal;
-                _status.Text = $"{_candidate.Barcode} — {T("SampleStatus.Rejected")}";
+                _status.Text = $"{candidate.Barcode} — {T("SampleStatus.Rejected")}";
             }
 
             if (result.Value.Problems.Count > 0)
                 _dialogs.Warn(Localizer.Describe(result.Value.Problems));
 
-            ClearCandidate();
+            if (ReferenceEquals(_candidate, candidate)) ClearCandidate();
             await RefreshAwaitingAsync();
         }
         finally
         {
             Cursor = Cursors.Default;
             _scan.Focus();
+            await EndDecisionAsync(candidate);
         }
     }
 

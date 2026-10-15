@@ -249,11 +249,7 @@ internal abstract class MasterDataEditor : Form
     protected static int? IntOrNull(NumericUpDown box) =>
         box.Value > 0 ? (int)box.Value : null;
 
-    protected static decimal? DecimalOrNull(TextBox box) =>
-        decimal.TryParse(box.Text.Replace(',', '.'),
-                         System.Globalization.NumberStyles.Float,
-                         System.Globalization.CultureInfo.InvariantCulture, out var value)
-            ? value : null;
+    protected static decimal? DecimalOrNull(TextBox box) => EditorValues.ParseDecimal(box.Text);
 
     protected static TEnum Selected<TEnum>(ComboBox combo) where TEnum : struct, Enum =>
         (TEnum)Enum.ToObject(typeof(TEnum), (combo.SelectedItem as EnumChoice)?.Value ?? 0);
@@ -455,18 +451,16 @@ internal sealed class QcMaterialEditorDialog : MasterDataEditor
         _expiry = new DateTimePicker
         {
             Bounds = new Rectangle(440, 32, 160, UiTheme.InputHeight),
-            Format = DateTimePickerFormat.Short,
-            MinDate = DateTime.Today,
-            Value = row?.ExpiryDate.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today.AddMonths(12)
+            Format = DateTimePickerFormat.Short
         };
 
         // An already-lapsed expiry cannot be shown by a picker whose minimum is today, and
-        // clamping it silently would edit the record just by opening it.
-        if (row?.ExpiryDate is { } expiry && expiry < DateOnly.FromDateTime(DateTime.Today))
-        {
-            _expiry.MinDate = new DateTime(2000, 1, 1);
-            _expiry.Value = expiry.ToDateTime(TimeOnly.MinValue);
-        }
+        // clamping it silently would edit the record just by opening it. The minimum is therefore
+        // chosen before the value is assigned: assigning a lapsed date first throws.
+        var expiryDate = row?.ExpiryDate.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today.AddMonths(12);
+
+        _expiry.MinDate = expiryDate < DateTime.Today ? new DateTime(2000, 1, 1) : DateTime.Today;
+        _expiry.Value = expiryDate;
 
         Controls.Add(_expiry);
 
