@@ -168,5 +168,8 @@ public enum SequencePurpose
     SubcontractDispatch = 12,
 
     /// <summary>Employee number (matricule).</summary>
-    EmployeeNumber = 13
+    EmployeeNumber = 13,
+
+    /// <summary>Work accident or blood exposure file, the reference given to the insurer.</summary>
+    WorkAccident = 14
 }

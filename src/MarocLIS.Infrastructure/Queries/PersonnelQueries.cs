@@ -149,6 +149,34 @@ public sealed class PersonnelQueries(LisDbContext db) : IPersonnelQueries
         ];
     }
 
+    public async Task<IReadOnlyList<AccidentDeadlineFacts>> GetAccidentDeadlineFactsAsync(CancellationToken ct = default)
+    {
+        var open = await (from a in db.WorkAccidents.AsNoTracking()
+                          join e in db.Employees.AsNoTracking() on a.EmployeeId equals e.Id
+                          where !a.IsClosed && e.ExitDate == null
+                          select new
+                          {
+                              e.Id, e.Number, e.LastName, e.FirstName, e.Job, AccidentId = a.Id,
+                              AccidentNumber = a.Number, a.OccurredAt, Declared = a.DeclaredToInsurerOn != null
+                          })
+            .ToListAsync(ct);
+        if (open.Count == 0) return [];
+
+        var ids = open.Select(a => a.AccidentId).ToList();
+        var checks = await db.WorkAccidents.AsNoTracking()
+            .Where(a => ids.Contains(a.Id))
+            .SelectMany(a => a.Checks.Where(c => c.DoneOn == null)
+                                     .Select(c => new { AccidentId = a.Id, c.Label, c.DueOn }))
+            .ToListAsync(ct);
+
+        return
+        [
+            .. open.Select(a => new AccidentDeadlineFacts(
+                a.Id, a.Number, $"{a.LastName} {a.FirstName}".Trim(), a.Job, a.AccidentNumber, a.OccurredAt, a.Declared,
+                [.. checks.Where(c => c.AccidentId == a.AccidentId).OrderBy(c => c.DueOn).Select(c => (c.Label, c.DueOn))]))
+        ];
+    }
+
     private async Task<Dictionary<Guid, string>> SubjectLabelsAsync(IEnumerable<Guid> ids, CancellationToken ct)
     {
         var wanted = ids.Distinct().ToList();

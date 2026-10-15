@@ -147,6 +147,8 @@ public static class Permissions
         public const string ApproveLeave = "hr.leave.approve";
         /// <summary>Building the shift and on-call planning.</summary>
         public const string ManagePlanning = "hr.planning";
+        /// <summary>Declaring work accidents and blood exposures, and following them up.</summary>
+        public const string Accidents = "hr.accidents";
     }
 
     public static class Statistics

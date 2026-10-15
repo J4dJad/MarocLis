@@ -33,7 +33,9 @@ public static class DesktopServiceCollectionExtensions
         services.AddSingleton<IListPdfRenderer, ListPdfRenderer>();
         services.AddSingleton<IInvoiceRenderer, QuestPdfInvoiceRenderer>();
         services.AddSingleton<Application.HumanResources.IPayslipRenderer, QuestPdfPayslipRenderer>();
-        services.AddSingleton<Application.HumanResources.IHrDocumentRenderer, QuestPdfHrDocumentRenderer>();
+        services.AddSingleton<QuestPdfHrDocumentRenderer>();
+        services.AddSingleton<Application.HumanResources.IHrDocumentRenderer>(sp => sp.GetRequiredService<QuestPdfHrDocumentRenderer>());
+        services.AddSingleton<Application.HumanResources.IAccidentRenderer>(sp => sp.GetRequiredService<QuestPdfHrDocumentRenderer>());
         services.AddSingleton<IBenchWorksheetRenderer, QuestPdfBenchWorksheetRenderer>();
 
         // Resolved once: the installed font set does not change while the application runs, and the
@@ -82,6 +84,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<Application.HumanResources.IPlanningQueries, PlanningQueries>();
         services.AddIsolatedQueries<Application.HumanResources.IPayrollQueries, PayrollQueries>();
         services.AddIsolatedQueries<Application.HumanResources.IHrDocumentQueries, HrDocumentQueries>();
+        services.AddIsolatedQueries<Application.HumanResources.IAccidentQueries, AccidentQueries>();
         services.AddIsolatedQueries<Application.Inventory.IPurchaseOrderQueries, PurchaseOrderQueries>();
         services.AddIsolatedQueries<Application.Quality.IDocumentControlQueries, DocumentControlQueries>();
         services.AddIsolatedQueries<Application.Quality.IEqaQueries, EqaQueries>();
@@ -123,6 +126,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<LeaveView>();
         services.AddTransient<PlanningView>();
         services.AddTransient<PayrollView>();
+        services.AddTransient<AccidentView>();
         services.AddTransient<PurchaseOrderView>();
         services.AddTransient<QualityDocumentsView>();
         services.AddTransient<EqaView>();

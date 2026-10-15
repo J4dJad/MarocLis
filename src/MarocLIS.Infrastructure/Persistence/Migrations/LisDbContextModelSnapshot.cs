@@ -2158,6 +2158,39 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("MaintenanceRecords", "eqp");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.AccidentEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("On")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Text")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("WorkAccidentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkAccidentId");
+
+                    b.ToTable("AccidentEvents", "hr");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.HumanResources.Employee", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2643,7 +2676,14 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("WorkAccidentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("WorkAccidentId")
+                        .HasDatabaseName("IX_LeaveRequests_WorkAccident")
+                        .HasFilter("[WorkAccidentId] IS NOT NULL");
 
                     b.HasIndex("EmployeeId", "StartDate")
                         .HasDatabaseName("IX_LeaveRequests_Employee_Start");
@@ -3015,6 +3055,14 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                             b1.Property<decimal>("TransportAllowance")
                                 .HasPrecision(18, 2)
                                 .HasColumnType("decimal(18,2)");
+
+                            b1.Property<decimal>("WorkAccidentAllowance")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("decimal(18,2)");
+
+                            b1.Property<decimal>("WorkAccidentDays")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("decimal(18,2)");
                         });
 
                     b.HasKey("Id");
@@ -3085,6 +3133,40 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("PublicHolidays", "hr");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.SerologyCheck", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("DoneOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("DueOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("WorkAccidentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkAccidentId");
+
+                    b.HasIndex("DoneOn", "DueOn")
+                        .HasDatabaseName("IX_SerologyChecks_Due");
+
+                    b.ToTable("SerologyChecks", "hr");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.HumanResources.ShiftAssignment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3151,6 +3233,118 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_ShiftAssignments_Site_Date");
 
                     b.ToTable("ShiftAssignments", "hr");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.WorkAccident", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Circumstances")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime?>("ConsultedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("DeclaredToInsurerOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("Exposure")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("FirstAidGiven")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("IncapacityRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("Injuries")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("InsurerClaimNumber")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("InsurerName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .UseCollation("Latin1_General_100_CS_AS_SC_UTF8");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Place")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateOnly?>("ReturnedToWorkOn")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("SourceIdentified")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("Subrogation")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Witnesses")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UX_WorkAccidents_Number");
+
+                    b.HasIndex("EmployeeId", "OccurredAt")
+                        .HasDatabaseName("IX_WorkAccidents_Employee_Date");
+
+                    b.HasIndex("IsClosed", "OccurredAt")
+                        .HasDatabaseName("IX_WorkAccidents_Open");
+
+                    b.ToTable("WorkAccidents", "hr");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Identity.AppUser", b =>
@@ -7345,6 +7539,15 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.AccidentEvent", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.HumanResources.WorkAccident", null)
+                        .WithMany("Events")
+                        .HasForeignKey("WorkAccidentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.HumanResources.EmployeeCredential", b =>
                 {
                     b.HasOne("MarocLIS.Domain.HumanResources.Employee", null)
@@ -7388,6 +7591,11 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("MarocLIS.Domain.HumanResources.WorkAccident", null)
+                        .WithMany()
+                        .HasForeignKey("WorkAccidentId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.HumanResources.Payslip", b =>
@@ -7405,7 +7613,25 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.SerologyCheck", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.HumanResources.WorkAccident", null)
+                        .WithMany("Checks")
+                        .HasForeignKey("WorkAccidentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.HumanResources.ShiftAssignment", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.HumanResources.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.WorkAccident", b =>
                 {
                     b.HasOne("MarocLIS.Domain.HumanResources.Employee", null)
                         .WithMany()
@@ -8373,6 +8599,13 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MarocLIS.Domain.HumanResources.PayrollPeriod", b =>
                 {
                     b.Navigation("Payslips");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.WorkAccident", b =>
+                {
+                    b.Navigation("Checks");
+
+                    b.Navigation("Events");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Identity.AppUser", b =>

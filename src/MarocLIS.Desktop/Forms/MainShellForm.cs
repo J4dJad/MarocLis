@@ -307,7 +307,7 @@ public sealed class MainShellForm : LocalizedForm
             new("group.personnel", "Nav.HumanResources",
                 [Permissions.HumanResources.View, Permissions.HumanResources.RequestLeave,
                  Permissions.HumanResources.ApproveLeave, Permissions.HumanResources.ManagePlanning,
-                 Permissions.HumanResources.Salary],
+                 Permissions.HumanResources.Salary, Permissions.HumanResources.Accidents],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 
             new("personnel", "Nav.Personnel", [Permissions.HumanResources.View],
@@ -331,6 +331,10 @@ public sealed class MainShellForm : LocalizedForm
 
             new("payroll", "Nav.Payroll", [Permissions.HumanResources.Salary],
                 n => n.NavigateToAsync<PayrollView>()),
+
+            // A blood exposure is declared by whoever is on duty with the right, HR or biologist.
+            new("accidents", "Nav.Accidents", [Permissions.HumanResources.Accidents, Permissions.HumanResources.View],
+                n => n.NavigateToAsync<AccidentView>()),
 
             new("group.administration", "Nav.Administration", [Permissions.Administration.ViewUsers],
                 _ => Task.CompletedTask, IsGroupHeader: true),

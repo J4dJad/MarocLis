@@ -142,8 +142,23 @@ public enum DeadlineKind
     MissingConfidentialityClause = 5,
     MissingOrderRegistration = 6,
     MissingMedicalVisit = 7,
-    MedicallyUnfit = 8
+    MedicallyUnfit = 8,
+    /// <summary>A work accident not yet declared to the insurer; due 48 hours after it.</summary>
+    AccidentDeclaration = 9,
+    /// <summary>A serological check after a blood exposure, not yet done.</summary>
+    SerologyCheck = 10
 }
+
+/// <summary>An open accident file of an active employee, as the deadline list needs it.</summary>
+public sealed record AccidentDeadlineFacts(
+    Guid EmployeeId,
+    string Number,
+    string FullName,
+    EmployeeJob Job,
+    string AccidentNumber,
+    DateTime OccurredAt,
+    bool Declared,
+    IReadOnlyList<(string Label, DateOnly DueOn)> PendingChecks);
 
 /// <summary>One thing HR must act on. <see cref="DueOn"/> is null for something missing altogether.</summary>
 public sealed record DeadlineRow(
@@ -162,6 +177,33 @@ public sealed record DeadlineRow(
 /// </summary>
 public static class PersonnelDeadlines
 {
+    /// <summary>
+    /// A declaration still to send, due 48 hours after the accident, and the serological checks of a
+    /// blood exposure due within the horizon. The subject is the accident's number.
+    /// </summary>
+    public static IReadOnlyList<DeadlineRow> ForAccidents(IEnumerable<AccidentDeadlineFacts> accidents,
+                                                          DateOnly today, int horizonDays)
+    {
+        var limit = today.AddDays(horizonDays);
+        var rows = new List<DeadlineRow>();
+
+        foreach (var a in accidents)
+        {
+            if (!a.Declared)
+            {
+                var due = DateOnly.FromDateTime(a.OccurredAt + WorkAccident.DeclarationDelay);
+                rows.Add(new DeadlineRow(a.EmployeeId, a.Number, a.FullName, a.Job, DeadlineKind.AccidentDeclaration,
+                                         a.AccidentNumber, null, due, due < today));
+            }
+
+            foreach (var (label, dueOn) in a.PendingChecks.Where(c => c.DueOn <= limit))
+                rows.Add(new DeadlineRow(a.EmployeeId, a.Number, a.FullName, a.Job, DeadlineKind.SerologyCheck,
+                                         $"{a.AccidentNumber} — {label}", null, dueOn, dueOn < today));
+        }
+
+        return rows;
+    }
+
     public static IReadOnlyList<DeadlineRow> Compute(IEnumerable<EmployeeDeadlineFacts> employees,
                                                      DateOnly today, int horizonDays)
     {
@@ -570,7 +612,16 @@ public sealed class PersonnelService(
         if (permitted.IsFailure) return Result.Failure<IReadOnlyList<DeadlineRow>>(permitted.FirstError);
 
         var facts = await queries.GetDeadlineFactsAsync(ct);
-        return Result.Success(PersonnelDeadlines.Compute(facts, clock.Today, horizonDays));
+        var accidents = await queries.GetAccidentDeadlineFactsAsync(ct);
+        IReadOnlyList<DeadlineRow> rows =
+        [
+            .. PersonnelDeadlines.Compute(facts, clock.Today, horizonDays)
+                                 .Concat(PersonnelDeadlines.ForAccidents(accidents, clock.Today, horizonDays))
+                                 .OrderByDescending(r => r.IsOverdue)
+                                 .ThenBy(r => r.DueOn ?? DateOnly.MinValue)
+                                 .ThenBy(r => r.FullName, StringComparer.CurrentCulture)
+        ];
+        return Result.Success(rows);
     }
 
     private static bool IsBiologist(ProfessionalQualification qualification) =>
@@ -594,4 +645,7 @@ public interface IPersonnelQueries
     Task<HabilitationMatrix> GetMatrixAsync(CancellationToken ct = default);
 
     Task<IReadOnlyList<EmployeeDeadlineFacts>> GetDeadlineFactsAsync(CancellationToken ct = default);
+
+    /// <summary>The accident files not closed, of employees still on the staff.</summary>
+    Task<IReadOnlyList<AccidentDeadlineFacts>> GetAccidentDeadlineFactsAsync(CancellationToken ct = default);
 }

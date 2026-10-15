@@ -164,7 +164,9 @@ public sealed class QuestPdfPayslipRenderer : IPayslipRenderer
 
                 Line("Salaire de base", rates.MonthlyWorkingDays, null, p.BaseSalary, null);
                 if (a.AbsenceDeduction > 0)
-                    Line($"Absences non rémunérées ({v.AbsenceDays.ToString("0.#", Fr)} j)", p.BaseSalary / rates.MonthlyWorkingDays,
+                    Line(v.WorkAccidentDays > 0
+                             ? $"Absences non rémunérées ({v.AbsenceDays.ToString("0.#", Fr)} j, dont {v.WorkAccidentDays.ToString("0.#", Fr)} j d'accident du travail)"
+                             : $"Absences non rémunérées ({v.AbsenceDays.ToString("0.#", Fr)} j)", p.BaseSalary / rates.MonthlyWorkingDays,
                          null, -a.AbsenceDeduction, null);
                 if (a.SeniorityBonus > 0)
                     Line("Prime d'ancienneté", p.BaseSalary - a.AbsenceDeduction, P(a.SeniorityRate), a.SeniorityBonus, null);
@@ -182,6 +184,9 @@ public sealed class QuestPdfPayslipRenderer : IPayslipRenderer
                 if (v.LeaveIndemnity > 0) Line("Indemnité compensatrice de congés payés", null, null, v.LeaveIndemnity, null);
                 if (v.NoticeIndemnity > 0) Line("Indemnité compensatrice de préavis", null, null, v.NoticeIndemnity, null);
                 if (v.SeverancePay > 0) Line("Indemnité légale de licenciement (exonérée)", null, null, v.SeverancePay, null);
+                if (v.WorkAccidentAllowance > 0)
+                    Line("Indemnités journalières d'accident du travail, avancées pour l'assureur (exonérées)", null, null,
+                         v.WorkAccidentAllowance, null);
 
                 Line("SALAIRE BRUT", null, null, a.Gross, null, bold: true);
 

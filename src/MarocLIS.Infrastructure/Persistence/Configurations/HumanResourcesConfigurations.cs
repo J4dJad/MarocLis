@@ -90,7 +90,10 @@ public sealed class LeaveRequestConfiguration : IEntityTypeConfiguration<LeaveRe
         builder.Ignore(e => e.IsLive);
 
         builder.HasOne<Employee>().WithMany().HasForeignKey(e => e.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<WorkAccident>().WithMany().HasForeignKey(e => e.WorkAccidentId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(e => new { e.EmployeeId, e.StartDate }).HasDatabaseName("IX_LeaveRequests_Employee_Start");
+        builder.HasIndex(e => e.WorkAccidentId).HasFilter("[WorkAccidentId] IS NOT NULL")
+               .HasDatabaseName("IX_LeaveRequests_WorkAccident");
         builder.HasIndex(e => new { e.Status, e.StartDate }).HasDatabaseName("IX_LeaveRequests_Status_Start");
     }
 }
@@ -231,5 +234,59 @@ public sealed class FinalSettlementConfiguration : IEntityTypeConfiguration<Fina
         // One settlement per departure; a re-hired employee who leaves again gets a new one.
         builder.HasIndex(e => new { e.EmployeeId, e.ExitDate }).IsUnique()
                .HasDatabaseName("UX_FinalSettlements_Employee_Exit");
+    }
+}
+
+// ---- Work accidents ----------------------------------------------------------------------------
+
+public sealed class WorkAccidentConfiguration : IEntityTypeConfiguration<WorkAccident>
+{
+    public void Configure(EntityTypeBuilder<WorkAccident> builder)
+    {
+        builder.ToTable("WorkAccidents", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Ignore(e => e.DeclarationDueAt);
+        builder.Ignore(e => e.IsBloodExposure);
+
+        builder.Property(e => e.Number).AsCode(20);
+        builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UX_WorkAccidents_Number");
+        builder.Property(e => e.Place).HasMaxLength(200);
+        builder.Property(e => e.Circumstances).HasMaxLength(2000).IsRequired();
+        builder.Property(e => e.Injuries).HasMaxLength(1000);
+        builder.Property(e => e.Witnesses).HasMaxLength(500);
+        builder.Property(e => e.InsurerName).HasMaxLength(150);
+        builder.Property(e => e.InsurerClaimNumber).HasMaxLength(60);
+        builder.Property(e => e.IncapacityRate).HasPrecision(5, 2);
+        builder.Property(e => e.Note).HasMaxLength(1000);
+
+        builder.HasOne<Employee>().WithMany().HasForeignKey(e => e.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => new { e.EmployeeId, e.OccurredAt }).HasDatabaseName("IX_WorkAccidents_Employee_Date");
+        builder.HasIndex(e => new { e.IsClosed, e.OccurredAt }).HasDatabaseName("IX_WorkAccidents_Open");
+
+        builder.HasMany(e => e.Events).WithOne()
+               .HasForeignKey(e => e.WorkAccidentId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasMany(e => e.Checks).WithOne()
+               .HasForeignKey(c => c.WorkAccidentId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class AccidentEventConfiguration : IEntityTypeConfiguration<AccidentEvent>
+{
+    public void Configure(EntityTypeBuilder<AccidentEvent> builder)
+    {
+        builder.ToTable("AccidentEvents", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Text).HasMaxLength(1000);
+    }
+}
+
+public sealed class SerologyCheckConfiguration : IEntityTypeConfiguration<SerologyCheck>
+{
+    public void Configure(EntityTypeBuilder<SerologyCheck> builder)
+    {
+        builder.ToTable("SerologyChecks", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Label).HasMaxLength(100).IsRequired();
+        builder.HasIndex(e => new { e.DoneOn, e.DueOn }).HasDatabaseName("IX_SerologyChecks_Due");
     }
 }

@@ -1,5 +1,25 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Accident_CheckBeforeAccident": "Le contrôle ne peut pas être antérieur à l'accident.",
+  "Accident_CheckInFuture": "La date du contrôle ne peut pas être dans le futur.",
+  "Accident_CheckNotFound": "Ce contrôle n'existe pas dans le dossier.",
+  "Accident_ChecksPending": "Des contrôles sérologiques restent à faire : le dossier ne peut pas être clos.",
+  "Accident_CircumstancesRequired": "Décrivez les circonstances de l'accident.",
+  "Accident_Closed": "Ce dossier est clos. Une rechute le rouvre.",
+  "Accident_ConsultedBeforeAccident": "La consultation ne peut pas précéder l'accident.",
+  "Accident_DeclaredBeforeAccident": "La déclaration ne peut pas précéder l'accident.",
+  "Accident_EmployeeChanged": "Le salarié d'un dossier ne se change pas : déclarez un nouvel accident.",
+  "Accident_EventKindInvalid": "Cette étape s'enregistre par son propre bouton.",
+  "Accident_EventTextRequired": "Précisez le contenu de la réponse ou de la note.",
+  "Accident_ExposureRequired": "Indiquez le type d'exposition au sang.",
+  "Accident_IncapacityInvalid": "Le taux d'incapacité doit être compris entre 0 et 100 %.",
+  "Accident_InFuture": "La date de l'accident ne peut pas être dans le futur.",
+  "Accident_NotEmployed": "À cette date, la personne ne faisait pas partie du personnel.",
+  "Accident_NotFound": "Ce dossier d'accident n'existe pas.",
+  "Accident_ReturnBeforeAccident": "La reprise ne peut pas précéder l'accident.",
+  "Accident_StoppageOnAccidentDay": "L'arrêt commence au plus tôt le lendemain de l'accident : le jour même est payé par l'employeur.",
+  "Accident_ReturnInFuture": "La reprise s'enregistre le jour où elle a lieu, pas à l'avance.",
+  "Accident_ReturnDuringStoppage": "Un arrêt court jusqu'au {0} : la reprise ne peut être qu'après.",
   "HrDocument_UseSettlement": "Le reçu s'imprime depuis le solde de tout compte.",
   "HrDocument_EmployeeExited": "Ce salarié a quitté le laboratoire : délivrez un certificat de travail.",
   "HrDocument_EmployeeNotExited": "Ce salarié est toujours en poste : enregistrez d'abord sa sortie.",
@@ -107,6 +127,80 @@
   "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
   "Deposit_NotFound": "Acompte introuvable.",
 
+  "Accident": {
+    "CheckNotice": "Indiquez seulement la date : le résultat reste au dossier de la médecine du travail.",
+    "StoppageNotice": "Les dates du certificat médical. L'arrêt commence au plus tôt le lendemain de l'accident (le jour même est payé par l'employeur). Il est enregistré comme congé « Accident du travail » validé : le planning le respecte et la paie retient ces jours, que l'assureur indemnise.",
+    "Notice": "La déclaration doit parvenir à l'assureur dans les 48 heures (loi 18-12). Pour un AES : lavage, antisepsie et consultation du médecin référent dans les heures qui suivent ; le bilan initial et les contrôles à 1, 3 et 6 mois sont programmés ici. Aucun résultat ni diagnostic n'est enregistré.",
+    "Relapse": "Rechute (rouvre un dossier clos)",
+    "ClaimNumber": "N° de sinistre",
+    "Insurer": "Assureur accidents du travail",
+    "ConsultedAt": "Vu par le médecin le",
+    "Exposure": "Type d'exposition (AES)",
+    "FirstAid": "Premiers soins donnés sur place",
+    "Witnesses": "Témoins",
+    "Injuries": "Nature et siège des lésions",
+    "Circumstances": "Circonstances détaillées",
+    "Place": "Lieu",
+    "Incapacity": "Taux d'IPP fixé (%)",
+    "IncapacityShort": "IPP {0} %",
+    "SubrogationAsk": "L'employeur avance les indemnités journalières (subrogation)",
+    "Subrogation": "Subrogation de l'employeur",
+    "SourceIdentified": "Source identifiée",
+    "DoneOn": "Fait le",
+    "Serology": "Suivi sérologique",
+    "EventBy": "Saisi par",
+    "EventText": "Détail",
+    "Event": "Étape",
+    "Heading": "{0} accident(s) cette année · {1} dossier(s) en cours · {2} déclaration(s) en retard",
+    "DeclareBefore": "À déclarer avant le {0}",
+    "DeclarationLate": "NON DÉCLARÉ — délai de 48 h dépassé",
+    "Closed": "Clos",
+    "Open": "En cours",
+    "NextCheck": "Prochain contrôle",
+    "ReturnedOn": "Reprise le",
+    "StoppageDays": "Arrêt (j)",
+    "DeclaredOn": "Déclaré à l'assureur le",
+    "Kind": "Nature",
+    "Employee": "Salarié",
+    "OccurredAt": "Date et heure",
+    "Number": "N° de dossier",
+    "ClosePrompt": "Motif ou conclusion de la clôture (règlement de l'assureur, consolidation…). Peut rester vide.",
+    "Close": "Clore le dossier",
+    "Register": "Registre de l'année",
+    "Declaration": "Déclaration (PDF)",
+    "CheckDone": "Contrôle fait",
+    "Log": "Suivi assureur",
+    "Return": "Reprise du travail",
+    "Stoppage": "Arrêt / prolongation",
+    "Edit": "Compléter",
+    "New": "Déclarer un accident"
+  },
+
+  "AccidentEventKind": {
+    "Closed": "Dossier clos",
+    "Note": "Note",
+    "Relapse": "Rechute",
+    "Return": "Reprise du travail",
+    "Extension": "Prolongation",
+    "Stoppage": "Arrêt de travail",
+    "InsurerResponse": "Réponse de l'assureur",
+    "InsurerReminder": "Relance de l'assureur",
+    "Declared": "Déclaré à l'assureur"
+  },
+
+  "ExposureType": {
+    "SkinSplash": "Projection sur peau lésée",
+    "MucousSplash": "Projection sur muqueuse",
+    "Cut": "Coupure par objet tranchant",
+    "Needlestick": "Piqûre par aiguille"
+  },
+
+  "AccidentKind": {
+    "BloodExposure": "Exposition au sang (AES)",
+    "Commuting": "Accident de trajet",
+    "WorkAccident": "Accident du travail"
+  },
+
   "StaffCategory": {
     "Employee": "employé",
     "Executive": "cadre"
@@ -190,6 +284,7 @@
   },
 
   "Payroll": {
+    "AccidentIncluded": "Arrêt pour accident du travail : {0} j retenus, {1} DH d'indemnités avancées pour l'assureur (repris des arrêts).",
     "TransferFile": "Fichier pour la banque (CSV)",
     "TransferOrder": "Ordre de virement (PDF)",
     "Transfer": "Virement",
@@ -414,6 +509,8 @@
   },
 
   "DeadlineKind": {
+    "SerologyCheck": "Contrôle sérologique après AES",
+    "AccidentDeclaration": "Déclaration d'accident à l'assureur (48 h)",
     "MedicallyUnfit": "Déclaré inapte",
     "MissingMedicalVisit": "Visite d'embauche absente",
     "MissingOrderRegistration": "Inscription à l'Ordre absente",
@@ -752,6 +849,7 @@
   },
 
   "Nav": {
+    "Accidents": "Accidents du travail",
     "Payroll": "Paie",
     "Planning": "Planning des gardes",
     "Leave": "Congés et absences",
@@ -2711,6 +2809,7 @@
   },
 
   "SequencePurpose": {
+    "WorkAccident": "Accidents du travail",
     "EmployeeNumber": "Matricule du personnel",
     "SubcontractDispatch": "Bordereau de sous-traitance",
     "Accession": "Numéro de dossier",

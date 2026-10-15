@@ -15,7 +15,7 @@ namespace MarocLIS.Reporting;
 /// de salaire, certificat de travail, reçu pour solde de tout compte, and the salary transfer
 /// order for the bank.
 /// </summary>
-public sealed class QuestPdfHrDocumentRenderer : IHrDocumentRenderer
+public sealed partial class QuestPdfHrDocumentRenderer : IHrDocumentRenderer, IAccidentRenderer
 {
     private static readonly CultureInfo Fr = CultureInfo.GetCultureInfo("fr-FR");
     private readonly ReportingOptions _options;

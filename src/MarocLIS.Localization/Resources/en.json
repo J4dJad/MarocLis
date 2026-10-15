@@ -1,5 +1,25 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Accident_CheckBeforeAccident": "The check cannot be before the accident.",
+  "Accident_CheckInFuture": "The check date cannot be in the future.",
+  "Accident_CheckNotFound": "This check is not in the file.",
+  "Accident_ChecksPending": "Serological checks are still due: the file cannot be closed.",
+  "Accident_CircumstancesRequired": "Describe the circumstances of the accident.",
+  "Accident_Closed": "This file is closed. A relapse reopens it.",
+  "Accident_ConsultedBeforeAccident": "The consultation cannot precede the accident.",
+  "Accident_DeclaredBeforeAccident": "The declaration cannot precede the accident.",
+  "Accident_EmployeeChanged": "A file's employee cannot be changed: declare a new accident.",
+  "Accident_EventKindInvalid": "This step is recorded with its own button.",
+  "Accident_EventTextRequired": "Give the content of the answer or note.",
+  "Accident_ExposureRequired": "Give the type of blood exposure.",
+  "Accident_IncapacityInvalid": "The incapacity rate must be between 0 and 100 %.",
+  "Accident_InFuture": "The accident date cannot be in the future.",
+  "Accident_NotEmployed": "On that date the person was not on the staff.",
+  "Accident_NotFound": "This accident file does not exist.",
+  "Accident_ReturnBeforeAccident": "The return cannot precede the accident.",
+  "Accident_StoppageOnAccidentDay": "The stoppage starts the day after the accident at the earliest: the day itself is paid by the employer.",
+  "Accident_ReturnInFuture": "The return is recorded on the day it happens, not in advance.",
+  "Accident_ReturnDuringStoppage": "A stoppage runs until {0}: the return can only be after it.",
   "HrDocument_UseSettlement": "The receipt is printed from the final settlement.",
   "HrDocument_EmployeeExited": "This employee has left: issue a work certificate.",
   "HrDocument_EmployeeNotExited": "This employee is still in post: record the departure first.",
@@ -107,6 +127,80 @@
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
 
+  "Accident": {
+    "CheckNotice": "Enter only the date: the result stays with the occupational physician.",
+    "StoppageNotice": "The dates of the medical certificate. The stoppage starts the day after the accident at the earliest (the day itself is paid by the employer). It is recorded as an approved \"Work accident\" leave: the planning respects it and the payroll withholds those days, which the insurer pays.",
+    "Notice": "The declaration must reach the insurer within 48 hours (law 18-12). For a blood exposure: wash, disinfect and see the referring physician within hours; the baseline and the checks at 1, 3 and 6 months are scheduled here. No result or diagnosis is recorded.",
+    "Relapse": "Relapse (reopens a closed file)",
+    "ClaimNumber": "Claim number",
+    "Insurer": "Work-accident insurer",
+    "ConsultedAt": "Seen by the physician on",
+    "Exposure": "Exposure type (blood exposure)",
+    "FirstAid": "First aid given on the spot",
+    "Witnesses": "Witnesses",
+    "Injuries": "Nature and site of the injuries",
+    "Circumstances": "Detailed circumstances",
+    "Place": "Place",
+    "Incapacity": "Permanent incapacity rate (%)",
+    "IncapacityShort": "Permanent incapacity {0} %",
+    "SubrogationAsk": "The employer advances the daily allowances (subrogation)",
+    "Subrogation": "Employer subrogation",
+    "SourceIdentified": "Source identified",
+    "DoneOn": "Done on",
+    "Serology": "Serological follow-up",
+    "EventBy": "Entered by",
+    "EventText": "Detail",
+    "Event": "Step",
+    "Heading": "{0} accident(s) this year · {1} open file(s) · {2} late declaration(s)",
+    "DeclareBefore": "To declare before {0}",
+    "DeclarationLate": "NOT DECLARED — 48-hour limit passed",
+    "Closed": "Closed",
+    "Open": "Open",
+    "NextCheck": "Next check",
+    "ReturnedOn": "Back on",
+    "StoppageDays": "Off (days)",
+    "DeclaredOn": "Declared to the insurer on",
+    "Kind": "Kind",
+    "Employee": "Employee",
+    "OccurredAt": "Date and time",
+    "Number": "File number",
+    "ClosePrompt": "Reason or outcome of the closure (insurer's settlement, consolidation…). May be left empty.",
+    "Close": "Close the file",
+    "Register": "Register of the year",
+    "Declaration": "Declaration (PDF)",
+    "CheckDone": "Check done",
+    "Log": "Insurer follow-up",
+    "Return": "Return to work",
+    "Stoppage": "Stoppage / extension",
+    "Edit": "Complete",
+    "New": "Declare an accident"
+  },
+
+  "AccidentEventKind": {
+    "Closed": "File closed",
+    "Note": "Note",
+    "Relapse": "Relapse",
+    "Return": "Return to work",
+    "Extension": "Extension",
+    "Stoppage": "Work stoppage",
+    "InsurerResponse": "Insurer's answer",
+    "InsurerReminder": "Reminder to the insurer",
+    "Declared": "Declared to the insurer"
+  },
+
+  "ExposureType": {
+    "SkinSplash": "Splash on broken skin",
+    "MucousSplash": "Splash on mucous membrane",
+    "Cut": "Cut by a sharp object",
+    "Needlestick": "Needlestick"
+  },
+
+  "AccidentKind": {
+    "BloodExposure": "Blood exposure",
+    "Commuting": "Commuting accident",
+    "WorkAccident": "Work accident"
+  },
+
   "StaffCategory": {
     "Employee": "employee",
     "Executive": "executive"
@@ -190,6 +284,7 @@
   },
 
   "Payroll": {
+    "AccidentIncluded": "Work-accident stoppage: {0} days withheld, {1} DH of allowances advanced for the insurer (taken from the stoppages).",
     "TransferFile": "File for the bank (CSV)",
     "TransferOrder": "Transfer order (PDF)",
     "Transfer": "Transfer",
@@ -414,6 +509,8 @@
   },
 
   "DeadlineKind": {
+    "SerologyCheck": "Serological check after a blood exposure",
+    "AccidentDeclaration": "Accident declaration to the insurer (48 h)",
     "MedicallyUnfit": "Declared unfit",
     "MissingMedicalVisit": "No hiring medical visit",
     "MissingOrderRegistration": "No registration with the Order",
@@ -752,6 +849,7 @@
   },
 
   "Nav": {
+    "Accidents": "Work accidents",
     "Payroll": "Payroll",
     "Planning": "Shift planning",
     "Leave": "Leave and absences",
@@ -2710,6 +2808,7 @@
   },
 
   "SequencePurpose": {
+    "WorkAccident": "Work accidents",
     "EmployeeNumber": "Employee number",
     "SubcontractDispatch": "Subcontracting slip",
     "Accession": "Accession number",

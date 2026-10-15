@@ -62,6 +62,15 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
             .Select(r => new { r.EmployeeId, r.Type, r.StartDate, r.EndDate, r.StartsAfternoon, r.EndsMorning })
             .ToListAsync(ct);
 
+        // Work-accident stoppages: the insurer pays them, so the salary is withheld; under
+        // subrogation the employer advances the allowance and the payslip carries it.
+        var stoppages = await db.LeaveRequests.AsNoTracking()
+            .Where(r => ids.Contains(r.EmployeeId) && r.Status == LeaveStatus.Approved
+                        && r.Type == LeaveType.WorkAccident && r.StartDate <= to && r.EndDate >= from)
+            .Join(db.WorkAccidents.AsNoTracking(), r => r.WorkAccidentId, a => (Guid?)a.Id,
+                  (r, a) => new { r.EmployeeId, r.StartDate, r.EndDate, a.Subrogation })
+            .ToListAsync(ct);
+
         var holidays = (await db.PublicHolidays.AsNoTracking()
             .Where(h => h.Date >= from && h.Date <= to)
             .Select(h => h.Date)
@@ -85,7 +94,17 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
                     days += Working(start, end, r.StartsAfternoon && start == r.StartDate, r.EndsMorning && end == r.EndDate);
                 }
 
-                return new PayrollCandidate(s.Id, Math.Min(days, monthlyWorkingDays));
+                decimal accident = 0m, subrogated = 0m;
+                foreach (var r in stoppages.Where(r => r.EmployeeId == s.Id))
+                {
+                    var stopped = Working(r.StartDate < from ? from : r.StartDate, r.EndDate > to ? to : r.EndDate);
+                    accident += stopped;
+                    if (r.Subrogation) subrogated += stopped;
+                }
+
+                var withheld = Math.Min(days + accident, monthlyWorkingDays);
+                accident = Math.Min(accident, withheld);
+                return new PayrollCandidate(s.Id, withheld, accident, Math.Min(subrogated, accident));
             })
         ];
     }

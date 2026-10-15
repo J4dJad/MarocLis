@@ -278,6 +278,17 @@ public sealed record PayslipVariables
     /// <summary>Indemnité légale de licenciement (art. 53): exempt from income tax and contributions.</summary>
     public decimal SeverancePay { get; init; }
 
+    // ---- Work accident: carried over from the stoppages -----------------------------------------
+
+    /// <summary>Working days of the month on a work-accident stoppage; already counted in <see cref="AbsenceDays"/>.</summary>
+    public decimal WorkAccidentDays { get; init; }
+
+    /// <summary>
+    /// Daily allowances the employer advances on the insurer's behalf (subrogation), reimbursed by
+    /// the insurer: exempt from income tax and contributions (CGI art. 57).
+    /// </summary>
+    public decimal WorkAccidentAllowance { get; init; }
+
     public string? Note { get; init; }
 }
 
@@ -414,7 +425,8 @@ public static class PayrollCalculator
 
         var transportExempt = Math.Min(Math.Max(0m, v.TransportAllowance), p.TransportExemptionCap);
         var transportTaxable = Math.Max(0m, v.TransportAllowance) - transportExempt;
-        var exempt = transportExempt + Math.Max(0m, v.OtherExemptAllowance) + Math.Max(0m, v.SeverancePay);
+        var exempt = transportExempt + Math.Max(0m, v.OtherExemptAllowance) + Math.Max(0m, v.SeverancePay)
+                     + Math.Max(0m, v.WorkAccidentAllowance);
         var departure = Math.Max(0m, v.LeaveIndemnity) + Math.Max(0m, v.NoticeIndemnity);
 
         var grossTaxable = R(earnedBase + seniority + overtime + Math.Max(0m, v.TaxableBonus) + transportTaxable + departure);

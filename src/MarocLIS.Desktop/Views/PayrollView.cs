@@ -525,6 +525,9 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
         var departure = v.LeaveIndemnity + v.NoticeIndemnity + v.SeverancePay;
         if (departure > 0)
             current.Text += " " + localizer.Format("Payroll.DepartureIncluded", departure.ToString("N2", fr));
+        if (v.WorkAccidentDays > 0)
+            current.Text += " " + localizer.Format("Payroll.AccidentIncluded", v.WorkAccidentDays.ToString("0.#", fr),
+                                                   v.WorkAccidentAllowance.ToString("N2", fr));
         Controls.Add(current);
 
         Notice(20, 290, 580, 74, "Payroll.VariablesNotice");

@@ -168,6 +168,53 @@ public sealed partial class DemoDataSeeder
                   s => s.OpenAsync(today.Year, today.Month, ct), ct), "Paie du mois");
     }
 
+    /// <summary>
+    /// A needlestick of the nurse last week, declared, its baseline check done; a commuting accident
+    /// of the secretary two days ago, not yet declared, with a short stoppage the laboratory advances
+    /// for the insurer. Its own section, so a database seeded before the screen existed gets them too.
+    /// </summary>
+    private async Task SeedAccidentsAsync(CancellationToken ct)
+    {
+        var people = await QueryAsync(db => db.Employees.IgnoreQueryFilters().AsNoTracking()
+            .Where(e => e.Cin == "ZD900003" || e.Cin == "ZD900005")
+            .Select(e => new { e.Id, e.Cin }).ToListAsync(ct));
+        var secretary = people.FirstOrDefault(p => p.Cin == "ZD900003")?.Id;
+        var nurse = people.FirstOrDefault(p => p.Cin == "ZD900005")?.Id;
+        if (secretary is null || nurse is null) return;
+        if (await QueryAsync(db => db.WorkAccidents.IgnoreQueryFilters().AnyAsync(a => a.EmployeeId == nurse || a.EmployeeId == secretary, ct)))
+            return;
+
+        var today = clock.Today;
+        var exposure = await AsAsync<AccidentService, Result<Guid>>(DemoActor.Administrator, s => s.SaveAsync(new AccidentRequest
+        {
+            EmployeeId = nurse.Value, Kind = AccidentKind.BloodExposure, OccurredAt = today.AddDays(-8).ToDateTime(new TimeOnly(9, 40)),
+            Place = "Salle de prélèvement", Exposure = ExposureType.Needlestick, SourceIdentified = true, FirstAidGiven = true,
+            Circumstances = "Piqûre au recapuchonnage d'une aiguille après un prélèvement veineux",
+            Injuries = "Piqûre superficielle de l'index gauche", ConsultedAt = today.AddDays(-8).ToDateTime(new TimeOnly(11, 0)),
+            InsurerName = "Wafa Assurance", InsurerClaimNumber = "AT-DEMO-2210", DeclaredToInsurerOn = today.AddDays(-7)
+        }, ct), ct);
+        if (Check(exposure, "AES de l'infirmière"))
+        {
+            var detail = await AsAsync<AccidentService, Result<AccidentDetail>>(DemoActor.Administrator,
+                s => s.GetAsync(exposure.Value, ct), ct);
+            if (Check(detail, "Suivi de l'AES") && detail.Value.Checks.FirstOrDefault() is { } baseline)
+                Check(await AsAsync<AccidentService, Result>(DemoActor.Administrator,
+                          s => s.MarkCheckDoneAsync(exposure.Value, baseline.CheckId, today.AddDays(-8), ct), ct), "Bilan initial de l'AES");
+        }
+
+        var commuting = await AsAsync<AccidentService, Result<Guid>>(DemoActor.Administrator, s => s.SaveAsync(new AccidentRequest
+        {
+            EmployeeId = secretary.Value, Kind = AccidentKind.Commuting, OccurredAt = today.AddDays(-2).ToDateTime(new TimeOnly(7, 50)),
+            Place = "Boulevard Zerktouni, sur le trajet du domicile", Circumstances = "Chute de scooter en venant au laboratoire",
+            Injuries = "Entorse de la cheville droite", Witnesses = "Agent de circulation", Subrogation = true,
+            InsurerName = "Wafa Assurance"
+        }, ct), ct);
+        if (Check(commuting, "Accident de trajet de la secrétaire"))
+            Check(await AsAsync<AccidentService, Result>(DemoActor.Administrator,
+                      s => s.AddStoppageAsync(commuting.Value, today.AddDays(-1), today.AddDays(3), false, ct), ct),
+                  "Arrêt de la secrétaire");
+    }
+
     /// <summary>A RIB with its two check digits, so the file passes the bank-account check.</summary>
     private static string Rib(string body)
     {

@@ -51,6 +51,9 @@ public sealed class LeaveRequest : AuditableAggregateRoot
     /// <summary>Medical certificate, civil-status document… handed to HR.</summary>
     public bool JustificationProvided { get; set; }
 
+    /// <summary>The accident file a work-accident stoppage belongs to.</summary>
+    public Guid? WorkAccidentId { get; set; }
+
     public LeaveStatus Status { get; private set; } = LeaveStatus.Pending;
 
     public DateTimeOffset SubmittedAt { get; private set; }

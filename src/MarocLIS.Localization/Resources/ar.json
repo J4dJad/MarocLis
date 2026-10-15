@@ -1,5 +1,25 @@
 {
   "$comment": "الفهرس العربي — يُعرض من اليمين إلى اليسار. الأرقام تبقى بالصيغة اللاتينية (0-9) تفاديًا لأخطاء النقل في النتائج الطبية.",
+  "Accident_CheckBeforeAccident": "لا يمكن أن يكون الفحص قبل الحادثة.",
+  "Accident_CheckInFuture": "لا يمكن أن يكون تاريخ الفحص في المستقبل.",
+  "Accident_CheckNotFound": "هذا الفحص غير موجود في الملف.",
+  "Accident_ChecksPending": "ما زالت فحوص مصلية لم تنجز: لا يمكن إغلاق الملف.",
+  "Accident_CircumstancesRequired": "صف ظروف الحادثة.",
+  "Accident_Closed": "هذا الملف مغلق. الانتكاسة تعيد فتحه.",
+  "Accident_ConsultedBeforeAccident": "لا يمكن أن تسبق الاستشارة الحادثة.",
+  "Accident_DeclaredBeforeAccident": "لا يمكن أن يسبق التصريح الحادثة.",
+  "Accident_EmployeeChanged": "لا يمكن تغيير أجير الملف: صرح بحادثة جديدة.",
+  "Accident_EventKindInvalid": "تسجل هذه المرحلة بزرها الخاص.",
+  "Accident_EventTextRequired": "حدد مضمون الجواب أو الملاحظة.",
+  "Accident_ExposureRequired": "حدد نوع التعرض للدم.",
+  "Accident_IncapacityInvalid": "يجب أن تكون نسبة العجز بين 0 و100 %.",
+  "Accident_InFuture": "لا يمكن أن يكون تاريخ الحادثة في المستقبل.",
+  "Accident_NotEmployed": "في هذا التاريخ لم يكن الشخص ضمن المستخدمين.",
+  "Accident_NotFound": "ملف الحادثة هذا غير موجود.",
+  "Accident_ReturnBeforeAccident": "لا يمكن أن يسبق الاستئناف الحادثة.",
+  "Accident_StoppageOnAccidentDay": "يبدأ التوقف على أقرب تقدير في اليوم الموالي للحادثة: يوم الحادثة يؤديه المشغل.",
+  "Accident_ReturnInFuture": "يسجل الاستئناف يوم حدوثه، لا مسبقا.",
+  "Accident_ReturnDuringStoppage": "يمتد توقف إلى غاية {0}: لا يمكن الاستئناف إلا بعده.",
   "HrDocument_UseSettlement": "يُطبع التوصيل من تصفية الحساب.",
   "HrDocument_EmployeeExited": "غادر هذا الأجير: سلّم شهادة العمل.",
   "HrDocument_EmployeeNotExited": "هذا الأجير مازال في الخدمة: سجل المغادرة أولا.",
@@ -107,6 +127,80 @@
   "Deposit_OrderCancelled": "الملف {0} ملغى: لا يمكن سوى إرجاع التسبيق.",
   "Deposit_NotFound": "التسبيق غير موجود.",
 
+  "Accident": {
+    "CheckNotice": "أدخل التاريخ فقط: تبقى النتيجة في ملف طب الشغل.",
+    "StoppageNotice": "تواريخ الشهادة الطبية. يبدأ التوقف على أقرب تقدير في اليوم الموالي للحادثة (يوم الحادثة يؤديه المشغل). يسجل كرخصة « حادثة شغل » مقبولة: يحترمها التخطيط وتقتطع الأجور هذه الأيام التي يعوضها المؤمن.",
+    "Notice": "يجب أن يصل التصريح إلى المؤمن داخل 48 ساعة (القانون 18-12). عند التعرض للدم: الغسل والتطهير واستشارة الطبيب المرجعي خلال ساعات؛ تتم برمجة الفحص الأولي وفحوص 1 و3 و6 أشهر هنا. لا تسجل أي نتيجة أو تشخيص.",
+    "Relapse": "انتكاسة (يعيد فتح ملف مغلق)",
+    "ClaimNumber": "رقم الحادث لدى المؤمن",
+    "Insurer": "مؤمن حوادث الشغل",
+    "ConsultedAt": "فحصه الطبيب في",
+    "Exposure": "نوع التعرض",
+    "FirstAid": "تم تقديم الإسعافات الأولية في عين المكان",
+    "Witnesses": "الشهود",
+    "Injuries": "طبيعة الإصابات ومكانها",
+    "Circumstances": "الظروف بالتفصيل",
+    "Place": "المكان",
+    "Incapacity": "نسبة العجز الدائم (%)",
+    "IncapacityShort": "العجز الدائم {0} %",
+    "SubrogationAsk": "المشغل يسبق التعويضات اليومية (الحلول)",
+    "Subrogation": "حلول المشغل",
+    "SourceIdentified": "المصدر معروف",
+    "DoneOn": "أنجز في",
+    "Serology": "التتبع المصلي",
+    "EventBy": "أدخله",
+    "EventText": "التفاصيل",
+    "Event": "المرحلة",
+    "Heading": "{0} حادثة هذه السنة · {1} ملف جار · {2} تصريح متأخر",
+    "DeclareBefore": "يجب التصريح قبل {0}",
+    "DeclarationLate": "لم يصرح به — تجاوز أجل 48 ساعة",
+    "Closed": "مغلق",
+    "Open": "جار",
+    "NextCheck": "الفحص المقبل",
+    "ReturnedOn": "الاستئناف في",
+    "StoppageDays": "التوقف (أيام)",
+    "DeclaredOn": "صرح به لدى المؤمن في",
+    "Kind": "النوع",
+    "Employee": "الأجير",
+    "OccurredAt": "التاريخ والساعة",
+    "Number": "رقم الملف",
+    "ClosePrompt": "سبب الإغلاق أو خلاصته (تسوية المؤمن، الجبر…). يمكن تركه فارغا.",
+    "Close": "إغلاق الملف",
+    "Register": "سجل السنة",
+    "Declaration": "التصريح (PDF)",
+    "CheckDone": "تم الفحص",
+    "Log": "تتبع المؤمن",
+    "Return": "استئناف العمل",
+    "Stoppage": "توقف / تمديد",
+    "Edit": "إتمام",
+    "New": "التصريح بحادثة"
+  },
+
+  "AccidentEventKind": {
+    "Closed": "إغلاق الملف",
+    "Note": "ملاحظة",
+    "Relapse": "انتكاسة",
+    "Return": "استئناف العمل",
+    "Extension": "تمديد",
+    "Stoppage": "توقف عن العمل",
+    "InsurerResponse": "جواب المؤمن",
+    "InsurerReminder": "تذكير المؤمن",
+    "Declared": "التصريح لدى المؤمن"
+  },
+
+  "ExposureType": {
+    "SkinSplash": "رذاذ على جلد مجروح",
+    "MucousSplash": "رذاذ على غشاء مخاطي",
+    "Cut": "جرح بأداة حادة",
+    "Needlestick": "وخز بإبرة"
+  },
+
+  "AccidentKind": {
+    "BloodExposure": "تعرض للدم",
+    "Commuting": "حادثة طريق",
+    "WorkAccident": "حادثة شغل"
+  },
+
   "StaffCategory": {
     "Employee": "مستخدم",
     "Executive": "إطار"
@@ -190,6 +284,7 @@
   },
 
   "Payroll": {
+    "AccidentIncluded": "توقف بسبب حادثة شغل: اقتطاع {0} يوم و{1} درهم تعويضات مسبقة لحساب المؤمن (مأخوذة من فترات التوقف).",
     "TransferFile": "ملف البنك (CSV)",
     "TransferOrder": "أمر التحويل (PDF)",
     "Transfer": "التحويل",
@@ -414,6 +509,8 @@
   },
 
   "DeadlineKind": {
+    "SerologyCheck": "فحص مصلي بعد التعرض للدم",
+    "AccidentDeclaration": "التصريح بالحادثة لدى المؤمن (48 ساعة)",
     "MedicallyUnfit": "غير لائق طبيًا",
     "MissingMedicalVisit": "غياب فحص التشغيل",
     "MissingOrderRegistration": "غياب التسجيل في الهيئة",
@@ -752,6 +849,7 @@
   },
 
   "Nav": {
+    "Accidents": "حوادث الشغل",
     "Payroll": "الأجور",
     "Planning": "جدول المناوبات",
     "Leave": "العطل والغيابات",
@@ -2710,6 +2808,7 @@
   },
 
   "SequencePurpose": {
+    "WorkAccident": "حوادث الشغل",
     "EmployeeNumber": "رقم تسجيل المستخدم",
     "SubcontractDispatch": "جدول المناولة",
     "Accession": "رقم الملف",

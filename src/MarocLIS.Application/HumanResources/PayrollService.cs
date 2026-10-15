@@ -50,7 +50,11 @@ public interface IPayslipRenderer
 }
 
 /// <summary>Who goes on a month's payroll, with what the leave already says about their absences.</summary>
-public sealed record PayrollCandidate(Guid EmployeeId, decimal UnpaidDays);
+/// <param name="UnpaidDays">Days withheld from the salary, work-accident days included.</param>
+/// <param name="WorkAccidentDays">Of which on a work-accident stoppage.</param>
+/// <param name="SubrogatedDays">Of which the employer advances the insurer's allowance.</param>
+public sealed record PayrollCandidate(Guid EmployeeId, decimal UnpaidDays, decimal WorkAccidentDays = 0m,
+                                      decimal SubrogatedDays = 0m);
 
 /// <summary>
 /// Monthly payroll. Everything here requires the salary right: nobody without it sees a salary.
@@ -244,7 +248,10 @@ public sealed class PayrollService(
             {
                 LeaveIndemnity = settled?.LeaveIndemnity ?? 0m,
                 NoticeIndemnity = settled?.NoticeIndemnity ?? 0m,
-                SeverancePay = settled?.SeverancePay ?? 0m
+                SeverancePay = settled?.SeverancePay ?? 0m,
+                WorkAccidentDays = candidate.WorkAccidentDays,
+                WorkAccidentAllowance = AccidentRules.Allowance(employee.BaseSalary.Value, rates.MonthlyWorkingDays,
+                                                                candidate.SubrogatedDays)
             };
             slip.Recompute(variables, rates, period.LastDay);
 
@@ -303,7 +310,8 @@ public sealed class PayrollService(
         decimal[] values = [variables.AbsenceDays, variables.OvertimeHours25, variables.OvertimeHours50,
                             variables.OvertimeHours100, variables.TaxableBonus, variables.TransportAllowance,
                             variables.OtherExemptAllowance, variables.AdvanceDeduction, variables.OtherDeduction,
-                            variables.LeaveIndemnity, variables.NoticeIndemnity, variables.SeverancePay];
+                            variables.LeaveIndemnity, variables.NoticeIndemnity, variables.SeverancePay,
+                            variables.WorkAccidentDays, variables.WorkAccidentAllowance];
         if (values.Any(v => v < 0)) return Result.Failure(Error.Validation("Payroll_NegativeVariable"));
 
         var period = await periods.GetByIdWithDetailsAsync(periodId, ct);

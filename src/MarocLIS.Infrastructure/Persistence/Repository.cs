@@ -436,6 +436,18 @@ public sealed class EmployeeRepository(LisDbContext context, IClock clock)
                .FirstOrDefaultAsync(e => e.Id == id, ct);
 }
 
+public sealed class WorkAccidentRepository(LisDbContext context, IClock clock)
+    : Repository<WorkAccident>(context, clock)
+{
+    /// <summary>History and serological checks included: both are added to and updated through the file.</summary>
+    protected override Task<WorkAccident?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+        Context.WorkAccidents
+               .Include(a => a.Events)
+               .Include(a => a.Checks)
+               .AsSplitQuery()
+               .FirstOrDefaultAsync(a => a.Id == id, ct);
+}
+
 public sealed class PayrollPeriodRepository(LisDbContext context, IClock clock)
     : Repository<PayrollPeriod>(context, clock)
 {

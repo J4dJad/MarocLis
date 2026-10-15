@@ -470,7 +470,7 @@ internal static class RolePermissionSets
              Permissions.HumanResources.View, Permissions.HumanResources.Manage,
              Permissions.HumanResources.ManageHabilitations, Permissions.HumanResources.Salary,
              Permissions.HumanResources.RequestLeave, Permissions.HumanResources.ApproveLeave,
-             Permissions.HumanResources.ManagePlanning
+             Permissions.HumanResources.ManagePlanning, Permissions.HumanResources.Accidents
          ]),
 
         (SystemRoles.Biologist,
@@ -489,7 +489,9 @@ internal static class RolePermissionSets
              Permissions.Catalog.View,
              Permissions.Equipment.View, Permissions.Instruments.View,
              Permissions.Inventory.View, Permissions.Statistics.View,
-             Permissions.HumanResources.RequestLeave
+             Permissions.HumanResources.RequestLeave,
+             // A blood exposure is declared by the biologist on duty, whoever it is.
+             Permissions.HumanResources.Accidents
          ]),
 
         (SystemRoles.Technician,
