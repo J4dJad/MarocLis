@@ -154,10 +154,16 @@ public sealed class ValidationQueries(LisDbContext db, IUnitOfWork unitOfWork) :
         if (onlyUrgent)
             orders = orders.Where(o => o.Priority != OrderPriority.Routine);
 
-        // Critical results whose communication is complete — validated read-back included.
-        var communicated = db.CriticalResultNotifications.AsNoTracking()
-            .Where(n => n.Outcome == NotificationOutcome.Acknowledged && n.ReadBackConfirmed)
-            .Select(n => n.TestResultId);
+        // Critical results whose current value has been communicated — read-back included. The
+        // same rule as IsCriticalCommunicatedAsync: a call made before the value was last entered
+        // communicated a figure the result no longer holds.
+        var communicated = db.TestResults.AsNoTracking()
+            .Where(r => db.CriticalResultNotifications.Any(
+                n => n.TestResultId == r.Id
+                     && n.Outcome == NotificationOutcome.Acknowledged
+                     && n.ReadBackConfirmed
+                     && (r.EnteredAt == null || n.AttemptedAt >= r.EnteredAt)))
+            .Select(r => r.Id);
 
         var grouped = await results
             .GroupBy(r => r.LabOrderId)
@@ -251,12 +257,23 @@ public sealed class ValidationQueries(LisDbContext db, IUnitOfWork unitOfWork) :
     public Task<TestResult?> GetResultAsync(Guid testResultId, CancellationToken ct = default) =>
         db.TestResults.FirstOrDefaultAsync(r => r.Id == testResultId, ct);
 
+    /// <summary>
+    /// Requires an acknowledged, read-back notification for the value the result holds now: the
+    /// call must have been opened at or after the last entry. Any notification for the result id
+    /// used to do, so a critical value corrected after the call — a re-run, a dilution — was
+    /// released on the strength of a figure the prescriber was never given. The dictated
+    /// <see cref="CriticalResultNotification.ReportedValue"/> is free text with its unit and cannot
+    /// be compared reliably; the entry time can. Mirrors <see cref="CriticalResultNotification.Covers"/>.
+    /// </summary>
     public Task<bool> IsCriticalCommunicatedAsync(Guid testResultId, CancellationToken ct = default) =>
-        db.CriticalResultNotifications
+        db.TestResults
             .AsNoTracking()
-            .AnyAsync(n => n.TestResultId == testResultId
-                           && n.Outcome == NotificationOutcome.Acknowledged
-                           && n.ReadBackConfirmed, ct);
+            .Where(r => r.Id == testResultId)
+            .AnyAsync(r => db.CriticalResultNotifications.Any(
+                n => n.TestResultId == r.Id
+                     && n.Outcome == NotificationOutcome.Acknowledged
+                     && n.ReadBackConfirmed
+                     && (r.EnteredAt == null || n.AttemptedAt >= r.EnteredAt)), ct);
 
     public Task<int> CountNotificationAttemptsAsync(Guid testResultId, CancellationToken ct = default) =>
         db.CriticalResultNotifications

@@ -481,10 +481,15 @@ public sealed class ValidationView : LocalizedView
                 && !row.IsHeading)
                 continue;
 
+            // Only a technically validated value can be released. An entered one is listed so the
+            // biologist sees the whole file, but it is neither pre-ticked nor tickable: the service
+            // refuses it until the technician has checked it.
+            var releasable = !row.IsHeading && row.Status == TestResultStatus.TechnicallyValidated;
+
             var index = _details.Rows.Add(
                 // Pre-ticked: the common case is releasing the whole file, and the biologist
                 // unticks what they want to hold back.
-                !row.IsHeading,
+                releasable,
                 new string(' ', row.IndentLevel * 4) + row.ParameterName.For(Localizer.CurrentLanguage),
                 row.IsHeading ? string.Empty : row.CurrentValue ?? string.Empty,
                 UiTheme.FlagGlyphs(row.Flags) is { Length: > 0 } glyphs
@@ -500,7 +505,7 @@ public sealed class ValidationView : LocalizedView
 
             var gridRow = _details.Rows[index];
             gridRow.Tag = row.TestResultId;
-            gridRow.Cells[ColumnSelected].ReadOnly = row.IsHeading;
+            gridRow.Cells[ColumnSelected].ReadOnly = !releasable;
         }
 
         _details.ResumeLayout(performLayout: true);

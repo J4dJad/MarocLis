@@ -197,6 +197,7 @@ public sealed class ResultReleaseGateTests
         var parameter = Parameter();
 
         result.EnterNumeric(parameter, 5.0m, Now, Guid.NewGuid());
+        result.TechnicallyValidate(Now, Guid.NewGuid());
         result.FlagQcFailure();
 
         var refused = result.BiologicallyValidate(Now, Guid.NewGuid(),
@@ -222,6 +223,7 @@ public sealed class ResultReleaseGateTests
 
         result.EnterNumeric(parameter, 5.50m, Now, Guid.NewGuid());
         result.ApplyInterpretation(parameter, null, AppLanguage.French, "g/L");
+        result.TechnicallyValidate(Now, Guid.NewGuid());
 
         result.IsCritical.Should().BeTrue();
 

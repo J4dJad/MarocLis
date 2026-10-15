@@ -134,6 +134,10 @@ public sealed class ValidationService(
         // disciplines and re-reading the user for each result would be wasteful.
         var departmentChecks = new Dictionary<string, Result>(StringComparer.OrdinalIgnoreCase);
 
+        // Vetted first, applied after: nothing is released until every gate — the analysis's
+        // included — has been checked for the whole batch.
+        var candidates = new List<(TestResult Result, ValidationDecision Decision, bool CriticalCommunicated)>();
+
         foreach (var decision in decisions)
         {
             if (!byId.TryGetValue(decision.TestResultId, out var result))
@@ -178,6 +182,54 @@ public sealed class ValidationService(
                 }
             }
 
+            // QC: the justification must be there; it is written onto the QC point only once the
+            // whole batch has been vetted.
+            var qcJustified = !string.IsNullOrWhiteSpace(decision.QcOverrideJustification);
+
+            if (result.Flags.HasFlag(ResultFlag.QcOutOfControl) && !qcJustified)
+            {
+                blocked.Add(Error.Regulatory("Result_QcOutOfControlBlocksValidation"));
+                continue;
+            }
+
+            var criticalCommunicated = !result.IsCritical
+                || await validationQueries.IsCriticalCommunicatedAsync(result.Id, ct);
+
+            var allowed = result.CanBiologicallyValidate(qcJustified, criticalCommunicated);
+
+            if (allowed.IsFailure)
+            {
+                blocked.Add(allowed.FirstError);
+                continue;
+            }
+
+            candidates.Add((result, decision, criticalCommunicated));
+        }
+
+        // The analysis is vetted before any of its results is released. An analysis this batch
+        // would complete has to accept biological validation itself; when it refuses, its results
+        // are held back with it. The refusal used to be discarded after the results had already been
+        // validated, which left released figures under an analysis still at "result entered".
+        foreach (var item in order.Items.Where(i => !i.IsCancelled))
+        {
+            var itemResults = stored.Where(r => r.LabOrderItemId == item.Id).ToList();
+            if (itemResults.Count == 0) continue;
+
+            var completes = itemResults.All(r => r.Status is TestResultStatus.Validated
+                                                         or TestResultStatus.Reported
+                                                         or TestResultStatus.NotDone
+                                                 || candidates.Any(c => c.Result.Id == r.Id));
+            if (!completes) continue;
+
+            var accepted = item.CanBeBiologicallyValidated();
+            if (accepted.IsSuccess) continue;
+
+            var heldBack = candidates.RemoveAll(c => c.Result.LabOrderItemId == item.Id);
+            if (heldBack > 0) blocked.Add(accepted.FirstError);
+        }
+
+        foreach (var (result, decision, criticalCommunicated) in candidates)
+        {
             if (decision.BiologistComment is not null)
                 result.BiologistComment = decision.BiologistComment;
 
@@ -187,14 +239,8 @@ public sealed class ValidationService(
 
             if (result.Flags.HasFlag(ResultFlag.QcOutOfControl))
             {
-                if (string.IsNullOrWhiteSpace(decision.QcOverrideJustification))
-                {
-                    blocked.Add(Error.Regulatory("Result_QcOutOfControlBlocksValidation"));
-                    continue;
-                }
-
                 var recorded = await validationQueries.RecordQcOverrideAsync(
-                    result.CoveringQcRunId, decision.QcOverrideJustification, ct);
+                    result.CoveringQcRunId, decision.QcOverrideJustification!, ct);
 
                 if (recorded.IsFailure)
                 {
@@ -204,9 +250,6 @@ public sealed class ValidationService(
 
                 qcOverridden = true;
             }
-
-            var criticalCommunicated = !result.IsCritical
-                || await validationQueries.IsCriticalCommunicatedAsync(result.Id, ct);
 
             var applied = result.BiologicallyValidate(now, currentUser.UserId,
                                                        qcOverridden, criticalCommunicated);
@@ -220,7 +263,8 @@ public sealed class ValidationService(
             validated++;
         }
 
-        // Advance each order item whose results are now all released.
+        // Advance each order item whose results are now all released. Vetted above, so a refusal
+        // here is unexpected — and reported rather than ignored.
         foreach (var item in order.Items.Where(i => !i.IsCancelled))
         {
             var itemResults = stored.Where(r => r.LabOrderItemId == item.Id).ToList();
@@ -229,7 +273,10 @@ public sealed class ValidationService(
             if (itemResults.All(r => r.Status is TestResultStatus.Validated
                                             or TestResultStatus.Reported
                                             or TestResultStatus.NotDone))
-                item.MarkBiologicallyValidated(now, currentUser.UserId);
+            {
+                var marked = item.MarkBiologicallyValidated(now, currentUser.UserId);
+                if (marked.IsFailure) blocked.Add(marked.FirstError);
+            }
         }
 
         order.RecomputeStatus();
@@ -283,10 +330,9 @@ public sealed class ValidationService(
                 continue;
             }
 
-            // Revise with no new value: the figure stands, but the release is withdrawn and the
-            // reason recorded, so the result returns to the bench for a second look.
-            var revised = result.Revise(result.NumericValue, result.TextValue, result.CodedValue,
-                                        clock.Now, currentUser.UserId, reason);
+            // The figure stands exactly as released — operator and titre included — but the
+            // release is withdrawn and the reason recorded as a revision.
+            var revised = result.WithdrawValidation(clock.Now, currentUser.UserId, reason);
 
             if (revised.IsFailure)
             {

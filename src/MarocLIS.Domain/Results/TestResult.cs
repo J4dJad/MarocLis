@@ -270,9 +270,16 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
     /// Replaces an already-validated value. Produces a revision holding the old value and the
     /// stated reason, and returns the result to the bench so it is validated again before it can
     /// be reported. This is the only lawful way to change a released figure.
+    /// <para>
+    /// The operator and the titre are part of the value and are replaced with it, not cleared
+    /// behind the caller's back. The entry is re-stamped: the result now holds a figure nobody has
+    /// communicated yet. To withdraw a release without changing the value, use
+    /// <see cref="WithdrawValidation"/>.
+    /// </para>
     /// </summary>
     public Result Revise(decimal? newNumeric, string? newText, string? newCoded,
-                         DateTimeOffset at, Guid byUserId, string reason)
+                         DateTimeOffset at, Guid byUserId, string reason,
+                         string? newValueOperator = null, int? newTitreDenominator = null)
     {
         if (string.IsNullOrWhiteSpace(reason))
             return Result.Failure(Error.Validation("Result_RevisionReasonRequired"));
@@ -293,8 +300,10 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
         NumericValue = newNumeric;
         TextValue = newText;
         CodedValue = newCoded;
-        ValueOperator = null;
-        TitreDenominator = null;
+        ValueOperator = newNumeric is null ? null : newValueOperator;
+        TitreDenominator = newTitreDenominator;
+        EnteredAt = at;
+        EnteredByUserId = byUserId;
 
         ValidatedAt = null;
         ValidatedByUserId = null;
@@ -458,16 +467,78 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
     public Result BiologicallyValidate(DateTimeOffset at, Guid byBiologistUserId,
                                        bool qcOverrideJustified, bool criticalCommunicated)
     {
+        var allowed = CanBiologicallyValidate(qcOverrideJustified, criticalCommunicated);
+        if (allowed.IsFailure) return allowed;
+
+        ValidatedAt = at;
+        ValidatedByUserId = byBiologistUserId;
+        Status = TestResultStatus.Validated;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// The preconditions of <see cref="BiologicallyValidate"/>, checked without changing anything,
+    /// so a batch can be vetted before any of it is applied.
+    /// <para>
+    /// Technical validation comes first, as it does for the analysis
+    /// (<see cref="Orders.LabOrderItem.MarkBiologicallyValidated"/>). A value that was only entered
+    /// has not been checked for plausibility, QC coverage or delta by anybody; releasing it straight
+    /// from entry left the analysis behind at "result entered" while its figure was already final.
+    /// </para>
+    /// </summary>
+    public Result CanBiologicallyValidate(bool qcOverrideJustified, bool criticalCommunicated)
+    {
         if (!HasValue)
             return Result.Failure(Error.Conflict("Result_NoValueToValidate"));
+        if (IsValidated)
+            return Result.Failure(Error.Conflict("Result_AlreadyValidated"));
+        if (Status != TestResultStatus.TechnicallyValidated)
+            return Result.Failure(Error.Regulatory("Item_TechnicalValidationRequiredFirst"));
         if (Flags.HasFlag(ResultFlag.QcOutOfControl) && !qcOverrideJustified)
             return Result.Failure(Error.Regulatory("Result_QcOutOfControlBlocksValidation"));
         if (IsCritical && !criticalCommunicated)
             return Result.Failure(Error.Regulatory("Result_CriticalMustBeCommunicated"));
 
-        ValidatedAt = at;
-        ValidatedByUserId = byBiologistUserId;
-        Status = TestResultStatus.Validated;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Withdraws a biological validation without touching the value. Records a revision holding the
+    /// value and the reason, exactly as <see cref="Revise"/> does, so the amendment trail shows the
+    /// release and its withdrawal; the result goes back to technically validated, where its analysis
+    /// returns too (<see cref="Orders.LabOrderItem.Unvalidate"/>).
+    /// <para>
+    /// Not a <see cref="Revise"/> with the same figures: that path takes only a numeric, text and
+    /// coded value and clears the operator and the titre, so "&gt; 1000" came back as a bare 1000
+    /// and a 1/320 titre as nothing. The entry stamps are kept too — the value was not re-entered,
+    /// and a critical call made about it still covers it.
+    /// </para>
+    /// </summary>
+    public Result WithdrawValidation(DateTimeOffset at, Guid byUserId, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Failure(Error.Validation("Result_RevisionReasonRequired"));
+        if (Status != TestResultStatus.Validated)
+            return Result.Failure(Error.Conflict("Item_NotValidated"));
+
+        _revisions.Add(new ResultRevision(Id, _revisions.Count + 1, at, byUserId, reason)
+        {
+            PreviousNumericValue = NumericValue,
+            PreviousValueOperator = ValueOperator,
+            PreviousTextValue = TextValue,
+            PreviousCodedValue = CodedValue,
+            PreviousTitreDenominator = TitreDenominator,
+            PreviousInterpretation = Interpretation,
+            WasValidated = true,
+            PreviousValidatedByUserId = ValidatedByUserId,
+            PreviousValidatedAt = ValidatedAt
+        });
+
+        ValidatedAt = null;
+        ValidatedByUserId = null;
+        Status = TechnicallyValidatedAt is null ? TestResultStatus.Entered
+                                                : TestResultStatus.TechnicallyValidated;
+        Flags |= ResultFlag.Corrected;
         return Result.Success();
     }
 

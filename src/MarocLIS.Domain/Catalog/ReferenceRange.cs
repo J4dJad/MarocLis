@@ -7,6 +7,11 @@ namespace MarocLIS.Domain.Catalog;
 /// The facts about a patient that decide which reference interval applies. Passed as a single
 /// value object so the selection logic stays testable and identical between result entry,
 /// report rendering and the re-interpretation that follows a demographic correction.
+/// <para>
+/// <see cref="ReferenceDate"/> is the day the result is interpreted for. A revised interval does
+/// not rewrite the past: the predecessor stays in the catalogue with its end date, and only the
+/// interval in force on that day may apply. Null leaves the validity window unchecked.
+/// </para>
 /// </summary>
 public readonly record struct ReferenceRangeContext(
     Gender Gender,
@@ -14,7 +19,8 @@ public readonly record struct ReferenceRangeContext(
     int? AgeInYears,
     bool IsPregnant,
     int? PregnancyTrimester,
-    Guid? InstrumentId)
+    Guid? InstrumentId,
+    DateOnly? ReferenceDate = null)
 {
     public static ReferenceRangeContext For(Patient patient, DateOnly on, Guid? instrumentId = null) =>
         new(patient.Gender,
@@ -22,7 +28,8 @@ public readonly record struct ReferenceRangeContext(
             patient.AgeInYears(on),
             patient.IsPregnant,
             TrimesterFrom(patient.LastMenstrualPeriod, on),
-            instrumentId);
+            instrumentId,
+            on);
 
     /// <summary>
     /// Gestational trimester from the last menstrual period: 1 up to 13 completed weeks,
@@ -116,6 +123,10 @@ public sealed class ReferenceRange : Entity, IAuditable
     public Guid? ModifiedByUserId { get; set; }
 
     // ---- Matching -----------------------------------------------------------------------------
+
+    /// <summary>Whether the interval is in force on a given day; both ends are inclusive.</summary>
+    public bool IsInForceOn(DateOnly on) =>
+        ValidFrom <= on && (ValidUntil is null || ValidUntil >= on);
 
     public bool Matches(ReferenceRangeContext context)
     {

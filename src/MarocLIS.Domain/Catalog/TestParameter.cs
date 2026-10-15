@@ -129,11 +129,21 @@ public sealed class TestParameter : Entity, IAuditable
     /// Picks the reference range that fits this patient. Ranges are scored by specificity so that a
     /// pregnancy-specific range beats a sex-specific one, which in turn beats an age-only range;
     /// the most specific match wins rather than the first one declared.
+    /// <para>
+    /// Only an interval in force on the context's reference date is considered. A revision closes
+    /// the predecessor with an end date but leaves it active — results already interpreted against
+    /// it still point at it — and the successor carries the same stratum, so without the date both
+    /// matched with equal specificity and the superseded interval, declared first, kept winning.
+    /// Between equally specific intervals the most recently started one wins.
+    /// </para>
     /// </summary>
     public ReferenceRange? ResolveRange(ReferenceRangeContext context) =>
         _referenceRanges
-            .Where(r => r.IsActive && r.Matches(context))
+            .Where(r => r.IsActive
+                        && (context.ReferenceDate is not { } on || r.IsInForceOn(on))
+                        && r.Matches(context))
             .OrderByDescending(r => r.Specificity)
+            .ThenByDescending(r => r.ValidFrom)
             .FirstOrDefault();
 
     /// <summary>Rounds a raw instrument value to the parameter's declared precision.</summary>

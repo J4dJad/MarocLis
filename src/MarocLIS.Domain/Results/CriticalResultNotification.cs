@@ -86,6 +86,15 @@ public sealed class CriticalResultNotification : AuditableAggregateRoot, ISiteSc
 
     public bool IsComplete => Outcome == NotificationOutcome.Acknowledged && ReadBackConfirmed;
 
+    /// <summary>
+    /// Whether this notification communicated the value the result holds now: complete, and opened
+    /// no earlier than the result's last entry. A call about a value since replaced does not count
+    /// for its replacement. The validation query applies the same rule in SQL.
+    /// </summary>
+    public bool Covers(TestResult result) =>
+        IsComplete && result.Id == TestResultId
+                   && (result.EnteredAt is not { } entered || AttemptedAt >= entered);
+
     /// <summary>Records a successful communication with read-back.</summary>
     public Result Acknowledge(DateTimeOffset at, string recipientName, string? recipientRole,
                               bool readBackConfirmed, string? readBackValue)

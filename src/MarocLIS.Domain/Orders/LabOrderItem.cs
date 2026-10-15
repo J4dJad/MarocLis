@@ -212,15 +212,30 @@ public sealed class LabOrderItem : Entity, IAuditable
         if (Status == LabOrderItemStatus.Validated)
             return Result.Success();
 
+        var allowed = CanBeBiologicallyValidated(allowWithoutTechnicalValidation);
+        if (allowed.IsFailure) return allowed;
+
+        ValidatedAt = at;
+        ValidatedByUserId = byBiologistUserId;
+        Status = LabOrderItemStatus.Validated;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// The preconditions of <see cref="MarkBiologicallyValidated"/>, checked without changing
+    /// anything, so the validation of a batch can be refused before any of its results is released.
+    /// </summary>
+    public Result CanBeBiologicallyValidated(bool allowWithoutTechnicalValidation = false)
+    {
+        if (Status == LabOrderItemStatus.Validated)
+            return Result.Success();
+
         if (Status == LabOrderItemStatus.ResultEntered && !allowWithoutTechnicalValidation)
             return Result.Failure(Error.Regulatory("Item_TechnicalValidationRequiredFirst"));
 
         if (Status is not (LabOrderItemStatus.TechnicallyValidated or LabOrderItemStatus.ResultEntered))
             return Result.Failure(Error.Conflict("Item_CannotValidateFromStatus", Status));
 
-        ValidatedAt = at;
-        ValidatedByUserId = byBiologistUserId;
-        Status = LabOrderItemStatus.Validated;
         return Result.Success();
     }
 
