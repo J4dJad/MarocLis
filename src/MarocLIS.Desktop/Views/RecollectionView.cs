@@ -113,9 +113,11 @@ public sealed class RecollectionView : LocalizedView
         };
 
         _refresh.Click += async (_, _) => await ActivateAsync();
-        _call.Click += async (_, _) => await RecordCallAsync();
-        _sms.Click += async (_, _) => await SendSmsAsync();
-        _abandon.Click += async (_, _) => await AbandonAsync();
+        // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
+        // action, and leaving the screen mid-write no longer disposes its context under it.
+        _call.Click += async (_, _) => await RunBusyAsync(RecordCallAsync);
+        _sms.Click += async (_, _) => await RunBusyAsync(SendSmsAsync);
+        _abandon.Click += async (_, _) => await RunBusyAsync(AbandonAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Orders.Edit, _call, _sms);

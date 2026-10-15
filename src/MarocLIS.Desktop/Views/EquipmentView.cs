@@ -146,9 +146,11 @@ public sealed class EquipmentView : LocalizedView
         _grid.SelectionChanged += (_, _) => ShowDetail();
         _grid.CellFormatting += OnCellFormatting;
 
-        _maintenance.Click += async (_, _) => await RecordMaintenanceAsync();
-        _calibration.Click += async (_, _) => await RecordCalibrationAsync();
-        _status.Click += async (_, _) => await ChangeStatusAsync();
+        // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
+        // action, and leaving the screen mid-write no longer disposes its context under it.
+        _maintenance.Click += async (_, _) => await RunBusyAsync(RecordMaintenanceAsync);
+        _calibration.Click += async (_, _) => await RunBusyAsync(RecordCalibrationAsync);
+        _status.Click += async (_, _) => await RunBusyAsync(ChangeStatusAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Equipment.RecordMaintenance, _maintenance);

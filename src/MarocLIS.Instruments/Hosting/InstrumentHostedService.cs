@@ -38,6 +38,7 @@ public sealed class InstrumentHostedService(
     ILogger<InstrumentHostedService>? logger = null) : BackgroundService
 {
     private readonly Dictionary<Guid, RunningLink> _running = [];
+    private readonly LinkRestartPolicy _restarts = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -127,8 +128,26 @@ public sealed class InstrumentHostedService(
 
         foreach (var (id, link) in _running.ToList())
         {
-            if (wanted.TryGetValue(id, out var desired)
-                && link.Fingerprint == Fingerprint(desired)) continue;
+            var unchanged = wanted.TryGetValue(id, out var desired)
+                            && link.Fingerprint == Fingerprint(desired);
+
+            if (unchanged && !link.Task.IsCompleted) continue;
+
+            if (unchanged)
+            {
+                // The driver ended on its own — an exception that escaped it (a share that blipped
+                // under an acknowledgement, a serial write timeout), or a loop that returned. It
+                // stayed in this table with the same fingerprint, and both checks here skipped it
+                // on every pass: the analyser's results stopped until somebody restarted the
+                // application. It is restarted once its back-off has run out.
+                if (!_restarts.IsDue(id, DateTimeOffset.UtcNow)) continue;
+
+                logger?.LogInformation("Restarting analyser link {Interface} after a failure.", id);
+
+                await link.StopAsync();
+                _running.Remove(id);
+                continue;
+            }
 
             // Either disabled or reconfigured. A reconfigured link is stopped and started rather
             // than mutated: a driver holds a transport whose port, baud rate and encoding were
@@ -138,6 +157,9 @@ public sealed class InstrumentHostedService(
             await link.StopAsync();
             _running.Remove(id);
             monitor.ReportStopped(id);
+
+            // Disabled or edited: whoever touched it starts the next run with a clean slate.
+            _restarts.Forget(id);
         }
 
         foreach (var link in enabled)
@@ -189,6 +211,7 @@ public sealed class InstrumentHostedService(
             }
 
             var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var startedAt = DateTimeOffset.UtcNow;
 
             var task = Task.Run(async () =>
             {
@@ -196,14 +219,21 @@ public sealed class InstrumentHostedService(
                 {
                     await driver.RunAsync(cts.Token);
                 }
-                catch (OperationCanceledException) { }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
                 catch (Exception ex)
                 {
-                    // A driver that throws is reported and left stopped. The next reconciliation
-                    // starts it again, which gives a flapping link a thirty-second floor instead of
-                    // a tight crash loop.
+                    // A driver that throws is reported and left stopped; a reconciliation pass
+                    // restarts it once LinkRestartPolicy's back-off has run out, so a flapping link
+                    // waits longer each time instead of crash-looping.
                     logger?.LogError(ex, "Analyser link {Interface} failed.", link.Id);
                     monitor.ReportFailed(link.Id, ex.Message);
+                }
+                finally
+                {
+                    // Recorded for any end the host did not ask for, a driver loop that simply
+                    // returned included: either way the analyser is no longer being listened to.
+                    if (!cts.IsCancellationRequested)
+                        _restarts.RecordFailure(link.Id, startedAt, DateTimeOffset.UtcNow);
                 }
             }, cts.Token);
 
@@ -291,6 +321,59 @@ public sealed class InstrumentHostedService(
             Cancellation.Dispose();
             Scope.Dispose();
         }
+    }
+}
+
+/// <summary>
+/// When an analyser link whose driver failed is started again.
+/// <para>
+/// The first restart comes after thirty seconds, then the wait doubles with each failure in a row,
+/// up to ten minutes: a share that blipped is back within a minute, while a link that fails as
+/// soon as it starts does not fill the log. A run that lasted longer than the longest wait counts
+/// as having worked, so the next failure starts again from thirty seconds.
+/// </para>
+/// </summary>
+public sealed class LinkRestartPolicy
+{
+    public static readonly TimeSpan FirstDelay = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan MaxDelay = TimeSpan.FromMinutes(10);
+
+    private readonly Lock _gate = new();
+    private readonly Dictionary<Guid, (int Failures, DateTimeOffset DueAt)> _failed = [];
+
+    /// <summary>The wait before the restart that follows <paramref name="failuresInARow"/> failures.</summary>
+    public static TimeSpan DelayAfter(int failuresInARow)
+    {
+        if (failuresInARow <= 1) return FirstDelay;
+
+        var seconds = FirstDelay.TotalSeconds * Math.Pow(2, Math.Min(failuresInARow - 1, 16));
+        return TimeSpan.FromSeconds(Math.Min(seconds, MaxDelay.TotalSeconds));
+    }
+
+    /// <summary>Called by the link's own task when its driver ends without being asked to.</summary>
+    public void RecordFailure(Guid interfaceId, DateTimeOffset startedAt, DateTimeOffset endedAt)
+    {
+        lock (_gate)
+        {
+            var inARow = _failed.TryGetValue(interfaceId, out var previous)
+                         && endedAt - startedAt < MaxDelay
+                ? previous.Failures + 1
+                : 1;
+
+            _failed[interfaceId] = (inARow, endedAt + DelayAfter(inARow));
+        }
+    }
+
+    /// <summary>True once a failed link's wait has run out.</summary>
+    public bool IsDue(Guid interfaceId, DateTimeOffset now)
+    {
+        lock (_gate) return !_failed.TryGetValue(interfaceId, out var state) || now >= state.DueAt;
+    }
+
+    /// <summary>Forgets a link's failures, when it is disabled or reconfigured.</summary>
+    public void Forget(Guid interfaceId)
+    {
+        lock (_gate) _failed.Remove(interfaceId);
     }
 }
 

@@ -758,6 +758,9 @@ public sealed class ResultEntryView : LocalizedView
         return typed;
     }
 
+    /// <summary>Leaving the screen asks too: the sidebar and the shortcuts dropped typed results.</summary>
+    public override bool ConfirmLeave() => ConfirmDiscardTyped();
+
     /// <summary>
     /// True when nothing typed would be lost by replacing the sheet, or the operator agrees to
     /// lose it. Opening another file used to replace the grid silently.

@@ -147,10 +147,12 @@ public sealed class SampleStorageView : LocalizedView
         _onlyExpired.CheckedChanged += async (_, _) => await ActivateAsync();
         _refresh.Click += async (_, _) => await ActivateAsync();
 
-        _shelve.Click += async (_, _) => await ShelveAsync();
-        _aliquot.Click += async (_, _) => await AliquotAsync();
-        _discard.Click += async (_, _) => await DiscardAsync();
-        _purge.Click += async (_, _) => await PurgeAsync();
+        // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
+        // action, and leaving the screen mid-write no longer disposes its context under it.
+        _shelve.Click += async (_, _) => await RunBusyAsync(ShelveAsync);
+        _aliquot.Click += async (_, _) => await RunBusyAsync(AliquotAsync);
+        _discard.Click += async (_, _) => await RunBusyAsync(DiscardAsync);
+        _purge.Click += async (_, _) => await RunBusyAsync(PurgeAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Samples.Receive, _shelve, _aliquot);

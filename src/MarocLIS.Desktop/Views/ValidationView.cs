@@ -271,17 +271,24 @@ public sealed class ValidationView : LocalizedView
 
     private void WireBehaviour()
     {
-        _refresh.Click += async (_, _) => await ActivateAsync();
-        _onlyUrgent.CheckedChanged += async (_, _) => await ActivateAsync();
-        _showValidated.CheckedChanged += async (_, _) => await ActivateAsync();
+        // A reload while an action is in flight would replace the file under it; the action
+        // reloads the worklist itself when it ends.
+        _refresh.Click += async (_, _) => { if (!IsBusy) await ActivateAsync(); };
+        _onlyUrgent.CheckedChanged += async (_, _) => { if (!IsBusy) await ActivateAsync(); };
+        _showValidated.CheckedChanged += async (_, _) => { if (!IsBusy) await ActivateAsync(); };
 
         _worklist.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadSelectedAsync());
 
         _selectAll.Click += (_, _) => ToggleAll();
-        _validate.Click += async (_, _) => await ValidateSelectedAsync();
-        _communicate.Click += async (_, _) => await CommunicateCriticalAsync();
-        _release.Click += async (_, _) => await ReleaseReportAsync();
-        _unvalidate.Click += async (_, _) => await UnvalidateSelectedAsync();
+
+        // One action at a time, each through RunBusyAsync: a second click while one runs is
+        // ignored (a double-click on "communicate" recorded every critical value twice), a release
+        // can no longer be confirmed for one file while a validation still running moves the
+        // screen to the next, and leaving the screen mid-write no longer disposes its context.
+        _validate.Click += async (_, _) => await RunBusyAsync(ValidateSelectedAsync);
+        _communicate.Click += async (_, _) => await RunBusyAsync(CommunicateCriticalAsync);
+        _release.Click += async (_, _) => await RunBusyAsync(ReleaseReportAsync);
+        _unvalidate.Click += async (_, _) => await RunBusyAsync(UnvalidateSelectedAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Results.BiologicalValidate, _validate);
@@ -606,7 +613,8 @@ public sealed class ValidationView : LocalizedView
     /// </summary>
     private async Task UnvalidateSelectedAsync()
     {
-        if (_sheet is null) return;
+        // The file the operator is looking at, held locally: _sheet follows the selection.
+        if (_sheet is not { } sheet) return;
 
         _details.EndEdit();
 
@@ -638,7 +646,7 @@ public sealed class ValidationView : LocalizedView
 
         if (reason is null) return;
 
-        var result = await _validation.UnvalidateAsync(_sheet.LabOrderId, ids, reason);
+        var result = await _validation.UnvalidateAsync(sheet.LabOrderId, ids, reason);
 
         if (result.IsFailure)
         {
@@ -654,7 +662,7 @@ public sealed class ValidationView : LocalizedView
 
     private async Task ValidateSelectedAsync()
     {
-        if (_sheet is null) return;
+        if (_sheet is not { } sheet) return;
 
         _details.EndEdit();
 
@@ -710,7 +718,7 @@ public sealed class ValidationView : LocalizedView
 
         try
         {
-            var outcome = await _validation.ValidateAsync(_sheet.LabOrderId, decisions);
+            var outcome = await _validation.ValidateAsync(sheet.LabOrderId, decisions);
 
             if (outcome.IsFailure)
             {
@@ -749,10 +757,10 @@ public sealed class ValidationView : LocalizedView
     /// </summary>
     private async Task CommunicateCriticalAsync()
     {
-        if (_sheet is null) return;
+        if (_sheet is not { } sheet) return;
 
         // Only the values not yet communicated: one already read back must not be called again.
-        var critical = _sheet.Rows.Where(r => r.NeedsCriticalCommunication).ToList();
+        var critical = sheet.Rows.Where(r => r.NeedsCriticalCommunication).ToList();
 
         if (critical.Count == 0) return;
 
@@ -806,16 +814,18 @@ public sealed class ValidationView : LocalizedView
 
     private async Task ReleaseReportAsync()
     {
-        if (_sheet is null) return;
+        // The file named in the confirmation is the file released. _sheet was read again after the
+        // modal, and a selection load finishing behind it had replaced it with the next file.
+        if (_sheet is not { } sheet) return;
 
-        if (!_dialogs.Confirm($"{T("Report.Title")} — {_sheet.AccessionNumber}")) return;
+        if (!_dialogs.Confirm($"{T("Report.Title")} — {sheet.AccessionNumber}")) return;
 
         _release.Enabled = false;
         Cursor = Cursors.WaitCursor;
 
         try
         {
-            var released = await _reports.ReleaseAsync(_sheet.LabOrderId);
+            var released = await _reports.ReleaseAsync(sheet.LabOrderId);
 
             if (released.IsFailure)
             {

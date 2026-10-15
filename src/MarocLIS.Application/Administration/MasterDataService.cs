@@ -931,52 +931,29 @@ public sealed class MasterDataService(
             : guard.Require(Permissions.Catalog.Manage);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
-        Prescriber prescriber;
+        Prescriber? existing = null;
 
         if (request.PrescriberId is { } id)
         {
-            var existing = await prescribers.GetByIdAsync(id, ct);
+            existing = await prescribers.GetByIdAsync(id, ct);
             if (existing is null) return Result.Failure<Guid>(Error.NotFound("Prescriber_NotFound"));
-            prescriber = existing;
-        }
-        else
-        {
-            prescriber = new Prescriber(request.LastName.Trim(), request.FirstName.Trim(),
-                                         request.Kind);
-
-            await prescribers.AddAsync(prescriber, ct);
         }
 
-        prescriber.LastName = request.LastName.Trim();
-        prescriber.FirstName = request.FirstName.Trim();
-        prescriber.FullNameArabic = Blank(request.FullNameArabic);
-        prescriber.SearchKey = PatientSearchKey.Build(request.LastName, request.FirstName);
-        prescriber.Kind = request.Kind;
-        prescriber.Speciality = request.Speciality;
-        prescriber.ProfessionalOrderNumber = Blank(request.ProfessionalOrderNumber);
-        prescriber.Inpe = Digits(request.Inpe);
-        prescriber.Ice = Digits(request.Ice);
-        prescriber.Phone = MoroccanIdentifiers.TryNormalizePhone(request.Phone) ?? Blank(request.Phone);
-        prescriber.MobilePhone = MoroccanIdentifiers.TryNormalizePhone(request.MobilePhone);
-        prescriber.Email = Blank(request.Email);
-        prescriber.Fax = Blank(request.Fax);
-        prescriber.AddressLine = Blank(request.AddressLine);
-        prescriber.City = Blank(request.City);
-        prescriber.InstitutionName = Blank(request.InstitutionName);
-        prescriber.DeliveryPreference = request.DeliveryPreference;
-        prescriber.SendPartialReports = request.SendPartialReports;
-        prescriber.CriticalResultPhone =
-            MoroccanIdentifiers.TryNormalizePhone(request.CriticalResultPhone)
-            ?? Blank(request.CriticalResultPhone);
-        prescriber.DiscountPercent = request.DiscountPercent;
-        prescriber.DefaultPayerId = request.DefaultPayerId;
-        prescriber.Notes = Blank(request.Notes);
-        prescriber.IsActive = request.IsActive;
+        // The aggregate's own rules — INPE and ICE format, the discount range, and that a delivery
+        // preference of e-mail or SMS actually has an address or a mobile behind it — checked on a
+        // copy the context never sees. A refused prescriber used to be added (or an existing one
+        // changed) first and left tracked: the order screen's "+" keeps its context, so the next
+        // save — the corrected prescriber, or the order itself — committed the refused one too.
+        var candidate = new Prescriber(request.LastName.Trim(), request.FirstName.Trim(), request.Kind);
+        Apply(candidate);
 
-        // The aggregate's own rules: INPE and ICE format, the discount range, and that a delivery
-        // preference of e-mail or SMS actually has an address or a mobile behind it.
-        var valid = prescriber.Validate();
+        var valid = candidate.Validate();
         if (valid.IsFailure) return Result.Failure<Guid>(valid.Errors);
+
+        var prescriber = existing ?? candidate;
+
+        if (existing is null) await prescribers.AddAsync(prescriber, ct);
+        else Apply(existing);
 
         prescribers.Update(prescriber);
 
@@ -987,6 +964,35 @@ public sealed class MasterDataService(
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(prescriber.Id);
+
+        void Apply(Prescriber target)
+        {
+            target.LastName = request.LastName.Trim();
+            target.FirstName = request.FirstName.Trim();
+            target.FullNameArabic = Blank(request.FullNameArabic);
+            target.SearchKey = PatientSearchKey.Build(request.LastName, request.FirstName);
+            target.Kind = request.Kind;
+            target.Speciality = request.Speciality;
+            target.ProfessionalOrderNumber = Blank(request.ProfessionalOrderNumber);
+            target.Inpe = Digits(request.Inpe);
+            target.Ice = Digits(request.Ice);
+            target.Phone = MoroccanIdentifiers.TryNormalizePhone(request.Phone) ?? Blank(request.Phone);
+            target.MobilePhone = MoroccanIdentifiers.TryNormalizePhone(request.MobilePhone);
+            target.Email = Blank(request.Email);
+            target.Fax = Blank(request.Fax);
+            target.AddressLine = Blank(request.AddressLine);
+            target.City = Blank(request.City);
+            target.InstitutionName = Blank(request.InstitutionName);
+            target.DeliveryPreference = request.DeliveryPreference;
+            target.SendPartialReports = request.SendPartialReports;
+            target.CriticalResultPhone =
+                MoroccanIdentifiers.TryNormalizePhone(request.CriticalResultPhone)
+                ?? Blank(request.CriticalResultPhone);
+            target.DiscountPercent = request.DiscountPercent;
+            target.DefaultPayerId = request.DefaultPayerId;
+            target.Notes = Blank(request.Notes);
+            target.IsActive = request.IsActive;
+        }
     }
 
     private static string? Blank(string? value) =>

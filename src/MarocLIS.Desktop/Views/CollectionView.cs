@@ -274,9 +274,11 @@ public sealed class CollectionView : LocalizedView
 
         _patients.SelectionChanged += (_, _) => ShowSelectedPatient();
 
-        _record.Click += async (_, _) => await RecordAsync(dispatch: false);
-        _dispatch.Click += async (_, _) => await RecordAsync(dispatch: true);
-        _reprint.Click += async (_, _) => await ReprintAsync();
+        // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
+        // action, and leaving the screen mid-write no longer disposes its context under it.
+        _record.Click += async (_, _) => await RunBusyAsync(() => RecordAsync(dispatch: false));
+        _dispatch.Click += async (_, _) => await RunBusyAsync(() => RecordAsync(dispatch: true));
+        _reprint.Click += async (_, _) => await RunBusyAsync(ReprintAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Samples.Collect, _record);

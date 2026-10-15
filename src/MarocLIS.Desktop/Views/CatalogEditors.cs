@@ -502,7 +502,9 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         box.Tag = UiTags.LatinValue;
         box.TextAlign = HorizontalAlignment.Right;
         box.Font = UiTheme.Monospace;
-        box.Text = value?.ToString("0.###") ?? string.Empty;
+        // Through the editing format: the culture's own text for a negative limit carries a
+        // direction mark in Arabic, and "0.###" also rounded the stored value on the next save.
+        box.Text = value is { } number ? EditorValues.FormatForEditing(number, 0) : string.Empty;
 
         Controls.Add(box);
         return box;

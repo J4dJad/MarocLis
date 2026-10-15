@@ -234,15 +234,17 @@ public sealed class NonConformityView : LocalizedView
 
         _register.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDetailAsync());
 
-        _open.Click += async (_, _) => await OpenNewAsync();
-        _addAction.Click += async (_, _) => await AddActionAsync();
-        _completeAction.Click += async (_, _) => await CompleteActionAsync();
-        _analysis.Click += async (_, _) => await RecordAnalysisAsync();
-        _close.Click += async (_, _) => await CloseAsync();
-        _reopen.Click += async (_, _) => await ReopenAsync();
-        _dismiss.Click += async (_, _) => await DismissAsync();
-        _startAction.Click += async (_, _) => await StartActionAsync();
-        _cancelAction.Click += async (_, _) => await CancelActionAsync();
+        // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
+        // action, and leaving the screen mid-write no longer disposes its context under it.
+        _open.Click += async (_, _) => await RunBusyAsync(OpenNewAsync);
+        _addAction.Click += async (_, _) => await RunBusyAsync(AddActionAsync);
+        _completeAction.Click += async (_, _) => await RunBusyAsync(CompleteActionAsync);
+        _analysis.Click += async (_, _) => await RunBusyAsync(RecordAnalysisAsync);
+        _close.Click += async (_, _) => await RunBusyAsync(CloseAsync);
+        _reopen.Click += async (_, _) => await RunBusyAsync(ReopenAsync);
+        _dismiss.Click += async (_, _) => await RunBusyAsync(DismissAsync);
+        _startAction.Click += async (_, _) => await RunBusyAsync(StartActionAsync);
+        _cancelAction.Click += async (_, _) => await RunBusyAsync(CancelActionAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Quality.ManageNonConformity, _open, _addAction, _completeAction, _analysis, _close, _reopen, _dismiss, _startAction, _cancelAction);

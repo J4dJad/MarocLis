@@ -127,12 +127,14 @@ public sealed class LeaveView : LocalizedView
         _year.SelectedIndexChanged += async (_, _) => { if (_year.Focused) await ActivateAsync(); };
         _pendingOnly.CheckedChanged += async (_, _) => await ActivateAsync();
 
-        _new.Click += async (_, _) => await NewAsync();
-        _approve.Click += async (_, _) => await ApproveAsync();
-        _refuse.Click += async (_, _) => await RefuseAsync();
-        _cancel.Click += async (_, _) => await CancelAsync();
-        _balances.Click += async (_, _) => await BalancesAsync();
-        _holidays.Click += async (_, _) => await HolidaysAsync();
+        // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
+        // action, and leaving the screen mid-write no longer disposes its context under it.
+        _new.Click += async (_, _) => await RunBusyAsync(NewAsync);
+        _approve.Click += async (_, _) => await RunBusyAsync(ApproveAsync);
+        _refuse.Click += async (_, _) => await RunBusyAsync(RefuseAsync);
+        _cancel.Click += async (_, _) => await RunBusyAsync(CancelAsync);
+        _balances.Click += async (_, _) => await RunBusyAsync(BalancesAsync);
+        _holidays.Click += async (_, _) => await RunBusyAsync(HolidaysAsync);
         _grid.SelectionChanged += (_, _) => ShowDetail();
 
         PermissionGate.Require([Permissions.HumanResources.RequestLeave, Permissions.HumanResources.Manage],

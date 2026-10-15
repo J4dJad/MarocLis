@@ -159,8 +159,10 @@ public sealed class SerialInstrumentTransport : IInstrumentTransport
             await _port.BaseStream.WriteAsync(data, ct);
             await _port.BaseStream.FlushAsync(ct);
         }
+        // TimeoutException too: a write blocked by flow control that never clears is a dead line,
+        // and escaping the driver it stopped the link.
         catch (Exception ex) when (ex is IOException or InvalidOperationException
-                                      or ObjectDisposedException)
+                                      or ObjectDisposedException or TimeoutException)
         {
             Disconnected?.Invoke(this, ex.Message);
         }
@@ -458,16 +460,31 @@ public sealed class FileDropInstrumentTransport : IInstrumentTransport
         File.Move(path, Path.Combine(target, name), overwrite: true);
     }
 
-    public Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
+    public async Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(_config.OutboundDirectory)) return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(_config.OutboundDirectory)) return;
 
-        Directory.CreateDirectory(_config.OutboundDirectory);
+        try
+        {
+            Directory.CreateDirectory(_config.OutboundDirectory);
 
-        var path = Path.Combine(_config.OutboundDirectory,
-                                $"orders-{DateTime.Now:yyyyMMdd-HHmmssfff}.txt");
+            var path = Path.Combine(_config.OutboundDirectory,
+                                    $"orders-{DateTime.Now:yyyyMMdd-HHmmssfff}.txt");
 
-        return File.WriteAllBytesAsync(path, data.ToArray(), ct);
+            await File.WriteAllBytesAsync(path, data.ToArray(), ct);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An unreachable outbound share is a dropped line, as on the other transports: the
+            // driver reconnects and carries on. Thrown, it ended the driver and the link with it,
+            // and the analyser's results stopped arriving over one acknowledgement nobody could
+            // write.
+            _logger?.LogWarning(ex, "Could not write to the instrument folder {Folder}.",
+                                _config.OutboundDirectory);
+
+            IsConnected = false;
+            Disconnected?.Invoke(this, $"Outbound folder {_config.OutboundDirectory} is not reachable");
+        }
     }
 
     public Task DisconnectAsync()

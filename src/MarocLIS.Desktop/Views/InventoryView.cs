@@ -218,13 +218,15 @@ public sealed class InventoryView : LocalizedView
 
         _stock.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadLotsAsync());
 
-        _receive.Click += async (_, _) => await ReceiveAsync();
-        _issue.Click += async (_, _) => await IssueAsync();
-        _release.Click += async (_, _) => await ReleaseAsync();
-        _rejectLot.Click += async (_, _) => await RejectAsync();
-        _clearRejection.Click += async (_, _) => await ClearRejectionAsync();
-        _recall.Click += async (_, _) => await RecallAsync();
-        _writeOff.Click += async (_, _) => await WriteOffAsync();
+        // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
+        // action, and leaving the screen mid-write no longer disposes its context under it.
+        _receive.Click += async (_, _) => await RunBusyAsync(ReceiveAsync);
+        _issue.Click += async (_, _) => await RunBusyAsync(IssueAsync);
+        _release.Click += async (_, _) => await RunBusyAsync(ReleaseAsync);
+        _rejectLot.Click += async (_, _) => await RunBusyAsync(RejectAsync);
+        _clearRejection.Click += async (_, _) => await RunBusyAsync(ClearRejectionAsync);
+        _recall.Click += async (_, _) => await RunBusyAsync(RecallAsync);
+        _writeOff.Click += async (_, _) => await RunBusyAsync(WriteOffAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Inventory.Receive, _receive, _rejectLot);
