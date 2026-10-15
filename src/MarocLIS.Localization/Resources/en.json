@@ -2307,6 +2307,8 @@
   },
 
   "Billing": {
+    "ReinvoiceToPayer": "This order is being invoiced again after a credit note. It was registered without third-party payment.\n\nAddress this invoice to the third-party payer {0} (its share claimed from it)?\n\nNo: the invoice is made out to the patient, for the full amount.",
+    "InvoicedDepositToRefund": "Invoiced ({0}) — deposit to refund",
     "WrittenOffTooltip": "Not included in the amount paid: {0} written off",
     "PrintReceipt": "Print receipt",
     "PrintInvoice": "Print invoice",
@@ -4280,6 +4282,7 @@
   "Order_NotFoundForScan": "No order matches \"{0}\" on this site.",
   "Order_AnalysisWithoutTariff": "Analysis {0} has no tariff in force today, neither for this payer nor on the laboratory's price list. Add one in the analysis catalogue, Tariffs tab.",
   "Order_ItemPartlyReportedCannotCancel": "Some results of this analysis are already on an issued report: it can no longer be cancelled; issue an amended report.",
+  "Order_InvoicedCannotAddItem": "Order {0} is already invoiced: an analysis added to it would never be billed. Register it on a new order, or first issue a full credit note on the invoice so that the whole order can be invoiced again.",
 
   "Report_NotFound": "Report not found.",
   "Report_SiteNotFound": "The order's site was not found.",

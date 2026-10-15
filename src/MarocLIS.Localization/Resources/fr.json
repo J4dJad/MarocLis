@@ -2308,6 +2308,8 @@
   },
 
   "Billing": {
+    "ReinvoiceToPayer": "Ce dossier est refacturé après un avoir. Il avait été enregistré sans tiers payant.\n\nAdresser cette facture au tiers payant {0} (part de l'organisme réclamée à celui-ci) ?\n\nNon : la facture est établie au nom du patient, pour la totalité.",
+    "InvoicedDepositToRefund": "Facturé ({0}) — acompte à rembourser",
     "WrittenOffTooltip": "Hors montant payé : {0} passés en perte",
     "PrintReceipt": "Imprimer le reçu",
     "PrintInvoice": "Imprimer la facture",
@@ -4281,6 +4283,7 @@
   "Order_NotFoundForScan": "Aucun dossier ne correspond à « {0} » sur ce site.",
   "Order_AnalysisWithoutTariff": "L'analyse {0} n'a pas de tarif en vigueur aujourd'hui, ni pour ce tiers payant ni dans la liste de prix du laboratoire. Ajoutez-lui un tarif dans le Catalogue des analyses, onglet Tarifs.",
   "Order_ItemPartlyReportedCannotCancel": "Une partie des résultats de cette analyse figure déjà sur un compte rendu émis : elle ne peut plus être annulée ; émettez un compte rendu rectifié.",
+  "Order_InvoicedCannotAddItem": "Le dossier {0} est déjà facturé : une analyse ajoutée n'y serait jamais facturée. Enregistrez-la dans un nouveau dossier, ou émettez d'abord un avoir total sur la facture pour refacturer le dossier complet.",
 
   "Report_NotFound": "Compte rendu introuvable.",
   "Report_SiteNotFound": "Site du dossier introuvable.",
