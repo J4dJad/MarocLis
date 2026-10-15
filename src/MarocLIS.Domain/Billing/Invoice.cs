@@ -145,6 +145,17 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
         claimStatus is ClaimStatus.Submitted or ClaimStatus.Resubmitted or ClaimStatus.Accepted
                     or ClaimStatus.PartiallyAccepted or ClaimStatus.Settled;
 
+    /// <summary>
+    /// The part of the payer's share the credit notes took off: they come off the patient's share
+    /// first, as the accounts take them, and off the payer's only beyond it. The payer no longer
+    /// owes it, so it is neither its to settle nor a shortfall to leave to the patient.
+    /// </summary>
+    public decimal PayerCreditedAmount =>
+        Math.Min(PayerShareAmount, Math.Max(0m, Money.Round(CreditedAmount - (TotalAmount - PayerShareAmount))));
+
+    /// <summary>What the payer still owes on its share before its answer: the share less what the credit notes took off it.</summary>
+    public decimal PayerDueAmount => Money.Round(PayerShareAmount - PayerCreditedAmount);
+
     /// <summary>What a further credit note may still reverse.</summary>
     public decimal CreditableAmount =>
         Kind == InvoiceKind.Invoice ? Math.Max(0m, Money.Round(TotalAmount - CreditedAmount)) : 0m;
@@ -395,13 +406,14 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     /// Records the payer's answer on its share: what it accepted, its settlement and any write-off
     /// of the refusal being already on the invoice. What the payer refused and nobody wrote off is
     /// left to the patient: that transfer is recorded on <paramref name="on"/>, the day of the
-    /// answer, so the accounts date it on the answer and not on the invoice's next change.
+    /// answer, so the accounts date it on the answer and not on the invoice's next change. The part
+    /// of the share a credit note already took off is not refused: nobody owes it any more.
     /// </summary>
     public void RecordPayerAnswer(decimal accepted, DateOnly on)
     {
         PayerAcceptedAmount = Money.Round(accepted);
 
-        var leftToPatient = Money.Round(PayerShareAmount - PayerAcceptedAmount.Value - WrittenOffAmount);
+        var leftToPatient = Money.Round(PayerDueAmount - PayerAcceptedAmount.Value - WrittenOffAmount);
         if (leftToPatient > 0m)
             _shortfallTransfers.Add(new PayerShortfallTransfer(Id, leftToPatient, on));
     }

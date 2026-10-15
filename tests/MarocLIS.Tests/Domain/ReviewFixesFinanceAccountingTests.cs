@@ -173,18 +173,19 @@ public sealed class ReviewFixesFinanceAccountingTests
 
     // ---- A5 --------------------------------------------------------------------------------------
 
+    // Since review 7 (A10) the site code is replaced by a short code of the whole "PREFIX/SITE".
     [Theory]
-    [InlineData("FAC/CASA/2026/000318", "FCASA26000318")]
-    [InlineData("AV/CASA/2026/000318", "ACASA26000318")]
-    [InlineData("REC/RABAT/2026/000007", "RRABA26000007")]
-    [InlineData("FAC/FE/2026/000001", "FFE26000001")]
-    [InlineData("PAIE2610-CASA", "PAIE2610-CASA")]
-    [InlineData("VIR-CNSS-2026-10-REF12345", "02610REF12345")]
-    public void A5_sage_pieces_hold_in_13_characters(string piece, string expected)
+    [InlineData("FAC/CASA/2026/000318", "F", "26000318")]
+    [InlineData("AV/CASA/2026/000318", "A", "26000318")]
+    [InlineData("REC/RABAT/2026/000007", "R", "26000007")]
+    [InlineData("FAC/FE/2026/000001", "F", "26000001")]
+    [InlineData("PAIE2610-CASA", "PAIE2610-CASA", "PAIE2610-CASA")]
+    [InlineData("VIR-CNSS-2026-10-REF12345", "V", "REF12345")]
+    public void A5_sage_pieces_hold_in_13_characters(string piece, string head, string tail)
     {
         var compact = SupplierAccountingExport.SagePiece(piece);
 
-        compact.Should().Be(expected);
+        compact.Should().StartWith(head).And.EndWith(tail);
         compact.Length.Should().BeLessThanOrEqualTo(13);
     }
 
@@ -199,7 +200,7 @@ public sealed class ReviewFixesFinanceAccountingTests
 
         var sage = Encoding.UTF8.GetString(SupplierAccountingExport.ToCsv(lines, AccountingExportLayout.Sage)).Split('\n')[1];
         var cells = sage.Split(';');
-        cells[5].Should().Be("FCASA26000318");
+        cells[5].Should().Be(SupplierAccountingExport.SagePiece("FAC/CASA/2026/000318")).And.HaveLength(13);
         cells[4].Should().StartWith("FAC/CASA/2026/000318").And.HaveLength(35);
 
         var generic = Encoding.UTF8.GetString(SupplierAccountingExport.ToCsv(lines, AccountingExportLayout.Generic));

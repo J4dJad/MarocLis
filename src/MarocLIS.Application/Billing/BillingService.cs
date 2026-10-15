@@ -1125,7 +1125,8 @@ public sealed class BillingService(
             return Result.Failure(Error.Validation("Claim_AcceptedAmountInvalid",
                                                    invoice.PayerShareAmount));
 
-        var missing = Money.Round(invoice.PayerShareAmount - accepted);
+        // What the payer refused: its share less what it accepted and what a credit note already took off it.
+        var missing = Math.Max(0m, Money.Round(invoice.PayerDueAmount - accepted));
 
         if (missing > 0m && string.IsNullOrWhiteSpace(reason))
             return Result.Failure(Error.Validation("Claim_RejectionReasonRequired"));
