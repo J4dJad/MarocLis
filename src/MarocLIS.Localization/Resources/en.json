@@ -2714,6 +2714,10 @@
   },
 
   "Result": {
+    "HistoryValue": "Value",
+    "HistoryCurrent": "Current value, not validated",
+    "HistoryEmpty": "No previous result",
+    "History": "Previous results",
     "AwaitingSample": "Tube not received yet for: {0}. These rows are locked until reception.",
     "InstrumentFlags": "Analyser alarm",
     "Title": "Result",

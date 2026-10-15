@@ -2714,6 +2714,10 @@
   },
 
   "Result": {
+    "HistoryValue": "Valeur",
+    "HistoryCurrent": "Valeur en cours, non validée",
+    "HistoryEmpty": "Aucune antériorité",
+    "History": "Antériorités",
     "AwaitingSample": "Tube pas encore réceptionné pour : {0}. Ces lignes sont verrouillées jusqu'à la réception.",
     "InstrumentFlags": "Alarme automate",
     "Title": "Résultat",

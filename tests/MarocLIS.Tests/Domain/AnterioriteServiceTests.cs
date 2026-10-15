@@ -80,7 +80,7 @@ public sealed class AnterioriteServiceTests
         });
         var guard = Stub.Of<IPermissionGuard>(new()
         {
-            ["Require"] = _ => Result.Failure(Error.Forbidden("Permission_Denied"))
+            ["Require"] = _ => Result.Failure(Error.Forbidden("Result_ModifyRequiresPermission"))
         });
 
         var history = await Service(order, queries, guard).GetHistoryAsync(order.Id, Guid.NewGuid());
