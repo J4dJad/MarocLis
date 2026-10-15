@@ -546,6 +546,9 @@ internal static class RolePermissionSets
              Permissions.Equipment.View, Permissions.Equipment.RecordMaintenance,
              Permissions.Instruments.View, Permissions.Instruments.StartStop,
              Permissions.Inventory.View, Permissions.Inventory.Issue,
+             // Takes deliveries in: temperature, checklist, GS1 scan. The lot lands quarantined
+             // and its release stays with whoever reviews the QC.
+             Permissions.Inventory.Receive,
              Permissions.HumanResources.RequestLeave
          ]),
 

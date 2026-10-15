@@ -165,7 +165,10 @@ public sealed class MasterDataQueries(LisDbContext db) : IMasterDataQueries
                     : db.Suppliers.Where(s => s.Id == i.PreferredSupplierId)
                                   .Select(s => s.Name).FirstOrDefault(),
                 i.IsHazardous, i.IsActive,
-                i.Lots.Count(l => l.QuantityRemaining > 0m)))
+                i.Lots.Count(l => l.QuantityRemaining > 0m),
+                i.Gtin, i.IsCeMarked, i.PreferredSupplierId, i.Manufacturer,
+                i.SupplierCatalogueReference, i.UsedByAnalysisCodesCsv, i.DefaultStorageLocation,
+                i.TestsPerPack, i.ReorderQuantity, i.MaximumStock, i.HazardClass))
             .ToListAsync(ct);
     }
 
@@ -190,7 +193,9 @@ public sealed class MasterDataQueries(LisDbContext db) : IMasterDataQueries
             {
                 s.Id, s.Code, s.Name, s.Ice, s.ContactName, s.Phone, s.Email, s.City,
                 s.LeadTimeDays, s.IsApproved, s.LastEvaluationDate, s.EvaluationScore, s.IsActive,
-                StockItemCount = db.StockItems.Count(i => i.PreferredSupplierId == s.Id)
+                StockItemCount = db.StockItems.Count(i => i.PreferredSupplierId == s.Id),
+                s.RegulatoryRegistrationNumber, s.RegulatoryRegistrationValidUntil,
+                s.FiscalId, s.CommercialRegisterNumber, s.AddressLine, s.Region, s.PaymentTermsDays, s.Notes
             })
             .ToListAsync(ct);
 
@@ -203,7 +208,10 @@ public sealed class MasterDataQueries(LisDbContext db) : IMasterDataQueries
                 // periodically. Twelve months is the common laboratory cycle.
                 s.IsApproved && (s.LastEvaluationDate is null
                                  || s.LastEvaluationDate.Value.AddMonths(12) < today),
-                s.IsActive, s.StockItemCount))
+                s.IsActive, s.StockItemCount,
+                s.RegulatoryRegistrationNumber, s.RegulatoryRegistrationValidUntil,
+                s.FiscalId, s.CommercialRegisterNumber, s.AddressLine, s.Region, s.PaymentTermsDays,
+                s.Notes))
         ];
     }
 

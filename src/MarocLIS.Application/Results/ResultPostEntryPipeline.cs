@@ -61,6 +61,17 @@ public sealed class ResultPostEntryPipeline(
         return patient;
     }
 
+    /// <summary>
+    /// The reagent lot in use for each parameter on the site, from the stock (opened, released, in
+    /// date, first expiry first). Empty when nothing is unambiguous.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, Guid>> ReagentLotsInUseAsync(
+        IReadOnlyCollection<Guid> testParameterIds, Guid siteId, CancellationToken ct = default) =>
+        testParameterIds.Count == 0
+            ? new Dictionary<Guid, Guid>()
+            : await queries.GetReagentLotsInUseAsync(testParameterIds, siteId, clock.Today, ct)
+              ?? new Dictionary<Guid, Guid>();
+
     public async Task<ResultCatalogue> LoadCatalogueAsync(LabOrder order, CancellationToken ct = default)
     {
         var parameters = new Dictionary<Guid, TestParameter>();

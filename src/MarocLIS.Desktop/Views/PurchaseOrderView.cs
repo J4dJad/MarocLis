@@ -43,13 +43,18 @@ public sealed class PurchaseOrderView : LocalizedView
     private IReadOnlyList<PurchaseOrderRow> _rows = [];
     private IReadOnlyList<PurchaseOrderLineRow> _lineRows = [];
 
+    // Reception checks, refusal of a delivery and the supplier's registration warning.
+    private readonly ReceptionService? _reception;
+
     public PurchaseOrderView(PurchaseOrderService orders, IUserDialogs dialogs, ILocalizer localizer,
-                             ICultureManager cultureManager, ILogger<PurchaseOrderView>? logger = null)
+                             ICultureManager cultureManager, ILogger<PurchaseOrderView>? logger = null,
+                             ReceptionService? reception = null)
         : base(localizer, cultureManager)
     {
         _orders = orders;
         _dialogs = dialogs;
         _logger = logger;
+        _reception = reception;
 
         BuildLayout();
         WireBehaviour();
@@ -181,7 +186,7 @@ public sealed class PurchaseOrderView : LocalizedView
 
         _newOrder.Click += async (_, _) => await CreateOrderAsync();
         _addLine.Click += async (_, _) => await AddLineAsync();
-        _approve.Click += async (_, _) => await StepAsync(o => _orders.ApproveAsync(o.Id), _approve.Text);
+        _approve.Click += async (_, _) => await ApproveAsync();
         _send.Click += async (_, _) => await SendAsync();
         _receive.Click += async (_, _) => await ReceiveAsync();
         _cancel.Click += async (_, _) => await CancelAsync();
@@ -454,6 +459,11 @@ public sealed class PurchaseOrderView : LocalizedView
             using var dialog = new PurchaseOrderDialog(Localizer, _dialogs, suppliers.Value);
             if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Request is null) return;
 
+            if (_reception is not null
+                && await _reception.RegistrationWarningAsync(dialog.Request.SupplierId) is { } warning
+                && !_dialogs.Confirm($"{Localizer.Describe(warning)}\n\n{T("Supplier.ContinueAnyway")}", _newOrder.Text))
+                return;
+
             var result = await _orders.CreateAsync(dialog.Request);
             if (result.IsFailure) { _dialogs.ShowFailure(result, _newOrder.Text); return; }
 
@@ -499,6 +509,19 @@ public sealed class PurchaseOrderView : LocalizedView
         await LoadAsync(order.Id);
     }
 
+    /// <summary>Approval, with a warning when the supplier's AMMPS / DMP registration has lapsed.</summary>
+    private async Task ApproveAsync()
+    {
+        if (SelectedOrder is not { } order) return;
+
+        if (_reception is not null
+            && await _reception.RegistrationWarningForOrderAsync(order.Id) is { } warning
+            && !_dialogs.Confirm($"{Localizer.Describe(warning)}\n\n{T("Supplier.ContinueAnyway")}", _approve.Text))
+            return;
+
+        await StepAsync(o => _orders.ApproveAsync(o.Id), _approve.Text);
+    }
+
     private async Task SendAsync()
     {
         if (SelectedOrder is not { } order) return;
@@ -514,8 +537,33 @@ public sealed class PurchaseOrderView : LocalizedView
     {
         if (SelectedOrder is not { } order || SelectedLine is not { } line) return;
 
-        using var dialog = new PurchaseOrderReceiptDialog(Localizer, _dialogs, order.Number, line);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Request is null) return;
+        var condition = _reception is null
+            ? StorageCondition.RoomTemperature
+            : await _reception.StorageConditionOfAsync(line.StockItemId);
+
+        using var dialog = new PurchaseOrderReceiptDialog(Localizer, _dialogs, order.Number, line, condition,
+            _reception is null ? null : gtin => _reception.FindByGtinAsync(gtin));
+        var answer = dialog.ShowDialog(this);
+
+        // Refused at the door: nothing is received on the order, the refusal and its NC are kept.
+        if (answer == DialogResult.Abort && dialog.RefusalReason is { } reason && _reception is not null)
+        {
+            var refused = await _reception.RefuseDeliveryAsync(new RefuseDeliveryRequest
+            {
+                PurchaseOrderId = order.Id,
+                StockItemId = line.StockItemId,
+                Reason = reason,
+                ArrivalTemperatureCelsius = dialog.Temperature,
+                DeliveryNoteReference = dialog.DeliveryNote,
+                LotNumber = dialog.LotNumber
+            });
+            if (refused.IsFailure) { _dialogs.ShowFailure(refused, T("Reception.Refuse")); return; }
+
+            _dialogs.Info(T("Reception.Refused", refused.Value), T("Reception.Refuse"));
+            return;
+        }
+
+        if (answer != DialogResult.OK || dialog.Request is null) return;
 
         var result = await _orders.ReceiveLineAsync(order.Id, dialog.Request);
         if (result.IsFailure) { _dialogs.ShowFailure(result, _receive.Text); return; }
@@ -687,13 +735,28 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
     private readonly TextBox _quantity, _lot, _deliveryNote, _location;
     private readonly DateTimePicker _expiry;
 
+    // Reception checks and GS1 scan.
+    private readonly PurchaseOrderLineRow _line;
+    private readonly ReceptionChecksPanel _checks;
+    private readonly Func<string, Task<GtinMatch?>>? _findByGtin;
+
     internal ReceivePurchaseOrderLineRequest? Request { get; private set; }
 
+    /// <summary>Set when the whole delivery was refused; the dialog then closes with Abort.</summary>
+    internal string? RefusalReason { get; private set; }
+    internal decimal? Temperature => _checks.Temperature;
+    internal string? DeliveryNote => Blank(_deliveryNote);
+    internal string? LotNumber => Blank(_lot);
+
     internal PurchaseOrderReceiptDialog(ILocalizer localizer, IUserDialogs dialogs, string number,
-                                        PurchaseOrderLineRow line)
-        : base(localizer, dialogs, "PurchaseOrders.ReceiveLine", $"{number} · {line.ItemCode}", 520, 300)
+                                        PurchaseOrderLineRow line,
+                                        StorageCondition condition = StorageCondition.RoomTemperature,
+                                        Func<string, Task<GtinMatch?>>? findByGtin = null)
+        : base(localizer, dialogs, "PurchaseOrders.ReceiveLine", $"{number} · {line.ItemCode}", 520, 520)
     {
         _lineId = line.Id;
+        _line = line;
+        _findByGtin = findByGtin;
 
         _quantity = TextField("Field.Quantity", 20, 14, 120,
                               line.QuantityOutstanding.ToString("0.##", CultureInfo.InvariantCulture),
@@ -713,9 +776,49 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
         _deliveryNote = TextField("Inventory.DeliveryNote", 20, 68, 230, null, latin: true);
         _location = TextField("Inventory.DefaultLocation", 270, 68, 230);
 
-        Notice(20, 128, 480, 60, "Inventory.ReceivedQuarantined", UiTheme.Abnormal);
+        _checks = new ReceptionChecksPanel(localizer, condition) { Location = new Point(20, 122) };
+        _checks.Scanned += async data => await OnScannedAsync(data);
+        Controls.Add(_checks);
 
-        Buttons(248, 520);
+        Notice(20, 124 + ReceptionChecksPanel.PanelHeight, 480, 40, "Inventory.ReceivedQuarantined", UiTheme.Abnormal);
+
+        Buttons(468, 520);
+
+        var refuse = UiTheme.SecondaryButton(localizer["Reception.Refuse"]);
+        refuse.Bounds = new Rectangle(20, 420, 480, UiTheme.ButtonHeight);
+        refuse.Enabled = findByGtin is not null;
+        refuse.Click += (_, _) =>
+        {
+            var reason = Dialogs.PromptForReason(Localizer["Reception.RefusePrompt"],
+                                                 Localizer["Reception.Refuse"], minimumLength: 10);
+            if (reason is null) return;
+            RefusalReason = reason;
+            DialogResult = DialogResult.Abort;
+            Close();
+        };
+        Controls.Add(refuse);
+    }
+
+    /// <summary>A scan fills the lot and expiry, and says so when the box is not the line's article.</summary>
+    private async Task OnScannedAsync(Gs1Data data)
+    {
+        if (data.LotNumber is { } lot) _lot.Text = lot;
+
+        if (data.ExpiryDate is { } expiry)
+        {
+            var date = expiry.ToDateTime(TimeOnly.MinValue);
+            if (date < _expiry.MinDate) Dialogs.Warn(Localizer.Format("Lot_AlreadyExpired", expiry), Text);
+            else _expiry.Value = date;
+        }
+
+        if (data.Gtin is not { } gtin || _findByGtin is null) return;
+
+        var match = await _findByGtin(gtin);
+
+        if (match is null)
+            Dialogs.Info(Localizer.Format("Reception.GtinUnknown", gtin), Text);
+        else if (match.StockItemId != _line.StockItemId)
+            Dialogs.Warn(Localizer.Format("Reception.GtinNotOnLine", match.Code, _line.ItemCode), Text);
     }
 
     protected override void Accept()
@@ -734,8 +837,12 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
             return;
         }
 
+        var check = _checks.Build(Dialogs, Text);
+        if (check is null) return;
+
         Request = new ReceivePurchaseOrderLineRequest
         {
+            Reception = check,
             LineId = _lineId,
             Quantity = quantity,
             LotNumber = _lot.Text.Trim(),

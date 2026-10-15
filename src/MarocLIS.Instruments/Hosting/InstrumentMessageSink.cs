@@ -395,6 +395,13 @@ public sealed class InstrumentMessageSink(
 
         if (imported > 0)
         {
+            // The reagent lot each value was measured with, from the stock of the analyser's site.
+            var lots = await pipeline.ReagentLotsInUseAsync(
+                [.. touched.Select(r => r.TestParameterId).Distinct()], link.SiteId, ct);
+
+            foreach (var value in touched)
+                value.ReagentLotId = lots.TryGetValue(value.TestParameterId, out var lot) ? lot : null;
+
             // The same post-analytical steps as a value typed at the bench: calculated parameters,
             // interpretation, previous value, delta check and the sample-defect flag. Run once per
             // tube, over the values it brought and the calculated ones they move; the order's other
@@ -620,6 +627,7 @@ public sealed class InstrumentMessageSink(
         }
 
         var imported = 0;
+        var points = new List<QcResult>();
 
         foreach (var incoming in specimen.Results)
         {
@@ -672,11 +680,19 @@ public sealed class InstrumentMessageSink(
             };
 
             await qcResults.AddAsync(point, ct);
+            points.Add(point);
             imported++;
         }
 
         if (imported > 0)
         {
+            // The reagent lot in use, so the control counts as evidence for that lot's release.
+            var lots = await pipeline.ReagentLotsInUseAsync(
+                [.. points.Select(p => p.TestParameterId).Distinct()], link.SiteId, ct);
+
+            foreach (var point in points)
+                point.ReagentLotId = lots.TryGetValue(point.TestParameterId, out var inUse) ? inUse : null;
+
             unitOfWork.AuditReason =
                 $"Contrôle interne reçu de l'automate — lot {lot}, {imported} niveau(x)";
 

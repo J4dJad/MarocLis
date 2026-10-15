@@ -59,6 +59,9 @@ public sealed record ReceiveLotRequest
     public decimal? UnitPriceMad { get; init; }
     public string? StorageLocation { get; init; }
     public int? StabilityAfterOpeningDays { get; init; }
+
+    /// <summary>Temperature and checklist at the door; the temperature is required for cold-chain items.</summary>
+    public ReceptionCheck? Reception { get; init; }
 }
 
 /// <summary>
@@ -86,7 +89,9 @@ public sealed class InventoryService(
     IPermissionGuard guard,
     ICurrentUser currentUser,
     IClock clock,
-    ReorderPlanner? reorder = null)
+    ReorderPlanner? reorder = null,
+    ReceptionService? reception = null,
+    IPurchasingQualityQueries? qualityQueries = null)
 {
     /// <summary>
     /// What the last stock operation drafted on the priority purchase orders, so the screen can say
@@ -152,6 +157,15 @@ public sealed class InventoryService(
                                               StringComparison.OrdinalIgnoreCase)))
             return Result.Failure<Guid>(Error.Conflict("Lot_AlreadyReceived", request.LotNumber));
 
+        // Temperature against the storage condition, and the checklist: a cold-chain item without
+        // a temperature is refused, a failed check is received (quarantined) and reported.
+        var assessment = ReceptionAssessment.Assess(item.StorageCondition, request.Reception);
+        if (assessment.IsFailure) return Result.Failure<Guid>(assessment.Errors);
+
+        await using var transaction = assessment.Value.NeedsNonConformity && reception is not null
+            ? await unitOfWork.BeginTransactionAsync(ct)
+            : null;
+
         var lot = item.AddLot(new ReagentLot(request.LotNumber.Trim(), request.ExpiryDate,
                                               request.Quantity, clock.Today)
         {
@@ -163,7 +177,16 @@ public sealed class InventoryService(
             ReceivedByUserId = currentUser.UserId
         });
 
+        if (request.Reception is { } check) lot.RecordReception(check);
+
         if (request.UnitPriceMad is { } price) item.LastUnitPriceMad = price;
+
+        if (assessment.Value.NeedsNonConformity && reception is not null)
+        {
+            var opened = await reception.OpenReceptionNonConformityAsync(
+                item, lot, lot.SupplierId, assessment.Value, request.Reception?.ArrivalTemperatureCelsius, ct);
+            if (opened.IsFailure) return Result.Failure<Guid>(opened.Errors);
+        }
 
         await movements.AddAsync(new StockMovement(item.Id, lot.Id, StockMovementKind.Receipt,
                                                     request.Quantity, clock.Now,
@@ -177,6 +200,7 @@ public sealed class InventoryService(
             $"Réception du lot {lot.LotNumber} de {item.Code} ({request.Quantity} {item.UnitOfMeasure})";
 
         await unitOfWork.SaveChangesAsync(ct);
+        if (transaction is not null) await unitOfWork.CommitAsync(ct);
 
         return Result.Success(lot.Id);
     }
@@ -188,8 +212,21 @@ public sealed class InventoryService(
     /// performed acceptably?", and "the storeman ticked a box" is not an answer.
     /// </para>
     /// </summary>
-    public async Task<Result> ReleaseLotAsync(Guid reagentLotId, string evidence,
-                                               CancellationToken ct = default)
+    public Task<Result> ReleaseLotAsync(Guid reagentLotId, string evidence,
+                                        CancellationToken ct = default) =>
+        ReleaseAsync(reagentLotId, evidence, null, ct);
+
+    /// <summary>
+    /// Releases a reagent lot whose QC does not conform, by derogation. Reserved to a biologist —
+    /// the permission to validate results biologically, the act this derogation stands in for —
+    /// with a written justification kept on the lot and in the audit trail.
+    /// </summary>
+    public Task<Result> ReleaseLotOverridingQcAsync(Guid reagentLotId, string evidence,
+                                                    string justification, CancellationToken ct = default) =>
+        ReleaseAsync(reagentLotId, evidence, justification, ct);
+
+    private async Task<Result> ReleaseAsync(Guid reagentLotId, string evidence, string? overrideJustification,
+                                            CancellationToken ct)
     {
         // A quality decision, taken by whoever reviews the controls, not by whoever unpacked the box.
         var permitted = guard.Require(Permissions.Quality.ReviewQc);
@@ -197,6 +234,36 @@ public sealed class InventoryService(
 
         var lot = await queries.GetLotEntityAsync(reagentLotId, ct);
         if (lot is null) return Result.Failure(Error.NotFound("Lot_NotFound", reagentLotId));
+
+        // A reagent tied to analyses is released on QC run with it, not on a sentence: ISO 15189
+        // §5.3.2.3. Consumables and unlinked items keep the evidence-only release.
+        var verdict = qualityQueries is null
+            ? null
+            : await qualityQueries.GetLotQcEvidenceAsync(reagentLotId, clock.Today, ct) is { } qc
+                ? LotQualityService.Verdict(qc)
+                : null;
+
+        if (verdict is { AllowsRelease: false })
+        {
+            if (overrideJustification is null)
+                return Result.Failure(Error.Regulatory(verdict.ResourceKey, lot.LotNumber,
+                                                       string.Join(", ", verdict.FailingLevels)));
+
+            var biologist = guard.Require(Permissions.Results.BiologicalValidate);
+            if (biologist.IsFailure)
+                return Result.Failure(Error.Forbidden("Lot_QcOverrideRequiresBiologist"));
+
+            var overridden = lot.ReleaseOverridingQc(clock.Today, currentUser.UserId, evidence,
+                                                     overrideJustification);
+            if (overridden.IsFailure) return overridden;
+
+            unitOfWork.AuditReason =
+                $"Libération du lot {lot.LotNumber} PAR DÉROGATION au CQ ({verdict.Kind}) : " +
+                $"{overrideJustification.Trim()} — preuve : {evidence}";
+            await unitOfWork.SaveChangesAsync(ct);
+
+            return Result.Success();
+        }
 
         var released = lot.Release(clock.Today, currentUser.UserId, evidence);
         if (released.IsFailure) return released;

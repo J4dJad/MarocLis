@@ -52,6 +52,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<HumanResources.SettlementService>();
         services.AddScoped<HumanResources.AccidentService>();
         services.AddScoped<Inventory.PurchaseOrderService>();
+        services.AddScoped<Inventory.ReceptionService>();
+        services.AddScoped<Inventory.LotQualityService>();
+        services.AddScoped<Inventory.SupplierEvaluationService>();
         services.AddScoped<Statistics.StatisticsService>();
         services.AddScoped<Administration.UserAdministrationService>();
         services.AddScoped<Administration.ConfigurationService>();

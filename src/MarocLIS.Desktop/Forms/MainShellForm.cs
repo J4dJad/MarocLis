@@ -329,6 +329,9 @@ public sealed class MainShellForm : LocalizedForm
             new("purchaseorders", "Nav.PurchaseOrders", [Permissions.Inventory.View],
                 n => n.NavigateToAsync<PurchaseOrderView>()),
 
+            new("supplierevaluation", "Nav.SupplierEvaluation", [Permissions.Inventory.ManagePurchaseOrders],
+                n => n.NavigateToAsync<SupplierEvaluationView>()),
+
             new("equipment", "Nav.Equipment", [Permissions.Equipment.View],
                 n => n.NavigateToAsync<EquipmentView>()),
 

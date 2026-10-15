@@ -435,7 +435,14 @@ public sealed partial class DemoDataSeeder
                         SupplierId = supplierIds.TryGetValue(demo.SupplierCode, out var supplierId) ? supplierId : null,
                         DeliveryNoteReference = $"BL-DEMO-{lot.LotNumber}",
                         UnitPriceMad = demo.UnitPrice,
-                        StabilityAfterOpeningDays = demo.Item.Kind == StockItemKind.Reagent ? 28 : null
+                        StabilityAfterOpeningDays = demo.Item.Kind == StockItemKind.Reagent ? 28 : null,
+                        // The reception checklist: a cold-chain item comes with its arrival temperature.
+                        Reception = new ReceptionCheck
+                        {
+                            ArrivalTemperatureCelsius = ColdChain.RequiresTemperature(demo.Item.StorageCondition)
+                                ? 5.2m
+                                : null
+                        }
                     }, ct), ct);
 
                 if (!Check(received, $"Lot {lot.LotNumber}")) continue;
@@ -457,9 +464,21 @@ public sealed partial class DemoDataSeeder
             }
             else if (lot.ReleaseEvidence is { } evidence && quarantined && !rejected)
             {
-                Check(await AsAsync<InventoryService, Result>(DemoActor.QualityManager,
-                          s => s.ReleaseLotAsync(lotId, evidence, ct), ct),
-                      $"Libération du lot {lot.LotNumber}");
+                var released = await AsAsync<InventoryService, Result>(DemoActor.QualityManager,
+                    s => s.ReleaseLotAsync(lotId, evidence, ct), ct);
+
+                // The demo lots are seeded before any QC run on them: the biologist releases them
+                // as a documented exception, as a laboratory starting on the software would.
+                if (released.IsFailure
+                    && released.FirstError.ResourceKey is "Lot_ReleaseNoQcRun" or "Lot_ReleaseQcRejected"
+                                                          or "Lot_ReleaseQcLevelsMissing")
+                {
+                    released = await AsAsync<InventoryService, Result>(DemoActor.Biologist,
+                        s => s.ReleaseLotOverridingQcAsync(lotId, evidence,
+                            "Données de démonstration : lot libéré sans CQ sur le lot", ct), ct);
+                }
+
+                Check(released, $"Libération du lot {lot.LotNumber}");
 
                 // A first consumption, so the movements history is not only receipts. Only on
                 // the run that received the lot, or every start would draw the stock down again.

@@ -111,6 +111,11 @@ public sealed record StockItemRequest
     public bool IsCritical { get; init; }
 
     public bool IsActive { get; init; } = true;
+
+    /// <summary>GS1 GTIN; 8, 12, 13 or 14 digits, stored as fourteen.</summary>
+    public string? Gtin { get; init; }
+
+    public bool IsCeMarked { get; init; }
 }
 
 public sealed record SupplierRequest
@@ -141,6 +146,10 @@ public sealed record SupplierRequest
 
     public string? Notes { get; init; }
     public bool IsActive { get; init; } = true;
+
+    /// <summary>AMMPS / DMP registration (loi 84-12) and its validity date.</summary>
+    public string? RegulatoryRegistrationNumber { get; init; }
+    public DateOnly? RegulatoryRegistrationValidUntil { get; init; }
 }
 
 public sealed record PrescriberRequest
@@ -243,13 +252,24 @@ public sealed record StockItemMasterRow(
     Guid StockItemId, string Code, MultilingualText Name, StockItemKind Kind,
     string UnitOfMeasure, decimal ReorderPoint, decimal MinimumStock, bool IsCritical,
     StorageCondition StorageCondition, string? SupplierName, bool IsHazardous, bool IsActive,
-    int LotCount);
+    int LotCount,
+    // The editor round-trips every field it shows: a field the row did not carry was blanked on the
+    // next save (the analyses list among them, which the reagent-lot tracing reads).
+    string? Gtin = null, bool IsCeMarked = false, Guid? PreferredSupplierId = null,
+    string? Manufacturer = null, string? SupplierCatalogueReference = null,
+    string? UsedByAnalysisCodesCsv = null, string? DefaultStorageLocation = null,
+    int? TestsPerPack = null, decimal ReorderQuantity = 0m, decimal? MaximumStock = null,
+    string? HazardClass = null);
 
 public sealed record SupplierRow(
     Guid SupplierId, string Code, string Name, string? Ice, string? ContactName, string? Phone,
     string? Email, string? City, int LeadTimeDays, bool IsApproved,
     DateOnly? LastEvaluationDate, int? EvaluationScore, bool IsEvaluationOverdue, bool IsActive,
-    int StockItemCount);
+    int StockItemCount,
+    string? RegistrationNumber = null, DateOnly? RegistrationValidUntil = null,
+    // Round-tripped by the editor, which blanked them on every save before.
+    string? FiscalId = null, string? CommercialRegisterNumber = null, string? AddressLine = null,
+    MoroccanRegion Region = MoroccanRegion.Unspecified, int PaymentTermsDays = 30, string? Notes = null);
 
 /// <summary>
 /// A payer as the maintenance grid shows it.
@@ -664,6 +684,10 @@ public sealed class MasterDataService(
         if (request.IsHazardous && string.IsNullOrWhiteSpace(request.HazardClass))
             errors.Add(Error.Validation("Stock_HazardClassRequired"));
 
+        var gtin = string.IsNullOrWhiteSpace(request.Gtin) ? null : Gs1Parser.NormaliseGtin(request.Gtin);
+        if (!string.IsNullOrWhiteSpace(request.Gtin) && gtin is null)
+            errors.Add(Error.Validation("Gs1_GtinInvalid", request.Gtin.Trim()));
+
         if (errors.Count > 0) return Result.Failure<Guid>(errors);
 
         var code = request.Code.Trim().ToUpperInvariant();
@@ -710,6 +734,8 @@ public sealed class MasterDataService(
         item.HazardClass = Blank(request.HazardClass);
         item.IsCritical = request.IsCritical;
         item.IsActive = request.IsActive;
+        item.Gtin = gtin;
+        item.IsCeMarked = request.IsCeMarked;
 
         stockItems.Update(item);
 
@@ -798,6 +824,8 @@ public sealed class MasterDataService(
         supplier.EvaluationScore = request.EvaluationScore;
         supplier.Notes = Blank(request.Notes);
         supplier.IsActive = request.IsActive;
+        supplier.RegulatoryRegistrationNumber = Blank(request.RegulatoryRegistrationNumber);
+        supplier.RegulatoryRegistrationValidUntil = request.RegulatoryRegistrationValidUntil;
 
         suppliers.Update(supplier);
 

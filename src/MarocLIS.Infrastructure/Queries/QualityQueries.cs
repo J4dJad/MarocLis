@@ -9,6 +9,11 @@ namespace MarocLIS.Infrastructure.Queries;
 
 public sealed class QualityQueries(LisDbContext db) : IQualityQueries
 {
+    public Task<IReadOnlyDictionary<Guid, Guid>> GetReagentLotsForQcAsync(
+        IReadOnlyCollection<Guid> testParameterIds, Guid? namedLotId, Guid siteId, DateOnly today,
+        CancellationToken ct = default) =>
+        ReagentLotLookup.ResolveAsync(db, testParameterIds, namedLotId, siteId, today, ct);
+
     // ---- Internal quality control ---------------------------------------------------------------
 
     public async Task<IReadOnlyList<QcEntryRow>> GetQcEntrySheetAsync(

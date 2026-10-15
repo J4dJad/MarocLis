@@ -54,6 +54,23 @@ public sealed class Supplier : AuditableAggregateRoot, ISoftDeletable
     public bool IsEvaluationOverdue(DateOnly today) =>
         IsApproved && (LastEvaluationDate is null || LastEvaluationDate.Value.AddYears(1) < today);
 
+    // ---- Regulatory (loi 84-12) ----------------------------------------------------------------
+
+    /// <summary>
+    /// Registration number with the AMMPS / DMP (Direction du médicament et de la pharmacie) as an
+    /// establishment allowed to place in vitro diagnostic devices on the Moroccan market (loi 84-12).
+    /// </summary>
+    public string? RegulatoryRegistrationNumber { get; set; }
+
+    public DateOnly? RegulatoryRegistrationValidUntil { get; set; }
+
+    /// <summary>
+    /// A registration whose validity date has passed. A supplier without a recorded registration is
+    /// not "expired": it may not need one (office supplies) and the screen says it is missing instead.
+    /// </summary>
+    public bool IsRegistrationExpired(DateOnly today) =>
+        RegulatoryRegistrationValidUntil is { } until && until < today;
+
     public Result Validate()
     {
         var errors = new List<Error>();
@@ -143,6 +160,15 @@ public sealed class StockItem : AuditableAggregateRoot, ISoftDeletable, ISiteSco
     public bool IsCritical { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// GS1 trade item number (GTIN-14, shorter GTINs left-padded with zeros), as read from the
+    /// DataMatrix on the box. Lets a scan at reception pick the article without typing.
+    /// </summary>
+    public string? Gtin { get; set; }
+
+    /// <summary>The device carries the CE (CE-IVD) marking, required for an IVD sold in Morocco.</summary>
+    public bool IsCeMarked { get; set; }
 
     public IReadOnlyCollection<ReagentLot> Lots => _lots.AsReadOnly();
 
@@ -280,12 +306,56 @@ public sealed class ReagentLot : Entity, IAuditable
     public DateOnly? RecalledOn { get; private set; }
     public string? RecallReference { get; private set; }
 
+    // ---- Reception checks ----------------------------------------------------------------------
+
+    /// <summary>Temperature measured when the parcel arrived, °C. Null when not taken.</summary>
+    public decimal? ArrivalTemperatureCelsius { get; private set; }
+
+    /// <summary>The delivery matched the order and the delivery note. Null: not checked.</summary>
+    public bool? ReceptionMatchesOrder { get; private set; }
+    public bool? ReceptionPackagingIntact { get; private set; }
+
+    /// <summary>Label and instructions for use in French.</summary>
+    public bool? ReceptionFrenchLabelling { get; private set; }
+    public bool? CertificateOfAnalysisReceived { get; private set; }
+
+    /// <summary>Released although the QC on the lot did not conform, by a biologist's derogation.</summary>
+    public bool ReleasedWithQcOverride { get; private set; }
+    public string? QcOverrideJustification { get; private set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public Guid? CreatedByUserId { get; set; }
     public DateTimeOffset? ModifiedAt { get; set; }
     public Guid? ModifiedByUserId { get; set; }
 
     // ---- Behaviour -----------------------------------------------------------------------------
+
+    /// <summary>Keeps what was checked when the lot arrived, as the reception record.</summary>
+    public void RecordReception(ReceptionCheck check)
+    {
+        ArrivalTemperatureCelsius = check.ArrivalTemperatureCelsius;
+        ReceptionMatchesOrder = check.MatchesOrder;
+        ReceptionPackagingIntact = check.PackagingIntact;
+        ReceptionFrenchLabelling = check.FrenchLabelling;
+        CertificateOfAnalysisReceived = check.CertificateOfAnalysisReceived;
+    }
+
+    /// <summary>
+    /// Releases the lot although its QC did not conform. Only the derogation is recorded here; who
+    /// may grant it is decided by the service.
+    /// </summary>
+    public Result ReleaseOverridingQc(DateOnly on, Guid byUserId, string evidence, string justification)
+    {
+        if (string.IsNullOrWhiteSpace(justification))
+            return Result.Failure(Error.Regulatory("Lot_QcOverrideJustificationRequired"));
+
+        var released = Release(on, byUserId, evidence);
+        if (released.IsFailure) return released;
+
+        ReleasedWithQcOverride = true;
+        QcOverrideJustification = justification.Trim();
+        return Result.Success();
+    }
 
     public bool IsExpired(DateOnly today) => ExpiryDate < today;
 
@@ -354,6 +424,8 @@ public sealed class ReagentLot : Entity, IAuditable
         ReleasedOn = null;
         ReleasedByUserId = null;
         AcceptanceEvidence = null;
+        ReleasedWithQcOverride = false;
+        QcOverrideJustification = null;
 
         return Result.Success();
     }

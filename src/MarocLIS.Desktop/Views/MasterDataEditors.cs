@@ -739,18 +739,18 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
 {
     private readonly Guid? _id;
     private readonly TextBox _code, _nameFr, _nameAr, _unit, _manufacturer, _reference,
-                             _analyses, _location, _hazardClass;
+                             _analyses, _location, _hazardClass, _gtin;
     private readonly ComboBox _kind, _storage, _supplier;
     private readonly NumericUpDown _tests;
     private readonly TextBox _reorder, _reorderQuantity, _minimum, _maximum;
-    private readonly CheckBox _critical, _hazardous, _active;
+    private readonly CheckBox _critical, _hazardous, _active, _ceMarked;
 
     internal StockItemRequest? Request { get; private set; }
 
     internal StockItemEditorDialog(ILocalizer localizer, IUserDialogs dialogs,
                                    StockItemMasterRow? row, IReadOnlyList<SupplierRow> suppliers)
         : base(localizer, dialogs,
-               row is null ? "Inventory.NewItem" : "Action.Edit", row?.Code, 720, 560)
+               row is null ? "Inventory.NewItem" : "Action.Edit", row?.Code, 720, 620)
     {
         _id = row?.StockItemId;
 
@@ -761,19 +761,21 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
         _kind = Choice("Field.Name", 20, 68, 200, row?.Kind ?? StockItemKind.Reagent,
                         "StockItemKind");
         _unit = TextField("Field.Unit", 240, 68, 100, row?.UnitOfMeasure ?? "u");
-        _tests = Number("Inventory.TestsPerPack", 360, 68, 100, null, 100_000);
+        _tests = Number("Inventory.TestsPerPack", 360, 68, 100, row?.TestsPerPack, 100_000);
 
         _storage = Choice("Sample.Storage", 480, 68, 220,
                            row?.StorageCondition ?? StorageCondition.RoomTemperature,
                            "StorageCondition");
 
-        _manufacturer = TextField("Equipment.Manufacturer", 20, 122, 200, null);
+        _manufacturer = TextField("Equipment.Manufacturer", 20, 122, 200, row?.Manufacturer);
         _supplier = Lookup("Inventory.Supplier", 240, 122, 240,
-                            suppliers.Select(s => (s.SupplierId, $"{s.Code} — {s.Name}")), null);
-        _reference = TextField("Inventory.SupplierReference", 500, 122, 200, null, latin: true);
+                            suppliers.Select(s => (s.SupplierId, $"{s.Code} — {s.Name}")),
+                            row?.PreferredSupplierId);
+        _reference = TextField("Inventory.SupplierReference", 500, 122, 200, row?.SupplierCatalogueReference,
+                               latin: true);
 
-        _analyses = TextField("Inventory.UsedByAnalyses", 20, 176, 460, null, latin: true);
-        _location = TextField("Inventory.DefaultLocation", 500, 176, 200, null);
+        _analyses = TextField("Inventory.UsedByAnalyses", 20, 176, 460, row?.UsedByAnalysisCodesCsv, latin: true);
+        _location = TextField("Inventory.DefaultLocation", 500, 176, 200, row?.DefaultStorageLocation);
 
         Notice(20, 230, 680, 30, "Inventory.ReorderNotice", UiTheme.Accent);
 
@@ -781,21 +783,28 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
                          row?.MinimumStock.ToString("0.##"), latin: true, right: true);
         _reorder = TextField("Inventory.ReorderPoint", 180, 266, 140,
                          row?.ReorderPoint.ToString("0.##"), latin: true, right: true);
-        _reorderQuantity = TextField("Inventory.ReorderQuantity", 340, 266, 140, null,
+        _reorderQuantity = TextField("Inventory.ReorderQuantity", 340, 266, 140,
+                                 row is null ? null : row.ReorderQuantity.ToString("0.##"),
                                  latin: true, right: true);
-        _maximum = TextField("Inventory.MaximumStock", 500, 266, 140, null, latin: true, right: true);
+        _maximum = TextField("Inventory.MaximumStock", 500, 266, 140, row?.MaximumStock?.ToString("0.##"),
+                             latin: true, right: true);
 
         _critical = Check("Inventory.IsCritical", 20, 330, row?.IsCritical ?? false, bold: true);
         Notice(20, 354, 680, 30, "Inventory.CriticalNotice");
 
         _hazardous = Check("Inventory.IsHazardous", 20, 392, row?.IsHazardous ?? false);
-        _hazardClass = TextField("Inventory.HazardClass", 240, 386, 200, null, latin: true);
+        _hazardClass = TextField("Inventory.HazardClass", 240, 386, 200, row?.HazardClass, latin: true);
         _hazardClass.Enabled = row?.IsHazardous ?? false;
         _hazardous.CheckedChanged += (_, _) => _hazardClass.Enabled = _hazardous.Checked;
 
         _active = Check("Field.Active", 480, 392, row?.IsActive ?? true);
 
-        Buttons(500, 720);
+        // GS1: the GTIN printed in the DataMatrix, so a scan at reception picks this article.
+        _gtin = TextField("Inventory.Gtin", 20, 446, 200, row?.Gtin, latin: true, mono: true);
+        _ceMarked = Check("Inventory.IsCeMarked", 240, 470, row?.IsCeMarked ?? false);
+        Notice(20, 500, 680, 30, "Inventory.GtinNotice");
+
+        Buttons(560, 720);
     }
 
     protected override void Accept()
@@ -854,7 +863,9 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
             IsHazardous = _hazardous.Checked,
             HazardClass = Blank(_hazardClass),
             IsCritical = _critical.Checked,
-            IsActive = _active.Checked
+            IsActive = _active.Checked,
+            Gtin = Blank(_gtin),
+            IsCeMarked = _ceMarked.Checked
         };
 
         DialogResult = DialogResult.OK;
@@ -867,7 +878,9 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
 {
     private readonly Guid? _id;
     private readonly TextBox _code, _name, _ice, _fiscalId, _rc, _contact, _phone, _email,
-                             _address, _city, _notes;
+                             _address, _city, _notes, _registration;
+    private readonly (CheckBox Toggle, DateTimePicker Picker) _registrationValidUntil;
+    private readonly Label _registrationNotice;
     private readonly ComboBox _region;
     private readonly NumericUpDown _lead, _terms, _score;
     private readonly CheckBox _approved, _active;
@@ -878,7 +891,7 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
 
     internal SupplierEditorDialog(ILocalizer localizer, IUserDialogs dialogs, SupplierRow? row)
         : base(localizer, dialogs,
-               row is null ? "Inventory.NewSupplier" : "Action.Edit", row?.Code, 700, 540)
+               row is null ? "Inventory.NewSupplier" : "Action.Edit", row?.Code, 700, 640)
     {
         _id = row?.SupplierId;
 
@@ -886,20 +899,20 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
         _name = TextField("Field.Name", 180, 14, 300, row?.Name);
         _ice = TextField("Site.Ice", 500, 14, 180, row?.Ice, latin: true, mono: true);
 
-        _fiscalId = TextField("Site.FiscalId", 20, 68, 160, null, latin: true, mono: true);
-        _rc = TextField("Site.CommercialRegister", 200, 68, 160, null, latin: true);
+        _fiscalId = TextField("Site.FiscalId", 20, 68, 160, row?.FiscalId, latin: true, mono: true);
+        _rc = TextField("Site.CommercialRegister", 200, 68, 160, row?.CommercialRegisterNumber, latin: true);
         _contact = TextField("Inventory.SupplierContact", 380, 68, 300, row?.ContactName);
 
         _phone = TextField("Site.Phone", 20, 122, 180, row?.Phone, latin: true, mono: true);
         _email = TextField("Field.Email", 220, 122, 240, row?.Email, latin: true);
         _city = TextField("Patient.City", 480, 122, 200, row?.City);
 
-        _address = TextField("Patient.Address", 20, 176, 440, null);
-        _region = Choice("Patient.Region", 480, 176, 200, MoroccanRegion.Unspecified,
+        _address = TextField("Patient.Address", 20, 176, 440, row?.AddressLine);
+        _region = Choice("Patient.Region", 480, 176, 200, row?.Region ?? MoroccanRegion.Unspecified,
                           "MoroccanRegion");
 
         _lead = Number("Inventory.LeadTime", 20, 230, 120, row?.LeadTimeDays ?? 7, 365);
-        _terms = Number("Billing.PaymentTerms", 160, 230, 120, 30, 365);
+        _terms = Number("Billing.PaymentTerms", 160, 230, 120, row?.PaymentTermsDays ?? 30, 365);
 
         Notice(20, 294, 660, 30, "Inventory.SupplierEvaluationNotice", UiTheme.Accent);
 
@@ -914,10 +927,19 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
         _approvalNotice = Notice(20, 386, 660, 30, "Supplier_ApprovalNeedsEvaluation",
                                   UiTheme.Abnormal);
 
-        _notes = TextField("Field.Notes", 20, 420, 440, null);
+        _notes = TextField("Field.Notes", 20, 420, 440, row?.Notes);
         _active = Check("Field.Active", 480, 434, row?.IsActive ?? true);
 
-        Buttons(480, 700);
+        // Loi 84-12: the establishment's registration with the AMMPS / DMP to sell IVD devices.
+        _registration = TextField("Inventory.RegulatoryRegistration", 20, 478, 300, row?.RegistrationNumber,
+                                  latin: true);
+        _registrationValidUntil = OptionalDate("Inventory.RegulatoryRegistrationValidUntil", 340, 478,
+                                               row?.RegistrationValidUntil);
+        _registrationNotice = Notice(20, 530, 660, 30, "Supplier_RegistrationExpiredNotice", UiTheme.Abnormal);
+        _registrationValidUntil.Toggle.CheckedChanged += (_, _) => RefreshApproval();
+        _registrationValidUntil.Picker.ValueChanged += (_, _) => RefreshApproval();
+
+        Buttons(580, 700);
         RefreshApproval();
     }
 
@@ -926,8 +948,15 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
     /// because the service refuses it — ISO 15189 §4.6 is about having assessed the supplier, not
     /// about having declared them approved.
     /// </summary>
-    private void RefreshApproval() =>
+    private void RefreshApproval()
+    {
         _approvalNotice.Visible = _approved.Checked && !_evaluated.Toggle.Checked;
+
+        // Approving a supplier whose registration has lapsed is allowed, but said.
+        if (_registrationNotice is not null)
+            _registrationNotice.Visible = _registrationValidUntil.Toggle.Checked
+                                          && _registrationValidUntil.Picker.Value.Date < DateTime.Today;
+    }
 
     protected override void Accept()
     {
@@ -971,7 +1000,9 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
             LastEvaluationDate = DateOrNull(_evaluated.Toggle, _evaluated.Picker),
             EvaluationScore = IntOrNull(_score),
             Notes = Blank(_notes),
-            IsActive = _active.Checked
+            IsActive = _active.Checked,
+            RegulatoryRegistrationNumber = Blank(_registration),
+            RegulatoryRegistrationValidUntil = DateOrNull(_registrationValidUntil.Toggle, _registrationValidUntil.Picker)
         };
 
         DialogResult = DialogResult.OK;

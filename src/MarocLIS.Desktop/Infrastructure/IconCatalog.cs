@@ -243,6 +243,7 @@ public static class IconCatalog
         ["documents"] = Glyph.BookOpen,
         ["inventory"] = Glyph.Boxes,
         ["purchaseorders"] = Glyph.ShoppingCart,
+        ["supplierevaluation"] = Glyph.BadgeCheck,
         ["equipment"] = Glyph.Wrench,
         ["personnel"] = Glyph.UserCheck,
         ["habilitations"] = Glyph.ShieldCheck,
