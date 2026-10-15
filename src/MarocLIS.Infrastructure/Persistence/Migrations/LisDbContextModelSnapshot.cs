@@ -23,6 +23,109 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("MarocLIS.Domain.Assets.FixedAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("AcquisitionDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<decimal>("CostExcludingVatMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("DisposalDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("DisposalPriceMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("DisposalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateOnly>("InServiceDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("InstrumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("InvoiceReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Method")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("ResidualValueMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SupplierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SupplierInvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("UsefulLifeYears")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("VatAmountMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("VatRecoverable")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstrumentId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FixedAssets_Instrument")
+                        .HasFilter("[InstrumentId] IS NOT NULL");
+
+                    b.HasIndex("SiteId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FixedAssets_Site_Code");
+
+                    b.ToTable("FixedAssets", "fin");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Audit.AuditEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -305,6 +408,16 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("OperatorUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ReconciledAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ReconciledByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReconciliationComment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -6528,6 +6641,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AccountingAccount")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("AddressLine")
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
@@ -7318,6 +7435,438 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("UX_QcTargets_Material_Parameter_Instrument");
 
                     b.ToTable("QcTargets", "qc");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Relations.DelegateVisit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DelegateUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("NextVisitOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid>("PrescriberId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("VisitDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PrescriberId", "VisitDate")
+                        .HasDatabaseName("IX_DelegateVisits_Prescriber");
+
+                    b.HasIndex("SiteId", "VisitDate")
+                        .HasDatabaseName("IX_DelegateVisits_Site_Date");
+
+                    b.ToTable("DelegateVisits", "rel");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Relations.Partnership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ContactName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("DiscountPercent")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("PartnerIce")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("PartnerKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PartnerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .UseCollation("Latin1_General_100_CI_AI_SC_UTF8");
+
+                    b.Property<int?>("PaymentTermsDays")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("PrescriberId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Terms")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "IsActive")
+                        .HasDatabaseName("IX_Partnerships_Site");
+
+                    b.ToTable("Partnerships", "rel");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Relations.PartnershipDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("AttachedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("AttachedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PartnershipId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SizeBytes")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PartnershipId", "AttachedAt")
+                        .HasDatabaseName("IX_PartnershipDocuments_Partnership");
+
+                    b.ToTable("PartnershipDocuments", "rel");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Relations.PatientMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Failure")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid?>("ReminderRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset>("SentAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("SentByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SourceOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("SourceResultDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SurveyInvitationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PatientId")
+                        .HasDatabaseName("IX_PatientMessages_Patient");
+
+                    b.HasIndex("ReminderRuleId", "SourceOrderId")
+                        .HasDatabaseName("IX_PatientMessages_Rule_Order");
+
+                    b.HasIndex("SiteId", "SentAt")
+                        .HasDatabaseName("IX_PatientMessages_Site_SentAt");
+
+                    b.ToTable("PatientMessages", "rel");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Relations.ReminderRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AnalysisTestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("DelayMonths")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid?>("TestPanelId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("WindowDays")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnalysisTestId")
+                        .HasDatabaseName("IX_ReminderRules_Analysis");
+
+                    b.HasIndex("TestPanelId")
+                        .HasDatabaseName("IX_ReminderRules_Panel");
+
+                    b.ToTable("ReminderRules", "rel");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Relations.SurveyInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("AnswerChannel")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("AnswerRecordedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("AnsweredAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(6)
+                        .HasColumnType("nvarchar(6)");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Delivered")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("InvitedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("LabOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SurveyInvitations_Code");
+
+                    b.HasIndex("LabOrderId")
+                        .HasDatabaseName("IX_SurveyInvitations_Order");
+
+                    b.HasIndex("PatientId", "InvitedAt")
+                        .HasDatabaseName("IX_SurveyInvitations_Patient");
+
+                    b.HasIndex("SiteId", "InvitedAt")
+                        .HasDatabaseName("IX_SurveyInvitations_Site_InvitedAt");
+
+                    b.ToTable("SurveyInvitations", "rel");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Reports.LabReport", b =>
@@ -8143,6 +8692,280 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasFilter("[SiteId] IS NOT NULL AND [Year] IS NOT NULL");
 
                     b.ToTable("NumberSequences", "cfg");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Treasury.BankAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountingAccount")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(12)");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CsvMapping")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("OpeningBalanceDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("OpeningBalanceMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Rib")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(24)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Rib")
+                        .IsUnique()
+                        .HasDatabaseName("UX_BankAccounts_Rib");
+
+                    b.HasIndex("SiteId", "IsActive")
+                        .HasDatabaseName("IX_BankAccounts_Site_Active");
+
+                    b.ToTable("BankAccounts", "bil");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Treasury.BankMatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("BankAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BankStatementLineId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsAutomatic")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("MatchedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("MatchedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("MovementDate")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(120)");
+
+                    b.Property<DateTimeOffset?>("UnmatchedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("UnmatchedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankStatementLineId")
+                        .HasDatabaseName("IX_BankMatches_Line");
+
+                    b.HasIndex("Kind", "SourceKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_BankMatches_ActiveSource")
+                        .HasFilter("[UnmatchedAt] IS NULL");
+
+                    b.ToTable("BankMatches", "bil");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Treasury.BankStatementLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("BankAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<Guid>("ImportId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("OperationDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceFileName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateOnly?>("ValueDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankAccountId", "Fingerprint")
+                        .IsUnique()
+                        .HasDatabaseName("UX_BankStatementLines_Account_Fingerprint");
+
+                    b.HasIndex("BankAccountId", "OperationDate")
+                        .HasDatabaseName("IX_BankStatementLines_Account_Date");
+
+                    b.ToTable("BankStatementLines", "bil");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Treasury.TreasuryForecastItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Recurrence")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "IsActive")
+                        .HasDatabaseName("IX_TreasuryForecastItems_Site_Active");
+
+                    b.ToTable("TreasuryForecastItems", "bil");
                 });
 
             modelBuilder.Entity("MarocLIS.Infrastructure.Persistence.PasswordHistoryEntry", b =>
@@ -9888,6 +10711,41 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Relations.ReminderRule", b =>
+                {
+                    b.OwnsOne("MarocLIS.Domain.Common.MultilingualText", "Template", b1 =>
+                        {
+                            b1.Property<Guid>("ReminderRuleId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("Ar")
+                                .HasMaxLength(480)
+                                .HasColumnType("nvarchar(480)")
+                                .HasColumnName("TemplateAr");
+
+                            b1.Property<string>("En")
+                                .HasMaxLength(480)
+                                .HasColumnType("nvarchar(480)")
+                                .HasColumnName("TemplateEn");
+
+                            b1.Property<string>("Fr")
+                                .IsRequired()
+                                .HasMaxLength(480)
+                                .HasColumnType("nvarchar(480)")
+                                .HasColumnName("TemplateFr");
+
+                            b1.HasKey("ReminderRuleId");
+
+                            b1.ToTable("ReminderRules", "rel");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ReminderRuleId");
+                        });
+
+                    b.Navigation("Template")
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Reports.LabReport", b =>
                 {
                     b.OwnsOne("MarocLIS.Domain.Common.MultilingualText", "AmendmentReason", b1 =>
@@ -10025,6 +10883,24 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .WithMany("Events")
                         .HasForeignKey("SampleId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Treasury.BankMatch", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Treasury.BankStatementLine", null)
+                        .WithMany()
+                        .HasForeignKey("BankStatementLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Treasury.BankStatementLine", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Treasury.BankAccount", null)
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
