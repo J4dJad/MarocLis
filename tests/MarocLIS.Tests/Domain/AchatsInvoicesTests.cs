@@ -623,11 +623,11 @@ public sealed class AchatsInvoicesTests
     private sealed class Guard(HashSet<string> granted) : IPermissionGuard
     {
         public Result Require(string permission) =>
-            granted.Contains(permission) ? Result.Success() : Result.Failure(Error.Forbidden("Auth_PermissionDenied"));
+            granted.Contains(permission) ? Result.Success() : Result.Failure(Error.Forbidden("Forbidden"));
         public Result RequireAny(params string[] permissions) =>
-            permissions.Any(granted.Contains) ? Result.Success() : Result.Failure(Error.Forbidden("Auth_PermissionDenied"));
+            permissions.Any(granted.Contains) ? Result.Success() : Result.Failure(Error.Forbidden("Forbidden"));
         public Result RequireAll(params string[] permissions) =>
-            permissions.All(granted.Contains) ? Result.Success() : Result.Failure(Error.Forbidden("Auth_PermissionDenied"));
+            permissions.All(granted.Contains) ? Result.Success() : Result.Failure(Error.Forbidden("Forbidden"));
         public Task<Result> RequireBiologicalValidationAsync(string departmentCode, CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
     }
