@@ -59,6 +59,13 @@ public interface IInventoryCountQueries
     Task<IReadOnlyList<(InventoryCountLineInput Lot, StockItemKind Kind)>> GetCountableLotsAsync(
         Guid siteId, CancellationToken ct = default);
 
+    /// <summary>The quantity the stock shows for a lot now, read afresh: the reference a count is measured against.</summary>
+    Task<decimal?> GetLotQuantityAsync(Guid reagentLotId, CancellationToken ct = default);
+
+    /// <summary>The lots on the site's other counts still being counted, with the count's number.</summary>
+    Task<IReadOnlyList<(Guid ReagentLotId, string CountNumber)>> GetLotsInOpenCountsAsync(
+        Guid siteId, Guid exceptInventoryCountId, CancellationToken ct = default);
+
     /// <summary>The storage locations in use, for the scope picker.</summary>
     Task<IReadOnlyList<string>> GetStorageLocationsAsync(Guid siteId, CancellationToken ct = default);
 }
@@ -143,9 +150,17 @@ public sealed class InventoryCountService(
         var count = await counts.GetByIdAsync(inventoryCountId, ct);
         if (count is null) return Result.Failure<int>(Error.NotFound("InventoryCount_NotFound"));
 
-        var lots = await queries.GetCountableLotsAsync(currentUser.SiteId, ct);
-        var started = count.StartCounting(lots.Where(l => count.Covers(l.Lot.StorageLocation, l.Kind))
-                                              .Select(l => l.Lot), clock.Now);
+        var lots = (await queries.GetCountableLotsAsync(currentUser.SiteId, ct))
+                   .Where(l => count.Covers(l.Lot.StorageLocation, l.Kind)).Select(l => l.Lot).ToList();
+
+        // A lot on two open counts would have its difference posted by each of them at closing.
+        var elsewhere = await queries.GetLotsInOpenCountsAsync(currentUser.SiteId, count.Id, ct);
+        var overlap = elsewhere.Where(e => lots.Any(l => l.ReagentLotId == e.ReagentLotId))
+                               .Select(e => e.CountNumber).Distinct().Order().ToList();
+        if (overlap.Count > 0)
+            return Result.Failure<int>(Error.Conflict("InventoryCount_LotsInOpenCount", string.Join(", ", overlap)));
+
+        var started = count.StartCounting(lots, clock.Now);
         if (started.IsFailure) return Result.Failure<int>(started.Errors);
 
         unitOfWork.AuditReason = $"Début du comptage de l'inventaire {count.Number} ({count.Lines.Count} lots)";
@@ -163,7 +178,12 @@ public sealed class InventoryCountService(
         var count = await counts.GetByIdAsync(inventoryCountId, ct);
         if (count is null) return Result.Failure(Error.NotFound("InventoryCount_NotFound"));
 
-        var recorded = count.RecordCount(lineId, counted, currentUser.UserId, clock.Now, comment);
+        // What the stock shows now, read afresh: issues made since the start are already off the
+        // shelf being counted, and must not be taken off the lot again at closing.
+        var countedLine = count.Lines.FirstOrDefault(l => l.Id == lineId);
+        var stockNow = countedLine is null ? null : await queries.GetLotQuantityAsync(countedLine.ReagentLotId, ct);
+
+        var recorded = count.RecordCount(lineId, counted, currentUser.UserId, clock.Now, comment, stockNow);
         if (recorded.IsFailure) return recorded;
 
         var line = count.Lines.First(l => l.Id == lineId);

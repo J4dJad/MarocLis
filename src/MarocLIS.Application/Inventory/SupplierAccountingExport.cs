@@ -157,8 +157,7 @@ public static class SupplierAccountingExport
             ? value == 0m ? string.Empty : value.ToString("0.00", Fr)
             : value.ToString("0.00", CultureInfo.InvariantCulture);
 
-    internal static string Cell(string value) =>
-        value.IndexOfAny([';', '"', '\n', '\r']) >= 0 ? $"\"{value.Replace("\"", "\"\"")}\"" : value;
+    internal static string Cell(string value) => CsvCell.Of(value);
 
     internal static byte[] Encode(string csv) =>
         [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(csv)];

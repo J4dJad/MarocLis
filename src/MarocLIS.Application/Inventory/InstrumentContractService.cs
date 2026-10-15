@@ -216,12 +216,15 @@ public sealed class InstrumentContractService(
         if (content.Length > PurchasingDocument.MaximumBytes)
             return Result.Failure(Error.Validation("Purchasing_FileTooLarge", PurchasingDocument.MaximumBytes / (1024 * 1024)));
 
+        var name = Path.GetFileName(fileName.Trim());
+        if (PurchasingDocument.ContentTypeFor(name) is not { } contentType)
+            return Result.Failure(Error.Validation("Purchasing_FileType"));
+
         var contract = await contracts.GetByIdAsync(contractId, ct);
         if (contract is null) return Result.Failure(Error.NotFound("Contract_NotFound"));
 
-        var name = Path.GetFileName(fileName.Trim());
         await documents.AddAsync(new PurchasingDocument(PurchasingDocumentOwner.InstrumentContract, contract.Id,
-                                                        name, PurchasingDocument.ContentTypeFor(name), content,
+                                                        name, contentType, content,
                                                         clock.Now, currentUser.UserId), ct);
 
         unitOfWork.AuditReason = $"Contrat {contract.Reference} : fichier {name} joint";
@@ -237,9 +240,12 @@ public sealed class InstrumentContractService(
         if (permitted.IsFailure) return Result.Failure<(string, byte[])>(permitted.FirstError);
 
         var file = await queries.GetDocumentAsync(PurchasingDocumentOwner.InstrumentContract, contractId, ct);
-        return file is { } found
-            ? Result.Success(found)
-            : Result.Failure<(string, byte[])>(Error.NotFound("Purchasing_FileNotFound"));
+        if (file is not { } found) return Result.Failure<(string, byte[])>(Error.NotFound("Purchasing_FileNotFound"));
+
+        // Opening runs the file through the shell: a kind attached before the allow-list stays closed.
+        return PurchasingDocument.ContentTypeFor(found.FileName) is null
+            ? Result.Failure<(string, byte[])>(Error.Validation("Purchasing_FileType"))
+            : Result.Success(found);
     }
 
     public async Task<Result<IReadOnlyList<ContractInterventionRow>>> GetInterventionsAsync(

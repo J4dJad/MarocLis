@@ -49,18 +49,21 @@ public sealed class PurchasingDocument : AggregateRoot, IAuditable
     public DateTimeOffset? ModifiedAt { get; set; }
     public Guid? ModifiedByUserId { get; set; }
 
-    public static string ContentTypeFor(string fileName) =>
+    /// <summary>
+    /// The content type of an accepted file, or null for any other kind. Opening a file hands it to
+    /// the Windows shell, so only documents that cannot run anything are kept: PDF, images, and
+    /// Word and Excel files without macros (.docm, .xlsm, the old .doc and .xls can carry them).
+    /// </summary>
+    public static string? ContentTypeFor(string fileName) =>
         Path.GetExtension(fileName).ToLowerInvariant() switch
         {
             ".pdf" => "application/pdf",
             ".png" => "image/png",
             ".jpg" or ".jpeg" => "image/jpeg",
             ".tif" or ".tiff" => "image/tiff",
-            ".doc" => "application/msword",
             ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ".xls" => "application/vnd.ms-excel",
             ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            _ => "application/octet-stream"
+            _ => null
         };
 }
 

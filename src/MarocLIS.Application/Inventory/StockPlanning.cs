@@ -453,10 +453,5 @@ public static class StockCsv
     }
 
     /// <summary>Guards a cell against the separator, quotes, line breaks and spreadsheet formulas.</summary>
-    public static string Cell(string? value)
-    {
-        var text = value ?? string.Empty;
-        if (text.Length > 0 && text[0] is '=' or '+' or '@' && !decimal.TryParse(text, out _)) text = "'" + text;
-        return text.IndexOfAny([';', '"', '\n', '\r']) >= 0 ? $"\"{text.Replace("\"", "\"\"")}\"" : text;
-    }
+    public static string Cell(string? value) => CsvCell.Of(value);
 }

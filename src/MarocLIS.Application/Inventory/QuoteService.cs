@@ -286,6 +286,12 @@ public sealed class QuoteService(
         if (request.FileContent is { Length: > PurchasingDocument.MaximumBytes })
             return Result.Failure(Error.Validation("Purchasing_FileTooLarge", PurchasingDocument.MaximumBytes / (1024 * 1024)));
 
+        var attached = request.FileContent is { Length: > 0 } && !string.IsNullOrWhiteSpace(request.FileName);
+        var fileName = attached ? Path.GetFileName(request.FileName!.Trim()) : string.Empty;
+        var contentType = attached ? PurchasingDocument.ContentTypeFor(fileName) : null;
+        if (attached && contentType is null)
+            return Result.Failure(Error.Validation("Purchasing_FileType"));
+
         var quote = await requests.GetByIdWithDetailsAsync(requestId, ct);
         if (quote is null) return Result.Failure(Error.NotFound("Quote_NotFound"));
 
@@ -297,11 +303,10 @@ public sealed class QuoteService(
         // An answer is proof the request reached the supplier, however it was sent.
         quote.MarkSentTo(request.SupplierId, clock.Now);
 
-        if (request.FileContent is { Length: > 0 } content && !string.IsNullOrWhiteSpace(request.FileName))
+        if (attached && contentType is not null)
         {
-            var name = Path.GetFileName(request.FileName.Trim());
             await documents.AddAsync(new PurchasingDocument(PurchasingDocumentOwner.SupplierQuote, recorded.Value.Id,
-                                                            name, PurchasingDocument.ContentTypeFor(name), content,
+                                                            fileName, contentType, request.FileContent!,
                                                             clock.Now, currentUser.UserId), ct);
         }
 
@@ -318,9 +323,12 @@ public sealed class QuoteService(
         if (permitted.IsFailure) return Result.Failure<(string, byte[])>(permitted.FirstError);
 
         var file = await queries.GetDocumentAsync(PurchasingDocumentOwner.SupplierQuote, supplierQuoteId, ct);
-        return file is { } found
-            ? Result.Success(found)
-            : Result.Failure<(string, byte[])>(Error.NotFound("Purchasing_FileNotFound"));
+        if (file is not { } found) return Result.Failure<(string, byte[])>(Error.NotFound("Purchasing_FileNotFound"));
+
+        // Opening runs the file through the shell: a kind attached before the allow-list stays closed.
+        return PurchasingDocument.ContentTypeFor(found.FileName) is null
+            ? Result.Failure<(string, byte[])>(Error.Validation("Purchasing_FileType"))
+            : Result.Success(found);
     }
 
     /// <summary>

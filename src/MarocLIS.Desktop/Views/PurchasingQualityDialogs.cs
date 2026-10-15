@@ -43,6 +43,12 @@ internal sealed class ReceptionChecksPanel : Panel
         _scan.Tag = UiTags.LatinValue;
         _scan.Font = UiTheme.Monospace;
         // A wedge scanner types the symbol and presses Enter: read it then, not on each character.
+        // Enter is claimed as the box's own key first: otherwise the dialog's default button takes
+        // it before KeyDown fires, and the scan saves the receipt with no lot and no expiry.
+        _scan.PreviewKeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter) e.IsInputKey = true;
+        };
         _scan.KeyDown += (_, e) =>
         {
             if (e.KeyCode != Keys.Enter) return;

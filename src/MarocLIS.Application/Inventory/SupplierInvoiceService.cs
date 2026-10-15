@@ -100,8 +100,23 @@ public sealed record OrderLineMatchSource(
     decimal QuantityInvoicedElsewhere,
     decimal NetUnitPriceMad,
     decimal VatRate,
-    DateOnly? LastReceivedOn)
+    DateOnly? LastReceivedOn,
+    IReadOnlyList<DatedQuantity>? Receipts = null,
+    IReadOnlyList<DatedQuantity>? OtherInvoices = null)
 {
+    /// <summary>
+    /// The delivery the invoice's quantity on this line bills (loi 69-21): the receipts are walked
+    /// in order past what the invoices dated before this one already billed. Without dated
+    /// receipts, the line's latest delivery.
+    /// </summary>
+    public DateOnly? DeliveryFor(DateOnly invoiceDate, decimal quantity)
+    {
+        if (Receipts is not { Count: > 0 }) return LastReceivedOn;
+
+        var before = (OtherInvoices ?? []).Where(i => i.On < invoiceDate).Sum(i => i.Quantity);
+        return PaymentTerms.DeliveryCovering(Receipts, before, quantity);
+    }
+
     public OrderLineFacts Facts => new(PurchaseOrderLineId, QuantityReceived, QuantityInvoicedElsewhere,
                                        NetUnitPriceMad, VatRate);
 }
@@ -386,8 +401,14 @@ public sealed class SupplierInvoiceService(
         var applied = invoice.ApplyMatch(ThreeWayMatch.Compare(invoice.Lines, facts, settings.Tolerance));
         if (applied.IsFailure) return applied;
 
-        // Loi 69-21: the term runs from the delivery; the latest one of the goods billed.
-        var delivered = sources.Where(s => s.LastReceivedOn is not null).Select(s => s.LastReceivedOn!.Value)
+        // Loi 69-21: the term runs from the delivery of the goods billed; the latest of them when
+        // the invoice bills several deliveries.
+        var bySource = sources.ToDictionary(s => s.PurchaseOrderLineId);
+        var delivered = invoice.Lines
+                               .Select(l => bySource.TryGetValue(l.PurchaseOrderLineId, out var s)
+                                                ? s.DeliveryFor(invoice.InvoiceDate, l.Quantity)
+                                                : null)
+                               .Where(d => d is not null).Select(d => d!.Value)
                                .DefaultIfEmpty().Max();
         invoice.SetPaymentTerms(delivered == default ? null : delivered, termsDays);
         return Result.Success();

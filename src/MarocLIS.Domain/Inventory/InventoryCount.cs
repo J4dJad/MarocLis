@@ -8,8 +8,11 @@ namespace MarocLIS.Domain.Inventory;
 /// when the count is closed.
 /// <para>
 /// The expected quantities are frozen when counting starts. Stock keeps moving while the shelves
-/// are counted — a technician still issues a box — so closing applies the difference found
-/// (counted less expected) to the lot as it stands then, rather than overwriting it with the count.
+/// are counted — a technician still issues a box — so each line also keeps what the stock showed
+/// when it was counted, and closing applies the difference found (counted less that quantity) to
+/// the lot as it stands then, rather than overwriting it with the count. Measured against the
+/// quantity frozen at the start instead, an issue made before the shelf was counted would be taken
+/// off the lot a second time.
 /// </para>
 /// </summary>
 public sealed class InventoryCount : AuditableAggregateRoot, ISiteScoped
@@ -110,7 +113,12 @@ public sealed class InventoryCount : AuditableAggregateRoot, ISiteScoped
         return Result.Success();
     }
 
-    public Result RecordCount(Guid lineId, decimal counted, Guid byUserId, DateTimeOffset at, string? comment)
+    /// <param name="stockAtCount">
+    /// What the stock shows for the lot as the count is entered; the variance is measured against
+    /// it. Left out, the quantity frozen at the start.
+    /// </param>
+    public Result RecordCount(Guid lineId, decimal counted, Guid byUserId, DateTimeOffset at, string? comment,
+                              decimal? stockAtCount = null)
     {
         if (Status != InventoryCountStatus.Counting) return Result.Failure(Error.Conflict("InventoryCount_NotCounting"));
         if (counted < 0m) return Result.Failure(Error.Validation("InventoryCount_NegativeQuantity"));
@@ -118,7 +126,7 @@ public sealed class InventoryCount : AuditableAggregateRoot, ISiteScoped
         var line = _lines.FirstOrDefault(l => l.Id == lineId);
         if (line is null) return Result.Failure(Error.NotFound("InventoryCount_LineNotFound"));
 
-        line.Record(counted, byUserId, at, comment);
+        line.Record(counted, byUserId, at, comment, stockAtCount);
         return Result.Success();
     }
 
@@ -190,6 +198,13 @@ public sealed class InventoryCountLine : Entity
 
     public decimal ExpectedQuantity { get; private set; }
     public decimal? CountedQuantity { get; private set; }
+
+    /// <summary>
+    /// What the stock showed for the lot when it was counted. Issues made between the start and
+    /// the count are already off the shelf and off the lot: the variance is taken against this.
+    /// </summary>
+    public decimal? StockAtCount { get; private set; }
+
     public Guid? CountedByUserId { get; private set; }
     public DateTimeOffset? CountedAt { get; private set; }
     public string? Comment { get; private set; }
@@ -197,12 +212,13 @@ public sealed class InventoryCountLine : Entity
     /// <summary>The adjustment posted for the difference at closing.</summary>
     public Guid? AdjustmentMovementId { get; set; }
 
-    /// <summary>Counted less expected; null until counted.</summary>
-    public decimal? Variance => CountedQuantity is { } counted ? counted - ExpectedQuantity : null;
+    /// <summary>Counted less what the stock showed at the count; null until counted.</summary>
+    public decimal? Variance => CountedQuantity is { } counted ? counted - (StockAtCount ?? ExpectedQuantity) : null;
 
-    internal void Record(decimal counted, Guid byUserId, DateTimeOffset at, string? comment)
+    internal void Record(decimal counted, Guid byUserId, DateTimeOffset at, string? comment, decimal? stockAtCount)
     {
         CountedQuantity = counted;
+        StockAtCount = stockAtCount ?? ExpectedQuantity;
         CountedByUserId = byUserId;
         CountedAt = at;
         Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();

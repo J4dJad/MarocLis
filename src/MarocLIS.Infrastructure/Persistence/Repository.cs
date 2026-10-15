@@ -13,6 +13,7 @@ using MarocLIS.Domain.Patients;
 using MarocLIS.Domain.Quality;
 using MarocLIS.Domain.Samples;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace MarocLIS.Infrastructure.Persistence;
@@ -56,6 +57,11 @@ public class Repository<T>(LisDbContext context, IClock clock) : IRepository<T>
     /// "Équipements" could no longer be saved from "Données de référence". An unchanged instance
     /// is reloaded; one this operation has already modified is left alone.
     /// </para>
+    /// <para>
+    /// Its loaded child collections are refreshed too. Reloading the root alone left the lines as
+    /// first read: an inventory screen did not see the counts a technician entered on another
+    /// workstation, and closed on its own stale figures.
+    /// </para>
     /// </summary>
     private async Task RefreshTrackedAsync(Guid id, CancellationToken ct)
     {
@@ -63,8 +69,60 @@ public class Repository<T>(LisDbContext context, IClock clock) : IRepository<T>
         if (tracked is null) return;
 
         var entry = Context.Entry(tracked);
-        if (entry.State == EntityState.Unchanged) await entry.ReloadAsync(ct);
+        if (entry.State != EntityState.Unchanged) return;
+
+        await entry.ReloadAsync(ct);
+        if (entry.State != EntityState.Unchanged) return;
+
+        foreach (var collection in entry.Collections.Where(c => c.IsLoaded))
+            await RefreshCollectionAsync(collection, ct);
     }
+
+    /// <summary>
+    /// Brings a tracked child collection up to date: rows saved elsewhere get their current values,
+    /// rows added elsewhere are loaded. Left alone when one of its rows has been changed here.
+    /// </summary>
+    private async Task RefreshCollectionAsync(CollectionEntry collection, CancellationToken ct)
+    {
+        var children = (collection.CurrentValue ?? Array.Empty<object>()).Cast<object>()
+                                                                          .Select(Context.Entry)
+                                                                          .ToList();
+        if (children.Any(c => c.State != EntityState.Unchanged)) return;
+
+        var childType = collection.Metadata.TargetEntityType.ClrType;
+        var fresh = await (Task<List<object>>)ReadFreshMethod.MakeGenericMethod(childType)
+                                                             .Invoke(null, [collection.Query(), ct])!;
+
+        var byId = fresh.OfType<Entity>().ToDictionary(e => e.Id);
+        foreach (var child in children)
+        {
+            if (child.Entity is not Entity { Id: var childId } || !byId.Remove(childId, out var current)) continue;
+            child.CurrentValues.SetValues(current);
+            child.OriginalValues.SetValues(current);
+            child.State = EntityState.Unchanged;
+        }
+
+        // Rows nobody here has seen yet: a tracked query adds them to the collection.
+        if (byId.Count > 0)
+            await (Task<List<object>>)ReadTrackedMethod.MakeGenericMethod(childType)
+                                                       .Invoke(null, [collection.Query(), ct])!;
+    }
+
+    private static readonly System.Reflection.MethodInfo ReadFreshMethod =
+        typeof(Repository<T>).GetMethod(nameof(ReadFreshAsync),
+                                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+    private static readonly System.Reflection.MethodInfo ReadTrackedMethod =
+        typeof(Repository<T>).GetMethod(nameof(ReadTrackedAsync),
+                                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+    private static async Task<List<object>> ReadFreshAsync<TChild>(IQueryable query, CancellationToken ct)
+        where TChild : class =>
+        (await ((IQueryable<TChild>)query).AsNoTracking().IgnoreAutoIncludes().ToListAsync(ct)).Cast<object>().ToList();
+
+    private static async Task<List<object>> ReadTrackedAsync<TChild>(IQueryable query, CancellationToken ct)
+        where TChild : class =>
+        (await ((IQueryable<TChild>)query).ToListAsync(ct)).Cast<object>().ToList();
 
     public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default) =>
         Context.RunExclusiveAsync(() => Context.Set<T>().AnyAsync(e => e.Id == id, ct), ct);

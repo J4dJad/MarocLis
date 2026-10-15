@@ -559,11 +559,7 @@ public static class PurchasingCsv
         ];
     }
 
-    private static string Cell(string? value)
-    {
-        var text = value ?? string.Empty;
-        return text.IndexOfAny([';', '"', '\n', '\r']) >= 0 ? $"\"{text.Replace("\"", "\"\"")}\"" : text;
-    }
+    private static string Cell(string? value) => CsvCell.Of(value);
 
     private static byte[] Bytes(StringBuilder csv) =>
         [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(csv.ToString())];

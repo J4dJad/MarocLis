@@ -68,6 +68,13 @@ public sealed class SupplierInvoice : AuditableAggregateRoot, ISiteScoped
     /// <summary>Date of the payment that settled the invoice.</summary>
     public DateOnly? PaidOn { get; private set; }
 
+    /// <summary>
+    /// Payments recorded so far. Kept on the invoice row so that every payment changes it: a
+    /// second partial payment leaves the status as it was, and without a change to the row its
+    /// version would not catch two accountants paying the same balance at once.
+    /// </summary>
+    public int PaymentCount { get; private set; }
+
     /// <summary>File name of the attached scan, if any; the content is a <see cref="SupplierInvoiceFile"/>.</summary>
     public string? ScanFileName { get; set; }
 
@@ -186,6 +193,7 @@ public sealed class SupplierInvoice : AuditableAggregateRoot, ISiteScoped
 
         payment.AttachTo(Id);
         _payments.Add(payment);
+        PaymentCount = _payments.Count;
 
         if (AmountOutstanding == 0m)
         {

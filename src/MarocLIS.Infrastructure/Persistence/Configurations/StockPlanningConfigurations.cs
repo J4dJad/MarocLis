@@ -54,6 +54,7 @@ public sealed class InventoryCountLineConfiguration : IEntityTypeConfiguration<I
         builder.Property(e => e.Comment).HasMaxLength(500);
         builder.Property(e => e.ExpectedQuantity).HasColumnType("decimal(18,3)");
         builder.Property(e => e.CountedQuantity).HasColumnType("decimal(18,3)");
+        builder.Property(e => e.StockAtCount).HasColumnType("decimal(18,3)");
         builder.Ignore(e => e.Variance);
 
         builder.HasIndex(e => new { e.InventoryCountId, e.ReagentLotId })
