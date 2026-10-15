@@ -109,7 +109,7 @@ public sealed class ReviewFixesFinanceRelationsDatabaseTests(FinanceRelationsScr
             var logged = await context.PatientMessages.IgnoreQueryFilters().AnyAsync(m => m.PhoneNumber == phoneNumber, ct);
             Sent.Add((phoneNumber, logged));
             return Refuse.Contains(phoneNumber)
-                ? Result.Failure(Error.Validation("Sms_GatewayRefused"))
+                ? Result.Failure(Error.Validation("Messaging_SmsFailed"))
                 : Result.Success();
         }
     }
@@ -351,7 +351,7 @@ public sealed class ReviewFixesFinanceRelationsDatabaseTests(FinanceRelationsScr
             };
 
         var failed = Reminder(failedOrder, Today.AddDays(-1));
-        failed.MarkFailed("Sms_GatewayRefused");
+        failed.MarkFailed("Messaging_SmsFailed");
         await using (var context = database.Context())
         {
             context.PatientMessages.AddRange(Reminder(order, Today.AddDays(-40)), Reminder(order, Today.AddDays(-5)), failed);
