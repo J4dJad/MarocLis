@@ -164,13 +164,16 @@ public sealed class Sample : AuditableAggregateRoot, ISoftDeletable, ISiteScoped
         if (CollectedAt is null)
             return Result.Failure(Error.Conflict("Sample_NotCollected"));
 
+        // Checked before anything is recorded. Refused here, the tube is not received: stamping
+        // the reception first left it with a reception time, an operator and defects while still
+        // in transit — and saved that way, since the caller saves the batch.
+        if (observedDefects != SampleDefect.None && !acceptWithReservation)
+            return Result.Failure(Error.Conflict("Sample_DefectsRequireExplicitDecision", observedDefects));
+
         ReceivedAt = at;
         ReceivedByUserId = byUserId;
         ReceptionTemperatureCelsius = temperatureCelsius;
         Defects |= observedDefects;
-
-        if (observedDefects != SampleDefect.None && !acceptWithReservation)
-            return Result.Failure(Error.Conflict("Sample_DefectsRequireExplicitDecision", observedDefects));
 
         IsAcceptedWithReservation = observedDefects != SampleDefect.None;
         Status = SampleStatus.Received;

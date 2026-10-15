@@ -227,24 +227,12 @@ public sealed class ReportReleaseService(
 
         var stored = await resultQueries.GetResultsForOrderAsync(orderId, null, ct);
 
-        // Only validated results go on a report. Anything else would be the laboratory publishing a
-        // figure no biologist has stood behind.
-        var releasable = stored
-            .Where(r => r.Status is TestResultStatus.Validated or TestResultStatus.Reported
-                                 or TestResultStatus.NotDone)
-            .ToList();
+        var (releasable, includedItemIds, completeness) = SelectReleasable(order, stored);
 
         if (releasable.Count == 0)
             return Result.Failure<ReleasedReport>(Error.Validation("Report_NoResultsIncluded"));
 
-        var includedItemIds = releasable.Select(r => r.LabOrderItemId).Distinct().ToList();
-
         var liveItems = order.Items.Where(i => !i.IsCancelled).ToList();
-        var completeness = includedItemIds.Count == liveItems.Count
-                           && liveItems.All(i => i.Status is LabOrderItemStatus.Validated
-                                                          or LabOrderItemStatus.Reported)
-            ? ReportCompleteness.Final
-            : ReportCompleteness.Partial;
 
         var previousVersion = await reportQueries.GetLatestVersionAsync(orderId, ct);
         var versionNumber = (previousVersion?.VersionNumber ?? 0) + 1;
@@ -542,6 +530,44 @@ public sealed class ReportReleaseService(
     private static string SmsText(string accession, string laboratory, string? phone) =>
         $"{laboratory} : votre compte rendu d'analyses (dossier {accession}) est disponible."
         + (string.IsNullOrWhiteSpace(phone) ? string.Empty : $" Tél. {phone}");
+
+    /// <summary>
+    /// What a release of the order carries: the results it prints, the analyses it covers, and
+    /// whether that is the complete file.
+    /// <para>
+    /// Only validated results go on a report. Anything else would be the laboratory publishing a
+    /// figure no biologist has stood behind.
+    /// </para>
+    /// <para>
+    /// A result whose analysis was cancelled afterwards is not releasable either, whatever its own
+    /// status: the analysis was withdrawn from the order (refused tube, cancelled request), so its
+    /// figure must not be printed — and counting the item as included left every later version
+    /// marked partial against an analysis that will never come back, so the file never reached
+    /// the register's awaiting-delivery list.
+    /// </para>
+    /// </summary>
+    public static (List<TestResult> Releasable, List<Guid> IncludedItemIds, ReportCompleteness Completeness)
+        SelectReleasable(LabOrder order, IReadOnlyList<TestResult> stored)
+    {
+        var liveItems = order.Items.Where(i => !i.IsCancelled).ToList();
+        var liveItemIds = liveItems.Select(i => i.Id).ToHashSet();
+
+        var releasable = stored
+            .Where(r => r.Status is TestResultStatus.Validated or TestResultStatus.Reported
+                                 or TestResultStatus.NotDone)
+            .Where(r => liveItemIds.Contains(r.LabOrderItemId))
+            .ToList();
+
+        var includedItemIds = releasable.Select(r => r.LabOrderItemId).Distinct().ToList();
+
+        var completeness = includedItemIds.Count == liveItems.Count
+                           && liveItems.All(i => i.Status is LabOrderItemStatus.Validated
+                                                          or LabOrderItemStatus.Reported)
+            ? ReportCompleteness.Final
+            : ReportCompleteness.Partial;
+
+        return (releasable, includedItemIds, completeness);
+    }
 
     /// <summary>
     /// Returns the stored PDF of a released version. Reprinting a validated report is a logged

@@ -198,7 +198,6 @@ public sealed class ResultEntryService(
             : await queries.GetCommunicatedCriticalResultIdsAsync(criticalIds, ct);
 
         var today = clock.Today;
-        var context = ReferenceRangeContext.For(patient, today);
         var rows = new List<ResultEntryRow>(resultRows.Count);
 
         foreach (var result in resultRows)
@@ -207,7 +206,9 @@ public sealed class ResultEntryService(
             var test = parameter is null ? null : catalogue.TestsByParameter.GetValueOrDefault(parameter.Id);
             if (parameter is null || test is null) continue;
 
-            var range = parameter.ResolveRange(context);
+            // The interval shown is the one the value is interpreted against: same instrument,
+            // same day.
+            var range = parameter.ResolveRange(ReferenceRangeContext.ForResult(patient, result, today));
             var previous = await queries.GetPreviousValueAsync(order.PatientId, parameter.Id,
                                                                 order.RegisteredAt, ct);
 
@@ -411,7 +412,46 @@ public sealed class ResultEntryService(
 
         // --- 3. Interpret, delta-check and flag -------------------------------------------------
 
-        var context = ReferenceRangeContext.For(patient, clock.Today);
+        var criticalFindings = await InterpretAsync(order, patient, stored, catalogue, ct);
+
+        // --- 4. Advance the order items whose parameters now all carry a value -------------------
+
+        foreach (var item in order.Items.Where(i => !i.IsCancelled))
+        {
+            var itemResults = stored.Where(r => r.LabOrderItemId == item.Id).ToList();
+            if (itemResults.Count == 0) continue;
+
+            if (itemResults.All(r => r.HasValue || r.Status == TestResultStatus.NotDone))
+                item.MarkResultEntered(now);
+        }
+
+        order.RecomputeStatus();
+
+        // --- 5. Reflex rules -------------------------------------------------------------------
+
+        var suggestions = await EvaluateReflexRulesAsync(stored, ct);
+
+        unitOfWork.AuditReason = $"Saisie de résultats — dossier {order.AccessionNumber}";
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success(new ResultEntryOutcome(accepted, rejected, criticalFindings, suggestions));
+    }
+
+    /// <summary>
+    /// Interprets, delta-checks and flags every non-validated result of the order that carries a
+    /// value, and returns the critical ones.
+    /// <para>
+    /// Each result is interpreted in its own context: the instrument that produced it and the day
+    /// it was measured. A shared context without the instrument re-resolved a TSH from the
+    /// analyser — interpreted against its method-specific interval when it arrived — against the
+    /// generic interval at the next manual submit on the same order.
+    /// </para>
+    /// </summary>
+    private async Task<List<CriticalFinding>> InterpretAsync(LabOrder order, Patient patient,
+                                                             IReadOnlyList<TestResult> stored,
+                                                             CatalogueSnapshot catalogue,
+                                                             CancellationToken ct)
+    {
         var criticalFindings = new List<CriticalFinding>();
 
         foreach (var result in stored.Where(r => r.HasValue && !r.IsValidated))
@@ -419,7 +459,8 @@ public sealed class ResultEntryService(
             var parameter = catalogue.Parameters.GetValueOrDefault(result.TestParameterId);
             if (parameter is null) continue;
 
-            var range = parameter.ResolveRange(context);
+            var range = parameter.ResolveRange(
+                ReferenceRangeContext.ForResult(patient, result, clock.Today));
             result.ApplyInterpretation(parameter, range, currentUser.Language,
                                        parameter.Unit?.DisplaySymbol);
 
@@ -457,27 +498,38 @@ public sealed class ResultEntryService(
             }
         }
 
-        // --- 4. Advance the order items whose parameters now all carry a value -------------------
+        return criticalFindings;
+    }
 
-        foreach (var item in order.Items.Where(i => !i.IsCancelled))
-        {
-            var itemResults = stored.Where(r => r.LabOrderItemId == item.Id).ToList();
-            if (itemResults.Count == 0) continue;
+    /// <summary>
+    /// Re-runs the calculations and the interpretation over an order's results that are not yet
+    /// validated, after the patient's sex, date of birth or pregnancy was corrected. Changes are
+    /// left for the caller to save with its own audit reason; validated results are not touched,
+    /// since a released figure changes only through a revision.
+    /// </summary>
+    /// <returns>
+    /// The number of results re-interpreted, and of validated results left as they were — which
+    /// were interpreted against the former demographics and may need amending.
+    /// </returns>
+    public async Task<(int Reinterpreted, int Validated)> ReinterpretPendingAsync(
+        Guid orderId, Patient patient, CancellationToken ct = default)
+    {
+        var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
+        if (order is null) return (0, 0);
 
-            if (itemResults.All(r => r.HasValue || r.Status == TestResultStatus.NotDone))
-                item.MarkResultEntered(now);
-        }
+        var stored = await queries.GetResultsForOrderAsync(orderId, null, ct);
+        var validated = stored.Count(r => r.IsValidated);
 
-        order.RecomputeStatus();
+        if (!stored.Any(r => !r.IsValidated && (r.HasValue || r.Status == TestResultStatus.NotDone)))
+            return (0, validated);
 
-        // --- 5. Reflex rules -------------------------------------------------------------------
+        var catalogue = await LoadCatalogueAsync(order, ct);
 
-        var suggestions = await EvaluateReflexRulesAsync(stored, ct);
+        // An eGFR or any formula reading the age or the sex changes with the demographics too.
+        RecalculateDerived(stored, catalogue, patient, clock.Now);
+        await InterpretAsync(order, patient, stored, catalogue, ct);
 
-        unitOfWork.AuditReason = $"Saisie de résultats — dossier {order.AccessionNumber}";
-        await unitOfWork.SaveChangesAsync(ct);
-
-        return Result.Success(new ResultEntryOutcome(accepted, rejected, criticalFindings, suggestions));
+        return (stored.Count(r => r.HasValue && !r.IsValidated), validated);
     }
 
     // ---- Entry parsing --------------------------------------------------------------------------
@@ -593,14 +645,54 @@ public sealed class ResultEntryService(
 
             if (evaluation.IsFailure)
             {
+                // Whatever the parameter held before is no input for the formulas that read it.
+                values.Remove(parameter.Code);
+
+                if (evaluation.FirstError.ResourceKey == FormulaEvaluator.NotApplicableKey)
+                {
+                    // The inputs are there but outside the formula's domain — Friedewald above
+                    // 4 g/L of triglycerides. Reported as not calculable, with the reason, so the
+                    // panel can be completed and the biologist sees a direct measurement is needed.
+                    if (target.Status != TestResultStatus.NotDone)
+                        target.MarkNotDone(NotCalculableComment, now, currentUser.UserId);
+                    continue;
+                }
+
                 // An input that has not been entered yet is the normal case mid-panel, not an
-                // error worth surfacing; the value simply stays awaited.
+                // error worth surfacing; the value simply stays awaited. But a value computed
+                // earlier from an input that has since been removed, or one no longer calculable,
+                // no longer has anything behind it and is withdrawn rather than left standing.
+                if (target.HasValue || target.Status == TestResultStatus.NotDone)
+                {
+                    target.ClearValue();
+                    ClearNotCalculableComment(target);
+                }
                 continue;
             }
 
+            var rounded = parameter.Round(evaluation.Value);
+            values[parameter.Code] = rounded;
+
+            // Unchanged inputs give an unchanged value: re-entering it would only reset the
+            // technical validation of a figure nobody changed.
+            if (target.Status != TestResultStatus.NotDone && target.NumericValue == rounded
+                && target.ValueOperator is null)
+                continue;
+
+            ClearNotCalculableComment(target);
             target.EnterNumeric(parameter, evaluation.Value, now, currentUser.UserId);
-            values[parameter.Code] = parameter.Round(evaluation.Value);
         }
+    }
+
+    /// <summary>Printed next to a calculated parameter whose formula does not apply to the values.</summary>
+    private const string NotCalculableComment = "Non calculable avec ces valeurs : dosage direct requis";
+
+    private static void ClearNotCalculableComment(TestResult target)
+    {
+        if (target.TechnicalComment != NotCalculableComment) return;
+
+        target.TechnicalComment = null;
+        target.PrintTechnicalComment = false;
     }
 
     private Dictionary<string, decimal> BuildValueBag(IReadOnlyList<TestResult> stored,

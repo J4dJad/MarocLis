@@ -79,8 +79,14 @@ public sealed class ValidationService(
     IDataAccessAuditor accessAuditor,
     IClock clock)
 {
+    /// <param name="includeValidated">
+    /// Also lists files whose results are validated but not yet reported, so a release can be
+    /// found again and withdrawn. Without it a fully validated file left the worklist at once and
+    /// its un-validation could not be reached from the screen.
+    /// </param>
     public async Task<Result<IReadOnlyList<ValidationWorklistEntry>>> GetWorklistAsync(
-        Guid? departmentId = null, bool onlyUrgent = false, CancellationToken ct = default)
+        Guid? departmentId = null, bool onlyUrgent = false, bool includeValidated = false,
+        CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Results.View);
         if (permitted.IsFailure)
@@ -94,6 +100,7 @@ public sealed class ValidationService(
             currentUser.AuthorizedDepartmentCodes,
             onlyUrgent,
             clock.Now,
+            includeValidated,
             ct);
 
         return Result.Success(entries);
@@ -470,7 +477,8 @@ public interface IValidationQueries
 {
     Task<IReadOnlyList<ValidationWorklistEntry>> GetValidationWorklistAsync(
         Guid siteId, Guid? departmentId, IReadOnlySet<string> authorizedDepartmentCodes,
-        bool onlyUrgent, DateTimeOffset now, CancellationToken ct = default);
+        bool onlyUrgent, DateTimeOffset now, bool includeValidated = false,
+        CancellationToken ct = default);
 
     Task<TestResult?> GetResultAsync(Guid testResultId, CancellationToken ct = default);
 

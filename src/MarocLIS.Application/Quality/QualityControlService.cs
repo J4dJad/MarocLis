@@ -256,8 +256,14 @@ public sealed class QualityControlService(
                     await queries.GetMaterialLevelAsync(target.QcMaterialId, ct))
             };
 
+            // The run's other levels of the same analyte on the same analyser, and only those: a
+            // glucose at +2.1 SD and a creatinine at -2.1 SD in the same submission are not one
+            // run's levels, and pairing them fired R4S or 2-2s across analytes that had nothing
+            // to do with each other.
             var peers = created
-                .Where(x => x.Result.Id != result.Id && x.Result.ZScore is not null)
+                .Where(x => x.Result.Id != result.Id && x.Result.ZScore is not null
+                            && x.Result.TestParameterId == result.TestParameterId
+                            && x.Result.InstrumentId == result.InstrumentId)
                 .Select(x => new QcPoint(x.Result.ZScore!.Value, x.Result.MeasuredAt, runId,
                                           QcLevel.Normal))
                 .ToList();
@@ -279,22 +285,27 @@ public sealed class QualityControlService(
 
         // --- 3. Flag the patient results the rejected runs cover -----------------------------------
 
-        var rejectedTargets = created
+        // Grouped by analyser: a submission may cover several, and each rejected control speaks
+        // for its own instrument only. Flagging every parameter against the first entry's
+        // analyser left the results of the instrument actually out of control unflagged.
+        var rejectedByInstrument = created
             .Where(x => x.Result.IsRejected)
-            .Select(x => x.Target.TestParameterId)
-            .Distinct()
+            .GroupBy(x => x.Result.InstrumentId,
+                     x => x.Target.TestParameterId)
             .ToList();
 
-        if (rejectedTargets.Count > 0 && created.Count > 0)
+        var flagged = 0;
+
+        foreach (var instrument in rejectedByInstrument)
         {
             // Patient results produced since the last accepted control for the same parameter and
             // instrument are flagged, so a biologist cannot release them without noticing.
-            var flagged = await queries.FlagResultsCoveredByRejectedQcAsync(
-                rejectedTargets, created[0].Result.InstrumentId, runId, ct);
-
-            if (flagged > 0)
-                problems.Add(Error.Regulatory("Qc_PatientResultsFlagged", flagged));
+            flagged += await queries.FlagResultsCoveredByRejectedQcAsync(
+                [.. instrument.Distinct()], instrument.Key, runId, ct);
         }
+
+        if (flagged > 0)
+            problems.Add(Error.Regulatory("Qc_PatientResultsFlagged", flagged));
 
         unitOfWork.AuditReason = $"Saisie du contrôle interne — série {runId:N}";
         await unitOfWork.SaveChangesAsync(ct);

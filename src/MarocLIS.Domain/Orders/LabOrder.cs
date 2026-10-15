@@ -159,7 +159,9 @@ public sealed class LabOrder : AuditableAggregateRoot, ISoftDeletable, ISiteScop
             return Result.Failure(Error.NotFound("Order_ItemNotFound"));
         if (string.IsNullOrWhiteSpace(reason))
             return Result.Failure(Error.Validation("Order_CancellationReasonRequired"));
-        if (item.Status == LabOrderItemStatus.Validated)
+        // Reported is past Validated, not outside it: a reported analysis is on a document in the
+        // patient's hands, and cancelling it would make the figure disappear from the file.
+        if (item.Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported)
             return Result.Failure(Error.Conflict("Order_ItemValidatedCannotCancel"));
 
         item.Cancel(now, byUserId, reason);
@@ -215,7 +217,7 @@ public sealed class LabOrder : AuditableAggregateRoot, ISoftDeletable, ISiteScop
             return Result.Failure(Error.Validation("Order_CancellationReasonRequired"));
         if (Status == LabOrderStatus.Cancelled)
             return Result.Success();
-        if (_items.Any(i => i.Status == LabOrderItemStatus.Validated))
+        if (_items.Any(i => i.Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported))
             return Result.Failure(Error.Conflict("Order_HasValidatedItemsCannotCancel"));
 
         foreach (var item in _items.Where(i => !i.IsCancelled))

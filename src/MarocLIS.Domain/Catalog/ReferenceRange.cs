@@ -1,5 +1,6 @@
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Patients;
+using MarocLIS.Domain.Results;
 
 namespace MarocLIS.Domain.Catalog;
 
@@ -12,6 +13,10 @@ namespace MarocLIS.Domain.Catalog;
 /// not rewrite the past: the predecessor stays in the catalogue with its end date, and only the
 /// interval in force on that day may apply. Null leaves the validity window unchecked.
 /// </para>
+/// <para>
+/// <see cref="DateOfBirth"/> lets an age band written in months be compared on the calendar, as
+/// one written in years is through <see cref="AgeInYears"/>; see <see cref="ReferenceRange.Matches"/>.
+/// </para>
 /// </summary>
 public readonly record struct ReferenceRangeContext(
     Gender Gender,
@@ -20,7 +25,8 @@ public readonly record struct ReferenceRangeContext(
     bool IsPregnant,
     int? PregnancyTrimester,
     Guid? InstrumentId,
-    DateOnly? ReferenceDate = null)
+    DateOnly? ReferenceDate = null,
+    DateOnly? DateOfBirth = null)
 {
     public static ReferenceRangeContext For(Patient patient, DateOnly on, Guid? instrumentId = null) =>
         new(patient.Gender,
@@ -29,7 +35,25 @@ public readonly record struct ReferenceRangeContext(
             patient.IsPregnant,
             TrimesterFrom(patient.LastMenstrualPeriod, on),
             instrumentId,
-            on);
+            on,
+            patient.DateOfBirth);
+
+    /// <summary>
+    /// The context a stored result is interpreted in: the patient as they are now recorded, aged on
+    /// the day the result was measured (the day it was entered when no measurement time is known,
+    /// <paramref name="today"/> for a result with neither), and the analyser that produced it.
+    /// <para>
+    /// The same for every caller — entry, the analyser interface and the re-interpretation after a
+    /// demographic correction — so a re-run reaches the interval the first run did. Built without
+    /// the instrument, a method-specific TSH interval was silently replaced by the generic one.
+    /// </para>
+    /// </summary>
+    public static ReferenceRangeContext ForResult(Patient patient, TestResult result, DateOnly today) =>
+        For(patient, ReferenceDateOf(result, today), result.InstrumentId);
+
+    /// <summary>The day a stored result is interpreted for; see <see cref="ForResult"/>.</summary>
+    public static DateOnly ReferenceDateOf(TestResult result, DateOnly today) =>
+        (result.MeasuredAt ?? result.EnteredAt) is { } at ? DateOnly.FromDateTime(at.Date) : today;
 
     /// <summary>
     /// Gestational trimester from the last menstrual period: 1 up to 13 completed weeks,
@@ -68,11 +92,38 @@ public sealed class ReferenceRange : Entity, IAuditable
     /// <summary><see cref="Gender.Unknown"/> means the range applies to any sex.</summary>
     public Gender AppliesToGender { get; set; } = Gender.Unknown;
 
-    /// <summary>Inclusive lower bound of the age band, in days. Null means "from birth".</summary>
+    /// <summary>
+    /// Inclusive lower bound of the age band, in days. Null means "from birth". A band whose bounds
+    /// are whole multiples of 365 means years and of 30 means months — the factors the catalogue
+    /// editor stores them with — and is compared on the calendar; see <see cref="AgeBandUnitDays"/>.
+    /// </summary>
     public int? AgeFromDays { get; set; }
 
     /// <summary>Exclusive upper bound of the age band, in days. Null means "no upper limit".</summary>
     public int? AgeToDays { get; set; }
+
+    /// <summary>Days per year in a stored age bound: "50 years" is stored as 18 250.</summary>
+    public const int DaysPerYear = 365;
+
+    /// <summary>Days per month in a stored age bound: "6 months" is stored as 180.</summary>
+    public const int DaysPerMonth = 30;
+
+    /// <summary>
+    /// The unit an age band is written in: years (365) when both bounds are whole years, otherwise
+    /// months (30) when both are whole months, otherwise days (1). The catalogue editor reopens a
+    /// band in this unit, and matching reads the bounds in it, so what the biologist typed is what
+    /// is compared.
+    /// </summary>
+    public static int AgeBandUnitDays(int? fromDays, int? toDays)
+    {
+        var from = fromDays ?? 0;
+        var to = toDays ?? 0;
+
+        if (from % DaysPerYear == 0 && to % DaysPerYear == 0) return DaysPerYear;
+        if (from % DaysPerMonth == 0 && to % DaysPerMonth == 0) return DaysPerMonth;
+
+        return 1;
+    }
 
     /// <summary>When set, the range applies only to pregnant (true) or non-pregnant (false) patients.</summary>
     public bool? AppliesToPregnancy { get; set; }
@@ -135,14 +186,12 @@ public sealed class ReferenceRange : Entity, IAuditable
 
         if (AgeFromDays is not null || AgeToDays is not null)
         {
-            if (context.AgeInDays is not { } days)
-            {
-                // Only a declared age in years is available; fall back to a whole-year comparison.
-                if (context.AgeInYears is not { } years) return false;
-                days = years * 365;
-            }
-            if (AgeFromDays is { } from && days < from) return false;
-            if (AgeToDays is { } to && days >= to) return false;
+            if (context.AgeInDays is null && context.AgeInYears is null) return false;
+
+            var unit = AgeBandUnitDays(AgeFromDays, AgeToDays);
+
+            if (AgeFromDays is { } from && !HasReached(from, unit, context)) return false;
+            if (AgeToDays is { } to && HasReached(to, unit, context)) return false;
         }
 
         if (AppliesToPregnancy is { } pregnancy && pregnancy != context.IsPregnant)
@@ -155,6 +204,30 @@ public sealed class ReferenceRange : Entity, IAuditable
             return false;
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether the patient has reached an age bound, read in the band's unit.
+    /// <para>
+    /// A bound in years is compared in completed years and one in months on the calendar from the
+    /// date of birth. Counting days against 365 × n moved a patient into the next band before the
+    /// birthday — a day early per leap year lived, twelve days early at fifty — and 30 × n drifts
+    /// the same way against real months. A bound in days is compared in days, which is what a
+    /// neonatal band means. Without a date of birth the declared age in whole years is all there
+    /// is, as before.
+    /// </para>
+    /// </summary>
+    private static bool HasReached(int bound, int unit, ReferenceRangeContext context)
+    {
+        if (unit == DaysPerYear && context.AgeInYears is { } years)
+            return years >= bound / DaysPerYear;
+
+        if (unit == DaysPerMonth && context.DateOfBirth is { } dob && context.ReferenceDate is { } on)
+            return dob.AddMonths(bound / DaysPerMonth) <= on;
+
+        if (context.AgeInDays is { } days) return days >= bound;
+
+        return context.AgeInYears is { } declared && declared * DaysPerYear >= bound;
     }
 
     /// <summary>

@@ -25,6 +25,16 @@ internal static class StarterCatalogue
 {
     private const string PendingVerification = "À vérifier par le laboratoire";
 
+    /// <summary>LDL by Friedewald, not calculable at or above 4 g/L of triglycerides.</summary>
+    internal const string FriedewaldLdlFormula = "if([TG]<4;round([CHOL]-[HDL]-[TG]/5;2);nd())";
+
+    /// <summary>
+    /// The formula earlier releases seeded, which yields 0 — read as a normal LDL — when the
+    /// triglycerides are too high. Kept so the seeder can replace exactly this text and nothing a
+    /// laboratory wrote itself.
+    /// </summary>
+    internal const string FormerFriedewaldLdlFormula = "if([TG]<4;round([CHOL]-[HDL]-[TG]/5;2);0)";
+
     internal static async Task SeedAsync(LisDbContext context, IClock clock, CancellationToken ct)
     {
         var departments = await context.Departments.ToDictionaryAsync(d => d.Code, d => d.Id, ct);
@@ -136,11 +146,12 @@ internal static class StarterCatalogue
             lipids.AddParameter(tg);
 
             // LDL by Friedewald. Only valid below 4 g/L of triglycerides, which the formula
-            // enforces itself: above that it yields 0 and the biologist is expected to order a
-            // direct measurement rather than report a number the method cannot support.
+            // enforces itself: above that nd() leaves the LDL not calculable — reported as such,
+            // with a direct measurement to request — rather than a number the method cannot
+            // support. The former "; 0)" stored a 0 that was interpreted as a normal LDL.
             var ldl = Param("LDL", "LDL-cholestérol (Friedewald)", "الكوليسترول الضار (فريدوالد)",
                             "LDL cholesterol (Friedewald)", Unit("G_L"), decimals: 2);
-            ldl.CalculationFormula = "if([TG]<4;round([CHOL]-[HDL]-[TG]/5;2);0)";
+            ldl.CalculationFormula = FriedewaldLdlFormula;
             ldl.AddReferenceRange(Range(null, 1.60m, source: "Seuil de décision clinique"));
             ldl.ReferenceRanges.First().IsDecisionThreshold = true;
             lipids.AddParameter(ldl);
