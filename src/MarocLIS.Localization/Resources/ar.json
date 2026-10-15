@@ -130,6 +130,7 @@
   "SupplierPayment_ReferenceRequired": "أدخل مرجع التحويل أو الشيك أو الكمبيالة.",
   "SupplierPayment_DateInFuture": "لا يمكن أن يكون تاريخ الأداء في المستقبل.",
   "SupplierPayment_MaturityBeforePayment": "لا يمكن أن يسبق تاريخ الاستحقاق تاريخ الأداء.",
+  "SupplierPayment_MaturityRequired": "أدخل تاريخ استحقاق الكمبيالة (LCN): يكون بعد تاريخ الأداء.",
   "SupplierInvoice_NotEditable": "تمت مطابقة الفاتورة: لم يعد بالإمكان تعديل سطورها.",
   "SupplierInvoice_QuantityMustBePositive": "يجب أن تكون الكمية المفوترة أكبر من الصفر.",
   "SupplierInvoice_PriceMustNotBeNegative": "يجب أن يكون ثمن الوحدة دون احتساب الضريبة ونسبة الضريبة على القيمة المضافة موجبين (بين 0 و100٪).",

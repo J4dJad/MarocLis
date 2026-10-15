@@ -130,6 +130,7 @@
   "SupplierPayment_ReferenceRequired": "Enter the reference of the transfer, cheque or bill of exchange.",
   "SupplierPayment_DateInFuture": "The payment date cannot be in the future.",
   "SupplierPayment_MaturityBeforePayment": "The due date cannot be before the payment date.",
+  "SupplierPayment_MaturityRequired": "Enter the due date of the bill of exchange (LCN): it falls after the payment date.",
   "SupplierInvoice_NotEditable": "The invoice has already been matched: its lines can no longer be changed.",
   "SupplierInvoice_QuantityMustBePositive": "The invoiced quantity must be greater than zero.",
   "SupplierInvoice_PriceMustNotBeNegative": "The unit price excluding VAT and the VAT rate must be positive (VAT between 0 and 100 %).",

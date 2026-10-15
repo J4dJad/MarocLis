@@ -130,6 +130,7 @@
   "SupplierPayment_ReferenceRequired": "Indiquez la référence du virement, du chèque ou de l'effet.",
   "SupplierPayment_DateInFuture": "La date du règlement ne peut pas être dans le futur.",
   "SupplierPayment_MaturityBeforePayment": "L'échéance ne peut pas précéder la date du règlement.",
+  "SupplierPayment_MaturityRequired": "Saisissez la date d'échéance de la LCN : elle est postérieure à la date de règlement.",
   "SupplierInvoice_NotEditable": "La facture a déjà été rapprochée : ses lignes ne peuvent plus être modifiées.",
   "SupplierInvoice_QuantityMustBePositive": "La quantité facturée doit être supérieure à zéro.",
   "SupplierInvoice_PriceMustNotBeNegative": "Le prix unitaire HT et le taux de TVA doivent être positifs (TVA entre 0 et 100 %).",
