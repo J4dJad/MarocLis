@@ -190,6 +190,9 @@ public sealed class SupplierInvoice : AuditableAggregateRoot, ISiteScoped
             return Result.Failure(Error.Validation("SupplierPayment_BeforeInvoice"));
         if (payment.Method != SupplierPaymentMethod.Cash && string.IsNullOrWhiteSpace(payment.Reference))
             return Result.Failure(Error.Validation("SupplierPayment_ReferenceRequired"));
+        // A bill (LCN) always carries its due date, the day the bank debits it.
+        if (payment.Method == SupplierPaymentMethod.BillOfExchange && payment.MaturityDate is null)
+            return Result.Failure(Error.Validation("SupplierPayment_MaturityRequired"));
         if (payment.MaturityDate is { } maturity && maturity < payment.PaidOn)
             return Result.Failure(Error.Validation("SupplierPayment_MaturityBeforePayment"));
 

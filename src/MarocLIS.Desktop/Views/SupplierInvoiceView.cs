@@ -990,8 +990,18 @@ internal sealed class SupplierPaymentDialog : MasterDataEditor
             return;
         }
 
+        // An LCN always falls due after it is issued: left on the payment date, its due date was
+        // not entered, and the bank reconciliation and the forecast would look for it on the wrong day.
+        var bill = method == SupplierPaymentMethod.BillOfExchange;
+        if (bill && maturity <= paidOn)
+        {
+            Dialogs.Warn(Localizer["SupplierPayment_MaturityRequired"], Text);
+            _maturity.Focus();
+            return;
+        }
+
         Request = new RecordSupplierPaymentRequest(paidOn, amount, method, Blank(_reference),
-                                                   _maturity.Enabled && maturity > paidOn ? maturity : null);
+                                                   _maturity.Enabled && (bill || maturity > paidOn) ? maturity : null);
         DialogResult = DialogResult.OK;
         Close();
     }
