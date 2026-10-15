@@ -91,6 +91,14 @@ public sealed class LabOrder : AuditableAggregateRoot, ISoftDeletable, ISiteScop
     public decimal? ReimbursementRateAtRegistration { get; set; }
     public string? PriorAgreementNumber { get; set; }
 
+    /// <summary>
+    /// Whether the laboratory bills the payer directly for this order (third-party payment ticked
+    /// on the coverage, under an agreement in force on the day). When it is not, the patient pays
+    /// the whole total at the counter and reclaims it, so the invoice is the patient's and nothing
+    /// is claimed from the payer.
+    /// </summary>
+    public bool DirectBillingAtRegistration { get; set; }
+
     /// <summary>Discount granted at reception, in percent, with the reason it was granted.</summary>
     public decimal? DiscountPercent { get; set; }
     public string? DiscountReason { get; set; }

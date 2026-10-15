@@ -260,7 +260,9 @@ public sealed class BillingService(
         // was frozen at registration with its own payer, and one invoice has one payer. Grouped,
         // the others were re-split under the first one's payer — a self-paid act claimed from the
         // payer, or a covered act put entirely on the patient. They are invoiced separately.
-        if (loaded.Select(o => o.PayerId).Distinct().Count() > 1)
+        // An order the payer is billed for directly and one the patient paid in full are not
+        // grouped either: one invoice is addressed to the payer, the other to the patient.
+        if (loaded.Select(o => (o.PayerId, o.DirectBillingAtRegistration)).Distinct().Count() > 1)
             return Result.Failure<Guid>(Error.Validation(
                 "Invoice_MultiplePayers",
                 string.Join(", ", loaded.Select(o => o.AccessionNumber))));
@@ -272,6 +274,13 @@ public sealed class BillingService(
         var payer = payerId is { } id ? await payers.GetByIdAsync(id, ct) : null;
 
         var today = clock.Today;
+
+        // An order registered without third-party payment (box unticked on the coverage, or the
+        // agreement expired) had its whole total asked of the patient at the counter. Its invoice
+        // is the patient's, with no payer share to claim: addressed to the payer, the same acts
+        // were claimed by the laboratory and reimbursed again on the patient's own feuille de soins.
+        if (payerIdOverride is null && !loaded[0].DirectBillingAtRegistration)
+            payer = null;
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
 
@@ -303,6 +312,7 @@ public sealed class BillingService(
         invoice.PrescriberInpe = loaded[0].Prescriber?.Inpe;
         invoice.PrescriberName = loaded[0].Prescriber?.FullName ?? loaded[0].PrescriberFreeText;
         invoice.ClaimStatus = payer is { ThirdPartyPaymentAgreement: true }
+                              && (payerIdOverride is null || payer.IsAgreementValid(today))
             ? ClaimStatus.Prepared
             : ClaimStatus.NotApplicable;
 
@@ -535,9 +545,13 @@ public sealed class BillingService(
         if (order.Status == LabOrderStatus.Cancelled)
             return Result.Failure<string>(Error.Conflict("Deposit_OrderCancelled", order.AccessionNumber));
 
-        // Never more than the request is worth, deposits already held included: an overpayment
-        // would only have to be handed back.
-        var total = order.Items.Where(i => !i.IsCancelled).Sum(i => i.ChargedPrice);
+        // Never more than the patient will owe, deposits already held included: an overpayment
+        // would only have to be handed back. Under direct billing the payer's share is claimed
+        // from the payer, so a deposit on it could never be applied to the invoice.
+        var live = order.Items.Where(i => !i.IsCancelled).ToList();
+        var total = order.PayerId is not null && order.DirectBillingAtRegistration
+            ? live.Sum(i => i.PatientShare)
+            : live.Sum(i => i.ChargedPrice);
         var held = (await deposits.ListAsync(d => d.LabOrderId == order.Id
                                                   && d.Status == DepositStatus.Held, ct))
                    .Sum(d => d.Remaining);
@@ -610,7 +624,7 @@ public sealed class BillingService(
     /// <summary>
     /// Hands back what is still held on a deposit — the request was cancelled, or the invoice came
     /// to less. Cash goes out of the operator's open till; a cheque, card or transfer comes off the
-    /// matching line of the operator's shift, when one is open.
+    /// matching line of the shift that took it, while that shift is open.
     /// </summary>
     public async Task<Result> RefundDepositAsync(Guid depositId, string reason,
                                                  CancellationToken ct = default)
@@ -632,7 +646,7 @@ public sealed class BillingService(
         if (refunded.IsFailure) return refunded;
 
         if (deposit.Method == PaymentMethod.Cash) session?.RecordCashRefund(amount);
-        else session?.ReverseNonCash(deposit.Method, amount);
+        else await ReverseOnTakingSessionAsync(deposit.CashSessionId, deposit.Method, amount, ct);
         deposits.Update(deposit);
 
         unitOfWork.AuditReason = $"Remboursement de l'acompte {deposit.Number} : {amount:N2} DH — {reason}";
@@ -831,7 +845,7 @@ public sealed class BillingService(
     /// A cash refund also has to reach the till: the shift's expected cash is the float plus what
     /// came in minus what went out, and a refund paid from the drawer that the session never heard
     /// about shows up at closing as an unexplained shortfall. A cheque, card or transfer refund
-    /// comes off the matching line of the operator's shift, when one is open, so the card line
+    /// comes off the matching line of the shift that took it, while that shift is open, so the card line
     /// still agrees with the terminal's batch.
     /// </para>
     /// </summary>
@@ -860,7 +874,7 @@ public sealed class BillingService(
         if (refunded.IsFailure) return refunded;
 
         if (payment.Method == PaymentMethod.Cash) session?.RecordCashRefund(payment.Amount);
-        else session?.ReverseNonCash(payment.Method, payment.Amount);
+        else await ReverseOnTakingSessionAsync(payment.CashSessionId, payment.Method, payment.Amount, ct);
 
         invoice.Recalculate();
 
@@ -870,6 +884,19 @@ public sealed class BillingService(
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Takes a refunded cheque, card or transfer off the line of the shift that took it, while that
+    /// shift is still open — not off the refunder's own shift, which never received it. A closed
+    /// shift was remitted as it stood and is not touched, as for a bounced cheque.
+    /// </summary>
+    private async Task ReverseOnTakingSessionAsync(Guid? sessionId, PaymentMethod method, decimal amount,
+                                                   CancellationToken ct)
+    {
+        if (sessionId is { } id
+            && await cashSessions.GetByIdAsync(id, ct) is { Status: CashSessionStatus.Open } taken)
+            taken.ReverseNonCash(method, amount);
     }
 
     /// <summary>
@@ -1193,14 +1220,18 @@ public sealed class BillingService(
             currentUser.SiteId, clock.Today.AddDays(-Math.Max(1, withinDays)), clock.Today, ct));
     }
 
-    /// <summary>The invoices inside one batch, with the reason for any that was refused.</summary>
+    /// <summary>
+    /// The invoices inside one batch, with the reason for any that was refused. Limited to the
+    /// batch row's payer: a reference shared by several payers (sent before a batch was held to
+    /// one payer) must not let one payer's answer be recorded on another's invoices.
+    /// </summary>
     public async Task<Result<IReadOnlyList<ClaimInvoiceRow>>> GetClaimInvoicesAsync(
-        string claimReference, CancellationToken ct = default)
+        string claimReference, Guid? payerId = null, CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Billing.View);
         if (permitted.IsFailure) return Result.Failure<IReadOnlyList<ClaimInvoiceRow>>(permitted.FirstError);
 
-        return Result.Success(await queries.GetClaimInvoicesAsync(claimReference, ct));
+        return Result.Success(await queries.GetClaimInvoicesAsync(claimReference, payerId, ct));
     }
 
     /// <summary>
@@ -1248,6 +1279,7 @@ public sealed class BillingService(
         if (reference.IsFailure) return Result.Failure<ClaimSubmission>(reference.FirstError);
 
         var submitted = 0;
+        Guid? batchPayerId = null;
 
         foreach (var invoiceId in invoiceIds.Distinct())
         {
@@ -1280,6 +1312,14 @@ public sealed class BillingService(
                 continue;
             }
 
+            // One batch, one payer, as on the claims screen: the payer answers for its batch as a
+            // whole, and an answer recorded on a mixed batch landed on another payer's invoices.
+            if (batchPayerId is { } first && first != payerId)
+            {
+                problems.Add(Error.Validation("Claim_MixedPayers", invoice.Number));
+                continue;
+            }
+
             var payer = await payers.GetByIdAsync(payerId, ct);
 
             if (payer?.RequiresInpeOnClaim == true && string.IsNullOrWhiteSpace(invoice.BiologistInpe))
@@ -1287,6 +1327,16 @@ public sealed class BillingService(
                 problems.Add(Error.Regulatory("Invoice_ClaimRequiresInpe", invoice.Number));
                 continue;
             }
+
+            // The prescriber's INPE, which the claims screen also requires of such a payer: sent
+            // without it from the invoice list, the claim was simply refused.
+            if (payer?.RequiresPrescription == true && string.IsNullOrWhiteSpace(invoice.PrescriberInpe))
+            {
+                problems.Add(Error.Regulatory("Invoice_ClaimRequiresPrescriberInpe", invoice.Number));
+                continue;
+            }
+
+            batchPayerId = payerId;
 
             // A resubmission after a rejection: the recorded refusal and its write-off are undone,
             // or the payer's payment on the corrected claim could never be entered.
@@ -1625,6 +1675,7 @@ public interface IBillingQueries
                                                              CancellationToken ct = default);
 
     Task<IReadOnlyList<ClaimInvoiceRow>> GetClaimInvoicesAsync(string claimReference,
+                                                                Guid? payerId = null,
                                                                 CancellationToken ct = default);
 
     /// <summary>Issued, payer-covered invoices not yet in a batch.</summary>

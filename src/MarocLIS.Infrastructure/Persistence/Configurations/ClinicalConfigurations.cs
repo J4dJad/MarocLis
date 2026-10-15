@@ -203,6 +203,7 @@ public sealed class LabOrderConfiguration : IEntityTypeConfiguration<LabOrder>
         builder.Property(e => e.PrescriptionScanContentType).HasMaxLength(100);
         builder.Property(e => e.DiscountPercent).HasColumnType("decimal(6,3)");
         builder.Property(e => e.ReimbursementRateAtRegistration).HasColumnType("decimal(6,4)");
+        builder.Property(e => e.DirectBillingAtRegistration);
 
         builder.HasOne(e => e.Patient).WithMany().HasForeignKey(e => e.PatientId)
                .OnDelete(DeleteBehavior.Restrict);

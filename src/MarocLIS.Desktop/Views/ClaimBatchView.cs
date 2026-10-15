@@ -500,7 +500,7 @@ public sealed class ClaimBatchView : LocalizedView
             return;
         }
 
-        var result = await _billing.GetClaimInvoicesAsync(batch.ClaimReference, ct);
+        var result = await _billing.GetClaimInvoicesAsync(batch.ClaimReference, batch.PayerId, ct);
 
         if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 

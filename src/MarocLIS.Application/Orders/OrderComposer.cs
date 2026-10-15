@@ -205,6 +205,26 @@ public sealed class OrderComposer(
     }
 
     /// <summary>
+    /// The coverage an order was registered under, rebuilt from its snapshot for an analysis added
+    /// later: the frozen rate and direct-billing decision, and the payer's own tariff basis — a
+    /// payer reimbursing a share of the laboratory's price is not split on the reference tariff.
+    /// </summary>
+    public async Task<CoverageContext> RegisteredCoverageAsync(LabOrder order, CancellationToken ct = default)
+    {
+        if (order.PayerId is not { } payerId) return CoverageContext.SelfPay;
+
+        var payer = await payers.GetByIdAsync(payerId, ct);
+
+        return new CoverageContext
+        {
+            PayerId = payerId,
+            ReimbursementRate = order.ReimbursementRateAtRegistration ?? 0m,
+            UsesReferenceTariff = payer?.UsesNationalReferenceTariff ?? true,
+            DirectBilling = order.DirectBillingAtRegistration
+        };
+    }
+
+    /// <summary>
     /// Refuses an analysis with no tariff in force for the payer or on the laboratory's own list.
     /// It used to be priced at nothing without a word, and the first anyone heard of it was an
     /// invoice short by the price of the analysis. A member of a panel sold at a package price
