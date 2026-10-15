@@ -11,11 +11,11 @@ public sealed class FixedAssetConfiguration : IEntityTypeConfiguration<FixedAsse
         builder.ToTable("FixedAssets", "fin");
         builder.HasKey(e => e.Id);
 
-        builder.Property(e => e.Code).HasMaxLength(30).IsRequired();
-        builder.Property(e => e.Label).HasMaxLength(200).IsRequired();
-        builder.Property(e => e.InvoiceReference).HasMaxLength(60);
-        builder.Property(e => e.DisposalReason).HasMaxLength(500);
-        builder.Property(e => e.Notes).HasMaxLength(1000);
+        builder.Property(e => e.Code).HasMaxLength(FixedAsset.CodeMaxLength).IsRequired();
+        builder.Property(e => e.Label).HasMaxLength(FixedAsset.LabelMaxLength).IsRequired();
+        builder.Property(e => e.InvoiceReference).HasMaxLength(FixedAsset.InvoiceReferenceMaxLength);
+        builder.Property(e => e.DisposalReason).HasMaxLength(FixedAsset.DisposalReasonMaxLength);
+        builder.Property(e => e.Notes).HasMaxLength(FixedAsset.NotesMaxLength);
 
         builder.Property(e => e.CostExcludingVatMad).HasColumnType("decimal(18,2)");
         builder.Property(e => e.VatAmountMad).HasColumnType("decimal(18,2)");
@@ -37,5 +37,23 @@ public sealed class FixedAssetConfiguration : IEntityTypeConfiguration<FixedAsse
                .IsUnique()
                .HasFilter("[InstrumentId] IS NOT NULL")
                .HasDatabaseName("UX_FixedAssets_Instrument");
+    }
+}
+
+public sealed class FixedAssetDepreciationPostingConfiguration : IEntityTypeConfiguration<FixedAssetDepreciationPosting>
+{
+    public void Configure(EntityTypeBuilder<FixedAssetDepreciationPosting> builder)
+    {
+        builder.ToTable("FixedAssetDepreciationPostings", "fin");
+        builder.HasKey(e => e.Id);
+
+        builder.Property(e => e.AmountMad).HasColumnType("decimal(18,2)");
+
+        // A month of an asset goes out once; exporting it again gives the same row back.
+        builder.HasIndex(e => new { e.FixedAssetId, e.Year, e.Month })
+               .IsUnique()
+               .HasDatabaseName("UX_FixedAssetDepreciationPostings_Asset_Month");
+
+        builder.HasOne<FixedAsset>().WithMany().HasForeignKey(e => e.FixedAssetId).OnDelete(DeleteBehavior.Cascade);
     }
 }

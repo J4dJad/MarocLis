@@ -109,7 +109,7 @@ public sealed class FinanceGDatabaseTests(FinanceGScratchDatabase database) : IC
             InvoiceReference = "FA-2025-77"
         });
 
-        var provided = (await queries.GetSupplierProvidedAsync(site.Id, today)).Single();
+        var provided = (await queries.GetSupplierProvidedAsync(site.Id, today, today)).Single();
         (provided.InstrumentCode, provided.ContractReference, provided.Kind)
             .Should().Be(("AN-G", "MAD-G-1", InstrumentContractKind.Placement));
 

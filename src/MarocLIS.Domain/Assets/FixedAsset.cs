@@ -94,11 +94,19 @@ public sealed class FixedAsset : AuditableAggregateRoot, ISiteScoped
 
     public const int MaximumUsefulLifeYears = 50;
 
+    /// <summary>The lengths of the database columns, which the dialogs and the checks share.</summary>
+    public const int CodeMaxLength = 30, LabelMaxLength = 200, InvoiceReferenceMaxLength = 60, NotesMaxLength = 1000,
+                     DisposalReasonMaxLength = 500;
+
     public Result Validate()
     {
         var errors = new List<Error>();
         if (string.IsNullOrWhiteSpace(Code)) errors.Add(Error.Validation("Asset_CodeRequired"));
         if (string.IsNullOrWhiteSpace(Label)) errors.Add(Error.Validation("Asset_LabelRequired"));
+        if (Label.Length > LabelMaxLength) errors.Add(Error.Validation("Asset_LabelTooLong", LabelMaxLength));
+        if (InvoiceReference?.Length > InvoiceReferenceMaxLength)
+            errors.Add(Error.Validation("Asset_InvoiceReferenceTooLong", InvoiceReferenceMaxLength));
+        if (Notes?.Length > NotesMaxLength) errors.Add(Error.Validation("Asset_NotesTooLong", NotesMaxLength));
         if (AcquisitionDate == default) errors.Add(Error.Validation("Asset_AcquisitionDateRequired"));
         if (InServiceDate != default && InServiceDate < AcquisitionDate)
             errors.Add(Error.Validation("Asset_InServiceBeforeAcquisition"));
@@ -123,6 +131,8 @@ public sealed class FixedAsset : AuditableAggregateRoot, ISiteScoped
         if (on < AcquisitionDate) return Result.Failure(Error.Validation("Asset_DisposalBeforeAcquisition"));
         if (price < 0m) return Result.Failure(Error.Validation("Asset_AmountNegative"));
         if (string.IsNullOrWhiteSpace(reason)) return Result.Failure(Error.Validation("Asset_DisposalReasonRequired"));
+        if (reason.Trim().Length > DisposalReasonMaxLength)
+            return Result.Failure(Error.Validation("Asset_DisposalReasonTooLong", DisposalReasonMaxLength));
 
         DisposalDate = on;
         DisposalPriceMad = Money.Round(price);
@@ -139,6 +149,44 @@ public sealed class FixedAsset : AuditableAggregateRoot, ISiteScoped
         DisposalReason = null;
         return Result.Success();
     }
+}
+
+/// <summary>
+/// One month of an asset's depreciation as it went out in an accounting export file: the amount
+/// the books received for that month, kept as it was even when the asset is corrected later.
+/// <para>
+/// The register recomputes the plan from the asset as it stands; these rows are what the
+/// accounting software already holds. A later export books the difference between the two (a
+/// catch-up, or a reversal after a backdated disposal) in its first month not yet exported, and
+/// gives an exported month again exactly as it was.
+/// </para>
+/// </summary>
+public sealed class FixedAssetDepreciationPosting : AggregateRoot
+{
+    private FixedAssetDepreciationPosting() { }
+
+    public FixedAssetDepreciationPosting(Guid fixedAssetId, int year, int month, DateOnly date, decimal amountMad,
+                                         DateTimeOffset exportedAt)
+    {
+        FixedAssetId = fixedAssetId;
+        Year = year;
+        Month = month;
+        Date = date;
+        AmountMad = Money.Round(amountMad);
+        ExportedAt = exportedAt;
+    }
+
+    public Guid FixedAssetId { get; private set; }
+    public int Year { get; private set; }
+    public int Month { get; private set; }
+
+    /// <summary>The date of the entry: the last day of the month, or the disposal date.</summary>
+    public DateOnly Date { get; private set; }
+
+    /// <summary>The amount exported, negative for a reversal.</summary>
+    public decimal AmountMad { get; private set; }
+
+    public DateTimeOffset ExportedAt { get; private set; }
 }
 
 /// <summary>The categories of the register, each with its CGNC accounts (configurable).</summary>

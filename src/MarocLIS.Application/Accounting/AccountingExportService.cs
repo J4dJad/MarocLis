@@ -179,8 +179,16 @@ public sealed class AccountingExportService(
         if (preview.Value.Entries.Count == 0)
             return Result.Failure<byte[]>(Error.Validation("Purchasing_NothingToExport"));
 
-        return Result.Success(SupplierAccountingExport.ToCsv(preview.Value.Entries.SelectMany(e => e.Lines),
-                                                             request.Layout));
+        var file = SupplierAccountingExport.ToCsv(preview.Value.Entries.SelectMany(e => e.Lines), request.Layout);
+
+        // The depreciation months now in the accounting software: a later correction of an asset is
+        // booked as a difference, not by rewriting them.
+        if (request.Journals.HasFlag(AccountingJournals.Depreciation))
+            foreach (var recorder in depreciationSources.OfType<IDepreciationExportRecorder>())
+                foreach (var siteId in request.SiteIds.Distinct())
+                    await recorder.RecordExportedAsync(siteId, request.From, request.To, ct);
+
+        return Result.Success(file);
     }
 
     // ---- VAT ---------------------------------------------------------------------------------------
@@ -285,6 +293,7 @@ public sealed class AccountingExportService(
         Add(purchases, PurchasingSettings.CashJournalKey, "SupplierCashJournal", p.CashJournal, code);
         Add(purchases, PurchasingSettings.SupplierAccountKey, "SupplierAccount", p.SupplierAccount);
         Add(purchases, PurchasingSettings.VatAccountKey, "RecoverableVat", p.VatAccount);
+        Add(purchases, PurchasingSettings.AssetVatAccountKey, "AssetVat", p.AssetVatAccount);
         Add(purchases, PurchasingSettings.BankAccountKey, "SupplierBankAccount", p.BankAccount);
         Add(purchases, PurchasingSettings.CashAccountKey, "SupplierCashAccount", p.CashAccount);
         foreach (var kind in Enum.GetValues<StockItemKind>())

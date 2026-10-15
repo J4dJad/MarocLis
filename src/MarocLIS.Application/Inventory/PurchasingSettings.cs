@@ -24,6 +24,7 @@ public sealed record PurchasingSettings
     public const string CashJournalKey = "Purchasing.Journal.Cash";
     public const string SupplierAccountKey = "Purchasing.Account.Suppliers";
     public const string VatAccountKey = "Purchasing.Account.RecoverableVat";
+    public const string AssetVatAccountKey = "Purchasing.Account.AssetVat";
     public const string BankAccountKey = "Purchasing.Account.Bank";
     public const string CashAccountKey = "Purchasing.Account.Cash";
     public const string ChargeAccountKeyPrefix = "Purchasing.Account.Charge.";
@@ -58,6 +59,12 @@ public sealed record PurchasingSettings
 
     /// <summary>CGNC 34552 État, TVA récupérable sur les charges.</summary>
     public string VatAccount { get; init; } = "34552";
+
+    /// <summary>
+    /// CGNC 34551 État, TVA récupérable sur les immobilisations: the VAT of an invoice linked to a
+    /// fixed asset of the register, when deducted.
+    /// </summary>
+    public string AssetVatAccount { get; init; } = "34551";
 
     /// <summary>CGNC 5141 Banques.</summary>
     public string BankAccount { get; init; } = "5141";
@@ -118,6 +125,7 @@ public sealed record PurchasingSettings
             CashJournal = Code(CashJournalKey, d.CashJournal),
             SupplierAccount = Code(SupplierAccountKey, d.SupplierAccount),
             VatAccount = Code(VatAccountKey, d.VatAccount),
+            AssetVatAccount = Code(AssetVatAccountKey, d.AssetVatAccount),
             BankAccount = Code(BankAccountKey, d.BankAccount),
             CashAccount = Code(CashAccountKey, d.CashAccount),
             ChargeAccounts = charges
@@ -142,6 +150,7 @@ public sealed record PurchasingSettings
             [CashJournalKey] = CashJournal,
             [SupplierAccountKey] = SupplierAccount,
             [VatAccountKey] = VatAccount,
+            [AssetVatAccountKey] = AssetVatAccount,
             [BankAccountKey] = BankAccount,
             [CashAccountKey] = CashAccount
         };

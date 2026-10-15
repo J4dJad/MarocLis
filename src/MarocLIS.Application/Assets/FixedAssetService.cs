@@ -45,8 +45,11 @@ public sealed record FixedAssetSource(
 /// <summary>One asset's line in the register for a financial year.</summary>
 /// <param name="Opening">Depreciation accumulated at 1 January.</param>
 /// <param name="Charge">The year's depreciation (dotation de l'exercice).</param>
-/// <param name="Closing">Depreciation accumulated at 31 December, or at the disposal.</param>
+/// <param name="Closing">Depreciation accumulated at 31 December: zero once the asset has left the register.</param>
+/// <param name="NetBookValue">At 31 December: zero once the asset has left the register.</param>
 /// <param name="DisposalResult">Disposal price less the net book value at the disposal, when disposed of in the year.</param>
+/// <param name="GrossOut">Gross value leaving the register in the year (sorties): the asset's, when disposed of in it.</param>
+/// <param name="DepreciationOut">Depreciation accumulated at the disposal, leaving with the asset.</param>
 public sealed record FixedAssetRegisterRow(
     FixedAssetSource Asset,
     CategoryAccounts Accounts,
@@ -55,7 +58,13 @@ public sealed record FixedAssetRegisterRow(
     decimal Charge,
     decimal Closing,
     decimal NetBookValue,
-    decimal? DisposalResult);
+    decimal? DisposalResult,
+    decimal GrossOut = 0m,
+    decimal DepreciationOut = 0m)
+{
+    /// <summary>Gross value at 31 December: nothing for an asset disposed of in the year.</summary>
+    public decimal ClosingGross => Money.Round(Asset.GrossValue - GrossOut);
+}
 
 /// <summary>An analyser placed by its supplier: in the laboratory, not in the assets.</summary>
 public sealed record SupplierProvidedRow(
@@ -74,7 +83,10 @@ public sealed record FixedAssetRegister(
     IReadOnlyList<FixedAssetRegisterRow> Assets,
     IReadOnlyList<SupplierProvidedRow> SupplierProvided)
 {
-    public decimal GrossValue => Money.Round(Assets.Sum(a => a.Asset.GrossValue));
+    /// <summary>Gross value at 31 December, without the assets disposed of in the year.</summary>
+    public decimal GrossValue => Money.Round(Assets.Sum(a => a.ClosingGross));
+    public decimal GrossOut => Money.Round(Assets.Sum(a => a.GrossOut));
+    public decimal DepreciationOut => Money.Round(Assets.Sum(a => a.DepreciationOut));
     public decimal Opening => Money.Round(Assets.Sum(a => a.Opening));
     public decimal Charge => Money.Round(Assets.Sum(a => a.Charge));
     public decimal Closing => Money.Round(Assets.Sum(a => a.Closing));
@@ -196,7 +208,9 @@ public sealed class FixedAssetService(
 
         var settings = await GetSettingsCoreAsync(ct);
         var sources = await queries.GetAssetsAsync(currentUser.SiteId, ct);
-        var provided = await queries.GetSupplierProvidedAsync(currentUser.SiteId, clock.Today, ct);
+        // The equipment placed during the year shown, not today's.
+        var provided = await queries.GetSupplierProvidedAsync(currentUser.SiteId, new DateOnly(year, 1, 1),
+                                                              new DateOnly(year, 12, 31), ct);
 
         return Result.Success(BuildRegister(year, sources, provided, settings));
     }
@@ -205,6 +219,12 @@ public sealed class FixedAssetService(
     /// The register of a year: the assets acquired by its end and not disposed of before it began,
     /// with the depreciation accumulated at the opening, the year's charge, the closing and the net
     /// book value; an asset disposed of during the year shows the result of the disposal.
+    /// <para>
+    /// An asset disposed of during the year is no longer the laboratory's at 31 December: its gross
+    /// value and the depreciation accumulated at the disposal leave the register in the "sorties"
+    /// columns, and its closing depreciation and net book value are zero, so that the totals are
+    /// those of the balance sheet.
+    /// </para>
     /// </summary>
     public static FixedAssetRegister BuildRegister(int year, IEnumerable<FixedAssetSource> sources,
                                                    IReadOnlyList<SupplierProvidedRow> provided,
@@ -223,9 +243,10 @@ public sealed class FixedAssetService(
             var closing = Money.Round(opening + charge);
             var netBookValue = Money.Round(asset.GrossValue - closing);
 
-            decimal? result = asset.DisposalDate is { } disposed && disposed <= last
-                ? Money.Round((asset.DisposalPrice ?? 0m) - netBookValue)
-                : null;
+            var disposedInYear = asset.DisposalDate is { } disposed && disposed <= last;
+            decimal? result = disposedInYear ? Money.Round((asset.DisposalPrice ?? 0m) - netBookValue) : null;
+            var (grossOut, depreciationOut) = disposedInYear ? (asset.GrossValue, closing) : (0m, 0m);
+            if (disposedInYear) (closing, netBookValue) = (0m, 0m);
 
             var rate = schedule.Years.FirstOrDefault(y => y.Year == year)?.Rate
                        ?? (asset.Method == DepreciationMethod.Declining
@@ -233,7 +254,7 @@ public sealed class FixedAssetService(
                            : Depreciation.StraightLineRate(asset.UsefulLifeYears));
 
             rows.Add(new FixedAssetRegisterRow(asset, settings.For(asset.Category), rate, opening, charge, closing,
-                                               netBookValue, result));
+                                               netBookValue, result, grossOut, depreciationOut));
         }
 
         return new FixedAssetRegister(year, rows, provided);
@@ -348,7 +369,8 @@ public sealed class FixedAssetService(
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
         var code = FixedAsset.Normalise(request.Code);
-        if (code.Length > 30) return Result.Failure<Guid>(Error.Validation("Asset_CodeTooLong", 30));
+        if (code.Length > FixedAsset.CodeMaxLength)
+            return Result.Failure<Guid>(Error.Validation("Asset_CodeTooLong", FixedAsset.CodeMaxLength));
         if (code.Length > 0 && await queries.CodeExistsAsync(currentUser.SiteId, code, request.Id, ct))
             return Result.Failure<Guid>(Error.Conflict("Asset_CodeExists", code));
 
@@ -519,7 +541,8 @@ public static class FixedAssetRegisterReport
     public static readonly IReadOnlyList<string> FrenchHeaders =
     [
         "Code", "Désignation", "Catégorie", "Compte", "Acquisition", "Mise en service", "Valeur brute",
-        "Méthode", "Durée", "Taux", "Amort. cumulés début", "Dotation exercice", "Amort. cumulés fin", "VNA",
+        "Méthode", "Durée", "Taux", "Amort. cumulés début", "Dotation exercice", "Sorties valeur brute",
+        "Sorties amort.", "Valeur brute fin", "Amort. cumulés fin", "VNA",
         "Sortie", "Prix de cession", "Résultat de cession", "Fournisseur", "Facture", "Équipement"
     ];
 
@@ -529,7 +552,8 @@ public static class FixedAssetRegisterReport
         row.Asset.Code, row.Asset.Label, category, row.Accounts.Asset,
         row.Asset.AcquisitionDate.ToString("dd/MM/yyyy", Fr), row.Asset.InServiceDate.ToString("dd/MM/yyyy", Fr),
         Amount(row.Asset.GrossValue), method, row.Asset.UsefulLifeYears.ToString(Fr), Percent(row.Rate),
-        Amount(row.Opening), Amount(row.Charge), Amount(row.Closing), Amount(row.NetBookValue),
+        Amount(row.Opening), Amount(row.Charge), Amount(row.GrossOut), Amount(row.DepreciationOut),
+        Amount(row.ClosingGross), Amount(row.Closing), Amount(row.NetBookValue),
         row.Asset.DisposalDate?.ToString("dd/MM/yyyy", Fr) ?? string.Empty,
         row.Asset.DisposalPrice is { } price && row.Asset.DisposalDate is not null ? Amount(price) : string.Empty,
         row.DisposalResult is { } result ? Amount(result) : string.Empty,
@@ -545,8 +569,9 @@ public static class FixedAssetRegisterReport
         [
             string.Empty, label, string.Empty, string.Empty, string.Empty, string.Empty,
             Amount(list.Sum(r => r.Asset.GrossValue)), string.Empty, string.Empty, string.Empty,
-            Amount(list.Sum(r => r.Opening)), Amount(list.Sum(r => r.Charge)), Amount(list.Sum(r => r.Closing)),
-            Amount(list.Sum(r => r.NetBookValue)), string.Empty, string.Empty,
+            Amount(list.Sum(r => r.Opening)), Amount(list.Sum(r => r.Charge)), Amount(list.Sum(r => r.GrossOut)),
+            Amount(list.Sum(r => r.DepreciationOut)), Amount(list.Sum(r => r.ClosingGross)),
+            Amount(list.Sum(r => r.Closing)), Amount(list.Sum(r => r.NetBookValue)), string.Empty, string.Empty,
             list.Any(r => r.DisposalResult is not null) ? Amount(list.Sum(r => r.DisposalResult ?? 0m)) : string.Empty,
             string.Empty, string.Empty, string.Empty
         ];
@@ -558,6 +583,7 @@ public static class FixedAssetRegisterReport
         row.InstrumentCode, name, status, string.Empty,
         row.StartDate.ToString("dd/MM/yyyy", Fr), string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
         string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
+        string.Empty, string.Empty, string.Empty,
         row.SupplierName, row.ContractReference, row.InstrumentCode
     ];
 
@@ -634,10 +660,10 @@ public interface IFixedAssetQueries
     Task<IReadOnlyList<FixedAssetSource>> GetAssetsAsync(Guid siteId, CancellationToken ct = default);
 
     /// <summary>
-    /// The site's instruments covered on <paramref name="today"/> by an active placement, comodat or
-    /// lease contract that has not ended.
+    /// The site's instruments covered at some point between <paramref name="from"/> and
+    /// <paramref name="to"/> by a placement, comodat or lease contract not terminated early.
     /// </summary>
-    Task<IReadOnlyList<SupplierProvidedRow>> GetSupplierProvidedAsync(Guid siteId, DateOnly today,
+    Task<IReadOnlyList<SupplierProvidedRow>> GetSupplierProvidedAsync(Guid siteId, DateOnly from, DateOnly to,
                                                                       CancellationToken ct = default);
 
     /// <summary>Every contract that names the instrument, whatever its kind or state.</summary>
@@ -661,4 +687,8 @@ public interface IFixedAssetQueries
     Task<AssetInstrumentSummary?> GetInstrumentSummaryAsync(Guid instrumentId, CancellationToken ct = default);
 
     Task<IReadOnlyDictionary<string, string?>> GetSettingValuesAsync(string prefix, CancellationToken ct = default);
+
+    /// <summary>The depreciation months of the site's assets already exported to the accounting software.</summary>
+    Task<IReadOnlyList<DepreciationPosting>> GetDepreciationPostingsAsync(Guid siteId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<DepreciationPosting>>([]);
 }

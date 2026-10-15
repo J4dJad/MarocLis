@@ -290,7 +290,9 @@ public sealed class FinanceGTests
 
         // 24 000 over five years from January 2024: 9 600 by the end of 2025, three months of 2026.
         var c = register.Assets.Single(r => r.Asset.Code == "C");
-        (c.Opening, c.Charge, c.NetBookValue, c.DisposalResult).Should().Be((9_600m, 1_200m, 13_200m, -3_200m));
+        // Net book value 13 200 at the disposal; gone from the register at 31 December.
+        (c.Opening, c.Charge, c.NetBookValue, c.DisposalResult).Should().Be((9_600m, 1_200m, 0m, -3_200m));
+        (c.GrossOut, c.DepreciationOut, c.Closing).Should().Be((24_000m, 10_800m, 0m));
 
         register.Charge.Should().Be(14_400m);
 
@@ -454,7 +456,7 @@ public sealed class FinanceGTests
 
         public Task<IReadOnlyList<FixedAssetSource>> GetAssetsAsync(Guid siteId, CancellationToken ct = default) =>
             Task.FromResult(Assets);
-        public Task<IReadOnlyList<SupplierProvidedRow>> GetSupplierProvidedAsync(Guid siteId, DateOnly today,
+        public Task<IReadOnlyList<SupplierProvidedRow>> GetSupplierProvidedAsync(Guid siteId, DateOnly from, DateOnly to,
                                                                                  CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<SupplierProvidedRow>>([]);
         public Task<IReadOnlyList<ProvidingContract>> GetProvidingContractsAsync(Guid instrumentId,

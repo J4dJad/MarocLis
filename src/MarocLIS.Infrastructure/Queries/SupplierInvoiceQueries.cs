@@ -361,6 +361,7 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                         && i.InvoiceDate >= from && i.InvoiceDate <= to)
             .Select(i => new
             {
+                i.Id,
                 Supplier = db.Suppliers.IgnoreQueryFilters().Where(s => s.Id == i.SupplierId)
                              .Select(s => new { s.Code, s.Name, s.AccountingAccount }).FirstOrDefault(),
                 i.InvoiceNumber,
@@ -377,6 +378,28 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
             .AsSplitQuery()
             .ToListAsync(ct);
 
+        // The fixed assets of the register bought on these invoices: capitalised under their
+        // category's asset account rather than expensed.
+        var ids = rows.Select(i => i.Id).ToList();
+        var assets = await db.FixedAssets.IgnoreQueryFilters().AsNoTracking()
+            .Where(a => a.SiteId == siteId && a.SupplierInvoiceId != null && ids.Contains(a.SupplierInvoiceId.Value))
+            .OrderBy(a => a.Code)
+            .Select(a => new { InvoiceId = a.SupplierInvoiceId!.Value, a.Category, a.CostExcludingVatMad, a.VatAmountMad,
+                               a.VatRecoverable })
+            .ToListAsync(ct);
+
+        var assetAccounts = assets.Count == 0
+            ? Application.Assets.FixedAssetSettings.Default
+            : Application.Assets.FixedAssetSettings.FromValues(
+                (await db.Settings.AsNoTracking()
+                    .Where(s => s.SiteId == null && s.Key.StartsWith(Application.Assets.FixedAssetSettings.Prefix))
+                    .Select(s => new { s.Key, s.Value })
+                    .ToListAsync(ct))
+                .ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal));
+
+        var byInvoice = assets.ToLookup(a => a.InvoiceId, a => new AccountingAssetShare(
+            assetAccounts.For(a.Category).Asset, a.CostExcludingVatMad, a.VatAmountMad, a.VatRecoverable));
+
         return
         [
             .. rows.Select(i => new AccountingInvoiceSource(
@@ -389,7 +412,8 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                         return new AccountingInvoiceLine(l.Kind ?? StockItemKind.Consumable, ht,
                                                          Money.Round(ht * l.VatRate));
                     })
-                ]))
+                ],
+                byInvoice.Contains(i.Id) ? [.. byInvoice[i.Id]] : null))
         ];
     }
 
