@@ -37,6 +37,17 @@ public interface ICurrentUser
 
     /// <summary>Machine name, recorded on audit entries and sample events.</summary>
     string Workstation { get; }
+
+    /// <summary>The prescriber the account is linked to, if any.</summary>
+    Guid? PrescriberId { get; }
+
+    /// <summary>
+    /// The operator is an outside prescriber and sees only the orders naming
+    /// <see cref="PrescriberId"/>, and those orders' patients — nothing at all when unlinked.
+    /// Decided at sign-in by <see cref="Domain.Identity.PrescriberScope"/> and enforced by the
+    /// data layer's query filters.
+    /// </summary>
+    bool IsPrescriberScoped { get; }
 }
 
 /// <summary>
@@ -69,7 +80,12 @@ public interface IAuthenticationService
     Task<Result<AuthenticatedSession>> SignInAsync(string userName, string password, Guid? siteId,
                                                    CancellationToken ct = default);
 
-    Task SignOutAsync(CancellationToken ct = default);
+    /// <summary>
+    /// Ends the session and records why: <see cref="SecurityEventKind.Logout"/> for a sign-out the
+    /// operator asked for, <see cref="SecurityEventKind.SessionTimeout"/> for the idle lock.
+    /// </summary>
+    Task SignOutAsync(SecurityEventKind reason = SecurityEventKind.Logout, string? details = null,
+                      CancellationToken ct = default);
 
     Task<Result> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword,
                                      CancellationToken ct = default);
@@ -92,7 +108,28 @@ public sealed record AuthenticatedSession(
     IReadOnlySet<string> Permissions,
     IReadOnlyList<Guid> AccessibleSiteIds,
     IReadOnlySet<string> AuthorizedDepartmentCodes,
-    bool MustChangePassword);
+    bool MustChangePassword,
+    Guid? PrescriberId = null,
+    bool IsPrescriberScoped = false,
+    // The account's security stamp at sign-in; a session whose stamp has moved is ended.
+    string? SecurityStamp = null);
+
+/// <summary>
+/// Re-checks an open session against the account as it is now.
+/// <para>
+/// A session is built once, at sign-in. Without this, an operator dismissed and deactivated at ten
+/// o'clock, or whose role was withdrawn, kept every right they had until they chose to sign out.
+/// The desktop shell calls it periodically and ends the session when it answers false.
+/// </para>
+/// </summary>
+public interface ISessionValidator
+{
+    /// <summary>
+    /// False when the account was deactivated, its security stamp rotated (password reset, role
+    /// change, prescriber link) or its effective permissions or sites changed since sign-in.
+    /// </summary>
+    Task<bool> IsStillValidAsync(CancellationToken ct = default);
+}
 
 /// <summary>
 /// The password policy. Values come from configuration so a laboratory can align it with its own

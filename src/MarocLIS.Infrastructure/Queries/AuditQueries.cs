@@ -44,11 +44,17 @@ public sealed class AuditQueries(LisDbContext db) : IAuditQueries
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var search = filter.Search.Trim();
+
+            // Not inside the payloads of personnel and payroll rows: searching them for "8500"
+            // would find whose salary it is, even with the values masked on display.
+            var payEntities = AuditRedaction.EntityNames.ToList();
+
             query = query.Where(a => a.EntityName.Contains(search)
                                      || (a.ChangedProperties != null
                                          && a.ChangedProperties.Contains(search))
                                      || (a.Reason != null && a.Reason.Contains(search))
-                                     || (a.Changes != null && a.Changes.Contains(search)));
+                                     || (a.Changes != null && !payEntities.Contains(a.EntityName)
+                                         && a.Changes.Contains(search)));
         }
 
         var rows = await query
@@ -72,8 +78,10 @@ public sealed class AuditQueries(LisDbContext db) : IAuditQueries
         [
             .. rows.Select(a => new AuditEntryRow(
                 a.Id, a.OccurredAt, a.EntityName, a.EntityId, a.Operation, a.UserName,
-                a.Workstation, a.ChangedProperties, a.Changes, a.Reason, a.PatientId,
-                a.PatientRecordNumber, a.AggregateName, a.CorrelationId))
+                a.Workstation, a.ChangedProperties,
+                // Rows written before redaction still hold the values; masked here, not rewritten.
+                AuditRedaction.Mask(a.EntityName, a.Changes),
+                a.Reason, a.PatientId, a.PatientRecordNumber, a.AggregateName, a.CorrelationId))
         ];
     }
 

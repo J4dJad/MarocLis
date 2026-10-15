@@ -54,6 +54,7 @@ public sealed class AdministrationQueries(LisDbContext db) : IAdministrationQuer
                 u.PasswordChangedAt,
                 u.PreferredLanguage,
                 u.AuthorizedDepartmentCodesCsv,
+                u.PrescriberId,
                 HasSignature = u.SignaturePng != null,
                 RoleIds = u.Roles.Select(r => r.RoleId).ToList(),
                 RoleCodes = u.Roles
@@ -95,7 +96,8 @@ public sealed class AdministrationQueries(LisDbContext db) : IAdministrationQuer
                     Split(r.AuthorizedDepartmentCodesCsv),
                     [.. r.Sites.Select(s => s.SiteId)],
                     r.Sites.FirstOrDefault(s => s.IsDefaultSite)?.SiteId,
-                    r.HasSignature);
+                    r.HasSignature,
+                    r.PrescriberId);
             })
         ];
     }
@@ -132,6 +134,21 @@ public sealed class AdministrationQueries(LisDbContext db) : IAdministrationQuer
                 [.. r.Permissions.Order(StringComparer.Ordinal)]))
         ];
     }
+
+    public async Task<IReadOnlyList<PrescriberOption>> GetPrescriberOptionsAsync(CancellationToken ct = default) =>
+        await db.Prescribers.AsNoTracking()
+            .OrderByDescending(p => p.IsActive)
+            .ThenBy(p => p.LastName).ThenBy(p => p.FirstName)
+            .Select(p => new PrescriberOption(
+                p.Id,
+                p.Kind == Domain.Orders.PrescriberKind.Institution
+                    ? p.InstitutionName ?? p.LastName
+                    : "Dr " + p.LastName + " " + p.FirstName,
+                p.City, p.IsActive))
+            .ToListAsync(ct);
+
+    public Task<bool> PrescriberExistsAsync(Guid prescriberId, CancellationToken ct = default) =>
+        db.Prescribers.AnyAsync(p => p.Id == prescriberId, ct);
 
     public async Task<IReadOnlyList<SiteRow>> GetSitesAsync(CancellationToken ct = default) =>
         await db.Sites.AsNoTracking()

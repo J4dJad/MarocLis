@@ -275,6 +275,15 @@ public static class ReferenceDataSeeder
         {
             if (existing.TryGetValue(code, out var role))
             {
+                // The prescriber role used to carry reports.print, which is the permission that
+                // releases a new report version — an outside doctor could issue the laboratory's
+                // reports. Withdrawn once, on the built-in role only, in exchange for reprinting
+                // an already released PDF; must run before ApplyShippedPermissions records the
+                // replacement as offered.
+                if (code == SystemRoles.Prescriber && role.IsBuiltIn)
+                    role.ReplaceShippedPermissionOnce(Permissions.Reports.Print,
+                                                      Permissions.Reports.ReprintValidated);
+
                 // Grant only the permissions a new version introduced (never offered before), so
                 // nothing an administrator deliberately added or removed is undone on restart.
                 role.ApplyShippedPermissions(permissions);
@@ -606,9 +615,12 @@ internal static class RolePermissionSets
          new MultilingualText("Prescripteur", "طبيب واصف", "Prescriber"),
          [
              // Read-only consultation of validated reports for their own patients. Scoping to
-             // "their own" is enforced by the query, not by the permission.
+             // "their own" is not a permission: an account linked to a prescriber is restricted
+             // to that prescriber's orders by the data layer's query filters (PrescriberScope).
+             // Never reports.print, which releases a new report version; reprinting the PDF
+             // already released is the consultation a prescriber needs.
              Permissions.Patients.View, Permissions.Orders.View,
-             Permissions.Results.View, Permissions.Reports.View, Permissions.Reports.Print
+             Permissions.Results.View, Permissions.Reports.View, Permissions.Reports.ReprintValidated
          ])
     ];
 }

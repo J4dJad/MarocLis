@@ -1,9 +1,12 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Desktop.Views;
+using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Localization;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using MarocLIS.Reporting;
 
@@ -40,6 +43,14 @@ public sealed class MainShellForm : LocalizedForm
     private readonly System.Windows.Forms.Timer _clockTimer = new() { Interval = 30_000 };
     private readonly System.Windows.Forms.Timer _idleTimer = new();
 
+    // Re-checks the account behind the session: deactivated, password reset, roles changed.
+    private readonly System.Windows.Forms.Timer _sessionTimer = new() { Interval = 60_000 };
+    private readonly ISessionValidator _sessionValidator;
+    private readonly IServiceScopeFactory _scopes;
+    private readonly ILogger<MainShellForm>? _logger;
+    private bool _checkingSession;
+    private bool _endingSession;
+
     private readonly List<NavigationEntry> _entries = [];
     private readonly Dictionary<string, Button> _navButtons = new(StringComparer.Ordinal);
     private string _activeKey = string.Empty;
@@ -75,9 +86,14 @@ public sealed class MainShellForm : LocalizedForm
     public MainShellForm(ICurrentUser currentUser, INavigationService navigation,
                          ILocalizer localizer, ICultureManager cultureManager,
                          IUserDialogs dialogs, PasswordPolicy policy,
-                         IListPdfRenderer lists, IDocumentOutput documents)
+                         IListPdfRenderer lists, IDocumentOutput documents,
+                         ISessionValidator sessionValidator, IServiceScopeFactory scopes,
+                         ILogger<MainShellForm>? logger = null)
         : base(localizer, cultureManager)
     {
+        _sessionValidator = sessionValidator;
+        _scopes = scopes;
+        _logger = logger;
         _lists = lists;
         _documents = documents;
         _currentUser = currentUser;
@@ -110,6 +126,11 @@ public sealed class MainShellForm : LocalizedForm
                                             policy.IdleTimeout.TotalMilliseconds / 4);
         _idleTimer.Tick += (_, _) => CheckIdle(policy.IdleTimeout);
         _idleTimer.Start();
+
+        // A session is built once, at sign-in; this is what makes deactivating a dismissed
+        // employee, resetting a password or withdrawing a role reach a workstation already open.
+        _sessionTimer.Tick += async (_, _) => await CheckSessionAsync();
+        _sessionTimer.Start();
 
         // Activity anywhere counts: a click in a grid or typing in a dialog never reaches this
         // form's own mouse and key handlers, and an operator working with the mouse alone was
@@ -817,7 +838,43 @@ public sealed class MainShellForm : LocalizedForm
         // to the counter meanwhile must not see the patient file left open behind it.
         _content.Visible = false;
         _dialogs.Warn(T("Message.SessionExpired"));
-        SignOut(confirm: false);
+        _ = EndSessionAsync(SecurityEventKind.SessionTimeout, $"Idle for {timeout.TotalMinutes:0} min");
+    }
+
+    /// <summary>
+    /// Ends the session when the account behind it changed since sign-in. A check that cannot
+    /// reach the database leaves the session alone: the next operation fails on its own, and a
+    /// network blip must not sign out every workstation at once.
+    /// </summary>
+    private async Task CheckSessionAsync()
+    {
+        if (_checkingSession || _endingSession) return;
+        _checkingSession = true;
+
+        bool valid;
+        try
+        {
+            valid = await _sessionValidator.IsStillValidAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "The session could not be re-checked against the account.");
+            return;
+        }
+        finally
+        {
+            _checkingSession = false;
+        }
+
+        if (valid || _endingSession) return;
+
+        _sessionTimer.Stop();
+        _idleTimer.Stop();
+
+        // Cleared before the notice, as for the idle lock: the notice waits for a click.
+        _content.Visible = false;
+        _dialogs.Warn(T("Auth_SessionRevoked"));
+        await EndSessionAsync(SecurityEventKind.Logout, "Session ended: account changed since sign-in");
     }
 
     /// <summary>Notes keyboard and mouse input in every window of the application, dialogs included.</summary>
@@ -834,14 +891,49 @@ public sealed class MainShellForm : LocalizedForm
         }
     }
 
-    private void SignOut(bool confirm = true)
+    private void SignOut()
     {
-        if (confirm && !_dialogs.Confirm(T("Action.Logout"))) return;
+        if (!_dialogs.Confirm(T("Action.Logout"))) return;
 
-        // Restarting the process is the cleanest way to guarantee no scope, cached query or
-        // tracked entity survives into the next operator's session on a shared workstation.
-        System.Windows.Forms.Application.Restart();
-        Environment.Exit(0);
+        _ = EndSessionAsync(SecurityEventKind.Logout, details: null);
+    }
+
+    /// <summary>
+    /// Records the end of the session, then leaves the message loop so the process restarts.
+    /// <para>
+    /// Restarting the process is the cleanest way to guarantee no scope, cached query or tracked
+    /// entity survives into the next operator's session on a shared workstation. It used to be
+    /// done here with <c>Environment.Exit</c>, which skipped everything after the message loop:
+    /// no sign-out event was recorded, the folder of patient PDFs viewed in the session was left
+    /// on disk, and the log was not flushed. The restart is now <see cref="Program"/>'s, once the
+    /// host — and with it that folder — is disposed and the log closed.
+    /// </para>
+    /// </summary>
+    private async Task EndSessionAsync(SecurityEventKind reason, string? details)
+    {
+        if (_endingSession) return;
+        _endingSession = true;
+
+        _idleTimer.Stop();
+        _sessionTimer.Stop();
+        _content.Visible = false;
+
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IAuthenticationService>()
+                       .SignOutAsync(reason, details);
+        }
+        catch (Exception ex)
+        {
+            // The session ends regardless; a missing record is logged, not a reason to stay open.
+            _logger?.LogError(ex, "The end of the session could not be recorded.");
+        }
+
+        Program.RestartAfterExit = true;
+
+        // Exit rather than Close: it also ends the loop of any dialog still open over the shell.
+        System.Windows.Forms.Application.Exit();
     }
 
     protected override void Dispose(bool disposing)
@@ -851,6 +943,7 @@ public sealed class MainShellForm : LocalizedForm
             System.Windows.Forms.Application.RemoveMessageFilter(_activity);
             _clockTimer.Dispose();
             _idleTimer.Dispose();
+            _sessionTimer.Dispose();
         }
         base.Dispose(disposing);
     }

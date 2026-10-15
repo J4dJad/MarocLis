@@ -1,5 +1,6 @@
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Organization;
 using MarocLIS.Domain.Sequencing;
 using Microsoft.EntityFrameworkCore;
@@ -64,6 +65,14 @@ public sealed class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
         builder.Property(e => e.AuthorizedDepartmentCodesCsv).HasMaxLength(500);
         builder.Property(e => e.LastLoginWorkstation).HasMaxLength(100);
         builder.Property(e => e.SignaturePng).HasColumnType("varbinary(max)");
+
+        // The prescriber an outside doctor's account is restricted to. Optional, no navigation:
+        // nothing loads the prescriber through the account, and a retired prescriber must not
+        // take the account's row with it.
+        builder.HasOne<Prescriber>().WithMany()
+               .HasForeignKey(e => e.PrescriberId)
+               .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.PrescriberId).HasDatabaseName("IX_Users_Prescriber");
 
         builder.HasMany(e => e.Roles)
                .WithOne(r => r.User!)

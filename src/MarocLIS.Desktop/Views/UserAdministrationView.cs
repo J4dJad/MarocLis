@@ -771,7 +771,7 @@ public sealed class UserAdministrationView : LocalizedView
 
     private async Task CreateUserAsync()
     {
-        using var dialog = new UserDialog(Localizer, _dialogs, existing: null);
+        using var dialog = new UserDialog(Localizer, _dialogs, existing: null, await LoadPrescriberOptionsAsync());
 
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.CreateRequest is null) return;
 
@@ -795,7 +795,7 @@ public sealed class UserAdministrationView : LocalizedView
     {
         if (_users.CurrentRow?.Tag is not UserRow row) return;
 
-        using var dialog = new UserDialog(Localizer, _dialogs, row);
+        using var dialog = new UserDialog(Localizer, _dialogs, row, await LoadPrescriberOptionsAsync());
 
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.UpdateRequest is null) return;
 
@@ -808,6 +808,13 @@ public sealed class UserAdministrationView : LocalizedView
         }
 
         await LoadUsersAsync();
+    }
+
+    /// <summary>The prescribers for the editor's picker; an empty list if they cannot be read.</summary>
+    private async Task<IReadOnlyList<PrescriberOption>> LoadPrescriberOptionsAsync()
+    {
+        var result = await _administration.GetPrescriberOptionsAsync();
+        return result.IsSuccess ? result.Value : [];
     }
 
     private async Task AssignRolesAsync()
@@ -1036,11 +1043,13 @@ internal sealed class UserDialog : Form
     private readonly TextBox _departments = UiTheme.Input(440);
     private readonly ComboBox _language = new();
     private readonly Label _qualificationNotice = new();
+    private readonly ComboBox _prescriber = new();
 
     internal CreateUserRequest? CreateRequest { get; private set; }
     internal UpdateUserRequest? UpdateRequest { get; private set; }
 
-    internal UserDialog(ILocalizer localizer, IUserDialogs dialogs, UserRow? existing)
+    internal UserDialog(ILocalizer localizer, IUserDialogs dialogs, UserRow? existing,
+                        IReadOnlyList<PrescriberOption> prescribers)
     {
         _localizer = localizer;
         _dialogs = dialogs;
@@ -1054,7 +1063,7 @@ internal sealed class UserDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(500, 560);
+        ClientSize = new Size(500, 640);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
@@ -1166,17 +1175,48 @@ internal sealed class UserDialog : Form
         };
         Controls.Add(departmentsHint);
 
+        // The outside doctor this account belongs to. Only the prescriber role uses it: such an
+        // account then sees that prescriber's orders and nothing else, and without a link it sees
+        // nothing at all. Staff accounts ignore it.
+        y += 84;
+        Field("Admin.Prescriber", y);
+        _prescriber.DropDownStyle = ComboBoxStyle.DropDownList;
+        _prescriber.FlatStyle = FlatStyle.Flat;
+        _prescriber.Bounds = new Rectangle(20, y + 18, 460, UiTheme.InputHeight);
+        _prescriber.Items.Add(new PrescriberChoice(null, localizer["Admin.NoPrescriber"]));
+
+        foreach (var option in prescribers)
+        {
+            var display = string.IsNullOrWhiteSpace(option.City)
+                ? option.FullName
+                : $"{option.FullName} — {option.City}";
+
+            // A retired prescriber stays pickable only for the account already linked to it.
+            if (option.IsActive || option.PrescriberId == existing?.PrescriberId)
+                _prescriber.Items.Add(new PrescriberChoice(option.PrescriberId, display));
+        }
+
+        var prescriberHint = new Label
+        {
+            Text = localizer["Admin.PrescriberHint"],
+            Font = UiTheme.Small,
+            ForeColor = UiTheme.TextSecondary,
+            AutoSize = false,
+            Bounds = new Rectangle(20, y + 48, 460, 30)
+        };
+        Controls.Add(prescriberHint);
+
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
-        ok.Bounds = new Rectangle(20, 512, 220, UiTheme.ButtonHeight);
+        ok.Bounds = new Rectangle(20, 592, 220, UiTheme.ButtonHeight);
         ok.Click += (_, _) => Accept();
 
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
-        cancel.Bounds = new Rectangle(250, 512, 230, UiTheme.ButtonHeight);
+        cancel.Bounds = new Rectangle(250, 592, 230, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
         Controls.AddRange([_userName, _password, _fullName, _fullNameArabic, _email, _phone,
                            _qualification, _language, _orderNumber, _inpe, _validUntil,
-                           _departments, ok, cancel]);
+                           _departments, _prescriber, ok, cancel]);
 
         AcceptButton = ok;
         CancelButton = cancel;
@@ -1189,8 +1229,22 @@ internal sealed class UserDialog : Form
     {
         _qualification.SelectedIndex = 0;
         _language.SelectedIndex = 0;
+        _prescriber.SelectedIndex = 0;
 
         if (existing is null) return;
+
+        if (existing.PrescriberId is { } linked)
+        {
+            var index = _prescriber.Items.Cast<object>().ToList()
+                .FindIndex(item => item is PrescriberChoice { Id: { } id } && id == linked);
+
+            // Not in the list (it could not be read): kept as it is rather than shown as "none",
+            // which saving would turn into a silent unlink.
+            if (index < 0)
+                index = _prescriber.Items.Add(new PrescriberChoice(linked, $"#{linked.ToString()[..8]}"));
+
+            _prescriber.SelectedIndex = index;
+        }
 
         _userName.Text = existing.UserName;
         _fullName.Text = existing.FullName;
@@ -1274,6 +1328,8 @@ internal sealed class UserDialog : Form
             ? DateOnly.FromDateTime(_validUntil.Value.Date)
             : null;
 
+        var prescriberId = (_prescriber.SelectedItem as PrescriberChoice)?.Id;
+
         if (_existing is null)
         {
             if (_userName.Text.Trim().Length < 3)
@@ -1303,7 +1359,8 @@ internal sealed class UserDialog : Form
                 Inpe = Blank(_inpe.Text),
                 QualificationValidUntil = validUntil,
                 PreferredLanguage = language,
-                AuthorizedDepartmentCodes = departments
+                AuthorizedDepartmentCodes = departments,
+                PrescriberId = prescriberId
             };
         }
         else
@@ -1320,7 +1377,8 @@ internal sealed class UserDialog : Form
                 Inpe = Blank(_inpe.Text),
                 QualificationValidUntil = validUntil,
                 PreferredLanguage = language,
-                AuthorizedDepartmentCodes = departments
+                AuthorizedDepartmentCodes = departments,
+                PrescriberId = prescriberId
             };
         }
 
@@ -1330,6 +1388,11 @@ internal sealed class UserDialog : Form
 
     private static string? Blank(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed record PrescriberChoice(Guid? Id, string Display)
+    {
+        public override string ToString() => Display;
+    }
 }
 
 /// <summary>

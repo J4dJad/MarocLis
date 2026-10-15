@@ -77,6 +77,12 @@ public sealed class CurrentUserAccessor : ICurrentUser
 
     public string Workstation { get; } = Environment.MachineName;
 
+    public Guid? PrescriberId { get; private set; }
+    public bool IsPrescriberScoped { get; private set; }
+
+    /// <summary>The account's security stamp when the session was opened; see <see cref="SessionValidator"/>.</summary>
+    internal string? SecurityStamp { get; private set; }
+
     public bool Has(string permission) => Permissions.Contains(permission);
 
     internal void Apply(AuthenticatedSession session)
@@ -92,7 +98,16 @@ public sealed class CurrentUserAccessor : ICurrentUser
         Permissions = session.Permissions;
         AccessibleSiteIds = session.AccessibleSiteIds;
         AuthorizedDepartmentCodes = session.AuthorizedDepartmentCodes;
+        PrescriberId = session.PrescriberId;
+        IsPrescriberScoped = session.IsPrescriberScoped;
+        SecurityStamp = session.SecurityStamp;
     }
+
+    /// <summary>
+    /// Takes the stamp the operator's own password change just produced, so changing one's own
+    /// password does not read, a minute later, as a session revoked by somebody else.
+    /// </summary>
+    internal void RefreshSecurityStamp(string stamp) => SecurityStamp = stamp;
 
     internal void SetSite(Guid siteId, string siteCode)
     {
@@ -112,6 +127,9 @@ public sealed class CurrentUserAccessor : ICurrentUser
         Permissions = NoPermissions;
         AccessibleSiteIds = [];
         AuthorizedDepartmentCodes = NoPermissions;
+        PrescriberId = null;
+        IsPrescriberScoped = false;
+        SecurityStamp = null;
     }
 }
 
@@ -201,6 +219,68 @@ public sealed class PermissionGuard(
             }, TaskScheduler.Default);
 
         return Result.Failure(Error.Forbidden(resourceKey, detail));
+    }
+}
+
+/// <summary>
+/// Re-reads the signed-in account and compares it with the session opened for it.
+/// <para>
+/// Through a short-lived context of its own, for the same reason as <see cref="SecurityAuditor"/>:
+/// the shell calls it on a timer, and on a screen's context it would collide with whatever that
+/// screen is loading. Ignores the site filter on purpose — the question is about the account, not
+/// about the site the operator is working on.
+/// </para>
+/// </summary>
+public sealed class SessionValidator(IServiceScopeFactory scopes, CurrentUserAccessor currentUser)
+    : ISessionValidator
+{
+    public async Task<bool> IsStillValidAsync(CancellationToken ct = default)
+    {
+        if (!currentUser.IsAuthenticated) return false;
+
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<LisDbContext>();
+
+        var account = await db.Users.IgnoreQueryFilters().AsNoTracking()
+            .Where(u => u.Id == currentUser.UserId)
+            .Select(u => new
+            {
+                u.IsActive,
+                u.SecurityStamp,
+                u.PrescriberId,
+                Permissions = u.Roles
+                    .Where(r => r.Role!.IsActive)
+                    .SelectMany(r => r.Role!.Permissions.Select(p => p.Permission))
+                    .ToList(),
+                Sites = u.SiteAccess.Select(a => a.SiteId).ToList()
+            })
+            .FirstOrDefaultAsync(ct);
+
+        return account is not null && Matches(currentUser, currentUser.SecurityStamp,
+                                              account.IsActive, account.SecurityStamp,
+                                              account.PrescriberId, account.Permissions, account.Sites);
+    }
+
+    /// <summary>The comparison itself, separate so it can be tested without a database.</summary>
+    public static bool Matches(ICurrentUser session, string? sessionStamp, bool isActive, string securityStamp,
+                                 Guid? prescriberId, IEnumerable<string> permissions,
+                                 IEnumerable<Guid> sites)
+    {
+        if (!isActive) return false;
+
+        // A session opened before stamps were recorded has nothing to compare against; the other
+        // checks still apply to it.
+        if (sessionStamp is not null
+            && !string.Equals(sessionStamp, securityStamp, StringComparison.Ordinal))
+            return false;
+
+        if (session.PrescriberId != prescriberId) return false;
+
+        // Compared as sets: a role edited or switched off changes what the account may do without
+        // touching the account itself, so its stamp does not move.
+        if (!session.Permissions.SetEquals(permissions)) return false;
+
+        return session.AccessibleSiteIds.ToHashSet().SetEquals(sites);
     }
 }
 
