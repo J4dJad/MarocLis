@@ -201,6 +201,15 @@ public class LisDbContext : DbContext
     public DbSet<WorkAccident> WorkAccidents => Set<WorkAccident>();
     public DbSet<CredentialFile> CredentialFiles => Set<CredentialFile>();
 
+    // ---- Commercial relations and patient follow-up messages ---------------------------------
+
+    public DbSet<Domain.Relations.DelegateVisit> DelegateVisits => Set<Domain.Relations.DelegateVisit>();
+    public DbSet<Domain.Relations.Partnership> Partnerships => Set<Domain.Relations.Partnership>();
+    public DbSet<Domain.Relations.PartnershipDocument> PartnershipDocuments => Set<Domain.Relations.PartnershipDocument>();
+    public DbSet<Domain.Relations.ReminderRule> ReminderRules => Set<Domain.Relations.ReminderRule>();
+    public DbSet<Domain.Relations.PatientMessage> PatientMessages => Set<Domain.Relations.PatientMessage>();
+    public DbSet<Domain.Relations.SurveyInvitation> SurveyInvitations => Set<Domain.Relations.SurveyInvitation>();
+
     // ---- Traceability and sequences -----------------------------------------------------------
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();

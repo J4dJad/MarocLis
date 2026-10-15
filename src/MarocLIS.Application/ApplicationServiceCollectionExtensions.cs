@@ -63,6 +63,11 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Inventory.TemperatureMonitoringService>();
         services.AddScoped<Inventory.SupplierEvaluationService>();
         services.AddScoped<Statistics.StatisticsService>();
+        services.AddScoped<Relations.PrescriberStatisticsService>();
+        services.AddScoped<Relations.RelationsService>();
+        services.AddScoped<Relations.PatientMessagingService>();
+        services.AddScoped<Steering.CostMarginService>();
+        services.AddScoped<Steering.SteeringService>();
         services.AddScoped<Administration.UserAdministrationService>();
         services.AddScoped<Administration.ConfigurationService>();
         services.AddScoped<Administration.MasterDataService>();

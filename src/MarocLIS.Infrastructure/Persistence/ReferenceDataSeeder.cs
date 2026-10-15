@@ -509,7 +509,10 @@ internal static class RolePermissionSets
              Permissions.HumanResources.View, Permissions.HumanResources.Manage,
              Permissions.HumanResources.ManageHabilitations, Permissions.HumanResources.Salary,
              Permissions.HumanResources.RequestLeave, Permissions.HumanResources.ApproveLeave,
-             Permissions.HumanResources.ManagePlanning, Permissions.HumanResources.Accidents
+             Permissions.HumanResources.ManagePlanning, Permissions.HumanResources.Accidents,
+             // Direction: prescriber relations, patient follow-up messages and the steering screens.
+             Permissions.Relations.View, Permissions.Relations.Manage, Permissions.Messaging.Campaign,
+             Permissions.Steering.View, Permissions.Steering.ManageCosts
          ]),
 
         (SystemRoles.Biologist,
@@ -627,7 +630,9 @@ internal static class RolePermissionSets
              // Keys supplier invoices; releasing a blocked one and paying stay with the director.
              Permissions.Inventory.EnterInvoices,
              Permissions.Statistics.View,
-             Permissions.HumanResources.RequestLeave
+             Permissions.HumanResources.RequestLeave,
+             // Prescriber and convention volumes; the steering screens stay with the direction.
+             Permissions.Relations.View
          ]),
 
         (SystemRoles.Prescriber,

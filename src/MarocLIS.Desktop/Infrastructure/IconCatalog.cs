@@ -266,5 +266,10 @@ public static class IconCatalog
         ["interfaces"] = Glyph.Cpu,
         ["masterdata"] = Glyph.Database,
         ["settings"] = Glyph.Settings,
+        ["steering"] = Glyph.Gauge,
+        ["prescriberstats"] = Glyph.ChartColumn,
+        ["relations"] = Glyph.Users,
+        ["patientmessaging"] = Glyph.Send,
+        ["costmargin"] = Glyph.Calculator,
     };
 }

@@ -181,6 +181,28 @@ public static class Permissions
         public const string EpidemiologicalDeclaration = "statistics.declaration";
     }
 
+    public static class Relations
+    {
+        /// <summary>Prescriber and clinic volumes, delegate visits and conventions, read-only.</summary>
+        public const string View = "relations.view";
+        /// <summary>Recording delegate visits and conventions, and attaching the signed convention.</summary>
+        public const string Manage = "relations.manage";
+    }
+
+    public static class Messaging
+    {
+        /// <summary>Bilan reminder rules and sends, satisfaction surveys and their answers.</summary>
+        public const string Campaign = "messaging.campaign";
+    }
+
+    public static class Steering
+    {
+        /// <summary>The management dashboard ("Pilotage") and the cost and margin analysis.</summary>
+        public const string View = "steering.view";
+        /// <summary>The cost parameters: allocation of indirect costs per test.</summary>
+        public const string ManageCosts = "steering.costs.manage";
+    }
+
     private static readonly Lazy<IReadOnlyList<string>> AllLazy = new(Discover);
 
     public static IReadOnlyList<string> All => AllLazy.Value;
