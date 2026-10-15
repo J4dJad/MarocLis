@@ -88,7 +88,8 @@ public sealed class PersonnelTests
         e.RecordExit(Today, ExitReason.Resignation, null).IsSuccess.Should().BeTrue();
 
         e.Habilitations.Should().OnlyContain(h => !h.IsActive);
-        e.Grant(HabilitationActivity.AdultCollection, null, HabilitationLevel.Authorized, Today, null,
+        // The exit day is worked: nothing is granted after it.
+        e.Grant(HabilitationActivity.AdultCollection, null, HabilitationLevel.Authorized, Today.AddDays(1), null,
                 Guid.NewGuid(), null).FirstError.ResourceKey.Should().Be("Habilitation_EmployeeExited");
         e.RecordExit(Today, ExitReason.Resignation, null).FirstError.ResourceKey.Should().Be("Employee_AlreadyExited");
     }

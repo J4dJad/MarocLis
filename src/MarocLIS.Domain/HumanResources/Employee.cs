@@ -118,6 +118,23 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
     public bool HasDeparture => ExitDate is not null;
 
     /// <summary>
+    /// The contract before a re-hire: its first and last days. The payroll of the month of the
+    /// departure, or of a re-hire within it, still pays those days and carries the final
+    /// settlement after <see cref="Rehire"/> has put the new dates in place.
+    /// </summary>
+    public DateOnly? PreviousHireDate { get; private set; }
+    public DateOnly? PreviousExitDate { get; private set; }
+
+    /// <summary>Why the habilitations still held at the departure end; also how a cancelled exit finds them.</summary>
+    public const string ExitWithdrawalReason = "Sortie du laboratoire";
+
+    /// <summary>
+    /// The departure has not taken effect yet on <paramref name="today"/>: the exit date is today
+    /// or later, so it can still be corrected or withdrawn (a resignation taken back, a wrong row).
+    /// </summary>
+    public bool ExitIsPending(DateOnly today) => ExitDate is { } exit && exit >= today;
+
+    /// <summary>
     /// On the staff on <paramref name="day"/>: no departure, or one not reached yet. The exit date
     /// is the last day worked, so the employee has left from the day after it; until then they
     /// take leave, accrue it and keep their habilitations like everyone else.
@@ -193,20 +210,77 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
         ExitComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
 
         // A person who has left holds no habilitation: the matrix must not show them as able to
-        // validate, and a return later starts from a fresh evaluation. They end on the exit date,
-        // not on the day the departure is recorded: the notice is worked with them.
-        foreach (var habilitation in _habilitations.Where(h => h.IsActiveOn(on)))
-            habilitation.Withdraw(on, "Sortie du laboratoire");
-
+        // validate, and a return later starts from a fresh evaluation. They end with the exit
+        // date, the last day worked, not on the day the departure is recorded: the notice is
+        // worked with them, the exit day included.
+        WithdrawForExit(on);
         return Result.Success();
     }
 
-    /// <summary>Re-hiring keeps the file; the contract dates are entered again.</summary>
+    private void WithdrawForExit(DateOnly exit)
+    {
+        foreach (var habilitation in _habilitations.Where(h => h.IsActiveOn(exit)))
+            habilitation.Withdraw(exit.AddDays(1), ExitWithdrawalReason);
+    }
+
+    /// <summary>The habilitations the departure ended, held again as before it.</summary>
+    private void ReinstateAfterExit(DateOnly exit)
+    {
+        // Ended by this departure: on the day after it, or on the day itself for those withdrawn
+        // before the exit day was counted as worked.
+        foreach (var habilitation in _habilitations.Where(h => h.WithdrawalReason == ExitWithdrawalReason
+                                                               && (h.WithdrawnOn == exit.AddDays(1) || h.WithdrawnOn == exit)))
+            habilitation.Reinstate();
+    }
+
+    /// <summary>
+    /// Corrects a departure that has not taken effect yet: another date, reason or comment. The
+    /// habilitations follow the new date. A departure already passed is not corrected here: the
+    /// payroll and the settlement were made from it.
+    /// </summary>
+    public Result CorrectExit(DateOnly on, ExitReason reason, string? comment, DateOnly today)
+    {
+        if (ExitDate is not { } current) return Result.Failure(Error.Conflict("Employee_NoDeparture"));
+        if (!ExitIsPending(today)) return Result.Failure(Error.Conflict("Employee_ExitAlreadyEffective", current));
+        if (on < HireDate) return Result.Failure(Error.Validation("Employee_ExitBeforeHire"));
+
+        ReinstateAfterExit(current);
+        ExitDate = on;
+        ExitReason = reason;
+        ExitComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+        WithdrawForExit(on);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Withdraws a departure that has not taken effect yet: a resignation taken back, an exit
+    /// saved on the wrong file. The employee is on the staff as before, with the habilitations
+    /// the departure was to end; the contract dates are untouched.
+    /// </summary>
+    public Result CancelExit(DateOnly today)
+    {
+        if (ExitDate is not { } current) return Result.Failure(Error.Conflict("Employee_NoDeparture"));
+        if (!ExitIsPending(today)) return Result.Failure(Error.Conflict("Employee_ExitAlreadyEffective", current));
+
+        ReinstateAfterExit(current);
+        ExitDate = null;
+        ExitReason = null;
+        ExitComment = null;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Re-hiring keeps the file; the contract dates are entered again. The contract that ended is
+    /// kept as the previous one, for the payroll of its last month. A departure not reached yet
+    /// is withdrawn with <see cref="CancelExit"/> instead.
+    /// </summary>
     public Result Rehire(DateOnly on)
     {
         if (!HasDeparture) return Result.Failure(Error.Conflict("Employee_AlreadyActive"));
         if (on <= ExitDate) return Result.Failure(Error.Validation("Employee_RehireBeforeExit", ExitDate!));
 
+        PreviousHireDate = HireDate;
+        PreviousExitDate = ExitDate;
         ExitDate = null;
         ExitReason = null;
         ExitComment = null;
@@ -282,8 +356,8 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
                                               DateOnly? reviewDueOn, Guid grantedByUserId,
                                               string? evidence)
     {
-        // Nothing is granted from the last day worked on; granted during the notice, it ends with it.
-        if (ExitDate is { } exit && grantedOn >= exit)
+        // Nothing is granted after the last day worked; granted during the notice, it ends with it.
+        if (ExitDate is { } exit && grantedOn > exit)
             return Result.Failure<EmployeeHabilitation>(Error.Conflict("Habilitation_EmployeeExited"));
 
         if (EmployeeHabilitation.RequiresSubject(activity) && subjectId is null)
@@ -301,7 +375,7 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
         var habilitation = new EmployeeHabilitation(Id, activity, subject, level, grantedOn,
                                                     reviewDueOn, grantedByUserId,
                                                     string.IsNullOrWhiteSpace(evidence) ? null : evidence.Trim());
-        if (ExitDate is { } leaving) habilitation.Withdraw(leaving, "Sortie du laboratoire");
+        if (ExitDate is { } leaving) habilitation.Withdraw(leaving.AddDays(1), ExitWithdrawalReason);
         _habilitations.Add(habilitation);
         return Result.Success(habilitation);
     }
@@ -537,7 +611,7 @@ public sealed class EmployeeHabilitation : Entity, IAuditable
 
     /// <summary>
     /// From when the habilitation no longer holds. May lie ahead: on a departure recorded during
-    /// the notice it is the exit date.
+    /// the notice it is the day after the exit date, the exit day being worked.
     /// </summary>
     public DateOnly? WithdrawnOn { get; private set; }
     public string? WithdrawalReason { get; private set; }
@@ -556,6 +630,13 @@ public sealed class EmployeeHabilitation : Entity, IAuditable
         if (WithdrawnOn is { } end && end <= on) return;
         WithdrawnOn = on;
         WithdrawalReason = reason;
+    }
+
+    /// <summary>Held again: the departure that ended it was corrected or withdrawn before taking effect.</summary>
+    internal void Reinstate()
+    {
+        WithdrawnOn = null;
+        WithdrawalReason = null;
     }
 
     public DateTimeOffset CreatedAt { get; set; }

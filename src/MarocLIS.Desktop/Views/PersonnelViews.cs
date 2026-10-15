@@ -38,6 +38,8 @@ public sealed class PersonnelView : LocalizedView
     private readonly Button _settlement = UiTheme.SecondaryButton(string.Empty);
     private readonly ContextMenuStrip _lettersMenu = new();
     private readonly ContextMenuStrip _settlementMenu = new();
+    private readonly ContextMenuStrip _exitMenu = new();
+    private readonly ToolStripMenuItem _correctExitItem = new(), _cancelExitItem = new();
     private readonly ToolStripMenuItem _employmentItem = new(), _salaryItem = new(), _certificateItem = new();
     private readonly ToolStripMenuItem _computeItem = new(), _receiptItem = new(), _signedItem = new();
     private readonly Label _status = new();
@@ -134,6 +136,7 @@ public sealed class PersonnelView : LocalizedView
 
         _lettersMenu.Items.AddRange([_employmentItem, _salaryItem, _certificateItem]);
         _settlementMenu.Items.AddRange([_computeItem, _receiptItem, _signedItem]);
+        _exitMenu.Items.AddRange([_correctExitItem, _cancelExitItem]);
 
         actions.Controls.AddRange([_new, _edit, _documents, _exit, _letters, _settlement, _status]);
 
@@ -163,12 +166,16 @@ public sealed class PersonnelView : LocalizedView
         };
         _documents.Click += async (_, _) => await Guarded(DocumentsAsync);
         _exit.Click += async (_, _) => await Guarded(ExitOrRehireAsync);
+        _correctExitItem.Click += async (_, _) => await Guarded(CorrectExitAsync);
+        _cancelExitItem.Click += async (_, _) => await Guarded(CancelExitAsync);
         _letters.Click += (_, _) =>
         {
-            var active = Current()?.ExitDate is null;
-            _employmentItem.Enabled = active && PermissionGate.Allows(Permissions.HumanResources.Manage);
+            // Serving a notice is still working here: the attestation de travail holds until the
+            // exit date, and the certificate can be prepared from the day the departure is known.
+            var row = Current();
+            _employmentItem.Enabled = row is not null && OnStaff(row) && PermissionGate.Allows(Permissions.HumanResources.Manage);
             _salaryItem.Enabled = PermissionGate.Allows(Permissions.HumanResources.Salary);
-            _certificateItem.Enabled = !active && PermissionGate.Allows(Permissions.HumanResources.Manage);
+            _certificateItem.Enabled = row?.ExitDate is not null && PermissionGate.Allows(Permissions.HumanResources.Manage);
             _lettersMenu.Show(_letters, new Point(0, _letters.Height));
         };
         _employmentItem.Click += async (_, _) => await Guarded(() => LetterAsync(HrDocumentKind.EmploymentAttestation));
@@ -188,7 +195,7 @@ public sealed class PersonnelView : LocalizedView
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not EmployeeRow row) return;
 
-            if (row.ExitDate is not null)
+            if (!OnStaff(row))
                 e.CellStyle!.ForeColor = UiTheme.TextMuted;
             else if (row.ContractEndDate is { } end && end < DateOnly.FromDateTime(DateTime.Today))
             {
@@ -214,6 +221,8 @@ public sealed class PersonnelView : LocalizedView
         _computeItem.Text = T("Settlement.Compute");
         _receiptItem.Text = T("Settlement.PrintReceipt");
         _signedItem.Text = T("Settlement.RecordSigned");
+        _correctExitItem.Text = T("Personnel.CorrectExit");
+        _cancelExitItem.Text = T("Personnel.CancelExit");
 
         _grid.Column("number").HeaderText = T("Personnel.Number");
         _grid.Column("name").HeaderText = T("Field.Name");
@@ -269,7 +278,9 @@ public sealed class PersonnelView : LocalizedView
         {
             var index = _grid.Rows.Add(
                 row.Number,
-                row.ExitDate is { } left ? $"{row.FullName}  ({T("Personnel.ExitedOn", left.ToString("dd/MM/yyyy"))})" : row.FullName,
+                row.ExitDate is { } left
+                    ? $"{row.FullName}  ({T(OnStaff(row) ? "Personnel.LeavingOn" : "Personnel.ExitedOn", left.ToString("dd/MM/yyyy"))})"
+                    : row.FullName,
                 T($"EmployeeJob.{row.Job}"),
                 row.JobTitle ?? string.Empty,
                 row.DepartmentName ?? string.Empty,
@@ -284,16 +295,30 @@ public sealed class PersonnelView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();
 
-        _heading.Text = T("Personnel.Heading", _rows.Count(r => r.ExitDate is null));
+        _heading.Text = T("Personnel.Heading", _rows.Count(OnStaff));
         RefreshExitCaption();
     }
 
     private EmployeeRow? Current() => _grid.CurrentRow?.Tag as EmployeeRow;
 
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    /// <summary>On the staff today: no departure, or one not reached yet (the notice being served).</summary>
+    private static bool OnStaff(EmployeeRow row) => row.ExitDate is not { } exit || exit >= Today;
+
+    /// <summary>
+    /// The departure button follows the file: record an exit; correct or withdraw one not reached
+    /// yet; re-hire once it has taken effect, the only time a re-hire can succeed.
+    /// </summary>
     private void RefreshExitCaption()
     {
         var row = Current();
-        _exit.Text = row?.ExitDate is not null ? T("Personnel.Rehire") : T("Personnel.RecordExit");
+        _exit.Text = row?.ExitDate switch
+        {
+            null => T("Personnel.RecordExit"),
+            { } exit when exit >= Today => T("Personnel.ChangeExit"),
+            _ => T("Personnel.Rehire")
+        };
         _edit.Enabled = _documents.Enabled = _exit.Enabled = _letters.Enabled = row is not null;
         _settlement.Enabled = row?.ExitDate is not null;
     }
@@ -395,20 +420,73 @@ public sealed class PersonnelView : LocalizedView
 
         Domain.Common.Result result;
 
-        if (row.ExitDate is null)
+        switch (row.ExitDate)
         {
-            using var dialog = new EmployeeExitDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}");
-            if (dialog.ShowDialog(this) != DialogResult.OK) return;
-            result = await _personnel.RecordExitAsync(row.EmployeeId, dialog.ExitDate, dialog.Reason, dialog.Comment);
-        }
-        else
-        {
-            if (!_dialogs.Confirm(T("Personnel.RehirePrompt", row.FullName), _exit.Text)) return;
-            result = await _personnel.RehireAsync(row.EmployeeId, DateOnly.FromDateTime(DateTime.Today));
+            case null:
+            {
+                using var dialog = new EmployeeExitDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}");
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                result = await _personnel.RecordExitAsync(row.EmployeeId, dialog.ExitDate, dialog.Reason, dialog.Comment);
+                break;
+            }
+            case { } exit when exit >= Today:
+                // Not reached yet: corrected or withdrawn, not re-hired.
+                _exitMenu.Show(_exit, new Point(0, _exit.Height));
+                return;
+            case { } exit:
+            {
+                using var dialog = new EmployeeRehireDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}", exit);
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                result = await _personnel.RehireAsync(row.EmployeeId, dialog.RehireDate);
+                break;
+            }
         }
 
         if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
         await ActivateAsync();
+    }
+
+    private async Task CorrectExitAsync()
+    {
+        if (Current() is not { ExitDate: { } exit, ExitReason: { } reason } row) return;
+        try
+        {
+            var detail = await _personnel.GetEmployeeAsync(row.EmployeeId);
+            if (detail.IsFailure) { _dialogs.ShowFailure(detail); return; }
+
+            using var dialog = new EmployeeExitDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}",
+                                                      (exit, reason, detail.Value.ExitComment));
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+            var result = await _personnel.CorrectExitAsync(row.EmployeeId, dialog.ExitDate, dialog.Reason, dialog.Comment);
+            if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Correcting a departure failed.");
+            _dialogs.Error(T("Message.UnexpectedError"));
+        }
+    }
+
+    private async Task CancelExitAsync()
+    {
+        if (Current() is not { ExitDate: { } exit } row) return;
+        try
+        {
+            var reason = _dialogs.PromptForReason(T("Personnel.CancelExitPrompt", row.FullName, exit.ToString("dd/MM/yyyy")),
+                                                  T("Personnel.CancelExit"));
+            if (reason is null) return;
+
+            var result = await _personnel.CancelExitAsync(row.EmployeeId, reason);
+            if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Withdrawing a departure failed.");
+            _dialogs.Error(T("Message.UnexpectedError"));
+        }
     }
 }
 

@@ -136,6 +136,20 @@ public sealed class AccidentService(
 
     public async Task<string?> LastInsurerAsync(CancellationToken ct = default) => await queries.LastInsurerAsync(ct);
 
+    /// <summary>
+    /// How long after the last day worked a new accident can still be declared for a person who
+    /// has left: one on the exit day is often reported in the days after.
+    /// </summary>
+    public const int DeclarableDaysAfterExit = 30;
+
+    /// <summary>
+    /// Whether a new accident can be declared for the person: on the staff, a departure recorded
+    /// ahead (the notice is worked, and an injury during it is an accident at work) or one passed
+    /// within <see cref="DeclarableDaysAfterExit"/> days. <see cref="SaveAsync"/> checks the date.
+    /// </summary>
+    public static bool IsDeclarableFor(DateOnly? exitDate, DateOnly today) =>
+        exitDate is not { } exit || exit >= today.AddDays(-DeclarableDaysAfterExit);
+
     /// <summary>The people an accident can be declared for, under the accident right alone.</summary>
     public async Task<Result<IReadOnlyList<EmployeeRow>>> GetEmployeesAsync(CancellationToken ct = default)
     {

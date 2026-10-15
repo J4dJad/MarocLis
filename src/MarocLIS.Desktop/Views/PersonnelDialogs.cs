@@ -637,7 +637,10 @@ internal sealed class CredentialEditorDialog : MasterDataEditor
     }
 }
 
-/// <summary>Recording a departure. Habilitations end with it.</summary>
+/// <summary>
+/// Recording a departure, or correcting one not reached yet (with <paramref name="current"/>).
+/// Habilitations end with it.
+/// </summary>
 internal sealed class EmployeeExitDialog : MasterDataEditor
 {
     private readonly ComboBox _reason;
@@ -648,19 +651,46 @@ internal sealed class EmployeeExitDialog : MasterDataEditor
     internal ExitReason Reason => Selected<ExitReason>(_reason);
     internal string? Comment => Blank(_comment);
 
-    internal EmployeeExitDialog(ILocalizer localizer, IUserDialogs dialogs, string employee)
-        : base(localizer, dialogs, "Personnel.RecordExit", employee, 520, 250)
+    internal EmployeeExitDialog(ILocalizer localizer, IUserDialogs dialogs, string employee,
+                                (DateOnly Date, ExitReason Reason, string? Comment)? current = null)
+        : base(localizer, dialogs, current is null ? "Personnel.RecordExit" : "Personnel.CorrectExit", employee, 520, 250)
     {
         Label("Personnel.ExitDate", 20, 10);
         _date.Bounds = new Rectangle(20, 28, 180, UiTheme.InputHeight);
         _date.Format = DateTimePickerFormat.Short;
+        if (current is { } date) _date.Value = date.Date.ToDateTime(TimeOnly.MinValue);
         Controls.Add(_date);
 
-        _reason = Choice("Personnel.ExitReason", 270, 10, 230, ExitReason.Resignation, "ExitReason");
-        _comment = TextField("Field.Comment", 20, 64, 480);
-        Notice(20, 116, 480, 40, "Personnel.ExitNotice", UiTheme.Abnormal);
+        _reason = Choice("Personnel.ExitReason", 270, 10, 230, current?.Reason ?? ExitReason.Resignation, "ExitReason");
+        _comment = TextField("Field.Comment", 20, 64, 480, current?.Comment);
+        Notice(20, 116, 480, 40, "Personnel.ExitNoticeAfterLastDay", UiTheme.Abnormal);
 
         Buttons(200, 520);
+    }
+
+    protected override void Accept() => DialogResult = DialogResult.OK;
+}
+
+/// <summary>The date a re-hire starts: the day after the departure at the earliest.</summary>
+internal sealed class EmployeeRehireDialog : MasterDataEditor
+{
+    private readonly DateTimePicker _date = new();
+
+    internal DateOnly RehireDate => DateOnly.FromDateTime(_date.Value.Date);
+
+    internal EmployeeRehireDialog(ILocalizer localizer, IUserDialogs dialogs, string employee, DateOnly exit)
+        : base(localizer, dialogs, "Personnel.Rehire", employee, 520, 210)
+    {
+        Label("Personnel.RehireDate", 20, 10);
+        _date.Bounds = new Rectangle(20, 28, 180, UiTheme.InputHeight);
+        _date.Format = DateTimePickerFormat.Short;
+        var earliest = exit.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        _date.MinDate = earliest;
+        _date.Value = DateTime.Today > earliest ? DateTime.Today : earliest;
+        Controls.Add(_date);
+
+        Notice(20, 70, 480, 70, "Personnel.RehireNotice", UiTheme.Abnormal);
+        Buttons(160, 520);
     }
 
     protected override void Accept() => DialogResult = DialogResult.OK;

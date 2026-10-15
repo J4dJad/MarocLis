@@ -24,6 +24,7 @@ public sealed class HrDocumentQueries(LisDbContext db) : IHrDocumentQueries
                           join p in db.PayrollPeriods.AsNoTracking() on s.PayrollPeriodId equals p.Id
                           where s.EmployeeId == employeeId
                                 && (p.Year < before.Year || (p.Year == before.Year && p.Month < before.Month))
+                                && s.Variables.MonthWorkingDays == 0m
                                 && s.Amounts.PaidDays >= fullDays
                           orderby p.Year descending, p.Month descending
                           select new { s.Amounts.GrossTaxable, s.Variables.LeaveIndemnity, s.Variables.NoticeIndemnity })
@@ -35,8 +36,14 @@ public sealed class HrDocumentQueries(LisDbContext db) : IHrDocumentQueries
 
     public async Task<decimal> LeaveBalanceAtExitAsync(Guid employeeId, CancellationToken ct = default)
     {
+        // The settlement of this departure, once paid, has taken its days off: they are still
+        // what it settles.
+        var exit = await db.Employees.AsNoTracking().Where(e => e.Id == employeeId).Select(e => e.ExitDate)
+                           .FirstOrDefaultAsync(ct);
+        var settled = exit is { } day ? SettlementService.SettledLeaveReference(day) : null;
+
         var balance = await db.LeaveLedger.AsNoTracking()
-            .Where(l => l.EmployeeId == employeeId)
+            .Where(l => l.EmployeeId == employeeId && l.Reference != settled)
             .SumAsync(l => (decimal?)l.Days, ct) ?? 0m;
 
         return balance + (await ExitAccrualsDueAsync(employeeId, ct)).Sum(d => d.Days);

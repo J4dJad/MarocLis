@@ -77,12 +77,16 @@ public interface IHrDocumentQueries
     Task<IReadOnlyList<decimal>> FullMonthGrossAsync(Guid employeeId, DateOnly before, decimal fullDays, int count,
                                                      CancellationToken ct = default);
 
-    /// <summary>Paid-leave days left on the day of departure, the months not yet credited included.</summary>
+    /// <summary>
+    /// Paid-leave days left on the day of departure, the months not yet credited included, before
+    /// the debit of the settlement of that departure.
+    /// </summary>
     Task<decimal> LeaveBalanceAtExitAsync(Guid employeeId, CancellationToken ct = default);
 
     /// <summary>
     /// The monthly accruals up to the departure not credited yet: counted in
-    /// <see cref="LeaveBalanceAtExitAsync"/>, written to the account when the settlement is signed.
+    /// <see cref="LeaveBalanceAtExitAsync"/>, written to the account with the leave the settlement
+    /// pays (<see cref="SettlementService.WriteSettledLeaveAsync"/>).
     /// </summary>
     Task<IReadOnlyList<LeaveLedgerEntry>> ExitAccrualsDueAsync(Guid employeeId, CancellationToken ct = default);
 
@@ -301,7 +305,7 @@ public sealed class SettlementService(
                     LeaveIndemnity = settlement.LeaveIndemnity,
                     NoticeIndemnity = settlement.NoticeIndemnity,
                     SeverancePay = settlement.SeverancePay
-                }, await RatesAsync(period.Year, ct), period.LastDay);
+                }, period.RatesFor(await RatesAsync(period.Year, ct)), period.LastDay);
                 periods.Update(period);
                 outcome = SettlementPayroll.Applied;
             }
@@ -313,9 +317,9 @@ public sealed class SettlementService(
     }
 
     /// <summary>
-    /// Records that the employee signed the receipt. From then on the settlement is final, and the
-    /// leave it paid leaves the account: the months credited at the departure are written, then
-    /// the days paid are debited, so a re-hired employee does not find them again.
+    /// Records that the employee signed the receipt. From then on the settlement is final. The
+    /// leave it paid leaves the account here too, if the closing of the month of departure has
+    /// not already taken it off (see <see cref="WriteSettledLeaveAsync"/>).
     /// </summary>
     public async Task<Result> SignAsync(Guid employeeId, DateOnly on, CancellationToken ct = default)
     {
@@ -334,10 +338,7 @@ public sealed class SettlementService(
 
         settlements.Update(settlement);
 
-        var reference = SettledLeaveReference(exit);
-        if (!(await ledger.ListAsync(l => l.EmployeeId == employeeId && l.Reference == reference, ct)).Any())
-            foreach (var entry in SettledLeaveEntries(settlement, await queries.ExitAccrualsDueAsync(employeeId, ct)))
-                await ledger.AddAsync(entry, ct);
+        await WriteSettledLeaveAsync(employee, settlement, ledger, queries, ct);
 
         unitOfWork.AuditReason = $"Reçu pour solde de tout compte de {employee.Number} signé le {on:dd/MM/yyyy}";
         await unitOfWork.SaveChangesAsync(ct);
@@ -348,19 +349,64 @@ public sealed class SettlementService(
     public static string SettledLeaveReference(DateOnly exit) => $"SOLDE-{exit:yyyyMMdd}";
 
     /// <summary>
-    /// What signing the settlement writes to the leave account: the accruals counted at the
-    /// departure but not credited yet, then the days paid as an indemnity taken off.
+    /// Takes the leave a settlement pays off the account, whatever happens to the receipt: when
+    /// the month of departure is closed (the indemnity is then paid), when the receipt is signed,
+    /// and at the latest when the employee is re-hired, before the departure is cleared from the
+    /// file. Safe to run again: the months already credited are not credited twice, and the debit
+    /// is brought to what the settlement says, a later change of it written as a correction.
+    /// </summary>
+    /// <param name="employee">The employee as before any re-hire: the accruals due are those up to the departure.</param>
+    public static async Task WriteSettledLeaveAsync(Employee employee, FinalSettlement settlement,
+                                                    IRepository<LeaveLedgerEntry> ledger, IHrDocumentQueries queries,
+                                                    CancellationToken ct)
+    {
+        var accrualsDue = employee.ExitDate == settlement.ExitDate
+            ? await queries.ExitAccrualsDueAsync(employee.Id, ct)
+            : [];
+
+        var reference = SettledLeaveReference(settlement.ExitDate);
+        var written = (await ledger.ListAsync(l => l.EmployeeId == employee.Id && l.Reference == reference, ct))
+            .Sum(l => l.Days);
+
+        foreach (var entry in SettledLeaveEntries(settlement, accrualsDue, written))
+            await ledger.AddAsync(entry, ct);
+    }
+
+    /// <summary>
+    /// What the settlement writes to the leave account: the accruals counted at the departure but
+    /// not credited yet, then the days paid as an indemnity taken off, less what
+    /// <paramref name="alreadyDebited"/> (negative) took off before.
     /// </summary>
     public static IReadOnlyList<LeaveLedgerEntry> SettledLeaveEntries(FinalSettlement settlement,
-                                                                    IReadOnlyList<LeaveLedgerEntry> accrualsDue)
+                                                                    IReadOnlyList<LeaveLedgerEntry> accrualsDue,
+                                                                    decimal alreadyDebited = 0m)
     {
         var entries = new List<LeaveLedgerEntry>(accrualsDue);
-        if (settlement.LeaveDays > 0)
+        var change = -Math.Max(0m, settlement.LeaveDays) - alreadyDebited;
+        if (change != 0m)
             entries.Add(new LeaveLedgerEntry(settlement.EmployeeId, settlement.ExitDate, LeaveLedgerKind.Adjustment,
-                                             -settlement.LeaveDays, SettledLeaveReference(settlement.ExitDate),
-                                             $"Congés payés par l'indemnité compensatrice du solde de tout compte " +
-                                             $"(sortie le {settlement.ExitDate:dd/MM/yyyy})"));
+                                             change, SettledLeaveReference(settlement.ExitDate),
+                                             alreadyDebited == 0m
+                                                 ? $"Congés payés par l'indemnité compensatrice du solde de tout compte " +
+                                                   $"(sortie le {settlement.ExitDate:dd/MM/yyyy})"
+                                                 : $"Correction des congés payés par le solde de tout compte " +
+                                                   $"(sortie le {settlement.ExitDate:dd/MM/yyyy}) : {settlement.LeaveDays:0.##} j"));
         return entries;
+    }
+
+    /// <summary>
+    /// Takes the leave paid off the account for every settlement paid with a month being closed:
+    /// those of the period's employees whose departure falls in it.
+    /// </summary>
+    public static async Task WriteSettledLeaveAsync(PayrollPeriod period, IRepository<FinalSettlement> settlements,
+                                                    IRepository<Employee> employees, IRepository<LeaveLedgerEntry> ledger,
+                                                    IHrDocumentQueries queries, CancellationToken ct)
+    {
+        var (first, last) = (period.FirstDay, period.LastDay);
+        var paid = period.Payslips.Select(p => p.EmployeeId).ToHashSet();
+        foreach (var settlement in await settlements.ListAsync(s => s.ExitDate >= first && s.ExitDate <= last, ct))
+            if (paid.Contains(settlement.EmployeeId) && await employees.GetByIdAsync(settlement.EmployeeId, ct) is { } employee)
+                await WriteSettledLeaveAsync(employee, settlement, ledger, queries, ct);
     }
 
     public async Task<Result<HrDocument>> ReceiptAsync(Guid employeeId, CancellationToken ct = default)

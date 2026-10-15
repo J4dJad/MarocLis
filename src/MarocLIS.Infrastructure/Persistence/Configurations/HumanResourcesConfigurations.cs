@@ -34,6 +34,9 @@ public sealed class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.Rib).HasMaxLength(30);
         builder.Property(e => e.BankName).HasMaxLength(100);
         builder.Property(e => e.ExitComment).HasMaxLength(500);
+        // The contract before a re-hire, still paid with the month of its departure.
+        builder.Property(e => e.PreviousHireDate);
+        builder.Property(e => e.PreviousExitDate);
 
         // One personnel file per LIS account.
         builder.HasIndex(e => e.UserId).IsUnique().HasFilter("[UserId] IS NOT NULL")

@@ -290,7 +290,10 @@ public static class PersonnelDeadlines
 public sealed class PersonnelService(
     IRepository<Employee> employees,
     IRepository<CredentialFile> credentialFiles,
+    IRepository<FinalSettlement> settlements,
+    IRepository<LeaveLedgerEntry> ledger,
     IPersonnelQueries queries,
+    IHrDocumentQueries hrQueries,
     ISequenceAllocator sequences,
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
@@ -471,6 +474,98 @@ public sealed class PersonnelService(
         return Result.Success();
     }
 
+    /// <summary>
+    /// Corrects a departure that has not taken effect yet (<see cref="Employee.CorrectExit"/>). A
+    /// settlement computed for the old date is emptied, to be computed again for the new one.
+    /// </summary>
+    public async Task<Result> CorrectExitAsync(Guid employeeId, DateOnly on, ExitReason reason, string? comment,
+                                               CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.HumanResources.Manage);
+        if (permitted.IsFailure) return permitted;
+
+        var employee = await employees.GetByIdWithDetailsAsync(employeeId, ct);
+        if (employee is null) return Result.Failure(Error.NotFound("Employee_NotFound"));
+        if (employee.ExitDate is not { } before) return Result.Failure(Error.Conflict("Employee_NoDeparture"));
+
+        var settled = await PendingSettlementAsync(employee, before, ct);
+        if (settled.IsFailure) return settled;
+
+        var beforeReason = employee.ExitReason;
+        var done = employee.CorrectExit(on, reason, comment, clock.Today);
+        if (done.IsFailure) return done;
+
+        // Computed for another date or reason: the amounts no longer hold.
+        if (settled.Value is { } settlement && (before != on || beforeReason != reason))
+        {
+            settlement.Void($"Sortie corrigée (le {before:dd/MM/yyyy}, {beforeReason}, devient le {on:dd/MM/yyyy}, " +
+                            $"{reason}) : solde à recalculer", before == on ? reason : null);
+            settlements.Update(settlement);
+        }
+
+        employees.Update(employee);
+        unitOfWork.AuditReason = $"Sortie de {employee.Number} ({employee.FullName}) corrigée : " +
+                                 $"le {before:dd/MM/yyyy} devient le {on:dd/MM/yyyy} ({reason})";
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Withdraws a departure that has not taken effect yet (<see cref="Employee.CancelExit"/>):
+    /// a resignation taken back, an exit saved on the wrong file. The reason goes to the audit trail.
+    /// </summary>
+    public async Task<Result> CancelExitAsync(Guid employeeId, string reason, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.HumanResources.Manage);
+        if (permitted.IsFailure) return permitted;
+        if (string.IsNullOrWhiteSpace(reason)) return Result.Failure(Error.Validation("Employee_ExitCancelReasonRequired"));
+
+        var employee = await employees.GetByIdWithDetailsAsync(employeeId, ct);
+        if (employee is null) return Result.Failure(Error.NotFound("Employee_NotFound"));
+        if (employee.ExitDate is not { } before) return Result.Failure(Error.Conflict("Employee_NoDeparture"));
+
+        var settled = await PendingSettlementAsync(employee, before, ct);
+        if (settled.IsFailure) return settled;
+
+        var done = employee.CancelExit(clock.Today);
+        if (done.IsFailure) return done;
+
+        if (settled.Value is { } settlement)
+        {
+            settlement.Void($"Sortie du {before:dd/MM/yyyy} annulée : {reason.Trim()}");
+            settlements.Update(settlement);
+        }
+
+        employees.Update(employee);
+        unitOfWork.AuditReason = $"Sortie de {employee.Number} ({employee.FullName}) du {before:dd/MM/yyyy} annulée : {reason.Trim()}";
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// The settlement of the departure about to be corrected or withdrawn, when there is one it can
+    /// still be emptied: refused once signed, paid with a closed month, or its leave written off.
+    /// </summary>
+    private async Task<Result<FinalSettlement?>> PendingSettlementAsync(Employee employee, DateOnly exit,
+                                                                        CancellationToken ct)
+    {
+        var settlement = (await settlements.ListAsync(s => s.EmployeeId == employee.Id && s.ExitDate == exit, ct))
+            .FirstOrDefault();
+        var reference = SettlementService.SettledLeaveReference(exit);
+
+        if (settlement is { IsSigned: true }
+            || await hrQueries.PayslipOfMonthAsync(employee.Id, exit.Year, exit.Month, ct) is { Status: PayrollStatus.Closed, Payslip: not null }
+            || (await ledger.ListAsync(l => l.EmployeeId == employee.Id && l.Reference == reference, ct)).Any())
+            return Result.Failure<FinalSettlement?>(Error.Conflict("Employee_ExitSettled", exit));
+
+        return Result.Success(settlement);
+    }
+
+    /// <summary>
+    /// Re-hires after a departure that has taken effect. The leave the settlement of that departure
+    /// paid is taken off the account first, with the months accrued up to it: once the departure
+    /// is cleared from the file nothing would write them any more.
+    /// </summary>
     public async Task<Result> RehireAsync(Guid employeeId, DateOnly on, CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.HumanResources.Manage);
@@ -478,6 +573,18 @@ public sealed class PersonnelService(
 
         var employee = await employees.GetByIdAsync(employeeId, ct);
         if (employee is null) return Result.Failure(Error.NotFound("Employee_NotFound"));
+
+        if (employee.ExitDate is { } exit && on > exit)
+        {
+            var settlement = (await settlements.ListAsync(s => s.EmployeeId == employeeId && s.ExitDate == exit, ct))
+                .FirstOrDefault();
+            if (settlement is not null)
+                await SettlementService.WriteSettledLeaveAsync(employee, settlement, ledger, hrQueries, ct);
+            else
+                // No settlement: the leave was not paid, the employee keeps it, accrued up to the departure.
+                foreach (var entry in await hrQueries.ExitAccrualsDueAsync(employeeId, ct))
+                    await ledger.AddAsync(entry, ct);
+        }
 
         var done = employee.Rehire(on);
         if (done.IsFailure) return done;

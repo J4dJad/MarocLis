@@ -70,6 +70,23 @@ public sealed class FinalSettlement : AuditableAggregateRoot, ISiteScoped
         return Result.Success();
     }
 
+    /// <summary>
+    /// Empties a settlement whose departure was corrected or withdrawn before taking effect: it no
+    /// longer pays anything with the month. Kept, with why, rather than deleted, for the audit.
+    /// </summary>
+    /// <param name="reason">The corrected reason of a departure kept on the same date.</param>
+    public Result Void(string note, ExitReason? reason = null)
+    {
+        if (IsSigned) return Result.Failure(Error.Conflict("Settlement_Signed"));
+
+        if (reason is { } corrected) ExitReason = corrected;
+
+        LeaveDays = LeaveIndemnity = NoticeIndemnity = SeverancePay = 0m;
+        NoticeNotWorked = false;
+        Note = note.Length > 500 ? note[..500] : note;
+        return Result.Success();
+    }
+
     public Result Sign(DateOnly on)
     {
         if (IsSigned) return Result.Failure(Error.Conflict("Settlement_Signed"));
