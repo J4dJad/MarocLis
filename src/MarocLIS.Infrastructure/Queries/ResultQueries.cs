@@ -19,6 +19,11 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
         CancellationToken ct = default) =>
         ReagentLotLookup.ResolveAsync(db, testParameterIds, null, siteId, today, ct);
 
+    public Task<IReadOnlyDictionary<Guid, Guid>> GetReagentLotsUnderEvaluationAsync(
+        IReadOnlyCollection<Guid> testParameterIds, Guid siteId, Guid instrumentId, DateOnly today,
+        CancellationToken ct = default) =>
+        ReagentLotLookup.ResolveUnderEvaluationAsync(db, testParameterIds, siteId, instrumentId, today, ct);
+
     /// <summary>
     /// The same rule as <see cref="ValidationQueries.IsCriticalCommunicatedAsync"/>: acknowledged,
     /// read back, and opened no earlier than the value's last entry.

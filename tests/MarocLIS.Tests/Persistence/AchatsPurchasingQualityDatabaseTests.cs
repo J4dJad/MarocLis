@@ -169,7 +169,10 @@ public sealed class AchatsPurchasingQualityDatabaseTests(AchatsAScratchDatabase 
         };
         var lot = item.AddLot(new ReagentLot("GLU-NEW", Today.AddDays(300), 4m, Today));
         var material = new QcMaterial(Unique("CTRL"), new MultilingualText("Contrôle bas"), QcLevel.Low, Today.AddDays(90));
-        var instrument = Guid.NewGuid();
+        // The levels required are those of the lot's own site's analysers.
+        var analyser = new MarocLIS.Domain.Equipment.Instrument(Unique("A"), new MultilingualText("Cobas"),
+                                                                MarocLIS.Domain.Equipment.EquipmentKind.Analyser, siteId);
+        var instrument = analyser.Id;
         var target = new QcTarget(material.Id, parameter.Id, instrument);
         var other = new QcResult(target.Id, parameter.Id, instrument, siteId, 5.1m, Now.AddHours(-2), Guid.NewGuid());
         var onLot = new QcResult(target.Id, parameter.Id, instrument, siteId, 5.2m, Now.AddHours(-1), Guid.NewGuid())
@@ -181,6 +184,7 @@ public sealed class AchatsPurchasingQualityDatabaseTests(AchatsAScratchDatabase 
         await using (var context = database.Context())
         {
             context.StockItems.Add(item);
+            context.Instruments.Add(analyser);
             context.QcMaterials.Add(material);
             context.QcTargets.Add(target);
             context.QcResults.AddRange(other, onLot);

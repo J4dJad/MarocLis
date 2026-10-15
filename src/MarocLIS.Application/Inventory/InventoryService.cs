@@ -277,11 +277,19 @@ public sealed class InventoryService(
     public async Task<Result> RejectLotAsync(Guid reagentLotId, string reason,
                                               CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Inventory.Receive);
+        var permitted = guard.RequireAny(Permissions.Inventory.Receive, Permissions.Quality.ReviewQc);
         if (permitted.IsFailure) return permitted;
 
         var lot = await queries.GetLotEntityAsync(reagentLotId, ct);
         if (lot is null) return Result.Failure(Error.NotFound("Lot_NotFound", reagentLotId));
+
+        // Refusing a delivery still in quarantine is part of receiving it. Withdrawing a lot that
+        // was released is a quality decision, taken by those who may release one.
+        if (!lot.IsAwaitingRelease)
+        {
+            var review = guard.Require(Permissions.Quality.ReviewQc);
+            if (review.IsFailure) return review;
+        }
 
         var rejected = lot.Reject(reason);
         if (rejected.IsFailure) return rejected;

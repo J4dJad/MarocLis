@@ -250,7 +250,8 @@ public sealed class InventoryView : LocalizedView
         _alerts.Click += async (_, _) => await RunBusyAsync(ShowStockAlertsAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
-        PermissionGate.Require(Permissions.Inventory.Receive, _receive, _rejectLot);
+        PermissionGate.Require(Permissions.Inventory.Receive, _receive);
+        PermissionGate.Require([Permissions.Inventory.Receive, Permissions.Quality.ReviewQc], _rejectLot);
         PermissionGate.Require(Permissions.Quality.ReviewQc, _release);
         PermissionGate.Require(Permissions.Inventory.Issue, _issue);
         PermissionGate.Require(Permissions.Inventory.Adjust, _clearRejection, _recall, _writeOff);
@@ -598,7 +599,10 @@ public sealed class InventoryView : LocalizedView
         var row = _lots.CurrentRow?.Tag as LotRow;
 
         _release.Enabled = row is { IsQuarantined: true, IsRejected: false, IsRecalled: false };
-        _rejectLot.Enabled = row is { IsRejected: false };
+        // A lot still in quarantine may be refused at reception; a released one only by whoever
+        // may release lots.
+        _rejectLot.Enabled = row is { IsRejected: false }
+                             && (row.IsQuarantined || PermissionGate.Allows(Permissions.Quality.ReviewQc));
 
         // Only offered for a lot that is actually rejected, and never for a recalled one: a
         // manufacturer recall is not a clerical error that can be withdrawn.

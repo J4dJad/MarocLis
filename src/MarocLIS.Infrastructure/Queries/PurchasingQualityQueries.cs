@@ -1,4 +1,5 @@
 using MarocLIS.Application.Inventory;
+using MarocLIS.Domain.Equipment;
 using MarocLIS.Domain.Inventory;
 using MarocLIS.Domain.Quality;
 using MarocLIS.Domain.Results;
@@ -20,20 +21,14 @@ internal static class ReagentLotLookup
     {
         if (testParameterIds.Count == 0) return new Dictionary<Guid, Guid>();
 
-        var ids = testParameterIds.Distinct().ToList();
+        var analysisOf = await AnalysisCodesAsync(db, testParameterIds, ct);
 
-        var analysisOf = await db.TestParameters.AsNoTracking()
-            .Where(p => ids.Contains(p.Id))
-            .Select(p => new
-            {
-                p.Id,
-                Code = db.AnalysisTests.IgnoreQueryFilters()
-                         .Where(a => a.Id == p.AnalysisTestId).Select(a => a.Code).FirstOrDefault()
-            })
-            .ToListAsync(ct);
-
+        // Only the lots that can answer: opened and still in service, plus the one named for the
+        // run. The exhausted, expired and withdrawn lots of past years are not read on every tube.
         var reagents = await db.StockItems.AsNoTracking()
-            .Include(i => i.Lots)
+            .Include(i => i.Lots.Where(l => l.Id == namedLotId
+                                            || (l.OpenedOn != null && !l.IsRejected && !l.IsRecalled
+                                                && l.ExpiryDate >= today)))
             .Where(i => i.SiteId == siteId && i.IsActive && i.Kind == StockItemKind.Reagent
                         && i.UsedByAnalysisCodesCsv != null)
             .ToListAsync(ct);
@@ -59,6 +54,61 @@ internal static class ReagentLotLookup
 
         return lots;
     }
+
+    /// <summary>
+    /// For each parameter, the lot awaiting release loaded on the analyser for its acceptance QC.
+    /// Absent when there is none, or when two articles' lots would both claim the parameter.
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<Guid, Guid>> ResolveUnderEvaluationAsync(
+        LisDbContext db, IReadOnlyCollection<Guid> testParameterIds, Guid siteId, Guid instrumentId,
+        DateOnly today, CancellationToken ct)
+    {
+        if (testParameterIds.Count == 0) return new Dictionary<Guid, Guid>();
+
+        var evaluated = await (
+            from l in db.ReagentLots.AsNoTracking()
+            join i in db.StockItems.AsNoTracking() on l.StockItemId equals i.Id
+            where i.SiteId == siteId && i.IsActive && i.Kind == StockItemKind.Reagent
+                  && i.UsedByAnalysisCodesCsv != null
+                  && l.EvaluationInstrumentId == instrumentId
+                  && l.IsQuarantined && !l.IsRejected && !l.IsRecalled && l.ReleasedOn == null
+                  && l.ExpiryDate >= today
+            select new { l.Id, i.UsedByAnalysisCodesCsv })
+            .ToListAsync(ct);
+
+        var lots = new Dictionary<Guid, Guid>();
+        if (evaluated.Count == 0) return lots;
+
+        foreach (var parameter in (await AnalysisCodesAsync(db, testParameterIds, ct)).Where(p => p.Code is not null))
+        {
+            var code = parameter.Code!.Trim().ToUpperInvariant();
+            var matching = evaluated
+                .Where(e => ReagentLotSelector.AnalysisCodes(e.UsedByAnalysisCodesCsv).Contains(code))
+                .ToList();
+
+            if (matching.Count == 1) lots[parameter.Id] = matching[0].Id;
+        }
+
+        return lots;
+    }
+
+    private static async Task<List<(Guid Id, string? Code)>> AnalysisCodesAsync(
+        LisDbContext db, IReadOnlyCollection<Guid> testParameterIds, CancellationToken ct)
+    {
+        var ids = testParameterIds.Distinct().ToList();
+
+        var rows = await db.TestParameters.AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .Select(p => new
+            {
+                p.Id,
+                Code = db.AnalysisTests.IgnoreQueryFilters()
+                         .Where(a => a.Id == p.AnalysisTestId).Select(a => a.Code).FirstOrDefault()
+            })
+            .ToListAsync(ct);
+
+        return [.. rows.Select(r => (r.Id, r.Code))];
+    }
 }
 
 public sealed class PurchasingQualityQueries(LisDbContext db) : IPurchasingQualityQueries
@@ -81,12 +131,12 @@ public sealed class PurchasingQualityQueries(LisDbContext db) : IPurchasingQuali
 
         var item = await db.StockItems.AsNoTracking().IgnoreQueryFilters()
             .Where(i => i.Id == lot.StockItemId)
-            .Select(i => new { i.Code, i.Kind, i.UsedByAnalysisCodesCsv })
+            .Select(i => new { i.Code, i.Kind, i.UsedByAnalysisCodesCsv, i.SiteId })
             .FirstOrDefaultAsync(ct);
         if (item is null) return null;
 
         var codes = ReagentLotSelector.AnalysisCodes(item.UsedByAnalysisCodesCsv);
-        var levels = await LevelsAsync(codes, today, ct);
+        var levels = await LevelsAsync(codes, item.SiteId, today, ct);
 
         var points = await db.QcResults.AsNoTracking()
             .Where(r => r.ReagentLotId == reagentLotId)
@@ -285,9 +335,11 @@ public sealed class PurchasingQualityQueries(LisDbContext db) : IPurchasingQuali
             select new ReagentLotOption(l.Id, i.Code, l.LotNumber, l.ExpiryDate, l.IsQuarantined))
             .ToListAsync(ct);
 
-    // The active control levels of the analyses, with a label naming parameter, level and analyser.
-    private async Task<Dictionary<Guid, string>> LevelsAsync(IReadOnlyList<string> codes, DateOnly today,
-                                                             CancellationToken ct)
+    // The active control levels of the analyses on the lot's site, with a label naming parameter,
+    // level and analyser. Only the site's analysers still in service: a lot can only get QC points
+    // there, so another site's levels, or a decommissioned analyser's, could never be satisfied.
+    private async Task<Dictionary<Guid, string>> LevelsAsync(IReadOnlyList<string> codes, Guid siteId,
+                                                             DateOnly today, CancellationToken ct)
     {
         if (codes.Count == 0) return [];
 
@@ -300,7 +352,10 @@ public sealed class PurchasingQualityQueries(LisDbContext db) : IPurchasingQuali
         var targetIds = await (
             from t in db.QcTargets.AsNoTracking()
             join m in db.QcMaterials.AsNoTracking() on t.QcMaterialId equals m.Id
+            join i in db.Instruments.AsNoTracking() on t.InstrumentId equals i.Id
             where t.IsActive && m.IsActive && m.ExpiryDate >= today && parameterIds.Contains(t.TestParameterId)
+                  && i.SiteId == siteId && i.Status != EquipmentStatus.Decommissioned
+                  && (i.DecommissioningDate == null || i.DecommissioningDate > today)
             select t.Id).ToListAsync(ct);
 
         return await LabelsAsync(targetIds, ct);

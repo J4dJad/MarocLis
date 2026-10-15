@@ -423,9 +423,11 @@ public interface IQualityQueries
 
     /// <summary>
     /// The trailing Z-score history for a target, oldest first — the shape
-    /// <see cref="WestgardEvaluator"/> expects.
+    /// <see cref="WestgardEvaluator"/> expects. Routine points only, or, with
+    /// <paramref name="evaluationLotId"/>, only the acceptance points of that reagent lot.
     /// </summary>
     Task<IReadOnlyList<QcPoint>> GetZScoreHistoryAsync(Guid qcTargetId, int count,
+                                                        Guid? evaluationLotId = null,
                                                         CancellationToken ct = default);
 
     Task<LeveyJenningsSeries?> GetLeveyJenningsAsync(Guid qcTargetId, DateTimeOffset from,
@@ -458,6 +460,10 @@ public interface IQualityQueries
     Task<IReadOnlyDictionary<Guid, Guid>> GetReagentLotsForQcAsync(
         IReadOnlyCollection<Guid> testParameterIds, Guid? namedLotId, Guid siteId, DateOnly today,
         CancellationToken ct = default);
+
+    /// <summary>The reagent lot, tracked, so a QC run can record that it is under evaluation.</summary>
+    Task<MarocLIS.Domain.Inventory.ReagentLot?> GetReagentLotAsync(Guid reagentLotId,
+                                                                    CancellationToken ct = default);
 
     // --- Non-conformities ----------------------------------------------------------------------
 

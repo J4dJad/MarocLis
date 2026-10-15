@@ -193,7 +193,7 @@ public sealed class StockItem : AuditableAggregateRoot, ISoftDeletable, ISiteSco
 
     /// <summary>Quantity on hand across all usable lots.</summary>
     public decimal QuantityOnHand(DateOnly today) =>
-        _lots.Where(l => l.IsUsable(today)).Sum(l => l.QuantityRemaining);
+        _lots.Where(l => l.IsIssuable(today)).Sum(l => l.QuantityRemaining);
 
     public bool NeedsReorder(DateOnly today) => QuantityOnHand(today) <= ReorderPoint;
 
@@ -204,7 +204,7 @@ public sealed class StockItem : AuditableAggregateRoot, ISoftDeletable, ISiteSco
     /// a laboratory from discarding usable reagent while an older one expires on the shelf.
     /// </summary>
     public ReagentLot? NextLotToUse(DateOnly today) =>
-        _lots.Where(l => l.IsUsable(today) && l.QuantityRemaining > 0)
+        _lots.Where(l => l.IsIssuable(today) && l.QuantityRemaining > 0)
              .OrderBy(l => l.ExpiryDate)
              .ThenBy(l => l.ReceivedOn)
              .FirstOrDefault();
@@ -340,8 +340,22 @@ public sealed class ReagentLot : Entity, IAuditable
 
     public decimal? UnitPriceMad { get; set; }
 
-    /// <summary>Date the lot was put into use; on-board stability runs from here.</summary>
+    /// <summary>Date the lot was put into use: the first unit issued from it.</summary>
     public DateOnly? OpenedOn { get; set; }
+
+    /// <summary>
+    /// Date the latest unit of the lot was issued, which is the one on the bench. On-board
+    /// stability runs from here: a lot of six kits is not out of stability on day 29 because its
+    /// first kit was opened a month ago while the fourth went on the analyser last week.
+    /// </summary>
+    public DateOnly? LastOpenedOn { get; private set; }
+
+    /// <summary>
+    /// The analyser on which this quarantined lot is loaded for its acceptance QC, so the controls
+    /// that analyser transmits are credited to it rather than to the lot in routine use. Cleared
+    /// when the lot is released or rejected.
+    /// </summary>
+    public Guid? EvaluationInstrumentId { get; private set; }
     public int? StabilityAfterOpeningDays { get; set; }
 
     public string? StorageLocation { get; set; }
@@ -423,12 +437,37 @@ public sealed class ReagentLot : Entity, IAuditable
 
     public bool IsExpired(DateOnly today) => ExpiryDate < today;
 
+    /// <summary>
+    /// The unit on the bench (the latest one issued) is past its stability after opening. Lots
+    /// opened before <see cref="LastOpenedOn"/> was kept count from their first opening.
+    /// </summary>
     public bool IsBeyondOpenStability(DateOnly today) =>
-        OpenedOn is { } opened && StabilityAfterOpeningDays is { } days && today > opened.AddDays(days);
+        (LastOpenedOn ?? OpenedOn) is { } opened && StabilityAfterOpeningDays is { } days &&
+        today > opened.AddDays(days);
 
-    public bool IsUsable(DateOnly today) =>
-        !IsQuarantined && !IsRejected && !IsRecalled &&
-        !IsExpired(today) && !IsBeyondOpenStability(today);
+    /// <summary>Usable on the analyser: released, in date, and the unit on the bench still stable.</summary>
+    public bool IsUsable(DateOnly today) => IsIssuable(today) && !IsBeyondOpenStability(today);
+
+    /// <summary>
+    /// Units may still be issued from it. The stock left on the shelf is sealed, so the stability
+    /// after opening of the unit already on the bench does not stop a fresh one being issued.
+    /// </summary>
+    public bool IsIssuable(DateOnly today) =>
+        !IsQuarantined && !IsRejected && !IsRecalled && !IsExpired(today);
+
+    /// <summary>A quarantined lot that has never been released (or whose release was withdrawn).</summary>
+    public bool IsAwaitingRelease => IsQuarantined && !IsRejected && ReleasedOn is null;
+
+    /// <summary>
+    /// Records that this lot, still awaiting release, is loaded on <paramref name="instrumentId"/>
+    /// for its acceptance QC. False when the lot is no longer awaiting release.
+    /// </summary>
+    public bool StartEvaluationOn(Guid instrumentId)
+    {
+        if (!IsAwaitingRelease) return false;
+        EvaluationInstrumentId = instrumentId;
+        return true;
+    }
 
     public int DaysUntilExpiry(DateOnly today) => ExpiryDate.DayNumber - today.DayNumber;
 
@@ -442,6 +481,7 @@ public sealed class ReagentLot : Entity, IAuditable
         ReleasedOn = on;
         ReleasedByUserId = byUserId;
         AcceptanceEvidence = evidence;
+        EvaluationInstrumentId = null;
         return Result.Success();
     }
 
@@ -453,6 +493,7 @@ public sealed class ReagentLot : Entity, IAuditable
         IsRejected = true;
         RejectionReason = reason;
         IsQuarantined = true;
+        EvaluationInstrumentId = null;
         return Result.Success();
     }
 
@@ -509,13 +550,14 @@ public sealed class ReagentLot : Entity, IAuditable
     {
         if (quantity <= 0m)
             return Result.Failure(Error.Validation("Lot_QuantityMustBePositive"));
-        if (!IsUsable(today))
+        if (!IsIssuable(today))
             return Result.Failure(Error.Regulatory("Lot_NotUsable", LotNumber));
         if (quantity > QuantityRemaining)
             return Result.Failure(Error.Validation("Lot_InsufficientQuantity", QuantityRemaining));
 
         QuantityRemaining -= quantity;
         OpenedOn ??= today;
+        LastOpenedOn = today;
         return Result.Success();
     }
 

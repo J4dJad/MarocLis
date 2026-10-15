@@ -14,6 +14,10 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
         CancellationToken ct = default) =>
         ReagentLotLookup.ResolveAsync(db, testParameterIds, namedLotId, siteId, today, ct);
 
+    public Task<MarocLIS.Domain.Inventory.ReagentLot?> GetReagentLotAsync(Guid reagentLotId,
+                                                                           CancellationToken ct = default) =>
+        db.ReagentLots.FirstOrDefaultAsync(l => l.Id == reagentLotId, ct);
+
     // ---- Internal quality control ---------------------------------------------------------------
 
     public async Task<IReadOnlyList<QcEntryRow>> GetQcEntrySheetAsync(
@@ -112,7 +116,7 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
     /// </para>
     /// </summary>
     public async Task<IReadOnlyList<QcPoint>> GetZScoreHistoryAsync(
-        Guid qcTargetId, int count, CancellationToken ct = default)
+        Guid qcTargetId, int count, Guid? evaluationLotId = null, CancellationToken ct = default)
     {
         var level = await db.QcTargets.AsNoTracking()
             .Where(t => t.Id == qcTargetId)
@@ -121,6 +125,11 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
 
         var rows = await db.QcResults.AsNoTracking()
             .Where(r => r.QcTargetId == qcTargetId && r.ZScore != null)
+            // A new lot's acceptance points are a series of their own: they say nothing about
+            // the lot in use, and the routine rules must not run across the two.
+            .Where(r => evaluationLotId == null
+                ? !r.IsLotEvaluation
+                : r.IsLotEvaluation && r.ReagentLotId == evaluationLotId)
             .OrderByDescending(r => r.MeasuredAt)
             .Take(Math.Clamp(count, 1, 100))
             .Select(r => new { r.ZScore, r.MeasuredAt, r.QcRunId })
@@ -234,7 +243,7 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
         // feature of an in-control series, whereas a rejected point is the error itself and would
         // widen the limits to accommodate it.
         return await db.QcResults.AsNoTracking()
-            .Where(r => r.QcTargetId == qcTargetId
+            .Where(r => r.QcTargetId == qcTargetId && !r.IsLotEvaluation
                         && r.MeasuredAt >= start && r.MeasuredAt <= end
                         && (r.Outcome == QcOutcome.Accepted || r.Outcome == QcOutcome.Warning))
             .OrderBy(r => r.MeasuredAt)
@@ -270,10 +279,12 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
         {
             // The last accepted control for this parameter on this instrument bounds the affected
             // window. With none, the window is open-ended and every unreleased result for the
-            // parameter is in question.
+            // parameter is in question. A new lot's acceptance run does not bound it: the
+            // patient results were produced with the lot in use, whatever the new lot did.
             var lastAccepted = await db.QcResults.AsNoTracking()
                 .Where(r => r.InstrumentId == instrumentId
                             && r.TestParameterId == parameterId
+                            && !r.IsLotEvaluation
                             && (r.Outcome == QcOutcome.Accepted || r.Outcome == QcOutcome.Warning))
                 .OrderByDescending(r => r.MeasuredAt)
                 .Select(r => (DateTimeOffset?)r.MeasuredAt)

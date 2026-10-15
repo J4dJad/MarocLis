@@ -402,6 +402,8 @@ public sealed class ResultEntryService(
                 continue;
             }
 
+            var valueBefore = ValueOf(result);
+
             var applied = ApplyEntry(result, parameter, entry, now);
             if (applied.IsFailure)
             {
@@ -414,10 +416,15 @@ public sealed class ResultEntryService(
             result.InstrumentId = entry.InstrumentId ?? result.InstrumentId;
             // A new value gets the lot of its own measurement: a re-run on a newer lot must not keep
             // the lot of the value it replaces. Unknown stays unknown rather than being guessed.
-            result.ReagentLotId = entry.ReagentLotId
-                                  ?? (lotsInUse is not null && lotsInUse.TryGetValue(result.TestParameterId, out var inUse)
-                                          ? inUse
-                                          : null);
+            // An unchanged value (only its comment edited) keeps the lot it was measured with, and
+            // a partner laboratory's value never carries one of the laboratory's own lots.
+            if (owner.IsSubcontracted)
+                result.ReagentLotId = entry.ReagentLotId;
+            else if (entry.ReagentLotId is not null || ValueOf(result) != valueBefore)
+                result.ReagentLotId = entry.ReagentLotId
+                                      ?? (lotsInUse is not null && lotsInUse.TryGetValue(result.TestParameterId, out var inUse)
+                                              ? inUse
+                                              : null);
 
             // A dilution is disclosed on the report: the same figure means something different
             // when the sample had to be diluted to bring it into the measuring range.
@@ -496,6 +503,12 @@ public sealed class ResultEntryService(
     /// that is genuinely what a technician types when a value is below the detection limit.
     /// </para>
     /// </summary>
+    /// <summary>What was measured, without who or when: tells a new value from a resent one.</summary>
+    private static (decimal? Numeric, string? Operator, string? Text, string? Coded, int? Titre, bool NotDone)
+        ValueOf(TestResult result) =>
+        (result.NumericValue, result.ValueOperator, result.TextValue, result.CodedValue,
+         result.TitreDenominator, result.Flags.HasFlag(ResultFlag.NotDone));
+
     private Result ApplyEntry(TestResult result, TestParameter parameter, ResultEntry entry,
                               DateTimeOffset now)
     {
@@ -720,6 +733,15 @@ public interface IResultQueries
     /// </summary>
     Task<IReadOnlyDictionary<Guid, Guid>> GetReagentLotsInUseAsync(
         IReadOnlyCollection<Guid> testParameterIds, Guid siteId, DateOnly today,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// For each parameter, the lot awaiting release that is loaded on <paramref name="instrumentId"/>
+    /// for its acceptance QC (<see cref="Domain.Inventory.ReagentLot.EvaluationInstrumentId"/>).
+    /// A parameter with none, or with more than one, is absent.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> GetReagentLotsUnderEvaluationAsync(
+        IReadOnlyCollection<Guid> testParameterIds, Guid siteId, Guid instrumentId, DateOnly today,
         CancellationToken ct = default);
 }
 
