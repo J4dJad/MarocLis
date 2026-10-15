@@ -2362,6 +2362,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<decimal?>("PreviousBaseSalary")
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<DateOnly?>("PreviousExitDate")
                         .HasColumnType("date");
 
@@ -4448,6 +4451,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<string>("RepeatReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("RepeatedAt")
+                        .HasColumnType("datetimeoffset(3)");
 
                     b.Property<DateTimeOffset?>("ReportedAt")
                         .HasColumnType("datetimeoffset(3)");
