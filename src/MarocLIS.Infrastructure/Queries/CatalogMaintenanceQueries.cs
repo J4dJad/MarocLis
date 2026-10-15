@@ -76,7 +76,15 @@ public sealed class CatalogMaintenanceQueries(LisDbContext db) : ICatalogMainten
                     .OrderByDescending(t => t.ValidFrom)
                     .Select(t => new { t.Price, t.Coefficient })
                     .FirstOrDefault(),
-                OrderedCount = db.LabOrderItems.Count(i => i.AnalysisTestId == a.Id)
+                OrderedCount = db.LabOrderItems.Count(i => i.AnalysisTestId == a.Id),
+                UnconfirmedAgeBandCount = db.ReferenceRanges.Count(
+                    r => r.IsActive
+                         && db.TestParameters.Any(p => p.Id == r.TestParameterId && p.AnalysisTestId == a.Id)
+                         // ReferenceRange.HasUnconfirmedAgeUnit, in SQL.
+                         && r.AgeUnitDays == null
+                         && (r.AgeFromDays != null || r.AgeToDays != null)
+                         && (r.AgeFromDays ?? 0) % ReferenceRange.DaysPerMonth == 0
+                         && (r.AgeToDays ?? 0) % ReferenceRange.DaysPerMonth == 0)
             })
             .ToListAsync(ct);
 
@@ -105,7 +113,8 @@ public sealed class CatalogMaintenanceQueries(LisDbContext db) : ICatalogMainten
                 a.IsSubcontracted,
                 a.ConsentRequirement,
                 a.IsActive,
-                a.OrderedCount))
+                a.OrderedCount,
+                a.UnconfirmedAgeBandCount))
         ];
     }
 
@@ -143,7 +152,14 @@ public sealed class CatalogMaintenanceQueries(LisDbContext db) : ICatalogMainten
                                       .Select(u => u.DisplaySymbol).FirstOrDefault(),
                 RangeCount = db.ReferenceRanges.Count(r => r.TestParameterId == p.Id && r.IsActive),
                 CodedOptionCount = db.CodedResultOptions.Count(o => o.TestParameterId == p.Id),
-                ResultCount = db.TestResults.Count(r => r.TestParameterId == p.Id)
+                ResultCount = db.TestResults.Count(r => r.TestParameterId == p.Id),
+                UnconfirmedAgeBandCount = db.ReferenceRanges.Count(
+                    r => r.TestParameterId == p.Id && r.IsActive
+                         // ReferenceRange.HasUnconfirmedAgeUnit, in SQL.
+                         && r.AgeUnitDays == null
+                         && (r.AgeFromDays != null || r.AgeToDays != null)
+                         && (r.AgeFromDays ?? 0) % ReferenceRange.DaysPerMonth == 0
+                         && (r.AgeToDays ?? 0) % ReferenceRange.DaysPerMonth == 0)
             })
             .ToListAsync(ct);
 
@@ -155,7 +171,8 @@ public sealed class CatalogMaintenanceQueries(LisDbContext db) : ICatalogMainten
                 p.TechnicalLimitHigh, p.CriticalLow, p.CriticalHigh, p.AnalyticalCvPercent,
                 p.DeltaCheckPercent, p.DeltaCheckWindowDays, p.CalculationFormula,
                 p.IsInternalOnly, p.AlwaysShowOnReport, p.DisplayOrder, p.IndentLevel,
-                p.IsActive, p.RangeCount, p.CodedOptionCount, p.ResultCount))
+                p.IsActive, p.RangeCount, p.CodedOptionCount, p.ResultCount,
+                p.UnconfirmedAgeBandCount))
         ];
     }
 

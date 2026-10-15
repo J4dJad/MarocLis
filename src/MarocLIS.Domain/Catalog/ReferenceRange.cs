@@ -146,6 +146,19 @@ public sealed class ReferenceRange : Entity, IAuditable
         return 1;
     }
 
+    /// <summary>
+    /// Whether the band was saved before its unit was kept and its bounds read differently depending
+    /// on the unit they were typed in. Bounds that are whole months — "0–30", "0–180" — were stored
+    /// the same for "0–30 jours" and "0–1 mois", and are read as months; nothing in the row says
+    /// which the biologist meant, so it is not guessed. The catalogue lists these bands until the
+    /// biologist re-saves each one in the unit it was written in.
+    /// </summary>
+    public static bool HasUnconfirmedAgeUnit(int? ageFromDays, int? ageToDays, int? ageUnitDays) =>
+        ageUnitDays is null
+        && (ageFromDays is not null || ageToDays is not null)
+        && (ageFromDays ?? 0) % DaysPerMonth == 0
+        && (ageToDays ?? 0) % DaysPerMonth == 0;
+
     /// <summary>When set, the range applies only to pregnant (true) or non-pregnant (false) patients.</summary>
     public bool? AppliesToPregnancy { get; set; }
 

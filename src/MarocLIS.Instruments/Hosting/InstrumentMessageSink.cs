@@ -352,6 +352,7 @@ public sealed class InstrumentMessageSink(
         var stored = await results.ListAsync(r => r.LabOrderId == order.Id, ct);
 
         var imported = 0;
+        var touched = new List<TestResult>();
 
         foreach (var incoming in specimen.Results)
         {
@@ -385,29 +386,38 @@ public sealed class InstrumentMessageSink(
 
             var applied = await ApplyAsync(link, mapping, incoming, target, order, issues, ct);
 
-            if (applied) imported++;
+            if (applied)
+            {
+                imported++;
+                touched.Add(target);
+            }
         }
 
         if (imported > 0)
         {
             // The same post-analytical steps as a value typed at the bench: calculated parameters,
             // interpretation, previous value, delta check and the sample-defect flag. Run once per
-            // tube, over the whole order, as the entry screen runs it once per save.
+            // tube, over the values it brought and the calculated ones they move; the order's other
+            // values went through it when they were stored.
             if (patient is not null)
             {
                 var catalogue = await pipeline.LoadCatalogueAsync(order, ct);
 
                 await pipeline.RunAsync(order, patient, stored, catalogue, serviceAccount.UserId,
-                                        order.ReportLanguage, ct);
+                                        order.ReportLanguage, touched, ct);
             }
             else
             {
                 issues.Add(Describe("Order_PatientNotFound", order.AccessionNumber));
             }
 
-            // The items the analyser produced for move to result-entered, so the technical
-            // validation worklist picks them up instead of them sitting in "received" forever.
-            foreach (var item in order.Items.Where(i => !i.IsCancelled && i.SampleId == sample.Id))
+            // The items the analyser produced values for move to result-entered, so the technical
+            // validation worklist picks them up instead of them sitting in "received" forever. Only
+            // those: another analysis on the same tube, run on another analyser or sent back to the
+            // bench and not re-run yet, has nothing new to validate.
+            var producedFor = touched.Select(r => r.LabOrderItemId).ToHashSet();
+
+            foreach (var item in order.Items.Where(i => !i.IsCancelled && producedFor.Contains(i.Id)))
                 item.MarkResultEntered(clock.Now);
 
             // And any other analysis a calculated value has just completed.

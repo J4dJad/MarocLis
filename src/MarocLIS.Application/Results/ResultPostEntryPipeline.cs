@@ -93,22 +93,51 @@ public sealed class ResultPostEntryPipeline(
     /// <param name="byUserId">Who calculated values are attributed to: the operator, or the
     /// analyser's service account.</param>
     /// <param name="language">The language the applied interval and the findings are written in.</param>
+    public Task<List<CriticalFinding>> RunAsync(LabOrder order, Patient patient,
+                                                IReadOnlyList<TestResult> stored,
+                                                ResultCatalogue catalogue, Guid byUserId,
+                                                AppLanguage language, CancellationToken ct = default) =>
+        RunAsync(order, patient, stored, catalogue, byUserId, language, changed: null, ct);
+
+    /// <summary>
+    /// As above, but interprets only <paramref name="changed"/> and the calculated values that
+    /// move with them; null interprets every value of the order.
+    /// <para>
+    /// The analyser path passes the values of the tube just imported. The other values of the order
+    /// were interpreted, delta-checked and flagged when they were stored, and nothing about them has
+    /// changed since; going over them again for every tube cost a history lookup per value — about a
+    /// hundred queries per tube on a full panel, and a day's replay that never finished.
+    /// </para>
+    /// </summary>
     public async Task<List<CriticalFinding>> RunAsync(LabOrder order, Patient patient,
                                                       IReadOnlyList<TestResult> stored,
                                                       ResultCatalogue catalogue, Guid byUserId,
-                                                      AppLanguage language, CancellationToken ct = default)
+                                                      AppLanguage language,
+                                                      IReadOnlyCollection<TestResult>? changed,
+                                                      CancellationToken ct = default)
     {
         var live = LiveResults(order, stored);
 
-        RecalculateDerived(live, catalogue, patient, clock.Now, byUserId);
+        var recalculated = RecalculateDerived(live, catalogue, patient, clock.Now, byUserId);
 
-        return await InterpretAsync(order, patient, live, catalogue, language, ct);
+        var toInterpret = changed is null
+            ? live
+            : [.. live.Where(r => changed.Contains(r) || recalculated.Contains(r))];
+
+        return await InterpretAsync(order, patient, toInterpret, catalogue, language, ct);
     }
 
     /// <summary>
     /// Moves to result-entered each live analysis whose parameters now all carry a value or are
     /// recorded as not done — calculated ones included, which is what lets a lipid panel whose LDL
     /// was computed here go on to technical validation.
+    /// <para>
+    /// An analysis sent back to the bench keeps its first run's values as their record, so "all
+    /// valued" is true of it from the start. It waits instead for a value stored since the repeat:
+    /// otherwise the next save or analyser import anywhere on the order put it straight back on the
+    /// validation list with the very figures that were not trusted, without the re-run ever having
+    /// been done.
+    /// </para>
     /// </summary>
     public static void AdvanceCompletedItems(LabOrder order, IReadOnlyList<TestResult> stored,
                                              DateTimeOffset now)
@@ -118,10 +147,24 @@ public sealed class ResultPostEntryPipeline(
             var itemResults = stored.Where(r => r.LabOrderItemId == item.Id).ToList();
             if (itemResults.Count == 0) continue;
 
-            if (itemResults.All(r => r.HasValue || r.Status == TestResultStatus.NotDone))
-                item.MarkResultEntered(now);
+            if (!itemResults.All(IsStored)) continue;
+
+            if (AwaitsRerun(item, itemResults)) continue;
+
+            item.MarkResultEntered(now);
         }
     }
+
+    /// <summary>
+    /// Whether the analysis was repeated and none of its values has been stored since: everything
+    /// it carries is still the run that was set aside.
+    /// </summary>
+    public static bool AwaitsRerun(LabOrderItem item, IEnumerable<TestResult> itemResults) =>
+        item.RepeatedAt is { } repeatedAt
+        && !itemResults.Any(r => IsStored(r) && r.EnteredAt >= repeatedAt);
+
+    private static bool IsStored(TestResult result) =>
+        result.HasValue || result.Status == TestResultStatus.NotDone;
 
     /// <summary>The results of the order's analyses that are not cancelled.</summary>
     public static List<TestResult> LiveResults(LabOrder order, IReadOnlyList<TestResult> stored)
@@ -152,19 +195,25 @@ public sealed class ResultPostEntryPipeline(
         var criticalFindings = new List<CriticalFinding>();
         var defectiveTubes = new Dictionary<Guid, bool>();
 
-        foreach (var result in stored.Where(r => r.HasValue && !r.IsValidated))
+        var pending = stored
+            .Where(r => r.HasValue && !r.IsValidated && catalogue.Parameters.ContainsKey(r.TestParameterId))
+            .ToList();
+
+        if (pending.Count == 0) return criticalFindings;
+
+        // The history of every parameter in one lookup, not one per value.
+        var history = await queries.GetPreviousValuesAsync(
+            order.PatientId, [.. pending.Select(r => r.TestParameterId).Distinct()], order.RegisteredAt, ct);
+
+        foreach (var result in pending)
         {
-            var parameter = catalogue.Parameters.GetValueOrDefault(result.TestParameterId);
-            if (parameter is null) continue;
+            var parameter = catalogue.Parameters[result.TestParameterId];
 
             var range = parameter.ResolveRange(
                 ReferenceRangeContext.ForResult(patient, result, clock.Today));
             result.ApplyInterpretation(parameter, range, language, parameter.Unit?.DisplaySymbol);
 
-            var previous = await queries.GetPreviousValueAsync(order.PatientId, parameter.Id,
-                                                               order.RegisteredAt, ct);
-
-            if (previous is not null)
+            if (history.GetValueOrDefault(parameter.Id) is { } previous)
             {
                 result.PreviousNumericValue = previous.Value;
                 result.PreviousResultDate = previous.Date;
@@ -212,18 +261,21 @@ public sealed class ResultPostEntryPipeline(
     /// stale input.
     /// </para>
     /// </summary>
-    private void RecalculateDerived(IReadOnlyList<TestResult> stored, ResultCatalogue catalogue,
-                                    Patient patient, DateTimeOffset now, Guid byUserId)
+    /// <returns>The results whose value this changed.</returns>
+    private HashSet<TestResult> RecalculateDerived(IReadOnlyList<TestResult> stored, ResultCatalogue catalogue,
+                                                   Patient patient, DateTimeOffset now, Guid byUserId)
     {
+        var changed = new HashSet<TestResult>();
+
         var calculated = catalogue.Parameters.Values
             .Where(p => p.IsCalculated)
             .ToDictionary(p => p.Code, p => p.CalculationFormula!, StringComparer.Ordinal);
 
-        if (calculated.Count == 0) return;
+        if (calculated.Count == 0) return changed;
 
         var ordering = FormulaEvaluator.ResolveEvaluationOrder(calculated);
-        if (ordering.IsFailure) return;   // A circular definition is a configuration error; the
-                                          // catalogue screen reports it, entry just skips.
+        if (ordering.IsFailure) return changed;   // A circular definition is a configuration error;
+                                                  // the catalogue screen reports it, entry just skips.
 
         // Measured values, keyed by parameter code, plus the patient context variables.
         var values = BuildValueBag(stored, catalogue, patient);
@@ -250,8 +302,9 @@ public sealed class ResultPostEntryPipeline(
                     // The inputs are there but outside the formula's domain — Friedewald above
                     // 4 g/L of triglycerides. Reported as not calculable, with the reason, so the
                     // panel can be completed and the biologist sees a direct measurement is needed.
-                    if (target.Status != TestResultStatus.NotDone)
-                        target.MarkNotDone(NotCalculableComment, now, byUserId);
+                    if (target.Status != TestResultStatus.NotDone
+                        && target.MarkNotDone(NotCalculableComment, now, byUserId).IsSuccess)
+                        changed.Add(target);
                     continue;
                 }
 
@@ -263,6 +316,7 @@ public sealed class ResultPostEntryPipeline(
                 {
                     target.ClearValue();
                     ClearNotCalculableComment(target);
+                    changed.Add(target);
                 }
                 continue;
             }
@@ -277,8 +331,11 @@ public sealed class ResultPostEntryPipeline(
                 continue;
 
             ClearNotCalculableComment(target);
-            target.EnterNumeric(parameter, evaluation.Value, now, byUserId);
+            if (target.EnterNumeric(parameter, evaluation.Value, now, byUserId).IsSuccess)
+                changed.Add(target);
         }
+
+        return changed;
     }
 
     private static void ClearNotCalculableComment(TestResult target)

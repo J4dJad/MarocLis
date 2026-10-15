@@ -537,7 +537,7 @@ public sealed class OrderAmendmentService(
             return Result.Failure(Error.Forbidden("Result_ModifyRequiresPermission",
                                                   item.AnalysisTest?.Code ?? string.Empty));
 
-        var repeated = item.Repeat(reason.Trim());
+        var repeated = item.Repeat(reason.Trim(), clock.Now);
         if (repeated.IsFailure) return repeated;
 
         // The first run's values stay as its record until the new run replaces them, but their

@@ -62,40 +62,62 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
         return await ordered.AsTracking().ToListAsync(ct);
     }
 
+    public Task<IReadOnlyList<TestResult>> GetCurrentResultsForOrderAsync(
+        Guid orderId, Guid? departmentId, CancellationToken ct = default)
+    {
+        TrackedRows.Forget(db, r => r.LabOrderId == orderId);
+
+        return GetResultsForOrderAsync(orderId, departmentId, ct);
+    }
+
+    /// <summary>The patient's most recent released value for one parameter before the current order.</summary>
+    public async Task<PreviousValue?> GetPreviousValueAsync(
+        Guid patientId, Guid parameterId, DateTimeOffset before, CancellationToken ct = default) =>
+        (await GetPreviousValuesAsync(patientId, [parameterId], before, ct)).GetValueOrDefault(parameterId);
+
     /// <summary>
-    /// The patient's most recent released value for a parameter before the current order.
+    /// The patient's most recent released value for each parameter before the current order.
     /// <para>
     /// Joins through the order rather than denormalising a patient identifier onto the result: a
     /// result's patient can change when two files are merged, and a stale copy would silently pair
     /// a delta check against the wrong person's history.
     /// </para>
     /// </summary>
-    public async Task<PreviousValue?> GetPreviousValueAsync(
-        Guid patientId, Guid parameterId, DateTimeOffset before, CancellationToken ct = default)
+    public async Task<IReadOnlyDictionary<Guid, PreviousValue>> GetPreviousValuesAsync(
+        Guid patientId, IReadOnlyCollection<Guid> parameterIds, DateTimeOffset before,
+        CancellationToken ct = default)
     {
+        if (parameterIds.Count == 0) return new Dictionary<Guid, PreviousValue>();
+
         // The files merged into this one are part of its history: a merge only points the duplicate
         // at the survivor, it does not move the duplicate's orders, so joining on the survivor's id
         // alone made the antériorité and the delta check vanish the moment two files were merged.
         var patientIds = await WithMergedDuplicatesAsync(patientId, ct);
+        var parameters = parameterIds.Distinct().ToList();
 
-        var row = await db.TestResults
+        // The latest row per parameter, in one statement (ROW_NUMBER over the parameter).
+        var rows = await db.TestResults
             .AsNoTracking()
-            .Where(r => r.TestParameterId == parameterId
+            .Where(r => parameters.Contains(r.TestParameterId)
                         && r.NumericValue != null
                         && r.ValidatedAt != null
                         && r.ValidatedAt < before)
             .Join(db.LabOrders.AsNoTracking().Where(o => patientIds.Contains(o.PatientId)),
                   result => result.LabOrderId,
                   order => order.Id,
-                  (result, order) => new { result.Id, result.NumericValue, result.ValidatedAt })
-            .OrderByDescending(x => x.ValidatedAt)
-            .FirstOrDefaultAsync(ct);
+                  (result, order) => new
+                  {
+                      result.Id, result.TestParameterId, result.NumericValue, result.ValidatedAt
+                  })
+            .GroupBy(x => x.TestParameterId)
+            .Select(g => g.OrderByDescending(x => x.ValidatedAt).First())
+            .ToListAsync(ct);
 
-        return row is null
-            ? null
-            : new PreviousValue(row.NumericValue!.Value,
-                                DateOnly.FromDateTime(row.ValidatedAt!.Value.Date),
-                                row.Id);
+        return rows.ToDictionary(
+            row => row.TestParameterId,
+            row => new PreviousValue(row.NumericValue!.Value,
+                                     DateOnly.FromDateTime(row.ValidatedAt!.Value.Date),
+                                     row.Id));
     }
 
     /// <summary>
@@ -332,8 +354,17 @@ public sealed class ValidationQueries(LisDbContext db, IUnitOfWork unitOfWork) :
         return age < 0 ? null : age;
     }
 
-    public Task<TestResult?> GetResultAsync(Guid testResultId, CancellationToken ct = default) =>
-        db.TestResults.FirstOrDefaultAsync(r => r.Id == testResultId, ct);
+    /// <summary>
+    /// The result as the database holds it now. A copy the screen's context already tracks, with
+    /// no change of its own, is read again: the stale-screen check of a critical call compared that
+    /// copy with itself, and a call dictated from a value the analyser had since replaced passed.
+    /// </summary>
+    public Task<TestResult?> GetResultAsync(Guid testResultId, CancellationToken ct = default)
+    {
+        TrackedRows.Forget(db, r => r.Id == testResultId);
+
+        return db.TestResults.FirstOrDefaultAsync(r => r.Id == testResultId, ct);
+    }
 
     /// <summary>
     /// Requires an acknowledged, read-back notification for the value the result holds now: the
@@ -656,4 +687,37 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
                             .Select(u => u.FullName).FirstOrDefault(),
                     d.AuthorizingConsentId != null))
                 .ToListAsync(ct);
+}
+
+/// <summary>
+/// Lets a tracking query read rows as they now stand. EF hands back the instance a context already
+/// tracks and keeps its values, whatever the database holds since; a desktop screen keeps its context
+/// for its whole life, so without this a re-read showed the screen's first load forever.
+/// </summary>
+internal static class TrackedRows
+{
+    /// <summary>
+    /// Stops tracking the matching results that carry no pending change, with their owned values,
+    /// so the next query loads them afresh. A result with a change of its own stays tracked: its
+    /// save is then checked against the row version it was read with.
+    /// </summary>
+    public static void Forget(LisDbContext db, Func<TestResult, bool> predicate)
+    {
+        var stale = db.ChangeTracker.Entries<TestResult>()
+            .Where(e => e.State == EntityState.Unchanged && predicate(e.Entity))
+            .ToList();
+
+        foreach (var entry in stale)
+        {
+            var owned = entry.References
+                .Where(r => r.Metadata.TargetEntityType.IsOwned() && r.TargetEntry is not null)
+                .Select(r => r.TargetEntry!)
+                .ToList();
+
+            if (owned.Any(o => o.State != EntityState.Unchanged)) continue;
+
+            foreach (var part in owned) part.State = EntityState.Detached;
+            entry.State = EntityState.Detached;
+        }
+    }
 }

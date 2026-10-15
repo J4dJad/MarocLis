@@ -287,7 +287,7 @@ public sealed class ReviewFixesClinical3Tests
         item.MarkTechnicallyValidated(Now, Guid.NewGuid());
         item.MarkBiologicallyValidated(Now, Guid.NewGuid());
 
-        item.Repeat("Valeur suspecte").IsFailure.Should().BeTrue();
+        item.Repeat("Valeur suspecte", Now).IsFailure.Should().BeTrue();
         item.Status.Should().Be(LabOrderItemStatus.Validated);
     }
 
@@ -506,7 +506,10 @@ public sealed class ReviewFixesClinical3Tests
             });
             var queries = Stub.Of<IResultQueries>(new()
             {
-                ["GetPreviousValueAsync"] = _ => Task.FromResult(self.Previous)
+                ["GetPreviousValuesAsync"] = args => Task.FromResult<IReadOnlyDictionary<Guid, PreviousValue>>(
+                    self.Previous is { } previous
+                        ? ((IReadOnlyCollection<Guid>)args![1]!).ToDictionary(id => id, _ => previous)
+                        : new Dictionary<Guid, PreviousValue>())
             });
 
             _sink = new InstrumentMessageSink(

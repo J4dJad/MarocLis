@@ -684,6 +684,10 @@ public sealed class CatalogView : LocalizedView
             if (row.IsAccredited) flags.Add("ISO");
             if (row.IsSubcontracted) flags.Add(T("Catalog.Subcontracted"));
             if (row.ConsentRequirement != ConsentRequirement.None) flags.Add(T("Consent.Required"));
+            // Age bands saved before their unit was kept, which may be read in months although
+            // they were typed in days: listed here so the biologist can find and re-save them.
+            if (row.UnconfirmedAgeBandCount > 0)
+                flags.Add($"{T("Catalog.AgeUnitToConfirm")} ({row.UnconfirmedAgeBandCount})");
 
             var index = _analyses.Rows.Add(
                 row.Code,
@@ -708,6 +712,9 @@ public sealed class CatalogView : LocalizedView
             $"{T("Catalog.Analyses")} — {_analysisRows.Count}"
             + (_analysisRows.Count(a => !a.IsOrderable) is var blocked and > 0
                 ? $" · {blocked} {T("Catalog.NotOrderable").ToLowerInvariant()}"
+                : string.Empty)
+            + (_analysisRows.Count(a => a.UnconfirmedAgeBandCount > 0) is var unconfirmed and > 0
+                ? $" · {unconfirmed} {T("Catalog.AgeUnitToConfirm").ToLowerInvariant()}"
                 : string.Empty);
     }
 
@@ -752,6 +759,7 @@ public sealed class CatalogView : LocalizedView
             if (row.IsCalculated) flags.Add("ƒ");
             if (row.IsInternalOnly) flags.Add(T("Catalog.InternalOnly"));
             if (row.IsUnusable) flags.Add(T("Catalog.Unusable"));
+            if (row.UnconfirmedAgeBandCount > 0) flags.Add(T("Catalog.AgeUnitToConfirm"));
             if (row.HasResults) flags.Add($"{row.ResultCount}");
 
             var index = _parameters.Rows.Add(
@@ -809,6 +817,7 @@ public sealed class CatalogView : LocalizedView
 
             if (!row.IsInForce(today)) flags.Add(T("Catalog.Superseded"));
             if (row.NeedsReview(today)) flags.Add(T("Catalog.ReviewDue"));
+            if (row.HasUnconfirmedAgeUnit) flags.Add(T("Catalog.AgeUnitToConfirm"));
             if (row.IsDecisionThreshold) flags.Add(T("Catalog.DecisionThreshold"));
 
             var index = _ranges.Rows.Add(
@@ -1099,6 +1108,11 @@ public sealed class CatalogView : LocalizedView
         if (_ranges.Rows[e.RowIndex].Tag is not ReferenceRangeRow row) return;
 
         if (!row.IsInForce(_clock.Today)) e.CellStyle!.ForeColor = UiTheme.TextMuted;
+        else if (row.HasUnconfirmedAgeUnit)
+        {
+            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
+            e.CellStyle.ForeColor = UiTheme.Abnormal;
+        }
         else if (row.NeedsReview(_clock.Today)) e.CellStyle!.ForeColor = UiTheme.Abnormal;
     }
 
