@@ -220,6 +220,58 @@ public sealed class StockItem : AuditableAggregateRoot, ISoftDeletable, ISiteSco
         _lots.Add(lot);
         return lot;
     }
+
+    // ---- Consumption and computed reorder policy -----------------------------------------------
+
+    /// <summary>Share of a pack lost to dead volume at each opening, in percent.</summary>
+    public decimal? DeadVolumePercent { get; set; }
+
+    /// <summary>Tests lost at each opening of a pack.</summary>
+    public decimal? DeadVolumeTestsPerOpening { get; set; }
+
+    /// <summary>Tests per result for the analyses that take more than one, "CODE=factor" entries.</summary>
+    public string? TestsPerResultCsv { get; set; }
+
+    /// <summary>Tests one calibration uses; one when unset.</summary>
+    public int? TestsPerCalibration { get; set; }
+
+    /// <summary>Safety stock in days of consumption, for the computed reorder point.</summary>
+    public int? SafetyStockDays { get; set; }
+
+    /// <summary>Shelf life a delivery typically has left on arrival; caps the quantity ordered.</summary>
+    public int? TypicalShelfLifeDays { get; set; }
+
+    /// <summary>
+    /// The reorder point follows the consumption: recomputed before the reorder planner runs,
+    /// instead of the figure typed in.
+    /// </summary>
+    public bool ReorderPointComputed { get; set; }
+
+    public StockConsumptionPolicy ConsumptionPolicy => new()
+    {
+        DeadVolumePercent = DeadVolumePercent,
+        DeadVolumeTestsPerOpening = DeadVolumeTestsPerOpening,
+        TestsPerResultCsv = TestsPerResultCsv,
+        TestsPerCalibration = TestsPerCalibration,
+        SafetyStockDays = SafetyStockDays,
+        TypicalShelfLifeDays = TypicalShelfLifeDays,
+        ReorderPointComputed = ReorderPointComputed
+    };
+
+    public Result ApplyConsumptionPolicy(StockConsumptionPolicy policy)
+    {
+        var valid = policy.Validate();
+        if (valid.IsFailure) return valid;
+
+        DeadVolumePercent = policy.DeadVolumePercent;
+        DeadVolumeTestsPerOpening = policy.DeadVolumeTestsPerOpening;
+        TestsPerResultCsv = string.IsNullOrWhiteSpace(policy.TestsPerResultCsv) ? null : policy.TestsPerResultCsv.Trim();
+        TestsPerCalibration = policy.TestsPerCalibration;
+        SafetyStockDays = policy.SafetyStockDays;
+        TypicalShelfLifeDays = policy.TypicalShelfLifeDays;
+        ReorderPointComputed = policy.ReorderPointComputed;
+        return Result.Success();
+    }
 }
 
 public enum StockItemKind
@@ -485,6 +537,18 @@ public sealed class ReagentLot : Entity, IAuditable
         var written = QuantityRemaining;
         QuantityRemaining = 0m;
         return written;
+    }
+
+    /// <summary>
+    /// Applies the difference an inventory count found (counted less expected) to the quantity on
+    /// the lot, whatever its state: a count records what is on the shelf, usable or not. Movements
+    /// made while the count was running stay applied. Never below zero; returns the change made.
+    /// </summary>
+    public decimal ApplyCountVariance(decimal variance)
+    {
+        var before = QuantityRemaining;
+        QuantityRemaining = Math.Max(0m, QuantityRemaining + variance);
+        return QuantityRemaining - before;
     }
 }
 

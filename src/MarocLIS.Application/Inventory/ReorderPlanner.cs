@@ -29,6 +29,11 @@ public sealed record ReorderOutcome(
 /// needs a supplier and only an approved one may be used; it is reported instead, and stays in
 /// the stock screen's alerts.
 /// </para>
+/// <para>
+/// A captive reagent of a placement contract in force is ordered from the contract's supplier at
+/// the contracted price. The reorder points that follow the consumption are recomputed first, once
+/// a day, and the quantity is capped at what will be used before the delivery expires.
+/// </para>
 /// </summary>
 public sealed class ReorderPlanner(
     IRepository<PurchaseOrder> orders,
@@ -37,24 +42,32 @@ public sealed class ReorderPlanner(
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     IClock clock,
-    ILogger<ReorderPlanner>? logger = null)
+    ILogger<ReorderPlanner>? logger = null,
+    StockPlanningService? planning = null)
 {
     public async Task<ReorderOutcome> RaiseDraftsAsync(CancellationToken ct = default)
     {
         try
         {
+            if (planning is not null) await planning.RefreshComputedReorderPointsAsync(ct: ct);
+
             var candidates = await queries.GetReorderCandidatesAsync(currentUser.SiteId, clock.Today, ct);
             if (candidates.Count == 0) return ReorderOutcome.None;
+
+            var averages = planning is null
+                ? new Dictionary<Guid, decimal>()
+                : await planning.AverageDailyConsumptionAsync(
+                    [.. candidates.Where(c => c.TypicalShelfLifeDays is not null).Select(c => c.StockItemId)], ct);
 
             var drafted = new List<string>();
             var numbers = new List<string>();
             var withoutSupplier = candidates
-                .Where(c => c.PreferredSupplierId is null || !c.SupplierApproved)
+                .Where(c => SupplierOf(c) is null)
                 .Select(c => c.Code)
                 .ToList();
 
-            foreach (var group in candidates.Where(c => c.PreferredSupplierId is not null && c.SupplierApproved)
-                                            .GroupBy(c => c.PreferredSupplierId!.Value))
+            foreach (var group in candidates.Where(c => SupplierOf(c) is not null)
+                                            .GroupBy(c => SupplierOf(c)!.Value))
             {
                 var order = await DraftForAsync(group.Key, ct);
                 if (order is null) continue;
@@ -63,13 +76,20 @@ public sealed class ReorderPlanner(
                 {
                     if (order.Lines.Any(l => l.StockItemId == item.StockItemId)) continue;
 
-                    // The list price with the supplier's usual discount, as the last delivery was
-                    // bought: the price alone would overstate the agreed price.
-                    var added = order.AddLine(new PurchaseOrderLine(item.StockItemId, Quantity(item),
-                                                                    item.LastUnitPriceMad ?? 0m)
+                    var (quantity, cap) = ReorderPolicy.CapByShelfLife(
+                        Quantity(item), averages.TryGetValue(item.StockItemId, out var daily) ? daily : (decimal?)null,
+                        item.TypicalShelfLifeDays, item.Usable);
+
+                    // A captive reagent at its contracted price, net. Otherwise the list price with
+                    // the supplier's usual discount, as the last delivery was bought: the price
+                    // alone would overstate the agreed price.
+                    var contracted = item.ContractPriceMad is not null && item.CaptiveSupplierId == group.Key;
+                    var added = order.AddLine(new PurchaseOrderLine(item.StockItemId, quantity,
+                                                                    contracted ? item.ContractPriceMad!.Value
+                                                                               : item.LastUnitPriceMad ?? 0m)
                     {
-                        Description = item.Code,
-                        DiscountRate = item.LastDiscountRate
+                        Description = Describe(item, contracted, cap, daily),
+                        DiscountRate = contracted ? 0m : item.LastDiscountRate
                     });
 
                     if (added.IsSuccess) drafted.Add(item.Code);
@@ -120,6 +140,24 @@ public sealed class ReorderPlanner(
         await unitOfWork.CommitAsync(ct);
 
         return order;
+    }
+
+    // The contract's supplier for a captive reagent, otherwise the preferred one; only an approved
+    // supplier can be ordered from automatically.
+    private static Guid? SupplierOf(ReorderCandidate item) =>
+        item.CaptiveSupplierId is { } captive
+            ? item.CaptiveSupplierApproved ? captive : null
+            : item.PreferredSupplierId is { } preferred && item.SupplierApproved ? preferred : null;
+
+    // The line says why its price and its quantity are what they are.
+    private static string Describe(ReorderCandidate item, bool contracted, decimal? cap, decimal daily)
+    {
+        var text = item.Code;
+        if (contracted) text += $" — prix du contrat {item.ContractReference}";
+        if (cap is { } capped)
+            text += FormattableString.Invariant(
+                $" — quantité plafonnée à {capped:0.###} : consommation {daily:0.###}/j × {item.TypicalShelfLifeDays} j de péremption − {item.Usable:0.###} en stock");
+        return text.Length <= 300 ? text : text[..300];
     }
 
     // The quantity set on the item; failing that, back up to the maximum; failing that, twice the

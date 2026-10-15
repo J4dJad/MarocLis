@@ -116,6 +116,9 @@ public sealed record StockItemRequest
     public string? Gtin { get; init; }
 
     public bool IsCeMarked { get; init; }
+
+    /// <summary>Consumption and computed-reorder settings; left as they are when null.</summary>
+    public StockConsumptionPolicy? ConsumptionPolicy { get; init; }
 }
 
 public sealed record SupplierRequest
@@ -263,7 +266,7 @@ public sealed record StockItemMasterRow(
     string? Manufacturer = null, string? SupplierCatalogueReference = null,
     string? UsedByAnalysisCodesCsv = null, string? DefaultStorageLocation = null,
     int? TestsPerPack = null, decimal ReorderQuantity = 0m, decimal? MaximumStock = null,
-    string? HazardClass = null);
+    string? HazardClass = null, StockConsumptionPolicy? ConsumptionPolicy = null);
 
 public sealed record SupplierRow(
     Guid SupplierId, string Code, string Name, string? Ice, string? ContactName, string? Phone,
@@ -693,6 +696,9 @@ public sealed class MasterDataService(
         if (!string.IsNullOrWhiteSpace(request.Gtin) && gtin is null)
             errors.Add(Error.Validation("Gs1_GtinInvalid", request.Gtin.Trim()));
 
+        if (request.ConsumptionPolicy?.Validate() is { IsFailure: true } policyInvalid)
+            errors.AddRange(policyInvalid.Errors);
+
         if (errors.Count > 0) return Result.Failure<Guid>(errors);
 
         var code = request.Code.Trim().ToUpperInvariant();
@@ -741,6 +747,7 @@ public sealed class MasterDataService(
         item.IsActive = request.IsActive;
         item.Gtin = gtin;
         item.IsCeMarked = request.IsCeMarked;
+        if (request.ConsumptionPolicy is { } policy) item.ApplyConsumptionPolicy(policy);
 
         stockItems.Update(item);
 

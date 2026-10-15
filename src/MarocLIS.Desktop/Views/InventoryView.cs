@@ -54,13 +54,18 @@ public sealed class InventoryView : LocalizedView
     private readonly IDocumentOutput? _output;
     private readonly ContextMenuStrip _lotMenu = new();
 
+    // Stock alerts: expiry at both levels and the stock-out forecast.
+    private readonly StockPlanningService? _planning;
+    private readonly Button _alerts = UiTheme.SecondaryButton(string.Empty);
+
     public InventoryView(InventoryService inventory, IUserDialogs dialogs,
                          ILocalizer localizer, ICultureManager cultureManager,
                          ILogger<InventoryView>? logger = null,
                          ReceptionService? reception = null, LotQualityService? lotQuality = null,
-                         IDocumentOutput? output = null)
+                         IDocumentOutput? output = null, StockPlanningService? planning = null)
         : base(localizer, cultureManager)
     {
+        _planning = planning;
         _inventory = inventory;
         _dialogs = dialogs;
         _logger = logger;
@@ -109,7 +114,10 @@ public sealed class InventoryView : LocalizedView
         _issue.Bounds = new Rectangle(450, 24, 170, UiTheme.ButtonHeight);
         _refresh.Bounds = new Rectangle(630, 24, 110, UiTheme.ButtonHeight);
 
-        stockBar.Controls.AddRange([_stockHeading, _onlyAlerts, _receive, _issue, _refresh]);
+        _alerts.Bounds = new Rectangle(750, 24, 170, UiTheme.ButtonHeight);
+        _alerts.Visible = _planning is not null;
+
+        stockBar.Controls.AddRange([_stockHeading, _onlyAlerts, _receive, _issue, _refresh, _alerts]);
 
         BuildStockColumns();
 
@@ -239,6 +247,7 @@ public sealed class InventoryView : LocalizedView
         _clearRejection.Click += async (_, _) => await RunBusyAsync(ClearRejectionAsync);
         _recall.Click += async (_, _) => await RunBusyAsync(RecallAsync);
         _writeOff.Click += async (_, _) => await RunBusyAsync(WriteOffAsync);
+        _alerts.Click += async (_, _) => await RunBusyAsync(ShowStockAlertsAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Inventory.Receive, _receive, _rejectLot);
@@ -294,6 +303,17 @@ public sealed class InventoryView : LocalizedView
 
         using var dialog = new RecallListDialog(Localizer, _dialogs, _output, _lotQuality, row.ReagentLotId,
                                                 row.LotNumber, list.Value);
+        dialog.ShowDialog(this);
+    }
+
+    private async Task ShowStockAlertsAsync()
+    {
+        if (_planning is null) return;
+
+        var alerts = await _planning.GetAlertsAsync();
+        if (alerts.IsFailure) { _dialogs.ShowFailure(alerts, _alerts.Text); return; }
+
+        using var dialog = new StockAlertsDialog(Localizer, alerts.Value);
         dialog.ShowDialog(this);
     }
 
@@ -377,6 +397,7 @@ public sealed class InventoryView : LocalizedView
         _recall.Text = T("Inventory.Recall");
         _writeOff.Text = T("Inventory.WriteOff");
         _refresh.Text = T("Action.Refresh");
+        _alerts.Text = T("Stock.Alerts");
 
         if (_stock.Columns.Count > 0)
         {

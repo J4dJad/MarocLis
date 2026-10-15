@@ -1,3 +1,4 @@
+using MarocLIS.Application.Inventory;
 using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Inventory;
@@ -113,13 +114,36 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
                                  || n.Status == NonConformityStatus.InProgress
                                  || n.Status == NonConformityStatus.AwaitingVerification), ct);
 
-        // Reagent lots expiring inside a fortnight, and anything already expired with stock left.
-        var expiryHorizon = todayOnly.AddDays(14);
+        // Reagent lots expiring at the two alert levels of the stock settings (J−30 and J−7 by
+        // default), anything already expired with stock left counted in both.
+        var planning = new StockPlanningQueries(db);
+        var stockSettings = StockSettings.FromValues(await planning.GetSettingValuesAsync(StockSettings.Prefix, ct));
 
-        var expiringLots = await db.ReagentLots.AsNoTracking()
-            .CountAsync(l => l.QuantityRemaining > 0
-                             && !l.IsRejected && !l.IsRecalled
-                             && l.ExpiryDate <= expiryHorizon, ct);
+        var expiryHorizon = todayOnly.AddDays(stockSettings.ExpiryWarningDays);
+        var criticalHorizon = todayOnly.AddDays(stockSettings.ExpiryCriticalDays);
+
+        var expiring = db.ReagentLots.AsNoTracking()
+            .Where(l => l.QuantityRemaining > 0
+                        && !l.IsRejected && !l.IsRecalled
+                        && db.StockItems.Any(i => i.Id == l.StockItemId && i.SiteId == siteId));
+
+        var expiringLots = await expiring.CountAsync(l => l.ExpiryDate <= expiryHorizon, ct);
+        var expiringCritical = await expiring.CountAsync(l => l.ExpiryDate <= criticalHorizon, ct);
+
+        // Items whose usable stock runs out, at the average consumption, before an order placed
+        // today would arrive.
+        var window = stockSettings.ConsumptionWindowDays;
+        var consumption = await planning.GetConsumptionDataAsync(siteId, todayOnly.AddDays(-window),
+                                                                 todayOnly.AddDays(-1), todayOnly, null, ct);
+        var stockOuts = StockPlanningCalculator.StockOuts(consumption, window, todayOnly).Count;
+
+        // Fridges and freezers without a reading today.
+        var start = StockPlanningQueries.Start(todayOnly);
+        var end = StockPlanningQueries.Start(todayOnly.AddDays(1));
+        var unitsWithoutReading = await db.StorageUnits.AsNoTracking()
+            .CountAsync(u => u.SiteId == siteId && u.IsActive
+                             && !db.TemperatureReadings.Any(r => r.StorageUnitId == u.Id
+                                                                 && r.ReadAt >= start && r.ReadAt < end), ct);
 
         // Items at or under their reorder point, counting only what can be used: a lot still in
         // quarantine, expired or past its open stability does not fill a rack.
@@ -196,6 +220,13 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
                     "inventory"),
                 new("Inventory.ExpiringSoon", expiringLots,
                     expiringLots > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
+                new("Stock.DashboardExpiringCritical", expiringCritical,
+                    expiringCritical > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral, "inventory"),
+                new("Stock.DashboardStockOuts", stockOuts,
+                    stockOuts > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral, "inventory"),
+                new("Temperatures.DashboardMissing", unitsWithoutReading,
+                    unitsWithoutReading > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "temperatures"),
                 new("SampleStatus.Rejected", rejectedSamplesToday,
                     rejectedSamplesToday > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
                 new("Dashboard.Receivables", unpaidInvoices,

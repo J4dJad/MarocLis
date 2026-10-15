@@ -149,7 +149,7 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
             .Select(i => new
             {
                 i.Id, i.Code, i.UnitOfMeasure, i.PreferredSupplierId, i.ReorderPoint,
-                i.ReorderQuantity, i.MaximumStock, i.LastUnitPriceMad,
+                i.ReorderQuantity, i.MaximumStock, i.LastUnitPriceMad, i.TypicalShelfLifeDays,
                 LastDiscountRate = db.PurchaseOrders
                     .Where(o => o.SupplierId == i.PreferredSupplierId)
                     .SelectMany(o => o.Lines.Where(l => l.StockItemId == i.Id && l.QuantityReceived > 0m),
@@ -170,12 +170,32 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
             })
             .ToListAsync(ct);
 
-        return rows.Where(r => r.Usable <= r.ReorderPoint)
-                   .Select(r => new ReorderCandidate(r.Id, r.Code, r.UnitOfMeasure, r.PreferredSupplierId,
-                                                     r.SupplierApproved, r.Usable, r.ReorderPoint,
-                                                     r.ReorderQuantity, r.MaximumStock, r.LastUnitPriceMad,
-                                                     r.LastDiscountRate ?? 0m))
-                   .ToList();
+        var due = rows.Where(r => r.Usable <= r.ReorderPoint).ToList();
+        if (due.Count == 0) return [];
+
+        // Captive reagents of a placement contract in force are ordered from its supplier, at its price.
+        var captive = (await InstrumentContractQueries.CaptiveReagentsAsync(db, siteId, today,
+                                                                            [.. due.Select(r => r.Id)], ct))
+            .GroupBy(c => c.StockItemId).ToDictionary(g => g.Key, g => g.First());
+        var captiveSuppliers = captive.Values.Select(c => c.SupplierId).Distinct().ToList();
+        var approved = (await db.Suppliers.AsNoTracking()
+                .Where(s => captiveSuppliers.Contains(s.Id) && s.IsActive && s.IsApproved)
+                .Select(s => s.Id)
+                .ToListAsync(ct))
+            .ToHashSet();
+
+        return due.Select(r =>
+                   {
+                       var contract = captive.GetValueOrDefault(r.Id);
+                       return new ReorderCandidate(r.Id, r.Code, r.UnitOfMeasure, r.PreferredSupplierId,
+                                                   r.SupplierApproved, r.Usable, r.ReorderPoint,
+                                                   r.ReorderQuantity, r.MaximumStock, r.LastUnitPriceMad,
+                                                   r.LastDiscountRate ?? 0m, r.TypicalShelfLifeDays,
+                                                   contract?.SupplierId,
+                                                   contract is not null && approved.Contains(contract.SupplierId),
+                                                   contract?.ContractPriceMad, contract?.ContractReference);
+                   })
+                  .ToList();
     }
 
     public async Task<Guid?> FindAutomaticDraftAsync(Guid siteId, Guid supplierId,

@@ -321,7 +321,8 @@ public sealed class MainShellForm : LocalizedForm
 
             new("group.logistics", "Nav.Inventory", [Permissions.Inventory.View,
                                                       Permissions.Equipment.View,
-                                                      Permissions.Inventory.EnterInvoices],
+                                                      Permissions.Inventory.EnterInvoices,
+                                                      Permissions.Inventory.RecordTemperatures],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 
             new("inventory", "Nav.Inventory", [Permissions.Inventory.View],
@@ -337,6 +338,14 @@ public sealed class MainShellForm : LocalizedForm
                 n => n.NavigateToAsync<SupplierInvoiceView>()),
             new("supplierevaluation", "Nav.SupplierEvaluation", [Permissions.Inventory.ManagePurchaseOrders],
                 n => n.NavigateToAsync<SupplierEvaluationView>()),
+            new("consumption", "Nav.Consumption", [Permissions.Inventory.View],
+                n => n.NavigateToAsync<ConsumptionView>()),
+            new("inventorycounts", "Nav.InventoryCounts", [Permissions.Inventory.Receive,
+                                                            Permissions.Inventory.CloseCounts],
+                n => n.NavigateToAsync<InventoryCountView>()),
+            new("temperatures", "Nav.Temperatures", [Permissions.Inventory.RecordTemperatures,
+                                                      Permissions.Inventory.ManageStorageUnits],
+                n => n.NavigateToAsync<TemperatureView>()),
 
             new("equipment", "Nav.Equipment", [Permissions.Equipment.View],
                 n => n.NavigateToAsync<EquipmentView>()),

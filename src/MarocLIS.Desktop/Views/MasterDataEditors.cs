@@ -745,12 +745,18 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
     private readonly TextBox _reorder, _reorderQuantity, _minimum, _maximum;
     private readonly CheckBox _critical, _hazardous, _active, _ceMarked;
 
+    // Consumption and computed reorder point (purchasing lot B).
+    private readonly TextBox _testsPerResult, _deadPercent, _deadTests;
+    private readonly NumericUpDown _calibrationTests, _safetyDays, _shelfLife;
+    private readonly CheckBox _computed;
+
     internal StockItemRequest? Request { get; private set; }
 
     internal StockItemEditorDialog(ILocalizer localizer, IUserDialogs dialogs,
-                                   StockItemMasterRow? row, IReadOnlyList<SupplierRow> suppliers)
+                                   StockItemMasterRow? row, IReadOnlyList<SupplierRow> suppliers,
+                                   Application.Inventory.ReorderPointProposal? proposal = null)
         : base(localizer, dialogs,
-               row is null ? "Inventory.NewItem" : "Action.Edit", row?.Code, 720, 620)
+               row is null ? "Inventory.NewItem" : "Action.Edit", row?.Code, 720, 800)
     {
         _id = row?.StockItemId;
 
@@ -804,7 +810,39 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
         _ceMarked = Check("Inventory.IsCeMarked", 240, 470, row?.IsCeMarked ?? false);
         Notice(20, 500, 680, 30, "Inventory.GtinNotice");
 
-        Buttons(560, 720);
+        // What a result costs in tests and what an opening loses, for the theoretical consumption;
+        // the safety margin and the shelf life, for the computed reorder point and the order cap.
+        var policy = row?.ConsumptionPolicy ?? new StockConsumptionPolicy();
+        static string N(decimal? v) => v?.ToString("0.###", System.Globalization.CultureInfo.CurrentCulture) ?? string.Empty;
+
+        Notice(20, 540, 680, 20, "Inventory.ConsumptionNotice", UiTheme.Accent);
+        _testsPerResult = TextField("Inventory.TestsPerResult", 20, 562, 300, policy.TestsPerResultCsv, latin: true, mono: true);
+        _deadPercent = TextField("Inventory.DeadVolumePercent", 340, 562, 170, N(policy.DeadVolumePercent),
+                                 latin: true, right: true);
+        _deadTests = TextField("Inventory.DeadVolumeTests", 530, 562, 170, N(policy.DeadVolumeTestsPerOpening),
+                               latin: true, right: true);
+
+        _calibrationTests = Number("Inventory.TestsPerCalibration", 20, 616, 150, policy.TestsPerCalibration, 1000m);
+        _safetyDays = Number("Inventory.SafetyStockDays", 190, 616, 150, policy.SafetyStockDays, 365m);
+        _shelfLife = Number("Inventory.ShelfLifeDays", 360, 616, 150, policy.TypicalShelfLifeDays, 3650m);
+
+        _computed = Check("Inventory.ReorderPointComputed", 20, 672, policy.ReorderPointComputed, bold: true);
+
+        var suggestion = Notice(20, 696, 520, 40, "Inventory.NoReorderProposal");
+        var apply = UiTheme.SecondaryButton(Localizer["Inventory.ApplyReorderProposal"]);
+        apply.Bounds = new Rectangle(560, 696, 140, UiTheme.ButtonHeight);
+        apply.Enabled = proposal is not null;
+        Controls.Add(apply);
+
+        if (proposal is { Suggestion: var s })
+        {
+            suggestion.Text = Localizer.Format("Inventory.ReorderProposal", N(s.ReorderPoint), N(s.AverageDailyConsumption),
+                                               s.LeadTimeDays, N(s.SafetyStock), proposal.WindowDays,
+                                               Localizer[s.FromTheoretical ? "Inventory.FromTheoretical" : "Inventory.FromIssues"]);
+            apply.Click += (_, _) => _reorder.Text = N(s.ReorderPoint);
+        }
+
+        Buttons(750, 720);
     }
 
     protected override void Accept()
@@ -842,6 +880,34 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
             return;
         }
 
+        var deadPercent = DecimalOrNull(_deadPercent);
+        var deadTests = DecimalOrNull(_deadTests);
+        if (!string.IsNullOrWhiteSpace(_deadPercent.Text) && deadPercent is null
+            || !string.IsNullOrWhiteSpace(_deadTests.Text) && deadTests is null)
+        {
+            Dialogs.Warn(Localizer["Stock_DeadVolumeOutOfRange"]);
+            _deadPercent.Focus();
+            return;
+        }
+
+        var policy = new StockConsumptionPolicy
+        {
+            TestsPerResultCsv = Blank(_testsPerResult),
+            DeadVolumePercent = deadPercent,
+            DeadVolumeTestsPerOpening = deadTests,
+            TestsPerCalibration = IntOrNull(_calibrationTests),
+            SafetyStockDays = IntOrNull(_safetyDays),
+            TypicalShelfLifeDays = IntOrNull(_shelfLife),
+            ReorderPointComputed = _computed.Checked
+        };
+
+        if (policy.Validate() is { IsFailure: true } invalid)
+        {
+            Dialogs.Warn(Localizer.Describe(invalid.Errors));
+            _testsPerResult.Focus();
+            return;
+        }
+
         Request = new StockItemRequest
         {
             StockItemId = _id,
@@ -865,7 +931,8 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
             IsCritical = _critical.Checked,
             IsActive = _active.Checked,
             Gtin = Blank(_gtin),
-            IsCeMarked = _ceMarked.Checked
+            IsCeMarked = _ceMarked.Checked,
+            ConsumptionPolicy = policy
         };
 
         DialogResult = DialogResult.OK;
