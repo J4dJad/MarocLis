@@ -89,11 +89,13 @@ public sealed class AccidentTests
     }
 
     [Theory]
-    [InlineData(5200, 26, 4, 533.33)]    // 200 a day × 4 × 2/3
-    [InlineData(7800, 26, 0, 0)]
-    [InlineData(7800, 0, 3, 0)]
-    public void The_advanced_allowance_is_two_thirds_of_the_withheld_salary(double salary, double days, double off, double expected) =>
-        AccidentRules.Allowance((decimal)salary, (decimal)days, (decimal)off).Should().Be((decimal)expected);
+    [InlineData(7300, 14, 2240)]         // 7,300 × 12 / 365 = 240 a day × 14 calendar days × 2/3
+    [InlineData(5200, 14, 1595.62)]
+    [InlineData(7800, 0, 0)]
+    [InlineData(0, 3, 0)]
+    public void The_advanced_allowance_is_two_thirds_of_the_daily_salary_for_each_calendar_day(double salary, double off,
+                                                                                               double expected) =>
+        AccidentRules.Allowance((decimal)salary, (decimal)off).Should().Be((decimal)expected);
 
     [Fact]
     public void The_advanced_allowance_is_exempt_from_tax_and_contributions()

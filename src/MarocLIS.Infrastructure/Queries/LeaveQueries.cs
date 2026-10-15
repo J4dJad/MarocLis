@@ -1,17 +1,24 @@
 using MarocLIS.Application.HumanResources;
+using MarocLIS.Domain.Common;
 using MarocLIS.Domain.HumanResources;
 using MarocLIS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace MarocLIS.Infrastructure.Queries;
 
-public sealed class LeaveQueries(LisDbContext db) : ILeaveQueries
+public sealed class LeaveQueries(LisDbContext db, IClock clock) : ILeaveQueries
 {
-    public Task<Guid?> EmployeeIdForUserAsync(Guid userId, CancellationToken ct = default) =>
-        db.Employees.AsNoTracking()
-          .Where(e => e.UserId == userId && e.ExitDate == null)
-          .Select(e => (Guid?)e.Id)
-          .FirstOrDefaultAsync(ct);
+    // An employee has left from the day after the exit date: a departure recorded ahead leaves the
+    // notice to be worked with leave, accrual and planning as before.
+
+    public Task<Guid?> EmployeeIdForUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        var today = clock.Today;
+        return db.Employees.AsNoTracking()
+                 .Where(e => e.UserId == userId && (e.ExitDate == null || e.ExitDate >= today))
+                 .Select(e => (Guid?)e.Id)
+                 .FirstOrDefaultAsync(ct);
+    }
 
     public async Task<IReadOnlyList<LeaveRow>> GetRequestsAsync(bool pendingOnly, int year, Guid? employeeId,
                                                                 CancellationToken ct = default)
@@ -112,7 +119,7 @@ public sealed class LeaveQueries(LisDbContext db) : ILeaveQueries
     public async Task<IReadOnlyList<LeaveBalanceRow>> GetBalancesAsync(DateOnly today, Guid? employeeId,
                                                                        CancellationToken ct = default)
     {
-        var people = db.Employees.AsNoTracking().Where(e => e.ExitDate == null);
+        var people = db.Employees.AsNoTracking().Where(e => e.ExitDate == null || e.ExitDate >= today);
         if (employeeId is { } only) people = people.Where(e => e.Id == only);
 
         var staff = await people
@@ -154,8 +161,11 @@ public sealed class LeaveQueries(LisDbContext db) : ILeaveQueries
 
     public async Task<IReadOnlyList<AccrualFacts>> GetAccrualFactsAsync(CancellationToken ct = default)
     {
+        // Accrual stops at the exit date (LeaveAccrual.Due); months left uncredited at the
+        // departure are counted by the final settlement.
+        var today = clock.Today;
         var staff = await db.Employees.AsNoTracking()
-            .Where(e => e.ExitDate == null)
+            .Where(e => e.ExitDate == null || e.ExitDate >= today)
             .Select(e => new { e.Id, e.HireDate, e.BirthDate, e.ExitDate, e.CreatedAt })
             .ToListAsync(ct);
         if (staff.Count == 0) return [];
@@ -181,12 +191,10 @@ public sealed class LeaveQueries(LisDbContext db) : ILeaveQueries
         ];
     }
 
-    public async Task<IReadOnlySet<DateOnly>> GetHolidayDatesAsync(DateOnly from, DateOnly to,
-                                                                   CancellationToken ct = default) =>
-        (await db.PublicHolidays.AsNoTracking()
-            .Where(h => h.Date >= from && h.Date <= to)
-            .Select(h => h.Date)
-            .ToListAsync(ct)).ToHashSet();
+    /// <summary>The civil holidays of the years the range touches are put in first: see <see cref="HolidayCalendar"/>.</summary>
+    public Task<IReadOnlySet<DateOnly>> GetHolidayDatesAsync(DateOnly from, DateOnly to,
+                                                            CancellationToken ct = default) =>
+        new HolidayCalendar(db).DatesAsync(from, to, ct);
 
     public async Task<IReadOnlyList<HolidayRow>> GetHolidaysAsync(int year, CancellationToken ct = default)
     {

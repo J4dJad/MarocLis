@@ -109,11 +109,20 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
 
     // ---- Departure -----------------------------------------------------------------------------
 
+    /// <summary>Last day worked. Recorded ahead when the notice is being served.</summary>
     public DateOnly? ExitDate { get; private set; }
     public ExitReason? ExitReason { get; private set; }
     public string? ExitComment { get; private set; }
 
-    public bool IsActive => ExitDate is null;
+    /// <summary>A departure is recorded, possibly for a date still to come.</summary>
+    public bool HasDeparture => ExitDate is not null;
+
+    /// <summary>
+    /// On the staff on <paramref name="day"/>: no departure, or one not reached yet. The exit date
+    /// is the last day worked, so the employee has left from the day after it; until then they
+    /// take leave, accrue it and keep their habilitations like everyone else.
+    /// </summary>
+    public bool IsActiveOn(DateOnly day) => ExitDate is not { } exit || day <= exit;
 
     public IReadOnlyCollection<EmployeeCredential> Credentials => _credentials.AsReadOnly();
     public IReadOnlyCollection<EmployeeHabilitation> Habilitations => _habilitations.AsReadOnly();
@@ -170,9 +179,13 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
         return remainder == 0;
     }
 
+    /// <summary>
+    /// Records the departure, possibly ahead of it (the notice being served): the employee stays
+    /// on the staff until the exit date, see <see cref="IsActiveOn"/>.
+    /// </summary>
     public Result RecordExit(DateOnly on, ExitReason reason, string? comment)
     {
-        if (!IsActive) return Result.Failure(Error.Conflict("Employee_AlreadyExited", ExitDate!));
+        if (HasDeparture) return Result.Failure(Error.Conflict("Employee_AlreadyExited", ExitDate!));
         if (on < HireDate) return Result.Failure(Error.Validation("Employee_ExitBeforeHire"));
 
         ExitDate = on;
@@ -180,8 +193,9 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
         ExitComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
 
         // A person who has left holds no habilitation: the matrix must not show them as able to
-        // validate, and a return later starts from a fresh evaluation.
-        foreach (var habilitation in _habilitations.Where(h => h.IsActive))
+        // validate, and a return later starts from a fresh evaluation. They end on the exit date,
+        // not on the day the departure is recorded: the notice is worked with them.
+        foreach (var habilitation in _habilitations.Where(h => h.IsActiveOn(on)))
             habilitation.Withdraw(on, "Sortie du laboratoire");
 
         return Result.Success();
@@ -190,7 +204,8 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
     /// <summary>Re-hiring keeps the file; the contract dates are entered again.</summary>
     public Result Rehire(DateOnly on)
     {
-        if (IsActive) return Result.Failure(Error.Conflict("Employee_AlreadyActive"));
+        if (!HasDeparture) return Result.Failure(Error.Conflict("Employee_AlreadyActive"));
+        if (on <= ExitDate) return Result.Failure(Error.Validation("Employee_RehireBeforeExit", ExitDate!));
 
         ExitDate = null;
         ExitReason = null;
@@ -267,7 +282,8 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
                                               DateOnly? reviewDueOn, Guid grantedByUserId,
                                               string? evidence)
     {
-        if (!IsActive)
+        // Nothing is granted from the last day worked on; granted during the notice, it ends with it.
+        if (ExitDate is { } exit && grantedOn >= exit)
             return Result.Failure<EmployeeHabilitation>(Error.Conflict("Habilitation_EmployeeExited"));
 
         if (EmployeeHabilitation.RequiresSubject(activity) && subjectId is null)
@@ -278,13 +294,14 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
 
         var subject = EmployeeHabilitation.RequiresSubject(activity) ? subjectId : null;
 
-        foreach (var current in _habilitations.Where(h => h.IsActive && h.Activity == activity
+        foreach (var current in _habilitations.Where(h => h.IsActiveOn(grantedOn) && h.Activity == activity
                                                           && h.SubjectId == subject))
             current.Withdraw(grantedOn, "Remplacée par une nouvelle décision");
 
         var habilitation = new EmployeeHabilitation(Id, activity, subject, level, grantedOn,
                                                     reviewDueOn, grantedByUserId,
                                                     string.IsNullOrWhiteSpace(evidence) ? null : evidence.Trim());
+        if (ExitDate is { } leaving) habilitation.Withdraw(leaving, "Sortie du laboratoire");
         _habilitations.Add(habilitation);
         return Result.Success(habilitation);
     }
@@ -296,7 +313,7 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
 
         var habilitation = _habilitations.FirstOrDefault(h => h.Id == habilitationId);
         if (habilitation is null) return Result.Failure(Error.NotFound("Habilitation_NotFound"));
-        if (!habilitation.IsActive) return Result.Failure(Error.Conflict("Habilitation_AlreadyWithdrawn"));
+        if (!habilitation.IsActiveOn(on)) return Result.Failure(Error.Conflict("Habilitation_AlreadyWithdrawn"));
 
         habilitation.Withdraw(on, reason.Trim());
         return Result.Success();
@@ -518,15 +535,25 @@ public sealed class EmployeeHabilitation : Entity, IAuditable
     /// <summary>What the decision rests on: training, supervised period, practical evaluation.</summary>
     public string? Evidence { get; private set; }
 
+    /// <summary>
+    /// From when the habilitation no longer holds. May lie ahead: on a departure recorded during
+    /// the notice it is the exit date.
+    /// </summary>
     public DateOnly? WithdrawnOn { get; private set; }
     public string? WithdrawalReason { get; private set; }
 
+    /// <summary>No end recorded, now or ahead.</summary>
     public bool IsActive => WithdrawnOn is null;
 
-    public bool IsReviewOverdue(DateOnly today) => IsActive && ReviewDueOn is { } due && due < today;
+    /// <summary>Held on <paramref name="day"/>: no end, or one still to come.</summary>
+    public bool IsActiveOn(DateOnly day) => WithdrawnOn is not { } end || day < end;
 
+    public bool IsReviewOverdue(DateOnly today) => IsActiveOn(today) && ReviewDueOn is { } due && due < today;
+
+    /// <summary>Ends the habilitation on <paramref name="on"/>; an end already set earlier stays.</summary>
     internal void Withdraw(DateOnly on, string reason)
     {
+        if (WithdrawnOn is { } end && end <= on) return;
         WithdrawnOn = on;
         WithdrawalReason = reason;
     }

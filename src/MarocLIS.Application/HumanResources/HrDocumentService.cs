@@ -80,6 +80,12 @@ public interface IHrDocumentQueries
     /// <summary>Paid-leave days left on the day of departure, the months not yet credited included.</summary>
     Task<decimal> LeaveBalanceAtExitAsync(Guid employeeId, CancellationToken ct = default);
 
+    /// <summary>
+    /// The monthly accruals up to the departure not credited yet: counted in
+    /// <see cref="LeaveBalanceAtExitAsync"/>, written to the account when the settlement is signed.
+    /// </summary>
+    Task<IReadOnlyList<LeaveLedgerEntry>> ExitAccrualsDueAsync(Guid employeeId, CancellationToken ct = default);
+
     /// <summary>The employee's payslip for a month, and the month's status, when the month is open.</summary>
     Task<(Guid PeriodId, PayrollStatus Status, Payslip? Payslip)?> PayslipOfMonthAsync(Guid employeeId, int year, int month,
                                                                                         CancellationToken ct = default);
@@ -119,9 +125,9 @@ public sealed class HrDocumentService(
 
         switch (kind)
         {
-            case HrDocumentKind.EmploymentAttestation when !employee.IsActive:
+            case HrDocumentKind.EmploymentAttestation when !employee.IsActiveOn(clock.Today):
                 return Result.Failure<HrDocument>(Error.Conflict("HrDocument_EmployeeExited"));
-            case HrDocumentKind.WorkCertificate when employee.IsActive:
+            case HrDocumentKind.WorkCertificate when !employee.HasDeparture:
                 return Result.Failure<HrDocument>(Error.Conflict("HrDocument_EmployeeNotExited"));
             case HrDocumentKind.SalaryAttestation when employee.BaseSalary is null:
                 return Result.Failure<HrDocument>(Error.Validation("HrDocument_NoSalary"));
@@ -188,6 +194,7 @@ public sealed record SettlementDetail(
 public sealed class SettlementService(
     IRepository<FinalSettlement> settlements,
     IRepository<Employee> employees,
+    IRepository<LeaveLedgerEntry> ledger,
     IRepository<PayrollPeriod> periods,
     IRepository<PayrollParameters> parameters,
     IHrDocumentQueries queries,
@@ -305,7 +312,11 @@ public sealed class SettlementService(
         return Result.Success(outcome);
     }
 
-    /// <summary>Records that the employee signed the receipt. From then on the settlement is final.</summary>
+    /// <summary>
+    /// Records that the employee signed the receipt. From then on the settlement is final, and the
+    /// leave it paid leaves the account: the months credited at the departure are written, then
+    /// the days paid are debited, so a re-hired employee does not find them again.
+    /// </summary>
     public async Task<Result> SignAsync(Guid employeeId, DateOnly on, CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.HumanResources.Salary);
@@ -322,9 +333,34 @@ public sealed class SettlementService(
         if (signed.IsFailure) return signed;
 
         settlements.Update(settlement);
+
+        var reference = SettledLeaveReference(exit);
+        if (!(await ledger.ListAsync(l => l.EmployeeId == employeeId && l.Reference == reference, ct)).Any())
+            foreach (var entry in SettledLeaveEntries(settlement, await queries.ExitAccrualsDueAsync(employeeId, ct)))
+                await ledger.AddAsync(entry, ct);
+
         unitOfWork.AuditReason = $"Reçu pour solde de tout compte de {employee.Number} signé le {on:dd/MM/yyyy}";
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success();
+    }
+
+    /// <summary>The reference of the debit for the leave paid on a departure: one per departure.</summary>
+    public static string SettledLeaveReference(DateOnly exit) => $"SOLDE-{exit:yyyyMMdd}";
+
+    /// <summary>
+    /// What signing the settlement writes to the leave account: the accruals counted at the
+    /// departure but not credited yet, then the days paid as an indemnity taken off.
+    /// </summary>
+    public static IReadOnlyList<LeaveLedgerEntry> SettledLeaveEntries(FinalSettlement settlement,
+                                                                    IReadOnlyList<LeaveLedgerEntry> accrualsDue)
+    {
+        var entries = new List<LeaveLedgerEntry>(accrualsDue);
+        if (settlement.LeaveDays > 0)
+            entries.Add(new LeaveLedgerEntry(settlement.EmployeeId, settlement.ExitDate, LeaveLedgerKind.Adjustment,
+                                             -settlement.LeaveDays, SettledLeaveReference(settlement.ExitDate),
+                                             $"Congés payés par l'indemnité compensatrice du solde de tout compte " +
+                                             $"(sortie le {settlement.ExitDate:dd/MM/yyyy})"));
+        return entries;
     }
 
     public async Task<Result<HrDocument>> ReceiptAsync(Guid employeeId, CancellationToken ct = default)

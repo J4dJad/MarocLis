@@ -35,30 +35,36 @@ public sealed class HrDocumentQueries(LisDbContext db) : IHrDocumentQueries
 
     public async Task<decimal> LeaveBalanceAtExitAsync(Guid employeeId, CancellationToken ct = default)
     {
+        var balance = await db.LeaveLedger.AsNoTracking()
+            .Where(l => l.EmployeeId == employeeId)
+            .SumAsync(l => (decimal?)l.Days, ct) ?? 0m;
+
+        return balance + (await ExitAccrualsDueAsync(employeeId, ct)).Sum(d => d.Days);
+    }
+
+    public async Task<IReadOnlyList<LeaveLedgerEntry>> ExitAccrualsDueAsync(Guid employeeId, CancellationToken ct = default)
+    {
         var e = await db.Employees.AsNoTracking()
             .Where(x => x.Id == employeeId)
             .Select(x => new { x.Id, x.HireDate, x.BirthDate, x.ExitDate, x.CreatedAt })
             .FirstOrDefaultAsync(ct);
-        if (e is null) return 0m;
-
-        var ledger = await db.LeaveLedger.AsNoTracking()
-            .Where(l => l.EmployeeId == employeeId)
-            .Select(l => new { l.Days, l.Kind, l.Reference })
-            .ToListAsync(ct);
-
-        var balance = ledger.Sum(l => l.Days);
-        if (e.ExitDate is not { } exit) return balance;
+        if (e?.ExitDate is not { } exit) return [];
 
         // The monthly accrual stops with the file: months up to the departure not credited yet
         // are added here, by the same rule, as if the accrual had run on the following month.
-        var credited = ledger.Where(l => l.Kind == LeaveLedgerKind.Accrual)
-                             .Select(l => l.Reference).ToHashSet(StringComparer.Ordinal);
+        var credited = (await db.LeaveLedger.AsNoTracking()
+                .Where(l => l.EmployeeId == employeeId && l.Kind == LeaveLedgerKind.Accrual)
+                .Select(l => l.Reference)
+                .ToListAsync(ct))
+            .ToHashSet(StringComparer.Ordinal);
         var opened = DateOnly.FromDateTime(e.CreatedAt.Date);
         var trackedFrom = e.HireDate > opened ? e.HireDate : new DateOnly(opened.Year, opened.Month, 1);
 
-        var due = LeaveAccrual.Due(new AccrualFacts(e.Id, e.HireDate, e.BirthDate, exit, trackedFrom, credited),
-                                   new DateOnly(exit.Year, exit.Month, 1).AddMonths(1));
-        return balance + due.Sum(d => d.Days);
+        return
+        [
+            .. LeaveAccrual.Due(new AccrualFacts(e.Id, e.HireDate, e.BirthDate, exit, trackedFrom, credited),
+                                new DateOnly(exit.Year, exit.Month, 1).AddMonths(1))
+        ];
     }
 
     public async Task<(Guid PeriodId, PayrollStatus Status, Payslip? Payslip)?> PayslipOfMonthAsync(

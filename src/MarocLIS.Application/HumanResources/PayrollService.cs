@@ -50,11 +50,19 @@ public interface IPayslipRenderer
 }
 
 /// <summary>Who goes on a month's payroll, with what the leave already says about their absences.</summary>
-/// <param name="UnpaidDays">Days withheld from the salary, work-accident days included.</param>
+/// <param name="UnpaidDays">Working days withheld from the salary within the contract, work-accident days included.</param>
 /// <param name="WorkAccidentDays">Of which on a work-accident stoppage.</param>
-/// <param name="SubrogatedDays">Of which the employer advances the insurer's allowance.</param>
+/// <param name="SubrogatedDays">
+/// Calendar days of the month on a stoppage for which the employer advances the insurer's allowance.
+/// </param>
+/// <param name="MonthWorkingDays">
+/// Working days of the month (Monday to Saturday less holidays) when the employee joined or left
+/// during it; 0 for a full month.
+/// </param>
+/// <param name="ContractWorkingDays">Of those, the days between the hire and the exit.</param>
 public sealed record PayrollCandidate(Guid EmployeeId, decimal UnpaidDays, decimal WorkAccidentDays = 0m,
-                                      decimal SubrogatedDays = 0m);
+                                      decimal SubrogatedDays = 0m, decimal MonthWorkingDays = 0m,
+                                      decimal ContractWorkingDays = 0m);
 
 /// <summary>
 /// Monthly payroll. Everything here requires the salary right: nobody without it sees a salary.
@@ -193,7 +201,9 @@ public sealed class PayrollService(
 
     /// <summary>
     /// Takes the files as they are now: new salaried staff are added, salaries and family
-    /// situations updated, absences taken again from leave. The variables already typed are kept.
+    /// situations updated, absences taken again from leave, and the payslips of those no longer
+    /// on the month's payroll (left before it, salary cleared, partner…) taken off. The variables
+    /// already typed, unpaid days entered by hand included, are kept.
     /// </summary>
     public async Task<Result<int>> RefreshAsync(Guid periodId, CancellationToken ct = default)
     {
@@ -217,11 +227,13 @@ public sealed class PayrollService(
     {
         var added = 0;
         var settlements = await queries.SettlementsAsync(period.FirstDay, period.LastDay, ct);
+        var paid = new HashSet<Guid>();
         foreach (var candidate in await queries.CandidatesAsync(period.SiteId, period.FirstDay, period.LastDay,
                                                              rates.MonthlyWorkingDays, ct))
         {
             var employee = await employees.GetByIdAsync(candidate.EmployeeId, ct);
             if (employee?.BaseSalary is null || !PayrollCalculator.IsOnPayroll(employee.ContractType)) continue;
+            paid.Add(employee.Id);
 
             var slip = period.Payslips.FirstOrDefault(p => p.EmployeeId == employee.Id);
             var isNew = slip is null;
@@ -239,21 +251,10 @@ public sealed class PayrollService(
             slip.Rib = employee.Rib;
             slip.BankName = employee.BankName;
 
-            var variables = isNew
-                ? new PayslipVariables { AbsenceDays = candidate.UnpaidDays }
-                : slip.Variables with { AbsenceDays = candidate.UnpaidDays };
-
-            // What the final settlement says is owed on departure, as it now stands.
-            var settled = settlements.GetValueOrDefault(employee.Id);
-            variables = variables with
-            {
-                LeaveIndemnity = settled?.LeaveIndemnity ?? 0m,
-                NoticeIndemnity = settled?.NoticeIndemnity ?? 0m,
-                SeverancePay = settled?.SeverancePay ?? 0m,
-                WorkAccidentDays = candidate.WorkAccidentDays,
-                WorkAccidentAllowance = AccidentRules.Allowance(employee.BaseSalary.Value, rates.MonthlyWorkingDays,
-                                                                candidate.SubrogatedDays)
-            };
+            // The leave-derived figures are taken again; what HR typed, the unpaid days entered by
+            // hand included, stays.
+            var variables = FromFiles(isNew ? new PayslipVariables() : slip.Variables, candidate,
+                                      settlements.GetValueOrDefault(employee.Id), employee.BaseSalary.Value);
             slip.Recompute(variables, rates, period.LastDay);
 
             if (isNew)
@@ -263,8 +264,33 @@ public sealed class PayrollService(
             }
         }
 
+        // A draft month is rebuilt from the files: whoever is no longer on it is taken off rather
+        // than left with a full month's pay.
+        foreach (var gone in period.Payslips.Where(p => !paid.Contains(p.EmployeeId)).Select(p => p.EmployeeId).ToList())
+            period.Remove(gone);
+
         return added;
     }
+
+    /// <summary>
+    /// The variables as the files give them: absences from the leave, days of the contract,
+    /// work-accident days and allowance, departure indemnities from the final settlement. The rest
+    /// of <paramref name="typed"/> (overtime, bonuses, unpaid days entered by hand…) is kept.
+    /// </summary>
+    public static PayslipVariables FromFiles(PayslipVariables typed, PayrollCandidate candidate, SettledAmounts? settled,
+                                             decimal baseSalary) =>
+        typed with
+        {
+            AbsenceDays = candidate.UnpaidDays,
+            MonthWorkingDays = candidate.MonthWorkingDays,
+            ContractWorkingDays = candidate.ContractWorkingDays,
+            // What the final settlement says is owed on departure, as it now stands.
+            LeaveIndemnity = settled?.LeaveIndemnity ?? 0m,
+            NoticeIndemnity = settled?.NoticeIndemnity ?? 0m,
+            SeverancePay = settled?.SeverancePay ?? 0m,
+            WorkAccidentDays = candidate.WorkAccidentDays,
+            WorkAccidentAllowance = AccidentRules.Allowance(baseSalary, candidate.SubrogatedDays)
+        };
 
     /// <summary>Spouse when married, plus the dependent children: the persons the income-tax deduction counts.</summary>
     public static int DependentPersons(Employee employee) =>
@@ -308,11 +334,9 @@ public sealed class PayrollService(
         var permitted = Require();
         if (permitted.IsFailure) return permitted;
 
-        decimal[] values = [variables.AbsenceDays, variables.OvertimeHours25, variables.OvertimeHours50,
+        decimal[] values = [variables.ManualAbsenceDays, variables.OvertimeHours25, variables.OvertimeHours50,
                             variables.OvertimeHours100, variables.TaxableBonus, variables.TransportAllowance,
-                            variables.OtherExemptAllowance, variables.AdvanceDeduction, variables.OtherDeduction,
-                            variables.LeaveIndemnity, variables.NoticeIndemnity, variables.SeverancePay,
-                            variables.WorkAccidentDays, variables.WorkAccidentAllowance];
+                            variables.OtherExemptAllowance, variables.AdvanceDeduction, variables.OtherDeduction];
         if (values.Any(v => v < 0)) return Result.Failure(Error.Validation("Payroll_NegativeVariable"));
 
         var period = await periods.GetByIdWithDetailsAsync(periodId, ct);
@@ -322,14 +346,29 @@ public sealed class PayrollService(
         var slip = period.Payslips.FirstOrDefault(p => p.Id == payslipId);
         if (slip is null) return Result.Failure(Error.NotFound("Payroll_PayslipNotFound"));
 
+        // What HR types; the figures taken from the files (leave, contract days, accident,
+        // settlement) stay as the last refresh left them.
+        var typed = slip.Variables with
+        {
+            ManualAbsenceDays = variables.ManualAbsenceDays,
+            OvertimeHours25 = variables.OvertimeHours25,
+            OvertimeHours50 = variables.OvertimeHours50,
+            OvertimeHours100 = variables.OvertimeHours100,
+            TaxableBonus = variables.TaxableBonus,
+            TransportAllowance = variables.TransportAllowance,
+            OtherExemptAllowance = variables.OtherExemptAllowance,
+            AdvanceDeduction = variables.AdvanceDeduction,
+            OtherDeduction = variables.OtherDeduction,
+            Note = string.IsNullOrWhiteSpace(variables.Note) ? null : variables.Note.Trim()
+        };
+
         var rates = await ParametersForAsync(period.Year, ct);
-        if (variables.AbsenceDays > rates.MonthlyWorkingDays)
+        if (typed.TotalAbsenceDays > rates.MonthlyWorkingDays)
             return Result.Failure(Error.Validation("Payroll_TooManyAbsenceDays", rates.MonthlyWorkingDays));
         if (variables.OvertimeHours25 + variables.OvertimeHours50 + variables.OvertimeHours100 > 100m)
             return Result.Failure(Error.Validation("Payroll_TooManyOvertimeHours"));
 
-        slip.Recompute(variables with { Note = string.IsNullOrWhiteSpace(variables.Note) ? null : variables.Note.Trim() },
-                       rates, period.LastDay);
+        slip.Recompute(typed, rates, period.LastDay);
         periods.Update(period);
 
         unitOfWork.AuditReason = $"Paie {period.Month:00}/{period.Year} : variables de {slip.Number} modifiées";
@@ -348,7 +387,8 @@ public sealed class PayrollService(
         if (period.Payslips.Any(p => p.Amounts.NetPay < 0))
             return Result.Failure(Error.Validation("Payroll_NegativeNetPay"));
 
-        var closed = period.Close(clock.Now, currentUser.UserId);
+        // The year's rates as the payslips were computed with them, kept for every later reprint.
+        var closed = period.Close(clock.Now, currentUser.UserId, await ParametersForAsync(period.Year, ct));
         if (closed.IsFailure) return closed;
 
         periods.Update(period);
@@ -385,7 +425,8 @@ public sealed class PayrollService(
         var period = await periods.GetByIdWithDetailsAsync(periodId, ct);
         if (period is null) return Result.Failure<IReadOnlyList<PayslipDocument>>(Error.NotFound("Payroll_NotFound"));
 
-        var rates = await ParametersForAsync(period.Year, ct);
+        // A closed month prints with the rates it was closed with, not the year's as since changed.
+        var rates = period.RatesForPrinting(await ParametersForAsync(period.Year, ct));
         var employer = await queries.EmployerAsync(period.SiteId, ct);
 
         return Result.Success<IReadOnlyList<PayslipDocument>>(
@@ -557,8 +598,9 @@ public interface IPayrollQueries
     Task<IReadOnlyList<Guid>> DraftPeriodIdsAsync(int year, CancellationToken ct = default);
 
     /// <summary>
-    /// Staff of the site employed during the month, with their unpaid working days: approved
-    /// unpaid leave and unjustified absences, and the days before hire or after departure.
+    /// Staff of the site employed during the month, with their unpaid working days within the
+    /// contract (approved unpaid leave, unjustified absences, work-accident stoppages) and, for a
+    /// hire or an exit during the month, the working days of the month and of the contract.
     /// </summary>
     Task<IReadOnlyList<PayrollCandidate>> CandidatesAsync(Guid siteId, DateOnly from, DateOnly to,
                                                           decimal monthlyWorkingDays, CancellationToken ct = default);

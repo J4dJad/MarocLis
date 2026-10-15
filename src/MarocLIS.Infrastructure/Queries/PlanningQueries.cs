@@ -1,11 +1,12 @@
 using MarocLIS.Application.HumanResources;
+using MarocLIS.Domain.Common;
 using MarocLIS.Domain.HumanResources;
 using MarocLIS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace MarocLIS.Infrastructure.Queries;
 
-public sealed class PlanningQueries(LisDbContext db) : IPlanningQueries
+public sealed class PlanningQueries(LisDbContext db, IClock clock) : IPlanningQueries
 {
     public async Task<IReadOnlyList<PlanningEmployee>> GetEmployeesAsync(DateOnly from, DateOnly to,
                                                                          CancellationToken ct = default)
@@ -22,9 +23,11 @@ public sealed class PlanningQueries(LisDbContext db) : IPlanningQueries
                 })
             .ToListAsync(ct);
 
+        // Habilitations held today; one ending with a departure recorded ahead still counts.
+        var today = clock.Today;
         var ids = rows.Select(r => r.Id).ToList();
         var levels = (await db.EmployeeHabilitations.AsNoTracking()
-                .Where(h => ids.Contains(h.EmployeeId) && h.WithdrawnOn == null)
+                .Where(h => ids.Contains(h.EmployeeId) && (h.WithdrawnOn == null || h.WithdrawnOn > today))
                 .Select(h => new { h.EmployeeId, h.Level })
                 .ToListAsync(ct))
             .ToLookup(h => h.EmployeeId, h => h.Level);

@@ -236,13 +236,21 @@ public static class AccidentRules
     /// <summary>The insurer's daily allowance: two thirds of the daily salary (loi 18-12).</summary>
     public const decimal DailyAllowanceShare = 2m / 3m;
 
+    /// <summary>Days of the year the daily salary is taken over: the allowance runs every calendar day.</summary>
+    public const decimal DaysPerYear = 365m;
+
     /// <summary>
-    /// What the employer advances under subrogation for the days withheld from the salary. A first
-    /// figure: the insurer's statement, which follows its own daily rate, decides the reimbursement.
+    /// What the employer advances under subrogation for a stoppage. The daily allowance of loi
+    /// 18-12 is due for every calendar day of the stoppage, Sundays and holidays included, on a
+    /// daily salary that is the yearly salary over 365 days:
+    /// <c>2/3 × (monthly salary × 12 / 365) × calendar days</c>. The salary withheld, on the other
+    /// hand, is the working days of the stoppage. A first figure: the insurer's statement, which
+    /// follows its own reference salary, decides the reimbursement.
     /// </summary>
-    public static decimal Allowance(decimal monthlySalary, decimal monthlyWorkingDays, decimal days) =>
-        monthlyWorkingDays <= 0 || days <= 0 ? 0m
-            : Math.Round(monthlySalary / monthlyWorkingDays * days * DailyAllowanceShare, 2, MidpointRounding.AwayFromZero);
+    public static decimal Allowance(decimal monthlySalary, decimal calendarDays) =>
+        monthlySalary <= 0 || calendarDays <= 0 ? 0m
+            : Math.Round(monthlySalary * 12m / DaysPerYear * calendarDays * DailyAllowanceShare, 2,
+                         MidpointRounding.AwayFromZero);
 
     public static IReadOnlyList<(string Label, DateOnly Due)> SerologySchedule(DateOnly exposure) =>
     [
