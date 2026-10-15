@@ -51,6 +51,10 @@ public sealed class NavigationService(
         if (_host is null)
             throw new InvalidOperationException("The navigation host has not been attached.");
 
+        // The screen being left decides whether it can go: results or control values typed and not
+        // yet saved are confirmed first, as opening another file on the same screen already was.
+        if (Current is { IsDisposed: false } current && !current.ConfirmLeave()) return;
+
         // Abandon an activation still in flight: a fast double-click on the sidebar would otherwise
         // let a slower earlier load finish last and overwrite the newer view's data.
         if (_activation is not null)

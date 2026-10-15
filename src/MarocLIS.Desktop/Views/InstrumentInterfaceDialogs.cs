@@ -609,8 +609,8 @@ internal sealed class InstrumentMappingDialog : Form
                 $"{mapping.AnalysisCode}/{mapping.ParameterCode}  {mapping.ParameterName.For(language)}",
                 mapping.InstrumentUnit ?? string.Empty,
                 mapping.CatalogueUnit ?? string.Empty,
-                mapping.ConversionFactor?.ToString("0.######") ?? string.Empty,
-                mapping.ConversionOffset?.ToString("0.######") ?? string.Empty,
+                mapping.ConversionFactor is { } factor ? EditorValues.FormatForEditing(factor, 0) : string.Empty,
+                mapping.ConversionOffset is { } offset ? EditorValues.FormatForEditing(offset, 0) : string.Empty,
                 mapping.CodedValueMap ?? string.Empty);
 
             _grid.Rows[index].Tag = mapping;
@@ -863,13 +863,10 @@ internal sealed class InstrumentMappingDialog : Form
 
         if (string.IsNullOrWhiteSpace(text)) return true;
 
-        if (!decimal.TryParse(text.Replace(',', '.'),
-                               System.Globalization.NumberStyles.Float,
-                               System.Globalization.CultureInfo.InvariantCulture, out var parsed))
-            return false;
-
-        value = parsed;
-        return true;
+        // The shared reader: the grid shows the offsets in the current culture, whose Arabic form
+        // of "-2,5" starts with a direction mark the invariant parse refused as "not numeric".
+        value = EditorValues.ParseDecimal(text);
+        return value is not null;
     }
 }
 

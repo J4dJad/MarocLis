@@ -322,20 +322,22 @@ public sealed class UserAdministrationView : LocalizedView
 
         _users.SelectionChanged += (_, _) => RefreshUserActions();
 
-        _newUser.Click += async (_, _) => await CreateUserAsync();
-        _editUser.Click += async (_, _) => await EditUserAsync();
-        _assignRoles.Click += async (_, _) => await AssignRolesAsync();
-        _siteAccess.Click += async (_, _) => await EditSiteAccessAsync();
-        _resetPassword.Click += async (_, _) => await ResetPasswordAsync();
-        _unlock.Click += async (_, _) => await UnlockAsync();
-        _toggleActive.Click += async (_, _) => await ToggleActiveAsync();
+        // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
+        // action, and leaving the screen mid-write no longer disposes its context under it.
+        _newUser.Click += async (_, _) => await RunBusyAsync(CreateUserAsync);
+        _editUser.Click += async (_, _) => await RunBusyAsync(EditUserAsync);
+        _assignRoles.Click += async (_, _) => await RunBusyAsync(AssignRolesAsync);
+        _siteAccess.Click += async (_, _) => await RunBusyAsync(EditSiteAccessAsync);
+        _resetPassword.Click += async (_, _) => await RunBusyAsync(ResetPasswordAsync);
+        _unlock.Click += async (_, _) => await RunBusyAsync(UnlockAsync);
+        _toggleActive.Click += async (_, _) => await RunBusyAsync(ToggleActiveAsync);
 
         _users.CellFormatting += OnUserFormatting;
 
         _roles.SelectionChanged += (_, _) => ShowRolePermissions();
-        _newRole.Click += async (_, _) => await CreateRoleAsync();
-        _toggleRole.Click += async (_, _) => await ToggleRoleActiveAsync();
-        _savePermissions.Click += async (_, _) => await SaveRolePermissionsAsync();
+        _newRole.Click += async (_, _) => await RunBusyAsync(CreateRoleAsync);
+        _toggleRole.Click += async (_, _) => await RunBusyAsync(ToggleRoleActiveAsync);
+        _savePermissions.Click += async (_, _) => await RunBusyAsync(SaveRolePermissionsAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Administration.ManageUsers, _newUser, _editUser, _siteAccess, _resetPassword, _unlock, _toggleActive);

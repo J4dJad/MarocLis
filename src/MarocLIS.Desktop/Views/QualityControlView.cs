@@ -419,6 +419,18 @@ public sealed class QualityControlView : LocalizedView
     }
 
     /// <summary>
+    /// Leaving the screen with control values typed and not yet submitted asks first: the sidebar
+    /// and the shortcuts dropped them without a word, and a run believed recorded was not.
+    /// </summary>
+    public override bool ConfirmLeave()
+    {
+        _entry.EndEdit();
+
+        return CaptureTyped().IsEmpty
+               || _dialogs.Confirm(T("Message.UnsavedChanges"), T("Nav.QualityControl"));
+    }
+
+    /// <summary>
     /// The control values typed and not yet submitted, by control target. The value column starts
     /// empty, so anything in it is pending. Rebuilding the grid — on a language change or any
     /// reload — used to blank it.

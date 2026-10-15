@@ -310,9 +310,11 @@ public sealed class SampleReceptionView : LocalizedView
             await ScanAsync(_scan.Text);
         };
 
-        _accept.Click += async (_, _) => await AcceptAsync(withReservation: false);
-        _acceptReserved.Click += async (_, _) => await AcceptAsync(withReservation: true);
-        _reject.Click += async (_, _) => await RejectAsync();
+        // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
+        // action, and leaving the screen mid-write no longer disposes its context under it.
+        _accept.Click += async (_, _) => await RunBusyAsync(() => AcceptAsync(withReservation: false));
+        _acceptReserved.Click += async (_, _) => await RunBusyAsync(() => AcceptAsync(withReservation: true));
+        _reject.Click += async (_, _) => await RunBusyAsync(RejectAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Samples.Receive, _accept, _acceptReserved);

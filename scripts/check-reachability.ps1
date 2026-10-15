@@ -43,8 +43,11 @@ Write-Host '--------------------------------'
 
 $src = Join-Path $SourceDirectory 'src'
 
+# Path separators are matched as [\\/] throughout: written as '\\' only, the project filters
+# matched no file at all under PowerShell on Linux or macOS, and checks 1 and 4 passed there
+# without checking anything ("0 application services found").
 $files = Get-ChildItem -Path $src -Recurse -Filter *.cs -File |
-    Where-Object { $_.FullName -notmatch '\\(obj|bin)\\' }
+    Where-Object { $_.FullName -notmatch '[\\/](obj|bin)[\\/]' }
 
 $documents = @{}
 
@@ -72,7 +75,7 @@ Write-Host '1. Public methods in Application, Instruments and Reporting are call
 #     accept a held transmission. Three projects do the work in this solution, not one.
 #   - *Service.cs only: the sink, the drivers and the renderers do not end in 'Service', which is
 #     exactly why the gap above survived. The file pattern now follows the roles, not the suffix.
-$workerProjects = '\\MarocLIS\.(Application|Instruments|Reporting)\\'
+$workerProjects = '[\\/]MarocLIS\.(Application|Instruments|Reporting)[\\/]'
 $workerFiles = '(Service|Sink|Renderer|Driver|Importer|Replayer)\.cs$'
 
 $serviceFiles = $documents.GetEnumerator() |
@@ -84,7 +87,7 @@ $serviceFiles = $documents.GetEnumerator() |
 # business. Sharing one file set between checks 1 and 4 made the widening above report that as a
 # failure.
 $applicationServiceFiles = $documents.GetEnumerator() |
-    Where-Object { $_.Value.Name -match 'Service\.cs$' -and $_.Key -match '\\MarocLIS\.Application\\' }
+    Where-Object { $_.Value.Name -match 'Service\.cs$' -and $_.Key -match '[\\/]MarocLIS\.Application[\\/]' }
 
 # Methods that are genuinely unreachable, known to be so, and recorded as a gap in the design
 # document. Listed here so the checker stays green on what it has already reported while still
@@ -92,6 +95,8 @@ $applicationServiceFiles = $documents.GetEnumerator() |
 $recordedGaps = @{
     'AstmInstrumentDriver.cs :: SendOrdersAsync' =
         'host-initiated worklist download is implemented on both drivers and never triggered - docs 04 section 8'
+    'Poct1AInstrumentDriver.cs :: SendOrdersAsync' =
+        'IInstrumentDriver member; POCT1-A has no order download in this build (returns false), results flow one way - same host-initiated gap as ASTM'
 }
 
 $uncalled = New-Object System.Collections.Generic.List[string]
@@ -119,9 +124,25 @@ foreach ($entry in $serviceFiles) {
         # Interface declarations and the definition itself do not count as calls.
         $callPattern = "(?<![\w.])(?:await\s+)?[\w\.\)\]]+\.$([regex]::Escape($method))\s*\("
 
-        $callers = $documents.GetEnumerator() |
+        $callers = @($documents.GetEnumerator() |
             Where-Object { $_.Value.Name -ne $name -and $_.Value.Text -match $callPattern } |
-            ForEach-Object { $_.Value.Name }
+            ForEach-Object { $_.Value.Name })
+
+        # A call from inside its own class counts too: such a method is reached through the
+        # class's other public methods, which this check verifies in turn. Leave accrual is run by
+        # LeaveService's own balance and approval methods, and the POCT1-A driver feeds its parser
+        # from its own read loop; both were reported as having no caller once the path filters
+        # above matched on Linux. Not for an interface member: a contract method exists to be
+        # called from outside, and the drivers' SendOrdersAsync, which only their own query
+        # handling calls, is precisely the recorded gap below.
+        if ($callers.Count -eq 0) {
+            $escaped = [regex]::Escape($method)
+            $contractPattern = "(?m)^\s*(?:Task|ValueTask|Result)(?:<[\w\s,<>\?\.\[\]]*?>)?\s+$escaped\s*\([^;{}]*\)\s*;"
+            $declarations = [regex]::Matches($text, "public\s+[^;{}=]*?\b$escaped\s*\(").Count
+            $ownCalls = [regex]::Matches($text, "(?<![\w.])(?:this\.)?$escaped\s*\(").Count - $declarations
+
+            if ($ownCalls -gt 0 -and $allText -notmatch $contractPattern) { $callers = @($name) }
+        }
 
         # Two classes in one file can declare the same method name - both ASTM and HL7 drivers
         # implement SendOrdersAsync - and reporting it twice says nothing the first line did not.

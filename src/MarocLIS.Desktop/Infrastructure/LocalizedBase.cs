@@ -234,6 +234,13 @@ public abstract class LocalizedView : UserControl
     /// </summary>
     public virtual Task ActivateAsync(CancellationToken ct = default) => Task.CompletedTask;
 
+    /// <summary>
+    /// Asked by the navigation service before the view is replaced: true when nothing would be
+    /// lost, or the operator agrees to lose it. A screen holding typed values that are not saved
+    /// yet overrides it to ask; leaving it used to drop them without a word.
+    /// </summary>
+    public virtual bool ConfirmLeave() => true;
+
     private int _operations;
 
     /// <summary>

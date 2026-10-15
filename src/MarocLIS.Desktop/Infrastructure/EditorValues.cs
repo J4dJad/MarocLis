@@ -23,7 +23,11 @@ internal static class EditorValues
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
 
-        var compact = new string(text.Where(c => !char.IsWhiteSpace(c) && c is not ' ').ToArray());
+        // The direction marks go with the spaces: the Arabic culture writes a negative number as
+        // "\u200E-2,5" (a left-to-right mark before the sign), and a box pre-filled with it read
+        // back as null, so saving an editor erased every negative bound it had displayed.
+        var compact = new string(text.Where(c => !char.IsWhiteSpace(c) && c is not ' '
+                                                 && !IsDirectionMark(c)).ToArray());
 
         var lastComma = compact.LastIndexOf(',');
         var lastPoint = compact.LastIndexOf('.');
@@ -57,8 +61,24 @@ internal static class EditorValues
         var fixedPart = new string('0', Math.Max(0, decimals));
         var format = "0." + fixedPart + "##########";
 
-        return value.ToString(format, provider ?? CultureInfo.CurrentCulture);
+        // Without the direction mark the Arabic culture puts before the minus sign: the boxes are
+        // laid out left to right, and the text must read back as the value it shows.
+        return WithoutDirectionMarks(value.ToString(format, provider ?? CultureInfo.CurrentCulture));
     }
+
+    /// <summary>
+    /// The invisible Unicode characters that only steer the display direction — LRM, RLM, the
+    /// Arabic letter mark, the embeddings and overrides, and the isolates — which a culture's
+    /// number format or a copy from an Arabic text can carry into a number box.
+    /// </summary>
+    public static bool IsDirectionMark(char c) =>
+        c is '\u200E' or '\u200F' or '\u061C'
+            or (>= '\u202A' and <= '\u202E')
+            or (>= '\u2066' and <= '\u2069');
+
+    /// <summary>The text with every <see cref="IsDirectionMark"/> character removed.</summary>
+    public static string WithoutDirectionMarks(string text) =>
+        text.Any(IsDirectionMark) ? new string(text.Where(c => !IsDirectionMark(c)).ToArray()) : text;
 
     /// <summary>
     /// The unit, in days, to show a stored age band in: the largest of years (365 days) and months
