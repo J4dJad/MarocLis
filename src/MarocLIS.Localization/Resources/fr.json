@@ -13,6 +13,7 @@
   "Reminder_WindowOutOfRange": "La fenêtre d'envoi doit être comprise entre 1 et 365 jours.",
   "Reminder_AlreadyExists": "Une règle de rappel existe déjà pour cette analyse ou ce bilan.",
   "Reminder_NotFound": "Règle de rappel introuvable.",
+  "Reminder_SpecificConsentAnalysis": "Cette analyse, ou une analyse de ce bilan, exige un consentement spécifique (VIH, génétique, dépistage prénatal) : elle ne peut pas faire l'objet d'un rappel par SMS.",
   "Relations_TextTooLong": "Texte trop long ({0} caractères au plus).",
   "Relations_ReasonRequired": "Indiquez le motif.",
   "Partnership_PartnerRequired": "Indiquez le partenaire.",
@@ -4348,6 +4349,7 @@
   "Sequence_AlreadyInThatState": "La série est déjà dans cet état.",
 
   "Setting_KeyRequired": "La clé du paramètre est obligatoire.",
+  "Setting_ManagedElsewhere": "Le paramètre {0} se modifie depuis son propre écran (messages patients ou coûts du pilotage), qui en contrôle le contenu et les droits.",
 
   "Equipment_CodeRequired": "Le code de l'équipement est obligatoire.",
   "Equipment_NameRequired": "La désignation française de l'équipement est obligatoire.",

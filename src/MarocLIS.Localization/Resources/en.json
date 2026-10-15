@@ -13,6 +13,7 @@
   "Reminder_WindowOutOfRange": "The sending window must be between 1 and 365 days.",
   "Reminder_AlreadyExists": "A reminder rule already exists for this test or panel.",
   "Reminder_NotFound": "Reminder rule not found.",
+  "Reminder_SpecificConsentAnalysis": "This analysis, or an analysis of this panel, requires a specific consent (HIV, genetics, prenatal screening): it cannot be the subject of an SMS reminder.",
   "Relations_TextTooLong": "Text too long ({0} characters at most).",
   "Relations_ReasonRequired": "Enter the reason.",
   "Partnership_PartnerRequired": "Enter the partner.",
@@ -4347,6 +4348,7 @@
   "Sequence_AlreadyInThatState": "The series is already in that state.",
 
   "Setting_KeyRequired": "The setting key is mandatory.",
+  "Setting_ManagedElsewhere": "The setting {0} is changed from its own screen (patient messages or steering costs), which checks its content and permissions.",
 
   "Equipment_CodeRequired": "The equipment code is mandatory.",
   "Equipment_NameRequired": "The French name of the equipment is mandatory.",

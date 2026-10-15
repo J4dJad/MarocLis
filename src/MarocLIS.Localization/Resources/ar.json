@@ -13,6 +13,7 @@
   "Reminder_WindowOutOfRange": "يجب أن تكون نافذة الإرسال بين 1 و365 يومًا.",
   "Reminder_AlreadyExists": "توجد قاعدة تذكير لهذا التحليل أو الحصيلة.",
   "Reminder_NotFound": "قاعدة التذكير غير موجودة.",
+  "Reminder_SpecificConsentAnalysis": "يتطلب هذا التحليل، أو أحد تحاليل هذه المجموعة، موافقة خاصة (فيروس نقص المناعة البشرية، التحاليل الجينية، الفحص قبل الولادة): لا يمكن أن يكون موضوع تذكير عبر الرسائل القصيرة.",
   "Relations_TextTooLong": "النص طويل جدًا ({0} حرفًا على الأكثر).",
   "Relations_ReasonRequired": "أدخل السبب.",
   "Partnership_PartnerRequired": "أدخل اسم الشريك.",
@@ -4347,6 +4348,7 @@
   "Sequence_AlreadyInThatState": "السلسلة في هذه الحالة سابقاً.",
 
   "Setting_KeyRequired": "مفتاح المعلمة إلزامي.",
+  "Setting_ManagedElsewhere": "يُعدَّل الإعداد {0} من شاشته الخاصة (رسائل المرضى أو تكاليف القيادة)، التي تتحقق من محتواه ومن الصلاحيات.",
 
   "Equipment_CodeRequired": "رمز التجهيز إلزامي.",
   "Equipment_NameRequired": "التسمية الفرنسية للتجهيز إلزامية.",
