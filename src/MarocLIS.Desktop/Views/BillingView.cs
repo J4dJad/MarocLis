@@ -334,7 +334,7 @@ public sealed class BillingView : LocalizedView
 
     /// <summary>
     /// A cancelled request is listed only because it still holds a deposit to hand back; it is
-    /// greyed so nobody tries to invoice it.
+    /// greyed so nobody tries to invoice it. So is an invoiced one listed for its leftover deposit.
     /// </summary>
     private void OnPendingFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
@@ -345,6 +345,12 @@ public sealed class BillingView : LocalizedView
         {
             e.CellStyle!.ForeColor = UiTheme.TextMuted;
             e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Strikeout);
+        }
+        else if (row.InvoiceId is not null)
+        {
+            e.CellStyle!.ForeColor = _pending.Columns[e.ColumnIndex].Name == "deposit"
+                ? UiTheme.Abnormal
+                : UiTheme.TextMuted;
         }
         else if (row.DepositHeld > 0m && _pending.Columns[e.ColumnIndex].Name == "deposit")
         {
@@ -457,7 +463,11 @@ public sealed class BillingView : LocalizedView
                 row.AccessionNumber,
                 row.PatientName,
                 row.RegisteredAt.ToString("dd/MM HH:mm"),
-                row.PayerName ?? T("PayerKind.SelfPay"),
+                // Already invoiced, listed only for its leftover deposit: shown in place of the payer,
+                // which no longer matters for it.
+                row.InvoiceId is not null
+                    ? T("Billing.InvoicedDepositToRefund", row.InvoiceNumber ?? string.Empty)
+                    : row.PayerName ?? T("PayerKind.SelfPay"),
                 row.AnalysisCount.ToString(),
                 Money.Of(row.Total).Format(Localizer.CurrentLanguage),
                 row.PayerShare > 0m
@@ -473,9 +483,12 @@ public sealed class BillingView : LocalizedView
 
         _pending.ResumeLayout(performLayout: true);
 
-        var total = Money.Of(_pendingRows.Sum(r => r.Total));
+        // Counted only what is still to invoice: a cancelled or invoiced request listed for its
+        // deposit is not.
+        var invoiceable = _pendingRows.Where(r => r.IsInvoiceable).ToList();
+        var total = Money.Of(invoiceable.Sum(r => r.Total));
 
-        _pendingHeading.Text = $"{T("Billing.Uninvoiced")} — {_pendingRows.Count} · " +
+        _pendingHeading.Text = $"{T("Billing.Uninvoiced")} — {invoiceable.Count} · " +
                                total.Format(Localizer.CurrentLanguage);
     }
 
@@ -572,15 +585,38 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
+        // An invoiced request is listed only for the deposit it still holds: it is refunded, not
+        // invoiced again. Named here, rather than the whole issue failing on one row nobody can spot.
+        var invoiced = selected.Where(s => s.InvoiceId is not null).ToList();
+
+        if (invoiced.Count > 0)
+        {
+            _dialogs.Warn(T("Invoice_OrderAlreadyInvoiced",
+                            string.Join(", ", invoiced.Select(s => s.AccessionNumber))),
+                          T("Billing.IssueInvoice"));
+            return;
+        }
+
         // Nor orders registered with different payers: each was split with its own at registration.
         // The service refuses it too; said here before the issue dialog is filled in for nothing.
-        if (selected.Select(s => s.PayerId).Distinct().Count() > 1)
+        if (selected.Select(s => (s.PayerId, s.DirectBilling)).Distinct().Count() > 1)
         {
             _dialogs.Warn(T("Invoice_MultiplePayers",
                             string.Join(", ", selected.Select(s => s.AccessionNumber))),
                           T("Billing.IssueInvoice"));
             return;
         }
+
+        // Invoiced again after a credit note reversed the first invoice, which went to the patient
+        // although the order had a payer: the usual correction is a third-party box left unticked at
+        // registration, so the operator is offered to address this one to the payer.
+        Guid? payerOverride = null;
+
+        if (selected[0] is { PayerId: { } payerId, DirectBilling: false }
+            && selected.Any(s => s.PreviouslyInvoiced)
+            && _dialogs.Confirm(T("Billing.ReinvoiceToPayer", selected[0].PayerName ?? string.Empty),
+                                T("Billing.IssueInvoice")))
+            payerOverride = payerId;
 
         var total = Money.Of(selected.Sum(s => s.Total));
 
@@ -600,6 +636,7 @@ public sealed class BillingView : LocalizedView
         {
             var result = await _billing.IssueInvoiceAsync(
                 [.. selected.Select(s => s.LabOrderId)],
+                payerIdOverride: payerOverride,
                 discountAmount: issue.DiscountAmount,
                 discountReason: issue.DiscountReason);
 
@@ -783,7 +820,14 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
-        if (order.Total - order.DepositHeld <= 0m)
+        if (order.InvoiceId is not null)
+        {
+            _dialogs.Warn(T("Invoice_OrderAlreadyInvoiced", order.AccessionNumber), T("Deposit.Take"));
+            return;
+        }
+
+        // The patient's share under direct billing, as the service caps it.
+        if (order.DepositCeiling <= 0m)
         {
             _dialogs.Info(T("Deposit.FullyCovered"), T("Deposit.Take"));
             return;
@@ -1210,12 +1254,13 @@ internal sealed class PaymentDialog : Form
 
     /// <summary>
     /// A deposit on an order not yet invoiced. The ceiling is what the order still leaves to take:
-    /// its total less the deposits already held.
+    /// what the patient will owe (the patient's share under direct billing) less the deposits
+    /// already held.
     /// </summary>
     internal static PaymentDialog ForDeposit(ILocalizer localizer, IUserDialogs dialogs,
                                              BillableOrderRow order)
         => new(localizer, dialogs, $"{localizer["Deposit.Take"]} — {order.AccessionNumber}",
-               localizer["Deposit.Available"], Money.Round(order.Total - order.DepositHeld),
+               localizer["Deposit.Available"], order.DepositCeiling,
                null, order.LabOrderId);
 
     private PaymentDialog(ILocalizer localizer, IUserDialogs dialogs, string title,

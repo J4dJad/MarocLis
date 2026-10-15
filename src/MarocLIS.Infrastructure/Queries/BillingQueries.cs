@@ -58,7 +58,17 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                 x.Order.Items.Count(i => i.Status != LabOrderItemStatus.Cancelled),
                 x.Order.Status,
                 db.Deposits.Where(d => d.LabOrderId == x.Order.Id && d.Status == DepositStatus.Held)
-                           .Sum(d => d.Amount - d.AppliedAmount - d.RefundedAmount)))
+                           .Sum(d => d.Amount - d.AppliedAmount - d.RefundedAmount),
+                x.Order.DirectBillingAtRegistration,
+                // Already invoiced: listed only for the deposit left to hand back, and marked so.
+                x.Order.InvoiceId,
+                x.Order.InvoiceId == null
+                    ? null
+                    : db.Invoices.Where(i => i.Id == x.Order.InvoiceId)
+                                 .Select(i => i.Number).FirstOrDefault(),
+                // Lines on an earlier invoice while the order has none: a credit note reversed it.
+                x.Order.InvoiceId == null
+                && db.InvoiceLines.Any(l => l.LabOrderId == x.Order.Id)))
             .ToListAsync(ct);
 
     public async Task<PagedResult<InvoiceRow>> GetInvoicesAsync(
@@ -323,11 +333,30 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
         };
     }
 
-    public Task<CashSession?> GetOpenCashSessionAsync(Guid operatorUserId,
-                                                       CancellationToken ct = default) =>
-        db.CashSessions
+    /// <summary>
+    /// The operator's open shift, tracked so the service can add to its counters.
+    /// <para>
+    /// Read fresh when the screen's context already tracks it: a refund or a returned cheque taken
+    /// off this shift from another workstation has changed its counters and its row version since,
+    /// and a query hands back the tracked instance as it was. The cashier's next payment then
+    /// failed as a concurrency conflict nobody caused. An instance this operation has already
+    /// modified is left alone.
+    /// </para>
+    /// </summary>
+    public async Task<CashSession?> GetOpenCashSessionAsync(Guid operatorUserId,
+                                                             CancellationToken ct = default)
+    {
+        foreach (var tracked in db.CashSessions.Local
+                     .Where(s => s.OperatorUserId == operatorUserId).ToList())
+        {
+            var entry = db.Entry(tracked);
+            if (entry.State == EntityState.Unchanged) await entry.ReloadAsync(ct);
+        }
+
+        return await db.CashSessions
             .FirstOrDefaultAsync(s => s.OperatorUserId == operatorUserId
                                       && s.Status == CashSessionStatus.Open, ct);
+    }
 
     /// <summary>
     /// The till summary for the closing screen.
