@@ -1,0 +1,77 @@
+using MarocLIS.Application.HumanResources;
+using MarocLIS.Domain.HumanResources;
+using MarocLIS.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
+namespace MarocLIS.Infrastructure.Queries;
+
+public sealed class HrDocumentQueries(LisDbContext db) : IHrDocumentQueries
+{
+    public async Task<IReadOnlyList<SalaryMonth>> ClosedSalaryMonthsAsync(Guid employeeId, int count,
+                                                                         CancellationToken ct = default) =>
+        await (from s in db.Payslips.AsNoTracking()
+               join p in db.PayrollPeriods.AsNoTracking() on s.PayrollPeriodId equals p.Id
+               where s.EmployeeId == employeeId && p.Status == PayrollStatus.Closed
+               orderby p.Year descending, p.Month descending
+               select new SalaryMonth(p.Year, p.Month, s.Amounts.Gross, s.Amounts.NetPay))
+            .Take(count)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<decimal>> FullMonthGrossAsync(Guid employeeId, DateOnly before, decimal fullDays,
+                                                                  int count, CancellationToken ct = default)
+    {
+        var rows = await (from s in db.Payslips.AsNoTracking()
+                          join p in db.PayrollPeriods.AsNoTracking() on s.PayrollPeriodId equals p.Id
+                          where s.EmployeeId == employeeId
+                                && (p.Year < before.Year || (p.Year == before.Year && p.Month < before.Month))
+                                && s.Amounts.PaidDays >= fullDays
+                          orderby p.Year descending, p.Month descending
+                          select new { s.Amounts.GrossTaxable, s.Variables.LeaveIndemnity, s.Variables.NoticeIndemnity })
+            .Take(count)
+            .ToListAsync(ct);
+
+        return [.. rows.Select(r => r.GrossTaxable - r.LeaveIndemnity - r.NoticeIndemnity)];
+    }
+
+    public async Task<decimal> LeaveBalanceAtExitAsync(Guid employeeId, CancellationToken ct = default)
+    {
+        var e = await db.Employees.AsNoTracking()
+            .Where(x => x.Id == employeeId)
+            .Select(x => new { x.Id, x.HireDate, x.BirthDate, x.ExitDate, x.CreatedAt })
+            .FirstOrDefaultAsync(ct);
+        if (e is null) return 0m;
+
+        var ledger = await db.LeaveLedger.AsNoTracking()
+            .Where(l => l.EmployeeId == employeeId)
+            .Select(l => new { l.Days, l.Kind, l.Reference })
+            .ToListAsync(ct);
+
+        var balance = ledger.Sum(l => l.Days);
+        if (e.ExitDate is not { } exit) return balance;
+
+        // The monthly accrual stops with the file: months up to the departure not credited yet
+        // are added here, by the same rule, as if the accrual had run on the following month.
+        var credited = ledger.Where(l => l.Kind == LeaveLedgerKind.Accrual)
+                             .Select(l => l.Reference).ToHashSet(StringComparer.Ordinal);
+        var opened = DateOnly.FromDateTime(e.CreatedAt.Date);
+        var trackedFrom = e.HireDate > opened ? e.HireDate : new DateOnly(opened.Year, opened.Month, 1);
+
+        var due = LeaveAccrual.Due(new AccrualFacts(e.Id, e.HireDate, e.BirthDate, exit, trackedFrom, credited),
+                                   new DateOnly(exit.Year, exit.Month, 1).AddMonths(1));
+        return balance + due.Sum(d => d.Days);
+    }
+
+    public async Task<(Guid PeriodId, PayrollStatus Status, Payslip? Payslip)?> PayslipOfMonthAsync(
+        Guid employeeId, int year, int month, CancellationToken ct = default)
+    {
+        var period = await db.PayrollPeriods.AsNoTracking()
+            .Where(p => p.Year == year && p.Month == month)
+            .Select(p => new { p.Id, p.Status })
+            .FirstOrDefaultAsync(ct);
+        if (period is null) return null;
+
+        var slip = await db.Payslips.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.PayrollPeriodId == period.Id && s.EmployeeId == employeeId, ct);
+        return (period.Id, period.Status, slip);
+    }
+}

@@ -210,3 +210,26 @@ public sealed class PayslipConfiguration : IEntityTypeConfiguration<Payslip>
         });
     }
 }
+
+public sealed class FinalSettlementConfiguration : IEntityTypeConfiguration<FinalSettlement>
+{
+    public void Configure(EntityTypeBuilder<FinalSettlement> builder)
+    {
+        builder.ToTable("FinalSettlements", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Ignore(e => e.IsSigned);
+        builder.Ignore(e => e.Total);
+        builder.Property(e => e.ReferenceSalary).HasPrecision(18, 2);
+        builder.Property(e => e.LeaveDays).HasPrecision(9, 2);
+        builder.Property(e => e.LeaveIndemnity).HasPrecision(18, 2);
+        builder.Property(e => e.NoticeIndemnity).HasPrecision(18, 2);
+        builder.Property(e => e.SeverancePay).HasPrecision(18, 2);
+        builder.Property(e => e.Note).HasMaxLength(500);
+
+        builder.HasOne<Employee>().WithMany().HasForeignKey(e => e.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+
+        // One settlement per departure; a re-hired employee who leaves again gets a new one.
+        builder.HasIndex(e => new { e.EmployeeId, e.ExitDate }).IsUnique()
+               .HasDatabaseName("UX_FinalSettlements_Employee_Exit");
+    }
+}

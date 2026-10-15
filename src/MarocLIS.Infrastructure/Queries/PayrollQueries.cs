@@ -110,4 +110,14 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
                                 site.CommercialRegisterCourt, site.ProfessionalTaxNumber, site.CnssAffiliationNumber,
                                 site.Inpe, site.LogoPng);
     }
+
+    public async Task<IReadOnlyDictionary<Guid, SettledAmounts>> SettlementsAsync(DateOnly from, DateOnly to,
+                                                                                  CancellationToken ct = default) =>
+        (await db.FinalSettlements.AsNoTracking()
+            .Where(s => s.ExitDate >= from && s.ExitDate <= to)
+            .Select(s => new { s.EmployeeId, s.LeaveIndemnity, s.NoticeIndemnity, s.SeverancePay })
+            .ToListAsync(ct))
+        .GroupBy(s => s.EmployeeId)
+        .ToDictionary(g => g.Key, g => new SettledAmounts(g.Sum(s => s.LeaveIndemnity), g.Sum(s => s.NoticeIndemnity),
+                                                          g.Sum(s => s.SeverancePay)));
 }

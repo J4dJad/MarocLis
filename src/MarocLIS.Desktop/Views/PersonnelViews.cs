@@ -17,6 +17,10 @@ namespace MarocLIS.Desktop.Views;
 public sealed class PersonnelView : LocalizedView
 {
     private readonly PersonnelService _personnel;
+    private readonly HrDocumentService _documentsService;
+    private readonly SettlementService _settlements;
+    private readonly IHrDocumentRenderer _renderer;
+    private readonly IDocumentOutput _output;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<PersonnelView>? _logger;
 
@@ -30,15 +34,40 @@ public sealed class PersonnelView : LocalizedView
     private readonly Button _edit = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _documents = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _exit = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _letters = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _settlement = UiTheme.SecondaryButton(string.Empty);
+    private readonly ContextMenuStrip _lettersMenu = new();
+    private readonly ContextMenuStrip _settlementMenu = new();
+    private readonly ToolStripMenuItem _employmentItem = new(), _salaryItem = new(), _certificateItem = new();
+    private readonly ToolStripMenuItem _computeItem = new(), _receiptItem = new(), _signedItem = new();
     private readonly Label _status = new();
 
     private IReadOnlyList<EmployeeRow> _rows = [];
 
-    public PersonnelView(PersonnelService personnel, IUserDialogs dialogs, ILocalizer localizer,
+    /// <summary>
+    /// Database work under way. The view's services share one context, which takes one operation
+    /// at a time: a click that lands while the list is reloading after a save is ignored.
+    /// </summary>
+    private int _pending;
+
+    private async Task Guarded(Func<Task> action)
+    {
+        if (_pending > 0) return;
+        _pending++;
+        try { await action(); }
+        finally { _pending--; }
+    }
+
+    public PersonnelView(PersonnelService personnel, HrDocumentService documents, SettlementService settlements,
+                         IHrDocumentRenderer renderer, IDocumentOutput output, IUserDialogs dialogs, ILocalizer localizer,
                          ICultureManager cultureManager, ILogger<PersonnelView>? logger = null)
         : base(localizer, cultureManager)
     {
         _personnel = personnel;
+        _documentsService = documents;
+        _settlements = settlements;
+        _renderer = renderer;
+        _output = output;
         _dialogs = dialogs;
         _logger = logger;
 
@@ -96,12 +125,17 @@ public sealed class PersonnelView : LocalizedView
         _edit.Bounds = new Rectangle(200, 10, 170, UiTheme.ButtonHeight);
         _documents.Bounds = new Rectangle(380, 10, 190, UiTheme.ButtonHeight);
         _exit.Bounds = new Rectangle(580, 10, 190, UiTheme.ButtonHeight);
+        _letters.Bounds = new Rectangle(780, 10, 170, UiTheme.ButtonHeight);
+        _settlement.Bounds = new Rectangle(960, 10, 210, UiTheme.ButtonHeight);
 
         _status.Font = UiTheme.Small;
         _status.AutoSize = false;
-        _status.Bounds = new Rectangle(782, 16, 520, 20);
+        _status.Bounds = new Rectangle(1182, 16, 400, 20);
 
-        actions.Controls.AddRange([_new, _edit, _documents, _exit, _status]);
+        _lettersMenu.Items.AddRange([_employmentItem, _salaryItem, _certificateItem]);
+        _settlementMenu.Items.AddRange([_computeItem, _receiptItem, _signedItem]);
+
+        actions.Controls.AddRange([_new, _edit, _documents, _exit, _letters, _settlement, _status]);
 
         Controls.Add(host);
         Controls.Add(actions);
@@ -117,21 +151,38 @@ public sealed class PersonnelView : LocalizedView
             Render();
         };
 
-        _refresh.Click += async (_, _) => await ActivateAsync();
-        _includeExited.CheckedChanged += async (_, _) => await ActivateAsync();
+        _refresh.Click += async (_, _) => await Guarded(() => ActivateAsync());
+        _includeExited.CheckedChanged += async (_, _) => await Guarded(() => ActivateAsync());
 
-        _new.Click += async (_, _) => await EditAsync(null);
-        _edit.Click += async (_, _) => { if (Current() is { } row) await EditAsync(row.EmployeeId); };
+        _new.Click += async (_, _) => await Guarded(() => EditAsync(null));
+        _edit.Click += async (_, _) => { if (Current() is { } row) await Guarded(() => EditAsync(row.EmployeeId)); };
         _grid.CellDoubleClick += async (_, e) =>
         {
             if (e.RowIndex >= 0 && !PermissionGate.IsBlocked(_edit) && Current() is { } row)
-                await EditAsync(row.EmployeeId);
+                await Guarded(() => EditAsync(row.EmployeeId));
         };
-        _documents.Click += async (_, _) => await DocumentsAsync();
-        _exit.Click += async (_, _) => await ExitOrRehireAsync();
+        _documents.Click += async (_, _) => await Guarded(DocumentsAsync);
+        _exit.Click += async (_, _) => await Guarded(ExitOrRehireAsync);
+        _letters.Click += (_, _) =>
+        {
+            var active = Current()?.ExitDate is null;
+            _employmentItem.Enabled = active && PermissionGate.Allows(Permissions.HumanResources.Manage);
+            _salaryItem.Enabled = PermissionGate.Allows(Permissions.HumanResources.Salary);
+            _certificateItem.Enabled = !active && PermissionGate.Allows(Permissions.HumanResources.Manage);
+            _lettersMenu.Show(_letters, new Point(0, _letters.Height));
+        };
+        _employmentItem.Click += async (_, _) => await Guarded(() => LetterAsync(HrDocumentKind.EmploymentAttestation));
+        _salaryItem.Click += async (_, _) => await Guarded(() => LetterAsync(HrDocumentKind.SalaryAttestation));
+        _certificateItem.Click += async (_, _) => await Guarded(() => LetterAsync(HrDocumentKind.WorkCertificate));
+        _settlement.Click += (_, _) => _settlementMenu.Show(_settlement, new Point(0, _settlement.Height));
+        _computeItem.Click += async (_, _) => await Guarded(SettlementAsync);
+        _receiptItem.Click += async (_, _) => await Guarded(ReceiptAsync);
+        _signedItem.Click += async (_, _) => await Guarded(ReceiptSignedAsync);
         _grid.SelectionChanged += (_, _) => RefreshExitCaption();
 
         PermissionGate.Require(Permissions.HumanResources.Manage, _new, _edit, _exit);
+        PermissionGate.Require([Permissions.HumanResources.Manage, Permissions.HumanResources.Salary], _letters);
+        PermissionGate.Require(Permissions.HumanResources.Salary, _settlement);
 
         _grid.CellFormatting += (_, e) =>
         {
@@ -155,6 +206,14 @@ public sealed class PersonnelView : LocalizedView
         _new.Text = T("Personnel.New");
         _edit.Text = T("Personnel.Edit");
         _documents.Text = T("Personnel.Documents");
+        _letters.Text = T("Personnel.Letters");
+        _settlement.Text = T("Personnel.Settlement");
+        _employmentItem.Text = T("HrDocument.EmploymentAttestation");
+        _salaryItem.Text = T("HrDocument.SalaryAttestation");
+        _certificateItem.Text = T("HrDocument.WorkCertificate");
+        _computeItem.Text = T("Settlement.Compute");
+        _receiptItem.Text = T("Settlement.PrintReceipt");
+        _signedItem.Text = T("Settlement.RecordSigned");
 
         _grid.Column("number").HeaderText = T("Personnel.Number");
         _grid.Column("name").HeaderText = T("Field.Name");
@@ -172,6 +231,7 @@ public sealed class PersonnelView : LocalizedView
 
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
+        _pending++;
         try
         {
             var result = await _personnel.GetEmployeesAsync(_includeExited.Checked, ct);
@@ -186,6 +246,10 @@ public sealed class PersonnelView : LocalizedView
             _logger?.LogError(ex, "Loading the personnel list failed.");
             _status.ForeColor = UiTheme.Critical;
             _status.Text = T("Message.UnexpectedError");
+        }
+        finally
+        {
+            _pending--;
         }
     }
 
@@ -230,7 +294,75 @@ public sealed class PersonnelView : LocalizedView
     {
         var row = Current();
         _exit.Text = row?.ExitDate is not null ? T("Personnel.Rehire") : T("Personnel.RecordExit");
-        _edit.Enabled = _documents.Enabled = _exit.Enabled = row is not null;
+        _edit.Enabled = _documents.Enabled = _exit.Enabled = _letters.Enabled = row is not null;
+        _settlement.Enabled = row?.ExitDate is not null;
+    }
+
+    private async Task OpenPdfAsync(Func<Task<Domain.Common.Result<HrDocument>>> load, string caption)
+    {
+        try
+        {
+            var document = await load();
+            if (document.IsFailure) { _dialogs.ShowFailure(document); return; }
+
+            var opened = await _output.OpenAsync(_renderer.Render(document.Value), "pdf");
+            if (opened.IsFailure) _dialogs.ShowFailure(opened, caption);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Printing an HR document failed.");
+            _dialogs.Error(T("Message.UnexpectedError"));
+        }
+    }
+
+    private async Task LetterAsync(HrDocumentKind kind)
+    {
+        if (Current() is not { } row) return;
+        await OpenPdfAsync(() => _documentsService.GetAsync(kind, row.EmployeeId), T($"HrDocument.{kind}"));
+    }
+
+    private async Task SettlementAsync()
+    {
+        if (Current() is not { ExitDate: not null } row) return;
+        try
+        {
+            var detail = await _settlements.GetAsync(row.EmployeeId);
+            if (detail.IsFailure) { _dialogs.ShowFailure(detail); return; }
+
+            using var dialog = new SettlementDialog(Localizer, _dialogs, detail.Value);
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+            var saved = await _settlements.SaveAsync(row.EmployeeId, dialog.Amounts);
+            if (saved.IsFailure) { _dialogs.ShowFailure(saved); return; }
+
+            _status.ForeColor = saved.Value == SettlementPayroll.Closed ? UiTheme.Abnormal : UiTheme.Normal;
+            _status.Text = T($"Settlement.Saved.{saved.Value}");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Computing a final settlement failed.");
+            _dialogs.Error(T("Message.UnexpectedError"));
+        }
+    }
+
+    private async Task ReceiptAsync()
+    {
+        if (Current() is not { ExitDate: not null } row) return;
+        await OpenPdfAsync(() => _settlements.ReceiptAsync(row.EmployeeId), T("Settlement.PrintReceipt"));
+    }
+
+    private async Task ReceiptSignedAsync()
+    {
+        if (Current() is not { ExitDate: { } exit } row) return;
+
+        using var dialog = new SettlementSignedDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}", exit);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        var signed = await _settlements.SignAsync(row.EmployeeId, dialog.SignedOn);
+        if (signed.IsFailure) { _dialogs.ShowFailure(signed); return; }
+
+        _status.ForeColor = UiTheme.Normal;
+        _status.Text = T("Settlement.SignedRecorded");
     }
 
     private async Task EditAsync(Guid? employeeId)

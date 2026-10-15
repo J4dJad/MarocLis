@@ -1,5 +1,15 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "HrDocument_UseSettlement": "Le reçu s'imprime depuis le solde de tout compte.",
+  "HrDocument_EmployeeExited": "Ce salarié a quitté le laboratoire : délivrez un certificat de travail.",
+  "HrDocument_EmployeeNotExited": "Ce salarié est toujours en poste : enregistrez d'abord sa sortie.",
+  "HrDocument_NoSalary": "Aucun salaire n'est renseigné dans le dossier de ce salarié.",
+  "Settlement_Signed": "Le reçu est signé : le solde de tout compte ne peut plus être modifié.",
+  "Settlement_NegativeAmount": "Les montants du solde doivent être positifs ou nuls.",
+  "Settlement_NoticeWorked": "Pas d'indemnité de préavis si le préavis a été effectué.",
+  "Settlement_SignedBeforeExit": "Le reçu ne peut pas être signé avant la date de sortie.",
+  "Settlement_SignedInFuture": "La date de signature ne peut pas être dans le futur.",
+  "Settlement_NotFound": "Le solde de tout compte n'a pas encore été calculé et enregistré.",
   "Payroll_ScaleInvalid": "Le barème IR est mal écrit : des plafonds croissants « 40000:0|60000:10|…|:37 ».",
   "Payroll_RateInvalid": "Un taux ou montant est invalide.",
   "Payroll_Closed": "Ce mois est clôturé.",
@@ -16,6 +26,7 @@
   "Payroll_TooManyOvertimeHours": "Plus de 100 heures supplémentaires dans le mois : vérifiez la saisie.",
   "Payroll_NegativeNetPay": "Un bulletin a un net négatif : réduisez ses retenues avant de clôturer.",
   "Payroll_ReopenReasonRequired": "Le motif de réouverture est obligatoire.",
+  "Payroll_TransferNotClosed": "Clôturez d'abord le mois : seule une paie clôturée est envoyée à la banque.",
   "Planning_EmployeeNotEmployed": "Le salarié n'est pas en poste ce jour-là.",
   "Planning_HoursInvalid": "L'heure de fin doit différer de l'heure de début.",
   "Planning_OnLeave": "Le salarié est en congé validé ce jour-là.",
@@ -94,6 +105,49 @@
   "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
   "Deposit_NotFound": "Acompte introuvable.",
 
+  "StaffCategory": {
+    "Employee": "employé",
+    "Executive": "cadre"
+  },
+
+  "Settlement": {
+    "SignedTitle": "Reçu signé par le salarié",
+    "SignedNotice": "Une fois la signature enregistrée, le solde est définitif. Le salarié peut le dénoncer dans les 60 jours (art. 76).",
+    "SignedOn": "Date de signature",
+    "NoticePayrollClosed": "La paie du mois de sortie est clôturée : rouvrez-la pour que le bulletin reprenne ces montants.",
+    "NoticePayroll": "Les montants sont reportés sur le bulletin du mois de sortie : congés et préavis soumis à CNSS, AMO et IR, licenciement exonéré.",
+    "Signed": "Reçu signé le {0} : le solde ne peut plus être modifié.",
+    "Total": "Total des indemnités : {0} DH",
+    "SeveranceNotDue": "Non due pour ce motif de sortie ou moins de 6 mois d'ancienneté.",
+    "SeveranceDue": "Due : {0} heures de salaire (art. 53), exonérée d'IR et de CNSS.",
+    "Severance": "Indemnité de licenciement",
+    "NoticeNotDue": "Pas de préavis pour ce motif de sortie.",
+    "NoticeLegal": "Préavis légal : {0} (décret 2-04-469).",
+    "NoticeDays": "{0} jours",
+    "NoticeMonths": "{0} mois",
+    "NoticeIndemnity": "Indemnité de préavis",
+    "NoticeNotWorked": "Préavis non effectué (dispense de l'employeur)",
+    "ReferenceFromBase": "Aucun mois complet en paie : salaire de base et prime d'ancienneté.",
+    "ReferenceFromMonths": "Moyenne du brut des {0} derniers mois complets.",
+    "LeaveIndemnity": "Indemnité de congés payés",
+    "LeaveDays": "Jours de congé restants",
+    "ReferenceSalary": "Salaire mensuel de référence",
+    "Summary": "Entrée le {0}, sortie le {1} ({2}). Ancienneté : {3} ans. Catégorie : {4}.",
+    "SignedRecorded": "Signature du reçu enregistrée : le solde ne peut plus être modifié.",
+    "Saved.Closed": "Solde enregistré, mais la paie du mois de sortie est clôturée : rouvrez-la pour mettre le bulletin à jour.",
+    "Saved.Applied": "Solde enregistré et reporté sur le bulletin du mois de sortie.",
+    "Saved.NotOpened": "Solde enregistré : il sera repris à l'ouverture ou l'actualisation de la paie du mois de sortie.",
+    "RecordSigned": "Reçu signé par le salarié…",
+    "PrintReceipt": "Imprimer le reçu pour solde de tout compte",
+    "Compute": "Calculer le solde de tout compte…"
+  },
+
+  "HrDocument": {
+    "WorkCertificate": "Certificat de travail (sortie)",
+    "SalaryAttestation": "Attestation de salaire",
+    "EmploymentAttestation": "Attestation de travail"
+  },
+
   "PayrollRate": {
     "Notice": "Valeurs par défaut : loi de finances 2025 et taux CNSS en vigueur. Vérifiez-les à chaque nouvelle loi de finances, notamment le SMIG. Les mois en brouillon de l'année sont recalculés à l'enregistrement ; les mois clôturés ne changent pas.",
     "Scale": "Barème IR annuel (plafond:taux|…|:taux)",
@@ -134,6 +188,10 @@
   },
 
   "Payroll": {
+    "TransferFile": "Fichier pour la banque (CSV)",
+    "TransferOrder": "Ordre de virement (PDF)",
+    "Transfer": "Virement",
+    "DepartureIncluded": "Dont indemnités de départ : {0} DH (solde de tout compte).",
     "VariablesNotice": "Heures supp. : +25 % de 6 h à 21 h, +50 % de 21 h à 6 h ou le jour de repos, +100 % la nuit du jour de repos. Le transport est exonéré jusqu'au plafond des paramètres. Les jours non payés sont repris des congés à chaque « Reprendre les dossiers ».",
     "CurrentResult": "Actuellement : brut {0} · CNSS {1} · AMO {2} · IR {3} · net à payer {4} DH (ancienneté {5} %).",
     "OtherDeduction": "Autres retenues",
@@ -492,6 +550,8 @@
   },
 
   "Personnel": {
+    "Settlement": "Solde de tout compte",
+    "Letters": "Attestations",
     "ExitNotice": "Les habilitations du salarié prennent fin à cette date. Le dossier reste consultable.",
     "ExitReason": "Motif",
     "ExitDate": "Date de sortie",

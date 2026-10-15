@@ -179,6 +179,9 @@ public sealed class QuestPdfPayslipRenderer : IPayslipRenderer
                              ? $"Indemnité de transport (dont {A(rates.TransportExemptionCap)} exonérés)"
                              : "Indemnité de transport (exonérée)", null, null, v.TransportAllowance, null);
                 if (v.OtherExemptAllowance > 0) Line("Autres indemnités non imposables", null, null, v.OtherExemptAllowance, null);
+                if (v.LeaveIndemnity > 0) Line("Indemnité compensatrice de congés payés", null, null, v.LeaveIndemnity, null);
+                if (v.NoticeIndemnity > 0) Line("Indemnité compensatrice de préavis", null, null, v.NoticeIndemnity, null);
+                if (v.SeverancePay > 0) Line("Indemnité légale de licenciement (exonérée)", null, null, v.SeverancePay, null);
 
                 Line("SALAIRE BRUT", null, null, a.Gross, null, bold: true);
 

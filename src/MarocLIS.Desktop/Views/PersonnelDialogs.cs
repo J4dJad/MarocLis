@@ -1,3 +1,4 @@
+using System.Globalization;
 using MarocLIS.Application.HumanResources;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.HumanResources;
@@ -574,4 +575,183 @@ internal sealed class HabilitationGrantDialog : MasterDataEditor
 
         DialogResult = DialogResult.OK;
     }
+}
+
+/// <summary>
+/// The final settlement of an employee who left: the law's figures proposed, every amount
+/// adjustable, the total carried onto the payslip of the month of departure.
+/// </summary>
+internal sealed class SettlementDialog : MasterDataEditor
+{
+    private static readonly CultureInfo Fr = CultureInfo.GetCultureInfo("fr-FR");
+
+    private readonly SettlementDetail _detail;
+    private readonly TextBox _reference, _leaveDays, _leave, _notice, _severance, _note;
+    private readonly CheckBox _noticeNotWorked;
+    private readonly Label _total;
+    private bool _computing;
+
+    internal SettlementAmounts Amounts { get; private set; } = null!;
+
+    internal SettlementDialog(ILocalizer localizer, IUserDialogs dialogs, SettlementDetail d)
+        : base(localizer, dialogs, "Personnel.Settlement", $"{d.Number} {d.FullName}", 720, 470)
+    {
+        _detail = d;
+        var a = d.Saved ?? d.Suggested;
+        static string N(decimal v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+
+        Controls.Add(new Label
+        {
+            Font = UiTheme.Body, ForeColor = UiTheme.TextPrimary, AutoSize = false, Bounds = new Rectangle(20, 10, 680, 40),
+            Text = localizer.Format("Settlement.Summary", d.HireDate.ToString("dd/MM/yyyy", Fr), d.ExitDate.ToString("dd/MM/yyyy", Fr),
+                                    localizer[$"ExitReason.{d.ExitReason}"], d.ServiceYears.ToString("0.##", Fr),
+                                    localizer[$"StaffCategory.{d.Category}"])
+        });
+
+        _reference = TextField("Settlement.ReferenceSalary", 20, 56, 200, N(a.ReferenceSalary), mono: true, right: true);
+        _leaveDays = TextField("Settlement.LeaveDays", 250, 56, 180, N(a.LeaveDays), mono: true, right: true);
+        _leave = TextField("Settlement.LeaveIndemnity", 460, 56, 240, N(a.LeaveIndemnity), mono: true, right: true);
+        Hint(20, 100, 420, d.ReferenceMonths > 0
+            ? localizer.Format("Settlement.ReferenceFromMonths", d.ReferenceMonths)
+            : localizer["Settlement.ReferenceFromBase"]);
+
+        _noticeNotWorked = Check("Settlement.NoticeNotWorked", 20, 132, a.NoticeNotWorked);
+        _notice = TextField("Settlement.NoticeIndemnity", 460, 124, 240, N(a.NoticeIndemnity), mono: true, right: true);
+        var period = d.Notice.Months > 0
+            ? localizer.Format("Settlement.NoticeMonths", d.Notice.Months)
+            : localizer.Format("Settlement.NoticeDays", d.Notice.Days);
+        Hint(20, 156, 420, d.NoticeApplies
+            ? localizer.Format("Settlement.NoticeLegal", period)
+            : localizer["Settlement.NoticeNotDue"]);
+
+        _severance = TextField("Settlement.Severance", 460, 192, 240, N(a.SeverancePay), mono: true, right: true);
+        Hint(20, 210, 420, d.SeveranceDue
+            ? localizer.Format("Settlement.SeveranceDue", d.SeveranceHours.ToString("0.##", Fr))
+            : localizer["Settlement.SeveranceNotDue"]);
+
+        _note = TextField("Field.Notes", 20, 252, 680, a.Note);
+
+        _total = new Label { Font = UiTheme.BodyBold, ForeColor = UiTheme.TextPrimary, AutoSize = false, Bounds = new Rectangle(20, 306, 680, 22) };
+        Controls.Add(_total);
+
+        if (d.SignedOn is { } signed)
+        {
+            Notice(20, 336, 680, 60, "Settlement.Signed", UiTheme.Abnormal).Text =
+                localizer.Format("Settlement.Signed", signed.ToString("dd/MM/yyyy", Fr));
+            foreach (var box in new Control[] { _reference, _leaveDays, _leave, _notice, _severance, _note, _noticeNotWorked })
+                box.Enabled = false;
+        }
+        else
+            Notice(20, 336, 680, 60, d.Payroll == SettlementPayroll.Closed ? "Settlement.NoticePayrollClosed" : "Settlement.NoticePayroll",
+                   d.Payroll == SettlementPayroll.Closed ? UiTheme.Abnormal : null);
+
+        Buttons(410, 720);
+
+        _notice.Enabled = _noticeNotWorked.Checked && d.SignedOn is null;
+        _reference.TextChanged += (_, _) => Recompute(leave: true, notice: true, severance: true);
+        _leaveDays.TextChanged += (_, _) => Recompute(leave: true);
+        _noticeNotWorked.CheckedChanged += (_, _) =>
+        {
+            _notice.Enabled = _noticeNotWorked.Checked;
+            Recompute(notice: true);
+        };
+        foreach (var box in new[] { _leave, _notice, _severance }) box.TextChanged += (_, _) => ShowTotal();
+        ShowTotal();
+    }
+
+    private void Hint(int x, int y, int width, string text) => Controls.Add(new Label
+    {
+        Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary, AutoSize = false, AutoEllipsis = true,
+        Bounds = new Rectangle(x, y, width, 20), Text = text
+    });
+
+    private static bool Read(TextBox box, out decimal value)
+    {
+        value = 0m;
+        var text = box.Text.Trim().Replace(',', '.').Replace(" ", string.Empty);
+        return text.Length == 0 || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static void Put(TextBox box, decimal value) => box.Text = value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>Puts the law's figure back in each amount whose basis just changed.</summary>
+    private void Recompute(bool leave = false, bool notice = false, bool severance = false)
+    {
+        if (_computing || !Read(_reference, out var reference)) return;
+        _computing = true;
+        try
+        {
+            var d = _detail;
+            if (leave && Read(_leaveDays, out var days))
+                Put(_leave, SettlementCalculator.LeaveIndemnity(days, reference, d.MonthlyWorkingDays));
+            if (notice)
+                Put(_notice, _noticeNotWorked.Checked && d.NoticeApplies
+                    ? SettlementCalculator.NoticeIndemnity(d.Notice, reference, d.MonthlyWorkingDays)
+                    : 0m);
+            if (severance && d.SeveranceDue)
+                Put(_severance, SettlementCalculator.Severance(d.ServiceYears, reference, d.MonthlyHours));
+        }
+        finally
+        {
+            _computing = false;
+        }
+
+        ShowTotal();
+    }
+
+    private void ShowTotal()
+    {
+        Read(_leave, out var leave);
+        Read(_notice, out var notice);
+        Read(_severance, out var severance);
+        _total.Text = Localizer.Format("Settlement.Total", (leave + notice + severance).ToString("N2", Fr));
+    }
+
+    protected override void Accept()
+    {
+        if (_detail.SignedOn is not null)
+        {
+            DialogResult = DialogResult.Cancel;
+            return;
+        }
+
+        TextBox[] boxes = [_reference, _leaveDays, _leave, _notice, _severance];
+        var values = new decimal[boxes.Length];
+        for (var i = 0; i < boxes.Length; i++)
+            if (!Read(boxes[i], out values[i]) || values[i] < 0)
+            {
+                Dialogs.Warn(Localizer["Settlement_NegativeAmount"], Text);
+                boxes[i].Focus();
+                return;
+            }
+
+        Amounts = new SettlementAmounts(values[0], values[1], values[2], _noticeNotWorked.Checked,
+                                        _noticeNotWorked.Checked ? values[3] : 0m, values[4], Blank(_note));
+        DialogResult = DialogResult.OK;
+    }
+}
+
+/// <summary>The date the employee signed the receipt for the final settlement.</summary>
+internal sealed class SettlementSignedDialog : MasterDataEditor
+{
+    private readonly DateTimePicker _date = new();
+
+    internal DateOnly SignedOn => DateOnly.FromDateTime(_date.Value.Date);
+
+    internal SettlementSignedDialog(ILocalizer localizer, IUserDialogs dialogs, string employee, DateOnly exit)
+        : base(localizer, dialogs, "Settlement.SignedTitle", employee, 520, 210)
+    {
+        Label("Settlement.SignedOn", 20, 10);
+        _date.Bounds = new Rectangle(20, 28, 180, UiTheme.InputHeight);
+        _date.Format = DateTimePickerFormat.Short;
+        _date.MaxDate = DateTime.Today;
+        _date.MinDate = exit.ToDateTime(TimeOnly.MinValue) > DateTime.Today ? DateTime.Today : exit.ToDateTime(TimeOnly.MinValue);
+        _date.Value = DateTime.Today;
+        Controls.Add(_date);
+
+        Notice(20, 70, 480, 70, "Settlement.SignedNotice", UiTheme.Abnormal);
+        Buttons(160, 520);
+    }
+
+    protected override void Accept() => DialogResult = DialogResult.OK;
 }

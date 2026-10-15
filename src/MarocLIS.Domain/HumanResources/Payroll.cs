@@ -267,6 +267,17 @@ public sealed record PayslipVariables
     /// <summary>Other deduction from net: loan repayment, garnishment…</summary>
     public decimal OtherDeduction { get; init; }
 
+    // ---- Departure: carried over from the final settlement -------------------------------------
+
+    /// <summary>Indemnité compensatrice de congés payés: taxable, subject to CNSS and AMO.</summary>
+    public decimal LeaveIndemnity { get; init; }
+
+    /// <summary>Indemnité compensatrice de préavis: taxable, subject to CNSS and AMO.</summary>
+    public decimal NoticeIndemnity { get; init; }
+
+    /// <summary>Indemnité légale de licenciement (art. 53): exempt from income tax and contributions.</summary>
+    public decimal SeverancePay { get; init; }
+
     public string? Note { get; init; }
 }
 
@@ -403,9 +414,10 @@ public static class PayrollCalculator
 
         var transportExempt = Math.Min(Math.Max(0m, v.TransportAllowance), p.TransportExemptionCap);
         var transportTaxable = Math.Max(0m, v.TransportAllowance) - transportExempt;
-        var exempt = transportExempt + Math.Max(0m, v.OtherExemptAllowance);
+        var exempt = transportExempt + Math.Max(0m, v.OtherExemptAllowance) + Math.Max(0m, v.SeverancePay);
+        var departure = Math.Max(0m, v.LeaveIndemnity) + Math.Max(0m, v.NoticeIndemnity);
 
-        var grossTaxable = R(earnedBase + seniority + overtime + Math.Max(0m, v.TaxableBonus) + transportTaxable);
+        var grossTaxable = R(earnedBase + seniority + overtime + Math.Max(0m, v.TaxableBonus) + transportTaxable + departure);
         var gross = R(grossTaxable + exempt);
 
         var contributes = exemption is PayrollExemption.None or PayrollExemption.Tahfiz;

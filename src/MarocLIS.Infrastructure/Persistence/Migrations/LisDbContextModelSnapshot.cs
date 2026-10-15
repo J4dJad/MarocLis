@@ -2442,6 +2442,79 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("EmployeeHabilitations", "hr");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.FinalSettlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("ExitDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("ExitReason")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("LeaveDays")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal>("LeaveIndemnity")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("NoticeIndemnity")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<bool>("NoticeNotWorked")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("ReferenceSalary")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal>("SeverancePay")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateOnly?>("SignedOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId", "ExitDate")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FinalSettlements_Employee_Exit");
+
+                    b.ToTable("FinalSettlements", "hr");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.HumanResources.LeaveLedgerEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2899,9 +2972,17 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                                 .HasPrecision(18, 2)
                                 .HasColumnType("decimal(18,2)");
 
+                            b1.Property<decimal>("LeaveIndemnity")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("decimal(18,2)");
+
                             b1.Property<string>("Note")
                                 .HasMaxLength(300)
                                 .HasColumnType("nvarchar(300)");
+
+                            b1.Property<decimal>("NoticeIndemnity")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("decimal(18,2)");
 
                             b1.Property<decimal>("OtherDeduction")
                                 .HasPrecision(18, 2)
@@ -2920,6 +3001,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                                 .HasColumnType("decimal(18,2)");
 
                             b1.Property<decimal>("OvertimeHours50")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("decimal(18,2)");
+
+                            b1.Property<decimal>("SeverancePay")
                                 .HasPrecision(18, 2)
                                 .HasColumnType("decimal(18,2)");
 
@@ -7275,6 +7360,15 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .WithMany("Habilitations")
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.FinalSettlement", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.HumanResources.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

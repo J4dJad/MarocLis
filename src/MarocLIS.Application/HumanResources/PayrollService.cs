@@ -200,6 +200,7 @@ public sealed class PayrollService(
     private async Task<int> FillAsync(PayrollPeriod period, PayrollParameters rates, CancellationToken ct)
     {
         var added = 0;
+        var settlements = await queries.SettlementsAsync(period.FirstDay, period.LastDay, ct);
         foreach (var candidate in await queries.CandidatesAsync(period.FirstDay, period.LastDay, rates.MonthlyWorkingDays, ct))
         {
             var employee = await employees.GetByIdAsync(candidate.EmployeeId, ct);
@@ -224,6 +225,15 @@ public sealed class PayrollService(
             var variables = isNew
                 ? new PayslipVariables { AbsenceDays = candidate.UnpaidDays }
                 : slip.Variables with { AbsenceDays = candidate.UnpaidDays };
+
+            // What the final settlement says is owed on departure, as it now stands.
+            var settled = settlements.GetValueOrDefault(employee.Id);
+            variables = variables with
+            {
+                LeaveIndemnity = settled?.LeaveIndemnity ?? 0m,
+                NoticeIndemnity = settled?.NoticeIndemnity ?? 0m,
+                SeverancePay = settled?.SeverancePay ?? 0m
+            };
             slip.Recompute(variables, rates, period.LastDay);
 
             if (isNew)
@@ -280,7 +290,8 @@ public sealed class PayrollService(
 
         decimal[] values = [variables.AbsenceDays, variables.OvertimeHours25, variables.OvertimeHours50,
                             variables.OvertimeHours100, variables.TaxableBonus, variables.TransportAllowance,
-                            variables.OtherExemptAllowance, variables.AdvanceDeduction, variables.OtherDeduction];
+                            variables.OtherExemptAllowance, variables.AdvanceDeduction, variables.OtherDeduction,
+                            variables.LeaveIndemnity, variables.NoticeIndemnity, variables.SeverancePay];
         if (values.Any(v => v < 0)) return Result.Failure(Error.Validation("Payroll_NegativeVariable"));
 
         var period = await periods.GetByIdWithDetailsAsync(periodId, ct);
@@ -396,7 +407,7 @@ public sealed class PayrollService(
         var rows = new List<IEnumerable<object?>>
         {
             new object?[] { "Matricule", "Nom", "CIN", "N° CNSS", "Jours payés", "Salaire de base", "Retenue absences",
-                "Ancienneté %", "Prime d'ancienneté", "Heures supp.", "Primes imposables", "Indemnités exonérées",
+                "Ancienneté %", "Prime d'ancienneté", "Heures supp.", "Primes imposables", "Indemnités de départ", "Indemnités exonérées",
                 "Brut", "Brut imposable", "CNSS salarié", "AMO salarié", "Frais professionnels", "Net imposable",
                 "IR", "Avances et retenues", "Net à payer", "CNSS patronale", "Allocations familiales",
                 "Formation professionnelle", "AMO patronale", "Coût employeur", "RIB" }
@@ -407,7 +418,7 @@ public sealed class PayrollService(
             var a = p.Amounts;
             rows.Add(new object?[] { p.Number, p.FullName, p.Cin, p.CnssNumber, a.PaidDays, p.BaseSalary,
                 a.AbsenceDeduction, a.SeniorityRate, a.SeniorityBonus, a.OvertimeAmount, p.Variables.TaxableBonus,
-                a.ExemptAllowances, a.Gross, a.GrossTaxable, a.CnssEmployee, a.AmoEmployee, a.ProfessionalExpenses,
+                p.Variables.LeaveIndemnity + p.Variables.NoticeIndemnity + p.Variables.SeverancePay, a.ExemptAllowances, a.Gross, a.GrossTaxable, a.CnssEmployee, a.AmoEmployee, a.ProfessionalExpenses,
                 a.NetTaxable, a.IncomeTax, a.OtherDeductions, a.NetPay, a.CnssEmployer, a.FamilyAllowanceEmployer,
                 a.TrainingTaxEmployer, a.AmoEmployer, a.EmployerCost, p.Rib });
         }
@@ -415,7 +426,9 @@ public sealed class PayrollService(
         decimal Sum(Func<PayslipAmounts, decimal> f) => slips.Sum(p => f(p.Amounts));
         rows.Add(new object?[] { "TOTAL", $"{slips.Count} salariés", null, null, null, slips.Sum(p => p.BaseSalary),
             Sum(a => a.AbsenceDeduction), null, Sum(a => a.SeniorityBonus), Sum(a => a.OvertimeAmount),
-            slips.Sum(p => p.Variables.TaxableBonus), Sum(a => a.ExemptAllowances), Sum(a => a.Gross),
+            slips.Sum(p => p.Variables.TaxableBonus),
+            slips.Sum(p => p.Variables.LeaveIndemnity + p.Variables.NoticeIndemnity + p.Variables.SeverancePay),
+            Sum(a => a.ExemptAllowances), Sum(a => a.Gross),
             Sum(a => a.GrossTaxable), Sum(a => a.CnssEmployee), Sum(a => a.AmoEmployee), Sum(a => a.ProfessionalExpenses),
             Sum(a => a.NetTaxable), Sum(a => a.IncomeTax), Sum(a => a.OtherDeductions), Sum(a => a.NetPay),
             Sum(a => a.CnssEmployer), Sum(a => a.FamilyAllowanceEmployer), Sum(a => a.TrainingTaxEmployer),
@@ -465,6 +478,46 @@ public sealed class PayrollService(
         return Result.Success(Encode(Csv(rows)));
     }
 
+    /// <summary>
+    /// The month's net pay for the bank: who, which account, how much. Only a closed month is
+    /// transferred, so the bank never pays an amount that may still change.
+    /// </summary>
+    public async Task<Result<TransferOrder>> GetTransferOrderAsync(Guid periodId, CancellationToken ct = default)
+    {
+        var docs = await GetDocumentsAsync(periodId, null, ct);
+        if (docs.IsFailure) return Result.Failure<TransferOrder>(docs.FirstError);
+        if (docs.Value is []) return Result.Failure<TransferOrder>(Error.Validation("Payroll_Empty"));
+
+        var first = docs.Value[0];
+        if (first.Status != PayrollStatus.Closed) return Result.Failure<TransferOrder>(Error.Conflict("Payroll_TransferNotClosed"));
+
+        return Result.Success(new TransferOrder(first.Employer, first.Year, first.Month, clock.Today,
+        [
+            .. docs.Value.Where(d => d.Payslip.Amounts.NetPay > 0)
+                  .Select(d => new TransferLine(d.Payslip.Number, d.Payslip.FullName, d.Payslip.BankName,
+                                                string.IsNullOrWhiteSpace(d.Payslip.Rib) ? null : d.Payslip.Rib.Replace(" ", string.Empty),
+                                                d.Payslip.Amounts.NetPay))
+        ]));
+    }
+
+    /// <summary>The transfer list as a file to import into the bank's online service, one line per account.</summary>
+    public async Task<Result<byte[]>> ExportTransferAsync(Guid periodId, CancellationToken ct = default)
+    {
+        var order = await GetTransferOrderAsync(periodId, ct);
+        if (order.IsFailure) return Result.Failure<byte[]>(order.FirstError);
+
+        var o = order.Value;
+        var reference = $"SALAIRE {o.Month:00}/{o.Year}";
+        var rows = new List<IEnumerable<object?>>
+        {
+            new object?[] { "Matricule", "Bénéficiaire", "Banque", "RIB", "Montant", "Motif" }
+        };
+        rows.AddRange(o.ByTransfer.Select(l => new object?[] { l.Number, l.FullName, l.BankName, l.Rib, l.Amount, reference }));
+        rows.Add(new object?[] { "TOTAL", $"{o.ByTransfer.Count()} virements", null, null, o.ByTransfer.Sum(l => l.Amount), null });
+
+        return Result.Success(Encode(Csv(rows)));
+    }
+
     private static byte[] Encode(string csv) =>
         [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(csv)];
 }
@@ -485,4 +538,9 @@ public interface IPayrollQueries
                                                           CancellationToken ct = default);
 
     Task<InvoiceIssuer> EmployerAsync(Guid siteId, CancellationToken ct = default);
+
+    /// <summary>Final settlements of employees who left during the period, by employee.</summary>
+    Task<IReadOnlyDictionary<Guid, SettledAmounts>> SettlementsAsync(DateOnly from, DateOnly to, CancellationToken ct = default);
 }
+
+public sealed record SettledAmounts(decimal LeaveIndemnity, decimal NoticeIndemnity, decimal SeverancePay);

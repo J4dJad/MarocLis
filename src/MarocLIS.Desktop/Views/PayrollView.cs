@@ -17,6 +17,7 @@ public sealed class PayrollView : LocalizedView
 {
     private readonly PayrollService _payroll;
     private readonly IPayslipRenderer _renderer;
+    private readonly IHrDocumentRenderer _letters;
     private readonly IDocumentOutput _output;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<PayrollView>? _logger;
@@ -36,17 +37,21 @@ public sealed class PayrollView : LocalizedView
     private readonly Button _cnss = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _update = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _close = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _transfer = UiTheme.SecondaryButton(string.Empty);
+    private readonly ContextMenuStrip _transferMenu = new();
 
     private IReadOnlyList<PayrollPeriodRow> _periods = [];
     private PayrollPeriodDetail? _detail;
     private bool _loading;
 
-    public PayrollView(PayrollService payroll, IPayslipRenderer renderer, IDocumentOutput output, IUserDialogs dialogs,
-                       ILocalizer localizer, ICultureManager cultureManager, ILogger<PayrollView>? logger = null)
+    public PayrollView(PayrollService payroll, IPayslipRenderer renderer, IHrDocumentRenderer letters, IDocumentOutput output,
+                       IUserDialogs dialogs, ILocalizer localizer, ICultureManager cultureManager,
+                       ILogger<PayrollView>? logger = null)
         : base(localizer, cultureManager)
     {
         _payroll = payroll;
         _renderer = renderer;
+        _letters = letters;
         _output = output;
         _dialogs = dialogs;
         _logger = logger;
@@ -121,8 +126,9 @@ public sealed class PayrollView : LocalizedView
         _cnss.Bounds = new Rectangle(700, 30, 160, UiTheme.ButtonHeight);
         _update.Bounds = new Rectangle(870, 30, 190, UiTheme.ButtonHeight);
         _close.Bounds = new Rectangle(1070, 30, 170, UiTheme.ButtonHeight);
+        _transfer.Bounds = new Rectangle(1250, 30, 150, UiTheme.ButtonHeight);
 
-        actions.Controls.AddRange([_totals, _variables, _payslip, _allPayslips, _journal, _cnss, _update, _close]);
+        actions.Controls.AddRange([_totals, _variables, _payslip, _allPayslips, _journal, _cnss, _update, _close, _transfer]);
 
         Controls.Add(host);
         Controls.Add(actions);
@@ -143,6 +149,9 @@ public sealed class PayrollView : LocalizedView
         _cnss.Click += async (_, _) => await ExportAsync(cnss: true);
         _update.Click += async (_, _) => await UpdateFromFilesAsync();
         _close.Click += async (_, _) => await CloseOrReopenAsync();
+        _transferMenu.Items.Add(new ToolStripMenuItem(string.Empty, null, async (_, _) => await TransferAsync(file: false)));
+        _transferMenu.Items.Add(new ToolStripMenuItem(string.Empty, null, async (_, _) => await TransferAsync(file: true)));
+        _transfer.Click += (_, _) => _transferMenu.Show(_transfer, new Point(0, _transfer.Height));
         _grid.SelectionChanged += (_, _) => RefreshButtons();
 
         _grid.CellFormatting += (_, e) =>
@@ -165,6 +174,9 @@ public sealed class PayrollView : LocalizedView
         _journal.Text = T("Payroll.Journal");
         _cnss.Text = T("Payroll.CnssSummary");
         _update.Text = T("Payroll.UpdateFromFiles");
+        _transfer.Text = T("Payroll.Transfer");
+        _transferMenu.Items[0].Text = T("Payroll.TransferOrder");
+        _transferMenu.Items[1].Text = T("Payroll.TransferFile");
 
         _grid.Column("number").HeaderText = T("Personnel.Number");
         _grid.Column("name").HeaderText = T("Field.Name");
@@ -295,6 +307,35 @@ public sealed class PayrollView : LocalizedView
         _payslip.Enabled = row;
         _allPayslips.Enabled = _journal.Enabled = _cnss.Enabled = _close.Enabled = _detail is not null;
         _close.Text = _detail?.Period.Status == PayrollStatus.Closed ? T("Payroll.Reopen") : T("Payroll.Close");
+
+        // Only a closed month goes to the bank: its amounts no longer change.
+        _transfer.Enabled = _detail?.Period.Status == PayrollStatus.Closed;
+    }
+
+    private async Task TransferAsync(bool file)
+    {
+        if (_detail is not { } d) return;
+        try
+        {
+            if (file)
+            {
+                var csv = await _payroll.ExportTransferAsync(d.Period.PeriodId);
+                if (csv.IsFailure) { _dialogs.ShowFailure(csv); return; }
+                var saved = await _output.OpenAsync(csv.Value, "csv");
+                if (saved.IsFailure) _dialogs.ShowFailure(saved);
+                return;
+            }
+
+            var order = await _payroll.GetTransferOrderAsync(d.Period.PeriodId);
+            if (order.IsFailure) { _dialogs.ShowFailure(order); return; }
+            var opened = await _output.OpenAsync(_letters.RenderTransferOrder(order.Value), "pdf");
+            if (opened.IsFailure) _dialogs.ShowFailure(opened, _transfer.Text);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Preparing the salary transfer failed.");
+            _dialogs.Error(T("Message.UnexpectedError"));
+        }
     }
 
     private async Task OpenMonthAsync()
@@ -448,13 +489,14 @@ internal sealed class PayrollMonthDialog : MasterDataEditor
 internal sealed class PayslipVariablesDialog : MasterDataEditor
 {
     private readonly TextBox _absence, _ot25, _ot50, _ot100, _bonus, _transport, _exempt, _advance, _other, _note;
+    private readonly PayslipVariables _original;
 
     internal PayslipVariables Variables { get; private set; } = new();
 
     internal PayslipVariablesDialog(ILocalizer localizer, IUserDialogs dialogs, PayslipRow row)
         : base(localizer, dialogs, "Payroll.Variables", $"{row.Number} {row.FullName}", 620, 430)
     {
-        var v = row.Variables;
+        var v = _original = row.Variables;
         static string N(decimal d) => d == 0 ? string.Empty : d.ToString("0.##", CultureInfo.InvariantCulture);
 
         TextBox Field(string key, int x, int y, decimal value) => TextField(key, x, y, 180, N(value), mono: true, right: true);
@@ -480,6 +522,9 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
                                     a.AmoEmployee.ToString("N2", fr), a.IncomeTax.ToString("N2", fr), a.NetPay.ToString("N2", fr),
                                     a.SeniorityRate.ToString("0.#", fr))
         };
+        var departure = v.LeaveIndemnity + v.NoticeIndemnity + v.SeverancePay;
+        if (departure > 0)
+            current.Text += " " + localizer.Format("Payroll.DepartureIncluded", departure.ToString("N2", fr));
         Controls.Add(current);
 
         Notice(20, 290, 580, 74, "Payroll.VariablesNotice");
@@ -505,7 +550,8 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
                 return;
             }
 
-        Variables = new PayslipVariables
+        // The departure indemnities come from the final settlement and are kept as they are.
+        Variables = _original with
         {
             AbsenceDays = values[0], OvertimeHours25 = values[1], OvertimeHours50 = values[2], OvertimeHours100 = values[3],
             TaxableBonus = values[4], TransportAllowance = values[5], OtherExemptAllowance = values[6],

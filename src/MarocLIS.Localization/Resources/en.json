@@ -1,5 +1,15 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "HrDocument_UseSettlement": "The receipt is printed from the final settlement.",
+  "HrDocument_EmployeeExited": "This employee has left: issue a work certificate.",
+  "HrDocument_EmployeeNotExited": "This employee is still in post: record the departure first.",
+  "HrDocument_NoSalary": "No salary is entered in this employee's file.",
+  "Settlement_Signed": "The receipt is signed: the final settlement can no longer be changed.",
+  "Settlement_NegativeAmount": "Settlement amounts must be zero or positive.",
+  "Settlement_NoticeWorked": "No notice indemnity when the notice was worked.",
+  "Settlement_SignedBeforeExit": "The receipt cannot be signed before the leaving date.",
+  "Settlement_SignedInFuture": "The signing date cannot be in the future.",
+  "Settlement_NotFound": "The final settlement has not been computed and saved yet.",
   "Payroll_ScaleInvalid": "The tax scale is malformed: rising bounds “40000:0|60000:10|…|:37”.",
   "Payroll_RateInvalid": "A rate or amount is invalid.",
   "Payroll_Closed": "This month is closed.",
@@ -16,6 +26,7 @@
   "Payroll_TooManyOvertimeHours": "More than 100 overtime hours in the month: check the entry.",
   "Payroll_NegativeNetPay": "A payslip has a negative net: reduce its deductions before closing.",
   "Payroll_ReopenReasonRequired": "A reason for reopening is required.",
+  "Payroll_TransferNotClosed": "Close the month first: only a closed payroll is sent to the bank.",
   "Planning_EmployeeNotEmployed": "The employee is not employed that day.",
   "Planning_HoursInvalid": "The end time must differ from the start.",
   "Planning_OnLeave": "The employee is on approved leave that day.",
@@ -94,6 +105,49 @@
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
 
+  "StaffCategory": {
+    "Employee": "employee",
+    "Executive": "executive"
+  },
+
+  "Settlement": {
+    "SignedTitle": "Receipt signed by the employee",
+    "SignedNotice": "Once the signature is recorded the settlement is final. The employee may contest it within 60 days (art. 76).",
+    "SignedOn": "Date signed",
+    "NoticePayrollClosed": "The leaving month's payroll is closed: reopen it for the payslip to take these amounts.",
+    "NoticePayroll": "The amounts go onto the leaving month's payslip: leave and notice subject to CNSS, AMO and tax, severance exempt.",
+    "Signed": "Receipt signed on {0}: the settlement can no longer be changed.",
+    "Total": "Total indemnities: {0} MAD",
+    "SeveranceNotDue": "Not due for this reason or under 6 months of service.",
+    "SeveranceDue": "Due: {0} hours of salary (art. 53), exempt from tax and CNSS.",
+    "Severance": "Severance pay",
+    "NoticeNotDue": "No notice for this reason for leaving.",
+    "NoticeLegal": "Legal notice: {0} (decree 2-04-469).",
+    "NoticeDays": "{0} days",
+    "NoticeMonths": "{0} month(s)",
+    "NoticeIndemnity": "Notice indemnity",
+    "NoticeNotWorked": "Notice not worked (released by the employer)",
+    "ReferenceFromBase": "No full month on the payroll: base salary and seniority bonus.",
+    "ReferenceFromMonths": "Average gross of the last {0} full months.",
+    "LeaveIndemnity": "Paid-leave indemnity",
+    "LeaveDays": "Leave days left",
+    "ReferenceSalary": "Monthly reference salary",
+    "Summary": "Hired {0}, left {1} ({2}). Service: {3} years. Category: {4}.",
+    "SignedRecorded": "Receipt signature recorded: the settlement can no longer be changed.",
+    "Saved.Closed": "Settlement saved, but the leaving month's payroll is closed: reopen it to update the payslip.",
+    "Saved.Applied": "Settlement saved and carried onto the leaving month's payslip.",
+    "Saved.NotOpened": "Settlement saved: it will be carried onto the payroll of the leaving month when it is opened or refreshed.",
+    "RecordSigned": "Receipt signed by the employee…",
+    "PrintReceipt": "Print the settlement receipt",
+    "Compute": "Compute the final settlement…"
+  },
+
+  "HrDocument": {
+    "WorkCertificate": "Work certificate (leaving)",
+    "SalaryAttestation": "Salary certificate",
+    "EmploymentAttestation": "Employment certificate"
+  },
+
   "PayrollRate": {
     "Notice": "Defaults: 2025 finance law and current CNSS rates. Check them with each new finance law, the minimum wage in particular. Draft months of the year are recomputed on saving; closed months do not change.",
     "Scale": "Annual tax scale (bound:rate|…|:rate)",
@@ -134,6 +188,10 @@
   },
 
   "Payroll": {
+    "TransferFile": "File for the bank (CSV)",
+    "TransferOrder": "Transfer order (PDF)",
+    "Transfer": "Transfer",
+    "DepartureIncluded": "Including leaving indemnities: {0} MAD (final settlement).",
     "VariablesNotice": "Overtime: +25% 6am–9pm, +50% 9pm–6am or on the rest day, +100% at night on the rest day. Transport is exempt up to the cap in the rates. Unpaid days are taken from leave on each “Update from files”.",
     "CurrentResult": "Currently: gross {0} · CNSS {1} · AMO {2} · tax {3} · net {4} MAD (seniority {5}%).",
     "OtherDeduction": "Other deductions",
@@ -492,6 +550,8 @@
   },
 
   "Personnel": {
+    "Settlement": "Final settlement",
+    "Letters": "Certificates",
     "ExitNotice": "The employee's authorisations end on this date. The file remains readable.",
     "ExitReason": "Reason",
     "ExitDate": "Departure date",
