@@ -234,8 +234,10 @@ public sealed class ReviewFixesCycle1BillingTests
     }
 
     [Fact]
-    public async Task AnInvoiceToAnotherPayer_UnderAnExpiredAgreement_IsNotPreparedAsAClaim()
+    public async Task AnInvoiceToAnotherPayer_UnderAnExpiredAgreement_IsRefused()
     {
+        // Since the fifth review (cycle 3, B4) the invoice is no longer addressed to the payer with
+        // no claim to carry its share: it is refused, and issued in the patient's name instead.
         var cnss = Payer("CNSS");
         var mutuelle = Payer("MUT");
         mutuelle.AgreementValidUntil = Today.AddDays(-15);
@@ -243,9 +245,9 @@ public sealed class ReviewFixesCycle1BillingTests
         var harness = new Harness(orders: [order], payers: [cnss, mutuelle], patients: [PatientOf(order)]);
 
         (await harness.Service.IssueInvoiceAsync([order.Id], payerIdOverride: mutuelle.Id))
-            .IsSuccess.Should().BeTrue();
+            .FirstError.ResourceKey.Should().Be("Invoice_PayerAgreementNotValid");
 
-        harness.Added.Single().ClaimStatus.Should().Be(ClaimStatus.NotApplicable);
+        harness.Added.Should().BeEmpty();
     }
 
     [Fact]

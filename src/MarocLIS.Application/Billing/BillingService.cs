@@ -36,7 +36,12 @@ public sealed record BillableOrderRow(
     /// <summary>
     /// Was on an invoice that credit notes have wholly reversed: it is waiting to be invoiced again.
     /// </summary>
-    bool PreviouslyInvoiced = false)
+    bool PreviouslyInvoiced = false,
+    /// <summary>
+    /// The order's payer has a third-party agreement in force: only then can an invoice be
+    /// addressed to it and its share claimed.
+    /// </summary>
+    bool PayerAgreementValid = false)
 {
     /// <summary>Whether the row can be put on a new invoice: neither cancelled nor invoiced.</summary>
     public bool IsInvoiceable => InvoiceId is null && Status != LabOrderStatus.Cancelled;
@@ -79,6 +84,13 @@ public sealed record InvoiceRow(
     /// <summary>What a further credit note may still reverse; zero for anything but an invoice.</summary>
     public decimal Creditable =>
         Kind == InvoiceKind.Invoice ? Math.Max(0m, Money.Round(Total - Credited)) : 0m;
+
+    /// <summary>
+    /// What the patient may still pay at the counter: the outstanding less the payer's share while
+    /// it is claimed from the payer. The same rule as <see cref="Invoice.PatientPayableAmount"/>.
+    /// </summary>
+    public decimal PatientPayable =>
+        Invoice.ComputePatientPayable(Outstanding, ClaimStatus, PayerShare, PayerAcceptedAmount);
 }
 
 public sealed record CashSessionSummary(
@@ -298,6 +310,14 @@ public sealed class BillingService(
         var payer = payerId is { } id ? await payers.GetByIdAsync(id, ct) : null;
 
         var today = clock.Today;
+
+        // Addressed to the payer only under an agreement in force: without one there is no claim
+        // to carry its share, which sat as a receivable nobody would ever be asked for, on an
+        // invoice the patient could no longer use for their own reimbursement.
+        if (payerIdOverride is not null
+            && payer is not null
+            && !(payer.ThirdPartyPaymentAgreement && payer.IsAgreementValid(today)))
+            return Result.Failure<Guid>(Error.Validation("Invoice_PayerAgreementNotValid", payer.Name.Fr));
 
         // An order registered without third-party payment (box unticked on the coverage, or the
         // agreement expired) had its whole total asked of the patient at the counter. Its invoice
@@ -549,8 +569,14 @@ public sealed class BillingService(
 
         if (original.IsFullyCredited)
         {
-            foreach (var order in await orders.ListAsync(o => o.InvoiceId == original.Id, ct))
+            foreach (var listed in await orders.ListAsync(o => o.InvoiceId == original.Id, ct))
             {
+                // Re-read through the repository, which refreshes an order this screen still tracks
+                // from the invoice's issue: a list hands it back as it was then, and saving it over
+                // a later change (results validated since) failed as a concurrency conflict.
+                var order = await orders.GetByIdWithDetailsAsync(listed.Id, ct);
+                if (order is null) continue;
+
                 order.InvoiceId = null;
                 orders.Update(order);
                 released.Add(order.AccessionNumber);
@@ -1724,6 +1750,12 @@ public interface IBillingQueries
     /// <summary>Issued, payer-covered invoices not yet in a batch.</summary>
     Task<IReadOnlyList<ClaimCandidateRow>> GetClaimCandidatesAsync(Guid siteId,
                                                                     CancellationToken ct = default);
+
+    /// <summary>
+    /// How many rows the billing desk lists at most, the most recent first. A list that reaches it
+    /// is truncated, and the screen says so.
+    /// </summary>
+    const int UninvoicedOrdersLimit = 500;
 
     Task<IReadOnlyList<BillableOrderRow>> GetUninvoicedOrdersAsync(
         Guid siteId, CancellationToken ct = default);

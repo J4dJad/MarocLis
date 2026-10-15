@@ -117,6 +117,33 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     /// </summary>
     public decimal OutstandingAmount => ComputeOutstanding(Kind, TotalAmount, PaidAmount, CreditedAmount);
 
+    /// <summary>
+    /// What the patient may still pay at the counter. On an invoice whose payer share is claimed
+    /// from the payer, that share is settled through the claim until the payer has answered: taken
+    /// from the patient as well, it was claimed again and the payer's payment could not be entered.
+    /// </summary>
+    public decimal PatientPayableAmount =>
+        ComputePatientPayable(OutstandingAmount, ClaimStatus, PayerShareAmount, PayerAcceptedAmount);
+
+    /// <summary>
+    /// The patient-payable rule, shared with the ledger rows. The payer's share stays reserved
+    /// while a claim is prepared or pending; once the payer's answer is recorded, its payment is in
+    /// and the shortfall it left is the patient's to pay.
+    /// </summary>
+    public static decimal ComputePatientPayable(decimal outstanding, ClaimStatus claimStatus,
+                                                decimal payerShare, decimal? payerAccepted) =>
+        claimStatus == ClaimStatus.NotApplicable || payerAccepted is not null
+            ? outstanding
+            : Math.Max(0m, Money.Round(outstanding - payerShare));
+
+    /// <summary>
+    /// Whether the claim forbids a credit note: sent to the payer or answered by it, the same acts
+    /// would be claimed again on the invoice that replaces this one. A rejected claim does not.
+    /// </summary>
+    public static bool ClaimBlocksCreditNote(ClaimStatus claimStatus) =>
+        claimStatus is ClaimStatus.Submitted or ClaimStatus.Resubmitted or ClaimStatus.Accepted
+                    or ClaimStatus.PartiallyAccepted or ClaimStatus.Settled;
+
     /// <summary>What a further credit note may still reverse.</summary>
     public decimal CreditableAmount =>
         Kind == InvoiceKind.Invoice ? Math.Max(0m, Money.Round(TotalAmount - CreditedAmount)) : 0m;
@@ -347,6 +374,11 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
             return Result.Failure(Error.Validation("Payment_AmountMustBePositive"));
         if (payment.Amount > OutstandingAmount)
             return Result.Failure(Error.Validation("Payment_ExceedsOutstanding", OutstandingAmount));
+        // The payer's own settlement and the write-off of its refused share are what close that
+        // share; anything else is paid by the patient, who owes only their part.
+        if (payment.Method is not (PaymentMethod.ThirdPartyPayer or PaymentMethod.WriteOff)
+            && payment.Amount > PatientPayableAmount)
+            return Result.Failure(Error.Validation("Payment_ExceedsPatientShare", PatientPayableAmount));
 
         payment.AttachTo(Id);
         _payments.Add(payment);
@@ -451,6 +483,8 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
             return Result.Failure(Error.Conflict("Invoice_CreditNoteRequiresIssued"));
         if (CreditableAmount <= 0m)
             return Result.Failure(Error.Conflict("Invoice_AlreadyFullyCredited", Number));
+        if (ClaimBlocksCreditNote(ClaimStatus))
+            return Result.Failure(Error.Conflict("Invoice_CreditNoteClaimSent", Number));
         if (amount <= 0m)
             return Result.Failure(Error.Validation("Invoice_CreditNoteAmountOutOfRange", CreditableAmount));
         if (Money.Round(amount) > CreditableAmount)

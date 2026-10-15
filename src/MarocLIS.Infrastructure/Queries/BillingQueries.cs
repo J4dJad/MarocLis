@@ -19,8 +19,11 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
     /// </para>
     /// </summary>
     public async Task<IReadOnlyList<BillableOrderRow>> GetUninvoicedOrdersAsync(
-        Guid siteId, CancellationToken ct = default) =>
-        await db.LabOrders.AsNoTracking()
+        Guid siteId, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        return await db.LabOrders.AsNoTracking()
             .Where(o => o.SiteId == siteId
                         && ((o.InvoiceId == null
                              && o.Status != LabOrderStatus.Cancelled
@@ -36,8 +39,10 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                   (o, p) => new { Order = o, Patient = p })
             // Ordered and capped before the projection: EF cannot sort on a member of a row built
             // through a constructor, and SQL Server rejected the query outright.
-            .OrderBy(x => x.Order.RegisteredAt)
-            .Take(500)
+            // The most recent first: capped oldest first, a backlog of 500 unclaimed rows hid
+            // every order registered since, and this is the only screen that invoices one.
+            .OrderByDescending(x => x.Order.RegisteredAt)
+            .Take(IBillingQueries.UninvoicedOrdersLimit)
             .Select(x => new BillableOrderRow(
                 x.Order.Id,
                 x.Order.AccessionNumber,
@@ -68,8 +73,14 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                                  .Select(i => i.Number).FirstOrDefault(),
                 // Lines on an earlier invoice while the order has none: a credit note reversed it.
                 x.Order.InvoiceId == null
-                && db.InvoiceLines.Any(l => l.LabOrderId == x.Order.Id)))
+                && db.InvoiceLines.Any(l => l.LabOrderId == x.Order.Id),
+                // The re-invoicing to the payer is offered only under an agreement in force.
+                x.Order.PayerId != null
+                && db.Payers.Any(y => y.Id == x.Order.PayerId
+                                      && y.ThirdPartyPaymentAgreement
+                                      && (y.AgreementValidUntil == null || y.AgreementValidUntil >= today))))
             .ToListAsync(ct);
+    }
 
     public async Task<PagedResult<InvoiceRow>> GetInvoicesAsync(
         Guid siteId, InvoiceStatus? status, string? search, int page, int pageSize,
@@ -536,6 +547,10 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                         && i.Status != InvoiceStatus.Cancelled
                         && i.Kind == InvoiceKind.Invoice
                         && i.PayerShareAmount > 0m
+                        // Prepared for a claim at issue, as the submission requires: an invoice
+                        // addressed to a payer whose agreement was absent or expired is not one,
+                        // and listed it was refused as "already submitted".
+                        && i.ClaimStatus == ClaimStatus.Prepared
                         // Wholly reversed by credit notes: there is nothing left to claim.
                         && i.CreditedAmount < i.TotalAmount)
             .Select(i => new
