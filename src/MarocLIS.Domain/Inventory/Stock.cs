@@ -31,7 +31,11 @@ public sealed class Supplier : AuditableAggregateRoot, ISoftDeletable
     /// <summary>Contractual delivery lead time, used to set reorder points.</summary>
     public int LeadTimeDays { get; set; } = 7;
 
-    public int PaymentTermsDays { get; set; } = 30;
+    /// <summary>
+    /// Agreed payment term in days. Loi n° 69-21: 60 days when nothing was agreed, at most 120 by
+    /// agreement; the supplier invoice's due date is computed from it.
+    /// </summary>
+    public int PaymentTermsDays { get; set; } = PaymentTerms.DefaultDays;
 
     /// <summary>
     /// Whether the supplier has been evaluated as required by ISO 15189 §4.6 — a laboratory has to
@@ -51,6 +55,12 @@ public sealed class Supplier : AuditableAggregateRoot, ISoftDeletable
     public Guid? DeletedByUserId { get; set; }
     public string? DeletionReason { get; set; }
 
+    /// <summary>
+    /// The supplier's auxiliary (third-party) account in the accounting export; the supplier code
+    /// when left empty.
+    /// </summary>
+    public string? AccountingAccount { get; set; }
+
     public bool IsEvaluationOverdue(DateOnly today) =>
         IsApproved && (LastEvaluationDate is null || LastEvaluationDate.Value.AddYears(1) < today);
 
@@ -63,6 +73,8 @@ public sealed class Supplier : AuditableAggregateRoot, ISoftDeletable
             errors.Add(Error.Validation("Supplier_IceInvalid"));
         if (EvaluationScore is < 0 or > 100)
             errors.Add(Error.Validation("Supplier_ScoreOutOfRange"));
+        if (PaymentTermsDays is < 0 or > PaymentTerms.MaximumDays)
+            errors.Add(Error.Validation("Supplier_PaymentTermsTooLong", PaymentTerms.MaximumDays));
         return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
     }
 }

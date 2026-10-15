@@ -86,6 +86,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<Application.HumanResources.IHrDocumentQueries, HrDocumentQueries>();
         services.AddIsolatedQueries<Application.HumanResources.IAccidentQueries, AccidentQueries>();
         services.AddIsolatedQueries<Application.Inventory.IPurchaseOrderQueries, PurchaseOrderQueries>();
+        services.AddIsolatedQueries<Application.Inventory.ISupplierInvoiceQueries, SupplierInvoiceQueries>();
         services.AddIsolatedQueries<Application.Quality.IDocumentControlQueries, DocumentControlQueries>();
         services.AddIsolatedQueries<Application.Quality.IEqaQueries, EqaQueries>();
         services.AddIsolatedQueries<Application.Statistics.IStatisticsQueries, StatisticsQueries>();
@@ -128,6 +129,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<PayrollView>();
         services.AddTransient<AccidentView>();
         services.AddTransient<PurchaseOrderView>();
+        services.AddTransient<SupplierInvoiceView>();
         services.AddTransient<QualityDocumentsView>();
         services.AddTransient<EqaView>();
         services.AddTransient<StatisticsView>();

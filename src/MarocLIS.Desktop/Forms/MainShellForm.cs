@@ -320,7 +320,8 @@ public sealed class MainShellForm : LocalizedForm
                 n => n.NavigateToAsync<QualityDocumentsView>()),
 
             new("group.logistics", "Nav.Inventory", [Permissions.Inventory.View,
-                                                      Permissions.Equipment.View],
+                                                      Permissions.Equipment.View,
+                                                      Permissions.Inventory.EnterInvoices],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 
             new("inventory", "Nav.Inventory", [Permissions.Inventory.View],
@@ -328,6 +329,10 @@ public sealed class MainShellForm : LocalizedForm
 
             new("purchaseorders", "Nav.PurchaseOrders", [Permissions.Inventory.View],
                 n => n.NavigateToAsync<PurchaseOrderView>()),
+
+            new("supplierinvoices", "Nav.SupplierInvoices", [Permissions.Inventory.EnterInvoices,
+                                                              Permissions.Inventory.ApprovePayments],
+                n => n.NavigateToAsync<SupplierInvoiceView>()),
 
             new("equipment", "Nav.Equipment", [Permissions.Equipment.View],
                 n => n.NavigateToAsync<EquipmentView>()),

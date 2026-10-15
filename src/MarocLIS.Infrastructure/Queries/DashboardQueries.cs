@@ -1,5 +1,6 @@
 using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Inventory;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Quality;
 using MarocLIS.Domain.Results;
@@ -153,6 +154,19 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
                                  || i.Status == InvoiceStatus.PartiallyPaid)
                              && i.DueDate != null && i.DueDate < todayOnly, ct);
 
+        // Supplier invoices still owed: overdue ones breach the loi 69-21 term and carry a fine,
+        // the ones due within a week are the next payment run.
+        var openSupplierInvoices = db.SupplierInvoices.AsNoTracking()
+            .Where(i => i.SiteId == siteId
+                        && i.Status != SupplierInvoiceStatus.Paid
+                        && i.Status != SupplierInvoiceStatus.Cancelled);
+
+        var supplierInvoicesOverdue = await openSupplierInvoices.CountAsync(i => i.DueDate < todayOnly, ct);
+
+        var paymentHorizon = todayOnly.AddDays(7);
+        var supplierInvoicesDueSoon = await openSupplierInvoices
+            .CountAsync(i => i.DueDate >= todayOnly && i.DueDate <= paymentHorizon, ct);
+
         return new DashboardSnapshot(
             Activity:
             [
@@ -185,7 +199,13 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
                 new("SampleStatus.Rejected", rejectedSamplesToday,
                     rejectedSamplesToday > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
                 new("Dashboard.Receivables", unpaidInvoices,
-                    unpaidInvoices > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral)
+                    unpaidInvoices > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
+                new("SupplierInvoices.DashboardOverdue", supplierInvoicesOverdue,
+                    supplierInvoicesOverdue > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral,
+                    "supplierinvoices"),
+                new("SupplierInvoices.DashboardDueSoon", supplierInvoicesDueSoon,
+                    supplierInvoicesDueSoon > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "supplierinvoices")
             ],
             GeneratedAt: now);
     }

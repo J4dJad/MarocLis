@@ -95,6 +95,12 @@ public static class Permissions
 
         /// <summary>Approves a purchase order: committing the laboratory's money is not the buyer's call.</summary>
         public const string ApprovePurchaseOrders = "inventory.po.approve";
+
+        /// <summary>Entering supplier invoices against purchase orders, and attaching their scan.</summary>
+        public const string EnterInvoices = "inventory.invoice.enter";
+
+        /// <summary>Releasing a blocked supplier invoice and recording supplier payments.</summary>
+        public const string ApprovePayments = "inventory.payment.approve";
     }
 
     public static class Equipment

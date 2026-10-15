@@ -190,6 +190,7 @@ public sealed class MasterDataQueries(LisDbContext db) : IMasterDataQueries
             {
                 s.Id, s.Code, s.Name, s.Ice, s.ContactName, s.Phone, s.Email, s.City,
                 s.LeadTimeDays, s.IsApproved, s.LastEvaluationDate, s.EvaluationScore, s.IsActive,
+                s.PaymentTermsDays, s.AccountingAccount,
                 StockItemCount = db.StockItems.Count(i => i.PreferredSupplierId == s.Id)
             })
             .ToListAsync(ct);
@@ -203,7 +204,7 @@ public sealed class MasterDataQueries(LisDbContext db) : IMasterDataQueries
                 // periodically. Twelve months is the common laboratory cycle.
                 s.IsApproved && (s.LastEvaluationDate is null
                                  || s.LastEvaluationDate.Value.AddMonths(12) < today),
-                s.IsActive, s.StockItemCount))
+                s.IsActive, s.StockItemCount, s.PaymentTermsDays, s.AccountingAccount))
         ];
     }
 

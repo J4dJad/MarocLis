@@ -268,6 +268,7 @@ public sealed class PurchaseOrderService(
 
         var received = order.ReceiveLine(line.Id, request.Quantity);
         if (received.IsFailure) return received;
+        line.LastReceivedOn = clock.Today;
 
         var deliveryNote = Blank(request.DeliveryNoteReference) ?? order.Number;
 

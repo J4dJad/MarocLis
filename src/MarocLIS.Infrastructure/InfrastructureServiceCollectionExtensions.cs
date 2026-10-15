@@ -141,6 +141,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ControlledDocumentRepository>();
         services.AddScoped<PurchaseOrderRepository>();
         services.AddScoped<NonConformityRepository>();
+        services.AddScoped<SupplierInvoiceRepository>();
 
         // The specialised repositories also satisfy the generic contract, so a use case can depend
         // on IRepository<LabOrder> and still get the detail-loading override.
@@ -177,6 +178,8 @@ public static class InfrastructureServiceCollectionExtensions
             sp => sp.GetRequiredService<PurchaseOrderRepository>());
         services.AddScoped<IRepository<NonConformity>>(
             sp => sp.GetRequiredService<NonConformityRepository>());
+        services.AddScoped<IRepository<SupplierInvoice>>(
+            sp => sp.GetRequiredService<SupplierInvoiceRepository>());
 
         services.AddScoped<Application.Administration.IConfigurationWriter, ConfigurationWriter>();
 
