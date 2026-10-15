@@ -34,7 +34,9 @@ public sealed record UserRow(
     IReadOnlyList<string> AuthorizedDepartmentCodes,
     IReadOnlyList<Guid> SiteIds,
     Guid? DefaultSiteId,
-    bool HasSignature)
+    bool HasSignature,
+    // The prescriber an outside doctor's account is restricted to.
+    Guid? PrescriberId = null)
 {
     /// <summary>
     /// Whether the record satisfies loi n° 12-01 for biological validation. Shown in the list so an
@@ -59,6 +61,9 @@ public sealed record RoleRow(
     IReadOnlyList<string> Permissions);
 
 public sealed record SiteRow(Guid SiteId, string Code, MultilingualText Name, bool IsActive);
+
+/// <summary>A prescriber an account can be linked to, for the user editor's picker.</summary>
+public sealed record PrescriberOption(Guid PrescriberId, string FullName, string? City, bool IsActive);
 
 /// <summary>
 /// One row of the security log, shared by the user-administration screen's recent-events panel and
@@ -104,6 +109,12 @@ public sealed record CreateUserRequest
 
     /// <summary>Empty means every department, which is only sensible for the responsible biologist.</summary>
     public IReadOnlyList<string> AuthorizedDepartmentCodes { get; init; } = [];
+
+    /// <summary>
+    /// The prescriber an outside doctor's account sees the orders of. Only meaningful with the
+    /// prescriber role; see <see cref="PrescriberScope"/>.
+    /// </summary>
+    public Guid? PrescriberId { get; init; }
 }
 
 public sealed record UpdateUserRequest
@@ -123,6 +134,9 @@ public sealed record UpdateUserRequest
     public AppLanguage PreferredLanguage { get; init; }
 
     public IReadOnlyList<string> AuthorizedDepartmentCodes { get; init; } = [];
+
+    /// <inheritdoc cref="CreateUserRequest.PrescriberId"/>
+    public Guid? PrescriberId { get; init; }
 }
 
 /// <summary>
@@ -205,6 +219,16 @@ public sealed class UserAdministrationService(
         return Result.Success(await queries.GetRecentSecurityEventsAsync(userId, take, ct));
     }
 
+    /// <summary>The prescribers an account can be linked to, for the user editor.</summary>
+    public async Task<Result<IReadOnlyList<PrescriberOption>>> GetPrescriberOptionsAsync(
+        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Administration.ViewUsers);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<PrescriberOption>>(permitted.FirstError);
+
+        return Result.Success(await queries.GetPrescriberOptionsAsync(ct));
+    }
+
     /// <summary>The permission catalogue, grouped by module, as the role editor renders it.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> GetPermissionCatalogue() =>
         Permissions.ByModule();
@@ -255,6 +279,9 @@ public sealed class UserAdministrationService(
             request.RoleIds, request.Qualification, request.ProfessionalOrderNumber, ct);
         if (roleCheck.IsFailure) return Result.Failure<Guid>(roleCheck.Errors);
 
+        if (request.PrescriberId is { } prescriberId && !await queries.PrescriberExistsAsync(prescriberId, ct))
+            return Result.Failure<Guid>(Error.NotFound("User_PrescriberNotFound"));
+
         // Falls back to the administrator's own site: an account with no site access cannot sign in
         // anywhere, and the site panel is a separate step.
         IReadOnlyList<Guid> sites = request.SiteIds.Count > 0
@@ -283,6 +310,8 @@ public sealed class UserAdministrationService(
             // which matters for every audit entry the account subsequently signs.
             MustChangePassword = true
         };
+
+        user.LinkPrescriber(request.PrescriberId);
 
         foreach (var roleId in request.RoleIds.Distinct()) user.AssignRole(roleId);
 
@@ -314,10 +343,21 @@ public sealed class UserAdministrationService(
         var user = await users.GetByIdWithDetailsAsync(request.UserId, ct);
         if (user is null) return Result.Failure(Error.NotFound("User_NotFound"));
 
+        // One's own competence record is somebody else's to change. Otherwise a user manager could
+        // record themselves as a biologist with an Ordre number, widen their own department scope
+        // or their own prescriber link, and so reach what the law reserves to others — the
+        // administrator is not the one who vouches for their own qualification.
+        if (request.UserId == currentUser.UserId && ChangesCompetenceRecord(user, request))
+            return Result.Failure(Error.Validation("User_CannotEditOwnQualification"));
+
         var qualification = ValidateQualification(request.Qualification,
                                                    request.ProfessionalOrderNumber,
                                                    request.QualificationValidUntil);
         if (qualification.IsFailure) return qualification;
+
+        if (request.PrescriberId is { } prescriberId && prescriberId != user.PrescriberId
+            && !await queries.PrescriberExistsAsync(prescriberId, ct))
+            return Result.Failure(Error.NotFound("User_PrescriberNotFound"));
 
         // Downgrading a qualification while the user still holds a validating role would leave a
         // biologist role attached to someone the law no longer lets validate. Checked against the
@@ -346,6 +386,7 @@ public sealed class UserAdministrationService(
         user.QualificationValidUntil = request.QualificationValidUntil;
         user.PreferredLanguage = request.PreferredLanguage;
         user.AuthorizedDepartmentCodesCsv = JoinDepartments(request.AuthorizedDepartmentCodes);
+        user.LinkPrescriber(request.PrescriberId);
 
         users.Update(user);
 
@@ -757,6 +798,25 @@ public sealed class UserAdministrationService(
         return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
     }
 
+    /// <summary>
+    /// Whether an edit touches the fields that decide what the account may release or see: the
+    /// qualification and its registration, its validity, the department scope and the prescriber
+    /// link. Compared on normalised values, so saving one's own telephone number is not refused
+    /// because the form sent the department list in a different order.
+    /// </summary>
+    private static bool ChangesCompetenceRecord(AppUser user, UpdateUserRequest request)
+    {
+        var departments = (JoinDepartments(request.AuthorizedDepartmentCodes) ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return request.Qualification != user.Qualification
+               || Blank(request.ProfessionalOrderNumber) != user.ProfessionalOrderNumber
+               || request.QualificationValidUntil != user.QualificationValidUntil
+               || !departments.SetEquals(user.AuthorizedDepartmentCodes)
+               || request.PrescriberId != user.PrescriberId;
+    }
+
     private static string? Blank(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -778,6 +838,11 @@ public interface IAdministrationQueries
     Task<IReadOnlyList<RoleRow>> GetRolesAsync(bool includeInactive, CancellationToken ct = default);
 
     Task<IReadOnlyList<SiteRow>> GetSitesAsync(CancellationToken ct = default);
+
+    /// <summary>Prescribers an account can be linked to, active ones first.</summary>
+    Task<IReadOnlyList<PrescriberOption>> GetPrescriberOptionsAsync(CancellationToken ct = default);
+
+    Task<bool> PrescriberExistsAsync(Guid prescriberId, CancellationToken ct = default);
 
     Task<IReadOnlyList<SecurityEventRow>> GetRecentSecurityEventsAsync(
         Guid? userId, int take, CancellationToken ct = default);

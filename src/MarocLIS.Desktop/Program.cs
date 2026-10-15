@@ -18,6 +18,12 @@ internal static class Program
 {
     private static IHost? _host;
 
+    /// <summary>
+    /// Set by the shell when the operator signs out or the session is ended: the process restarts
+    /// on the login screen once the host is disposed and the log flushed.
+    /// </summary>
+    internal static bool RestartAfterExit { get; set; }
+
     /// <summary>Service provider for forms created outside the container, e.g. by a menu click.</summary>
     internal static IServiceProvider Services =>
         _host?.Services ?? throw new InvalidOperationException("The host has not been built.");
@@ -71,10 +77,14 @@ internal static class Program
         }
         finally
         {
+            // Disposing the host disposes the singletons, among them the document output, which
+            // deletes the folder of patient PDFs viewed in this session.
             _host?.StopAsync().GetAwaiter().GetResult();
             _host?.Dispose();
             Log.CloseAndFlush();
         }
+
+        if (RestartAfterExit) System.Windows.Forms.Application.Restart();
     }
 
     private static IHost BuildHost()

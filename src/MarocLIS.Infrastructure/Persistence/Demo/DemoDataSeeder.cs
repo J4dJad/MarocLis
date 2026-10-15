@@ -365,7 +365,9 @@ public sealed partial class DemoDataSeeder(
                                        currentUser.SiteCode, currentUser.Language,
                                        currentUser.Qualification, currentUser.Permissions,
                                        currentUser.AccessibleSiteIds,
-                                       currentUser.AuthorizedDepartmentCodes, false)
+                                       currentUser.AuthorizedDepartmentCodes, false,
+                                       currentUser.PrescriberId, currentUser.IsPrescriberScoped,
+                                       currentUser.SecurityStamp)
             : null;
 
     private void Restore(AuthenticatedSession? previous)

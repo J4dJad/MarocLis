@@ -45,8 +45,16 @@ public sealed class AuthenticationService(
             .Include(u => u.SiteAccess)
             .FirstOrDefaultAsync(u => u.UserName == normalised, ct);
 
+        // The password is checked first, for every outcome, unknown names included. Answering
+        // "locked out" or "inactive" before it, or answering an unknown name without spending the
+        // time a hash costs, tells whoever is typing which names are real accounts.
         if (user is null)
+        {
+            passwordHasher.Verify(password, DummyHash);
             return await FailAsync(normalised, "Auth_InvalidCredentials", ct);
+        }
+
+        var passwordCorrect = passwordHasher.Verify(password, user.PasswordHash);
 
         // IsActive alone: an account is deactivated, never deleted. AppUser stopped being
         // ISoftDeletable because UserRole depends on it as a required navigation, and the two
@@ -56,13 +64,19 @@ public sealed class AuthenticationService(
 
         if (user.IsLockedOut(clock.Now))
         {
+            // Only the account holder learns that the account is locked: with the right password
+            // the reason is theirs to know; with a wrong one the answer is the same as for a name
+            // that does not exist. The counter is not advanced while locked, so guessing cannot
+            // extend the lockout of somebody else's account indefinitely.
             await securityAuditor.LogAsync(SecurityEventKind.LoginFailed, false, normalised,
-                                           "Auth_AccountLockedOut", ct: ct);
+                                           "Auth_AccountLockedOut",
+                                           details: passwordCorrect ? "Correct password" : null, ct: ct);
+
             return Result.Failure<AuthenticatedSession>(
-                Error.Forbidden("Auth_AccountLockedOut", user.LockedOutUntil!.Value));
+                LockedOutAnswer(passwordCorrect, user.LockedOutUntil!.Value));
         }
 
-        if (!passwordHasher.Verify(password, user.PasswordHash))
+        if (!passwordCorrect)
         {
             user.RegisterFailedLogin(clock.Now, policy.MaxFailedAttempts, policy.LockoutDuration);
             await db.SaveChangesAsync(ct);
@@ -74,10 +88,9 @@ public sealed class AuthenticationService(
                 false, normalised, "Auth_InvalidCredentials",
                 details: $"Attempt {user.FailedLoginAttempts} of {policy.MaxFailedAttempts}", ct: ct);
 
-            return Result.Failure<AuthenticatedSession>(
-                lockedOutNow
-                    ? Error.Forbidden("Auth_AccountLockedOut", user.LockedOutUntil!.Value)
-                    : Error.Forbidden("Auth_InvalidCredentials"));
+            // The same answer as an unknown name, even on the attempt that locks the account; the
+            // holder learns of the lockout on their next attempt with the right password.
+            return Result.Failure<AuthenticatedSession>(Error.Forbidden("Auth_InvalidCredentials"));
         }
 
         // Resolve the working site: the one asked for, the user's default, or their only one.
@@ -101,10 +114,13 @@ public sealed class AuthenticationService(
         if (site is null || !site.IsActive)
             return await FailAsync(normalised, "Auth_SiteNotAuthorized", ct, discloseReason: true);
 
-        // Transparently upgrade a hash produced under an older work factor.
+        // Transparently upgrade a hash produced under an older work factor. The hash only: the
+        // password itself did not change, so neither does its age — SetPassword would have reset
+        // it here, before IsPasswordExpired below reads it, and an expired password would have
+        // gone unnoticed for another full period.
         if (passwordHasher.NeedsRehash(user.PasswordHash))
         {
-            user.SetPassword(passwordHasher.Hash(password), clock.Now, user.MustChangePassword);
+            user.ReplacePasswordHash(passwordHasher.Hash(password));
             logger?.LogInformation("Rehashed the password for {UserName} at the current work factor.",
                                    normalised);
         }
@@ -112,11 +128,17 @@ public sealed class AuthenticationService(
         user.RegisterSuccessfulLogin(clock.Now, currentUser.Workstation);
         await db.SaveChangesAsync(ct);
 
-        var permissions = user.Roles
+        var activeRoles = user.Roles
             .Select(r => r.Role)
             .Where(r => r is { IsActive: true })
+            .ToList();
+
+        var permissions = activeRoles
             .SelectMany(r => r!.Permissions.Select(p => p.Permission))
             .ToHashSet(StringComparer.Ordinal);
+
+        var prescriberScoped = PrescriberScope.Applies(
+            user.PrescriberId, user.Qualification, activeRoles.Select(r => r!.Code), permissions);
 
         var session = new AuthenticatedSession(
             user.Id,
@@ -129,7 +151,10 @@ public sealed class AuthenticationService(
             permissions,
             accessibleSiteIds,
             user.AuthorizedDepartmentCodes,
-            user.MustChangePassword || IsPasswordExpired(user));
+            user.MustChangePassword || IsPasswordExpired(user),
+            user.PrescriberId,
+            prescriberScoped,
+            user.SecurityStamp);
 
         currentUser.Apply(session);
 
@@ -138,10 +163,11 @@ public sealed class AuthenticationService(
         return Result.Success(session);
     }
 
-    public async Task SignOutAsync(CancellationToken ct = default)
+    public async Task SignOutAsync(SecurityEventKind reason = SecurityEventKind.Logout,
+                                   string? details = null, CancellationToken ct = default)
     {
         if (currentUser.IsAuthenticated)
-            await securityAuditor.LogAsync(SecurityEventKind.Logout, true, currentUser.UserName, ct: ct);
+            await securityAuditor.LogAsync(reason, true, currentUser.UserName, details: details, ct: ct);
 
         currentUser.Clear();
     }
@@ -166,6 +192,10 @@ public sealed class AuthenticationService(
         if (reuse.IsFailure) return reuse;
 
         await ApplyNewPasswordAsync(user, newPassword, mustChangeAtNextLogon: false, ct);
+
+        // The operator's own change rotates the stamp of the session they are in; it stays theirs.
+        if (currentUser.IsAuthenticated && currentUser.UserId == user.Id)
+            currentUser.RefreshSecurityStamp(user.SecurityStamp);
 
         await securityAuditor.LogAsync(SecurityEventKind.PasswordChanged, true, user.UserName,
                                        targetUserId: user.Id, ct: ct);
@@ -207,6 +237,32 @@ public sealed class AuthenticationService(
         currentUser.SetSite(site.Id, site.Code);
         return Result.Success();
     }
+
+    /// <summary>
+    /// What a locked account answers: the lockout itself only to whoever typed the right password,
+    /// the generic refusal to anyone else, so a locked account cannot be told from a missing one.
+    /// </summary>
+    public static Error LockedOutAnswer(bool passwordCorrect, DateTimeOffset lockedOutUntil) =>
+        passwordCorrect
+            ? Error.Forbidden("Auth_AccountLockedOut", lockedOutUntil)
+            : Error.Forbidden("Auth_InvalidCredentials");
+
+    /// <summary>
+    /// A hash of a random value, verified against when the user name is unknown so that answer
+    /// costs the same time as a wrong password for a real account. Computed once per process.
+    /// </summary>
+    private string DummyHash
+    {
+        get
+        {
+            if (_dummyHash is { } cached) return cached;
+            var hash = passwordHasher.Hash(Guid.NewGuid().ToString("N"));
+            Interlocked.CompareExchange(ref _dummyHash, hash, null);
+            return _dummyHash!;
+        }
+    }
+
+    private static string? _dummyHash;
 
     private bool IsPasswordExpired(AppUser user) =>
         policy.ExpiryDays > 0 &&

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
@@ -11,6 +12,86 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace MarocLIS.Infrastructure.Persistence;
+
+/// <summary>
+/// Pay and bank details kept out of the audit trail.
+/// <para>
+/// The audit trail is read by the quality manager and the administrator, neither of whom is meant
+/// to see salaries (<c>hr.salary</c> guards them everywhere else). The entry still says that the
+/// salary or the RIB changed, when and by whom — which is what an audit asks — but not to what.
+/// Rows written before this existed are masked when read, through <see cref="Mask"/>.
+/// </para>
+/// </summary>
+public static class AuditRedaction
+{
+    /// <summary>What a redacted value is recorded as.</summary>
+    public static readonly object Marker = new { changed = true, redacted = true };
+
+    private static readonly Dictionary<string, HashSet<string>> Redacted = new(StringComparer.Ordinal)
+    {
+        [nameof(Domain.HumanResources.Employee)] = new(StringComparer.Ordinal)
+        {
+            nameof(Domain.HumanResources.Employee.BaseSalary),
+            nameof(Domain.HumanResources.Employee.Rib),
+            nameof(Domain.HumanResources.Employee.BankName)
+        },
+        [nameof(Domain.HumanResources.Payslip)] = new(StringComparer.Ordinal)
+        {
+            nameof(Domain.HumanResources.Payslip.BaseSalary),
+            nameof(Domain.HumanResources.Payslip.Rib),
+            nameof(Domain.HumanResources.Payslip.BankName),
+            nameof(Domain.HumanResources.Payslip.Amounts),
+            nameof(Domain.HumanResources.Payslip.Variables)
+        },
+        [nameof(Domain.HumanResources.FinalSettlement)] = new(StringComparer.Ordinal)
+        {
+            nameof(Domain.HumanResources.FinalSettlement.ReferenceSalary),
+            nameof(Domain.HumanResources.FinalSettlement.LeaveIndemnity),
+            nameof(Domain.HumanResources.FinalSettlement.NoticeIndemnity),
+            nameof(Domain.HumanResources.FinalSettlement.SeverancePay)
+        }
+    };
+
+    /// <summary>Entity names whose audit payload may carry pay or bank details.</summary>
+    public static IReadOnlyCollection<string> EntityNames => Redacted.Keys;
+
+    public static bool IsRedacted(string entityName, string propertyName) =>
+        Redacted.TryGetValue(entityName, out var properties)
+        && (properties.Contains(propertyName)
+            // A complex property's columns are named "Amounts.NetPay" in some EF versions.
+            || properties.Contains(propertyName.Split('.', 2)[0]));
+
+    /// <summary>
+    /// Masks the redacted values of a stored payload, for rows written before redaction existed.
+    /// Leaves anything else, and anything that is not the JSON object the interceptor writes, as is.
+    /// </summary>
+    public static string? Mask(string entityName, string? changes)
+    {
+        if (changes is null || !Redacted.ContainsKey(entityName)) return changes;
+
+        JsonObject? payload;
+        try
+        {
+            payload = JsonNode.Parse(changes) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return changes;
+        }
+
+        if (payload is null) return changes;
+
+        var masked = false;
+        foreach (var key in payload.Select(p => p.Key).ToList())
+        {
+            if (!IsRedacted(entityName, key)) continue;
+            payload[key] = JsonSerializer.SerializeToNode(Marker);
+            masked = true;
+        }
+
+        return masked ? payload.ToJsonString() : changes;
+    }
+}
 
 /// <summary>
 /// Stamps who/when onto auditable entities and writes an <see cref="AuditEntry"/> for every change,
@@ -179,6 +260,16 @@ public sealed class AuditSaveChangesInterceptor(
 
             if (RedactedProperties.Contains(name)) continue;
 
+            // Pay and bank details: the change is recorded, never the amount or the account.
+            if (AuditRedaction.IsRedacted(entry.Metadata.ClrType.Name, name))
+            {
+                if (operation == AuditOperation.Update && !property.IsModified) continue;
+                if (operation == AuditOperation.Update && Equals(property.OriginalValue, property.CurrentValue)) continue;
+                if (operation == AuditOperation.Insert && property.CurrentValue is null) continue;
+                changes[name] = AuditRedaction.Marker;
+                continue;
+            }
+
             // Large binary payloads are recorded as a size, not a copy.
             if (property.Metadata.ClrType == typeof(byte[]))
             {
@@ -205,6 +296,20 @@ public sealed class AuditSaveChangesInterceptor(
                     changes[name] = new { old = property.OriginalValue, @new = property.CurrentValue };
                     break;
             }
+        }
+
+        // Complex properties — a payslip's computed amounts and monthly variables — are not in
+        // entry.Properties. Those that are redacted are recorded as changed, as a whole.
+        foreach (var complex in entry.ComplexProperties)
+        {
+            var name = complex.Metadata.Name;
+            if (!AuditRedaction.IsRedacted(entry.Metadata.ClrType.Name, name)) continue;
+
+            if (operation == AuditOperation.Update
+                && !complex.Properties.Any(p => p.IsModified && !Equals(p.OriginalValue, p.CurrentValue)))
+                continue;
+
+            changes[name] = AuditRedaction.Marker;
         }
 
         return changes;

@@ -196,6 +196,13 @@ public sealed class ReportReleaseService(
 
         if (permitted.IsFailure) return Result.Failure<ReleasedReport>(permitted.FirstError);
 
+        // Issuing a report is the laboratory's act; an outside prescriber only consults what was
+        // issued. Refused on the scope as well as on the permission, so a prescriber role that an
+        // administrator gave reports.print back to still cannot mint a new version.
+        if (currentUser.IsPrescriberScoped)
+            return Result.Failure<ReleasedReport>(
+                Error.Forbidden("Message.PermissionDenied", Permissions.Reports.Print));
+
         var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
         if (order is null) return Result.Failure<ReleasedReport>(Error.NotFound("Order_NotFound"));
 

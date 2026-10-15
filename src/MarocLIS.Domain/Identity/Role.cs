@@ -95,6 +95,32 @@ public sealed class Role : AuditableAggregateRoot
         return granted;
     }
 
+    /// <summary>
+    /// Withdraws, once, a shipped permission that a later version replaced with another, granting
+    /// the replacement in its place.
+    /// <para>
+    /// <see cref="ApplyShippedPermissions"/> never revokes, by design, so a permission dropped from
+    /// the shipped set stays on every existing installation. When the permission was a defect rather
+    /// than a choice, that is not good enough. "Once" is tracked through the replacement: until it
+    /// has been offered, the swap has not run. Must therefore be followed by
+    /// <see cref="ApplyShippedPermissions"/> with a shipped set containing the replacement, which
+    /// records it as offered; from then on an administrator who deliberately grants the old
+    /// permission back keeps it.
+    /// </para>
+    /// </summary>
+    /// <returns>Whether the old permission was withdrawn by this call.</returns>
+    public bool ReplaceShippedPermissionOnce(string withdrawn, string replacement)
+    {
+        if (SeededPermissions is not null && ParseSeeded(SeededPermissions).Contains(replacement))
+            return false;
+
+        if (!Has(withdrawn)) return false;
+
+        Revoke(withdrawn);
+        Grant(replacement);
+        return true;
+    }
+
     /// <summary>Grants the full shipped set to a role the seeder has just created and records it.</summary>
     public void SeedShippedPermissions(IEnumerable<string> shipped)
     {

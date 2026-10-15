@@ -70,6 +70,14 @@ public sealed class AppUser : AuditableAggregateRoot
     /// </summary>
     public string? AuthorizedDepartmentCodesCsv { get; set; }
 
+    /// <summary>
+    /// The prescriber this account belongs to, for an outside doctor consulting their own patients.
+    /// Such an account sees only the orders that name this prescriber (see
+    /// <see cref="PrescriberScope"/>); changed only through <see cref="LinkPrescriber"/>, because
+    /// the link is a scoping decision and must end any session opened under the old one.
+    /// </summary>
+    public Guid? PrescriberId { get; private set; }
+
     // ---- Login hardening --------------------------------------------------------------------
 
     public int FailedLoginAttempts { get; private set; }
@@ -96,10 +104,34 @@ public sealed class AppUser : AuditableAggregateRoot
         PasswordHash = newHash;
         PasswordChangedAt = now;
         MustChangePassword = mustChangeAtNextLogon;
-        SecurityStamp = Guid.NewGuid().ToString("N");
+        RotateSecurityStamp();
         FailedLoginAttempts = 0;
         LockedOutUntil = null;
     }
+
+    /// <summary>
+    /// Replaces the stored hash of the same password, re-computed under a stronger work factor.
+    /// Not a password change: the age of the password, the forced-change flag and the security
+    /// stamp are left alone, or an upgrade at sign-in would reset the expiry it is checked against.
+    /// </summary>
+    public void ReplacePasswordHash(string newHash)
+    {
+        if (string.IsNullOrEmpty(newHash))
+            throw new DomainException("A password hash cannot be empty.");
+
+        PasswordHash = newHash;
+    }
+
+    /// <summary>Links the account to a prescriber, or removes the link with <c>null</c>.</summary>
+    public void LinkPrescriber(Guid? prescriberId)
+    {
+        if (PrescriberId == prescriberId) return;
+        PrescriberId = prescriberId;
+        RotateSecurityStamp();
+    }
+
+    /// <summary>Invalidates every session opened before now; they re-check it periodically.</summary>
+    private void RotateSecurityStamp() => SecurityStamp = Guid.NewGuid().ToString("N");
 
     public bool IsLockedOut(DateTimeOffset now) => LockedOutUntil is { } until && until > now;
 
@@ -118,7 +150,12 @@ public sealed class AppUser : AuditableAggregateRoot
         LastLoginWorkstation = workstation;
     }
 
-    public void Deactivate() => IsActive = false;
+    public void Deactivate()
+    {
+        if (!IsActive) return;
+        IsActive = false;
+        RotateSecurityStamp();
+    }
 
     /// <summary>
     /// Clears the failed sign-in counter and the lockout window, and nothing else. An administrative
@@ -144,7 +181,7 @@ public sealed class AppUser : AuditableAggregateRoot
     {
         if (_roles.Any(r => r.RoleId == roleId)) return;
         _roles.Add(new UserRole(Id, roleId));
-        SecurityStamp = Guid.NewGuid().ToString("N");
+        RotateSecurityStamp();
     }
 
     public void RemoveRole(Guid roleId)
@@ -152,7 +189,7 @@ public sealed class AppUser : AuditableAggregateRoot
         var existing = _roles.FirstOrDefault(r => r.RoleId == roleId);
         if (existing is null) return;
         _roles.Remove(existing);
-        SecurityStamp = Guid.NewGuid().ToString("N");
+        RotateSecurityStamp();
     }
 
     public void GrantSiteAccess(Guid siteId, bool isDefault = false)

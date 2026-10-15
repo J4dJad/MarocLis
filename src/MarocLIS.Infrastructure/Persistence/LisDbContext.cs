@@ -18,6 +18,7 @@ using MarocLIS.Domain.Samples;
 using MarocLIS.Domain.Sequencing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Query;
 
 namespace MarocLIS.Infrastructure.Persistence;
 
@@ -69,6 +70,21 @@ public class LisDbContext : DbContext
         IgnoreSiteScope || _currentUser is not { IsAuthenticated: true }
             ? []
             : _currentUser.AccessibleSiteIds;
+
+    /// <summary>
+    /// The signed-in operator is an outside prescriber: orders, and everything hanging off them,
+    /// are filtered to <see cref="PrescriberScopeId"/>. Deliberately not suspended by
+    /// <see cref="IgnoreSiteScope"/>: a cross-site report is not a reason to see another doctor's
+    /// patients.
+    /// </summary>
+    public bool PrescriberScoped => _currentUser is { IsAuthenticated: true, IsPrescriberScoped: true };
+
+    /// <summary>
+    /// The prescriber a scoped session may see. <see cref="Guid.Empty"/> for a scoped account linked
+    /// to nobody, which matches no order: such an account sees nothing, rather than every order
+    /// whose prescriber is unrecorded.
+    /// </summary>
+    public Guid PrescriberScopeId => _currentUser?.PrescriberId ?? Guid.Empty;
 
     // ---- Organisation and identity ------------------------------------------------------------
 
@@ -246,16 +262,60 @@ public class LisDbContext : DbContext
         }
     }
 
+    /// <summary>
+    /// The prescriber scope, per entity: an order naming the prescriber, and the patients, items,
+    /// samples, results, reports and critical-value calls of such orders. A patient is visible
+    /// through at least one such order, never on their own.
+    /// <para>
+    /// In the model rather than in each query, for the reason the site filter is: patient search,
+    /// order lists, worklists, the report register and every repository load all go through these
+    /// sets, and a screen added next year will too. Each filter opens with <c>!PrescriberScoped</c>,
+    /// so for laboratory staff it is a parameter test and the subquery is never evaluated.
+    /// </para>
+    /// </summary>
+    private Dictionary<Type, LambdaExpression> PrescriberScopeFilters() => new()
+    {
+        [typeof(LabOrder)] = (Expression<Func<LabOrder, bool>>)(o =>
+            !PrescriberScoped || o.PrescriberId == PrescriberScopeId),
+
+        [typeof(Patient)] = (Expression<Func<Patient, bool>>)(p =>
+            !PrescriberScoped
+            || LabOrders.Any(o => o.PatientId == p.Id && o.PrescriberId == PrescriberScopeId)),
+
+        [typeof(LabOrderItem)] = (Expression<Func<LabOrderItem, bool>>)(i =>
+            !PrescriberScoped
+            || LabOrders.Any(o => o.Id == i.LabOrderId && o.PrescriberId == PrescriberScopeId)),
+
+        [typeof(Sample)] = (Expression<Func<Sample, bool>>)(s =>
+            !PrescriberScoped
+            || LabOrders.Any(o => o.Id == s.LabOrderId && o.PrescriberId == PrescriberScopeId)),
+
+        [typeof(TestResult)] = (Expression<Func<TestResult, bool>>)(r =>
+            !PrescriberScoped
+            || LabOrders.Any(o => o.Id == r.LabOrderId && o.PrescriberId == PrescriberScopeId)),
+
+        [typeof(LabReport)] = (Expression<Func<LabReport, bool>>)(r =>
+            !PrescriberScoped
+            || LabOrders.Any(o => o.Id == r.LabOrderId && o.PrescriberId == PrescriberScopeId)),
+
+        [typeof(CriticalResultNotification)] = (Expression<Func<CriticalResultNotification, bool>>)(n =>
+            !PrescriberScoped
+            || LabOrders.Any(o => o.Id == n.LabOrderId && o.PrescriberId == PrescriberScopeId))
+    };
+
     private void ApplyGlobalFilters(ModelBuilder builder)
     {
+        var prescriberFilters = PrescriberScopeFilters();
+
         foreach (var entity in builder.Model.GetEntityTypes())
         {
             if (entity.BaseType is not null) continue;
 
             var softDeletable = typeof(ISoftDeletable).IsAssignableFrom(entity.ClrType);
             var siteScoped = typeof(ISiteScoped).IsAssignableFrom(entity.ClrType);
+            var prescriberFilter = prescriberFilters.GetValueOrDefault(entity.ClrType);
 
-            if (!softDeletable && !siteScoped) continue;
+            if (!softDeletable && !siteScoped && prescriberFilter is null) continue;
 
             var parameter = Expression.Parameter(entity.ClrType, "e");
             Expression? filter = null;
@@ -294,6 +354,13 @@ public class LisDbContext : DbContext
 
                 var siteFilter = Expression.OrElse(unrestricted, contains);
                 filter = filter is null ? siteFilter : Expression.AndAlso(filter, siteFilter);
+            }
+
+            if (prescriberFilter is not null)
+            {
+                var scope = ReplacingExpressionVisitor.Replace(
+                    prescriberFilter.Parameters[0], parameter, prescriberFilter.Body);
+                filter = filter is null ? scope : Expression.AndAlso(filter, scope);
             }
 
             builder.Entity(entity.ClrType).HasQueryFilter(Expression.Lambda(filter!, parameter));
