@@ -397,6 +397,15 @@ public sealed class MainShellForm : LocalizedForm
             new("fixedassets", "Nav.FixedAssets", [Permissions.Assets.View],
                 n => n.NavigateToAsync<FixedAssetView>()),
 
+            new("bankreconciliation", "Nav.BankReconciliation", [Permissions.Treasury.View, Permissions.Treasury.Manage],
+                n => n.NavigateToAsync<BankReconciliationView>()),
+
+            new("cashforecast", "Nav.CashForecast", [Permissions.Treasury.View, Permissions.Treasury.Manage],
+                n => n.NavigateToAsync<CashForecastView>()),
+
+            new("cashreview", "Nav.CashSessionReview", [Permissions.Billing.ReconcileCashSession],
+                n => n.NavigateToAsync<CashSessionReviewView>()),
+
             new("group.administration", "Nav.Administration", [Permissions.Administration.ViewUsers],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 

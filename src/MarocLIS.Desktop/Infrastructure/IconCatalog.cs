@@ -269,5 +269,8 @@ public static class IconCatalog
         ["accountingexport"] = Glyph.FileSpreadsheet,
         ["accountingsettings"] = Glyph.Calculator,
         ["fixedassets"] = Glyph.Archive,
+        ["bankreconciliation"] = Glyph.CheckCheck,
+        ["cashforecast"] = Glyph.HandCoins,
+        ["cashreview"] = Glyph.ClipboardCheck,
     };
 }

@@ -70,6 +70,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Administration.AuditTrailService>();
         services.AddScoped<Assets.FixedAssetService>();
         services.AddScoped<Accounting.IDepreciationEntrySource, Assets.FixedAssetDepreciationSource>();
+        services.AddScoped<Treasury.TreasuryService>();
+        services.AddScoped<Treasury.CashSessionReviewService>();
 
         return services;
     }

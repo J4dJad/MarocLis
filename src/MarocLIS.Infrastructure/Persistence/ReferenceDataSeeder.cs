@@ -513,7 +513,10 @@ internal static class RolePermissionSets
              // The director hands the accountant the period's entries.
              Permissions.Accounting.Export,
              // The director owns the laboratory's equipment, and its register.
-             Permissions.Assets.View, Permissions.Assets.Manage
+             Permissions.Assets.View, Permissions.Assets.Manage,
+             // The director signs the tills off and follows the bank and the cash forecast.
+             Permissions.Billing.ReconcileCashSession,
+             Permissions.Treasury.View, Permissions.Treasury.Manage
          ]),
 
         (SystemRoles.Biologist,
@@ -636,7 +639,10 @@ internal static class RolePermissionSets
              Permissions.HumanResources.RequestLeave,
              Permissions.Accounting.Export,
              // Keeps the fixed-assets register and its depreciation.
-             Permissions.Assets.View, Permissions.Assets.Manage
+             Permissions.Assets.View, Permissions.Assets.Manage,
+             // Treasury: the bank reconciliation, the cash forecast and the tills' sign-off.
+             Permissions.Billing.ReconcileCashSession,
+             Permissions.Treasury.View, Permissions.Treasury.Manage
          ]),
 
         (SystemRoles.Prescriber,
