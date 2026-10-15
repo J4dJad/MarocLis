@@ -484,7 +484,7 @@ public sealed class QualityDocumentsView : LocalizedView
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Content is null) return;
 
         var result = await _documents.AddDraftAsync(document.Id, dialog.ChangeSummary, dialog.Content,
-                                                    dialog.FileName, dialog.ContentType);
+                                                    dialog.FileName);
         if (result.IsFailure)
         {
             _dialogs.ShowFailure(result, _newVersion.Text);
@@ -660,7 +660,6 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
     internal MultilingualText? ChangeSummary { get; private set; }
     internal byte[]? Content { get; private set; }
     internal string FileName { get; private set; } = string.Empty;
-    internal string? ContentType { get; private set; }
 
     internal DocumentVersionDialog(ILocalizer localizer, IUserDialogs dialogs, string reference)
         : base(localizer, dialogs, "Documents.NewVersion", reference, 560, 300)
@@ -686,7 +685,7 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
         using var picker = new OpenFileDialog
         {
             Title = Localizer["Documents.Browse"],
-            Filter = "PDF (*.pdf)|*.pdf|Word (*.docx;*.doc)|*.docx;*.doc|Excel (*.xlsx;*.xls)|*.xlsx;*.xls|*.*|*.*",
+            Filter = $"PDF, images, Office ({SafeDocumentFile.PickerPattern})|{SafeDocumentFile.PickerPattern}",
             CheckFileExists = true
         };
 
@@ -702,6 +701,11 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
         }
 
         var info = new FileInfo(_file.Text);
+        if (SafeDocumentFile.ContentTypeFor(info.Name) is null)
+        {
+            Dialogs.Warn(Localizer["Document_FileType"], Text);
+            return;
+        }
         if (info.Length > DocumentControlService.MaximumContentBytes)
         {
             Dialogs.Warn(Localizer.Format("Document_ContentTooLarge",
@@ -721,15 +725,6 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
         }
 
         FileName = info.Name;
-        ContentType = info.Extension.ToUpperInvariant() switch
-        {
-            ".PDF" => "application/pdf",
-            ".DOCX" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ".DOC" => "application/msword",
-            ".XLSX" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ".XLS" => "application/vnd.ms-excel",
-            _ => "application/octet-stream"
-        };
         ChangeSummary = string.IsNullOrWhiteSpace(_summaryFr.Text)
             ? null
             : new MultilingualText(_summaryFr.Text.Trim(), Blank(_summaryAr));

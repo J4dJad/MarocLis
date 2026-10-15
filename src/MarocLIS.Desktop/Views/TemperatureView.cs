@@ -65,7 +65,7 @@ public sealed class TemperatureView : LocalizedView
         _record.Click += async (_, _) => await RunBusyAsync(RecordAsync);
         _units.CellDoubleClick += async (_, e) =>
         {
-            if (e.RowIndex >= 0 && PermissionGate.Allows(Permissions.Inventory.RecordTemperatures))
+            if (e.RowIndex >= 0 && CanRecord)
                 await RunBusyAsync(RecordAsync);
         };
         _newUnit.Click += async (_, _) => await RunBusyAsync(() => EditUnitAsync(null));
@@ -80,6 +80,19 @@ public sealed class TemperatureView : LocalizedView
     public override string Title => T("Nav.Temperatures");
 
     private StorageUnitRow? CurrentUnit => _units.CurrentRow?.Tag as StorageUnitRow;
+
+    /// <summary>
+    /// Readings go only to a unit in service: an inactive one is listed to be reactivated or to
+    /// print its past sheets, and the service refuses a reading on it.
+    /// </summary>
+    private bool CanRecord =>
+        CurrentUnit is { IsActive: true } && PermissionGate.Allows(Permissions.Inventory.RecordTemperatures);
+
+    private void RefreshButtons()
+    {
+        _record.Enabled = CanRecord;
+        _editUnit.Enabled = CurrentUnit is not null && PermissionGate.Allows(Permissions.Inventory.ManageStorageUnits);
+    }
 
     private void BuildLayout()
     {
@@ -271,7 +284,7 @@ public sealed class TemperatureView : LocalizedView
         var missing = _unitRows.Count(u => u.MissingToday);
         _status.Text = missing > 0 ? T("Temperatures.MissingCount", missing) : string.Empty;
         _status.ForeColor = missing > 0 ? UiTheme.Abnormal : UiTheme.TextSecondary;
-        _editUnit.Enabled = CurrentUnit is not null && PermissionGate.Allows(Permissions.Inventory.ManageStorageUnits);
+        RefreshButtons();
     }
 
     private async Task LoadReadingsAsync(CancellationToken ct = default)
@@ -305,12 +318,12 @@ public sealed class TemperatureView : LocalizedView
         _readingsHeading.Text = CurrentUnit is { } unit
             ? $"{T("Temperatures.Readings")} — {unit.Name} · {_readingRows.Count}"
             : T("Temperatures.Readings");
-        _editUnit.Enabled = CurrentUnit is not null && PermissionGate.Allows(Permissions.Inventory.ManageStorageUnits);
+        RefreshButtons();
     }
 
     private async Task RecordAsync()
     {
-        if (CurrentUnit is not { } unit) return;
+        if (CurrentUnit is not { IsActive: true } unit) return;
 
         using var dialog = new TemperatureReadingDialog(Localizer, _dialogs, unit);
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;

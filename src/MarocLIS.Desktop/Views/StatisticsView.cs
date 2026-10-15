@@ -385,11 +385,10 @@ public sealed class StatisticsView : LocalizedView
         var grid = _tabs.SelectedTab?.Controls.OfType<DataGridView>().FirstOrDefault();
         if (grid is null || grid.Rows.Count == 0) return;
 
-        static string Cell(object? value)
-        {
-            var text = Convert.ToString(value, CultureInfo.CurrentCulture) ?? string.Empty;
-            return text.IndexOfAny([';', '"', '\n']) >= 0 ? $"\"{text.Replace("\"", "\"\"")}\"" : text;
-        }
+        // Patient, prescriber and test names come from the database: the shared cell neutralises
+        // formulas for Excel.
+        static string Cell(object? value) =>
+            MarocLIS.Application.Inventory.CsvCell.Of(Convert.ToString(value, CultureInfo.CurrentCulture));
 
         var csv = new StringBuilder();
         csv.AppendLine(string.Join(';', grid.Columns.Cast<DataGridViewColumn>()

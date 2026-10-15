@@ -139,14 +139,18 @@ public sealed class DocumentControlService(
     /// <summary>
     /// Starts a new version with its file. The file is attached at creation because a draft
     /// without content cannot be submitted, and an empty draft lying in the register is noise.
+    /// The content type comes from the extension, and only the kinds of <see cref="SafeDocumentFile"/>
+    /// are accepted: every reviewer and reader opens the version through the Windows shell.
     /// </summary>
     public async Task<Result<int>> AddDraftAsync(Guid documentId, MultilingualText? changeSummary,
                                                  byte[] content, string fileName,
-                                                 string? contentType, CancellationToken ct = default)
+                                                 CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Quality.ManageDocuments);
         if (permitted.IsFailure) return Result.Failure<int>(permitted.FirstError);
 
+        if (SafeDocumentFile.ContentTypeFor(fileName) is not { } contentType)
+            return Result.Failure<int>(Error.Validation("Document_FileType"));
         if (content.Length == 0)
             return Result.Failure<int>(Error.Validation("Document_ContentRequired"));
         if (content.Length > MaximumContentBytes)
@@ -299,9 +303,12 @@ public sealed class DocumentControlService(
         if (permitted.IsFailure) return Result.Failure<DocumentContent>(permitted.FirstError);
 
         var content = await queries.GetContentAsync(documentId, versionNumber, ct);
+        if (content is null) return Result.Failure<DocumentContent>(Error.NotFound("Document_VersionNotFound"));
 
-        return content is null
-            ? Result.Failure<DocumentContent>(Error.NotFound("Document_VersionNotFound"))
+        // A version stored before the allow-list may be a script or a macro document: it stays on
+        // record but is never handed out to be opened.
+        return SafeDocumentFile.ContentTypeFor(content.FileName) is null
+            ? Result.Failure<DocumentContent>(Error.Validation("Document_FileType"))
             : Result.Success(content);
     }
 
