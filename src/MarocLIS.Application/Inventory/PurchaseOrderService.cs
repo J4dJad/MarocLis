@@ -22,7 +22,8 @@ public sealed record PurchaseOrderRow(
     string? SupplierReference,
     bool IsOverdue,
     bool IsPriority = false,
-    bool RaisedAutomatically = false);
+    bool RaisedAutomatically = false,
+    Guid SupplierId = default);
 
 /// <summary>One line of a purchase order, with what is still to be delivered.</summary>
 public sealed record PurchaseOrderLineRow(
@@ -45,6 +46,10 @@ public sealed record PurchaseOrderLineRow(
 /// The discount (0.10 for 10 %) of the last line of the item received from its preferred supplier:
 /// the supplier's usual discount, which <see cref="LastUnitPriceMad"/>, a list price, does not include.
 /// </param>
+/// <param name="ContractPriceMad">
+/// The contracted price when the item is a captive reagent of an instrument contract in force,
+/// ordered from <paramref name="ContractSupplierId"/>: what the line starts from instead of the last price.
+/// </param>
 public sealed record OrderableItem(
     Guid Id,
     string Code,
@@ -53,7 +58,9 @@ public sealed record OrderableItem(
     Guid? PreferredSupplierId,
     decimal ReorderQuantity,
     decimal? LastUnitPriceMad,
-    decimal LastDiscountRate = 0m);
+    decimal LastDiscountRate = 0m,
+    decimal? ContractPriceMad = null,
+    Guid? ContractSupplierId = null);
 
 public sealed record SupplierOption(Guid Id, string Code, string Name);
 

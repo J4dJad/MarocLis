@@ -167,6 +167,7 @@ public sealed class SequenceAllocator(LisDbContext context, IClock clock, ICurre
         SequencePurpose.SubcontractDispatch => "ST/{YEAR}/{SEQ:5}",
         SequencePurpose.EmployeeNumber => "M{SEQ:4}",
         SequencePurpose.WorkAccident => "AT-{YEAR}-{SEQ:4}",
+        SequencePurpose.QuoteRequest => "DP/{YEAR}/{SEQ:5}",
         _ => "{SEQ:6}"
     };
 }

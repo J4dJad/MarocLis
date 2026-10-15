@@ -170,6 +170,10 @@ public class LisDbContext : DbContext
     public DbSet<InstrumentInterface> InstrumentInterfaces => Set<InstrumentInterface>();
     public DbSet<InstrumentTestMapping> InstrumentTestMappings => Set<InstrumentTestMapping>();
     public DbSet<InstrumentMessageLog> InstrumentMessageLog => Set<InstrumentMessageLog>();
+    public DbSet<QuoteRequest> QuoteRequests => Set<QuoteRequest>();
+    public DbSet<SupplierQuote> SupplierQuotes => Set<SupplierQuote>();
+    public DbSet<PurchasingDocument> PurchasingDocuments => Set<PurchasingDocument>();
+    public DbSet<InstrumentContract> InstrumentContracts => Set<InstrumentContract>();
 
     // ---- Personnel ----------------------------------------------------------------------------
 

@@ -33,7 +33,8 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
                                          .Select(u => u.FullName).FirstOrDefault(),
                 o.SupplierReference,
                 o.IsPriority,
-                o.RaisedAutomatically
+                o.RaisedAutomatically,
+                o.SupplierId
             })
             .ToListAsync(ct);
 
@@ -51,7 +52,7 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
                 o.RaisedByName ?? "?", o.ApprovedByName, o.SupplierReference,
                 o.Status is PurchaseOrderStatus.Sent or PurchaseOrderStatus.PartiallyReceived
                     && o.ExpectedDeliveryDate is { } expected && expected < today,
-                o.IsPriority, o.RaisedAutomatically);
+                o.IsPriority, o.RaisedAutomatically, o.SupplierId);
         }).ToList();
     }
 
@@ -115,9 +116,16 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
             })
             .ToListAsync(ct);
 
+        // Captive reagents of a contract in force start from the contracted price.
+        var captive = await InstrumentContractQueries.CaptiveReagentsAsync(db, siteId, DateOnly.FromDateTime(DateTime.Today),
+                                                                           null, ct);
+        var contracted = captive.GroupBy(c => c.StockItemId).ToDictionary(g => g.Key, g => g.First());
+
         return rows.Select(i => new OrderableItem(i.Id, i.Code, i.Name, i.UnitOfMeasure,
                                                   i.PreferredSupplierId, i.ReorderQuantity,
-                                                  i.LastUnitPriceMad, i.LastDiscountRate ?? 0m)).ToList();
+                                                  i.LastUnitPriceMad, i.LastDiscountRate ?? 0m,
+                                                  contracted.GetValueOrDefault(i.Id)?.ContractPriceMad,
+                                                  contracted.GetValueOrDefault(i.Id)?.SupplierId)).ToList();
     }
 
     public Task<bool> IsSupplierApprovedAsync(Guid supplierId, CancellationToken ct = default) =>

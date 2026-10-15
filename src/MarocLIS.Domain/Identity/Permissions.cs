@@ -95,6 +95,9 @@ public static class Permissions
 
         /// <summary>Approves a purchase order: committing the laboratory's money is not the buyer's call.</summary>
         public const string ApprovePurchaseOrders = "inventory.po.approve";
+
+        /// <summary>Requests for quotation: sends them, records the answers, chooses the offer.</summary>
+        public const string ManageQuotes = "inventory.quotes.manage";
     }
 
     public static class Equipment
@@ -103,6 +106,10 @@ public static class Permissions
         public const string Manage = "equipment.manage";
         public const string RecordMaintenance = "equipment.maintenance";
         public const string Calibrate = "equipment.calibrate";
+
+        /// <summary>Instrument placement contracts and their commitment dashboard: the money side of an analyser.</summary>
+        public const string ViewContracts = "equipment.contracts.view";
+        public const string ManageContracts = "equipment.contracts.manage";
     }
 
     public static class Instruments

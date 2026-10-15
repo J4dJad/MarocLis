@@ -171,5 +171,8 @@ public enum SequencePurpose
     EmployeeNumber = 13,
 
     /// <summary>Work accident or blood exposure file, the reference given to the insurer.</summary>
-    WorkAccident = 14
+    WorkAccident = 14,
+
+    /// <summary>Request for quotation sent to suppliers (demande de devis).</summary>
+    QuoteRequest = 15
 }

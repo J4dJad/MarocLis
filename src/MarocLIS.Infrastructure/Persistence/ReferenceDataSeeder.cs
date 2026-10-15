@@ -497,6 +497,7 @@ internal static class RolePermissionSets
              Permissions.Instruments.StartStop, Permissions.Instruments.ReplayMessages,
              Permissions.Inventory.View, Permissions.Inventory.Receive, Permissions.Inventory.Issue,
              Permissions.Inventory.ApprovePurchaseOrders,
+             Permissions.Equipment.ViewContracts, Permissions.Equipment.ManageContracts,
              Permissions.Billing.View,
              Permissions.Statistics.View, Permissions.Statistics.EpidemiologicalDeclaration,
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,
@@ -589,6 +590,7 @@ internal static class RolePermissionSets
              Permissions.Instruments.View,
              Permissions.Inventory.View, Permissions.Inventory.Receive, Permissions.Inventory.Adjust,
              Permissions.Inventory.ApprovePurchaseOrders,
+             Permissions.Equipment.ViewContracts,
              Permissions.Statistics.View,
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,
              // The habilitation matrix is the quality manager's audit evidence; granting stays
@@ -607,6 +609,8 @@ internal static class RolePermissionSets
              Permissions.Billing.ApplyDiscount, Permissions.Billing.ManageTariffs,
              Permissions.Billing.CloseCashSession, Permissions.Billing.ExportAccounting,
              Permissions.Inventory.View, Permissions.Inventory.ManagePurchaseOrders,
+             Permissions.Inventory.ManageQuotes,
+             Permissions.Equipment.ViewContracts, Permissions.Equipment.ManageContracts,
              Permissions.Statistics.View,
              Permissions.HumanResources.RequestLeave
          ]),

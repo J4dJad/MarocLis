@@ -1,5 +1,6 @@
 using System.Globalization;
 using MarocLIS.Domain.Common;
+using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Inventory;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Identity;
@@ -21,6 +22,8 @@ public sealed class PurchaseOrderView : LocalizedView
 {
     private readonly SelectionLoads _selectionLoads = new();
     private readonly PurchaseOrderService _orders;
+    private readonly PurchaseOrderDocumentService _documents;
+    private readonly IDocumentOutput _output;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<PurchaseOrderView>? _logger;
 
@@ -32,6 +35,8 @@ public sealed class PurchaseOrderView : LocalizedView
 
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _newOrder = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _printPdf = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _savePdf = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _addLine = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _approve = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _send = UiTheme.SecondaryButton(string.Empty);
@@ -43,11 +48,14 @@ public sealed class PurchaseOrderView : LocalizedView
     private IReadOnlyList<PurchaseOrderRow> _rows = [];
     private IReadOnlyList<PurchaseOrderLineRow> _lineRows = [];
 
-    public PurchaseOrderView(PurchaseOrderService orders, IUserDialogs dialogs, ILocalizer localizer,
+    public PurchaseOrderView(PurchaseOrderService orders, PurchaseOrderDocumentService documents,
+                             IDocumentOutput output, IUserDialogs dialogs, ILocalizer localizer,
                              ICultureManager cultureManager, ILogger<PurchaseOrderView>? logger = null)
         : base(localizer, cultureManager)
     {
         _orders = orders;
+        _documents = documents;
+        _output = output;
         _dialogs = dialogs;
         _logger = logger;
 
@@ -79,7 +87,10 @@ public sealed class PurchaseOrderView : LocalizedView
         _refresh.Bounds = new Rectangle(300, 26, 110, UiTheme.ButtonHeight);
         _newOrder.Bounds = new Rectangle(420, 26, 190, UiTheme.ButtonHeight);
 
-        bar.Controls.AddRange([_heading, _onlyOpen, _refresh, _newOrder]);
+        _printPdf.Bounds = new Rectangle(620, 26, 170, UiTheme.ButtonHeight);
+        _savePdf.Bounds = new Rectangle(800, 26, 190, UiTheme.ButtonHeight);
+
+        bar.Controls.AddRange([_heading, _onlyOpen, _refresh, _newOrder, _printPdf, _savePdf]);
 
         var split = new ProportionalSplitContainer
         {
@@ -180,7 +191,9 @@ public sealed class PurchaseOrderView : LocalizedView
         _lines.SelectionChanged += (_, _) => RefreshButtons();
 
         _newOrder.Click += async (_, _) => await CreateOrderAsync();
-        _addLine.Click += async (_, _) => await AddLineAsync();
+        _addLine.Click += async (_, _) => await AddLineAsync(SelectedOrder?.SupplierId);
+        _printPdf.Click += async (_, _) => await PrintPdfAsync();
+        _savePdf.Click += async (_, _) => await SavePdfAsync();
         _approve.Click += async (_, _) => await StepAsync(o => _orders.ApproveAsync(o.Id), _approve.Text);
         _send.Click += async (_, _) => await SendAsync();
         _receive.Click += async (_, _) => await ReceiveAsync();
@@ -223,7 +236,9 @@ public sealed class PurchaseOrderView : LocalizedView
         _newOrder.Text = T("PurchaseOrders.NewOrder");
         _addLine.Text = T("PurchaseOrders.AddLine");
         _approve.Text = T("PurchaseOrders.Approve");
-        _send.Text = T("PurchaseOrders.Send");
+        _send.Text = T("PurchaseOrders.SendToSupplier");
+        _printPdf.Text = T("PurchaseOrders.PrintPdf");
+        _savePdf.Text = T("PurchaseOrders.SavePdf");
         _receive.Text = T("PurchaseOrders.ReceiveLine");
         _cancel.Text = T("PurchaseOrders.CancelOrder");
 
@@ -434,6 +449,8 @@ public sealed class PurchaseOrderView : LocalizedView
                            && SelectedLine is { QuantityOutstanding: > 0m };
         _cancel.Enabled = order?.Status is PurchaseOrderStatus.Draft or PurchaseOrderStatus.Approved
                                          or PurchaseOrderStatus.Sent;
+        _printPdf.Enabled = _savePdf.Enabled =
+            order is not null && PurchaseOrderDocumentService.IsPrintable(order.Status);
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -499,15 +516,117 @@ public sealed class PurchaseOrderView : LocalizedView
         await LoadAsync(order.Id);
     }
 
+    /// <summary>
+    /// Sends the approved order to the supplier: by e-mail with the PDF attached when the laboratory
+    /// has a mail account and the supplier an address, otherwise by hand. In the second case the
+    /// order is only marked sent once the operator confirms having sent it themselves.
+    /// </summary>
     private async Task SendAsync()
+    {
+        if (SelectedOrder is not { Status: PurchaseOrderStatus.Approved } order) return;
+
+        try
+        {
+            string manualReason;
+
+            if (_documents.CanEmail)
+            {
+                var pdf = await _documents.RenderAsync(order.Id);
+                if (pdf.IsFailure) { _dialogs.ShowFailure(pdf, _send.Text); return; }
+
+                if (pdf.Value.SupplierEmail is { } address)
+                {
+                    if (!_dialogs.Confirm(T("PurchaseOrders.EmailQuestion", order.Number, order.SupplierName, address),
+                                          _send.Text))
+                        return;
+
+                    var emailed = await _documents.EmailAsync(order.Id);
+                    if (emailed.IsSuccess)
+                    {
+                        _dialogs.Info(T("PurchaseOrders.EmailSent", order.Number, address), _send.Text);
+                        await LoadAsync(order.Id);
+                        return;
+                    }
+
+                    // The mail did not leave: the order stays approved, and the operator may still
+                    // send it by hand.
+                    manualReason = Describe(emailed);
+                }
+                else
+                {
+                    manualReason = T("Po_SupplierEmailMissing", order.SupplierName);
+                }
+            }
+            else
+            {
+                manualReason = T("Purchasing_EmailNotConfigured");
+            }
+
+            if (!_dialogs.Confirm($"{manualReason}\n\n{T("PurchaseOrders.ManualSendQuestion", order.Number, order.SupplierName)}",
+                                  _send.Text))
+                return;
+
+            await StepAsync(o => _orders.SendAsync(o.Id), _send.Text);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Sending purchase order {Number} failed.", order.Number);
+            _dialogs.Warn(T("Message.UnexpectedError"), _send.Text);
+        }
+    }
+
+    private async Task PrintPdfAsync()
     {
         if (SelectedOrder is not { } order) return;
 
-        if (!_dialogs.Confirm(T("PurchaseOrders.SendQuestion", order.Number, order.SupplierName),
-                              _send.Text))
-            return;
+        try
+        {
+            var pdf = await _documents.RenderAsync(order.Id);
+            if (pdf.IsFailure) { _dialogs.ShowFailure(pdf, _printPdf.Text); return; }
 
-        await StepAsync(o => _orders.SendAsync(o.Id), _send.Text);
+            var opened = await _output.OpenAsync(pdf.Value.Content, "pdf");
+            if (opened.IsFailure) _dialogs.ShowFailure(opened, _printPdf.Text);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Rendering purchase order {Number} failed.", order.Number);
+            _dialogs.Warn(T("Message.UnexpectedError"), _printPdf.Text);
+        }
+    }
+
+    /// <summary>Saves the PDF where the operator chooses, to attach it to a mail of their own.</summary>
+    private async Task SavePdfAsync()
+    {
+        if (SelectedOrder is not { } order) return;
+
+        try
+        {
+            var pdf = await _documents.RenderAsync(order.Id);
+            if (pdf.IsFailure) { _dialogs.ShowFailure(pdf, _savePdf.Text); return; }
+
+            using var dialog = new SaveFileDialog
+            {
+                Title = _savePdf.Text,
+                FileName = pdf.Value.FileName,
+                Filter = "PDF (*.pdf)|*.pdf",
+                DefaultExt = "pdf",
+                AddExtension = true,
+                OverwritePrompt = true
+            };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+            await File.WriteAllBytesAsync(dialog.FileName, pdf.Value.Content);
+            _dialogs.Info(T("PurchaseOrders.PdfSaved", dialog.FileName), _savePdf.Text);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _dialogs.Warn($"{T("Message.UnexpectedError")}\n{ex.Message}", _savePdf.Text);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Saving purchase order {Number} failed.", order.Number);
+            _dialogs.Warn(T("Message.UnexpectedError"), _savePdf.Text);
+        }
     }
 
     private async Task ReceiveAsync()
@@ -642,6 +761,13 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
         _price.Text = item.LastUnitPriceMad?.ToString("0.00", CultureInfo.InvariantCulture) ?? string.Empty;
         // The discount was agreed with the preferred supplier: another supplier starts from none.
         var discount = _supplierId is not null && item.PreferredSupplierId == _supplierId ? item.LastDiscountRate : 0m;
+
+        // A captive reagent ordered from its contract's supplier is bought at the contracted price.
+        if (item.ContractPriceMad is { } contracted && _supplierId is not null && item.ContractSupplierId == _supplierId)
+        {
+            _price.Text = contracted.ToString("0.00", CultureInfo.InvariantCulture);
+            discount = 0m;
+        }
         _discount.Text = (discount * 100m).ToString("0.##", CultureInfo.InvariantCulture);
     }
 
