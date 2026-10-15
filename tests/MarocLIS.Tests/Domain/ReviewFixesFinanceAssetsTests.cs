@@ -175,7 +175,8 @@ public sealed class ReviewFixesFinanceAssetsTests
             null!, [recorder], null!, null!,
             ReviewFixesBilling2Tests.Stub<IPermissionGuard>.Create(),
             ReviewFixesBilling2Tests.Stub<ICurrentUser>.With(
-                ("get_SiteId", _ => site), ("get_AccessibleSiteIds", _ => (IReadOnlyList<Guid>)[site])));
+                ("get_SiteId", _ => site), ("get_AccessibleSiteIds", _ => (IReadOnlyList<Guid>)[site])),
+            ReviewFixesBilling2Tests.Stub<IDataAccessAuditor>.Create());
 
         var request = new AccountingExportRequest(Jan2026, new DateOnly(2026, 1, 31), [site],
                                                   AccountingJournals.Depreciation, AccountingExportLayout.Sage);
