@@ -5,12 +5,22 @@ using QuestPDF.Infrastructure;
 namespace MarocLIS.Reporting;
 
 /// <summary>A screen's list as it stands, ready to print: the rows the operator is looking at.</summary>
+/// <param name="Layout">For a list too wide for equal columns on A4; null keeps the usual layout.</param>
 public sealed record ListDocument(
     string Title,
     string Caption,
     IReadOnlyList<string> Columns,
     IReadOnlyList<IReadOnlyList<string>> Rows,
-    bool RightToLeft = false);
+    bool RightToLeft = false,
+    ListLayout? Layout = null);
+
+/// <summary>
+/// The layout of a wide list (the fixed-assets register): relative column widths, so that dates and
+/// amounts get the room they need and short columns stay narrow, a smaller font and, when asked, an
+/// A3 page.
+/// </summary>
+/// <param name="ColumnWidths">One relative width per column; a missing one counts as 1.</param>
+public sealed record ListLayout(IReadOnlyList<float> ColumnWidths, float FontSize = 8.5f, bool A3 = false);
 
 public interface IListPdfRenderer
 {
@@ -42,14 +52,17 @@ public sealed class ListPdfRenderer : IListPdfRenderer
     {
         var landscape = document.Columns.Count > 6;
         var font = document.RightToLeft ? _options.ArabicFontFamily : _options.LatinFontFamily;
+        var layout = document.Layout;
+        var size = layout?.A3 == true ? PageSizes.A3 : PageSizes.A4;
+        var padding = layout is null ? 3f : 2f;
 
         return Document.Create(container =>
         {
             container.Page(page =>
             {
-                page.Size(landscape ? PageSizes.A4.Landscape() : PageSizes.A4);
+                page.Size(landscape ? size.Landscape() : size);
                 page.Margin(28);
-                page.DefaultTextStyle(t => t.FontFamily(font, _options.ArabicFontFamily).FontSize(8.5f));
+                page.DefaultTextStyle(t => t.FontFamily(font, _options.ArabicFontFamily).FontSize(layout?.FontSize ?? 8.5f));
 
                 if (document.RightToLeft) page.ContentFromRightToLeft();
 
@@ -63,7 +76,10 @@ public sealed class ListPdfRenderer : IListPdfRenderer
                 {
                     table.ColumnsDefinition(columns =>
                     {
-                        foreach (var _ in document.Columns) columns.RelativeColumn();
+                        for (var i = 0; i < document.Columns.Count; i++)
+                            columns.RelativeColumn(layout is { } l && i < l.ColumnWidths.Count && l.ColumnWidths[i] > 0f
+                                                       ? l.ColumnWidths[i]
+                                                       : 1f);
                     });
 
                     table.Header(header =>
@@ -72,7 +88,7 @@ public sealed class ListPdfRenderer : IListPdfRenderer
                         {
                             header.Cell().Background(Colors.Grey.Lighten3)
                                   .BorderBottom(0.75f).BorderColor(Colors.Grey.Darken1)
-                                  .Padding(3).Text(title).SemiBold();
+                                  .Padding(padding).Text(title).SemiBold();
                         }
                     });
 
@@ -83,7 +99,7 @@ public sealed class ListPdfRenderer : IListPdfRenderer
                             var value = i < row.Count ? row[i] : string.Empty;
 
                             table.Cell().BorderBottom(0.25f).BorderColor(Colors.Grey.Lighten1)
-                                 .Padding(3).Text(value);
+                                 .Padding(padding).Text(value);
                         }
                     }
                 });

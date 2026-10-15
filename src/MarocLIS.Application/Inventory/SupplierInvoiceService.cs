@@ -234,7 +234,8 @@ public sealed class SupplierInvoiceService(
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
     ICurrentUser currentUser,
-    IClock clock)
+    IClock clock,
+    IRepository<SupplierInvoiceExport>? invoiceExports = null)
 {
     private static readonly string[] ReadRights =
         [Permissions.Inventory.EnterInvoices, Permissions.Inventory.ApprovePayments];
@@ -743,10 +744,28 @@ public sealed class SupplierInvoiceService(
         var invoiceSources = await queries.GetAccountingInvoicesAsync(currentUser.SiteId, from, to, ct);
         var paymentSources = await queries.GetAccountingPaymentsAsync(currentUser.SiteId, from, to, ct);
 
-        var entries = SupplierAccountingExport.BuildEntries(invoiceSources, paymentSources, settings);
+        var reclassified = await queries.GetAccountingReclassificationsAsync(currentUser.SiteId, from, to, ct);
+
+        IReadOnlyList<AccountingEntry> entries =
+        [
+            .. SupplierAccountingExport.BuildEntries(invoiceSources, paymentSources, settings),
+            .. SupplierAccountingExport.Reclassifications(reclassified, settings, from, to)
+        ];
         if (entries.Count == 0) return Result.Failure<byte[]>(Error.Validation("Purchasing_NothingToExport"));
 
-        return Result.Success(SupplierAccountingExport.ToCsv(entries, layout));
+        var file = SupplierAccountingExport.ToCsv(entries, layout);
+
+        // The invoices now in the accounting software: an asset linked to one later is reclassified (I7).
+        var exported = invoiceSources.Where(i => !i.Exported && i.Id != Guid.Empty).ToList();
+        if (invoiceExports is not null && exported.Count > 0)
+        {
+            foreach (var invoice in exported)
+                await invoiceExports.AddAsync(new SupplierInvoiceExport(invoice.Id, clock.Now), ct);
+            unitOfWork.AuditReason = $"Factures fournisseurs exportées du {from:dd/MM/yyyy} au {to:dd/MM/yyyy}";
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+
+        return Result.Success(file);
     }
 
     private static string? Blank(string? value) =>
@@ -793,6 +812,15 @@ public interface ISupplierInvoiceQueries
     /// <summary>Invoices not cancelled, dated within the period.</summary>
     Task<IReadOnlyList<AccountingInvoiceSource>> GetAccountingInvoicesAsync(Guid siteId, DateOnly from, DateOnly to,
                                                                             CancellationToken ct = default);
+
+    /// <summary>
+    /// Invoices, whatever their date, with an asset linked after their purchases entry was exported
+    /// on a day within the period: the reclassifications of <see cref="SupplierAccountingExport.Reclassifications"/>.
+    /// </summary>
+    Task<IReadOnlyList<AccountingInvoiceSource>> GetAccountingReclassificationsAsync(Guid siteId, DateOnly from,
+                                                                                     DateOnly to,
+                                                                                     CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<AccountingInvoiceSource>>([]);
 
     /// <summary>Payments made within the period.</summary>
     Task<IReadOnlyList<AccountingPaymentSource>> GetAccountingPaymentsAsync(Guid siteId, DateOnly from, DateOnly to,

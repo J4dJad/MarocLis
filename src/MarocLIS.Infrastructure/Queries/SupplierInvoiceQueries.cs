@@ -353,12 +353,34 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
         ];
     }
 
-    public async Task<IReadOnlyList<AccountingInvoiceSource>> GetAccountingInvoicesAsync(
+    public Task<IReadOnlyList<AccountingInvoiceSource>> GetAccountingInvoicesAsync(
+        Guid siteId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        LoadAccountingInvoicesAsync(siteId, i => i.InvoiceDate >= from && i.InvoiceDate <= to, ct);
+
+    public async Task<IReadOnlyList<AccountingInvoiceSource>> GetAccountingReclassificationsAsync(
         Guid siteId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
+        var links = await (from a in db.FixedAssets.IgnoreQueryFilters().AsNoTracking()
+                           join e in db.Set<SupplierInvoiceExport>().AsNoTracking()
+                               on a.SupplierInvoiceId equals (Guid?)e.SupplierInvoiceId
+                           where a.SiteId == siteId && a.SupplierInvoiceLinkedAt != null
+                                 && a.SupplierInvoiceLinkedAt > e.ExportedAt
+                           select new { e.SupplierInvoiceId, LinkedAt = a.SupplierInvoiceLinkedAt!.Value })
+            .ToListAsync(ct);
+
+        var ids = links.Where(l => LinkDay(l.LinkedAt) >= from && LinkDay(l.LinkedAt) <= to)
+                       .Select(l => l.SupplierInvoiceId).Distinct().ToList();
+        return ids.Count == 0 ? [] : await LoadAccountingInvoicesAsync(siteId, i => ids.Contains(i.Id), ct);
+    }
+
+    private static DateOnly LinkDay(DateTimeOffset linkedAt) => DateOnly.FromDateTime(linkedAt.DateTime);
+
+    private async Task<IReadOnlyList<AccountingInvoiceSource>> LoadAccountingInvoicesAsync(
+        Guid siteId, System.Linq.Expressions.Expression<Func<SupplierInvoice, bool>> which, CancellationToken ct)
+    {
         var rows = await db.SupplierInvoices.AsNoTracking()
-            .Where(i => i.SiteId == siteId && i.Status != SupplierInvoiceStatus.Cancelled
-                        && i.InvoiceDate >= from && i.InvoiceDate <= to)
+            .Where(i => i.SiteId == siteId && i.Status != SupplierInvoiceStatus.Cancelled)
+            .Where(which)
             .Select(i => new
             {
                 i.Id,
@@ -378,14 +400,19 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        // The fixed assets of the register bought on these invoices: capitalised under their
-        // category's asset account rather than expensed.
         var ids = rows.Select(i => i.Id).ToList();
+        var exported = await db.Set<SupplierInvoiceExport>().AsNoTracking()
+            .Where(e => ids.Contains(e.SupplierInvoiceId))
+            .ToDictionaryAsync(e => e.SupplierInvoiceId, e => e.ExportedAt, ct);
+
+        // The fixed assets of the register bought on these invoices: capitalised under their
+        // category's asset account rather than expensed. One linked after the invoice was exported
+        // is reclassified on the day of the link instead (I7).
         var assets = await db.FixedAssets.IgnoreQueryFilters().AsNoTracking()
             .Where(a => a.SiteId == siteId && a.SupplierInvoiceId != null && ids.Contains(a.SupplierInvoiceId.Value))
             .OrderBy(a => a.Code)
-            .Select(a => new { InvoiceId = a.SupplierInvoiceId!.Value, a.Category, a.CostExcludingVatMad, a.VatAmountMad,
-                               a.VatRecoverable })
+            .Select(a => new { a.Id, InvoiceId = a.SupplierInvoiceId!.Value, a.Category, a.CostExcludingVatMad,
+                               a.VatAmountMad, a.VatRecoverable, LinkedAt = a.SupplierInvoiceLinkedAt })
             .ToListAsync(ct);
 
         var assetAccounts = assets.Count == 0
@@ -397,8 +424,31 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                     .ToListAsync(ct))
                 .ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal));
 
-        var byInvoice = assets.ToLookup(a => a.InvoiceId, a => new AccountingAssetShare(
-            assetAccounts.For(a.Category).Asset, a.CostExcludingVatMad, a.VatAmountMad, a.VatRecoverable));
+        // An asset whose category changed afterwards keeps, in these entries, the account it was
+        // exported under: the transfer entry of the depreciation journal moves it (I8).
+        var assetIds = assets.Select(a => a.Id).ToList();
+        var transfers = assetIds.Count == 0
+            ? []
+            : (await db.Set<Domain.Assets.FixedAssetTransfer>().AsNoTracking()
+                    .Where(t => assetIds.Contains(t.FixedAssetId))
+                    .ToListAsync(ct))
+                .Select(t => new Application.Assets.DepreciationTransfer(
+                    t.FixedAssetId, t.Date, t.ChangedAt,
+                    new Application.Assets.CategoryAccounts(t.FromAssetAccount, t.FromDepreciationAccount, t.FromChargeAccount),
+                    new Application.Assets.CategoryAccounts(t.ToAssetAccount, t.ToDepreciationAccount, t.FromChargeAccount),
+                    t.GrossMad, t.DepreciationMad))
+                .ToList();
+
+        var byInvoice = assets.ToLookup(a => a.InvoiceId, a =>
+        {
+            DateTimeOffset? exportedAt = exported.TryGetValue(a.InvoiceId, out var at) ? at : null;
+            var late = exportedAt is { } e && a.LinkedAt is { } linked && linked > e;
+            var account = Application.Assets.FixedAssetDepreciationSource.AccountsAt(
+                transfers.Where(t => t.AssetId == a.Id), late ? a.LinkedAt : exportedAt,
+                assetAccounts.For(a.Category)).Asset;
+            return new AccountingAssetShare(account, a.CostExcludingVatMad, a.VatAmountMad, a.VatRecoverable,
+                                            late ? LinkDay(a.LinkedAt!.Value) : null);
+        });
 
         return
         [
@@ -413,7 +463,9 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                                                          Money.Round(ht * l.VatRate));
                     })
                 ],
-                byInvoice.Contains(i.Id) ? [.. byInvoice[i.Id]] : null))
+                byInvoice.Contains(i.Id) ? [.. byInvoice[i.Id]] : null,
+                i.Id,
+                exported.ContainsKey(i.Id)))
         ];
     }
 
@@ -429,7 +481,14 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 join s in db.Suppliers.IgnoreQueryFilters().AsNoTracking() on i.SupplierId equals s.Id
                 where i.SiteId == siteId && p.PaidOn >= start && p.PaidOn <= end
                 select new AccountingPaymentSource(s.Code, s.Name, s.AccountingAccount, i.InvoiceNumber,
-                                                   p.PaidOn, p.AmountMad, p.Method, p.Reference))
+                                                   p.PaidOn, p.AmountMad, p.Method, p.Reference,
+                                                   // Capitalised in the invoice's own entry: owed on 4481 (I11).
+                                                   db.FixedAssets.IgnoreQueryFilters().Any(a =>
+                                                       a.SupplierInvoiceId == i.Id
+                                                       && (a.SupplierInvoiceLinkedAt == null
+                                                           || !db.Set<SupplierInvoiceExport>().Any(e =>
+                                                               e.SupplierInvoiceId == i.Id
+                                                               && e.ExportedAt < a.SupplierInvoiceLinkedAt)))))
             .ToListAsync(ct);
     }
 }

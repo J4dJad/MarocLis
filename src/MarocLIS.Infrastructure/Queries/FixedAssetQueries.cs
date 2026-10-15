@@ -46,10 +46,11 @@ public sealed class FixedAssetQueries(LisDbContext db) : IFixedAssetQueries
     public async Task<IReadOnlyList<SupplierProvidedRow>> GetSupplierProvidedAsync(Guid siteId, DateOnly from, DateOnly to,
                                                                                    CancellationToken ct = default)
     {
+        // A contract terminated early still covered the years before its termination (I12).
         var contracts = (await db.InstrumentContracts.AsNoTracking()
-                .Where(c => c.SiteId == siteId && c.IsActive && ProvidedKinds.Contains(c.Kind))
+                .Where(c => c.SiteId == siteId && ProvidedKinds.Contains(c.Kind))
                 .ToListAsync(ct))
-            .Where(c => c.StartDate <= to && c.EndDate >= from)
+            .Where(c => c.StartDate <= to && c.EffectiveEndDate >= from)
             .ToList();
 
         var instrumentIds = contracts.SelectMany(c => c.Instruments.Select(i => i.InstrumentId)).Distinct().ToList();
@@ -74,7 +75,7 @@ public sealed class FixedAssetQueries(LisDbContext db) : IFixedAssetQueries
                 .Select(x => new SupplierProvidedRow(
                     x.InstrumentId, instruments[x.InstrumentId].Code, instruments[x.InstrumentId].Name,
                     suppliers.GetValueOrDefault(x.Contract.SupplierId) ?? string.Empty,
-                    x.Contract.Reference, x.Contract.Kind, x.Contract.StartDate, x.Contract.EndDate))
+                    x.Contract.Reference, x.Contract.Kind, x.Contract.StartDate, x.Contract.EffectiveEndDate))
                 .OrderBy(r => r.InstrumentCode, StringComparer.Ordinal)
         ];
     }
@@ -224,8 +225,31 @@ public sealed class FixedAssetQueries(LisDbContext db) : IFixedAssetQueries
         await (from p in db.Set<FixedAssetDepreciationPosting>().AsNoTracking()
                join a in db.FixedAssets.IgnoreQueryFilters().AsNoTracking() on p.FixedAssetId equals a.Id
                where a.SiteId == siteId
-               select new DepreciationPosting(p.FixedAssetId, p.Year, p.Month, p.Date, p.AmountMad))
+               select new DepreciationPosting(p.FixedAssetId, p.Year, p.Month, p.Date, p.AmountMad,
+                                              p.ChargeAccount, p.DepreciationAccount, p.ExportedAt))
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<DepreciationTransfer>> GetDepreciationTransfersAsync(Guid siteId,
+                                                                                         CancellationToken ct = default)
+    {
+        var rows = await (from t in db.Set<FixedAssetTransfer>().AsNoTracking()
+                          join a in db.FixedAssets.IgnoreQueryFilters().AsNoTracking() on t.FixedAssetId equals a.Id
+                          where a.SiteId == siteId
+                          select t)
+            .ToListAsync(ct);
+
+        return
+        [
+            .. rows.Select(t => new DepreciationTransfer(
+                t.FixedAssetId, t.Date, t.ChangedAt,
+                new CategoryAccounts(t.FromAssetAccount, t.FromDepreciationAccount, t.FromChargeAccount),
+                new CategoryAccounts(t.ToAssetAccount, t.ToDepreciationAccount, t.FromChargeAccount),
+                t.GrossMad, t.DepreciationMad))
+        ];
+    }
+
+    public Task<bool> IsSupplierInvoiceExportedAsync(Guid supplierInvoiceId, CancellationToken ct = default) =>
+        db.Set<SupplierInvoiceExport>().AsNoTracking().AnyAsync(e => e.SupplierInvoiceId == supplierInvoiceId, ct);
 
     public async Task<IReadOnlyDictionary<string, string?>> GetSettingValuesAsync(string prefix,
                                                                                   CancellationToken ct = default)

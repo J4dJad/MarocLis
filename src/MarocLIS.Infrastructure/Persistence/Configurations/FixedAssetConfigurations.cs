@@ -48,12 +48,35 @@ public sealed class FixedAssetDepreciationPostingConfiguration : IEntityTypeConf
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.AmountMad).HasColumnType("decimal(18,2)");
+        builder.Property(e => e.ChargeAccount).HasMaxLength(FixedAssetDepreciationPosting.AccountMaxLength);
+        builder.Property(e => e.DepreciationAccount).HasMaxLength(FixedAssetDepreciationPosting.AccountMaxLength);
 
         // A month of an asset goes out once; exporting it again gives the same row back.
         builder.HasIndex(e => new { e.FixedAssetId, e.Year, e.Month })
                .IsUnique()
                .HasDatabaseName("UX_FixedAssetDepreciationPostings_Asset_Month");
 
+        builder.HasOne<FixedAsset>().WithMany().HasForeignKey(e => e.FixedAssetId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class FixedAssetTransferConfiguration : IEntityTypeConfiguration<FixedAssetTransfer>
+{
+    public void Configure(EntityTypeBuilder<FixedAssetTransfer> builder)
+    {
+        builder.ToTable("FixedAssetTransfers", "fin");
+        builder.HasKey(e => e.Id);
+
+        const int account = FixedAssetDepreciationPosting.AccountMaxLength;
+        builder.Property(e => e.FromAssetAccount).HasMaxLength(account).IsRequired();
+        builder.Property(e => e.FromDepreciationAccount).HasMaxLength(account).IsRequired();
+        builder.Property(e => e.FromChargeAccount).HasMaxLength(account).IsRequired();
+        builder.Property(e => e.ToAssetAccount).HasMaxLength(account).IsRequired();
+        builder.Property(e => e.ToDepreciationAccount).HasMaxLength(account).IsRequired();
+        builder.Property(e => e.GrossMad).HasColumnType("decimal(18,2)");
+        builder.Property(e => e.DepreciationMad).HasColumnType("decimal(18,2)");
+
+        builder.HasIndex(e => e.FixedAssetId).HasDatabaseName("IX_FixedAssetTransfers_Asset");
         builder.HasOne<FixedAsset>().WithMany().HasForeignKey(e => e.FixedAssetId).OnDelete(DeleteBehavior.Cascade);
     }
 }

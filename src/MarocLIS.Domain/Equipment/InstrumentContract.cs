@@ -78,6 +78,23 @@ public sealed class InstrumentContract : AuditableAggregateRoot, ISiteScoped
     /// <summary>Cleared when the contract is terminated before its term.</summary>
     public bool IsActive { get; set; } = true;
 
+    /// <summary>The day the contract was terminated before its term (<see cref="IsActive"/> cleared).</summary>
+    public DateOnly? TerminatedOn { get; set; }
+
+    /// <summary>
+    /// The last day the contract covered: its term, or the day it was terminated. A contract
+    /// deactivated before the termination day was kept counts from its last modification.
+    /// </summary>
+    public DateOnly EffectiveEndDate
+    {
+        get
+        {
+            if (IsActive) return EndDate;
+            var terminated = TerminatedOn ?? DateOnly.FromDateTime((ModifiedAt ?? CreatedAt).DateTime);
+            return terminated < EndDate ? terminated : EndDate;
+        }
+    }
+
     public IReadOnlyCollection<InstrumentContractInstrument> Instruments => _instruments.AsReadOnly();
     public IReadOnlyCollection<InstrumentContractReagent> Reagents => _reagents.AsReadOnly();
 

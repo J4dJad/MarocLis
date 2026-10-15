@@ -196,6 +196,10 @@ public sealed class InstrumentContractService(
         contract.PenaltyTerms = Blank(request.PenaltyTerms);
         contract.PenaltyAmountMad = request.PenaltyAmountMad is { } penalty ? Money.Round(penalty) : null;
         contract.Notes = Blank(request.Notes);
+        // The day of an early termination: the fixed-assets register lists the equipment as the
+        // supplier's up to it, also in the years printed afterwards.
+        if (contract.IsActive && !request.IsActive) contract.TerminatedOn = clock.Today;
+        else if (request.IsActive) contract.TerminatedOn = null;
         contract.IsActive = request.IsActive;
         contract.SetInstruments(request.InstrumentIds);
         contract.SetReagents(request.Reagents);

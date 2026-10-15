@@ -139,6 +139,7 @@ public sealed class InstrumentContractConfiguration : IEntityTypeConfiguration<I
         builder.Property(e => e.Notes).HasMaxLength(1000);
 
         builder.Ignore(e => e.EndDate);
+        builder.Ignore(e => e.EffectiveEndDate);
         builder.Ignore(e => e.CountedAnalysisCodes);
 
         builder.HasMany(e => e.Instruments).WithOne()

@@ -196,7 +196,8 @@ public sealed class FixedAssetService(
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
     ICurrentUser currentUser,
-    IClock clock)
+    IClock clock,
+    IRepository<FixedAssetTransfer>? transfers = null)
 {
     // ---- Reading ---------------------------------------------------------------------------------
 
@@ -381,11 +382,13 @@ public sealed class FixedAssetService(
         }
 
         FixedAsset asset;
+        (FixedAssetCategory Category, decimal Gross, Guid? InvoiceId)? before = null;
         if (request.Id is { } id)
         {
             var existing = await assets.GetByIdAsync(id, ct);
             if (existing is null) return Result.Failure<Guid>(Error.NotFound("Asset_NotFound"));
             asset = existing;
+            before = (asset.Category, asset.GrossValueMad, asset.SupplierInvoiceId);
             asset.ChangeCode(code);
         }
         else
@@ -402,7 +405,7 @@ public sealed class FixedAssetService(
         asset.VatRecoverable = request.VatRecoverable;
         asset.SupplierId = request.SupplierId;
         asset.InvoiceReference = Blank(request.InvoiceReference);
-        asset.SupplierInvoiceId = request.SupplierInvoiceId;
+        asset.LinkSupplierInvoice(request.SupplierInvoiceId, clock.Now);
         asset.InstrumentId = request.InstrumentId;
         asset.Method = request.Method;
         asset.UsefulLifeYears = request.UsefulLifeYears;
@@ -411,6 +414,9 @@ public sealed class FixedAssetService(
 
         var valid = asset.Validate();
         if (valid.IsFailure) return Result.Failure<Guid>(valid.Errors);
+
+        if (before is { } old && old.Category != asset.Category)
+            await RecordTransferAsync(asset, old.Category, old.Gross, old.InvoiceId, ct);
 
         if (request.Id is null) await assets.AddAsync(asset, ct);
         else assets.Update(asset);
@@ -421,6 +427,32 @@ public sealed class FixedAssetService(
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(asset.Id);
+    }
+
+    /// <summary>
+    /// A change of category of an asset already in the accounting software — depreciation months
+    /// exported, or its supplier invoice exported — is booked as a transfer (I8): the exported
+    /// depreciation from the old 28xxx to the new one, the gross value from the old asset account to
+    /// the new one, dated today, in the next export. The months already exported keep their accounts.
+    /// Whether the accountant prefers the transfer dated the start of the financial year is to confirm.
+    /// </summary>
+    private async Task RecordTransferAsync(FixedAsset asset, FixedAssetCategory oldCategory, decimal oldGross,
+                                           Guid? oldInvoiceId, CancellationToken ct)
+    {
+        if (transfers is null) return;
+
+        var months = (await queries.GetDepreciationPostingsAsync(asset.SiteId, ct)).Where(p => p.AssetId == asset.Id).ToList();
+        var (posted, exported) = (months.Count > 0, Money.Round(months.Sum(p => p.Amount)));
+        var invoiceExported = oldInvoiceId is { } invoiceId && await queries.IsSupplierInvoiceExportedAsync(invoiceId, ct);
+        if (!posted && !invoiceExported) return;
+
+        var settings = await GetSettingsCoreAsync(ct);
+        var (from, to) = (settings.For(oldCategory), settings.For(asset.Category));
+        if (from.Asset == to.Asset && from.Depreciation == to.Depreciation) return;
+
+        await transfers.AddAsync(new FixedAssetTransfer(asset.Id, clock.Today, clock.Now, oldCategory, asset.Category,
+                                                        from.Asset, from.Depreciation, from.Charge, to.Asset,
+                                                        to.Depreciation, oldGross, exported), ct);
     }
 
     /// <summary>
@@ -546,6 +578,18 @@ public static class FixedAssetRegisterReport
         "Sortie", "Prix de cession", "Résultat de cession", "Fournisseur", "Facture", "Équipement"
     ];
 
+    /// <summary>
+    /// The relative widths of the 20 columns of the register's PDF (up to the disposal result), in
+    /// points on an A3 landscape page at <see cref="PdfFontSize"/>: an amount up to "99 999 999,99" and
+    /// a date hold on one line, the duration and the rate stay narrow.
+    /// </summary>
+    public static readonly IReadOnlyList<float> PdfColumnWidths =
+    [
+        52, 110, 70, 40, 46, 46, 58, 52, 26, 32, 58, 58, 58, 58, 58, 58, 58, 46, 58, 58
+    ];
+
+    public const float PdfFontSize = 7f;
+
     /// <summary>A line's cells, the words (category, method, "mis à disposition") given by the caller.</summary>
     public static IReadOnlyList<string> Cells(FixedAssetRegisterRow row, string category, string method) =>
     [
@@ -661,7 +705,8 @@ public interface IFixedAssetQueries
 
     /// <summary>
     /// The site's instruments covered at some point between <paramref name="from"/> and
-    /// <paramref name="to"/> by a placement, comodat or lease contract not terminated early.
+    /// <paramref name="to"/> by a placement, comodat or lease contract, up to its termination when
+    /// it was terminated early.
     /// </summary>
     Task<IReadOnlyList<SupplierProvidedRow>> GetSupplierProvidedAsync(Guid siteId, DateOnly from, DateOnly to,
                                                                       CancellationToken ct = default);
@@ -691,4 +736,12 @@ public interface IFixedAssetQueries
     /// <summary>The depreciation months of the site's assets already exported to the accounting software.</summary>
     Task<IReadOnlyList<DepreciationPosting>> GetDepreciationPostingsAsync(Guid siteId, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<DepreciationPosting>>([]);
+
+    /// <summary>The changes of category of the site's assets made after they were exported.</summary>
+    Task<IReadOnlyList<DepreciationTransfer>> GetDepreciationTransfersAsync(Guid siteId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<DepreciationTransfer>>([]);
+
+    /// <summary>Whether the purchases entry of the supplier invoice went out in an accounting export.</summary>
+    Task<bool> IsSupplierInvoiceExportedAsync(Guid supplierInvoiceId, CancellationToken ct = default) =>
+        Task.FromResult(false);
 }

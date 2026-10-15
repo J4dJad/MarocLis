@@ -24,7 +24,14 @@ public enum VatStatementLineKind
     DeductibleAfterProrata = 4,
 
     /// <summary>VAT collected less deductible: positive is owed, negative is a credit.</summary>
-    Balance = 5
+    Balance = 5,
+
+    /// <summary>
+    /// Fixed assets bought at one rate, with their VAT when it is deducted (34551, regularised over
+    /// five years under CGI art. 104). The VAT of an asset marked not recoverable goes into its cost
+    /// and is on no line.
+    /// </summary>
+    AssetPurchases = 6
 }
 
 /// <param name="Rate">The VAT rate in percent, for the turnover and purchase lines.</param>
@@ -46,7 +53,8 @@ public sealed record VatStatement(DateOnly From, DateOnly To, IReadOnlyList<VatS
     public decimal ExemptTurnover => Lines.Where(l => l.Kind == VatStatementLineKind.ExemptTurnover).Sum(l => l.Base);
     public decimal TaxableTurnover => Lines.Where(l => l.Kind == VatStatementLineKind.TaxableTurnover).Sum(l => l.Base);
     public decimal Collected => Lines.Where(l => l.Kind == VatStatementLineKind.TaxableTurnover).Sum(l => l.Vat);
-    public decimal Invoiced => Lines.Where(l => l.Kind == VatStatementLineKind.Purchases).Sum(l => l.Vat);
+    public decimal Invoiced =>
+        Lines.Where(l => l.Kind is VatStatementLineKind.Purchases or VatStatementLineKind.AssetPurchases).Sum(l => l.Vat);
 
     /// <summary>Taxable turnover over total turnover, in percent, rounded up to the unit as CGI art. 104 provides.</summary>
     public decimal ProrataPercent =>
@@ -84,17 +92,46 @@ public sealed record VatStatement(DateOnly From, DateOnly To, IReadOnlyList<VatS
         }
 
         var bought = new SortedDictionary<decimal, (decimal Base, decimal Vat)>();
-        foreach (var line in purchases.Where(p => p.InvoiceDate >= from && p.InvoiceDate <= to).SelectMany(p => p.Lines))
+        var assets = new SortedDictionary<decimal, (decimal Base, decimal Vat)>();
+        static void Add(SortedDictionary<decimal, (decimal Base, decimal Vat)> to, decimal rate, decimal @base, decimal vat)
         {
-            var rate = line.ExcludingVat == 0m ? 0m : Math.Round(line.Vat * 100m / line.ExcludingVat, 0);
-            var sum = bought.TryGetValue(rate, out var s) ? s : (Base: 0m, Vat: 0m);
-            bought[rate] = (sum.Base + line.ExcludingVat, sum.Vat + line.Vat);
+            var sum = to.TryGetValue(rate, out var s) ? s : (Base: 0m, Vat: 0m);
+            to[rate] = (sum.Base + @base, sum.Vat + vat);
+        }
+        static decimal RateOf(decimal @base, decimal vat) => @base == 0m ? 0m : Math.Round(vat * 100m / @base, 0);
+
+        foreach (var invoice in purchases.Where(p => p.InvoiceDate >= from && p.InvoiceDate <= to))
+        {
+            var own = new SortedDictionary<decimal, (decimal Base, decimal Vat)>();
+            foreach (var line in invoice.Lines) Add(own, RateOf(line.ExcludingVat, line.Vat), line.ExcludingVat, line.Vat);
+
+            // The share of the fixed assets bought on the invoice (I10), capped at what the invoice
+            // holds as the purchases journal caps it: off the purchase lines, onto the asset lines when
+            // the VAT is deducted, left out when it goes into the asset's cost.
+            var excludingLeft = Money.Round(invoice.Lines.Where(l => l.ExcludingVat > 0m).Sum(l => l.ExcludingVat));
+            var vatLeft = Money.Round(invoice.Lines.Sum(l => l.Vat));
+            foreach (var asset in invoice.Assets ?? [])
+            {
+                var cost = Math.Max(0m, Math.Min(Money.Round(asset.ExcludingVat), excludingLeft));
+                var vat = vatLeft > 0m ? Math.Max(0m, Math.Min(Money.Round(asset.Vat), vatLeft)) : 0m;
+                (excludingLeft, vatLeft) = (excludingLeft - cost, vatLeft - vat);
+                if (own.Count == 0 || cost == 0m && vat == 0m) continue;
+
+                var rate = RateOf(cost, vat);
+                var bucket = own.ContainsKey(rate) ? rate : own.MaxBy(b => b.Value.Base).Key;
+                Add(own, bucket, -cost, -vat);
+                if (asset.VatRecoverable) Add(assets, rate, cost, vat);
+            }
+
+            foreach (var (rate, sum) in own) Add(bought, rate, sum.Base, sum.Vat);
         }
 
         var lines = new List<VatStatementLine> { new(VatStatementLineKind.ExemptTurnover, null, Money.Round(exempt), 0m) };
         lines.AddRange(taxable.Select(t => new VatStatementLine(VatStatementLineKind.TaxableTurnover, t.Key,
                                                                 Money.Round(t.Value.Base), Money.Round(t.Value.Vat))));
         lines.AddRange(bought.Select(t => new VatStatementLine(VatStatementLineKind.Purchases, t.Key,
+                                                               Money.Round(t.Value.Base), Money.Round(t.Value.Vat))));
+        lines.AddRange(assets.Select(t => new VatStatementLine(VatStatementLineKind.AssetPurchases, t.Key,
                                                                Money.Round(t.Value.Base), Money.Round(t.Value.Vat))));
 
         var statement = new VatStatement(from, to, lines);
@@ -118,6 +155,7 @@ public sealed record VatStatement(DateOnly From, DateOnly To, IReadOnlyList<VatS
         VatStatementLineKind.ExemptTurnover => "Chiffre d'affaires exonéré (analyses, art. 91 CGI)",
         VatStatementLineKind.TaxableTurnover => $"Chiffre d'affaires taxable à {line.Rate:0.##} % — TVA collectée",
         VatStatementLineKind.Purchases => $"Achats à {line.Rate:0.##} % — TVA facturée par les fournisseurs",
+        VatStatementLineKind.AssetPurchases => $"Immobilisations à {line.Rate:0.##} % — TVA sur immobilisations",
         VatStatementLineKind.Prorata => "Prorata de déduction (%)",
         VatStatementLineKind.DeductibleAfterProrata => "TVA déductible après prorata",
         VatStatementLineKind.Balance => "TVA due (crédit si négatif)",
