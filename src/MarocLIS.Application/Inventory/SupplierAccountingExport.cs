@@ -238,11 +238,8 @@ public static class SupplierAccountingExport
 
     /// <summary>
     /// The piece and label as Sage takes them. A piece longer than 13 characters is compacted rather
-    /// than cut: a number of the billing series, PREFIX/SITE/YEAR/SEQ ("FAC/CASA/2026/000318"),
-    /// becomes the prefix's initial, the site code cut to what is left, the year's last two digits
-    /// and the whole sequence ("FCASA26000318"), so each invoice keeps a piece of its own; anything
-    /// else loses its separators and keeps its last 13 characters. The full number is then put at
-    /// the head of the label when the label, cut to 35, does not already show it.
+    /// than cut (see <see cref="SagePiece"/>), and the full number is then put at the head of the
+    /// label when the label, cut to 35, does not already show it.
     /// </summary>
     internal static (string Piece, string Label) SageCells(string piece, string label)
     {
@@ -259,23 +256,56 @@ public static class SupplierAccountingExport
         return (compact, cut);
     }
 
+    /// <summary>
+    /// A piece of at most 13 characters, each distinct number keeping a piece of its own. A number
+    /// of the billing series, PREFIX/SITE/YEAR/SEQ ("FAC/CASA-ANFA/2026/000318"), becomes the
+    /// prefix's initial, a short code worked out from the whole "PREFIX/SITE" (so that sites whose
+    /// codes start alike, and the invoices, credit notes and receipts of one site, do not share
+    /// it), the year's last two digits and the whole sequence: "F" + 4 characters + "26000318".
+    /// Anything else keeps its first character, a short code of the whole text and the end of it.
+    /// The short code depends on the text alone, so a piece is the same in every export.
+    /// </summary>
     public static string SagePiece(string piece)
     {
         piece = piece.Trim();
         if (piece.Length <= SagePieceLength) return piece;
 
-        var parts = piece.Split(['/', '-', ' ', '.', '_'], StringSplitOptions.RemoveEmptyEntries);
+        // The site code is free text: only the slashes of the series separate its parts.
+        var parts = piece.Split('/', StringSplitOptions.TrimEntries);
         if (parts is [var prefix, var site, var year, var sequence]
-            && prefix.All(char.IsAsciiLetter) && year.Length == 4 && year.All(char.IsAsciiDigit)
-            && sequence.All(char.IsAsciiDigit))
+            && prefix.Length > 0 && char.IsAsciiLetter(prefix[0]) && site.Length > 0
+            && year.Length == 4 && year.All(char.IsAsciiDigit)
+            && sequence.Length > 0 && sequence.All(char.IsAsciiDigit))
         {
             var room = SagePieceLength - 1 - 2 - sequence.Length;
-            if (room >= 1)
-                return $"{char.ToUpperInvariant(prefix[0])}{(site.Length > room ? site[..room] : site)}{year[2..]}{sequence}";
+            if (room >= 3)
+                return $"{char.ToUpperInvariant(prefix[0])}{ShortCode($"{prefix}/{site}", room)}{year[2..]}{sequence}";
         }
 
-        var joined = string.Concat(parts);
-        return joined.Length <= SagePieceLength ? joined : joined[^SagePieceLength..];
+        var joined = string.Concat(piece.Where(char.IsAsciiLetterOrDigit)).ToUpperInvariant();
+        if (joined.Length == 0) joined = piece;
+        const int tail = SagePieceLength - 1 - 4;
+        return $"{char.ToUpperInvariant(joined[0])}{ShortCode(piece, 4)}{(joined.Length > tail ? joined[^tail..] : joined)}";
+    }
+
+    /// <summary>
+    /// <paramref name="width"/> base-36 characters taken from a 64-bit FNV-1a hash of the text, case
+    /// ignored: stable from one run, machine or version to the next, unlike <c>string.GetHashCode</c>.
+    /// </summary>
+    private static string ShortCode(string text, int width)
+    {
+        const string digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        var hash = 14695981039346656037UL;
+        foreach (var b in Encoding.UTF8.GetBytes(text.ToUpperInvariant()))
+            hash = (hash ^ b) * 1099511628211UL;
+
+        var code = new char[width];
+        for (var i = width - 1; i >= 0; i--)
+        {
+            code[i] = digits[(int)(hash % 36UL)];
+            hash /= 36UL;
+        }
+        return new string(code);
     }
 
     private static string Amount(decimal value, bool sage) =>

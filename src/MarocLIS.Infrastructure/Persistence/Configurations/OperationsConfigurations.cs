@@ -41,6 +41,8 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(e => e.CreditedAmount).HasColumnType("decimal(18,2)");
         builder.Ignore(e => e.OutstandingAmount);
         builder.Ignore(e => e.CreditableAmount);
+        builder.Ignore(e => e.PayerCreditedAmount);
+        builder.Ignore(e => e.PayerDueAmount);
         builder.Ignore(e => e.IsFullyCredited);
 
         builder.HasMany(e => e.Lines).WithOne()
