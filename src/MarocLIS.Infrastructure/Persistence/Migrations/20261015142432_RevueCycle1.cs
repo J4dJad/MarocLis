@@ -61,6 +61,7 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 UPDATE o SET o.DirectBillingAtRegistration =
   CASE WHEN c.DirectBillingEnabled = 1 AND p.ThirdPartyPaymentAgreement = 1
         AND (p.AgreementValidUntil IS NULL OR p.AgreementValidUntil >= CAST(o.RegisteredAt AS date))
+        AND o.ReimbursementRateAtRegistration > 0
        THEN 1 ELSE 0 END
 FROM ord.LabOrders o
 JOIN pat.PatientCoverages c ON c.Id = o.PatientCoverageId

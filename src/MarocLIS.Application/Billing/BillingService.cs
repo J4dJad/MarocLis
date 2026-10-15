@@ -25,7 +25,31 @@ public sealed record BillableOrderRow(
     int AnalysisCount,
     LabOrderStatus Status,
     /// <summary>Deposits taken on the order and not yet turned into a settlement or refunded.</summary>
-    decimal DepositHeld = 0m);
+    decimal DepositHeld = 0m,
+    /// <summary>The payer is billed directly for its share (frozen at registration).</summary>
+    bool DirectBilling = false,
+    /// <summary>
+    /// Set when the order is already invoiced and listed only for the deposit left over to refund.
+    /// </summary>
+    Guid? InvoiceId = null,
+    string? InvoiceNumber = null,
+    /// <summary>
+    /// Was on an invoice that credit notes have wholly reversed: it is waiting to be invoiced again.
+    /// </summary>
+    bool PreviouslyInvoiced = false)
+{
+    /// <summary>Whether the row can be put on a new invoice: neither cancelled nor invoiced.</summary>
+    public bool IsInvoiceable => InvoiceId is null && Status != LabOrderStatus.Cancelled;
+
+    /// <summary>
+    /// What a further deposit may still cover: what the patient will owe less the deposits held.
+    /// Under direct billing the payer's share is claimed from the payer, so only the patient's
+    /// share can be taken in advance, as <see cref="BillingService.TakeDepositAsync"/> enforces.
+    /// </summary>
+    public decimal DepositCeiling =>
+        Math.Max(0m, Money.Round((PayerId is not null && DirectBilling ? PatientShare : Total)
+                                 - DepositHeld));
+}
 
 /// <summary>One invoice in the ledger view.</summary>
 public sealed record InvoiceRow(
@@ -515,8 +539,27 @@ public sealed class BillingService(
         var applied = original.ApplyCreditNote(creditNote.TotalAmount);
         if (applied.IsFailure) return Result.Failure<Guid>(applied.Errors);
 
+        // Wholly reversed, the invoice no longer bills its orders: they are freed, so they come
+        // back to the billing desk and the correct invoice can be issued — to the patient, or to
+        // the payer when the first one was addressed wrongly. Left attached to the reversed
+        // invoice, they were refused as already invoiced and their acts stayed on no valid invoice.
+        // Deposits still held follow the order and are applied to the new invoice; those already
+        // applied are settlements on the reversed invoice, refunded from it.
+        var released = new List<string>();
+
+        if (original.IsFullyCredited)
+        {
+            foreach (var order in await orders.ListAsync(o => o.InvoiceId == original.Id, ct))
+            {
+                order.InvoiceId = null;
+                orders.Update(order);
+                released.Add(order.AccessionNumber);
+            }
+        }
+
         unitOfWork.AuditReason =
-            $"Avoir {creditNote.Number} sur la facture {original.Number} : {reason}";
+            $"Avoir {creditNote.Number} sur la facture {original.Number} : {reason}"
+            + (released.Count > 0 ? $" — dossier(s) à refacturer : {string.Join(", ", released)}" : string.Empty);
 
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);

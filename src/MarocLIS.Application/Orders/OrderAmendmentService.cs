@@ -303,6 +303,14 @@ public sealed class OrderAmendmentService(
         if (order.IsClosed)
             return Result.Failure<OrderAmendment>(Error.Conflict("Order_ClosedCannotAddItem"));
 
+        // An order carries one invoice. An act added after it was issued would be on none: the
+        // order no longer reaches the billing desk, and an issued invoice is never edited. The
+        // addition goes on a new order, or the invoice is credited in full first, which frees the
+        // order for a new invoice that includes it.
+        if (order.InvoiceId is not null)
+            return Result.Failure<OrderAmendment>(
+                Error.Conflict("Order_InvoicedCannotAddItem", order.AccessionNumber));
+
         var patient = await patients.GetByIdWithDetailsAsync(order.PatientId, ct);
         if (patient is null)
             return Result.Failure<OrderAmendment>(Error.NotFound("Order_PatientNotFound"));
