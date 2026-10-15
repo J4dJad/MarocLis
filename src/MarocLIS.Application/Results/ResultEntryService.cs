@@ -302,6 +302,35 @@ public sealed class ResultEntryService(
         });
     }
 
+    /// <summary>The most points the antériorité chart shows: beyond that it stops being readable.</summary>
+    public const int ResultHistoryLimit = 30;
+
+    /// <summary>
+    /// The patient's validated values for one parameter, oldest first, for the antériorité chart of
+    /// the entry and validation screens. Read from the order so the screen cannot ask for the
+    /// history of a patient it is not showing, and through the same merged-file walk as the
+    /// antériorité column: a chart that lost the survivor's years of values the day two files were
+    /// merged would contradict the column beside it.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<ResultHistoryPoint>>> GetHistoryAsync(
+        Guid orderId, Guid testParameterId, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Results.View);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<ResultHistoryPoint>>(permitted.FirstError);
+
+        var order = await orders.GetByIdAsync(orderId, ct);
+        if (order is null) return Result.Failure<IReadOnlyList<ResultHistoryPoint>>(Error.NotFound("Order_NotFound"));
+
+        var points = await queries.GetValidatedHistoryAsync(order.PatientId, testParameterId,
+                                                            ResultHistoryLimit, ct);
+
+        // Other files' values are shown, so the access is recorded like opening the order.
+        await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.ViewOrder, order.PatientId, order.Id,
+                                     "ResultHistory", points.Count, ct: ct);
+
+        return Result.Success(points);
+    }
+
     /// <summary>
     /// Stores a batch of entries and runs the full post-analytical pipeline over the order.
     /// Batched because a technician types a whole panel and expects the calculated parameters and
@@ -710,6 +739,15 @@ public interface IResultQueries
         Guid patientId, IReadOnlyCollection<Guid> parameterIds, DateTimeOffset before,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// The patient's validated numeric values for one parameter, merged files included, the latest
+    /// <paramref name="limit"/> of them in chronological order (oldest first) — the antériorité
+    /// chart. Unlike <see cref="GetPreviousValuesAsync"/> there is no cut-off date: the current
+    /// order's value is part of the curve once it is validated.
+    /// </summary>
+    Task<IReadOnlyList<ResultHistoryPoint>> GetValidatedHistoryAsync(
+        Guid patientId, Guid parameterId, int limit, CancellationToken ct = default);
+
     Task<IReadOnlyList<ReflexRule>> GetActiveReflexRulesAsync(IReadOnlyList<Guid> triggerParameterIds,
                                                                CancellationToken ct = default);
 
@@ -747,3 +785,7 @@ public interface IResultQueries
 }
 
 public sealed record PreviousValue(decimal Value, DateOnly Date, Guid TestResultId);
+
+/// <summary>One validated value on the antériorité chart, with the file it was reported in.</summary>
+public sealed record ResultHistoryPoint(Guid TestResultId, DateTimeOffset ValidatedAt, decimal Value,
+                                        string? ValueOperator, string AccessionNumber);

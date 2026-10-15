@@ -61,6 +61,7 @@ public sealed class ResultEntryView : LocalizedView
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly Button _save = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _validate = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _history = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
 
     // ---- worklist: the dossiers with results to enter ----
@@ -198,12 +199,15 @@ public sealed class ResultEntryView : LocalizedView
         _validate.Bounds = new Rectangle(200, 10, 220, UiTheme.ButtonHeight);
         _validate.Enabled = false;
 
-        _status.Bounds = new Rectangle(434, 16, 620, 20);
+        _history.Bounds = new Rectangle(430, 10, 170, UiTheme.ButtonHeight);
+        _history.Enabled = false;
+
+        _status.Bounds = new Rectangle(614, 16, 620, 20);
         _status.Font = UiTheme.Small;
         _status.ForeColor = UiTheme.TextSecondary;
         _status.AutoSize = false;
 
-        actions.Controls.AddRange([_save, _validate, _status]);
+        actions.Controls.AddRange([_save, _validate, _history, _status]);
 
         var entryHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
         entryHost.Controls.Add(gridHost);
@@ -502,6 +506,21 @@ public sealed class ResultEntryView : LocalizedView
         PermissionGate.Require(Permissions.Results.Enter, _save, _benchSheet);
         PermissionGate.Require(Permissions.Results.TechnicalValidate, _validate);
 
+        // The antériorités of the selected parameter: the button, or a double-click on the
+        // antériorité cell, which is where the eye already is when the last value raises a doubt.
+        _history.Visible = PermissionGate.Allows(Permissions.Results.View);
+        PermissionGate.Require(Permissions.Results.View, _history);
+        _history.Click += async (_, _) => await ShowHistoryAsync();
+        _grid.CurrentCellChanged += (_, _) => _history.Enabled = ResultHistory.IsCharted(SelectedRow());
+        _grid.CellDoubleClick += async (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            if (_grid.Columns[e.ColumnIndex].Name != ColumnPrevious) return;
+            if (PermissionGate.IsBlocked(_history)) return;
+
+            await ShowHistoryAsync();
+        };
+
         // Enter commits the cell and steps down the column, which is how values are actually
         // entered. The grid's default — move right — would land in a read-only unit cell.
         _grid.KeyDown += OnGridKeyDown;
@@ -601,6 +620,7 @@ public sealed class ResultEntryView : LocalizedView
         _benchSheet.Text = T("BenchSheet.Open");
         _save.Text = T("Action.Save");
         _validate.Text = T("Validation.Technical");
+        _history.Text = T("Result.History");
 
         if (_grid.Columns.Count == 0) return;
 
@@ -857,6 +877,7 @@ public sealed class ResultEntryView : LocalizedView
 
         // Technical validation only makes sense once something has been entered.
         _validate.Enabled = sheet.Rows.Any(r => r.Status == TestResultStatus.Entered);
+        _history.Enabled = ResultHistory.IsCharted(SelectedRow());
 
         // Said once on opening, rather than discovered row by row as cells refuse the cursor.
         var awaiting = sheet.Rows.Where(r => r.IsAwaitingSample).Select(r => r.AnalysisCode).Distinct().ToList();
@@ -891,6 +912,66 @@ public sealed class ResultEntryView : LocalizedView
         }
 
         _scan.Focus();
+    }
+
+    // ---- Antériorités ---------------------------------------------------------------------------------
+
+    /// <summary>The sheet row under the grid's cursor, or null on a heading or an empty grid.</summary>
+    private ResultEntryRow? SelectedRow() =>
+        _grid.CurrentRow?.Tag is Guid id && _rowsById.TryGetValue(id, out var row) ? row : null;
+
+    /// <summary>
+    /// Opens the chart of the selected parameter's validated values, with the value typed in the
+    /// grid — saved or not — as the current point. Read through the load gate: the screen's one
+    /// context refuses a second query while the worklist or a file is loading.
+    /// </summary>
+    private async Task ShowHistoryAsync()
+    {
+        if (_sheet is not { } sheet) return;
+        if (SelectedRow() is not { } row || !ResultHistory.IsCharted(row)) return;
+
+        _grid.EndEdit();
+        var typed = _grid.CurrentRow?.Cells[ColumnValue].Value?.ToString();
+
+        IReadOnlyList<ResultHistoryPoint> points;
+
+        await _loadGate.WaitAsync();
+        try
+        {
+            var history = await _entry.GetHistoryAsync(sheet.LabOrderId, row.TestParameterId);
+
+            if (history.IsFailure)
+            {
+                _dialogs.ShowFailure(history);
+                return;
+            }
+
+            points = history.Value;
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away mid-load.
+            return;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Loading the history of parameter {ParameterId} failed.", row.TestParameterId);
+            _dialogs.Error(T("Message.UnexpectedError"));
+            return;
+        }
+        finally
+        {
+            _loadGate.Release();
+        }
+
+        // Shown once the gate is released: the dialog is modal, and the screen must not stay
+        // locked behind it.
+        var series = ResultHistory.SeriesFor(row, points, sheet.AccessionNumber,
+                                             row.IsEditable ? typed : null);
+
+        using var dialog = new ResultHistoryDialog(Localizer, row.ParameterName.For(Localizer.CurrentLanguage),
+                                                   series);
+        dialog.ShowDialog(FindForm());
     }
 
     // ---- Bench worksheet ---------------------------------------------------------------------------

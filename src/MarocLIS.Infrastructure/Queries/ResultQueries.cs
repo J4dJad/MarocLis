@@ -131,6 +131,44 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
     }
 
     /// <summary>
+    /// The patient's validated values for one parameter, the latest <paramref name="limit"/>,
+    /// returned oldest first. Joined through the order, merged files included, for the same reason
+    /// as <see cref="GetPreviousValuesAsync"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<ResultHistoryPoint>> GetValidatedHistoryAsync(
+        Guid patientId, Guid parameterId, int limit, CancellationToken ct = default)
+    {
+        if (limit <= 0) return [];
+
+        var patientIds = await WithMergedDuplicatesAsync(patientId, ct);
+
+        var latest = await db.TestResults
+            .AsNoTracking()
+            .Where(r => r.TestParameterId == parameterId
+                        && r.NumericValue != null
+                        && r.ValidatedAt != null)
+            .Join(db.LabOrders.AsNoTracking().Where(o => patientIds.Contains(o.PatientId)),
+                  result => result.LabOrderId,
+                  order => order.Id,
+                  (result, order) => new
+                  {
+                      result.Id, result.ValidatedAt, result.NumericValue, result.ValueOperator,
+                      order.AccessionNumber
+                  })
+            .OrderByDescending(x => x.ValidatedAt)
+            .ThenByDescending(x => x.Id)
+            .Take(limit)
+            .ToListAsync(ct);
+
+        // Taken newest first so the cap keeps the recent values; drawn oldest first.
+        return [.. latest
+            .AsEnumerable()
+            .Reverse()
+            .Select(x => new ResultHistoryPoint(x.Id, x.ValidatedAt!.Value, x.NumericValue!.Value,
+                                                x.ValueOperator, x.AccessionNumber))];
+    }
+
+    /// <summary>
     /// The patient plus every file merged into it, followed transitively. Merges can chain — a
     /// file that already absorbed a duplicate may itself be merged later — so one level is not
     /// enough. Only identifiers are read, across sites and soft deletion, since a duplicate

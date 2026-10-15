@@ -42,6 +42,8 @@
     <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\TypedEdits.cs" Link="Desktop\TypedEdits.cs" />
     <!-- The per-call query scopes the screens and the analyser host read through. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Composition\IsolatedQueries.cs" Link="Desktop\IsolatedQueries.cs" />
+    <!-- The value-axis arithmetic of the hand-drawn charts. -->
+    <Compile Include="..\..\src\MarocLIS.Desktop\Controls\ChartScale.cs" Link="Desktop\ChartScale.cs" />
   </ItemGroup>
 
 </Project>

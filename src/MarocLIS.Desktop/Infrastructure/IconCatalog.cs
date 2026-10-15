@@ -152,6 +152,7 @@ public static class IconCatalog
         ["Report.RecordDelivery"] = Glyph.MailCheck,
         ["Report.Reprint"] = Glyph.Printer,
         ["Report.Title"] = Glyph.FileText,
+        ["Result.History"] = Glyph.Activity,
         ["Sample.CreateAliquot"] = Glyph.TestTube,
         ["Sample.Discard"] = Glyph.Trash2,
         ["Sample.PurgeExpired"] = Glyph.Trash,
