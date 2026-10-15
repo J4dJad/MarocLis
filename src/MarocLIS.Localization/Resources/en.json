@@ -153,6 +153,7 @@
   "Payroll_SimplIrNothing": "No payroll was run in {0} for this site.",
   "Payroll_SimplIrNoFiscalId": "The site's fiscal identifier (IF) is not filled in: enter it in Settings, on the site's record.",
   "Payroll_SimplIrCodesRequired": "Enter the commune code and both rate codes from the Simpl-IR referential.",
+  "Payroll_BdsDuplicateCnss": "The same CNSS number appears on several payslips of the month, and the BDS file would declare only one of them: {0}. Correct the number in the employees' files, then reopen the month, update it from the files and close it again.",
   "Planning_EmployeeNotEmployed": "The employee is not employed that day.",
   "Planning_HoursInvalid": "The end time must differ from the start.",
   "Planning_OnLeave": "The employee is on approved leave that day.",

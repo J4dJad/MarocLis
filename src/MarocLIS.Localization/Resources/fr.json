@@ -153,6 +153,7 @@
   "Payroll_SimplIrNothing": "Aucune paie n'a été établie en {0} pour ce site.",
   "Payroll_SimplIrNoFiscalId": "L'identifiant fiscal (IF) du site n'est pas renseigné : saisissez-le dans Paramètres, fiche du site.",
   "Payroll_SimplIrCodesRequired": "Saisissez le code de la commune et les deux codes de taux du référentiel Simpl-IR.",
+  "Payroll_BdsDuplicateCnss": "Le même numéro CNSS figure sur plusieurs bulletins du mois, le fichier BDS n'en déclarerait qu'un : {0}. Corrigez le numéro dans les dossiers concernés, puis rouvrez le mois, reprenez les dossiers et clôturez à nouveau.",
   "Planning_EmployeeNotEmployed": "Le salarié n'est pas en poste ce jour-là.",
   "Planning_HoursInvalid": "L'heure de fin doit différer de l'heure de début.",
   "Planning_OnLeave": "Le salarié est en congé validé ce jour-là.",
