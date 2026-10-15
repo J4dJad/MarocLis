@@ -3769,6 +3769,7 @@
   "Claim_AcceptedAmountInvalid": "Le montant accepté doit être compris entre 0 et la part de l'organisme ({0}).",
   "Claim_AlreadySubmitted": "La facture {0} a déjà été transmise à l'organisme : elle ne peut pas figurer dans un second bordereau.",
   "Claim_OutcomeSkippedSettled": "La facture {0} a déjà son règlement organisme saisi : le retour global du bordereau ne la modifie pas.",
+  "Claim_MixedPayers": "La facture {0} relève d'un autre organisme que le reste du bordereau : un bordereau ne concerne qu'un seul organisme, elle sera transmise séparément.",
 
   "Sample_StorageLocationRequired": "L'emplacement de rangement est obligatoire.",
   "Sample_DiscardNoteRequired": "L'élimination d'un échantillon doit être motivée : elle met fin à toute possibilité de reprise.",
@@ -4048,6 +4049,7 @@
   "Invoice_CreditNoteExceedsBalance": "Le montant de l'avoir dépasse ce qui reste à créditer sur la facture ({0}) : les avoirs cumulés ne peuvent pas excéder le total facturé.",
   "Invoice_AlreadyFullyCredited": "La facture {0} est déjà entièrement annulée par avoir : il n'y a plus rien à créditer.",
   "Invoice_MultiplePayers": "Les dossiers {0} n'ont pas été enregistrés avec le même organisme payeur (ou certains sont sans tiers payant) : chaque dossier garde la répartition fixée à l'enregistrement. Facturez-les séparément.",
+  "Invoice_ClaimRequiresPrescriberInpe": "La facture {0} doit porter l'INPE du prescripteur pour être transmise à cet organisme.",
 
   "Payment_AmountMustBePositive": "Le montant du règlement doit être positif.",
   "Payment_ExceedsOutstanding": "Le montant dépasse le reste à payer ({0}).",

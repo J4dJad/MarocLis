@@ -3768,6 +3768,7 @@
   "Claim_AcceptedAmountInvalid": "The accepted amount must be between 0 and the payer's share ({0}).",
   "Claim_AlreadySubmitted": "Invoice {0} has already been submitted to the payer: it cannot go into a second claim batch.",
   "Claim_OutcomeSkippedSettled": "Invoice {0} already has its payer settlement recorded: the batch-level answer does not change it.",
+  "Claim_MixedPayers": "Invoice {0} belongs to a different payer than the rest of the batch: a batch covers a single payer, so it must be sent separately.",
 
   "Sample_StorageLocationRequired": "The storage location is mandatory.",
   "Sample_DiscardNoteRequired": "Discarding a sample must be justified: it ends any possibility of a repeat.",
@@ -4047,6 +4048,7 @@
   "Invoice_CreditNoteExceedsBalance": "The credit note exceeds what remains creditable on the invoice ({0}): credit notes together cannot exceed the invoiced total.",
   "Invoice_AlreadyFullyCredited": "Invoice {0} has already been fully credited: there is nothing left to credit.",
   "Invoice_MultiplePayers": "Orders {0} were not registered with the same payer (or some are self-pay): each order keeps the split fixed at registration. Invoice them separately.",
+  "Invoice_ClaimRequiresPrescriberInpe": "Invoice {0} must carry the prescriber's INPE to be sent to this payer.",
 
   "Payment_AmountMustBePositive": "The payment amount must be positive.",
   "Payment_ExceedsOutstanding": "The amount exceeds the outstanding balance ({0}).",
