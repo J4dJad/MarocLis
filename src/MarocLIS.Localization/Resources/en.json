@@ -1,5 +1,21 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Payroll_ScaleInvalid": "The tax scale is malformed: rising bounds “40000:0|60000:10|…|:37”.",
+  "Payroll_RateInvalid": "A rate or amount is invalid.",
+  "Payroll_Closed": "This month is closed.",
+  "Payroll_NotClosed": "This month is not closed.",
+  "Payroll_AlreadyIncluded": "This employee already has a payslip this month.",
+  "Payroll_Empty": "No payslip to close.",
+  "Payroll_PeriodInvalid": "Invalid pay month.",
+  "Payroll_PeriodExists": "The payroll for {0} is already open.",
+  "Payroll_NobodyToPay": "No employee in post that month has a base salary.",
+  "Payroll_NotFound": "Pay month not found.",
+  "Payroll_PayslipNotFound": "Payslip not found.",
+  "Payroll_NegativeVariable": "Enter positive numbers.",
+  "Payroll_TooManyAbsenceDays": "At most {0} unpaid days.",
+  "Payroll_TooManyOvertimeHours": "More than 100 overtime hours in the month: check the entry.",
+  "Payroll_NegativeNetPay": "A payslip has a negative net: reduce its deductions before closing.",
+  "Payroll_ReopenReasonRequired": "A reason for reopening is required.",
   "Planning_EmployeeNotEmployed": "The employee is not employed that day.",
   "Planning_HoursInvalid": "The end time must differ from the start.",
   "Planning_OnLeave": "The employee is on approved leave that day.",
@@ -77,6 +93,85 @@
   "Deposit_ExceedsOrderTotal": "The deposit exceeds what is left to cover on the request ({0}).",
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
+
+  "PayrollRate": {
+    "Notice": "Defaults: 2025 finance law and current CNSS rates. Check them with each new finance law, the minimum wage in particular. Draft months of the year are recomputed on saving; closed months do not change.",
+    "Scale": "Annual tax scale (bound:rate|…|:rate)",
+    "Transport": "Exempt transport / month (MAD)",
+    "MonthlyHours": "Hours per month",
+    "Smig": "Monthly minimum wage (MAD)",
+    "FamilyDeduction": "Family deduction / year (MAD)",
+    "ExpensesCap": "Annual expenses cap (MAD)",
+    "ExpensesThreshold": "Low-rate annual threshold (MAD)",
+    "ExpensesHigh": "Expenses high rate (%)",
+    "ExpensesLow": "Expenses low rate (%)",
+    "AmoEmployer": "AMO employer (%)",
+    "AmoEmployee": "AMO employee (%)",
+    "TrainingTax": "Training tax (%)",
+    "FamilyAllowance": "Family allowances (%)",
+    "CnssEmployer": "CNSS employer (%)",
+    "CnssEmployee": "CNSS employee (%)",
+    "CnssCeiling": "Monthly CNSS ceiling (MAD)"
+  },
+
+  "PayrollExemption": {
+    "Internship": "Exempt internship",
+    "Tahfiz": "Tahfiz",
+    "InsertionContract": "Exempt insertion contract",
+    "None": "—"
+  },
+
+  "PayslipWarning": {
+    "NegativeNet": "Negative net",
+    "NoRib": "RIB missing",
+    "NoCnssNumber": "CNSS number missing",
+    "BelowMinimumWage": "Below minimum wage"
+  },
+
+  "PayrollStatus": {
+    "Closed": "Closed",
+    "Draft": "Draft"
+  },
+
+  "Payroll": {
+    "VariablesNotice": "Overtime: +25% 6am–9pm, +50% 9pm–6am or on the rest day, +100% at night on the rest day. Transport is exempt up to the cap in the rates. Unpaid days are taken from leave on each “Update from files”.",
+    "CurrentResult": "Currently: gross {0} · CNSS {1} · AMO {2} · tax {3} · net {4} MAD (seniority {5}%).",
+    "OtherDeduction": "Other deductions",
+    "Advance": "Advance repayment",
+    "OtherExempt": "Other exempt allowances",
+    "Transport": "Transport allowance (MAD)",
+    "TaxableBonus": "Taxable bonuses (MAD)",
+    "Overtime100": "Overtime at 100%",
+    "Overtime50": "Overtime at 50%",
+    "Overtime25": "Overtime at 25%",
+    "AbsenceDays": "Unpaid days",
+    "OpenNotice": "A payslip is prepared for each employee in post that month with a base salary. Approved unpaid leave and unjustified absences are taken into account.",
+    "Month": "Pay month",
+    "ReopenPrompt": "Reason for reopening the payroll for {0}:",
+    "ClosePrompt": "Close the payroll for {0}? The payslips will no longer be recomputed.",
+    "Updated": "{0} new payslip(s); salaries, family situations and absences taken from the files.",
+    "NoPeriod": "No month open: “Open a month” prepares a payslip for each employee with a salary.",
+    "Totals": "Gross {0} · CNSS+AMO {1} · Tax {2} · Net {3} · Employer cost {4} MAD",
+    "Heading": "Payroll for {0} — {1}, {2} payslip(s)",
+    "Alerts": "To check",
+    "EmployerCost": "Employer cost",
+    "Net": "Net pay",
+    "IncomeTax": "Income tax",
+    "Social": "CNSS + AMO",
+    "Gross": "Gross",
+    "Base": "Base salary",
+    "Days": "Days",
+    "Reopen": "Reopen the month",
+    "Close": "Close the month",
+    "UpdateFromFiles": "Update from files",
+    "CnssSummary": "CNSS summary",
+    "Journal": "Payroll journal",
+    "AllPayslips": "All payslips",
+    "Payslip": "Payslip",
+    "Variables": "Month's variables",
+    "Settings": "Rates and scale",
+    "OpenMonth": "Open a month"
+  },
 
   "EmployeeJobShort": {
     "Support": "Supp.",
@@ -595,6 +690,7 @@
   },
 
   "Nav": {
+    "Payroll": "Payroll",
     "Planning": "Shift planning",
     "Leave": "Leave and absences",
     "PersonnelDeadlines": "HR deadlines",

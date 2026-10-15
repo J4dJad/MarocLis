@@ -156,6 +156,9 @@ public class LisDbContext : DbContext
     public DbSet<LeaveLedgerEntry> LeaveLedger => Set<LeaveLedgerEntry>();
     public DbSet<PublicHoliday> PublicHolidays => Set<PublicHoliday>();
     public DbSet<ShiftAssignment> ShiftAssignments => Set<ShiftAssignment>();
+    public DbSet<PayrollParameters> PayrollParameters => Set<PayrollParameters>();
+    public DbSet<PayrollPeriod> PayrollPeriods => Set<PayrollPeriod>();
+    public DbSet<Payslip> Payslips => Set<Payslip>();
 
     // ---- Traceability and sequences -----------------------------------------------------------
 

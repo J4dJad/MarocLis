@@ -144,3 +144,69 @@ public sealed class ShiftAssignmentConfiguration : IEntityTypeConfiguration<Shif
         builder.HasIndex(e => new { e.EmployeeId, e.Date }).HasDatabaseName("IX_ShiftAssignments_Employee_Date");
     }
 }
+
+// ---- Payroll -----------------------------------------------------------------------------------
+
+public sealed class PayrollParametersConfiguration : IEntityTypeConfiguration<PayrollParameters>
+{
+    public void Configure(EntityTypeBuilder<PayrollParameters> builder)
+    {
+        builder.ToTable("PayrollParameters", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.IncomeTaxScale).HasMaxLength(300).IsRequired();
+        builder.HasIndex(e => e.Year).IsUnique().HasDatabaseName("UX_PayrollParameters_Year");
+    }
+}
+
+public sealed class PayrollPeriodConfiguration : IEntityTypeConfiguration<PayrollPeriod>
+{
+    public void Configure(EntityTypeBuilder<PayrollPeriod> builder)
+    {
+        builder.ToTable("PayrollPeriods", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Ignore(e => e.FirstDay);
+        builder.Ignore(e => e.LastDay);
+        builder.Ignore(e => e.IsClosed);
+        builder.HasIndex(e => new { e.SiteId, e.Year, e.Month }).IsUnique()
+               .HasDatabaseName("UX_PayrollPeriods_Site_Month");
+
+        builder.HasMany(e => e.Payslips).WithOne()
+               .HasForeignKey(p => p.PayrollPeriodId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class PayslipConfiguration : IEntityTypeConfiguration<Payslip>
+{
+    public void Configure(EntityTypeBuilder<Payslip> builder)
+    {
+        builder.ToTable("Payslips", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Number).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.FullName).HasMaxLength(200).IsRequired();
+        builder.Property(e => e.Cin).HasMaxLength(20);
+        builder.Property(e => e.CnssNumber).HasMaxLength(20);
+        builder.Property(e => e.JobTitle).HasMaxLength(150);
+        builder.Property(e => e.Rib).HasMaxLength(30);
+        builder.Property(e => e.BankName).HasMaxLength(100);
+        builder.Property(e => e.BaseSalary).HasPrecision(18, 2);
+
+        builder.HasOne<Employee>().WithMany().HasForeignKey(e => e.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => new { e.PayrollPeriodId, e.EmployeeId }).IsUnique()
+               .HasDatabaseName("UX_Payslips_Period_Employee");
+        builder.HasIndex(e => e.EmployeeId).HasDatabaseName("IX_Payslips_Employee");
+
+        // Value objects replaced as a whole on each recomputation, stored as columns of the payslip.
+        builder.ComplexProperty(e => e.Variables, variables =>
+        {
+            foreach (var property in typeof(PayslipVariables).GetProperties().Where(p => p.PropertyType == typeof(decimal)))
+                variables.Property(property.Name).HasPrecision(18, 2);
+            variables.Property(v => v.Note).HasMaxLength(300);
+        });
+
+        builder.ComplexProperty(e => e.Amounts, amounts =>
+        {
+            foreach (var property in typeof(PayslipAmounts).GetProperties().Where(p => p.PropertyType == typeof(decimal)))
+                amounts.Property(property.Name).HasPrecision(18, 2);
+        });
+    }
+}

@@ -1,5 +1,21 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Payroll_ScaleInvalid": "Le barème IR est mal écrit : des plafonds croissants « 40000:0|60000:10|…|:37 ».",
+  "Payroll_RateInvalid": "Un taux ou montant est invalide.",
+  "Payroll_Closed": "Ce mois est clôturé.",
+  "Payroll_NotClosed": "Ce mois n'est pas clôturé.",
+  "Payroll_AlreadyIncluded": "Ce salarié a déjà un bulletin ce mois-ci.",
+  "Payroll_Empty": "Aucun bulletin à clôturer.",
+  "Payroll_PeriodInvalid": "Mois de paie invalide.",
+  "Payroll_PeriodExists": "La paie de {0} est déjà ouverte.",
+  "Payroll_NobodyToPay": "Aucun salarié en poste ce mois-là n'a de salaire de base renseigné.",
+  "Payroll_NotFound": "Mois de paie introuvable.",
+  "Payroll_PayslipNotFound": "Bulletin introuvable.",
+  "Payroll_NegativeVariable": "Saisissez des nombres positifs.",
+  "Payroll_TooManyAbsenceDays": "Au plus {0} jours non payés.",
+  "Payroll_TooManyOvertimeHours": "Plus de 100 heures supplémentaires dans le mois : vérifiez la saisie.",
+  "Payroll_NegativeNetPay": "Un bulletin a un net négatif : réduisez ses retenues avant de clôturer.",
+  "Payroll_ReopenReasonRequired": "Le motif de réouverture est obligatoire.",
   "Planning_EmployeeNotEmployed": "Le salarié n'est pas en poste ce jour-là.",
   "Planning_HoursInvalid": "L'heure de fin doit différer de l'heure de début.",
   "Planning_OnLeave": "Le salarié est en congé validé ce jour-là.",
@@ -77,6 +93,85 @@
   "Deposit_ExceedsOrderTotal": "L'acompte dépasse ce qui reste à couvrir sur le dossier ({0}).",
   "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
   "Deposit_NotFound": "Acompte introuvable.",
+
+  "PayrollRate": {
+    "Notice": "Valeurs par défaut : loi de finances 2025 et taux CNSS en vigueur. Vérifiez-les à chaque nouvelle loi de finances, notamment le SMIG. Les mois en brouillon de l'année sont recalculés à l'enregistrement ; les mois clôturés ne changent pas.",
+    "Scale": "Barème IR annuel (plafond:taux|…|:taux)",
+    "Transport": "Transport exonéré / mois (DH)",
+    "MonthlyHours": "Heures par mois",
+    "Smig": "SMIG mensuel (DH)",
+    "FamilyDeduction": "Charge de famille / an (DH)",
+    "ExpensesCap": "Plafond annuel frais pro. (DH)",
+    "ExpensesThreshold": "Seuil annuel taux bas (DH)",
+    "ExpensesHigh": "Frais pro. taux haut (%)",
+    "ExpensesLow": "Frais pro. taux bas (%)",
+    "AmoEmployer": "AMO patronale (%)",
+    "AmoEmployee": "AMO salarié (%)",
+    "TrainingTax": "Formation professionnelle (%)",
+    "FamilyAllowance": "Allocations familiales (%)",
+    "CnssEmployer": "CNSS patronale (%)",
+    "CnssEmployee": "CNSS salarié (%)",
+    "CnssCeiling": "Plafond CNSS mensuel (DH)"
+  },
+
+  "PayrollExemption": {
+    "Internship": "Stage exonéré",
+    "Tahfiz": "Tahfiz",
+    "InsertionContract": "Contrat d'insertion exonéré",
+    "None": "—"
+  },
+
+  "PayslipWarning": {
+    "NegativeNet": "Net négatif",
+    "NoRib": "RIB manquant",
+    "NoCnssNumber": "N° CNSS manquant",
+    "BelowMinimumWage": "Sous le SMIG"
+  },
+
+  "PayrollStatus": {
+    "Closed": "Clôturée",
+    "Draft": "Brouillon"
+  },
+
+  "Payroll": {
+    "VariablesNotice": "Heures supp. : +25 % de 6 h à 21 h, +50 % de 21 h à 6 h ou le jour de repos, +100 % la nuit du jour de repos. Le transport est exonéré jusqu'au plafond des paramètres. Les jours non payés sont repris des congés à chaque « Reprendre les dossiers ».",
+    "CurrentResult": "Actuellement : brut {0} · CNSS {1} · AMO {2} · IR {3} · net à payer {4} DH (ancienneté {5} %).",
+    "OtherDeduction": "Autres retenues",
+    "Advance": "Remboursement d'avance",
+    "OtherExempt": "Autres indemnités exonérées",
+    "Transport": "Indemnité de transport (DH)",
+    "TaxableBonus": "Primes imposables (DH)",
+    "Overtime100": "Heures supp. à 100 %",
+    "Overtime50": "Heures supp. à 50 %",
+    "Overtime25": "Heures supp. à 25 %",
+    "AbsenceDays": "Jours non payés",
+    "OpenNotice": "Un bulletin est préparé pour chaque salarié en poste ce mois-là dont le salaire de base est renseigné. Les congés sans solde et absences injustifiées validés sont repris.",
+    "Month": "Mois de paie",
+    "ReopenPrompt": "Motif de réouverture de la paie de {0} :",
+    "ClosePrompt": "Clôturer la paie de {0} ? Les bulletins ne seront plus recalculés.",
+    "Updated": "{0} nouveau(x) bulletin(s) ; salaires, situations familiales et absences repris des dossiers.",
+    "NoPeriod": "Aucun mois ouvert : « Ouvrir un mois » prépare un bulletin par salarié dont le salaire est renseigné.",
+    "Totals": "Brut {0} · CNSS+AMO {1} · IR {2} · Net à payer {3} · Coût employeur {4} DH",
+    "Heading": "Paie de {0} — {1}, {2} bulletin(s)",
+    "Alerts": "À vérifier",
+    "EmployerCost": "Coût employeur",
+    "Net": "Net à payer",
+    "IncomeTax": "IR",
+    "Social": "CNSS + AMO",
+    "Gross": "Brut",
+    "Base": "Salaire de base",
+    "Days": "Jours",
+    "Reopen": "Rouvrir le mois",
+    "Close": "Clôturer le mois",
+    "UpdateFromFiles": "Reprendre les dossiers",
+    "CnssSummary": "Récapitulatif CNSS",
+    "Journal": "Journal de paie",
+    "AllPayslips": "Tous les bulletins",
+    "Payslip": "Bulletin",
+    "Variables": "Variables du mois",
+    "Settings": "Taux et barème",
+    "OpenMonth": "Ouvrir un mois"
+  },
 
   "EmployeeJobShort": {
     "Support": "Sup",
@@ -595,6 +690,7 @@
   },
 
   "Nav": {
+    "Payroll": "Paie",
     "Planning": "Planning des gardes",
     "Leave": "Congés et absences",
     "PersonnelDeadlines": "Échéances RH",

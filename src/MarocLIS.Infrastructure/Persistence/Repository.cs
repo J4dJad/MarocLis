@@ -433,6 +433,16 @@ public sealed class EmployeeRepository(LisDbContext context, IClock clock)
                .FirstOrDefaultAsync(e => e.Id == id, ct);
 }
 
+public sealed class PayrollPeriodRepository(LisDbContext context, IClock clock)
+    : Repository<PayrollPeriod>(context, clock)
+{
+    /// <summary>The month with its payslips: they are recomputed and closed together.</summary>
+    protected override Task<PayrollPeriod?> LoadWithDetailsAsync(Guid id, CancellationToken ct = default) =>
+        Context.PayrollPeriods
+               .Include(p => p.Payslips)
+               .FirstOrDefaultAsync(p => p.Id == id, ct);
+}
+
 public sealed class QcResultRepository(LisDbContext context, IClock clock)
     : Repository<QcResult>(context, clock)
 {

@@ -116,6 +116,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<StockItemRepository>();
         services.AddScoped<InstrumentRepository>();
         services.AddScoped<EmployeeRepository>();
+        services.AddScoped<PayrollPeriodRepository>();
         services.AddScoped<QcResultRepository>();
         services.AddScoped<ControlledDocumentRepository>();
         services.AddScoped<PurchaseOrderRepository>();
@@ -145,6 +146,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IRepository<Instrument>>(sp => sp.GetRequiredService<InstrumentRepository>());
         services.AddScoped<IRepository<Domain.HumanResources.Employee>>(
             sp => sp.GetRequiredService<EmployeeRepository>());
+        services.AddScoped<IRepository<Domain.HumanResources.PayrollPeriod>>(
+            sp => sp.GetRequiredService<PayrollPeriodRepository>());
         services.AddScoped<IRepository<QcResult>>(sp => sp.GetRequiredService<QcResultRepository>());
         services.AddScoped<IRepository<ControlledDocument>>(
             sp => sp.GetRequiredService<ControlledDocumentRepository>());
