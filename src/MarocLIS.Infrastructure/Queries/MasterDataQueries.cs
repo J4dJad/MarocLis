@@ -251,7 +251,7 @@ public sealed class MasterDataQueries(LisDbContext db) : IMasterDataQueries
                 p.UsesNationalReferenceTariff, p.ThirdPartyPaymentAgreement, p.AgreementNumber,
                 p.AgreementValidUntil, p.PaymentTermsDays, p.RequiresPrescription,
                 p.RequiresInpeOnClaim, p.Ice, p.ContactName, p.Phone, p.Email, p.AddressLine,
-                p.City, p.IsActive,
+                p.City, p.IsActive, p.AccountingAccount,
 
                 // Counted rather than loaded: both are shown as numbers and a payer with a long
                 // history would otherwise pull thousands of rows across the LAN to display one.
@@ -277,7 +277,7 @@ public sealed class MasterDataQueries(LisDbContext db) : IMasterDataQueries
                     && p.AgreementValidUntil < today,
                 p.PaymentTermsDays, p.RequiresPrescription, p.RequiresInpeOnClaim, p.Ice,
                 p.ContactName, p.Phone, p.Email, p.AddressLine, p.City, p.IsActive,
-                p.CoveredPatientCount, p.OpenInvoiceCount))
+                p.CoveredPatientCount, p.OpenInvoiceCount, p.AccountingAccount))
         ];
     }
 

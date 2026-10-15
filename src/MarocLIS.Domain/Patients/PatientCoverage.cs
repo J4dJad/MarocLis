@@ -164,6 +164,13 @@ public sealed class Payer : AuditableAggregateRoot
     public string? AddressLine { get; set; }
     public string? City { get; set; }
 
+    /// <summary>
+    /// The payer's account in the accounting export: digits for a general sub-account (34211), any
+    /// other text for an auxiliary account under the payers' receivable. Null: the default account
+    /// with the payer's code as third party.
+    /// </summary>
+    public string? AccountingAccount { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     // Not ISoftDeletable. A payer the laboratory stops accepting is deactivated —

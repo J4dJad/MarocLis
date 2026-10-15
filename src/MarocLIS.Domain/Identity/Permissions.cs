@@ -181,6 +181,12 @@ public static class Permissions
         public const string EpidemiologicalDeclaration = "statistics.declaration";
     }
 
+    public static class Accounting
+    {
+        /// <summary>The accounting export, its accounts and journals, and the VAT statement.</summary>
+        public const string Export = "accounting.export";
+    }
+
     private static readonly Lazy<IReadOnlyList<string>> AllLazy = new(Discover);
 
     public static IReadOnlyList<string> All => AllLazy.Value;

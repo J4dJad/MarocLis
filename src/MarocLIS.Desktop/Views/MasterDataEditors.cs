@@ -1248,7 +1248,7 @@ internal sealed class PayerEditorDialog : MasterDataEditor
 {
     private readonly Guid? _id;
     private readonly TextBox _code, _nameFr, _nameAr, _nameEn, _agreementNumber, _ice,
-                             _contact, _phone, _email, _address, _city;
+                             _contact, _phone, _email, _address, _city, _accountingAccount;
     private readonly ComboBox _kind;
     private readonly NumericUpDown _rate, _terms;
     private readonly CheckBox _tnr, _thirdParty, _requiresPrescription, _requiresInpe, _active;
@@ -1298,6 +1298,9 @@ internal sealed class PayerEditorDialog : MasterDataEditor
 
         (_validUntilToggle, _validUntil) = OptionalDate("Coverage.AgreementValidUntil", 270, 300,
                                                           row?.AgreementValidUntil);
+
+        _accountingAccount = TextField("Coverage.AccountingAccount", 500, 282, 210, row?.AccountingAccount,
+                                       latin: true, mono: true);
 
         _contact = TextField("Inventory.SupplierContact", 20, 360, 220, row?.ContactName);
         _phone = TextField("Site.Phone", 260, 360, 170, row?.Phone, latin: true, mono: true);
@@ -1407,6 +1410,7 @@ internal sealed class PayerEditorDialog : MasterDataEditor
             Email = Blank(_email),
             AddressLine = Blank(_address),
             City = Blank(_city),
+            AccountingAccount = Blank(_accountingAccount),
             IsActive = _active.Checked
         };
 

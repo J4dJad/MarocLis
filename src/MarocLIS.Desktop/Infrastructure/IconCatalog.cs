@@ -266,5 +266,7 @@ public static class IconCatalog
         ["interfaces"] = Glyph.Cpu,
         ["masterdata"] = Glyph.Database,
         ["settings"] = Glyph.Settings,
+        ["accountingexport"] = Glyph.FileSpreadsheet,
+        ["accountingsettings"] = Glyph.Calculator,
     };
 }

@@ -509,7 +509,9 @@ internal static class RolePermissionSets
              Permissions.HumanResources.View, Permissions.HumanResources.Manage,
              Permissions.HumanResources.ManageHabilitations, Permissions.HumanResources.Salary,
              Permissions.HumanResources.RequestLeave, Permissions.HumanResources.ApproveLeave,
-             Permissions.HumanResources.ManagePlanning, Permissions.HumanResources.Accidents
+             Permissions.HumanResources.ManagePlanning, Permissions.HumanResources.Accidents,
+             // The director hands the accountant the period's entries.
+             Permissions.Accounting.Export
          ]),
 
         (SystemRoles.Biologist,
@@ -627,7 +629,8 @@ internal static class RolePermissionSets
              // Keys supplier invoices; releasing a blocked one and paying stay with the director.
              Permissions.Inventory.EnterInvoices,
              Permissions.Statistics.View,
-             Permissions.HumanResources.RequestLeave
+             Permissions.HumanResources.RequestLeave,
+             Permissions.Accounting.Export
          ]),
 
         (SystemRoles.Prescriber,

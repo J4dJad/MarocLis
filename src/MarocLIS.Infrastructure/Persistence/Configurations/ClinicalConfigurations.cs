@@ -143,6 +143,7 @@ public sealed class PayerConfiguration : IEntityTypeConfiguration<Payer>
         builder.Property(e => e.Email).HasMaxLength(200);
         builder.Property(e => e.AddressLine).HasMaxLength(400);
         builder.Property(e => e.City).HasMaxLength(100);
+        builder.Property(e => e.AccountingAccount).HasMaxLength(20);
     }
 }
 
