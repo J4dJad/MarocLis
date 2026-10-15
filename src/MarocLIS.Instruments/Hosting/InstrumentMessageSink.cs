@@ -686,12 +686,26 @@ public sealed class InstrumentMessageSink(
 
         if (imported > 0)
         {
-            // The reagent lot in use, so the control counts as evidence for that lot's release.
-            var lots = await pipeline.ReagentLotsInUseAsync(
-                [.. points.Select(p => p.TestParameterId).Distinct()], link.SiteId, ct);
+            // The reagent lot measured: a new lot loaded on this analyser for its acceptance QC
+            // when there is one, otherwise the lot in use. Crediting a new lot's controls to the
+            // lot in use left the new lot without evidence and mixed its values into the old one.
+            var parameterIds = points.Select(p => p.TestParameterId).Distinct().ToList();
+            var evaluated = await pipeline.ReagentLotsUnderEvaluationAsync(
+                parameterIds, link.SiteId, link.InstrumentId, ct);
+            var lots = await pipeline.ReagentLotsInUseAsync(parameterIds, link.SiteId, ct);
 
             foreach (var point in points)
-                point.ReagentLotId = lots.TryGetValue(point.TestParameterId, out var inUse) ? inUse : null;
+            {
+                if (evaluated.TryGetValue(point.TestParameterId, out var underEvaluation))
+                {
+                    point.ReagentLotId = underEvaluation;
+                    point.IsLotEvaluation = true;
+                }
+                else
+                {
+                    point.ReagentLotId = lots.TryGetValue(point.TestParameterId, out var inUse) ? inUse : null;
+                }
+            }
 
             unitOfWork.AuditReason =
                 $"Contrôle interne reçu de l'automate — lot {lot}, {imported} niveau(x)";

@@ -207,6 +207,11 @@ public sealed class QualityControlService(
             ? null
             : await queries.GetReagentLotsForQcAsync(parameterIds, namedLot, currentUser.SiteId, today, ct);
 
+        // A named lot still awaiting release makes its points an acceptance run for that lot,
+        // kept apart from the routine QC of the lot the patient results are produced with.
+        var evaluatedLot = namedLot is { } namedId ? await queries.GetReagentLotAsync(namedId, ct) : null;
+        if (evaluatedLot is { IsAwaitingRelease: false }) evaluatedLot = null;
+
         // --- 1. Store the raw points -------------------------------------------------------------
 
         foreach (var entry in entries)
@@ -238,6 +243,14 @@ public sealed class QualityControlService(
                 Comment = entry.Comment
             };
 
+            if (evaluatedLot is not null && result.ReagentLotId == evaluatedLot.Id)
+            {
+                result.IsLotEvaluation = true;
+
+                // The analyser's own transmissions of the next runs are credited to this lot.
+                evaluatedLot.StartEvaluationOn(result.InstrumentId);
+            }
+
             await results.AddAsync(result, ct);
             created.Add((result, target, entry));
         }
@@ -262,7 +275,8 @@ public sealed class QualityControlService(
                 continue;
             }
 
-            var history = await queries.GetZScoreHistoryAsync(target.Id, 12, ct);
+            var history = await queries.GetZScoreHistoryAsync(
+                target.Id, 12, result.IsLotEvaluation ? result.ReagentLotId : null, ct);
 
             // The point just stored is the newest element of the history the rules evaluate.
             var series = new List<QcPoint>(history)
@@ -288,8 +302,9 @@ public sealed class QualityControlService(
             result.ApplyEvaluation(evaluation);
 
             // Only accepted points shape the laboratory's own mean and SD. Folding in a rejected
-            // point would widen the limits to accommodate the very error that was detected.
-            if (evaluation.Outcome is QcOutcome.Accepted or QcOutcome.Warning)
+            // point would widen the limits to accommodate the very error that was detected. Nor
+            // does a new lot's acceptance point: the limits are those of the lot in use.
+            if ((evaluation.Outcome is QcOutcome.Accepted or QcOutcome.Warning) && !result.IsLotEvaluation)
                 target.AccumulatePoint(result.Value);
 
             outcomes.Add(new QcEntryResult(result.Id, target.Id,
@@ -302,9 +317,10 @@ public sealed class QualityControlService(
 
         // Grouped by analyser: a submission may cover several, and each rejected control speaks
         // for its own instrument only. Flagging every parameter against the first entry's
-        // analyser left the results of the instrument actually out of control unflagged.
+        // analyser left the results of the instrument actually out of control unflagged. A new
+        // lot's rejected acceptance run flags nothing: no patient result was produced with it.
         var rejectedByInstrument = created
-            .Where(x => x.Result.IsRejected)
+            .Where(x => x.Result.IsRejected && !x.Result.IsLotEvaluation)
             .GroupBy(x => x.Result.InstrumentId,
                      x => x.Target.TestParameterId)
             .ToList();

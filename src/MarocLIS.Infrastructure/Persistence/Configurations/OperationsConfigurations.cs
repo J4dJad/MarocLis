@@ -220,6 +220,9 @@ public sealed class QcResultConfiguration : IEntityTypeConfiguration<QcResult>
         builder.Property(e => e.OverrideJustification).HasMaxLength(1000);
         builder.Property(e => e.Comment).HasMaxLength(1000);
 
+        // A new lot's acceptance point, kept out of the routine series and statistics.
+        builder.Property(e => e.IsLotEvaluation);
+
         // The Levey-Jennings chart reads a window of points for one target, newest last.
         builder.HasIndex(e => new { e.QcTargetId, e.MeasuredAt })
                .HasDatabaseName("IX_QcResults_Target_Measured");
@@ -437,6 +440,11 @@ public sealed class ReagentLotConfiguration : IEntityTypeConfiguration<ReagentLo
         builder.Property(e => e.QuantityReceived).HasColumnType("decimal(18,3)");
         builder.Property(e => e.QuantityRemaining).HasColumnType("decimal(18,3)");
         builder.Property(e => e.UnitPriceMad).HasColumnType("decimal(18,2)");
+
+        // On-board stability runs from the latest unit issued; the analyser a new lot is being
+        // evaluated on receives its transmitted controls.
+        builder.Property(e => e.LastOpenedOn);
+        builder.Property(e => e.EvaluationInstrumentId);
 
         builder.HasIndex(e => new { e.StockItemId, e.LotNumber })
                .IsUnique()

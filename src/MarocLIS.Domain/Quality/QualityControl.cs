@@ -209,6 +209,14 @@ public sealed class QcResult : AuditableAggregateRoot, ISiteScoped
 
     /// <summary>Reagent and calibration in use, so a rejection points at a cause.</summary>
     public Guid? ReagentLotId { get; set; }
+
+    /// <summary>
+    /// Measured on a reagent lot still awaiting release, for its acceptance. Such a point is
+    /// evidence about the new lot only: it stays out of the routine Westgard series, out of the
+    /// laboratory's own mean and SD, and never flags the patient results, which were all produced
+    /// with the lot in use.
+    /// </summary>
+    public bool IsLotEvaluation { get; set; }
     public Guid? CalibrationRecordId { get; set; }
 
     // ---- Review -------------------------------------------------------------------------------

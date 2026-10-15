@@ -72,6 +72,19 @@ public sealed class ResultPostEntryPipeline(
             : await queries.GetReagentLotsInUseAsync(testParameterIds, siteId, clock.Today, ct)
               ?? new Dictionary<Guid, Guid>();
 
+    /// <summary>
+    /// The lot awaiting release loaded on the analyser for its acceptance QC, for each parameter
+    /// that has exactly one. The controls that analyser sends belong to that lot.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, Guid>> ReagentLotsUnderEvaluationAsync(
+        IReadOnlyCollection<Guid> testParameterIds, Guid siteId, Guid instrumentId,
+        CancellationToken ct = default) =>
+        testParameterIds.Count == 0
+            ? new Dictionary<Guid, Guid>()
+            : await queries.GetReagentLotsUnderEvaluationAsync(testParameterIds, siteId, instrumentId,
+                                                               clock.Today, ct)
+              ?? new Dictionary<Guid, Guid>();
+
     public async Task<ResultCatalogue> LoadCatalogueAsync(LabOrder order, CancellationToken ct = default)
     {
         var parameters = new Dictionary<Guid, TestParameter>();
