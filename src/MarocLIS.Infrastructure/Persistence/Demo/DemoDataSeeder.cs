@@ -132,6 +132,8 @@ public sealed partial class DemoDataSeeder(
             await RunSectionAsync("Équipements", SeedEquipmentAsync, ct);
             await RunSectionAsync("Interface automate", SeedInstrumentInterfaceAsync, ct);
             await RunSectionAsync("Contrôle interne", SeedQualityControlAsync, ct);
+            // Before the orders, so a demonstration file can carry the analysis sent out.
+            await RunSectionAsync("Sous-traitance", SeedSubcontractingAsync, ct);
             await RunSectionAsync("Patients", SeedPatientsAsync, ct);
             await RunSectionAsync("Dossiers", SeedOrdersAsync, ct);
 

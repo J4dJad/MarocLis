@@ -713,8 +713,10 @@ public sealed class ReportReleaseService(
                     .ThenBy(g => g.Key.Code, StringComparer.Ordinal)
                     .Select(analysisGroup =>
                     {
-                        var item = order.Items.FirstOrDefault(
-                            i => i.AnalysisTestId == analysisGroup.Key.Id);
+                        // The act these results belong to. Looked up by analysis, a cancelled earlier
+                        // request for it came first, and its partner was named for the one reported.
+                        var itemId = analysisGroup.First().Result.LabOrderItemId;
+                        var item = order.Items.FirstOrDefault(i => i.Id == itemId);
 
                         var lines = analysisGroup
                             .OrderBy(x => x.Parameter.DisplayOrder)

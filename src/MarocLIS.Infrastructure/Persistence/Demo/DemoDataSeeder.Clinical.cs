@@ -262,8 +262,9 @@ public sealed partial class DemoDataSeeder
         new("DEMO-000012", DemoStage.Received, [], ["NFS", "IONO", "CREAT"], "Bennis",
             "Altération de l'état général, déshydratation.", RejectTubeOf: "NFS"),
 
-        new("DEMO-000013", DemoStage.Received, [], ["GLY", "UREE", "CREAT"], "Bennis",
-            "Bilan rénal de contrôle.", Fasted: true, FastingHours: 10)
+        // The vitamin D is sent out: received, it waits on the subcontracting list to leave.
+        new("DEMO-000013", DemoStage.Received, [], ["GLY", "UREE", "CREAT", DemoSubcontractedCode], "Bennis",
+            "Bilan rénal de contrôle, insuffisance rénale chronique.", Fasted: true, FastingHours: 10)
     ];
 
     /// <summary>Parameters measured on the demonstration biochemistry analyser.</summary>

@@ -395,6 +395,23 @@ public sealed class OrderAmendmentService(
                 warnings.Add(Error.Validation("Order_AddedOnReceivedSample", sample.Barcode));
         }
 
+        // An analysis put on a tube already drawn starts where the tube is. Left pending on a tube
+        // already received, it could never be completed, and a subcontracted one never reached the
+        // send-out list. Its own promise runs from now, when it was asked for.
+        var now = clock.Now;
+
+        foreach (var item in added)
+        {
+            var tube = reusable.FirstOrDefault(s => s.Id == item.SampleId);
+            if (tube?.CollectedAt is not { } collectedAt) continue;
+
+            item.MarkCollected(collectedAt);
+
+            if (tube.ReceivedAt is not null)
+                item.MarkReceived(now, selected.First(a => a.Test.Id == item.AnalysisTestId)
+                                               .Test.ExpectedCompletion(now, order.IsUrgent));
+        }
+
         await composer.CreateAwaitedResultsAsync(order, selected, added, ct);
 
         // The promise moves out only if the addition is slower than what was already promised —

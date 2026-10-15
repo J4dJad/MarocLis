@@ -1,5 +1,6 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Catalog;
 using MarocLIS.Application.Instruments;
 using MarocLIS.Application.Inventory;
 using MarocLIS.Domain.Catalog;
@@ -7,6 +8,7 @@ using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
 using MarocLIS.Domain.Inventory;
 using MarocLIS.Domain.Morocco;
+using MarocLIS.Domain.Organization;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
 using Microsoft.EntityFrameworkCore;
@@ -775,5 +777,161 @@ public sealed partial class DemoDataSeeder
                                            now.AddMinutes(-20), ct);
             return true;
         }, ct);
+    }
+
+    // ---- Subcontracting -------------------------------------------------------------------------
+
+    /// <summary>Code of the demonstration partner laboratory.</summary>
+    private const string DemoPartnerCode = DemoPrefix + "PART";
+
+    /// <summary>Code of the demonstration analysis sent to it.</summary>
+    private const string DemoSubcontractedCode = DemoPrefix + "VITD";
+
+    /// <summary>
+    /// A partner laboratory and an analysis the laboratory sends to it, so the send-out circuit —
+    /// list, slip, partner reference, return — can be tried: the 25-OH vitamin D, which most
+    /// Moroccan laboratories without a chemiluminescence platform for it send out. The starter
+    /// catalogue has no analysis that is commonly sent out, so this one is added, demonstration-coded.
+    /// <para>
+    /// The partner is written directly, since no service creates a site; the analysis, its
+    /// parameter, interval and price go through the catalogue screens' service. Each part is looked
+    /// for first, so an interrupted run is completed rather than repeated.
+    /// </para>
+    /// </summary>
+    private async Task SeedSubcontractingAsync(CancellationToken ct)
+    {
+        var partnerId = await QueryAsync(db => db.Sites.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.Code == DemoPartnerCode)
+            .Select(s => (Guid?)s.Id)
+            .FirstOrDefaultAsync(ct));
+
+        if (partnerId is null)
+        {
+            var partner = new LabSite(DemoPartnerCode,
+                                      new MultilingualText("Laboratoire partenaire (démo)",
+                                                           "المختبر الشريك (عرض)",
+                                                           "Partner laboratory (demo)"),
+                                      LabSiteKind.ReferralPartner)
+            {
+                LegalName = "LABORATOIRE PARTENAIRE DÉMO SARL",
+                AddressLine = new MultilingualText("45, avenue Hassan II — Rabat"),
+                City = "Rabat",
+                Phone = "+212537000000",
+                Email = "envois@partenaire-demo.example"
+            };
+
+            await WriteAsync(db =>
+            {
+                db.Sites.Add(partner);
+                return Task.CompletedTask;
+            }, ct);
+
+            partnerId = partner.Id;
+        }
+
+        var analysis = await QueryAsync(db => db.AnalysisTests.IgnoreQueryFilters().AsNoTracking()
+            .Where(a => a.Code == DemoSubcontractedCode)
+            .Select(a => new
+            {
+                a.Id,
+                Parameter = a.Parameters.Select(p => (Guid?)p.Id).FirstOrDefault(),
+                HasRange = a.Parameters.Any(p => p.ReferenceRanges.Any()),
+                HasTariff = a.Tariffs.Any()
+            })
+            .FirstOrDefaultAsync(ct));
+
+        var analysisId = analysis?.Id;
+
+        if (analysisId is null)
+        {
+            var nomenclature = await QueryAsync(async db => new
+            {
+                Department = await db.Departments.AsNoTracking()
+                    .Where(d => d.Code == Department.Codes.Biochemistry).Select(d => (Guid?)d.Id).FirstOrDefaultAsync(ct),
+                Specimen = await db.SpecimenTypes.AsNoTracking()
+                    .Where(t => t.Code == SpecimenType.Codes.SerumDryTube).Select(t => (Guid?)t.Id).FirstOrDefaultAsync(ct),
+                Container = await db.ContainerTypes.AsNoTracking()
+                    .Where(c => c.Code == "TUBE_GEL").Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct)
+            });
+
+            if (nomenclature.Department is not { } departmentId || nomenclature.Specimen is not { } specimenId)
+            {
+                _problems.Add("Sous-traitance : discipline de biochimie ou sérum introuvable.");
+                return;
+            }
+
+            var created = await AsAsync<CatalogMaintenanceService, Result<Guid>>(
+                DemoActor.Administrator, s => s.SaveAnalysisAsync(new AnalysisRequest
+                {
+                    Code = DemoSubcontractedCode,
+                    Name = new MultilingualText("25-OH vitamine D (démo)", "فيتامين د 25-OH (عرض)",
+                                                "25-OH vitamin D (demo)"),
+                    DepartmentId = departmentId,
+                    SpecimenTypeId = specimenId,
+                    ContainerTypeId = nomenclature.Container,
+                    Method = new MultilingualText("Immunoessai par chimiluminescence (laboratoire partenaire)"),
+                    IsSubcontracted = true,
+                    SubcontractorSiteId = partnerId,
+                    // The partner's turnaround and the courier both ways.
+                    RoutineTurnaroundHours = 96,
+                    IsAvailableUrgently = false
+                }, ct), ct);
+
+            if (!Check(created, "Sous-traitance — analyse")) return;
+
+            analysisId = created.Value;
+        }
+
+        var parameterId = analysis?.Parameter;
+
+        if (parameterId is null)
+        {
+            var units = await QueryAsync(db => db.Units.AsNoTracking()
+                .Where(u => u.Code == "NG_ML").Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct));
+
+            var parameter = await AsAsync<CatalogMaintenanceService, Result<Guid>>(
+                DemoActor.Administrator, s => s.SaveParameterAsync(new ParameterRequest
+                {
+                    AnalysisTestId = analysisId.Value,
+                    Code = DemoSubcontractedCode,
+                    Name = new MultilingualText("25-OH vitamine D", "فيتامين د 25-OH", "25-OH vitamin D"),
+                    ValueType = ResultValueType.Numeric,
+                    UnitId = units,
+                    Decimals = 1
+                }, ct), ct);
+
+            if (!Check(parameter, "Sous-traitance — paramètre")) return;
+
+            parameterId = parameter.Value;
+        }
+
+        if (analysis is not { HasRange: true })
+        {
+            Check(await AsAsync<CatalogMaintenanceService, Result<Guid>>(
+                      DemoActor.Administrator, s => s.SaveRangeAsync(new ReferenceRangeRequest
+                      {
+                          TestParameterId = parameterId.Value,
+                          LowerLimit = 30m,
+                          UpperLimit = 100m,
+                          Source = "Valeurs du laboratoire partenaire (démo)",
+                          ValidFrom = new DateOnly(clock.Today.Year, 1, 1)
+                      }, ct), ct),
+                  "Sous-traitance — intervalle");
+        }
+
+        if (analysis is not { HasTariff: true })
+        {
+            Check(await AsAsync<CatalogMaintenanceService, Result<Guid>>(
+                      DemoActor.Administrator, s => s.AddTariffAsync(new TariffRequest
+                      {
+                          AnalysisTestId = analysisId.Value,
+                          ValidFrom = new DateOnly(clock.Today.Year, 1, 1),
+                          LetterKey = "B",
+                          Coefficient = 250m,
+                          LetterKeyValue = ReferenceDataSeeder.PlaceholderLetterKeyValueMad,
+                          Price = 250m * ReferenceDataSeeder.PlaceholderLetterKeyValueMad
+                      }, ct), ct),
+                  "Sous-traitance — tarif");
+        }
     }
 }

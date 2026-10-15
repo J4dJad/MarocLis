@@ -69,8 +69,10 @@ public sealed class SubcontractQueries(LisDbContext db) : ISubcontractQueries
 
         if (partner is null) return null;
 
+        // The slip numbers are per site, so the same number exists at another site, sent by somebody else.
         var sentBy = await db.LabOrderItems.AsNoTracking()
-            .Where(i => i.SubcontractDispatchNumber == dispatchNumber)
+            .Where(i => i.SubcontractDispatchNumber == dispatchNumber
+                        && db.LabOrders.Any(o => o.Id == i.LabOrderId && o.SiteId == siteId))
             .Select(i => db.Users.Where(u => u.Id == i.SubcontractSentByUserId).Select(u => u.FullName).FirstOrDefault())
             .FirstOrDefaultAsync(ct);
 

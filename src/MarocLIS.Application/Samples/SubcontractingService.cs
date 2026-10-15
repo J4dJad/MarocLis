@@ -121,10 +121,18 @@ public sealed class SubcontractingService(
         foreach (var orderId in orderIds)
         {
             var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
-            if (order is null) continue;
+
+            // This site's acts only, as the list shows them. Another site's act sent from here took
+            // this site's slip number and was then on no slip either site could print.
+            if (order is null || order.SiteId != currentUser.SiteId) continue;
 
             foreach (var item in order.Items.Where(i => itemIds.Contains(i.Id)))
             {
+                // An act performed here has no partner to look up: asking for one hid the reason.
+                if (!item.IsSubcontracted)
+                    return Result.Failure<IReadOnlyList<SubcontractDispatch>>(
+                        Error.Conflict("Subcontract_NotSubcontracted", order.AccessionNumber));
+
                 var partner = partnerOverride ?? item.SubcontractorSiteId;
 
                 if (partner is not { } partnerId || !partners.ContainsKey(partnerId))
@@ -212,7 +220,11 @@ public sealed class SubcontractingService(
         var order = orderIds.Count == 0 ? null : await orders.GetByIdWithDetailsAsync(orderIds[0], ct);
         var item = order?.Items.FirstOrDefault(i => i.Id == itemId);
 
-        if (order is null || item is null) return Result.Failure(Error.NotFound("Subcontract_NothingSelected"));
+        if (order is null || item is null || order.SiteId != currentUser.SiteId)
+            return Result.Failure(Error.NotFound("Subcontract_NothingSelected"));
+
+        if (!item.IsSubcontracted)
+            return Result.Failure(Error.Conflict("Subcontract_NotSubcontracted", order.AccessionNumber));
 
         var value = string.IsNullOrWhiteSpace(reference) ? null : reference.Trim();
 
