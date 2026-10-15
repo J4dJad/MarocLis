@@ -944,13 +944,18 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
 
     internal PrescriberRequest? Request { get; private set; }
 
-    internal PrescriberEditorDialog(ILocalizer localizer, IUserDialogs dialogs, PrescriberRow? row)
+    /// <param name="typedName">
+    /// For a new prescriber created from the order screen: the name already typed in the list, so
+    /// it is not typed twice.
+    /// </param>
+    internal PrescriberEditorDialog(ILocalizer localizer, IUserDialogs dialogs, PrescriberRow? row,
+                                    string? typedName = null)
         : base(localizer, dialogs,
                row is null ? "Order.NewPrescriber" : "Action.Edit", row?.FullName, 720, 620)
     {
         _id = row?.PrescriberId;
 
-        var parts = (row?.FullName ?? string.Empty).Split(' ', 2);
+        var parts = (row?.FullName ?? typedName?.Trim() ?? string.Empty).Split(' ', 2);
 
         _lastName = TextField("Patient.LastName", 20, 14, 200, parts.ElementAtOrDefault(0));
         _firstName = TextField("Patient.FirstName", 240, 14, 200, parts.ElementAtOrDefault(1));

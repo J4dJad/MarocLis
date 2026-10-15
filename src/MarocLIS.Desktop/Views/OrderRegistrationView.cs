@@ -61,6 +61,9 @@ public sealed class OrderRegistrationView : LocalizedView
     private readonly Label _priorityLabel = new();
     private readonly Label _originLabel = new();
     private readonly ComboBox _prescriber = new();
+    private readonly Button _newPrescriber = UiTheme.SecondaryButton("+");
+    private readonly ToolTip _tips = new();
+    private readonly Application.Administration.MasterDataService _masterDataService;
     private readonly Label _prescriberLabel = new();
     private readonly TextBox _clinicalInfo = UiTheme.Input(420);
     private readonly Label _clinicalInfoLabel = new();
@@ -86,6 +89,7 @@ public sealed class OrderRegistrationView : LocalizedView
                                  IClock clock, IUserDialogs dialogs,
                                  Composition.PatientEditorFactory patientEditor,
                                  Application.Administration.IMasterDataQueries masterData,
+                                 Application.Administration.MasterDataService masterDataService,
                                  ILocalizer localizer, ICultureManager cultureManager,
                                  ILogger<OrderRegistrationView>? logger = null)
         : base(localizer, cultureManager)
@@ -101,6 +105,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _dialogs = dialogs;
         _patientEditor = patientEditor;
         _masterData = masterData;
+        _masterDataService = masterDataService;
         _logger = logger;
 
         BuildLayout();
@@ -197,7 +202,11 @@ public sealed class OrderRegistrationView : LocalizedView
         _prescriber.FlatStyle = FlatStyle.Flat;
         _prescriber.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
         _prescriber.AutoCompleteSource = AutoCompleteSource.ListItems;
-        _prescriber.Bounds = new Rectangle(424, 22, 280, UiTheme.InputHeight);
+        _prescriber.Bounds = new Rectangle(424, 22, 248, UiTheme.InputHeight);
+
+        // A doctor met for the first time is created here, without leaving the file being typed.
+        _newPrescriber.Bounds = new Rectangle(676, 22, 28, UiTheme.InputHeight);
+        _newPrescriber.Padding = Padding.Empty;
 
         _clinicalInfoLabel.Font = UiTheme.Small;
         _clinicalInfoLabel.ForeColor = UiTheme.TextSecondary;
@@ -218,7 +227,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _selfPay.Location = new Point(600, 80);
 
         contextPanel.Controls.AddRange([_priorityLabel, _priority, _originLabel, _origin,
-                                        _prescriberLabel, _prescriber,
+                                        _prescriberLabel, _prescriber, _newPrescriber,
                                         _clinicalInfoLabel, _clinicalInfo, _fasted, _selfPay]);
 
         // --- catalogue and basket -----------------------------------------------------------------
@@ -361,6 +370,8 @@ public sealed class OrderRegistrationView : LocalizedView
         PermissionGate.Require(Permissions.Patients.Create, _newPatient);
         PermissionGate.Require(Permissions.Patients.Create, _emergencyPatient);
         PermissionGate.Require(Permissions.Orders.Create, _register);
+        PermissionGate.Require([Permissions.Catalog.Manage, Permissions.Orders.Create], _newPrescriber);
+        _newPrescriber.Click += async (_, _) => await CreatePrescriberAsync();
 
         _catalogSearch.TextChanged += async (_, _) => await SearchCatalogueAsync();
 
@@ -413,6 +424,8 @@ public sealed class OrderRegistrationView : LocalizedView
         _priorityLabel.Text = T("Field.Priority");
         _originLabel.Text = T("Order.Origin");
         _prescriberLabel.Text = T("Order.Prescriber");
+        _tips.SetToolTip(_newPrescriber, T("Order.NewPrescriber"));
+        _newPrescriber.AccessibleName = T("Order.NewPrescriber");
         _clinicalInfoLabel.Text = T("Order.ClinicalInformation");
         _fasted.Text = T("Order.Fasted");
         _selfPay.Text = T("PayerKind.SelfPay");
@@ -486,6 +499,38 @@ public sealed class OrderRegistrationView : LocalizedView
         {
             // The list only helps typing; a name typed freely is still accepted without it.
             _logger?.LogWarning(ex, "Loading the prescribers failed.");
+        }
+    }
+
+    private async Task CreatePrescriberAsync()
+    {
+        if (!_newPrescriber.Enabled) return;
+        _newPrescriber.Enabled = false;
+        try
+        {
+            // What was typed and matches nobody becomes the new doctor's name.
+            var typed = ChosenPrescriber() is null ? _prescriber.Text : null;
+            using var dialog = new PrescriberEditorDialog(Localizer, _dialogs, null, typed);
+
+            while (dialog.ShowDialog(FindForm()) == DialogResult.OK && dialog.Request is { } request)
+            {
+                var saved = await _masterDataService.SavePrescriberAsync(request);
+                if (saved.IsFailure)
+                {
+                    // The form stays open with what was typed, as in the directory screen.
+                    _dialogs.ShowFailure(saved, dialog.Text);
+                    continue;
+                }
+
+                await LoadPrescribersAsync(CancellationToken.None);
+                var created = _prescriber.Items.OfType<PrescriberChoice>().FirstOrDefault(p => p.Id == saved.Value);
+                if (created is not null) _prescriber.SelectedItem = created;
+                return;
+            }
+        }
+        finally
+        {
+            _newPrescriber.Enabled = true;
         }
     }
 
@@ -1054,7 +1099,7 @@ public sealed class OrderRegistrationView : LocalizedView
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _debounce.Dispose();
+        if (disposing) { _debounce.Dispose(); _tips.Dispose(); }
         base.Dispose(disposing);
     }
 

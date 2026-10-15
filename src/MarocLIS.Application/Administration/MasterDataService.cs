@@ -924,7 +924,11 @@ public sealed class MasterDataService(
     public async Task<Result<Guid>> SavePrescriberAsync(PrescriberRequest request,
                                                          CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Catalog.Manage);
+        // Reception creates a doctor it meets for the first time while registering the file;
+        // changing an existing one stays with whoever manages the directory.
+        var permitted = request.PrescriberId is null
+            ? guard.RequireAny(Permissions.Catalog.Manage, Permissions.Orders.Create)
+            : guard.Require(Permissions.Catalog.Manage);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
         Prescriber prescriber;
