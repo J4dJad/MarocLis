@@ -2,6 +2,7 @@ using MarocLIS.Application.Administration;
 using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
+using MarocLIS.Domain.Inventory;
 using MarocLIS.Domain.Patients;
 using MarocLIS.Domain.Quality;
 using MarocLIS.Infrastructure.Persistence;
@@ -168,7 +169,17 @@ public sealed class MasterDataQueries(LisDbContext db) : IMasterDataQueries
                 i.Lots.Count(l => l.QuantityRemaining > 0m),
                 i.Gtin, i.IsCeMarked, i.PreferredSupplierId, i.Manufacturer,
                 i.SupplierCatalogueReference, i.UsedByAnalysisCodesCsv, i.DefaultStorageLocation,
-                i.TestsPerPack, i.ReorderQuantity, i.MaximumStock, i.HazardClass))
+                i.TestsPerPack, i.ReorderQuantity, i.MaximumStock, i.HazardClass,
+                new StockConsumptionPolicy
+                {
+                    DeadVolumePercent = i.DeadVolumePercent,
+                    DeadVolumeTestsPerOpening = i.DeadVolumeTestsPerOpening,
+                    TestsPerResultCsv = i.TestsPerResultCsv,
+                    TestsPerCalibration = i.TestsPerCalibration,
+                    SafetyStockDays = i.SafetyStockDays,
+                    TypicalShelfLifeDays = i.TypicalShelfLifeDays,
+                    ReorderPointComputed = i.ReorderPointComputed
+                }))
             .ToListAsync(ct);
     }
 

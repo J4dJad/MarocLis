@@ -33,6 +33,7 @@ public sealed class MasterDataView : LocalizedView
     private readonly MasterDataService _master;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<MasterDataView>? _logger;
+    private readonly Application.Inventory.StockPlanningService? _planning;
 
     private readonly TabControl _tabs = new();
     private readonly TabPage _instrumentTab = new();
@@ -88,10 +89,12 @@ public sealed class MasterDataView : LocalizedView
     private IReadOnlyList<ParameterOption> _parameters = [];
 
     public MasterDataView(MasterDataService master, IUserDialogs dialogs, ILocalizer localizer,
-                          ICultureManager cultureManager, ILogger<MasterDataView>? logger = null)
+                          ICultureManager cultureManager, ILogger<MasterDataView>? logger = null,
+                          Application.Inventory.StockPlanningService? planning = null)
         : base(localizer, cultureManager)
     {
         _master = master;
+        _planning = planning;
         _dialogs = dialogs;
         _logger = logger;
 
@@ -1012,7 +1015,13 @@ public sealed class MasterDataView : LocalizedView
 
     private async Task EditStockAsync(StockItemMasterRow? row)
     {
-        using var dialog = new StockItemEditorDialog(Localizer, _dialogs, row, _supplierRows);
+        // The reorder point the consumption calls for, shown beside the one typed in.
+        Application.Inventory.ReorderPointProposal? proposal = null;
+        if (row is not null && _planning is not null
+            && await _planning.ProposeReorderPointAsync(row.StockItemId) is { IsSuccess: true } proposed)
+            proposal = proposed.Value;
+
+        using var dialog = new StockItemEditorDialog(Localizer, _dialogs, row, _supplierRows, proposal);
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;
 

@@ -174,5 +174,8 @@ public enum SequencePurpose
     WorkAccident = 14,
 
     /// <summary>Request for quotation sent to suppliers (demande de devis).</summary>
-    QuoteRequest = 15
+    QuoteRequest = 15,
+
+    /// <summary>Periodic stock inventory (inventaire), quoted on the adjustments it posts.</summary>
+    InventoryCount = 16
 }

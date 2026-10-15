@@ -500,6 +500,9 @@ internal static class RolePermissionSets
              Permissions.Equipment.ViewContracts, Permissions.Equipment.ManageContracts,
              // The laboratory's director releases blocked supplier invoices and pays them.
              Permissions.Inventory.EnterInvoices, Permissions.Inventory.ApprovePayments,
+             // Inventories and the cold chain: opens and closes the counts, declares the fridges.
+             Permissions.Inventory.CloseCounts, Permissions.Inventory.RecordTemperatures,
+             Permissions.Inventory.ManageStorageUnits,
              Permissions.Billing.View,
              Permissions.Statistics.View, Permissions.Statistics.EpidemiologicalDeclaration,
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,
@@ -525,6 +528,7 @@ internal static class RolePermissionSets
              Permissions.Catalog.View,
              Permissions.Equipment.View, Permissions.Instruments.View,
              Permissions.Inventory.View, Permissions.Statistics.View,
+             Permissions.Inventory.RecordTemperatures,
              Permissions.HumanResources.RequestLeave,
              // A blood exposure is declared by the biologist on duty, whoever it is.
              Permissions.HumanResources.Accidents
@@ -552,6 +556,8 @@ internal static class RolePermissionSets
              // Takes deliveries in: temperature, checklist, GS1 scan. The lot lands quarantined
              // and its release stays with whoever reviews the QC.
              Permissions.Inventory.Receive,
+             // Reads the fridges twice a day; counts the shelves (with Receive) but does not close.
+             Permissions.Inventory.RecordTemperatures,
              Permissions.HumanResources.RequestLeave
          ]),
 
@@ -595,6 +601,8 @@ internal static class RolePermissionSets
              Permissions.Instruments.View,
              Permissions.Inventory.View, Permissions.Inventory.Receive, Permissions.Inventory.Adjust,
              Permissions.Inventory.ApprovePurchaseOrders,
+             Permissions.Inventory.CloseCounts, Permissions.Inventory.RecordTemperatures,
+             Permissions.Inventory.ManageStorageUnits,
              Permissions.Equipment.ViewContracts,
              Permissions.Statistics.View,
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,

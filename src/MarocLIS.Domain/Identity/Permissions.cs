@@ -103,6 +103,18 @@ public static class Permissions
 
         /// <summary>Releasing a blocked supplier invoice and recording supplier payments.</summary>
         public const string ApprovePayments = "inventory.payment.approve";
+
+        /// <summary>
+        /// Opening and closing a periodic inventory. Closing posts the adjustments; counting the
+        /// shelves only takes <see cref="Receive"/>.
+        /// </summary>
+        public const string CloseCounts = "inventory.counts.close";
+
+        /// <summary>Entering the daily fridge and freezer temperatures.</summary>
+        public const string RecordTemperatures = "inventory.temperature.record";
+
+        /// <summary>Declaring the monitored fridges, freezers and rooms and their ranges.</summary>
+        public const string ManageStorageUnits = "inventory.storageunits.manage";
     }
 
     public static class Equipment

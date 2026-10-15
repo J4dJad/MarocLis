@@ -382,6 +382,11 @@ public interface IPurchaseOrderQueries
 
 /// <summary>An item that has fallen to its reorder point and is not on any open order.</summary>
 /// <param name="LastDiscountRate">The preferred supplier's usual discount, as in <see cref="OrderableItem"/>.</param>
+/// <param name="TypicalShelfLifeDays">Shelf life a delivery arrives with, for the expiry cap.</param>
+/// <param name="CaptiveSupplierId">
+/// The supplier of the placement contract in force that makes the item a captive reagent: it is
+/// ordered there, at <paramref name="ContractPriceMad"/>.
+/// </param>
 public sealed record ReorderCandidate(
     Guid StockItemId,
     string Code,
@@ -393,4 +398,9 @@ public sealed record ReorderCandidate(
     decimal ReorderQuantity,
     decimal? MaximumStock,
     decimal? LastUnitPriceMad,
-    decimal LastDiscountRate = 0m);
+    decimal LastDiscountRate = 0m,
+    int? TypicalShelfLifeDays = null,
+    Guid? CaptiveSupplierId = null,
+    bool CaptiveSupplierApproved = false,
+    decimal? ContractPriceMad = null,
+    string? ContractReference = null);

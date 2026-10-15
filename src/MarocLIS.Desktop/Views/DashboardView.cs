@@ -164,6 +164,9 @@ public sealed class DashboardView : LocalizedView
         ["Equipment.NextCalibration"] = Permissions.Equipment.View,
         ["Inventory.ToReorder"] = Permissions.Inventory.View,
         ["Inventory.ExpiringSoon"] = Permissions.Inventory.View,
+        ["Stock.DashboardExpiringCritical"] = Permissions.Inventory.View,
+        ["Stock.DashboardStockOuts"] = Permissions.Inventory.View,
+        ["Temperatures.DashboardMissing"] = Permissions.Inventory.RecordTemperatures,
         ["Dashboard.Receivables"] = Permissions.Billing.View,
         ["SupplierInvoices.DashboardOverdue"] = Permissions.Inventory.EnterInvoices,
         ["SupplierInvoices.DashboardDueSoon"] = Permissions.Inventory.EnterInvoices
