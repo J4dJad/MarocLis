@@ -362,7 +362,9 @@ public sealed class PayrollDeclarationTests
                                        FamilyStatus status = FamilyStatus.Unmarried, int dependants = 0,
                                        decimal transport = 0m)
     {
-        var amounts = PayrollCalculator.Compute(new PayslipInput(salary, new DateOnly(2020, 1, 6), new DateOnly(2025, month, 28),
+        // An ANAPEC contract within the 24 months of its exemption.
+        var hired = type == ContractType.Anapec ? new DateOnly(2025, 1, 2) : new DateOnly(2020, 1, 6);
+        var amounts = PayrollCalculator.Compute(new PayslipInput(salary, hired, new DateOnly(2025, month, 28),
                                                                  type, dependants, new PayslipVariables { TransportAllowance = transport }),
                                                 new PayrollParameters(2025));
         return new SimplIrPayslip(month, id, "M-" + last, last, "Prénom", "3 rue Y, Salé", "AB1", "100000001", status, type,
@@ -523,6 +525,9 @@ public sealed class PayrollDeclarationTests
         public Task<IReadOnlyDictionary<Guid, SettledAmounts>> SettlementsAsync(DateOnly from, DateOnly to,
                                                                                 CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyDictionary<Guid, SettledAmounts>>(new Dictionary<Guid, SettledAmounts>());
+        public Task<EmployerOtherSites> EmployerOtherSitesAsync(Guid siteId, EmployerIdentifier by, int year, int? month,
+                                                                CancellationToken ct = default) =>
+            Task.FromResult(EmployerOtherSites.None);
     }
 
     private sealed class User : MarocLIS.Application.Abstractions.ICurrentUser

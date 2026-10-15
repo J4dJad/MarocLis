@@ -38,6 +38,7 @@ public sealed class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.PreviousHireDate);
         builder.Property(e => e.PreviousExitDate);
         builder.Property(e => e.PreviousBaseSalary).HasColumnType("decimal(18,2)");
+        builder.Property(e => e.PreviousContractType);
 
         // One personnel file per LIS account.
         builder.HasIndex(e => e.UserId).IsUnique().HasFilter("[UserId] IS NOT NULL")

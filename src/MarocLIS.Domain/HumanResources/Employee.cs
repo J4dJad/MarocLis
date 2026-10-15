@@ -132,6 +132,13 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
     /// </summary>
     public decimal? PreviousBaseSalary { get; private set; }
 
+    /// <summary>
+    /// The type of that previous contract, as it stood at the re-hire: the month of the departure
+    /// keeps its exemptions (ANAPEC, Tahfiz…) and its list on the état 9421 even once the file is
+    /// switched to the new contract. Null for a re-hire recorded before it was kept.
+    /// </summary>
+    public ContractType? PreviousContractType { get; private set; }
+
     /// <summary>Why the habilitations still held at the departure end; also how a cancelled exit finds them.</summary>
     public const string ExitWithdrawalReason = "Sortie du laboratoire";
 
@@ -289,6 +296,7 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
         PreviousHireDate = HireDate;
         PreviousExitDate = ExitDate;
         PreviousBaseSalary = BaseSalary;
+        PreviousContractType = ContractType;
         ExitDate = null;
         ExitReason = null;
         ExitComment = null;

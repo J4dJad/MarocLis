@@ -239,10 +239,13 @@ public sealed class PayrollService(
                                                              rates.MonthlyWorkingDays, ct))
         {
             var employee = await employees.GetByIdAsync(candidate.EmployeeId, ct);
-            if (employee?.BaseSalary is null || !PayrollCalculator.IsOnPayroll(employee.ContractType)) continue;
-            paid.Add(employee.Id);
+            if (employee?.BaseSalary is null) continue;
 
             var slip = period.Payslips.FirstOrDefault(p => p.EmployeeId == employee.Id);
+            var contractType = ContractTypeOfMonth(employee, period, slip?.ContractType);
+            if (!PayrollCalculator.IsOnPayroll(contractType)) continue;
+            paid.Add(employee.Id);
+
             var isNew = slip is null;
             slip ??= new Payslip(employee.Id);
 
@@ -252,7 +255,7 @@ public sealed class PayrollService(
             slip.CnssNumber = employee.CnssNumber;
             slip.JobTitle = employee.JobTitle;
             (slip.HireDate, slip.BaseSalary) = ContractOfMonth(employee, period, isNew ? null : slip.BaseSalary);
-            slip.ContractType = employee.ContractType;
+            slip.ContractType = contractType;
             slip.DependentPersons = DependentPersons(employee);
             slip.Rib = employee.Rib;
             slip.BankName = employee.BankName;
@@ -295,6 +298,23 @@ public sealed class PayrollService(
             return (hire, employee.PreviousBaseSalary ?? kept ?? current);
 
         return (employee.HireDate, current);
+    }
+
+    /// <summary>
+    /// The contract type the month is paid under, as <see cref="ContractOfMonth"/> gives its salary:
+    /// that of the contract that ended for the month of a departure followed by a re-hire. The
+    /// type decides the exemptions (ANAPEC, Tahfiz, internship) and the list of the état 9421, so
+    /// an ANAPEC stipend re-hired as a CDI in the same month is not taxed as a salary, nor a CDI
+    /// salary re-hired as ANAPEC exempted.
+    /// </summary>
+    /// <param name="kept">The type already on the draft payslip, for a re-hire recorded before the previous type was kept.</param>
+    public static ContractType ContractTypeOfMonth(Employee employee, PayrollPeriod period, ContractType? kept)
+    {
+        if (employee.PreviousHireDate is { } hire && employee.PreviousExitDate is { } exit
+            && hire <= period.LastDay && exit >= period.FirstDay)
+            return employee.PreviousContractType ?? kept ?? employee.ContractType;
+
+        return employee.ContractType;
     }
 
     private static bool PaysDeparture(Payslip slip, IReadOnlyDictionary<Guid, SettledAmounts> settled) =>
@@ -613,8 +633,13 @@ public sealed class PayrollService(
         var docs = await GetDocumentsAsync(periodId, null, ct);
         if (docs.IsFailure) return Result.Failure<byte[]>(docs.FirstError);
 
-        var contributing = docs.Value.Where(d => d.Payslip.Amounts.Exemption != PayrollExemption.InsertionContract
-                                                 && d.Payslip.Amounts.Exemption != PayrollExemption.Internship).ToList();
+        // An insertion stipend contributes only on what exceeds the exempt 6,000 DH.
+        var contributing = docs.Value.Where(d => d.Payslip.Amounts.Exemption switch
+        {
+            PayrollExemption.Internship => false,
+            PayrollExemption.InsertionContract => PayrollCalculator.ContributionBase(d.Payslip.Amounts) > 0m,
+            _ => true
+        }).ToList();
 
         var rows = new List<IEnumerable<object?>>
         {
@@ -626,16 +651,18 @@ public sealed class PayrollService(
         foreach (var d in contributing)
         {
             var p = d.Payslip; var a = p.Amounts;
-            var capped = Math.Min(a.GrossTaxable, d.Parameters.CnssCeiling);
-            rows.Add(new object?[] { p.CnssNumber, p.FullName, p.Cin, a.PaidDays, a.GrossTaxable, capped,
+            var subject = PayrollCalculator.ContributionBase(a);
+            var capped = Math.Min(subject, d.Parameters.CnssCeiling);
+            rows.Add(new object?[] { p.CnssNumber, p.FullName, p.Cin, a.PaidDays, subject, capped,
                 a.CnssEmployee, a.CnssEmployer, a.FamilyAllowanceEmployer, a.TrainingTaxEmployer, a.AmoEmployee,
                 a.AmoEmployer, a.CnssEmployee + a.CnssEmployer + a.FamilyAllowanceEmployer + a.TrainingTaxEmployer
                                + a.AmoEmployee + a.AmoEmployer });
         }
 
         decimal Sum(Func<PayslipAmounts, decimal> f) => contributing.Sum(d => f(d.Payslip.Amounts));
-        rows.Add(new object?[] { "TOTAL", $"{contributing.Count} salariés", null, Sum(a => a.PaidDays), Sum(a => a.GrossTaxable),
-            contributing.Sum(d => Math.Min(d.Payslip.Amounts.GrossTaxable, d.Parameters.CnssCeiling)),
+        rows.Add(new object?[] { "TOTAL", $"{contributing.Count} salariés", null, Sum(a => a.PaidDays),
+            Sum(PayrollCalculator.ContributionBase),
+            contributing.Sum(d => Math.Min(PayrollCalculator.ContributionBase(d.Payslip.Amounts), d.Parameters.CnssCeiling)),
             Sum(a => a.CnssEmployee), Sum(a => a.CnssEmployer), Sum(a => a.FamilyAllowanceEmployer),
             Sum(a => a.TrainingTaxEmployer), Sum(a => a.AmoEmployee), Sum(a => a.AmoEmployer),
             Sum(a => a.CnssEmployee + a.CnssEmployer + a.FamilyAllowanceEmployer + a.TrainingTaxEmployer
@@ -698,24 +725,44 @@ public sealed class PayrollService(
     /// beneficiary is insured, and the exemption of the contributions is the CNSS's to apply.
     /// The salary is the gross subject to the CNSS, the days those paid (26 at most).
     /// </para>
+    /// <para>
+    /// The BDS is the affiliate's, one per month for all its sites: the month of every site sharing
+    /// the CNSS affiliation number is declared with this one, and the BDS is refused while one of
+    /// them is still a draft. Declared from one site only, the staff of the others were sent as
+    /// departures (SO) with no salary.
+    /// </para>
     /// </summary>
     public async Task<Result<PayrollExportFile>> ExportBdsAsync(Guid periodId, byte[] preestablished,
                                                                 CancellationToken ct = default)
     {
-        var docs = await GetDocumentsAsync(periodId, null, ct);
-        if (docs.IsFailure) return Result.Failure<PayrollExportFile>(docs.FirstError);
-        if (docs.Value is []) return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_Empty"));
+        var permitted = Require();
+        if (permitted.IsFailure) return Result.Failure<PayrollExportFile>(permitted.FirstError);
 
-        var first = docs.Value[0];
-        if (first.Status != PayrollStatus.Closed)
-            return Result.Failure<PayrollExportFile>(Error.Conflict("Payroll_BdsNotClosed"));
+        var period = await periods.GetByIdWithDetailsAsync(periodId, ct);
+        if (period is null) return Result.Failure<PayrollExportFile>(Error.NotFound("Payroll_NotFound"));
+        if (period.Payslips.Count == 0) return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_Empty"));
+        if (!period.IsClosed) return Result.Failure<PayrollExportFile>(Error.Conflict("Payroll_BdsNotClosed"));
 
+        var employer = await queries.EmployerAsync(period.SiteId, ct);
         var file = CnssBdsFile.Parse(preestablished);
         if (file.IsFailure) return Result.Failure<PayrollExportFile>(file.FirstError);
-        var matches = CnssBdsFile.Matches(file.Value, first.Employer.CnssAffiliationNumber, first.Year, first.Month);
+        var matches = CnssBdsFile.Matches(file.Value, employer.CnssAffiliationNumber, period.Year, period.Month);
         if (matches.IsFailure) return Result.Failure<PayrollExportFile>(matches.FirstError);
 
-        var declared = docs.Value.Where(d => d.Payslip.Amounts.Exemption != PayrollExemption.Internship).ToList();
+        var others = await queries.EmployerOtherSitesAsync(period.SiteId, EmployerIdentifier.CnssAffiliation,
+                                                          period.Year, period.Month, ct);
+        var drafts = others.Months.Where(m => !m.Period.IsClosed).Select(m => m.SiteName).ToList();
+        if (drafts.Count > 0)
+            return Result.Failure<PayrollExportFile>(Error.Conflict("Payroll_BdsOtherSiteDraft",
+                                                                    $"{period.Month:00}/{period.Year}", string.Join(", ", drafts)));
+
+        // Each month with the rates it was closed with, as it prints.
+        var current = await ParametersForAsync(period.Year, ct);
+        var declared = others.Months.Select(m => m.Period).Prepend(period)
+            .SelectMany(p => p.Payslips.Select(s => (Payslip: s, Parameters: p.RatesForPrinting(current))))
+            .Where(d => d.Payslip.Amounts.Exemption != PayrollExemption.Internship)
+            .OrderBy(d => d.Payslip.FullName, StringComparer.CurrentCulture)
+            .ToList();
 
         var missing = declared.Where(d => CnssBdsFile.Digits(d.Payslip.CnssNumber).Length == 0)
                               .Select(d => $"{d.Payslip.Number} {d.Payslip.FullName}").ToList();
@@ -727,28 +774,34 @@ public sealed class PayrollService(
         if (invalid.Count > 0)
             return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_BdsCnssNumberInvalid", string.Join(", ", invalid)));
 
-        // The BDS has one line per insured number: two payslips under the same number (typed twice
-        // by mistake) would lose one salary from the declaration.
+        // The BDS has one line per insured number: two employees under the same number (typed twice
+        // by mistake) would lose one salary from the declaration. One employee paid on two sites in
+        // the month is one insured person, declared once.
         var duplicates = declared.GroupBy(d => long.Parse(CnssBdsFile.Digits(d.Payslip.CnssNumber), CultureInfo.InvariantCulture))
-                                 .Where(g => g.Count() > 1)
+                                 .Where(g => g.Select(d => d.Payslip.EmployeeId).Distinct().Count() > 1)
                                  .OrderBy(g => g.Key)
-                                 .Select(g => $"{g.Key:000000000} ({string.Join(", ", g.Select(d => $"{d.Payslip.Number} {d.Payslip.FullName}"))})")
+                                 .Select(g => $"{g.Key:000000000} ({string.Join(", ", g.DistinctBy(d => d.Payslip.EmployeeId).Select(d => $"{d.Payslip.Number} {d.Payslip.FullName}"))})")
                                  .ToList();
         if (duplicates.Count > 0)
             return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_BdsDuplicateCnss", string.Join("; ", duplicates)));
 
-        var lastDay = new DateOnly(first.Year, first.Month, 1).AddMonths(1).AddDays(-1);
+        var lastDay = period.LastDay;
         var paid = declared.Select(d => d.Payslip.EmployeeId).ToList();
-        var staff = await employees.ListAsync(e => e.CnssNumber != null || paid.Contains(e.Id), ct);
+        var staff = (await employees.ListAsync(e => e.CnssNumber != null || paid.Contains(e.Id), ct))
+                    .Concat(others.Staff.Where(e => e.CnssNumber != null || paid.Contains(e.Id)))
+                    .DistinctBy(e => e.Id)
+                    .ToList();
         var byId = staff.ToDictionary(e => e.Id);
 
-        var salaries = declared.Select(d =>
+        var salaries = declared.GroupBy(d => d.Payslip.EmployeeId).Select(g =>
         {
-            var p = d.Payslip;
-            var a = p.Amounts;
+            // The payslip with the most days gives the identity and the situation.
+            var (p, rates) = g.OrderByDescending(d => d.Payslip.Amounts.PaidDays).First();
+            var days = Math.Min(g.Sum(d => (int)d.Payslip.Amounts.PaidDays), CnssBdsFile.MaximumDays);
+            var gross = g.Sum(d => d.Payslip.Amounts.GrossTaxable);
             return new BdsSalary(long.Parse(CnssBdsFile.Digits(p.CnssNumber), CultureInfo.InvariantCulture), p.FullName, p.Cin,
-                                 (int)a.PaidDays, a.GrossTaxable, Math.Min(a.GrossTaxable, d.Parameters.CnssCeiling),
-                                 BdsSituationOf(byId.GetValueOrDefault(p.EmployeeId), p, d.Parameters, lastDay));
+                                 days, gross, Math.Min(gross, rates.CnssCeiling),
+                                 BdsSituationOf(byId.GetValueOrDefault(p.EmployeeId), p, rates, lastDay));
         }).ToList();
 
         // An insured person the CNSS expects and the month does not pay has left (SO), or died.
@@ -781,8 +834,9 @@ public sealed class PayrollService(
     }
 
     /// <summary>
-    /// The year's état 9421 for Simpl-IR (<see cref="SimplIrSalaryDeclaration"/>), from the site's
-    /// closed payslips of the year. Refused while a month of the year is still a draft.
+    /// The year's état 9421 for Simpl-IR (<see cref="SimplIrSalaryDeclaration"/>), from the closed
+    /// payslips of the year of every site sharing the site's identifiant fiscal: the return is the
+    /// employer's, one per IF. Refused while a month of the year is still a draft on any of them.
     /// </summary>
     public async Task<Result<PayrollExportFile>> ExportSimplIrAsync(int year, SimplIrCodes codes, CancellationToken ct = default)
     {
@@ -793,12 +847,20 @@ public sealed class PayrollService(
         var site = currentUser.SiteId;
         var months = (await periods.ListAsync(p => p.SiteId == site && p.Year == year, ct)).OrderBy(p => p.Month).ToList();
 
-        var open = months.Where(p => !p.IsClosed).Select(p => $"{p.Month:00}/{p.Year}").ToList();
+        var employer = await queries.EmployerAsync(site, ct);
+        var others = string.IsNullOrWhiteSpace(employer.FiscalId)
+            ? EmployerOtherSites.None
+            : await queries.EmployerOtherSitesAsync(site, EmployerIdentifier.FiscalId, year, null, ct);
+
+        var open = months.Where(p => !p.IsClosed).Select(p => $"{p.Month:00}/{p.Year}")
+                         .Concat(others.Months.Where(m => !m.Period.IsClosed)
+                                              .Select(m => $"{m.Period.Month:00}/{m.Period.Year} ({m.SiteName})"))
+                         .ToList();
         if (open.Count > 0)
             return Result.Failure<PayrollExportFile>(Error.Conflict("Payroll_SimplIrOpenMonths", year, string.Join(", ", open)));
-        if (months.Count == 0) return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_SimplIrNothing", year));
+        if (months.Count + others.Months.Count == 0)
+            return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_SimplIrNothing", year));
 
-        var employer = await queries.EmployerAsync(site, ct);
         if (string.IsNullOrWhiteSpace(employer.FiscalId))
             return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_SimplIrNoFiscalId"));
 
@@ -811,8 +873,17 @@ public sealed class PayrollService(
             slips.AddRange(period.Payslips.Select(p => (period.Month, p, rates)));
         }
 
+        foreach (var period in others.Months.Select(m => m.Period))
+        {
+            var rates = period.RatesFor(current);
+            slips.AddRange(period.Payslips.Select(p => (period.Month, p, rates)));
+        }
+
         var ids = slips.Select(s => s.Slip.EmployeeId).Distinct().ToList();
-        var files = (await employees.ListAsync(e => ids.Contains(e.Id), ct)).ToDictionary(e => e.Id);
+        var files = (await employees.ListAsync(e => ids.Contains(e.Id), ct))
+                    .Concat(others.Staff.Where(e => ids.Contains(e.Id)))
+                    .DistinctBy(e => e.Id)
+                    .ToDictionary(e => e.Id);
 
         var lines = slips.Select(s =>
         {
@@ -820,7 +891,7 @@ public sealed class PayrollService(
             var e = files.GetValueOrDefault(p.EmployeeId);
             // As PayrollCalculator chose it: the low-income rate while the month's taxable pay,
             // brought to the year, stays within the threshold.
-            var high = p.Amounts.GrossTaxable * 12m > rates.ProfessionalExpensesThreshold;
+            var high = PayrollCalculator.ContributionBase(p.Amounts) * 12m > rates.ProfessionalExpensesThreshold;
             var address = e is null
                 ? null
                 : string.Join(", ", new[] { e.Address, e.City }.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!.Trim()));
@@ -865,6 +936,35 @@ public interface IPayrollQueries
 
     /// <summary>Final settlements of employees who left during the period, by employee.</summary>
     Task<IReadOnlyDictionary<Guid, SettledAmounts>> SettlementsAsync(DateOnly from, DateOnly to, CancellationToken ct = default);
+
+    /// <summary>
+    /// The payroll months, with their payslips, of the employer's other sites: those sharing the
+    /// site's CNSS affiliation number or identifiant fiscal (<paramref name="by"/>), for the year
+    /// or one month of it, and the staff of those sites. Read across the site filter, deliberately
+    /// and for the employer's declarations only (BDS, état 9421): they are the employer's, not a
+    /// site's, and an operator who sees one site still files them for all. Nothing when the site
+    /// has no such number.
+    /// </summary>
+    Task<EmployerOtherSites> EmployerOtherSitesAsync(Guid siteId, EmployerIdentifier by, int year, int? month,
+                                                     CancellationToken ct = default);
+}
+
+/// <summary>What makes two sites one employer for a declaration.</summary>
+public enum EmployerIdentifier
+{
+    /// <summary>The CNSS affiliation number: the BDS.</summary>
+    CnssAffiliation = 0,
+    /// <summary>The identifiant fiscal: the état 9421.</summary>
+    FiscalId = 1
+}
+
+/// <summary>A payroll month of another site of the employer, read-only.</summary>
+public sealed record EmployerSiteMonth(string SiteName, PayrollPeriod Period);
+
+/// <param name="Staff">The employees of those sites, and whoever their months pay; read-only.</param>
+public sealed record EmployerOtherSites(IReadOnlyList<EmployerSiteMonth> Months, IReadOnlyList<Employee> Staff)
+{
+    public static readonly EmployerOtherSites None = new([], []);
 }
 
 public sealed record SettledAmounts(decimal LeaveIndemnity, decimal NoticeIndemnity, decimal SeverancePay);
