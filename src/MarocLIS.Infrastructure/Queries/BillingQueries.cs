@@ -105,7 +105,12 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                 i.ClaimStatus,
                 i.CoveredOrderNumbersCsv,
                 i.PayerShareAmount,
-                i.PayerAcceptedAmount
+                i.PayerAcceptedAmount,
+                // Closes the balance but was not paid: shown apart from the paid column.
+                WrittenOff = db.Payments
+                    .Where(p => p.InvoiceId == i.Id && p.Status == PaymentStatus.Settled
+                                && p.Method == PaymentMethod.WriteOff)
+                    .Sum(p => (decimal?)p.Amount) ?? 0m
             })
             .ToListAsync(ct);
 
@@ -118,8 +123,10 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
             r.DueDate,
             r.BilledToName,
             r.TotalAmount,
-            r.PaidAmount,
-            // Credit notes reduce what is owed; the same rule as the entity's.
+            // What was actually paid; a write-off is reported in its own column.
+            Money.Round(r.PaidAmount - r.WrittenOff),
+            // Credit notes reduce what is owed; the same rule as the entity's. The stored paid total
+            // includes the write-offs, which do close the balance.
             Invoice.ComputeOutstanding(r.Kind, r.TotalAmount, r.PaidAmount, r.CreditedAmount),
             // Ageing computed here rather than stored, so it is never stale.
             r.DueDate is { } due && due < today
@@ -130,7 +137,8 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
             r.CoveredOrderNumbersCsv,
             Money.Round(r.PayerShareAmount),
             r.PayerAcceptedAmount,
-            r.CreditedAmount)).ToList();
+            r.CreditedAmount,
+            Money.Round(r.WrittenOff))).ToList();
 
         return new PagedResult<InvoiceRow>(mapped, total, page, pageSize);
     }
@@ -394,8 +402,14 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                     .Sum(p => (decimal?)p.Amount) ?? 0m,
                 PayerName = db.Payers.Where(p => p.Id == i.PayerId)
                                       .Select(p => p.Name.Fr).FirstOrDefault(),
+                // The payer's answer: its settlement or the write-off of what it refused, entered
+                // after the submission. A counter payment or a deposit applied at issue is not an
+                // outcome of the claim.
                 LastOutcomeOn = db.Payments
-                    .Where(p => p.InvoiceId == i.Id && p.Status == PaymentStatus.Settled)
+                    .Where(p => p.InvoiceId == i.Id && p.Status == PaymentStatus.Settled
+                                && (p.Method == PaymentMethod.ThirdPartyPayer
+                                    || p.Method == PaymentMethod.WriteOff)
+                                && p.PaymentDate >= i.ClaimSubmittedOn)
                     .Max(p => (DateOnly?)p.PaymentDate)
             })
             .ToListAsync(ct);
@@ -443,6 +457,11 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                 i.NetAmount,
                 i.PayerShareAmount,
                 i.PaidAmount,
+                // A write-off of the refused share is not a payment: kept out of the paid column.
+                WrittenOff = db.Payments
+                    .Where(p => p.InvoiceId == i.Id && p.Status == PaymentStatus.Settled
+                                && p.Method == PaymentMethod.WriteOff)
+                    .Sum(p => (decimal?)p.Amount) ?? 0m,
                 i.ClaimStatus,
                 i.ClaimRejectionReason,
                 i.CoveredOrderNumbersCsv,
@@ -458,7 +477,7 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                     i.Id, i.Number, i.IssueDate,
                     i.PatientName ?? i.BilledToName ?? string.Empty,
                     i.PrescriberInpe,
-                    Money.Round(i.NetAmount), Money.Round(i.PayerShareAmount), Money.Round(i.PaidAmount),
+                    Money.Round(i.NetAmount), Money.Round(i.PayerShareAmount), Money.Round(i.PaidAmount - i.WrittenOff),
                     i.ClaimStatus, i.ClaimRejectionReason, i.CoveredOrderNumbersCsv))
                 // Refused first: those are the rows that need a decision, correct and resend or
                 // write off.

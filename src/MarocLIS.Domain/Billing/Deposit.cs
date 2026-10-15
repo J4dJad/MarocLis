@@ -48,7 +48,7 @@ public sealed class Deposit : AuditableAggregateRoot, ISiteScoped
     public string? BankName { get; set; }
     public DateOnly? MaturityDate { get; set; }
 
-    /// <summary>Till session the cash went into.</summary>
+    /// <summary>Till session (shift) the deposit was taken in; required for cash.</summary>
     public Guid? CashSessionId { get; set; }
 
     /// <summary>The invoice the deposit was turned into a settlement on.</summary>

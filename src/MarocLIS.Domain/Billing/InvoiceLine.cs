@@ -108,6 +108,14 @@ public sealed class InvoiceLine : Entity
     /// </summary>
     private decimal? _coverageShare;
 
+    /// <summary>
+    /// True when the payer reimburses a percentage of the laboratory's own price rather than of the
+    /// national reference tariff. Its share then follows the line's final cost: a discount lowers
+    /// it by the payer's rate, as at registration, instead of merely capping it. In memory only,
+    /// like <see cref="_coverageShare"/>.
+    /// </summary>
+    private bool _shareFollowsLinePrice;
+
     public decimal PatientShare => Money.Round(TotalAmount - PayerShare);
 
     /// <summary>
@@ -118,6 +126,7 @@ public sealed class InvoiceLine : Entity
     public void SetCoverageSplit(decimal reimbursementRate, bool payerUsesReferenceTariff)
     {
         ReimbursementRate = reimbursementRate;
+        _shareFollowsLinePrice = !payerUsesReferenceTariff;
 
         var basis = payerUsesReferenceTariff
             ? Money.Round(ReferenceTariffBase * Quantity)
@@ -131,15 +140,23 @@ public sealed class InvoiceLine : Entity
     {
         ReimbursementRate = null;
         _coverageShare = null;
+        _shareFollowsLinePrice = false;
         PayerShare = 0m;
     }
 
     /// <summary>
-    /// Re-caps the payer share on the line's current total, which an invoice-level discount lowers
-    /// after the split was set.
+    /// Brings the payer share up to date with the line's current total, which an invoice-level
+    /// discount lowers after the split was set. A share on the laboratory price is recomputed on the
+    /// discounted price; a share on the reference tariff does not depend on the price charged and
+    /// is only capped, so the payer never reimburses more than the line costs.
     /// </summary>
-    internal void CapPayerShareToTotal() =>
+    internal void CapPayerShareToTotal()
+    {
+        if (_shareFollowsLinePrice && ReimbursementRate is { } rate)
+            _coverageShare = Money.Round(NetAmount * rate);
+
         PayerShare = Math.Clamp(_coverageShare ?? PayerShare, 0m, Math.Max(0m, TotalAmount));
+    }
 
     /// <summary>Amount charged above the reference tariff, entirely on the patient.</summary>
     public decimal ExcessOverReferenceTariff =>

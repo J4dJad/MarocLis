@@ -48,6 +48,16 @@ public sealed record InvoiceDocument(
     /// <summary>Total of the credit notes issued against this invoice.</summary>
     public decimal CreditedAmount { get; init; }
 
+    /// <summary>
+    /// The settled write-offs among the payments. <see cref="PaidAmount"/> includes them because
+    /// they close the balance, but nobody paid them.
+    /// </summary>
+    public decimal WrittenOffAmount =>
+        Money.Round(Payments.Where(p => p.IsSettled && p.IsWriteOff).Sum(p => p.Amount));
+
+    /// <summary>What was actually paid, the figure a receipt states as paid.</summary>
+    public decimal CollectedAmount => Money.Round(PaidAmount - WrittenOffAmount);
+
     /// <summary>Same rule as the invoice itself: what was credited is no longer owed.</summary>
     public decimal OutstandingAmount =>
         Invoice.ComputeOutstanding(Kind, TotalAmount, PaidAmount, CreditedAmount);
@@ -100,6 +110,9 @@ public sealed record InvoiceDocumentPayment(
 {
     /// <summary>Only a settled payment counts towards what has been paid.</summary>
     public bool IsSettled => Status == PaymentStatus.Settled;
+
+    /// <summary>A loss closing the balance, not money received.</summary>
+    public bool IsWriteOff => Method == PaymentMethod.WriteOff;
 }
 
 /// <summary>Turns an <see cref="InvoiceDocument"/> into a printable PDF.</summary>

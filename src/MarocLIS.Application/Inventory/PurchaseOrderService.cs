@@ -276,7 +276,9 @@ public sealed class PurchaseOrderService(
             StorageLocation = Blank(request.StorageLocation) ?? item.DefaultStorageLocation,
             ReceivedByUserId = currentUser.UserId
         });
-        item.LastUnitPriceMad = line.NetUnitPriceMad;
+        // The supplier's list price, not the net: the next purchase-order line is pre-filled with it
+        // next to its own discount field, and a net price there had the discount taken off twice.
+        item.LastUnitPriceMad = line.UnitPriceMad;
 
         await movements.AddAsync(new StockMovement(item.Id, lot.Id, StockMovementKind.Receipt,
                                                    request.Quantity, clock.Now,
