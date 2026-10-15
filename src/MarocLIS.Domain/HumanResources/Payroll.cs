@@ -497,6 +497,20 @@ public static class PayrollCalculator
     public const decimal TahfizTaxExemptGross = 10000m;
 
     /// <summary>
+    /// The months from the hire the Tahfiz benefits last (CGI art. 57-20°): the income-tax
+    /// exemption and the employer's charges the State takes on.
+    /// </summary>
+    public const int TahfizExemptMonths = 24;
+
+    /// <summary>
+    /// Whether a month paid on <paramref name="payDate"/> still falls within the 24 months of a
+    /// Tahfiz contract hired on <paramref name="hireDate"/>, the month in which they end included,
+    /// as <see cref="WithinInsertionExemption"/>. Beyond, the salary is an ordinary one.
+    /// </summary>
+    public static bool WithinTahfizExemption(DateOnly hireDate, DateOnly payDate) =>
+        new DateOnly(payDate.Year, payDate.Month, 1) < hireDate.AddMonths(TahfizExemptMonths);
+
+    /// <summary>
     /// The monthly stipend of an insertion contract the CGI (art. 57-16°) exempts from income tax,
     /// and loi 16-93 from the social contributions and the training tax: 6,000 DH. What is paid
     /// above it is pay like any other, taxed and subject to the contributions.
@@ -577,6 +591,32 @@ public static class PayrollCalculator
     public static decimal ContractBase(decimal baseSalary, PayslipVariables v) =>
         v.IsProrated ? R(baseSalary * Math.Max(0m, v.ContractWorkingDays) / v.MonthWorkingDays) : baseSalary;
 
+    /// <summary>
+    /// The employee's CNSS and AMO, the professional expenses and the net taxable of a month whose
+    /// contributions and tax are levied on <paramref name="subject"/> (<see cref="ContributionBase"/>).
+    /// </summary>
+    private static (decimal Cnss, decimal Amo, decimal Expenses, decimal NetTaxable) EmployeeDeductions(decimal subject,
+                                                                                                       PayrollParameters p)
+    {
+        var cnss = R(Math.Min(subject, p.CnssCeiling) * p.CnssEmployeeRate / 100m);
+        var amo = R(subject * p.AmoEmployeeRate / 100m);
+
+        var expensesRate = subject * 12m <= p.ProfessionalExpensesThreshold
+            ? p.ProfessionalExpensesLowRate
+            : p.ProfessionalExpensesHighRate;
+        var expenses = R(Math.Min(subject * expensesRate / 100m, p.ProfessionalExpensesAnnualCap / 12m));
+
+        return (cnss, amo, expenses, Math.Max(0m, R(subject - expenses - cnss - amo)));
+    }
+
+    /// <summary>
+    /// The net taxable of a payslip as the rules now compute it from its gross taxable and its
+    /// exemption. An ANAPEC payslip closed before the 6,000 DH cap was applied stored the net
+    /// taxable of the whole stipend; this is that of the excess, as the état 9421 declares it.
+    /// </summary>
+    public static decimal NetTaxableOf(PayslipAmounts amounts, PayrollParameters p) =>
+        EmployeeDeductions(ContributionBase(amounts), p).NetTaxable;
+
     public static PayslipAmounts Compute(PayslipInput input, PayrollParameters p)
     {
         var v = input.Variables;
@@ -588,6 +628,10 @@ public static class PayrollCalculator
         // The insertion contract's exemption lasts 24 months; a month beyond is taxed and bears
         // the contributions as any salary.
         if (exemption == PayrollExemption.InsertionContract && !WithinInsertionExemption(input.HireDate, input.PayDate))
+            exemption = PayrollExemption.None;
+
+        // So do the Tahfiz benefits.
+        if (exemption == PayrollExemption.Tahfiz && !WithinTahfizExemption(input.HireDate, input.PayDate))
             exemption = PayrollExemption.None;
 
         // Days before the hire or after the exit: the base in proportion to the days of the contract.
@@ -626,23 +670,15 @@ public static class PayrollCalculator
         // neither; of an insertion stipend, only what exceeds the exempt 6,000 DH.
         var subject = ContributionBase(new PayslipAmounts { GrossTaxable = grossTaxable, Exemption = exemption });
         var cnssBase = Math.Min(subject, p.CnssCeiling);
+        var (cnssEmployee, amoEmployee, expenses, netTaxable) = EmployeeDeductions(subject, p);
 
-        var cnssEmployee = R(cnssBase * p.CnssEmployeeRate / 100m);
-        var amoEmployee = R(subject * p.AmoEmployeeRate / 100m);
-
-        // The State takes on the employer's CNSS and training tax under Tahfiz.
-        var employerCnssDue = exemption != PayrollExemption.Tahfiz;
+        // The State takes on the employer's CNSS and training tax under Tahfiz, for a salary within
+        // the 10,000 DH of the scheme: above, the month bears them as it bears the income tax.
+        var employerCnssDue = !(exemption == PayrollExemption.Tahfiz && grossTaxable <= TahfizTaxExemptGross);
         var cnssEmployer = employerCnssDue ? R(cnssBase * p.CnssEmployerRate / 100m) : 0m;
         var familyAllowance = employerCnssDue ? R(subject * p.FamilyAllowanceRate / 100m) : 0m;
         var trainingTax = employerCnssDue ? R(subject * p.TrainingTaxRate / 100m) : 0m;
         var amoEmployer = R(subject * p.AmoEmployerRate / 100m);
-
-        var expensesRate = subject * 12m <= p.ProfessionalExpensesThreshold
-            ? p.ProfessionalExpensesLowRate
-            : p.ProfessionalExpensesHighRate;
-        var expenses = R(Math.Min(subject * expensesRate / 100m, p.ProfessionalExpensesAnnualCap / 12m));
-
-        var netTaxable = Math.Max(0m, R(subject - expenses - cnssEmployee - amoEmployee));
 
         var taxed = exemption switch
         {

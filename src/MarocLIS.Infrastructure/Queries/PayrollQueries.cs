@@ -97,49 +97,61 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
                 // The days of the contracts within the month, the one ended by a re-hire included:
                 // a hire or an exit during it is paid in proportion to them
                 // (PayrollCalculator.ContractBase), not as absences.
-                var stints = new List<(DateOnly First, DateOnly Last)>();
-                void Stint(DateOnly hire, DateOnly? exit)
+                (DateOnly First, DateOnly Last)? Stint(DateOnly hire, DateOnly? exit)
                 {
                     var first = hire > from ? hire : from;
                     var last = exit is { } end && end < to ? end : to;
-                    if (first <= last) stints.Add((first, last));
+                    return first <= last ? (first, last) : null;
                 }
-                Stint(s.HireDate, s.ExitDate);
-                if (s.PreviousHireDate is { } previousHire && s.PreviousExitDate is { } previousExit)
-                    Stint(previousHire, previousExit);
+                var current = Stint(s.HireDate, s.ExitDate);
+                var previous = s.PreviousHireDate is { } previousHire && s.PreviousExitDate is { } previousExit
+                    ? Stint(previousHire, previousExit)
+                    : null;
 
-                var contractDays = stints.Sum(c => Working(c.First, c.Last));
+                var all = new[] { current, previous }.OfType<(DateOnly First, DateOnly Last)>().ToList();
+                var candidate = Figures(s.Id, all);
 
-                // Then the unpaid leave inside the contracts.
-                var days = 0m;
-                decimal accident = 0m, subrogated = 0m;
-                foreach (var (first, last) in stints)
-                {
-                    foreach (var r in unpaid.Where(r => r.EmployeeId == s.Id))
-                    {
-                        var start = r.StartDate < first ? first : r.StartDate;
-                        var end = r.EndDate > last ? last : r.EndDate;
-                        days += Working(start, end, r.StartsAfternoon && start == r.StartDate, r.EndsMorning && end == r.EndDate);
-                    }
-
-                    // A stoppage withholds the salary of its working days; the allowance advanced
-                    // under subrogation is due for every calendar day of it (loi 18-12).
-                    foreach (var r in stoppages.Where(r => r.EmployeeId == s.Id))
-                    {
-                        var start = r.StartDate < first ? first : r.StartDate;
-                        var end = r.EndDate > last ? last : r.EndDate;
-                        accident += Working(start, end);
-                        if (r.Subrogation) subrogated += Calendar(start, end);
-                    }
-                }
-
-                var withheld = Math.Min(days + accident, monthlyWorkingDays);
-                accident = Math.Min(accident, withheld);
-                return new PayrollCandidate(s.Id, withheld, accident, subrogated,
-                                            contractDays < monthDays ? monthDays : 0m,
-                                            contractDays < monthDays ? contractDays : 0m);
+                // Both contracts in the month: each one's own figures too, for when only one of
+                // them is on the payroll (PayrollService.StintOfMonth).
+                return current is { } c && previous is { } p
+                    ? candidate with { PreviousContract = Figures(s.Id, [p]), CurrentContract = Figures(s.Id, [c]) }
+                    : candidate;
             })
         ];
+
+        PayrollCandidate Figures(Guid employeeId, IReadOnlyList<(DateOnly First, DateOnly Last)> stints)
+        {
+            var contractDays = stints.Sum(c => Working(c.First, c.Last));
+
+            // Then the unpaid leave inside the contracts.
+            var days = 0m;
+            decimal accident = 0m, subrogated = 0m;
+            foreach (var (first, last) in stints)
+            {
+                foreach (var r in unpaid.Where(r => r.EmployeeId == employeeId))
+                {
+                    var start = r.StartDate < first ? first : r.StartDate;
+                    var end = r.EndDate > last ? last : r.EndDate;
+                    days += Working(start, end, r.StartsAfternoon && start == r.StartDate, r.EndsMorning && end == r.EndDate);
+                }
+
+                // A stoppage withholds the salary of its working days; the allowance advanced
+                // under subrogation is due for every calendar day of it (loi 18-12).
+                foreach (var r in stoppages.Where(r => r.EmployeeId == employeeId))
+                {
+                    var start = r.StartDate < first ? first : r.StartDate;
+                    var end = r.EndDate > last ? last : r.EndDate;
+                    accident += Working(start, end);
+                    if (r.Subrogation) subrogated += Calendar(start, end);
+                }
+            }
+
+            var withheld = Math.Min(days + accident, monthlyWorkingDays);
+            accident = Math.Min(accident, withheld);
+            return new PayrollCandidate(employeeId, withheld, accident, subrogated,
+                                        contractDays < monthDays ? monthDays : 0m,
+                                        contractDays < monthDays ? contractDays : 0m);
+        }
     }
 
     public async Task<InvoiceIssuer> EmployerAsync(Guid siteId, CancellationToken ct = default)
@@ -208,9 +220,21 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
             .Where(e => ids.Contains(e.SiteId) || paid.Contains(e.Id))
             .ToListAsync(ct);
 
+        // The months asked for that a site had salaried staff for and opened no payroll month of.
+        var missing = new List<EmployerSiteMissingMonth>();
+        foreach (var m in month is { } one ? new[] { one } : Enumerable.Range(1, 12))
+        {
+            var first = new DateOnly(year, m, 1);
+            var last = first.AddMonths(1).AddDays(-1);
+            foreach (var (id, name) in others.OrderBy(o => o.Value, StringComparer.CurrentCulture))
+                if (!months.Any(p => p.SiteId == id && p.Month == m)
+                    && staff.Any(e => e.SiteId == id && PayrollService.IsOnPayrollIn(e, first, last)))
+                    missing.Add(new EmployerSiteMissingMonth(name, m));
+        }
+
         return new EmployerOtherSites(
             [.. months.OrderBy(p => p.Month).ThenBy(p => others[p.SiteId], StringComparer.CurrentCulture)
                       .Select(p => new EmployerSiteMonth(others[p.SiteId], p))],
-            staff);
+            staff, missing);
     }
 }

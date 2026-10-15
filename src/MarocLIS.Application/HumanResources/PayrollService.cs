@@ -62,7 +62,18 @@ public interface IPayslipRenderer
 /// <param name="ContractWorkingDays">Of those, the days between the hire and the exit.</param>
 public sealed record PayrollCandidate(Guid EmployeeId, decimal UnpaidDays, decimal WorkAccidentDays = 0m,
                                       decimal SubrogatedDays = 0m, decimal MonthWorkingDays = 0m,
-                                      decimal ContractWorkingDays = 0m);
+                                      decimal ContractWorkingDays = 0m)
+{
+    /// <summary>
+    /// For the month of a departure followed by a re-hire, the same figures for the contract that
+    /// ended alone and for the new one alone; null otherwise. Paid alone when the other contract
+    /// is not on the payroll (<see cref="PayrollService.StintOfMonth"/>).
+    /// </summary>
+    public PayrollCandidate? PreviousContract { get; init; }
+
+    /// <inheritdoc cref="PreviousContract"/>
+    public PayrollCandidate? CurrentContract { get; init; }
+}
 
 /// <summary>
 /// Monthly payroll. Everything here requires the salary right: nobody without it sees a salary.
@@ -242,7 +253,7 @@ public sealed class PayrollService(
             if (employee?.BaseSalary is null) continue;
 
             var slip = period.Payslips.FirstOrDefault(p => p.EmployeeId == employee.Id);
-            var contractType = ContractTypeOfMonth(employee, period, slip?.ContractType);
+            var (contractType, figures, currentOnly) = StintOfMonth(employee, period, slip?.ContractType, candidate);
             if (!PayrollCalculator.IsOnPayroll(contractType)) continue;
             paid.Add(employee.Id);
 
@@ -254,7 +265,9 @@ public sealed class PayrollService(
             slip.Cin = employee.Cin;
             slip.CnssNumber = employee.CnssNumber;
             slip.JobTitle = employee.JobTitle;
-            (slip.HireDate, slip.BaseSalary) = ContractOfMonth(employee, period, isNew ? null : slip.BaseSalary);
+            (slip.HireDate, slip.BaseSalary) = currentOnly
+                ? (employee.HireDate, employee.BaseSalary.Value)
+                : ContractOfMonth(employee, period, isNew ? null : slip.BaseSalary);
             slip.ContractType = contractType;
             slip.DependentPersons = DependentPersons(employee);
             slip.Rib = employee.Rib;
@@ -262,7 +275,7 @@ public sealed class PayrollService(
 
             // The leave-derived figures are taken again; what HR typed, the unpaid days entered by
             // hand included, stays.
-            var variables = FromFiles(isNew ? new PayslipVariables() : slip.Variables, candidate,
+            var variables = FromFiles(isNew ? new PayslipVariables() : slip.Variables, figures,
                                       settled.GetValueOrDefault(employee.Id), slip.BaseSalary);
             slip.Recompute(variables, rates, period.LastDay);
 
@@ -316,6 +329,40 @@ public sealed class PayrollService(
 
         return employee.ContractType;
     }
+
+    /// <summary>
+    /// The contract the month pays and its figures. The month of a departure followed by a re-hire
+    /// is paid under <see cref="ContractTypeOfMonth"/>, the days of both contracts together, unless
+    /// only one of them is on the payroll (an agency temp hired on a CDI, a CDI become a partner):
+    /// then only that contract's days are paid, under its type and salary
+    /// (<see cref="PayrollCandidate.PreviousContract"/>, <see cref="PayrollCandidate.CurrentContract"/>).
+    /// </summary>
+    /// <returns>The type, the figures, and whether the current contract alone is paid.</returns>
+    public static (ContractType Type, PayrollCandidate Figures, bool CurrentOnly) StintOfMonth(
+        Employee employee, PayrollPeriod period, ContractType? kept, PayrollCandidate candidate)
+    {
+        var type = ContractTypeOfMonth(employee, period, kept);
+        var rehired = employee.PreviousHireDate is { } hire && employee.PreviousExitDate is { } exit
+                      && hire <= period.LastDay && exit >= period.FirstDay;
+        if (!rehired || PayrollCalculator.IsOnPayroll(type) == PayrollCalculator.IsOnPayroll(employee.ContractType))
+            return (type, candidate, false);
+
+        return PayrollCalculator.IsOnPayroll(type)
+            ? (type, candidate.PreviousContract ?? candidate, false)
+            : (employee.ContractType, candidate.CurrentContract ?? candidate, true);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="employee"/> is on the payroll in the month from <paramref name="first"/>
+    /// to <paramref name="last"/>: a salary, and a contract within it of a type the payroll pays,
+    /// the one a re-hire ended included. A site with such staff has a payroll month to open.
+    /// </summary>
+    public static bool IsOnPayrollIn(Employee employee, DateOnly first, DateOnly last) =>
+        employee.BaseSalary is not null
+        && ((employee.HireDate <= last && (employee.ExitDate is null || employee.ExitDate >= first)
+             && PayrollCalculator.IsOnPayroll(employee.ContractType))
+            || (employee.PreviousHireDate <= last && employee.PreviousExitDate >= first
+                && PayrollCalculator.IsOnPayroll(employee.PreviousContractType ?? employee.ContractType)));
 
     private static bool PaysDeparture(Payslip slip, IReadOnlyDictionary<Guid, SettledAmounts> settled) =>
         slip.Variables.LeaveIndemnity + slip.Variables.NoticeIndemnity + slip.Variables.SeverancePay > 0m
@@ -754,6 +801,13 @@ public sealed class PayrollService(
             return Result.Failure<PayrollExportFile>(Error.Conflict("Payroll_BdsOtherSiteDraft",
                                                                     $"{period.Month:00}/{period.Year}", string.Join(", ", drafts)));
 
+        // A site with salaried staff in the month and no payroll month for it: its staff would be
+        // sent as departures (SO) with no salary.
+        var notOpened = others.NotOpened.Where(m => m.Month == period.Month).Select(m => m.SiteName).ToList();
+        if (notOpened.Count > 0)
+            return Result.Failure<PayrollExportFile>(Error.Conflict("Payroll_BdsOtherSiteNotOpened",
+                                                                    $"{period.Month:00}/{period.Year}", string.Join(", ", notOpened)));
+
         // Each month with the rates it was closed with, as it prints.
         var current = await ParametersForAsync(period.Year, ct);
         var declared = others.Months.Select(m => m.Period).Prepend(period)
@@ -859,6 +913,17 @@ public sealed class PayrollService(
         if (months.Count + others.Months.Count == 0)
             return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_SimplIrNothing", year));
 
+        // A month another site had salaried staff for and never opened would leave their pay and
+        // tax out of the return. Only within the months the employer's payroll covers that year:
+        // the months before it started on the application, or still to come, are not asked for.
+        var paidMonths = months.Select(p => p.Month).Concat(others.Months.Select(m => m.Period.Month)).ToList();
+        var notOpened = others.NotOpened.Where(m => m.Month >= paidMonths.Min() && m.Month <= paidMonths.Max())
+                              .OrderBy(m => m.Month).ThenBy(m => m.SiteName, StringComparer.CurrentCulture)
+                              .Select(m => $"{m.Month:00}/{year} ({m.SiteName})")
+                              .ToList();
+        if (notOpened.Count > 0)
+            return Result.Failure<PayrollExportFile>(Error.Conflict("Payroll_SimplIrMonthsNotOpened", year, string.Join(", ", notOpened)));
+
         if (string.IsNullOrWhiteSpace(employer.FiscalId))
             return Result.Failure<PayrollExportFile>(Error.Validation("Payroll_SimplIrNoFiscalId"));
 
@@ -893,9 +958,14 @@ public sealed class PayrollService(
             var address = e is null
                 ? null
                 : string.Join(", ", new[] { e.Address, e.City }.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!.Trim()));
+            // An ANAPEC payslip closed before the 6,000 DH cap stored the net taxable of the whole
+            // stipend: the net taxable declared is that of the excess, computed again.
+            var amounts = p.Amounts.Exemption == PayrollExemption.InsertionContract
+                ? p.Amounts with { NetTaxable = PayrollCalculator.NetTaxableOf(p.Amounts, rates) }
+                : p.Amounts;
             return new SimplIrPayslip(month, p.EmployeeId, p.Number, e?.LastName ?? p.FullName, e?.FirstName ?? string.Empty,
                                       address, p.Cin, p.CnssNumber, e?.FamilyStatus ?? FamilyStatus.Unmarried, p.ContractType,
-                                      p.DependentPersons, high, p.Amounts);
+                                      p.DependentPersons, high, amounts);
         }).ToList();
 
         return Result.Success(new PayrollExportFile(SimplIrSalaryDeclaration.FileName(employer.FiscalId, year),
@@ -959,10 +1029,20 @@ public enum EmployerIdentifier
 /// <summary>A payroll month of another site of the employer, read-only.</summary>
 public sealed record EmployerSiteMonth(string SiteName, PayrollPeriod Period);
 
+/// <summary>A month another site of the employer had salaried staff for and has no payroll month of.</summary>
+public sealed record EmployerSiteMissingMonth(string SiteName, int Month);
+
 /// <param name="Staff">The employees of those sites, and whoever their months pay; read-only.</param>
-public sealed record EmployerOtherSites(IReadOnlyList<EmployerSiteMonth> Months, IReadOnlyList<Employee> Staff)
+/// <param name="Missing">
+/// The months asked for in which one of those sites had staff on the payroll
+/// (<see cref="PayrollService.IsOnPayrollIn"/>) and opened no payroll month.
+/// </param>
+public sealed record EmployerOtherSites(IReadOnlyList<EmployerSiteMonth> Months, IReadOnlyList<Employee> Staff,
+                                        IReadOnlyList<EmployerSiteMissingMonth>? Missing = null)
 {
     public static readonly EmployerOtherSites None = new([], []);
+
+    public IReadOnlyList<EmployerSiteMissingMonth> NotOpened => Missing ?? [];
 }
 
 public sealed record SettledAmounts(decimal LeaveIndemnity, decimal NoticeIndemnity, decimal SeverancePay);

@@ -262,7 +262,7 @@ public sealed class QuestPdfPayslipRenderer : IPayslipRenderer
     private static string ExemptionLabel(PayrollExemption exemption) => exemption switch
     {
         PayrollExemption.InsertionContract => "Contrat d'insertion : indemnité de stage exonérée de CNSS, d'AMO et d'IR jusqu'à 6 000 DH par mois ; l'excédent est soumis.",
-        PayrollExemption.Tahfiz => "Programme Tahfiz : charges patronales CNSS prises en charge par l'État ; IR exonéré jusqu'à 10 000 DH brut.",
+        PayrollExemption.Tahfiz => "Programme Tahfiz (24 mois) : charges patronales CNSS prises en charge par l'État et IR exonéré jusqu'à 10 000 DH brut.",
         PayrollExemption.Internship => "Stage : gratification exonérée de cotisations et d'IR.",
         _ => string.Empty
     };
