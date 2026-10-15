@@ -55,6 +55,7 @@ public sealed class ValidationView : LocalizedView
     private readonly Button _communicate = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _release = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _unvalidate = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _history = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
 
     private IReadOnlyList<ValidationWorklistEntry> _entries = [];
@@ -177,13 +178,15 @@ public sealed class ValidationView : LocalizedView
         _communicate.Bounds = new Rectangle(390, 8, 240, UiTheme.ButtonHeight);
         _release.Bounds = new Rectangle(640, 8, 200, UiTheme.ButtonHeight);
         _unvalidate.Bounds = new Rectangle(850, 8, 210, UiTheme.ButtonHeight);
+        _history.Bounds = new Rectangle(1070, 8, 170, UiTheme.ButtonHeight);
 
-        _status.Bounds = new Rectangle(1074, 14, 440, 20);
+        _status.Bounds = new Rectangle(1254, 14, 440, 20);
         _status.Font = UiTheme.Small;
         _status.ForeColor = UiTheme.TextSecondary;
         _status.AutoSize = false;
 
-        actions.Controls.AddRange([_selectAll, _validate, _communicate, _release, _unvalidate, _status]);
+        actions.Controls.AddRange([_selectAll, _validate, _communicate, _release, _unvalidate, _history,
+                                   _status]);
 
         bottom.Controls.AddRange([detailHost, actions, _detailHeading]);
         _detailHeading.BringToFront();
@@ -302,6 +305,21 @@ public sealed class ValidationView : LocalizedView
         PermissionGate.Require(Permissions.Reports.Print, _release);
         PermissionGate.Require(Permissions.Results.Unvalidate, _unvalidate);
 
+        // The antériorités of the selected parameter: the button, or a double-click on the
+        // antériorité cell, which is where the eye already is when the last value raises a doubt.
+        _history.Visible = PermissionGate.Allows(Permissions.Results.View);
+        PermissionGate.Require(Permissions.Results.View, _history);
+        _history.Click += async (_, _) => await ShowHistoryAsync();
+        _details.CurrentCellChanged += (_, _) => _history.Enabled = ResultHistory.IsCharted(SelectedDetail());
+        _details.CellDoubleClick += async (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            if (_details.Columns[e.ColumnIndex].Name != ColumnPrevious) return;
+            if (PermissionGate.IsBlocked(_history)) return;
+
+            await ShowHistoryAsync();
+        };
+
         _details.CellFormatting += OnDetailFormatting;
         _worklist.CellFormatting += OnWorklistFormatting;
 
@@ -378,6 +396,7 @@ public sealed class ValidationView : LocalizedView
         _communicate.Text = T("Nav.CriticalResults");
         _release.Text = T("Report.Title");
         _unvalidate.Text = T("Validation.Unvalidate");
+        _history.Text = T("Result.History");
 
         if (_worklist.Columns.Count > 0)
         {
@@ -598,6 +617,64 @@ public sealed class ValidationView : LocalizedView
                               && _rowsById.Values.Any(r => !r.IsHeading
                                                            && r.Status is TestResultStatus.Validated
                                                                        or TestResultStatus.Reported);
+
+        _history.Enabled = enabled && ResultHistory.IsCharted(SelectedDetail());
+    }
+
+    // ---- Antériorités ---------------------------------------------------------------------------------
+
+    /// <summary>The sheet row under the detail grid's cursor, or null.</summary>
+    private ResultEntryRow? SelectedDetail() =>
+        _details.CurrentRow?.Tag is Guid id && _rowsById.TryGetValue(id, out var row) ? row : null;
+
+    /// <summary>
+    /// Opens the chart of the selected parameter's validated values, the value awaiting this
+    /// biologist's signature drawn as the current point. Read in the selection queue: the detail
+    /// loads share this screen's context, which refuses a second query while one runs.
+    /// </summary>
+    private async Task ShowHistoryAsync()
+    {
+        if (_sheet is not { } sheet) return;
+        if (SelectedDetail() is not { } row || !ResultHistory.IsCharted(row)) return;
+
+        IReadOnlyList<ResultHistoryPoint>? points = null;
+
+        async Task FetchAsync()
+        {
+            var history = await _entry.GetHistoryAsync(sheet.LabOrderId, row.TestParameterId);
+
+            if (history.IsFailure)
+            {
+                _dialogs.ShowFailure(history);
+                return;
+            }
+
+            points = history.Value;
+        }
+
+        try
+        {
+            // Busy for the read only: an action in flight on the same context is not raced, and
+            // a second click while the read runs is ignored.
+            if (!await RunBusyAsync(() => _selectionLoads.RunAsync(FetchAsync))) return;
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded.
+            return;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Loading the history of parameter {ParameterId} failed.", row.TestParameterId);
+            _dialogs.Error(T("Message.UnexpectedError"));
+            return;
+        }
+
+        if (points is null) return;
+
+        using var dialog = new ResultHistoryDialog(Localizer, row.ParameterName.For(Localizer.CurrentLanguage),
+                                                   ResultHistory.SeriesFor(row, points, sheet.AccessionNumber));
+        dialog.ShowDialog(FindForm());
     }
 
     private void ToggleAll()
