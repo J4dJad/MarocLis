@@ -33,13 +33,21 @@ public sealed record StatementLineRow(
     int MatchCount,
     bool IsAutomatic,
     IReadOnlyList<TreasuryMovementKind> MatchKinds,
-    string? MatchComment)
+    string? MatchComment,
+    Guid ImportId = default)
 {
     public bool IsReconciled => MatchCount > 0;
 
     /// <summary>What the matches leave unexplained: bank charges deducted from a card batch, typically.</summary>
     public decimal DifferenceMad => IsReconciled ? Money.Round(AmountMad - MatchedAmountMad) : 0m;
 }
+
+/// <summary>A line already imported on the account, as the duplicate check of a new import reads it.</summary>
+public sealed record ExistingStatementLine(DateOnly OperationDate, decimal AmountMad, string Label, string? Reference,
+                                           string Fingerprint, bool IsDeleted);
+
+/// <summary>A line of the file and what an import does with it: skip it, or bring it in with that fingerprint.</summary>
+public sealed record DeduplicatedLine(ParsedStatementLine Line, bool IsDuplicate, string? Fingerprint);
 
 public sealed record AutoMatchProposal(Guid StatementLineId, TreasuryMovement Movement, bool ByReference);
 
@@ -197,28 +205,100 @@ public static class BankReconciliation
     }
 
     /// <summary>
-    /// Ranks the identical lines of an import so <see cref="BankStatementLine.ComputeFingerprint"/>
-    /// tells the second of two identical card commissions from a duplicate of the first.
+    /// Ranks the lines of a file that share a date and an amount, and fingerprints each with its
+    /// rank (<see cref="BankStatementLine.ComputeFingerprint(Guid, DateOnly, decimal, int)"/>): the
+    /// second of two card commissions of the same day is a line of its own, not a duplicate.
     /// </summary>
     public static IReadOnlyList<(ParsedStatementLine Line, string Fingerprint)> Fingerprints(
         Guid bankAccountId, IEnumerable<ParsedStatementLine> lines)
     {
-        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        var seen = new Dictionary<(DateOnly, decimal), int>();
         var result = new List<(ParsedStatementLine, string)>();
 
         foreach (var line in lines.Where(l => l.IsValid))
         {
-            var first = BankStatementLine.ComputeFingerprint(bankAccountId, line.OperationDate!.Value,
-                                                             line.Amount!.Value, line.Label, line.Reference, 0);
-            var occurrence = seen.TryGetValue(first, out var n) ? n + 1 : 0;
-            seen[first] = occurrence;
-
-            result.Add((line, occurrence == 0
-                ? first
-                : BankStatementLine.ComputeFingerprint(bankAccountId, line.OperationDate.Value, line.Amount.Value,
-                                                       line.Label, line.Reference, occurrence)));
+            var key = (line.OperationDate!.Value, Money.Round(line.Amount!.Value));
+            var rank = seen.TryGetValue(key, out var n) ? n + 1 : 0;
+            seen[key] = rank;
+            result.Add((line, BankStatementLine.ComputeFingerprint(bankAccountId, key.Item1, key.Item2, rank)));
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Says which lines of a file the account already has, so an overlapping statement brings no
+    /// line in twice even when it was exported with another layout: the web banking's truncated
+    /// labels against the statement service's full ones, a reference column added or dropped.
+    /// <list type="number">
+    /// <item>A line is identified by its date and amount. On a given day, as many lines of that
+    /// amount as the account already has are duplicates; the rest are new.</item>
+    /// <item>The label and reference only decide which of the file's lines of the same date and
+    /// amount are the ones already there: one whose text agrees with an existing line's first.</item>
+    /// </list>
+    /// A withdrawn import's lines (<see cref="ExistingStatementLine.IsDeleted"/>) are not there any
+    /// more, but their fingerprints stay taken: a new line takes the lowest rank still free.
+    /// </summary>
+    public static IReadOnlyList<DeduplicatedLine> Deduplicate(Guid bankAccountId, IEnumerable<ParsedStatementLine> lines,
+                                                              IEnumerable<ExistingStatementLine> existing)
+    {
+        var all = existing.ToList();
+        var taken = all.Select(e => e.Fingerprint).ToHashSet(StringComparer.Ordinal);
+        var live = all.Where(e => !e.IsDeleted)
+                      .GroupBy(e => (e.OperationDate, Money.Round(e.AmountMad)))
+                      .ToDictionary(g => g.Key, g => g.ToList());
+
+        var valid = lines.Where(l => l.IsValid).ToList();
+        var outcome = new Dictionary<int, DeduplicatedLine>();
+
+        foreach (var group in valid.GroupBy(l => (l.OperationDate!.Value, Money.Round(l.Amount!.Value))))
+        {
+            var pool = live.TryGetValue(group.Key, out var found) ? [.. found] : new List<ExistingStatementLine>();
+            var unpaired = new List<ParsedStatementLine>();
+
+            foreach (var line in group)
+            {
+                var same = pool.FirstOrDefault(e => SameText(line, e));
+                if (same is null) { unpaired.Add(line); continue; }
+
+                pool.Remove(same);
+                outcome[line.LineNumber] = new DeduplicatedLine(line, IsDuplicate: true, null);
+            }
+
+            foreach (var line in unpaired)
+            {
+                if (pool.Count > 0)
+                {
+                    pool.RemoveAt(0);
+                    outcome[line.LineNumber] = new DeduplicatedLine(line, IsDuplicate: true, null);
+                    continue;
+                }
+
+                var rank = 0;
+                string fingerprint;
+                while (!taken.Add(fingerprint = BankStatementLine.ComputeFingerprint(bankAccountId, group.Key.Item1,
+                                                                                      group.Key.Item2, rank)))
+                    rank++;
+
+                outcome[line.LineNumber] = new DeduplicatedLine(line, IsDuplicate: false, fingerprint);
+            }
+        }
+
+        return [.. valid.Select(l => outcome[l.LineNumber])];
+    }
+
+    /// <summary>
+    /// The same line read twice: the same reference, or labels of which one starts the other (a
+    /// web-banking export cuts the label the statement prints in full).
+    /// </summary>
+    private static bool SameText(ParsedStatementLine line, ExistingStatementLine existing)
+    {
+        var reference = Compact(line.Reference);
+        if (reference.Length > 0 && reference == Compact(existing.Reference)) return true;
+
+        var a = Compact(line.Label);
+        var b = Compact(existing.Label);
+        if (a.Length == 0 || b.Length == 0) return false;
+        return a.StartsWith(b, StringComparison.Ordinal) || b.StartsWith(a, StringComparison.Ordinal);
     }
 }

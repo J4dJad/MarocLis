@@ -95,6 +95,7 @@ public sealed class SupplierPaymentConfiguration : IEntityTypeConfiguration<Supp
         builder.HasKey(e => e.Id);
         builder.Property(e => e.AmountMad).HasColumnType("decimal(18,2)");
         builder.Property(e => e.Reference).HasMaxLength(60);
+        builder.Ignore(e => e.BankDate);
 
         builder.HasIndex(e => new { e.SupplierInvoiceId, e.PaidOn })
                .HasDatabaseName("IX_SupplierPayments_Invoice_Date");

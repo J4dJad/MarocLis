@@ -34,8 +34,12 @@ public sealed record BankStatementCsvMapping
 
     public string DateFormat { get; init; } = "dd/MM/yyyy";
 
-    /// <summary>',' for the French layout of most Moroccan banks, '.' otherwise.</summary>
-    public char DecimalSeparator { get; init; } = ',';
+    /// <summary>
+    /// ',' for the French layout of most Moroccan banks, '.' otherwise; '\0' (the default) reads
+    /// it from the file's amounts, so a new account's first import does not take "1500.00" for
+    /// 150 000 (see <see cref="BankStatementCsv.DetectDecimalSeparator"/>).
+    /// </summary>
+    public char DecimalSeparator { get; init; }
 
     public bool UsesDebitCreditColumns => AmountColumn <= 0;
 
@@ -91,9 +95,15 @@ public static class BankStatementCsv
     /// <summary>
     /// The text of the file. Most bank exports are Windows-1252 rather than UTF-8; a file that is
     /// not valid UTF-8 is read as Windows-1252, so the accents of the labels survive either way.
+    /// A file Excel saved as "Texte Unicode" is UTF-16 and says so with its byte order mark.
     /// </summary>
     public static string Decode(byte[] content)
     {
+        if (content.Length >= 2 && content[0] == 0xFF && content[1] == 0xFE)
+            return Encoding.Unicode.GetString(content, 2, content.Length - 2);
+        if (content.Length >= 2 && content[0] == 0xFE && content[1] == 0xFF)
+            return Encoding.BigEndianUnicode.GetString(content, 2, content.Length - 2);
+
         if (content.Length >= 3 && content[0] == 0xEF && content[1] == 0xBB && content[2] == 0xBF)
             return Encoding.UTF8.GetString(content, 3, content.Length - 3);
 
@@ -125,6 +135,15 @@ public static class BankStatementCsv
 
         var first = mapping.SkipLines + (mapping.HasHeader ? 1 : 0);
 
+        int[] amountColumns = mapping.UsesDebitCreditColumns
+            ? [mapping.DebitColumn, mapping.CreditColumn]
+            : [mapping.AmountColumn];
+        var decimalSeparator = mapping.DecimalSeparator is ',' or '.'
+            ? mapping.DecimalSeparator
+            : DetectDecimalSeparator(lines.Skip(first).Select(l => SplitCells(l, delimiter))
+                                          .SelectMany(cells => amountColumns.Where(c => c > 0 && c <= cells.Count)
+                                                                            .Select(c => cells[c - 1])));
+
         for (var i = first; i < lines.Count; i++)
         {
             var cells = SplitCells(lines[i], delimiter);
@@ -145,8 +164,8 @@ public static class BankStatementCsv
             {
                 var debitText = Cell(mapping.DebitColumn);
                 var creditText = Cell(mapping.CreditColumn);
-                var debit = ParseAmount(debitText, mapping.DecimalSeparator);
-                var credit = ParseAmount(creditText, mapping.DecimalSeparator);
+                var debit = ParseAmount(debitText, decimalSeparator);
+                var credit = ParseAmount(creditText, decimalSeparator);
 
                 if ((debitText.Length > 0 && debit is null) || (creditText.Length > 0 && credit is null))
                 {
@@ -161,7 +180,7 @@ public static class BankStatementCsv
             }
             else
             {
-                amount = ParseAmount(Cell(mapping.AmountColumn), mapping.DecimalSeparator);
+                amount = ParseAmount(Cell(mapping.AmountColumn), decimalSeparator);
                 if (amount is null) amountError = "BankStatement_AmountUnreadable";
             }
 
@@ -201,8 +220,35 @@ public static class BankStatementCsv
     }
 
     /// <summary>
+    /// The decimal separator the amounts of a file use: in each amount, the last '.' or ',' that is
+    /// followed by one or two final digits ("1 500,00", "1,500.00", "12.5"). The more frequent one
+    /// wins; ',' when nothing tells (whole amounts only).
+    /// </summary>
+    public static char DetectDecimalSeparator(IEnumerable<string> amountCells)
+    {
+        int commas = 0, dots = 0;
+        foreach (var cell in amountCells)
+        {
+            var t = new string([.. cell.Where(c => char.IsAsciiDigit(c) || c is '.' or ',')]);
+            var last = t.LastIndexOfAny(['.', ',']);
+            if (last < 0) continue;
+
+            var tail = t.Length - last - 1;
+            if (tail is < 1 or > 2) continue;
+            if (t[last] == ',') commas++; else dots++;
+        }
+
+        return dots > commas ? '.' : ',';
+    }
+
+    /// <summary>
     /// An amount as banks print it: "1 234,56", "1.234,56", "-120,00", "(120,00)", "120,00-",
     /// with or without "DH" / "MAD". Null when it is not a number; zero for an empty cell.
+    /// <para>
+    /// A thousands separator followed by only one or two final digits ("1500.00" read with ',')
+    /// is a decimal separator the mapping got wrong: the amount is refused rather than read a
+    /// hundred times too large.
+    /// </para>
     /// </summary>
     public static decimal? ParseAmount(string text, char decimalSeparator)
     {
@@ -217,6 +263,13 @@ public static class BankStatementCsv
         if (t.StartsWith('+')) t = t[1..];
 
         var thousands = decimalSeparator == ',' ? '.' : ',';
+
+        var lastThousands = t.LastIndexOf(thousands);
+        if (lastThousands >= 0)
+        {
+            var tail = t[(lastThousands + 1)..].Trim();
+            if (tail.Length is 1 or 2 && tail.All(char.IsAsciiDigit)) return null;
+        }
         var sb = new StringBuilder();
         foreach (var c in t)
         {

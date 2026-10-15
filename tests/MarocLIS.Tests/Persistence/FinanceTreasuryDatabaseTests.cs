@@ -153,7 +153,9 @@ public sealed class FinanceTreasuryDatabaseTests(FinanceTreasuryScratchDatabase 
             new Payment(300m, PaymentMethod.Cash, Today.AddDays(-8), user, site) { CashSessionId = Guid.NewGuid() });
 
         var session = new CashSession(site, user, new DateTimeOffset(Today.AddDays(-8).ToDateTime(new TimeOnly(8, 0))), 500m);
-        session.RecordWithdrawal(3_000m);
+        session.RecordWithdrawal(3_000m, session.OpenedAt.AddHours(3), "Versement BMCE");
+        // Only a closed shift's withdrawals are offered: an open one can still take more out.
+        session.Close(session.OpenedAt.AddHours(9), user, 0m, "Fond remis au coffre").IsSuccess.Should().BeTrue();
         context.CashSessions.Add(session);
 
         var supplier = new Supplier("F" + Guid.NewGuid().ToString("N")[..8], "Biomed Maroc");

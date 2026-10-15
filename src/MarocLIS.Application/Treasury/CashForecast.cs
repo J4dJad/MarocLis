@@ -26,7 +26,12 @@ public enum ForecastCategory
 /// <summary>One expected flow, signed: positive comes in, negative goes out.</summary>
 public sealed record ForecastFlow(DateOnly Date, decimal AmountMad, ForecastCategory Category, string Label);
 
-public sealed record ForecastOpeningBalance(string Account, decimal BalanceMad, DateOnly? AsOf);
+/// <param name="IsRecordedNotOnStatement">
+/// Not an account: what the application recorded after <paramref name="AsOf"/> that no statement
+/// line holds yet, added to the statements' balances so the forecast opens on the book balance.
+/// </param>
+public sealed record ForecastOpeningBalance(string Account, decimal BalanceMad, DateOnly? AsOf,
+                                            bool IsRecordedNotOnStatement = false);
 
 public sealed record ForecastWeek(
     int Number,

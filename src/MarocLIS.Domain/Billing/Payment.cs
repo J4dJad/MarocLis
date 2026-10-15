@@ -276,7 +276,23 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
         if (method != PaymentMethod.Cash) Accumulate(method, -amount);
     }
 
-    public void RecordWithdrawal(decimal amount) => CashWithdrawals = Money.Round(CashWithdrawals + amount);
+    private readonly List<CashWithdrawal> _withdrawals = [];
+
+    /// <summary>
+    /// Each withdrawal on its own, as it was banked: two deposit slips of a shift are two bank lines,
+    /// and the reconciliation needs two movements to match them with.
+    /// </summary>
+    public IReadOnlyList<CashWithdrawal> Withdrawals => _withdrawals.AsReadOnly();
+
+    /// <summary>
+    /// Takes cash out of the till. With <paramref name="at"/>, the withdrawal is also kept on its
+    /// own (<see cref="Withdrawals"/>); the total is what the till count needs either way.
+    /// </summary>
+    public void RecordWithdrawal(decimal amount, DateTimeOffset? at = null, string? reason = null)
+    {
+        CashWithdrawals = Money.Round(CashWithdrawals + amount);
+        if (at is { } when) _withdrawals.Add(new CashWithdrawal(Id, amount, when, reason));
+    }
 
     /// <summary>
     /// Closes the shift. A variance beyond the tolerance must be explained before the session can
@@ -308,6 +324,8 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
     /// <summary>The supervisor's comment: the variance accepted, the deposit slip checked, the follow-up.</summary>
     public string? ReconciliationComment { get; private set; }
 
+    public const int ReconciliationCommentMaxLength = 1000;
+
     /// <summary>
     /// Signs a closed shift off (visa du responsable): the counted cash, the variance and its
     /// explanation were checked by someone other than the operator. Four eyes is the point, so the
@@ -321,6 +339,8 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
             return Result.Failure(Error.Forbidden("CashSession_ReconcilerIsOperator"));
         if (Variance is { } variance && variance != 0m && string.IsNullOrWhiteSpace(comment))
             return Result.Failure(Error.Validation("CashSession_ReconciliationCommentRequired", variance));
+        if (comment is not null && comment.Trim().Length > ReconciliationCommentMaxLength)
+            return Result.Failure(Error.Validation("Treasury_TextTooLong", ReconciliationCommentMaxLength));
 
         ReconciledAt = at;
         ReconciledByUserId = byUserId;

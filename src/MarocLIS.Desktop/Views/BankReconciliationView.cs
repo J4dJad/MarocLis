@@ -35,6 +35,7 @@ public sealed class BankReconciliationView : LocalizedView
     private readonly Button _match = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _justify = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _unmatch = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _withdrawImport = UiTheme.SecondaryButton(string.Empty);
     private readonly CheckBox _openOnly = new() { AutoSize = true };
 
     private readonly Label _linesTitle = new();
@@ -69,10 +70,12 @@ public sealed class BankReconciliationView : LocalizedView
         _match.Click += async (_, _) => await RunBusyAsync(MatchAsync);
         _justify.Click += async (_, _) => await RunBusyAsync(JustifyAsync);
         _unmatch.Click += async (_, _) => await RunBusyAsync(UnmatchAsync);
+        _withdrawImport.Click += async (_, _) => await RunBusyAsync(WithdrawImportAsync);
         _lines.SelectionChanged += (_, _) => RefreshButtons();
         _movements.SelectionChanged += (_, _) => RefreshButtons();
 
-        PermissionGate.Require(Permissions.Treasury.Manage, _accounts, _import, _auto, _match, _justify, _unmatch);
+        PermissionGate.Require(Permissions.Treasury.Manage, _accounts, _import, _auto, _match, _justify, _unmatch,
+                               _withdrawImport);
     }
 
     public override string Title => T("Nav.BankReconciliation");
@@ -114,10 +117,11 @@ public sealed class BankReconciliationView : LocalizedView
         _match.Bounds = new Rectangle(230, 82, 170, UiTheme.ButtonHeight);
         _justify.Bounds = new Rectangle(410, 82, 150, UiTheme.ButtonHeight);
         _unmatch.Bounds = new Rectangle(570, 82, 170, UiTheme.ButtonHeight);
-        _openOnly.Location = new Point(752, 86);
+        _withdrawImport.Bounds = new Rectangle(750, 82, 190, UiTheme.ButtonHeight);
+        _openOnly.Location = new Point(952, 86);
 
         bar.Controls.AddRange([_heading, _accountLabel, _account, _fromLabel, _from, _toLabel, _to, _refresh,
-                               _accounts, _import, _auto, _match, _justify, _unmatch, _openOnly]);
+                               _accounts, _import, _auto, _match, _justify, _unmatch, _withdrawImport, _openOnly]);
 
         AddColumns(_lines, ("date", 9), ("label", 30), ("reference", 12), ("amount", 11), ("status", 18));
         AddColumns(_movements, ("date", 9), ("kind", 16), ("label", 26), ("reference", 13), ("amount", 11));
@@ -186,6 +190,7 @@ public sealed class BankReconciliationView : LocalizedView
         _match.Text = T("Treasury.Match");
         _justify.Text = T("Treasury.Justify");
         _unmatch.Text = T("Treasury.Unmatch");
+        _withdrawImport.Text = T("Treasury.WithdrawImport");
         _openOnly.Text = T("Treasury.OpenOnly");
         _linesTitle.Text = T("Treasury.StatementLines");
         _movementsTitle.Text = T("Treasury.UnmatchedMovements");
@@ -296,7 +301,7 @@ public sealed class BankReconciliationView : LocalizedView
         string Row(string key, decimal value) => $"{T(key),-38}{Amount(value),18}";
         _summary.Text = string.Join(Environment.NewLine,
             $"{Row("Treasury.StatementBalance", s.StatementBalanceMad)}    {Row("Treasury.ReconciledBalance", s.ReconciledBalanceMad)}",
-            $"{Row("Treasury.UnmatchedLines", s.UnmatchedStatementMad)}    {Row("Treasury.UnmatchedMovementsTotal", s.UnmatchedMovementsMad)}",
+            $"{Row("Treasury.UnmatchedLines", s.UnmatchedStatementMad)}    {Row("Treasury.UnmatchedMovementsSiteTotal", s.UnmatchedMovementsMad)}",
             $"{T("Treasury.OpeningAsOf", s.OpeningBalanceDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), Amount(s.OpeningBalanceMad))}   ·   " +
             $"{T("Treasury.UnmatchedCounts", s.UnmatchedStatementCount, s.UnmatchedMovementCount)}");
 
@@ -311,6 +316,7 @@ public sealed class BankReconciliationView : LocalizedView
         _match.Enabled = manage && line is { IsReconciled: false } && _movements.SelectedRows.Count > 0;
         _justify.Enabled = manage && line is { IsReconciled: false };
         _unmatch.Enabled = manage && line is { IsReconciled: true };
+        _withdrawImport.Enabled = manage && line is not null;
     }
 
     // ---- Actions ---------------------------------------------------------------------------------
@@ -388,7 +394,8 @@ public sealed class BankReconciliationView : LocalizedView
         string? comment = null;
         if (difference != 0m)
         {
-            comment = _dialogs.PromptForReason(T("Treasury.MatchDifferencePrompt", Amount(difference)), _match.Text);
+            comment = _dialogs.PromptForReason(T("Treasury.MatchDifferencePrompt", Amount(difference)), _match.Text,
+                                               maxLength: BankMatch.CommentMaxLength);
             if (comment is null) return;
         }
 
@@ -403,12 +410,31 @@ public sealed class BankReconciliationView : LocalizedView
         if (CurrentLine is not { IsReconciled: false } line) return;
 
         var comment = _dialogs.PromptForReason(T("Treasury.JustifyPrompt", line.Label, Amount(line.AmountMad)),
-                                               _justify.Text);
+                                               _justify.Text, maxLength: BankMatch.CommentMaxLength);
         if (comment is null) return;
 
         var result = await _treasury.JustifyAsync(line.Id, comment);
         if (result.IsFailure) { _dialogs.ShowFailure(result, _justify.Text); return; }
 
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Withdraws the whole import the selected line came with, read with a wrong mapping. The
+    /// service refuses while a line of it is reconciled.
+    /// </summary>
+    private async Task WithdrawImportAsync()
+    {
+        if (CurrentLine is not { } line) return;
+        if (!_dialogs.Confirm(T("Treasury.WithdrawImportConfirm",
+                                line.OperationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), line.Label,
+                                Amount(line.AmountMad)), _withdrawImport.Text)) return;
+
+        var result = await _treasury.WithdrawImportAsync(line.Id);
+        if (result.IsFailure) { _dialogs.ShowFailure(result, _withdrawImport.Text); return; }
+
+        _dialogs.Info(T("Treasury.ImportWithdrawn", result.Value), _withdrawImport.Text);
+        await LoadAccountsAsync(select: CurrentAccount?.Id);
         await LoadAsync();
     }
 

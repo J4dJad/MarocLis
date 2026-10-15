@@ -38,12 +38,16 @@ public sealed class TreasuryForecastItem : AuditableAggregateRoot, ISiteScoped
 
     public void ChangeAmount(decimal amountMad) => AmountMad = Money.Round(amountMad);
 
+    public const int LabelMaxLength = 200;
+
     public Result Validate()
     {
         var errors = new List<Error>();
 
         if (string.IsNullOrWhiteSpace(Label))
             errors.Add(Error.Validation("TreasuryItem_LabelRequired"));
+        else if (Label.Length > LabelMaxLength)
+            errors.Add(Error.Validation("Treasury_TextTooLong", LabelMaxLength));
         if (AmountMad == 0m)
             errors.Add(Error.Validation("TreasuryItem_AmountRequired"));
         if (EndDate is { } end && end < StartDate)

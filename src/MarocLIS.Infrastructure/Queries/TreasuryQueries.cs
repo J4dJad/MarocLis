@@ -12,6 +12,9 @@ namespace MarocLIS.Infrastructure.Queries;
 
 public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
 {
+    /// <summary>The longest payment term the law on payment terms (loi 69-21) allows between traders.</summary>
+    private const int SupplierBillLongestTermDays = 120;
+
     // ---- Bank accounts ---------------------------------------------------------------------------
 
     public async Task<IReadOnlyList<BankAccountRow>> GetBankAccountsAsync(Guid siteId, bool includeInactive,
@@ -56,19 +59,15 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
         db.BankAccounts.IgnoreQueryFilters().AsNoTracking()
           .AnyAsync(a => a.Rib == rib && (exceptId == null || a.Id != exceptId), ct);
 
-    public async Task<IReadOnlySet<string>> GetExistingFingerprintsAsync(
-        Guid bankAccountId, IReadOnlyCollection<string> fingerprints, CancellationToken ct = default)
-    {
-        if (fingerprints.Count == 0) return new HashSet<string>(StringComparer.Ordinal);
-
-        var wanted = fingerprints.Distinct(StringComparer.Ordinal).ToList();
-        var found = await db.BankStatementLines.IgnoreQueryFilters().AsNoTracking()
-            .Where(l => l.BankAccountId == bankAccountId && wanted.Contains(l.Fingerprint))
-            .Select(l => l.Fingerprint)
+    public async Task<IReadOnlyList<ExistingStatementLine>> GetExistingLinesAsync(
+        Guid bankAccountId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        // Withdrawn lines too: their fingerprints still hold the unique index.
+        await db.BankStatementLines.IgnoreQueryFilters().AsNoTracking()
+            .Where(l => l.BankAccountId == bankAccountId && l.OperationDate >= from && l.OperationDate <= to)
+            .OrderBy(l => l.OperationDate).ThenBy(l => l.Id)
+            .Select(l => new ExistingStatementLine(l.OperationDate, l.AmountMad, l.Label, l.Reference, l.Fingerprint,
+                                                   l.IsDeleted))
             .ToListAsync(ct);
-
-        return found.ToHashSet(StringComparer.Ordinal);
-    }
 
     // ---- Reconciliation --------------------------------------------------------------------------
 
@@ -86,6 +85,7 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
                 l.Label,
                 l.Reference,
                 l.AmountMad,
+                l.ImportId,
                 Matches = db.BankMatches
                     .Where(m => m.BankStatementLineId == l.Id && m.UnmatchedAt == null)
                     .Select(m => new { m.Kind, m.AmountMad, m.IsAutomatic, m.Comment })
@@ -101,7 +101,7 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
                 Money.Round(l.Matches.Sum(m => m.AmountMad)), l.Matches.Count,
                 l.Matches.Count > 0 && l.Matches.All(m => m.IsAutomatic),
                 [.. l.Matches.Select(m => m.Kind).Distinct()],
-                l.Matches.Select(m => m.Comment).FirstOrDefault(c => c != null)))
+                l.Matches.Select(m => m.Comment).FirstOrDefault(c => c != null), l.ImportId))
         ];
     }
 
@@ -128,7 +128,8 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
                             || p.Method == PaymentMethod.ThirdPartyPayer)
                         && ((p.PaymentDate >= from.AddDays(-60) && p.PaymentDate <= to)
                             || (p.MaturityDate != null && p.MaturityDate >= from && p.MaturityDate <= to)
-                            || (p.BouncedAt != null && p.BouncedAt >= fromInstant && p.BouncedAt < toInstant)))
+                            || (p.BouncedAt != null && p.BouncedAt >= fromInstant && p.BouncedAt < toInstant)
+                            || (p.RefundedAt != null && p.RefundedAt >= fromInstant && p.RefundedAt < toInstant)))
             .Select(p => new
             {
                 p.Id,
@@ -140,6 +141,7 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
                 p.Reference,
                 p.RemittanceReference,
                 p.BouncedAt,
+                p.RefundedAt,
                 Invoice = db.Invoices.Where(i => i.Id == p.InvoiceId)
                     .Select(i => new { i.Number, i.BilledToName, i.PayerId }).FirstOrDefault()
             })
@@ -170,34 +172,68 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
                                                    -Money.Round(p.Amount), Describe(p.Invoice?.Number, p.Invoice?.BilledToName),
                                                    p.Reference, ClearsLate: false));
             }
+
+            // Handed back to the patient by cheque or transfer: money going out.
+            if (p.Status == PaymentStatus.Refunded && p.RefundedAt is { } refunded && InPeriod(DayOf(refunded)))
+            {
+                movements.Add(new TreasuryMovement(TreasuryMovementKind.PatientRefund, p.Id.ToString("N"), DayOf(refunded),
+                                                   -Money.Round(p.Amount), Describe(p.Invoice?.Number, p.Invoice?.BilledToName),
+                                                   p.Reference, ClearsLate: p.Method != PaymentMethod.BankTransfer));
+            }
         }
 
         // -- Deposits taken by cheque, transfer, bill or card.
         var deposits = await db.Deposits.AsNoTracking()
-            .Where(d => d.SiteId == siteId && d.ReceivedAt >= fromInstant && d.ReceivedAt < toInstant
+            .Where(d => d.SiteId == siteId
+                        && ((d.ReceivedAt >= fromInstant && d.ReceivedAt < toInstant)
+                            || (d.RefundedAt != null && d.RefundedAt >= fromInstant && d.RefundedAt < toInstant))
                         && (d.Method == PaymentMethod.Cheque || d.Method == PaymentMethod.BankTransfer
                             || d.Method == PaymentMethod.BillOfExchange || d.Method == PaymentMethod.Card))
-            .Select(d => new { d.Id, d.Number, d.Method, d.Amount, d.ReceivedAt, d.MaturityDate, d.Reference })
+            .Select(d => new
+            {
+                d.Id, d.Number, d.Method, d.Amount, d.ReceivedAt, d.MaturityDate, d.Reference, d.RefundedAmount,
+                d.RefundedAt
+            })
             .ToListAsync(ct);
 
         foreach (var d in deposits.Where(d => d.Method != PaymentMethod.Card))
         {
             var date = d.MaturityDate ?? DayOf(d.ReceivedAt);
-            if (!InPeriod(date)) continue;
-            movements.Add(new TreasuryMovement(TreasuryMovementKind.PatientDeposit, d.Id.ToString("N"), date,
-                                               Money.Round(d.Amount), d.Number, d.Reference, ClearsLate: false));
+            if (InPeriod(date))
+            {
+                movements.Add(new TreasuryMovement(TreasuryMovementKind.PatientDeposit, d.Id.ToString("N"), date,
+                                                   Money.Round(d.Amount), d.Number, d.Reference, ClearsLate: false));
+            }
+
+            if (d.RefundedAt is { } refunded && d.RefundedAmount > 0m && InPeriod(DayOf(refunded)))
+            {
+                movements.Add(new TreasuryMovement(TreasuryMovementKind.PatientRefund, d.Id.ToString("N"), DayOf(refunded),
+                                                   -Money.Round(d.RefundedAmount), d.Number, d.Reference,
+                                                   ClearsLate: d.Method != PaymentMethod.BankTransfer));
+            }
         }
 
-        // -- The day's card takings, which the acquirer credits as one batch.
-        var cards = payments.Where(p => p.Method == PaymentMethod.Card && p.Status == PaymentStatus.Settled)
+        // -- The day's card takings, which the acquirer credits as one batch. A card payment counts
+        // on the day it was taken whatever became of it, and a refund on the terminal comes off the
+        // batch of the day it was made: that is what the acquirer credits each day.
+        var cards = payments.Where(p => p.Method == PaymentMethod.Card
+                                        && (p.Status == PaymentStatus.Settled || p.Status == PaymentStatus.Refunded))
                             .Select(p => (Date: p.PaymentDate, p.Amount))
+                            .Concat(payments.Where(p => p.Method == PaymentMethod.Card && p.Status == PaymentStatus.Refunded
+                                                        && p.RefundedAt != null)
+                                            .Select(p => (Date: DayOf(p.RefundedAt!.Value), Amount: -p.Amount)))
                             .Concat(deposits.Where(d => d.Method == PaymentMethod.Card)
                                             .Select(d => (Date: DayOf(d.ReceivedAt), d.Amount)))
+                            .Concat(deposits.Where(d => d.Method == PaymentMethod.Card && d.RefundedAt != null
+                                                        && d.RefundedAmount > 0m)
+                                            .Select(d => (Date: DayOf(d.RefundedAt!.Value), Amount: -d.RefundedAmount)))
                             .Where(c => InPeriod(c.Date))
                             .GroupBy(c => c.Date);
 
         foreach (var day in cards)
         {
+            if (Money.Round(day.Sum(c => c.Amount)) == 0m) continue;
+
             // The site is part of the key: every site has a batch on the same day.
             movements.Add(new TreasuryMovement(TreasuryMovementKind.CardBatch,
                                                $"{siteId:N}|{day.Key.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}", day.Key,
@@ -224,16 +260,21 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
                                                r.Key.Reference.Length == 0 ? null : r.Key.Reference, ClearsLate: false));
         }
 
-        // -- Supplier payments. Cash ones never reach the bank.
+        // -- Supplier payments. Cash ones never reach the bank. A bill (LCN) or a post-dated cheque
+        // reaches it on its due date. One recorded before the due date was kept has only its
+        // payment date: it is read back over the longest legal term (120 days) instead.
+        var legacyFrom = from.AddDays(-SupplierBillLongestTermDays);
         var supplierPayments = await (
                 from p in db.SupplierPayments.AsNoTracking()
                 join i in db.SupplierInvoices.AsNoTracking() on p.SupplierInvoiceId equals i.Id
                 where i.SiteId == siteId && p.Method != SupplierPaymentMethod.Cash
-                      && p.PaidOn >= @from && p.PaidOn <= to
+                      && ((p.MaturityDate ?? p.PaidOn) >= @from && (p.MaturityDate ?? p.PaidOn) <= to
+                          || (p.MaturityDate == null && p.Method == SupplierPaymentMethod.BillOfExchange
+                              && p.PaidOn >= legacyFrom && p.PaidOn <= to))
                 select new
                 {
                     p.Id,
-                    p.PaidOn,
+                    Date = p.MaturityDate ?? p.PaidOn,
                     p.AmountMad,
                     p.Method,
                     p.Reference,
@@ -244,14 +285,36 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
             .ToListAsync(ct);
 
         movements.AddRange(supplierPayments.Select(p => new TreasuryMovement(
-            TreasuryMovementKind.SupplierPayment, p.Id.ToString("N"), p.PaidOn, -Money.Round(p.AmountMad),
+            TreasuryMovementKind.SupplierPayment, p.Id.ToString("N"), p.Date, -Money.Round(p.AmountMad),
             Describe(p.InvoiceNumber, p.Supplier), p.Reference,
             ClearsLate: p.Method is SupplierPaymentMethod.Cheque or SupplierPaymentMethod.BillOfExchange)));
 
-        // -- Cash taken out of the tills and banked, per shift.
+        // -- Cash taken out of the tills and banked: each withdrawal is a deposit slip, so a bank line
+        // of its own. A shift still open can take more out, so only closed shifts are offered. A
+        // shift recorded before withdrawals were kept one by one has only its total, on its day.
+        var withdrawals = await (
+                from w in db.CashWithdrawals.AsNoTracking()
+                join s in db.CashSessions.AsNoTracking() on w.CashSessionId equals s.Id
+                where s.SiteId == siteId && s.Status != CashSessionStatus.Open
+                      && w.At >= fromInstant && w.At < toInstant
+                select new
+                {
+                    w.Id,
+                    w.At,
+                    w.Amount,
+                    w.Reason,
+                    Operator = db.Users.Where(u => u.Id == s.OperatorUserId).Select(u => u.FullName).FirstOrDefault()
+                })
+            .ToListAsync(ct);
+
+        movements.AddRange(withdrawals.Where(w => InPeriod(DayOf(w.At))).Select(w => new TreasuryMovement(
+            TreasuryMovementKind.CashDeposit, w.Id.ToString("N"), DayOf(w.At), Money.Round(w.Amount),
+            w.Operator ?? "?", w.Reason, ClearsLate: false)));
+
         var sessions = await db.CashSessions.AsNoTracking()
-            .Where(s => s.SiteId == siteId && s.CashWithdrawals > 0m
-                        && s.OpenedAt >= fromInstant && s.OpenedAt < toInstant)
+            .Where(s => s.SiteId == siteId && s.CashWithdrawals > 0m && s.Status != CashSessionStatus.Open
+                        && s.OpenedAt >= fromInstant && s.OpenedAt < toInstant
+                        && !db.CashWithdrawals.Any(w => w.CashSessionId == s.Id))
             .Select(s => new
             {
                 s.Id,
@@ -289,7 +352,7 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
         // -- Less what an active match already holds.
         var matched = await db.BankMatches.AsNoTracking()
             .Where(m => m.SiteId == siteId && m.UnmatchedAt == null
-                        && m.MovementDate >= from && m.MovementDate <= to)
+                        && m.MovementDate >= legacyFrom && m.MovementDate <= to)
             .Select(m => new { m.Kind, m.SourceKey })
             .ToListAsync(ct);
         var held = matched.Select(m => (m.Kind, m.SourceKey)).ToHashSet();

@@ -910,7 +910,7 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
 /// <summary>A payment against an invoice approved for payment, the outstanding amount by default.</summary>
 internal sealed class SupplierPaymentDialog : MasterDataEditor
 {
-    private readonly DateTimePicker _date;
+    private readonly DateTimePicker _date, _maturity;
     private readonly TextBox _amount, _reference;
     private readonly ComboBox _method;
 
@@ -934,7 +934,30 @@ internal sealed class SupplierPaymentDialog : MasterDataEditor
                             latin: true, mono: true, right: true);
         _method = Choice("SupplierInvoices.Method", 360, 14, 140, SupplierPaymentMethod.Transfer,
                          "SupplierPaymentMethod");
-        _reference = TextField("SupplierInvoices.Reference", 20, 68, 480, null, latin: true, mono: true);
+        _reference = TextField("SupplierInvoices.Reference", 20, 68, 320, null, latin: true, mono: true);
+        _reference.MaxLength = 60;
+
+        // An LCN or a post-dated cheque reaches the bank on its due date, which the bank
+        // reconciliation looks for it on; the payment date by default.
+        Label("SupplierInvoices.MaturityDate", 360, 68);
+        _maturity = new DateTimePicker
+        {
+            Bounds = new Rectangle(360, 86, 140, UiTheme.InputHeight),
+            Format = DateTimePickerFormat.Short,
+            Value = DateTime.Today
+        };
+        Controls.Add(_maturity);
+
+        void Refresh()
+        {
+            var method = Selected<SupplierPaymentMethod>(_method);
+            _maturity.Enabled = method is SupplierPaymentMethod.Cheque or SupplierPaymentMethod.BillOfExchange;
+            if (_maturity.Value.Date < _date.Value.Date) _maturity.Value = _date.Value.Date;
+        }
+
+        _method.SelectedIndexChanged += (_, _) => Refresh();
+        _date.ValueChanged += (_, _) => Refresh();
+        Refresh();
 
         Notice(20, 124, 480, 60, "SupplierInvoices.PaymentNotice");
 
@@ -958,8 +981,17 @@ internal sealed class SupplierPaymentDialog : MasterDataEditor
             return;
         }
 
-        Request = new RecordSupplierPaymentRequest(DateOnly.FromDateTime(_date.Value.Date), amount, method,
-                                                   Blank(_reference));
+        var paidOn = DateOnly.FromDateTime(_date.Value.Date);
+        var maturity = DateOnly.FromDateTime(_maturity.Value.Date);
+        if (_maturity.Enabled && maturity < paidOn)
+        {
+            Dialogs.Warn(Localizer["SupplierPayment_MaturityBeforePayment"], Text);
+            _maturity.Focus();
+            return;
+        }
+
+        Request = new RecordSupplierPaymentRequest(paidOn, amount, method, Blank(_reference),
+                                                   _maturity.Enabled && maturity > paidOn ? maturity : null);
         DialogResult = DialogResult.OK;
         Close();
     }

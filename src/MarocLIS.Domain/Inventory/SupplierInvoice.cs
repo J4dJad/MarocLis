@@ -190,6 +190,8 @@ public sealed class SupplierInvoice : AuditableAggregateRoot, ISiteScoped
             return Result.Failure(Error.Validation("SupplierPayment_BeforeInvoice"));
         if (payment.Method != SupplierPaymentMethod.Cash && string.IsNullOrWhiteSpace(payment.Reference))
             return Result.Failure(Error.Validation("SupplierPayment_ReferenceRequired"));
+        if (payment.MaturityDate is { } maturity && maturity < payment.PaidOn)
+            return Result.Failure(Error.Validation("SupplierPayment_MaturityBeforePayment"));
 
         payment.AttachTo(Id);
         _payments.Add(payment);
@@ -328,7 +330,8 @@ public sealed class SupplierPayment : Entity
     private SupplierPayment() { }
 
     public SupplierPayment(DateOnly paidOn, decimal amountMad, SupplierPaymentMethod method,
-                           string? reference, DateTimeOffset recordedAt, Guid recordedByUserId)
+                           string? reference, DateTimeOffset recordedAt, Guid recordedByUserId,
+                           DateOnly? maturityDate = null)
     {
         PaidOn = paidOn;
         AmountMad = Money.Round(amountMad);
@@ -336,6 +339,10 @@ public sealed class SupplierPayment : Entity
         Reference = string.IsNullOrWhiteSpace(reference) ? null : reference.Trim();
         RecordedAt = recordedAt;
         RecordedByUserId = recordedByUserId;
+        // Only a cheque or a bill can fall due later; a transfer leaves the account on the day.
+        MaturityDate = method is SupplierPaymentMethod.Cheque or SupplierPaymentMethod.BillOfExchange
+            ? maturityDate
+            : null;
     }
 
     public Guid SupplierInvoiceId { get; private set; }
@@ -347,6 +354,15 @@ public sealed class SupplierPayment : Entity
 
     /// <summary>Transfer, cheque or bill number.</summary>
     public string? Reference { get; private set; }
+
+    /// <summary>
+    /// Due date of a bill of exchange (LCN) or a post-dated cheque: the day the bank debits it,
+    /// which can be months after <see cref="PaidOn"/>. Null when it is debited on the day.
+    /// </summary>
+    public DateOnly? MaturityDate { get; private set; }
+
+    /// <summary>The day the payment should reach the bank statement.</summary>
+    public DateOnly BankDate => MaturityDate ?? PaidOn;
 
     public DateTimeOffset RecordedAt { get; private set; }
     public Guid RecordedByUserId { get; private set; }
