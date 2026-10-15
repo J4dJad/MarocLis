@@ -272,6 +272,12 @@ public sealed class MaintenanceRecord : Entity, IAuditable
     public byte[]? AttachedReport { get; set; }
     public string? AttachedReportContentType { get; set; }
 
+    /// <summary>When the supplier was called out, for the intervention delay a contract caps.</summary>
+    public DateTimeOffset? RequestedAt { get; set; }
+
+    /// <summary>When the supplier's technician arrived on site.</summary>
+    public DateTimeOffset? ArrivedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public Guid? CreatedByUserId { get; set; }
     public DateTimeOffset? ModifiedAt { get; set; }

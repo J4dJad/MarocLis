@@ -37,6 +37,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddSingleton<Application.HumanResources.IHrDocumentRenderer>(sp => sp.GetRequiredService<QuestPdfHrDocumentRenderer>());
         services.AddSingleton<Application.HumanResources.IAccidentRenderer>(sp => sp.GetRequiredService<QuestPdfHrDocumentRenderer>());
         services.AddSingleton<IBenchWorksheetRenderer, QuestPdfBenchWorksheetRenderer>();
+        services.AddSingleton<Application.Inventory.IPurchaseOrderRenderer, QuestPdfPurchaseOrderRenderer>();
 
         // Resolved once: the installed font set does not change while the application runs, and the
         // report screen would otherwise pay to enumerate it on every release.
@@ -86,6 +87,9 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<Application.HumanResources.IHrDocumentQueries, HrDocumentQueries>();
         services.AddIsolatedQueries<Application.HumanResources.IAccidentQueries, AccidentQueries>();
         services.AddIsolatedQueries<Application.Inventory.IPurchaseOrderQueries, PurchaseOrderQueries>();
+        services.AddIsolatedQueries<Application.Inventory.IPurchaseOrderDocumentQueries, PurchaseOrderDocumentQueries>();
+        services.AddIsolatedQueries<Application.Inventory.IQuoteQueries, QuoteQueries>();
+        services.AddIsolatedQueries<Application.Inventory.IInstrumentContractQueries, InstrumentContractQueries>();
         services.AddIsolatedQueries<Application.Quality.IDocumentControlQueries, DocumentControlQueries>();
         services.AddIsolatedQueries<Application.Quality.IEqaQueries, EqaQueries>();
         services.AddIsolatedQueries<Application.Statistics.IStatisticsQueries, StatisticsQueries>();
@@ -128,6 +132,8 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<PayrollView>();
         services.AddTransient<AccidentView>();
         services.AddTransient<PurchaseOrderView>();
+        services.AddTransient<QuoteRequestView>();
+        services.AddTransient<InstrumentContractView>();
         services.AddTransient<QualityDocumentsView>();
         services.AddTransient<EqaView>();
         services.AddTransient<StatisticsView>();
