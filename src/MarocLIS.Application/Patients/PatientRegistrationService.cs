@@ -415,10 +415,22 @@ public sealed class PatientRegistrationService(
          patient.LastMenstrualPeriod, patient.WeightKg, patient.HeightCm);
 
     private async Task<(int Reinterpreted, int Validated)> ReinterpretResultsAsync(Patient patient,
-                                                                                   CancellationToken ct)
+                                                                                   CancellationToken ct) =>
+        await ReinterpretResultsAsync(patient, await WithMergedDuplicatesAsync(patient.Id, ct), ct);
+
+    /// <summary>
+    /// Re-interprets the pending results of the orders filed under any of
+    /// <paramref name="patientIds"/>, with <paramref name="patient"/>'s demographics.
+    /// <para>
+    /// The files merged into the patient are included: a merge leaves the duplicate's orders
+    /// where they were, and a correction of the survivor's sex or date of birth has to reach the
+    /// order still pending on the duplicate, which was interpreted with the duplicate's mistakes.
+    /// </para>
+    /// </summary>
+    private async Task<(int Reinterpreted, int Validated)> ReinterpretResultsAsync(
+        Patient patient, IReadOnlyCollection<Guid> patientIds, CancellationToken ct)
     {
-        var patientId = patient.Id;
-        var files = await orders.ListAsync(o => o.PatientId == patientId
+        var files = await orders.ListAsync(o => patientIds.Contains(o.PatientId)
                                                 && o.Status != LabOrderStatus.Cancelled, ct);
 
         var reinterpreted = 0;
@@ -432,6 +444,25 @@ public sealed class PatientRegistrationService(
         }
 
         return (reinterpreted, validated);
+    }
+
+    /// <summary>The patient and every file merged into it, followed transitively.</summary>
+    private async Task<List<Guid>> WithMergedDuplicatesAsync(Guid patientId, CancellationToken ct)
+    {
+        var all = new HashSet<Guid> { patientId };
+        var frontier = new List<Guid> { patientId };
+
+        while (frontier.Count > 0)
+        {
+            var current = frontier;
+            var merged = await patients.ListAsync(
+                p => p.MergedIntoPatientId != null && current.Contains(p.MergedIntoPatientId.Value), ct);
+
+            // The visited set stops a corrupt cycle from looping forever.
+            frontier = [.. merged.Select(p => p.Id).Where(all.Add)];
+        }
+
+        return [.. all];
     }
 
     // ---- Coverage ------------------------------------------------------------------------------
@@ -604,6 +635,13 @@ public sealed class PatientRegistrationService(
         if (surviving.MergedIntoPatientId is not null)
             return Result.Failure(Error.Conflict("Patient_SurvivorAlreadyMerged"));
 
+        // The duplicate's pending orders were interpreted with the duplicate's demographics; from
+        // now on they are the survivor's, which is the file that gets corrected. Read before the
+        // pointer is set, while the duplicate's own merged files are still found under it.
+        var duplicateFiles = Demographics(duplicate) != Demographics(surviving)
+            ? await WithMergedDuplicatesAsync(duplicate.Id, ct)
+            : null;
+
         duplicate.MarkMergedInto(survivingPatientId);
 
         patients.Update(duplicate);
@@ -611,6 +649,18 @@ public sealed class PatientRegistrationService(
         unitOfWork.AuditReason =
             $"Fusion du dossier {duplicate.MedicalRecordNumber} dans " +
             $"{surviving.MedicalRecordNumber} : {reason}";
+
+        if (duplicateFiles is not null)
+        {
+            var (reinterpreted, validated) = await ReinterpretResultsAsync(surviving, duplicateFiles, ct);
+
+            if (reinterpreted > 0)
+                unitOfWork.AuditReason += $" ; {reinterpreted} résultat(s) non validé(s) réinterprété(s)";
+            if (validated > 0)
+                unitOfWork.AuditReason +=
+                    $" ; {validated} résultat(s) déjà validé(s) interprété(s) selon les données " +
+                    "du doublon, à revoir et à amender si nécessaire";
+        }
 
         await unitOfWork.SaveChangesAsync(ct);
 

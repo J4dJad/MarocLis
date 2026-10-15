@@ -5,6 +5,7 @@ using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
+using MarocLIS.Domain.Results;
 using MarocLIS.Domain.Samples;
 
 namespace MarocLIS.Application.Orders;
@@ -104,7 +105,8 @@ public sealed record OrderItemDetail(
                                             or LabOrderItemStatus.Cancelled);
 
     /// <summary>Mirrors <see cref="LabOrderItem.Repeat"/>.</summary>
-    public bool CanRepeat => Status is not (LabOrderItemStatus.Reported
+    public bool CanRepeat => Status is not (LabOrderItemStatus.Validated
+                                            or LabOrderItemStatus.Reported
                                             or LabOrderItemStatus.Cancelled);
 
     /// <summary>Mirrors <see cref="LabOrderItem.IsOverdue"/>.</summary>
@@ -191,7 +193,8 @@ public sealed class OrderAmendmentService(
     IPermissionGuard guard,
     ICurrentUser currentUser,
     IDataAccessAuditor accessAuditor,
-    IClock clock)
+    IClock clock,
+    IRepository<TestResult> results)
 {
     // ---- Reading -------------------------------------------------------------------------------
 
@@ -519,8 +522,32 @@ public sealed class OrderAmendmentService(
         var item = order.Items.FirstOrDefault(i => i.Id == itemId);
         if (item is null) return Result.Failure(Error.NotFound("Order_ItemNotFound"));
 
+        var runResults = await results.ListAsync(r => r.LabOrderItemId == item.Id, ct);
+
+        // A value a biologist released stays released until its validation is withdrawn, which
+        // takes the right to withdraw it. Repeating around it left the released figure printing
+        // while the new run's values were refused — a technician undoing a biologist's release.
+        if (runResults.Any(r => r.IsValidated))
+            return Result.Failure(Error.Conflict("Item_RepeatRequiresUnvalidation"));
+
+        // Checked values are being set aside: the same right as changing one.
+        if ((item.Status == LabOrderItemStatus.TechnicallyValidated
+             || runResults.Any(r => r.Status == TestResultStatus.TechnicallyValidated))
+            && !currentUser.Has(Permissions.Results.Modify))
+            return Result.Failure(Error.Forbidden("Result_ModifyRequiresPermission",
+                                                  item.AnalysisTest?.Code ?? string.Empty));
+
         var repeated = item.Repeat(reason.Trim());
         if (repeated.IsFailure) return repeated;
+
+        // The first run's values stay as its record until the new run replaces them, but their
+        // technical validation goes: left in place, the biologist could release them one by one,
+        // since the analysis-level check only runs when a batch completes the analysis.
+        foreach (var result in runResults)
+        {
+            var reopened = result.ReopenForRepeat();
+            if (reopened.IsFailure) return reopened;
+        }
 
         order.RecomputeStatus();
 

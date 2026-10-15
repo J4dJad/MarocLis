@@ -497,6 +497,28 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
     }
 
     /// <summary>
+    /// Withdraws the technical validation of a value whose analysis is sent back to the bench. The
+    /// value stays, as the record of the first run, until the new run replaces it — but nobody
+    /// stands behind it any more, so it is no longer on the biologist's worklist as releasable.
+    /// A released value is not reopened this way: its release is withdrawn first, by somebody
+    /// entitled to withdraw it.
+    /// </summary>
+    public Result ReopenForRepeat()
+    {
+        if (IsValidated)
+            return Result.Failure(Error.Conflict("Result_ValidatedRequiresRevision"));
+
+        if (Status == TestResultStatus.TechnicallyValidated)
+        {
+            Status = TestResultStatus.Entered;
+            TechnicallyValidatedAt = null;
+            TechnicallyValidatedByUserId = null;
+        }
+
+        return Result.Success();
+    }
+
+    /// <summary>
     /// Biological validation of the individual value. The caller must already have established the
     /// user's right to validate; this guard enforces the structural preconditions — a value must
     /// exist, an out-of-control QC must have been explicitly overridden, and a critical value must

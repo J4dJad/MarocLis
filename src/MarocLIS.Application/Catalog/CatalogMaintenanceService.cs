@@ -100,6 +100,10 @@ public sealed record ReferenceRangeRequest
     public Gender AppliesToGender { get; init; } = Gender.Unknown;
     public int? AgeFromDays { get; init; }
     public int? AgeToDays { get; init; }
+
+    /// <summary>The unit the band was typed in, in days per unit; see <see cref="ReferenceRange.AgeUnitDays"/>.</summary>
+    public int? AgeUnitDays { get; init; }
+
     public bool? AppliesToPregnancy { get; init; }
     public int? PregnancyTrimester { get; init; }
     public Guid? InstrumentId { get; init; }
@@ -258,7 +262,7 @@ public sealed record ReferenceRangeRow(
     decimal? LowerLimit, decimal? UpperLimit, MultilingualText? DisplayText,
     string? ExpectedCodedValue, bool IsDecisionThreshold, string? Source,
     DateOnly? LastReviewedOn, DateOnly ValidFrom, DateOnly? ValidUntil, bool IsActive,
-    int Specificity)
+    int Specificity, int? AgeUnitDays = null)
 {
     public bool IsInForce(DateOnly on) =>
         IsActive && ValidFrom <= on && (ValidUntil is null || ValidUntil >= on);
@@ -901,6 +905,8 @@ public sealed class CatalogMaintenanceService(
         {
             AgeFromDays = request.AgeFromDays,
             AgeToDays = request.AgeToDays,
+            AgeUnitDays = request.AgeFromDays is null && request.AgeToDays is null
+                ? null : request.AgeUnitDays,
             AppliesToPregnancy = request.AppliesToPregnancy,
             PregnancyTrimester = request.PregnancyTrimester,
             InstrumentId = request.InstrumentId,
@@ -953,6 +959,7 @@ public sealed class CatalogMaintenanceService(
                             || existing.AppliesToGender != candidate.AppliesToGender
                             || existing.AgeFromDays != candidate.AgeFromDays
                             || existing.AgeToDays != candidate.AgeToDays
+                            || existing.EffectiveAgeUnitDays != candidate.EffectiveAgeUnitDays
                             || existing.AppliesToPregnancy != candidate.AppliesToPregnancy
                             || existing.PregnancyTrimester != candidate.PregnancyTrimester
                             || existing.InstrumentId != candidate.InstrumentId;
@@ -989,6 +996,7 @@ public sealed class CatalogMaintenanceService(
         existing.AppliesToGender = candidate.AppliesToGender;
         existing.AgeFromDays = candidate.AgeFromDays;
         existing.AgeToDays = candidate.AgeToDays;
+        existing.AgeUnitDays = candidate.AgeUnitDays;
         existing.AppliesToPregnancy = candidate.AppliesToPregnancy;
         existing.PregnancyTrimester = candidate.PregnancyTrimester;
         existing.InstrumentId = candidate.InstrumentId;

@@ -256,31 +256,42 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
     {
         if (testParameterIds.Count == 0) return 0;
 
-        // The last accepted control on this instrument bounds the affected window. With none, the
-        // window is open-ended and every unreleased result for the parameter is in question.
-        var lastAccepted = await db.QcResults.AsNoTracking()
-            .Where(r => r.InstrumentId == instrumentId
-                        && testParameterIds.Contains(r.TestParameterId)
-                        && (r.Outcome == QcOutcome.Accepted || r.Outcome == QcOutcome.Warning))
-            .OrderByDescending(r => r.MeasuredAt)
-            .Select(r => (DateTimeOffset?)r.MeasuredAt)
-            .FirstOrDefaultAsync(ct);
+        var flagged = 0;
 
-        var affected = await db.TestResults
-            .Where(r => r.InstrumentId == instrumentId
-                        && testParameterIds.Contains(r.TestParameterId)
-                        && r.Status != TestResultStatus.Reported
-                        && r.ValidatedAt == null
-                        && (lastAccepted == null || r.MeasuredAt >= lastAccepted))
-            .ToListAsync(ct);
-
-        foreach (var result in affected)
+        // One window per parameter. The latest accepted control across all the rejected parameters
+        // bounded them all: with glucose last accepted yesterday and creatinine this morning, both
+        // rejected now, the glucose results of the night escaped the flag.
+        foreach (var parameterId in testParameterIds.Distinct())
         {
-            result.FlagQcFailure();
-            result.CoveringQcRunId = qcRunId;
+            // The last accepted control for this parameter on this instrument bounds the affected
+            // window. With none, the window is open-ended and every unreleased result for the
+            // parameter is in question.
+            var lastAccepted = await db.QcResults.AsNoTracking()
+                .Where(r => r.InstrumentId == instrumentId
+                            && r.TestParameterId == parameterId
+                            && (r.Outcome == QcOutcome.Accepted || r.Outcome == QcOutcome.Warning))
+                .OrderByDescending(r => r.MeasuredAt)
+                .Select(r => (DateTimeOffset?)r.MeasuredAt)
+                .FirstOrDefaultAsync(ct);
+
+            var affected = await db.TestResults
+                .Where(r => r.InstrumentId == instrumentId
+                            && r.TestParameterId == parameterId
+                            && r.Status != TestResultStatus.Reported
+                            && r.ValidatedAt == null
+                            && (lastAccepted == null || r.MeasuredAt >= lastAccepted))
+                .ToListAsync(ct);
+
+            foreach (var result in affected)
+            {
+                result.FlagQcFailure();
+                result.CoveringQcRunId = qcRunId;
+            }
+
+            flagged += affected.Count;
         }
 
-        return affected.Count;
+        return flagged;
     }
 
     public Task<string?> GetParameterCodeAsync(Guid testParameterId, CancellationToken ct = default) =>

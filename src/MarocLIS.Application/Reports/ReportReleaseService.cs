@@ -315,8 +315,11 @@ public sealed class ReportReleaseService(
             superseded?.MarkSupersededBy(report.Id);
         }
 
+        // An analysis only some of whose results were validated stays where it is, but is marked
+        // as printed: its failure to be marked reported used to be ignored, which left it
+        // cancellable with a released figure on the report.
         foreach (var item in liveItems.Where(i => includedItemIds.Contains(i.Id)))
-            item.MarkReported(clock.Now);
+            if (item.MarkReported(clock.Now).IsFailure) item.RecordPartlyReported(clock.Now);
 
         foreach (var result in releasable) result.MarkReported();
 
@@ -552,16 +555,28 @@ public sealed class ReportReleaseService(
     /// marked partial against an analysis that will never come back, so the file never reached
     /// the register's awaiting-delivery list.
     /// </para>
+    /// <para>
+    /// A "not done" line carries no value of its own to validate, so it is printed once a
+    /// biologist has validated its analysis, not before. Released on its own status, the automatic
+    /// "LDL non calculable" — derived from a triglyceride nobody had checked yet, a typo as often
+    /// as not — went out on a partial report for some other analysis, and once printed it was
+    /// frozen and never recomputed from the corrected value.
+    /// </para>
     /// </summary>
     public static (List<TestResult> Releasable, List<Guid> IncludedItemIds, ReportCompleteness Completeness)
         SelectReleasable(LabOrder order, IReadOnlyList<TestResult> stored)
     {
         var liveItems = order.Items.Where(i => !i.IsCancelled).ToList();
         var liveItemIds = liveItems.Select(i => i.Id).ToHashSet();
+        var validatedItemIds = liveItems
+            .Where(i => i.Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported)
+            .Select(i => i.Id)
+            .ToHashSet();
 
         var releasable = stored
             .Where(r => r.Status is TestResultStatus.Validated or TestResultStatus.Reported
-                                 or TestResultStatus.NotDone)
+                        || (r.Status == TestResultStatus.NotDone
+                            && validatedItemIds.Contains(r.LabOrderItemId)))
             .Where(r => liveItemIds.Contains(r.LabOrderItemId))
             .ToList();
 

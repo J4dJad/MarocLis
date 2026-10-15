@@ -331,7 +331,9 @@ public sealed class ValidationService(
         {
             var item = order.Items.FirstOrDefault(i => i.Id == result.LabOrderItemId);
 
-            if (item?.ReportedAt is not null)
+            // The result itself, not its analysis: an analysis partly printed still lets a
+            // validated figure that never left the laboratory be withdrawn.
+            if (result.Status == TestResultStatus.Reported || item?.Status == LabOrderItemStatus.Reported)
             {
                 errors.Add(Error.Regulatory("Item_AlreadyReportedRequiresAmendment"));
                 continue;
@@ -364,17 +366,27 @@ public sealed class ValidationService(
     /// Opens the communication record for a critical value. Created when the value is detected
     /// rather than when the call is made, so an uncommunicated panic value is visible on a
     /// worklist instead of depending on somebody remembering.
+    /// <para>
+    /// <paramref name="displayedEnteredAt"/> is the entry time of the value the operator is about
+    /// to dictate, as their screen shows it. A value stored since — an analyser re-run while the
+    /// file stood open — refuses the call: the call would be timed after the new value and so
+    /// count as communicating it, while the figure read out was the old one.
+    /// </para>
     /// </summary>
     public async Task<Result<Guid>> RaiseCriticalNotificationAsync(
         Guid testResultId, string parameterName, string reportedValue,
         NotificationChannel channel, string? contactUsed, Guid? prescriberId,
-        CancellationToken ct = default)
+        DateTimeOffset? displayedEnteredAt, CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Results.EnterCritical);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
         var result = await validationQueries.GetResultAsync(testResultId, ct);
         if (result is null) return Result.Failure<Guid>(Error.NotFound("Result_NotFound", testResultId));
+
+        if (result.EnteredAt != displayedEnteredAt)
+            return Result.Failure<Guid>(
+                Error.Conflict("Notification_ValueChangedSinceDisplayed", parameterName));
 
         var attemptNumber = await validationQueries.CountNotificationAttemptsAsync(testResultId, ct) + 1;
 

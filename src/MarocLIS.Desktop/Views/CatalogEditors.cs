@@ -824,9 +824,13 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
 
         if (existing is not null)
         {
-            // The largest unit that holds both bounds exactly, or the band would be re-saved
-            // truncated.
-            var divisor = EditorValues.AgeUnitDays(existing.AgeFromDays, existing.AgeToDays);
+            // The unit it was typed in; for a band saved before the unit was kept, the largest
+            // unit that holds both bounds exactly, or the band would be re-saved truncated.
+            var divisor = existing.AgeUnitDays is { } typed and (1 or 30 or 365)
+                          && (existing.AgeFromDays ?? 0) % typed == 0
+                          && (existing.AgeToDays ?? 0) % typed == 0
+                ? typed
+                : EditorValues.AgeUnitDays(existing.AgeFromDays, existing.AgeToDays);
 
             _ageUnit.SelectedIndex = divisor switch { 1 => 0, 30 => 1, _ => 2 };
             _ageFrom.Value = (existing.AgeFromDays ?? 0) / divisor;
@@ -970,6 +974,7 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
             AppliesToGender = Selected<Gender>(_gender),
             AgeFromDays = ageFrom,
             AgeToDays = ageTo,
+            AgeUnitDays = unit,
             AppliesToPregnancy = Pregnancy,
             PregnancyTrimester = Trimester,
             InstrumentId = SelectedId(_instrument),

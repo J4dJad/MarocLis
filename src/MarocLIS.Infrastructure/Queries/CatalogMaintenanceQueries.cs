@@ -174,6 +174,7 @@ public sealed class CatalogMaintenanceQueries(LisDbContext db) : ICatalogMainten
                 r.AppliesToGender,
                 r.AgeFromDays,
                 r.AgeToDays,
+                r.AgeUnitDays,
                 r.AppliesToPregnancy,
                 r.PregnancyTrimester,
                 r.InstrumentId,
@@ -207,7 +208,8 @@ public sealed class CatalogMaintenanceQueries(LisDbContext db) : ICatalogMainten
                 + (r.AppliesToPregnancy is not null ? 4 : 0)
                 + (r.InstrumentId is not null ? 3 : 0)
                 + (r.AppliesToGender != Domain.Patients.Gender.Unknown ? 2 : 0)
-                + (r.AgeFromDays is not null || r.AgeToDays is not null ? 1 : 0)))
+                + (r.AgeFromDays is not null || r.AgeToDays is not null ? 1 : 0),
+                r.AgeUnitDays))
         ];
     }
 

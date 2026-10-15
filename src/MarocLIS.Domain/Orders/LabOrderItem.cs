@@ -250,7 +250,7 @@ public sealed class LabOrderItem : Entity, IAuditable
         // true, but it sends the biologist looking for a validation that is right there, instead of
         // telling them the one thing they need to know: the result has left the laboratory and the
         // correction has to go out as an amended report.
-        if (ReportedAt is not null)
+        if (Status == LabOrderItemStatus.Reported)
             return Result.Failure(Error.Regulatory("Item_AlreadyReportedRequiresAmendment"));
         if (Status != LabOrderItemStatus.Validated)
             return Result.Failure(Error.Conflict("Item_NotValidated"));
@@ -264,6 +264,20 @@ public sealed class LabOrderItem : Entity, IAuditable
         return Result.Success();
     }
 
+    /// <summary>
+    /// Records that some of the analysis's results went out on a report while the analysis itself
+    /// is not validated yet — the biologist released the haemoglobin of a blood count and not the
+    /// rest. The analysis keeps its status; <see cref="ReportedAt"/> is what then stops it being
+    /// cancelled, since cancelling would drop a printed figure from every later version.
+    /// </summary>
+    public void RecordPartlyReported(DateTimeOffset at)
+    {
+        if (Status != LabOrderItemStatus.Cancelled) ReportedAt ??= at;
+    }
+
+    /// <summary>Some of the analysis's results are on a report that has left the laboratory.</summary>
+    public bool HasReportedResults => ReportedAt is not null;
+
     public Result MarkReported(DateTimeOffset at)
     {
         if (Status is not (LabOrderItemStatus.Validated or LabOrderItemStatus.Reported))
@@ -273,10 +287,19 @@ public sealed class LabOrderItem : Entity, IAuditable
         return Result.Success();
     }
 
-    /// <summary>Sends the analysis back to the bench, keeping the run history.</summary>
+    /// <summary>
+    /// Sends the analysis back to the bench, keeping the run history.
+    /// <para>
+    /// Not once a biologist has validated it. Repeating reset the analysis and left its released
+    /// results standing: they went on printing, the new run's values were refused, and the analysis
+    /// could never be validated again. The validation is withdrawn first, by somebody entitled to
+    /// withdraw it, and the analysis can then be repeated.
+    /// </para>
+    /// </summary>
     public Result Repeat(string reason)
     {
-        if (Status is LabOrderItemStatus.Reported or LabOrderItemStatus.Cancelled)
+        if (Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported
+                   or LabOrderItemStatus.Cancelled)
             return Result.Failure(Error.Conflict("Item_CannotRepeatFromStatus", Status));
         if (string.IsNullOrWhiteSpace(reason))
             return Result.Failure(Error.Validation("Item_RepeatReasonRequired"));
