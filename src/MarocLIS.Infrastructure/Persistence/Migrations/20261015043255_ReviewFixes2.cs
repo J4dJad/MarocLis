@@ -61,16 +61,30 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                 WHERE e.ExitDate IS NOT NULL AND h.WithdrawalReason = N'Sortie du laboratoire' AND h.WithdrawnOn = e.ExitDate;
                 """);
 
-            // Leave paid by a settlement whose exit month is closed but whose receipt was never signed.
+            // Leave paid by a settlement whose exit month is closed but whose receipt was never signed,
+            // when the closed payslip of that month did pay a leave indemnity (a settlement saved after
+            // the closing never went through the payroll). The days paid also counted the accruals
+            // of the last months, not credited yet; SettlementService writes those with the debit, but
+            // they cannot be computed here. So the debit is what the account held at the departure,
+            // up to the days paid: a re-hired employee, whose accruals nothing will write any more,
+            // does not start the new contract below zero, and a later signature or re-hire of one
+            // still out credits the accruals and brings the debit to the days paid
+            // (SettlementService.WriteSettledLeaveAsync).
             migrationBuilder.Sql("""
                 INSERT INTO hr.LeaveLedger (Id, EmployeeId, [Date], Kind, Days, Reference, Comment, CreatedAt)
-                SELECT NEWID(), s.EmployeeId, s.ExitDate, 3, -s.LeaveDays, CONCAT('SOLDE-', FORMAT(s.ExitDate, 'yyyyMMdd')),
+                SELECT NEWID(), s.EmployeeId, s.ExitDate, 3, -d.Days, CONCAT('SOLDE-', FORMAT(s.ExitDate, 'yyyyMMdd')),
                        CONCAT(N'Congés payés par l''indemnité compensatrice du solde de tout compte (sortie le ', FORMAT(s.ExitDate, 'dd/MM/yyyy'), N')'),
                        SYSDATETIMEOFFSET()
                 FROM hr.FinalSettlements s
-                WHERE s.LeaveDays > 0
+                CROSS APPLY (SELECT COALESCE(SUM(l.Days), 0) AS Balance FROM hr.LeaveLedger l
+                             WHERE l.EmployeeId = s.EmployeeId AND l.[Date] <= s.ExitDate AND l.Reference NOT LIKE 'SOLDE-%') b
+                CROSS APPLY (SELECT CASE WHEN b.Balance <= 0 THEN 0
+                                         WHEN b.Balance < s.LeaveDays THEN b.Balance
+                                         ELSE s.LeaveDays END AS Days) d
+                WHERE s.LeaveDays > 0 AND d.Days > 0
                   AND EXISTS (SELECT 1 FROM hr.Payslips ps JOIN hr.PayrollPeriods p ON p.Id = ps.PayrollPeriodId
-                              WHERE ps.EmployeeId = s.EmployeeId AND p.Status = 1 AND p.Year = YEAR(s.ExitDate) AND p.Month = MONTH(s.ExitDate))
+                              WHERE ps.EmployeeId = s.EmployeeId AND p.Status = 1 AND p.Year = YEAR(s.ExitDate) AND p.Month = MONTH(s.ExitDate)
+                                AND ps.Variables_LeaveIndemnity > 0)
                   AND NOT EXISTS (SELECT 1 FROM hr.LeaveLedger l WHERE l.EmployeeId = s.EmployeeId
                                   AND l.Reference = CONCAT('SOLDE-', FORMAT(s.ExitDate, 'yyyyMMdd')));
                 """);

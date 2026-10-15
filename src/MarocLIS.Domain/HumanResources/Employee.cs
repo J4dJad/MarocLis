@@ -125,6 +125,13 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
     public DateOnly? PreviousHireDate { get; private set; }
     public DateOnly? PreviousExitDate { get; private set; }
 
+    /// <summary>
+    /// The base salary of that previous contract, as it stood at the re-hire: the month of the
+    /// departure is paid at it even once the new contract's salary is entered. Null for a re-hire
+    /// recorded before it was kept.
+    /// </summary>
+    public decimal? PreviousBaseSalary { get; private set; }
+
     /// <summary>Why the habilitations still held at the departure end; also how a cancelled exit finds them.</summary>
     public const string ExitWithdrawalReason = "Sortie du laboratoire";
 
@@ -281,6 +288,7 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
 
         PreviousHireDate = HireDate;
         PreviousExitDate = ExitDate;
+        PreviousBaseSalary = BaseSalary;
         ExitDate = null;
         ExitReason = null;
         ExitComment = null;

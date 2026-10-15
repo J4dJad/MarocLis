@@ -271,11 +271,17 @@ public sealed class ValidationView : LocalizedView
 
     private void WireBehaviour()
     {
-        // A reload while an action is in flight would replace the file under it; the action
-        // reloads the worklist itself when it ends.
-        _refresh.Click += async (_, _) => { if (!IsBusy) await ActivateAsync(); };
-        _onlyUrgent.CheckedChanged += async (_, _) => { if (!IsBusy) await ActivateAsync(); };
-        _showValidated.CheckedChanged += async (_, _) => { if (!IsBusy) await ActivateAsync(); };
+        // A reload while an action is in flight would replace the file under it: it is put off
+        // until the action ends. Not every action reloads the worklist (a refusal, a cancel, a
+        // critical value communicated), so a filter ticked meanwhile is applied then.
+        _refresh.Click += async (_, _) => await ReloadOrDeferAsync();
+        _onlyUrgent.CheckedChanged += async (_, _) => await ReloadOrDeferAsync();
+        _showValidated.CheckedChanged += async (_, _) => await ReloadOrDeferAsync();
+        BecameIdle += async (_, _) =>
+        {
+            // Left mid-action, the screen is no longer hosted and is about to be disposed.
+            if (_worklistStale && !IsDisposed && Parent is not null) await ActivateAsync();
+        };
 
         _worklist.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadSelectedAsync());
 
@@ -401,8 +407,24 @@ public sealed class ValidationView : LocalizedView
 
     // ---- Worklist ---------------------------------------------------------------------------------
 
+    /// <summary>Set when a reload was asked for during an action; cleared by the reload.</summary>
+    private bool _worklistStale;
+
+    private async Task ReloadOrDeferAsync()
+    {
+        if (IsBusy)
+        {
+            _worklistStale = true;
+            return;
+        }
+
+        await ActivateAsync();
+    }
+
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
+        // The filters are read below: a change after this point asks for another reload.
+        _worklistStale = false;
         try
         {
             var result = await _validation.GetWorklistAsync(onlyUrgent: _onlyUrgent.Checked,

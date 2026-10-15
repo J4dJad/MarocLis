@@ -41,6 +41,10 @@ public sealed record PurchaseOrderLineRow(
     decimal LineTotalExcludingVat);
 
 /// <summary>A stock item that can be ordered, with the defaults a new line starts from.</summary>
+/// <param name="LastDiscountRate">
+/// The discount (0.10 for 10 %) of the last line of the item received from its preferred supplier:
+/// the supplier's usual discount, which <see cref="LastUnitPriceMad"/>, a list price, does not include.
+/// </param>
 public sealed record OrderableItem(
     Guid Id,
     string Code,
@@ -48,7 +52,8 @@ public sealed record OrderableItem(
     string UnitOfMeasure,
     Guid? PreferredSupplierId,
     decimal ReorderQuantity,
-    decimal? LastUnitPriceMad);
+    decimal? LastUnitPriceMad,
+    decimal LastDiscountRate = 0m);
 
 public sealed record SupplierOption(Guid Id, string Code, string Name);
 
@@ -345,6 +350,7 @@ public interface IPurchaseOrderQueries
 }
 
 /// <summary>An item that has fallen to its reorder point and is not on any open order.</summary>
+/// <param name="LastDiscountRate">The preferred supplier's usual discount, as in <see cref="OrderableItem"/>.</param>
 public sealed record ReorderCandidate(
     Guid StockItemId,
     string Code,
@@ -355,4 +361,5 @@ public sealed record ReorderCandidate(
     decimal ReorderPoint,
     decimal ReorderQuantity,
     decimal? MaximumStock,
-    decimal? LastUnitPriceMad);
+    decimal? LastUnitPriceMad,
+    decimal LastDiscountRate = 0m);

@@ -251,17 +251,16 @@ public sealed class PayrollService(
             slip.Cin = employee.Cin;
             slip.CnssNumber = employee.CnssNumber;
             slip.JobTitle = employee.JobTitle;
-            slip.HireDate = employee.HireDate;
+            (slip.HireDate, slip.BaseSalary) = ContractOfMonth(employee, period, isNew ? null : slip.BaseSalary);
             slip.ContractType = employee.ContractType;
             slip.DependentPersons = DependentPersons(employee);
-            slip.BaseSalary = employee.BaseSalary.Value;
             slip.Rib = employee.Rib;
             slip.BankName = employee.BankName;
 
             // The leave-derived figures are taken again; what HR typed, the unpaid days entered by
             // hand included, stays.
             var variables = FromFiles(isNew ? new PayslipVariables() : slip.Variables, candidate,
-                                      settled.GetValueOrDefault(employee.Id), employee.BaseSalary.Value);
+                                      settled.GetValueOrDefault(employee.Id), slip.BaseSalary);
             slip.Recompute(variables, rates, period.LastDay);
 
             if (isNew)
@@ -279,6 +278,23 @@ public sealed class PayrollService(
             period.Remove(gone);
 
         return added;
+    }
+
+    /// <summary>
+    /// The hire date and base salary the month is paid on. The month of a departure followed by a
+    /// re-hire is the last month of the contract that ended: its seniority runs from that
+    /// contract's hire date and its salary is the one of that contract, not the new contract's.
+    /// </summary>
+    /// <param name="kept">The salary already on the draft payslip, for a re-hire recorded before the previous salary was kept.</param>
+    public static (DateOnly HireDate, decimal BaseSalary) ContractOfMonth(Employee employee, PayrollPeriod period,
+                                                                         decimal? kept)
+    {
+        var current = employee.BaseSalary ?? 0m;
+        if (employee.PreviousHireDate is { } hire && employee.PreviousExitDate is { } exit
+            && hire <= period.LastDay && exit >= period.FirstDay)
+            return (hire, employee.PreviousBaseSalary ?? kept ?? current);
+
+        return (employee.HireDate, current);
     }
 
     private static bool PaysDeparture(Payslip slip, IReadOnlyDictionary<Guid, SettledAmounts> settled) =>
@@ -396,13 +412,28 @@ public sealed class PayrollService(
 
         var period = await periods.GetByIdWithDetailsAsync(periodId, ct);
         if (period is null) return Result.Failure(Error.NotFound("Payroll_NotFound"));
+        if (period.IsClosed) return Result.Failure(Error.Conflict("Payroll_Closed"));
+
+        var current = await ParametersForAsync(period.Year, ct);
+        var rates = period.RatesFor(current);
+
+        // A departure corrected or withdrawn since the last refresh leaves a payslip prorated to
+        // the old exit date: the month is not closed on it before it is taken again from the files.
+        var changed = await DepartureChangedAsync(period, rates, ct);
+        if (changed.Count > 0)
+            return Result.Failure(Error.Conflict("Payroll_DepartureChanged", string.Join(", ", changed)));
+
+        // The indemnities paid are those of the final settlements as they now stand: a settlement
+        // emptied since (exit corrected or withdrawn) pays nothing, and the leave written off
+        // below is the leave the payslip pays.
+        await ApplySettlementsAsync(period, rates, ct);
 
         if (period.Payslips.Any(p => p.Amounts.NetPay < 0))
             return Result.Failure(Error.Validation("Payroll_NegativeNetPay"));
 
         // The rates the payslips are computed with, kept for every later reprint: the year's, or
         // those of the first closing for a month reopened since.
-        var closed = period.Close(clock.Now, currentUser.UserId, await ParametersForAsync(period.Year, ct));
+        var closed = period.Close(clock.Now, currentUser.UserId, current);
         if (closed.IsFailure) return closed;
 
         // The leave indemnities of the month's departures are paid now: the days leave the
@@ -415,7 +446,54 @@ public sealed class PayrollService(
         return Result.Success();
     }
 
-    public async Task<Result> ReopenAsync(Guid periodId, string reason, CancellationToken ct = default)
+    /// <summary>
+    /// The payslips whose departure figures (days of the month and of the contract) no longer
+    /// match the files, by employee number.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> DepartureChangedAsync(PayrollPeriod period, PayrollParameters rates,
+                                                                    CancellationToken ct)
+    {
+        var candidates = (await queries.CandidatesAsync(period.SiteId, period.FirstDay, period.LastDay,
+                                                        rates.MonthlyWorkingDays, ct))
+            .ToDictionary(c => c.EmployeeId);
+        return
+        [
+            .. period.Payslips
+                  .Where(p => candidates.TryGetValue(p.EmployeeId, out var c)
+                              && (c.MonthWorkingDays != p.Variables.MonthWorkingDays
+                                  || c.ContractWorkingDays != p.Variables.ContractWorkingDays))
+                  .Select(p => p.Number)
+                  .Order(StringComparer.Ordinal)
+        ];
+    }
+
+    /// <summary>Puts on each payslip the indemnities its final settlement now says, as <see cref="FromFiles"/> does.</summary>
+    private async Task ApplySettlementsAsync(PayrollPeriod period, PayrollParameters rates, CancellationToken ct)
+    {
+        var (first, last) = (period.FirstDay, period.LastDay);
+        var settled = (await settlements.ListAsync(s => s.ExitDate >= first && s.ExitDate <= last, ct))
+            .GroupBy(s => s.EmployeeId)
+            .ToDictionary(g => g.Key, g => (Leave: g.Sum(s => s.LeaveIndemnity), Notice: g.Sum(s => s.NoticeIndemnity),
+                                            Severance: g.Sum(s => s.SeverancePay)));
+
+        foreach (var slip in period.Payslips)
+        {
+            var (leave, notice, severance) = settled.GetValueOrDefault(slip.EmployeeId);
+            if (slip.Variables.LeaveIndemnity == leave && slip.Variables.NoticeIndemnity == notice
+                && slip.Variables.SeverancePay == severance) continue;
+
+            slip.Recompute(slip.Variables with { LeaveIndemnity = leave, NoticeIndemnity = notice, SeverancePay = severance },
+                           rates, period.LastDay);
+        }
+    }
+
+    /// <param name="applyCurrentRates">
+    /// Recompute the month with the year's rates as they now stand instead of those it was closed
+    /// with, to correct a rate typed wrong (see <see cref="PayrollPeriod.Reopen"/>). Written to the
+    /// audit trail.
+    /// </param>
+    public async Task<Result> ReopenAsync(Guid periodId, string reason, bool applyCurrentRates = false,
+                                          CancellationToken ct = default)
     {
         var permitted = Require();
         if (permitted.IsFailure) return permitted;
@@ -424,11 +502,18 @@ public sealed class PayrollService(
         var period = await periods.GetByIdWithDetailsAsync(periodId, ct);
         if (period is null) return Result.Failure(Error.NotFound("Payroll_NotFound"));
 
-        var reopened = period.Reopen();
+        var reopened = period.Reopen(applyCurrentRates);
         if (reopened.IsFailure) return reopened;
 
+        if (applyCurrentRates)
+        {
+            var rates = period.RatesFor(await ParametersForAsync(period.Year, ct));
+            foreach (var slip in period.Payslips) slip.Recompute(slip.Variables, rates, period.LastDay);
+        }
+
         periods.Update(period);
-        unitOfWork.AuditReason = $"Paie {period.Month:00}/{period.Year} rouverte : {reason.Trim()}";
+        unitOfWork.AuditReason = $"Paie {period.Month:00}/{period.Year} rouverte : {reason.Trim()}"
+                                 + (applyCurrentRates ? $" (recalculée aux taux de paie {period.Year} actuels)" : string.Empty);
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success();
     }

@@ -265,6 +265,17 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
 
     public void RecordCashRefund(decimal amount) => CashRefunds = Money.Round(CashRefunds + amount);
 
+    /// <summary>
+    /// Takes a cheque, card or transfer settlement back off the shift's takings: refunded at the
+    /// counter (the card terminal's batch carries the refund the same day), or a cheque returned
+    /// unpaid before its shift was closed. Cash goes through <see cref="RecordCashRefund"/> instead,
+    /// which the count of the till needs.
+    /// </summary>
+    public void ReverseNonCash(PaymentMethod method, decimal amount)
+    {
+        if (method != PaymentMethod.Cash) Accumulate(method, -amount);
+    }
+
     public void RecordWithdrawal(decimal amount) => CashWithdrawals = Money.Round(CashWithdrawals + amount);
 
     /// <summary>

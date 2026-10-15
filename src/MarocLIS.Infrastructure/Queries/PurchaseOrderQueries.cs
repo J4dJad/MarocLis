@@ -103,13 +103,21 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
             .Select(i => new
             {
                 i.Id, i.Code, i.Name, i.UnitOfMeasure, i.PreferredSupplierId, i.ReorderQuantity,
-                i.LastUnitPriceMad
+                i.LastUnitPriceMad,
+                // The supplier's usual discount: the one of the last delivery of the item from it.
+                LastDiscountRate = db.PurchaseOrders
+                    .Where(o => o.SupplierId == i.PreferredSupplierId)
+                    .SelectMany(o => o.Lines.Where(l => l.StockItemId == i.Id && l.QuantityReceived > 0m),
+                                (o, l) => new { o.OrderDate, o.Number, l.DiscountRate })
+                    .OrderByDescending(x => x.OrderDate).ThenByDescending(x => x.Number)
+                    .Select(x => (decimal?)x.DiscountRate)
+                    .FirstOrDefault()
             })
             .ToListAsync(ct);
 
         return rows.Select(i => new OrderableItem(i.Id, i.Code, i.Name, i.UnitOfMeasure,
                                                   i.PreferredSupplierId, i.ReorderQuantity,
-                                                  i.LastUnitPriceMad)).ToList();
+                                                  i.LastUnitPriceMad, i.LastDiscountRate ?? 0m)).ToList();
     }
 
     public Task<bool> IsSupplierApprovedAsync(Guid supplierId, CancellationToken ct = default) =>
@@ -134,6 +142,13 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
             {
                 i.Id, i.Code, i.UnitOfMeasure, i.PreferredSupplierId, i.ReorderPoint,
                 i.ReorderQuantity, i.MaximumStock, i.LastUnitPriceMad,
+                LastDiscountRate = db.PurchaseOrders
+                    .Where(o => o.SupplierId == i.PreferredSupplierId)
+                    .SelectMany(o => o.Lines.Where(l => l.StockItemId == i.Id && l.QuantityReceived > 0m),
+                                (o, l) => new { o.OrderDate, o.Number, l.DiscountRate })
+                    .OrderByDescending(x => x.OrderDate).ThenByDescending(x => x.Number)
+                    .Select(x => (decimal?)x.DiscountRate)
+                    .FirstOrDefault(),
                 SupplierApproved = db.Suppliers.Any(s => s.Id == i.PreferredSupplierId
                                                          && s.IsActive && s.IsApproved),
                 // Usable only, as on the stock screen: released, in date, within open stability.
@@ -150,7 +165,8 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
         return rows.Where(r => r.Usable <= r.ReorderPoint)
                    .Select(r => new ReorderCandidate(r.Id, r.Code, r.UnitOfMeasure, r.PreferredSupplierId,
                                                      r.SupplierApproved, r.Usable, r.ReorderPoint,
-                                                     r.ReorderQuantity, r.MaximumStock, r.LastUnitPriceMad))
+                                                     r.ReorderQuantity, r.MaximumStock, r.LastUnitPriceMad,
+                                                     r.LastDiscountRate ?? 0m))
                    .ToList();
     }
 

@@ -584,6 +584,7 @@ internal sealed class PurchaseOrderDialog : MasterDataEditor
 internal sealed class PurchaseOrderLineDialog : MasterDataEditor
 {
     private readonly IReadOnlyList<OrderableItem> _items;
+    private readonly Guid? _supplierId;
     private readonly ComboBox _item;
     private readonly TextBox _quantity, _price, _discount, _vat;
     private readonly Label _unit = new();
@@ -594,6 +595,7 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
                                      IReadOnlyList<OrderableItem> items, Guid? supplierId)
         : base(localizer, dialogs, "PurchaseOrders.AddLine", number, 560, 260)
     {
+        _supplierId = supplierId;
         // Articles normally bought from this supplier first: the usual case, and the short list.
         _items = items.OrderBy(i => supplierId is not null && i.PreferredSupplierId == supplierId ? 0 : 1)
                       .ThenBy(i => i.Code, StringComparer.Ordinal).ToList();
@@ -626,7 +628,10 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
     private OrderableItem? Current =>
         SelectedId(_item) is { } id ? _items.FirstOrDefault(i => i.Id == id) : null;
 
-    /// <summary>The reorder quantity and the last price paid, as starting values.</summary>
+    /// <summary>
+    /// The reorder quantity, the last list price and, from the item's usual supplier, its usual
+    /// discount, as starting values.
+    /// </summary>
     private void FillDefaults()
     {
         if (Current is not { } item) return;
@@ -635,6 +640,9 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
         _quantity.Text = item.ReorderQuantity > 0m
             ? item.ReorderQuantity.ToString("0.##", CultureInfo.InvariantCulture) : string.Empty;
         _price.Text = item.LastUnitPriceMad?.ToString("0.00", CultureInfo.InvariantCulture) ?? string.Empty;
+        // The discount was agreed with the preferred supplier: another supplier starts from none.
+        var discount = _supplierId is not null && item.PreferredSupplierId == _supplierId ? item.LastDiscountRate : 0m;
+        _discount.Text = (discount * 100m).ToString("0.##", CultureInfo.InvariantCulture);
     }
 
     protected override void Accept()

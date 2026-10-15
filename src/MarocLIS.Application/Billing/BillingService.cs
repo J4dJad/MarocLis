@@ -609,7 +609,8 @@ public sealed class BillingService(
 
     /// <summary>
     /// Hands back what is still held on a deposit — the request was cancelled, or the invoice came
-    /// to less. Cash goes out of the operator's open till.
+    /// to less. Cash goes out of the operator's open till; a cheque, card or transfer comes off the
+    /// matching line of the operator's shift, when one is open.
     /// </summary>
     public async Task<Result> RefundDepositAsync(Guid depositId, string reason,
                                                  CancellationToken ct = default)
@@ -622,20 +623,16 @@ public sealed class BillingService(
 
         var amount = deposit.Remaining;
 
-        CashSession? session = null;
+        var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
 
-        if (deposit.Method == PaymentMethod.Cash)
-        {
-            session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
-
-            if (session is null)
-                return Result.Failure(Error.Validation("Payment_CashRequiresOpenSession"));
-        }
+        if (session is null && deposit.Method == PaymentMethod.Cash)
+            return Result.Failure(Error.Validation("Payment_CashRequiresOpenSession"));
 
         var refunded = deposit.Refund(clock.Now, reason);
         if (refunded.IsFailure) return refunded;
 
-        session?.RecordCashRefund(amount);
+        if (deposit.Method == PaymentMethod.Cash) session?.RecordCashRefund(amount);
+        else session?.ReverseNonCash(deposit.Method, amount);
         deposits.Update(deposit);
 
         unitOfWork.AuditReason = $"Remboursement de l'acompte {deposit.Number} : {amount:N2} DH — {reason}";
@@ -810,6 +807,14 @@ public sealed class BillingService(
         var bounced = payment.MarkBounced(clock.Now, reason);
         if (bounced.IsFailure) return bounced;
 
+        // A cheque returned while the shift it was taken in is still open never leaves with that
+        // shift's remittance: it comes off its cheque line. Once the shift is closed, the bank
+        // remittance was made with it and the bounce is the receivable's business only. A deposit
+        // applied to the invoice carries the shift the deposit was taken in.
+        if (payment.CashSessionId is { } sessionId
+            && await cashSessions.GetByIdAsync(sessionId, ct) is { Status: CashSessionStatus.Open } taken)
+            taken.ReverseNonCash(payment.Method, payment.Amount);
+
         invoice.Recalculate();
 
         unitOfWork.AuditReason =
@@ -825,7 +830,9 @@ public sealed class BillingService(
     /// <para>
     /// A cash refund also has to reach the till: the shift's expected cash is the float plus what
     /// came in minus what went out, and a refund paid from the drawer that the session never heard
-    /// about shows up at closing as an unexplained shortfall.
+    /// about shows up at closing as an unexplained shortfall. A cheque, card or transfer refund
+    /// comes off the matching line of the operator's shift, when one is open, so the card line
+    /// still agrees with the terminal's batch.
     /// </para>
     /// </summary>
     public async Task<Result> RefundPaymentAsync(Guid invoiceId, Guid paymentId, string reason,
@@ -844,20 +851,16 @@ public sealed class BillingService(
         // The till is checked before the payment is touched. The refund used to be applied first,
         // so a refusal here left the tracked payment Refunded in a long-lived context, and the next
         // unrelated save wrote the refund to the database without any money leaving the drawer.
-        CashSession? session = null;
+        var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
 
-        if (payment.Method == PaymentMethod.Cash)
-        {
-            session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
-
-            if (session is null)
-                return Result.Failure(Error.Validation("Payment_CashRefundRequiresOpenSession"));
-        }
+        if (session is null && payment.Method == PaymentMethod.Cash)
+            return Result.Failure(Error.Validation("Payment_CashRefundRequiresOpenSession"));
 
         var refunded = payment.Refund(clock.Now, reason);
         if (refunded.IsFailure) return refunded;
 
-        session?.RecordCashRefund(payment.Amount);
+        if (payment.Method == PaymentMethod.Cash) session?.RecordCashRefund(payment.Amount);
+        else session?.ReverseNonCash(payment.Method, payment.Amount);
 
         invoice.Recalculate();
 

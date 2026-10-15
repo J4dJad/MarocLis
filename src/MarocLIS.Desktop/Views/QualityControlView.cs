@@ -424,6 +424,10 @@ public sealed class QualityControlView : LocalizedView
     /// </summary>
     public override bool ConfirmLeave()
     {
+        // While a submission runs the values typed are the ones being saved: the navigation waits
+        // for it to end rather than asking whether to drop them.
+        if (IsBusy) return true;
+
         _entry.EndEdit();
 
         return CaptureTyped().IsEmpty

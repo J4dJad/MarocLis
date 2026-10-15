@@ -270,11 +270,14 @@ public sealed class PayrollPeriod : AuditableAggregateRoot, ISiteScoped
 
     /// <summary>
     /// Back to draft, to correct an error found after closing. The reason goes to the audit trail.
-    /// The rates of the closing stay with the month: see <see cref="RatesFor"/>.
+    /// The rates of the closing stay with the month (see <see cref="RatesFor"/>), unless
+    /// <paramref name="dropClosingRates"/>: a rate typed wrong for the year and corrected since
+    /// is then taken, and the next closing keeps the corrected rates.
     /// </summary>
-    public Result Reopen()
+    public Result Reopen(bool dropClosingRates = false)
     {
         if (!IsClosed) return Result.Failure(Error.Conflict("Payroll_NotClosed"));
+        if (dropClosingRates) RatesSnapshot = null;
         Status = PayrollStatus.Draft;
         ClosedAt = null;
         ClosedByUserId = null;

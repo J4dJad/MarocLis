@@ -63,10 +63,13 @@ public sealed class ReorderPlanner(
                 {
                     if (order.Lines.Any(l => l.StockItemId == item.StockItemId)) continue;
 
+                    // The list price with the supplier's usual discount, as the last delivery was
+                    // bought: the price alone would overstate the agreed price.
                     var added = order.AddLine(new PurchaseOrderLine(item.StockItemId, Quantity(item),
                                                                     item.LastUnitPriceMad ?? 0m)
                     {
-                        Description = item.Code
+                        Description = item.Code,
+                        DiscountRate = item.LastDiscountRate
                     });
 
                     if (added.IsSuccess) drafted.Add(item.Code);

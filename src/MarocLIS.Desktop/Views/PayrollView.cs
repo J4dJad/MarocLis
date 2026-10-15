@@ -393,7 +393,10 @@ public sealed class PayrollView : LocalizedView
         {
             var reason = _dialogs.PromptForReason(T("Payroll.ReopenPrompt", MonthName(d.Period.Year, d.Period.Month)), _close.Text);
             if (reason is null) return;
-            done = await _payroll.ReopenAsync(d.Period.PeriodId, reason);
+            // Normally the month keeps the rates it was closed with; taking the year's current
+            // ones is only for a rate typed wrong and corrected since. "No" is the default answer.
+            var currentRates = _dialogs.Confirm(T("Payroll.ReopenCurrentRatesPrompt", d.Period.Year), _close.Text);
+            done = await _payroll.ReopenAsync(d.Period.PeriodId, reason, currentRates);
         }
 
         if (done.IsFailure) { _dialogs.ShowFailure(done, _close.Text); return; }

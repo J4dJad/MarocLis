@@ -759,7 +759,11 @@ public sealed class ResultEntryView : LocalizedView
     }
 
     /// <summary>Leaving the screen asks too: the sidebar and the shortcuts dropped typed results.</summary>
-    public override bool ConfirmLeave() => ConfirmDiscardTyped();
+    /// <summary>
+    /// While a save runs the grid still holds the values being saved, which differ from the stored
+    /// ones: no "unsaved changes" prompt then, the navigation waits for the save to end.
+    /// </summary>
+    public override bool ConfirmLeave() => IsBusy || ConfirmDiscardTyped();
 
     /// <summary>
     /// True when nothing typed would be lost by replacing the sheet, or the operator agrees to
