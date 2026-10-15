@@ -3955,6 +3955,52 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("InventoryCountLines", "inv");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Inventory.LatePaymentDeclaration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ExportedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("ExportedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("PeriodFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("PeriodTo")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "PeriodFrom", "PeriodTo")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LatePaymentDeclarations_Site_Period");
+
+                    b.ToTable("LatePaymentDeclarations", "inv");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Inventory.LotCertificateFile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4362,6 +4408,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("EvaluationInstrumentId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("EvaluationStartedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
                     b.Property<DateOnly>("ExpiryDate")
                         .HasColumnType("date");
 
@@ -4740,6 +4789,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("datetimeoffset(3)");
 
+                    b.Property<Guid?>("PurchaseOrderId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18,6)");
 
@@ -4766,6 +4818,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PurchaseOrderId")
+                        .HasDatabaseName("IX_StockMovements_PurchaseOrder")
+                        .HasFilter("[PurchaseOrderId] IS NOT NULL");
 
                     b.HasIndex("ReagentLotId")
                         .HasDatabaseName("IX_StockMovements_Lot")
