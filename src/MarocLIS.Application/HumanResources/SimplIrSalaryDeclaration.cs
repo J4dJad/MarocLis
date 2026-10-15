@@ -37,7 +37,11 @@ public sealed record SimplIrPayslip(int Month, Guid EmployeeId, string Number, s
 /// <list type="bullet">
 /// <item>Permanent staff (listPersonnelPermanent): every salaried employee, fixed-term included.</item>
 /// <item>Stagiaires: internship agreements and ANAPEC insertion contracts, whose stipend the
-/// CGI (art. 57-16°) exempts and the stagiaire annex lists.</item>
+/// CGI (art. 57-16°) exempts up to 6,000 DH a month and the stagiaire annex lists, the taxed
+/// excess as its net taxable income. An ANAPEC month past the 24 months of the exemption is
+/// an ordinary salary and goes to the permanent list.</item>
+/// <item>A Tahfiz salary up to 10,000 DH (CGI art. 57-20°) is declared exempt (mtExonere), not
+/// as taxable income on which no tax was withheld.</item>
 /// <item>Occasional staff: none, the payroll has no such contract.</item>
 /// <item>Partners and agency staff are not paid by the payroll and never appear.</item>
 /// </list>
@@ -51,6 +55,17 @@ public static class SimplIrSalaryDeclaration
         $"TraitementEtSalaire_{fiscalId.Trim()}_{year}.xml";
 
     public static bool IsStagiaire(ContractType type) => type is ContractType.Internship or ContractType.Anapec;
+
+    /// <summary>
+    /// The payslip goes to the stagiaire list: an internship, or an insertion contract within the
+    /// 24 months of its exemption (<see cref="PayrollCalculator.WithinInsertionExemption"/>).
+    /// </summary>
+    public static bool IsStagiaire(SimplIrPayslip payslip) =>
+        IsStagiaire(payslip.ContractType) && payslip.Amounts.Exemption != PayrollExemption.None;
+
+    /// <summary>A Tahfiz salary the income tax exempts: gross taxable within 10,000 DH (CGI art. 57-20°).</summary>
+    public static bool IsExemptTahfiz(PayslipAmounts a) =>
+        a.Exemption == PayrollExemption.Tahfiz && a.GrossTaxable <= PayrollCalculator.TahfizTaxExemptGross;
 
     public static string FamilyStatusCode(FamilyStatus status) => status switch
     {
@@ -77,13 +92,13 @@ public static class SimplIrSalaryDeclaration
         // during the year gives one stagiaire row (the exempt months) and one permanent row.
         var people = payslips
             .Where(p => PayrollCalculator.IsOnPayroll(p.ContractType))
-            .GroupBy(p => (p.EmployeeId, Stagiaire: IsStagiaire(p.ContractType)))
+            .GroupBy(p => (p.EmployeeId, Stagiaire: IsStagiaire(p)))
             .Select(g => new Person(g.OrderBy(p => p.Month).Last(), [.. g.OrderBy(p => p.Month)]))
             .OrderBy(p => p.Latest.LastName, StringComparer.Ordinal).ThenBy(p => p.Latest.FirstName, StringComparer.Ordinal)
             .ToList();
 
-        var permanent = people.Where(p => !IsStagiaire(p.Latest.ContractType)).ToList();
-        var stagiaires = people.Where(p => IsStagiaire(p.Latest.ContractType)).ToList();
+        var permanent = people.Where(p => !IsStagiaire(p.Latest)).ToList();
+        var stagiaires = people.Where(p => IsStagiaire(p.Latest)).ToList();
 
         var permanentRows = permanent.Select(p => Permanent(p, codes)).ToList();
         var stagiaireRows = stagiaires.Select(Stagiaire).ToList();
@@ -155,15 +170,21 @@ public static class SimplIrSalaryDeclaration
     {
         var e = p.Latest;
         var gross = p.Sum(a => a.Gross);
-        var exempt = p.Sum(a => a.ExemptAllowances);
-        var taxable = p.Sum(a => a.GrossTaxable);
-        var expenses = p.Sum(a => a.ProfessionalExpenses);
-        var insurance = p.Sum(a => a.CnssEmployee + a.AmoEmployee);
+
+        // A Tahfiz month within 10,000 DH is not taxable: its salary is declared exempt, and the
+        // expenses and contributions are not deducted from a taxable income it does not have.
+        var taxed = p.Slips.Where(s => !IsExemptTahfiz(s.Amounts)).ToList();
+        decimal Taxed(Func<PayslipAmounts, decimal> amount) => taxed.Sum(s => amount(s.Amounts));
+
+        var exempt = p.Sum(a => a.ExemptAllowances) + p.Slips.Where(s => IsExemptTahfiz(s.Amounts)).Sum(s => s.Amounts.GrossTaxable);
+        var taxable = Taxed(a => a.GrossTaxable);
+        var expenses = Taxed(a => a.ProfessionalExpenses);
+        var insurance = Taxed(a => a.CnssEmployee + a.AmoEmployee);
         const decimal otherWithholdings = 0m;
 
         // One rate per employee on the return: the one most of the year's taxable pay was at.
-        var high = p.Slips.Where(s => s.HighExpensesRate).Sum(s => s.Amounts.GrossTaxable);
-        var low = p.Slips.Where(s => !s.HighExpensesRate).Sum(s => s.Amounts.GrossTaxable);
+        var high = taxed.Where(s => s.HighExpensesRate).Sum(s => s.Amounts.GrossTaxable);
+        var low = taxed.Where(s => !s.HighExpensesRate).Sum(s => s.Amounts.GrossTaxable);
         var rate = high > low ? codes.HighIncomeRateCode : codes.LowIncomeRateCode;
 
         return new XElement("PersonnelPermanent",
@@ -186,7 +207,7 @@ public static class SimplIrSalaryDeclaration
             E("mtFraisProfess", Amount(expenses)),
             E("mtCotisationAssur", Amount(insurance)),
             E("mtAutresRetenues", Amount(otherWithholdings)),
-            E("mtRevenuNetImposable", Amount(p.Sum(a => a.NetTaxable))),
+            E("mtRevenuNetImposable", Amount(Taxed(a => a.NetTaxable))),
             E("mtTotalDeduction", Amount(expenses + insurance + otherWithholdings)),
             E("irPreleve", Amount(p.Sum(a => a.IncomeTax))),
             E("casSportif", "false"),
@@ -216,11 +237,13 @@ public static class SimplIrSalaryDeclaration
     }
 
     /// <summary>
-    /// The stipend of an internship or of an ANAPEC insertion contract is exempt (CGI art. 57-16°)
-    /// and not taxed by the payroll: nothing of it is taxable, whatever NetTaxable computed.
+    /// An internship's gratification is exempt and not taxed by the payroll; an ANAPEC stipend is
+    /// exempt up to 6,000 DH a month (CGI art. 57-16°) and its excess taxed. The net taxable
+    /// declared is that of the excess, nothing for a stipend within the cap whatever a payslip
+    /// computed before the cap was applied.
     /// </summary>
     private static decimal StagiaireNetTaxable(PayslipAmounts a) =>
-        a.Exemption is PayrollExemption.InsertionContract or PayrollExemption.Internship ? 0m : a.NetTaxable;
+        PayrollCalculator.ContributionBase(a) > 0m ? a.NetTaxable : 0m;
 
     /// <summary>
     /// The tax withheld each month. When and how it was paid to the DGI is not recorded in the

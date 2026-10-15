@@ -97,7 +97,9 @@ public sealed class ReviewFixesCycle1HrTests
 
     private static SimplIrPayslip Line(int month, Guid id, ContractType type, decimal salary)
     {
-        var amounts = PayrollCalculator.Compute(new PayslipInput(salary, new DateOnly(2020, 1, 6), new DateOnly(2025, month, 28),
+        // An ANAPEC contract within the 24 months of its exemption.
+        var hired = type == ContractType.Anapec ? new DateOnly(2025, 1, 2) : new DateOnly(2020, 1, 6);
+        var amounts = PayrollCalculator.Compute(new PayslipInput(salary, hired, new DateOnly(2025, month, 28),
                                                                  type, 0, new PayslipVariables()),
                                                 new PayrollParameters(2025));
         return new SimplIrPayslip(month, id, "M-1", "IDRISSI", "Nadia", "3 rue Y", "AB1", "100000001",
@@ -155,9 +157,10 @@ public sealed class ReviewFixesCycle1HrTests
     [Fact]
     public void H3_an_exempt_stipend_declares_no_net_taxable_income()
     {
-        var anapec = Enumerable.Range(1, 6).Select(m => Line(m, Guid.NewGuid(), ContractType.Anapec, 4000m)).ToList();
+        // As a payslip computed before the 6,000 DH cap carried it: a net taxable on an exempt stipend.
+        var anapec = Enumerable.Range(1, 6).Select(m => Line(m, Guid.NewGuid(), ContractType.Anapec, 4000m))
+                               .Select(l => l with { Amounts = l.Amounts with { NetTaxable = 2600m } }).ToList();
         var intern = Line(3, Guid.NewGuid(), ContractType.Internship, 2000m);
-        anapec[0].Amounts.NetTaxable.Should().BePositive("the calculator still computes it");
         anapec[0].Amounts.IncomeTax.Should().Be(0m);
 
         var root = Declaration([anapec[0], intern]);
@@ -218,6 +221,9 @@ public sealed class ReviewFixesCycle1HrTests
         public Task<IReadOnlyDictionary<Guid, SettledAmounts>> SettlementsAsync(DateOnly from, DateOnly to,
                                                                                 CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyDictionary<Guid, SettledAmounts>>(new Dictionary<Guid, SettledAmounts>());
+        public Task<EmployerOtherSites> EmployerOtherSitesAsync(Guid siteId, EmployerIdentifier by, int year, int? month,
+                                                                CancellationToken ct = default) =>
+            Task.FromResult(EmployerOtherSites.None);
     }
 
     private sealed class User : ICurrentUser

@@ -517,6 +517,9 @@ public sealed class ReviewFixesHrTests
         public Task<IReadOnlyDictionary<Guid, SettledAmounts>> SettlementsAsync(DateOnly from, DateOnly to,
                                                                                 CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyDictionary<Guid, SettledAmounts>>(new Dictionary<Guid, SettledAmounts>());
+        public Task<EmployerOtherSites> EmployerOtherSitesAsync(Guid siteId, EmployerIdentifier by, int year, int? month,
+                                                                CancellationToken ct = default) =>
+            Task.FromResult(EmployerOtherSites.None);
     }
 
     internal sealed class FakeHrDocumentQueries : IHrDocumentQueries

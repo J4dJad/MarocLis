@@ -466,7 +466,10 @@ public sealed record PayslipAmounts
 public enum PayrollExemption
 {
     None = 0,
-    /// <summary>Contrat d'insertion ANAPEC (Idmaj): no CNSS, AMO or income tax on the stipend.</summary>
+    /// <summary>
+    /// Contrat d'insertion ANAPEC (Idmaj): no CNSS, AMO or income tax on the stipend up to
+    /// 6,000 DH a month, during the first 24 months (<see cref="PayrollCalculator.InsertionExemptStipend"/>).
+    /// </summary>
     InsertionContract = 1,
     /// <summary>Tahfiz: income tax exempt up to 10,000 DH gross, employer CNSS borne by the State.</summary>
     Tahfiz = 2,
@@ -492,6 +495,36 @@ public enum PayrollExemption
 public static class PayrollCalculator
 {
     public const decimal TahfizTaxExemptGross = 10000m;
+
+    /// <summary>
+    /// The monthly stipend of an insertion contract the CGI (art. 57-16°) exempts from income tax,
+    /// and loi 16-93 from the social contributions and the training tax: 6,000 DH. What is paid
+    /// above it is pay like any other, taxed and subject to the contributions.
+    /// </summary>
+    public const decimal InsertionExemptStipend = 6000m;
+
+    /// <summary>The months from the hire the insertion-contract exemption lasts (CGI art. 57-16°).</summary>
+    public const int InsertionExemptMonths = 24;
+
+    /// <summary>
+    /// Whether a month paid on <paramref name="payDate"/> still falls within the 24 months of an
+    /// insertion contract hired on <paramref name="hireDate"/>: the month in which they end is
+    /// the last exempt one. Beyond, the stipend is an ordinary salary for the tax and the contributions.
+    /// </summary>
+    public static bool WithinInsertionExemption(DateOnly hireDate, DateOnly payDate) =>
+        new DateOnly(payDate.Year, payDate.Month, 1) < hireDate.AddMonths(InsertionExemptMonths);
+
+    /// <summary>
+    /// The part of a payslip's gross taxable the contributions and the income tax are levied on:
+    /// all of it, nothing for an internship, and for an insertion contract what exceeds
+    /// <see cref="InsertionExemptStipend"/>.
+    /// </summary>
+    public static decimal ContributionBase(PayslipAmounts amounts) => amounts.Exemption switch
+    {
+        PayrollExemption.Internship => 0m,
+        PayrollExemption.InsertionContract => Math.Max(0m, amounts.GrossTaxable - InsertionExemptStipend),
+        _ => amounts.GrossTaxable
+    };
 
     public static decimal SeniorityRate(DateOnly hireDate, DateOnly on)
     {
@@ -549,6 +582,14 @@ public static class PayrollCalculator
         var v = input.Variables;
         var exemption = ExemptionFor(input.ContractType);
 
+        // Interns and insertion contracts receive a stipend, not a salary: no seniority, no overtime.
+        var salaried = exemption is PayrollExemption.None or PayrollExemption.Tahfiz;
+
+        // The insertion contract's exemption lasts 24 months; a month beyond is taxed and bears
+        // the contributions as any salary.
+        if (exemption == PayrollExemption.InsertionContract && !WithinInsertionExemption(input.HireDate, input.PayDate))
+            exemption = PayrollExemption.None;
+
         // Days before the hire or after the exit: the base in proportion to the days of the contract.
         // Ordinary unpaid absences inside it keep the 26-day convention.
         var contractBase = ContractBase(input.BaseSalary, v);
@@ -563,9 +604,6 @@ public static class PayrollCalculator
         // (half a day of unpaid leave) is a day worked.
         var contractDays = v.IsProrated ? Math.Min(Math.Max(0m, Math.Ceiling(v.ContractWorkingDays)), p.MonthlyWorkingDays)
                                         : p.MonthlyWorkingDays;
-
-        // Interns and insertion contracts receive a stipend, not a salary: no seniority, no overtime.
-        var salaried = exemption is PayrollExemption.None or PayrollExemption.Tahfiz;
 
         var seniorityRate = salaried ? SeniorityRate(input.HireDate, input.PayDate) : 0m;
         var seniority = R(earnedBase * seniorityRate / 100m);
@@ -584,29 +622,31 @@ public static class PayrollCalculator
         var grossTaxable = R(earnedBase + seniority + overtime + Math.Max(0m, v.TaxableBonus) + transportTaxable + departure);
         var gross = R(grossTaxable + exempt);
 
-        var contributes = exemption is PayrollExemption.None or PayrollExemption.Tahfiz;
-        var cnssBase = Math.Min(grossTaxable, p.CnssCeiling);
+        // What the contributions and the tax are levied on: an internship's gratification bears
+        // neither; of an insertion stipend, only what exceeds the exempt 6,000 DH.
+        var subject = ContributionBase(new PayslipAmounts { GrossTaxable = grossTaxable, Exemption = exemption });
+        var cnssBase = Math.Min(subject, p.CnssCeiling);
 
-        var cnssEmployee = contributes ? R(cnssBase * p.CnssEmployeeRate / 100m) : 0m;
-        var amoEmployee = contributes ? R(grossTaxable * p.AmoEmployeeRate / 100m) : 0m;
+        var cnssEmployee = R(cnssBase * p.CnssEmployeeRate / 100m);
+        var amoEmployee = R(subject * p.AmoEmployeeRate / 100m);
 
         // The State takes on the employer's CNSS and training tax under Tahfiz.
-        var employerCnssDue = exemption == PayrollExemption.None;
+        var employerCnssDue = exemption != PayrollExemption.Tahfiz;
         var cnssEmployer = employerCnssDue ? R(cnssBase * p.CnssEmployerRate / 100m) : 0m;
-        var familyAllowance = employerCnssDue ? R(grossTaxable * p.FamilyAllowanceRate / 100m) : 0m;
-        var trainingTax = employerCnssDue ? R(grossTaxable * p.TrainingTaxRate / 100m) : 0m;
-        var amoEmployer = contributes ? R(grossTaxable * p.AmoEmployerRate / 100m) : 0m;
+        var familyAllowance = employerCnssDue ? R(subject * p.FamilyAllowanceRate / 100m) : 0m;
+        var trainingTax = employerCnssDue ? R(subject * p.TrainingTaxRate / 100m) : 0m;
+        var amoEmployer = R(subject * p.AmoEmployerRate / 100m);
 
-        var expensesRate = grossTaxable * 12m <= p.ProfessionalExpensesThreshold
+        var expensesRate = subject * 12m <= p.ProfessionalExpensesThreshold
             ? p.ProfessionalExpensesLowRate
             : p.ProfessionalExpensesHighRate;
-        var expenses = R(Math.Min(grossTaxable * expensesRate / 100m, p.ProfessionalExpensesAnnualCap / 12m));
+        var expenses = R(Math.Min(subject * expensesRate / 100m, p.ProfessionalExpensesAnnualCap / 12m));
 
-        var netTaxable = Math.Max(0m, R(grossTaxable - expenses - cnssEmployee - amoEmployee));
+        var netTaxable = Math.Max(0m, R(subject - expenses - cnssEmployee - amoEmployee));
 
         var taxed = exemption switch
         {
-            PayrollExemption.InsertionContract or PayrollExemption.Internship => false,
+            PayrollExemption.Internship => false,
             PayrollExemption.Tahfiz => grossTaxable > TahfizTaxExemptGross,
             _ => true
         };

@@ -172,4 +172,45 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
         .GroupBy(s => s.EmployeeId)
         .ToDictionary(g => g.Key, g => new SettledAmounts(g.Sum(s => s.LeaveIndemnity), g.Sum(s => s.NoticeIndemnity),
                                                           g.Sum(s => s.SeverancePay)));
+
+    public async Task<EmployerOtherSites> EmployerOtherSitesAsync(Guid siteId, EmployerIdentifier by, int year, int? month,
+                                                                  CancellationToken ct = default)
+    {
+        // IgnoreQueryFilters, deliberately and here only: the BDS and the état 9421 are the
+        // employer's, filed once for all its sites, and the operator who files them may see one.
+        // A site closed since (soft-deleted) still paid its staff that year, so it is counted.
+        // Employees, payroll months and payslips carry no other filter than the site's.
+        var sites = await db.Sites.IgnoreQueryFilters().AsNoTracking()
+            .Select(s => new { s.Id, Name = s.Name.Fr, s.FiscalId, s.CnssAffiliationNumber })
+            .ToListAsync(ct);
+
+        string Key(string? value) => by == EmployerIdentifier.CnssAffiliation
+            ? CnssBdsFile.Digits(value)
+            : (value ?? string.Empty).Trim().ToUpperInvariant();
+
+        var own = sites.FirstOrDefault(s => s.Id == siteId);
+        var key = own is null ? string.Empty : Key(by == EmployerIdentifier.CnssAffiliation ? own.CnssAffiliationNumber : own.FiscalId);
+        if (key.Length == 0) return EmployerOtherSites.None;
+
+        var others = sites.Where(s => s.Id != siteId
+                                      && Key(by == EmployerIdentifier.CnssAffiliation ? s.CnssAffiliationNumber : s.FiscalId) == key)
+                          .ToDictionary(s => s.Id, s => s.Name);
+        if (others.Count == 0) return EmployerOtherSites.None;
+
+        var ids = others.Keys.ToList();
+        var months = await db.PayrollPeriods.IgnoreQueryFilters().AsNoTracking()
+            .Include(p => p.Payslips)
+            .Where(p => ids.Contains(p.SiteId) && p.Year == year && (month == null || p.Month == month))
+            .ToListAsync(ct);
+
+        var paid = months.SelectMany(p => p.Payslips).Select(s => s.EmployeeId).Distinct().ToList();
+        var staff = await db.Employees.IgnoreQueryFilters().AsNoTracking()
+            .Where(e => ids.Contains(e.SiteId) || paid.Contains(e.Id))
+            .ToListAsync(ct);
+
+        return new EmployerOtherSites(
+            [.. months.OrderBy(p => p.Month).ThenBy(p => others[p.SiteId], StringComparer.CurrentCulture)
+                      .Select(p => new EmployerSiteMonth(others[p.SiteId], p))],
+            staff);
+    }
 }
