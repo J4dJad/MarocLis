@@ -6,13 +6,21 @@ using MarocLIS.Domain.Inventory;
 namespace MarocLIS.Application.Inventory;
 
 /// <summary>One supplier invoice as the purchases journal needs it.</summary>
+/// <param name="Assets">The fixed assets of the register linked to this invoice, if any.</param>
 public sealed record AccountingInvoiceSource(
     string SupplierCode,
     string SupplierName,
     string? SupplierAccount,
     string InvoiceNumber,
     DateOnly InvoiceDate,
-    IReadOnlyList<AccountingInvoiceLine> Lines);
+    IReadOnlyList<AccountingInvoiceLine> Lines,
+    IReadOnlyList<AccountingAssetShare>? Assets = null);
+
+/// <summary>
+/// A fixed asset bought on a supplier invoice: its asset account (class 2, from its category), its
+/// cost excluding VAT and its VAT, and whether that VAT is deducted.
+/// </summary>
+public sealed record AccountingAssetShare(string AssetAccount, decimal ExcludingVat, decimal Vat, bool VatRecoverable);
 
 /// <summary>An invoice line's amounts, with the category its charge account depends on.</summary>
 public sealed record AccountingInvoiceLine(StockItemKind Kind, decimal ExcludingVat, decimal Vat);
@@ -57,6 +65,13 @@ public enum AccountingExportLayout
 /// (5141) or the cash box (5161) in credit. Every entry balances, because the invoice total is the
 /// sum of the same rounded line amounts the debits are.
 /// </para>
+/// <para>
+/// An invoice a fixed asset of the register is linked to is capitalised, not expensed: the asset's
+/// cost goes to its asset account (2332… by category) instead of the charge accounts, and its VAT
+/// to 34551 TVA récupérable sur immobilisations, or into the asset account when it is not deducted
+/// (an exempt laboratory, article 91 of the CGI). The register depreciates that same cost. What the
+/// invoice holds beyond the asset (consumables bought with it) stays a charge.
+/// </para>
 /// </summary>
 public static class SupplierAccountingExport
 {
@@ -73,19 +88,39 @@ public static class SupplierAccountingExport
 
             var byAccount = invoice.Lines
                 .GroupBy(l => settings.ChargeAccountFor(l.Kind), StringComparer.Ordinal)
-                .OrderBy(g => g.Key, StringComparer.Ordinal);
+                .OrderBy(g => g.Key, StringComparer.Ordinal)
+                .Select(g => (Account: g.Key, Amount: Money.Round(g.Sum(l => l.ExcludingVat))))
+                .ToList();
+
+            var vat = Money.Round(invoice.Lines.Sum(l => l.Vat));
 
             decimal total = 0m;
-            foreach (var group in byAccount)
+            if (invoice.Assets is { Count: > 0 } assets)
             {
-                var amount = Money.Round(group.Sum(l => l.ExcludingVat));
+                var capitalised = Capitalise(assets, byAccount, ref vat);
+                foreach (var (account, amount) in capitalised.AssetDebits)
+                {
+                    total += amount;
+                    entries.Add(new AccountingEntry(invoice.InvoiceDate, settings.PurchaseJournal, account, null,
+                                                    label, invoice.InvoiceNumber, amount, 0m));
+                }
+                if (capitalised.RecoverableVat != 0m)
+                {
+                    total += capitalised.RecoverableVat;
+                    entries.Add(new AccountingEntry(invoice.InvoiceDate, settings.PurchaseJournal, settings.AssetVatAccount,
+                                                    null, label, invoice.InvoiceNumber, capitalised.RecoverableVat, 0m));
+                }
+                byAccount = capitalised.Charges;
+            }
+
+            foreach (var (account, amount) in byAccount)
+            {
                 if (amount == 0m) continue;
                 total += amount;
-                entries.Add(new AccountingEntry(invoice.InvoiceDate, settings.PurchaseJournal, group.Key, null,
+                entries.Add(new AccountingEntry(invoice.InvoiceDate, settings.PurchaseJournal, account, null,
                                                 label, invoice.InvoiceNumber, amount, 0m));
             }
 
-            var vat = Money.Round(invoice.Lines.Sum(l => l.Vat));
             if (vat != 0m)
             {
                 total += vat;
@@ -113,6 +148,50 @@ public static class SupplierAccountingExport
         }
 
         return entries;
+    }
+
+    private sealed record Capitalised(
+        IReadOnlyList<(string Account, decimal Amount)> AssetDebits,
+        decimal RecoverableVat,
+        List<(string Account, decimal Amount)> Charges);
+
+    /// <summary>
+    /// Moves the assets' share of an invoice from its charges to the asset accounts. Each asset takes
+    /// its cost and its VAT, never more than the invoice still holds (an asset whose cost includes
+    /// transport invoiced elsewhere); the cost comes off the largest charges first. The debits only
+    /// move between accounts, so the entry still balances against the supplier's credit.
+    /// </summary>
+    private static Capitalised Capitalise(IReadOnlyList<AccountingAssetShare> assets,
+                                          IReadOnlyList<(string Account, decimal Amount)> charges, ref decimal vat)
+    {
+        var excluding = Money.Round(charges.Where(c => c.Amount > 0m).Sum(c => c.Amount));
+        var debits = new SortedDictionary<string, decimal>(StringComparer.Ordinal);
+        var recoverable = 0m;
+        var taken = 0m;
+
+        foreach (var asset in assets)
+        {
+            var cost = Math.Max(0m, Math.Min(Money.Round(asset.ExcludingVat), excluding - taken));
+            var assetVat = vat > 0m ? Math.Max(0m, Math.Min(Money.Round(asset.Vat), vat)) : 0m;
+            taken += cost;
+            vat = Money.Round(vat - assetVat);
+            if (asset.VatRecoverable) recoverable += assetVat;
+
+            var debit = Money.Round(cost + (asset.VatRecoverable ? 0m : assetVat));
+            if (debit != 0m) debits[asset.AssetAccount] = debits.GetValueOrDefault(asset.AssetAccount) + debit;
+        }
+
+        var left = new List<(string Account, decimal Amount)>(charges);
+        var remaining = taken;
+        foreach (var index in Enumerable.Range(0, left.Count).OrderByDescending(i => left[i].Amount).ToList())
+        {
+            if (remaining <= 0m) break;
+            var off = Math.Min(remaining, Math.Max(0m, left[index].Amount));
+            left[index] = (left[index].Account, Money.Round(left[index].Amount - off));
+            remaining -= off;
+        }
+
+        return new Capitalised([.. debits.Select(d => (d.Key, Money.Round(d.Value)))], Money.Round(recoverable), left);
     }
 
     private static string ThirdParty(string? account, string code) =>

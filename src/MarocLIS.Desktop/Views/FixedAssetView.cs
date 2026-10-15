@@ -159,7 +159,8 @@ public sealed class FixedAssetView : LocalizedView
     private static readonly string[] RegisterColumns =
     [
         "code", "label", "category", "account", "acquired", "inservice", "gross", "method", "life", "rate",
-        "opening", "charge", "closing", "nbv", "disposal", "price", "result", "supplier", "invoice", "instrument"
+        "opening", "charge", "grossout", "depreciationout", "closinggross", "closing", "nbv", "disposal", "price",
+        "result", "supplier", "invoice", "instrument"
     ];
 
     private void BuildColumns()
@@ -168,8 +169,8 @@ public sealed class FixedAssetView : LocalizedView
 
         foreach (var name in RegisterColumns)
         {
-            var amount = name is "gross" or "opening" or "charge" or "closing" or "nbv" or "price" or "result"
-                                 or "life" or "rate";
+            var amount = name is "gross" or "opening" or "charge" or "grossout" or "depreciationout" or "closinggross"
+                                 or "closing" or "nbv" or "price" or "result" or "life" or "rate";
             AddColumn(_grid, name, name switch { "label" => 16, "category" or "supplier" => 10, _ => 7 },
                       name is "code" ? UiTheme.MonospaceBold : amount || name is "account" ? UiTheme.Monospace : UiTheme.Body,
                       amount ? right : DataGridViewContentAlignment.MiddleLeft);
@@ -250,7 +251,8 @@ public sealed class FixedAssetView : LocalizedView
     [
         T("Field.Code"), T("Assets.Label"), T("Assets.Category"), T("Assets.Account"), T("Assets.AcquisitionDate"),
         T("Assets.InServiceDate"), T("Assets.GrossValue"), T("Assets.Method"), T("Assets.UsefulLife"),
-        T("Assets.Rate"), T("Assets.Opening"), T("Assets.Charge"), T("Assets.Closing"), T("Assets.NetBookValue"),
+        T("Assets.Rate"), T("Assets.Opening"), T("Assets.Charge"), T("Assets.GrossOut"), T("Assets.DepreciationOut"),
+        T("Assets.ClosingGross"), T("Assets.Closing"), T("Assets.NetBookValue"),
         T("Assets.DisposalDate"), T("Assets.DisposalPrice"), T("Assets.DisposalResult"), T("Inventory.Supplier"),
         T("Assets.InvoiceReference"), T("Assets.Instrument")
     ];
@@ -550,7 +552,7 @@ public sealed class FixedAssetView : LocalizedView
         if (_register is not { } register) return;
 
         // The PDF keeps the accounting columns; supplier, invoice and instrument are in the CSV.
-        const int columns = 17;
+        const int columns = 20;
         var document = new ListDocument(
             T("Assets.ReportTitle", register.Year),
             $"{T("Assets.ReportCaption")} — {DateTime.Now:dd/MM/yyyy HH:mm}",
@@ -620,7 +622,9 @@ internal sealed class FixedAssetDialog : MasterDataEditor
         static string Amount(decimal value) => value == 0m ? string.Empty : value.ToString("0.00", CultureInfo.InvariantCulture);
 
         _code = TextField("Field.Code", 20, 14, 160, values?.Code, latin: true, mono: true);
+        _code.MaxLength = FixedAsset.CodeMaxLength;
         _label = TextField("Assets.Label", 200, 14, 440, values?.Label);
+        _label.MaxLength = FixedAsset.LabelMaxLength;
         _category = Choice("Assets.Category", 660, 14, 220, category, "FixedAssetCategory");
 
         _acquired = DatePicker("Assets.AcquisitionDate", 20, 68, values?.AcquisitionDate);
@@ -655,6 +659,7 @@ internal sealed class FixedAssetDialog : MasterDataEditor
         };
         Controls.Add(_invoice);
         _invoiceReference = TextField("Assets.InvoiceReference", 660, 176, 220, values?.InvoiceReference, latin: true);
+        _invoiceReference.MaxLength = FixedAsset.InvoiceReferenceMaxLength;
 
         string InstrumentDisplay(AssetInstrumentOption i)
         {
@@ -674,6 +679,7 @@ internal sealed class FixedAssetDialog : MasterDataEditor
         Controls.Add(_instrumentState);
 
         _notes = TextField("Field.Notes", 20, 290, 860, values?.Notes);
+        _notes.MaxLength = FixedAsset.NotesMaxLength;
         Notice(20, 346, 860, 100, "Assets.EditorNotice");
 
         _method.SelectedIndexChanged += (_, _) => RenderPlan();
@@ -997,6 +1003,7 @@ internal sealed class AssetDisposalDialog : MasterDataEditor
         Controls.Add(_date);
         _price = TextField("Assets.DisposalPrice", 200, 14, 140, null, latin: true, mono: true, right: true);
         _reason = TextField("Assets.DisposalReason", 20, 68, 480);
+        _reason.MaxLength = FixedAsset.DisposalReasonMaxLength;
         Notice(20, 122, 480, 60, "Assets.DisposalNotice");
         Buttons(190, 520);
     }
