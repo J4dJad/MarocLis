@@ -52,6 +52,7 @@
   "Asset_NotesTooLong": "لا يمكن أن تتجاوز الملاحظات {0} حرفا.",
   "Asset_DisposalReasonTooLong": "لا يمكن أن يتجاوز سبب الإخراج {0} حرفا.",
   "Treasury_PeriodInvalid": "تاريخ النهاية سابق لتاريخ البداية.",
+  "Treasury_TextTooLong": "النص طويل جدا (الحد الأقصى {0} حرفا).",
   "TreasuryItem_AmountRequired": "أدخل مبلغاً غير منعدم: موجباً للمداخيل وسالباً للمصاريف.",
   "TreasuryItem_EndBeforeStart": "تاريخ النهاية سابق لتاريخ البداية.",
   "TreasuryItem_LabelRequired": "البيان إلزامي.",
@@ -67,6 +68,7 @@
   "BankStatement_LineNotFound": "سطر الكشف غير موجود.",
   "BankStatement_NothingToImport": "لا يوجد سطر جديد للاستيراد: الكشف مستورد من قبل أو غير مقروء بهذه الأعمدة.",
   "BankStatement_SkipLinesInvalid": "يجب أن يكون عدد الأسطر المتجاهلة بين 0 و100.",
+  "BankStatement_ImportHasMatches": "لا يمكن إلغاء هذا الاستيراد: {0} من سطوره مطابقة. ألغِ مطابقتها أولا.",
   "BankMatch_AlreadyUnmatched": "تم إلغاء هذه المطابقة من قبل.",
   "BankMatch_DifferenceNeedsComment": "تترك الحركات المختارة فرقاً قدره {0} درهم مع سطر الكشف: اذكر سببه (عمولة، مصاريف…).",
   "BankMatch_DirectionMismatch": "لا يمكن لتحصيل أن يفسر خصماً، ولا لأداء أن يفسر إيداعاً.",
@@ -126,6 +128,7 @@
   "SupplierPayment_BeforeInvoice": "لا يمكن أن يسبق تاريخ الأداء تاريخ الفاتورة.",
   "SupplierPayment_ReferenceRequired": "أدخل مرجع التحويل أو الشيك أو الكمبيالة.",
   "SupplierPayment_DateInFuture": "لا يمكن أن يكون تاريخ الأداء في المستقبل.",
+  "SupplierPayment_MaturityBeforePayment": "لا يمكن أن يسبق تاريخ الاستحقاق تاريخ الأداء.",
   "SupplierInvoice_NotEditable": "تمت مطابقة الفاتورة: لم يعد بالإمكان تعديل سطورها.",
   "SupplierInvoice_QuantityMustBePositive": "يجب أن تكون الكمية المفوترة أكبر من الصفر.",
   "SupplierInvoice_PriceMustNotBeNegative": "يجب أن يكون ثمن الوحدة دون احتساب الضريبة ونسبة الضريبة على القيمة المضافة موجبين (بين 0 و100٪).",
@@ -663,6 +666,12 @@
   },
 
   "Treasury": {
+    "OpeningRecordedNotOnStatement": "حركات مسجلة بعد {0} وغير واردة في أي كشف: {1}",
+    "PreviewOutdated": "تغيّر الإعداد: انقر على «معاينة» قبل الاستيراد.",
+    "UnmatchedMovementsSiteTotal": "حركات غير مطابقة (الموقع بأكمله)",
+    "ImportWithdrawn": "تم إلغاء الاستيراد: سُحب {0} سطر من الكشف.",
+    "WithdrawImportConfirm": "إلغاء الاستيراد بأكمله الذي ينتمي إليه سطر {0} «{1}» ({2})؟\nستُسحب من الكشف جميع السطور المستوردة من هذا الملف، ويمكن بعد ذلك إعادة استيراده بالإعداد الصحيح.",
+    "WithdrawImport": "إلغاء الاستيراد",
     "Workstation": "المحطة",
     "Week": "الأسبوع",
     "ValueDateColumn": "عمود تاريخ القيمة",
@@ -767,6 +776,7 @@
   },
 
   "TreasuryMovementKind": {
+    "PatientRefund": "استرداد لفائدة المريض",
     "Justified": "مبررة",
     "ReturnedCheque": "شيك غير مؤدى",
     "Payroll": "تحويل الأجور",
@@ -1155,6 +1165,7 @@
   },
 
   "SupplierInvoices": {
+    "MaturityDate": "تاريخ الاستحقاق (كمبيالة، شيك)",
     "DashboardDueSoon": "فواتير موردين مستحقة خلال 7 أيام",
     "DashboardOverdue": "فواتير موردين متأخرة الأداء",
     "PaymentTermsNotice": "القانون 69-21: 60 يوماً دون اتفاق، و120 يوماً على الأكثر باتفاق، ابتداءً من التسليم.",

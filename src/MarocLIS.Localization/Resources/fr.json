@@ -52,6 +52,7 @@
   "Asset_NotesTooLong": "Les notes ne peuvent pas dépasser {0} caractères.",
   "Asset_DisposalReasonTooLong": "Le motif de la sortie ne peut pas dépasser {0} caractères.",
   "Treasury_PeriodInvalid": "La date de fin précède la date de début.",
+  "Treasury_TextTooLong": "Texte trop long ({0} caractères au plus).",
   "TreasuryItem_AmountRequired": "Saisissez un montant non nul : positif pour une rentrée, négatif pour une sortie.",
   "TreasuryItem_EndBeforeStart": "La date de fin précède la date de début.",
   "TreasuryItem_LabelRequired": "Le libellé est obligatoire.",
@@ -67,6 +68,7 @@
   "BankStatement_LineNotFound": "Ligne de relevé introuvable.",
   "BankStatement_NothingToImport": "Aucune ligne nouvelle à importer : le relevé est déjà importé ou illisible avec ces colonnes.",
   "BankStatement_SkipLinesInvalid": "Le nombre de lignes à ignorer doit être compris entre 0 et 100.",
+  "BankStatement_ImportHasMatches": "Impossible d'annuler cet import : {0} de ses lignes sont rapprochées. Annulez d'abord leur rapprochement.",
   "BankMatch_AlreadyUnmatched": "Ce rapprochement a déjà été annulé.",
   "BankMatch_DifferenceNeedsComment": "Les mouvements choisis laissent un écart de {0} DH avec la ligne du relevé : indiquez-en la raison (commission, frais…).",
   "BankMatch_DirectionMismatch": "Un encaissement ne peut pas expliquer un débit, ni un décaissement un crédit.",
@@ -126,6 +128,7 @@
   "SupplierPayment_BeforeInvoice": "Le règlement ne peut pas être antérieur à la date de la facture.",
   "SupplierPayment_ReferenceRequired": "Indiquez la référence du virement, du chèque ou de l'effet.",
   "SupplierPayment_DateInFuture": "La date du règlement ne peut pas être dans le futur.",
+  "SupplierPayment_MaturityBeforePayment": "L'échéance ne peut pas précéder la date du règlement.",
   "SupplierInvoice_NotEditable": "La facture a déjà été rapprochée : ses lignes ne peuvent plus être modifiées.",
   "SupplierInvoice_QuantityMustBePositive": "La quantité facturée doit être supérieure à zéro.",
   "SupplierInvoice_PriceMustNotBeNegative": "Le prix unitaire HT et le taux de TVA doivent être positifs (TVA entre 0 et 100 %).",
@@ -663,6 +666,12 @@
   },
 
   "Treasury": {
+    "OpeningRecordedNotOnStatement": "Mouvements enregistrés après le {0} et absents des relevés : {1}",
+    "PreviewOutdated": "Le paramétrage a changé : cliquez sur « Aperçu » avant d'importer.",
+    "UnmatchedMovementsSiteTotal": "Mouvements non rapprochés (tout le site)",
+    "ImportWithdrawn": "Import annulé : {0} ligne(s) retirée(s) du relevé.",
+    "WithdrawImportConfirm": "Annuler tout l'import dont fait partie la ligne du {0} « {1} » ({2}) ?\nToutes les lignes importées avec ce fichier seront retirées du relevé ; le fichier pourra être réimporté avec le bon paramétrage.",
+    "WithdrawImport": "Annuler l'import",
     "Workstation": "Poste",
     "Week": "Sem.",
     "ValueDateColumn": "Col. date valeur",
@@ -767,6 +776,7 @@
   },
 
   "TreasuryMovementKind": {
+    "PatientRefund": "Remboursement patient",
     "Justified": "Justifiée",
     "ReturnedCheque": "Chèque impayé",
     "Payroll": "Virement des salaires",
@@ -1155,6 +1165,7 @@
   },
 
   "SupplierInvoices": {
+    "MaturityDate": "Échéance (LCN, chèque)",
     "DashboardDueSoon": "Factures fournisseurs à payer sous 7 jours",
     "DashboardOverdue": "Factures fournisseurs en retard de paiement",
     "PaymentTermsNotice": "Loi 69-21 : 60 jours sans accord, 120 jours au plus par accord, à compter de la livraison.",

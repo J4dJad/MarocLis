@@ -126,6 +126,43 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("FixedAssets", "fin");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Assets.FixedAssetDepreciationPosting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountMad")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("ExportedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("FixedAssetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FixedAssetId", "Year", "Month")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FixedAssetDepreciationPostings_Asset_Month");
+
+                    b.ToTable("FixedAssetDepreciationPostings", "fin");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Audit.AuditEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -451,6 +488,37 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("CashSessions", "bil");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Billing.CashWithdrawal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("CashSessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashSessionId")
+                        .HasDatabaseName("IX_CashWithdrawals_Session");
+
+                    b.ToTable("CashWithdrawals", "bil");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Billing.Deposit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -517,6 +585,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<string>("RefundReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("RefundSiteId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("RefundedAmount")
                         .HasColumnType("decimal(18,2)");
@@ -831,6 +902,36 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("InvoiceLines", "bil");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Billing.PayerShortfallTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("ReversedOn")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateOnly>("TransferredOn")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId")
+                        .HasDatabaseName("IX_PayerShortfallTransfers_Invoice");
+
+                    b.ToTable("PayerShortfallTransfers", "bil");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Billing.Payment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -894,6 +995,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<string>("RefundReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("RefundSiteId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset?>("RefundedAt")
                         .HasColumnType("datetimeoffset(3)");
@@ -5367,6 +5471,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("AmountMad")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateOnly?>("MaturityDate")
+                        .HasColumnType("date");
+
                     b.Property<int>("Method")
                         .HasColumnType("int");
 
@@ -8861,6 +8968,16 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("Fingerprint")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -8869,6 +8986,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("ImportId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Label")
                         .IsRequired()
@@ -8904,6 +9024,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasColumnType("date");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ImportId")
+                        .HasDatabaseName("IX_BankStatementLines_Import");
 
                     b.HasIndex("BankAccountId", "Fingerprint")
                         .IsUnique()
@@ -8997,12 +9120,39 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("PasswordHistory", "sec");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Assets.FixedAssetDepreciationPosting", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Assets.FixedAsset", null)
+                        .WithMany()
+                        .HasForeignKey("FixedAssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Billing.CashWithdrawal", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Billing.CashSession", null)
+                        .WithMany("Withdrawals")
+                        .HasForeignKey("CashSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Billing.InvoiceLine", b =>
                 {
                     b.HasOne("MarocLIS.Domain.Billing.Invoice", null)
                         .WithMany("Lines")
                         .HasForeignKey("InvoiceId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Billing.PayerShortfallTransfer", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Billing.Invoice", null)
+                        .WithMany("ShortfallTransfers")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -10904,11 +11054,18 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Billing.CashSession", b =>
+                {
+                    b.Navigation("Withdrawals");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Billing.Invoice", b =>
                 {
                     b.Navigation("Lines");
 
                     b.Navigation("Payments");
+
+                    b.Navigation("ShortfallTransfers");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Catalog.AnalysisTest", b =>

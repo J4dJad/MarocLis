@@ -52,6 +52,7 @@
   "Asset_NotesTooLong": "The notes cannot exceed {0} characters.",
   "Asset_DisposalReasonTooLong": "The reason for the disposal cannot exceed {0} characters.",
   "Treasury_PeriodInvalid": "The end date is before the start date.",
+  "Treasury_TextTooLong": "Text too long ({0} characters at most).",
   "TreasuryItem_AmountRequired": "Enter a non-zero amount: positive for money in, negative for money out.",
   "TreasuryItem_EndBeforeStart": "The end date is before the start date.",
   "TreasuryItem_LabelRequired": "The label is required.",
@@ -67,6 +68,7 @@
   "BankStatement_LineNotFound": "Statement line not found.",
   "BankStatement_NothingToImport": "No new line to import: the statement is already imported or unreadable with these columns.",
   "BankStatement_SkipLinesInvalid": "The number of lines to skip must be between 0 and 100.",
+  "BankStatement_ImportHasMatches": "This import cannot be undone: {0} of its lines are reconciled. Undo their reconciliation first.",
   "BankMatch_AlreadyUnmatched": "This match has already been undone.",
   "BankMatch_DifferenceNeedsComment": "The selected movements leave a difference of {0} MAD with the statement line: state the reason (commission, charges…).",
   "BankMatch_DirectionMismatch": "A receipt cannot explain a debit, nor a payment a credit.",
@@ -126,6 +128,7 @@
   "SupplierPayment_BeforeInvoice": "The payment cannot be dated before the invoice.",
   "SupplierPayment_ReferenceRequired": "Enter the reference of the transfer, cheque or bill of exchange.",
   "SupplierPayment_DateInFuture": "The payment date cannot be in the future.",
+  "SupplierPayment_MaturityBeforePayment": "The due date cannot be before the payment date.",
   "SupplierInvoice_NotEditable": "The invoice has already been matched: its lines can no longer be changed.",
   "SupplierInvoice_QuantityMustBePositive": "The invoiced quantity must be greater than zero.",
   "SupplierInvoice_PriceMustNotBeNegative": "The unit price excluding VAT and the VAT rate must be positive (VAT between 0 and 100 %).",
@@ -663,6 +666,12 @@
   },
 
   "Treasury": {
+    "OpeningRecordedNotOnStatement": "Movements recorded after {0} and on no statement yet: {1}",
+    "PreviewOutdated": "The mapping changed: click \"Preview\" before importing.",
+    "UnmatchedMovementsSiteTotal": "Unmatched movements (whole site)",
+    "ImportWithdrawn": "Import undone: {0} line(s) removed from the statement.",
+    "WithdrawImportConfirm": "Undo the whole import the line of {0} \"{1}\" ({2}) came with?\nEvery line imported with that file will be removed from the statement; the file can then be imported again with the right mapping.",
+    "WithdrawImport": "Undo import",
     "Workstation": "Workstation",
     "Week": "Week",
     "ValueDateColumn": "Value date col.",
@@ -767,6 +776,7 @@
   },
 
   "TreasuryMovementKind": {
+    "PatientRefund": "Patient refund",
     "Justified": "Justified",
     "ReturnedCheque": "Returned cheque",
     "Payroll": "Payroll transfer",
@@ -1155,6 +1165,7 @@
   },
 
   "SupplierInvoices": {
+    "MaturityDate": "Due date (bill, cheque)",
     "DashboardDueSoon": "Supplier invoices due within 7 days",
     "DashboardOverdue": "Supplier invoices overdue",
     "PaymentTermsNotice": "Law 69-21: 60 days without agreement, 120 days at most by agreement, from delivery.",
