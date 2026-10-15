@@ -8,10 +8,14 @@ namespace MarocLIS.Infrastructure.Queries;
 
 public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
 {
-    public async Task<IReadOnlyList<PayrollPeriodRow>> GetPeriodsAsync(CancellationToken ct = default)
+    // The site filter of the context lets through every site the operator may switch to; a payroll
+    // is one site's, so each query below names the site it is run for.
+
+    public async Task<IReadOnlyList<PayrollPeriodRow>> GetPeriodsAsync(Guid siteId, CancellationToken ct = default)
     {
         var rows = await (
                 from p in db.PayrollPeriods.AsNoTracking()
+                where p.SiteId == siteId
                 join u in db.Users.AsNoTracking() on p.ClosedByUserId equals u.Id into uj
                 from u in uj.DefaultIfEmpty()
                 select new
@@ -33,9 +37,9 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
         ];
     }
 
-    public Task<Guid?> FindPeriodAsync(int year, int month, CancellationToken ct = default) =>
+    public Task<Guid?> FindPeriodAsync(Guid siteId, int year, int month, CancellationToken ct = default) =>
         db.PayrollPeriods.AsNoTracking()
-          .Where(p => p.Year == year && p.Month == month)
+          .Where(p => p.SiteId == siteId && p.Year == year && p.Month == month)
           .Select(p => (Guid?)p.Id)
           .FirstOrDefaultAsync(ct);
 
@@ -45,11 +49,12 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
             .Select(p => p.Id)
             .ToListAsync(ct);
 
-    public async Task<IReadOnlyList<PayrollCandidate>> CandidatesAsync(DateOnly from, DateOnly to, decimal monthlyWorkingDays,
+    public async Task<IReadOnlyList<PayrollCandidate>> CandidatesAsync(Guid siteId, DateOnly from, DateOnly to,
+                                                                       decimal monthlyWorkingDays,
                                                                        CancellationToken ct = default)
     {
         var staff = await db.Employees.AsNoTracking()
-            .Where(e => e.HireDate <= to && (e.ExitDate == null || e.ExitDate >= from))
+            .Where(e => e.SiteId == siteId && e.HireDate <= to && (e.ExitDate == null || e.ExitDate >= from))
             .Select(e => new { e.Id, e.HireDate, e.ExitDate })
             .ToListAsync(ct);
         if (staff.Count == 0) return [];

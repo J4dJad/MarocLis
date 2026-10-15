@@ -81,7 +81,7 @@ public sealed class PayrollService(
     {
         var permitted = Require();
         if (permitted.IsFailure) return Result.Failure<IReadOnlyList<PayrollPeriodRow>>(permitted.FirstError);
-        return Result.Success(await queries.GetPeriodsAsync(ct));
+        return Result.Success(await queries.GetPeriodsAsync(currentUser.SiteId, ct));
     }
 
     public async Task<Result<PayrollParameters>> GetParametersAsync(int year, CancellationToken ct = default)
@@ -176,7 +176,7 @@ public sealed class PayrollService(
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
         if (month is < 1 or > 12 || year < 2000) return Result.Failure<Guid>(Error.Validation("Payroll_PeriodInvalid"));
-        if (await queries.FindPeriodAsync(year, month, ct) is not null)
+        if (await queries.FindPeriodAsync(currentUser.SiteId, year, month, ct) is not null)
             return Result.Failure<Guid>(Error.Conflict("Payroll_PeriodExists", $"{month:00}/{year}"));
 
         var rates = await ParametersForAsync(year, ct);
@@ -217,7 +217,8 @@ public sealed class PayrollService(
     {
         var added = 0;
         var settlements = await queries.SettlementsAsync(period.FirstDay, period.LastDay, ct);
-        foreach (var candidate in await queries.CandidatesAsync(period.FirstDay, period.LastDay, rates.MonthlyWorkingDays, ct))
+        foreach (var candidate in await queries.CandidatesAsync(period.SiteId, period.FirstDay, period.LastDay,
+                                                             rates.MonthlyWorkingDays, ct))
         {
             var employee = await employees.GetByIdAsync(candidate.EmployeeId, ct);
             if (employee?.BaseSalary is null || !PayrollCalculator.IsOnPayroll(employee.ContractType)) continue;
@@ -278,7 +279,7 @@ public sealed class PayrollService(
         if (period is null) return Result.Failure<PayrollPeriodDetail>(Error.NotFound("Payroll_NotFound"));
 
         var rates = await ParametersForAsync(period.Year, ct);
-        var row = (await queries.GetPeriodsAsync(ct)).First(p => p.PeriodId == periodId);
+        var row = (await queries.GetPeriodsAsync(period.SiteId, ct)).First(p => p.PeriodId == periodId);
 
         return Result.Success(new PayrollPeriodDetail(row,
         [
@@ -544,18 +545,23 @@ public sealed class PayrollService(
 
 public interface IPayrollQueries
 {
-    Task<IReadOnlyList<PayrollPeriodRow>> GetPeriodsAsync(CancellationToken ct = default);
+    /// <summary>The site's payroll months. A payroll is one site's: an operator with several sites sees the one worked on.</summary>
+    Task<IReadOnlyList<PayrollPeriodRow>> GetPeriodsAsync(Guid siteId, CancellationToken ct = default);
 
-    Task<Guid?> FindPeriodAsync(int year, int month, CancellationToken ct = default);
+    Task<Guid?> FindPeriodAsync(Guid siteId, int year, int month, CancellationToken ct = default);
 
+    /// <summary>
+    /// Draft months of the year on every site the operator may see: the rates are the same for all
+    /// sites, so a change to them is carried to each site's open month.
+    /// </summary>
     Task<IReadOnlyList<Guid>> DraftPeriodIdsAsync(int year, CancellationToken ct = default);
 
     /// <summary>
-    /// Staff of the current site employed during the month, with their unpaid working days: approved
+    /// Staff of the site employed during the month, with their unpaid working days: approved
     /// unpaid leave and unjustified absences, and the days before hire or after departure.
     /// </summary>
-    Task<IReadOnlyList<PayrollCandidate>> CandidatesAsync(DateOnly from, DateOnly to, decimal monthlyWorkingDays,
-                                                          CancellationToken ct = default);
+    Task<IReadOnlyList<PayrollCandidate>> CandidatesAsync(Guid siteId, DateOnly from, DateOnly to,
+                                                          decimal monthlyWorkingDays, CancellationToken ct = default);
 
     Task<InvoiceIssuer> EmployerAsync(Guid siteId, CancellationToken ct = default);
 

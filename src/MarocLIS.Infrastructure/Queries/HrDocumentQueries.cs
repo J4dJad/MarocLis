@@ -64,8 +64,13 @@ public sealed class HrDocumentQueries(LisDbContext db) : IHrDocumentQueries
     public async Task<(Guid PeriodId, PayrollStatus Status, Payslip? Payslip)?> PayslipOfMonthAsync(
         Guid employeeId, int year, int month, CancellationToken ct = default)
     {
+        // Each site runs its own payroll, so a month can have one period per site: the one holding
+        // the employee's payslip, else the month of the employee's own site — never another site's.
         var period = await db.PayrollPeriods.AsNoTracking()
-            .Where(p => p.Year == year && p.Month == month)
+            .Where(p => p.Year == year && p.Month == month
+                        && (db.Payslips.Any(s => s.PayrollPeriodId == p.Id && s.EmployeeId == employeeId)
+                            || db.Employees.Any(e => e.Id == employeeId && e.SiteId == p.SiteId)))
+            .OrderByDescending(p => db.Payslips.Any(s => s.PayrollPeriodId == p.Id && s.EmployeeId == employeeId))
             .Select(p => new { p.Id, p.Status })
             .FirstOrDefaultAsync(ct);
         if (period is null) return null;

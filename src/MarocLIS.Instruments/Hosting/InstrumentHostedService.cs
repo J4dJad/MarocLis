@@ -23,9 +23,11 @@ namespace MarocLIS.Instruments.Hosting;
 /// at the end of the day instead, which is to say not at all.
 /// </para>
 /// <para>
-/// Every driver runs in its own DI scope with its own database context. Sharing one would mean a
-/// change tracker shared between eight analysers transmitting concurrently, where one failed import
-/// rolls back another analyser's results.
+/// Every message a driver delivers is handled in a DI scope of its own, with its own database
+/// context (<see cref="ScopedInstrumentMessageSink"/>). Sharing one would mean a change tracker
+/// shared between eight analysers transmitting concurrently, where one failed import rolls back
+/// another analyser's results; keeping one per link for its whole life meant reading mappings and
+/// tubes as they were days ago.
 /// </para>
 /// </summary>
 public sealed class InstrumentHostedService(
@@ -157,8 +159,8 @@ public sealed class InstrumentHostedService(
 
         try
         {
-            var sink = scope.ServiceProvider.GetRequiredService<IInstrumentMessageSink>();
             var loggerFactory = scope.ServiceProvider.GetService<ILoggerFactory>();
+            var sink = new ScopedInstrumentMessageSink(scopes, loggerFactory?.CreateLogger("Instrument.Sink"));
 
             var transport = BuildTransport(link, loggerFactory?.CreateLogger("Instrument.Transport"));
 
