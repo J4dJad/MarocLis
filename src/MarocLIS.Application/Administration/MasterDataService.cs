@@ -229,6 +229,9 @@ public sealed record PayerRequest
     public string? AddressLine { get; init; }
     public string? City { get; init; }
 
+    /// <summary>The payer's account in the accounting export (see <c>Payer.AccountingAccount</c>).</summary>
+    public string? AccountingAccount { get; init; }
+
     public bool IsActive { get; init; } = true;
 }
 
@@ -296,7 +299,8 @@ public sealed record PayerRow(
     // AddressLine is projected, not dropped: the editor round-trips every field it shows, and a
     // row that omitted one would blank it on the next save. Same defect as PrescriberRow's missing
     // SendPartialReports.
-    string? AddressLine, string? City, bool IsActive, int CoveredPatientCount, int OpenInvoiceCount)
+    string? AddressLine, string? City, bool IsActive, int CoveredPatientCount, int OpenInvoiceCount,
+    string? AccountingAccount = null)
 {
     /// <summary>The rate as a percentage, for display. The stored value is a fraction.</summary>
     public decimal ReimbursementPercent => DefaultReimbursementRate * 100m;
@@ -926,7 +930,11 @@ public sealed class MasterDataService(
         payer.Email = Blank(request.Email);
         payer.AddressLine = Blank(request.AddressLine);
         payer.City = Blank(request.City);
+        payer.AccountingAccount = Blank(request.AccountingAccount);
         payer.IsActive = request.IsActive;
+
+        if (payer.AccountingAccount is { } account && !Accounting.AccountingSettings.IsCode(account))
+            return Result.Failure<Guid>(Error.Validation("Accounting_AccountInvalid", account));
 
         var valid = payer.Validate();
         if (valid.IsFailure) return Result.Failure<Guid>(valid.Errors);
