@@ -19,7 +19,14 @@ public sealed record TreasuryMovement(
     decimal AmountMad,
     string Label,
     string? Reference,
-    bool ClearsLate);
+    bool ClearsLate)
+{
+    /// <summary>A payroll transfer: the first day of the month it pays, so the forecast can place its pay day.</summary>
+    public DateOnly? PayrollMonth { get; init; }
+
+    /// <summary>A payroll transfer: the day its month was closed; salaries are not paid before.</summary>
+    public DateOnly? PayrollClosedOn { get; init; }
+}
 
 /// <summary>A statement line as the reconciliation reads it.</summary>
 public sealed record StatementLineRow(

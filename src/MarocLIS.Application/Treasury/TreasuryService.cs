@@ -143,10 +143,12 @@ public interface ITreasuryQueries
     /// <summary>
     /// The movements of the site dated between the two days that no active match holds: patient
     /// cheques, transfers and bills, the day's card batches, payer remittances, supplier payments,
-    /// banked till withdrawals, payroll transfers and returned cheques.
+    /// banked till withdrawals, payroll transfers and returned cheques. A supplier bill recorded
+    /// without its due date is read back from its payment date, but never from before
+    /// <paramref name="booksFrom"/> (the day after the accounts' opening balance, which holds it).
     /// </summary>
     Task<IReadOnlyList<TreasuryMovement>> GetUnmatchedMovementsAsync(Guid siteId, DateOnly from, DateOnly to,
-                                                                     CancellationToken ct = default);
+                                                                     DateOnly booksFrom, CancellationToken ct = default);
 
     Task<bool> IsMovementMatchedAsync(TreasuryMovementKind kind, string key, CancellationToken ct = default);
 
@@ -402,7 +404,8 @@ public sealed class TreasuryService(
         var earliest = from.AddDays(-options.ChequeDaysAfter);
         if (earliest <= account.OpeningBalanceDate) earliest = account.OpeningBalanceDate.AddDays(1);
 
-        return await queries.GetUnmatchedMovementsAsync(currentUser.SiteId, earliest, to.AddDays(options.DaysBefore), ct);
+        return await queries.GetUnmatchedMovementsAsync(currentUser.SiteId, earliest, to.AddDays(options.DaysBefore),
+                                                        account.OpeningBalanceDate.AddDays(1), ct);
     }
 
     /// <summary>Matches what the rules find certain (see <see cref="BankReconciliation.ProposeMatches"/>).</summary>
@@ -677,24 +680,63 @@ public sealed class TreasuryService(
         // holds, from the day after the earliest account's last line. Movements are not tied to an
         // account, so with several accounts the earliest date is taken: a movement already on a
         // later account's statement but not reconciled would count twice, so reconcile first.
+        // A cheque or bill written to a supplier before that day may not be cashed yet, so those are
+        // read further back, as the reconciliation does; nothing from before the accounts' opening
+        // balance, which holds it.
         var openings = source.Openings.ToList();
         if (openings.Count > 0)
         {
             var asOf = openings.Min(o => o.AsOf ?? today);
-            var pending = await queries.GetUnmatchedMovementsAsync(currentUser.SiteId, asOf.AddDays(1), to, ct);
+            var accounts = await queries.GetBankAccountsAsync(currentUser.SiteId, includeInactive: false, ct);
+            var booksFrom = accounts.Count == 0 ? asOf.AddDays(1) : accounts.Min(a => a.OpeningBalanceDate).AddDays(1);
+            var readFrom = asOf.AddDays(1 - ReconciliationOptions.Default.ChequeDaysAfter);
+            if (readFrom < booksFrom) readFrom = booksFrom;
+
+            var pending = await queries.GetUnmatchedMovementsAsync(currentUser.SiteId, readFrom, to, booksFrom, ct);
+            var payDays = CashForecastCalculator.PayDays(today, to, options.PayrollDay).ToHashSet();
+
+            // A supplier cheque already cashed but not reconciled yet is on the statement: a debit
+            // of its amount on or after its date, that no match holds, is taken to be it.
+            var unreconciledDebits = new List<StatementLineRow>();
+            if (readFrom <= asOf)
+            {
+                foreach (var account in accounts)
+                    unreconciledDebits.AddRange((await queries.GetStatementLinesAsync(account.Id, readFrom, asOf, ct))
+                                                .Where(l => !l.IsReconciled && l.AmountMad < 0m));
+            }
+
+            bool Cashed(TreasuryMovement m)
+            {
+                var line = unreconciledDebits.Where(l => l.AmountMad == m.AmountMad && l.OperationDate >= m.Date)
+                                             .OrderBy(l => l.OperationDate).FirstOrDefault();
+                if (line is null) return false;
+                unreconciledDebits.Remove(line);
+                return true;
+            }
 
             var inTransit = 0m;
             foreach (var m in pending)
             {
-                if (m.Date <= today)
+                var date = m.Date;
+                if (m.Kind == TreasuryMovementKind.Payroll)
                 {
-                    if (m.Kind == TreasuryMovementKind.Payroll && m.Date == today) continue;
+                    // On the pay day the forecast uses, not at month end: one still to come is the
+                    // payroll line's, one already paid is in transit.
+                    if (m.PayrollMonth is { } month)
+                        date = CashForecastCalculator.PayDayOf(month, m.PayrollClosedOn, options.PayrollDay);
+                    if (payDays.Contains(date)) continue;
+                }
+
+                // Up to the last line it is on the statement, but for a supplier's cheque or bill.
+                if (date <= asOf && !(m.Kind == TreasuryMovementKind.SupplierPayment && m.ClearsLate && !Cashed(m))) continue;
+
+                if (date <= today)
+                {
                     inTransit += m.AmountMad;
                 }
-                // A future pay day is the payroll line's; anything else falls on its due date.
-                else if (m.Kind != TreasuryMovementKind.Payroll)
+                else if (date <= to)
                 {
-                    flows.Add(new ForecastFlow(m.Date, m.AmountMad, CategoryOf(m.Kind),
+                    flows.Add(new ForecastFlow(date, m.AmountMad, CategoryOf(m.Kind),
                                                string.IsNullOrWhiteSpace(m.Reference) ? m.Label : $"{m.Label} ({m.Reference})"));
                 }
             }

@@ -150,6 +150,23 @@ public static class CashForecastCalculator
         }
     }
 
+    /// <summary>
+    /// The day the salaries of <paramref name="month"/> leave the bank, on the pay day of
+    /// <see cref="PayDays"/>: the last day of the month for 0; a day from the 15th on is in the
+    /// month itself (salaries paid at month end), an earlier one in the next month (paid early in
+    /// the following month). Never before the month was closed: a late closing is paid that day.
+    /// </summary>
+    public static DateOnly PayDayOf(DateOnly month, DateOnly? closedOn, int payrollDay)
+    {
+        var paidIn = payrollDay is >= 1 and < 15
+            ? new DateOnly(month.Year, month.Month, 1).AddMonths(1)
+            : new DateOnly(month.Year, month.Month, 1);
+        var last = DateTime.DaysInMonth(paidIn.Year, paidIn.Month);
+        var day = payrollDay is >= 1 and <= 31 ? Math.Min(payrollDay, last) : last;
+        var payDay = new DateOnly(paidIn.Year, paidIn.Month, day);
+        return closedOn is { } closed && closed > payDay ? closed : payDay;
+    }
+
     /// <summary>The counter's takings per week, from what was collected over the last days.</summary>
     public static decimal WeeklyAverage(decimal collected, int days) =>
         days <= 0 ? 0m : Money.Round(collected / days * 7m);
