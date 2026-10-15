@@ -181,6 +181,12 @@ public sealed class PurchaseOrderLine : Entity
     /// <summary>Reagents and consumables are normally taxed at the standard 20 % rate.</summary>
     public decimal VatRate { get; set; } = 0.20m;
 
+    /// <summary>
+    /// What one unit actually costs once the line discount is taken off: the price a received lot
+    /// is valued at. The list price would overstate the stock by the discount negotiated.
+    /// </summary>
+    public decimal NetUnitPriceMad => Money.Round(UnitPriceMad * (1m - DiscountRate));
+
     public decimal LineTotalExcludingVat =>
         Money.Round(QuantityOrdered * UnitPriceMad * (1m - DiscountRate));
 

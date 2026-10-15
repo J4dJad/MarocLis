@@ -271,11 +271,12 @@ public sealed class PurchaseOrderService(
         {
             SupplierId = order.SupplierId,
             DeliveryNoteReference = deliveryNote,
-            UnitPriceMad = line.UnitPriceMad,
+            // Valued net of the line discount, at what the laboratory actually pays per unit.
+            UnitPriceMad = line.NetUnitPriceMad,
             StorageLocation = Blank(request.StorageLocation) ?? item.DefaultStorageLocation,
             ReceivedByUserId = currentUser.UserId
         });
-        item.LastUnitPriceMad = line.UnitPriceMad;
+        item.LastUnitPriceMad = line.NetUnitPriceMad;
 
         await movements.AddAsync(new StockMovement(item.Id, lot.Id, StockMovementKind.Receipt,
                                                    request.Quantity, clock.Now,

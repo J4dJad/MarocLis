@@ -503,6 +503,7 @@ public sealed class PurchaseOrderLineConfiguration : IEntityTypeConfiguration<Pu
         builder.Property(e => e.DiscountRate).HasColumnType("decimal(6,4)");
         builder.Property(e => e.VatRate).HasColumnType("decimal(6,4)");
 
+        builder.Ignore(e => e.NetUnitPriceMad);
         builder.Ignore(e => e.LineTotalExcludingVat);
         builder.Ignore(e => e.VatAmount);
         builder.Ignore(e => e.QuantityOutstanding);

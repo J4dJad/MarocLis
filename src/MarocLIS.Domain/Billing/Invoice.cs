@@ -339,6 +339,35 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
         return Result.Success();
     }
 
+    /// <summary>
+    /// Puts a rejected claim back in the state it was before the payer's answer was recorded, so
+    /// it can be corrected and sent again.
+    /// <para>
+    /// A payer rejection followed by a corrected resubmission is routine with Moroccan payers. The
+    /// recorded settlement used to stay behind: the accepted amount blocked the payer's eventual
+    /// payment from being entered, and the write-off of the refused share closed the balance it
+    /// was meant to pay. The write-off is cancelled — not deleted, it stays on the record — and
+    /// the payer's answer is cleared.
+    /// </para>
+    /// </summary>
+    public Result ReopenRejectedClaim(string reason)
+    {
+        if (ClaimStatus != ClaimStatus.Rejected)
+            return Result.Failure(Error.Conflict("Claim_AlreadySubmitted", Number));
+
+        foreach (var writeOff in _payments.Where(p => p.Method == PaymentMethod.WriteOff
+                                                      && p.Status == PaymentStatus.Settled))
+        {
+            var cancelled = writeOff.CancelWriteOff(reason);
+            if (cancelled.IsFailure) return cancelled;
+        }
+
+        PayerAcceptedAmount = null;
+        Recalculate();
+
+        return Result.Success();
+    }
+
     // ---- Credit notes -------------------------------------------------------------------------
 
     /// <summary>

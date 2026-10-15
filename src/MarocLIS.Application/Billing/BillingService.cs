@@ -66,7 +66,28 @@ public sealed record CashSessionSummary(
     decimal CashRefunds,
     decimal CashWithdrawals,
     decimal ExpectedClosingCash,
-    int PaymentCount);
+    int PaymentCount)
+{
+    /// <summary>
+    /// The summary of an open shift, taken from the session's own running counters: the closing
+    /// screen pre-fills and shows the variance on the same expected cash that
+    /// <see cref="CashSession.Close"/> records it against.
+    /// </summary>
+    public static CashSessionSummary From(CashSession session, string operatorName, int paymentCount) =>
+        new(session.Id,
+            session.OperatorUserId,
+            operatorName,
+            session.OpenedAt,
+            session.OpeningFloat,
+            session.ExpectedCashReceipts,
+            session.ChequeReceipts,
+            session.CardReceipts,
+            session.TransferReceipts,
+            session.CashRefunds,
+            session.CashWithdrawals,
+            session.ExpectedClosingCash,
+            paymentCount);
+}
 
 public sealed record TakeDepositRequest(
     Guid LabOrderId,
@@ -257,11 +278,6 @@ public sealed class BillingService(
             invoice.BilledToCity = patient.City;
         }
 
-        var coverage = patient.PrimaryCoverage(today);
-        var rate = coverage is not null && payer is not null
-            ? coverage.EffectiveRate(today, payer.DefaultReimbursementRate)
-            : 0m;
-
         invoice.PrescriberInpe = loaded[0].Prescriber?.Inpe;
         invoice.PrescriberName = loaded[0].Prescriber?.FullName ?? loaded[0].PrescriberFreeText;
         invoice.ClaimStatus = payer is { ThirdPartyPaymentAgreement: true }
@@ -283,6 +299,11 @@ public sealed class BillingService(
 
         foreach (var order in loaded)
         {
+            // The split agreed when the order was registered, not the patient's coverage on the day
+            // of invoicing: a coverage that lapsed before month-end invoicing would otherwise put the
+            // whole bill on the patient, and a secondary mutuelle would be priced at the primary rate.
+            var rate = FrozenReimbursementRate(order, patient, payer);
+
             foreach (var item in order.Items.Where(i => !i.IsCancelled && i.ChargedPrice > 0m))
             {
                 var line = new InvoiceLine(
@@ -342,6 +363,35 @@ public sealed class BillingService(
         await unitOfWork.CommitAsync(ct);
 
         return Result.Success(invoice.Id);
+    }
+
+    /// <summary>
+    /// The reimbursement rate to split an order's lines with when it is invoiced to
+    /// <paramref name="payer"/>.
+    /// <para>
+    /// When the order is invoiced to the payer it was registered with, the rate frozen at
+    /// registration applies, whatever has happened to the coverage since: that is the split the
+    /// patient was told about and paid on at the counter. Only an order invoiced to another payer
+    /// than the registered one (an override) has no snapshot to use; it then takes the patient's
+    /// coverage with that payer as it stood on the day the order was registered.
+    /// </para>
+    /// </summary>
+    public static decimal FrozenReimbursementRate(LabOrder order, Patient patient, Payer? payer)
+    {
+        if (payer is null) return 0m;
+
+        // Registered with this payer: a null rate means the coverage gave nothing at registration.
+        if (order.PayerId == payer.Id)
+            return order.ReimbursementRateAtRegistration ?? 0m;
+
+        var registeredOn = DateOnly.FromDateTime(order.RegisteredAt.Date);
+        var coverage = patient.Coverages
+            .Where(c => c.PayerId == payer.Id && c.IsValidOn(registeredOn))
+            .OrderByDescending(c => c.IsPrimary)
+            .ThenByDescending(c => c.ValidFrom)
+            .FirstOrDefault();
+
+        return coverage?.EffectiveRate(registeredOn, payer.DefaultReimbursementRate) ?? 0m;
     }
 
     /// <summary>
@@ -774,18 +824,23 @@ public sealed class BillingService(
         var payment = invoice.Payments.FirstOrDefault(p => p.Id == paymentId);
         if (payment is null) return Result.Failure(Error.NotFound("Payment_NotFound"));
 
-        var refunded = payment.Refund(clock.Now, reason);
-        if (refunded.IsFailure) return refunded;
+        // The till is checked before the payment is touched. The refund used to be applied first,
+        // so a refusal here left the tracked payment Refunded in a long-lived context, and the next
+        // unrelated save wrote the refund to the database without any money leaving the drawer.
+        CashSession? session = null;
 
         if (payment.Method == PaymentMethod.Cash)
         {
-            var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+            session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
 
             if (session is null)
                 return Result.Failure(Error.Validation("Payment_CashRefundRequiresOpenSession"));
-
-            session.RecordCashRefund(payment.Amount);
         }
+
+        var refunded = payment.Refund(clock.Now, reason);
+        if (refunded.IsFailure) return refunded;
+
+        session?.RecordCashRefund(payment.Amount);
 
         invoice.Recalculate();
 
@@ -1165,7 +1220,8 @@ public sealed class BillingService(
 
         foreach (var invoiceId in invoiceIds.Distinct())
         {
-            var invoice = await invoices.GetByIdAsync(invoiceId, ct);
+            // With its payments: a rejected claim's write-off is reversed on resubmission.
+            var invoice = await invoices.GetByIdWithDetailsAsync(invoiceId, ct);
 
             if (invoice is null)
             {
@@ -1199,6 +1255,20 @@ public sealed class BillingService(
             {
                 problems.Add(Error.Regulatory("Invoice_ClaimRequiresInpe", invoice.Number));
                 continue;
+            }
+
+            // A resubmission after a rejection: the recorded refusal and its write-off are undone,
+            // or the payer's payment on the corrected claim could never be entered.
+            if (invoice.ClaimStatus == ClaimStatus.Rejected)
+            {
+                var reopened = invoice.ReopenRejectedClaim(
+                    $"renvoi au tiers payant (dossier {reference.Value})");
+
+                if (reopened.IsFailure)
+                {
+                    problems.AddRange(reopened.Errors);
+                    continue;
+                }
             }
 
             invoice.ClaimReference = reference.Value;

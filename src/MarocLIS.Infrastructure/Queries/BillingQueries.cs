@@ -323,61 +323,41 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
     /// <summary>
     /// The till summary for the closing screen.
     /// <para>
-    /// The receipt totals are re-derived from the settled payments rather than read from the
-    /// session's running counters. The counters exist for speed; the money has to reconcile against
-    /// the payments themselves, and a drift between the two is exactly what the closing check is
-    /// for.
+    /// The figures are the session's own running counters — the very ones
+    /// <see cref="CashSession.ExpectedClosingCash"/> and <c>Close()</c> reconcile against — so the
+    /// expected cash pre-filled on the screen is the figure the variance is recorded on. It used to
+    /// be re-derived from the settled payments, which disagreed with the domain twice over: a cash
+    /// payment refunded in the same shift left the settled total and was also subtracted as a
+    /// refund, and cash deposits (acomptes), which are not payments until invoiced, were missing
+    /// altogether. Every such shift closed on a variance nobody had caused.
     /// </para>
     /// </summary>
     public async Task<CashSessionSummary?> GetCashSessionSummaryAsync(
         Guid operatorUserId, CancellationToken ct = default)
     {
         var session = await db.CashSessions.AsNoTracking()
-            .Where(s => s.OperatorUserId == operatorUserId && s.Status == CashSessionStatus.Open)
-            .Select(s => new
-            {
-                s.Id,
-                s.OperatorUserId,
-                s.OpenedAt,
-                s.OpeningFloat,
-                s.CashRefunds,
-                s.CashWithdrawals
-            })
-            .FirstOrDefaultAsync(ct);
+            .FirstOrDefaultAsync(s => s.OperatorUserId == operatorUserId
+                                      && s.Status == CashSessionStatus.Open, ct);
 
         if (session is null) return null;
 
-        var byMethod = await db.Payments.AsNoTracking()
-            .Where(p => p.CashSessionId == session.Id && p.Status == PaymentStatus.Settled)
-            .GroupBy(p => p.Method)
-            .Select(g => new { Method = g.Key, Total = g.Sum(p => p.Amount), Count = g.Count() })
-            .ToListAsync(ct);
+        // What went through the till in this shift: payments taken at the counter and deposits.
+        // A payment made by applying a deposit carries the deposit's session but is not a second
+        // movement of money, so it is not counted again.
+        var paymentCount = await db.Payments.AsNoTracking()
+            .CountAsync(p => p.CashSessionId == session.Id && p.DepositId == null, ct);
 
-        decimal TotalFor(PaymentMethod method) =>
-            byMethod.FirstOrDefault(x => x.Method == method)?.Total ?? 0m;
+        var depositCount = await db.Deposits.AsNoTracking()
+            .CountAsync(d => d.CashSessionId == session.Id, ct);
 
         var operatorName = await db.Users.AsNoTracking()
             .Where(u => u.Id == session.OperatorUserId)
             .Select(u => u.FullName)
             .FirstOrDefaultAsync(ct) ?? string.Empty;
 
-        var cash = TotalFor(PaymentMethod.Cash);
-
-        return new CashSessionSummary(
-            session.Id,
-            session.OperatorUserId,
-            operatorName,
-            session.OpenedAt,
-            session.OpeningFloat,
-            cash,
-            TotalFor(PaymentMethod.Cheque),
-            TotalFor(PaymentMethod.Card),
-            TotalFor(PaymentMethod.BankTransfer),
-            session.CashRefunds,
-            session.CashWithdrawals,
-            Money.Round(session.OpeningFloat + cash - session.CashRefunds - session.CashWithdrawals),
-            byMethod.Sum(x => x.Count));
+        return CashSessionSummary.From(session, operatorName, paymentCount + depositCount);
     }
+
     // ---- Claims ----------------------------------------------------------------------------------
 
     /// <summary>
@@ -405,7 +385,13 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                 i.ClaimStatus,
                 i.NetAmount,
                 i.PayerShareAmount,
-                i.PaidAmount,
+                // What the payer itself paid. The invoice's PaidAmount also holds what the patient
+                // paid at the counter and any write-off, which made a batch look settled when the
+                // payer had sent nothing.
+                PayerPaid = db.Payments
+                    .Where(p => p.InvoiceId == i.Id)
+                    .Where(Payment.IsPayerSettlement)
+                    .Sum(p => (decimal?)p.Amount) ?? 0m,
                 PayerName = db.Payers.Where(p => p.Id == i.PayerId)
                                       .Select(p => p.Name.Fr).FirstOrDefault(),
                 LastOutcomeOn = db.Payments
@@ -426,7 +412,7 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                     g.Count(),
                     Money.Round(g.Sum(r => r.NetAmount)),
                     Money.Round(g.Sum(r => r.PayerShareAmount)),
-                    Money.Round(g.Sum(r => r.PaidAmount)),
+                    Money.Round(g.Sum(r => r.PayerPaid)),
                     g.Count(r => r.ClaimStatus == ClaimStatus.Accepted
                                  || r.ClaimStatus == ClaimStatus.Settled),
                     g.Count(r => r.ClaimStatus == ClaimStatus.Rejected
