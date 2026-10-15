@@ -207,6 +207,8 @@ public static class IconCatalog
         ["Payroll.AllPayslips"] = Glyph.FileText,
         ["Payroll.Journal"] = Glyph.FileSpreadsheet,
         ["Payroll.CnssSummary"] = Glyph.Landmark,
+        ["Payroll.BdsFile"] = Glyph.Download,
+        ["Payroll.SimplIr"] = Glyph.Download,
         ["Payroll.UpdateFromFiles"] = Glyph.RefreshCw,
         ["Payroll.Close"] = Glyph.Lock,
         ["Payroll.Reopen"] = Glyph.LockOpen,
