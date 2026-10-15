@@ -17,7 +17,9 @@ namespace MarocLIS.Desktop.Views;
 /// prints the variance report.
 /// <para>
 /// The printed count sheet leaves the expected quantity out: a counter who sees what the system
-/// expects tends to find it.
+/// expects tends to find it. It has a column for the time each shelf was counted: a sheet keyed in
+/// later is entered with that time ("Feuille comptée le"), and each lot is measured against the
+/// stock at that time rather than the stock when it is typed in.
 /// </para>
 /// </summary>
 public sealed class InventoryCountView : LocalizedView
@@ -42,6 +44,11 @@ public sealed class InventoryCountView : LocalizedView
     private readonly Button _sheetCsv = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _variances = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
+    private readonly Label _sheetTimeLabel = new();
+    private readonly DateTimePicker _sheetTime = new()
+    {
+        Format = DateTimePickerFormat.Custom, CustomFormat = "dd/MM/yyyy HH:mm", ShowCheckBox = true, Checked = false
+    };
 
     private IReadOnlyList<InventoryCountRow> _rows = [];
     private InventoryCountDetail? _detail;
@@ -53,7 +60,8 @@ public sealed class InventoryCountView : LocalizedView
     private bool _saving;
     private Guid? _renderedCountId;
 
-    private sealed record PendingCount(Guid InventoryCountId, Guid LineId, decimal Counted, string? Comment);
+    private sealed record PendingCount(Guid InventoryCountId, Guid LineId, decimal Counted, string? Comment,
+                                       DateTimeOffset? ShelfCountedAt);
 
     public InventoryCountView(InventoryCountService counts, IListPdfRenderer lists, IDocumentOutput output,
                               IUserDialogs dialogs, ILocalizer localizer, ICultureManager cultureManager,
@@ -149,13 +157,21 @@ public sealed class InventoryCountView : LocalizedView
         _sheet.Bounds = new Rectangle(380, 6, 220, UiTheme.ButtonHeight);
         _sheetCsv.Bounds = new Rectangle(610, 6, 170, UiTheme.ButtonHeight);
         _variances.Bounds = new Rectangle(790, 6, 220, UiTheme.ButtonHeight);
-        linesBar.Controls.AddRange([_linesHeading, _sheet, _sheetCsv, _variances]);
+
+        // Unticked, a figure is the shelf as it is now; ticked, the time the paper sheet was filled in.
+        _sheetTimeLabel.Font = UiTheme.Small;
+        _sheetTimeLabel.ForeColor = UiTheme.TextSecondary;
+        _sheetTimeLabel.AutoSize = true;
+        _sheetTimeLabel.Location = new Point(1020, 0);
+        _sheetTime.Bounds = new Rectangle(1020, 16, 170, UiTheme.InputHeight);
+        _sheetTime.Value = DateTime.Now;
+        linesBar.Controls.AddRange([_linesHeading, _sheet, _sheetCsv, _variances, _sheetTimeLabel, _sheetTime]);
 
         foreach (var (name, weight, editable) in new[]
                  {
-                     ("line", 4, false), ("location", 12, false), ("code", 10, false), ("item", 18, false),
-                     ("lot", 11, false), ("expiry", 8, false), ("expected", 8, false), ("counted", 8, true),
-                     ("variance", 7, false), ("comment", 16, true)
+                     ("line", 4, false), ("location", 11, false), ("code", 9, false), ("item", 16, false),
+                     ("lot", 10, false), ("expiry", 8, false), ("expected", 7, false), ("stockAtCount", 8, false),
+                     ("counted", 8, true), ("countedAt", 9, false), ("variance", 7, false), ("comment", 14, true)
                  })
         {
             _lines.Columns.Add(new DataGridViewTextBoxColumn
@@ -164,7 +180,7 @@ public sealed class InventoryCountView : LocalizedView
                 SortMode = DataGridViewColumnSortMode.NotSortable,
                 DefaultCellStyle = new DataGridViewCellStyle
                 {
-                    Alignment = name is "expected" or "counted" or "variance"
+                    Alignment = name is "expected" or "stockAtCount" or "counted" or "variance"
                         ? DataGridViewContentAlignment.MiddleRight
                         : DataGridViewContentAlignment.MiddleLeft,
                     BackColor = editable ? UiTheme.SurfaceRaised : Color.Empty
@@ -199,14 +215,20 @@ public sealed class InventoryCountView : LocalizedView
         Controls.Add(split);
     }
 
+    // The variance is counted less the stock when the shelf was counted: that is the column next
+    // to it. The quantity frozen at the start stays for information, labelled as such.
     private IReadOnlyList<string> SheetHeaders(bool withExpected) =>
     [
         "#", T("Sample.Storage"), T("Field.Code"), T("Inventory.Item"), T("Inventory.LotNumber"), T("Inventory.Expiry"),
-        .. withExpected ? new[] { T("InventoryCount.Expected") } : [],
+        .. withExpected ? new[] { T("InventoryCount.ExpectedAtStart"), T("InventoryCount.StockAtCount") } : [],
         T("InventoryCount.Counted"),
+        T("InventoryCount.CountedAt"),
         .. withExpected ? new[] { T("InventoryCount.Variance") } : [],
         T("Field.Comment")
     ];
+
+    private static string When(DateTimeOffset? at) =>
+        at?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.CurrentCulture) ?? string.Empty;
 
     protected override void ApplyTexts()
     {
@@ -220,6 +242,7 @@ public sealed class InventoryCountView : LocalizedView
         _sheetCsv.Text = T("InventoryCount.SheetCsv");
         _variances.Text = T("InventoryCount.VarianceReport");
         _linesHeading.Text = T("InventoryCount.Lines");
+        _sheetTimeLabel.Text = T("InventoryCount.SheetTime");
 
         var listHeaders = new[]
         {
@@ -311,15 +334,15 @@ public sealed class InventoryCountView : LocalizedView
             {
                 var index = _lines.Rows.Add(l.LineNumber, l.StorageLocation ?? string.Empty, l.ItemCode, l.ItemName,
                                             l.LotNumber, l.ExpiryDate.ToString("dd/MM/yyyy", CultureInfo.CurrentCulture),
-                                            N(l.ExpectedQuantity), N(l.CountedQuantity), N(l.Variance),
-                                            l.Comment ?? string.Empty);
+                                            N(l.ExpectedQuantity), N(l.StockAtCount), N(l.CountedQuantity),
+                                            When(l.CountedAt), N(l.Variance), l.Comment ?? string.Empty);
                 _lines.Rows[index].Tag = l;
                 _lines.Rows[index].ReadOnly = !counting || !PermissionGate.Allows(Permissions.Inventory.Receive)
                                                            && !PermissionGate.Allows(Permissions.Inventory.CloseCounts);
             }
 
             _linesHeading.Text = $"{T("InventoryCount.Lines")} — {_detail.Count.Number} · {_detail.Count.Counted}/{_detail.Count.Lines}";
-            _status.Text = counting ? T("InventoryCount.CountingNotice") : string.Empty;
+            _status.Text = counting ? $"{T("InventoryCount.CountingNotice")} {T("InventoryCount.SheetTimeNotice")}" : string.Empty;
 
             if (row >= 0 && row < _lines.Rows.Count && column >= 0 && column < _lines.Columns.Count)
                 _lines.CurrentCell = _lines.Rows[row].Cells[column];
@@ -392,7 +415,11 @@ public sealed class InventoryCountView : LocalizedView
 
         if (counted == line.CountedQuantity && (comment ?? string.Empty) == (line.Comment ?? string.Empty)) return;
 
-        _pending.Enqueue(new PendingCount(_detail.Count.InventoryCountId, line.LineId, counted, comment));
+        // The sheet's time goes with a figure; a comment alone leaves the line's count where it was.
+        DateTimeOffset? shelf = _sheetTime.Checked && counted != line.CountedQuantity
+            ? new DateTimeOffset(_sheetTime.Value)
+            : null;
+        _pending.Enqueue(new PendingCount(_detail.Count.InventoryCountId, line.LineId, counted, comment, shelf));
         if (_saving) return;
 
         _saving = true;
@@ -417,7 +444,8 @@ public sealed class InventoryCountView : LocalizedView
 
     private async Task SaveLineAsync(PendingCount count)
     {
-        var saved = await _counts.RecordCountAsync(count.InventoryCountId, count.LineId, count.Counted, count.Comment);
+        var saved = await _counts.RecordCountAsync(count.InventoryCountId, count.LineId, count.Counted, count.Comment,
+                                                   count.ShelfCountedAt);
         if (saved.IsFailure) _dialogs.ShowFailure(saved, T("InventoryCount.Counted"));
 
         // The saved line as recorded — or as it still is, after a refusal — with its variance.
@@ -448,6 +476,8 @@ public sealed class InventoryCountView : LocalizedView
                     : null;
                 if (editing != "counted") row.Cells["counted"].Value = N(fresh.CountedQuantity);
                 if (editing != "comment") row.Cells["comment"].Value = fresh.Comment ?? string.Empty;
+                row.Cells["stockAtCount"].Value = N(fresh.StockAtCount);
+                row.Cells["countedAt"].Value = When(fresh.CountedAt);
                 row.Cells["variance"].Value = N(fresh.Variance);
             }
             finally
@@ -511,7 +541,7 @@ public sealed class InventoryCountView : LocalizedView
         [
             l.LineNumber.ToString(CultureInfo.InvariantCulture), l.StorageLocation ?? string.Empty, l.ItemCode,
             l.ItemName, l.LotNumber, l.ExpiryDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-            string.Empty, string.Empty
+            string.Empty, string.Empty, string.Empty
         ]).ToList();
 
         var headers = SheetHeaders(withExpected: false);
@@ -539,7 +569,8 @@ public sealed class InventoryCountView : LocalizedView
         [
             l.LineNumber.ToString(CultureInfo.InvariantCulture), l.StorageLocation ?? string.Empty, l.ItemCode,
             l.ItemName, l.LotNumber, l.ExpiryDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-            N(l.ExpectedQuantity), N(l.CountedQuantity), N(l.Variance), l.Comment ?? string.Empty
+            N(l.ExpectedQuantity), N(l.StockAtCount), N(l.CountedQuantity), When(l.CountedAt), N(l.Variance),
+            l.Comment ?? string.Empty
         ]).ToList();
 
         var document = new ListDocument(
