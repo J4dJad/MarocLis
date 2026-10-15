@@ -134,9 +134,10 @@ public sealed class FinanceETests
         entry.IsBalanced.Should().BeTrue();
         Single(entry, "71241").Debit.Should().Be(30m);
         Single(entry, "71242").Debit.Should().Be(60m);
-        // Half the invoice was the payer's: half the credit note comes off its receivable.
-        Single(entry, "34211").Credit.Should().Be(45m);
-        Single(entry, "3421").Credit.Should().Be(45m);
+        // Billing takes a credit note off the patient's share first (review 6, A3): the patient's 150
+        // covers the 90, the payer is still claimed for its whole share.
+        entry.Lines.Should().NotContain(l => l.Account == "34211");
+        Single(entry, "3421").Credit.Should().Be(90m);
     }
 
     [Fact]

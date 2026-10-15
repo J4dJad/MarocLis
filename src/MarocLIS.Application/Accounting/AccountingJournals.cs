@@ -72,14 +72,16 @@ public sealed record AccountingProblem(
 /// <list type="bullet">
 /// <item>Invoice: the patient (3421) and, for the share claimed from a payer, the payer (3421 or the
 /// payer's own account) in debit; revenue (7124, per department) and any VAT collected (4455) in
-/// credit. A credit note reverses the same accounts.</item>
+/// credit. A credit note reverses the same accounts, off the patient's share first as billing
+/// takes it (see <see cref="CreditOnPayer"/>).</item>
 /// <item>Patient payment: the treasury account of the method (5161 per site for cash, 5141 or
 /// 5111 otherwise) in debit, the patient in credit. Payer settlement: the bank in debit, the payer in
 /// credit. A bounced cheque or a refund reverses the receipt on the day it happened.</item>
 /// <item>Deposit: the treasury in debit, 4421 in credit when taken; 4421 to the patient when it
 /// settles the invoice; 4421 to the treasury for what is handed back.</item>
 /// <item>Write-off of a payer's refused share: 6585 in debit, the payer in credit; the share left
-/// to the patient instead moves from the payer's account to the patient's.</item>
+/// to the patient instead moves from the payer's account to the patient's on the day of the
+/// answer, and back on the day the claim is reopened.</item>
 /// <item>Closed till: the cash sent to the bank from 5161 to 5115, and the difference at the
 /// count to 6588 or 7588.</item>
 /// </list>
@@ -133,7 +135,8 @@ public static class SalesAccountingJournal
                 if (payment.Status == PaymentStatus.Bounced && In(payment.BouncedOn))
                     entries.Add(Reversal(payment, payment.BouncedOn!.Value, "Impayé", settings));
                 if (payment.Status == PaymentStatus.Refunded && In(payment.RefundedOn))
-                    entries.Add(Reversal(payment, payment.RefundedOn!.Value, "Rembt", settings));
+                    entries.Add(Reversal(payment, payment.RefundedOn!.Value, "Rembt", settings,
+                                         payment.RefundSiteCode));
             }
 
             if (journals.HasFlag(AccountingJournals.Adjustments) && payment.Method == PaymentMethod.WriteOff
@@ -167,13 +170,19 @@ public static class SalesAccountingJournal
         {
             foreach (var shortfall in sources.Shortfalls.Where(s => In(s.Date) && s.Amount > 0m))
             {
-                var label = $"Refus tiers payant fact. {shortfall.InvoiceNumber}";
+                // Reopened claim: the share left to the patient goes back to the payer, as a
+                // cancelled write-off does.
+                var label = shortfall.Reversal
+                    ? $"Annul. refus tiers payant fact. {shortfall.InvoiceNumber}"
+                    : $"Refus tiers payant fact. {shortfall.InvoiceNumber}";
                 var (patient, patientThird) = Patient(shortfall.Customer, settings);
                 var (payer, payerThird) = Payer(shortfall.Customer, settings);
+                var toPatient = shortfall.Reversal ? 0m : shortfall.Amount;
+                var toPayer = shortfall.Reversal ? shortfall.Amount : 0m;
                 entries.Add(Entry(shortfall.Date, settings.MiscJournal, shortfall.InvoiceNumber, label,
                                   AccountingJournals.Adjustments, shortfall.SiteCode,
-                                  Line(patient, patientThird, shortfall.Amount, 0m),
-                                  Line(payer, payerThird, 0m, shortfall.Amount)));
+                                  Line(patient, patientThird, toPatient, toPayer),
+                                  Line(payer, payerThird, toPayer, toPatient)));
             }
         }
 
@@ -192,12 +201,16 @@ public static class SalesAccountingJournal
                                       Line(treasury, null, deposit.Amount, 0m),
                                       Line(settings.CustomerAdvances, third, 0m, deposit.Amount)));
 
+                // Cash handed back from another site's till comes out of that site's cash account.
+                var refundTreasury = deposit.Method == PaymentMethod.Cash && !string.IsNullOrEmpty(deposit.RefundSiteCode)
+                    ? settings.ReceiptAccountFor(deposit.Method, deposit.RefundSiteCode)
+                    : treasury;
                 if (deposit.RefundedAmount > 0m && In(deposit.RefundedOn))
                     entries.Add(Entry(deposit.RefundedOn!.Value, journal, deposit.Number,
                                       $"Rembt acompte {deposit.Number} {deposit.Customer.PatientName}",
                                       AccountingJournals.Receipts, deposit.SiteCode,
                                       Line(settings.CustomerAdvances, third, deposit.RefundedAmount, 0m),
-                                      Line(treasury, null, 0m, deposit.RefundedAmount)));
+                                      Line(refundTreasury, null, 0m, deposit.RefundedAmount)));
             }
 
             foreach (var session in sources.CashSessions.Where(s => In(s.ClosedOn)))
@@ -246,12 +259,18 @@ public static class SalesAccountingJournal
         var basis = credit ? document.Original : document;
 
         var payerPart = 0m;
-        if (basis is { PayerClaimed: true, PayerShare: > 0m, Total: > 0m })
-            payerPart = credit
-                ? Math.Min(basis.PayerShare, Money.Round(document.Total * basis.PayerShare / basis.Total))
-                : document.PayerShare;
-        if (!credit && !document.PayerClaimed) payerPart = 0m;
-        var patientPart = Money.Round(document.Total - payerPart);
+        var lossReversed = 0m;
+        if (credit)
+        {
+            if (basis is { PayerClaimed: true, PayerShare: > 0m, Total: > 0m } && document.Total > 0m)
+                (payerPart, lossReversed) = CreditOnPayer(document.Total, basis,
+                                                          document.CreditState ?? CreditNoteState.None);
+        }
+        else if (document.PayerClaimed)
+        {
+            payerPart = document.PayerShare;
+        }
+        var patientPart = Money.Round(document.Total - payerPart - lossReversed);
 
         var lines = new List<AccountingEntry>();
         var label = $"{(credit ? "Avoir" : "Fact.")} {document.Number} {Name(document.Customer)}";
@@ -268,6 +287,9 @@ public static class SalesAccountingJournal
             lines.Add(Signed(account, third, patientPart, debit: !credit));
         }
 
+        // The payer's refused share was written off: the revenue it stood for is cancelled, so is the loss.
+        if (lossReversed != 0m) lines.Add(Signed(settings.WriteOff, null, lossReversed, debit: false));
+
         foreach (var (account, amount) in Revenue(document, settings))
             lines.Add(Signed(account, null, amount, debit: credit));
 
@@ -277,6 +299,35 @@ public static class SalesAccountingJournal
         return new JournalEntry(document.IssueDate, settings.SalesJournal, document.Number, label,
                                 AccountingJournals.Sales, document.SiteCode,
                                 [.. lines.Select(Label(label, document.Number, document.IssueDate, settings.SalesJournal))]);
+    }
+
+    /// <summary>
+    /// How a credit note comes off the receivables, as billing takes it: off the patient's share
+    /// first (the payer is still claimed and settles up to its whole share, see
+    /// <c>Invoice.ComputePatientPayable</c>), the payer's share left to the patient included; then off
+    /// what the payer still owes; then, once the payer's refusal was written off, off that loss.
+    /// The credit notes on one invoice are taken in their order, so each comes off what the
+    /// earlier ones left.
+    /// </summary>
+    /// <returns>The payer's part and the write-off reversed; the patient's part is the rest.</returns>
+    internal static (decimal Payer, decimal Loss) CreditOnPayer(decimal amount, SalesDocumentSource original,
+                                                               CreditNoteState state)
+    {
+        var patientShare = Math.Max(0m, Money.Round(original.Total - original.PayerShare + state.LeftToPatient));
+        var payerOpen = Math.Max(0m, Money.Round(original.PayerShare - state.PayerSettled - state.WrittenOff
+                                                 - state.LeftToPatient));
+        var loss = Math.Max(0m, state.WrittenOff);
+
+        (decimal Payer, decimal Loss) Cumulative(decimal credited)
+        {
+            var rest = Math.Max(0m, credited - Math.Min(credited, patientShare));
+            var payer = Math.Min(rest, payerOpen);
+            return (payer, Math.Min(rest - payer, loss));
+        }
+
+        var before = Cumulative(Math.Max(0m, state.PriorCredited));
+        var after = Cumulative(Math.Max(0m, state.PriorCredited) + amount);
+        return (Money.Round(after.Payer - before.Payer), Money.Round(after.Loss - before.Loss));
     }
 
     /// <summary>
@@ -371,12 +422,16 @@ public static class SalesAccountingJournal
     }
 
     /// <summary>A bounced cheque or a refund: the receipt reversed on the day it happened.</summary>
-    private static JournalEntry Reversal(SalesPaymentSource payment, DateOnly on, string what, AccountingSettings settings)
+    /// <param name="paidAtSite">For a refund: the site whose till paid it, when it is not the payment's.</param>
+    private static JournalEntry Reversal(SalesPaymentSource payment, DateOnly on, string what, AccountingSettings settings,
+                                         string? paidAtSite = null)
     {
         var (receivable, third) = payment.Method == PaymentMethod.ThirdPartyPayer
             ? Payer(payment.Customer, settings)
             : Patient(payment.Customer, settings);
         var (treasury, journal) = Treasury(payment, settings);
+        if (payment.Method == PaymentMethod.Cash && !string.IsNullOrEmpty(paidAtSite))
+            treasury = settings.CashFor(paidAtSite);
 
         return Entry(on, journal, payment.InvoiceNumber,
                      $"{what} {MethodLabel(payment.Method)} fact. {payment.InvoiceNumber} {Name(payment.Customer)}",

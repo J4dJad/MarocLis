@@ -298,6 +298,7 @@ public sealed class InvoiceRepository(LisDbContext context, IClock clock)
         Context.Invoices
                .Include(i => i.Lines)
                .Include(i => i.Payments)
+               .Include(i => i.ShortfallTransfers)
                .AsSplitQuery()
                .FirstOrDefaultAsync(i => i.Id == id, ct);
 }

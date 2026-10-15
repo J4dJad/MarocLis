@@ -88,6 +88,8 @@ public sealed class AccountingQueries(LisDbContext db) : IAccountingQueries
         var lineInvoiceIds = documents.Select(d => d.Id).Concat(originalIds).Distinct().ToList();
         var lines = await LinesAsync(lineInvoiceIds, ct);
 
+        var creditStates = await CreditStatesAsync(documents, ct);
+
         // ---- Settlements ----
 
         var payments = await (
@@ -104,7 +106,7 @@ public sealed class AccountingQueries(LisDbContext db) : IAccountingQueries
                 {
                     p.SiteId, i.Number, i.IssueDate, i.PatientId, i.PayerId, i.BilledToName, i.ClaimStatus,
                     p.Method, p.Status, p.Amount, p.PaymentDate, p.BouncedAt, p.RefundedAt, p.ModifiedAt,
-                    p.DepositId, p.CashSessionId, Reference = p.RemittanceReference
+                    p.DepositId, p.CashSessionId, Reference = p.RemittanceReference, p.RefundSiteId
                 })
             .ToListAsync(ct);
 
@@ -122,23 +124,17 @@ public sealed class AccountingQueries(LisDbContext db) : IAccountingQueries
 
         // ---- Payers' refused shares left to the patient ----
 
-        var shortfallRows = await db.Invoices.AsNoTracking()
-            .Where(i => ids.Contains(i.SiteId)
-                        && i.Kind == InvoiceKind.Invoice
-                        && i.ClaimStatus != ClaimStatus.NotApplicable
-                        && i.PayerAcceptedAmount != null && i.PayerAcceptedAmount < i.PayerShareAmount
-                        && (i.ModifiedAt ?? i.CreatedAt) >= after)
-            .Select(i => new
-            {
-                i.SiteId, i.Number, i.PatientId, i.PayerId, i.BilledToName, i.PayerShareAmount, i.PayerAcceptedAmount,
-                i.ModifiedAt, i.CreatedAt,
-                Settled = i.Payments.Where(p => p.Method == PaymentMethod.ThirdPartyPayer && p.Status == PaymentStatus.Settled)
-                                    .Select(p => (DateOnly?)p.PaymentDate).Max(),
-                WrittenOff = i.Payments.Where(p => p.Method == PaymentMethod.WriteOff && p.Status == PaymentStatus.Settled)
-                                       .Sum(p => (decimal?)p.Amount) ?? 0m,
-                WrittenOn = i.Payments.Where(p => p.Method == PaymentMethod.WriteOff && p.Status == PaymentStatus.Settled)
-                                      .Select(p => (DateOnly?)p.PaymentDate).Max()
-            })
+        // Each dated on the payer's answer, and reversed on the day the claim was reopened.
+        var shortfallRows = await (
+                from t in db.Set<PayerShortfallTransfer>().AsNoTracking()
+                join i in db.Invoices.AsNoTracking() on t.InvoiceId equals i.Id
+                where ids.Contains(i.SiteId)
+                      && ((t.TransferredOn >= start && t.TransferredOn <= end)
+                          || (t.ReversedOn != null && t.ReversedOn >= start && t.ReversedOn <= end))
+                select new
+                {
+                    i.SiteId, i.Number, i.PatientId, i.PayerId, i.BilledToName, t.Amount, t.TransferredOn, t.ReversedOn
+                })
             .ToListAsync(ct);
 
         // ---- Deposits ----
@@ -150,7 +146,7 @@ public sealed class AccountingQueries(LisDbContext db) : IAccountingQueries
             .Select(d => new
             {
                 d.SiteId, d.Number, d.PatientId, d.Method, d.Amount, d.ReceivedAt, d.RefundedAmount, d.RefundedAt,
-                d.CashSessionId, d.Reference
+                d.CashSessionId, d.Reference, d.RefundSiteId
             })
             .ToListAsync(ct);
 
@@ -169,6 +165,15 @@ public sealed class AccountingQueries(LisDbContext db) : IAccountingQueries
                     Operator = u == null ? null : u.FullName
                 })
             .ToListAsync(ct);
+
+        // The tills that paid cash refunds may belong to sites outside the filter.
+        var refundSiteIds = payments.Select(p => p.RefundSiteId).Concat(deposits.Select(d => d.RefundSiteId))
+            .Where(id => id is not null && !sites.ContainsKey(id.Value)).Select(id => id!.Value).Distinct().ToList();
+        if (refundSiteIds.Count > 0)
+            foreach (var (id, code) in await db.Sites.AsNoTracking().IgnoreQueryFilters()
+                         .Where(s => refundSiteIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Code, ct))
+                sites[id] = code;
+        string? RefundSite(Guid? id) => id is { } rid ? SiteCode(rid) : null;
 
         // ---- Who owes it ----
 
@@ -198,7 +203,7 @@ public sealed class AccountingQueries(LisDbContext db) : IAccountingQueries
         SalesDocumentSource Document(DocumentRow d, SalesDocumentSource? original) =>
             new(d.SiteId, SiteCode(d.SiteId), d.Kind, d.Number, d.IssueDate, Customer(d.PatientId, d.PayerId, d.BilledToName),
                 d.ClaimStatus != ClaimStatus.NotApplicable && d.PayerId is not null, d.Total, d.Vat, d.PayerShare,
-                lines.GetValueOrDefault(d.Id, []), original);
+                lines.GetValueOrDefault(d.Id, []), original, creditStates.GetValueOrDefault(d.Id));
 
         var originalSources = originals.ToDictionary(o => o.Id, o => Document(o, null));
 
@@ -219,21 +224,28 @@ public sealed class AccountingQueries(LisDbContext db) : IAccountingQueries
                     p.DepositId is { } did ? depositNumbers.GetValueOrDefault(did, "?") : null,
                     p.CashSessionId,
                     p.CashSessionId is { } sid && sessionDates.TryGetValue(sid, out var opened) ? Day(opened) : null,
-                    p.Reference))
+                    p.Reference,
+                    p.Status == PaymentStatus.Refunded ? RefundSite(p.RefundSiteId) : null))
             ],
             [
-                .. shortfallRows.Select(s => new PayerShortfallSource(
-                    s.SiteId, SiteCode(s.SiteId), s.Number,
-                    s.Settled ?? s.WrittenOn ?? Day(s.ModifiedAt ?? s.CreatedAt),
-                    Customer(s.PatientId, s.PayerId, s.BilledToName),
-                    Money.Round(s.PayerShareAmount - (s.PayerAcceptedAmount ?? 0m) - s.WrittenOff)))
-                    .Where(s => s.Amount > 0m)
+                .. shortfallRows.SelectMany(s => s.ReversedOn is { } reversed
+                        ? new[]
+                        {
+                            new PayerShortfallSource(s.SiteId, SiteCode(s.SiteId), s.Number, s.TransferredOn,
+                                                     Customer(s.PatientId, s.PayerId, s.BilledToName), s.Amount),
+                            new PayerShortfallSource(s.SiteId, SiteCode(s.SiteId), s.Number, reversed,
+                                                     Customer(s.PatientId, s.PayerId, s.BilledToName), s.Amount,
+                                                     Reversal: true)
+                        }
+                        : [new PayerShortfallSource(s.SiteId, SiteCode(s.SiteId), s.Number, s.TransferredOn,
+                                                    Customer(s.PatientId, s.PayerId, s.BilledToName), s.Amount)])
+                    .Where(s => s.Amount > 0m && s.Date >= start && s.Date <= end)
             ],
             [
                 .. deposits.Select(d => new DepositSource(
                     d.SiteId, SiteCode(d.SiteId), d.Number, Customer(d.PatientId, null, null), d.Method, d.Amount,
                     Day(d.ReceivedAt), d.RefundedAmount, d.RefundedAt is { } r ? Day(r) : null, d.CashSessionId,
-                    d.Reference))
+                    d.Reference, RefundSite(d.RefundSiteId)))
             ],
             [
                 .. sessions.Select(s => new CashSessionSource(
@@ -243,6 +255,67 @@ public sealed class AccountingQueries(LisDbContext db) : IAccountingQueries
                         ? Money.Round(counted - Money.Round(s.OpeningFloat + s.ExpectedCashReceipts - s.CashRefunds - s.CashWithdrawals))
                         : 0m))
             ]);
+    }
+
+    /// <summary>
+    /// For each credit note: where the invoice it reverses stood on the credit note's issue date
+    /// (earlier credit notes, the payer's settlements, standing write-offs, the payer's refused
+    /// share left to the patient), so the credit comes off the receivables billing takes it from.
+    /// </summary>
+    private async Task<Dictionary<Guid, CreditNoteState>> CreditStatesAsync(List<DocumentRow> documents,
+                                                                           CancellationToken ct)
+    {
+        var notes = documents.Where(d => d.Kind == InvoiceKind.CreditNote && d.CorrectsInvoiceId is not null).ToList();
+        if (notes.Count == 0) return [];
+
+        var originalIds = notes.Select(n => n.CorrectsInvoiceId!.Value).Distinct().ToList();
+
+        var credits = await db.Invoices.AsNoTracking().IgnoreQueryFilters()
+            .Where(i => i.CorrectsInvoiceId != null && originalIds.Contains(i.CorrectsInvoiceId.Value)
+                        && i.Kind == InvoiceKind.CreditNote
+                        && i.Status != InvoiceStatus.Draft && i.Status != InvoiceStatus.Cancelled)
+            .Select(i => new { i.Id, OriginalId = i.CorrectsInvoiceId!.Value, i.IssueDate, i.Number, i.TotalAmount })
+            .ToListAsync(ct);
+
+        var settlements = await db.Payments.AsNoTracking().IgnoreQueryFilters()
+            .Where(p => originalIds.Contains(p.InvoiceId)
+                        && (p.Method == PaymentMethod.ThirdPartyPayer || p.Method == PaymentMethod.WriteOff))
+            .Select(p => new { p.InvoiceId, p.Method, p.Status, p.Amount, p.PaymentDate, p.ModifiedAt })
+            .ToListAsync(ct);
+
+        var transfers = await db.Set<PayerShortfallTransfer>().AsNoTracking()
+            .Where(t => originalIds.Contains(t.InvoiceId))
+            .Select(t => new { t.InvoiceId, t.Amount, t.TransferredOn, t.ReversedOn })
+            .ToListAsync(ct);
+
+        var states = new Dictionary<Guid, CreditNoteState>();
+        foreach (var note in notes)
+        {
+            var original = note.CorrectsInvoiceId!.Value;
+            var on = note.IssueDate;
+
+            var prior = credits.Where(c => c.OriginalId == original && c.Id != note.Id
+                                           && (c.IssueDate < on
+                                               || (c.IssueDate == on && string.CompareOrdinal(c.Number, note.Number) < 0)))
+                               .Sum(c => c.TotalAmount);
+            var own = settlements.Where(p => p.InvoiceId == original && p.PaymentDate <= on).ToList();
+            var settled = own.Where(p => p.Method == PaymentMethod.ThirdPartyPayer && p.Status == PaymentStatus.Settled)
+                             .Sum(p => p.Amount);
+            // A write-off cancelled after the credit note still stood on its date.
+            var writtenOff = own.Where(p => p.Method == PaymentMethod.WriteOff
+                                            && (p.Status == PaymentStatus.Settled
+                                                || (p.Status == PaymentStatus.Cancelled && p.ModifiedAt is { } m
+                                                    && Day(m) > on)))
+                                .Sum(p => p.Amount);
+            var left = transfers.Where(t => t.InvoiceId == original && t.TransferredOn <= on
+                                            && (t.ReversedOn is null || t.ReversedOn > on))
+                                .Sum(t => t.Amount);
+
+            states[note.Id] = new CreditNoteState(Money.Round(prior), Money.Round(settled), Money.Round(writtenOff),
+                                                  Money.Round(left));
+        }
+
+        return states;
     }
 
     private sealed record DocumentRow(Guid Id, Guid SiteId, InvoiceKind Kind, string Number, DateOnly IssueDate,

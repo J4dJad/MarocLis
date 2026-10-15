@@ -60,6 +60,12 @@ public sealed class Deposit : AuditableAggregateRoot, ISiteScoped
     public DateTimeOffset? RefundedAt { get; private set; }
     public string? RefundReason { get; private set; }
 
+    /// <summary>
+    /// The site whose till paid a cash refund. A user with several sites may refund from another
+    /// site's drawer than the one that took the money: that site's cash account pays it.
+    /// </summary>
+    public Guid? RefundSiteId { get; set; }
+
     /// <summary>What is still held: neither applied to an invoice nor handed back.</summary>
     public decimal Remaining => Money.Round(Amount - AppliedAmount - RefundedAmount);
 
