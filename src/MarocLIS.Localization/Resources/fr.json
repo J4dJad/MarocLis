@@ -76,6 +76,7 @@
   "Leave_AdjustmentInvalid": "Saisissez un nombre de jours non nul, 60 au plus.",
   "Leave_AdjustmentReasonRequired": "Le motif de l'ajustement est obligatoire.",
   "Leave_NoEmployees": "Aucun salarié actif : créez d'abord les dossiers dans « Dossiers du personnel ».",
+  "Leave_SubmittedByOther": "Cette demande a été saisie par la RH : seule la RH ou un valideur des congés peut l'annuler.",
   "Habilitation_EmployeeExited": "Ce salarié est sorti : aucune habilitation ne peut lui être accordée.",
   "Habilitation_SubjectRequired": "Choisissez l'automate ou la discipline concernés.",
   "Habilitation_ReviewBeforeGrant": "La réévaluation doit être postérieure à la décision.",
@@ -108,6 +109,7 @@
   "Employee_ExitBeforeHire": "La date de sortie précède la date d'embauche.",
   "Employee_UserAlreadyLinked": "Ce compte SIL est déjà rattaché à un autre dossier du personnel.",
   "Employee_CinAlreadyUsed": "La CIN {0} figure déjà dans un autre dossier du personnel.",
+  "Employee_RehireBeforeExit": "La réembauche doit suivre la date de sortie ({0}).",
   "Recollection_ContactNoteRequired": "Indiquez le résultat de l'appel.",
   "Recollection_AlreadyDrawn": "Le tube {0} a déjà été prélevé ou retiré : la liste a été mise à jour.",
   "Messaging_EmailNotConfigured": "La messagerie (SMTP) n'est pas configurée.",
@@ -288,6 +290,9 @@
   },
 
   "Payroll": {
+    "ProratedMonth": "Entrée ou sortie en cours de mois : salaire de base payé pour {0} j ouvrables sur {1}.",
+    "LeaveAbsenceIncluded": "Jours non payés repris des congés : {0} j, en plus de ceux saisis ici.",
+    "ManualAbsenceDays": "Autres jours non payés",
     "AccidentIncluded": "Arrêt pour accident du travail : {0} j retenus, {1} DH d'indemnités avancées pour l'assureur (repris des arrêts).",
     "TransferFile": "Fichier pour la banque (CSV)",
     "TransferOrder": "Ordre de virement (PDF)",
@@ -1529,6 +1534,7 @@
   },
 
   "Validation": {
+    "ShowValidated": "Afficher les résultats validés",
     "Technical": "Validation technique",
     "Biological": "Validation biologique",
     "ValidatedBy": "Validé par",
@@ -2662,6 +2668,9 @@
   },
 
   "Admin": {
+    "PrescriberHint": "Uniquement pour le rôle Prescripteur : le compte ne voit que les demandes de ce prescripteur. Sans prescripteur associé, il ne voit rien.",
+    "NoPrescriber": "(aucun)",
+    "Prescriber": "Prescripteur associé",
     "Users": "Utilisateurs",
     "UserName": "Identifiant",
     "FullName": "Nom complet",
@@ -3015,6 +3024,7 @@
   "Auth_PasswordTooWeak": "Le mot de passe doit comporter au moins {0} caractères et mêler lettres, chiffres et caractères spéciaux.",
   "Auth_PasswordReused": "Ce mot de passe a déjà été utilisé récemment.",
   "Auth_PasswordMismatch": "Les deux mots de passe saisis ne correspondent pas.",
+  "Auth_SessionRevoked": "Votre compte a été modifié (désactivation, mot de passe réinitialisé ou droits changés). La session est fermée ; reconnectez-vous.",
 
   "Site_LegalNameRequired": "La raison sociale du site est obligatoire pour facturer.",
   "Site_IceInvalid": "L'ICE doit comporter 15 chiffres.",
@@ -3520,6 +3530,8 @@
   "User_WouldRemoveLastAdministrator": "Opération refusée : {0} est le dernier compte actif habilité à gérer les utilisateurs. La rétablir exigerait une intervention directe en base, hors de tout contrôle.",
   "User_CannotUnlockInactive": "Le compte {0} est désactivé : il ne peut pas être déverrouillé. Réactivez-le d'abord, en indiquant le motif.",
   "User_ResetPasswordExceedsOwnPermissions": "Opération refusée : le compte {0} détient des permissions que vous n'avez pas. Seul un utilisateur disposant au moins des mêmes droits peut réinitialiser son mot de passe.",
+  "User_CannotEditOwnQualification": "Vous ne pouvez pas modifier votre propre qualification, votre numéro d'inscription à l'Ordre, sa validité, vos secteurs autorisés ni votre prescripteur associé. Demandez-le à un autre administrateur.",
+  "User_PrescriberNotFound": "Le prescripteur sélectionné est introuvable.",
 
   "Role_NotFound": "Rôle introuvable.",
   "Role_CodeRequired": "Le code du rôle est obligatoire.",
@@ -3641,6 +3653,7 @@
   "Formula_InvalidArgument": "Argument invalide pour la fonction {0}.",
   "Formula_UnknownFunction": "Fonction inconnue dans la formule : {0}",
   "Formula_Expected": "Caractère « {0} » attendu dans la formule.",
+  "Formula_NotApplicable": "La formule ne s'applique pas à ces valeurs : le paramètre n'est pas calculable (dosage direct requis).",
 
   "Instruments_MessageRejected": "Message automate rejeté : {0}",
   "Instruments_UnknownTestCode": "Code d'analyse inconnu transmis par l'automate : {0}",

@@ -41,6 +41,8 @@ public sealed class ReviewFixesInfra2HostIdentityTests
         public IReadOnlySet<string> Permissions { get; } = new HashSet<string>();
         public IReadOnlySet<string> AuthorizedDepartmentCodes { get; } = new HashSet<string>();
         public bool Has(string permission) => false;
+        public Guid? PrescriberId => null;
+        public bool IsPrescriberScoped => false;
         public string Workstation => "PAILLASSE-1";
     }
 

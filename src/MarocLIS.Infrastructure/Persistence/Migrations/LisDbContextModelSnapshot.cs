@@ -511,6 +511,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("CreditedAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("DiscountAmount")
                         .HasColumnType("decimal(18,2)");
 
@@ -2862,6 +2865,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<int>("Month")
                         .HasColumnType("int");
 
+                    b.Property<string>("RatesSnapshot")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -3064,7 +3071,19 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                                 .HasPrecision(18, 2)
                                 .HasColumnType("decimal(18,2)");
 
+                            b1.Property<decimal>("ContractWorkingDays")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("decimal(18,2)");
+
                             b1.Property<decimal>("LeaveIndemnity")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("decimal(18,2)");
+
+                            b1.Property<decimal>("ManualAbsenceDays")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("decimal(18,2)");
+
+                            b1.Property<decimal>("MonthWorkingDays")
                                 .HasPrecision(18, 2)
                                 .HasColumnType("decimal(18,2)");
 
@@ -3473,6 +3492,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<int>("PreferredLanguage")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("PrescriberId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("ProfessionalOrderNumber")
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
@@ -3503,6 +3525,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .UseCollation("Latin1_General_100_CS_AS_SC_UTF8");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PrescriberId")
+                        .HasDatabaseName("IX_Users_Prescriber");
 
                     b.HasIndex("UserName")
                         .IsUnique()
@@ -3544,6 +3569,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<string>("SeededPermissions")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -7699,6 +7728,14 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Identity.AppUser", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Orders.Prescriber", null)
+                        .WithMany()
+                        .HasForeignKey("PrescriberId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Identity.Role", b =>

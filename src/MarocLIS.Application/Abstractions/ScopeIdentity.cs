@@ -70,5 +70,9 @@ public sealed class ServiceAccountUser(Guid userId, string userName, string full
 
     public bool Has(string permission) => false;
 
+    /// <summary>Background work is not a prescriber's session and is never narrowed to one.</summary>
+    public Guid? PrescriberId => null;
+    public bool IsPrescriberScoped => false;
+
     public string Workstation { get; } = Environment.MachineName;
 }

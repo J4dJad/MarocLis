@@ -188,7 +188,7 @@ public sealed class PayrollPeriodConfiguration : IEntityTypeConfiguration<Payrol
         builder.Ignore(e => e.IsClosed);
 
         // The rates the month was closed with, as JSON: a reprint shows those, not today's.
-        builder.Property(e => e.RatesSnapshot);
+        builder.Property(e => e.RatesSnapshot).HasColumnType("nvarchar(max)");
         builder.HasIndex(e => new { e.SiteId, e.Year, e.Month }).IsUnique()
                .HasDatabaseName("UX_PayrollPeriods_Site_Month");
 

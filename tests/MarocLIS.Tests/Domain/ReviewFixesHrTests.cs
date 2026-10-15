@@ -486,6 +486,8 @@ public sealed class ReviewFixesHrTests
         public IReadOnlySet<string> Permissions { get; } = new HashSet<string>(permissions);
         public IReadOnlySet<string> AuthorizedDepartmentCodes { get; } = new HashSet<string>();
         public bool Has(string permission) => Permissions.Contains(permission);
+        public Guid? PrescriberId => null;
+        public bool IsPrescriberScoped => false;
         public string Workstation => "TEST";
     }
 
@@ -643,6 +645,8 @@ public sealed class ReviewFixesHrDatabaseTests : IDisposable
         public IReadOnlySet<string> Permissions { get; } = new HashSet<string>();
         public IReadOnlySet<string> AuthorizedDepartmentCodes { get; } = new HashSet<string>();
         public bool Has(string permission) => true;
+        public Guid? PrescriberId => null;
+        public bool IsPrescriberScoped => false;
         public string Workstation => "TEST";
     }
 }

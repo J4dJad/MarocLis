@@ -104,7 +104,7 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
 
         // Permission codes are short and the shipped set is a few dozen; nvarchar(max) keeps a
         // future larger catalogue from ever truncating the record.
-        builder.Property(e => e.SeededPermissions);
+        builder.Property(e => e.SeededPermissions).HasColumnType("nvarchar(max)");
 
         builder.HasMany(e => e.Permissions)
                .WithOne(p => p.Role!)
