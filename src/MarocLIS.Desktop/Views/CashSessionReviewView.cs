@@ -194,12 +194,14 @@ public sealed class CashSessionReviewView : LocalizedView
         if (row.Variance is { } v && v != 0m)
         {
             comment = _dialogs.PromptForReason(T("Treasury.ReconcileCommentPrompt", row.OperatorName, Amount(v)),
-                                               _reconcile.Text);
+                                               _reconcile.Text,
+                                               maxLength: Domain.Billing.CashSession.ReconciliationCommentMaxLength);
             if (comment is null) return;
         }
         else
         {
-            comment = _dialogs.PromptForText(T("Treasury.ReconcileOptionalPrompt", row.OperatorName), _reconcile.Text);
+            comment = _dialogs.PromptForText(T("Treasury.ReconcileOptionalPrompt", row.OperatorName), _reconcile.Text,
+                                             maxLength: Domain.Billing.CashSession.ReconciliationCommentMaxLength);
             if (comment is null) return;
         }
 

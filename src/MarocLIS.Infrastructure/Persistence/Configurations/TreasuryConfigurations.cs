@@ -31,9 +31,10 @@ public sealed class BankStatementLineConfiguration : IEntityTypeConfiguration<Ba
     {
         builder.ToTable("BankStatementLines", "bil");
         builder.HasKey(e => e.Id);
-        builder.Property(e => e.Label).HasMaxLength(300).IsRequired();
-        builder.Property(e => e.Reference).HasMaxLength(100);
-        builder.Property(e => e.SourceFileName).HasMaxLength(200);
+        builder.Property(e => e.Label).HasMaxLength(BankStatementLine.LabelMaxLength).IsRequired();
+        builder.Property(e => e.Reference).HasMaxLength(BankStatementLine.ReferenceMaxLength);
+        builder.Property(e => e.SourceFileName).HasMaxLength(BankStatementLine.SourceFileNameMaxLength);
+        builder.Property(e => e.DeletionReason).HasMaxLength(500);
         builder.Property(e => e.AmountMad).HasColumnType("decimal(18,2)");
         builder.Property(e => e.Fingerprint).HasMaxLength(40).IsUnicode(false).IsRequired();
 
@@ -44,6 +45,9 @@ public sealed class BankStatementLineConfiguration : IEntityTypeConfiguration<Ba
         builder.HasIndex(e => new { e.BankAccountId, e.Fingerprint })
                .IsUnique()
                .HasDatabaseName("UX_BankStatementLines_Account_Fingerprint");
+
+        // The withdrawal of an import reads its lines.
+        builder.HasIndex(e => e.ImportId).HasDatabaseName("IX_BankStatementLines_Import");
 
         // The reconciliation reads an account's lines over a period.
         builder.HasIndex(e => new { e.BankAccountId, e.OperationDate })
@@ -59,7 +63,7 @@ public sealed class BankMatchConfiguration : IEntityTypeConfiguration<BankMatch>
         builder.HasKey(e => e.Id);
         builder.Property(e => e.SourceKey).HasMaxLength(120).IsUnicode(false).IsRequired();
         builder.Property(e => e.AmountMad).HasColumnType("decimal(18,2)");
-        builder.Property(e => e.Comment).HasMaxLength(500);
+        builder.Property(e => e.Comment).HasMaxLength(BankMatch.CommentMaxLength);
         builder.Ignore(e => e.IsActive);
 
         builder.HasOne<BankStatementLine>().WithMany().HasForeignKey(e => e.BankStatementLineId)
@@ -84,5 +88,26 @@ public sealed class TreasuryForecastItemConfiguration : IEntityTypeConfiguration
         builder.Property(e => e.Label).HasMaxLength(200).IsRequired();
         builder.Property(e => e.AmountMad).HasColumnType("decimal(18,2)");
         builder.HasIndex(e => new { e.SiteId, e.IsActive }).HasDatabaseName("IX_TreasuryForecastItems_Site_Active");
+    }
+}
+
+/// <summary>
+/// The till withdrawals one by one, each a deposit slip the bank reconciliation matches. Configured
+/// here rather than with the cash session because the reconciliation is what reads them.
+/// </summary>
+public sealed class CashWithdrawalConfiguration : IEntityTypeConfiguration<Domain.Billing.CashWithdrawal>
+{
+    public void Configure(EntityTypeBuilder<Domain.Billing.CashWithdrawal> builder)
+    {
+        builder.ToTable("CashWithdrawals", "bil");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+        builder.Property(e => e.Reason).HasMaxLength(Domain.Billing.CashWithdrawal.ReasonMaxLength);
+
+        builder.HasOne<Domain.Billing.CashSession>().WithMany(s => s.Withdrawals)
+               .HasForeignKey(e => e.CashSessionId)
+               .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(e => e.CashSessionId).HasDatabaseName("IX_CashWithdrawals_Session");
     }
 }

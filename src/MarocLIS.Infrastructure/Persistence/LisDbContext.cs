@@ -142,6 +142,7 @@ public class LisDbContext : DbContext
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<CashSession> CashSessions => Set<CashSession>();
+    public DbSet<CashWithdrawal> CashWithdrawals => Set<CashWithdrawal>();
     public DbSet<Deposit> Deposits => Set<Deposit>();
 
     // ---- Treasury -----------------------------------------------------------------------------

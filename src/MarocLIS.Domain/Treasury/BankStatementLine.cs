@@ -9,9 +9,18 @@ namespace MarocLIS.Domain.Treasury;
 /// One line of a bank statement, imported from the bank's CSV export. A credit is positive, a debit
 /// negative. Imported lines are not edited: a wrong import is corrected by the bank's next
 /// statement, and what the bank said is the reference the reconciliation is made against.
+/// <para>
+/// A whole import read with a wrong mapping (decimal separator, debit and credit swapped, wrong
+/// account) is withdrawn as one, while none of its lines is reconciled: the lines are soft-deleted,
+/// so what was imported and who withdrew it stay readable.
+/// </para>
 /// </summary>
-public sealed class BankStatementLine : AuditableAggregateRoot, ISiteScoped
+public sealed class BankStatementLine : AuditableAggregateRoot, ISiteScoped, ISoftDeletable
 {
+    public const int LabelMaxLength = 300;
+    public const int ReferenceMaxLength = 100;
+    public const int SourceFileNameMaxLength = 200;
+
     private BankStatementLine() { }
 
     public BankStatementLine(Guid bankAccountId, Guid siteId, Guid importId, DateOnly operationDate,
@@ -23,8 +32,9 @@ public sealed class BankStatementLine : AuditableAggregateRoot, ISiteScoped
         ImportId = importId;
         OperationDate = operationDate;
         ValueDate = valueDate;
-        Label = label.Trim();
-        Reference = string.IsNullOrWhiteSpace(reference) ? null : reference.Trim();
+        // A multi-line SEPA motive can outrun the column: the start of it is what identifies the line.
+        Label = Cut(label.Trim(), LabelMaxLength);
+        Reference = string.IsNullOrWhiteSpace(reference) ? null : Cut(reference.Trim(), ReferenceMaxLength);
         AmountMad = Money.Round(amountMad);
         Fingerprint = fingerprint;
     }
@@ -35,7 +45,20 @@ public sealed class BankStatementLine : AuditableAggregateRoot, ISiteScoped
     /// <summary>The import the line came in with: one file, one identifier.</summary>
     public Guid ImportId { get; private set; }
 
-    public string? SourceFileName { get; set; }
+    private string? _sourceFileName;
+
+    public string? SourceFileName
+    {
+        get => _sourceFileName;
+        set => _sourceFileName = string.IsNullOrWhiteSpace(value) ? null : Cut(value.Trim(), SourceFileNameMaxLength);
+    }
+
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+
+    public static string Cut(string text, int maxLength) => text.Length <= maxLength ? text : text[..maxLength];
 
     public DateOnly OperationDate { get; private set; }
     public DateOnly? ValueDate { get; private set; }
@@ -52,22 +75,19 @@ public sealed class BankStatementLine : AuditableAggregateRoot, ISiteScoped
     public string Fingerprint { get; private set; } = string.Empty;
 
     /// <summary>
-    /// The account, date, amount, label and reference of a line, and its rank among the identical
-    /// lines of the file (two card commissions of the same amount on the same day are two lines).
-    /// Hashed so the column stays short whatever the bank puts in its labels.
+    /// What identifies a line since the label stopped being part of it: the account, the date, the
+    /// amount and the line's rank among the lines of the account with that date and amount. The
+    /// same day's statement read from the web banking (truncated labels) and from the statement
+    /// service (full labels, a reference column) gives the same lines; see
+    /// <c>BankReconciliation.Deduplicate</c>.
     /// </summary>
-    public static string ComputeFingerprint(Guid bankAccountId, DateOnly date, decimal amount, string label,
-                                            string? reference, int occurrence)
+    public static string ComputeFingerprint(Guid bankAccountId, DateOnly date, decimal amount, int rank)
     {
-        static string Compact(string? text) =>
-            new([.. (text ?? string.Empty).ToUpperInvariant().Where(char.IsLetterOrDigit)]);
-
-        var key = string.Join('|',
+        var key = string.Join('|', "v2",
             bankAccountId.ToString("N"),
             date.ToString("yyyyMMdd", CultureInfo.InvariantCulture),
             Money.Round(amount).ToString("0.00", CultureInfo.InvariantCulture),
-            Compact(label), Compact(reference),
-            occurrence.ToString(CultureInfo.InvariantCulture));
+            rank.ToString(CultureInfo.InvariantCulture));
 
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..40];
     }
@@ -102,6 +122,9 @@ public enum TreasuryMovementKind
 
     /// <summary>A patient's cheque returned unpaid: the bank takes the amount back.</summary>
     ReturnedCheque = 7,
+
+    /// <summary>A patient payment or deposit handed back by cheque or transfer.</summary>
+    PatientRefund = 8,
 
     /// <summary>
     /// No movement of the application: a bank charge, interest, a tax the bank collected. The line
@@ -154,6 +177,8 @@ public sealed class BankMatch : AuditableAggregateRoot, ISiteScoped
     public decimal AmountMad { get; private set; }
 
     public bool IsAutomatic { get; private set; }
+
+    public const int CommentMaxLength = 500;
     public string? Comment { get; private set; }
     public DateTimeOffset MatchedAt { get; private set; }
     public Guid MatchedByUserId { get; private set; }

@@ -1000,7 +1000,7 @@ public sealed class BillingService(
         var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
         if (session is null) return Result.Failure(Error.Conflict("CashSession_NotOpen"));
 
-        session.RecordWithdrawal(amount);
+        session.RecordWithdrawal(amount, clock.Now, reason);
 
         unitOfWork.AuditReason = $"Prélèvement de caisse de {amount:N2} DH : {reason}";
         await unitOfWork.SaveChangesAsync(ct);

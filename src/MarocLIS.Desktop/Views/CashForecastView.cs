@@ -172,9 +172,12 @@ public sealed class CashForecastView : LocalizedView
 
         var openings = _forecast.Openings.Count == 0
             ? T("Treasury.NoBankAccount")
-            : string.Join("   ·   ", _forecast.Openings.Select(o =>
-                $"{o.Account} : {Amount(o.BalanceMad)}" +
-                (o.AsOf is { } asOf ? $" ({asOf.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)})" : string.Empty)));
+            : string.Join("   ·   ", _forecast.Openings.Select(o => o.IsRecordedNotOnStatement
+                // What the opening adds to the statements, so the director sees what it opens on.
+                ? T("Treasury.OpeningRecordedNotOnStatement",
+                    (o.AsOf ?? _forecast.From).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), Amount(o.BalanceMad))
+                : $"{o.Account} : {Amount(o.BalanceMad)}" +
+                  (o.AsOf is { } asOf ? $" ({asOf.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)})" : string.Empty)));
 
         _notes.Text = string.Join(Environment.NewLine,
             $"{T("Treasury.Opening")} : {openings}",

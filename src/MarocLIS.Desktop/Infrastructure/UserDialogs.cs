@@ -26,9 +26,10 @@ public interface IUserDialogs
     /// backs out, and refuses an empty answer, because "reason: (blank)" in an audit trail is
     /// worse than no field at all.
     /// </summary>
-    string? PromptForReason(string prompt, string? title = null, int minimumLength = 5);
+    /// <param name="maxLength">The column the answer is stored in, when it has a limit; 0 for none.</param>
+    string? PromptForReason(string prompt, string? title = null, int minimumLength = 5, int maxLength = 0);
 
-    string? PromptForText(string prompt, string? title = null, string? initialValue = null);
+    string? PromptForText(string prompt, string? title = null, string? initialValue = null, int maxLength = 0);
 }
 
 public sealed class UserDialogs(ILocalizer localizer, ICultureManager cultureManager) : IUserDialogs
@@ -90,11 +91,11 @@ public sealed class UserDialogs(ILocalizer localizer, ICultureManager cultureMan
                         // and a reflexive Enter should not be the one that goes through.
                         MessageBoxDefaultButton.Button2, Options) == DialogResult.Yes;
 
-    public string? PromptForReason(string prompt, string? title = null, int minimumLength = 5)
+    public string? PromptForReason(string prompt, string? title = null, int minimumLength = 5, int maxLength = 0)
     {
         while (true)
         {
-            var answer = PromptForText(prompt, title ?? localizer["Message.ReasonRequiredTitle"]);
+            var answer = PromptForText(prompt, title ?? localizer["Message.ReasonRequiredTitle"], maxLength: maxLength);
 
             if (answer is null) return null;   // The operator backed out.
 
@@ -105,11 +106,12 @@ public sealed class UserDialogs(ILocalizer localizer, ICultureManager cultureMan
         }
     }
 
-    public string? PromptForText(string prompt, string? title = null, string? initialValue = null)
+    public string? PromptForText(string prompt, string? title = null, string? initialValue = null, int maxLength = 0)
     {
         using var dialog = new TextPromptForm(prompt, Caption(title), initialValue,
                                               cultureManager.IsRightToLeft,
                                               localizer["Action.Ok"], localizer["Action.Cancel"]);
+        if (maxLength > 0) dialog.LimitLength(maxLength);
 
         return dialog.ShowDialog() == DialogResult.OK ? dialog.Value : null;
     }
@@ -124,6 +126,9 @@ internal sealed class TextPromptForm : Form
     private readonly TextBox _input;
 
     internal string Value => _input.Text;
+
+    /// <summary>The longest answer the field it goes to can hold; a longer paste is cut.</summary>
+    internal void LimitLength(int maxLength) => _input.MaxLength = maxLength;
 
     internal TextPromptForm(string prompt, string title, string? initialValue, bool rightToLeft,
                             string okText, string cancelText)

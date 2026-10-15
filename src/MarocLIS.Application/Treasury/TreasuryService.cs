@@ -41,7 +41,8 @@ public enum ImportLineStatus
     Invalid = 2
 }
 
-public sealed record ImportPreviewLine(ParsedStatementLine Line, ImportLineStatus Status);
+/// <param name="Fingerprint">What a new line is imported with; null for a duplicate or an unreadable line.</param>
+public sealed record ImportPreviewLine(ParsedStatementLine Line, ImportLineStatus Status, string? Fingerprint = null);
 
 public sealed record ImportPreview(
     IReadOnlyList<IReadOnlyList<string>> RawRows,
@@ -128,8 +129,12 @@ public interface ITreasuryQueries
 
     Task<bool> RibInUseAsync(string rib, Guid? exceptId, CancellationToken ct = default);
 
-    Task<IReadOnlySet<string>> GetExistingFingerprintsAsync(Guid bankAccountId, IReadOnlyCollection<string> fingerprints,
-                                                            CancellationToken ct = default);
+    /// <summary>
+    /// The account's lines dated between the two days, both included, withdrawn ones too (flagged):
+    /// what the duplicate check of an import compares the file with.
+    /// </summary>
+    Task<IReadOnlyList<ExistingStatementLine>> GetExistingLinesAsync(Guid bankAccountId, DateOnly from, DateOnly to,
+                                                                     CancellationToken ct = default);
 
     /// <summary>The account's lines dated between the two days, both included, with their active matches.</summary>
     Task<IReadOnlyList<StatementLineRow>> GetStatementLinesAsync(Guid bankAccountId, DateOnly from, DateOnly to,
@@ -256,8 +261,8 @@ public sealed class TreasuryService(
 
     /// <summary>
     /// Imports the new lines of a statement in one save, and keeps the mapping with the account for
-    /// the next one. Lines already imported (same account, date, amount, label and reference) are
-    /// skipped, so importing an overlapping statement brings nothing in twice.
+    /// the next one. Lines already imported are skipped (see <see cref="BankReconciliation.Deduplicate"/>),
+    /// so importing an overlapping statement brings nothing in twice, whatever its layout.
     /// </summary>
     public async Task<Result<ImportResult>> ImportAsync(Guid bankAccountId, byte[] content, string? fileName,
                                                         BankStatementCsvMapping mapping, CancellationToken ct = default)
@@ -281,17 +286,13 @@ public sealed class TreasuryService(
 
         var importId = Guid.CreateVersion7();
 
-        // The fingerprints are those of the whole file: the rank of an identical line is counted
-        // over the file, not over what is left of it once the duplicates are taken out.
-        var fingerprints = BankReconciliation.Fingerprints(account.Id, classified.Select(l => l.Line))
-                                             .ToDictionary(f => f.Line.LineNumber, f => f.Fingerprint);
-
         foreach (var item in fresh)
         {
+            // Label, reference and file name longer than their columns are cut by the line itself.
             var line = item.Line;
             await lines.AddAsync(new BankStatementLine(account.Id, account.SiteId, importId, line.OperationDate!.Value,
                                                        line.ValueDate, line.Label, line.Reference, line.Amount!.Value,
-                                                       fingerprints[line.LineNumber])
+                                                       item.Fingerprint!)
             {
                 SourceFileName = string.IsNullOrWhiteSpace(fileName) ? null : Path.GetFileName(fileName)
             }, ct);
@@ -313,19 +314,51 @@ public sealed class TreasuryService(
                                                                        CancellationToken ct)
     {
         var parsed = BankStatementCsv.Parse(text, mapping);
-        var fingerprints = BankReconciliation.Fingerprints(accountId, parsed);
-        var existing = await queries.GetExistingFingerprintsAsync(
-            accountId, [.. fingerprints.Select(f => f.Fingerprint)], ct);
-        var duplicates = fingerprints.Where(f => existing.Contains(f.Fingerprint))
-                                     .Select(f => f.Line.LineNumber).ToHashSet();
+        var dated = parsed.Where(l => l.IsValid).Select(l => l.OperationDate!.Value).ToList();
+        var existing = dated.Count == 0
+            ? []
+            : await queries.GetExistingLinesAsync(accountId, dated.Min(), dated.Max(), ct);
+        var outcome = BankReconciliation.Deduplicate(accountId, parsed, existing)
+                                        .ToDictionary(d => d.Line.LineNumber);
 
         return
         [
-            .. parsed.Select(l => new ImportPreviewLine(l,
-                !l.IsValid ? ImportLineStatus.Invalid
-                : duplicates.Contains(l.LineNumber) ? ImportLineStatus.Duplicate
-                : ImportLineStatus.New))
+            .. parsed.Select(l => !l.IsValid || !outcome.TryGetValue(l.LineNumber, out var d)
+                ? new ImportPreviewLine(l, ImportLineStatus.Invalid)
+                : d.IsDuplicate
+                    ? new ImportPreviewLine(l, ImportLineStatus.Duplicate)
+                    : new ImportPreviewLine(l, ImportLineStatus.New, d.Fingerprint))
         ];
+    }
+
+    /// <summary>
+    /// Withdraws the import a line came in with: every line of that file, read with a wrong
+    /// mapping (decimal separator, debit and credit swapped, wrong account) and so wrong in the
+    /// balance for good otherwise. Refused while any of its lines is reconciled: the matches are
+    /// undone first, on purpose. The lines are soft-deleted, so the audit trail keeps what was
+    /// imported, and the same file read correctly can be imported again.
+    /// </summary>
+    public async Task<Result<int>> WithdrawImportAsync(Guid statementLineId, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Treasury.Manage);
+        if (permitted.IsFailure) return Result.Failure<int>(permitted.FirstError);
+
+        var line = await lines.GetByIdAsync(statementLineId, ct);
+        if (line is null) return Result.Failure<int>(Error.NotFound("BankStatement_LineNotFound"));
+
+        var batch = await lines.ListAsync(l => l.BankAccountId == line.BankAccountId && l.ImportId == line.ImportId, ct);
+        var ids = batch.Select(l => l.Id).ToList();
+
+        var held = await matches.ListAsync(m => ids.Contains(m.BankStatementLineId) && m.UnmatchedAt == null, ct);
+        if (held.Count > 0)
+            return Result.Failure<int>(Error.Conflict("BankStatement_ImportHasMatches", held.Select(m => m.BankStatementLineId).Distinct().Count()));
+
+        var reason = $"Import du relevé {line.SourceFileName ?? line.ImportId.ToString("N")[..8]} annulé";
+        foreach (var l in batch) lines.SoftDelete(l, currentUser.UserId, reason);
+
+        unitOfWork.AuditReason = $"{reason} — {batch.Count} ligne(s), {Money.Round(batch.Sum(l => l.AmountMad)):N2} DH";
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success(batch.Count);
     }
 
     // ---- Reconciliation --------------------------------------------------------------------------
@@ -354,8 +387,10 @@ public sealed class TreasuryService(
             ? await queries.GetStatementLinesAsync(bankAccountId, account.OpeningBalanceDate.AddDays(1), to, ct)
             : periodLines;
 
+        // The movements are read a few days past the period, for the matching; what the balance
+        // adjusts for is only what was recorded by its last day, as the statement balance is.
         var summary = BankReconciliation.Summarise(account.OpeningBalanceMad, account.OpeningBalanceDate,
-                                                   linesUpTo, movements);
+                                                   linesUpTo, movements.Where(m => m.Date <= to));
 
         return Result.Success(new ReconciliationData(account, periodLines, movements, summary));
     }
@@ -426,6 +461,8 @@ public sealed class TreasuryService(
         var difference = Money.Round(line.AmountMad - movements.Sum(m => m.AmountMad));
         if (difference != 0m && string.IsNullOrWhiteSpace(comment))
             return Result.Failure(Error.Validation("BankMatch_DifferenceNeedsComment", difference));
+        if (comment is not null && comment.Trim().Length > BankMatch.CommentMaxLength)
+            return Result.Failure(Error.Validation("Treasury_TextTooLong", BankMatch.CommentMaxLength));
 
         foreach (var m in movements)
         {
@@ -455,6 +492,8 @@ public sealed class TreasuryService(
 
         if (string.IsNullOrWhiteSpace(comment))
             return Result.Failure(Error.Validation("BankMatch_JustificationRequired"));
+        if (comment.Trim().Length > BankMatch.CommentMaxLength)
+            return Result.Failure(Error.Validation("Treasury_TextTooLong", BankMatch.CommentMaxLength));
 
         var line = await lines.GetByIdAsync(statementLineId, ct);
         if (line is null) return Result.Failure(Error.NotFound("BankStatement_LineNotFound"));
@@ -540,7 +579,10 @@ public sealed class TreasuryService(
     /// <summary>
     /// The cash forecast of the site, week by week from today:
     /// <list type="bullet">
-    /// <item>opening: the statement balance of each active account, as of its last imported line;</item>
+    /// <item>opening: the statement balance of each active account, as of its last imported line,
+    /// plus what the application recorded after that day and no statement line holds yet (a
+    /// supplier transfer, a payer's remittance, a card batch); a movement dated later than today
+    /// (an LCN or a post-dated cheque not due yet) is a flow on its due date instead;</item>
     /// <item>payer receipts: each unsettled claim batch, for what the payer still owes on it, on its
     /// submission date plus the delay the payer actually takes (median of the last year, else its
     /// terms). A batch already past that date is shown apart unless asked for in the first week:
@@ -569,6 +611,16 @@ public sealed class TreasuryService(
 
         var flows = new List<ForecastFlow>();
         decimal overdue = 0m;
+
+        static ForecastCategory CategoryOf(TreasuryMovementKind kind) => kind switch
+        {
+            TreasuryMovementKind.PayerSettlement => ForecastCategory.PayerReceipts,
+            TreasuryMovementKind.PatientPayment or TreasuryMovementKind.PatientDeposit or TreasuryMovementKind.CardBatch
+                or TreasuryMovementKind.PatientRefund or TreasuryMovementKind.ReturnedCheque => ForecastCategory.PatientReceipts,
+            TreasuryMovementKind.SupplierPayment => ForecastCategory.SupplierPayments,
+            TreasuryMovementKind.Payroll => ForecastCategory.Payroll,
+            _ => ForecastCategory.Other
+        };
 
         var delays = source.DelaySamples.GroupBy(s => s.PayerId)
                            .ToDictionary(g => g.Key, g => g.Select(s => s.Days).ToList());
@@ -621,11 +673,40 @@ public sealed class TreasuryService(
                 flows.Add(new ForecastFlow(date, item.AmountMad, ForecastCategory.Other, item.Label));
         }
 
-        var opening = Money.Round(source.Openings.Sum(o => o.BalanceMad));
+        // What was recorded since the last statement and is on none yet: the movements no match
+        // holds, from the day after the earliest account's last line. Movements are not tied to an
+        // account, so with several accounts the earliest date is taken: a movement already on a
+        // later account's statement but not reconciled would count twice, so reconcile first.
+        var openings = source.Openings.ToList();
+        if (openings.Count > 0)
+        {
+            var asOf = openings.Min(o => o.AsOf ?? today);
+            var pending = await queries.GetUnmatchedMovementsAsync(currentUser.SiteId, asOf.AddDays(1), to, ct);
+
+            var inTransit = 0m;
+            foreach (var m in pending)
+            {
+                if (m.Date <= today)
+                {
+                    if (m.Kind == TreasuryMovementKind.Payroll && m.Date == today) continue;
+                    inTransit += m.AmountMad;
+                }
+                // A future pay day is the payroll line's; anything else falls on its due date.
+                else if (m.Kind != TreasuryMovementKind.Payroll)
+                {
+                    flows.Add(new ForecastFlow(m.Date, m.AmountMad, CategoryOf(m.Kind),
+                                               string.IsNullOrWhiteSpace(m.Reference) ? m.Label : $"{m.Label} ({m.Reference})"));
+                }
+            }
+
+            openings.Add(new ForecastOpeningBalance(string.Empty, Money.Round(inTransit), asOf, IsRecordedNotOnStatement: true));
+        }
+
+        var opening = Money.Round(openings.Sum(o => o.BalanceMad));
         var table = CashForecastCalculator.BuildWeeks(today, weeks, opening, flows);
 
         return Result.Success(new CashForecastResult(
-            today, to, source.Openings, table, [.. flows.OrderBy(f => f.Date)],
+            today, to, openings, table, [.. flows.OrderBy(f => f.Date)],
             Money.Round(overdue),
             Money.Round(source.SupplierInvoices.Where(i => !i.IsApproved).Sum(i => i.OutstandingMad)),
             source.LastPayrollNetMad, weeklyPatients));

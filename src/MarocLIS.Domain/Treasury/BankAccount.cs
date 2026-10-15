@@ -61,6 +61,9 @@ public sealed class BankAccount : AuditableAggregateRoot, ISiteScoped
         OpeningBalanceDate = on;
     }
 
+    /// <summary>The bank's name and the account's label: the columns are this long.</summary>
+    public const int NameMaxLength = 120;
+
     public Result Validate()
     {
         var errors = new List<Error>();
@@ -69,6 +72,8 @@ public sealed class BankAccount : AuditableAggregateRoot, ISiteScoped
             errors.Add(Error.Validation("BankAccount_BankNameRequired"));
         if (string.IsNullOrWhiteSpace(Label))
             errors.Add(Error.Validation("BankAccount_LabelRequired"));
+        if (BankName.Length > NameMaxLength || Label.Length > NameMaxLength)
+            errors.Add(Error.Validation("Treasury_TextTooLong", NameMaxLength));
         if (!Employee.IsValidRib(Rib))
             errors.Add(Error.Validation("BankAccount_RibInvalid"));
         if (!IsValidAccountingAccount(AccountingAccount))

@@ -206,8 +206,13 @@ public sealed record CreateSupplierInvoiceRequest
     public required IReadOnlyList<SupplierInvoiceLineRequest> Lines { get; init; }
 }
 
+/// <param name="MaturityDate">
+/// Due date of a bill of exchange (LCN) or a post-dated cheque, when the bank debits it later than
+/// <paramref name="PaidOn"/>; the bank reconciliation looks for it on that day.
+/// </param>
 public sealed record RecordSupplierPaymentRequest(DateOnly PaidOn, decimal AmountMad,
-                                                  SupplierPaymentMethod Method, string? Reference);
+                                                  SupplierPaymentMethod Method, string? Reference,
+                                                  DateOnly? MaturityDate = null);
 
 /// <summary>
 /// Supplier invoices and their payment (factures fournisseurs).
@@ -506,7 +511,8 @@ public sealed class SupplierInvoiceService(
         if (invoice is null) return Result.Failure(Error.NotFound("SupplierInvoice_NotFound"));
 
         var done = invoice.RecordPayment(new SupplierPayment(request.PaidOn, request.AmountMad, request.Method,
-                                                             request.Reference, clock.Now, currentUser.UserId));
+                                                             request.Reference, clock.Now, currentUser.UserId,
+                                                             request.MaturityDate));
         if (done.IsFailure) return done;
 
         unitOfWork.AuditReason =

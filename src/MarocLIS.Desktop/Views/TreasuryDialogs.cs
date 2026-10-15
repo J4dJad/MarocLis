@@ -110,9 +110,13 @@ internal sealed class BankAccountEditor : MasterDataEditor
 
         _bank = TextField("Treasury.BankName", 20, 14, 250, row?.BankName);
         _label = TextField("Treasury.AccountLabel", 290, 14, 250, row?.Label);
+        _bank.MaxLength = BankAccount.NameMaxLength;
+        _label.MaxLength = BankAccount.NameMaxLength;
         _rib = TextField("Treasury.Rib", 20, 68, 300, row?.Rib, latin: true, mono: true);
         _accounting = TextField("Treasury.AccountingAccount", 340, 68, 200, row?.AccountingAccount ?? "5141",
                                 latin: true, mono: true);
+        _rib.MaxLength = 40;
+        _accounting.MaxLength = 12;
         _opening = TextField("Treasury.OpeningBalance", 20, 122, 180,
                              (row?.OpeningBalanceMad ?? 0m).ToString("0.00", CultureInfo.InvariantCulture),
                              latin: true, mono: true, right: true);
@@ -192,6 +196,12 @@ internal sealed class BankStatementImportDialog : Form
 
     private ImportPreview? _result;
 
+    /// <summary>
+    /// The mapping the preview on screen was read with: the import uses it, never the fields as
+    /// they stand, and any change to a field takes the import away until the preview is redone.
+    /// </summary>
+    private BankStatementCsvMapping? _previewed;
+
     internal BankStatementImportDialog(ILocalizer localizer, IUserDialogs dialogs, TreasuryService treasury,
                                        BankAccountRow account, byte[] content, string fileName)
     {
@@ -216,6 +226,12 @@ internal sealed class BankStatementImportDialog : Form
 
         _preview.Click += async (_, _) => await PreviewAsync();
         _import.Click += async (_, _) => await ImportAsync();
+
+        foreach (var combo in new[] { _delimiter, _decimal }) combo.SelectedIndexChanged += (_, _) => MappingChanged();
+        foreach (var number in new[] { _skip, _date, _valueDate, _label, _reference, _amount, _debit, _credit })
+            number.ValueChanged += (_, _) => MappingChanged();
+        _header.CheckedChanged += (_, _) => MappingChanged();
+        _dateFormat.TextChanged += (_, _) => MappingChanged();
         Shown += async (_, _) => await PreviewAsync();
     }
 
@@ -235,12 +251,12 @@ internal sealed class BankStatementImportDialog : Form
         }
 
         _delimiter.Items.AddRange([_localizer["Treasury.DelimiterAuto"], ";", ",", _localizer["Treasury.DelimiterTab"]]);
-        _decimal.Items.AddRange([",", "."]);
+        _decimal.Items.AddRange([_localizer["Treasury.DelimiterAuto"], ",", "."]);
 
         Field("Treasury.Delimiter", _delimiter, 110);
         Field("Treasury.SkipLines", _skip, 70);
         Field("Treasury.DateFormat", _dateFormat, 110);
-        Field("Treasury.DecimalSeparator", _decimal, 60);
+        Field("Treasury.DecimalSeparator", _decimal, 110);
         _header.Text = _localizer["Treasury.HasHeader"];
         _header.Location = new Point(x, 28);
         top.Controls.Add(_header);
@@ -323,7 +339,7 @@ internal sealed class BankStatementImportDialog : Form
         _debit.Value = Math.Clamp(m.DebitColumn, 0, 60);
         _credit.Value = Math.Clamp(m.CreditColumn, 0, 60);
         _dateFormat.Text = m.DateFormat;
-        _decimal.SelectedIndex = m.DecimalSeparator == '.' ? 1 : 0;
+        _decimal.SelectedIndex = m.DecimalSeparator switch { ',' => 1, '.' => 2, _ => 0 };
     }
 
     private BankStatementCsvMapping Mapping() => new()
@@ -339,12 +355,24 @@ internal sealed class BankStatementImportDialog : Form
         DebitColumn = (int)_debit.Value,
         CreditColumn = (int)_credit.Value,
         DateFormat = string.IsNullOrWhiteSpace(_dateFormat.Text) ? "dd/MM/yyyy" : _dateFormat.Text.Trim(),
-        DecimalSeparator = _decimal.SelectedIndex == 1 ? '.' : ','
+        DecimalSeparator = _decimal.SelectedIndex switch { 1 => ',', 2 => '.', _ => '\0' }
     };
+
+    private void MappingChanged()
+    {
+        if (_previewed is null || Mapping() == _previewed) return;
+
+        _previewed = null;
+        _import.Enabled = false;
+        _summary.Text = _localizer["Treasury.PreviewOutdated"];
+        _summary.ForeColor = UiTheme.Critical;
+    }
 
     private async Task PreviewAsync()
     {
         var mapping = Mapping();
+        _previewed = null;
+        _import.Enabled = false;
         var result = await _treasury.PreviewImportAsync(_account.Id, _content, mapping);
         if (result.IsFailure) { _dialogs.ShowFailure(result, Text); return; }
 
@@ -387,12 +415,15 @@ internal sealed class BankStatementImportDialog : Form
             : _localizer.Format("Treasury.ImportSummary", _result.NewCount, _result.DuplicateCount, _result.InvalidCount,
                                 Money.Of(_result.NewTotalMad).Format(_localizer.CurrentLanguage));
         _summary.ForeColor = valid.IsFailure ? UiTheme.Critical : UiTheme.TextSecondary;
-        _import.Enabled = valid.IsSuccess && _result.NewCount > 0;
+        // A field changed while the preview was being read: it is already out of date.
+        _previewed = Mapping() == mapping ? mapping : null;
+        _import.Enabled = _previewed is not null && valid.IsSuccess && _result.NewCount > 0;
     }
 
     private async Task ImportAsync()
     {
-        if (_result is null || _result.NewCount == 0) return;
+        if (_result is null || _result.NewCount == 0 || _previewed is null) return;
+        if (Mapping() != _previewed) { MappingChanged(); return; }
 
         if (_result.InvalidCount > 0
             && !_dialogs.Confirm(_localizer.Format("Treasury.ImportWithInvalid", _result.InvalidCount), Text))
@@ -401,7 +432,7 @@ internal sealed class BankStatementImportDialog : Form
         _import.Enabled = false;
         try
         {
-            var imported = await _treasury.ImportAsync(_account.Id, _content, _fileName, Mapping());
+            var imported = await _treasury.ImportAsync(_account.Id, _content, _fileName, _previewed);
             if (imported.IsFailure) { _dialogs.ShowFailure(imported, Text); return; }
 
             _dialogs.Info(_localizer.Format("Treasury.Imported", imported.Value.Imported, imported.Value.Duplicates,
@@ -411,7 +442,7 @@ internal sealed class BankStatementImportDialog : Form
         }
         finally
         {
-            if (!IsDisposed) _import.Enabled = true;
+            if (!IsDisposed) _import.Enabled = _previewed is not null;
         }
     }
 }
@@ -521,6 +552,7 @@ internal sealed class ForecastItemEditor : MasterDataEditor
         _id = row?.Id;
 
         _label = TextField("Treasury.Label", 20, 14, 330, row?.Label);
+        _label.MaxLength = TreasuryForecastItem.LabelMaxLength;
         _amount = TextField("Treasury.SignedAmount", 370, 14, 170,
                             (row?.AmountMad ?? 0m).ToString("0.00", CultureInfo.InvariantCulture),
                             latin: true, mono: true, right: true);
