@@ -331,17 +331,17 @@ public sealed class PatientMessagingQueries(LisDbContext db) : IPatientMessaging
         return result;
     }
 
-    public async Task<IReadOnlySet<(Guid RuleId, Guid OrderId)>> GetRemindedAsync(Guid siteId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SentReminder>> GetRemindedAsync(Guid siteId, CancellationToken ct = default)
     {
         var rows = await db.PatientMessages.AsNoTracking()
             .Where(m => m.SiteId == siteId && m.Kind == PatientMessageKind.BilanReminder
                         && m.Status == PatientMessageStatus.Sent
                         && m.ReminderRuleId != null && m.SourceOrderId != null)
-            .Select(m => new { RuleId = m.ReminderRuleId!.Value, OrderId = m.SourceOrderId!.Value })
-            .Distinct()
+            .GroupBy(m => new { RuleId = m.ReminderRuleId!.Value, OrderId = m.SourceOrderId!.Value })
+            .Select(g => new { g.Key.RuleId, g.Key.OrderId, SentAt = g.Max(m => m.SentAt) })
             .ToListAsync(ct);
 
-        return rows.Select(r => (r.RuleId, r.OrderId)).ToHashSet();
+        return rows.Select(r => new SentReminder(r.RuleId, r.OrderId, r.SentAt)).ToList();
     }
 
     public async Task<IReadOnlyDictionary<Guid, MessageRecipient>> GetRecipientsAsync(IReadOnlyList<Guid> patientIds,
@@ -429,7 +429,7 @@ public sealed class PatientMessagingQueries(LisDbContext db) : IPatientMessaging
                                                                             DateTimeOffset end, CancellationToken ct = default) =>
         await db.SurveyInvitations.AsNoTracking()
             .Where(s => s.SiteId == siteId && s.InvitedAt >= start && s.InvitedAt < end)
-            .Select(s => new SurveyAnswerRow(s.InvitedAt, s.Delivered, s.Score, s.Comment, s.AnsweredAt))
+            .Select(s => new SurveyAnswerRow(s.InvitedAt, s.Delivered, s.Score, s.Comment, s.AnsweredAt, s.LabOrderId))
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<PatientMessageRow>> GetMessagesAsync(Guid siteId, DateTimeOffset start,

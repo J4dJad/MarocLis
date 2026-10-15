@@ -90,9 +90,12 @@ public sealed record SurveyResults(
     IReadOnlyList<int> Distribution,
     IReadOnlyList<SurveyComment> Comments);
 
-/// <summary>What the survey statistics read: one invitation, anonymised.</summary>
+/// <summary>What the survey statistics read: one invitation, anonymised (the order only tells attempts apart).</summary>
 public sealed record SurveyAnswerRow(DateTimeOffset InvitedAt, bool Delivered, int? Score, string? Comment,
-                                     DateTimeOffset? AnsweredAt);
+                                     DateTimeOffset? AnsweredAt, Guid OrderId);
+
+/// <summary>A bilan reminder sent: under which rule, for which order, and when (latest send).</summary>
+public sealed record SentReminder(Guid RuleId, Guid OrderId, DateTimeOffset SentAt);
 
 public sealed record PatientMessageRow(
     DateTimeOffset SentAt,
@@ -161,15 +164,18 @@ public sealed record MessagingSettings
 
         // A stored value that the messaging screen would refuse (promotional wording, no code, a link
         // that is not HTTPS) is not sent: the default takes its place.
-        string Template(string key, string fallback) =>
-            Text(key, fallback) is var t && MessageWording.Validate(t).IsSuccess && HasCode(t) ? t : fallback;
+        // A template relying on {lien} alone is kept only with the link it relies on: when the stored
+        // address is dropped, the default (which carries {code}) is sent instead.
         var url = values.TryGetValue(SurveyUrlKey, out var stored) ? stored?.Trim() ?? string.Empty : string.Empty;
+        if (!IsValidSurveyUrl(url)) url = string.Empty;
+        string Template(string key, string fallback) =>
+            Text(key, fallback) is var t && MessageWording.Validate(t).IsSuccess && HasCode(t, url) ? t : fallback;
 
         return new MessagingSettings
         {
             SurveyTemplateFr = Template(SurveyTemplateFrKey, d.SurveyTemplateFr),
             SurveyTemplateAr = Template(SurveyTemplateArKey, d.SurveyTemplateAr),
-            SurveyUrl = IsValidSurveyUrl(url) ? url : string.Empty,
+            SurveyUrl = url,
             SurveyIntervalDays = values.TryGetValue(SurveyIntervalDaysKey, out var days)
                                  && int.TryParse(days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
                                  && n is >= 0 and <= 3650
@@ -178,10 +184,14 @@ public sealed record MessagingSettings
         };
     }
 
-    /// <summary>A survey message must carry the code or the link, or it can never be answered.</summary>
-    public static bool HasCode(string template) =>
+    /// <summary>
+    /// A survey message must carry the code, or the link to a survey page, or it can never be answered:
+    /// <c>{lien}</c> renders empty without a survey address, so on its own it needs a valid one.
+    /// </summary>
+    public static bool HasCode(string template, string? surveyUrl) =>
         template.Contains(MessageWording.Code, StringComparison.OrdinalIgnoreCase)
-        || template.Contains(MessageWording.Link, StringComparison.OrdinalIgnoreCase);
+        || (template.Contains(MessageWording.Link, StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(surveyUrl) && IsValidSurveyUrl(surveyUrl));
 
     /// <summary>Empty (answers by SMS), or an absolute HTTPS address.</summary>
     public static bool IsValidSurveyUrl(string? url) =>
@@ -237,18 +247,29 @@ public static class ReminderPlanner
     }
 
     /// <summary>
-    /// One reminder per patient per run, and none for an order already reminded under any rule: a
-    /// rule on an analysis and a rule on a panel containing it (or two rules on analyses of the same
-    /// order) would otherwise each send their SMS. A panel rule is preferred, as it names the whole
-    /// bilan, then the earliest due date. A patient with results of different orders due on the same
-    /// day gets the other reminder at a later run.
+    /// A reminder sent under another rule for the same order this many days before a reminder's due
+    /// date, or later, already covered it: the two rules were due at about the same time.
+    /// </summary>
+    public const int SameTimeDays = 30;
+
+    /// <summary>
+    /// One reminder per patient per run, and none for an order already reminded under another rule
+    /// at about the same time (<see cref="SameTimeDays"/> before this reminder's due date, or later):
+    /// a rule on an analysis and a rule on a panel containing it (or two rules on analyses of the same
+    /// order) would otherwise each send their SMS. A rule with a longer delay on the same order still
+    /// reminds when it falls due (HbA1c at 3 months, lipid panel at 12 months). A panel rule is
+    /// preferred, as it names the whole bilan, then the earliest due date. A patient with results of
+    /// different orders due on the same day gets the other reminder at a later run.
     /// </summary>
     public static IReadOnlyList<PlannedReminder> OnePerPatient(IEnumerable<PlannedReminder> planned,
-                                                               IReadOnlySet<(Guid RuleId, Guid OrderId)> alreadySent,
-                                                               IReadOnlySet<Guid> panelRuleIds)
+                                                               IEnumerable<SentReminder> alreadySent,
+                                                               IReadOnlySet<Guid> panelRuleIds, TimeSpan offset)
     {
-        var remindedOrders = alreadySent.Select(s => s.OrderId).ToHashSet();
-        return planned.Where(p => !remindedOrders.Contains(p.OrderId))
+        var sentByOrder = alreadySent.ToLookup(s => s.OrderId);
+        return planned.Where(p => !sentByOrder[p.OrderId].Any(
+                                      s => s.RuleId != p.RuleId
+                                           && DateOnly.FromDateTime(s.SentAt.ToOffset(offset).DateTime)
+                                              >= p.DueOn.AddDays(-SameTimeDays)))
                       .GroupBy(p => p.PatientId)
                       .Select(g => g.OrderByDescending(p => panelRuleIds.Contains(p.RuleId))
                                     .ThenBy(p => p.DueOn).ThenBy(p => p.RuleId).First())
@@ -377,7 +398,8 @@ public sealed class PatientMessagingService(
         }
         if (active.Count == 0) return [];
 
-        var sent = await queries.GetRemindedAsync(currentUser.SiteId, ct);
+        var reminded = await queries.GetRemindedAsync(currentUser.SiteId, ct);
+        var sent = reminded.Select(s => (s.RuleId, s.OrderId)).ToHashSet();
         var targets = (await queries.GetTargetsAsync(ct)).ToDictionary(t => t.Id);
         var signature = await queries.GetSignatureAsync(currentUser.SiteId, ct);
 
@@ -396,8 +418,9 @@ public sealed class PatientMessagingService(
         // want of consent must not take the place of nobody.
         var reachable = planned.Where(p => recipients.TryGetValue(p.PatientId, out var r) && r.HasFollowUpConsent
                                            && !r.OptedOutOfSecondaryUse && !string.IsNullOrWhiteSpace(r.MobilePhone));
-        var chosen = ReminderPlanner.OnePerPatient(reachable, sent,
-                                                   active.Where(r => r.TestPanelId is not null).Select(r => r.Id).ToHashSet());
+        var chosen = ReminderPlanner.OnePerPatient(reachable, reminded,
+                                                   active.Where(r => r.TestPanelId is not null).Select(r => r.Id).ToHashSet(),
+                                                   offset);
 
         var candidates = new List<ReminderCandidate>();
         foreach (var plan in chosen)
@@ -519,12 +542,19 @@ public sealed class PatientMessagingService(
             if (valid.IsFailure) return valid;
         }
 
-        if (!MessagingSettings.HasCode(settings.SurveyTemplateFr) || !MessagingSettings.HasCode(settings.SurveyTemplateAr))
-            return Result.Failure(Error.Validation("Survey_TemplateNeedsCode"));
-        if (settings.SurveyIntervalDays is < 0 or > 3650)
-            return Result.Failure(Error.Validation("Survey_IntervalOutOfRange"));
         if (!MessagingSettings.IsValidSurveyUrl(settings.SurveyUrl))
             return Result.Failure(Error.Validation("Survey_UrlInvalid"));
+        foreach (var template in new[] { settings.SurveyTemplateFr, settings.SurveyTemplateAr })
+        {
+            if (MessagingSettings.HasCode(template, settings.SurveyUrl)) continue;
+            // {lien} without a survey address would send a message with neither code nor link.
+            return Result.Failure(Error.Validation(
+                template.Contains(MessageWording.Link, StringComparison.OrdinalIgnoreCase)
+                    ? "Survey_LinkNeedsUrl"
+                    : "Survey_TemplateNeedsCode"));
+        }
+        if (settings.SurveyIntervalDays is < 0 or > 3650)
+            return Result.Failure(Error.Validation("Survey_IntervalOutOfRange"));
 
         var changed = new List<string>();
         foreach (var (key, value) in settings.ToValues())
@@ -750,12 +780,15 @@ public sealed class PatientMessagingService(
     public static SurveyResults SummariseSurveys(DateOnly from, DateOnly to, IReadOnlyList<SurveyAnswerRow> rows,
                                                  TimeSpan offset)
     {
-        var delivered = rows.Count(r => r.Delivered);
+        // Each order counts once: a survey resent after the gateway refused it is one patient invited,
+        // delivered when any attempt reached them.
+        var byOrder = rows.GroupBy(r => r.OrderId).ToList();
+        var delivered = byOrder.Count(g => g.Any(r => r.Delivered));
         var answered = rows.Where(r => r.Score is not null).ToList();
         var distribution = Enumerable.Range(1, 5).Select(s => answered.Count(r => r.Score == s)).ToList();
 
         return new SurveyResults(
-            from, to, rows.Count, delivered, answered.Count,
+            from, to, byOrder.Count, delivered, answered.Count,
             delivered == 0 ? null : Math.Round(100.0 * answered.Count / delivered, 1),
             answered.Count == 0 ? null : Math.Round(answered.Average(r => r.Score!.Value), 2),
             distribution,
@@ -827,7 +860,7 @@ public interface IPatientMessagingQueries
                                                                    DateTimeOffset since, CancellationToken ct = default);
 
     /// <summary>The (rule, order) pairs a reminder was already sent for at the site, failed sends excluded.</summary>
-    Task<IReadOnlySet<(Guid RuleId, Guid OrderId)>> GetRemindedAsync(Guid siteId, CancellationToken ct = default);
+    Task<IReadOnlyList<SentReminder>> GetRemindedAsync(Guid siteId, CancellationToken ct = default);
 
     /// <summary>Name, mobile, language and the follow-up consent in force on <paramref name="today"/>.</summary>
     Task<IReadOnlyDictionary<Guid, MessageRecipient>> GetRecipientsAsync(IReadOnlyList<Guid> patientIds, DateOnly today,
