@@ -214,6 +214,39 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
         return Result.Success(credential);
     }
 
+    /// <summary>Corrects a document: a wrong date, a renewed card with its new number.</summary>
+    public Result<EmployeeCredential> UpdateCredential(Guid credentialId, CredentialKind kind, string title,
+                                                       string? reference, string? issuedBy, DateOnly? obtainedOn,
+                                                       DateOnly? expiresOn, MedicalFitness? fitness, string? note)
+    {
+        var credential = _credentials.FirstOrDefault(c => c.Id == credentialId);
+        if (credential is null) return Result.Failure<EmployeeCredential>(Error.NotFound("Credential_NotFound"));
+        if (string.IsNullOrWhiteSpace(title))
+            return Result.Failure<EmployeeCredential>(Error.Validation("Credential_TitleRequired"));
+        if (expiresOn is { } expires && obtainedOn is { } obtained && expires < obtained)
+            return Result.Failure<EmployeeCredential>(Error.Validation("Credential_ExpiryBeforeIssue"));
+
+        credential.Change(kind);
+        credential.Title = title.Trim();
+        credential.Reference = reference;
+        credential.IssuedBy = issuedBy;
+        credential.ObtainedOn = obtainedOn;
+        credential.ExpiresOn = expiresOn;
+        credential.Fitness = kind == CredentialKind.MedicalVisit ? fitness : null;
+        credential.Note = note;
+        return Result.Success(credential);
+    }
+
+    /// <summary>Notes the name of the scan kept with a document, or that it has none any more.</summary>
+    public Result MarkCredentialFile(Guid credentialId, string? fileName)
+    {
+        var credential = _credentials.FirstOrDefault(c => c.Id == credentialId);
+        if (credential is null) return Result.Failure(Error.NotFound("Credential_NotFound"));
+
+        credential.FileName = fileName;
+        return Result.Success();
+    }
+
     /// <summary>Removes a document entered by mistake. The audit trail keeps what it said.</summary>
     public Result RemoveCredential(Guid credentialId)
     {
@@ -368,10 +401,55 @@ public sealed class EmployeeCredential : Entity, IAuditable
 
     public string? Note { get; set; }
 
+    /// <summary>
+    /// Name of the scan kept with the document (diploma, vaccination card), if any. The file itself
+    /// is a <see cref="CredentialFile"/>, so listing a file's documents never loads the scans.
+    /// </summary>
+    public string? FileName { get; internal set; }
+
+    internal void Change(CredentialKind kind) => Kind = kind;
+
     public DateTimeOffset CreatedAt { get; set; }
     public Guid? CreatedByUserId { get; set; }
     public DateTimeOffset? ModifiedAt { get; set; }
     public Guid? ModifiedByUserId { get; set; }
+}
+
+/// <summary>The scan of one document of a personnel file: a PDF or a picture, kept in the database.</summary>
+public sealed class CredentialFile : AuditableAggregateRoot
+{
+    /// <summary>Large enough for a few scanned pages, small enough to keep the database light.</summary>
+    public const int MaximumBytes = 10 * 1024 * 1024;
+
+    private CredentialFile() { }
+
+    public CredentialFile(Guid credentialId, string fileName, string contentType, byte[] content)
+    {
+        CredentialId = credentialId;
+        Replace(fileName, contentType, content);
+    }
+
+    public Guid CredentialId { get; private set; }
+    public string FileName { get; private set; } = string.Empty;
+    public string ContentType { get; private set; } = string.Empty;
+    public byte[] Content { get; private set; } = [];
+
+    public void Replace(string fileName, string contentType, byte[] content)
+    {
+        FileName = fileName;
+        ContentType = contentType;
+        Content = content;
+    }
+
+    /// <summary>PDF and the usual picture formats: what a scanner or a phone produces.</summary>
+    public static string? ContentTypeOf(string fileName) => Path.GetExtension(fileName).ToUpperInvariant() switch
+    {
+        ".PDF" => "application/pdf",
+        ".JPG" or ".JPEG" => "image/jpeg",
+        ".PNG" => "image/png",
+        ".TIF" or ".TIFF" => "image/tiff",
+        _ => null
+    };
 }
 
 public enum CredentialKind

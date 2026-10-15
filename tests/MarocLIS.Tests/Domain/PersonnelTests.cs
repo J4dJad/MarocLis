@@ -145,4 +145,38 @@ public sealed class PersonnelTests
         rows.Select(r => r.Kind).Should().BeEquivalentTo(
             [DeadlineKind.MissingOrderRegistration, DeadlineKind.MedicallyUnfit]);
     }
+
+    [Fact]
+    public void A_document_is_corrected_in_place_and_keeps_its_scan()
+    {
+        var employee = Technician();
+        var card = employee.AddCredential(new EmployeeCredential(CredentialKind.MedicalVisit, "Visite")
+        {
+            ObtainedOn = new DateOnly(2025, 1, 10), Fitness = MedicalFitness.Fit
+        }).Value;
+        employee.MarkCredentialFile(card.Id, "visite.pdf").IsSuccess.Should().BeTrue();
+
+        employee.UpdateCredential(card.Id, CredentialKind.MedicalVisit, "Visite", null, null,
+                                  new DateOnly(2025, 1, 10), new DateOnly(2024, 1, 1), MedicalFitness.Fit, null)
+            .FirstError.ResourceKey.Should().Be("Credential_ExpiryBeforeIssue");
+
+        employee.UpdateCredential(card.Id, CredentialKind.Diploma, "  Diplôme  ", "D-1", "ISPITS",
+                                  new DateOnly(2019, 7, 1), null, MedicalFitness.Fit, null).IsSuccess.Should().BeTrue();
+
+        card.Kind.Should().Be(CredentialKind.Diploma);
+        card.Title.Should().Be("Diplôme");
+        card.Fitness.Should().BeNull();           // a fitness decision belongs to a medical visit only
+        card.FileName.Should().Be("visite.pdf");
+        employee.UpdateCredential(Guid.NewGuid(), CredentialKind.Other, "X", null, null, null, null, null, null)
+            .FirstError.ResourceKey.Should().Be("Credential_NotFound");
+    }
+
+    [Theory]
+    [InlineData("diplome.PDF", "application/pdf")]
+    [InlineData("carte.jpeg", "image/jpeg")]
+    [InlineData("scan.tif", "image/tiff")]
+    [InlineData("lettre.docx", null)]
+    [InlineData("sans extension", null)]
+    public void Only_pdf_and_pictures_are_kept_as_scans(string name, string? expected) =>
+        CredentialFile.ContentTypeOf(name).Should().Be(expected);
 }

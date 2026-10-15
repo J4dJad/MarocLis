@@ -44,6 +44,7 @@ public sealed class MainShellForm : LocalizedForm
     private readonly Dictionary<string, Button> _navButtons = new(StringComparer.Ordinal);
     private string _activeKey = string.Empty;
     private DateTimeOffset _lastActivity = DateTimeOffset.Now;
+    private readonly ActivityFilter _activity;
 
     // Screens with a shortcut out of the box: the counter and bench workflow, in the order a file
     // goes through the laboratory. Every other screen can be given one in the shortcuts dialog.
@@ -109,6 +110,12 @@ public sealed class MainShellForm : LocalizedForm
                                             policy.IdleTimeout.TotalMilliseconds / 4);
         _idleTimer.Tick += (_, _) => CheckIdle(policy.IdleTimeout);
         _idleTimer.Start();
+
+        // Activity anywhere counts: a click in a grid or typing in a dialog never reaches this
+        // form's own mouse and key handlers, and an operator working with the mouse alone was
+        // signed out mid-task.
+        _activity = new ActivityFilter(() => _lastActivity = DateTimeOffset.Now);
+        System.Windows.Forms.Application.AddMessageFilter(_activity);
 
         _languagePicker.SelectedIndexChanged += OnLanguagePicked;
     }
@@ -805,8 +812,26 @@ public sealed class MainShellForm : LocalizedForm
         if (DateTimeOffset.Now - _lastActivity < timeout) return;
 
         _idleTimer.Stop();
+
+        // The screen is cleared before the notice: the notice waits for a click, and whoever comes
+        // to the counter meanwhile must not see the patient file left open behind it.
+        _content.Visible = false;
         _dialogs.Warn(T("Message.SessionExpired"));
         SignOut(confirm: false);
+    }
+
+    /// <summary>Notes keyboard and mouse input in every window of the application, dialogs included.</summary>
+    private sealed class ActivityFilter(Action onActivity) : IMessageFilter
+    {
+        private const int WmKeyDown = 0x0100, WmSysKeyDown = 0x0104, WmMouseMove = 0x0200, WmLeftDown = 0x0201,
+                          WmRightDown = 0x0204, WmMouseWheel = 0x020A;
+
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (m.Msg is WmKeyDown or WmSysKeyDown or WmMouseMove or WmLeftDown or WmRightDown or WmMouseWheel)
+                onActivity();
+            return false;
+        }
     }
 
     private void SignOut(bool confirm = true)
@@ -823,6 +848,7 @@ public sealed class MainShellForm : LocalizedForm
     {
         if (disposing)
         {
+            System.Windows.Forms.Application.RemoveMessageFilter(_activity);
             _clockTimer.Dispose();
             _idleTimer.Dispose();
         }

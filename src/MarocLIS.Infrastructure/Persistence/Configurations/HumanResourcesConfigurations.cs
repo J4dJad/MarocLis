@@ -58,7 +58,23 @@ public sealed class EmployeeCredentialConfiguration : IEntityTypeConfiguration<E
         builder.Property(e => e.Reference).HasMaxLength(60);
         builder.Property(e => e.IssuedBy).HasMaxLength(200);
         builder.Property(e => e.Note).HasMaxLength(500);
+        builder.Property(e => e.FileName).HasMaxLength(200);
         builder.HasIndex(e => e.ExpiresOn).HasDatabaseName("IX_EmployeeCredentials_Expiry");
+    }
+}
+
+public sealed class CredentialFileConfiguration : IEntityTypeConfiguration<CredentialFile>
+{
+    public void Configure(EntityTypeBuilder<CredentialFile> builder)
+    {
+        builder.ToTable("CredentialFiles", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.FileName).HasMaxLength(200).IsRequired();
+        builder.Property(e => e.ContentType).HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Content).HasColumnType("varbinary(max)").IsRequired();
+        builder.HasIndex(e => e.CredentialId).IsUnique().HasDatabaseName("UX_CredentialFiles_Credential");
+        // Removing a document removes its scan with it.
+        builder.HasOne<EmployeeCredential>().WithMany().HasForeignKey(e => e.CredentialId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 

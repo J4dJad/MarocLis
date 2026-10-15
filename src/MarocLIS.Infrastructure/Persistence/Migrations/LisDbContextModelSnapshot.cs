@@ -2191,6 +2191,54 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("AccidentEvents", "hr");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.CredentialFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CredentialId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_CredentialFiles_Credential");
+
+                    b.ToTable("CredentialFiles", "hr");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.HumanResources.Employee", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2365,6 +2413,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<DateOnly?>("ExpiresOn")
                         .HasColumnType("date");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<int?>("Fitness")
                         .HasColumnType("int");
@@ -7544,6 +7596,15 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.HasOne("MarocLIS.Domain.HumanResources.WorkAccident", null)
                         .WithMany("Events")
                         .HasForeignKey("WorkAccidentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.HumanResources.CredentialFile", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.HumanResources.EmployeeCredential", null)
+                        .WithMany()
+                        .HasForeignKey("CredentialId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

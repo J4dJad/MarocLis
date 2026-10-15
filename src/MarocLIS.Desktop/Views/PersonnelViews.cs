@@ -386,7 +386,7 @@ public sealed class PersonnelView : LocalizedView
     private async Task DocumentsAsync()
     {
         if (Current() is not { } row) return;
-        await PersonnelFile.DocumentsAsync(this, _personnel, _dialogs, Localizer, row.EmployeeId);
+        await PersonnelFile.DocumentsAsync(this, _personnel, _output, _dialogs, Localizer, row.EmployeeId);
     }
 
     private async Task ExitOrRehireAsync()
@@ -755,6 +755,7 @@ public sealed class PersonnelDeadlinesView : LocalizedView
 
     private readonly PersonnelService _personnel;
     private readonly IUserDialogs _dialogs;
+    private readonly IDocumentOutput _output;
     private readonly ILogger<PersonnelDeadlinesView>? _logger;
 
     private readonly Label _heading = new();
@@ -766,11 +767,13 @@ public sealed class PersonnelDeadlinesView : LocalizedView
 
     private IReadOnlyList<DeadlineRow> _rows = [];
 
-    public PersonnelDeadlinesView(PersonnelService personnel, IUserDialogs dialogs, ILocalizer localizer,
-                                  ICultureManager cultureManager, ILogger<PersonnelDeadlinesView>? logger = null)
+    public PersonnelDeadlinesView(PersonnelService personnel, IDocumentOutput output, IUserDialogs dialogs,
+                                  ILocalizer localizer, ICultureManager cultureManager,
+                                  ILogger<PersonnelDeadlinesView>? logger = null)
         : base(localizer, cultureManager)
     {
         _personnel = personnel;
+        _output = output;
         _dialogs = dialogs;
         _logger = logger;
 
@@ -930,7 +933,7 @@ public sealed class PersonnelDeadlinesView : LocalizedView
         try
         {
             var changed = documents
-                ? await PersonnelFile.DocumentsAsync(this, _personnel, _dialogs, Localizer, row.EmployeeId)
+                ? await PersonnelFile.DocumentsAsync(this, _personnel, _output, _dialogs, Localizer, row.EmployeeId)
                 : await PersonnelFile.EditAsync(this, _personnel, _dialogs, Localizer, row.EmployeeId);
 
             if (changed) await ActivateAsync();

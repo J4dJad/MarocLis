@@ -25,6 +25,13 @@ public interface IDocumentOutput
     /// </para>
     /// </summary>
     Task<Result<string>> OpenAsync(byte[] content, string extension, CancellationToken ct = default);
+
+    /// <summary>
+    /// Opens a document to look at, never on the printer: a scan kept in a file is consulted, and
+    /// the workstation's "print without preview" setting is for documents the application produces.
+    /// </summary>
+    Task<Result<string>> ViewAsync(byte[] content, string extension, CancellationToken ct = default) =>
+        OpenAsync(content, extension, ct);
 }
 
 /// <summary>

@@ -64,8 +64,14 @@ public sealed class SessionDocumentOutput : IDocumentOutput, IDisposable
         SweepPreviousSessions(root);
     }
 
-    public async Task<Result<string>> OpenAsync(byte[] content, string extension,
-                                                  CancellationToken ct = default)
+    public Task<Result<string>> OpenAsync(byte[] content, string extension, CancellationToken ct = default) =>
+        WriteAndOpenAsync(content, extension, mayPrint: true, ct);
+
+    public Task<Result<string>> ViewAsync(byte[] content, string extension, CancellationToken ct = default) =>
+        WriteAndOpenAsync(content, extension, mayPrint: false, ct);
+
+    private async Task<Result<string>> WriteAndOpenAsync(byte[] content, string extension, bool mayPrint,
+                                                         CancellationToken ct)
     {
         if (content.Length == 0)
             return Result.Failure<string>(Error.Validation("Document_Empty"));
@@ -91,7 +97,7 @@ public sealed class SessionDocumentOutput : IDocumentOutput, IDisposable
 
         // The workstation's A4 printer, when it is set to print without a preview. Falls back to the
         // viewer when the PDF reader cannot print to a named printer, so a document is never lost.
-        if (_printers is { PrintDocumentsDirectly: true } printers
+        if (mayPrint && _printers is { PrintDocumentsDirectly: true } printers
             && extension.TrimStart('.').Equals("pdf", StringComparison.OrdinalIgnoreCase)
             && PrintTo(path, printers.DocumentPrinter))
             return Result.Success(path);

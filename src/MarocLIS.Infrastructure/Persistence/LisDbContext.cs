@@ -169,6 +169,7 @@ public class LisDbContext : DbContext
     public DbSet<Payslip> Payslips => Set<Payslip>();
     public DbSet<FinalSettlement> FinalSettlements => Set<FinalSettlement>();
     public DbSet<WorkAccident> WorkAccidents => Set<WorkAccident>();
+    public DbSet<CredentialFile> CredentialFiles => Set<CredentialFile>();
 
     // ---- Traceability and sequences -----------------------------------------------------------
 

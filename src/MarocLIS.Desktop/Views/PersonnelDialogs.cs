@@ -1,4 +1,5 @@
 using System.Globalization;
+using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.HumanResources;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.HumanResources;
@@ -47,9 +48,10 @@ internal static class PersonnelFile
     }
 
     internal static async Task<bool> DocumentsAsync(IWin32Window owner, PersonnelService personnel,
-                                                    IUserDialogs dialogs, ILocalizer localizer, Guid employeeId)
+                                                    IDocumentOutput output, IUserDialogs dialogs,
+                                                    ILocalizer localizer, Guid employeeId)
     {
-        using var dialog = new CredentialsDialog(localizer, dialogs, personnel, employeeId);
+        using var dialog = new CredentialsDialog(localizer, dialogs, personnel, output, employeeId);
         await dialog.LoadAsync();
         dialog.ShowDialog(owner);
         return dialog.Changed;
@@ -257,25 +259,35 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
     }
 }
 
-/// <summary>The documents of one file, with their dates: what HR shows an inspector or an assessor.</summary>
+/// <summary>
+/// The documents of one file, with their dates and their scans: what HR shows an inspector or an
+/// assessor.
+/// </summary>
 internal sealed class CredentialsDialog : Form
 {
     private readonly ILocalizer _localizer;
     private readonly IUserDialogs _dialogs;
     private readonly PersonnelService _personnel;
+    private readonly IDocumentOutput _output;
     private readonly Guid _employeeId;
 
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly Button _add = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _edit = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _attach = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _open = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _remove = UiTheme.SecondaryButton(string.Empty);
+    private int _pending;
 
     internal bool Changed { get; private set; }
 
-    internal CredentialsDialog(ILocalizer localizer, IUserDialogs dialogs, PersonnelService personnel, Guid employeeId)
+    internal CredentialsDialog(ILocalizer localizer, IUserDialogs dialogs, PersonnelService personnel,
+                               IDocumentOutput output, Guid employeeId)
     {
         _localizer = localizer;
         _dialogs = dialogs;
         _personnel = personnel;
+        _output = output;
         _employeeId = employeeId;
 
         Text = localizer["Personnel.Documents"];
@@ -283,46 +295,78 @@ internal sealed class CredentialsDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(900, 460);
+        ClientSize = new Size(1040, 480);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
-        void Add(string name, string key, int weight, Font? font = null)
+        void Add(string name, string key, int weight, int minimum, Font? font = null)
             => _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                Name = name, HeaderText = localizer[key], FillWeight = weight, ReadOnly = true,
+                Name = name, HeaderText = localizer[key], FillWeight = weight, MinimumWidth = minimum, ReadOnly = true,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
                 DefaultCellStyle = new DataGridViewCellStyle { Font = font ?? UiTheme.Body }
             });
 
-        Add("kind", "Credential.Kind", 16, UiTheme.Small);
-        Add("title", "Credential.Title", 24);
-        Add("reference", "Credential.Reference", 12, UiTheme.Monospace);
-        Add("issuer", "Credential.IssuedBy", 14, UiTheme.Small);
-        Add("obtained", "Credential.ObtainedOn", 10, UiTheme.Monospace);
-        Add("expires", "Credential.ExpiresOn", 10, UiTheme.Monospace);
-        Add("note", "Field.Notes", 14, UiTheme.Small);
+        // The dates and the number keep the room they need: "01/07/2015" cut to "01/07/..." is no date.
+        Add("kind", "Credential.Kind", 14, 120, UiTheme.Small);
+        Add("title", "Credential.Title", 22, 150);
+        Add("reference", "Credential.Reference", 13, 120, UiTheme.Monospace);
+        Add("issuer", "Credential.IssuedBy", 12, 90, UiTheme.Small);
+        Add("obtained", "Credential.ObtainedOn", 10, 100, UiTheme.Monospace);
+        Add("expires", "Credential.ExpiresOn", 10, 120, UiTheme.Monospace);
+        Add("file", "Credential.Scan", 7, 70, UiTheme.Small);
+        Add("note", "Field.Notes", 12, 90, UiTheme.Small);
 
-        var host = new Panel { Bounds = new Rectangle(12, 12, 876, 380) };
+        var host = new Panel { Bounds = new Rectangle(12, 12, 1016, 400) };
         _grid.Dock = DockStyle.Fill;
         host.Controls.Add(_grid);
 
         _add.Text = localizer["Credential.Add"];
-        _add.Bounds = new Rectangle(12, 408, 200, UiTheme.ButtonHeight);
-        _add.Click += async (_, _) => await AddAsync();
-
+        _edit.Text = localizer["Credential.Edit"];
+        _attach.Text = localizer["Credential.Attach"];
+        _open.Text = localizer["Credential.OpenScan"];
         _remove.Text = localizer["Credential.Remove"];
-        _remove.Bounds = new Rectangle(222, 408, 200, UiTheme.ButtonHeight);
-        _remove.Click += async (_, _) => await RemoveAsync();
+
+        // Sized to their captions, so a longer translation pushes the next button along instead of
+        // being cut.
+        var actions = new FlowLayoutPanel
+        {
+            Location = new Point(12, 426), AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false
+        };
+        foreach (var button in new[] { _add, _edit, _attach, _open, _remove })
+        {
+            button.AutoSize = true;
+            button.AutoSizeMode = AutoSizeMode.GrowOnly;
+            button.MinimumSize = new Size(130, UiTheme.ButtonHeight);
+            button.Size = button.MinimumSize;
+            button.Margin = new Padding(0, 0, 10, 0);
+            actions.Controls.Add(button);
+        }
+
+        _add.Click += async (_, _) => await Guarded(AddAsync);
+        _edit.Click += async (_, _) => await Guarded(EditAsync);
+        _attach.Click += async (_, _) => await Guarded(AttachAsync);
+        _open.Click += async (_, _) => await Guarded(OpenAsync);
+        _remove.Click += async (_, _) => await Guarded(RemoveAsync);
 
         var close = UiTheme.SecondaryButton(localizer["Action.Close"]);
-        close.Bounds = new Rectangle(738, 408, 150, UiTheme.ButtonHeight);
+        close.Bounds = new Rectangle(888, 426, 140, UiTheme.ButtonHeight);
         close.DialogResult = DialogResult.Cancel;
 
-        Controls.AddRange([host, _add, _remove, close]);
+        Controls.AddRange([host, actions, close]);
         CancelButton = close;
 
-        PermissionGate.Require(Permissions.HumanResources.Manage, _add, _remove);
+        PermissionGate.Require(Permissions.HumanResources.Manage, _add, _edit, _attach, _remove);
+
+        _grid.SelectionChanged += (_, _) => UpdateButtons();
+
+        // A double-click corrects the document for whoever may, and otherwise shows its scan.
+        _grid.CellDoubleClick += async (_, e) =>
+        {
+            if (e.RowIndex < 0) return;
+            if (!PermissionGate.IsBlocked(_edit)) await Guarded(EditAsync);
+            else if (Current()?.FileName is not null) await Guarded(OpenAsync);
+        };
 
         _grid.CellFormatting += (_, e) =>
         {
@@ -334,10 +378,38 @@ internal sealed class CredentialsDialog : Form
                 e.CellStyle.ForeColor = UiTheme.Critical;
             }
         };
+
+        UpdateButtons();
+    }
+
+    private CredentialRow? Current() => _grid.CurrentRow?.Tag as CredentialRow;
+
+    private void UpdateButtons()
+    {
+        var row = Current();
+        _edit.Enabled = _attach.Enabled = _remove.Enabled = row is not null && _pending == 0;
+        _open.Enabled = row?.FileName is not null && _pending == 0;
+        _add.Enabled = _pending == 0;
+    }
+
+    /// <summary>One operation at a time: a second click while a scan uploads does nothing.</summary>
+    private async Task Guarded(Func<Task> action)
+    {
+        if (_pending > 0) return;
+        _pending++;
+        UpdateButtons();
+        try { await action(); }
+        finally
+        {
+            _pending--;
+            UpdateButtons();
+        }
     }
 
     internal async Task LoadAsync()
     {
+        var keep = Current()?.CredentialId;
+
         var result = await _personnel.GetEmployeeAsync(_employeeId);
         if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 
@@ -353,9 +425,14 @@ internal sealed class CredentialsDialog : Form
 
             var index = _grid.Rows.Add(_localizer[$"CredentialKind.{c.Kind}"], c.Title, c.Reference ?? string.Empty,
                                        c.IssuedBy ?? string.Empty, c.ObtainedOn?.ToString("dd/MM/yyyy") ?? "—",
-                                       c.ExpiresOn?.ToString("dd/MM/yyyy") ?? "—", note);
+                                       c.ExpiresOn?.ToString("dd/MM/yyyy") ?? "—",
+                                       c.FileName is null ? "—" : _localizer["Credential.HasScan"], note);
             _grid.Rows[index].Tag = c;
+            if (c.FileName is not null) _grid.Rows[index].Cells["file"].ToolTipText = c.FileName;
+            if (c.CredentialId == keep) _grid.CurrentCell = _grid.Rows[index].Cells[0];
         }
+
+        UpdateButtons();
     }
 
     private async Task AddAsync()
@@ -376,9 +453,82 @@ internal sealed class CredentialsDialog : Form
         }
     }
 
+    private async Task EditAsync()
+    {
+        if (Current() is not { } row) return;
+
+        using var editor = new CredentialEditorDialog(_localizer, _dialogs, row);
+
+        while (editor.ShowDialog(this) == DialogResult.OK)
+        {
+            var updated = await _personnel.UpdateCredentialAsync(_employeeId, row.CredentialId, editor.Request);
+            if (updated.IsSuccess)
+            {
+                Changed = true;
+                await LoadAsync();
+                return;
+            }
+
+            _dialogs.ShowFailure(updated, editor.Text);
+        }
+    }
+
+    private async Task AttachAsync()
+    {
+        if (Current() is not { } row) return;
+
+        if (row.FileName is not null
+            && !_dialogs.Confirm(_localizer.Format("Credential.ReplaceScanPrompt", row.FileName), _attach.Text))
+            return;
+
+        using var picker = new OpenFileDialog
+        {
+            Title = _attach.Text,
+            Filter = $"{_localizer["Credential.ScanFiles"]} (*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff)|*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff",
+            CheckFileExists = true
+        };
+        if (picker.ShowDialog(this) != DialogResult.OK) return;
+
+        byte[] content;
+        try
+        {
+            var info = new FileInfo(picker.FileName);
+            if (info.Length > CredentialFile.MaximumBytes)
+            {
+                _dialogs.Warn(_localizer.Format("Credential_FileTooLarge", CredentialFile.MaximumBytes / (1024 * 1024)),
+                              _attach.Text);
+                return;
+            }
+            content = await File.ReadAllBytesAsync(info.FullName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _dialogs.Warn($"{_localizer["Documents.FileUnreadable"]}\n{ex.Message}", _attach.Text);
+            return;
+        }
+
+        var attached = await _personnel.AttachCredentialFileAsync(_employeeId, row.CredentialId,
+                                                                  Path.GetFileName(picker.FileName), content);
+        if (attached.IsFailure) { _dialogs.ShowFailure(attached, _attach.Text); return; }
+
+        Changed = true;
+        await LoadAsync();
+    }
+
+    private async Task OpenAsync()
+    {
+        if (Current() is not { FileName: not null } row) return;
+
+        var file = await _personnel.GetCredentialFileAsync(_employeeId, row.CredentialId);
+        if (file.IsFailure) { _dialogs.ShowFailure(file, _open.Text); return; }
+
+        var opened = await _output.ViewAsync(file.Value.Content, Path.GetExtension(file.Value.FileName));
+        if (opened.IsFailure) _dialogs.ShowFailure(opened, _open.Text);
+    }
+
     private async Task RemoveAsync()
     {
-        if (_grid.CurrentRow?.Tag is not CredentialRow row) return;
+        if (Current() is not { } row) return;
 
         var reason = _dialogs.PromptForReason(_localizer.Format("Credential.RemovePrompt", row.Title), _remove.Text);
         if (reason is null) return;
@@ -401,11 +551,11 @@ internal sealed class CredentialEditorDialog : MasterDataEditor
 
     internal CredentialRequest Request { get; private set; } = null!;
 
-    internal CredentialEditorDialog(ILocalizer localizer, IUserDialogs dialogs)
-        : base(localizer, dialogs, "Credential.Add", null, 520, 360)
+    internal CredentialEditorDialog(ILocalizer localizer, IUserDialogs dialogs, CredentialRow? existing = null)
+        : base(localizer, dialogs, existing is null ? "Credential.Add" : "Credential.Edit", existing?.Title, 520, 360)
     {
-        _kind = Choice("Credential.Kind", 20, 10, 230, CredentialKind.Diploma, "CredentialKind");
-        _fitness = Choice("Credential.Fitness", 270, 10, 230, MedicalFitness.Fit, "MedicalFitness");
+        _kind = Choice("Credential.Kind", 20, 10, 230, existing?.Kind ?? CredentialKind.Diploma, "CredentialKind");
+        _fitness = Choice("Credential.Fitness", 270, 10, 230, existing?.Fitness ?? MedicalFitness.Fit, "MedicalFitness");
         _title = TextField("Credential.Title", 20, 62, 480);
         _reference = TextField("Credential.Reference", 20, 114, 230, latin: true, mono: true);
         _issuer = TextField("Credential.IssuedBy", 270, 114, 230);
@@ -415,10 +565,32 @@ internal sealed class CredentialEditorDialog : MasterDataEditor
         _note = TextField("Field.Notes", 20, 216, 480);
         Notice(20, 266, 480, 34, "Credential.NoDiagnosisNotice");
 
+        if (existing is not null)
+        {
+            _title.Text = existing.Title;
+            _reference.Text = existing.Reference ?? string.Empty;
+            _issuer.Text = existing.IssuedBy ?? string.Empty;
+            SetDate(_obtained, existing.ObtainedOn);
+            SetDate(_expires, existing.ExpiresOn);
+            _note.Text = existing.Note ?? string.Empty;
+            _suggested = existing.Title;
+        }
+
         _kind.SelectedIndexChanged += (_, _) => OnKindChanged();
         OnKindChanged();
 
         Buttons(310, 520);
+    }
+
+    private static void SetDate((CheckBox Toggle, DateTimePicker Picker) field, DateOnly? value)
+    {
+        field.Toggle.Checked = value is not null;
+        if (value is not { } date) return;
+
+        var wanted = date.ToDateTime(TimeOnly.MinValue);
+        field.Picker.Value = wanted < field.Picker.MinDate ? field.Picker.MinDate
+                           : wanted > field.Picker.MaxDate ? field.Picker.MaxDate
+                           : wanted;
     }
 
     /// <summary>

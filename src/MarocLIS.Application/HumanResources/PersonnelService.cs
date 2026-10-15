@@ -69,7 +69,11 @@ public sealed record CredentialRow(
     DateOnly? ObtainedOn,
     DateOnly? ExpiresOn,
     MedicalFitness? Fitness,
-    string? Note);
+    string? Note,
+    string? FileName = null);
+
+/// <summary>A scan as it is opened on screen.</summary>
+public sealed record CredentialFileContent(string FileName, string ContentType, byte[] Content);
 
 public sealed record EmployeeDetail(
     EmployeeRequest Request,
@@ -285,6 +289,7 @@ public static class PersonnelDeadlines
 /// </summary>
 public sealed class PersonnelService(
     IRepository<Employee> employees,
+    IRepository<CredentialFile> credentialFiles,
     IPersonnelQueries queries,
     ISequenceAllocator sequences,
     IUnitOfWork unitOfWork,
@@ -356,7 +361,7 @@ public sealed class PersonnelService(
         var credentials = e.Credentials
             .OrderBy(c => c.Kind).ThenByDescending(c => c.ObtainedOn ?? DateOnly.MinValue)
             .Select(c => new CredentialRow(c.Id, c.Kind, c.Title, c.Reference, c.IssuedBy,
-                                           c.ObtainedOn, c.ExpiresOn, c.Fitness, c.Note))
+                                           c.ObtainedOn, c.ExpiresOn, c.Fitness, c.Note, c.FileName))
             .ToList();
 
         return Result.Success(new EmployeeDetail(request, e.Number, salary, e.ExitDate, e.ExitReason,
@@ -512,6 +517,83 @@ public sealed class PersonnelService(
         unitOfWork.AuditReason = $"Pièce ajoutée au dossier {employee.Number} : {request.Kind} {request.Title.Trim()}";
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success();
+    }
+
+    public async Task<Result> UpdateCredentialAsync(Guid employeeId, Guid credentialId, CredentialRequest request,
+                                                    CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.HumanResources.Manage);
+        if (permitted.IsFailure) return permitted;
+
+        var employee = await employees.GetByIdWithDetailsAsync(employeeId, ct);
+        if (employee is null) return Result.Failure(Error.NotFound("Employee_NotFound"));
+
+        if (request.Kind == CredentialKind.MedicalVisit && request.Fitness is null)
+            return Result.Failure(Error.Validation("Credential_FitnessRequired"));
+
+        var updated = employee.UpdateCredential(credentialId, request.Kind, request.Title, Clean(request.Reference),
+                                                Clean(request.IssuedBy), request.ObtainedOn, request.ExpiresOn,
+                                                request.Fitness, Clean(request.Note));
+        if (updated.IsFailure) return updated;
+
+        employees.Update(employee);
+        unitOfWork.AuditReason = $"Pièce modifiée dans le dossier {employee.Number} : {request.Kind} {request.Title.Trim()}";
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    /// <summary>Keeps the scan of a document with it, replacing the one already there.</summary>
+    public async Task<Result> AttachCredentialFileAsync(Guid employeeId, Guid credentialId, string fileName,
+                                                        byte[] content, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.HumanResources.Manage);
+        if (permitted.IsFailure) return permitted;
+
+        // Only the name is kept: the folder it came from says something about the workstation, nothing about the document.
+        var name = Path.GetFileName((fileName ?? string.Empty).Replace('\\', '/')).Trim();
+        if (name.Length == 0 || content is not { Length: > 0 })
+            return Result.Failure(Error.Validation("Credential_FileEmpty"));
+        if (content.Length > CredentialFile.MaximumBytes)
+            return Result.Failure(Error.Validation("Credential_FileTooLarge", CredentialFile.MaximumBytes / (1024 * 1024)));
+        if (CredentialFile.ContentTypeOf(name) is not { } contentType)
+            return Result.Failure(Error.Validation("Credential_FileType"));
+        if (name.Length > 200) name = name[..(200 - Path.GetExtension(name).Length)] + Path.GetExtension(name);
+
+        var employee = await employees.GetByIdWithDetailsAsync(employeeId, ct);
+        if (employee is null) return Result.Failure(Error.NotFound("Employee_NotFound"));
+
+        var marked = employee.MarkCredentialFile(credentialId, name);
+        if (marked.IsFailure) return marked;
+
+        var existing = (await credentialFiles.ListAsync(f => f.CredentialId == credentialId, ct)).FirstOrDefault();
+        if (existing is null)
+            await credentialFiles.AddAsync(new CredentialFile(credentialId, name, contentType, content), ct);
+        else
+        {
+            existing.Replace(name, contentType, content);
+            credentialFiles.Update(existing);
+        }
+
+        employees.Update(employee);
+        unitOfWork.AuditReason = $"Scan joint à une pièce du dossier {employee.Number} : {name}";
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    public async Task<Result<CredentialFileContent>> GetCredentialFileAsync(Guid employeeId, Guid credentialId,
+                                                                            CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.HumanResources.View);
+        if (permitted.IsFailure) return Result.Failure<CredentialFileContent>(permitted.FirstError);
+
+        var employee = await employees.GetByIdWithDetailsAsync(employeeId, ct);
+        if (employee is null || employee.Credentials.All(c => c.Id != credentialId))
+            return Result.Failure<CredentialFileContent>(Error.NotFound("Credential_NotFound"));
+
+        var file = (await credentialFiles.ListAsync(f => f.CredentialId == credentialId, ct)).FirstOrDefault();
+        return file is null
+            ? Result.Failure<CredentialFileContent>(Error.NotFound("Credential_NoFile"))
+            : Result.Success(new CredentialFileContent(file.FileName, file.ContentType, file.Content));
     }
 
     public async Task<Result> RemoveCredentialAsync(Guid employeeId, Guid credentialId, string reason,
