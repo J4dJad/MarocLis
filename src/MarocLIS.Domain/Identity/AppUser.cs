@@ -120,6 +120,19 @@ public sealed class AppUser : AuditableAggregateRoot
 
     public void Deactivate() => IsActive = false;
 
+    /// <summary>
+    /// Clears the failed sign-in counter and the lockout window, and nothing else. An administrative
+    /// unlock must not reactivate a withdrawn account; reactivation is its own, audited decision.
+    /// </summary>
+    public void ClearLockout()
+    {
+        if (!IsActive)
+            throw new DomainException("An inactive account cannot be unlocked; reactivate it instead.");
+
+        FailedLoginAttempts = 0;
+        LockedOutUntil = null;
+    }
+
     public void Activate()
     {
         IsActive = true;

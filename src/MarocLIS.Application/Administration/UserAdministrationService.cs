@@ -243,6 +243,14 @@ public sealed class UserAdministrationService(
                                                    request.QualificationValidUntil);
         if (qualification.IsFailure) return Result.Failure<Guid>(qualification.Errors);
 
+        // Giving roles is the role administrator's decision (SetRolesAsync requires it too);
+        // otherwise anyone who may create accounts could create one holding every permission.
+        if (request.RoleIds.Count > 0)
+        {
+            var mayAssignRoles = guard.Require(Permissions.Administration.ManageRoles);
+            if (mayAssignRoles.IsFailure) return Result.Failure<Guid>(mayAssignRoles.FirstError);
+        }
+
         var roleCheck = await CheckRolesAgainstQualificationAsync(
             request.RoleIds, request.Qualification, request.ProfessionalOrderNumber, ct);
         if (roleCheck.IsFailure) return Result.Failure<Guid>(roleCheck.Errors);
@@ -505,12 +513,15 @@ public sealed class UserAdministrationService(
         var user = await users.GetByIdAsync(userId, ct);
         if (user is null) return Result.Failure(Error.NotFound("User_NotFound"));
 
+        // Unlocking a deactivated account would be a reactivation without its reason or its
+        // last-administrator check; reactivation goes through SetActiveAsync.
+        if (!user.IsActive)
+            return Result.Failure(Error.Validation("User_CannotUnlockInactive", user.UserName));
+
         if (!user.IsLockedOut(clock.Now) && user.FailedLoginAttempts == 0)
             return Result.Failure(Error.Validation("User_NotLockedOut"));
 
-        // Activate() clears the counter and the lockout window; it is the same reset the domain
-        // applies on reactivation, and duplicating it here would be a second place to get wrong.
-        user.Activate();
+        user.ClearLockout();
 
         users.Update(user);
 
@@ -532,6 +543,15 @@ public sealed class UserAdministrationService(
     {
         var permitted = guard.Require(Permissions.Administration.ManageUsers);
         if (permitted.IsFailure) return permitted;
+
+        var user = await users.GetByIdWithDetailsAsync(userId, ct);
+        if (user is null) return Result.Failure(Error.NotFound("User_NotFound"));
+
+        // Whoever sets an account's password can sign in as that account. A user manager must not
+        // gain, through someone else's account, a permission they were not given themselves.
+        var held = await queries.GetPermissionsForRolesAsync([.. user.Roles.Select(r => r.RoleId)], ct);
+        if (held.Any(p => !currentUser.Has(p)))
+            return Result.Failure(Error.Validation("User_ResetPasswordExceedsOwnPermissions", user.UserName));
 
         return await authentication.ResetPasswordAsync(userId, newPassword, ct);
     }
@@ -639,11 +659,22 @@ public sealed class UserAdministrationService(
         var permitted = guard.Require(Permissions.Administration.ManageRoles);
         if (permitted.IsFailure) return permitted;
 
-        var role = await roles.GetByIdAsync(roleId, ct);
+        var role = await roles.GetByIdWithDetailsAsync(roleId, ct);
         if (role is null) return Result.Failure(Error.NotFound("Role_NotFound"));
 
         if (role.IsBuiltIn && !active)
             return Result.Failure(Error.Validation("Role_BuiltInCannotBeDeactivated", role.Code));
+
+        // A deactivated role grants nothing, so switching off a role carrying user management can
+        // orphan the installation exactly as revoking the permission would — same check.
+        if (!active && role.IsActive && role.Has(Permissions.Administration.ManageUsers))
+        {
+            var survivors = await queries.CountActiveUsersWithPermissionAsync(
+                Permissions.Administration.ManageUsers, excludingRoleId: roleId, ct: ct);
+
+            if (survivors == 0)
+                return Result.Failure(Error.Validation("Role_WouldRemoveLastAdministrator"));
+        }
 
         role.IsActive = active;
         roles.Update(role);

@@ -726,7 +726,8 @@ public sealed class UserAdministrationView : LocalizedView
         _assignRoles.Enabled = row is not null;
         _siteAccess.Enabled = row is not null;
         _resetPassword.Enabled = row is not null;
-        _unlock.Enabled = row is { IsLockedOut: true } or { FailedLoginAttempts: > 0 };
+        // An inactive account is reactivated, not unlocked: the service refuses it.
+        _unlock.Enabled = row is { IsActive: true } and ({ IsLockedOut: true } or { FailedLoginAttempts: > 0 });
 
         _toggleActive.Enabled = row is not null;
         _toggleActive.Text = row is { IsActive: false } ? T("Admin.Reactivate") : T("Admin.Deactivate");
