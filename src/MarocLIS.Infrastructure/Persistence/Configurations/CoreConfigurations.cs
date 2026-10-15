@@ -298,6 +298,9 @@ public sealed class ReferenceRangeConfiguration : IEntityTypeConfiguration<Refer
         builder.MapMultilingual(e => e.DisplayText, "DisplayText", frenchRequired: false, maxLength: 200);
         builder.Property(e => e.ExpectedCodedValue).HasMaxLength(60);
         builder.Property(e => e.Source).HasMaxLength(300);
+        // The unit the age band was typed in (1, 30 or 365); null on bands saved before it was kept.
+        builder.Property(e => e.AgeUnitDays);
+        builder.Ignore(e => e.EffectiveAgeUnitDays);
         builder.HasIndex(e => new { e.TestParameterId, e.IsActive })
                .HasDatabaseName("IX_ReferenceRanges_Parameter");
     }

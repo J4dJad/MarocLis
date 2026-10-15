@@ -1,5 +1,4 @@
 using MarocLIS.Application.Abstractions;
-using MarocLIS.Application.Calculations;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -46,6 +45,12 @@ public sealed record ResultEntryRow
     public ResultInterpretation Interpretation { get; init; }
     public ResultFlag Flags { get; init; }
     public TestResultStatus Status { get; init; }
+
+    /// <summary>
+    /// When the value shown was stored. A critical call names it, so a call dictated from a screen
+    /// loaded before a re-run is refused instead of covering a value nobody was told about.
+    /// </summary>
+    public DateTimeOffset? EnteredAt { get; init; }
 
     /// <summary>The value is beyond a critical threshold, low or high.</summary>
     public bool IsCritical => (Flags & (ResultFlag.CriticalLow | ResultFlag.CriticalHigh)) != 0;
@@ -147,6 +152,9 @@ public sealed class ResultEntryService(
     IDataAccessAuditor accessAuditor,
     IClock clock)
 {
+    /// <summary>The steps every stored value goes through, shared with the analyser interface.</summary>
+    private readonly ResultPostEntryPipeline _pipeline = new(analyses, patients, samples, queries, clock);
+
     /// <summary>
     /// Resolves whatever the technician scanned or typed to an order.
     /// <para>
@@ -180,10 +188,11 @@ public sealed class ResultEntryService(
         var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
         if (order is null) return Result.Failure<ResultEntrySheet>(Error.NotFound("Order_NotFound"));
 
-        var patient = await patients.GetByIdAsync(order.PatientId, ct);
+        // A merged duplicate's order is read with the surviving file's demographics.
+        var patient = await _pipeline.PatientOfAsync(order, ct);
         if (patient is null) return Result.Failure<ResultEntrySheet>(Error.NotFound("Order_PatientNotFound"));
 
-        var catalogue = await LoadCatalogueAsync(order, ct);
+        var catalogue = await _pipeline.LoadCatalogueAsync(order, ct);
         var resultRows = await queries.GetResultsForOrderAsync(orderId, departmentId, ct);
         var sampleDefects = await LoadSampleDefectsAsync(order, ct);
         var sampleStatuses = await LoadSampleStatusesAsync(order, ct);
@@ -256,6 +265,7 @@ public sealed class ResultEntryService(
                 Interpretation = result.Interpretation,
                 Flags = result.Flags,
                 Status = result.Status,
+                EnteredAt = result.EnteredAt,
                 IsCriticalCommunicated = communicated.Contains(result.Id),
                 TechnicalComment = result.TechnicalComment,
                 InstrumentFlags = result.InstrumentFlags,
@@ -303,10 +313,11 @@ public sealed class ResultEntryService(
         var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
         if (order is null) return Result.Failure<ResultEntryOutcome>(Error.NotFound("Order_NotFound"));
 
-        var patient = await patients.GetByIdAsync(order.PatientId, ct);
+        // A merged duplicate's order is read with the surviving file's demographics.
+        var patient = await _pipeline.PatientOfAsync(order, ct);
         if (patient is null) return Result.Failure<ResultEntryOutcome>(Error.NotFound("Order_PatientNotFound"));
 
-        var catalogue = await LoadCatalogueAsync(order, ct);
+        var catalogue = await _pipeline.LoadCatalogueAsync(order, ct);
         var stored = await queries.GetResultsForOrderAsync(orderId, null, ct);
         var byId = stored.ToDictionary(r => r.Id);
 
@@ -406,28 +417,18 @@ public sealed class ResultEntryService(
             accepted++;
         }
 
-        // --- 2. Recompute calculated parameters -------------------------------------------------
+        // --- 2. Recompute calculated parameters, then interpret, delta-check and flag -----------
 
-        RecalculateDerived(stored, catalogue, patient, now);
+        var criticalFindings = await _pipeline.RunAsync(order, patient, stored, catalogue,
+                                                        currentUser.UserId, currentUser.Language, ct);
 
-        // --- 3. Interpret, delta-check and flag -------------------------------------------------
+        // --- 3. Advance the order items whose parameters now all carry a value -------------------
 
-        var criticalFindings = await InterpretAsync(order, patient, stored, catalogue, ct);
-
-        // --- 4. Advance the order items whose parameters now all carry a value -------------------
-
-        foreach (var item in order.Items.Where(i => !i.IsCancelled))
-        {
-            var itemResults = stored.Where(r => r.LabOrderItemId == item.Id).ToList();
-            if (itemResults.Count == 0) continue;
-
-            if (itemResults.All(r => r.HasValue || r.Status == TestResultStatus.NotDone))
-                item.MarkResultEntered(now);
-        }
+        ResultPostEntryPipeline.AdvanceCompletedItems(order, stored, now);
 
         order.RecomputeStatus();
 
-        // --- 5. Reflex rules -------------------------------------------------------------------
+        // --- 4. Reflex rules -------------------------------------------------------------------
 
         var suggestions = await EvaluateReflexRulesAsync(stored, ct);
 
@@ -435,70 +436,6 @@ public sealed class ResultEntryService(
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new ResultEntryOutcome(accepted, rejected, criticalFindings, suggestions));
-    }
-
-    /// <summary>
-    /// Interprets, delta-checks and flags every non-validated result of the order that carries a
-    /// value, and returns the critical ones.
-    /// <para>
-    /// Each result is interpreted in its own context: the instrument that produced it and the day
-    /// it was measured. A shared context without the instrument re-resolved a TSH from the
-    /// analyser — interpreted against its method-specific interval when it arrived — against the
-    /// generic interval at the next manual submit on the same order.
-    /// </para>
-    /// </summary>
-    private async Task<List<CriticalFinding>> InterpretAsync(LabOrder order, Patient patient,
-                                                             IReadOnlyList<TestResult> stored,
-                                                             CatalogueSnapshot catalogue,
-                                                             CancellationToken ct)
-    {
-        var criticalFindings = new List<CriticalFinding>();
-
-        foreach (var result in stored.Where(r => r.HasValue && !r.IsValidated))
-        {
-            var parameter = catalogue.Parameters.GetValueOrDefault(result.TestParameterId);
-            if (parameter is null) continue;
-
-            var range = parameter.ResolveRange(
-                ReferenceRangeContext.ForResult(patient, result, clock.Today));
-            result.ApplyInterpretation(parameter, range, currentUser.Language,
-                                       parameter.Unit?.DisplaySymbol);
-
-            var previous = await queries.GetPreviousValueAsync(order.PatientId, parameter.Id,
-                                                               order.RegisteredAt, ct);
-
-            if (previous is not null)
-            {
-                result.PreviousNumericValue = previous.Value;
-                result.PreviousResultDate = previous.Date;
-
-                var daysSince = clock.Today.DayNumber - previous.Date.DayNumber;
-
-                if (result.NumericValue is { } current &&
-                    parameter.FailsDeltaCheck(current, previous.Value, daysSince))
-                    result.FlagDeltaCheckFailure();
-            }
-
-            // A defect on the sample this result came from is disclosed on the report, so the
-            // clinician can weigh it. Silently reporting a haemolysed potassium is the error.
-            var item = order.Items.FirstOrDefault(i => i.Id == result.LabOrderItemId);
-            if (item?.SampleId is { } sampleId)
-            {
-                var sample = await samples.GetByIdAsync(sampleId, ct);
-                if (sample?.HasDefects == true) result.FlagSampleDefect();
-            }
-
-            if (result.IsCritical)
-            {
-                criticalFindings.Add(new CriticalFinding(
-                    result.Id,
-                    parameter.Name.For(currentUser.Language),
-                    $"{result.FormatValue(currentUser.Language)} {parameter.Unit?.DisplaySymbol}".Trim(),
-                    result.Interpretation));
-            }
-        }
-
-        return criticalFindings;
     }
 
     /// <summary>
@@ -523,11 +460,11 @@ public sealed class ResultEntryService(
         if (!stored.Any(r => !r.IsValidated && (r.HasValue || r.Status == TestResultStatus.NotDone)))
             return (0, validated);
 
-        var catalogue = await LoadCatalogueAsync(order, ct);
+        var catalogue = await _pipeline.LoadCatalogueAsync(order, ct);
 
         // An eGFR or any formula reading the age or the sex changes with the demographics too.
-        RecalculateDerived(stored, catalogue, patient, clock.Now);
-        await InterpretAsync(order, patient, stored, catalogue, ct);
+        await _pipeline.RunAsync(order, patient, stored, catalogue, currentUser.UserId,
+                                 currentUser.Language, ct);
 
         return (stored.Count(r => r.HasValue && !r.IsValidated), validated);
     }
@@ -602,124 +539,6 @@ public sealed class ResultEntryService(
                     : Result.Success();
             }
         }
-    }
-
-    // ---- Calculated parameters ------------------------------------------------------------------
-
-    /// <summary>
-    /// Recomputes every calculated parameter of the order in dependency order.
-    /// <para>
-    /// Dependency order is resolved rather than assumed: an LDL depends on a cholesterol, an
-    /// HDL and a triglyceride, and a laboratory is free to define a parameter that depends on
-    /// another calculated one. Evaluating in catalogue order would silently produce a value from a
-    /// stale input.
-    /// </para>
-    /// </summary>
-    private void RecalculateDerived(IReadOnlyList<TestResult> stored, CatalogueSnapshot catalogue,
-                                    Patient patient, DateTimeOffset now)
-    {
-        var calculated = catalogue.Parameters.Values
-            .Where(p => p.IsCalculated)
-            .ToDictionary(p => p.Code, p => p.CalculationFormula!, StringComparer.Ordinal);
-
-        if (calculated.Count == 0) return;
-
-        var ordering = FormulaEvaluator.ResolveEvaluationOrder(calculated);
-        if (ordering.IsFailure) return;   // A circular definition is a configuration error; the
-                                          // catalogue screen reports it, entry just skips.
-
-        // Measured values, keyed by parameter code, plus the patient context variables.
-        var values = BuildValueBag(stored, catalogue, patient);
-
-        foreach (var code in ordering.Value)
-        {
-            var parameter = catalogue.Parameters.Values
-                .FirstOrDefault(p => string.Equals(p.Code, code, StringComparison.Ordinal));
-
-            if (parameter is null) continue;
-
-            var target = stored.FirstOrDefault(r => r.TestParameterId == parameter.Id);
-            if (target is null || target.IsValidated) continue;
-
-            var evaluation = FormulaEvaluator.Evaluate(parameter.CalculationFormula!, values);
-
-            if (evaluation.IsFailure)
-            {
-                // Whatever the parameter held before is no input for the formulas that read it.
-                values.Remove(parameter.Code);
-
-                if (evaluation.FirstError.ResourceKey == FormulaEvaluator.NotApplicableKey)
-                {
-                    // The inputs are there but outside the formula's domain — Friedewald above
-                    // 4 g/L of triglycerides. Reported as not calculable, with the reason, so the
-                    // panel can be completed and the biologist sees a direct measurement is needed.
-                    if (target.Status != TestResultStatus.NotDone)
-                        target.MarkNotDone(NotCalculableComment, now, currentUser.UserId);
-                    continue;
-                }
-
-                // An input that has not been entered yet is the normal case mid-panel, not an
-                // error worth surfacing; the value simply stays awaited. But a value computed
-                // earlier from an input that has since been removed, or one no longer calculable,
-                // no longer has anything behind it and is withdrawn rather than left standing.
-                if (target.HasValue || target.Status == TestResultStatus.NotDone)
-                {
-                    target.ClearValue();
-                    ClearNotCalculableComment(target);
-                }
-                continue;
-            }
-
-            var rounded = parameter.Round(evaluation.Value);
-            values[parameter.Code] = rounded;
-
-            // Unchanged inputs give an unchanged value: re-entering it would only reset the
-            // technical validation of a figure nobody changed.
-            if (target.Status != TestResultStatus.NotDone && target.NumericValue == rounded
-                && target.ValueOperator is null)
-                continue;
-
-            ClearNotCalculableComment(target);
-            target.EnterNumeric(parameter, evaluation.Value, now, currentUser.UserId);
-        }
-    }
-
-    /// <summary>Printed next to a calculated parameter whose formula does not apply to the values.</summary>
-    private const string NotCalculableComment = "Non calculable avec ces valeurs : dosage direct requis";
-
-    private static void ClearNotCalculableComment(TestResult target)
-    {
-        if (target.TechnicalComment != NotCalculableComment) return;
-
-        target.TechnicalComment = null;
-        target.PrintTechnicalComment = false;
-    }
-
-    private Dictionary<string, decimal> BuildValueBag(IReadOnlyList<TestResult> stored,
-                                                       CatalogueSnapshot catalogue, Patient patient)
-    {
-        var values = new Dictionary<string, decimal>(StringComparer.Ordinal);
-
-        foreach (var result in stored)
-        {
-            if (result.NumericValue is not { } value) continue;
-            var parameter = catalogue.Parameters.GetValueOrDefault(result.TestParameterId);
-            if (parameter is null) continue;
-            values[parameter.Code] = value;
-        }
-
-        var today = clock.Today;
-
-        values[FormulaEvaluator.ContextVariables.AgeYears] = patient.AgeInYears(today) ?? 0m;
-        values[FormulaEvaluator.ContextVariables.AgeDays] = patient.AgeInDays(today) ?? 0m;
-        values[FormulaEvaluator.ContextVariables.IsFemale] = patient.Gender == Gender.Female ? 1m : 0m;
-        values[FormulaEvaluator.ContextVariables.IsMale] = patient.Gender == Gender.Male ? 1m : 0m;
-        values[FormulaEvaluator.ContextVariables.IsPregnant] = patient.IsPregnant ? 1m : 0m;
-        values[FormulaEvaluator.ContextVariables.WeightKg] = patient.WeightKg ?? 0m;
-        values[FormulaEvaluator.ContextVariables.HeightCm] = patient.HeightCm ?? 0m;
-        values[FormulaEvaluator.ContextVariables.BodySurfaceArea] = patient.BodySurfaceAreaM2 ?? 0m;
-
-        return values;
     }
 
     // ---- Reflex rules ---------------------------------------------------------------------------
@@ -797,31 +616,7 @@ public sealed class ResultEntryService(
         return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
     }
 
-    // ---- Catalogue snapshot ---------------------------------------------------------------------
-
-    private sealed record CatalogueSnapshot(
-        Dictionary<Guid, TestParameter> Parameters,
-        Dictionary<Guid, AnalysisTest> TestsByParameter);
-
-    private async Task<CatalogueSnapshot> LoadCatalogueAsync(LabOrder order, CancellationToken ct)
-    {
-        var parameters = new Dictionary<Guid, TestParameter>();
-        var testsByParameter = new Dictionary<Guid, AnalysisTest>();
-
-        foreach (var analysisId in order.Items.Select(i => i.AnalysisTestId).Distinct())
-        {
-            var test = await analyses.GetByIdWithDetailsAsync(analysisId, ct);
-            if (test is null) continue;
-
-            foreach (var parameter in test.Parameters)
-            {
-                parameters[parameter.Id] = parameter;
-                testsByParameter[parameter.Id] = test;
-            }
-        }
-
-        return new CatalogueSnapshot(parameters, testsByParameter);
-    }
+    // ---- Catalogue and tubes -------------------------------------------------------------------
 
     private async Task<Dictionary<Guid, SampleDefect>> LoadSampleDefectsAsync(
         LabOrder order, CancellationToken ct)

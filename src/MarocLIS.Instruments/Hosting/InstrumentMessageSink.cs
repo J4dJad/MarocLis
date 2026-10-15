@@ -1,5 +1,6 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Results;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
@@ -53,6 +54,7 @@ public sealed class InstrumentMessageSink(
     IRepository<QcTarget> qcTargets,
     IRepository<QcResult> qcResults,
     IRepository<Instrument> instruments,
+    ResultPostEntryPipeline pipeline,
     IInstrumentMessageLogStore messageLog,
     IUnitOfWork unitOfWork,
     IClock clock,
@@ -343,8 +345,9 @@ public sealed class InstrumentMessageSink(
         }
 
         // The patient's demographics decide which reference interval applies, so they are loaded
-        // once per specimen rather than per result.
-        var patient = await patients.GetByIdAsync(order.PatientId, ct);
+        // once per specimen rather than per result — the surviving file's, when this order sits on
+        // a duplicate that was merged into it.
+        var patient = await pipeline.PatientOfAsync(order, ct);
 
         var stored = await results.ListAsync(r => r.LabOrderId == order.Id, ct);
 
@@ -369,7 +372,7 @@ public sealed class InstrumentMessageSink(
                 continue;
             }
 
-            var target = stored.FirstOrDefault(r => r.TestParameterId == mapping.TestParameterId);
+            var target = TargetFor(order, stored, sample.Id, mapping.TestParameterId);
 
             if (target is null)
             {
@@ -380,18 +383,35 @@ public sealed class InstrumentMessageSink(
                 continue;
             }
 
-            var applied = await ApplyAsync(link, mapping, incoming, target, order, patient,
-                                            issues, ct);
+            var applied = await ApplyAsync(link, mapping, incoming, target, order, issues, ct);
 
             if (applied) imported++;
         }
 
         if (imported > 0)
         {
+            // The same post-analytical steps as a value typed at the bench: calculated parameters,
+            // interpretation, previous value, delta check and the sample-defect flag. Run once per
+            // tube, over the whole order, as the entry screen runs it once per save.
+            if (patient is not null)
+            {
+                var catalogue = await pipeline.LoadCatalogueAsync(order, ct);
+
+                await pipeline.RunAsync(order, patient, stored, catalogue, serviceAccount.UserId,
+                                        order.ReportLanguage, ct);
+            }
+            else
+            {
+                issues.Add(Describe("Order_PatientNotFound", order.AccessionNumber));
+            }
+
             // The items the analyser produced for move to result-entered, so the technical
             // validation worklist picks them up instead of them sitting in "received" forever.
             foreach (var item in order.Items.Where(i => !i.IsCancelled && i.SampleId == sample.Id))
                 item.MarkResultEntered(clock.Now);
+
+            // And any other analysis a calculated value has just completed.
+            ResultPostEntryPipeline.AdvanceCompletedItems(order, stored, clock.Now);
 
             order.RecomputeStatus();
         }
@@ -399,10 +419,33 @@ public sealed class InstrumentMessageSink(
         return imported;
     }
 
+    /// <summary>
+    /// The row a value for this parameter goes into: one of a live analysis, on this tube.
+    /// <para>
+    /// A recollection cancels the analysis of the refused tube and keeps its rows beside the
+    /// replacement's, for the same parameters. Taking the first row for the parameter wrote the
+    /// new tube's value into the cancelled one about as often as not: hidden from the report,
+    /// while the replacement stayed awaited and the file never completed. An analysis not yet
+    /// bound to a tube is the fallback; one bound to another tube is not this tube's.
+    /// </para>
+    /// </summary>
+    public static TestResult? TargetFor(LabOrder order, IReadOnlyList<TestResult> stored,
+                                        Guid sampleId, Guid testParameterId)
+    {
+        var live = order.Items.Where(i => !i.IsCancelled).ToDictionary(i => i.Id);
+
+        var candidates = stored
+            .Where(r => r.TestParameterId == testParameterId && live.ContainsKey(r.LabOrderItemId))
+            .ToList();
+
+        return candidates.FirstOrDefault(r => live[r.LabOrderItemId].SampleId == sampleId)
+               ?? candidates.FirstOrDefault(r => live[r.LabOrderItemId].SampleId is null);
+    }
+
     private async Task<bool> ApplyAsync(InstrumentInterface link, InstrumentTestMapping mapping,
                                          InstrumentResult incoming, TestResult target,
-                                         LabOrder order, Patient? patient,
-                                         List<string> issues, CancellationToken ct)
+                                         LabOrder order, List<string> issues,
+                                         CancellationToken ct)
     {
         var parameter = await ResolveParameterAsync(order, target, mapping.TestParameterId, ct);
 
@@ -448,7 +491,13 @@ public sealed class InstrumentMessageSink(
             return false;
         }
 
-        var at = incoming.MeasuredAt ?? clock.Now;
+        // Stamped with the time the value reached the laboratory system, not the analyser's
+        // measurement time. The entry time is what a critical call is compared with: a re-run
+        // measured at 10:05 and imported at 10:30, after a link outage or from a replay, counted
+        // as covered by a call made at 10:10 about the value it replaced — and an analyser clock
+        // running ahead blocked calls that were valid. The measurement time is kept beside it,
+        // and it is what the reference interval and the QC window are read on.
+        var at = clock.Now;
         var raw = incoming.Value.Trim();
 
         var outcome = parameter.ValueType switch
@@ -473,6 +522,7 @@ public sealed class InstrumentMessageSink(
             return false;
         }
 
+        target.MeasuredAt = incoming.MeasuredAt ?? at;
         target.InstrumentId = link.InstrumentId;
         target.RawInstrumentValue = raw;
         target.InstrumentFlags = link.KeepInstrumentFlags ? DescribeInstrumentFlags(incoming) : null;
@@ -480,19 +530,10 @@ public sealed class InstrumentMessageSink(
         if (incoming.DilutionFactor is { } dilution and > 1m)
             target.DilutionFactor = dilution;
 
-        // Interpreted here, against this patient's own demographics and this analyser. A value
-        // stored without an interval is a number nobody can act on, and a method-dependent interval
-        // is the norm for hormones and immunoassays — so the instrument is part of the selection.
-        if (patient is not null && parameter.ValueType is ResultValueType.Numeric
-                                                       or ResultValueType.NumericWithOperator)
-        {
-            var context = ReferenceRangeContext.For(patient, clock.Today, link.InstrumentId);
-            var range = parameter.ResolveRange(context);
-
-            target.ApplyInterpretation(parameter, range, order.ReportLanguage,
-                                        parameter.Unit?.DisplaySymbol);
-        }
-
+        // Interpreted with the rest of the tube, by the post-entry pipeline, once every value of
+        // the transmission is in: against this patient's demographics, on the day it was measured
+        // and with this analyser, since a method-dependent interval is the norm for hormones and
+        // immunoassays.
         return true;
     }
 

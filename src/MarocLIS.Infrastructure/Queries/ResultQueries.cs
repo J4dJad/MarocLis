@@ -103,11 +103,29 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
     /// file that already absorbed a duplicate may itself be merged later — so one level is not
     /// enough. Only identifiers are read, across sites and soft deletion, since a duplicate
     /// registered elsewhere is still the same person; the orders themselves stay site-filtered.
+    /// <para>
+    /// The walk starts from the surviving file, not from the one given. An order still pending on
+    /// a duplicate merged today belongs to the person whose years of history sit on the survivor;
+    /// following only the files merged into the duplicate found nothing, and the inversion its
+    /// delta check exists to catch went through.
+    /// </para>
     /// </summary>
     private async Task<List<Guid>> WithMergedDuplicatesAsync(Guid patientId, CancellationToken ct)
     {
-        var all = new HashSet<Guid> { patientId };
-        var frontier = new List<Guid> { patientId };
+        var root = patientId;
+        var climbed = new HashSet<Guid> { root };
+
+        while (await db.Patients
+                   .IgnoreQueryFilters()
+                   .AsNoTracking()
+                   .Where(p => p.Id == root)
+                   .Select(p => p.MergedIntoPatientId)
+                   .FirstOrDefaultAsync(ct) is { } survivor
+               && climbed.Add(survivor))
+            root = survivor;
+
+        var all = new HashSet<Guid> { root };
+        var frontier = new List<Guid> { root };
 
         while (frontier.Count > 0)
         {
@@ -408,8 +426,12 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
     public async Task<IReadOnlyList<PendingReportRow>> GetPendingReleaseAsync(
         Guid siteId, string? search, CancellationToken ct = default)
     {
+        // A validated result of an analysis cancelled since is never printed (SelectReleasable
+        // drops it), so it does not keep the file on the list of reports to issue.
         var validated = db.TestResults.AsNoTracking()
-            .Where(r => r.SiteId == siteId && r.Status == TestResultStatus.Validated);
+            .Where(r => r.SiteId == siteId && r.Status == TestResultStatus.Validated
+                        && db.LabOrderItems.Any(i => i.Id == r.LabOrderItemId
+                                                     && i.Status != LabOrderItemStatus.Cancelled));
 
         var orders = db.LabOrders.AsNoTracking()
             .Where(o => o.SiteId == siteId && o.Status != LabOrderStatus.Cancelled

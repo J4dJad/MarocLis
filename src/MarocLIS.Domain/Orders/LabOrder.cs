@@ -163,6 +163,10 @@ public sealed class LabOrder : AuditableAggregateRoot, ISoftDeletable, ISiteScop
         // patient's hands, and cancelling it would make the figure disappear from the file.
         if (item.Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported)
             return Result.Failure(Error.Conflict("Order_ItemValidatedCannotCancel"));
+        // Nor one some of whose results were printed while the rest await validation: the
+        // printed figure would vanish from every later version of the report.
+        if (item.HasReportedResults)
+            return Result.Failure(Error.Conflict("Order_ItemPartlyReportedCannotCancel"));
 
         item.Cancel(now, byUserId, reason);
         RecomputeStatus();
@@ -192,6 +196,8 @@ public sealed class LabOrder : AuditableAggregateRoot, ISoftDeletable, ISiteScop
             if (old is null) return Result.Failure(Error.NotFound("Order_ItemNotFound"));
             if (old.Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported)
                 return Result.Failure(Error.Conflict("Order_ItemValidatedCannotCancel"));
+            if (old.HasReportedResults)
+                return Result.Failure(Error.Conflict("Order_ItemPartlyReportedCannotCancel"));
         }
 
         foreach (var (oldItemId, replacement) in swaps)
@@ -217,7 +223,8 @@ public sealed class LabOrder : AuditableAggregateRoot, ISoftDeletable, ISiteScop
             return Result.Failure(Error.Validation("Order_CancellationReasonRequired"));
         if (Status == LabOrderStatus.Cancelled)
             return Result.Success();
-        if (_items.Any(i => i.Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported))
+        if (_items.Any(i => i.Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported
+                            || (!i.IsCancelled && i.HasReportedResults)))
             return Result.Failure(Error.Conflict("Order_HasValidatedItemsCannotCancel"));
 
         foreach (var item in _items.Where(i => !i.IsCancelled))

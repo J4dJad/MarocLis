@@ -109,6 +109,27 @@ public sealed class ReferenceRange : Entity, IAuditable
     public const int DaysPerMonth = 30;
 
     /// <summary>
+    /// The unit the band was typed in, in days per unit: 1 (days), 30 (months) or 365 (years).
+    /// <para>
+    /// Stored because the bounds alone cannot tell: "0–30 jours" and "0–1 mois" are both 0–30,
+    /// and read as months the neonatal band ended on the same day of the next month — two days
+    /// early for a baby born on 31 January. Null on a band saved before the unit was kept, which is
+    /// then read as <see cref="AgeBandUnitDays"/> infers it.
+    /// </para>
+    /// </summary>
+    public int? AgeUnitDays { get; set; }
+
+    /// <summary>
+    /// The unit the bounds are compared in: the one typed, when it is a known unit and divides both
+    /// bounds, otherwise the inferred one.
+    /// </summary>
+    public int EffectiveAgeUnitDays =>
+        AgeUnitDays is { } unit and (DaysPerYear or DaysPerMonth or 1)
+        && (AgeFromDays ?? 0) % unit == 0 && (AgeToDays ?? 0) % unit == 0
+            ? unit
+            : AgeBandUnitDays(AgeFromDays, AgeToDays);
+
+    /// <summary>
     /// The unit an age band is written in: years (365) when both bounds are whole years, otherwise
     /// months (30) when both are whole months, otherwise days (1). The catalogue editor reopens a
     /// band in this unit, and matching reads the bounds in it, so what the biologist typed is what
@@ -188,7 +209,7 @@ public sealed class ReferenceRange : Entity, IAuditable
         {
             if (context.AgeInDays is null && context.AgeInYears is null) return false;
 
-            var unit = AgeBandUnitDays(AgeFromDays, AgeToDays);
+            var unit = EffectiveAgeUnitDays;
 
             if (AgeFromDays is { } from && !HasReached(from, unit, context)) return false;
             if (AgeToDays is { } to && HasReached(to, unit, context)) return false;

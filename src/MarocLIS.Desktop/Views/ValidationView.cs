@@ -771,7 +771,8 @@ public sealed class ValidationView : LocalizedView
 
             var raised = await _validation.RaiseCriticalNotificationAsync(
                 row.TestResultId, parameterName, value,
-                NotificationChannel.Telephone, contactUsed: null, prescriberId: null);
+                NotificationChannel.Telephone, contactUsed: null, prescriberId: null,
+                displayedEnteredAt: row.EnteredAt);
 
             if (raised.IsFailure)
             {

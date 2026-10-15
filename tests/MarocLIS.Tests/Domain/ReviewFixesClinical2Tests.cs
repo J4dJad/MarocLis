@@ -630,7 +630,8 @@ public sealed class ReviewFixesClinical2Tests
             Registration = new PatientRegistrationService(
                 Stub.Of<IRepository<Patient>>(new()
                 {
-                    ["GetByIdWithDetailsAsync"] = _ => Task.FromResult<Patient?>(self.Patient)
+                    ["GetByIdWithDetailsAsync"] = _ => Task.FromResult<Patient?>(self.Patient),
+                    ["ListAsync"] = _ => Task.FromResult<IReadOnlyList<Patient>>([])
                 }),
                 Stub.Of<IPatientDuplicateFinder>(),
                 Stub.Of<ISequenceAllocator>(),

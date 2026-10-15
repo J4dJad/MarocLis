@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using FluentAssertions;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Results;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
@@ -201,6 +202,10 @@ public sealed class ReplayRefusalTests
             new ThrowingRepository<QcTarget>(),
             new ThrowingRepository<QcResult>(),
             new ThrowingRepository<Instrument>(),
+            new ResultPostEntryPipeline(new ThrowingRepository<AnalysisTest>(),
+                                        new ThrowingRepository<Patient>(),
+                                        new ThrowingRepository<Sample>(),
+                                        null!, new FixedClock()),
             log,
             new ThrowingUnitOfWork(),
             new FixedClock(),
