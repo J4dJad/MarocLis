@@ -3,13 +3,21 @@ using System.Runtime.CompilerServices;
 namespace MarocLIS.Desktop.Infrastructure;
 
 /// <summary>
-/// Keeps every grid column wide enough for the longest word of its header, and a code column
-/// wide enough for its codes.
+/// Keeps every grid column wide enough for the longest word of its header, a code column wide
+/// enough for its codes, and a short text column (a status, a sector, a unit, a tube) wide enough
+/// for its values.
 /// <para>
 /// The grids fill their width by weight and their headers wrap, but a single word cannot wrap:
 /// on a narrow window or beside a split, "Échantillons" came out as "Échantillo" and an accession
 /// number as "2610…", which nobody can read off a rack. Each column now gets a minimum width;
 /// when the minimums no longer fit, the grid scrolls sideways instead of cutting words.
+/// </para>
+/// <para>
+/// Short values are as unreadable cut as codes: the file list showed "À pré…" and "Réce…" for its
+/// statuses, the file's analyses "En at…" and "IMMU…", the result sheet "mL/min/1…", while the
+/// designation and comment columns beside them stood half empty. Each text column's minimum now
+/// covers its widest value up to <see cref="MaxTextMinimum"/>; longer free text (names,
+/// designations) still shares what is left by weight.
 /// </para>
 /// <para>
 /// Applied to the whole view from <see cref="LocalizedView"/> and <see cref="LocalizedForm"/>,
@@ -18,9 +26,10 @@ namespace MarocLIS.Desktop.Infrastructure;
 /// </summary>
 public static class GridColumns
 {
-    private const int HeaderSlack = 18;   // header padding plus a sort glyph
+    private const int HeaderSlack = 24;   // header padding plus a sort glyph
     private const int CellSlack = 16;     // cell padding
     private const int MaxMinimum = 220;
+    private const int MaxTextMinimum = 170;
     private const int SampledRows = 200;
 
     private static readonly ConditionalWeakTable<DataGridView, object> Hooked = new();
@@ -79,33 +88,41 @@ public static class GridColumns
         });
     }
 
-    // Codes (accession numbers, barcodes) are set in the monospace font and cannot be shortened;
-    // free text such as names is left to wrap or ellipsize.
+    // Codes (accession numbers, barcodes) are set in the monospace font and cannot be shortened.
+    // Other text columns get their widest value up to a cap; a column that wraps its text keeps
+    // only its header's minimum.
     private static void FitCodes(DataGridView grid)
     {
         foreach (DataGridViewColumn column in grid.Columns)
         {
-            var font = column.DefaultCellStyle.Font;
-            if (font is null || font.FontFamily.Name != UiTheme.Monospace.FontFamily.Name) continue;
+            if (column is not DataGridViewTextBoxColumn and not DataGridViewComboBoxColumn) continue;
+
+            var style = column.InheritedStyle;
+            var font = column.DefaultCellStyle?.Font ?? style?.Font ?? grid.Font ?? UiTheme.Body;
+            var isCode = font.FontFamily.Name == UiTheme.Monospace.FontFamily.Name;
+            if (!isCode && style?.WrapMode == DataGridViewTriState.True) continue;
 
             var widest = 0;
             var rows = Math.Min(grid.Rows.Count, SampledRows);
 
             for (var i = 0; i < rows; i++)
             {
-                var text = grid.Rows[i].Cells[column.Index].FormattedValue as string;
-                if (string.IsNullOrEmpty(text)) continue;
-                widest = Math.Max(widest, TextRenderer.MeasureText(text, font).Width);
+                var row = grid.Rows[i];
+                var cell = row.Cells[column.Index];
+                if (cell.FormattedValue is not string { Length: > 0 } text) continue;
+                // A row or a cell set in bold (the file's open analyses) is measured in bold.
+                var cellFont = cell.Style.Font ?? row.DefaultCellStyle.Font ?? font;
+                widest = Math.Max(widest, TextRenderer.MeasureText(text, cellFont).Width);
             }
 
-            if (widest > 0) SetMinimum(column, widest + CellSlack);
+            if (widest > 0) SetMinimum(column, widest + CellSlack, isCode ? MaxMinimum : MaxTextMinimum);
         }
     }
 
     // Only ever raises a minimum, so a width a screen sets for its own column is kept.
-    private static void SetMinimum(DataGridViewColumn column, int width)
+    private static void SetMinimum(DataGridViewColumn column, int width, int cap = MaxMinimum)
     {
-        width = Math.Clamp(width, 24, MaxMinimum);
+        width = Math.Clamp(width, 24, cap);
         if (column.MinimumWidth < width) column.MinimumWidth = width;
     }
 
