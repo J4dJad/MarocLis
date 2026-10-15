@@ -128,6 +128,10 @@ public sealed record OrderLineMatchSource(
 public sealed record PaymentFact(DateOnly PaidOn, decimal Amount);
 
 /// <summary>An open or late-paid invoice, for the late-payment declaration.</summary>
+/// <param name="DeclaredThrough">
+/// The end of the last earlier declaration that listed the invoice; null when none did, and its
+/// whole delay is owed in this one.
+/// </param>
 public sealed record LatePaymentSource(
     string SupplierName,
     string? SupplierIce,
@@ -137,7 +141,8 @@ public sealed record LatePaymentSource(
     DateOnly? DeliveryDate,
     DateOnly DueDate,
     decimal TotalIncludingVat,
-    IReadOnlyList<PaymentFact> Payments);
+    IReadOnlyList<PaymentFact> Payments,
+    DateOnly? DeclaredThrough = null);
 
 /// <summary>One late amount of the declaration, with the penalty and the fine it carries.</summary>
 /// <param name="PaidOn">Null for an amount still unpaid at the end of the period.</param>
@@ -218,6 +223,7 @@ public sealed class SupplierInvoiceService(
     IRepository<SupplierInvoice> invoices,
     IRepository<SupplierInvoiceFile> files,
     IRepository<Supplier> suppliers,
+    IRepository<LatePaymentDeclaration> declarations,
     ISupplierInvoiceQueries queries,
     IConfigurationWriter settingsWriter,
     IUnitOfWork unitOfWork,
@@ -432,8 +438,9 @@ public sealed class SupplierInvoiceService(
 
     /// <summary>
     /// Deliveries are billed in invoice order: an invoice entered (or cancelled) on the same order
-    /// lines moves the deliveries the open invoices of the same date or later bill, and so their
-    /// due dates. Those are worked out again, without touching their match or their approval.
+    /// lines moves the deliveries the invoices of the same date or later bill, and so their due
+    /// dates. Those are worked out again, without touching their match, approval or payments; a
+    /// paid invoice too, whose due date is what the late-payment declaration measures it against.
     /// </summary>
     /// <param name="live">Whether <paramref name="changed"/> now bills its lines (entered) or not (cancelled).</param>
     private async Task MoveLaterTermsAsync(SupplierInvoice changed, bool live, CancellationToken ct)
@@ -444,7 +451,7 @@ public sealed class SupplierInvoiceService(
         foreach (var id in laterIds)
         {
             var later = await invoices.GetByIdWithDetailsAsync(id, ct);
-            if (later is null || !later.IsOpen) continue;
+            if (later is null || later.Status == SupplierInvoiceStatus.Cancelled) continue;
 
             // The changed invoice as it now stands, whatever the database says before the save.
             var sources = (await queries.GetOrderLineSourcesAsync(
@@ -648,7 +655,8 @@ public sealed class SupplierInvoiceService(
     [
         .. sources
             .SelectMany(s => LatePayment.LateAmounts(s.DueDate, s.TotalIncludingVat,
-                                                     s.Payments.Select(p => (p.PaidOn, p.Amount)), from, to)
+                                                     s.Payments.Select(p => (p.PaidOn, p.Amount)), from, to,
+                                                     s.DeclaredThrough)
                                         .Select(late => (Source: s, Late: late)))
             .OrderBy(x => x.Source.SupplierName, StringComparer.CurrentCulture)
             .ThenBy(x => x.Source.InvoiceNumber, StringComparer.Ordinal)
@@ -669,6 +677,19 @@ public sealed class SupplierInvoiceService(
     {
         var rows = await GetLatePaymentsAsync(from, to, ct);
         if (rows.IsFailure) return Result.Failure<byte[]>(rows.FirstError);
+
+        // The export of an ended period is what gets filed: the period is recorded, with what had
+        // been entered by now. A later period then deducts only what this one listed, and exporting
+        // it again gives this file.
+        var siteId = currentUser.SiteId;
+        if (to < clock.Today
+            && (await declarations.ListAsync(d => d.SiteId == siteId && d.PeriodFrom == from && d.PeriodTo == to, ct))
+                .Count == 0)
+        {
+            await declarations.AddAsync(new LatePaymentDeclaration(siteId, from, to, clock.Now, currentUser.UserId), ct);
+            unitOfWork.AuditReason = $"Déclaration des retards de paiement (loi 69-21) exportée : {from:dd/MM/yyyy} au {to:dd/MM/yyyy}";
+            await unitOfWork.SaveChangesAsync(ct);
+        }
 
         return Result.Success(LatePaymentsCsv(rows.Value));
     }
@@ -744,8 +765,8 @@ public interface ISupplierInvoiceQueries
 
     /// <param name="excludingInvoiceId">The invoice being matched again, whose own lines do not count as "elsewhere".</param>
     /// <summary>
-    /// The open invoices, other than <paramref name="exceptInvoiceId"/>, that bill one of these
-    /// order lines and are dated on or after <paramref name="onOrAfter"/>.
+    /// The open or paid (not cancelled) invoices, other than <paramref name="exceptInvoiceId"/>, that
+    /// bill one of these order lines and are dated on or after <paramref name="onOrAfter"/>.
     /// </summary>
     Task<IReadOnlyList<Guid>> GetOpenInvoicesBillingAsync(IReadOnlyCollection<Guid> purchaseOrderLineIds, DateOnly onOrAfter,
                                                           Guid exceptInvoiceId, CancellationToken ct = default);

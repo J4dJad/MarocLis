@@ -103,6 +103,20 @@ public sealed class SupplierPaymentConfiguration : IEntityTypeConfiguration<Supp
     }
 }
 
+public sealed class LatePaymentDeclarationConfiguration : IEntityTypeConfiguration<LatePaymentDeclaration>
+{
+    public void Configure(EntityTypeBuilder<LatePaymentDeclaration> builder)
+    {
+        builder.ToTable("LatePaymentDeclarations", "inv");
+        builder.HasKey(e => e.Id);
+
+        // A period is recorded once, at its first export: exporting it again gives the same list.
+        builder.HasIndex(e => new { e.SiteId, e.PeriodFrom, e.PeriodTo })
+               .IsUnique()
+               .HasDatabaseName("UX_LatePaymentDeclarations_Site_Period");
+    }
+}
+
 public sealed class SupplierInvoiceFileConfiguration : IEntityTypeConfiguration<SupplierInvoiceFile>
 {
     public void Configure(EntityTypeBuilder<SupplierInvoiceFile> builder)

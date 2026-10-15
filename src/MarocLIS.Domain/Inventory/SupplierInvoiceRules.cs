@@ -133,8 +133,8 @@ public static class ThreeWayMatch
 /// <param name="PaidOn">Null for an amount still unpaid at the end of the period.</param>
 /// <param name="DaysLate">The whole delay, from the due date.</param>
 /// <param name="DaysDeclaredBefore">
-/// The part of that delay already run at the end of the previous period: the amount was then
-/// still unpaid and late, and was declared with its fine for those days.
+/// The part of that delay already run at the end of the last declaration that listed the invoice:
+/// the amount was then still unpaid and late, and was declared with its fine for those days.
 /// </param>
 public sealed record LateAmount(decimal Amount, DateOnly? PaidOn, int DaysLate, int DaysDeclaredBefore = 0);
 
@@ -173,21 +173,24 @@ public static class LatePayment
     /// What of one invoice was late over a period: each payment made in the period after the due
     /// date, and whatever was still unpaid at the end of the period if it was already due.
     /// <para>
-    /// Each carries the days of its delay already run before the period: an amount unpaid at the
-    /// end of the previous period was declared then, with its fine and penalty for those days, and
-    /// only the rest is owed for this period. Declared period after period, the fine adds up to the
-    /// fine for the whole delay instead of counting the first months twice.
+    /// Each carries the days of its delay already declared: an amount unpaid at the end of an
+    /// earlier declaration that listed the invoice (<paramref name="declaredThrough"/>, the end of
+    /// its period) was declared then, with its fine and penalty for those days, and only the rest
+    /// is owed for this period. Declared period after period, the fine adds up to the fine for the
+    /// whole delay instead of counting the first months twice. An invoice no declaration listed
+    /// (dated or entered too late for it) owes its whole delay here.
     /// </para>
     /// </summary>
     public static IReadOnlyList<LateAmount> LateAmounts(DateOnly dueDate, decimal totalIncludingVat,
                                                         IEnumerable<(DateOnly PaidOn, decimal Amount)> payments,
-                                                        DateOnly from, DateOnly to)
+                                                        DateOnly from, DateOnly to, DateOnly? declaredThrough = null)
     {
         var list = payments.ToList();
         var late = new List<LateAmount>();
 
-        // Whatever is paid in the period, or left unpaid at its end, was still unpaid the day before it began.
-        var daysBefore = DaysLate(dueDate, from.AddDays(-1));
+        // Whatever is paid in the period, or left unpaid at its end, was still unpaid at the end of
+        // the earlier declaration, and declared late for the days run until then.
+        var daysBefore = declaredThrough is { } declared && declared < from ? DaysLate(dueDate, declared) : 0;
 
         foreach (var (paidOn, amount) in list.Where(p => p.PaidOn >= from && p.PaidOn <= to)
                                              .OrderBy(p => p.PaidOn))

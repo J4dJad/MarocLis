@@ -434,6 +434,7 @@ public sealed class AchatsInvoicesTests
                 new Store<SupplierInvoice>(Invoices),
                 new Store<SupplierInvoiceFile>([]),
                 new Store<Supplier>([supplier]),
+                new Store<LatePaymentDeclaration>([]),
                 new Queries(sources, Existing),
                 new NoSettings(),
                 new UnitOfWork(this),

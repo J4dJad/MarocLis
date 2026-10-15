@@ -605,6 +605,33 @@ public sealed class ReagentLot : Entity, IAuditable
         return Result.Success();
     }
 
+    /// <summary>
+    /// Adds a further delivery of the same manufacturer lot: the rest of a partial delivery, or a
+    /// standing order still on the lot. It is the same lot, so its release and QC stand; a lot
+    /// refused or recalled takes no more stock. The unit price becomes the average of what is on
+    /// the shelf.
+    /// </summary>
+    public Result ReceiveMore(decimal quantity, DateOnly expiryDate, decimal? unitPriceMad)
+    {
+        if (quantity <= 0m)
+            return Result.Failure(Error.Validation("Lot_QuantityMustBePositive"));
+        if (IsRejected || IsRecalled)
+            return Result.Failure(Error.Conflict("Lot_ReceiveIntoRefusedLot", LotNumber));
+        if (expiryDate != ExpiryDate)
+            return Result.Failure(Error.Validation("Lot_ReceiveExpiryDiffers", LotNumber, ExpiryDate));
+
+        if (unitPriceMad is { } price)
+        {
+            UnitPriceMad = UnitPriceMad is { } current && QuantityRemaining > 0m
+                ? Money.Round((current * QuantityRemaining + price * quantity) / (QuantityRemaining + quantity))
+                : price;
+        }
+
+        QuantityReceived += quantity;
+        QuantityRemaining += quantity;
+        return Result.Success();
+    }
+
     /// <summary>Writes off the remaining quantity, e.g. on expiry.</summary>
     public decimal WriteOffRemainder()
     {
@@ -675,6 +702,12 @@ public sealed class StockMovement : AggregateRoot, IAuditable, ISiteScoped
     public string? Reason { get; set; }
 
     public string? Reference { get; set; }
+
+    /// <summary>
+    /// The order a receipt was delivered on. A lot can be received more than once (a backorder of
+    /// the same manufacturer lot), each time on its own order: the receipts, not the lot, date them.
+    /// </summary>
+    public Guid? PurchaseOrderId { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public Guid? CreatedByUserId { get; set; }

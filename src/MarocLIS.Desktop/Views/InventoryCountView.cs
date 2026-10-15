@@ -146,7 +146,9 @@ public sealed class InventoryCountView : LocalizedView
         top.Controls.Add(_list);
         top.Controls.Add(bar);
 
-        var linesBar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
+        // Two lines: the sheet time sits under the buttons so that it stays visible at the shell's
+        // minimum width (the bar keeps its own layout and is not wrapped).
+        var linesBar = new Panel { Dock = DockStyle.Top, Height = 78, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
         _linesHeading.Font = UiTheme.SectionTitle;
         _linesHeading.ForeColor = UiTheme.TextPrimary;
         // Fixed width: the heading grows with the selection and must not run under the buttons.
@@ -162,8 +164,8 @@ public sealed class InventoryCountView : LocalizedView
         _sheetTimeLabel.Font = UiTheme.Small;
         _sheetTimeLabel.ForeColor = UiTheme.TextSecondary;
         _sheetTimeLabel.AutoSize = true;
-        _sheetTimeLabel.Location = new Point(900, 0);
-        _sheetTime.Bounds = new Rectangle(900, 16, 170, UiTheme.InputHeight);
+        _sheetTimeLabel.Location = new Point(260, 48);
+        _sheetTime.Bounds = new Rectangle(490, 44, 170, UiTheme.InputHeight);
         _sheetTime.Value = DateTime.Now;
         linesBar.Controls.AddRange([_linesHeading, _sheet, _sheetCsv, _variances, _sheetTimeLabel, _sheetTime]);
 
@@ -415,8 +417,10 @@ public sealed class InventoryCountView : LocalizedView
 
         if (counted == line.CountedQuantity && (comment ?? string.Empty) == (line.Comment ?? string.Empty)) return;
 
-        // The sheet's time goes with a figure; a comment alone leaves the line's count where it was.
-        DateTimeOffset? shelf = _sheetTime.Checked && counted != line.CountedQuantity
+        // The sheet's time goes with the first figure of a line. A comment, or a figure corrected on a
+        // line already counted (perhaps from an earlier sheet), stays on the time of that count: the
+        // picker stays ticked for the whole sheet and must not re-base lines keyed before it.
+        DateTimeOffset? shelf = _sheetTime.Checked && line.CountedQuantity is null
             ? new DateTimeOffset(_sheetTime.Value)
             : null;
         _pending.Enqueue(new PendingCount(_detail.Count.InventoryCountId, line.LineId, counted, comment, shelf));

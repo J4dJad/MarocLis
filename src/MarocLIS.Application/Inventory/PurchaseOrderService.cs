@@ -274,11 +274,17 @@ public sealed class PurchaseOrderService(
         if (item is null) return Result.Failure(Error.NotFound("Stock_ItemNotFound"));
 
         var lotNumber = request.LotNumber.Trim();
-        if (item.Lots.Any(l => string.Equals(l.LotNumber, lotNumber, StringComparison.OrdinalIgnoreCase)))
-            return Result.Failure(Error.Conflict("Lot_AlreadyReceived", lotNumber));
+
+        // The same manufacturer lot delivered again (the backorder of a partial delivery): the
+        // quantity joins the lot already on the shelf, which keeps its release and its QC.
+        var existing = item.Lots.FirstOrDefault(l => string.Equals(l.LotNumber, lotNumber, StringComparison.OrdinalIgnoreCase));
 
         var assessment = ReceptionAssessment.Assess(item.StorageCondition, request.Reception);
         if (assessment.IsFailure) return Result.Failure(assessment.Errors);
+
+        // A failed check keeps a new lot in quarantine; it cannot be mixed into a released one.
+        if (existing is { IsAwaitingRelease: false } && assessment.Value.NeedsNonConformity)
+            return Result.Failure(Error.Conflict("Lot_ReceiveNonConformingIntoReleased", lotNumber));
 
         var received = order.ReceiveLine(line.Id, request.Quantity);
         if (received.IsFailure) return received;
@@ -290,19 +296,29 @@ public sealed class PurchaseOrderService(
 
         var deliveryNote = Blank(request.DeliveryNoteReference) ?? order.Number;
 
-        var lot = item.AddLot(new ReagentLot(lotNumber, request.ExpiryDate, request.Quantity,
-                                             clock.Today)
+        ReagentLot lot;
+        if (existing is not null)
         {
-            SupplierId = order.SupplierId,
-            DeliveryNoteReference = deliveryNote,
-            // Valued net of the line discount, at what the laboratory actually pays per unit.
-            UnitPriceMad = line.NetUnitPriceMad,
-            StorageLocation = Blank(request.StorageLocation) ?? item.DefaultStorageLocation,
-            ReceivedByUserId = currentUser.UserId,
-            // The order the lot came on: what the supplier evaluation measures punctuality against.
-            PurchaseOrderId = order.Id
-        });
-        if (request.Reception is { } check) lot.RecordReception(check);
+            var added = existing.ReceiveMore(request.Quantity, request.ExpiryDate, line.NetUnitPriceMad);
+            if (added.IsFailure) return added;
+            lot = existing;
+        }
+        else
+        {
+            lot = item.AddLot(new ReagentLot(lotNumber, request.ExpiryDate, request.Quantity,
+                                             clock.Today)
+            {
+                SupplierId = order.SupplierId,
+                DeliveryNoteReference = deliveryNote,
+                // Valued net of the line discount, at what the laboratory actually pays per unit.
+                UnitPriceMad = line.NetUnitPriceMad,
+                StorageLocation = Blank(request.StorageLocation) ?? item.DefaultStorageLocation,
+                ReceivedByUserId = currentUser.UserId,
+                // The order the lot came on: what the supplier evaluation measures punctuality against.
+                PurchaseOrderId = order.Id
+            });
+            if (request.Reception is { } check) lot.RecordReception(check);
+        }
 
         if (assessment.Value.NeedsNonConformity && reception is not null)
         {
@@ -320,7 +336,8 @@ public sealed class PurchaseOrderService(
                                                    currentUser.UserId, currentUser.SiteId)
         {
             BalanceAfter = lot.QuantityRemaining,
-            Reference = deliveryNote
+            Reference = deliveryNote,
+            PurchaseOrderId = order.Id
         }, ct);
 
         unitOfWork.AuditReason =

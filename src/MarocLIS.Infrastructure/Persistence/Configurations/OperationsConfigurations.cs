@@ -469,6 +469,11 @@ public sealed class StockMovementConfiguration : IEntityTypeConfiguration<StockM
         builder.Property(e => e.Reference).HasMaxLength(60);
         builder.Ignore(e => e.SignedQuantity);
 
+        // A plain reference, like the item and the lot of this ledger row: dated receipts per order.
+        builder.HasIndex(e => e.PurchaseOrderId)
+               .HasFilter("[PurchaseOrderId] IS NOT NULL")
+               .HasDatabaseName("IX_StockMovements_PurchaseOrder");
+
         builder.HasIndex(e => new { e.StockItemId, e.OccurredAt })
                .HasDatabaseName("IX_StockMovements_Item_Occurred");
         builder.HasIndex(e => e.ReagentLotId)

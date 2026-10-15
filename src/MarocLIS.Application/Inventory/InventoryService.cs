@@ -153,38 +153,54 @@ public sealed class InventoryService(
         var item = await items.GetByIdWithDetailsAsync(request.StockItemId, ct);
         if (item is null) return Result.Failure<Guid>(Error.NotFound("Stock_ItemNotFound"));
 
-        if (item.Lots.Any(l => string.Equals(l.LotNumber, request.LotNumber.Trim(),
-                                              StringComparison.OrdinalIgnoreCase)))
-            return Result.Failure<Guid>(Error.Conflict("Lot_AlreadyReceived", request.LotNumber));
+        // The same manufacturer lot delivered again: the quantity joins the lot already on the
+        // shelf, which keeps its release and its QC.
+        var existing = item.Lots.FirstOrDefault(l => string.Equals(l.LotNumber, request.LotNumber.Trim(),
+                                                                   StringComparison.OrdinalIgnoreCase));
 
         // Temperature against the storage condition, and the checklist: a cold-chain item without
         // a temperature is refused, a failed check is received (quarantined) and reported.
         var assessment = ReceptionAssessment.Assess(item.StorageCondition, request.Reception);
         if (assessment.IsFailure) return Result.Failure<Guid>(assessment.Errors);
 
+        // A failed check keeps a new lot in quarantine; it cannot be mixed into a released one.
+        if (existing is { IsAwaitingRelease: false } && assessment.Value.NeedsNonConformity)
+            return Result.Failure<Guid>(Error.Conflict("Lot_ReceiveNonConformingIntoReleased", existing.LotNumber));
+
         await using var transaction = assessment.Value.NeedsNonConformity && reception is not null
             ? await unitOfWork.BeginTransactionAsync(ct)
             : null;
 
-        var lot = item.AddLot(new ReagentLot(request.LotNumber.Trim(), request.ExpiryDate,
-                                              request.Quantity, clock.Today)
+        ReagentLot lot;
+        if (existing is not null)
         {
-            SupplierId = request.SupplierId ?? item.PreferredSupplierId,
-            DeliveryNoteReference = request.DeliveryNoteReference,
-            UnitPriceMad = request.UnitPriceMad,
-            StorageLocation = request.StorageLocation ?? item.DefaultStorageLocation,
-            StabilityAfterOpeningDays = request.StabilityAfterOpeningDays,
-            ReceivedByUserId = currentUser.UserId
-        });
+            var added = existing.ReceiveMore(request.Quantity, request.ExpiryDate, request.UnitPriceMad);
+            if (added.IsFailure) return Result.Failure<Guid>(added.Errors);
+            lot = existing;
+        }
+        else
+        {
+            lot = item.AddLot(new ReagentLot(request.LotNumber.Trim(), request.ExpiryDate,
+                                             request.Quantity, clock.Today)
+            {
+                SupplierId = request.SupplierId ?? item.PreferredSupplierId,
+                DeliveryNoteReference = request.DeliveryNoteReference,
+                UnitPriceMad = request.UnitPriceMad,
+                StorageLocation = request.StorageLocation ?? item.DefaultStorageLocation,
+                StabilityAfterOpeningDays = request.StabilityAfterOpeningDays,
+                ReceivedByUserId = currentUser.UserId
+            });
 
-        if (request.Reception is { } check) lot.RecordReception(check);
+            if (request.Reception is { } check) lot.RecordReception(check);
+        }
 
         if (request.UnitPriceMad is { } price) item.LastUnitPriceMad = price;
 
         if (assessment.Value.NeedsNonConformity && reception is not null)
         {
             var opened = await reception.OpenReceptionNonConformityAsync(
-                item, lot, lot.SupplierId, assessment.Value, request.Reception?.ArrivalTemperatureCelsius, ct);
+                item, lot, request.SupplierId ?? lot.SupplierId, assessment.Value,
+                request.Reception?.ArrivalTemperatureCelsius, ct);
             if (opened.IsFailure) return Result.Failure<Guid>(opened.Errors);
         }
 

@@ -118,8 +118,9 @@ public sealed class ReviewFixesCycle2PurchasingTests(ReviewFixesCycle2Purchasing
         q1Unpaid.Fine.Should().Be(310m);
         q1Unpaid.DaysDeclaredBefore.Should().Be(0);
 
-        // Q2: paid 31 May, 100 days late in all, 39 of them already declared.
-        var q2 = SupplierInvoiceService.ComputeLatePayments([source], new DateOnly(2026, 4, 1), new DateOnly(2026, 6, 30),
+        // Q2: paid 31 May, 100 days late in all, 39 of them already declared (Q1 listed it).
+        var q2 = SupplierInvoiceService.ComputeLatePayments([source with { DeclaredThrough = new DateOnly(2026, 3, 31) }],
+                                                            new DateOnly(2026, 4, 1), new DateOnly(2026, 6, 30),
                                                             settings).Single();
         q2.DaysLate.Should().Be(100);
         q2.DaysDeclaredBefore.Should().Be(39);
