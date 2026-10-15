@@ -8,6 +8,7 @@
   "Survey_TemplateNeedsCode": "يجب أن تتضمن رسالة الاستطلاع {code} أو {lien}.",
   "Survey_IntervalOutOfRange": "يجب أن يكون الفاصل الزمني بين 0 و3650 يومًا.",
   "Survey_UrlInvalid": "يجب أن يكون رابط الاستطلاع عنوان https صالحًا.",
+  "Survey_LinkNeedsUrl": "رسالة الاستطلاع التي لا تتضمن {code} تعتمد على {lien} وحده، ويبقى فارغًا دون رابط للاستطلاع: أدخلوا عنوان https أو أضيفوا {code}.",
   "Reminder_AnalysisOrPanel": "اختر تحليلًا أو حصيلة، وليس الاثنين معًا.",
   "Reminder_DelayOutOfRange": "يجب أن تكون المهلة بين {0} و{1} شهرًا.",
   "Reminder_WindowOutOfRange": "يجب أن تكون نافذة الإرسال بين 1 و365 يومًا.",

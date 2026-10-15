@@ -8,6 +8,7 @@
   "Survey_TemplateNeedsCode": "The survey message must contain {code} or {lien}.",
   "Survey_IntervalOutOfRange": "The interval must be between 0 and 3650 days.",
   "Survey_UrlInvalid": "The survey link must be a valid https address.",
+  "Survey_LinkNeedsUrl": "A survey message without {code} relies on {lien} alone, which stays empty without a survey link: enter an https address or add {code}.",
   "Reminder_AnalysisOrPanel": "Choose a test or a panel, not both.",
   "Reminder_DelayOutOfRange": "The delay must be between {0} and {1} months.",
   "Reminder_WindowOutOfRange": "The sending window must be between 1 and 365 days.",

@@ -8,6 +8,7 @@
   "Survey_TemplateNeedsCode": "Le message d'enquête doit contenir {code} ou {lien}.",
   "Survey_IntervalOutOfRange": "L'intervalle doit être compris entre 0 et 3650 jours.",
   "Survey_UrlInvalid": "Le lien de l'enquête doit être une adresse https valide.",
+  "Survey_LinkNeedsUrl": "Un message d'enquête sans {code} n'a que {lien}, qui reste vide sans lien d'enquête : renseignez une adresse https ou ajoutez {code}.",
   "Reminder_AnalysisOrPanel": "Choisissez une analyse ou un bilan, pas les deux.",
   "Reminder_DelayOutOfRange": "Le délai doit être compris entre {0} et {1} mois.",
   "Reminder_WindowOutOfRange": "La fenêtre d'envoi doit être comprise entre 1 et 365 jours.",
