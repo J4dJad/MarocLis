@@ -115,7 +115,7 @@ public sealed partial class DemoDataSeeder
 
         if (toClaim.Count > 0)
         {
-            Check(await AsAsync<BillingService, Result<string>>(DemoActor.Secretary,
+            Check(await AsAsync<BillingService, Result<ClaimSubmission>>(DemoActor.Secretary,
                       s => s.SubmitClaimBatchAsync(toClaim, ct), ct),
                   "Bordereau tiers payant");
         }

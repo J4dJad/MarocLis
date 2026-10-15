@@ -87,7 +87,23 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     /// <summary>Share the patient owes — ticket modérateur plus any excess over the reference tariff.</summary>
     public decimal PatientShareAmount { get; private set; }
 
+    /// <summary>
+    /// What closes the receivable: every settled line, write-offs included. Use
+    /// <see cref="CollectedAmount"/> for what was actually paid.
+    /// </summary>
     public decimal PaidAmount { get; private set; }
+
+    /// <summary>
+    /// The part of <see cref="PaidAmount"/> that was written off: it closes the balance, but nobody
+    /// paid it, so a receipt or the ledger must not show it as paid.
+    /// </summary>
+    public decimal WrittenOffAmount =>
+        Money.Round(_payments.Where(p => p.Status == PaymentStatus.Settled
+                                         && p.Method == PaymentMethod.WriteOff)
+                             .Sum(p => p.Amount));
+
+    /// <summary>Money that actually came in on this invoice.</summary>
+    public decimal CollectedAmount => Money.Round(PaidAmount - WrittenOffAmount);
 
     /// <summary>
     /// Sum of the credit notes issued against this invoice. A credit note withdraws part of the
@@ -354,6 +370,13 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     {
         if (ClaimStatus != ClaimStatus.Rejected)
             return Result.Failure(Error.Conflict("Claim_AlreadySubmitted", Number));
+
+        // The payer paid something on it: the refusal recorded over it was a batch-level answer
+        // that did not concern this invoice, and reopening would undo a settlement that stands.
+        if (PayerAcceptedAmount is > 0m
+            || _payments.Any(p => p.Method == PaymentMethod.ThirdPartyPayer
+                                  && p.Status == PaymentStatus.Settled))
+            return Result.Failure(Error.Conflict("Claim_SettlementAlreadyRecorded", Number));
 
         foreach (var writeOff in _payments.Where(p => p.Method == PaymentMethod.WriteOff
                                                       && p.Status == PaymentStatus.Settled))

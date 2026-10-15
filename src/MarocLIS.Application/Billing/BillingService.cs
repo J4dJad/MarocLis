@@ -46,7 +46,11 @@ public sealed record InvoiceRow(
     /// <summary>What the payer agreed to pay on its share; null until the settlement is recorded.</summary>
     decimal? PayerAcceptedAmount = null,
     /// <summary>Total of the credit notes issued against the invoice.</summary>
-    decimal Credited = 0m)
+    decimal Credited = 0m,
+    /// <summary>
+    /// Written off: closes the balance without having been paid, so it is not in <c>Paid</c>.
+    /// </summary>
+    decimal WrittenOff = 0m)
 {
     /// <summary>What a further credit note may still reverse; zero for anything but an invoice.</summary>
     public decimal Creditable =>
@@ -105,6 +109,15 @@ public sealed record DepositRow(
     decimal Remaining,
     PaymentMethod Method,
     DepositStatus Status);
+
+/// <summary>
+/// A claim batch as sent: its reference, how many invoices went into it, and the ones left out with
+/// the reason for each. Some invoices refused do not undo the batch the others went into.
+/// </summary>
+public sealed record ClaimSubmission(string Reference, int Submitted, IReadOnlyList<Error> Skipped);
+
+/// <summary>A payer's answer as recorded: on how many invoices, and the ones left out with why.</summary>
+public sealed record ClaimOutcomeRecorded(int Updated, IReadOnlyList<Error> Skipped);
 
 /// <summary>What happens to the part of the payer's share the payer did not accept.</summary>
 public enum PayerShortfallHandling
@@ -242,6 +255,15 @@ public sealed class BillingService(
 
         if (patientIds.Count > 1)
             return Result.Failure<Guid>(Error.Validation("Invoice_MultiplePatients"));
+
+        // Nor for orders registered with different payers, self-pay included: each order's split
+        // was frozen at registration with its own payer, and one invoice has one payer. Grouped,
+        // the others were re-split under the first one's payer — a self-paid act claimed from the
+        // payer, or a covered act put entirely on the patient. They are invoiced separately.
+        if (loaded.Select(o => o.PayerId).Distinct().Count() > 1)
+            return Result.Failure<Guid>(Error.Validation(
+                "Invoice_MultiplePayers",
+                string.Join(", ", loaded.Select(o => o.AccessionNumber))));
 
         var patient = await patients.GetByIdWithDetailsAsync(patientIds[0], ct);
         if (patient is null) return Result.Failure<Guid>(Error.NotFound("Order_PatientNotFound"));
@@ -524,15 +546,12 @@ public sealed class BillingService(
             return Result.Failure<string>(Error.Validation("Deposit_ExceedsOrderTotal",
                                                            Money.Round(total - held)));
 
-        CashSession? session = null;
+        // Every method goes on the operator's shift report: cash for the reconciliation, cheques,
+        // cards and transfers for the takings. Only cash requires an open till.
+        var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
 
-        if (request.Method == PaymentMethod.Cash)
-        {
-            session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
-
-            if (session is null)
-                return Result.Failure<string>(Error.Validation("Payment_CashRequiresOpenSession"));
-        }
+        if (session is null && request.Method == PaymentMethod.Cash)
+            return Result.Failure<string>(Error.Validation("Payment_CashRequiresOpenSession"));
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
 
@@ -692,15 +711,13 @@ public sealed class BillingService(
         var invoice = await invoices.GetByIdWithDetailsAsync(request.InvoiceId, ct);
         if (invoice is null) return Result.Failure(Error.NotFound("Invoice_NotFound"));
 
-        CashSession? session = null;
+        // Looked up for every method, not only cash: the cheque, card and transfer lines of the
+        // shift report read the session's counters, and stayed at zero while only cash reached them.
+        // Only cash requires an open till.
+        var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
 
-        if (request.Method == PaymentMethod.Cash)
-        {
-            session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
-
-            if (session is null)
-                return Result.Failure(Error.Validation("Payment_CashRequiresOpenSession"));
-        }
+        if (session is null && request.Method == PaymentMethod.Cash)
+            return Result.Failure(Error.Validation("Payment_CashRequiresOpenSession"));
 
         var payment = new Payment(request.Amount, request.Method, clock.Today,
                                    currentUser.UserId, currentUser.SiteId)
@@ -893,27 +910,27 @@ public sealed class BillingService(
     /// payer actually did.
     /// </para>
     /// </summary>
-    public async Task<Result> RecordClaimOutcomeAsync(IReadOnlyList<Guid> invoiceIds,
-                                                       ClaimStatus outcome,
-                                                       string? rejectionReason = null,
-                                                       CancellationToken ct = default)
+    public async Task<Result<ClaimOutcomeRecorded>> RecordClaimOutcomeAsync(
+        IReadOnlyList<Guid> invoiceIds, ClaimStatus outcome, string? rejectionReason = null,
+        CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Billing.ExportAccounting);
-        if (permitted.IsFailure) return permitted;
+        if (permitted.IsFailure) return Result.Failure<ClaimOutcomeRecorded>(permitted.FirstError);
 
         if (invoiceIds.Count == 0)
-            return Result.Failure(Error.Validation("Billing.SelectOneInvoice"));
+            return Result.Failure<ClaimOutcomeRecorded>(Error.Validation("Billing.SelectOneInvoice"));
 
         if (outcome is not (ClaimStatus.Accepted or ClaimStatus.PartiallyAccepted
                          or ClaimStatus.Rejected or ClaimStatus.Resubmitted
                          or ClaimStatus.Settled))
-            return Result.Failure(Error.Validation("Claim_OutcomeNotRecordable", outcome));
+            return Result.Failure<ClaimOutcomeRecorded>(
+                Error.Validation("Claim_OutcomeNotRecordable", outcome));
 
         // A refusal without its reason is unusable: the reason is what decides whether the claim
         // is corrected and resubmitted or written off, and the payer only states it once.
         if (outcome is ClaimStatus.Rejected or ClaimStatus.PartiallyAccepted
             && string.IsNullOrWhiteSpace(rejectionReason))
-            return Result.Failure(Error.Validation("Claim_RejectionReasonRequired"));
+            return Result.Failure<ClaimOutcomeRecorded>(Error.Validation("Claim_RejectionReasonRequired"));
 
         var errors = new List<Error>();
         var updated = 0;
@@ -934,6 +951,15 @@ public sealed class BillingService(
                 continue;
             }
 
+            // Its own settlement is already recorded, payment and write-off included: the payer
+            // answered for this invoice, and a batch-level answer does not override it. Overwritten,
+            // a paid invoice showed as refused, and resending it reopened the paid receivable.
+            if (invoice.PayerAcceptedAmount is not null)
+            {
+                errors.Add(Error.Conflict("Claim_OutcomeSkippedSettled", invoice.Number));
+                continue;
+            }
+
             invoice.ClaimStatus = outcome;
 
             invoice.ClaimRejectionReason =
@@ -945,7 +971,7 @@ public sealed class BillingService(
             updated++;
         }
 
-        if (updated == 0) return Result.Failure(errors.Count > 0
+        if (updated == 0) return Result.Failure<ClaimOutcomeRecorded>(errors.Count > 0
             ? errors
             : [Error.Validation("Billing.SelectOneInvoice")]);
 
@@ -954,7 +980,9 @@ public sealed class BillingService(
 
         await unitOfWork.SaveChangesAsync(ct);
 
-        return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
+        // Saved: a success, with the invoices left out and why, not a failure the screen would show
+        // as "nothing recorded".
+        return Result.Success(new ClaimOutcomeRecorded(updated, errors));
     }
 
     /// <summary>
@@ -1197,14 +1225,14 @@ public sealed class BillingService(
     /// notice.
     /// </para>
     /// </summary>
-    public async Task<Result<string>> SubmitClaimBatchAsync(
+    public async Task<Result<ClaimSubmission>> SubmitClaimBatchAsync(
         IReadOnlyList<Guid> invoiceIds, CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Billing.ExportAccounting);
-        if (permitted.IsFailure) return Result.Failure<string>(permitted.FirstError);
+        if (permitted.IsFailure) return Result.Failure<ClaimSubmission>(permitted.FirstError);
 
         if (invoiceIds.Count == 0)
-            return Result.Failure<string>(Error.Validation("Message.NothingSelected"));
+            return Result.Failure<ClaimSubmission>(Error.Validation("Message.NothingSelected"));
 
         var today = clock.Today;
         var problems = new List<Error>();
@@ -1214,7 +1242,7 @@ public sealed class BillingService(
         var reference = await sequences.NextAsync(
             SequencePurpose.ClaimBatch, currentUser.SiteId, today.Year, ct);
 
-        if (reference.IsFailure) return Result.Failure<string>(reference.FirstError);
+        if (reference.IsFailure) return Result.Failure<ClaimSubmission>(reference.FirstError);
 
         var submitted = 0;
 
@@ -1278,15 +1306,16 @@ public sealed class BillingService(
         }
 
         // Nothing went into the batch: rolled back, so the reference is not spent on an empty one.
-        if (submitted == 0) return Result.Failure<string>(problems);
+        if (submitted == 0) return Result.Failure<ClaimSubmission>(problems);
 
         unitOfWork.AuditReason = $"Transmission du dossier tiers payant {reference.Value}";
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);
 
-        return problems.Count == 0
-            ? Result.Success(reference.Value)
-            : Result.Failure<string>(problems);
+        // Committed: a success carrying the batch reference, with the invoices left out and why.
+        // Returned as a failure, the operator saw only the refusals and no reference, and believed
+        // nothing had been sent.
+        return Result.Success(new ClaimSubmission(reference.Value, submitted, problems));
     }
 }
 

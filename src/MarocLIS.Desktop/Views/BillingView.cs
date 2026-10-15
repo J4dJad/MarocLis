@@ -525,6 +525,11 @@ public sealed class BillingView : LocalizedView
                 T($"InvoiceStatus.{row.Status}"));
 
             _ledger.Rows[index].Tag = row;
+
+            // A write-off closes the balance but is not in the paid column: said where it is missing.
+            if (row.WrittenOff > 0m)
+                _ledger.Rows[index].Cells["paid"].ToolTipText =
+                    T("Billing.WrittenOffTooltip", Money.Of(row.WrittenOff).Format(Localizer.CurrentLanguage));
         }
 
         _ledger.ResumeLayout(performLayout: true);
@@ -564,6 +569,16 @@ public sealed class BillingView : LocalizedView
         if (selected.Select(s => s.PatientId).Distinct().Count() > 1)
         {
             _dialogs.Warn(T("Invoice_MultiplePatients"), T("Billing.IssueInvoice"));
+            return;
+        }
+
+        // Nor orders registered with different payers: each was split with its own at registration.
+        // The service refuses it too; said here before the issue dialog is filled in for nothing.
+        if (selected.Select(s => s.PayerId).Distinct().Count() > 1)
+        {
+            _dialogs.Warn(T("Invoice_MultiplePayers",
+                            string.Join(", ", selected.Select(s => s.AccessionNumber))),
+                          T("Billing.IssueInvoice"));
             return;
         }
 
@@ -730,11 +745,15 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
+        // Invoices whose own settlement was already entered keep it; the operator is told which.
+        if (result.Value.Skipped.Count > 0)
+            _dialogs.Warn(Localizer.Describe(result.Value.Skipped), T("Billing.RecordClaimOutcome"));
+
         _status.ForeColor = dialog.Outcome is ClaimStatus.Rejected
             ? UiTheme.Critical
             : UiTheme.Normal;
 
-        _status.Text = $"{submitted.Count} × {T($"ClaimStatus.{dialog.Outcome}")}";
+        _status.Text = $"{result.Value.Updated} × {T($"ClaimStatus.{dialog.Outcome}")}";
 
         await LoadLedgerAsync();
     }
@@ -1034,7 +1053,18 @@ public sealed class BillingView : LocalizedView
                 return;
             }
 
-            _dialogs.Info(T("Billing.ClaimReference") + " : " + result.Value, T("Billing.SubmitClaim"));
+            var batch = result.Value;
+
+            // Sent, even if some invoices were left out: the reference comes first, then why the
+            // others were not sent, so nobody concludes from the refusals that nothing went.
+            if (batch.Skipped.Count == 0)
+                _dialogs.Info(T("Billing.ClaimReference") + " : " + batch.Reference, T("Billing.SubmitClaim"));
+            else
+                _dialogs.Warn(T("Claim.PartiallySubmitted", batch.Reference, batch.Submitted,
+                                batch.Skipped.Count)
+                              + Environment.NewLine + Environment.NewLine
+                              + Localizer.Describe(batch.Skipped),
+                              T("Billing.SubmitClaim"));
 
             await LoadLedgerAsync();
         }

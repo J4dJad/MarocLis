@@ -43,7 +43,10 @@ public sealed class Payment : AuditableAggregateRoot, ISiteScoped
     /// <summary>Due date of a post-dated cheque or a bill of exchange.</summary>
     public DateOnly? MaturityDate { get; set; }
 
-    /// <summary>Till session this cash movement belongs to.</summary>
+    /// <summary>
+    /// Till session (shift) the payment was taken in. Required for cash; set for the other methods
+    /// too when the operator has a till open, for the shift report.
+    /// </summary>
     public Guid? CashSessionId { get; set; }
 
     /// <summary>

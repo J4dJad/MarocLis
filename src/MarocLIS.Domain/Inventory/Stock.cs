@@ -120,7 +120,10 @@ public sealed class StockItem : AuditableAggregateRoot, ISoftDeletable, ISiteSco
 
     public decimal? MaximumStock { get; set; }
 
-    /// <summary>Last known unit purchase price, for stock valuation.</summary>
+    /// <summary>
+    /// Last unit price ordered from the supplier, before the line discount: what the next order
+    /// line starts from. Each lot carries its own net valuation.
+    /// </summary>
     public decimal? LastUnitPriceMad { get; set; }
 
     // ---- Storage -------------------------------------------------------------------------------

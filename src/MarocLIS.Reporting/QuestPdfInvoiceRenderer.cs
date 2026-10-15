@@ -333,7 +333,12 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
                     TotalLine(totals, "Part organisme", format.Money(doc.PayerShareAmount));
 
                 TotalLine(totals, "Part patient", format.Money(doc.PatientShareAmount));
-                TotalLine(totals, "Montant payé", format.Money(doc.PaidAmount));
+                TotalLine(totals, "Montant payé", format.Money(doc.CollectedAmount));
+
+                // Closes the balance without having been paid: stated apart, or the amount paid
+                // would include money nobody paid.
+                if (doc.WrittenOffAmount > 0m)
+                    TotalLine(totals, "Passé en perte", format.Money(doc.WrittenOffAmount));
 
                 // A credit note reduces what is owed; without this line the balance would not add up.
                 if (doc.CreditedAmount > 0m)
@@ -382,14 +387,17 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
                     foreach (var payment in doc.Payments)
                     {
                         // A bounced cheque or a refund is listed, struck through and labelled, but
-                        // not counted: the receipt has to reconcile with the balance it states.
+                        // not counted: the receipt has to reconcile with the balance it states. A
+                        // write-off is labelled as not received: it is counted as a loss, not paid.
                         var settled = payment.IsSettled;
 
                         table.Cell().Element(Cell).Text(format.Date(payment.PaymentDate)).FontSize(8.5f);
 
-                        table.Cell().Element(Cell).Text(settled
-                            ? MethodLabel(payment.Method)
-                            : $"{MethodLabel(payment.Method)} ({StatusLabel(payment.Status)})").FontSize(8.5f);
+                        table.Cell().Element(Cell).Text(!settled
+                            ? $"{MethodLabel(payment.Method)} ({StatusLabel(payment.Status)})"
+                            : payment.IsWriteOff
+                                ? $"{MethodLabel(payment.Method)} (non encaissé)"
+                                : MethodLabel(payment.Method)).FontSize(8.5f);
 
                         var reference = string.Join(" — ", new[] { payment.Reference, payment.BankName }
                             .Where(s => !string.IsNullOrWhiteSpace(s)));
@@ -419,7 +427,10 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
                         TotalLine(totals, "Part patient", format.Money(doc.PatientShareAmount));
                     }
 
-                    TotalLine(totals, "Total payé", format.Money(doc.PaidAmount), bold: true, rule: true);
+                    TotalLine(totals, "Total payé", format.Money(doc.CollectedAmount), bold: true, rule: true);
+
+                    if (doc.WrittenOffAmount > 0m)
+                        TotalLine(totals, "Passé en perte", format.Money(doc.WrittenOffAmount));
 
                     if (doc.CreditedAmount > 0m)
                         TotalLine(totals, "Avoirs émis", format.Money(doc.CreditedAmount));

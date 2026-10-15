@@ -689,8 +689,26 @@ public sealed class ClaimBatchView : LocalizedView
                 return;
             }
 
-            _status.ForeColor = UiTheme.Normal;
-            _status.Text = T("Claim.Submitted", result.Value, ticked.Count, value);
+            var batch = result.Value;
+
+            if (batch.Skipped.Count == 0)
+            {
+                _status.ForeColor = UiTheme.Normal;
+                _status.Text = T("Claim.Submitted", batch.Reference, batch.Submitted, value);
+            }
+            else
+            {
+                // The batch went, without some invoices: its reference first, then why the others
+                // stayed behind. Shown as a plain failure, it read as if nothing had been sent.
+                var partial = T("Claim.PartiallySubmitted", batch.Reference, batch.Submitted,
+                                batch.Skipped.Count);
+
+                _status.ForeColor = UiTheme.Critical;
+                _status.Text = partial;
+                _dialogs.Warn(partial + Environment.NewLine + Environment.NewLine
+                              + Localizer.Describe(batch.Skipped),
+                              T("Billing.SubmitClaim"));
+            }
 
             await ActivateAsync();
         }
@@ -725,11 +743,16 @@ public sealed class ClaimBatchView : LocalizedView
         if (result.IsFailure)
         {
             _dialogs.ShowFailure(result, T("Billing.RecordClaimOutcome"));
+            await LoadBatchesAsync();
             return;
         }
 
+        // Invoices already settled one by one keep their own answer; the operator is told which.
+        if (result.Value.Skipped.Count > 0)
+            _dialogs.Warn(Localizer.Describe(result.Value.Skipped), T("Billing.RecordClaimOutcome"));
+
         _status.ForeColor = UiTheme.Normal;
-        _status.Text = T("Claim.OutcomeRecorded", batch.ClaimReference, _invoiceRows.Count);
+        _status.Text = T("Claim.OutcomeRecorded", batch.ClaimReference, result.Value.Updated);
 
         await LoadBatchesAsync();
     }
