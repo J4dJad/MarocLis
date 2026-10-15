@@ -200,12 +200,29 @@ public sealed class QualityControlService(
         foreach (var entry in entries)
             resolvedTargets[entry.QcTargetId] = await targets.GetByIdAsync(entry.QcTargetId, ct);
 
-        var parameterIds = resolvedTargets.Values.OfType<QcTarget>().Select(t => t.TestParameterId)
-                                          .Distinct().ToList();
-        var namedLot = entries.Select(e => e.ReagentLotId).FirstOrDefault(id => id is not null);
-        var lotsByParameter = parameterIds.Count == 0
+        // A lot named for the run applies to the entries that name it, which must be one analyser's:
+        // the screen's single lot applied to every analyser's rows turned another analyser's
+        // routine QC into an acceptance run that flagged no patient result when rejected.
+        var named = entries.Where(e => e.ReagentLotId is not null).ToList();
+        var namedLot = named.Select(e => e.ReagentLotId).FirstOrDefault();
+
+        if (named.Select(e => e.ReagentLotId).Distinct().Count() > 1
+            || named.Select(e => resolvedTargets[e.QcTargetId]?.InstrumentId).OfType<Guid>().Distinct().Count() > 1)
+            return Result.Failure<QcSubmissionOutcome>(Error.Validation("Qc_NamedLotOneAnalyser"));
+
+        IReadOnlyCollection<Guid> ParametersOf(IEnumerable<QcEntry> of) =>
+            [.. of.Select(e => resolvedTargets[e.QcTargetId]).OfType<QcTarget>()
+                  .Select(t => t.TestParameterId).Distinct()];
+
+        var namedParameters = ParametersOf(named);
+        var routineParameters = ParametersOf(entries.Where(e => e.ReagentLotId is null));
+
+        var lotsForNamed = namedParameters.Count == 0
             ? null
-            : await queries.GetReagentLotsForQcAsync(parameterIds, namedLot, currentUser.SiteId, today, ct);
+            : await queries.GetReagentLotsForQcAsync(namedParameters, namedLot, currentUser.SiteId, today, ct);
+        var lotsInUse = routineParameters.Count == 0
+            ? null
+            : await queries.GetReagentLotsForQcAsync(routineParameters, null, currentUser.SiteId, today, ct);
 
         // A named lot still awaiting release makes its points an acceptance run for that lot,
         // kept apart from the routine QC of the lot the patient results are produced with.
@@ -229,6 +246,8 @@ public sealed class QualityControlService(
             if (material is not null && !material.IsUsable(today))
                 problems.Add(Error.Validation("Qc_MaterialExpired", material.LotNumber));
 
+            var lotsByParameter = entry.ReagentLotId is null ? lotsInUse : lotsForNamed;
+
             var result = new QcResult(target.Id, target.TestParameterId, target.InstrumentId,
                                        currentUser.SiteId, entry.Value, now, currentUser.UserId)
             {
@@ -247,7 +266,8 @@ public sealed class QualityControlService(
             {
                 result.IsLotEvaluation = true;
 
-                // The analyser's own transmissions of the next runs are credited to this lot.
+                // Records where the lot is loaded. Its transmissions are credited to it only from an
+                // explicit start (StartLotEvaluationAsync), not from what was typed here.
                 evaluatedLot.StartEvaluationOn(result.InstrumentId);
             }
 
@@ -342,6 +362,45 @@ public sealed class QualityControlService(
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new QcSubmissionOutcome(outcomes, problems));
+    }
+
+    /// <summary>
+    /// Starts an evaluation run of a lot awaiting release on an analyser: the next control of each
+    /// level the analyser transmits today for the lot's analyses is credited to the lot and evaluated
+    /// on its own series. Started again for each run (the next day of a multi-day evaluation, a
+    /// rerun); routine QC transmitted afterwards stays with the lot in use.
+    /// </summary>
+    public async Task<Result> StartLotEvaluationAsync(Guid reagentLotId, Guid instrumentId,
+                                                       CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Quality.EnterQc);
+        if (permitted.IsFailure) return permitted;
+
+        var lot = await queries.GetReagentLotAsync(reagentLotId, ct);
+        if (lot is null) return Result.Failure(Error.NotFound("Lot_NotFound", reagentLotId));
+
+        if (!lot.StartEvaluationOn(instrumentId, clock.Now))
+            return Result.Failure(Error.Conflict("Lot_NotAwaitingRelease", lot.LotNumber));
+
+        unitOfWork.AuditReason = $"Évaluation du lot {lot.LotNumber} démarrée sur l'automate";
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    /// <summary>Ends a lot's evaluation run: the analyser's transmissions are routine QC again.</summary>
+    public async Task<Result> StopLotEvaluationAsync(Guid reagentLotId, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Quality.EnterQc);
+        if (permitted.IsFailure) return permitted;
+
+        var lot = await queries.GetReagentLotAsync(reagentLotId, ct);
+        if (lot is null) return Result.Failure(Error.NotFound("Lot_NotFound", reagentLotId));
+
+        lot.StopEvaluation();
+
+        unitOfWork.AuditReason = $"Évaluation du lot {lot.LotNumber} arrêtée";
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
     }
 
     public async Task<Result<LeveyJenningsSeries>> GetChartAsync(

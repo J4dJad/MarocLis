@@ -171,7 +171,7 @@ public sealed class ReviewFixesCycle2ClinicalTests
                     ((IReadOnlyCollection<Guid>)args![0]!).ToDictionary(id => id, _ => self.LotInUse)),
                 ["GetReagentLotsUnderEvaluationAsync"] = args => Task.FromResult<IReadOnlyDictionary<Guid, Guid>>(
                     self.UnderEvaluation is { } lot
-                        ? ((IReadOnlyCollection<Guid>)args![0]!).ToDictionary(id => id, _ => lot)
+                        ? ((IReadOnlyDictionary<Guid, Guid>)args![0]!).Keys.ToDictionary(id => id, _ => lot)
                         : new Dictionary<Guid, Guid>())
             });
 
@@ -359,7 +359,7 @@ public sealed class ReviewFixesCycle2ClinicalDatabaseTests(Cycle2ClinicalScratch
     }
 
     [SqlServerFact]
-    public async Task K8_TheAnalyserCreditsTheNewLot_OnlyOnTheDayARunOnItWasEnteredInTheQcScreen()
+    public async Task K8_TheAnalyserCreditsTheNewLot_OnlyOnTheDayItsEvaluationRunWasStarted()
     {
         var (analysis, parameter) = await CatalogueAsync();
         var siteId = Guid.NewGuid();
@@ -369,7 +369,7 @@ public sealed class ReviewFixesCycle2ClinicalDatabaseTests(Cycle2ClinicalScratch
             UsedByAnalysisCodesCsv = analysis.Code
         };
         var monday = item.AddLot(new ReagentLot("GLU-L2", Today.AddDays(300), 4m, Today.AddDays(-3)));
-        monday.StartEvaluationOn(analyser.Id).Should().BeTrue();
+        monday.StartEvaluationOn(analyser.Id, Now.AddDays(-1)).Should().BeTrue();
         var today = item.AddLot(new ReagentLot("GLU-L3", Today.AddDays(300), 4m, Today.AddDays(-3)));
         today.StartEvaluationOn(analyser.Id).Should().BeTrue();
 
@@ -386,21 +386,37 @@ public sealed class ReviewFixesCycle2ClinicalDatabaseTests(Cycle2ClinicalScratch
             await context.SaveChangesAsync();
         }
 
+        var levels = new Dictionary<Guid, Guid> { [target.Id] = parameter.Id };
+
         await using (var read = database.Context())
         {
-            (await new ResultQueries(read).GetReagentLotsUnderEvaluationAsync([parameter.Id], siteId, analyser.Id, Today))
-                .Should().BeEmpty("no run on a lot under evaluation was entered on this analyser today");
+            (await new ResultQueries(read).GetReagentLotsUnderEvaluationAsync(levels, siteId, analyser.Id, Today))
+                .Should().BeEmpty("no evaluation run was started on this analyser today");
         }
 
+        // A value typed in the QC screen starts nothing (cycle 3 K14); the explicit start does.
         await using (var context = database.Context())
         {
             context.QcResults.Add(Point(target, siteId, Now.AddHours(-1), today.Id, evaluation: true));
             await context.SaveChangesAsync();
         }
 
+        await using (var read = database.Context())
+        {
+            (await new ResultQueries(read).GetReagentLotsUnderEvaluationAsync(levels, siteId, analyser.Id, Today))
+                .Should().BeEmpty();
+        }
+
+        await using (var context = database.Context())
+        {
+            var lot = await context.ReagentLots.SingleAsync(l => l.Id == today.Id);
+            lot.StartEvaluationOn(analyser.Id, Now.AddHours(-1)).Should().BeTrue();
+            await context.SaveChangesAsync();
+        }
+
         await using var again = database.Context();
-        (await new ResultQueries(again).GetReagentLotsUnderEvaluationAsync([parameter.Id], siteId, analyser.Id, Today))
-            .Should().Equal(new Dictionary<Guid, Guid> { [parameter.Id] = today.Id });
+        (await new ResultQueries(again).GetReagentLotsUnderEvaluationAsync(levels, siteId, analyser.Id, Today))
+            .Should().Equal(new Dictionary<Guid, Guid> { [target.Id] = today.Id });
     }
 
     [SqlServerFact]

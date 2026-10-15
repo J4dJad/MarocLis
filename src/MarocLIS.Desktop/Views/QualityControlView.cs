@@ -65,6 +65,17 @@ public sealed class QualityControlView : LocalizedView
     };
     private readonly MarocLIS.Application.Inventory.LotQualityService? _lotQuality;
 
+    // The analyser the named lot is loaded on. The lot applies to that analyser's rows only: one
+    // lot for every row turned another analyser's routine QC into the new lot's acceptance run.
+    // The same analyser is where an evaluation run is started for the lot's transmitted controls.
+    private readonly ComboBox _lotAnalyser = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        FlatStyle = FlatStyle.Flat
+    };
+    private readonly Button _startEvaluation = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _stopEvaluation = UiTheme.SecondaryButton(string.Empty);
+
     public QualityControlView(QualityControlService qc, IUserDialogs dialogs,
                               ILocalizer localizer, ICultureManager cultureManager,
                               ILogger<QualityControlView>? logger = null,
@@ -122,13 +133,16 @@ public sealed class QualityControlView : LocalizedView
 
         var entryActions = new Panel
         {
-            Dock = DockStyle.Bottom, Height = 42, BackColor = UiTheme.Surface
+            Dock = DockStyle.Bottom, Height = 84, BackColor = UiTheme.Surface
         };
 
         _submit.Bounds = new Rectangle(0, 8, 220, UiTheme.ButtonHeight);
         _refresh.Bounds = new Rectangle(230, 8, 110, UiTheme.ButtonHeight);
         _reagentLot.Bounds = new Rectangle(350, 10, 280, UiTheme.InputHeight);
-        entryActions.Controls.AddRange([_submit, _refresh, _reagentLot]);
+        _lotAnalyser.Bounds = new Rectangle(0, 52, 220, UiTheme.InputHeight);
+        _startEvaluation.Bounds = new Rectangle(230, 50, 220, UiTheme.ButtonHeight);
+        _stopEvaluation.Bounds = new Rectangle(460, 50, 170, UiTheme.ButtonHeight);
+        entryActions.Controls.AddRange([_submit, _refresh, _reagentLot, _lotAnalyser, _startEvaluation, _stopEvaluation]);
 
         entryPanel.Controls.Add(entryHost);
         entryPanel.Controls.Add(entryActions);
@@ -260,9 +274,13 @@ public sealed class QualityControlView : LocalizedView
         _reviewAction.Click += async (_, _) => await RunBusyAsync(ReviewSelectedAsync);
         _establishLimits.Click += async (_, _) => await RunBusyAsync(EstablishLimitsAsync);
         _editRules.Click += async (_, _) => await RunBusyAsync(EditRulesAsync);
+        _startEvaluation.Click += async (_, _) => await RunBusyAsync(() => ChangeEvaluationAsync(start: true));
+        _stopEvaluation.Click += async (_, _) => await RunBusyAsync(() => ChangeEvaluationAsync(start: false));
+        _reagentLot.SelectedIndexChanged += (_, _) => UpdateLotControls();
+        _lotAnalyser.SelectedIndexChanged += (_, _) => UpdateLotControls();
 
         // Greyed out for a user without the right; the service refuses them in any case.
-        PermissionGate.Require(Permissions.Quality.EnterQc, _submit);
+        PermissionGate.Require(Permissions.Quality.EnterQc, _submit, _startEvaluation, _stopEvaluation);
         PermissionGate.Require(Permissions.Quality.ReviewQc, _reviewAction);
         PermissionGate.Require(Permissions.Quality.ManageQcRules, _establishLimits, _editRules);
 
@@ -357,6 +375,10 @@ public sealed class QualityControlView : LocalizedView
         _reviewAction.Text = T("Quality.Review");
         _establishLimits.Text = T("Quality.EstablishLimits");
         _editRules.Text = T("Quality.EditRules");
+        _startEvaluation.Text = T("Qc.StartEvaluation");
+        _stopEvaluation.Text = T("Qc.StopEvaluation");
+        if (_lotAnalyser.Items.Count > 0 && _lotAnalyser.Items[0] is AnalyserChoice { Id: null })
+            _lotAnalyser.Items[0] = new AnalyserChoice(null, T("Qc.LotAnalyser"));
 
         if (_entry.Columns.Count > 0)
         {
@@ -423,6 +445,47 @@ public sealed class QualityControlView : LocalizedView
         public override string ToString() => Display;
     }
 
+    private sealed record AnalyserChoice(Guid? Id, string Display)
+    {
+        public override string ToString() => Display;
+    }
+
+    private Guid? NamedLotId => (_reagentLot.SelectedItem as LotChoice)?.Id;
+
+    private Guid? LotAnalyserId => (_lotAnalyser.SelectedItem as AnalyserChoice)?.Id;
+
+    /// <summary>The analysers of the sheet, for the named lot; one alone is chosen already.</summary>
+    private void LoadLotAnalysers()
+    {
+        var keep = LotAnalyserId;
+        var analysers = _rows.GroupBy(r => r.InstrumentId)
+                             .Select(g => new AnalyserChoice(g.Key, g.First().InstrumentCode))
+                             .OrderBy(a => a.Display, StringComparer.CurrentCulture)
+                             .ToList();
+
+        _lotAnalyser.Items.Clear();
+        _lotAnalyser.Items.Add(new AnalyserChoice(null, T("Qc.LotAnalyser")));
+
+        foreach (var analyser in analysers)
+        {
+            var index = _lotAnalyser.Items.Add(analyser);
+            if (analyser.Id == keep || analysers.Count == 1) _lotAnalyser.SelectedIndex = index;
+        }
+
+        if (_lotAnalyser.SelectedIndex < 0) _lotAnalyser.SelectedIndex = 0;
+        UpdateLotControls();
+    }
+
+    private void UpdateLotControls()
+    {
+        var named = NamedLotId is not null;
+        _lotAnalyser.Enabled = named;
+
+        var canEvaluate = named && LotAnalyserId is not null && PermissionGate.Allows(Permissions.Quality.EnterQc);
+        _startEvaluation.Enabled = canEvaluate;
+        _stopEvaluation.Enabled = named && PermissionGate.Allows(Permissions.Quality.EnterQc);
+    }
+
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
         await LoadReagentLotsAsync(ct);
@@ -443,6 +506,7 @@ public sealed class QualityControlView : LocalizedView
 
             _rows = sheet.Value;
             RenderEntry(typed);
+            LoadLotAnalysers();
 
             var review = await _qc.GetPendingReviewAsync(ct);
 
@@ -613,11 +677,50 @@ public sealed class QualityControlView : LocalizedView
 
     // ---- Actions ---------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Starts (or stops) the evaluation run of the named lot on its analyser: the next control of
+    /// each level that analyser transmits today is credited to the lot, the rest stays routine QC.
+    /// </summary>
+    private async Task ChangeEvaluationAsync(bool start)
+    {
+        if (NamedLotId is not { } lotId) return;
+
+        if (start && LotAnalyserId is null)
+        {
+            _dialogs.Warn(T("Qc.ChooseLotAnalyser"));
+            return;
+        }
+
+        var changed = start
+            ? await _qc.StartLotEvaluationAsync(lotId, LotAnalyserId!.Value)
+            : await _qc.StopLotEvaluationAsync(lotId);
+
+        if (changed.IsFailure)
+        {
+            _dialogs.ShowFailure(changed);
+            return;
+        }
+
+        _status.ForeColor = UiTheme.TextSecondary;
+        _status.Text = start
+            ? Localizer.Format("Qc.EvaluationStarted", _reagentLot.Text, _lotAnalyser.Text)
+            : Localizer.Format("Qc.EvaluationStopped", _reagentLot.Text);
+    }
+
     private async Task SubmitAsync()
     {
         _entry.EndEdit();
 
         var entries = new List<QcEntry>();
+
+        // A named lot is the lot of one analyser's rows; the other analysers' rows are routine QC.
+        var namedLot = NamedLotId;
+        if (namedLot is not null && LotAnalyserId is null)
+        {
+            _dialogs.Warn(T("Qc.ChooseLotAnalyser"));
+            _lotAnalyser.Focus();
+            return;
+        }
 
         foreach (DataGridViewRow gridRow in _entry.Rows)
         {
@@ -637,7 +740,8 @@ public sealed class QualityControlView : LocalizedView
                 return;
             }
 
-            entries.Add(new QcEntry(row.QcTargetId, value, (_reagentLot.SelectedItem as LotChoice)?.Id));
+            entries.Add(new QcEntry(row.QcTargetId, value,
+                                    row.InstrumentId == LotAnalyserId ? namedLot : null));
         }
 
         if (entries.Count == 0)

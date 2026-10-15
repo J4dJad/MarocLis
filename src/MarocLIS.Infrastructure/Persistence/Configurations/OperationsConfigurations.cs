@@ -442,9 +442,10 @@ public sealed class ReagentLotConfiguration : IEntityTypeConfiguration<ReagentLo
         builder.Property(e => e.UnitPriceMad).HasColumnType("decimal(18,2)");
 
         // On-board stability runs from the latest unit issued; the analyser a new lot is being
-        // evaluated on receives its transmitted controls.
+        // evaluated on receives its transmitted controls from the start of an evaluation run.
         builder.Property(e => e.LastOpenedOn);
         builder.Property(e => e.EvaluationInstrumentId);
+        builder.Property(e => e.EvaluationStartedAt);
 
         builder.HasIndex(e => new { e.StockItemId, e.LotNumber })
                .IsUnique()
