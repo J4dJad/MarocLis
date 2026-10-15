@@ -85,8 +85,11 @@ public sealed record SavePartnershipRequest
     public bool IsActive { get; init; } = true;
 }
 
-/// <summary>Something to pick in a relations editor: a prescriber or a staff member.</summary>
-public sealed record RelationLookup(Guid Id, string Display);
+/// <summary>
+/// Something to pick in a relations editor: a prescriber or a staff member. Inactive only when the
+/// record being edited already names it.
+/// </summary>
+public sealed record RelationLookup(Guid Id, string Display, bool IsActive = true);
 
 public sealed record RelationOptions(IReadOnlyList<RelationLookup> Prescribers, IReadOnlyList<RelationLookup> Staff);
 
@@ -127,12 +130,15 @@ public sealed class RelationsService(
         return Result.Success(await queries.GetDueVisitsAsync(currentUser.SiteId, clock.Today, ct));
     }
 
-    public async Task<Result<RelationOptions>> GetOptionsAsync(CancellationToken ct = default)
+    /// <param name="keep">The prescriber and staff ids the record being edited names: listed even inactive.</param>
+    public async Task<Result<RelationOptions>> GetOptionsAsync(IReadOnlyCollection<Guid>? keep = null,
+                                                               CancellationToken ct = default)
     {
         var permitted = guard.RequireAny(Permissions.Relations.Manage, Permissions.Relations.View);
         if (permitted.IsFailure) return Result.Failure<RelationOptions>(permitted.FirstError);
 
-        return Result.Success(await queries.GetOptionsAsync(currentUser.SiteId, ct));
+        return Result.Success(await queries.GetOptionsAsync(currentUser.SiteId,
+                                                            keep?.Where(id => id != Guid.Empty).ToList() ?? [], ct));
     }
 
     public async Task<Result<Guid>> SaveVisitAsync(SaveDelegateVisitRequest request, CancellationToken ct = default)
@@ -298,6 +304,11 @@ public sealed class RelationsService(
         var permitted = guard.Require(Permissions.Relations.View);
         if (permitted.IsFailure) return Result.Failure<(string, byte[])>(permitted.FirstError);
 
+        // The convention is loaded first, through the site filter: its file is not site-scoped itself,
+        // and another site's contract is not this user's to open.
+        if (await partnerships.GetByIdAsync(partnershipId, ct) is null)
+            return Result.Failure<(string, byte[])>(Error.NotFound("Partnership_NotFound"));
+
         var file = await queries.GetLatestDocumentAsync(partnershipId, ct);
         if (file is not { } found) return Result.Failure<(string, byte[])>(Error.NotFound("Purchasing_FileNotFound"));
 
@@ -317,8 +328,11 @@ public interface IRelationsQueries
 
     Task<IReadOnlyList<DelegateVisitRow>> GetDueVisitsAsync(Guid siteId, DateOnly today, CancellationToken ct = default);
 
-    /// <summary>Active prescribers, and the active staff of the site who can be named delegate.</summary>
-    Task<RelationOptions> GetOptionsAsync(Guid siteId, CancellationToken ct = default);
+    /// <summary>
+    /// Active prescribers, and the active staff of the site who can be named delegate, plus the
+    /// <paramref name="keep"/> records whatever their state.
+    /// </summary>
+    Task<RelationOptions> GetOptionsAsync(Guid siteId, IReadOnlyCollection<Guid> keep, CancellationToken ct = default);
 
     Task<IReadOnlyList<PartnershipRow>> GetPartnershipsAsync(Guid siteId, bool includeInactive, DateOnly today,
                                                              CancellationToken ct = default);

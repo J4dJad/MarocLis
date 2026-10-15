@@ -111,7 +111,11 @@ public sealed class SteeringQueries(LisDbContext db) : ISteeringQueries
                         && i.LabOrder.RegisteredAt >= start && i.LabOrder.RegisteredAt < end)
             .Select(i => new SteeringActivityRow(
                 i.LabOrder!.SiteId,
-                i.LabOrder.PrescriberId,
+                // A "self-referral" prescriber record is the patient asking on their own: no prescriber.
+                db.Prescribers.IgnoreQueryFilters()
+                  .Any(p => p.Id == i.LabOrder.PrescriberId && p.Kind == PrescriberKind.SelfReferral)
+                    ? null
+                    : i.LabOrder.PrescriberId,
                 new ActivityItem(
                     i.LabOrderId,
                     i.LabOrder.PatientId,

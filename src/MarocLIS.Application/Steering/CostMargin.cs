@@ -185,6 +185,9 @@ public sealed record CostSettings
     public const string Prefix = "Steering.Cost.";
     public const string AllocationPerTestKey = "Steering.Cost.AllocationPerTestMad";
 
+    /// <summary>Highest allocation the cost screen accepts; a stored value above it is ignored.</summary>
+    public const decimal MaximumAllocationPerTestMad = 100000m;
+
     /// <summary>
     /// Indirect costs spread over each test, in dirhams: controls, calibrators, consumables,
     /// maintenance, the analyser's rent. Zero leaves the margin a margin on reagents.
@@ -195,7 +198,7 @@ public sealed record CostSettings
     {
         AllocationPerTestMad = values.TryGetValue(AllocationPerTestKey, out var text) && text is not null
                                && decimal.TryParse(text.Replace(',', '.'), NumberStyles.Number,
-                                                   CultureInfo.InvariantCulture, out var value) && value >= 0m
+                                                   CultureInfo.InvariantCulture, out var value) && value is >= 0m and <= MaximumAllocationPerTestMad
             ? value
             : 0m
     };
@@ -311,7 +314,7 @@ public sealed class CostMarginService(
     {
         var permitted = guard.Require(Permissions.Steering.ManageCosts);
         if (permitted.IsFailure) return permitted;
-        if (settings.AllocationPerTestMad is < 0m or > 100000m)
+        if (settings.AllocationPerTestMad is < 0m or > CostSettings.MaximumAllocationPerTestMad)
             return Result.Failure(Error.Validation("Steering_AllocationOutOfRange"));
 
         var value = Money.Round(settings.AllocationPerTestMad).ToString(CultureInfo.InvariantCulture);

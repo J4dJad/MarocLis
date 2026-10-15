@@ -373,13 +373,24 @@ public sealed class ConfigurationService(
 
     // ---- Settings ------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Settings owned by a screen of their own, which checks their wording, format and permission
+    /// (the patient messages, the cost allocation): neither listed nor written here.
+    /// </summary>
+    public static readonly IReadOnlyList<string> DedicatedPrefixes =
+        [MarocLIS.Application.Relations.MessagingSettings.Prefix, MarocLIS.Application.Steering.CostSettings.Prefix];
+
+    public static bool IsDedicated(string key) =>
+        DedicatedPrefixes.Any(p => key.Trim().StartsWith(p, StringComparison.OrdinalIgnoreCase));
+
     public async Task<Result<IReadOnlyList<SettingRow>>> GetSettingsAsync(
         CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return Result.Failure<IReadOnlyList<SettingRow>>(permitted.FirstError);
 
-        return Result.Success(await queries.GetSettingsAsync(ct));
+        return Result.Success<IReadOnlyList<SettingRow>>(
+            [.. (await queries.GetSettingsAsync(ct)).Where(s => !IsDedicated(s.Key))]);
     }
 
     public async Task<Result> SetSettingAsync(string key, string? value, Guid? siteId = null,
@@ -394,6 +405,8 @@ public sealed class ConfigurationService(
             return Result.Failure(Error.Validation("Setting_KeyRequired"));
 
         var normalised = key.Trim();
+        if (IsDedicated(normalised))
+            return Result.Failure(Error.Validation("Setting_ManagedElsewhere", normalised));
 
         var existing = await writer.GetSettingAsync(normalised, siteId, ct);
 
