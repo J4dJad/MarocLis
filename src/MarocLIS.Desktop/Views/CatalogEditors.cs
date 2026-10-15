@@ -824,12 +824,9 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
 
         if (existing is not null)
         {
-            var divisor = (existing.AgeFromDays ?? existing.AgeToDays ?? 0) switch
-            {
-                < 31 and > 0 => 1,
-                < 731 => 30,
-                _ => 365
-            };
+            // The largest unit that holds both bounds exactly, or the band would be re-saved
+            // truncated.
+            var divisor = EditorValues.AgeUnitDays(existing.AgeFromDays, existing.AgeToDays);
 
             _ageUnit.SelectedIndex = divisor switch { 1 => 0, 30 => 1, _ => 2 };
             _ageFrom.Value = (existing.AgeFromDays ?? 0) / divisor;
@@ -903,7 +900,8 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
         box.Tag = UiTags.LatinValue;
         box.TextAlign = HorizontalAlignment.Right;
         box.Font = UiTheme.Monospace;
-        box.Text = value?.ToString("N" + decimals) ?? string.Empty;
+        // No thousands separator: the box is read back as typed, and "150 000" did not survive it.
+        box.Text = value is { } number ? EditorValues.FormatForEditing(number, decimals) : string.Empty;
 
         Controls.Add(box);
         return box;

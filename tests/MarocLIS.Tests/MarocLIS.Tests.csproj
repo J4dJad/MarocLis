@@ -33,4 +33,12 @@
     <ProjectReference Include="..\..\src\MarocLIS.Reporting\MarocLIS.Reporting.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      The desktop client targets net10.0-windows and cannot be referenced from here. Its few
+      WinForms-free helpers are compiled in by link instead, so their conversions are tested.
+    -->
+    <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\EditorValues.cs" Link="Desktop\EditorValues.cs" />
+  </ItemGroup>
+
 </Project>
