@@ -101,6 +101,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<Application.Administration.IAdministrationQueries, AdministrationQueries>();
         services.AddIsolatedQueries<Application.Administration.IMasterDataQueries, MasterDataQueries>();
         services.AddIsolatedQueries<Application.Administration.IAuditQueries, AuditQueries>();
+        services.AddIsolatedQueries<Application.Assets.IFixedAssetQueries, FixedAssetQueries>();
 
         // ---- Shell and dialogs -----------------------------------------------------------------
 
@@ -153,6 +154,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<MasterDataView>();
         services.AddTransient<CatalogView>();
         services.AddTransient<InstrumentInterfaceView>();
+        services.AddTransient<FixedAssetView>();
 
         // Scoped, not singleton: it constructs a form over a scoped application service, and a
         // singleton would pin one change tracker for the life of the process.

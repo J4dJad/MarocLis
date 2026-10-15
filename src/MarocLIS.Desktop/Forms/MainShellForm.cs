@@ -385,6 +385,12 @@ public sealed class MainShellForm : LocalizedForm
             new("accidents", "Nav.Accidents", [Permissions.HumanResources.Accidents, Permissions.HumanResources.View],
                 n => n.NavigateToAsync<AccidentView>()),
 
+            new("group.finance", "Nav.Finance", [Permissions.Assets.View],
+                _ => Task.CompletedTask, IsGroupHeader: true),
+
+            new("fixedassets", "Nav.FixedAssets", [Permissions.Assets.View],
+                n => n.NavigateToAsync<FixedAssetView>()),
+
             new("group.administration", "Nav.Administration", [Permissions.Administration.ViewUsers],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 

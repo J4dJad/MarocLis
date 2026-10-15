@@ -181,6 +181,14 @@ public static class Permissions
         public const string EpidemiologicalDeclaration = "statistics.declaration";
     }
 
+    public static class Assets
+    {
+        /// <summary>The fixed-assets register, the depreciation schedules and the register report.</summary>
+        public const string View = "assets.view";
+        /// <summary>Entering, editing and disposing of fixed assets, and their accounts.</summary>
+        public const string Manage = "assets.manage";
+    }
+
     private static readonly Lazy<IReadOnlyList<string>> AllLazy = new(Discover);
 
     public static IReadOnlyList<string> All => AllLazy.Value;

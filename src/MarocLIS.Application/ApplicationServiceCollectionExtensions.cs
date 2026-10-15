@@ -67,6 +67,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Administration.ConfigurationService>();
         services.AddScoped<Administration.MasterDataService>();
         services.AddScoped<Administration.AuditTrailService>();
+        services.AddScoped<Assets.FixedAssetService>();
+        services.AddScoped<Accounting.IDepreciationEntrySource, Assets.FixedAssetDepreciationSource>();
 
         return services;
     }

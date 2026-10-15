@@ -180,6 +180,7 @@ public class LisDbContext : DbContext
     public DbSet<SupplierQuote> SupplierQuotes => Set<SupplierQuote>();
     public DbSet<PurchasingDocument> PurchasingDocuments => Set<PurchasingDocument>();
     public DbSet<InstrumentContract> InstrumentContracts => Set<InstrumentContract>();
+    public DbSet<MarocLIS.Domain.Assets.FixedAsset> FixedAssets => Set<MarocLIS.Domain.Assets.FixedAsset>();
     public DbSet<InventoryCount> InventoryCounts => Set<InventoryCount>();
     public DbSet<InventoryCountLine> InventoryCountLines => Set<InventoryCountLine>();
     public DbSet<StorageUnit> StorageUnits => Set<StorageUnit>();
