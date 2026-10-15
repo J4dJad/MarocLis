@@ -304,7 +304,9 @@ public sealed class MainShellForm : LocalizedForm
             new("equipment", "Nav.Equipment", [Permissions.Equipment.View],
                 n => n.NavigateToAsync<EquipmentView>()),
 
-            new("group.personnel", "Nav.HumanResources", [Permissions.HumanResources.View],
+            new("group.personnel", "Nav.HumanResources",
+                [Permissions.HumanResources.View, Permissions.HumanResources.RequestLeave,
+                 Permissions.HumanResources.ApproveLeave, Permissions.HumanResources.ManagePlanning],
                 _ => Task.CompletedTask, IsGroupHeader: true),
 
             new("personnel", "Nav.Personnel", [Permissions.HumanResources.View],
@@ -315,6 +317,16 @@ public sealed class MainShellForm : LocalizedForm
 
             new("hrdeadlines", "Nav.PersonnelDeadlines", [Permissions.HumanResources.View],
                 n => n.NavigateToAsync<PersonnelDeadlinesView>()),
+
+            // Every employee asks for their own leave here; the list shows them their own only.
+            new("leave", "Nav.Leave",
+                [Permissions.HumanResources.RequestLeave, Permissions.HumanResources.ApproveLeave,
+                 Permissions.HumanResources.View],
+                n => n.NavigateToAsync<LeaveView>()),
+
+            new("planning", "Nav.Planning",
+                [Permissions.HumanResources.View, Permissions.HumanResources.ManagePlanning],
+                n => n.NavigateToAsync<PlanningView>()),
 
             new("group.administration", "Nav.Administration", [Permissions.Administration.ViewUsers],
                 _ => Task.CompletedTask, IsGroupHeader: true),

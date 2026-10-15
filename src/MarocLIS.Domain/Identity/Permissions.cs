@@ -141,6 +141,12 @@ public static class Permissions
         public const string ManageHabilitations = "hr.habilitations";
         /// <summary>Reading and changing salary and bank details.</summary>
         public const string Salary = "hr.salary";
+        /// <summary>Requesting one's own leave. Given to every staff role.</summary>
+        public const string RequestLeave = "hr.leave.request";
+        /// <summary>Approving or refusing leave requests, and entering leave for others.</summary>
+        public const string ApproveLeave = "hr.leave.approve";
+        /// <summary>Building the shift and on-call planning.</summary>
+        public const string ManagePlanning = "hr.planning";
     }
 
     public static class Statistics

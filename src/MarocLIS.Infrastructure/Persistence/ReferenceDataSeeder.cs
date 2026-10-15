@@ -468,7 +468,9 @@ internal static class RolePermissionSets
              Permissions.Statistics.View, Permissions.Statistics.EpidemiologicalDeclaration,
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,
              Permissions.HumanResources.View, Permissions.HumanResources.Manage,
-             Permissions.HumanResources.ManageHabilitations, Permissions.HumanResources.Salary
+             Permissions.HumanResources.ManageHabilitations, Permissions.HumanResources.Salary,
+             Permissions.HumanResources.RequestLeave, Permissions.HumanResources.ApproveLeave,
+             Permissions.HumanResources.ManagePlanning
          ]),
 
         (SystemRoles.Biologist,
@@ -486,7 +488,8 @@ internal static class RolePermissionSets
              Permissions.Quality.ManageNonConformity,
              Permissions.Catalog.View,
              Permissions.Equipment.View, Permissions.Instruments.View,
-             Permissions.Inventory.View, Permissions.Statistics.View
+             Permissions.Inventory.View, Permissions.Statistics.View,
+             Permissions.HumanResources.RequestLeave
          ]),
 
         (SystemRoles.Technician,
@@ -507,7 +510,8 @@ internal static class RolePermissionSets
              Permissions.Catalog.View,
              Permissions.Equipment.View, Permissions.Equipment.RecordMaintenance,
              Permissions.Instruments.View, Permissions.Instruments.StartStop,
-             Permissions.Inventory.View, Permissions.Inventory.Issue
+             Permissions.Inventory.View, Permissions.Inventory.Issue,
+             Permissions.HumanResources.RequestLeave
          ]),
 
         (SystemRoles.Phlebotomist,
@@ -517,7 +521,8 @@ internal static class RolePermissionSets
              Permissions.Orders.View,
              Permissions.Samples.View, Permissions.Samples.Collect, Permissions.Samples.Reprint,
              Permissions.Samples.Dispatch,
-             Permissions.Catalog.View
+             Permissions.Catalog.View,
+             Permissions.HumanResources.RequestLeave
          ]),
 
         (SystemRoles.Receptionist,
@@ -531,7 +536,8 @@ internal static class RolePermissionSets
              Permissions.Reports.View, Permissions.Reports.Print, Permissions.Reports.Send,
              Permissions.Billing.View, Permissions.Billing.CreateInvoice,
              Permissions.Billing.RecordPayment, Permissions.Billing.CloseCashSession,
-             Permissions.Catalog.View
+             Permissions.Catalog.View,
+             Permissions.HumanResources.RequestLeave
          ]),
 
         (SystemRoles.QualityManager,
@@ -552,7 +558,7 @@ internal static class RolePermissionSets
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,
              // The habilitation matrix is the quality manager's audit evidence; granting stays
              // with the biologists.
-             Permissions.HumanResources.View
+             Permissions.HumanResources.View, Permissions.HumanResources.RequestLeave
          ]),
 
         (SystemRoles.Accountant,
@@ -566,7 +572,8 @@ internal static class RolePermissionSets
              Permissions.Billing.ApplyDiscount, Permissions.Billing.ManageTariffs,
              Permissions.Billing.CloseCashSession, Permissions.Billing.ExportAccounting,
              Permissions.Inventory.View, Permissions.Inventory.ManagePurchaseOrders,
-             Permissions.Statistics.View
+             Permissions.Statistics.View,
+             Permissions.HumanResources.RequestLeave
          ]),
 
         (SystemRoles.Prescriber,

@@ -75,3 +75,72 @@ public sealed class EmployeeHabilitationConfiguration : IEntityTypeConfiguration
                .HasDatabaseName("IX_EmployeeHabilitations_Activity");
     }
 }
+
+// ---- Leave and planning ------------------------------------------------------------------------
+
+public sealed class LeaveRequestConfiguration : IEntityTypeConfiguration<LeaveRequest>
+{
+    public void Configure(EntityTypeBuilder<LeaveRequest> builder)
+    {
+        builder.ToTable("LeaveRequests", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Days).HasColumnType("decimal(6,2)");
+        builder.Property(e => e.Reason).HasMaxLength(500);
+        builder.Property(e => e.DecisionComment).HasMaxLength(500);
+        builder.Ignore(e => e.IsLive);
+
+        builder.HasOne<Employee>().WithMany().HasForeignKey(e => e.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => new { e.EmployeeId, e.StartDate }).HasDatabaseName("IX_LeaveRequests_Employee_Start");
+        builder.HasIndex(e => new { e.Status, e.StartDate }).HasDatabaseName("IX_LeaveRequests_Status_Start");
+    }
+}
+
+public sealed class LeaveLedgerEntryConfiguration : IEntityTypeConfiguration<LeaveLedgerEntry>
+{
+    public void Configure(EntityTypeBuilder<LeaveLedgerEntry> builder)
+    {
+        builder.ToTable("LeaveLedger", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Days).HasColumnType("decimal(6,2)");
+        builder.Property(e => e.Reference).HasMaxLength(40).IsRequired();
+        builder.Property(e => e.Comment).HasMaxLength(500);
+
+        builder.HasOne<Employee>().WithMany().HasForeignKey(e => e.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        // A month is credited once, whoever runs the accrual and however often.
+        builder.HasIndex(e => new { e.EmployeeId, e.Reference }).IsUnique()
+               .HasFilter($"[Kind] = {(int)LeaveLedgerKind.Accrual}")
+               .HasDatabaseName("UX_LeaveLedger_Accrual");
+        builder.HasIndex(e => new { e.EmployeeId, e.Date }).HasDatabaseName("IX_LeaveLedger_Employee_Date");
+    }
+}
+
+public sealed class PublicHolidayConfiguration : IEntityTypeConfiguration<PublicHoliday>
+{
+    public void Configure(EntityTypeBuilder<PublicHoliday> builder)
+    {
+        builder.ToTable("PublicHolidays", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Name).HasMaxLength(150).IsRequired();
+        builder.Property(e => e.DeletionReason).HasMaxLength(500);
+        builder.HasIndex(e => e.Date).IsUnique().HasFilter("[IsDeleted] = 0")
+               .HasDatabaseName("UX_PublicHolidays_Date");
+    }
+}
+
+public sealed class ShiftAssignmentConfiguration : IEntityTypeConfiguration<ShiftAssignment>
+{
+    public void Configure(EntityTypeBuilder<ShiftAssignment> builder)
+    {
+        builder.ToTable("ShiftAssignments", "hr");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Note).HasMaxLength(300);
+        builder.Property(e => e.DeletionReason).HasMaxLength(500);
+        builder.Ignore(e => e.Hours);
+        builder.Ignore(e => e.StartsAt);
+        builder.Ignore(e => e.EndsAt);
+
+        builder.HasOne<Employee>().WithMany().HasForeignKey(e => e.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => new { e.SiteId, e.Date }).HasDatabaseName("IX_ShiftAssignments_Site_Date");
+        builder.HasIndex(e => new { e.EmployeeId, e.Date }).HasDatabaseName("IX_ShiftAssignments_Employee_Date");
+    }
+}
