@@ -145,14 +145,14 @@ public sealed class ResultTrendChart : Control
         g.DrawString(text, UiTheme.Body, brush, plot, format);
     }
 
-    /// <summary>A muted line at the top of the plot, for a chart drawn with a single value.</summary>
+    /// <summary>A muted line at the top left of the plot, for a chart drawn with a single value.</summary>
     private static void DrawCaption(Graphics g, Rectangle plot, string text)
     {
         using var brush = new SolidBrush(UiTheme.TextMuted);
-        using var format = new StringFormat { Alignment = StringAlignment.Center };
+        using var format = new StringFormat { Alignment = StringAlignment.Near };
 
         g.DrawString(text, UiTheme.Small, brush,
-                     new RectangleF(plot.X, plot.Y + 4, plot.Width, 18), format);
+                     new RectangleF(plot.X + 8, plot.Y + 4, plot.Width - 16, 18), format);
     }
 
     /// <summary>Faint gridlines on round values, labelled in the parameter's unit.</summary>
@@ -329,7 +329,10 @@ public sealed class ResultTrendChart : Control
             if (series.LowerLimit is { } low) values.Add(low);
             if (series.UpperLimit is { } high) values.Add(high);
 
-            var ticks = ChartScale.NiceTicks(values.Min(), values.Max());
+            // Room above the highest value, where the caption is written: a value on the top
+            // gridline sat under "Aucune antériorité".
+            var span = Math.Max(values.Max() - values.Min(), Math.Abs(values.Max()) * 0.1m);
+            var ticks = ChartScale.NiceTicks(values.Min(), values.Max() + span * 0.15m);
 
             return new Mapping
             {

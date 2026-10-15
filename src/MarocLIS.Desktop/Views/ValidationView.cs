@@ -238,7 +238,9 @@ public sealed class ValidationView : LocalizedView
         _details.Columns.Add(new DataGridViewCheckBoxColumn
         {
             Name = ColumnSelected,
-            FillWeight = 5,
+            // A tick box has one width; by weight it took a fifth of the grid from the parameter names.
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+            Width = 36,
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
 
