@@ -239,6 +239,61 @@ internal abstract class MasterDataEditor : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+
+        _accept = ok;
+        _dismiss = cancel;
+    }
+
+    private Button? _accept, _dismiss;
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        FitToScreen();
+    }
+
+    /// <summary>
+    /// Keeps a tall editor usable on a small screen. The analysis editor is 764 pixels high, and
+    /// at 1366×768 its Save and Cancel buttons sat below the taskbar: the only way out was Enter or
+    /// Esc. When the dialog is taller than the screen's working area, every field moves into a
+    /// scrolling body and the buttons stay pinned at the bottom, always in view.
+    /// </summary>
+    private void FitToScreen()
+    {
+        if (_accept is null || _dismiss is null) return;
+
+        var chrome = Height - ClientSize.Height;
+        var available = Screen.FromControl(Owner ?? (Control)this).WorkingArea.Height - chrome;
+
+        if (ClientSize.Height <= available) return;
+
+        var shift = ClientSize.Height - available;
+        var footerTop = Math.Min(_accept.Top, _dismiss.Top) - shift;
+
+        if (footerTop <= 0) return;
+
+        SuspendLayout();
+
+        var body = new Panel
+        {
+            AutoScroll = true,
+            AutoScrollMargin = new Size(0, 12),
+            BackColor = BackColor,
+            Bounds = new Rectangle(0, 0, ClientSize.Width, footerTop - 4)
+        };
+
+        // Moved with their coordinates unchanged: the panel sits at the origin, so the layout the
+        // editor drew is the layout the operator scrolls through.
+        foreach (var control in Controls.Cast<Control>().Where(c => c != _accept && c != _dismiss).ToList())
+            body.Controls.Add(control);
+
+        Controls.Add(body);
+
+        _accept.Top -= shift;
+        _dismiss.Top -= shift;
+        ClientSize = new Size(ClientSize.Width, available);
+
+        ResumeLayout(performLayout: true);
     }
 
     protected abstract void Accept();

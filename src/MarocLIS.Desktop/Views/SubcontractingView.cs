@@ -151,9 +151,9 @@ public sealed class SubcontractingView : LocalizedView
         _stageFilter.SelectedIndexChanged += (_, _) => Render();
         _refresh.Click += async (_, _) => await ActivateAsync();
 
-        _send.Click += async (_, _) => await SendAsync();
+        _send.Click += async (_, _) => await RunBusyAsync(SendAsync);
         _reprint.Click += async (_, _) => await ReprintAsync();
-        _reference.Click += async (_, _) => await SetReferenceAsync();
+        _reference.Click += async (_, _) => await RunBusyAsync(SetReferenceAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Samples.Dispatch, _send, _reference);

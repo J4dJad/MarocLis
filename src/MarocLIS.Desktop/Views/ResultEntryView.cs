@@ -494,8 +494,9 @@ public sealed class ResultEntryView : LocalizedView
             await LoadAsync(_scan.Text);
         };
 
-        _save.Click += async (_, _) => await SubmitAsync();
-        _validate.Click += async (_, _) => await TechnicallyValidateAsync();
+        // Busy while saving: leaving the screen mid-save no longer disposes the context under it.
+        _save.Click += async (_, _) => await RunBusyAsync(SubmitAsync);
+        _validate.Click += async (_, _) => await RunBusyAsync(TechnicallyValidateAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Results.Enter, _save, _benchSheet);
@@ -611,7 +612,13 @@ public sealed class ResultEntryView : LocalizedView
         _grid.Column(ColumnPrevious).HeaderText = T("Result.Previous");
         _grid.Column(ColumnComment).HeaderText = T("Result.TechnicalComment");
 
-        if (_sheet is not null) RenderSheet(_sheet);
+        // Re-rendered for the new language with what was typed put back: a technician switching
+        // language to read a name to a patient must not lose a panel of results doing it.
+        if (_sheet is not null)
+        {
+            _grid.EndEdit();
+            RenderSheet(_sheet, CaptureTyped());
+        }
     }
 
     public override async Task ActivateAsync(CancellationToken ct = default)
@@ -620,6 +627,8 @@ public sealed class ResultEntryView : LocalizedView
 
         if (InitialOrderId is { } orderId)
         {
+            if (!ConfirmDiscardTyped()) return;
+
             await LoadOrderAsync(orderId, ct);
         }
         else
@@ -642,6 +651,27 @@ public sealed class ResultEntryView : LocalizedView
         {
             // The same click arrives twice (selection, then click); the second finds it open.
             if (skipIfOpen && _sheet?.AccessionNumber == term) return;
+
+            // ...or, when the operator just refused to leave the current file, finds it refused.
+            if (skipIfOpen && _declined is { } declined && declined.Term == term
+                && Environment.TickCount64 - declined.At < 1500)
+            {
+                _declined = null;
+                RenderWorklist();
+                return;
+            }
+
+            _declined = null;
+
+            if (!ConfirmDiscardTyped())
+            {
+                _declined = (term, Environment.TickCount64);
+
+                // Back on the file still open, so the list does not claim another one is shown.
+                RenderWorklist();
+                return;
+            }
+
             await LoadCoreAsync(term);
         }
         finally
@@ -704,7 +734,47 @@ public sealed class ResultEntryView : LocalizedView
         }
     }
 
-    private void RenderSheet(ResultEntrySheet sheet)
+    /// <summary>Set when the operator refused to leave unsaved values, to absorb the click's twin event.</summary>
+    private (string Term, long At)? _declined;
+
+    /// <summary>Values and comments typed in the grid and not yet saved, keyed by result and column.</summary>
+    private TypedEdits<(Guid Id, string Column)> CaptureTyped()
+    {
+        var typed = new TypedEdits<(Guid, string)>();
+
+        foreach (DataGridViewRow gridRow in _grid.Rows)
+        {
+            if (gridRow.Tag is not Guid id || !_rowsById.TryGetValue(id, out var row)) continue;
+            if (row.IsHeading) continue;
+
+            if (!gridRow.Cells[ColumnValue].ReadOnly)
+                typed.Capture((id, ColumnValue), gridRow.Cells[ColumnValue].Value?.ToString(),
+                              row.CurrentValue);
+
+            typed.Capture((id, ColumnComment), gridRow.Cells[ColumnComment].Value?.ToString(),
+                          row.TechnicalComment);
+        }
+
+        return typed;
+    }
+
+    /// <summary>
+    /// True when nothing typed would be lost by replacing the sheet, or the operator agrees to
+    /// lose it. Opening another file used to replace the grid silently.
+    /// </summary>
+    private bool ConfirmDiscardTyped()
+    {
+        if (_sheet is null) return true;
+
+        _grid.EndEdit();
+
+        var typed = CaptureTyped();
+
+        return typed.IsEmpty
+               || _dialogs.Confirm(T("Message.UnsavedChanges"), _sheet.AccessionNumber);
+    }
+
+    private void RenderSheet(ResultEntrySheet sheet, TypedEdits<(Guid Id, string Column)>? keep = null)
     {
         _rowsById.Clear();
 
@@ -764,6 +834,15 @@ public sealed class ResultEntryView : LocalizedView
             {
                 gridRow.Cells[ColumnParameter].ToolTipText =
                     $"{T("Sample.Defects")} : {row.SampleDefects}";
+            }
+
+            if (keep is not null)
+            {
+                if (!locked && keep.TryGet((row.TestResultId, ColumnValue), out var value))
+                    gridRow.Cells[ColumnValue].Value = value;
+
+                if (keep.TryGet((row.TestResultId, ColumnComment), out var comment))
+                    gridRow.Cells[ColumnComment].Value = comment;
             }
         }
 

@@ -103,6 +103,9 @@ public sealed class PatientEditorForm : LocalizedForm
 
     private readonly Button _save = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _cancel = UiTheme.SecondaryButton(string.Empty);
+
+    /// <summary>True while a create or update is awaited; the dialog cannot be dismissed then.</summary>
+    private bool _saving;
     private readonly Label _status = new();
     private readonly Label _header = new();
 
@@ -1317,6 +1320,8 @@ public sealed class PatientEditorForm : LocalizedForm
         }
 
         _save.Enabled = false;
+        _cancel.Enabled = false;
+        _saving = true;
 
         try
         {
@@ -1336,8 +1341,29 @@ public sealed class PatientEditorForm : LocalizedForm
         }
         finally
         {
-            if (!IsDisposed && DialogResult != DialogResult.OK) _save.Enabled = true;
+            _saving = false;
+            if (!IsDisposed && DialogResult != DialogResult.OK)
+            {
+                _save.Enabled = true;
+                _cancel.Enabled = true;
+            }
         }
+    }
+
+    /// <summary>
+    /// Refuses to close while a save is in flight. Esc or the close box used to dismiss the dialog
+    /// while the registration still completed behind it: the caller got "cancelled", the patient
+    /// was created anyway, and the clerk — seeing no file — registered the same person again.
+    /// </summary>
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (_saving && DialogResult != DialogResult.OK && e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        base.OnFormClosing(e);
     }
 
     /// <summary>

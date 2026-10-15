@@ -259,8 +259,24 @@ public sealed class ClaimBatchView : LocalizedView
         _candidates.CellValueChanged += (_, _) => RefreshSelectionSummary();
 
         _selectClaimable.Click += (_, _) => SelectClaimable();
-        _submit.Click += async (_, _) => await SubmitAsync();
-        _recordOutcome.Click += async (_, _) => await RecordOutcomeAsync();
+        _submit.Click += async (_, _) => await RunActionAsync(SubmitAsync);
+        _recordOutcome.Click += async (_, _) => await RunActionAsync(RecordOutcomeAsync);
+    }
+
+    /// <summary>
+    /// One action at a time, with the actions held disabled until it ends: the reload inside the
+    /// submission moves the selection, whose RefreshActions re-enabled the button mid-await, and a
+    /// second click sent a second batch.
+    /// </summary>
+    private async Task RunActionAsync(Func<Task> action)
+    {
+        var ran = await RunBusyAsync(async () =>
+        {
+            RefreshActions();
+            await action();
+        });
+
+        if (ran && !IsDisposed) RefreshActions();
     }
 
     protected override void ApplyTexts()
@@ -623,8 +639,9 @@ public sealed class ClaimBatchView : LocalizedView
     private void RefreshActions()
     {
         var ticked = Ticked;
+        var idle = !IsBusy;
 
-        var onePayer = ticked.Count > 0
+        var onePayer = idle && ticked.Count > 0
                        && ticked.Select(t => t.PayerId).Distinct().Count() == 1;
 
         // One payer per batch, and every member claimable. A payer that receives a batch containing
@@ -634,7 +651,7 @@ public sealed class ClaimBatchView : LocalizedView
 
         _selectClaimable.Enabled = _candidateRows.Any(c => c.IsClaimable);
 
-        _recordOutcome.Enabled = SelectedBatch is not null
+        _recordOutcome.Enabled = idle && SelectedBatch is not null
                                  && _currentUser.Has(Permissions.Billing.ExportAccounting);
     }
 

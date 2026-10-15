@@ -410,7 +410,7 @@ public sealed class OrderRegistrationView : LocalizedView
         };
 
         _selfPay.CheckedChanged += (_, _) => RefreshTotals();
-        _register.Click += async (_, _) => await RegisterAsync();
+        _register.Click += async (_, _) => await RunBusyAsync(RegisterAsync);
         _clear.Click += (_, _) => ResetForm();
     }
 

@@ -265,16 +265,18 @@ public sealed class BillingView : LocalizedView
             await LoadLedgerAsync();
         };
 
-        _issue.Click += async (_, _) => await IssueAsync();
-        _pay.Click += async (_, _) => await RecordPaymentAsync();
-        _refund.Click += async (_, _) => await RefundAsync();
-        _bounced.Click += async (_, _) => await MarkBouncedAsync();
-        _claimOutcome.Click += async (_, _) => await RecordClaimOutcomeAsync();
-        _deposit.Click += async (_, _) => await TakeDepositAsync();
-        _refundDeposit.Click += async (_, _) => await RefundDepositAsync();
-        _payerSettlement.Click += async (_, _) => await RecordPayerSettlementAsync();
-        _creditNote.Click += async (_, _) => await IssueCreditNoteAsync();
-        _submitClaim.Click += async (_, _) => await SubmitClaimAsync();
+        // Every write runs through RunBusyAsync: a double-click records one payment, not two, and
+        // leaving the screen mid-write no longer disposes the context under it.
+        _issue.Click += async (_, _) => await RunBusyAsync(IssueAsync);
+        _pay.Click += async (_, _) => await RunBusyAsync(RecordPaymentAsync);
+        _refund.Click += async (_, _) => await RunBusyAsync(RefundAsync);
+        _bounced.Click += async (_, _) => await RunBusyAsync(MarkBouncedAsync);
+        _claimOutcome.Click += async (_, _) => await RunBusyAsync(RecordClaimOutcomeAsync);
+        _deposit.Click += async (_, _) => await RunBusyAsync(TakeDepositAsync);
+        _refundDeposit.Click += async (_, _) => await RunBusyAsync(RefundDepositAsync);
+        _payerSettlement.Click += async (_, _) => await RunBusyAsync(RecordPayerSettlementAsync);
+        _creditNote.Click += async (_, _) => await RunBusyAsync(IssueCreditNoteAsync);
+        _submitClaim.Click += async (_, _) => await RunBusyAsync(SubmitClaimAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Billing.CreateInvoice, _issue);
@@ -283,8 +285,8 @@ public sealed class BillingView : LocalizedView
         PermissionGate.Require(Permissions.Billing.ExportAccounting, _claimOutcome, _submitClaim,
                                _payerSettlement);
         PermissionGate.Require(Permissions.Billing.CreditNote, _creditNote);
-        _printInvoice.Click += async (_, _) => await PrintAsync(receipt: false);
-        _printReceipt.Click += async (_, _) => await PrintAsync(receipt: true);
+        _printInvoice.Click += async (_, _) => await RunBusyAsync(() => PrintAsync(receipt: false));
+        _printReceipt.Click += async (_, _) => await RunBusyAsync(() => PrintAsync(receipt: true));
 
         _ledger.CellFormatting += OnLedgerFormatting;
         _pending.CellFormatting += OnPendingFormatting;

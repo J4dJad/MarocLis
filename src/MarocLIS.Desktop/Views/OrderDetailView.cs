@@ -425,13 +425,13 @@ public sealed class OrderDetailView : LocalizedView
 
         _refresh.Click += async (_, _) => await ActivateAsync();
 
-        _addAnalyses.Click += async (_, _) => await AddAnalysesAsync();
-        _cancelItem.Click += async (_, _) => await CancelItemAsync();
-        _repeatItem.Click += async (_, _) => await RepeatItemAsync();
-        _editHeader.Click += async (_, _) => await EditHeaderAsync();
-        _cancelOrder.Click += async (_, _) => await CancelOrderAsync();
+        _addAnalyses.Click += async (_, _) => await RunBusyAsync(AddAnalysesAsync);
+        _cancelItem.Click += async (_, _) => await RunBusyAsync(CancelItemAsync);
+        _repeatItem.Click += async (_, _) => await RunBusyAsync(RepeatItemAsync);
+        _editHeader.Click += async (_, _) => await RunBusyAsync(EditHeaderAsync);
+        _cancelOrder.Click += async (_, _) => await RunBusyAsync(CancelOrderAsync);
         _printLabels.Click += async (_, _) => await ReprintLabelsAsync();
-        _printReport.Click += async (_, _) => await OpenReportAsync();
+        _printReport.Click += async (_, _) => await RunBusyAsync(OpenReportAsync);
 
         _items.SelectionChanged += (_, _) => RefreshActions();
         _items.CellFormatting += OnItemFormatting;
