@@ -189,7 +189,10 @@ public sealed class LeaveService(
 
         var employee = await employees.GetByIdAsync(employeeId.Value, ct);
         if (employee is null) return Result.Failure<Guid>(Error.NotFound("Employee_NotFound"));
-        if (!employee.IsActive || submission.StartDate < employee.HireDate)
+        // Still on the staff today, and for the whole leave: a departure recorded ahead leaves the
+        // notice to be worked, with leave, up to the exit date.
+        if (!employee.IsActiveOn(clock.Today) || submission.StartDate < employee.HireDate
+            || (employee.ExitDate is { } exit && submission.EndDate > exit))
             return Result.Failure<Guid>(Error.Validation("Leave_EmployeeNotEmployed"));
 
         var calendar = await queries.GetHolidayDatesAsync(submission.StartDate, submission.EndDate, ct);
@@ -288,6 +291,11 @@ public sealed class LeaveService(
         if (await OwnEmployeeIdAsync(ct) != request.EmployeeId && !ActsForOthers)
             return Result.Failure(Error.Forbidden("Leave_OwnRequestsOnly"));
 
+        // An absence HR recorded is HR's to withdraw, as is a request HR entered on the employee's
+        // behalf: the employee cancelling it would get the days paid.
+        if (CancelRefusal(request, currentUser.UserId, Has(Permissions.HumanResources.Manage), ActsForOthers) is { } refused)
+            return Result.Failure(refused);
+
         var wasApproved = request.Status == LeaveStatus.Approved;
 
         var cancelled = request.Cancel(clock.Today, clock.Now, currentUser.UserId, comment);
@@ -303,6 +311,19 @@ public sealed class LeaveService(
         unitOfWork.AuditReason = $"Congé annulé ({request.Type}, {request.StartDate:dd/MM/yyyy})";
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Why the caller may not cancel <paramref name="request"/>, or null. An HR-only type
+    /// (unjustified absence) needs the HR right; a request someone else submitted needs a right to
+    /// act for others (HR or the leave approver).
+    /// </summary>
+    public static Error? CancelRefusal(LeaveRequest request, Guid callerUserId, bool managesHr, bool actsForOthers)
+    {
+        if (LeaveRules.IsHrOnly(request.Type) && !managesHr) return Error.Forbidden("Leave_HrOnlyType");
+        if (request.SubmittedByUserId != callerUserId && !actsForOthers)
+            return Error.Forbidden("Leave_SubmittedByOther");
+        return null;
     }
 
     /// <summary>An opening balance or a correction, always with its reason.</summary>

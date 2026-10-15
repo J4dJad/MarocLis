@@ -1,16 +1,21 @@
 using MarocLIS.Application.HumanResources;
+using MarocLIS.Domain.Common;
 using MarocLIS.Domain.HumanResources;
 using MarocLIS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace MarocLIS.Infrastructure.Queries;
 
-public sealed class PersonnelQueries(LisDbContext db) : IPersonnelQueries
+public sealed class PersonnelQueries(LisDbContext db, IClock clock) : IPersonnelQueries
 {
+    // Gone from the day after the exit date; a habilitation ends on its withdrawal date, which on
+    // a departure recorded ahead is the exit date.
+
     public async Task<IReadOnlyList<EmployeeRow>> GetEmployeesAsync(bool includeExited, CancellationToken ct = default)
     {
+        var today = clock.Today;
         var query = db.Employees.AsNoTracking();
-        if (!includeExited) query = query.Where(e => e.ExitDate == null);
+        if (!includeExited) query = query.Where(e => e.ExitDate == null || e.ExitDate >= today);
 
         var rows = await (
                 from e in query
@@ -80,6 +85,7 @@ public sealed class PersonnelQueries(LisDbContext db) : IPersonnelQueries
 
     public async Task<HabilitationMatrix> GetMatrixAsync(CancellationToken ct = default)
     {
+        var today = clock.Today;
         var employees = await GetEmployeesAsync(includeExited: false, ct);
         var ids = employees.Select(e => e.EmployeeId).ToList();
 
@@ -87,7 +93,7 @@ public sealed class PersonnelQueries(LisDbContext db) : IPersonnelQueries
                 from h in db.EmployeeHabilitations.AsNoTracking()
                 join u in db.Users.AsNoTracking() on h.GrantedByUserId equals u.Id into uj
                 from u in uj.DefaultIfEmpty()
-                where h.WithdrawnOn == null && ids.Contains(h.EmployeeId)
+                where (h.WithdrawnOn == null || h.WithdrawnOn > today) && ids.Contains(h.EmployeeId)
                 select new
                 {
                     h.Id, h.EmployeeId, h.Activity, h.SubjectId, h.Level, h.GrantedOn,
@@ -111,8 +117,9 @@ public sealed class PersonnelQueries(LisDbContext db) : IPersonnelQueries
 
     public async Task<IReadOnlyList<EmployeeDeadlineFacts>> GetDeadlineFactsAsync(CancellationToken ct = default)
     {
+        var today = clock.Today;
         var employees = await db.Employees.AsNoTracking()
-            .Where(e => e.ExitDate == null)
+            .Where(e => e.ExitDate == null || e.ExitDate >= today)
             .Select(e => new
             {
                 e.Id, e.Number, e.LastName, e.FirstName, e.Job, e.IsExposedToBiologicalRisk,
@@ -128,7 +135,7 @@ public sealed class PersonnelQueries(LisDbContext db) : IPersonnelQueries
             .ToListAsync(ct);
 
         var habilitations = await db.EmployeeHabilitations.AsNoTracking()
-            .Where(h => h.WithdrawnOn == null && ids.Contains(h.EmployeeId))
+            .Where(h => (h.WithdrawnOn == null || h.WithdrawnOn > today) && ids.Contains(h.EmployeeId))
             .Select(h => new { h.EmployeeId, h.Activity, h.SubjectId, h.ReviewDueOn })
             .ToListAsync(ct);
 
@@ -151,9 +158,10 @@ public sealed class PersonnelQueries(LisDbContext db) : IPersonnelQueries
 
     public async Task<IReadOnlyList<AccidentDeadlineFacts>> GetAccidentDeadlineFactsAsync(CancellationToken ct = default)
     {
+        var today = clock.Today;
         var open = await (from a in db.WorkAccidents.AsNoTracking()
                           join e in db.Employees.AsNoTracking() on a.EmployeeId equals e.Id
-                          where !a.IsClosed && e.ExitDate == null
+                          where !a.IsClosed && (e.ExitDate == null || e.ExitDate >= today)
                           select new
                           {
                               e.Id, e.Number, e.LastName, e.FirstName, e.Job, AccidentId = a.Id,

@@ -196,8 +196,17 @@ public static class LeaveRules
         return Math.Min(AnnualCeiling, basis + 1.5m * (years / 5));
     }
 
-    public static decimal MonthlyEntitlement(DateOnly hireDate, DateOnly? birthDate, DateOnly on) =>
-        Math.Round(AnnualEntitlement(hireDate, birthDate, on) / 12m, 2);
+    /// <summary>
+    /// A twelfth of the yearly entitlement, to the hundredth, a half rounded up (19.5 / 12 = 1.625
+    /// gives 1.63). December takes what is left so the twelve months add up to the entitlement
+    /// exactly: 11 × 1.63 + 1.57 = 19.5.
+    /// </summary>
+    public static decimal MonthlyEntitlement(DateOnly hireDate, DateOnly? birthDate, DateOnly on)
+    {
+        var annual = AnnualEntitlement(hireDate, birthDate, on);
+        var monthly = Math.Round(annual / 12m, 2, MidpointRounding.AwayFromZero);
+        return on.Month == 12 ? annual - 11m * monthly : monthly;
+    }
 
     public static int FullYears(DateOnly from, DateOnly to)
     {

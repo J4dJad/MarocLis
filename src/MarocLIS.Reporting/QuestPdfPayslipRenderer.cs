@@ -100,6 +100,7 @@ public sealed class QuestPdfPayslipRenderer : IPayslipRenderer
         var p = doc.Payslip;
         var a = p.Amounts;
         var v = p.Variables;
+        // For a closed month, the rates it was closed with (PayrollPeriod.RatesSnapshot).
         var rates = doc.Parameters;
         var payDate = new DateOnly(doc.Year, doc.Month, 1).AddMonths(1).AddDays(-1);
         var years = LeaveRules.FullYears(p.HireDate, payDate);
@@ -163,11 +164,20 @@ public sealed class QuestPdfPayslipRenderer : IPayslipRenderer
                 }
 
                 Line("Salaire de base", rates.MonthlyWorkingDays, null, p.BaseSalary, null);
-                if (a.AbsenceDeduction > 0)
+
+                // A hire or an exit during the month: the base for the working days of the contract.
+                var outside = p.BaseSalary - PayrollCalculator.ContractBase(p.BaseSalary, v);
+                if (outside > 0)
+                    Line($"Entrée ou sortie en cours de mois ({v.ContractWorkingDays.ToString("0.#", Fr)} j sur " +
+                         $"{v.MonthWorkingDays.ToString("0.#", Fr)} j ouvrables)", null, null, -outside, null);
+
+                var absences = a.AbsenceDeduction - outside;
+                var absenceDays = v.TotalAbsenceDays;
+                if (absences > 0)
                     Line(v.WorkAccidentDays > 0
-                             ? $"Absences non rémunérées ({v.AbsenceDays.ToString("0.#", Fr)} j, dont {v.WorkAccidentDays.ToString("0.#", Fr)} j d'accident du travail)"
-                             : $"Absences non rémunérées ({v.AbsenceDays.ToString("0.#", Fr)} j)", p.BaseSalary / rates.MonthlyWorkingDays,
-                         null, -a.AbsenceDeduction, null);
+                             ? $"Absences non rémunérées ({absenceDays.ToString("0.#", Fr)} j, dont {v.WorkAccidentDays.ToString("0.#", Fr)} j d'accident du travail)"
+                             : $"Absences non rémunérées ({absenceDays.ToString("0.#", Fr)} j)", p.BaseSalary / rates.MonthlyWorkingDays,
+                         null, -absences, null);
                 if (a.SeniorityBonus > 0)
                     Line("Prime d'ancienneté", p.BaseSalary - a.AbsenceDeduction, P(a.SeniorityRate), a.SeniorityBonus, null);
 

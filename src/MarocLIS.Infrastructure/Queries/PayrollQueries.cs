@@ -76,40 +76,51 @@ public sealed class PayrollQueries(LisDbContext db) : IPayrollQueries
                   (r, a) => new { r.EmployeeId, r.StartDate, r.EndDate, a.Subrogation })
             .ToListAsync(ct);
 
-        var holidays = (await db.PublicHolidays.AsNoTracking()
-            .Where(h => h.Date >= from && h.Date <= to)
-            .Select(h => h.Date)
-            .ToListAsync(ct)).ToHashSet();
+        // The civil holidays of the year are put in first if nobody has opened that year's calendar.
+        var holidays = await new HolidayCalendar(db).DatesAsync(from, to, ct);
 
         decimal Working(DateOnly a, DateOnly b, bool afternoon = false, bool morning = false) =>
             b < a ? 0m : LeaveRules.CountDays(LeaveType.Unpaid, a, b, afternoon, morning, holidays);
+
+        static decimal Calendar(DateOnly a, DateOnly b) => b < a ? 0m : b.DayNumber - a.DayNumber + 1;
+
+        var monthDays = Working(from, to);
 
         return
         [
             .. staff.Select(s =>
             {
-                // Days of the month outside the contract, then the unpaid leave inside it.
-                var days = Working(from, s.HireDate.AddDays(-1));
-                if (s.ExitDate is { } exit) days += Working(exit.AddDays(1), to);
+                // The days of the contract within the month: a hire or an exit during it is paid in
+                // proportion to them (PayrollCalculator.ContractBase), not as absences.
+                var first = s.HireDate > from ? s.HireDate : from;
+                var last = s.ExitDate is { } exit && exit < to ? exit : to;
+                var contractDays = Working(first, last);
 
+                // Then the unpaid leave inside the contract.
+                var days = 0m;
                 foreach (var r in unpaid.Where(r => r.EmployeeId == s.Id))
                 {
-                    var start = r.StartDate < from ? from : r.StartDate;
-                    var end = r.EndDate > to ? to : r.EndDate;
+                    var start = r.StartDate < first ? first : r.StartDate;
+                    var end = r.EndDate > last ? last : r.EndDate;
                     days += Working(start, end, r.StartsAfternoon && start == r.StartDate, r.EndsMorning && end == r.EndDate);
                 }
 
+                // A stoppage withholds the salary of its working days; the allowance advanced under
+                // subrogation is due for every calendar day of it (loi 18-12).
                 decimal accident = 0m, subrogated = 0m;
                 foreach (var r in stoppages.Where(r => r.EmployeeId == s.Id))
                 {
-                    var stopped = Working(r.StartDate < from ? from : r.StartDate, r.EndDate > to ? to : r.EndDate);
-                    accident += stopped;
-                    if (r.Subrogation) subrogated += stopped;
+                    var start = r.StartDate < first ? first : r.StartDate;
+                    var end = r.EndDate > last ? last : r.EndDate;
+                    accident += Working(start, end);
+                    if (r.Subrogation) subrogated += Calendar(start, end);
                 }
 
                 var withheld = Math.Min(days + accident, monthlyWorkingDays);
                 accident = Math.Min(accident, withheld);
-                return new PayrollCandidate(s.Id, withheld, accident, Math.Min(subrogated, accident));
+                return new PayrollCandidate(s.Id, withheld, accident, subrogated,
+                                            contractDays < monthDays ? monthDays : 0m,
+                                            contractDays < monthDays ? contractDays : 0m);
             })
         ];
     }

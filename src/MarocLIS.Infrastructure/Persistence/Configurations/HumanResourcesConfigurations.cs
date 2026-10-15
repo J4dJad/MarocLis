@@ -20,7 +20,7 @@ public sealed class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.FirstName).IsRequired().AsSearchable(100);
         builder.Property(e => e.FullNameArabic).HasMaxLength(200);
         builder.Ignore(e => e.FullName);
-        builder.Ignore(e => e.IsActive);
+        builder.Ignore(e => e.HasDeparture);
 
         builder.Property(e => e.Cin).HasMaxLength(20);
         builder.Property(e => e.CnssNumber).HasMaxLength(20);
@@ -186,6 +186,9 @@ public sealed class PayrollPeriodConfiguration : IEntityTypeConfiguration<Payrol
         builder.Ignore(e => e.FirstDay);
         builder.Ignore(e => e.LastDay);
         builder.Ignore(e => e.IsClosed);
+
+        // The rates the month was closed with, as JSON: a reprint shows those, not today's.
+        builder.Property(e => e.RatesSnapshot);
         builder.HasIndex(e => new { e.SiteId, e.Year, e.Month }).IsUnique()
                .HasDatabaseName("UX_PayrollPeriods_Site_Month");
 
@@ -217,7 +220,9 @@ public sealed class PayslipConfiguration : IEntityTypeConfiguration<Payslip>
         // Value objects replaced as a whole on each recomputation, stored as columns of the payslip.
         builder.ComplexProperty(e => e.Variables, variables =>
         {
-            foreach (var property in typeof(PayslipVariables).GetProperties().Where(p => p.PropertyType == typeof(decimal)))
+            // Stored figures only: the totals worked out from them are not columns.
+            foreach (var property in typeof(PayslipVariables).GetProperties()
+                                                             .Where(p => p.PropertyType == typeof(decimal) && p.CanWrite))
                 variables.Property(property.Name).HasPrecision(18, 2);
             variables.Property(v => v.Note).HasMaxLength(300);
         });

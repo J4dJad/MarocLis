@@ -113,6 +113,57 @@ public sealed class PayrollParameters : AuditableAggregateRoot
 
         return Result.Success();
     }
+
+    // ---- Snapshot ------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The rates as a JSON text, kept with a closed month so that a payslip printed again later
+    /// shows the rates it was computed with, not the year's rates as since corrected.
+    /// </summary>
+    public string ToSnapshot() => System.Text.Json.JsonSerializer.Serialize(new Snapshot(
+        CnssCeiling, CnssEmployeeRate, CnssEmployerRate, FamilyAllowanceRate, TrainingTaxRate, AmoEmployeeRate,
+        AmoEmployerRate, ProfessionalExpensesLowRate, ProfessionalExpensesHighRate, ProfessionalExpensesThreshold,
+        ProfessionalExpensesAnnualCap, IncomeTaxScale, FamilyDeductionPerPerson, FamilyDeductionMaxPersons,
+        SmigMonthly, MonthlyHours, MonthlyWorkingDays, TransportExemptionCap));
+
+    /// <summary>The rates a snapshot holds; null when there is none or it cannot be read.</summary>
+    public static PayrollParameters? FromSnapshot(int year, string? snapshot)
+    {
+        if (string.IsNullOrWhiteSpace(snapshot)) return null;
+
+        Snapshot? s;
+        try
+        {
+            s = System.Text.Json.JsonSerializer.Deserialize<Snapshot>(snapshot);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+        if (s is null) return null;
+
+        return new PayrollParameters(year)
+        {
+            CnssCeiling = s.CnssCeiling, CnssEmployeeRate = s.CnssEmployeeRate, CnssEmployerRate = s.CnssEmployerRate,
+            FamilyAllowanceRate = s.FamilyAllowanceRate, TrainingTaxRate = s.TrainingTaxRate,
+            AmoEmployeeRate = s.AmoEmployeeRate, AmoEmployerRate = s.AmoEmployerRate,
+            ProfessionalExpensesLowRate = s.ProfessionalExpensesLowRate,
+            ProfessionalExpensesHighRate = s.ProfessionalExpensesHighRate,
+            ProfessionalExpensesThreshold = s.ProfessionalExpensesThreshold,
+            ProfessionalExpensesAnnualCap = s.ProfessionalExpensesAnnualCap, IncomeTaxScale = s.IncomeTaxScale,
+            FamilyDeductionPerPerson = s.FamilyDeductionPerPerson, FamilyDeductionMaxPersons = s.FamilyDeductionMaxPersons,
+            SmigMonthly = s.SmigMonthly, MonthlyHours = s.MonthlyHours, MonthlyWorkingDays = s.MonthlyWorkingDays,
+            TransportExemptionCap = s.TransportExemptionCap
+        };
+    }
+
+    private sealed record Snapshot(
+        decimal CnssCeiling, decimal CnssEmployeeRate, decimal CnssEmployerRate, decimal FamilyAllowanceRate,
+        decimal TrainingTaxRate, decimal AmoEmployeeRate, decimal AmoEmployerRate, decimal ProfessionalExpensesLowRate,
+        decimal ProfessionalExpensesHighRate, decimal ProfessionalExpensesThreshold,
+        decimal ProfessionalExpensesAnnualCap, string IncomeTaxScale, decimal FamilyDeductionPerPerson,
+        int FamilyDeductionMaxPersons, decimal SmigMonthly, decimal MonthlyHours, decimal MonthlyWorkingDays,
+        decimal TransportExemptionCap);
 }
 
 /// <summary>
@@ -139,6 +190,13 @@ public sealed class PayrollPeriod : AuditableAggregateRoot, ISiteScoped
     public DateTimeOffset? ClosedAt { get; private set; }
     public Guid? ClosedByUserId { get; private set; }
 
+    /// <summary>
+    /// The rates the payslips were computed with, taken when the month is closed
+    /// (<see cref="PayrollParameters.ToSnapshot"/>). Null for a draft, and for a month closed before
+    /// it was kept.
+    /// </summary>
+    public string? RatesSnapshot { get; private set; }
+
     public IReadOnlyCollection<Payslip> Payslips => _payslips.AsReadOnly();
 
     public DateOnly FirstDay => new(Year, Month, 1);
@@ -156,7 +214,22 @@ public sealed class PayrollPeriod : AuditableAggregateRoot, ISiteScoped
         return Result.Success(payslip);
     }
 
-    public Result Close(DateTimeOffset now, Guid byUserId)
+    /// <summary>
+    /// Takes an employee off a draft month: no longer on the site's payroll for it (left before the
+    /// month, salary cleared, now a partner…).
+    /// </summary>
+    public Result Remove(Guid employeeId)
+    {
+        if (IsClosed) return Result.Failure(Error.Conflict("Payroll_Closed"));
+        var payslip = _payslips.FirstOrDefault(p => p.EmployeeId == employeeId);
+        if (payslip is null) return Result.Failure(Error.NotFound("Payroll_PayslipNotFound"));
+
+        _payslips.Remove(payslip);
+        return Result.Success();
+    }
+
+    /// <param name="rates">The rates the payslips were computed with, kept with the month.</param>
+    public Result Close(DateTimeOffset now, Guid byUserId, PayrollParameters? rates = null)
     {
         if (IsClosed) return Result.Failure(Error.Conflict("Payroll_Closed"));
         if (_payslips.Count == 0) return Result.Failure(Error.Validation("Payroll_Empty"));
@@ -164,8 +237,13 @@ public sealed class PayrollPeriod : AuditableAggregateRoot, ISiteScoped
         Status = PayrollStatus.Closed;
         ClosedAt = now;
         ClosedByUserId = byUserId;
+        RatesSnapshot = rates?.ToSnapshot();
         return Result.Success();
     }
+
+    /// <summary>The rates to print the month with: those kept at closing, else <paramref name="current"/>.</summary>
+    public PayrollParameters RatesForPrinting(PayrollParameters current) =>
+        IsClosed && PayrollParameters.FromSnapshot(Year, RatesSnapshot) is { } kept ? kept : current;
 
     /// <summary>Back to draft, to correct an error found after closing. The reason goes to the audit trail.</summary>
     public Result Reopen()
@@ -174,6 +252,7 @@ public sealed class PayrollPeriod : AuditableAggregateRoot, ISiteScoped
         Status = PayrollStatus.Draft;
         ClosedAt = null;
         ClosedByUserId = null;
+        RatesSnapshot = null;
         return Result.Success();
     }
 }
@@ -240,8 +319,32 @@ public sealed class Payslip : Entity, IAuditable
 /// <summary>What changes from one month to the next. Entered by HR; absences are pre-filled from leave.</summary>
 public sealed record PayslipVariables
 {
-    /// <summary>Working days not paid: unpaid leave, unjustified absence, days before hire or after exit.</summary>
+    /// <summary>
+    /// Working days not paid, taken from the approved leave (unpaid leave, unjustified absence,
+    /// work-accident stoppage) each time the month is refreshed from the files.
+    /// </summary>
     public decimal AbsenceDays { get; init; }
+
+    /// <summary>
+    /// Working days not paid entered by hand by HR, on top of <see cref="AbsenceDays"/>. Kept when
+    /// the month is refreshed: only the leave-derived figure is taken again.
+    /// </summary>
+    public decimal ManualAbsenceDays { get; init; }
+
+    /// <summary>Every unpaid day of the month: the leave-derived ones and those entered by hand.</summary>
+    public decimal TotalAbsenceDays => AbsenceDays + ManualAbsenceDays;
+
+    /// <summary>
+    /// Working days of the whole month, Monday to Saturday less public holidays, when the employee
+    /// joined or left during it; 0 for a month worked from end to end.
+    /// </summary>
+    public decimal MonthWorkingDays { get; init; }
+
+    /// <summary>Of <see cref="MonthWorkingDays"/>, those between the hire date and the exit date.</summary>
+    public decimal ContractWorkingDays { get; init; }
+
+    /// <summary>Hired or left during the month: the base salary is paid for the days of the contract only.</summary>
+    public bool IsProrated => MonthWorkingDays > 0 && ContractWorkingDays < MonthWorkingDays;
 
     /// <summary>Overtime hours at +25 % (6 h–21 h).</summary>
     public decimal OvertimeHours25 { get; init; }
@@ -285,7 +388,8 @@ public sealed record PayslipVariables
 
     /// <summary>
     /// Daily allowances the employer advances on the insurer's behalf (subrogation), reimbursed by
-    /// the insurer: exempt from income tax and contributions (CGI art. 57).
+    /// the insurer: exempt from income tax and contributions (CGI art. 57). Due for every calendar
+    /// day of the stoppage, see <see cref="AccidentRules.Allowance"/>.
     /// </summary>
     public decimal WorkAccidentAllowance { get; init; }
 
@@ -345,7 +449,9 @@ public enum PayrollExemption
 /// <summary>
 /// The Moroccan payslip arithmetic, apart from any database.
 /// <list type="number">
-/// <item>Gross: base, less unpaid days (base / 26 per day), plus seniority (Code du travail art. 350:
+/// <item>Gross: base, paid in proportion to the working days of the contract when the employee joined
+/// or left during the month (base × days present / working days of the month, Monday to Saturday
+/// less public holidays, for both), less unpaid days (base / 26 per day), plus seniority (Code du travail art. 350:
 /// 5 % after 2 years, 10 % after 5, 15 % after 12, 20 % after 20, 25 % after 25), overtime (hourly
 /// rate base / 191, +25, +50 or +100 %), bonuses and allowances.</item>
 /// <item>CNSS social benefits on the gross taxable capped at 6,000 DH; AMO, family allowances and
@@ -402,15 +508,30 @@ public static class PayrollCalculator
 
     private static decimal R(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
+    /// <summary>
+    /// The base salary for the days of the contract: the whole base for a full month, otherwise
+    /// base × working days present / working days of the month. A hire on the 2nd of a month whose
+    /// 1st is a holiday is a full month; an exit on the 1st pays that one day.
+    /// </summary>
+    public static decimal ContractBase(decimal baseSalary, PayslipVariables v) =>
+        v.IsProrated ? R(baseSalary * Math.Max(0m, v.ContractWorkingDays) / v.MonthWorkingDays) : baseSalary;
+
     public static PayslipAmounts Compute(PayslipInput input, PayrollParameters p)
     {
         var v = input.Variables;
         var exemption = ExemptionFor(input.ContractType);
 
-        var absenceDays = Math.Clamp(v.AbsenceDays, 0m, p.MonthlyWorkingDays);
+        // Days before the hire or after the exit: the base in proportion to the days of the contract.
+        // Ordinary unpaid absences inside it keep the 26-day convention.
+        var contractBase = ContractBase(input.BaseSalary, v);
+        var absenceDays = Math.Clamp(v.TotalAbsenceDays, 0m, p.MonthlyWorkingDays);
         var dailyRate = input.BaseSalary / p.MonthlyWorkingDays;
-        var absenceDeduction = absenceDays >= p.MonthlyWorkingDays ? input.BaseSalary : R(dailyRate * absenceDays);
-        var earnedBase = input.BaseSalary - absenceDeduction;
+        var unpaid = absenceDays >= p.MonthlyWorkingDays ? input.BaseSalary : R(dailyRate * absenceDays);
+        var earnedBase = Math.Max(0m, contractBase - unpaid);
+        var absenceDeduction = input.BaseSalary - earnedBase;
+
+        var contractDays = v.IsProrated ? R(p.MonthlyWorkingDays * Math.Max(0m, v.ContractWorkingDays) / v.MonthWorkingDays)
+                                        : p.MonthlyWorkingDays;
 
         // Interns and insertion contracts receive a stipend, not a salary: no seniority, no overtime.
         var salaried = exemption is PayrollExemption.None or PayrollExemption.Tahfiz;
@@ -469,7 +590,7 @@ public static class PayrollCalculator
 
         return new PayslipAmounts
         {
-            PaidDays = p.MonthlyWorkingDays - absenceDays,
+            PaidDays = Math.Max(0m, contractDays - absenceDays),
             AbsenceDeduction = absenceDeduction,
             SeniorityRate = seniorityRate,
             SeniorityBonus = seniority,

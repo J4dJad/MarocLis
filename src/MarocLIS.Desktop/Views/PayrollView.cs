@@ -501,7 +501,8 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
 
         TextBox Field(string key, int x, int y, decimal value) => TextField(key, x, y, 180, N(value), mono: true, right: true);
 
-        _absence = Field("Payroll.AbsenceDays", 20, 10, v.AbsenceDays);
+        // Only the days entered by hand: those from the leave are taken again at each refresh.
+        _absence = Field("Payroll.ManualAbsenceDays", 20, 10, v.ManualAbsenceDays);
         _ot25 = Field("Payroll.Overtime25", 220, 10, v.OvertimeHours25);
         _ot50 = Field("Payroll.Overtime50", 420, 10, v.OvertimeHours50);
         _ot100 = Field("Payroll.Overtime100", 20, 62, v.OvertimeHours100);
@@ -522,6 +523,11 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
                                     a.AmoEmployee.ToString("N2", fr), a.IncomeTax.ToString("N2", fr), a.NetPay.ToString("N2", fr),
                                     a.SeniorityRate.ToString("0.#", fr))
         };
+        if (v.AbsenceDays > 0)
+            current.Text += " " + localizer.Format("Payroll.LeaveAbsenceIncluded", v.AbsenceDays.ToString("0.#", fr));
+        if (v.IsProrated)
+            current.Text += " " + localizer.Format("Payroll.ProratedMonth", v.ContractWorkingDays.ToString("0.#", fr),
+                                                   v.MonthWorkingDays.ToString("0.#", fr));
         var departure = v.LeaveIndemnity + v.NoticeIndemnity + v.SeverancePay;
         if (departure > 0)
             current.Text += " " + localizer.Format("Payroll.DepartureIncluded", departure.ToString("N2", fr));
@@ -553,10 +559,10 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
                 return;
             }
 
-        // The departure indemnities come from the final settlement and are kept as they are.
+        // The departure indemnities and the leave-derived days come from the files and are kept as they are.
         Variables = _original with
         {
-            AbsenceDays = values[0], OvertimeHours25 = values[1], OvertimeHours50 = values[2], OvertimeHours100 = values[3],
+            ManualAbsenceDays = values[0], OvertimeHours25 = values[1], OvertimeHours50 = values[2], OvertimeHours100 = values[3],
             TaxableBonus = values[4], TransportAllowance = values[5], OtherExemptAllowance = values[6],
             AdvanceDeduction = values[7], OtherDeduction = values[8], Note = Blank(_note)
         };
