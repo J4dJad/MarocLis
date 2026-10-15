@@ -41,7 +41,10 @@ public sealed class InventoryCountQueries(LisDbContext db) : IInventoryCountQuer
             return new InventoryCountLineRow(l.Id, l.LineNumber, l.StockItemId, l.ItemCode, item?.Name.Current ?? l.ItemCode,
                                              item?.UnitOfMeasure ?? string.Empty, l.ReagentLotId, l.LotNumber,
                                              l.ExpiryDate, l.StorageLocation, l.ExpectedQuantity, l.CountedQuantity,
-                                             l.Variance, l.Comment);
+                                             l.Variance, l.Comment,
+                                             // A line counted before the reference was kept was measured against the start.
+                                             l.StockAtCount ?? (l.CountedQuantity is null ? null : l.ExpectedQuantity),
+                                             l.CountedAt);
         }).ToList();
 
         var row = new InventoryCountRow(count.Id, count.Number, count.CountDate, count.Scope, count.StorageLocation,
@@ -72,11 +75,22 @@ public sealed class InventoryCountQueries(LisDbContext db) : IInventoryCountQuer
                                                                  r.Location, r.QuantityRemaining), r.Kind))];
     }
 
-    public async Task<decimal?> GetLotQuantityAsync(Guid reagentLotId, CancellationToken ct = default) =>
-        await db.ReagentLots.IgnoreQueryFilters().AsNoTracking()
-                .Where(l => l.Id == reagentLotId)
-                .Select(l => (decimal?)l.QuantityRemaining)
-                .FirstOrDefaultAsync(ct);
+    public async Task<decimal?> GetLotQuantityAtAsync(Guid reagentLotId, DateTimeOffset at, CancellationToken ct = default)
+    {
+        var now = await db.ReagentLots.IgnoreQueryFilters().AsNoTracking()
+                          .Where(l => l.Id == reagentLotId)
+                          .Select(l => (decimal?)l.QuantityRemaining)
+                          .FirstOrDefaultAsync(ct);
+        if (now is null) return null;
+
+        // Every change to a lot's quantity is a movement: undo those made after the time asked.
+        var since = await db.StockMovements.IgnoreQueryFilters().AsNoTracking()
+                            .Where(m => m.ReagentLotId == reagentLotId && m.OccurredAt > at)
+                            .Select(m => new { m.Kind, m.Quantity })
+                            .ToListAsync(ct);
+
+        return now.Value - since.Sum(m => StockMovement.Signed(m.Kind, m.Quantity));
+    }
 
     public async Task<IReadOnlyList<(Guid ReagentLotId, string CountNumber)>> GetLotsInOpenCountsAsync(
         Guid siteId, Guid exceptInventoryCountId, CancellationToken ct = default)

@@ -102,18 +102,22 @@ public sealed record OrderLineMatchSource(
     decimal VatRate,
     DateOnly? LastReceivedOn,
     IReadOnlyList<DatedQuantity>? Receipts = null,
-    IReadOnlyList<DatedQuantity>? OtherInvoices = null)
+    IReadOnlyList<BilledQuantity>? OtherInvoices = null)
 {
     /// <summary>
     /// The delivery the invoice's quantity on this line bills (loi 69-21): the receipts are walked
-    /// in order past what the invoices dated before this one already billed. Without dated
-    /// receipts, the line's latest delivery.
+    /// in order past what the invoices before this one already billed — those dated earlier, and
+    /// those of the same date entered before it. Without dated receipts, the line's latest delivery.
     /// </summary>
-    public DateOnly? DeliveryFor(DateOnly invoiceDate, decimal quantity)
+    /// <param name="enteredAt">When this invoice was entered; null for one being entered now, after all the others.</param>
+    public DateOnly? DeliveryFor(DateOnly invoiceDate, decimal quantity, DateTimeOffset? enteredAt = null)
     {
         if (Receipts is not { Count: > 0 }) return LastReceivedOn;
 
-        var before = (OtherInvoices ?? []).Where(i => i.On < invoiceDate).Sum(i => i.Quantity);
+        var before = (OtherInvoices ?? [])
+                     .Where(i => i.On < invoiceDate
+                                 || i.On == invoiceDate && (enteredAt is null || i.EnteredAt <= enteredAt))
+                     .Sum(i => i.Quantity);
         return PaymentTerms.DeliveryCovering(Receipts, before, quantity);
     }
 
@@ -150,7 +154,9 @@ public sealed record LatePaymentRow(
     DateOnly? PaidOn,
     int DaysLate,
     decimal Penalty,
-    decimal Fine);
+    decimal Fine,
+    int DaysDeclaredBefore = 0,
+    decimal FineDeclaredBefore = 0m);
 
 /// <summary>The due-date dashboard of the invoice screen.</summary>
 public sealed record SupplierDueSummary(
@@ -350,10 +356,11 @@ public sealed class SupplierInvoiceService(
         }
 
         var settings = await GetSettingsCoreAsync(ct);
-        var matched = Match(invoice, sources, settings, supplier.PaymentTermsDays);
+        var matched = Match(invoice, sources, settings, supplier.PaymentTermsDays, enteredAt: null);
         if (matched.IsFailure) return Result.Failure<SupplierInvoiceOutcome>(matched.Errors);
 
         await invoices.AddAsync(invoice, ct);
+        await MoveLaterTermsAsync(invoice, live: true, ct);
 
         unitOfWork.AuditReason = invoice.Status == SupplierInvoiceStatus.Blocked
             ? $"Saisie de la facture fournisseur {number} ({supplier.Code}) : bloquée, {invoice.Variances.Count} écart(s)"
@@ -381,7 +388,8 @@ public sealed class SupplierInvoiceService(
             [.. invoice.Lines.Select(l => l.PurchaseOrderLineId)], invoice.Id, ct);
 
         var settings = await GetSettingsCoreAsync(ct);
-        var matched = Match(invoice, sources, settings, supplier?.PaymentTermsDays ?? PaymentTerms.DefaultDays);
+        var matched = Match(invoice, sources, settings, supplier?.PaymentTermsDays ?? PaymentTerms.DefaultDays,
+                            invoice.CreatedAt);
         if (matched.IsFailure) return Result.Failure<SupplierInvoiceOutcome>(matched.Errors);
 
         unitOfWork.AuditReason = $"Nouveau rapprochement de la facture fournisseur {invoice.InvoiceNumber} : " +
@@ -395,23 +403,68 @@ public sealed class SupplierInvoiceService(
     }
 
     private static Result Match(SupplierInvoice invoice, IReadOnlyList<OrderLineMatchSource> sources,
-                                PurchasingSettings settings, int termsDays)
+                                PurchasingSettings settings, int termsDays, DateTimeOffset? enteredAt)
     {
         var facts = sources.ToDictionary(s => s.PurchaseOrderLineId, s => s.Facts);
         var applied = invoice.ApplyMatch(ThreeWayMatch.Compare(invoice.Lines, facts, settings.Tolerance));
         if (applied.IsFailure) return applied;
 
-        // Loi 69-21: the term runs from the delivery of the goods billed; the latest of them when
-        // the invoice bills several deliveries.
+        invoice.SetPaymentTerms(DeliveryOf(invoice, sources, enteredAt), termsDays);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Loi 69-21: the term runs from the delivery of the goods billed; the latest of them when the
+    /// invoice bills several deliveries.
+    /// </summary>
+    private static DateOnly? DeliveryOf(SupplierInvoice invoice, IReadOnlyList<OrderLineMatchSource> sources,
+                                        DateTimeOffset? enteredAt)
+    {
         var bySource = sources.ToDictionary(s => s.PurchaseOrderLineId);
         var delivered = invoice.Lines
                                .Select(l => bySource.TryGetValue(l.PurchaseOrderLineId, out var s)
-                                                ? s.DeliveryFor(invoice.InvoiceDate, l.Quantity)
+                                                ? s.DeliveryFor(invoice.InvoiceDate, l.Quantity, enteredAt)
                                                 : null)
                                .Where(d => d is not null).Select(d => d!.Value)
                                .DefaultIfEmpty().Max();
-        invoice.SetPaymentTerms(delivered == default ? null : delivered, termsDays);
-        return Result.Success();
+        return delivered == default ? null : delivered;
+    }
+
+    /// <summary>
+    /// Deliveries are billed in invoice order: an invoice entered (or cancelled) on the same order
+    /// lines moves the deliveries the open invoices of the same date or later bill, and so their
+    /// due dates. Those are worked out again, without touching their match or their approval.
+    /// </summary>
+    /// <param name="live">Whether <paramref name="changed"/> now bills its lines (entered) or not (cancelled).</param>
+    private async Task MoveLaterTermsAsync(SupplierInvoice changed, bool live, CancellationToken ct)
+    {
+        var lineIds = changed.Lines.Select(l => l.PurchaseOrderLineId).Distinct().ToList();
+        var laterIds = await queries.GetOpenInvoicesBillingAsync(lineIds, changed.InvoiceDate, changed.Id, ct);
+
+        foreach (var id in laterIds)
+        {
+            var later = await invoices.GetByIdWithDetailsAsync(id, ct);
+            if (later is null || !later.IsOpen) continue;
+
+            // The changed invoice as it now stands, whatever the database says before the save.
+            var sources = (await queries.GetOrderLineSourcesAsync(
+                               [.. later.Lines.Select(l => l.PurchaseOrderLineId)], later.Id, ct))
+                .Select(s => s with
+                {
+                    OtherInvoices =
+                    [
+                        .. (s.OtherInvoices ?? []).Where(o => o.InvoiceId != changed.Id),
+                        .. live
+                            ? changed.Lines.Where(l => l.PurchaseOrderLineId == s.PurchaseOrderLineId)
+                                     .Select(l => new BilledQuantity(changed.InvoiceDate, l.Quantity, clock.Now, changed.Id))
+                            : []
+                    ]
+                })
+                .ToList();
+
+            var delivery = DeliveryOf(later, sources, later.CreatedAt);
+            if (delivery != later.DeliveryDate) later.SetPaymentTerms(delivery, later.PaymentTermsDays);
+        }
     }
 
     // ---- Release, payment, cancellation --------------------------------------------------------------
@@ -466,6 +519,8 @@ public sealed class SupplierInvoiceService(
 
         var done = invoice.Cancel(clock.Now, reason ?? string.Empty);
         if (done.IsFailure) return done;
+
+        await MoveLaterTermsAsync(invoice, live: false, ct);
 
         unitOfWork.AuditReason = $"Annulation de la facture fournisseur {invoice.InvoiceNumber} : {reason!.Trim()}";
         await unitOfWork.SaveChangesAsync(ct);
@@ -602,9 +657,11 @@ public sealed class SupplierInvoiceService(
                 x.Source.SupplierName, x.Source.SupplierIce, x.Source.SupplierFiscalId, x.Source.InvoiceNumber,
                 x.Source.InvoiceDate, x.Source.DeliveryDate, x.Source.DueDate, x.Source.TotalIncludingVat,
                 x.Late.Amount, x.Late.PaidOn, x.Late.DaysLate,
-                LatePayment.Penalty(x.Late.Amount, settings.PenaltyRatePercent, x.Late.DaysLate),
-                LatePayment.Fine(x.Late.Amount, x.Late.DaysLate, settings.FineFirstMonthPercent,
-                                 settings.FineAdditionalMonthPercent)))
+                LatePayment.PenaltyForPeriod(x.Late, settings.PenaltyRatePercent),
+                LatePayment.FineForPeriod(x.Late, settings.FineFirstMonthPercent, settings.FineAdditionalMonthPercent),
+                x.Late.DaysDeclaredBefore,
+                LatePayment.FineDeclaredBefore(x.Late, settings.FineFirstMonthPercent,
+                                               settings.FineAdditionalMonthPercent)))
     ];
 
     public async Task<Result<byte[]>> ExportLatePaymentsAsync(DateOnly from, DateOnly to,
@@ -626,19 +683,22 @@ public sealed class SupplierInvoiceService(
         var text = new StringBuilder();
         text.AppendLine("Fournisseur;ICE;IF;N° facture;Date facture;Date de livraison;Date d'échéance;" +
                         "Montant TTC facture;Montant en retard;Date de paiement;Jours de retard;" +
-                        "Pénalité due au fournisseur;Amende (déclaration)");
+                        "Pénalité due au fournisseur;Amende (déclaration);" +
+                        "Jours de retard déjà déclarés;Amende déjà déclarée");
 
         foreach (var r in rows)
         {
             text.AppendLine(string.Join(';', C(r.SupplierName), C(r.SupplierIce), C(r.SupplierFiscalId),
                 C(r.InvoiceNumber), D(r.InvoiceDate), D(r.DeliveryDate), D(r.DueDate), M(r.InvoiceTotal),
                 M(r.LateAmount), r.PaidOn is null ? "Impayé" : D(r.PaidOn),
-                r.DaysLate.ToString(CultureInfo.InvariantCulture), M(r.Penalty), M(r.Fine)));
+                r.DaysLate.ToString(CultureInfo.InvariantCulture), M(r.Penalty), M(r.Fine),
+                r.DaysDeclaredBefore.ToString(CultureInfo.InvariantCulture), M(r.FineDeclaredBefore)));
         }
 
         text.AppendLine(string.Join(';', "TOTAL", string.Empty, string.Empty, string.Empty, string.Empty,
             string.Empty, string.Empty, string.Empty, M(rows.Sum(r => r.LateAmount)), string.Empty,
-            string.Empty, M(rows.Sum(r => r.Penalty)), M(rows.Sum(r => r.Fine))));
+            string.Empty, M(rows.Sum(r => r.Penalty)), M(rows.Sum(r => r.Fine)), string.Empty,
+            M(rows.Sum(r => r.FineDeclaredBefore))));
 
         return SupplierAccountingExport.Encode(text.ToString());
     }
@@ -683,6 +743,13 @@ public interface ISupplierInvoiceQueries
                                                                         CancellationToken ct = default);
 
     /// <param name="excludingInvoiceId">The invoice being matched again, whose own lines do not count as "elsewhere".</param>
+    /// <summary>
+    /// The open invoices, other than <paramref name="exceptInvoiceId"/>, that bill one of these
+    /// order lines and are dated on or after <paramref name="onOrAfter"/>.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetOpenInvoicesBillingAsync(IReadOnlyCollection<Guid> purchaseOrderLineIds, DateOnly onOrAfter,
+                                                          Guid exceptInvoiceId, CancellationToken ct = default);
+
     Task<IReadOnlyList<OrderLineMatchSource>> GetOrderLineSourcesAsync(IReadOnlyCollection<Guid> purchaseOrderLineIds,
                                                                         Guid? excludingInvoiceId,
                                                                         CancellationToken ct = default);

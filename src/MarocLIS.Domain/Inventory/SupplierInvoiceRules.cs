@@ -50,6 +50,13 @@ public static class PaymentTerms
 /// <summary>A quantity on a date: a receipt on an order line, or a quantity billed on an invoice.</summary>
 public readonly record struct DatedQuantity(DateOnly On, decimal Quantity);
 
+/// <summary>
+/// A quantity of an order line billed on another invoice: its date, and when it was entered, which
+/// orders invoices of the same date.
+/// </summary>
+public readonly record struct BilledQuantity(DateOnly On, decimal Quantity, DateTimeOffset EnteredAt = default,
+                                             Guid InvoiceId = default);
+
 /// <summary>What an order line allows an invoice to bill, as the three-way match sees it.</summary>
 /// <param name="QuantityInvoicedElsewhere">Already billed on the supplier's other invoices, cancelled ones excepted.</param>
 /// <param name="NetUnitPriceMad">The ordered unit price excluding VAT, after the line discount.</param>
@@ -124,7 +131,12 @@ public static class ThreeWayMatch
 
 /// <summary>An amount paid late, or still unpaid after its due date, over a declaration period.</summary>
 /// <param name="PaidOn">Null for an amount still unpaid at the end of the period.</param>
-public sealed record LateAmount(decimal Amount, DateOnly? PaidOn, int DaysLate);
+/// <param name="DaysLate">The whole delay, from the due date.</param>
+/// <param name="DaysDeclaredBefore">
+/// The part of that delay already run at the end of the previous period: the amount was then
+/// still unpaid and late, and was declared with its fine for those days.
+/// </param>
+public sealed record LateAmount(decimal Amount, DateOnly? PaidOn, int DaysLate, int DaysDeclaredBefore = 0);
 
 /// <summary>
 /// Late payment under loi n° 69-21.
@@ -160,6 +172,12 @@ public static class LatePayment
     /// <summary>
     /// What of one invoice was late over a period: each payment made in the period after the due
     /// date, and whatever was still unpaid at the end of the period if it was already due.
+    /// <para>
+    /// Each carries the days of its delay already run before the period: an amount unpaid at the
+    /// end of the previous period was declared then, with its fine and penalty for those days, and
+    /// only the rest is owed for this period. Declared period after period, the fine adds up to the
+    /// fine for the whole delay instead of counting the first months twice.
+    /// </para>
     /// </summary>
     public static IReadOnlyList<LateAmount> LateAmounts(DateOnly dueDate, decimal totalIncludingVat,
                                                         IEnumerable<(DateOnly PaidOn, decimal Amount)> payments,
@@ -168,17 +186,33 @@ public static class LatePayment
         var list = payments.ToList();
         var late = new List<LateAmount>();
 
+        // Whatever is paid in the period, or left unpaid at its end, was still unpaid the day before it began.
+        var daysBefore = DaysLate(dueDate, from.AddDays(-1));
+
         foreach (var (paidOn, amount) in list.Where(p => p.PaidOn >= from && p.PaidOn <= to)
                                              .OrderBy(p => p.PaidOn))
         {
             var days = DaysLate(dueDate, paidOn);
-            if (days > 0) late.Add(new LateAmount(amount, paidOn, days));
+            if (days > 0) late.Add(new LateAmount(amount, paidOn, days, daysBefore));
         }
 
         var unpaid = Money.Round(totalIncludingVat - list.Where(p => p.PaidOn <= to).Sum(p => p.Amount));
         var daysAtEnd = DaysLate(dueDate, to);
-        if (unpaid > 0m && daysAtEnd > 0) late.Add(new LateAmount(unpaid, null, daysAtEnd));
+        if (unpaid > 0m && daysAtEnd > 0) late.Add(new LateAmount(unpaid, null, daysAtEnd, daysBefore));
 
         return late;
     }
+
+    /// <summary>The penalty owed for the period: the whole delay's, less what the earlier days were already charged.</summary>
+    public static decimal PenaltyForPeriod(LateAmount late, decimal annualRatePercent) =>
+        Penalty(late.Amount, annualRatePercent, late.DaysLate)
+        - Penalty(late.Amount, annualRatePercent, late.DaysDeclaredBefore);
+
+    /// <summary>The fine owed for the period: the whole delay's, less the fine already declared for the earlier days.</summary>
+    public static decimal FineForPeriod(LateAmount late, decimal firstMonthPercent, decimal additionalMonthPercent) =>
+        Fine(late.Amount, late.DaysLate, firstMonthPercent, additionalMonthPercent)
+        - FineDeclaredBefore(late, firstMonthPercent, additionalMonthPercent);
+
+    public static decimal FineDeclaredBefore(LateAmount late, decimal firstMonthPercent, decimal additionalMonthPercent) =>
+        Fine(late.Amount, late.DaysDeclaredBefore, firstMonthPercent, additionalMonthPercent);
 }

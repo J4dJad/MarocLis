@@ -588,6 +588,8 @@ public sealed class AchatsInvoicesTests
             Task.FromResult<IReadOnlyList<SupplierOption>>([]);
         public Task<IReadOnlyList<InvoiceableOrderLine>> GetInvoiceableLinesAsync(Guid siteId, Guid supplierId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<InvoiceableOrderLine>>([]);
+        public Task<IReadOnlyList<Guid>> GetOpenInvoicesBillingAsync(IReadOnlyCollection<Guid> purchaseOrderLineIds, DateOnly from, Guid exceptInvoiceId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<Guid>>([]);
         public Task<IReadOnlyList<OrderLineMatchSource>> GetOrderLineSourcesAsync(IReadOnlyCollection<Guid> purchaseOrderLineIds, Guid? excludingInvoiceId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<OrderLineMatchSource>>([.. sources.Where(s => purchaseOrderLineIds.Contains(s.PurchaseOrderLineId))]);
         public Task<bool> InvoiceNumberExistsAsync(Guid supplierId, string invoiceNumber, CancellationToken ct = default) =>

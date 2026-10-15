@@ -9,10 +9,16 @@ namespace MarocLIS.Domain.Inventory;
 /// <para>
 /// The expected quantities are frozen when counting starts. Stock keeps moving while the shelves
 /// are counted — a technician still issues a box — so each line also keeps what the stock showed
-/// when it was counted, and closing applies the difference found (counted less that quantity) to
-/// the lot as it stands then, rather than overwriting it with the count. Measured against the
-/// quantity frozen at the start instead, an issue made before the shelf was counted would be taken
-/// off the lot a second time.
+/// when the shelf was counted, and closing applies the difference found (counted less that
+/// quantity) to the lot as it stands then, rather than overwriting it with the count. Measured
+/// against the quantity frozen at the start instead, an issue made before the shelf was counted
+/// would be taken off the lot a second time.
+/// </para>
+/// <para>
+/// The shelf is often counted on the printed sheet and keyed in hours later. The time the shelf
+/// was counted is therefore recorded on the line (the time of entry unless the counter gives the
+/// sheet's), and the reference is the stock at that time — not at the time of entry, which would
+/// add back every issue made in between.
 /// </para>
 /// </summary>
 public sealed class InventoryCount : AuditableAggregateRoot, ISiteScoped
@@ -113,12 +119,18 @@ public sealed class InventoryCount : AuditableAggregateRoot, ISiteScoped
         return Result.Success();
     }
 
+    /// <param name="at">When the count is entered.</param>
     /// <param name="stockAtCount">
-    /// What the stock shows for the lot as the count is entered; the variance is measured against
-    /// it. Left out, the quantity frozen at the start.
+    /// What the stock showed for the lot when the shelf was counted; the variance is measured
+    /// against it. Left out, the quantity frozen at the start.
+    /// </param>
+    /// <param name="shelfCountedAt">
+    /// When the shelf was counted, for a count keyed in from the paper sheet. Left out: the time
+    /// already recorded on a counted line (a corrected figure or a comment keeps its reference),
+    /// else <paramref name="at"/>.
     /// </param>
     public Result RecordCount(Guid lineId, decimal counted, Guid byUserId, DateTimeOffset at, string? comment,
-                              decimal? stockAtCount = null)
+                              decimal? stockAtCount = null, DateTimeOffset? shelfCountedAt = null)
     {
         if (Status != InventoryCountStatus.Counting) return Result.Failure(Error.Conflict("InventoryCount_NotCounting"));
         if (counted < 0m) return Result.Failure(Error.Validation("InventoryCount_NegativeQuantity"));
@@ -126,8 +138,30 @@ public sealed class InventoryCount : AuditableAggregateRoot, ISiteScoped
         var line = _lines.FirstOrDefault(l => l.Id == lineId);
         if (line is null) return Result.Failure(Error.NotFound("InventoryCount_LineNotFound"));
 
-        line.Record(counted, byUserId, at, comment, stockAtCount);
+        if (shelfCountedAt is { } shelf)
+        {
+            // A sheet time is written to the minute: within the minute the count started, it is the start.
+            if (StartedAt is { } started && shelf < started)
+            {
+                if (started - shelf >= TimeSpan.FromMinutes(1))
+                    return Result.Failure(Error.Validation("InventoryCount_CountedBeforeStart"));
+                shelfCountedAt = started;
+            }
+            if (shelfCountedAt > at) return Result.Failure(Error.Validation("InventoryCount_CountedInFuture"));
+        }
+
+        line.Record(counted, byUserId, at, comment, stockAtCount, shelfCountedAt);
         return Result.Success();
+    }
+
+    /// <summary>
+    /// When the shelf of a line is taken to have been counted, for an entry made at
+    /// <paramref name="at"/>: the time given, else the one a counted line already has, else now.
+    /// </summary>
+    public DateTimeOffset ShelfTimeFor(InventoryCountLine line, DateTimeOffset at, DateTimeOffset? given)
+    {
+        var shelf = given ?? (line.CountedQuantity is not null ? line.CountedAt : null) ?? at;
+        return StartedAt is { } started && shelf < started ? started : shelf;
     }
 
     /// <summary>
@@ -200,12 +234,17 @@ public sealed class InventoryCountLine : Entity
     public decimal? CountedQuantity { get; private set; }
 
     /// <summary>
-    /// What the stock showed for the lot when it was counted. Issues made between the start and
-    /// the count are already off the shelf and off the lot: the variance is taken against this.
+    /// What the stock showed for the lot when the shelf was counted. Issues made between the start
+    /// and the count are already off the shelf and off the lot: the variance is taken against this.
     /// </summary>
     public decimal? StockAtCount { get; private set; }
 
     public Guid? CountedByUserId { get; private set; }
+
+    /// <summary>
+    /// When the shelf was counted: the time of entry, or the time written on the paper sheet the
+    /// figure was keyed in from. <see cref="StockAtCount"/> is the stock at that time.
+    /// </summary>
     public DateTimeOffset? CountedAt { get; private set; }
     public string? Comment { get; private set; }
 
@@ -215,12 +254,22 @@ public sealed class InventoryCountLine : Entity
     /// <summary>Counted less what the stock showed at the count; null until counted.</summary>
     public decimal? Variance => CountedQuantity is { } counted ? counted - (StockAtCount ?? ExpectedQuantity) : null;
 
-    internal void Record(decimal counted, Guid byUserId, DateTimeOffset at, string? comment, decimal? stockAtCount)
+    internal void Record(decimal counted, Guid byUserId, DateTimeOffset at, string? comment, decimal? stockAtCount,
+                         DateTimeOffset? shelfCountedAt)
     {
+        // A comment added or a figure corrected later is still the same count of the shelf: its
+        // reference stays the stock at that count, not the stock at the new entry. Only a shelf
+        // counted again (a time given that differs) takes a new reference.
+        var sameCount = CountedQuantity is not null && StockAtCount is not null
+                        && (shelfCountedAt is null || shelfCountedAt == CountedAt);
+        if (!sameCount)
+        {
+            StockAtCount = stockAtCount ?? ExpectedQuantity;
+            CountedAt = shelfCountedAt ?? (CountedQuantity is not null ? CountedAt : null) ?? at;
+        }
+
         CountedQuantity = counted;
-        StockAtCount = stockAtCount ?? ExpectedQuantity;
         CountedByUserId = byUserId;
-        CountedAt = at;
         Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
     }
 }

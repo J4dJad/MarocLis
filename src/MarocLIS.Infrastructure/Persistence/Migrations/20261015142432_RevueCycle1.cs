@@ -99,6 +99,21 @@ WHERE (l.ReleasedOn IS NULL AND l.IsQuarantined = 1)
    OR (CAST(q.MeasuredAt AS date) <= l.ReleasedOn
        AND NOT EXISTS (SELECT 1 FROM inv.StockMovements m
                        WHERE m.ReagentLotId = l.Id AND m.Kind = 1 AND m.OccurredAt <= q.MeasuredAt));");
+
+            // Counts still being counted during the upgrade: their lines already counted were measured
+            // against the quantity frozen at the start, which takes the issues made since off the lot a
+            // second time at closing. Their reference becomes the stock when the shelf was counted: the
+            // start quantity plus the lot's movements between the start and the count.
+            migrationBuilder.Sql(@"
+UPDATE cl SET StockAtCount = cl.ExpectedQuantity + ISNULL(x.Net, 0)
+FROM inv.InventoryCountLines cl
+JOIN inv.InventoryCounts c ON c.Id = cl.InventoryCountId
+OUTER APPLY (SELECT SUM(CASE WHEN m.Kind IN (0, 3, 7, 9) THEN m.Quantity ELSE -m.Quantity END) AS Net
+             FROM inv.StockMovements m
+             WHERE m.ReagentLotId = cl.ReagentLotId AND m.OccurredAt > c.StartedAt
+               AND m.OccurredAt <= cl.CountedAt) x
+WHERE c.Status = 1 AND c.StartedAt IS NOT NULL
+  AND cl.CountedQuantity IS NOT NULL AND cl.CountedAt IS NOT NULL AND cl.StockAtCount IS NULL;");
         }
 
         /// <inheritdoc />

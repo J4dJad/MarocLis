@@ -21,6 +21,9 @@ public sealed record InventoryCountRow(
     DateTimeOffset? ClosedAt);
 
 /// <summary>One lot of a count sheet, with the item's name and unit for the printout.</summary>
+/// <param name="ExpectedQuantity">Frozen at the start; for information once stock has moved.</param>
+/// <param name="StockAtCount">What the stock showed when the shelf was counted: the variance is counted less this.</param>
+/// <param name="CountedAt">When the shelf was counted.</param>
 public sealed record InventoryCountLineRow(
     Guid LineId,
     int LineNumber,
@@ -35,7 +38,9 @@ public sealed record InventoryCountLineRow(
     decimal ExpectedQuantity,
     decimal? CountedQuantity,
     decimal? Variance,
-    string? Comment);
+    string? Comment,
+    decimal? StockAtCount = null,
+    DateTimeOffset? CountedAt = null);
 
 public sealed record InventoryCountDetail(InventoryCountRow Count, IReadOnlyList<InventoryCountLineRow> Lines);
 
@@ -59,8 +64,12 @@ public interface IInventoryCountQueries
     Task<IReadOnlyList<(InventoryCountLineInput Lot, StockItemKind Kind)>> GetCountableLotsAsync(
         Guid siteId, CancellationToken ct = default);
 
-    /// <summary>The quantity the stock shows for a lot now, read afresh: the reference a count is measured against.</summary>
-    Task<decimal?> GetLotQuantityAsync(Guid reagentLotId, CancellationToken ct = default);
+    /// <summary>
+    /// The quantity the stock showed for a lot at a time: what it shows now, read afresh, less the
+    /// movements recorded after that time. The reference a count of the shelf at that time is
+    /// measured against.
+    /// </summary>
+    Task<decimal?> GetLotQuantityAtAsync(Guid reagentLotId, DateTimeOffset at, CancellationToken ct = default);
 
     /// <summary>The lots on the site's other counts still being counted, with the count's number.</summary>
     Task<IReadOnlyList<(Guid ReagentLotId, string CountNumber)>> GetLotsInOpenCountsAsync(
@@ -169,8 +178,12 @@ public sealed class InventoryCountService(
         return Result.Success(count.Lines.Count);
     }
 
+    /// <param name="shelfCountedAt">
+    /// When the shelf was counted, for a figure keyed in from the paper sheet. Left out: the time a
+    /// counted line already has (a correction or a comment keeps its reference), else now.
+    /// </param>
     public async Task<Result> RecordCountAsync(Guid inventoryCountId, Guid lineId, decimal counted, string? comment,
-                                               CancellationToken ct = default)
+                                               DateTimeOffset? shelfCountedAt = null, CancellationToken ct = default)
     {
         var permitted = guard.RequireAny(Permissions.Inventory.Receive, Permissions.Inventory.CloseCounts);
         if (permitted.IsFailure) return permitted;
@@ -178,12 +191,17 @@ public sealed class InventoryCountService(
         var count = await counts.GetByIdAsync(inventoryCountId, ct);
         if (count is null) return Result.Failure(Error.NotFound("InventoryCount_NotFound"));
 
-        // What the stock shows now, read afresh: issues made since the start are already off the
-        // shelf being counted, and must not be taken off the lot again at closing.
+        // What the stock showed when the shelf was counted, read afresh: issues made since the start
+        // are already off the shelf, and must not be taken off the lot again at closing; issues made
+        // after the shelf was counted, before the sheet was keyed in, must not be added back.
+        var now = clock.Now;
         var countedLine = count.Lines.FirstOrDefault(l => l.Id == lineId);
-        var stockNow = countedLine is null ? null : await queries.GetLotQuantityAsync(countedLine.ReagentLotId, ct);
+        var stockAtCount = countedLine is null
+            ? null
+            : await queries.GetLotQuantityAtAsync(countedLine.ReagentLotId,
+                                                  count.ShelfTimeFor(countedLine, now, shelfCountedAt), ct);
 
-        var recorded = count.RecordCount(lineId, counted, currentUser.UserId, clock.Now, comment, stockNow);
+        var recorded = count.RecordCount(lineId, counted, currentUser.UserId, now, comment, stockAtCount, shelfCountedAt);
         if (recorded.IsFailure) return recorded;
 
         var line = count.Lines.First(l => l.Id == lineId);
@@ -206,6 +224,14 @@ public sealed class InventoryCountService(
 
         var count = await counts.GetByIdAsync(inventoryCountId, ct);
         if (count is null) return Result.Failure<int>(Error.NotFound("InventoryCount_NotFound"));
+
+        // Two counts of the same lot would each post their difference. Starting a count refuses
+        // that, but counts already open together (opened before the check existed) must not both close.
+        var elsewhere = await queries.GetLotsInOpenCountsAsync(count.SiteId, count.Id, ct);
+        var overlap = elsewhere.Where(e => count.Lines.Any(l => l.ReagentLotId == e.ReagentLotId))
+                               .Select(e => e.CountNumber).Distinct().Order().ToList();
+        if (overlap.Count > 0 && count.Status == InventoryCountStatus.Counting)
+            return Result.Failure<int>(Error.Conflict("InventoryCount_LotsInOtherOpenCount", string.Join(", ", overlap)));
 
         var closed = count.Close(currentUser.UserId, clock.Now);
         if (closed.IsFailure) return Result.Failure<int>(closed.Errors);

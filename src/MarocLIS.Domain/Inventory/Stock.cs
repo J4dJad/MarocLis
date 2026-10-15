@@ -651,11 +651,14 @@ public sealed class StockMovement : AggregateRoot, IAuditable, ISiteScoped
     public Guid? ModifiedByUserId { get; set; }
 
     /// <summary>Signed effect on stock, for running-balance queries.</summary>
-    public decimal SignedQuantity => Kind switch
+    public decimal SignedQuantity => Signed(Kind, Quantity);
+
+    /// <summary>What comes in adds, everything else takes away.</summary>
+    public static decimal Signed(StockMovementKind kind, decimal quantity) => kind switch
     {
         StockMovementKind.Receipt or StockMovementKind.Return or StockMovementKind.PositiveAdjustment
-            or StockMovementKind.TransferIn => Quantity,
-        _ => -Quantity
+            or StockMovementKind.TransferIn => quantity,
+        _ => -quantity
     };
 }
 

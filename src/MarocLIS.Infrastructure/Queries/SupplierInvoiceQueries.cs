@@ -247,7 +247,7 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 from il in live
                 join si in db.SupplierInvoices.IgnoreQueryFilters() on il.SupplierInvoiceId equals si.Id
                 where ids.Contains(il.PurchaseOrderLineId)
-                select new { il.PurchaseOrderLineId, si.InvoiceDate, il.Quantity })
+                select new { il.PurchaseOrderLineId, si.InvoiceDate, il.Quantity, si.CreatedAt, InvoiceId = si.Id })
             .AsNoTracking().ToListAsync(ct);
 
         return
@@ -258,8 +258,26 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 l.LastReceivedOn,
                 [.. lots.Where(r => r.PurchaseOrderId == l.PurchaseOrderId && r.StockItemId == l.StockItemId)
                         .Select(r => new DatedQuantity(r.ReceivedOn, r.QuantityReceived))],
-                [.. billed.Where(b => b.PurchaseOrderLineId == l.Id).Select(b => new DatedQuantity(b.InvoiceDate, b.Quantity))]))
+                [.. billed.Where(b => b.PurchaseOrderLineId == l.Id)
+                          .Select(b => new BilledQuantity(b.InvoiceDate, b.Quantity, b.CreatedAt, b.InvoiceId))]))
         ];
+    }
+
+    public async Task<IReadOnlyList<Guid>> GetOpenInvoicesBillingAsync(IReadOnlyCollection<Guid> purchaseOrderLineIds,
+                                                                       DateOnly onOrAfter, Guid exceptInvoiceId,
+                                                                       CancellationToken ct = default)
+    {
+        var ids = purchaseOrderLineIds.Distinct().ToList();
+        return await (
+                from il in db.SupplierInvoiceLines.AsNoTracking()
+                join si in db.SupplierInvoices.IgnoreQueryFilters().AsNoTracking() on il.SupplierInvoiceId equals si.Id
+                where ids.Contains(il.PurchaseOrderLineId) && si.Id != exceptInvoiceId && si.InvoiceDate >= onOrAfter
+                      && (si.Status == SupplierInvoiceStatus.Pending || si.Status == SupplierInvoiceStatus.Blocked
+                          || si.Status == SupplierInvoiceStatus.ApprovedForPayment
+                          || si.Status == SupplierInvoiceStatus.PartiallyPaid)
+                select si.Id)
+            .Distinct()
+            .ToListAsync(ct);
     }
 
     public Task<bool> InvoiceNumberExistsAsync(Guid supplierId, string invoiceNumber, CancellationToken ct = default) =>
