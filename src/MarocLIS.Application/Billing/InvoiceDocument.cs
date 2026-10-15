@@ -45,7 +45,12 @@ public sealed record InvoiceDocument(
     IReadOnlyList<InvoiceDocumentLine> Lines,
     IReadOnlyList<InvoiceDocumentPayment> Payments)
 {
-    public decimal OutstandingAmount => Money.Round(TotalAmount - PaidAmount);
+    /// <summary>Total of the credit notes issued against this invoice.</summary>
+    public decimal CreditedAmount { get; init; }
+
+    /// <summary>Same rule as the invoice itself: what was credited is no longer owed.</summary>
+    public decimal OutstandingAmount =>
+        Invoice.ComputeOutstanding(Kind, TotalAmount, PaidAmount, CreditedAmount);
 
     /// <summary>True when at least one line carries VAT.</summary>
     public bool HasVat => VatAmount > 0m;

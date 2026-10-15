@@ -961,24 +961,44 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
+        // Already reversed in full: a second credit note would credit the same charge twice. The
+        // service refuses it as well; this saves the operator typing a reason for nothing.
+        if (invoice.Creditable <= 0m)
+        {
+            _dialogs.Warn(T("Invoice_AlreadyFullyCredited", invoice.Number));
+            return;
+        }
+
         var reason = _dialogs.PromptForReason(
             T("Billing.CreditNoteReasonPrompt", invoice.Number),
             T("Billing.CreditNote"), minimumLength: 10);
 
         if (reason is null) return;
 
-        var result = await _billing.IssueCreditNoteAsync(invoice.InvoiceId, reason);
+        // Off until the service answers: a second click would issue a second credit note.
+        _creditNote.Enabled = false;
+        Cursor = Cursors.WaitCursor;
 
-        if (result.IsFailure)
+        try
         {
-            _dialogs.ShowFailure(result);
-            return;
+            var result = await _billing.IssueCreditNoteAsync(invoice.InvoiceId, reason);
+
+            if (result.IsFailure)
+            {
+                _dialogs.ShowFailure(result);
+                return;
+            }
+
+            _status.ForeColor = UiTheme.Normal;
+            _status.Text = T("Message.Saved");
+
+            await LoadLedgerAsync();
         }
-
-        _status.ForeColor = UiTheme.Normal;
-        _status.Text = T("Message.Saved");
-
-        await LoadLedgerAsync();
+        finally
+        {
+            Cursor = Cursors.Default;
+            _creditNote.Enabled = true;
+        }
     }
 
     private async Task SubmitClaimAsync()
@@ -995,18 +1015,32 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
-        var result = await _billing.SubmitClaimBatchAsync(
-            [.. selected.Select(i => i.InvoiceId)]);
+        // Off until the service answers: a double click used to send the same invoices in two
+        // batches. The service re-checks the claim status as well.
+        _submitClaim.Enabled = false;
+        Cursor = Cursors.WaitCursor;
 
-        if (result.IsFailure)
+        try
         {
-            _dialogs.ShowFailure(result);
-            return;
+            var result = await _billing.SubmitClaimBatchAsync(
+                [.. selected.Select(i => i.InvoiceId)]);
+
+            if (result.IsFailure)
+            {
+                _dialogs.ShowFailure(result);
+                await LoadLedgerAsync();
+                return;
+            }
+
+            _dialogs.Info(T("Billing.ClaimReference") + " : " + result.Value, T("Billing.SubmitClaim"));
+
+            await LoadLedgerAsync();
         }
-
-        _dialogs.Info(T("Billing.ClaimReference") + " : " + result.Value, T("Billing.SubmitClaim"));
-
-        await LoadLedgerAsync();
+        finally
+        {
+            Cursor = Cursors.Default;
+            _submitClaim.Enabled = true;
+        }
     }
 
     // ---- Printing ------------------------------------------------------------------------------------
