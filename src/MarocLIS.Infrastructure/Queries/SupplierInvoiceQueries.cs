@@ -222,6 +222,7 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 select new
                 {
                     l.Id,
+                    l.PurchaseOrderId,
                     o.SupplierId,
                     l.StockItemId,
                     l.Description,
@@ -236,12 +237,28 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 })
             .ToListAsync(ct);
 
+        // The dated deliveries of each line: the lots received on its order for its item.
+        var orderIds = rows.Select(l => (Guid?)l.PurchaseOrderId).Distinct().ToList();
+        var lots = await db.ReagentLots.IgnoreQueryFilters().AsNoTracking()
+                           .Where(l => l.PurchaseOrderId != null && orderIds.Contains(l.PurchaseOrderId))
+                           .Select(l => new { l.PurchaseOrderId, l.StockItemId, l.ReceivedOn, l.QuantityReceived })
+                           .ToListAsync(ct);
+        var billed = await (
+                from il in live
+                join si in db.SupplierInvoices.IgnoreQueryFilters() on il.SupplierInvoiceId equals si.Id
+                where ids.Contains(il.PurchaseOrderLineId)
+                select new { il.PurchaseOrderLineId, si.InvoiceDate, il.Quantity })
+            .AsNoTracking().ToListAsync(ct);
+
         return
         [
             .. rows.Select(l => new OrderLineMatchSource(
                 l.Id, l.SupplierId, l.StockItemId, l.Description ?? l.ItemCode ?? string.Empty,
                 l.QuantityReceived, l.Invoiced, Money.Round(l.UnitPriceMad * (1m - l.DiscountRate)), l.VatRate,
-                l.LastReceivedOn))
+                l.LastReceivedOn,
+                [.. lots.Where(r => r.PurchaseOrderId == l.PurchaseOrderId && r.StockItemId == l.StockItemId)
+                        .Select(r => new DatedQuantity(r.ReceivedOn, r.QuantityReceived))],
+                [.. billed.Where(b => b.PurchaseOrderLineId == l.Id).Select(b => new DatedQuantity(b.InvoiceDate, b.Quantity))]))
         ];
     }
 

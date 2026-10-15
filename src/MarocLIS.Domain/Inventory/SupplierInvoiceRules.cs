@@ -23,7 +23,32 @@ public static class PaymentTerms
     /// </summary>
     public static DateOnly DueDate(DateOnly invoiceDate, DateOnly? deliveryDate, int agreedDays) =>
         (deliveryDate ?? invoiceDate).AddDays(Effective(agreedDays));
+
+    /// <summary>
+    /// The delivery an invoice line bills: the receipt at which the quantity delivered on the
+    /// order line first covered what the earlier invoices billed plus this one. Not simply the
+    /// latest receipt — a January delivery invoiced after a February one arrived would otherwise
+    /// get its term counted from February. Beyond the receipts on record, the last one; null when
+    /// none is.
+    /// </summary>
+    public static DateOnly? DeliveryCovering(IEnumerable<DatedQuantity> receipts, decimal invoicedBefore,
+                                             decimal quantity)
+    {
+        var needed = invoicedBefore + quantity;
+        var delivered = 0m;
+        DateOnly? last = null;
+        foreach (var receipt in receipts.OrderBy(r => r.On))
+        {
+            delivered += receipt.Quantity;
+            last = receipt.On;
+            if (delivered >= needed) return receipt.On;
+        }
+        return last;
+    }
 }
+
+/// <summary>A quantity on a date: a receipt on an order line, or a quantity billed on an invoice.</summary>
+public readonly record struct DatedQuantity(DateOnly On, decimal Quantity);
 
 /// <summary>What an order line allows an invoice to bill, as the three-way match sees it.</summary>
 /// <param name="QuantityInvoicedElsewhere">Already billed on the supplier's other invoices, cancelled ones excepted.</param>

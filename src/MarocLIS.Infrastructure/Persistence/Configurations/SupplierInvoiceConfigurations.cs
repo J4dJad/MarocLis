@@ -25,6 +25,9 @@ public sealed class SupplierInvoiceConfiguration : IEntityTypeConfiguration<Supp
         builder.Ignore(e => e.AmountOutstanding);
         builder.Ignore(e => e.IsOpen);
 
+        // Bumped by every payment, so that two payments on the same balance conflict on the row version.
+        builder.Property(e => e.PaymentCount);
+
         builder.HasMany(e => e.Lines).WithOne()
                .HasForeignKey(l => l.SupplierInvoiceId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(e => e.Variances).WithOne()

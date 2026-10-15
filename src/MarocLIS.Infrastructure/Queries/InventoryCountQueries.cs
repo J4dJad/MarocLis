@@ -18,7 +18,8 @@ public sealed class InventoryCountQueries(LisDbContext db) : IInventoryCountQuer
                 c.Id, c.Number, c.CountDate, c.Scope, c.StorageLocation, c.Category, c.Status,
                 c.Lines.Count(),
                 c.Lines.Count(l => l.CountedQuantity != null),
-                c.Lines.Count(l => l.CountedQuantity != null && l.CountedQuantity != l.ExpectedQuantity),
+                c.Lines.Count(l => l.CountedQuantity != null
+                                   && l.CountedQuantity != (l.StockAtCount ?? l.ExpectedQuantity)),
                 c.ClosedAt))
             .ToListAsync(ct);
 
@@ -69,6 +70,25 @@ public sealed class InventoryCountQueries(LisDbContext db) : IInventoryCountQuer
 
         return [.. rows.Select(r => (new InventoryCountLineInput(r.Id, r.LotId, r.Code, r.LotNumber, r.ExpiryDate,
                                                                  r.Location, r.QuantityRemaining), r.Kind))];
+    }
+
+    public async Task<decimal?> GetLotQuantityAsync(Guid reagentLotId, CancellationToken ct = default) =>
+        await db.ReagentLots.IgnoreQueryFilters().AsNoTracking()
+                .Where(l => l.Id == reagentLotId)
+                .Select(l => (decimal?)l.QuantityRemaining)
+                .FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<(Guid ReagentLotId, string CountNumber)>> GetLotsInOpenCountsAsync(
+        Guid siteId, Guid exceptInventoryCountId, CancellationToken ct = default)
+    {
+        var rows = await (
+                from c in db.InventoryCounts.AsNoTracking().IgnoreAutoIncludes()
+                from l in c.Lines
+                where c.SiteId == siteId && c.Status == InventoryCountStatus.Counting && c.Id != exceptInventoryCountId
+                select new { l.ReagentLotId, c.Number })
+            .ToListAsync(ct);
+
+        return [.. rows.Select(r => (r.ReagentLotId, r.Number))];
     }
 
     public async Task<IReadOnlyList<string>> GetStorageLocationsAsync(Guid siteId, CancellationToken ct = default)

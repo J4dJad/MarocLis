@@ -47,6 +47,14 @@ public sealed class InventoryCountView : LocalizedView
     private InventoryCountDetail? _detail;
     private bool _rendering;
 
+    // Counts typed while an earlier one is still being saved wait their turn instead of being
+    // dropped: a counter goes down the sheet faster than the database answers.
+    private readonly Queue<PendingCount> _pending = new();
+    private bool _saving;
+    private Guid? _renderedCountId;
+
+    private sealed record PendingCount(Guid InventoryCountId, Guid LineId, decimal Counted, string? Comment);
+
     public InventoryCountView(InventoryCountService counts, IListPdfRenderer lists, IDocumentOutput output,
                               IUserDialogs dialogs, ILocalizer localizer, ICultureManager cultureManager,
                               ILogger<InventoryCountView>? logger = null)
@@ -69,7 +77,7 @@ public sealed class InventoryCountView : LocalizedView
         _sheet.Click += async (_, _) => await RunBusyAsync(() => PrintSheetAsync(pdf: true));
         _sheetCsv.Click += async (_, _) => await RunBusyAsync(() => PrintSheetAsync(pdf: false));
         _variances.Click += async (_, _) => await RunBusyAsync(PrintVariancesAsync);
-        _lines.CellEndEdit += async (_, e) => await RunBusyAsync(() => SaveLineAsync(e.RowIndex));
+        _lines.CellEndEdit += async (_, e) => await QueueLineAsync(e.RowIndex);
 
         // Opening, starting and closing a count is the manager's; counting needs the reception right.
         PermissionGate.Require(Permissions.Inventory.CloseCounts, _new, _start, _close, _cancel);
@@ -283,6 +291,13 @@ public sealed class InventoryCountView : LocalizedView
 
     private void RenderLines()
     {
+        // The cursor stays where the counter was: back on line 1 after every reload, a 250-line
+        // sheet meant scrolling down again for each lot.
+        var (row, column) = _lines.CurrentCell is { } cell && _detail?.Count.InventoryCountId == _renderedCountId
+            ? (cell.RowIndex, cell.ColumnIndex)
+            : (-1, -1);
+        _renderedCountId = _detail?.Count.InventoryCountId;
+
         _rendering = true;
         try
         {
@@ -305,6 +320,9 @@ public sealed class InventoryCountView : LocalizedView
 
             _linesHeading.Text = $"{T("InventoryCount.Lines")} — {_detail.Count.Number} · {_detail.Count.Counted}/{_detail.Count.Lines}";
             _status.Text = counting ? T("InventoryCount.CountingNotice") : string.Empty;
+
+            if (row >= 0 && row < _lines.Rows.Count && column >= 0 && column < _lines.Columns.Count)
+                _lines.CurrentCell = _lines.Rows[row].Cells[column];
         }
         finally
         {
@@ -351,7 +369,12 @@ public sealed class InventoryCountView : LocalizedView
         _status.Text = T("InventoryCount.Started", started.Value);
     }
 
-    private async Task SaveLineAsync(int rowIndex)
+    /// <summary>
+    /// Saves a count as it is entered. Only the saved line and the progress are refreshed: reloading
+    /// the whole sheet threw away the value being typed on the next line and sent the cursor back
+    /// to the top.
+    /// </summary>
+    private async Task QueueLineAsync(int rowIndex)
     {
         if (_rendering || rowIndex < 0 || _detail is null) return;
         if (_lines.Rows[rowIndex].Tag is not InventoryCountLineRow line) return;
@@ -369,11 +392,89 @@ public sealed class InventoryCountView : LocalizedView
 
         if (counted == line.CountedQuantity && (comment ?? string.Empty) == (line.Comment ?? string.Empty)) return;
 
-        var saved = await _counts.RecordCountAsync(_detail.Count.InventoryCountId, line.LineId, counted, comment);
-        if (saved.IsFailure) { _dialogs.ShowFailure(saved, T("InventoryCount.Counted")); }
+        _pending.Enqueue(new PendingCount(_detail.Count.InventoryCountId, line.LineId, counted, comment));
+        if (_saving) return;
 
-        // Re-read after the grid has finished its edit, so the variance and the progress follow.
-        BeginInvoke(new Action(() => _ = ActivateAsync()));
+        _saving = true;
+        BeginOperation();
+        try
+        {
+            while (_pending.TryDequeue(out var next)) await SaveLineAsync(next);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Saving an inventory count line failed.");
+            _pending.Clear();
+            await ActivateAsync();
+        }
+        finally
+        {
+            _saving = false;
+            EndOperation();
+        }
+    }
+
+    private async Task SaveLineAsync(PendingCount count)
+    {
+        var saved = await _counts.RecordCountAsync(count.InventoryCountId, count.LineId, count.Counted, count.Comment);
+        if (saved.IsFailure) _dialogs.ShowFailure(saved, T("InventoryCount.Counted"));
+
+        // The saved line as recorded — or as it still is, after a refusal — with its variance.
+        var detail = await _counts.GetDetailAsync(count.InventoryCountId);
+        if (detail.IsFailure || _detail?.Count.InventoryCountId != count.InventoryCountId) return;
+
+        _detail = detail.Value;
+        RefreshLine(count.LineId);
+        RefreshProgress();
+    }
+
+    private void RefreshLine(Guid lineId)
+    {
+        if (_detail?.Lines.FirstOrDefault(l => l.LineId == lineId) is not { } fresh) return;
+        static string N(decimal? v) => v?.ToString("0.###", CultureInfo.CurrentCulture) ?? string.Empty;
+
+        foreach (DataGridViewRow row in _lines.Rows)
+        {
+            if (row.Tag is not InventoryCountLineRow line || line.LineId != lineId) continue;
+
+            row.Tag = fresh;
+            _rendering = true;
+            try
+            {
+                // A cell being typed in again keeps what is being typed.
+                var editing = _lines.IsCurrentCellInEditMode && _lines.CurrentCell is { } cell && cell.RowIndex == row.Index
+                    ? cell.OwningColumn?.Name
+                    : null;
+                if (editing != "counted") row.Cells["counted"].Value = N(fresh.CountedQuantity);
+                if (editing != "comment") row.Cells["comment"].Value = fresh.Comment ?? string.Empty;
+                row.Cells["variance"].Value = N(fresh.Variance);
+            }
+            finally
+            {
+                _rendering = false;
+            }
+
+            _lines.InvalidateRow(row.Index);
+            return;
+        }
+    }
+
+    private void RefreshProgress()
+    {
+        if (_detail is null) return;
+        var count = _detail.Count;
+
+        _linesHeading.Text = $"{T("InventoryCount.Lines")} — {count.Number} · {count.Counted}/{count.Lines}";
+        _rows = [.. _rows.Select(r => r.InventoryCountId == count.InventoryCountId ? count : r)];
+
+        foreach (DataGridViewRow row in _list.Rows)
+        {
+            if (row.Tag is not InventoryCountRow r || r.InventoryCountId != count.InventoryCountId) continue;
+            row.Tag = count;
+            row.Cells["counted"].Value = count.Counted;
+            row.Cells["variances"].Value = count.WithVariance;
+        }
     }
 
     private async Task CloseAsync()
