@@ -224,6 +224,12 @@ public sealed class QuestPdfReportRenderer : IReportRenderer
                           amendment.Item().Text($"{Label("Report.AmendmentReason", model)} :")
                                    .FontSize(8).Bold();
                           amendment.Item().Text(reason.For(model.Language)).FontSize(8);
+
+                          // The figures that changed since the version the reader holds.
+                          if (!string.IsNullOrWhiteSpace(model.AmendedParameterCodes))
+                              amendment.Item().PaddingTop(2)
+                                       .Text($"{Label("Report.AmendedParameters", model)} : {model.AmendedParameterCodes}")
+                                       .FontSize(8).Bold();
                       });
             }
 

@@ -263,9 +263,14 @@ public sealed class ReportReleaseService(
         // Reissuing a delivered partial with nothing new on it is still a reissue.
         var addsResults = releasable.Any(r => r.Status == TestResultStatus.Validated);
 
+        // A value corrected after its analysis was printed contradicts the version the recipient
+        // holds, whatever else the release adds: it goes out only as a rectification.
+        var corrected = CorrectedSinceReported(order, releasable);
+
         if (amendmentKind == ReportAmendmentKind.None && previousVersion is not null
             && (previousVersion.Completeness == ReportCompleteness.Final
-                || (previousVersion.WasDelivered && !addsResults)))
+                || (previousVersion.WasDelivered && !addsResults)
+                || corrected.Count > 0))
             return Result.Failure<ReleasedReport>(
                 Error.Regulatory("Report_ReissueRequiresAmendmentReason"));
 
@@ -273,7 +278,7 @@ public sealed class ReportReleaseService(
 
         var model = await BuildModelAsync(order, patient, site, biologist.Value, releasable,
                                            reportLanguage, versionNumber, completeness,
-                                           amendmentKind, amendmentReason, conclusion, ct);
+                                           amendmentKind, amendmentReason, conclusion, corrected, ct);
 
         var report = new LabReport(order.Id, order.SiteId, versionNumber, completeness,
                                    reportLanguage, clock.Now, biologist.Value.Id)
@@ -284,6 +289,7 @@ public sealed class ReportReleaseService(
             Conclusion = conclusion,
             AmendmentKind = amendmentKind,
             AmendmentReason = amendmentReason,
+            AmendedParameterCodesCsv = model.AmendedParameterCodes,
             SupersedesReportId = amendmentKind == ReportAmendmentKind.None ? null : previousVersion?.Id,
             ContainsSubcontractedResults = model.ContainsSubcontractedResults,
             ContainsReservations = model.ContainsReservations,
@@ -592,6 +598,24 @@ public sealed class ReportReleaseService(
     }
 
     /// <summary>
+    /// The released values corrected (<see cref="TestResult.Revise"/>) after their analysis was
+    /// first printed, and not printed since: what a rectified report must name as changed.
+    /// <para>
+    /// Read from the result itself — the correction flag, and an entry stamp later than the
+    /// analysis's first report, which a revision re-stamps and a mere withdrawal of the release
+    /// does not — so no revision history has to be loaded for every release.
+    /// </para>
+    /// </summary>
+    public static List<TestResult> CorrectedSinceReported(LabOrder order, IEnumerable<TestResult> releasable) =>
+    [
+        .. releasable.Where(r => r.Status == TestResultStatus.Validated
+                                 && r.Flags.HasFlag(ResultFlag.Corrected)
+                                 && order.Items.FirstOrDefault(i => i.Id == r.LabOrderItemId)
+                                     is { ReportedAt: { } reportedAt }
+                                 && r.EnteredAt > reportedAt)
+    ];
+
+    /// <summary>
     /// Returns the stored PDF of a released version. Reprinting a validated report is a logged
     /// disclosure, not a neutral read.
     /// </summary>
@@ -648,7 +672,8 @@ public sealed class ReportReleaseService(
         LabOrder order, Patient patient, LabSite site, AppUser biologist,
         IReadOnlyList<TestResult> releasable, AppLanguage language, int versionNumber,
         ReportCompleteness completeness, ReportAmendmentKind amendmentKind,
-        MultilingualText? amendmentReason, MultilingualText? conclusion, CancellationToken ct)
+        MultilingualText? amendmentReason, MultilingualText? conclusion,
+        IReadOnlyCollection<TestResult> corrected, CancellationToken ct)
     {
         var catalogue = new Dictionary<Guid, (AnalysisTest Test, TestParameter Parameter)>();
 
@@ -774,6 +799,15 @@ public sealed class ReportReleaseService(
             Completeness = completeness,
             AmendmentKind = amendmentKind,
             AmendmentReason = amendmentReason,
+            // Named on the rectified report, so the reader sees which figures changed.
+            AmendedParameterCodes = corrected.Count == 0
+                ? null
+                : string.Join(", ", corrected
+                    .Select(r => catalogue.TryGetValue(r.TestParameterId, out var entry)
+                        ? entry.Parameter.Code
+                        : null)
+                    .OfType<string>()
+                    .Distinct(StringComparer.Ordinal)),
 
             LaboratoryName = site.Name.For(language),
             LaboratoryLegalName = site.LegalName,

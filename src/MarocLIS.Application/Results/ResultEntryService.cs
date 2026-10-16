@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Calculations;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -115,7 +116,28 @@ public sealed record ResultEntry(
     bool PrintTechnicalComment = false,
     decimal? DilutionFactor = null,
     Guid? InstrumentId = null,
-    Guid? ReagentLotId = null);
+    Guid? ReagentLotId = null,
+    ResultEntryAction Action = ResultEntryAction.Value);
+
+/// <summary>What an entry does to its result.</summary>
+public enum ResultEntryAction
+{
+    /// <summary>Stores <see cref="ResultEntry.RawValue"/>; an empty value records the analysis as not done.</summary>
+    Value = 0,
+
+    /// <summary>
+    /// Records the analysis as not done, with <see cref="ResultEntry.TechnicalComment"/> as the
+    /// reason printed on the report. The reason is required: "Non fait" alone tells the clinician
+    /// nothing about whether to send the patient back.
+    /// </summary>
+    NotDone = 1,
+
+    /// <summary>
+    /// Withdraws a value keyed by mistake, or a "not done", so the result is awaited again. Only
+    /// before biological validation; a released value is corrected, never cleared.
+    /// </summary>
+    Clear = 2
+}
 
 public sealed record ResultEntryOutcome(
     int Accepted,
@@ -433,6 +455,29 @@ public sealed class ResultEntryService(
 
             var valueBefore = ValueOf(result);
 
+            // A value keyed on the wrong line, or a "not done" set by mistake: the result goes back
+            // to awaited, and nothing of the withdrawn value — its lot, its not-done reason — stays
+            // to be printed or traced as if it had been measured.
+            if (entry.Action == ResultEntryAction.Clear)
+            {
+                var cleared = result.ClearValue();
+                if (cleared.IsFailure)
+                {
+                    rejected.Add(cleared.FirstError);
+                    continue;
+                }
+
+                if (valueBefore.NotDone)
+                {
+                    result.TechnicalComment = null;
+                    result.PrintTechnicalComment = false;
+                }
+
+                result.ReagentLotId = null;
+                accepted++;
+                continue;
+            }
+
             var applied = ApplyEntry(result, parameter, entry, now);
             if (applied.IsFailure)
             {
@@ -441,7 +486,9 @@ public sealed class ResultEntryService(
             }
 
             result.TechnicalComment = entry.TechnicalComment ?? result.TechnicalComment;
-            result.PrintTechnicalComment = entry.PrintTechnicalComment;
+            // The reason an analysis was not done is printed in the value's place: never hidden.
+            result.PrintTechnicalComment = entry.PrintTechnicalComment
+                                           || entry.Action == ResultEntryAction.NotDone;
             result.InstrumentId = entry.InstrumentId ?? result.InstrumentId;
             // A new value gets the lot of its own measurement: a re-run on a newer lot must not keep
             // the lot of the value it replaces. Unknown stays unknown rather than being guessed.
@@ -489,6 +536,160 @@ public sealed class ResultEntryService(
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new ResultEntryOutcome(accepted, rejected, criticalFindings, suggestions));
+    }
+
+    /// <summary>
+    /// Corrects a value a biologist has already released, printed or not — the rectification of a
+    /// result, which the entry grid refuses (<c>Result_ValidatedRequiresRevision</c>).
+    /// <para>
+    /// The value is never overwritten in place: <see cref="TestResult.Revise"/> keeps the released
+    /// figure, its interpretation, who validated it and when, with the stated reason, as a revision.
+    /// The new figure is read exactly as the grid reads it (same parsing, same impossibility and
+    /// measuring-range rules) and then stands where any new value stands — entered, checked by
+    /// nobody — so it goes through technical and biological validation again, critical call
+    /// included, before a report can carry it. Its analysis goes back to entry with it, and so does
+    /// every released calculated value that read it (an LDL after a corrected cholesterol).
+    /// </para>
+    /// <para>
+    /// Reserved to whoever may withdraw a release (<see cref="Permissions.Results.Unvalidate"/>,
+    /// with <see cref="Permissions.Results.Modify"/>) and is qualified to validate the discipline;
+    /// once the value has been printed, also to whoever may issue a rectified report
+    /// (<see cref="Permissions.Reports.Amend"/>), since that is the only way out for the corrected
+    /// figure: the next release of the file is refused unless it is issued as a rectification.
+    /// </para>
+    /// </summary>
+    public async Task<Result<ResultEntryOutcome>> CorrectReleasedAsync(
+        Guid orderId, Guid testResultId, string? newValue, string reason, CancellationToken ct = default)
+    {
+        var permitted = guard.RequireAll(Permissions.Results.Modify, Permissions.Results.Unvalidate);
+        if (permitted.IsFailure) return Result.Failure<ResultEntryOutcome>(permitted.FirstError);
+
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Failure<ResultEntryOutcome>(Error.Validation("Result_RevisionReasonRequired"));
+        if (string.IsNullOrWhiteSpace(newValue))
+            return Result.Failure<ResultEntryOutcome>(Error.Validation("Result_CorrectionValueRequired"));
+
+        reason = reason.Trim();
+
+        var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
+        if (order is null) return Result.Failure<ResultEntryOutcome>(Error.NotFound("Order_NotFound"));
+
+        var patient = await _pipeline.PatientOfAsync(order, ct);
+        if (patient is null) return Result.Failure<ResultEntryOutcome>(Error.NotFound("Order_PatientNotFound"));
+
+        var catalogue = await _pipeline.LoadCatalogueAsync(order, ct);
+        var stored = await queries.GetResultsForOrderAsync(orderId, null, ct);
+
+        var result = stored.FirstOrDefault(r => r.Id == testResultId);
+        if (result is null)
+            return Result.Failure<ResultEntryOutcome>(Error.NotFound("Result_NotFound", testResultId));
+
+        var parameter = catalogue.Parameters.GetValueOrDefault(result.TestParameterId);
+        if (parameter is null)
+            return Result.Failure<ResultEntryOutcome>(
+                Error.NotFound("Result_ParameterNotFound", result.TestParameterId));
+
+        // A calculated value follows its inputs: the input is what gets corrected.
+        if (parameter.IsCalculated)
+            return Result.Failure<ResultEntryOutcome>(
+                Error.Validation("Result_CalculatedCannotBeEntered", parameter.Code));
+
+        // A value nobody has released yet is simply re-entered in the grid.
+        if (!result.IsValidated)
+            return Result.Failure<ResultEntryOutcome>(
+                Error.Conflict("Result_CorrectionOnlyForReleased", parameter.Code));
+
+        var item = order.Items.FirstOrDefault(i => i.Id == result.LabOrderItemId);
+        if (item is null || item.IsCancelled)
+            return Result.Failure<ResultEntryOutcome>(Error.Conflict("Result_ItemCancelled", parameter.Code));
+
+        if (result.Status == TestResultStatus.Reported || item.HasReportedResults)
+        {
+            var amend = guard.Require(Permissions.Reports.Amend);
+            if (amend.IsFailure) return Result.Failure<ResultEntryOutcome>(amend.FirstError);
+        }
+
+        var departmentCode = catalogue.TestsByParameter.GetValueOrDefault(parameter.Id)?.Department?.Code
+                             ?? string.Empty;
+        var qualified = await guard.RequireBiologicalValidationAsync(departmentCode, ct);
+        if (qualified.IsFailure) return Result.Failure<ResultEntryOutcome>(qualified.FirstError);
+
+        var now = clock.Now;
+
+        // Read on a scratch result, so a figure the parameter refuses changes nothing at all.
+        var probe = new TestResult(order.Id, item.Id, parameter.Id, order.SiteId);
+        var parsed = ApplyEntry(probe, parameter, new ResultEntry(result.Id, newValue), now);
+        if (parsed.IsFailure) return Result.Failure<ResultEntryOutcome>(parsed.FirstError);
+
+        // Withdrawing a release without changing the figure is "Dévalider", not a correction.
+        if (ValueOf(probe) == ValueOf(result))
+            return Result.Failure<ResultEntryOutcome>(
+                Error.Conflict("Result_CorrectionUnchanged", parameter.Code));
+
+        var revised = result.Revise(probe.NumericValue, probe.TextValue, probe.CodedValue, now,
+                                    currentUser.UserId, reason, probe.ValueOperator,
+                                    probe.TitreDenominator);
+        if (revised.IsFailure) return Result.Failure<ResultEntryOutcome>(revised.FirstError);
+
+        ReopenItemForCorrection(item, reason);
+
+        // Released calculated values that read the corrected figure, directly or through another
+        // calculated one, are reopened too so the pipeline recomputes them: a corrected
+        // cholesterol under a released LDL computed from the old one would print both.
+        var correctedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { parameter.Code };
+        bool reopenedAny;
+
+        do
+        {
+            reopenedAny = false;
+
+            foreach (var dependent in stored.Where(r => r.IsValidated).ToList())
+            {
+                var formula = catalogue.Parameters.GetValueOrDefault(dependent.TestParameterId);
+                if (formula is not { IsCalculated: true } || correctedCodes.Contains(formula.Code)) continue;
+                if (!FormulaEvaluator.ReferencedParameters(formula.CalculationFormula).Any(correctedCodes.Contains))
+                    continue;
+
+                var owner = order.Items.FirstOrDefault(i => i.Id == dependent.LabOrderItemId);
+                if (owner is null || owner.IsCancelled) continue;
+
+                var dependentReason = $"Recalcul après correction de {parameter.Code} : {reason}";
+                // Within the revision's reason column.
+                if (dependentReason.Length > 500) dependentReason = dependentReason[..500];
+                if (dependent.Revise(dependent.NumericValue, dependent.TextValue, dependent.CodedValue, now,
+                                     currentUser.UserId, dependentReason, dependent.ValueOperator,
+                                     dependent.TitreDenominator).IsFailure)
+                    continue;
+
+                ReopenItemForCorrection(owner, dependentReason);
+                correctedCodes.Add(formula.Code);
+                reopenedAny = true;
+            }
+        }
+        while (reopenedAny);
+
+        var criticalFindings = await _pipeline.RunAsync(order, patient, stored, catalogue,
+                                                        currentUser.UserId, currentUser.Language, ct);
+
+        ResultPostEntryPipeline.AdvanceCompletedItems(order, stored, now);
+        order.RecomputeStatus();
+
+        unitOfWork.AuditReason =
+            $"Correction d'un résultat validé — dossier {order.AccessionNumber}, {parameter.Code} : {reason}";
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return Result.Success(new ResultEntryOutcome(1, [], criticalFindings, []));
+    }
+
+    /// <summary>
+    /// Takes the analysis of a corrected value back to entry, where its validation starts again. An
+    /// analysis still before validation (sent back to the bench, partly released) is there already.
+    /// </summary>
+    private static void ReopenItemForCorrection(LabOrderItem item, string reason)
+    {
+        if (item.Status is LabOrderItemStatus.TechnicallyValidated or LabOrderItemStatus.Validated
+                        or LabOrderItemStatus.Reported)
+            item.ReopenForCorrection(reason);
     }
 
     /// <summary>
@@ -542,6 +743,11 @@ public sealed class ResultEntryService(
                               DateTimeOffset now)
     {
         var raw = entry.RawValue?.Trim();
+
+        if (entry.Action == ResultEntryAction.NotDone)
+            return string.IsNullOrWhiteSpace(entry.TechnicalComment)
+                ? Result.Failure(Error.Validation("Result_NotDoneReasonRequired"))
+                : result.MarkNotDone(entry.TechnicalComment.Trim(), now, currentUser.UserId);
 
         if (string.IsNullOrEmpty(raw))
             return result.MarkNotDone(entry.TechnicalComment ?? "Non fait", now, currentUser.UserId);
@@ -642,8 +848,11 @@ public sealed class ResultEntryService(
         if (order is null) return Result.Failure(Error.NotFound("Order_NotFound"));
 
         var stored = await queries.GetResultsForOrderAsync(orderId, null, ct);
-        var selected = resultIds.Count == 0
-            ? stored
+        // The whole file means what is still to check: its released values, printed or not, are
+        // not refused one by one as "already validated" — a file with one corrected value among
+        // printed ones could otherwise never be checked without an error.
+        List<TestResult> selected = resultIds.Count == 0
+            ? [.. stored.Where(r => !r.IsValidated)]
             : [.. stored.Where(r => resultIds.Contains(r.Id))];
 
         var errors = new List<Error>();

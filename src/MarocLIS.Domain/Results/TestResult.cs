@@ -338,6 +338,8 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
         TitreDenominator = newTitreDenominator;
         EnteredAt = at;
         EnteredByUserId = byUserId;
+        // The figure now standing is the reviser's, not the analyser's transmission.
+        IsAutoTransmitted = false;
 
         ValidatedAt = null;
         ValidatedByUserId = null;
