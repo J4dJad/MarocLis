@@ -388,6 +388,50 @@ public sealed class MasterDataService(
             await queries.GetInstrumentsAsync(currentUser.SiteId, includeInactive, ct));
     }
 
+    /// <summary>
+    /// The stored instrument as the request that would save it unchanged.
+    /// <para>
+    /// The editor starts from this rather than from the grid row, which carries no software
+    /// version, supplier, contract reference, support number or commissioning date: an editor
+    /// built from the row opened those blank and saved them away.
+    /// </para>
+    /// </summary>
+    public async Task<Result<InstrumentRequest>> GetInstrumentForEditAsync(Guid instrumentId,
+                                                                            CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Equipment.View);
+        if (permitted.IsFailure) return Result.Failure<InstrumentRequest>(permitted.FirstError);
+
+        var instrument = await instruments.GetByIdAsync(instrumentId, ct);
+        if (instrument is null) return Result.Failure<InstrumentRequest>(Error.NotFound("Equipment_NotFound"));
+
+        return Result.Success(new InstrumentRequest
+        {
+            InstrumentId = instrument.Id,
+            Code = instrument.Code,
+            Name = instrument.Name,
+            Kind = instrument.Kind,
+            Manufacturer = instrument.Manufacturer,
+            Model = instrument.Model,
+            SerialNumber = instrument.SerialNumber,
+            SoftwareVersion = instrument.SoftwareVersion,
+            Location = instrument.Location,
+            DepartmentId = instrument.DepartmentId,
+            PurchaseDate = instrument.PurchaseDate,
+            CommissioningDate = instrument.CommissioningDate,
+            SupplierId = instrument.SupplierId,
+            MaintenanceContractReference = instrument.MaintenanceContractReference,
+            MaintenanceContractValidUntil = instrument.MaintenanceContractValidUntil,
+            SupportPhone = instrument.SupportPhone,
+            PreventiveMaintenanceIntervalDays = instrument.PreventiveMaintenanceIntervalDays,
+            LastPreventiveMaintenanceOn = instrument.LastPreventiveMaintenanceOn,
+            CalibrationIntervalDays = instrument.CalibrationIntervalDays,
+            LastCalibrationOn = instrument.LastCalibrationOn,
+            VerificationIntervalDays = instrument.VerificationIntervalDays,
+            LastVerificationOn = instrument.LastVerificationOn
+        });
+    }
+
     public async Task<Result<Guid>> SaveInstrumentAsync(InstrumentRequest request,
                                                          CancellationToken ct = default)
     {
@@ -964,6 +1008,52 @@ public sealed class MasterDataService(
         if (permitted.IsFailure) return Result.Failure<IReadOnlyList<PrescriberRow>>(permitted.FirstError);
 
         return Result.Success(await queries.GetPrescribersAsync(search, includeInactive, ct));
+    }
+
+    /// <summary>
+    /// The stored prescriber as the request that would save it unchanged.
+    /// <para>
+    /// The editor starts from this rather than from the grid row. The row carries one telephone
+    /// (the mobile, else the landline) and no ICE, fax, address, critical-result number, notes or
+    /// default payer: an editor built from it offered the landline as the mobile and saved the
+    /// rest away, the critical-result number among them.
+    /// </para>
+    /// </summary>
+    public async Task<Result<PrescriberRequest>> GetPrescriberForEditAsync(Guid prescriberId,
+                                                                            CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Catalog.Manage);
+        if (permitted.IsFailure) return Result.Failure<PrescriberRequest>(permitted.FirstError);
+
+        var prescriber = await prescribers.GetByIdAsync(prescriberId, ct);
+        if (prescriber is null) return Result.Failure<PrescriberRequest>(Error.NotFound("Prescriber_NotFound"));
+
+        return Result.Success(new PrescriberRequest
+        {
+            PrescriberId = prescriber.Id,
+            LastName = prescriber.LastName,
+            FirstName = prescriber.FirstName,
+            FullNameArabic = prescriber.FullNameArabic,
+            Kind = prescriber.Kind,
+            Speciality = prescriber.Speciality,
+            ProfessionalOrderNumber = prescriber.ProfessionalOrderNumber,
+            Inpe = prescriber.Inpe,
+            Ice = prescriber.Ice,
+            Phone = prescriber.Phone,
+            MobilePhone = prescriber.MobilePhone,
+            Email = prescriber.Email,
+            Fax = prescriber.Fax,
+            AddressLine = prescriber.AddressLine,
+            City = prescriber.City,
+            InstitutionName = prescriber.InstitutionName,
+            DeliveryPreference = prescriber.DeliveryPreference,
+            SendPartialReports = prescriber.SendPartialReports,
+            CriticalResultPhone = prescriber.CriticalResultPhone,
+            DiscountPercent = prescriber.DiscountPercent,
+            DefaultPayerId = prescriber.DefaultPayerId,
+            Notes = prescriber.Notes,
+            IsActive = prescriber.IsActive
+        });
     }
 
     /// <summary>

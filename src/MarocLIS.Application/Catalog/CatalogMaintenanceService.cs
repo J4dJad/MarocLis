@@ -519,6 +519,114 @@ public sealed class CatalogMaintenanceService(
         return Result.Success(await queries.GetInstrumentOptionsAsync(ct));
     }
 
+    /// <summary>
+    /// The stored analysis as the request that would save it unchanged.
+    /// <para>
+    /// The editor starts from this rather than from the grid row. The row is a summary, and an
+    /// editor built from it opened with LOINC, stabilities, fasting, clinical information, the
+    /// partner laboratory and the urgent turnaround blank or defaulted, then saved those over the
+    /// record: correcting a turnaround erased a stability window. Starting from the whole request,
+    /// a field the dialog does not show (the execution days) is carried through as stored.
+    /// </para>
+    /// </summary>
+    public async Task<Result<AnalysisRequest>> GetAnalysisForEditAsync(Guid analysisTestId,
+                                                                        CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Catalog.View);
+        if (permitted.IsFailure) return Result.Failure<AnalysisRequest>(permitted.FirstError);
+
+        var analysis = await analyses.GetByIdAsync(analysisTestId, ct);
+        if (analysis is null) return Result.Failure<AnalysisRequest>(Error.NotFound("Test_NotFound"));
+
+        return Result.Success(new AnalysisRequest
+        {
+            Id = analysis.Id,
+            Code = analysis.Code,
+            Name = analysis.Name,
+            ShortName = analysis.ShortName,
+            SearchAliases = analysis.SearchAliases,
+            DepartmentId = analysis.DepartmentId,
+            SpecimenTypeId = analysis.SpecimenTypeId,
+            ContainerTypeId = analysis.ContainerTypeId,
+            RequiredVolumeMl = analysis.RequiredVolumeMl,
+            LoincCode = analysis.LoincCode,
+            NationalActCode = analysis.NationalActCode,
+            Method = analysis.Method,
+            ReagentReference = analysis.ReagentReference,
+            IsAccredited = analysis.IsAccredited,
+            IsSubcontracted = analysis.IsSubcontracted,
+            SubcontractorSiteId = analysis.SubcontractorSiteId,
+            RoutineTurnaroundHours = analysis.RoutineTurnaroundHours,
+            UrgentTurnaroundMinutes = analysis.UrgentTurnaroundMinutes,
+            IsAvailableUrgently = analysis.IsAvailableUrgently,
+            ScheduledDaysCsv = analysis.ScheduledDaysCsv,
+            FastingHoursOverride = analysis.FastingHoursOverride,
+            StabilityAtRoomTemperatureHours = analysis.StabilityAtRoomTemperatureHours,
+            StabilityRefrigeratedHours = analysis.StabilityRefrigeratedHours,
+            RequiredClinicalInformation = analysis.RequiredClinicalInformation,
+            ConsentRequirement = analysis.ConsentRequirement,
+            IsNotifiableDisease = analysis.IsNotifiableDisease,
+            IsActive = analysis.IsActive,
+            DisplayOrder = analysis.DisplayOrder
+        });
+    }
+
+    /// <summary>
+    /// The stored parameter as the request that would save it unchanged, allowed answers included.
+    /// <para>
+    /// The answer list is replaced as a whole on save, so an editor that opened it empty forced the
+    /// operator to retype every answer of a coded parameter or lose them. Answers retired because
+    /// a result used them are left out: they are no longer offered, and re-saving keeps them so.
+    /// </para>
+    /// </summary>
+    public async Task<Result<ParameterRequest>> GetParameterForEditAsync(
+        Guid analysisTestId, Guid parameterId, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Catalog.View);
+        if (permitted.IsFailure) return Result.Failure<ParameterRequest>(permitted.FirstError);
+
+        var analysis = await analyses.GetByIdWithDetailsAsync(analysisTestId, ct);
+        if (analysis is null) return Result.Failure<ParameterRequest>(Error.NotFound("Test_NotFound"));
+
+        var parameter = analysis.Parameters.FirstOrDefault(p => p.Id == parameterId);
+        if (parameter is null)
+            return Result.Failure<ParameterRequest>(Error.NotFound("Parameter_NotFound"));
+
+        return Result.Success(new ParameterRequest
+        {
+            Id = parameter.Id,
+            AnalysisTestId = analysis.Id,
+            Code = parameter.Code,
+            Name = parameter.Name,
+            ShortName = parameter.ShortName,
+            ValueType = parameter.ValueType,
+            LoincCode = parameter.LoincCode,
+            UnitId = parameter.UnitId,
+            Decimals = parameter.Decimals,
+            MeasuringRangeLow = parameter.MeasuringRangeLow,
+            MeasuringRangeHigh = parameter.MeasuringRangeHigh,
+            TechnicalLimitLow = parameter.TechnicalLimitLow,
+            TechnicalLimitHigh = parameter.TechnicalLimitHigh,
+            CriticalLow = parameter.CriticalLow,
+            CriticalHigh = parameter.CriticalHigh,
+            AnalyticalCvPercent = parameter.AnalyticalCvPercent,
+            DeltaCheckPercent = parameter.DeltaCheckPercent,
+            DeltaCheckWindowDays = parameter.DeltaCheckWindowDays,
+            CalculationFormula = parameter.CalculationFormula,
+            IsInternalOnly = parameter.IsInternalOnly,
+            AlwaysShowOnReport = parameter.AlwaysShowOnReport,
+            DisplayOrder = parameter.DisplayOrder,
+            IndentLevel = parameter.IndentLevel,
+            IsActive = parameter.IsActive,
+            CodedOptions = [.. parameter.CodedOptions
+                                        .Where(o => o.DisplayOrder != int.MaxValue)
+                                        .OrderBy(o => o.DisplayOrder)
+                                        .Select(o => new CodedOptionRequest(
+                                            o.Code, o.Label, o.DisplayOrder,
+                                            o.IsAbnormal, o.IsCritical, o.IsExpectedNormal))]
+        });
+    }
+
     // ---- Analyses ------------------------------------------------------------------------------
 
     /// <summary>
