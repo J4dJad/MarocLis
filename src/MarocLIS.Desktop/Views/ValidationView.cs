@@ -195,10 +195,13 @@ public sealed class ValidationView : LocalizedView
         _title.Anchor = AnchorStyles.Left;
         _title.Margin = new Padding(0, 0, 14, 0);
 
+        // One line beside the title: a wrapping panel in an auto-sized row measures itself as a
+        // column of chips and opens a tall gap above the files.
         _chips.AutoSize = true;
-        _chips.WrapContents = true;
-        _chips.Dock = DockStyle.Fill;
-        _chips.Margin = new Padding(0, 6, 0, 0);
+        _chips.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _chips.WrapContents = false;
+        _chips.Anchor = AnchorStyles.Left;
+        _chips.Margin = new Padding(0, 4, 0, 0);
         _chips.BackColor = UiTheme.Surface;
 
         foreach (var filter in Enum.GetValues<ValidationFilter>())

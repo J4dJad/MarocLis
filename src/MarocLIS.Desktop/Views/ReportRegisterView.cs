@@ -1126,6 +1126,7 @@ public sealed class ReportRegisterView : LocalizedView
             _previewTitle.Text = $"{T("Report.Preview")} · {pending.AccessionNumber}";
             _preview.Show(site, $"v{next}", name, $"{pending.AccessionNumber} · {kind}", T("Validation.Signature"));
             _preview.Visible = true;
+            _facts.Visible = true;
             _openPdf.Visible = false;
 
             _signatory.Text = T("Report.SignatoryAtRelease");
@@ -1149,6 +1150,7 @@ public sealed class ReportRegisterView : LocalizedView
                           $"{row.AccessionNumber} · {kind} · {row.ReleasedAt.ToLocalTime():dd/MM/yyyy}",
                           row.SignatoryName);
             _preview.Visible = true;
+            _facts.Visible = true;
             _openPdf.Visible = row.HasStoredPdf;
 
             _signatory.Text = row.SignatoryName.Length > 0 ? row.SignatoryName : "—";
@@ -1169,6 +1171,8 @@ public sealed class ReportRegisterView : LocalizedView
         _previewTitle.Text = T("Report.Preview");
         _preview.Visible = false;
         _openPdf.Visible = false;
+        // Nothing selected: no blank page and no column of dashes floating under it.
+        _facts.Visible = false;
         _signatory.Text = _prescriber.Text = _versions.Text = _delivery.Text = "—";
     }
 
