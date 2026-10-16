@@ -947,7 +947,9 @@ public sealed record PendingReportRow(
     int AwaitingAnalyses,
     DateTimeOffset? LastValidatedAt,
     /// <summary>Versions already released for the order; above zero, this one completes a partial.</summary>
-    int ReleasedVersions);
+    int ReleasedVersions,
+    /// <summary>The prescriber as the report will name them: establishment, doctor, or free text.</summary>
+    string? PrescriberName = null);
 
 public enum DeliveryResultKind
 {

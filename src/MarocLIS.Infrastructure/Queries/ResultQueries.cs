@@ -544,7 +544,16 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
                                                               && i.Status != LabOrderItemStatus.Cancelled
                                                               && i.Status != LabOrderItemStatus.Validated
                                                               && i.Status != LabOrderItemStatus.Reported),
-                ReleasedVersions = db.LabReports.Count(r => r.LabOrderId == o.Id)
+                ReleasedVersions = db.LabReports.Count(r => r.LabOrderId == o.Id),
+                // Named as the register names it, so the file reads the same before and after release.
+                PrescriberName = db.Prescribers.Where(p => p.Id == o.PrescriberId)
+                                                .Select(p => (p.Kind == PrescriberKind.Institution
+                                                              || p.Kind == PrescriberKind.Laboratory)
+                                                             && p.InstitutionName != null
+                                                    ? p.InstitutionName
+                                                    : p.LastName + " " + p.FirstName)
+                                                .FirstOrDefault(),
+                o.PrescriberFreeText
             })
             .OrderByDescending(x => x.Priority)
             .ThenBy(x => x.RegisteredAt)
@@ -563,7 +572,8 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
                 x.ValidatedResults,
                 x.AwaitingAnalyses,
                 x.LastValidatedAt,
-                x.ReleasedVersions))
+                x.ReleasedVersions,
+                x.PrescriberName ?? x.PrescriberFreeText))
             .ToList();
     }
 

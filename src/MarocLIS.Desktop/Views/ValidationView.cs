@@ -2,8 +2,10 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Results;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -23,6 +25,12 @@ namespace MarocLIS.Desktop.Views;
 /// the biologist the action that clears it: record the telephone call, or justify the QC override.
 /// Neither can be clicked past.
 /// </para>
+/// <para>
+/// Laid out as the laboratory's « LIS · A Fluent clair » mock-up: « À valider » with filter chips,
+/// the files in a card, then the open file's results beside its context (what is abnormal, late,
+/// critical or out of control, the clinical information and the biologist's comment), and the
+/// actions in the bottom bar with « Valider la sélection » last.
+/// </para>
 /// </summary>
 public sealed class ValidationView : LocalizedView
 {
@@ -36,34 +44,78 @@ public sealed class ValidationView : LocalizedView
     private const string ColumnRange = "range";
     private const string ColumnPrevious = "previous";
 
+    private const int ContextWidth = 290;
+
+    /// <summary>The grid's size in the semibold face: a patient's name, an abnormal parameter.</summary>
+    private static readonly Font GridBold = EntryPaint.Resized(UiTheme.BodyBold, UiTheme.GridBody.Size);
+
     private readonly ValidationService _validation;
     private readonly ResultEntryService _entry;
     private readonly ReportReleaseService _reports;
     private readonly IDocumentOutput _documents;
     private readonly IUserDialogs _dialogs;
+    private readonly INavigationService _navigation;
     private readonly ILogger<ValidationView>? _logger;
 
-    private readonly DataGridView _worklist = UiTheme.Grid();
-    private readonly DataGridView _details = UiTheme.Grid();
-    private readonly Label _worklistHeading = new();
-    private readonly Label _detailHeading = new();
-    private readonly CheckBox _onlyUrgent = new();
+    // ---- « À valider », the chips, « Afficher les résultats validés » ----
+    private readonly Label _title = new();
+    private readonly FlowLayoutPanel _chips = new();
+    private readonly Dictionary<ValidationFilter, ChipButton> _chipButtons = [];
+    private ValidationFilter _filter = ValidationFilter.All;
     private readonly CheckBox _showValidated = new();
-    private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _selectAll = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _validate = UiTheme.PrimaryButton(string.Empty);
+
+    // ---- the files ----
+    private readonly DataGridView _worklist = UiTheme.Grid();
+    private readonly ToolTip _tips = new();
+
+    // ---- the open file's results ----
+    private readonly Label _detailHeading = new();
+    private readonly Label _detailSubtitle = new();
+    private readonly Label _selectionCount = new();
+    private readonly DataGridView _details = UiTheme.Grid();
+    private readonly FlowLayoutPanel _keyHints = new();
+
+    // ---- the context card ----
+    private readonly Label _contextTitle = new();
+    private readonly TableLayoutPanel _contextLines = new();
+    private readonly Label _clinicalCaption = ValidationPaint.Caption();
+    private readonly Label _clinicalText = new();
+    private readonly Label _commentCaption = ValidationPaint.Caption();
+    private readonly FramedTextBox _comment = new();
+    private readonly LinkLabel _openOrder = new();
+
+    // ---- bottom bar ----
+    private readonly Button _more = UiTheme.SecondaryButton(string.Empty);
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly ToolStripMenuItem _selectAll = new();
+    private readonly ToolStripMenuItem _unvalidate = new();
+    private readonly ToolStripMenuItem _refresh = new();
+    private readonly Button _history = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _communicate = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _release = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _unvalidate = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _history = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _remaining = new();
+    private readonly Button _validate = UiTheme.PrimaryButton(string.Empty);
     private readonly Label _status = new();
+    private readonly Panel _statusStrip = new();
 
     private IReadOnlyList<ValidationWorklistEntry> _entries = [];
     private ResultEntrySheet? _sheet;
     private readonly Dictionary<Guid, ResultEntryRow> _rowsById = [];
+    private readonly List<ResultEntryRow> _listed = [];
+
+    /// <summary>
+    /// The biologist's comments typed on the open file, by result: printed under the value on the
+    /// report once the line is validated. Kept while the same file stays open, so a validation that
+    /// refuses a line does not lose what was typed for it.
+    /// </summary>
+    private readonly Dictionary<Guid, string> _comments = [];
+    private Guid? _commentsOrderId;
+    private Guid? _commentRowId;
+    private bool _showingComment;
 
     public ValidationView(ValidationService validation, ResultEntryService entry,
                           ReportReleaseService reports, IDocumentOutput documents, IUserDialogs dialogs,
+                          INavigationService navigation,
                           ILocalizer localizer, ICultureManager cultureManager,
                           ILogger<ValidationView>? logger = null)
         : base(localizer, cultureManager)
@@ -73,6 +125,7 @@ public sealed class ValidationView : LocalizedView
         _reports = reports;
         _documents = documents;
         _dialogs = dialogs;
+        _navigation = navigation;
         _logger = logger;
 
         BuildLayout();
@@ -81,131 +134,419 @@ public sealed class ValidationView : LocalizedView
 
     public override string Title => T("Nav.Validation");
 
+    private bool IsRightToLeft => RightToLeft == RightToLeft.Yes;
+
     // ---- Layout -----------------------------------------------------------------------------------
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(0);
 
-        var split = new ProportionalSplitContainer
+        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+
+        // The cards: the heading row, the files, then the results beside their context. A table
+        // rather than docking: it mirrors by itself in Arabic, the context going to the left.
+        var page = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 240,
-            SplitterWidth = 6,
+            ColumnCount = 1,
+            RowCount = 3,
+            Padding = new Padding(24, 14, 24, 12),
+            Margin = new Padding(0),
             BackColor = UiTheme.Surface
         };
+        page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        page.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
+        page.RowStyles.Add(new RowStyle(SizeType.Percent, 68));
 
-        // --- worklist ----------------------------------------------------------------------------
+        page.Controls.Add(BuildHeadingRow(), 0, 0);
+        page.Controls.Add(BuildWorklistCard(), 0, 1);
+        page.Controls.Add(BuildLowerRow(), 0, 2);
 
-        var top = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        host.Controls.Add(page);
+        host.Controls.Add(BuildStatusStrip());
+        host.Controls.Add(BuildActionBar());
 
-        _worklistHeading.Font = UiTheme.SectionTitle;
-        _worklistHeading.ForeColor = UiTheme.TextPrimary;
-        _worklistHeading.AutoSize = true;
-        _worklistHeading.Location = new Point(0, 0);
+        Controls.Add(host);
 
-        _onlyUrgent.Font = UiTheme.Small;
-        _onlyUrgent.ForeColor = UiTheme.TextSecondary;
-        _onlyUrgent.AutoSize = true;
-        _onlyUrgent.Location = new Point(260, 4);
+        SetDetailActionsEnabled(false);
+    }
+
+    /// <summary>« À valider », the chips, and « Afficher les résultats validés » at the far end.</summary>
+    private TableLayoutPanel BuildHeadingRow()
+    {
+        var row = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 3,
+            RowCount = 1,
+            Margin = new Padding(0, 0, 0, 10),
+            BackColor = UiTheme.Surface
+        };
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        _title.Font = UiTheme.PageTitle;
+        _title.ForeColor = UiTheme.TextPrimary;
+        _title.AutoSize = true;
+        _title.Anchor = AnchorStyles.Left;
+        _title.Margin = new Padding(0, 0, 14, 0);
+
+        // One line beside the title: a wrapping panel in an auto-sized row measures itself as a
+        // column of chips and opens a tall gap above the files.
+        _chips.AutoSize = true;
+        _chips.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _chips.WrapContents = false;
+        _chips.Anchor = AnchorStyles.Left;
+        _chips.Margin = new Padding(0, 4, 0, 0);
+        _chips.BackColor = UiTheme.Surface;
+
+        foreach (var filter in Enum.GetValues<ValidationFilter>())
+        {
+            var chip = new ChipButton { Height = 28, Selected = filter == _filter };
+            chip.Click += async (_, _) => await SelectFilterAsync(filter);
+            _chipButtons[filter] = chip;
+            _chips.Controls.Add(chip);
+        }
 
         // Brings back the files and results already validated but not yet reported: the only way
         // to reach a release in order to withdraw it, since the worklist otherwise drops a file the
         // moment its last result is validated.
-        _showValidated.Font = UiTheme.Small;
-        _showValidated.ForeColor = UiTheme.TextSecondary;
         _showValidated.AutoSize = true;
-        _showValidated.Location = new Point(340, 4);
+        _showValidated.Font = UiTheme.Body;
+        _showValidated.ForeColor = UiTheme.TextPrimary;
+        _showValidated.Anchor = AnchorStyles.Right;
+        _showValidated.Margin = new Padding(12, 0, 0, 0);
 
-        _refresh.Bounds = new Rectangle(420, 0, 110, UiTheme.ButtonHeight - 4);
+        row.Controls.Add(_title, 0, 0);
+        row.Controls.Add(_chips, 1, 0);
+        row.Controls.Add(_showValidated, 2, 0);
+        return row;
+    }
 
-        // The heading sizes itself to its text, which in French is longer than the gap left for
-        // it: the tick box and the button follow it instead of sitting at fixed positions under it.
-        void FollowHeading()
-        {
-            _onlyUrgent.Left = _worklistHeading.Right + 16;
-            _showValidated.Left = _onlyUrgent.Right + 16;
-            _refresh.Left = Math.Max(420, _showValidated.Right + 16);
-        }
-
-        _worklistHeading.SizeChanged += (_, _) => FollowHeading();
-        _onlyUrgent.SizeChanged += (_, _) => FollowHeading();
-        _showValidated.SizeChanged += (_, _) => FollowHeading();
-
-        BuildWorklistColumns();
-
-        var worklistHost = new Panel
+    private Panel BuildWorklistCard()
+    {
+        var card = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(0, 30, 0, 0),
+            Margin = new Padding(0, 0, 0, 14),
+            Padding = new Padding(1),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        UiChrome.AsCard(card);
+
+        BuildWorklistColumns();
+        _worklist.RowTemplate.Height = 34;
+        _worklist.ColumnHeadersDefaultCellStyle.Padding = new Padding(12, 6, 12, 6);
+        _worklist.DefaultCellStyle.Padding = new Padding(12, 0, 12, 0);
+        _worklist.ShowCellToolTips = true;
+        _worklist.CellPainting += PaintWorklistCell;
+
+        card.Controls.Add(_worklist);
+        return card;
+    }
+
+    /// <summary>The results card, and the context card beside it.</summary>
+    private TableLayoutPanel BuildLowerRow()
+    {
+        var row = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
             BackColor = UiTheme.Surface
         };
-        worklistHost.Controls.Add(_worklist);
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ContextWidth));
+        row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        top.Controls.AddRange([worklistHost, _worklistHeading, _onlyUrgent, _showValidated, _refresh]);
+        row.Controls.Add(BuildResultsCard(), 0, 0);
+        row.Controls.Add(BuildContextCard(), 1, 0);
+        return row;
+    }
 
-        // The host is first so that it docks last and fills what is left, which also puts it in
-        // front: the heading, the tick box and the refresh button sat behind it, invisible.
-        _worklistHeading.BringToFront();
-        _onlyUrgent.BringToFront();
-        _showValidated.BringToFront();
-        _refresh.BringToFront();
+    private Panel BuildResultsCard()
+    {
+        var card = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 0, 14, 0),
+            Padding = new Padding(1),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        UiChrome.AsCard(card);
+        card.RightToLeftChanged += (_, _) =>
+            card.Margin = IsRightToLeft ? new Padding(14, 0, 0, 0) : new Padding(0, 0, 14, 0);
 
-        // --- detail ------------------------------------------------------------------------------
-
-        var bottom = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        // « 2610-000008 — NOM Prénom   31 ans · Masculin            14 sur 16 sélectionnés »
+        var heading = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 3,
+            RowCount = 1,
+            Padding = new Padding(14, 10, 14, 8),
+            Margin = new Padding(0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        heading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        heading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         _detailHeading.Font = UiTheme.SectionTitle;
         _detailHeading.ForeColor = UiTheme.TextPrimary;
         _detailHeading.AutoSize = true;
-        _detailHeading.Location = new Point(0, 0);
+        _detailHeading.Anchor = AnchorStyles.Left;
+        _detailHeading.Margin = new Padding(0, 0, 10, 0);
+        _detailHeading.UseMnemonic = false;
+
+        _detailSubtitle.Font = UiTheme.Body;
+        _detailSubtitle.ForeColor = UiTheme.TextSecondary;
+        _detailSubtitle.AutoSize = true;
+        _detailSubtitle.AutoEllipsis = true;
+        _detailSubtitle.Anchor = AnchorStyles.Left;
+        _detailSubtitle.Margin = new Padding(0, 2, 10, 0);
+
+        _selectionCount.Font = UiTheme.Body;
+        _selectionCount.ForeColor = UiTheme.TextSecondary;
+        _selectionCount.AutoSize = true;
+        _selectionCount.Anchor = AnchorStyles.Right;
+        _selectionCount.Margin = new Padding(0, 2, 0, 0);
+
+        heading.Controls.Add(_detailHeading, 0, 0);
+        heading.Controls.Add(_detailSubtitle, 1, 0);
+        heading.Controls.Add(_selectionCount, 2, 0);
 
         BuildDetailColumns();
+        _details.RowTemplate.Height = 30;
+        _details.ColumnHeadersDefaultCellStyle.Padding = new Padding(10, 6, 10, 6);
+        _details.DefaultCellStyle.Padding = new Padding(10, 0, 10, 0);
+        _details.ShowCellToolTips = true;
+        _details.CellPainting += PaintDetailCell;
 
-        var detailHost = new Panel
+        // The keys the grid answers to, under it, in the work-surface colour.
+        _keyHints.Dock = DockStyle.Bottom;
+        _keyHints.Height = 30;
+        _keyHints.WrapContents = false;
+        _keyHints.AutoScroll = false;
+        _keyHints.Padding = new Padding(12, 8, 12, 0);
+        _keyHints.BackColor = UiTheme.Surface;
+        _keyHints.Paint += (_, e) =>
+        {
+            using var pen = new Pen(UiTheme.Border);
+            e.Graphics.DrawLine(pen, 0, 0, _keyHints.Width, 0);
+        };
+
+        card.Controls.Add(_details);
+        card.Controls.Add(_keyHints);
+        card.Controls.Add(heading);
+        return card;
+    }
+
+    /// <summary>
+    /// « Contexte »: what the file carries that a biologist must see before signing, the clinical
+    /// information, the comment printed under the selected value, and the way to the full file.
+    /// Scrolls inside itself on a short screen.
+    /// </summary>
+    private Panel BuildContextCard()
+    {
+        var card = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(0, 30, 0, 0),
-            BackColor = UiTheme.Surface
+            Margin = new Padding(0),
+            Padding = new Padding(1),
+            BackColor = UiTheme.SurfaceRaised
         };
-        detailHost.Controls.Add(_details);
+        UiChrome.AsCard(card);
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = UiTheme.Surface };
+        var body = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 8,
+            Padding = new Padding(14, 12, 14, 12),
+            Margin = new Padding(0),
+            AutoScroll = true,
+            BackColor = UiTheme.SurfaceRaised
+        };
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (var i = 0; i < 6; i++) body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
+        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        _selectAll.Bounds = new Rectangle(0, 8, 150, UiTheme.ButtonHeight);
-        _validate.Bounds = new Rectangle(160, 8, 220, UiTheme.ButtonHeight);
-        _communicate.Bounds = new Rectangle(390, 8, 240, UiTheme.ButtonHeight);
-        _release.Bounds = new Rectangle(640, 8, 200, UiTheme.ButtonHeight);
-        _unvalidate.Bounds = new Rectangle(850, 8, 210, UiTheme.ButtonHeight);
-        _history.Bounds = new Rectangle(1070, 8, 170, UiTheme.ButtonHeight);
+        _contextTitle.Font = UiTheme.SectionTitle;
+        _contextTitle.ForeColor = UiTheme.TextPrimary;
+        _contextTitle.AutoSize = true;
+        _contextTitle.Margin = new Padding(0, 0, 0, 8);
 
-        _status.Bounds = new Rectangle(1254, 14, 440, 20);
+        _contextLines.AutoSize = true;
+        _contextLines.Dock = DockStyle.Fill;
+        _contextLines.ColumnCount = 2;
+        _contextLines.Margin = new Padding(0);
+        _contextLines.BackColor = UiTheme.SurfaceRaised;
+        _contextLines.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _contextLines.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        // The rule between the signals and the clinical information.
+        var rule = new Panel { Dock = DockStyle.Fill, Height = 1, Margin = new Padding(0, 6, 0, 10), BackColor = UiTheme.Border };
+
+        _clinicalText.AutoSize = true;
+        _clinicalText.Font = UiTheme.Body;
+        _clinicalText.ForeColor = UiTheme.TextPrimary;
+        _clinicalText.Margin = new Padding(0, 0, 0, 12);
+        _clinicalText.MaximumSize = new Size(ContextWidth - 36, 0);
+        _clinicalText.UseMnemonic = false;
+
+        _commentCaption.AutoEllipsis = true;
+        _commentCaption.MaximumSize = new Size(ContextWidth - 36, 0);
+
+        _comment.Dock = DockStyle.Fill;
+        _comment.Margin = new Padding(0, 0, 0, 8);
+        _comment.Box.MaxLength = 2000;
+        _comment.Box.Enabled = false;
+
+        _openOrder.AutoSize = true;
+        _openOrder.Font = UiTheme.Small;
+        _openOrder.LinkColor = UiTheme.Accent;
+        _openOrder.ActiveLinkColor = UiTheme.AccentInk;
+        _openOrder.LinkBehavior = LinkBehavior.HoverUnderline;
+        _openOrder.Margin = new Padding(0, 2, 0, 0);
+
+        body.Controls.Add(_contextTitle, 0, 0);
+        body.Controls.Add(_contextLines, 0, 1);
+        body.Controls.Add(rule, 0, 2);
+        body.Controls.Add(_clinicalCaption, 0, 3);
+        body.Controls.Add(_clinicalText, 0, 4);
+        body.Controls.Add(_commentCaption, 0, 5);
+        body.Controls.Add(_comment, 0, 6);
+        body.Controls.Add(_openOrder, 0, 7);
+
+        card.Controls.Add(body);
+        return card;
+    }
+
+    /// <summary>What the last action said — validated, refused, released. Shown only while there is something to say.</summary>
+    private Panel BuildStatusStrip()
+    {
+        _statusStrip.Dock = DockStyle.Bottom;
+        _statusStrip.Height = 24;
+        _statusStrip.Padding = new Padding(24, 2, 24, 2);
+        _statusStrip.BackColor = UiTheme.Surface;
+        _statusStrip.Tag = UiTags.OwnLayout;
+        _statusStrip.Visible = false;
+
+        _status.Dock = DockStyle.Fill;
+        _status.AutoSize = false;
+        _status.AutoEllipsis = true;
         _status.Font = UiTheme.Small;
         _status.ForeColor = UiTheme.TextSecondary;
-        _status.AutoSize = false;
+        _status.TextAlign = ContentAlignment.MiddleLeft;
+        _status.UseMnemonic = false;
+        _status.TextChanged += (_, _) =>
+        {
+            _statusStrip.Visible = !string.IsNullOrEmpty(_status.Text);
+            _tips.SetToolTip(_status, _status.Text);
+        };
+        _statusStrip.Controls.Add(_status);
+        return _statusStrip;
+    }
 
-        actions.Controls.AddRange([_selectAll, _validate, _communicate, _release, _unvalidate, _history,
-                                   _status]);
+    /// <summary>« Plus d'actions ▾ », Antériorités, Résultats critiques…, Compte rendu, the count, « Valider la sélection ».</summary>
+    private EntryStrip BuildActionBar()
+    {
+        // In a strip of its own: a white table straight on the work surface would be drawn as a card.
+        var strip = new EntryStrip { Dock = DockStyle.Bottom, Height = 56, BackColor = UiTheme.SurfaceRaised };
+        var bar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 7,
+            RowCount = 1,
+            Padding = new Padding(24, 11, 24, 11),
+            Margin = new Padding(0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        for (var i = 0; i < 4; i++) bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        strip.Controls.Add(bar);
 
-        bottom.Controls.AddRange([detailHost, actions, _detailHeading]);
-        _detailHeading.BringToFront();
+        var buttons = new[] { _more, _history, _communicate, _release, _validate };
 
-        split.Panel1.Controls.Add(top);
-        split.Panel2.Controls.Add(bottom);
+        // On a 1366-pixel screen the count does not always fit on one line beside the buttons: it
+        // takes what is left and wraps, rather than pushing a button out of the bar.
+        void FitRemaining()
+        {
+            var used = bar.Padding.Horizontal + _remaining.Margin.Horizontal
+                       + buttons.Where(b => b.Visible).Sum(b => b.PreferredSize.Width + b.Margin.Horizontal);
+            var left = Math.Max(90, bar.ClientSize.Width - used);
+            var font = TextRenderer.MeasureText(_remaining.Text, UiTheme.Body).Width <= left ? UiTheme.Body : UiTheme.Small;
+            if (_remaining.Font != font) _remaining.Font = font;
+            if (_remaining.MaximumSize.Width != left) _remaining.MaximumSize = new Size(left, 0);
+        }
 
-        Controls.Add(split);
+        bar.Resize += (_, _) => FitRemaining();
+        _remaining.TextChanged += (_, _) => FitRemaining();
 
-        SetDetailActionsEnabled(false);
+        foreach (var button in buttons)
+        {
+            button.AutoSize = true;
+            button.MinimumSize = new Size(0, 34);
+            button.Height = 34;
+            button.Margin = new Padding(0, 0, 8, 0);
+        }
+
+        _validate.Margin = new Padding(0);
+        ButtonKey.ShowChevron(_more);
+
+        _remaining.AutoSize = true;
+        _remaining.Anchor = AnchorStyles.Right;
+        _remaining.TextAlign = ContentAlignment.MiddleRight;
+        _remaining.Font = UiTheme.Body;
+        _remaining.ForeColor = UiTheme.TextSecondary;
+        _remaining.Margin = new Padding(8, 0, 12, 0);
+
+        var spacer = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0), BackColor = UiTheme.SurfaceRaised };
+
+        bar.Controls.Add(_more, 0, 0);
+        bar.Controls.Add(_history, 1, 0);
+        bar.Controls.Add(_communicate, 2, 0);
+        bar.Controls.Add(_release, 3, 0);
+        bar.Controls.Add(spacer, 4, 0);
+        bar.Controls.Add(_remaining, 5, 0);
+        bar.Controls.Add(_validate, 6, 0);
+
+        // The everyday buttons that were in the strip and are used less: select all, withdraw a
+        // release, refresh. Each keeps its icon.
+        _moreMenu.Items.AddRange([_selectAll, _unvalidate, new ToolStripSeparator(), _refresh]);
+        _moreMenu.Font = UiTheme.Body;
+        _selectAll.Image = Icons.Render(Glyph.ListChecks, UiTheme.TextPrimary, 16);
+        _unvalidate.Image = Icons.Render(Glyph.Undo2, UiTheme.TextPrimary, 16);
+        _refresh.Image = Icons.Render(Glyph.RefreshCw, UiTheme.TextPrimary, 16);
+        _refresh.ShortcutKeyDisplayString = "F5";
+
+        // The captions are not plain resource texts any more ("Valider la sélection (14)",
+        // "Résultats critiques…"): their icons are set here rather than found by caption.
+        ButtonIcons.Set(_validate, Glyph.BadgeCheck, always: true);
+        ButtonIcons.Set(_communicate, Glyph.TriangleAlert, always: true);
+
+        return strip;
     }
 
     private void BuildWorklistColumns()
     {
         _worklist.Columns.Clear();
 
-        void Add(string name, int weight, bool mono = false,
+        void Add(string name, int weight, Font? font = null,
                  DataGridViewContentAlignment align = DataGridViewContentAlignment.MiddleLeft)
-            => _worklist.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            var column = new DataGridViewTextBoxColumn
             {
                 Name = name,
                 FillWeight = weight,
@@ -213,20 +554,22 @@ public sealed class ValidationView : LocalizedView
                 SortMode = DataGridViewColumnSortMode.NotSortable,
                 DefaultCellStyle = new DataGridViewCellStyle
                 {
-                    Font = mono ? UiTheme.Monospace : UiTheme.Body,
+                    Font = font ?? UiTheme.GridBody,
                     Alignment = align
                 }
-            });
+            };
+            if (align == DataGridViewContentAlignment.MiddleRight)
+                column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
+            _worklist.Columns.Add(column);
+        }
 
-        Add("accession", 14, mono: true);
-        Add("patient", 22);
-        Add("age", 6, align: DataGridViewContentAlignment.MiddleRight);
-        Add("priority", 9);
-        Add("awaiting", 8, align: DataGridViewContentAlignment.MiddleRight);
-        Add("abnormal", 8, align: DataGridViewContentAlignment.MiddleRight);
-        Add("critical", 9, align: DataGridViewContentAlignment.MiddleRight);
-        Add("alerts", 12);
-        Add("registered", 12, mono: true);
+        Add("accession", 13, UiTheme.Monospace);
+        Add("patient", 27);
+        Add("priority", 10);
+        Add("awaiting", 8, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight);
+        Add("abnormal", 8, UiTheme.MonospaceBold, DataGridViewContentAlignment.MiddleRight);
+        Add("alerts", 26);
+        Add("registered", 10, UiTheme.Monospace);
     }
 
     private void BuildDetailColumns()
@@ -240,14 +583,15 @@ public sealed class ValidationView : LocalizedView
             Name = ColumnSelected,
             // A tick box has one width; by weight it took a fifth of the grid from the parameter names.
             AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-            Width = 36,
+            Width = 40,
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
 
         void Add(string name, int weight, Font? font = null,
                  DataGridViewContentAlignment align = DataGridViewContentAlignment.MiddleLeft,
                  Color? foreground = null)
-            => _details.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            var column = new DataGridViewTextBoxColumn
             {
                 Name = name,
                 FillWeight = weight,
@@ -255,23 +599,27 @@ public sealed class ValidationView : LocalizedView
                 SortMode = DataGridViewColumnSortMode.NotSortable,
                 DefaultCellStyle = new DataGridViewCellStyle
                 {
-                    Font = font ?? UiTheme.Body,
+                    Font = font ?? UiTheme.GridBody,
                     Alignment = align,
                     ForeColor = foreground ?? UiTheme.TextPrimary
                 }
-            });
+            };
+            if (align == DataGridViewContentAlignment.MiddleRight)
+                column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
+            _details.Columns.Add(column);
+        }
 
-        Add(ColumnParameter, 32);
-        Add(ColumnValue, 13, UiTheme.MonospaceBold, DataGridViewContentAlignment.MiddleRight);
-        Add(ColumnFlag, 8, UiTheme.MonospaceBold, DataGridViewContentAlignment.MiddleCenter);
-        Add(ColumnUnit, 9, UiTheme.Small);
-        Add(ColumnRange, 18, UiTheme.Small, foreground: UiTheme.TextSecondary);
-        Add(ColumnPrevious, 15, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight,
+        Add(ColumnParameter, 30);
+        Add(ColumnValue, 11, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight);
+        Add(ColumnFlag, 13, UiTheme.SmallBold);
+        Add(ColumnUnit, 8, UiTheme.Small, foreground: UiTheme.TextSecondary);
+        Add(ColumnRange, 14, UiTheme.Monospace, foreground: UiTheme.TextSecondary);
+        Add(ColumnPrevious, 13, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight,
             UiTheme.TextSecondary);
 
         // The analyser's own doubts (linearity, reagent, sample alarms): a value it flagged must not
         // be signed without the biologist seeing why.
-        Add(ColumnAnalyser, 16, UiTheme.Small, foreground: UiTheme.Abnormal);
+        Add(ColumnAnalyser, 13, UiTheme.Small, foreground: UiTheme.Abnormal);
     }
 
     private void WireBehaviour()
@@ -280,7 +628,6 @@ public sealed class ValidationView : LocalizedView
         // until the action ends. Not every action reloads the worklist (a refusal, a cancel, a
         // critical value communicated), so a filter ticked meanwhile is applied then.
         _refresh.Click += async (_, _) => await ReloadOrDeferAsync();
-        _onlyUrgent.CheckedChanged += async (_, _) => await ReloadOrDeferAsync();
         _showValidated.CheckedChanged += async (_, _) => await ReloadOrDeferAsync();
         BecameIdle += async (_, _) =>
         {
@@ -305,14 +652,26 @@ public sealed class ValidationView : LocalizedView
         PermissionGate.Require(Permissions.Results.BiologicalValidate, _validate);
         PermissionGate.Require(Permissions.Results.EnterCritical, _communicate);
         PermissionGate.Require(Permissions.Reports.Print, _release);
-        PermissionGate.Require(Permissions.Results.Unvalidate, _unvalidate);
+
+        // Un-validation is in the « Plus d'actions » menu: a menu item is not a control, so its
+        // right is checked each time the menu opens (see UpdateMenu), with the same permission.
+        _more.Click += (_, _) =>
+        {
+            UpdateMenu();
+            _moreMenu.RightToLeft = RightToLeft;
+            _moreMenu.Show(_more, new Point(IsRightToLeft ? _more.Width : 0, _more.Height));
+        };
 
         // The antériorités of the selected parameter: the button, or a double-click on the
         // antériorité cell, which is where the eye already is when the last value raises a doubt.
         _history.Visible = PermissionGate.Allows(Permissions.Results.View);
         PermissionGate.Require(Permissions.Results.View, _history);
         _history.Click += async (_, _) => await ShowHistoryAsync();
-        _details.CurrentCellChanged += (_, _) => _history.Enabled = ResultHistory.IsCharted(SelectedDetail());
+        _details.CurrentCellChanged += (_, _) =>
+        {
+            _history.Enabled = ResultHistory.IsCharted(SelectedDetail());
+            ShowComment();
+        };
         _details.CellDoubleClick += async (_, e) =>
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
@@ -322,15 +681,70 @@ public sealed class ValidationView : LocalizedView
             await ShowHistoryAsync();
         };
 
+        // A tick counts the moment it is clicked, not when the cell is left: the count and the
+        // caption of « Valider la sélection » follow it.
+        _details.CurrentCellDirtyStateChanged += (_, _) =>
+        {
+            if (_details.IsCurrentCellDirty && _details.CurrentCell is DataGridViewCheckBoxCell)
+                _details.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        };
+        _details.CellValueChanged += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _details.Columns[e.ColumnIndex].Name == ColumnSelected)
+                ShowSelectionCount();
+        };
+
         _details.CellFormatting += OnDetailFormatting;
         _worklist.CellFormatting += OnWorklistFormatting;
 
-        // Double-clicking a file opens it for entry rather than validation, which is what a
-        // biologist wants when a value looks wrong and needs re-checking at the bench.
+        // Double-clicking a file puts the keyboard in its results, which is where the biologist
+        // goes next: ticking with the space bar and validating with F9.
         _worklist.CellDoubleClick += (_, e) =>
         {
             if (e.RowIndex >= 0 && _worklist.Rows[e.RowIndex].Tag is Guid) _details.Focus();
         };
+
+        _comment.Box.TextChanged += (_, _) => KeepComment();
+
+        _openOrder.Visible = PermissionGate.Allows(Permissions.Orders.View);
+        _openOrder.LinkClicked += async (_, _) => await OpenOrderAsync();
+    }
+
+    /// <summary>
+    /// The screen's keys: F9 validates the selection, F10 opens the next file, the space bar ticks
+    /// the result under the cursor. Each does exactly what its button does, and nothing when that
+    /// button is unavailable, so a key the user gave to something else in the shell still reaches it.
+    /// </summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        switch (keyData)
+        {
+            case Keys.F9 when _validate.Enabled && _validate.Visible && !IsBusy:
+                _validate.PerformClick();
+                return true;
+
+            case Keys.F10 when !IsBusy:
+                return SelectNextFile();
+
+            case Keys.Space when _details.ContainsFocus && _details.CurrentRow is { } row
+                                 && !row.Cells[ColumnSelected].ReadOnly:
+                _details.EndEdit();
+                row.Cells[ColumnSelected].Value = row.Cells[ColumnSelected].Value is not true;
+                return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    private bool SelectNextFile()
+    {
+        if (_worklist.Rows.Count == 0) return false;
+
+        var next = (_worklist.CurrentRow?.Index ?? -1) + 1;
+        if (next >= _worklist.Rows.Count) return true;
+
+        _worklist.CurrentCell = _worklist.Rows[next].Cells[0];
+        return true;
     }
 
     private void OnWorklistFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -341,19 +755,108 @@ public sealed class ValidationView : LocalizedView
         var entry = _entries.FirstOrDefault(x => x.LabOrderId == id);
         if (entry is null) return;
 
+        var name = _worklist.Columns[e.ColumnIndex].Name;
+
         // An uncommunicated critical result is the only state here that is a breached obligation
-        // rather than a backlog, so it is the only one painted as critical.
+        // rather than a backlog, so it is the only one painted as critical; late files and failed
+        // QC carry their pill in « Signalements ».
         if (entry.UncommunicatedCriticalCount > 0)
         {
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
-            e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
+            e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.GridBody, FontStyle.Bold);
         }
-        else if (entry.IsOverdue || entry.HasQcFailure)
+        else if (name == "abnormal" && entry.AbnormalCount > 0)
         {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
         }
+
+        if (name == "accession" && _worklist.Rows[e.RowIndex].Selected)
+            e.CellStyle!.Font = UiTheme.MonospaceBold;
+    }
+
+    /// <summary>
+    /// The patient as « NOM Prénom · M · 31 ans », the priority as a pill (« Routine » in plain
+    /// text), and the signals as pills.
+    /// </summary>
+    private void PaintWorklistCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null) return;
+        if (_worklist.Rows[e.RowIndex].Tag is not Guid id) return;
+
+        var entry = _entries.FirstOrDefault(x => x.LabOrderId == id);
+        if (entry is null) return;
+
+        var name = _worklist.Columns[e.ColumnIndex].Name;
+        if (name is not ("patient" or "priority" or "alerts")) return;
+
+        var rtl = IsRightToLeft;
+        var selected = (e.State & DataGridViewElementStates.Selected) != 0;
+        e.PaintBackground(e.ClipBounds, selected);
+
+        var inner = new Rectangle(e.CellBounds.X + 12, e.CellBounds.Y, e.CellBounds.Width - 24, e.CellBounds.Height);
+        var alignment = rtl ? TextFormatFlags.Right | TextFormatFlags.RightToLeft : TextFormatFlags.Left;
+        const TextFormatFlags single = TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix
+                                       | TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter;
+
+        switch (name)
+        {
+            case "patient":
+            {
+                var nameFont = GridBold;
+                var nameColour = entry.UncommunicatedCriticalCount > 0 ? UiTheme.Critical : UiTheme.TextPrimary;
+                var nameWidth = Math.Min(inner.Width,
+                    TextRenderer.MeasureText(entry.PatientName, nameFont, Size.Empty, TextFormatFlags.NoPadding).Width);
+                TextRenderer.DrawText(e.Graphics, entry.PatientName, nameFont,
+                                      EntryPaint.Mirror(new Rectangle(inner.X, inner.Y, nameWidth, inner.Height), e.CellBounds, rtl),
+                                      nameColour, single | TextFormatFlags.EndEllipsis | alignment);
+
+                var rest = PatientDetail(entry);
+                if (rest.Length > 0 && nameWidth < inner.Width - 10)
+                {
+                    var restBounds = new Rectangle(inner.X + nameWidth, inner.Y, inner.Width - nameWidth, inner.Height);
+                    TextRenderer.DrawText(e.Graphics, $" · {rest}", UiTheme.GridBody,
+                                          EntryPaint.Mirror(restBounds, e.CellBounds, rtl),
+                                          UiTheme.TextSecondary, single | TextFormatFlags.EndEllipsis | alignment);
+                }
+
+                break;
+            }
+
+            case "priority":
+                if (entry.Priority == OrderPriority.Routine)
+                {
+                    TextRenderer.DrawText(e.Graphics, T("Priority.Routine"), UiTheme.GridBody,
+                                          EntryPaint.Mirror(inner, e.CellBounds, rtl), UiTheme.TextSecondary,
+                                          single | TextFormatFlags.EndEllipsis | alignment);
+                }
+                else
+                {
+                    ValidationPaint.DrawPills(e.Graphics, e.CellBounds,
+                        [(T($"Priority.{entry.Priority}"),
+                          entry.Priority == OrderPriority.VitalEmergency ? EntryPaint.Critical : EntryPaint.Warning)],
+                        rtl, 12);
+                }
+
+                break;
+
+            case "alerts":
+                ValidationPaint.DrawPills(e.Graphics, e.CellBounds,
+                    [.. ValidationScreenRules.Alerts(entry).Select(a => (T(a.Key, a.Args), ValidationPaint.Colours(a.Tone)))],
+                    rtl, 12);
+                break;
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>« M · 31 ans »: the sex and the age after the patient's name.</summary>
+    private string PatientDetail(ValidationWorklistEntry entry)
+    {
+        var parts = new List<string>(2);
+        if (entry.Gender != Domain.Patients.Gender.Unknown) parts.Add(T($"GenderShort.{entry.Gender}"));
+        if (entry.AgeYears is { } age) parts.Add($"{age} {T("Report.Years")}");
+        return string.Join(" · ", parts);
     }
 
     private void OnDetailFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -362,53 +865,122 @@ public sealed class ValidationView : LocalizedView
         if (_details.Rows[e.RowIndex].Tag is not Guid id) return;
         if (!_rowsById.TryGetValue(id, out var row)) return;
 
+        var name = _details.Columns[e.ColumnIndex].Name;
         var appearance = UiTheme.ForInterpretation(row.Interpretation);
+        var abnormal = ValidationScreenRules.IsAbnormal(row);
 
-        if (_details.Columns[e.ColumnIndex].Name is ColumnValue or ColumnFlag)
+        // An abnormal line in the warm tint of the mock-up, its parameter and value in bold; the
+        // critical one keeps the critical tint. The value takes the interpretation's ink.
+        if (abnormal)
+        {
+            e.CellStyle!.BackColor = row.IsCritical ? UiTheme.CriticalBackground : ValidationPaint.AbnormalRow;
+            if (name == ColumnParameter) e.CellStyle.Font = GridBold;
+        }
+
+        if (name == ColumnValue)
         {
             e.CellStyle!.ForeColor = appearance.Foreground;
-            e.CellStyle.BackColor = appearance.Background;
-            if (appearance.Bold)
+            if (appearance.Bold || abnormal)
                 e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Monospace, FontStyle.Bold);
         }
 
+        // A comment typed for the line is marked on its parameter, and read in its tooltip.
+        if (name == ColumnParameter && _comments.TryGetValue(id, out var comment) && e.Value is string text)
+        {
+            e.Value = text + "  ✎";
+            e.FormattingApplied = true;
+            _details.Rows[e.RowIndex].Cells[e.ColumnIndex].ToolTipText = comment;
+        }
+
         // Already released, listed only so it can be withdrawn: set apart from what awaits release.
-        if (IsReleased(row))
+        if (ValidationScreenRules.IsReleased(row))
         {
             e.CellStyle!.ForeColor = UiTheme.TextSecondary;
-            e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Italic);
+            e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.GridBody, FontStyle.Italic);
         }
 
         if (row.IsHeading)
         {
             e.CellStyle!.BackColor = UiTheme.SurfaceSunken;
-            e.CellStyle.Font = new Font(UiTheme.Body, FontStyle.Bold | FontStyle.Italic);
+            e.CellStyle.Font = new Font(UiTheme.GridBody, FontStyle.Bold | FontStyle.Italic);
         }
     }
 
+    /// <summary>
+    /// « Indic. »: the indicator as a pill — « ▲ Haut » in the warning pair, « ▼ Bas » in the info
+    /// pair, critical in the critical pair — then the result's other flags (CIQ, Δ, ×…) as before.
+    /// </summary>
+    private void PaintDetailCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null) return;
+        if (_details.Columns[e.ColumnIndex].Name != ColumnFlag) return;
+        if (_details.Rows[e.RowIndex].Tag is not Guid id || !_rowsById.TryGetValue(id, out var row)) return;
+
+        var rtl = IsRightToLeft;
+        e.PaintBackground(e.ClipBounds, (e.State & DataGridViewElementStates.Selected) != 0);
+
+        var x = e.CellBounds.X + 10;
+        if (Indicator(row.Interpretation) is { } indicator)
+        {
+            var size = EntryPaint.MeasurePill(indicator.Text, UiTheme.SmallBold, 8);
+            var pill = EntryPaint.Mirror(
+                new Rectangle(x, e.CellBounds.Y + (e.CellBounds.Height - size.Height) / 2,
+                              Math.Min(size.Width, e.CellBounds.Width - 14), size.Height),
+                e.CellBounds, rtl);
+            EntryPaint.DrawPill(e.Graphics, pill, indicator.Text, UiTheme.SmallBold, indicator.Colours, rtl);
+            x += size.Width + 6;
+        }
+
+        var glyphs = UiTheme.FlagGlyphs(row.Flags);
+        if (glyphs.Length > 0 && x < e.CellBounds.Right - 8)
+        {
+            var rest = EntryPaint.Mirror(new Rectangle(x, e.CellBounds.Y, e.CellBounds.Right - x - 4,
+                                                       e.CellBounds.Height), e.CellBounds, rtl);
+            TextRenderer.DrawText(e.Graphics, glyphs, UiTheme.MonospaceBold, rest, UiTheme.Abnormal,
+                                  TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+                                  | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis
+                                  | (rtl ? TextFormatFlags.Right | TextFormatFlags.RightToLeft : TextFormatFlags.Left));
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>The indicator pill of an interpretation; null for a normal or uninterpretable value.</summary>
+    private (string Text, (Color Back, Color Fore) Colours)? Indicator(ResultInterpretation interpretation) =>
+        interpretation switch
+        {
+            ResultInterpretation.High => ($"▲ {T("ResultEntry.FlagHigh")}", EntryPaint.Warning),
+            ResultInterpretation.Low => ($"▼ {T("ResultEntry.FlagLow")}", EntryPaint.Info),
+            ResultInterpretation.CriticalHigh => ($"▲▲ {T("ResultEntry.FlagCritical")}", EntryPaint.Critical),
+            ResultInterpretation.CriticalLow => ($"▼▼ {T("ResultEntry.FlagCritical")}", EntryPaint.Critical),
+            ResultInterpretation.Abnormal => ($"◆ {T("Interpretation.Abnormal")}", EntryPaint.Warning),
+            _ => null
+        };
+
     protected override void ApplyTexts()
     {
-        _worklistHeading.Text = T("Validation.PendingBiological");
-        _detailHeading.Text = T("Result.Plural");
-        _onlyUrgent.Text = T("Priority.Urgent");
+        _title.Text = T("Dashboard.AwaitingValidation");
         _showValidated.Text = T("Validation.ShowValidated");
-        _refresh.Text = T("Action.Refresh");
+        _contextTitle.Text = T("Validation.Context");
+        _clinicalCaption.Text = T("Order.ClinicalInformation");
+        _openOrder.Text = T("Validation.OpenFullOrder");
+
+        _more.Text = T("ResultEntry.MoreActions");
         _selectAll.Text = T("Action.SelectAll");
-        _validate.Text = T("Validation.Biological");
-        _communicate.Text = T("Nav.CriticalResults");
-        _release.Text = T("Report.Title");
-        _unvalidate.Text = T("Validation.Unvalidate");
+        _unvalidate.Text = $"{T("Validation.Unvalidate")}…";
+        _refresh.Text = T("Action.Refresh");
         _history.Text = T("Result.History");
+        _communicate.Text = $"{T("Nav.CriticalResults")}…";
+        _release.Text = T("Report.Title");
+        ButtonKey.Show(_validate, "F9");
 
         if (_worklist.Columns.Count > 0)
         {
-            _worklist.Column("accession").HeaderText = T("Order.AccessionNumber");
+            _worklist.Column("accession").HeaderText = T("Order.Title");
             _worklist.Column("patient").HeaderText = T("Patient.Title");
-            _worklist.Column("age").HeaderText = T("Patient.Age");
             _worklist.Column("priority").HeaderText = T("Field.Priority");
-            _worklist.Column("awaiting").HeaderText = T("Validation.PendingBiological");
-            _worklist.Column("abnormal").HeaderText = T("Interpretation.Abnormal");
-            _worklist.Column("critical").HeaderText = T("Flag.CriticalHigh");
+            _worklist.Column("awaiting").HeaderText = T("Validation.ToValidateColumn");
+            _worklist.Column("abnormal").HeaderText = T("Validation.AbnormalColumn");
             _worklist.Column("alerts").HeaderText = T("Result.Flags");
             _worklist.Column("registered").HeaderText = T("Order.RegisteredAt");
         }
@@ -418,12 +990,57 @@ public sealed class ValidationView : LocalizedView
             _details.Column(ColumnSelected).HeaderText = string.Empty;
             _details.Column(ColumnParameter).HeaderText = T("Result.Parameter");
             _details.Column(ColumnValue).HeaderText = T("Result.Value");
-            _details.Column(ColumnFlag).HeaderText = T("Result.Flags");
+            _details.Column(ColumnFlag).HeaderText = T("ResultEntry.Indicator");
             _details.Column(ColumnUnit).HeaderText = T("Result.Unit");
             _details.Column(ColumnRange).HeaderText = T("Result.ReferenceRange");
             _details.Column(ColumnPrevious).HeaderText = T("Result.Previous");
             _details.Column(ColumnAnalyser).HeaderText = T("Result.InstrumentFlags");
         }
+
+        RenderKeyHints();
+        RenderChips();
+        RenderRemaining();
+
+        if (_sheet is { } sheet) RenderDetails(sheet, keepTicks: true);
+        else ClearDetails();
+
+        _worklist.Invalidate();
+    }
+
+    /// <summary>The keys the screen answers to — and only those.</summary>
+    private void RenderKeyHints()
+    {
+        _keyHints.SuspendLayout();
+        _keyHints.Controls.Clear();
+
+        void Hint(string key, string meaning)
+        {
+            _keyHints.Controls.Add(new Label
+            {
+                Text = key,
+                AutoSize = true,
+                Font = UiTheme.Mono(8.25f, FontStyle.Bold),
+                ForeColor = UiTheme.TextPrimary,
+                Margin = new Padding(0, 0, 4, 0),
+                UseMnemonic = false
+            });
+            _keyHints.Controls.Add(new Label
+            {
+                Text = meaning,
+                AutoSize = true,
+                Font = UiTheme.Small,
+                ForeColor = UiTheme.TextSecondary,
+                Margin = new Padding(0, 1, 16, 0),
+                UseMnemonic = false
+            });
+        }
+
+        Hint(T("Validation.KeySpace"), T("Validation.KeyTick"));
+        Hint("F9", T("Validation.KeyValidate"));
+        Hint("F10", T("Validation.KeyNextOrder"));
+        Hint(T("ResultEntry.DoubleClick"), T("ResultEntry.KeyHistory"));
+
+        _keyHints.ResumeLayout(performLayout: true);
     }
 
     // ---- Worklist ---------------------------------------------------------------------------------
@@ -448,7 +1065,9 @@ public sealed class ValidationView : LocalizedView
         _worklistStale = false;
         try
         {
-            var result = await _validation.GetWorklistAsync(onlyUrgent: _onlyUrgent.Checked,
+            // The whole list, every time: the chips filter it here and show their counts. « Urgents »
+            // is the server's former « urgent only », the same test on the same rows.
+            var result = await _validation.GetWorklistAsync(onlyUrgent: false,
                                                             includeValidated: _showValidated.Checked,
                                                             ct: ct);
 
@@ -472,43 +1091,113 @@ public sealed class ValidationView : LocalizedView
         }
     }
 
+    private async Task SelectFilterAsync(ValidationFilter filter)
+    {
+        if (_filter == filter) return;
+
+        _filter = filter;
+        RenderChips();
+
+        // A filter changed while an action runs is applied when it ends, like the tick box.
+        if (IsBusy)
+        {
+            _worklistStale = true;
+            return;
+        }
+
+        RenderWorklist();
+        await Task.CompletedTask;
+    }
+
+    private void RenderChips()
+    {
+        foreach (var (filter, chip) in _chipButtons)
+        {
+            var caption = filter switch
+            {
+                ValidationFilter.Urgent => T("Validation.FilterUrgent"),
+                ValidationFilter.Abnormal => T("Validation.FilterAbnormal"),
+                ValidationFilter.QcBlocked => T("Validation.FilterQc"),
+                _ => T("ResultEntry.AllSectors")
+            };
+
+            chip.Text = $"{caption} · {ValidationScreenRules.Count(_entries, filter)}";
+            chip.Selected = filter == _filter;
+        }
+    }
+
+    private IReadOnlyList<ValidationWorklistEntry> VisibleEntries =>
+        [.. _entries.Where(e => ValidationScreenRules.Matches(e, _filter))];
+
     private void RenderWorklist()
     {
+        var keep = _worklist.CurrentRow?.Tag as Guid?;
+        var visible = VisibleEntries;
+
         _worklist.SuspendLayout();
         _worklist.Rows.Clear();
 
-        foreach (var entry in _entries)
+        foreach (var entry in visible)
         {
-            var alerts = new List<string>();
-            if (entry.UncommunicatedCriticalCount > 0) alerts.Add($"!{entry.UncommunicatedCriticalCount}");
-            if (entry.HasQcFailure) alerts.Add("CIQ");
-            if (entry.HasDeltaCheckFailure) alerts.Add("Δ");
-            if (entry.HasSampleDefect) alerts.Add("éch.");
-            if (entry.IsOverdue) alerts.Add(T("Order.Overdue"));
+            var alerts = ValidationScreenRules.Alerts(entry);
+            var detail = PatientDetail(entry);
 
+            // The cells hold the text a print of the list (Ctrl+P) or a screen reader gets; the
+            // patient, the priority and the signals are painted over it.
             var index = _worklist.Rows.Add(
                 entry.AccessionNumber,
-                entry.PatientName,
-                entry.AgeYears?.ToString() ?? string.Empty,
-                entry.Priority == Domain.Orders.OrderPriority.Routine
-                    ? string.Empty
-                    : T($"Priority.{entry.Priority}"),
+                detail.Length > 0 ? $"{entry.PatientName} · {detail}" : entry.PatientName,
+                T($"Priority.{entry.Priority}"),
                 entry.AwaitingCount.ToString(),
                 entry.AbnormalCount > 0 ? entry.AbnormalCount.ToString() : string.Empty,
-                entry.CriticalCount > 0 ? entry.CriticalCount.ToString() : string.Empty,
-                string.Join(" ", alerts),
+                string.Join(" · ", alerts.Select(a => T(a.Key, a.Args))),
                 entry.RegisteredAt.ToString("dd/MM HH:mm"));
 
-            _worklist.Rows[index].Tag = entry.LabOrderId;
+            var gridRow = _worklist.Rows[index];
+            gridRow.Tag = entry.LabOrderId;
+            gridRow.Cells["alerts"].ToolTipText = gridRow.Cells["alerts"].Value as string ?? string.Empty;
+            gridRow.Cells["patient"].ToolTipText = gridRow.Cells["patient"].Value as string ?? string.Empty;
         }
 
         _worklist.ResumeLayout(performLayout: true);
 
-        _status.ForeColor = UiTheme.TextSecondary;
-        _status.Text = $"{_entries.Count} {T("Order.Plural").ToLowerInvariant()}";
+        RenderChips();
+        RenderRemaining();
 
-        if (_worklist.Rows.Count > 0) _worklist.SelectFirstRow();
-        else ClearDetails();
+        if (_worklist.Rows.Count == 0)
+        {
+            ClearDetails();
+            return;
+        }
+
+        // The file that was open stays open across a reload, as long as it is still listed.
+        var reselect = keep is { } id
+            ? _worklist.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Tag is Guid g && g == id)
+            : null;
+
+        if (reselect is null || reselect.Index == 0)
+        {
+            _worklist.SelectFirstRow();
+            return;
+        }
+
+        try
+        {
+            _worklist.CurrentCell = reselect.Cells[0];
+            reselect.Selected = true;
+        }
+        catch (InvalidOperationException)
+        {
+            // Mid-layout: fall back on the first file, as before.
+            _worklist.SelectFirstRow();
+        }
+    }
+
+    /// <summary>« 2 dossiers · 31 résultats en attente », over what the chip shows.</summary>
+    private void RenderRemaining()
+    {
+        var visible = VisibleEntries;
+        _remaining.Text = T("Validation.PendingSummary", visible.Count, visible.Sum(e => e.AwaitingCount));
     }
 
     private async Task LoadSelectedAsync()
@@ -530,46 +1219,58 @@ public sealed class ValidationView : LocalizedView
         }
 
         _sheet = sheet.Value;
-        RenderDetails(_sheet);
+        RenderDetails(_sheet, keepTicks: false);
     }
 
-    private void RenderDetails(ResultEntrySheet sheet)
+    private void RenderDetails(ResultEntrySheet sheet, bool keepTicks)
     {
-        _rowsById.Clear();
+        // The comments typed belong to one file: another file starts with none.
+        if (_commentsOrderId != sheet.LabOrderId)
+        {
+            _comments.Clear();
+            _commentsOrderId = sheet.LabOrderId;
+        }
 
-        _detailHeading.Text = $"{sheet.AccessionNumber} — {sheet.PatientName}" +
-                              (sheet.AgeYears is { } age ? $", {age} {T("Report.Years")}" : string.Empty) +
-                              $", {T($"Gender.{sheet.Gender}")}";
+        // Re-rendered for a new language, the ticks the biologist set are put back.
+        var ticks = keepTicks
+            ? _details.Rows.Cast<DataGridViewRow>()
+                .Where(r => r.Tag is Guid)
+                .ToDictionary(r => (Guid)r.Tag!, r => r.Cells[ColumnSelected].Value is true)
+            : null;
+
+        _rowsById.Clear();
+        _listed.Clear();
+
+        _detailHeading.Text = $"{sheet.AccessionNumber} — {sheet.PatientName}";
+
+        var subtitle = new List<string>(2);
+        if (sheet.AgeYears is { } age) subtitle.Add($"{age} {T("Report.Years")}");
+        subtitle.Add(T($"Gender.{sheet.Gender}"));
+        _detailSubtitle.Text = string.Join(" · ", subtitle);
 
         _details.SuspendLayout();
         _details.Rows.Clear();
+
+        var showValidated = _showValidated.Checked;
 
         foreach (var row in sheet.Rows)
         {
             _rowsById[row.TestResultId] = row;
 
-            // Only what is awaiting release is listed: a biologist validating a file does not need
-            // to scroll past results they released last week. Validated results come back on
-            // request, to be ticked for un-validation.
-            var withdrawable = _showValidated.Checked && !row.IsHeading
-                               && row.Status == TestResultStatus.Validated;
+            if (!ValidationScreenRules.IsListed(row, showValidated)) continue;
 
-            if (row.Status is not (TestResultStatus.TechnicallyValidated or TestResultStatus.Entered)
-                && !row.IsHeading && !withdrawable)
-                continue;
+            _listed.Add(row);
 
-            // Only a technically validated value can be released. An entered one is listed so the
-            // biologist sees the whole file, but it is neither pre-ticked nor tickable: the service
-            // refuses it until the technician has checked it. A validated one is tickable for
-            // un-validation but never pre-ticked: withdrawing a release is a deliberate act.
-            var releasable = !row.IsHeading && row.Status == TestResultStatus.TechnicallyValidated;
+            var releasable = ValidationScreenRules.IsReleasable(row);
+            var withdrawable = ValidationScreenRules.IsWithdrawable(row, showValidated);
 
             var index = _details.Rows.Add(
                 // Pre-ticked: the common case is releasing the whole file, and the biologist
                 // unticks what they want to hold back.
-                releasable,
+                ticks is not null && ticks.TryGetValue(row.TestResultId, out var ticked) ? ticked : releasable,
                 new string(' ', row.IndentLevel * 4) + row.ParameterName.For(Localizer.CurrentLanguage),
                 row.IsHeading ? string.Empty : row.CurrentValue ?? string.Empty,
+                // The text behind the painted pill, for a print of the grid and a screen reader.
                 UiTheme.FlagGlyphs(row.Flags) is { Length: > 0 } glyphs
                     ? glyphs
                     : UiTheme.ForInterpretation(row.Interpretation).Glyph,
@@ -578,7 +1279,7 @@ public sealed class ValidationView : LocalizedView
                 row.PreviousValue is { } previous
                     ? $"{previous:N2}" +
                       (row.PreviousDate is { } date ? $"  {date:dd/MM/yy}" : string.Empty)
-                    : string.Empty,
+                    : "—",
                 row.InstrumentFlags ?? string.Empty);
 
             var gridRow = _details.Rows[index];
@@ -593,34 +1294,181 @@ public sealed class ValidationView : LocalizedView
         var uncommunicated = sheet.Rows.Any(r => r.NeedsCriticalCommunication);
 
         _communicate.Enabled = uncommunicated;
-        _communicate.ForeColor = uncommunicated ? UiTheme.Critical : UiTheme.TextSecondary;
+        _communicate.ForeColor = uncommunicated ? UiTheme.Critical : UiTheme.TextPrimary;
         _communicate.Font = uncommunicated ? UiTheme.BodyBold : UiTheme.Body;
+
+        RenderContext(sheet);
+        ShowSelectionCount();
+        ShowComment();
+    }
+
+    /// <summary>The « Contexte » card of the open file.</summary>
+    private void RenderContext(ResultEntrySheet sheet)
+    {
+        var entry = _entries.FirstOrDefault(e => e.LabOrderId == sheet.LabOrderId);
+        var lines = ValidationScreenRules.Context(_listed, sheet.Priority, sheet.DueAt ?? entry?.DueAt,
+                                                  DateTimeOffset.Now);
+
+        _contextLines.SuspendLayout();
+        _contextLines.Controls.Clear();
+        _contextLines.RowStyles.Clear();
+        _contextLines.RowCount = lines.Count;
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var line = lines[i];
+            _contextLines.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var pill = new PillLabel { Anchor = AnchorStyles.Left, Margin = new Padding(0, 3, 8, 3) };
+            pill.Show(line.Badge, ValidationPaint.Colours(line.Tone));
+
+            var text = new Label
+            {
+                Text = T(line.Key, line.Args),
+                AutoSize = true,
+                Font = UiTheme.Body,
+                ForeColor = line.Tone == ValidationTone.Critical ? UiTheme.CriticalInk : UiTheme.TextPrimary,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 3, 0, 3),
+                MaximumSize = new Size(ContextWidth - 36 - pill.Width - 8, 0),
+                UseMnemonic = false
+            };
+
+            _contextLines.Controls.Add(pill, 0, i);
+            _contextLines.Controls.Add(text, 1, i);
+        }
+
+        _contextLines.ResumeLayout(performLayout: true);
+
+        var clinical = string.IsNullOrWhiteSpace(sheet.ClinicalInformation) ? null : sheet.ClinicalInformation.Trim();
+        _clinicalText.Text = clinical ?? T("Validation.NotProvided");
+        _clinicalText.ForeColor = clinical is null ? UiTheme.TextSecondary : UiTheme.TextPrimary;
     }
 
     private void ClearDetails()
     {
         _sheet = null;
         _rowsById.Clear();
+        _listed.Clear();
         _details.Rows.Clear();
         _detailHeading.Text = T("App.NoData");
+        _detailSubtitle.Text = string.Empty;
+        _selectionCount.Text = string.Empty;
+        _contextLines.Controls.Clear();
+        _clinicalText.Text = string.Empty;
+        _communicate.ForeColor = UiTheme.TextPrimary;
+        _communicate.Font = UiTheme.Body;
         SetDetailActionsEnabled(false);
+        ShowComment();
+        ShowValidateCaption(0);
     }
 
     private void SetDetailActionsEnabled(bool enabled)
     {
-        _selectAll.Enabled = enabled;
         _validate.Enabled = enabled;
         _release.Enabled = enabled;
-
-        // Offered only when something on the sheet has actually been validated — retracting
-        // nothing is not a meaningful action, and an always-enabled button next to Validate invites
-        // the wrong click.
-        _unvalidate.Enabled = enabled
-                              && _rowsById.Values.Any(r => !r.IsHeading
-                                                           && r.Status is TestResultStatus.Validated
-                                                                       or TestResultStatus.Reported);
-
+        if (!enabled) _communicate.Enabled = false;
         _history.Enabled = enabled && ResultHistory.IsCharted(SelectedDetail());
+        UpdateMenu();
+    }
+
+    /// <summary>
+    /// The menu's items, enabled as their buttons were. « Dévalider » is offered only when something
+    /// on the sheet has actually been validated — retracting nothing is not a meaningful action —
+    /// and only to a user holding the right to.
+    /// </summary>
+    private void UpdateMenu()
+    {
+        var loaded = _details.Rows.Count > 0;
+
+        _selectAll.Enabled = loaded;
+        _unvalidate.Enabled = loaded
+                              && PermissionGate.Allows(Permissions.Results.Unvalidate)
+                              && _rowsById.Values.Any(r => !r.IsHeading && ValidationScreenRules.IsReleased(r));
+    }
+
+    /// <summary>« 14 sur 16 sélectionnés » and « Valider la sélection (14) ».</summary>
+    private void ShowSelectionCount()
+    {
+        var tickable = 0;
+        var ticked = 0;
+        var toValidate = 0;
+
+        foreach (DataGridViewRow gridRow in _details.Rows)
+        {
+            if (gridRow.Cells[ColumnSelected].ReadOnly) continue;
+            tickable++;
+
+            if (gridRow.Cells[ColumnSelected].Value is not true) continue;
+            ticked++;
+
+            if (gridRow.Tag is Guid id && _rowsById.TryGetValue(id, out var row) && !ValidationScreenRules.IsReleased(row))
+                toValidate++;
+        }
+
+        _selectionCount.Text = tickable == 0 ? string.Empty : T("Validation.SelectedCount", ticked, tickable);
+        ShowValidateCaption(toValidate);
+    }
+
+    private void ShowValidateCaption(int count)
+    {
+        _validate.Text = T("Validation.ValidateSelection", count);
+        _validate.AccessibleName = _validate.Text;
+    }
+
+    // ---- The biologist's comment ----------------------------------------------------------------------
+
+    /// <summary>
+    /// Shows the comment of the line under the cursor. Only a line awaiting release takes one: it is
+    /// written onto the result when that line is validated, and printed under the value.
+    /// </summary>
+    private void ShowComment()
+    {
+        var row = SelectedDetail();
+        var editable = row is not null && ValidationScreenRules.IsReleasable(row)
+                       && PermissionGate.Allows(Permissions.Results.BiologicalValidate);
+
+        _showingComment = true;
+        try
+        {
+            _commentRowId = editable ? row!.TestResultId : null;
+            _comment.Box.Text = editable && _comments.TryGetValue(row!.TestResultId, out var text) ? text : string.Empty;
+            _comment.Box.Enabled = editable;
+            _comment.Box.PlaceholderText = editable ? T("Validation.BiologistCommentHint") : string.Empty;
+            _commentCaption.Text = editable
+                ? $"{T("Validation.BiologistComment")} · {row!.ParameterName.For(Localizer.CurrentLanguage)}"
+                : T("Validation.BiologistComment");
+        }
+        finally
+        {
+            _showingComment = false;
+        }
+    }
+
+    private void KeepComment()
+    {
+        if (_showingComment || _commentRowId is not { } id) return;
+
+        var text = _comment.Box.Text.Trim();
+        var had = _comments.ContainsKey(id);
+
+        if (text.Length == 0) _comments.Remove(id);
+        else _comments[id] = text;
+
+        // The ✎ on the parameter appears or goes with the first or last letter.
+        if (had != _comments.ContainsKey(id)) _details.InvalidateColumn(_details.Column(ColumnParameter).Index);
+    }
+
+    /// <summary>Comments typed and not yet written onto a validated result are lost on leaving: asked first.</summary>
+    public override bool ConfirmLeave() =>
+        _comments.Count == 0 || _dialogs.Confirm(T("Validation.CommentsNotSaved", _comments.Count), T("Nav.Validation"));
+
+    private async Task OpenOrderAsync()
+    {
+        if (_sheet is not { } sheet || !PermissionGate.Allows(Permissions.Orders.View)) return;
+
+        var orderId = sheet.LabOrderId;
+        await _navigation.NavigateToAsync<OrderDetailView>(view => view.OrderId = orderId);
     }
 
     // ---- Antériorités ---------------------------------------------------------------------------------
@@ -684,16 +1532,14 @@ public sealed class ValidationView : LocalizedView
         // Selects what awaits release; released rows are ticked one by one, on purpose.
         var toggleable = _details.Rows.Cast<DataGridViewRow>()
             .Where(r => !r.Cells[ColumnSelected].ReadOnly
-                        && !(r.Tag is Guid id && _rowsById.TryGetValue(id, out var row) && IsReleased(row)))
+                        && !(r.Tag is Guid id && _rowsById.TryGetValue(id, out var row)
+                             && ValidationScreenRules.IsReleased(row)))
             .ToList();
 
         var target = toggleable.Any(r => r.Cells[ColumnSelected].Value is not true);
 
         foreach (var row in toggleable) row.Cells[ColumnSelected].Value = target;
     }
-
-    private static bool IsReleased(ResultEntryRow row) =>
-        row.Status is TestResultStatus.Validated or TestResultStatus.Reported;
 
     // ---- Validation --------------------------------------------------------------------------------
 
@@ -714,6 +1560,10 @@ public sealed class ValidationView : LocalizedView
     /// </summary>
     private async Task UnvalidateSelectedAsync()
     {
+        // The menu item is not a gated control: the right is checked again here, before the
+        // reason is asked for. The service refuses in any case.
+        if (!PermissionGate.Allows(Permissions.Results.Unvalidate)) return;
+
         // The file the operator is looking at, held locally: _sheet follows the selection.
         if (_sheet is not { } sheet) return;
 
@@ -729,7 +1579,7 @@ public sealed class ValidationView : LocalizedView
 
             // Only a released result has a validation to withdraw; the ticked rows awaiting
             // release are what the Validate button is for.
-            if (!IsReleased(row)) continue;
+            if (!ValidationScreenRules.IsReleased(row)) continue;
 
             ids.Add(id);
         }
@@ -776,14 +1626,20 @@ public sealed class ValidationView : LocalizedView
             if (!_rowsById.TryGetValue(id, out var row) || row.IsHeading) continue;
 
             // A released row is listed for un-validation only: validating it again means nothing.
-            if (IsReleased(row)) continue;
+            if (ValidationScreenRules.IsReleased(row)) continue;
 
             var selected = gridRow.Cells[ColumnSelected].Value is true;
 
             if (selected && row.Flags.HasFlag(ResultFlag.QcOutOfControl))
                 qcAffected.Add(row.ParameterName.For(Localizer.CurrentLanguage));
 
-            decisions.Add(new ValidationDecision(id, selected));
+            // The biologist's comment goes with the line it was typed for, and is written onto the
+            // result only if that line is validated.
+            var comment = selected && _comments.TryGetValue(id, out var text)
+                ? new MultilingualText(text)
+                : null;
+
+            decisions.Add(new ValidationDecision(id, selected, comment));
         }
 
         if (decisions.All(d => !d.Validate))
@@ -838,6 +1694,10 @@ public sealed class ValidationView : LocalizedView
 
             _status.ForeColor = result.Blocked.Count > 0 ? UiTheme.Abnormal : UiTheme.Normal;
             _status.Text = $"{result.Validated} {T("Validation.ValidatedBy").ToLowerInvariant()}";
+
+            // The comments of the lines now validated are on their results; the others stay.
+            foreach (var decision in decisions.Where(d => d.Validate && d.BiologistComment is not null))
+                _comments.Remove(decision.TestResultId);
 
             await ActivateAsync();
         }

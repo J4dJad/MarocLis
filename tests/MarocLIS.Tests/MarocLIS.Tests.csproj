@@ -51,6 +51,9 @@
     <!-- The rules of the "Nouvelle demande" screen: Enter's match, the repeat reminder, initials. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\OrderRegistrationRules.cs" Link="Desktop\OrderRegistrationRules.cs" />
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\PatientListRules.cs" Link="Desktop\PatientListRules.cs" />
+    <!-- The rules of the "Validation biologique" and "Comptes rendus" screens: chips, signals, context, tabs. -->
+    <Compile Include="..\..\src\MarocLIS.Desktop\Views\ValidationScreenRules.cs" Link="Desktop\ValidationScreenRules.cs" />
+    <Compile Include="..\..\src\MarocLIS.Desktop\Views\ReportRegisterRules.cs" Link="Desktop\ReportRegisterRules.cs" />
   </ItemGroup>
 
 </Project>
