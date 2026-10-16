@@ -260,7 +260,10 @@ internal sealed class ConsumptionDetailDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(820, 460);
+        // Tall enough for the eight lines of the summary and a few analyses below it; at 460 the
+        // first line (patients) scrolled away and the analyses were cut at the bottom.
+        var screen = Screen.FromPoint(Cursor.Position).WorkingArea;
+        ClientSize = new Size(820, Math.Min(680, screen.Height - 80));
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
@@ -296,6 +299,11 @@ internal sealed class ConsumptionDetailDialog : Form
         summary.Rows.Add(localizer["Consumption.Real"], "—", N(r.RealConsumption));
         summary.Rows.Add(localizer["Consumption.Variance"], "—",
                          r.VariancePercent is { } p ? $"{N(r.Variance)} ({p:0.#} %)" : N(r.Variance));
+        // Every line shown, without a scroll bar of its own: measured once the window is styled,
+        // when the header and the rows have their final heights.
+        summary.ScrollBars = ScrollBars.None;
+        Shown += (_, _) => summary.Height = summary.ColumnHeadersHeight
+                                            + summary.Rows.GetRowsHeight(DataGridViewElementStates.Visible) + 2;
 
         var analyses = UiTheme.Grid();
         analyses.Dock = DockStyle.Fill;

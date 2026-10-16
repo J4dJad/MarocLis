@@ -24,6 +24,9 @@ internal static class StoragePlacePicker
         combo.DropDownStyle = ComboBoxStyle.DropDownList;
         combo.FlatStyle = FlatStyle.Flat;
         combo.Font = UiTheme.Body;
+        // The serum bank's dialogs are plain windows, not restyled as a whole: without its own
+        // border the list showed no frame at all.
+        combo.WithFieldBorder();
     }
 
     /// <summary>

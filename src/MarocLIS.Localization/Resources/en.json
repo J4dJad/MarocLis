@@ -428,7 +428,7 @@
   },
 
   "AdminA": {
-    "SettingsLead": "Laboratory identity, numbering, settings and this workstation's printers.",
+    "SettingsLead": "Laboratory identity, numbering, settings, storage places and this workstation's printers.",
     "ChipToComplete": "To complete",
     "ChipAll": "All",
     "PanelMembers": "Analyses in the panel",

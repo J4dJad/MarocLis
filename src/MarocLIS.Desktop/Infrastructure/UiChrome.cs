@@ -80,6 +80,14 @@ public static class UiChrome
         return box;
     }
 
+    /// <summary>The same border for a flat drop-down list, on a window that is not restyled as a whole.</summary>
+    public static ComboBox WithFieldBorder(this ComboBox combo)
+    {
+        if (combo.FlatStyle != FlatStyle.Flat || Styled.TryGetValue(combo, out _)) return combo;
+        Frame(combo);
+        return combo;
+    }
+
     private static void Frame(Control field)
     {
         Styled.AddOrUpdate(field, Marker);

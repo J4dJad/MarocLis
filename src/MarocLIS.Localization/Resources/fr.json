@@ -428,7 +428,7 @@
   },
 
   "AdminA": {
-    "SettingsLead": "Identité du laboratoire, numérotations, paramètres et imprimantes de ce poste.",
+    "SettingsLead": "Identité du laboratoire, numérotations, paramètres, lieux de stockage et imprimantes de ce poste.",
     "ChipToComplete": "À compléter",
     "ChipAll": "Toutes",
     "PanelMembers": "Analyses du profil",
