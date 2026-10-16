@@ -410,7 +410,7 @@ public sealed class RelationsView : LocalizedView
 
         using var picker = new OpenFileDialog
         {
-            Title = _attach.Text,
+            Title = UserDialogs.CaptionOf(_attach.Text, _attach.Text),
             Filter = $"PDF, images, Office ({SafeDocumentFile.PickerPattern})|{SafeDocumentFile.PickerPattern}",
             CheckFileExists = true
         };

@@ -10,6 +10,16 @@ namespace MarocLIS.Desktop.Infrastructure;
 internal static class EditorValues
 {
     /// <summary>
+    /// The longest amount a money box takes: "999 999 999 999" and its decimals still fit the
+    /// decimal(18,2) columns, where a longer figure was refused by the database with an unexpected
+    /// error and the form lost with it.
+    /// </summary>
+    public const int AmountMaxLength = 15;
+
+    /// <summary>The same for the decimal(18,6) columns of the catalogue (limits, volumes, coefficients): twelve figures.</summary>
+    public const int MeasureMaxLength = 12;
+
+    /// <summary>
     /// Reads a number typed, pasted or pre-filled in any of the cultures the application runs in.
     /// <para>
     /// The cultures write "150 000,5" with a space (or a no-break space, which the framework uses

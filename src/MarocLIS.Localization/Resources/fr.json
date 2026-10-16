@@ -301,6 +301,7 @@
   "Habilitation_BiologistSignatureRequired": "Seul un biologiste peut habiliter un salarié à travailler seul ou à former. Vous pouvez le placer « En formation ».",
   "Habilitation_BiologicalValidationBiologistOnly": "La validation biologique ne peut être accordée qu'à un biologiste (loi 12-01).",
   "Habilitation_GrantInFuture": "La date de décision ne peut pas être dans le futur.",
+  "Habilitation_BeforeHire": "La date de décision ne peut pas précéder l'embauche ({0}).",
   "Credential_TitleRequired": "L'intitulé de la pièce est obligatoire.",
   "Credential_ExpiryBeforeIssue": "La date de renouvellement précède la date d'obtention.",
   "Credential_NotFound": "Pièce introuvable.",

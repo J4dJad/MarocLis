@@ -352,7 +352,7 @@ public sealed class BankReconciliationView : LocalizedView
 
         using var picker = new OpenFileDialog
         {
-            Title = _import.Text,
+            Title = UserDialogs.CaptionOf(_import.Text, _import.Text),
             Filter = $"{T("Treasury.CsvFiles")} (*.csv;*.txt)|*.csv;*.txt",
             CheckFileExists = true
         };
@@ -402,6 +402,14 @@ public sealed class BankReconciliationView : LocalizedView
         var movements = _movements.SelectedRows.Cast<DataGridViewRow>()
                                   .Select(r => r.Tag).OfType<TreasuryMovement>().ToList();
         if (movements.Count == 0) return;
+
+        // The service refuses a movement going the other way than the line; said before the
+        // difference is asked for, not after the operator has explained it.
+        if (movements.Any(m => Math.Sign(m.AmountMad) != Math.Sign(line.AmountMad)))
+        {
+            _dialogs.Warn(T("BankMatch_DirectionMismatch"), _match.Text);
+            return;
+        }
 
         var difference = Money.Round(line.AmountMad - movements.Sum(m => m.AmountMad));
         string? comment = null;

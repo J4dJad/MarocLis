@@ -301,6 +301,7 @@
   "Habilitation_BiologistSignatureRequired": "Only a biologist can authorise someone to work alone or to train others. You can place them “In training”.",
   "Habilitation_BiologicalValidationBiologistOnly": "Biological validation can only be granted to a biologist (law 12-01).",
   "Habilitation_GrantInFuture": "The decision date cannot be in the future.",
+  "Habilitation_BeforeHire": "The decision date cannot be before the hiring date ({0}).",
   "Credential_TitleRequired": "The document title is required.",
   "Credential_ExpiryBeforeIssue": "The renewal date is before the date obtained.",
   "Credential_NotFound": "Document not found.",
