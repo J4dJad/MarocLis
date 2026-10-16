@@ -68,7 +68,7 @@ public sealed class MasterDataView : LocalizedView
     private readonly Button _editSupplier = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _supplierNotice = new();
 
-    private readonly TextBox _prescriberSearch = UiTheme.Input(260);
+    private readonly TextBox _prescriberSearch = new();
     private readonly Button _newPrescriber = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _editPrescriber = UiTheme.SecondaryButton(string.Empty);
 
@@ -78,6 +78,15 @@ public sealed class MasterDataView : LocalizedView
 
     private readonly CheckBox _includeInactive = new();
     private readonly Label _status = new();
+
+    private readonly Label _pageTitle = new();
+    private readonly Label _instrumentHeading = new();
+    private readonly Label _materialHeading = new();
+    private readonly Label _targetHeading = new();
+    private readonly Label _stockHeading = new();
+    private readonly Label _supplierHeading = new();
+    private readonly Label _prescriberHeading = new();
+    private readonly Label _payerHeading = new();
 
     private IReadOnlyList<InstrumentMasterRow> _instrumentRows = [];
     private IReadOnlyList<QcMaterialRow> _materialRows = [];
@@ -108,24 +117,9 @@ public sealed class MasterDataView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = AdminLayout.Page;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = UiTheme.Surface };
-
-        _includeInactive.Font = UiTheme.Small;
-        _includeInactive.ForeColor = UiTheme.TextSecondary;
-        _includeInactive.AutoSize = true;
-        _includeInactive.Location = new Point(0, 8);
-
-        _status.Font = UiTheme.Small;
-        _status.AutoSize = false;
-        _status.Bounds = new Rectangle(300, 8, 1100, 20);
-
-        bar.Controls.AddRange([_includeInactive, _status]);
-
-        _tabs.Dock = DockStyle.Fill;
-        _tabs.Font = UiTheme.Body;
-        _tabs.Padding = new Point(14, 6);
+        AdminLayout.Filter(_includeInactive);
 
         BuildInstrumentTab();
         BuildQcTab();
@@ -137,8 +131,8 @@ public sealed class MasterDataView : LocalizedView
         _tabs.TabPages.AddRange([_instrumentTab, _qcTab, _stockTab, _supplierTab,
                                  _prescriberTab, _payerTab]);
 
-        Controls.Add(_tabs);
-        Controls.Add(bar);
+        Controls.Add(AdminLayout.FlatTabs(_tabs));
+        Controls.Add(AdminLayout.PageHeader(_pageTitle, _status, _includeInactive));
     }
 
     private static void Columns(DataGridView grid,
@@ -162,18 +156,18 @@ public sealed class MasterDataView : LocalizedView
         }
     }
 
-    private static Panel Actions(int height, params Control[] controls)
+    /// <summary>A tab's list: its card with the head's actions, and the tab's rule under it.</summary>
+    private static void List(TabPage tab, Label heading, DataGridView grid, Button primary, Button edit,
+                             Label? notice = null)
     {
-        var panel = new Panel { Dock = DockStyle.Bottom, Height = height,
-                                BackColor = UiTheme.Surface };
-        panel.Controls.AddRange(controls);
-        return panel;
+        tab.BackColor = UiTheme.Surface;
+        AdminLayout.ListGrid(grid);
+        tab.Controls.Add(AdminLayout.CardSection(heading, grid, AdminLayout.Actions(primary, edit)));
+        if (notice is not null) tab.Controls.Add(AdminLayout.Note(notice, 40));
     }
 
     private void BuildInstrumentTab()
     {
-        _instrumentTab.BackColor = UiTheme.Surface;
-        _instrumentTab.Padding = new Padding(UiTheme.Gutter);
 
         Columns(_instruments,
             ("code", 10, UiTheme.MonospaceBold, false),
@@ -187,28 +181,17 @@ public sealed class MasterDataView : LocalizedView
             ("qctargets", 6, UiTheme.Monospace, true),
             ("interface", 7, UiTheme.SmallBold, false));
 
-        _instruments.Dock = DockStyle.Fill;
-
-        _newInstrument.Bounds = new Rectangle(0, 8, 200, UiTheme.ButtonHeight);
-        _editInstrument.Bounds = new Rectangle(210, 8, 150, UiTheme.ButtonHeight);
-
-        _instrumentNotice.Font = UiTheme.Small;
-        _instrumentNotice.AutoSize = false;
-        _instrumentNotice.Bounds = new Rectangle(0, 44, 1300, 32);
-
-        _instrumentTab.Controls.Add(_instruments);
-        _instrumentTab.Controls.Add(Actions(80, _newInstrument, _editInstrument, _instrumentNotice));
+        List(_instrumentTab, _instrumentHeading, _instruments, _newInstrument, _editInstrument, _instrumentNotice);
     }
 
     private void BuildQcTab()
     {
         _qcTab.BackColor = UiTheme.Surface;
-        _qcTab.Padding = new Padding(UiTheme.Gutter);
 
         var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
-            SplitterDistance = 240, SplitterWidth = 6, BackColor = UiTheme.Surface
+            SplitterDistance = 240, SplitterWidth = AdminLayout.Gap, BackColor = UiTheme.Surface
         };
 
         Columns(_qcMaterials,
@@ -221,14 +204,9 @@ public sealed class MasterDataView : LocalizedView
             ("targets", 8, UiTheme.Monospace, true),
             ("state", 11, UiTheme.SmallBold, false));
 
-        _qcMaterials.Dock = DockStyle.Fill;
-
-        _newMaterial.Bounds = new Rectangle(0, 8, 220, UiTheme.ButtonHeight);
-        _editMaterial.Bounds = new Rectangle(230, 8, 150, UiTheme.ButtonHeight);
-
-        var top = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        top.Controls.Add(_qcMaterials);
-        top.Controls.Add(Actions(44, _newMaterial, _editMaterial));
+        AdminLayout.ListGrid(_qcMaterials);
+        var top = AdminLayout.CardSection(_materialHeading, _qcMaterials,
+                                          AdminLayout.Actions(_newMaterial, _editMaterial));
 
         Columns(_qcTargets,
             ("lot", 12, UiTheme.Monospace, false),
@@ -241,18 +219,12 @@ public sealed class MasterDataView : LocalizedView
             ("rules", 7, UiTheme.Monospace, true),
             ("state", 11, UiTheme.SmallBold, false));
 
-        _qcTargets.Dock = DockStyle.Fill;
-
-        _newTarget.Bounds = new Rectangle(0, 8, 240, UiTheme.ButtonHeight);
-        _editTarget.Bounds = new Rectangle(250, 8, 150, UiTheme.ButtonHeight);
-
-        _qcNotice.Font = UiTheme.Small;
-        _qcNotice.AutoSize = false;
-        _qcNotice.Bounds = new Rectangle(0, 44, 1300, 32);
-
+        // One primary action per tab: the new control material; the targets follow it.
+        AdminLayout.ListGrid(_qcTargets);
         var bottom = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        bottom.Controls.Add(_qcTargets);
-        bottom.Controls.Add(Actions(80, _newTarget, _editTarget, _qcNotice));
+        bottom.Controls.Add(AdminLayout.CardSection(_targetHeading, _qcTargets,
+                                                    AdminLayout.Actions(null, _editTarget, _newTarget)));
+        bottom.Controls.Add(AdminLayout.Note(_qcNotice, 40));
 
         split.Panel1.Controls.Add(top);
         split.Panel2.Controls.Add(bottom);
@@ -262,8 +234,6 @@ public sealed class MasterDataView : LocalizedView
 
     private void BuildStockTab()
     {
-        _stockTab.BackColor = UiTheme.Surface;
-        _stockTab.Padding = new Padding(UiTheme.Gutter);
 
         Columns(_stock,
             ("code", 11, UiTheme.MonospaceBold, false),
@@ -276,19 +246,11 @@ public sealed class MasterDataView : LocalizedView
             ("supplier", 13, UiTheme.Small, false),
             ("flags", 8, UiTheme.SmallBold, false));
 
-        _stock.Dock = DockStyle.Fill;
-
-        _newStock.Bounds = new Rectangle(0, 8, 200, UiTheme.ButtonHeight);
-        _editStock.Bounds = new Rectangle(210, 8, 150, UiTheme.ButtonHeight);
-
-        _stockTab.Controls.Add(_stock);
-        _stockTab.Controls.Add(Actions(44, _newStock, _editStock));
+        List(_stockTab, _stockHeading, _stock, _newStock, _editStock);
     }
 
     private void BuildSupplierTab()
     {
-        _supplierTab.BackColor = UiTheme.Surface;
-        _supplierTab.Padding = new Padding(UiTheme.Gutter);
 
         Columns(_suppliers,
             ("code", 10, UiTheme.MonospaceBold, false),
@@ -301,23 +263,11 @@ public sealed class MasterDataView : LocalizedView
             ("evaluation", 11, UiTheme.Monospace, false),
             ("items", 6, UiTheme.Monospace, true));
 
-        _suppliers.Dock = DockStyle.Fill;
-
-        _newSupplier.Bounds = new Rectangle(0, 8, 200, UiTheme.ButtonHeight);
-        _editSupplier.Bounds = new Rectangle(210, 8, 150, UiTheme.ButtonHeight);
-
-        _supplierNotice.Font = UiTheme.Small;
-        _supplierNotice.AutoSize = false;
-        _supplierNotice.Bounds = new Rectangle(0, 44, 1300, 32);
-
-        _supplierTab.Controls.Add(_suppliers);
-        _supplierTab.Controls.Add(Actions(80, _newSupplier, _editSupplier, _supplierNotice));
+        List(_supplierTab, _supplierHeading, _suppliers, _newSupplier, _editSupplier, _supplierNotice);
     }
 
     private void BuildPrescriberTab()
     {
-        _prescriberTab.BackColor = UiTheme.Surface;
-        _prescriberTab.Padding = new Padding(UiTheme.Gutter);
 
         Columns(_prescribers,
             ("name", 20, null, false),
@@ -330,17 +280,10 @@ public sealed class MasterDataView : LocalizedView
             ("delivery", 12, UiTheme.Small, false),
             ("orders", 6, UiTheme.Monospace, true));
 
-        _prescribers.Dock = DockStyle.Fill;
+        var search = AdminLayout.Row(AdminLayout.RowHeight + 4, [new AdminSearchBox(_prescriberSearch, 320)], []);
+        search.Padding = new Padding(0, 0, 0, 6);
 
-        var search = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = UiTheme.Surface };
-        _prescriberSearch.Location = new Point(0, 4);
-        search.Controls.Add(_prescriberSearch);
-
-        _newPrescriber.Bounds = new Rectangle(0, 8, 210, UiTheme.ButtonHeight);
-        _editPrescriber.Bounds = new Rectangle(220, 8, 150, UiTheme.ButtonHeight);
-
-        _prescriberTab.Controls.Add(_prescribers);
-        _prescriberTab.Controls.Add(Actions(44, _newPrescriber, _editPrescriber));
+        List(_prescriberTab, _prescriberHeading, _prescribers, _newPrescriber, _editPrescriber);
         _prescriberTab.Controls.Add(search);
     }
 
@@ -356,8 +299,6 @@ public sealed class MasterDataView : LocalizedView
     /// </summary>
     private void BuildPayerTab()
     {
-        _payerTab.BackColor = UiTheme.Surface;
-        _payerTab.Padding = new Padding(UiTheme.Gutter);
 
         Columns(_payers,
             ("code", 9, UiTheme.MonospaceBold, false),
@@ -372,18 +313,7 @@ public sealed class MasterDataView : LocalizedView
             ("openinvoices", 7, UiTheme.Monospace, true),
             ("problems", 14, UiTheme.Small, false));
 
-        _payers.Dock = DockStyle.Fill;
-
-        _payerNotice.Font = UiTheme.Small;
-        _payerNotice.ForeColor = UiTheme.TextSecondary;
-        _payerNotice.AutoSize = false;
-        _payerNotice.Bounds = new Rectangle(380, 12, 900, 30);
-
-        _newPayer.Bounds = new Rectangle(0, 8, 190, UiTheme.ButtonHeight);
-        _editPayer.Bounds = new Rectangle(200, 8, 150, UiTheme.ButtonHeight);
-
-        _payerTab.Controls.Add(_payers);
-        _payerTab.Controls.Add(Actions(52, _newPayer, _editPayer, _payerNotice));
+        List(_payerTab, _payerHeading, _payers, _newPayer, _editPayer, _payerNotice);
     }
 
     private void WireBehaviour()
@@ -447,6 +377,20 @@ public sealed class MasterDataView : LocalizedView
         PermissionGate.Require(Permissions.Inventory.ManagePurchaseOrders, _newStock, _editStock, _newSupplier, _editSupplier);
         PermissionGate.Require(Permissions.Catalog.Manage, _newPrescriber, _editPrescriber);
         PermissionGate.Require(Permissions.Billing.ManageTariffs, _newPayer, _editPayer);
+    }
+
+    /// <summary>Each card's title: its tab's name and the number of lines it holds.</summary>
+    private void RefreshHeadings()
+    {
+        static string Count(string caption, DataGridView grid) => $"{caption} — {grid.Rows.Count}";
+
+        _instrumentHeading.Text = Count(_instrumentTab.Text, _instruments);
+        _materialHeading.Text = Count(_qcTab.Text, _qcMaterials);
+        _targetHeading.Text = Count(T("Quality.QcTargets"), _qcTargets);
+        _stockHeading.Text = Count(_stockTab.Text, _stock);
+        _supplierHeading.Text = Count(_supplierTab.Text, _suppliers);
+        _prescriberHeading.Text = Count(_prescriberTab.Text, _prescribers);
+        _payerHeading.Text = Count(_payerTab.Text, _payers);
     }
 
     // ---- Conditional formatting ---------------------------------------------------------------------
@@ -596,6 +540,8 @@ public sealed class MasterDataView : LocalizedView
             button.Text = T("Action.Edit");
 
         _prescriberSearch.PlaceholderText = T("App.SearchPlaceholder");
+        _pageTitle.Text = T("Nav.MasterData");
+        RefreshHeadings();
 
         _instrumentNotice.ForeColor = UiTheme.TextSecondary;
         _instrumentNotice.Text = T("Equipment.IntervalNotice");
@@ -785,6 +731,7 @@ public sealed class MasterDataView : LocalizedView
         }
 
         _editInstrument.Enabled = _instruments.Rows.Count > 0;
+        RefreshHeadings();
     }
 
     private void RenderMaterials()
@@ -810,6 +757,7 @@ public sealed class MasterDataView : LocalizedView
         }
 
         _editMaterial.Enabled = _qcMaterials.Rows.Count > 0;
+        RefreshHeadings();
         if (_qcMaterials.Rows.Count > 0) _qcMaterials.SelectFirstRow();
     }
 
@@ -842,6 +790,7 @@ public sealed class MasterDataView : LocalizedView
         }
 
         _editTarget.Enabled = _qcTargets.Rows.Count > 0;
+        RefreshHeadings();
     }
 
     private static int CountRules(WestgardRule rules) =>
@@ -872,6 +821,7 @@ public sealed class MasterDataView : LocalizedView
         }
 
         _editStock.Enabled = _stock.Rows.Count > 0;
+        RefreshHeadings();
     }
 
     private void RenderSuppliers()
@@ -895,6 +845,7 @@ public sealed class MasterDataView : LocalizedView
         }
 
         _editSupplier.Enabled = _suppliers.Rows.Count > 0;
+        RefreshHeadings();
     }
 
     private void RenderPrescribers()
@@ -922,6 +873,7 @@ public sealed class MasterDataView : LocalizedView
         }
 
         _editPrescriber.Enabled = _prescribers.Rows.Count > 0;
+        RefreshHeadings();
     }
 
     private void RenderPayers()
@@ -951,6 +903,7 @@ public sealed class MasterDataView : LocalizedView
         }
 
         _editPayer.Enabled = _payers.Rows.Count > 0;
+        RefreshHeadings();
     }
 
     // ---- Editors -------------------------------------------------------------------------------------
