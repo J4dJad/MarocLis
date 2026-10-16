@@ -352,6 +352,46 @@
   "Deposit_OrderCancelled": "الملف {0} ملغى: لا يمكن سوى إرجاع التسبيق.",
   "Deposit_NotFound": "التسبيق غير موجود.",
 
+  "AdminDialog": {
+    "ShortcutsDialog": "اختصاراتك على هذا المركز: اختر سطرًا ثم اضغط المفاتيح.",
+    "ChangePasswordForm": "اختر كلمة مرور لا يعرفها أحد سواك.",
+    "SiteAccessDialog": "المواقع التي يمكن لهذا الحساب العمل فيها، والموقع المفتوح افتراضيًا.",
+    "RoleAssignmentDialog": "حدِّد الأدوار التي يملكها هذا الحساب.",
+    "UserDialog": "هوية الموظف ومؤهله والأقسام المأذون له بها.",
+    "InstrumentFrameTestDialog": "الصق إطارًا لترى ما سيُستورد منه، دون حفظ أي شيء.",
+    "InstrumentRawMessageDialog": "الرسالة كما أرسلها الجهاز، بايتًا بايتًا.",
+    "MappableParameterPicker": "حدِّد المؤشرات المراد ربطها بهذا الجهاز.",
+    "InstrumentMappingDialog": "كل رمز من رموز الجهاز مربوط بمؤشر من الدليل.",
+    "InterfaceInstrumentDialog": "الجهاز الذي تربطه هذه الواجهة بالمختبر.",
+    "InstrumentInterfaceDialog": "الاتصال بالجهاز وصيغة الرسائل التي يتبادلها.",
+    "PayerEditorDialog": "نسبة التغطية وأساس التعويض والاتفاقية.",
+    "PrescriberEditorDialog": "هوية الطبيب الواصف وطريقة تسليم التقارير.",
+    "SupplierEditorDialog": "هوية المورد وجهة الاتصال وآجال التسليم.",
+    "StockItemEditorDialog": "المادة وتعبئتها وعتبات إعادة التموين.",
+    "QcTargetEditorDialog": "القيمة المستهدفة والانحراف المعياري للمراقبة لمؤشر على جهاز.",
+    "QcMaterialEditorDialog": "حصة المراقبة ومستواها وتاريخ انتهاء صلاحيتها.",
+    "InstrumentEditorDialog": "التعريف والموقع ودورية الصيانة والمعايرة.",
+    "NomenclatureEditorDialog": "عنصر من قائمة مرجعية يستعمله الدليل.",
+    "ReflexRuleEditorDialog": "التحليل المُضاف عندما تستوفي النتيجة الشرط.",
+    "PanelEditorDialog": "التحاليل التي تُطلب معًا ضمن المجموعة، وسعرها الجزافي.",
+    "TariffEditorDialog": "لا تُعدَّل التعريفة: تسري نسخة جديدة ابتداءً من تاريخها.",
+    "RangeReviewDialog": "تُؤرَّخ المراجعة بتاريخ اليوم وتُوقَّع باسمك.",
+    "ReferenceRangeEditorDialog": "الفئة المعنية والمجال المرجعي الذي ينطبق عليها.",
+    "ParameterEditorDialog": "ما يُدخله المختبر وما يطبعه التقرير لهذا المؤشر.",
+    "AnalysisEditorDialog": "تعريف التحليل والعينة وآجال الإنجاز والسعر."
+  },
+
+  "AdminA": {
+    "SettingsLead": "هوية المختبر والترقيم والإعدادات وطابعات هذا المركز.",
+    "ChipToComplete": "للاستكمال",
+    "ChipAll": "الكل",
+    "PanelMembers": "تحاليل المجموعة",
+    "CatalogLead": "التحاليل والتعريفات والمجموعات وقواعد التحاليل التلقائية والقوائم المرجعية.",
+    "RowDetail": "تفاصيل السطر المحدد",
+    "NoUserSelected": "لم يتم اختيار أي حساب",
+    "UsersLead": "الحسابات والأدوار وسجل الأمان — يُعطَّل الحساب ولا يُحذف أبدًا."
+  },
+
   "OrderFile": {
     "HistoryEmpty": "لا توجد أي عملية معلّلة مسجّلة لهذا الملف.",
     "ReportReleased": "نُشر التقرير — النسخة {0}",

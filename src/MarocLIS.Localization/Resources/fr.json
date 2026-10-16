@@ -352,6 +352,46 @@
   "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
   "Deposit_NotFound": "Acompte introuvable.",
 
+  "AdminDialog": {
+    "ShortcutsDialog": "Vos raccourcis sur ce poste : sélectionnez une ligne et tapez les touches.",
+    "ChangePasswordForm": "Choisissez un mot de passe que vous seul connaissez.",
+    "SiteAccessDialog": "Les sites où ce compte peut travailler, et celui ouvert par défaut.",
+    "RoleAssignmentDialog": "Cochez les rôles que ce compte détient.",
+    "UserDialog": "Identité, qualification et secteurs autorisés du collaborateur.",
+    "InstrumentFrameTestDialog": "Collez une trame pour voir ce qu'elle importerait, sans rien enregistrer.",
+    "InstrumentRawMessageDialog": "Le message tel que l'automate l'a envoyé, octet par octet.",
+    "MappableParameterPicker": "Cochez les paramètres à rattacher à cet automate.",
+    "InstrumentMappingDialog": "Chaque code de l'automate rattaché à un paramètre du catalogue.",
+    "InterfaceInstrumentDialog": "L'automate que cette interface relie au laboratoire.",
+    "InstrumentInterfaceDialog": "La connexion à l'automate et le format des messages qu'il échange.",
+    "PayerEditorDialog": "Taux de prise en charge, base de remboursement et convention.",
+    "PrescriberEditorDialog": "Identité du prescripteur et mode de remise des comptes rendus.",
+    "SupplierEditorDialog": "Identité, contact et délais du fournisseur.",
+    "StockItemEditorDialog": "L'article, son conditionnement et ses seuils de réapprovisionnement.",
+    "QcTargetEditorDialog": "La cible et l'écart-type du contrôle pour un paramètre sur un automate.",
+    "QcMaterialEditorDialog": "Le lot de contrôle, son niveau et sa péremption.",
+    "InstrumentEditorDialog": "Identification, emplacement et périodicités de maintenance et d'étalonnage.",
+    "NomenclatureEditorDialog": "Une entrée de liste de référence, utilisée par le catalogue.",
+    "ReflexRuleEditorDialog": "L'analyse ajoutée quand un résultat remplit la condition.",
+    "PanelEditorDialog": "Les analyses que le profil commande ensemble, et son prix forfaitaire.",
+    "TariffEditorDialog": "Un tarif ne se modifie pas : une nouvelle version prend effet à sa date.",
+    "RangeReviewDialog": "La revue est datée d'aujourd'hui et signée à votre nom.",
+    "ReferenceRangeEditorDialog": "La population visée et l'intervalle qui s'applique à elle.",
+    "ParameterEditorDialog": "Ce que la paillasse saisit et ce que le compte rendu imprime pour ce paramètre.",
+    "AnalysisEditorDialog": "Identification, prélèvement, délais et prix de l'analyse."
+  },
+
+  "AdminA": {
+    "SettingsLead": "Identité du laboratoire, numérotations, paramètres et imprimantes de ce poste.",
+    "ChipToComplete": "À compléter",
+    "ChipAll": "Toutes",
+    "PanelMembers": "Analyses du profil",
+    "CatalogLead": "Analyses, tarifs, profils, règles réflexes et listes de référence.",
+    "RowDetail": "Détail de la ligne sélectionnée",
+    "NoUserSelected": "Aucun compte sélectionné",
+    "UsersLead": "Comptes, rôles et journal de sécurité — un compte se désactive, il ne se supprime jamais."
+  },
+
   "OrderFile": {
     "HistoryEmpty": "Aucune opération motivée n'est enregistrée pour ce dossier.",
     "ReportReleased": "Compte rendu diffusé — version {0}",

@@ -352,6 +352,46 @@
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
 
+  "AdminDialog": {
+    "ShortcutsDialog": "Your shortcuts on this workstation: select a line and press the keys.",
+    "ChangePasswordForm": "Choose a password only you know.",
+    "SiteAccessDialog": "The sites this account may work at, and the one opened by default.",
+    "RoleAssignmentDialog": "Tick the roles this account holds.",
+    "UserDialog": "The staff member's identity, qualification and authorised departments.",
+    "InstrumentFrameTestDialog": "Paste a frame to see what it would import, without saving anything.",
+    "InstrumentRawMessageDialog": "The message as the instrument sent it, byte by byte.",
+    "MappableParameterPicker": "Tick the parameters to map to this instrument.",
+    "InstrumentMappingDialog": "Each instrument code tied to a catalogue parameter.",
+    "InterfaceInstrumentDialog": "The instrument this interface connects to the laboratory.",
+    "InstrumentInterfaceDialog": "The connection to the instrument and the format of its messages.",
+    "PayerEditorDialog": "Coverage rate, reimbursement base and agreement.",
+    "PrescriberEditorDialog": "The prescriber's identity and how reports are delivered.",
+    "SupplierEditorDialog": "The supplier's identity, contact and lead times.",
+    "StockItemEditorDialog": "The item, its packaging and its reorder thresholds.",
+    "QcTargetEditorDialog": "The control's target and standard deviation for a parameter on an instrument.",
+    "QcMaterialEditorDialog": "The control lot, its level and its expiry.",
+    "InstrumentEditorDialog": "Identification, location and maintenance and calibration intervals.",
+    "NomenclatureEditorDialog": "An entry of a reference list, used by the catalogue.",
+    "ReflexRuleEditorDialog": "The analysis added when a result meets the condition.",
+    "PanelEditorDialog": "The analyses the panel orders together, and its package price.",
+    "TariffEditorDialog": "A tariff is never changed: a new version takes effect on its date.",
+    "RangeReviewDialog": "The review is dated today and signed in your name.",
+    "ReferenceRangeEditorDialog": "The population concerned and the interval that applies to it.",
+    "ParameterEditorDialog": "What the bench enters and what the report prints for this parameter.",
+    "AnalysisEditorDialog": "Identification, specimen, turnaround times and price of the analysis."
+  },
+
+  "AdminA": {
+    "SettingsLead": "Laboratory identity, numbering, settings and this workstation's printers.",
+    "ChipToComplete": "To complete",
+    "ChipAll": "All",
+    "PanelMembers": "Analyses in the panel",
+    "CatalogLead": "Analyses, tariffs, panels, reflex rules and reference lists.",
+    "RowDetail": "Details of the selected line",
+    "NoUserSelected": "No account selected",
+    "UsersLead": "Accounts, roles and the security log — an account is deactivated, never deleted."
+  },
+
   "OrderFile": {
     "HistoryEmpty": "No change with a recorded reason for this order.",
     "ReportReleased": "Report released — version {0}",
