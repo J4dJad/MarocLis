@@ -1,11 +1,13 @@
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Orders;
+using MarocLIS.Application.Samples;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Morocco;
 using MarocLIS.Domain.Organization;
+using MarocLIS.Domain.Samples;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
 
@@ -25,6 +27,7 @@ public sealed class SettingsView : LocalizedView
 {
     private readonly ConfigurationService _configuration;
     private readonly UserAdministrationService _administration;
+    private readonly SampleStorageLocationService _storageLocations;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<SettingsView>? _logger;
 
@@ -33,6 +36,7 @@ public sealed class SettingsView : LocalizedView
     private readonly TabPage _numberingTab = new();
     private readonly TabPage _settingsTab = new();
     private readonly TabPage _printersTab = new();
+    private readonly TabPage _storageTab = new();
 
     // ---- Site tab ----
     private readonly ComboBox _sitePicker = new();
@@ -91,6 +95,15 @@ public sealed class SettingsView : LocalizedView
     private readonly Button _addSetting = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _settingsNotice = new();
 
+    // ---- Storage places tab ----
+    private readonly DataGridView _places = UiTheme.Grid();
+    private readonly Button _addPlace = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _renamePlace = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _togglePlace = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _placesHeading = new();
+    private readonly Label _placesNotice = new();
+    private IReadOnlyList<SampleStorageLocationRow> _placeRows = [];
+
     // ---- Printers tab ----
     private readonly WorkstationPrinters? _printers;
     private readonly ILabelPrinter? _labelPrinter;
@@ -118,6 +131,7 @@ public sealed class SettingsView : LocalizedView
 
     public SettingsView(ConfigurationService configuration,
                         UserAdministrationService administration,
+                        SampleStorageLocationService storageLocations,
                         IUserDialogs dialogs, ILocalizer localizer,
                         ICultureManager cultureManager,
                         ILogger<SettingsView>? logger = null,
@@ -129,6 +143,7 @@ public sealed class SettingsView : LocalizedView
         _labelPrinter = labelPrinter;
         _configuration = configuration;
         _administration = administration;
+        _storageLocations = storageLocations;
         _dialogs = dialogs;
         _logger = logger;
 
@@ -148,8 +163,13 @@ public sealed class SettingsView : LocalizedView
         BuildNumberingTab();
         BuildSettingsTab();
         BuildPrintersTab();
+        BuildStorageTab();
 
-        _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _printersTab]);
+        _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _storageTab, _printersTab]);
+
+        // The storage list is settings work: without the right the tab is not offered at all.
+        if (!PermissionGate.Allows(Permissions.Administration.ManageSettings))
+            _tabs.TabPages.Remove(_storageTab);
         Controls.Add(AdminLayout.FlatTabs(_tabs));
         Controls.Add(AdminLayout.PageHeader(_pageTitle, _pageCaption));
     }
@@ -469,6 +489,41 @@ public sealed class SettingsView : LocalizedView
         _settingsTab.Controls.Add(AdminLayout.Note(_settingsNotice, 40));
     }
 
+    /// <summary>
+    /// The site's sample storage places: the closed list reception and the serum bank offer.
+    /// </summary>
+    private void BuildStorageTab()
+    {
+        _storageTab.BackColor = UiTheme.Surface;
+
+        _places.Columns.Clear();
+        void Add(string name, int w, Font? f = null, string align = "")
+            => _places.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = name, FillWeight = w, ReadOnly = true,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Font = f ?? UiTheme.Body,
+                    Alignment = align == "r" ? DataGridViewContentAlignment.MiddleRight
+                                             : DataGridViewContentAlignment.MiddleLeft
+                }
+            });
+
+        Add("name", 50);
+        Add("state", 15, UiTheme.SmallBold);
+        Add("stored", 15, UiTheme.Monospace, "r");
+
+        AdminLayout.ListGrid(_places);
+        AdminLayout.PillColumn(_places, "state", r => r.Tag is SampleStorageLocationRow row
+            ? row.IsActive ? AdminLayout.Ok : AdminLayout.Wait
+            : null);
+
+        _storageTab.Controls.Add(AdminLayout.CardSection(_placesHeading, _places,
+                                                         AdminLayout.Actions(_addPlace, _renamePlace, _togglePlace)));
+        _storageTab.Controls.Add(AdminLayout.Note(_placesNotice, 40));
+    }
+
     private void BuildPrintersTab()
     {
         _printersTab.BackColor = UiTheme.Surface;
@@ -659,13 +714,23 @@ public sealed class SettingsView : LocalizedView
         _editFormat.Click += async (_, _) => await EditFormatAsync();
         _toggleClosed.Click += async (_, _) => await ToggleClosedAsync();
 
+        _places.SelectionChanged += (_, _) => RefreshPlaceActions();
+        _places.CellDoubleClick += async (_, e) =>
+        {
+            if (e.RowIndex >= 0 && !PermissionGate.IsBlocked(_renamePlace)) await RenamePlaceAsync();
+        };
+        _addPlace.Click += async (_, _) => await AddPlaceAsync();
+        _renamePlace.Click += async (_, _) => await RenamePlaceAsync();
+        _togglePlace.Click += async (_, _) => await TogglePlaceAsync();
+
         _settings.SelectionChanged += (_, _) => RefreshSettingActions();
         _editSetting.Click += async (_, _) => await EditSettingAsync();
         _addSetting.Click += async (_, _) => await AddSettingAsync();
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Administration.ManageSites, _saveSite, _chooseLogo, _removeLogo, _newSite);
-        PermissionGate.Require(Permissions.Administration.ManageSettings, _editFormat, _toggleClosed, _editSetting, _addSetting);
+        PermissionGate.Require(Permissions.Administration.ManageSettings, _editFormat, _toggleClosed, _editSetting, _addSetting,
+                               _addPlace, _renamePlace, _togglePlace);
 
         _sequences.CellFormatting += OnSequenceFormatting;
         _settings.CellFormatting += OnSettingFormatting;
@@ -715,6 +780,11 @@ public sealed class SettingsView : LocalizedView
         _numberingTab.Text = T("Admin.Sequences");
         _settingsTab.Text = T("Nav.Settings");
         _printersTab.Text = T("Printers.Title");
+        _storageTab.Text = T("StorageLocations.Title");
+        _placesHeading.Text = T("StorageLocations.Title");
+        _placesNotice.Text = T("StorageLocations.Notice");
+        _addPlace.Text = T("Action.Add");
+        _renamePlace.Text = T("StorageLocations.Rename");
 
         _printersIntro.Text = T("Printers.Intro");
         _documentPrinterLabel.Text = T("Printers.Documents");
@@ -784,9 +854,17 @@ public sealed class SettingsView : LocalizedView
             _settings.Column("sensitive").HeaderText = T("Admin.SettingSensitive");
         }
 
+        if (_places.Columns.Count > 0)
+        {
+            _places.Column("name").HeaderText = T("StorageLocations.Name");
+            _places.Column("state").HeaderText = T("Field.Status");
+            _places.Column("stored").HeaderText = T("StorageLocations.StoredSamples");
+        }
+
         if (_sites.Count > 0) PopulateSite();
         RenderSequences();
         RenderSettings();
+        RenderPlaces();
     }
 
     private static void SetText(Control parent, string name, string text)
@@ -839,6 +917,7 @@ public sealed class SettingsView : LocalizedView
 
             await LoadSequencesAsync(ct);
             await LoadSettingsAsync(ct);
+            await LoadPlacesAsync(ct);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -1300,6 +1379,138 @@ public sealed class SettingsView : LocalizedView
         }
 
         await LoadSettingsAsync();
+    }
+
+    // ---- Storage places ------------------------------------------------------------------------------
+
+    private async Task LoadPlacesAsync(CancellationToken ct = default)
+    {
+        if (!_tabs.TabPages.Contains(_storageTab)) return;
+
+        var result = await _storageLocations.GetAllAsync(ct);
+        if (result.IsFailure) return;
+
+        _placeRows = result.Value;
+        RenderPlaces();
+    }
+
+    private void RenderPlaces(Guid? select = null)
+    {
+        if (_places.Columns.Count == 0) return;
+
+        var selected = select ?? (_places.CurrentRow?.Tag as SampleStorageLocationRow)?.Id;
+
+        _places.Rows.Clear();
+
+        foreach (var row in _placeRows)
+        {
+            var index = _places.Rows.Add(
+                row.Name,
+                row.IsActive ? T("Admin.Active") : T("Admin.Inactive"),
+                row.StoredSampleCount.ToString("N0"));
+
+            _places.Rows[index].Tag = row;
+
+            if (row.Id == selected)
+                _places.CurrentCell = _places.Rows[index].Cells[0];
+        }
+
+        RefreshPlaceActions();
+    }
+
+    private void RefreshPlaceActions()
+    {
+        var row = _places.CurrentRow?.Tag as SampleStorageLocationRow;
+
+        _renamePlace.Enabled = row is not null;
+        _togglePlace.Enabled = row is not null;
+        _togglePlace.Text = row is { IsActive: false } ? T("Admin.Reactivate") : T("Admin.Deactivate");
+    }
+
+    private async Task AddPlaceAsync()
+    {
+        string? name = null;
+
+        // Asked again with what was typed when refused, so a duplicate costs one correction.
+        while (true)
+        {
+            name = _dialogs.PromptForText(T("StorageLocations.NewPrompt"), T("StorageLocations.Title"),
+                                          name, SampleStorageLocation.NameMaxLength);
+            if (name is null) return;
+
+            var result = await _storageLocations.CreateAsync(name);
+
+            if (result.IsFailure)
+            {
+                _dialogs.ShowFailure(result, T("StorageLocations.Title"));
+                continue;
+            }
+
+            await ReloadPlacesAsync(result.Value);
+            return;
+        }
+    }
+
+    private async Task RenamePlaceAsync()
+    {
+        if (_places.CurrentRow?.Tag is not SampleStorageLocationRow row) return;
+
+        var name = row.Name;
+
+        while (true)
+        {
+            name = _dialogs.PromptForText(T("StorageLocations.RenamePrompt", row.Name),
+                                          T("StorageLocations.Rename"), name,
+                                          SampleStorageLocation.NameMaxLength);
+            if (name is null) return;
+
+            var result = await _storageLocations.RenameAsync(row.Id, name);
+
+            if (result.IsFailure)
+            {
+                _dialogs.ShowFailure(result, T("StorageLocations.Rename"));
+                continue;
+            }
+
+            await ReloadPlacesAsync(row.Id);
+            return;
+        }
+    }
+
+    private async Task TogglePlaceAsync()
+    {
+        if (_places.CurrentRow?.Tag is not SampleStorageLocationRow row) return;
+
+        var activating = !row.IsActive;
+
+        if (!activating
+            && !_dialogs.Confirm(T("StorageLocations.DeactivateConfirm", row.Name, row.StoredSampleCount),
+                                 T("Admin.Deactivate")))
+            return;
+
+        var result = await _storageLocations.SetActiveAsync(row.Id, activating);
+
+        if (result.IsFailure)
+        {
+            _dialogs.ShowFailure(result, activating ? T("Admin.Reactivate") : T("Admin.Deactivate"));
+            return;
+        }
+
+        await ReloadPlacesAsync(row.Id);
+    }
+
+    private async Task ReloadPlacesAsync(Guid select)
+    {
+        var result = await _storageLocations.GetAllAsync();
+
+        if (result.IsFailure)
+        {
+            _dialogs.ShowFailure(result);
+            return;
+        }
+
+        _placeRows = result.Value;
+        RenderPlaces(select);
     }
 
     private sealed record SiteChoice(Guid Id, string Display)

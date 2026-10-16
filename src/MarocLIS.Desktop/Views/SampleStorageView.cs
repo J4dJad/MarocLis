@@ -374,7 +374,7 @@ public sealed class SampleStorageView : LocalizedView
     {
         if (Selected is not { } row) return;
 
-        using var dialog = new SampleStorageDialog(Localizer, _dialogs, row);
+        using var dialog = new SampleStorageDialog(Localizer, _dialogs, row, await StoragePlacesAsync());
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
 
@@ -393,7 +393,7 @@ public sealed class SampleStorageView : LocalizedView
     {
         if (Selected is not { } row) return;
 
-        using var dialog = new SampleAliquotDialog(Localizer, row);
+        using var dialog = new SampleAliquotDialog(Localizer, row, await StoragePlacesAsync());
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
 
@@ -407,6 +407,24 @@ public sealed class SampleStorageView : LocalizedView
         _dialogs.Info(T("Sample.AliquotCreated", result.Value), T("Sample.CreateAliquot"));
 
         await ActivateAsync();
+    }
+
+    /// <summary>
+    /// The site's active storage places, read when a dialog opens so a place just created in the
+    /// settings is offered. Empty when they cannot be read: the tube's own place is still shown.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> StoragePlacesAsync()
+    {
+        try
+        {
+            var places = await _samples.GetStorageLocationsAsync();
+            return places.IsSuccess ? places.Value : [];
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Loading the storage places failed.");
+            return [];
+        }
     }
 
     private async Task DiscardAsync()
@@ -483,7 +501,8 @@ internal sealed class SampleStorageDialog : Form
     private readonly ILocalizer _localizer;
     private readonly IUserDialogs _dialogs;
 
-    private readonly TextBox _location = UiTheme.Input(240);
+    private readonly ComboBox _location = new();
+    private readonly IReadOnlyList<string> _places;
     private readonly TextBox _position = UiTheme.Input(180);
     private readonly DateTimePicker _keepUntil = new();
     private readonly CheckBox _hasKeepUntil = new();
@@ -494,16 +513,18 @@ internal sealed class SampleStorageDialog : Form
     /// next person to position this dialog, or to read its position, silently gets a shelf
     /// reference instead of a <see cref="Point"/>.
     /// </summary>
-    internal string StorageLocation => _location.Text.Trim();
+    internal string StorageLocation => StoragePlacePicker.Selected(_location) ?? string.Empty;
     internal string? Position => string.IsNullOrWhiteSpace(_position.Text) ? null : _position.Text.Trim();
 
     internal DateOnly? KeepUntil =>
         _hasKeepUntil.Checked ? DateOnly.FromDateTime(_keepUntil.Value.Date) : null;
 
-    internal SampleStorageDialog(ILocalizer localizer, IUserDialogs dialogs, StoredSampleRow row)
+    internal SampleStorageDialog(ILocalizer localizer, IUserDialogs dialogs, StoredSampleRow row,
+                                 IReadOnlyList<string> places)
     {
         _localizer = localizer;
         _dialogs = dialogs;
+        _places = places;
 
         Text = $"{localizer["Sample.Shelve"]} — {row.Barcode}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -521,8 +542,12 @@ internal sealed class SampleStorageDialog : Form
 
         var locationLabel = Pilotage.Caption(localizer["Sample.Storage"]);
         locationLabel.Location = new Point(20, 14);
+        // The site's active places; the tube's own place kept and selected even when it is no
+        // longer in the list.
+        StoragePlacePicker.Configure(_location);
         _location.Bounds = new Rectangle(20, 34, 240, UiTheme.InputHeight);
-        _location.Text = row.StorageLocation ?? string.Empty;
+        StoragePlacePicker.Fill(_location, places, row.StorageLocation, localizer["Sample.StorageChoose"],
+                                place => localizer.Format("Sample.StorageOutOfList", place));
 
         var positionLabel = Pilotage.Caption(localizer["Sample.StoragePosition"]);
         positionLabel.Location = new Point(276, 14);
@@ -573,9 +598,12 @@ internal sealed class SampleStorageDialog : Form
 
     private void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_location.Text))
+        if (StoragePlacePicker.Selected(_location) is null)
         {
-            _dialogs.Warn(_localizer["Sample_StorageLocationRequired"]);
+            // With no place in the list, the operator is told where places are created.
+            _dialogs.Warn(_places.Count == 0 && _location.Items.Count <= 1
+                ? _localizer["Sample.StorageListEmpty"]
+                : _localizer["Sample_StorageLocationRequired"]);
             _location.Focus();
             return;
         }
@@ -596,7 +624,7 @@ internal sealed class SampleAliquotDialog : Form
 {
     private readonly TextBox _volume = UiTheme.Input(120);
     private readonly TextBox _purpose = UiTheme.Input(280);
-    private readonly TextBox _location = UiTheme.Input(240);
+    private readonly ComboBox _location = new();
 
     internal decimal? VolumeMl =>
         decimal.TryParse(_volume.Text.Replace(',', '.'),
@@ -607,10 +635,10 @@ internal sealed class SampleAliquotDialog : Form
 
     internal string? Purpose => string.IsNullOrWhiteSpace(_purpose.Text) ? null : _purpose.Text.Trim();
 
-    internal string? StorageLocation =>
-        string.IsNullOrWhiteSpace(_location.Text) ? null : _location.Text.Trim();
+    /// <summary>The place chosen; null for the empty entry, which keeps the parent tube's place.</summary>
+    internal string? StorageLocation => StoragePlacePicker.Selected(_location);
 
-    internal SampleAliquotDialog(ILocalizer localizer, StoredSampleRow row)
+    internal SampleAliquotDialog(ILocalizer localizer, StoredSampleRow row, IReadOnlyList<string> places)
     {
         Text = $"{localizer["Sample.CreateAliquot"]} — {row.Barcode}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -647,8 +675,10 @@ internal sealed class SampleAliquotDialog : Form
 
         var locationLabel = Pilotage.Caption(localizer["Sample.Storage"]);
         locationLabel.Location = new Point(20, 110);
+        StoragePlacePicker.Configure(_location);
         _location.Bounds = new Rectangle(20, 130, 240, UiTheme.InputHeight);
-        _location.Text = row.StorageLocation ?? string.Empty;
+        StoragePlacePicker.Fill(_location, places, row.StorageLocation, localizer["Sample.StorageNotSpecified"],
+                                place => localizer.Format("Sample.StorageOutOfList", place));
 
         body.Controls.AddRange([notice, volumeLabel, _volume, purposeLabel, _purpose, locationLabel, _location]);
 

@@ -405,8 +405,9 @@ public sealed class SampleWorkflowService(
     }
 
     /// <summary>
-    /// The storage places already used on this site, offered at reception so the same fridge is
-    /// written the same way every time. The field stays free: a new place is typed in.
+    /// The active storage places of this site's list (« Paramètres › Lieux de stockage »), the only
+    /// ones offered at reception and in the serum bank, so the same fridge is written the same way
+    /// every time. A new place is created in the settings, not typed at the bench.
     /// </summary>
     public async Task<Result<IReadOnlyList<string>>> GetStorageLocationsAsync(CancellationToken ct = default)
     {
@@ -870,7 +871,7 @@ public interface ISampleQueries
     Task<IReadOnlyList<SampleLabel>> GetLabelsForOrderAsync(
         Guid labOrderId, DateTimeOffset now, CancellationToken ct = default);
 
-    /// <summary>Storage places already recorded for this site's tubes, distinct and in order.</summary>
+    /// <summary>The active places of the site's storage list, by name.</summary>
     Task<IReadOnlyList<string>> GetStorageLocationsAsync(Guid siteId, CancellationToken ct = default);
 
     /// <summary>Minimum acceptable volume for the tube's container, for the under-fill check.</summary>

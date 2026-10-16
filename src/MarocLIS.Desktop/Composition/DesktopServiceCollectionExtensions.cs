@@ -80,6 +80,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<Application.Catalog.ICatalogMaintenanceQueries, CatalogMaintenanceQueries>();
         services.AddIsolatedQueries<Application.Instruments.IInstrumentInterfaceQueries, InstrumentInterfaceQueries>();
         services.AddIsolatedQueries<Application.Samples.ISampleQueries, SampleQueries>();
+        services.AddIsolatedQueries<Application.Samples.ISampleStorageLocationQueries, SampleStorageLocationQueries>();
         services.AddIsolatedQueries<Application.Samples.ISubcontractQueries, SubcontractQueries>();
         services.AddIsolatedQueries<Application.Samples.IRecollectionQueries, RecollectionQueries>();
         services.AddIsolatedQueries<Application.Billing.IBillingQueries, BillingQueries>();

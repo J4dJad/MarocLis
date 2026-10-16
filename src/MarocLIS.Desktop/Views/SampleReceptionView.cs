@@ -77,6 +77,7 @@ public sealed class SampleReceptionView : LocalizedView
     private readonly CheckBox _coldChain = new();
     private readonly Label _storageLabel = new();
     private readonly ComboBox _storage = new();
+    private IReadOnlyList<string> _storagePlaces = [];
     private Control? _temperatureField;
 
     // Actions
@@ -411,11 +412,9 @@ public sealed class SampleReceptionView : LocalizedView
         _coldChain.Margin = new Padding(0, 26, 16, 0);
         _coldChain.Checked = true;
 
-        // Editable: the places already used are offered, a new one is typed in.
-        _storage.DropDownStyle = ComboBoxStyle.DropDown;
-        _storage.FlatStyle = FlatStyle.Flat;
-        _storage.Font = UiTheme.Body;
-        _storage.MaxLength = 100;
+        // A closed list: the site's active places, created in « Paramètres › Lieux de stockage ».
+        // The empty first entry leaves the tube unshelved, as an empty field did.
+        StoragePlacePicker.Configure(_storage);
         var storageField = CollectionStackedField.Of(_storageLabel, _storage, 240, new Padding(0, 0, 16, 0));
 
         conditions.Controls.AddRange([_temperatureField, _coldChain, storageField]);
@@ -852,6 +851,7 @@ public sealed class SampleReceptionView : LocalizedView
         _temperatureLabel.Text = T("Sample.Temperature");
         _coldChain.Text = T("Sample.ColdChain");
         _storageLabel.Text = T("Sample.Storage");
+        FillStoragePlaces();
         _accept.Text = T("Action.Accept");
         CollectionKeyHint.Reserve(_accept, T("Sample.EnterKey"));
         _acceptReserved.Text = T("Action.AcceptWithReservation");
@@ -913,7 +913,7 @@ public sealed class SampleReceptionView : LocalizedView
         _scan.Focus();
     }
 
-    /// <summary>The storage places already used on the site, offered in the editable list.</summary>
+    /// <summary>The site's active storage places, the only ones the list offers.</summary>
     private async Task LoadStorageLocationsAsync(CancellationToken ct = default)
     {
         try
@@ -921,12 +921,8 @@ public sealed class SampleReceptionView : LocalizedView
             var places = await _workflow.GetStorageLocationsAsync(ct);
             if (places.IsFailure) return;
 
-            var typed = _storage.Text;
-            _storage.BeginUpdate();
-            _storage.Items.Clear();
-            foreach (var place in places.Value) _storage.Items.Add(place);
-            _storage.EndUpdate();
-            _storage.Text = typed;
+            _storagePlaces = places.Value;
+            FillStoragePlaces();
         }
         catch (OperationCanceledException)
         {
@@ -934,10 +930,15 @@ public sealed class SampleReceptionView : LocalizedView
         }
         catch (Exception ex)
         {
-            // The list is a convenience: the place can still be typed.
+            // Without the list the tube is received unshelved; it is shelved later in the serum bank.
             _logger?.LogError(ex, "Loading the storage places failed.");
         }
     }
+
+    /// <summary>Refills the list, keeping the place chosen for the current tube.</summary>
+    private void FillStoragePlaces() =>
+        StoragePlacePicker.Fill(_storage, _storagePlaces, StoragePlacePicker.Selected(_storage),
+                                T("Sample.StorageNotSpecified"), place => T("Sample.StorageOutOfList", place));
 
     private async Task RefreshAwaitingAsync(CancellationToken ct = default)
     {
@@ -1206,7 +1207,7 @@ public sealed class SampleReceptionView : LocalizedView
 
         _temperature.Clear();
         _coldChain.Checked = true;
-        _storage.Text = string.Empty;
+        if (_storage.Items.Count > 0) _storage.SelectedIndex = 0;
         _requestRecollection.Checked = true;
 
         _rejectReason.SelectedIndex = -1;
@@ -1311,7 +1312,7 @@ public sealed class SampleReceptionView : LocalizedView
             AcceptWithReservation = withReservation,
             TemperatureCelsius = temperature,
             ColdChainRespected = candidate.RequiresColdChain ? _coldChain.Checked : null,
-            StorageLocation = string.IsNullOrWhiteSpace(_storage.Text) ? null : _storage.Text.Trim()
+            StorageLocation = StoragePlacePicker.Selected(_storage)
         };
 
         _deciding = true;
@@ -1344,9 +1345,6 @@ public sealed class SampleReceptionView : LocalizedView
             if (ReferenceEquals(_candidate, candidate)) ClearCandidate();
             await RefreshAwaitingAsync();
 
-            // A place typed for the first time joins the list for the next tube.
-            if (request.StorageLocation is { } place && !_storage.Items.Contains(place))
-                _storage.Items.Add(place);
         }
         finally
         {

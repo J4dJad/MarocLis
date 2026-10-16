@@ -29,6 +29,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Catalog.CatalogMaintenanceService>();
         services.AddScoped<Instruments.InstrumentInterfaceService>();
         services.AddScoped<Samples.SampleWorkflowService>();
+        services.AddScoped<Samples.SampleStorageLocationService>();
         services.AddScoped<Samples.SubcontractingService>();
         services.AddScoped<Samples.RecollectionService>();
         services.AddScoped<ResultPostEntryPipeline>();

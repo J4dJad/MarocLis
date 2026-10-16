@@ -304,6 +304,22 @@ public sealed class SampleConfiguration : IEntityTypeConfiguration<Sample>
     }
 }
 
+/// <summary>
+/// The site's list of storage places. The name is unique per site, active or not: a place taken out
+/// of use and then created again under the same name would be two entries of one fridge.
+/// </summary>
+public sealed class SampleStorageLocationConfiguration : IEntityTypeConfiguration<SampleStorageLocation>
+{
+    public void Configure(EntityTypeBuilder<SampleStorageLocation> builder)
+    {
+        builder.ToTable("StorageLocations", "smp");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Name).HasMaxLength(SampleStorageLocation.NameMaxLength).IsRequired();
+        builder.HasIndex(e => new { e.SiteId, e.Name }).IsUnique()
+               .HasDatabaseName("UX_StorageLocations_Site_Name");
+    }
+}
+
 public sealed class SampleEventConfiguration : IEntityTypeConfiguration<SampleEvent>
 {
     public void Configure(EntityTypeBuilder<SampleEvent> builder)
