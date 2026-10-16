@@ -170,6 +170,10 @@ public sealed class Sample : AuditableAggregateRoot, ISoftDeletable, ISiteScoped
         if (observedDefects != SampleDefect.None && !acceptWithReservation)
             return Result.Failure(Error.Conflict("Sample_DefectsRequireExplicitDecision", observedDefects));
 
+        // A mistyped figure is refused here, as for the fridge readings, rather than by the column.
+        if (temperatureCelsius is < MinimumReceptionTemperature or > MaximumReceptionTemperature)
+            return Result.Failure(Error.Validation("Temperature_ValueImplausible"));
+
         ReceivedAt = at;
         ReceivedByUserId = byUserId;
         ReceptionTemperatureCelsius = temperatureCelsius;
@@ -240,9 +244,19 @@ public sealed class Sample : AuditableAggregateRoot, ISoftDeletable, ISiteScoped
         return aliquot;
     }
 
+    /// <summary>The longest detail an event keeps (its column).</summary>
+    public const int EventDetailMaxLength = 500;
+
+    /// <summary>The temperatures a reception accepts, as the fridge readings do.</summary>
+    public const decimal MinimumReceptionTemperature = -200m;
+    public const decimal MaximumReceptionTemperature = 100m;
+
+    // The detail is shortened rather than refused: a rejection reason followed by a long comment,
+    // or a long discard note, made the whole save fail on the column after the act was decided.
     public void AddEvent(SampleEventKind kind, DateTimeOffset at, Guid? byUserId, string? detail,
                          decimal? temperatureCelsius = null, string? workstation = null)
-        => _events.Add(new SampleEvent(Id, kind, at, byUserId, detail)
+        => _events.Add(new SampleEvent(Id, kind, at, byUserId,
+                                       detail is { Length: > EventDetailMaxLength } ? detail[..EventDetailMaxLength] : detail)
         {
             TemperatureCelsius = temperatureCelsius,
             Workstation = workstation

@@ -89,6 +89,12 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
         _bearerName = TextField("Report.Bearer", 20, 200, 260);
         _bearerCin = TextField("Report.BearerCin", 300, 200, 180, null, latin: true, mono: true);
 
+        // As long as the delivery's columns: a longer entry failed the save of the hand-over.
+        _recipientName.MaxLength = 200;
+        _recipientIdentifier.MaxLength = 250;
+        _bearerName.MaxLength = 200;
+        _bearerCin.MaxLength = 20;
+
         Notice(20, 246, 560, 30, "Report.BearerNotice");
 
         _consentReference = TextField("Report.AuthorizingConsent", 20, 280, 380, null,
@@ -308,6 +314,10 @@ internal sealed class ReportAmendmentDialog : MasterDataEditor
 
         _conclusionFr = TextField("Report.ConclusionFr", 20, 244, 280);
         _conclusionAr = TextField("Report.ConclusionAr", 320, 244, 280, null, arabic: true);
+
+        // As long as the report's columns.
+        _reasonFr.MaxLength = _reasonAr.MaxLength = 1000;
+        _conclusionFr.MaxLength = _conclusionAr.MaxLength = 4000;
 
         Notice(20, 290, 580, 44, "Report.ConclusionNotice");
 

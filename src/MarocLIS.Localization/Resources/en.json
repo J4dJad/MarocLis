@@ -5502,6 +5502,7 @@
   "Sample_AlreadyRejected": "Tube {0} is already refused. Its replacement, if one was requested, already exists.",
   "Sample_NothingToRecollect": "Tube {0} has no analysis left to run: all are validated. A new draw would have nothing to analyse. Untick \"recollection\" to refuse the tube alone.",
   "Sample_RejectionReasonRequired": "Choose the rejection reason from the list before rejecting the tube.",
+  "Sample_AliquotVolumeInvalid": "Invalid aliquot volume: enter a positive number, in mL, or leave the field empty.",
   "Formula_Empty": "The calculation formula is empty.",
   "Formula_DivisionByZero": "Division by zero in the calculation formula.",
   "Formula_Overflow": "Arithmetic overflow in the calculation formula.",

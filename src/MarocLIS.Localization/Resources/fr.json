@@ -5503,6 +5503,7 @@
   "Sample_AlreadyRejected": "Le tube {0} est déjà refusé. Son remplacement, s'il a été demandé, existe déjà.",
   "Sample_NothingToRecollect": "Le tube {0} n'a plus d'analyse en attente : toutes sont validées. Un nouveau prélèvement n'aurait rien à analyser. Décochez « Demander un nouveau prélèvement » pour refuser le tube seul.",
   "Sample_RejectionReasonRequired": "Choisissez le motif du refus dans la liste avant de refuser le tube.",
+  "Sample_AliquotVolumeInvalid": "Volume de l'aliquote invalide : saisissez un nombre positif, en mL, ou laissez le champ vide.",
   "Formula_Empty": "La formule de calcul est vide.",
   "Formula_DivisionByZero": "Division par zéro dans la formule de calcul.",
   "Formula_Overflow": "Dépassement de capacité dans la formule de calcul.",

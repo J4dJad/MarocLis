@@ -316,7 +316,8 @@ public sealed class RecollectionView : LocalizedView
         if (Current() is not { } row) return;
 
         var note = _dialogs.PromptForText(
-            T("Recollection.CallPrompt", row.PatientName, row.Phone ?? "—"), T("Recollection.RecordCall"));
+            T("Recollection.CallPrompt", row.PatientName, row.Phone ?? "—"), T("Recollection.RecordCall"),
+            maxLength: 490);
 
         if (note is null) return;
 
@@ -342,7 +343,8 @@ public sealed class RecollectionView : LocalizedView
         if (Current() is not { } row) return;
 
         var reason = _dialogs.PromptForReason(
-            T("Recollection.AbandonPrompt", row.AccessionNumber, row.AnalysisCodes), T("Recollection.Abandon"));
+            T("Recollection.AbandonPrompt", row.AccessionNumber, row.AnalysisCodes), T("Recollection.Abandon"),
+            maxLength: 470);
 
         if (reason is null) return;
 

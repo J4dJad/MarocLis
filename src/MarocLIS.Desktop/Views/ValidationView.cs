@@ -1593,7 +1593,7 @@ public sealed class ValidationView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T("Validation.UnvalidatePrompt", ids.Count), T("Validation.Unvalidate"),
-            minimumLength: 15);
+            minimumLength: 15, maxLength: 500);
 
         if (reason is null) return;
 
@@ -1659,7 +1659,7 @@ public sealed class ValidationView : LocalizedView
                 $"{T("Result_QcOutOfControlBlocksValidation")}\n\n" +
                 $"{string.Join(", ", qcAffected)}\n\n{T("Validation.OverrideJustification")}",
                 T("Validation.QcOverride"),
-                minimumLength: 15);
+                minimumLength: 15, maxLength: 1000);
 
             if (qcJustification is null) return;
 
@@ -1741,9 +1741,11 @@ public sealed class ValidationView : LocalizedView
                 return;
             }
 
+            // Within the notification's columns: a longer name or read-back failed the save and
+            // left the call open with the value unreleasable.
             var recipient = _dialogs.PromptForText(
                 $"{parameterName} : {value}\n\n{T("Notification_RecipientNameRequired")}",
-                T("Nav.CriticalResults"));
+                T("Nav.CriticalResults"), maxLength: 200);
 
             if (recipient is null)
             {
@@ -1754,7 +1756,7 @@ public sealed class ValidationView : LocalizedView
 
             var readBack = _dialogs.PromptForText(
                 $"{T("Validation.ReadBackPrompt")}\n\n{parameterName}",
-                T("Nav.CriticalResults"));
+                T("Nav.CriticalResults"), maxLength: 100);
 
             if (string.IsNullOrWhiteSpace(readBack))
             {

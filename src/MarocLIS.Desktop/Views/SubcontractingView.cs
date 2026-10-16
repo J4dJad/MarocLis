@@ -242,7 +242,7 @@ public sealed class SubcontractingView : LocalizedView
         }
     }
 
-    private IEnumerable<SubcontractRow> Visible()
+    private IEnumerable<SubcontractRow> ShownRows()
     {
         var rows = _stage switch
         {
@@ -271,7 +271,7 @@ public sealed class SubcontractingView : LocalizedView
         _grid.SuspendLayout();
         _grid.Rows.Clear();
 
-        foreach (var row in Visible())
+        foreach (var row in ShownRows())
         {
             var index = _grid.Rows.Add(
                 false,
