@@ -231,6 +231,16 @@ public sealed class BillingService(
                                             clock.Today, ct));
     }
 
+    /// <summary>The ledger's count per invoice status, for the same search.</summary>
+    public async Task<Result<IReadOnlyDictionary<InvoiceStatus, int>>> GetInvoiceStatusCountsAsync(
+        string? search = null, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.View);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyDictionary<InvoiceStatus, int>>(permitted.FirstError);
+
+        return Result.Success(await queries.GetInvoiceStatusCountsAsync(currentUser.SiteId, search, ct));
+    }
+
     // ---- Issuing -------------------------------------------------------------------------------
 
     /// <summary>
@@ -1779,6 +1789,14 @@ public interface IBillingQueries
     Task<PagedResult<InvoiceRow>> GetInvoicesAsync(
         Guid siteId, InvoiceStatus? status, string? search, int page, int pageSize,
         DateOnly today, CancellationToken ct = default);
+
+    /// <summary>
+    /// How many invoices of the site each status holds, for the same search as
+    /// <see cref="GetInvoicesAsync"/> and without its status filter: the counts on the ledger's
+    /// status chips. Drafts are left out, as in the ledger.
+    /// </summary>
+    Task<IReadOnlyDictionary<InvoiceStatus, int>> GetInvoiceStatusCountsAsync(
+        Guid siteId, string? search, CancellationToken ct = default);
 
     /// <summary>
     /// The settlements recorded against one invoice, so a refund or a returned cheque can be

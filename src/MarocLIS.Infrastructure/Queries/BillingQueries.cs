@@ -82,17 +82,11 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
             .ToListAsync(ct);
     }
 
-    public async Task<PagedResult<InvoiceRow>> GetInvoicesAsync(
-        Guid siteId, InvoiceStatus? status, string? search, int page, int pageSize,
-        DateOnly today, CancellationToken ct = default)
+    /// <summary>The site's ledger — every invoice but the drafts — narrowed by the search box.</summary>
+    private IQueryable<Invoice> Ledger(Guid siteId, string? search)
     {
-        page = Math.Max(1, page);
-        pageSize = Math.Clamp(pageSize, 10, 200);
-
         var query = db.Invoices.AsNoTracking()
             .Where(i => i.SiteId == siteId && i.Status != InvoiceStatus.Draft);
-
-        if (status is { } wanted) query = query.Where(i => i.Status == wanted);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -104,6 +98,27 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                 || (i.CoveredOrderNumbersCsv != null
                     && EF.Functions.Like(i.CoveredOrderNumbersCsv, pattern)));
         }
+
+        return query;
+    }
+
+    public async Task<IReadOnlyDictionary<InvoiceStatus, int>> GetInvoiceStatusCountsAsync(
+        Guid siteId, string? search, CancellationToken ct = default) =>
+        await Ledger(siteId, search)
+            .GroupBy(i => i.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.Status, g => g.Count, ct);
+
+    public async Task<PagedResult<InvoiceRow>> GetInvoicesAsync(
+        Guid siteId, InvoiceStatus? status, string? search, int page, int pageSize,
+        DateOnly today, CancellationToken ct = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 10, 200);
+
+        var query = Ledger(siteId, search);
+
+        if (status is { } wanted) query = query.Where(i => i.Status == wanted);
 
         var total = await query.CountAsync(ct);
 
