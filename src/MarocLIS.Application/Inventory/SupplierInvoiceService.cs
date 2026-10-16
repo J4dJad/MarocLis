@@ -556,6 +556,9 @@ public sealed class SupplierInvoiceService(
         var name = Path.GetFileName(fileName);
         if (CredentialFile.ContentTypeOf(name) is not { } contentType)
             return Result.Failure(Error.Validation("SupplierInvoice_ScanType"));
+        // The name columns hold 200 characters and Windows allows 255: shortened, extension kept,
+        // as for the lot certificates, rather than failing the save with « Erreur inattendue ».
+        if (name.Length > 200) name = name[..(200 - Path.GetExtension(name).Length)] + Path.GetExtension(name);
 
         var invoice = await invoices.GetByIdAsync(invoiceId, ct);
         if (invoice is null) return Result.Failure(Error.NotFound("SupplierInvoice_NotFound"));

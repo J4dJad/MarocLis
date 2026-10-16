@@ -235,7 +235,7 @@ public sealed class EquipmentView : LocalizedView
             _grid.Column("contract").HeaderText = T("Equipment.Contract");
         }
 
-        if (_rows.Count > 0) Render();
+        if (_rows.Count > 0) Render((_grid.CurrentRow?.Tag as EquipmentRow)?.InstrumentId);
         ShowDetail();
     }
 
@@ -255,8 +255,11 @@ public sealed class EquipmentView : LocalizedView
                 return;
             }
 
+            // The instrument just serviced stays current, with its detail beside it.
+            var keep = (_grid.CurrentRow?.Tag as EquipmentRow)?.InstrumentId;
+
             _rows = result.Value;
-            Render();
+            Render(keep);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -265,7 +268,7 @@ public sealed class EquipmentView : LocalizedView
         }
     }
 
-    private void Render()
+    private void Render(Guid? keep = null)
     {
         _grid.SuspendLayout();
         _grid.Rows.Clear();
@@ -294,7 +297,10 @@ public sealed class EquipmentView : LocalizedView
             ? $"{T("StocksUi.Instruments", _rows.Count)} · {T("Equipment.Overdue")} {overdue}"
             : T("StocksUi.Instruments", _rows.Count);
 
-        if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
+        var kept = _grid.Rows.Cast<DataGridViewRow>()
+                        .FirstOrDefault(r => keep is not null && r.Tag is EquipmentRow row && row.InstrumentId == keep);
+        if (kept is { Index: > 0 }) _grid.MakeCurrent(kept);
+        else if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
         StockGrid.Filter(_grid, _search.Query);
 
         ShowDetail();

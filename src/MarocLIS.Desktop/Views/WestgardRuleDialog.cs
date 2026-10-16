@@ -31,6 +31,7 @@ internal sealed class WestgardRuleDialog : Form
     private readonly CheckedListBox _list = new();
     private readonly Label _summary = new();
     private readonly ILocalizer _localizer;
+    private Button? _ok;
 
     private readonly (WestgardRule Rule, string LabelKey, string DescriptionKey)[] _rules =
     [
@@ -100,7 +101,7 @@ internal sealed class WestgardRuleDialog : Form
         minimal.Bounds = new Rectangle(380, 356, 220, UiTheme.ButtonHeight);
         minimal.Click += (_, _) => Apply(WestgardRule.OneThreeS);
 
-        var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
+        var ok = _ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
         ok.Bounds = new Rectangle(20, 420, 280, UiTheme.ButtonHeight);
         ok.Click += (_, _) => Accept();
 
@@ -154,10 +155,15 @@ internal sealed class WestgardRuleDialog : Form
         }
 
         _summary.Text = string.Join(Environment.NewLine, lines);
+
+        // A control left with no rule is refused, as in the catalogue: Save waits for one ticked.
+        if (_ok is not null) _ok.Enabled = count > 0;
     }
 
     private void Accept()
     {
+        if (_list.CheckedIndices.Count == 0) return;
+
         var selected = WestgardRule.None;
 
         foreach (var index in _list.CheckedIndices.Cast<int>())

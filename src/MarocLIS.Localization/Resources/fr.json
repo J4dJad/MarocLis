@@ -5760,6 +5760,7 @@
   "Eqa_SdMustBePositive": "L'écart-type des pairs doit être strictement positif.",
   "Eqa_NoReportedValue": "Aucune valeur transmise n'est enregistrée pour ce paramètre.",
   "Eqa_ScoreRequired": "Saisissez l'écart normalisé, ou la moyenne et l'écart-type des pairs pour le calculer.",
+  "Eqa_ScoreOutOfRange": "L'écart normalisé, le biais ou une valeur saisie est hors de toute mesure : vérifiez l'unité de la valeur assignée et de l'écart-type des pairs.",
   "Po_ExpectedDateInPast": "La date de livraison prévue ne peut pas être passée.",
   "Po_SupplierNotApproved": "Ce fournisseur n'est pas approuvé : aucune commande ne peut lui être passée.",
   "Po_PriceMustNotBeNegative": "Le prix unitaire ne peut pas être négatif.",

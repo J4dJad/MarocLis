@@ -178,7 +178,7 @@ public sealed class EqaView : LocalizedView
         }
 
         RenderHeading();
-        if (_rows.Count > 0) Render();
+        if (_rows.Count > 0) Render((_grid.CurrentRow?.Tag as EqaRow)?.Id);
         ShowDetail();
     }
 
@@ -188,6 +188,10 @@ public sealed class EqaView : LocalizedView
 
     private async Task LoadAsync(CancellationToken ct = default)
     {
+        // The participation just worked on stays the current one: the list went back to its first
+        // row after each result or evaluation, away from the line whose verdict was to be read.
+        var keep = (_grid.CurrentRow?.Tag as EqaRow)?.Id;
+
         try
         {
             var result = await _eqa.GetParticipationsAsync((int)_year.Value, _onlyPending.Checked, ct);
@@ -198,7 +202,7 @@ public sealed class EqaView : LocalizedView
             }
 
             _rows = result.Value;
-            Render();
+            Render(keep);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -208,10 +212,11 @@ public sealed class EqaView : LocalizedView
         }
     }
 
+    // Shown in the operator's culture, as on the QC screen: « 1.32 » here beside « 1,32 » there.
     private static string Number(decimal? value, string format = "0.###") =>
-        value?.ToString(format, CultureInfo.InvariantCulture) ?? string.Empty;
+        value?.ToString(format, CultureInfo.CurrentCulture) ?? string.Empty;
 
-    private void Render()
+    private void Render(Guid? keep = null)
     {
         _grid.SuspendLayout();
         _grid.Rows.Clear();
@@ -240,7 +245,9 @@ public sealed class EqaView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         RenderHeading();
 
-        if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
+        var kept = _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => keep is not null && r.Tag is EqaRow row && row.Id == keep);
+        if (kept is { Index: > 0 }) _grid.MakeCurrent(kept);
+        else if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
         ShowDetail();
     }
 

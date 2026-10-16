@@ -30,7 +30,9 @@ internal abstract class MasterDataEditor : Form
         Localizer = localizer;
         Dialogs = dialogs;
 
-        Text = subtitle is null ? localizer[titleKey] : $"{localizer[titleKey]} — {subtitle}";
+        // Several editors open from a menu entry whose label ends with « … »; the window title does not.
+        var title = localizer[titleKey].TrimEnd('…');
+        Text = subtitle is null ? title : $"{title} — {subtitle}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;

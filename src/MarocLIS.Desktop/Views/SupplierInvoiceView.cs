@@ -822,8 +822,8 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
             });
 
         Add("order", "PurchaseOrders.Number", 11);
-        Add("item", "Inventory.Item", 24);
-        Add("ordered", "PurchaseOrders.Ordered", 7, right: true);
+        Add("item", "Inventory.Item", 23);
+        Add("ordered", "PurchaseOrders.Ordered", 8, right: true);
         Add("received", "PurchaseOrders.Received", 7, right: true);
         Add("invoiced", "SupplierInvoices.AlreadyInvoiced", 7, right: true);
         Add(ColQuantity, "SupplierInvoices.QuantityInvoiced", 8, editable: true, right: true);

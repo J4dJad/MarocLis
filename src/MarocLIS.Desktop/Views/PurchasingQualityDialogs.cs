@@ -281,11 +281,11 @@ internal sealed class LotComparisonDialog : Form
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
 
-        Add("LotComparison.Level", 30);
-        Add("LotComparison.NewN", 6);
+        Add("LotComparison.Level", 26);
+        Add("LotComparison.NewN", 8);
         Add("LotComparison.NewMean", 10);
         Add("LotComparison.NewSd", 9);
-        Add("LotComparison.OldN", 6);
+        Add("LotComparison.OldN", 8);
         Add("LotComparison.OldMean", 10);
         Add("LotComparison.OldSd", 9);
         Add("LotComparison.Difference", 10);

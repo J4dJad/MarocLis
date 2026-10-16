@@ -485,6 +485,10 @@ public sealed class InventoryView : LocalizedView
 
     private void RenderStock()
     {
+        // The article worked on stays current after a reception, a release or a write-off: the
+        // list went back to its first article, and the lots shown were another article's.
+        var keep = (_stock.CurrentRow?.Tag as StockRow)?.StockItemId;
+
         _stock.SuspendLayout();
         _stock.Rows.Clear();
 
@@ -525,7 +529,10 @@ public sealed class InventoryView : LocalizedView
         _count.Text = $"{T("StocksUi.Items", _stockRows.Count)}" +
                       (alertCount > 0 ? $" · {alertCount} {T("Inventory.BelowMinimum").ToLowerInvariant()}" : string.Empty);
 
-        if (_stock.Rows.Count > 0) _stock.SelectFirstRow();
+        var kept = _stock.Rows.Cast<DataGridViewRow>()
+                         .FirstOrDefault(r => keep is not null && r.Tag is StockRow row && row.StockItemId == keep);
+        if (kept is { Index: > 0 }) _stock.MakeCurrent(kept);
+        else if (_stock.Rows.Count > 0) _stock.SelectFirstRow();
         StockGrid.Filter(_stock, _search.Query);
     }
 
@@ -552,6 +559,8 @@ public sealed class InventoryView : LocalizedView
 
     private void RenderLots()
     {
+        var keep = (_lots.CurrentRow?.Tag as LotRow)?.ReagentLotId;
+
         _lots.SuspendLayout();
         _lots.Rows.Clear();
 
@@ -579,6 +588,11 @@ public sealed class InventoryView : LocalizedView
         }
 
         _lots.ResumeLayout(performLayout: true);
+
+        // The lot just released, refused or recalled stays the current one, its new state in view.
+        var keptLot = _lots.Rows.Cast<DataGridViewRow>()
+                          .FirstOrDefault(r => keep is not null && r.Tag is LotRow lot && lot.ReagentLotId == keep);
+        if (keptLot is not null) _lots.MakeCurrent(keptLot);
 
         var quarantined = _lotRows.Count(r => r.IsQuarantined && !r.IsRejected);
 

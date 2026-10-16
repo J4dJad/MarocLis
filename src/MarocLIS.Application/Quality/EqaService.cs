@@ -183,6 +183,10 @@ public sealed class EqaService(
         return Result.Success();
     }
 
+    // The score and bias columns hold eight integer digits, the values twelve.
+    private const decimal MaximumScore = 100_000_000m;
+    private const decimal MaximumValue = 1_000_000_000_000m;
+
     /// <summary>
     /// Records the organiser's evaluation.
     /// <para>
@@ -225,17 +229,27 @@ public sealed class EqaService(
                 return Result.Failure<string?>(Error.Validation("Eqa_ScoreRequired"));
         }
 
+        var bias = participation.ReportedValue is { } value && evaluation.AssignedValue is { } assigned
+                                                           && assigned != 0m
+            ? Math.Round((value - assigned) / assigned * 100m, 2)
+            : (decimal?)null;
+
+        // A value keyed in the wrong unit (0.001 for 1000) gives a score or a bias of hundreds of
+        // millions: beyond the columns, the save failed with « Erreur inattendue ». No organiser
+        // publishes such a figure, so it is refused before anything is written.
+        if (zScore is { } score && Math.Abs(score) >= MaximumScore
+            || bias is { } deviation && Math.Abs(deviation) >= MaximumScore
+            || new[] { evaluation.AssignedValue, evaluation.PeerGroupMean, evaluation.PeerGroupSd }
+                   .Any(v => v is { } x && Math.Abs(x) >= MaximumValue))
+            return Result.Failure<string?>(Error.Validation("Eqa_ScoreOutOfRange"));
+
         participation.AssignedValue = evaluation.AssignedValue;
         participation.PeerGroupMean = evaluation.PeerGroupMean;
         participation.PeerGroupSd = evaluation.PeerGroupSd;
         participation.InvestigationNotes = evaluation.InvestigationNotes;
         participation.ZScore = zScore;
 
-        participation.BiasPercent =
-            participation.ReportedValue is { } value && evaluation.AssignedValue is { } assigned
-                                                      && assigned != 0m
-                ? Math.Round((value - assigned) / assigned * 100m, 2)
-                : null;
+        participation.BiasPercent = bias;
 
         participation.Outcome = evaluation.OutcomeOverride ?? participation.ClassifyFromZScore();
 

@@ -294,7 +294,7 @@ public sealed class NonConformityView : LocalizedView
             _actions.Column("completed").HeaderText = T("Field.Date");
         }
 
-        if (_rows.Count > 0) RenderRegister();
+        if (_rows.Count > 0) RenderRegister((_register.CurrentRow?.Tag as NonConformityRow)?.Id);
     }
 
     // ---- Loading -------------------------------------------------------------------------------------
@@ -313,8 +313,12 @@ public sealed class NonConformityView : LocalizedView
                 return;
             }
 
+            // The file being worked on stays current: after each action the register went back to
+            // its first file, and the next action was added to another non-conformity's list.
+            var keep = (_register.CurrentRow?.Tag as NonConformityRow)?.Id;
+
             _rows = result.Value;
-            RenderRegister();
+            RenderRegister(keep);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -324,7 +328,7 @@ public sealed class NonConformityView : LocalizedView
         }
     }
 
-    private void RenderRegister()
+    private void RenderRegister(Guid? keep = null)
     {
         _register.SuspendLayout();
         _register.Rows.Clear();
@@ -378,7 +382,10 @@ public sealed class NonConformityView : LocalizedView
             ? Localizer.Format("QualityHr.Nc.CountOverdue", _rows.Count, overdue)
             : Localizer.Format("QualityHr.Nc.Count", _rows.Count);
 
-        if (_register.Rows.Count > 0) _register.SelectFirstRow();
+        var kept = _register.Rows.Cast<DataGridViewRow>()
+                            .FirstOrDefault(r => keep is not null && r.Tag is NonConformityRow row && row.Id == keep);
+        if (kept is { Index: > 0 }) _register.MakeCurrent(kept);
+        else if (_register.Rows.Count > 0) _register.SelectFirstRow();
         else ClearDetail();
     }
 
@@ -400,6 +407,9 @@ public sealed class NonConformityView : LocalizedView
 
             if (actions.IsFailure) return;
 
+            // The action just started or completed stays current when it is still the same file's.
+            var keepAction = (_actions.CurrentRow?.Tag as CorrectiveActionRow)?.Id;
+
             _currentActions = actions.Value;
 
             _actions.SuspendLayout();
@@ -419,6 +429,10 @@ public sealed class NonConformityView : LocalizedView
             }
 
             _actions.ResumeLayout(performLayout: true);
+
+            var keptAction = _actions.Rows.Cast<DataGridViewRow>()
+                                    .FirstOrDefault(r => keepAction is not null && r.Tag is CorrectiveActionRow a && a.Id == keepAction);
+            if (keptAction is not null) _actions.MakeCurrent(keptAction);
 
             // A file is selected: SetDetailEnabled itself narrows the bar to the file's status, so
             // a closed file keeps only Reopen (passing false here left Reopen unreachable).

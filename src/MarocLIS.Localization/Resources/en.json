@@ -5759,6 +5759,7 @@
   "Eqa_SdMustBePositive": "The peer SD must be strictly positive.",
   "Eqa_NoReportedValue": "No submitted value is recorded for this parameter.",
   "Eqa_ScoreRequired": "Enter the Z-score, or the peer mean and SD to compute it.",
+  "Eqa_ScoreOutOfRange": "The z-score, the bias or a value entered is beyond any measure: check the unit of the assigned value and of the peer-group SD.",
   "Po_ExpectedDateInPast": "The expected delivery date cannot be in the past.",
   "Po_SupplierNotApproved": "This supplier is not approved: no order can be placed with it.",
   "Po_PriceMustNotBeNegative": "The unit price cannot be negative.",

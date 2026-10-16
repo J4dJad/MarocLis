@@ -569,6 +569,11 @@ public sealed class QualityControlService(
         var permitted = guard.Require(Permissions.Quality.ManageQcRules);
         if (permitted.IsFailure) return permitted;
 
+        // The catalogue refuses a control without a rule; changing the rules from the QC screen
+        // left that door open, and such a control charts points without ever rejecting a run.
+        if (rules == WestgardRule.None)
+            return Result.Failure(Error.Regulatory("QcTarget_AtLeastOneRuleRequired"));
+
         var target = await targets.GetByIdAsync(qcTargetId, ct);
         if (target is null) return Result.Failure(Error.NotFound("Qc_TargetNotFound", qcTargetId));
 

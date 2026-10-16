@@ -67,6 +67,10 @@ public sealed class QualityControlView : LocalizedView
     private IReadOnlyList<QcEntryRow> _rows = [];
     private IReadOnlyList<QcReviewRow> _pendingReview = [];
 
+    // The control the chart shows: the entry row's, or the rejection's picked in the review list.
+    // The chart card's « Plus d'actions » acts on it, not on whichever entry row happens to be current.
+    private Guid? _chartTargetId;
+
     // The reagent lot the run is recorded against: a new lot under evaluation, or (by default) the
     // lot in use. The QC on a lot is what its release is gated on.
     private readonly ComboBox _reagentLot = new()
@@ -669,6 +673,7 @@ public sealed class QualityControlView : LocalizedView
     {
         try
         {
+            _chartTargetId = qcTargetId;
             ShowControlFacts(qcTargetId);
 
             var chart = await _qc.GetChartAsync(qcTargetId);
@@ -856,14 +861,6 @@ public sealed class QualityControlView : LocalizedView
     }
 
     /// <summary>
-    /// Establishes the laboratory's own control limits from a chosen window.
-    /// <para>
-    /// Deliberately a window and not "all history": a laboratory that has explained and corrected
-    /// a bad period should be able to exclude it, and recomputing over everything would bake that
-    /// period's scatter into the limits permanently.
-    /// </para>
-    /// </summary>
-    /// <summary>
     /// Chooses which Westgard rules apply to the selected control.
     /// <para>
     /// Not a preference. The rule set is the analytical control strategy: 1₃ₛ alone on a
@@ -875,7 +872,7 @@ public sealed class QualityControlView : LocalizedView
     /// </summary>
     private async Task EditRulesAsync()
     {
-        if (_entry.CurrentRow?.Tag is not QcEntryRow row)
+        if (ChartedRow() is not { } row)
         {
             _status.ForeColor = UiTheme.TextSecondary;
             _status.Text = T("Message.NothingSelected");
@@ -902,15 +899,35 @@ public sealed class QualityControlView : LocalizedView
         await ActivateAsync();
     }
 
+    /// <summary>
+    /// The control the chart shows. A rejection picked in the review list charts its own control,
+    /// and the limits or rules changed from the chart's card belonged to the entry row still current
+    /// above — another control than the one on screen.
+    /// </summary>
+    private QcEntryRow? ChartedRow() =>
+        _chartTargetId is { } id
+            ? _rows.FirstOrDefault(r => r.QcTargetId == id)
+            : _entry.CurrentRow?.Tag as QcEntryRow;
+
+    /// <summary>
+    /// Establishes the laboratory's own control limits from a chosen window.
+    /// <para>
+    /// Deliberately a window and not "all history": a laboratory that has explained and corrected
+    /// a bad period should be able to exclude it, and recomputing over everything would bake that
+    /// period's scatter into the limits permanently.
+    /// </para>
+    /// </summary>
     private async Task EstablishLimitsAsync()
     {
-        if (_entry.CurrentRow?.Tag is not QcEntryRow row)
+        if (ChartedRow() is not { } row)
         {
             _status.Text = T("Message.NothingSelected");
             return;
         }
 
+        // Named in the question: the limits are the charted control's, whichever list it was picked in.
         var answer = _dialogs.PromptForText(
+            $"{row.ParameterName.For(Localizer.CurrentLanguage)} · {T($"QcLevel.{row.Level}")} · {row.MaterialLotNumber} · {row.InstrumentCode}\n\n" +
             T("Quality.EstablishLimitsPrompt", QcTarget.MinimumPointsForLaboratoryStatistics),
             T("Quality.EstablishLimits"), "60");
 
