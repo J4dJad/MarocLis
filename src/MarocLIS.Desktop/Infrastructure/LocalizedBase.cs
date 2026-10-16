@@ -28,6 +28,10 @@ public static class RtlLayout
 
     private static void ApplyRecursive(Control control, RightToLeft direction, bool rtl)
     {
+        // A web page carries its own direction (the help sets it in its HTML), and the browser
+        // control refuses the property outright: setting it closed the help with an error.
+        if (control is WebBrowserBase) return;
+
         control.RightToLeft = direction;
 
         switch (control)
