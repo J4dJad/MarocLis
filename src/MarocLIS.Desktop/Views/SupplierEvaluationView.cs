@@ -25,14 +25,16 @@ public sealed class SupplierEvaluationView : LocalizedView
     private readonly ILogger<SupplierEvaluationView>? _logger;
 
     private readonly DataGridView _grid = UiTheme.Grid();
-    private readonly Label _heading = new();
-    private readonly Label _yearLabel = new();
+    private readonly Label _heading = StockPage.Title();
+    private readonly Label _count = StockPage.Count();
+    private readonly StockSearchBox _search = new();
+    private readonly Label _yearLabel = StockPage.Caption(new Label());
     private readonly NumericUpDown _year = new();
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _apply = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _pdf = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _csv = UiTheme.SecondaryButton(string.Empty);
-    private readonly Label _formula = new();
+    private readonly StockFooter _formula = new();
 
     private IReadOnlyList<SupplierEvaluationRow> _rows = [];
 
@@ -67,31 +69,16 @@ public sealed class SupplierEvaluationView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
-
-        var bar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _yearLabel.Font = UiTheme.Small;
-        _yearLabel.ForeColor = UiTheme.TextSecondary;
-        _yearLabel.AutoSize = true;
-        _yearLabel.Location = new Point(0, 34);
+        Padding = StockPage.ContentPadding;
 
         _year.Minimum = 2000;
         _year.Maximum = 2100;
         _year.Value = DateTime.Today.Year;
-        _year.Bounds = new Rectangle(70, 30, 80, UiTheme.InputHeight);
+        _year.Width = 80;
+        _year.Font = UiTheme.Monospace;
 
-        _refresh.Bounds = new Rectangle(170, 26, 110, UiTheme.ButtonHeight);
-        _apply.Bounds = new Rectangle(290, 26, 230, UiTheme.ButtonHeight);
-        _pdf.Bounds = new Rectangle(530, 26, 150, UiTheme.ButtonHeight);
-        _csv.Bounds = new Rectangle(690, 26, 150, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _yearLabel, _year, _refresh, _apply, _pdf, _csv]);
+        var header = StockPage.Header(_heading, _count, _refresh, _pdf, _csv, _apply);
+        var filters = StockPage.Filters(_search, _yearLabel, _year);
 
         foreach (var (name, weight) in new[]
                  {
@@ -103,7 +90,21 @@ public sealed class SupplierEvaluationView : LocalizedView
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = name, FillWeight = weight, ReadOnly = true,
-                SortMode = DataGridViewColumnSortMode.NotSortable
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    // Codes, counts, scores and dates in the figure font, as on every list.
+                    Font = name switch
+                    {
+                        "code" => UiTheme.MonospaceBold,
+                        "proposed" => UiTheme.MonospaceBold,
+                        "name" or "registration" => UiTheme.Body,
+                        _ => UiTheme.Monospace
+                    },
+                    Alignment = name is "code" or "name" or "registration" or "validity"
+                        ? DataGridViewContentAlignment.MiddleLeft
+                        : DataGridViewContentAlignment.MiddleRight
+                }
             });
         }
 
@@ -118,14 +119,11 @@ public sealed class SupplierEvaluationView : LocalizedView
             }
         };
 
-        _formula.Dock = DockStyle.Bottom;
-        _formula.Height = 46;
-        _formula.Font = UiTheme.Small;
-        _formula.ForeColor = UiTheme.TextSecondary;
+        _search.Changed += (_, _) => StockGrid.Filter(_grid, _search.Query);
 
-        Controls.Add(_grid);
-        Controls.Add(_formula);
-        Controls.Add(bar);
+        Controls.Add(new StockCard(_grid, heading: false, footer: _formula) { Dock = DockStyle.Fill });
+        Controls.Add(filters);
+        Controls.Add(header);
     }
 
     private IReadOnlyList<string> Headers() =>
@@ -140,6 +138,7 @@ public sealed class SupplierEvaluationView : LocalizedView
     protected override void ApplyTexts()
     {
         _heading.Text = T("Nav.SupplierEvaluation");
+        _search.Placeholder = T("StocksUi.SearchSuppliers");
         _yearLabel.Text = T("SupplierEvaluation.Year");
         _refresh.Text = T("Action.Refresh");
         _apply.Text = T("SupplierEvaluation.Apply");
@@ -180,7 +179,8 @@ public sealed class SupplierEvaluationView : LocalizedView
             _grid.Rows[index].Tag = row;
         }
 
-        _heading.Text = $"{T("Nav.SupplierEvaluation")} — {(int)_year.Value} · {_rows.Count}";
+        StockGrid.Filter(_grid, _search.Query);
+        _count.Text = T("StocksUi.Suppliers", _rows.Count, (int)_year.Value);
         _apply.Enabled = Current?.Kpis.ProposedScore is not null;
     }
 

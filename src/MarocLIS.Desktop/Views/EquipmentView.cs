@@ -30,11 +30,18 @@ public sealed class EquipmentView : LocalizedView
     private readonly ILogger<EquipmentView>? _logger;
 
     private readonly DataGridView _grid = UiTheme.Grid();
-    private readonly Label _heading = new();
-    private readonly CheckBox _onlyDue = new();
+    // Direction A: title and count, search and chip, the register card and, beside it, the
+    // selected instrument's card with its dates and what can be recorded on it.
+    private readonly Label _heading = StockPage.Title();
+    private readonly Label _count = StockPage.Count();
+    private readonly StockSearchBox _search = new();
+    private readonly CheckBox _onlyDue = new StockChip();
+    private readonly StockCard _asideCard;
+    private readonly StockFacts _facts = new() { Dock = DockStyle.Top };
+    private readonly PillLabel _statusPill = new();
 
     private readonly Button _maintenance = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _calibration = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _calibration = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _status = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
 
@@ -52,6 +59,7 @@ public sealed class EquipmentView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
 
+        _asideCard = new StockCard(new Panel { BackColor = UiTheme.SurfaceRaised });
         BuildLayout();
         WireBehaviour();
     }
@@ -62,53 +70,48 @@ public sealed class EquipmentView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = StockPage.ContentPadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 74, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _onlyDue.Font = UiTheme.Small;
-        _onlyDue.ForeColor = UiTheme.TextSecondary;
-        _onlyDue.AutoSize = true;
-        _onlyDue.Location = new Point(120, 44);
+        var header = StockPage.Header(_heading, _count, _refresh);
         _onlyDue.Checked = true;   // The overdue list is the reason the screen exists.
-
-        // Before the tick box, not after it: the tick box sizes itself to its sentence, which ran
-        // under a button placed at a fixed position to its right.
-        _refresh.Bounds = new Rectangle(0, 38, 110, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _onlyDue, _refresh]);
+        var filters = StockPage.Filters(_search, _onlyDue);
 
         BuildColumns();
+        var registerCard = new StockCard(_grid, heading: false);
 
-        var gridHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        gridHost.Controls.Add(_grid);
+        // The selected instrument: its status, what is wrong with it, its facts and its actions,
+        // the maintenance being the everyday one.
+        _asideCard.Heading.End(_statusPill);
 
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 92, BackColor = UiTheme.Surface };
-
-        _detail.Font = UiTheme.Small;
+        _detail.Font = UiTheme.Body;
         _detail.ForeColor = UiTheme.TextSecondary;
         _detail.AutoSize = false;
-        _detail.Bounds = new Rectangle(0, 4, 1200, 32);
-
-        _maintenance.Bounds = new Rectangle(0, 42, 210, UiTheme.ButtonHeight);
-        _calibration.Bounds = new Rectangle(220, 42, 210, UiTheme.ButtonHeight);
-        _status.Bounds = new Rectangle(440, 42, 200, UiTheme.ButtonHeight);
+        _detail.Dock = DockStyle.Top;
+        _detail.Height = 22;
+        _detail.AutoEllipsis = true;
 
         _message.Font = UiTheme.SmallBold;
         _message.ForeColor = UiTheme.TextSecondary;
         _message.AutoSize = false;
-        _message.Bounds = new Rectangle(652, 48, 560, 20);
+        _message.Dock = DockStyle.Top;
+        _message.Height = 40;
 
-        footer.Controls.AddRange([_detail, _maintenance, _calibration, _status, _message]);
+        var body = (Panel)_asideCard.Controls[0];
+        body.Padding = new Padding(15, 0, 15, 4);
+        body.AutoScroll = true;
+        body.Controls.Add(_facts);
+        body.Controls.Add(_message);
+        body.Controls.Add(_detail);
 
-        Controls.Add(gridHost);
-        Controls.Add(footer);
-        Controls.Add(bar);
+        foreach (var button in new[] { _status, _calibration, _maintenance }) StockPage.Action(button);
+        var actions = StockPage.ActionBar(_status, _calibration, _maintenance);
+        _asideCard.Controls.Add(actions);
+        actions.BringToFront();
+        body.BringToFront();
+
+        Controls.Add(StockPage.Beside(registerCard, _asideCard, 900));
+        Controls.Add(filters);
+        Controls.Add(header);
     }
 
     private void BuildColumns()
@@ -127,7 +130,7 @@ public sealed class EquipmentView : LocalizedView
                 }
             });
 
-        Add("code", 9, UiTheme.Monospace);
+        Add("code", 9, UiTheme.MonospaceBold);
         Add("name", 20);
         Add("kind", 10, UiTheme.Small);
         Add("status", 11, UiTheme.SmallBold);
@@ -145,6 +148,8 @@ public sealed class EquipmentView : LocalizedView
 
         _grid.SelectionChanged += (_, _) => ShowDetail();
         _grid.CellFormatting += OnCellFormatting;
+        StockGrid.Pills(_grid, "status", tag => tag is EquipmentRow row ? StatusPill(row.Status) : null);
+        _search.Changed += (_, _) => StockGrid.Filter(_grid, _search.Query);
 
         // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
         // action, and leaving the screen mid-write no longer disposes its context under it.
@@ -174,8 +179,13 @@ public sealed class EquipmentView : LocalizedView
         else if (row.MaintenanceOverdue || row.ContractExpired
                  || row.Status == EquipmentStatus.UnderMaintenance)
         {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
+            // A reminder, not an emergency: the late date and the status pill carry it, not the row.
+            var column = _grid.Columns[e.ColumnIndex].Name;
+            if (column == "maintenance" && row.MaintenanceOverdue || column == "contract" && row.ContractExpired)
+            {
+                e.CellStyle!.ForeColor = UiTheme.Abnormal;
+                e.CellStyle.Font = UiTheme.MonospaceBold;
+            }
         }
         else if (row.Status == EquipmentStatus.Decommissioned)
         {
@@ -183,9 +193,19 @@ public sealed class EquipmentView : LocalizedView
         }
     }
 
+    private static StockPill StatusPill(EquipmentStatus status) => status switch
+    {
+        EquipmentStatus.Operational => StockPill.Done,
+        EquipmentStatus.OutOfService => StockPill.Critical,
+        EquipmentStatus.UnderMaintenance => StockPill.Warning,
+        EquipmentStatus.Commissioning => StockPill.Running,
+        _ => StockPill.Waiting
+    };
+
     protected override void ApplyTexts()
     {
         _heading.Text = T("Equipment.Title");
+        _search.Placeholder = T("StocksUi.SearchEquipment");
         _onlyDue.Text = T("Equipment.OnlyDue");
         _maintenance.Text = T("Equipment.RecordMaintenance");
         _calibration.Text = T("Equipment.RecordCalibration");
@@ -260,11 +280,12 @@ public sealed class EquipmentView : LocalizedView
 
         var overdue = _rows.Count(r => r.CalibrationOverdue || r.MaintenanceOverdue);
 
-        _heading.Text = overdue > 0
-            ? $"{T("Equipment.Title")} — {_rows.Count} · {T("Equipment.Overdue")} {overdue}"
-            : $"{T("Equipment.Title")} — {_rows.Count}";
+        _count.Text = overdue > 0
+            ? $"{T("StocksUi.Instruments", _rows.Count)} · {T("Equipment.Overdue")} {overdue}"
+            : T("StocksUi.Instruments", _rows.Count);
 
         if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
+        StockGrid.Filter(_grid, _search.Query);
 
         ShowDetail();
     }
@@ -288,8 +309,26 @@ public sealed class EquipmentView : LocalizedView
         {
             _detail.Text = string.Empty;
             _message.Text = string.Empty;
+            _asideCard.Title.Text = T("StocksUi.NoInstrument");
+            _asideCard.Note.Text = string.Empty;
+            _statusPill.Show(string.Empty, EntryPaint.Waiting);
+            _facts.Show([]);
             return;
         }
+
+        var pill = StatusPill(row.Status);
+        _asideCard.Title.Text = row.Name.For(Localizer.CurrentLanguage);
+        _asideCard.Note.Text = row.Code;
+        _statusPill.Show($"{pill.Symbol} {T($"EquipmentStatus.{row.Status}")}", pill.Tone);
+        _facts.Show(
+        [
+            (T("Equipment.Kind"), T($"EquipmentKind.{row.Kind}"), false),
+            (T("Equipment.SerialNumber"), row.SerialNumber ?? string.Empty, true),
+            (T("Equipment.Location"), row.Location ?? string.Empty, false),
+            (T("Equipment.NextMaintenance"), Due(row.NextMaintenanceDue, row.MaintenanceOverdue), true),
+            (T("Equipment.NextCalibration"), Due(row.NextCalibrationDue, row.CalibrationOverdue), true),
+            (T("Equipment.Contract"), Due(row.ContractValidUntil, row.ContractExpired), true)
+        ]);
 
         var parts = new List<string>(5);
 

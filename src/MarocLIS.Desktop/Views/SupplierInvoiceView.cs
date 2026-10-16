@@ -33,10 +33,19 @@ public sealed class SupplierInvoiceView : LocalizedView
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
     private readonly TabPage _linesTab = new(), _variancesTab = new(), _paymentsTab = new();
 
-    private readonly Label _heading = new();
-    private readonly Label _summary = new();
-    private readonly Label _detailHeading = new();
+    // Direction A: title and count, search and the due-date chips, the invoices card and the
+    // selected invoice's card. The filter list stays as the state the chips choose.
+    private readonly Label _heading = StockPage.Title();
+    private readonly Label _count = StockPage.Count();
+    private readonly StockSearchBox _search = new();
+    private readonly List<StockChip> _chips = [];
+    private readonly StockFooter _summary = new();
+    private readonly StockCard _detailCard;
     private readonly Label _detailInfo = new();
+    private readonly ContextMenuStrip _headerMore = new();
+    private readonly ContextMenuStrip _detailMore = new();
+    private readonly Button _headerMoreButton;
+    private readonly Button _detailMoreButton;
     private readonly ComboBox _filter = new() { DropDownStyle = ComboBoxStyle.DropDownList, FormattingEnabled = true };
 
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
@@ -44,12 +53,12 @@ public sealed class SupplierInvoiceView : LocalizedView
     private readonly Button _rematch = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _unblock = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _pay = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _attach = UiTheme.SecondaryButton(string.Empty);
+    private readonly StockMenuButton _attach = new();
     private readonly Button _viewScan = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _cancel = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _late = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _export = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _settings = UiTheme.SecondaryButton(string.Empty);
+    private readonly StockMenuButton _cancel = new();
+    private readonly StockMenuButton _late = new();
+    private readonly StockMenuButton _export = new();
+    private readonly StockMenuButton _settings = new();
 
     private IReadOnlyList<SupplierInvoiceRow> _rows = [];
     private SupplierInvoiceDetail? _detail;
@@ -65,6 +74,11 @@ public sealed class SupplierInvoiceView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
 
+        var detailBody = new Panel { BackColor = UiTheme.SurfaceRaised };
+        _detailCard = new StockCard(detailBody);
+        _headerMoreButton = StockMenu.More(_headerMore, localizer);
+        _detailMoreButton = StockMenu.More(_detailMore, localizer);
+
         BuildLayout();
         WireBehaviour();
     }
@@ -75,47 +89,28 @@ public sealed class SupplierInvoiceView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = StockPage.ContentPadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 84, BackColor = UiTheme.Surface };
+        // The rare tools of the payment run go behind « Plus d'actions ».
+        foreach (var button in new[] { _late, _export, _settings }) _headerMore.Items.Add(StockMenu.Entry(button));
+        var header = StockPage.Header(_heading, _count, _refresh, _headerMoreButton, _newInvoice);
+        ShortcutHints.Attach(_newInvoice, NewKey);
 
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _summary.Font = UiTheme.SmallBold;
-        _summary.ForeColor = UiTheme.TextSecondary;
-        _summary.AutoSize = false;
-        _summary.Bounds = new Rectangle(0, 34, 1100, 18);
-
-        _filter.Bounds = new Rectangle(0, 56, 260, UiTheme.InputHeight);
-        _refresh.Bounds = new Rectangle(280, 52, 110, UiTheme.ButtonHeight);
-        _newInvoice.Bounds = new Rectangle(400, 52, 200, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _summary, _filter, _refresh, _newInvoice]);
-
-        var split = new ProportionalSplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 260,
-            SplitterWidth = 6,
-            BackColor = UiTheme.Surface
-        };
+        // One chip per filter; the due ones carry their count from the due-date dashboard.
+        foreach (var filter in Enum.GetValues<SupplierInvoiceFilter>())
+            _chips.Add(new StockChip { Tag = filter, Checked = filter == SupplierInvoiceFilter.Open });
+        StockChip.Exclusive(_chips, chip => _filter.SelectedItem = chip.Tag);
+        var filters = StockPage.Filters(_search, [.. _chips]);
 
         BuildColumns();
-        split.Panel1.Controls.Add(_grid);
-
-        _detailHeading.Font = UiTheme.SectionTitle;
-        _detailHeading.ForeColor = UiTheme.TextPrimary;
-        _detailHeading.Dock = DockStyle.Top;
-        _detailHeading.Height = 26;
+        var invoicesCard = new StockCard(_grid, heading: false, footer: _summary);
 
         _detailInfo.Font = UiTheme.Small;
         _detailInfo.ForeColor = UiTheme.TextSecondary;
+        _detailInfo.BackColor = UiTheme.SurfaceRaised;
         _detailInfo.Dock = DockStyle.Top;
-        _detailInfo.Height = 40;
+        _detailInfo.Height = 44;
+        _detailInfo.Padding = new Padding(15, 0, 15, 4);
         _detailInfo.AutoSize = false;
 
         _linesTab.Controls.Add(_lines);
@@ -123,31 +118,33 @@ public sealed class SupplierInvoiceView : LocalizedView
         _paymentsTab.Controls.Add(_payments);
         _tabs.TabPages.AddRange([_linesTab, _variancesTab, _paymentsTab]);
 
-        split.Panel2.Controls.Add(_tabs);
-        split.Panel2.Controls.Add(_detailInfo);
-        split.Panel2.Controls.Add(_detailHeading);
+        var body = (Panel)_detailCard.Controls[0];
+        body.Padding = new Padding(15, 0, 15, 4);
+        body.Controls.Add(_tabs);
+        body.Controls.Add(_detailInfo);
 
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 92, BackColor = UiTheme.Surface };
+        // The selected invoice's actions, the payment being the main one.
+        foreach (var button in new[] { _attach, _cancel }) _detailMore.Items.Add(StockMenu.Entry(button));
+        foreach (var button in new[] { _rematch, _unblock, _viewScan, _pay }) StockPage.Action(button);
+        _detailCard.Heading.End(_rematch, _unblock, _viewScan, _detailMoreButton, _pay);
 
-        var x = 0;
-        foreach (var button in new[] { _rematch, _unblock, _pay, _attach, _viewScan, _cancel })
+        Controls.Add(StockPage.Stack(invoicesCard, _detailCard, 250));
+        Controls.Add(filters);
+        Controls.Add(header);
+    }
+
+    private const string NewKey = "Ctrl+N";
+
+    /// <summary>Ctrl+N enters a new invoice, as the key drawn on the button says.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.N) && _newInvoice.Enabled && _newInvoice.Visible)
         {
-            button.Bounds = new Rectangle(x, 4, 170, UiTheme.ButtonHeight);
-            x += 180;
+            _newInvoice.PerformClick();
+            return true;
         }
 
-        x = 0;
-        foreach (var button in new[] { _late, _export, _settings })
-        {
-            button.Bounds = new Rectangle(x, 48, 260, UiTheme.ButtonHeight);
-            x += 270;
-        }
-
-        footer.Controls.AddRange([_rematch, _unblock, _pay, _attach, _viewScan, _cancel, _late, _export, _settings]);
-
-        Controls.Add(split);
-        Controls.Add(footer);
-        Controls.Add(bar);
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private static void AddColumn(DataGridView grid, string name, int weight, Font? font = null, bool right = false) =>
@@ -206,6 +203,8 @@ public sealed class SupplierInvoiceView : LocalizedView
         _refresh.Click += async (_, _) => await ActivateAsync();
         _grid.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDetailAsync());
         _grid.CellFormatting += OnFormatting;
+        StockGrid.Pills(_grid, "status", tag => tag is SupplierInvoiceRow row ? StatusPill(row) : null);
+        _search.Changed += (_, _) => StockGrid.Filter(_grid, _search.Query);
 
         _newInvoice.Click += async (_, _) => await RunBusyAsync(NewInvoiceAsync);
         _rematch.Click += async (_, _) => await RunBusyAsync(RematchAsync);
@@ -237,8 +236,9 @@ public sealed class SupplierInvoiceView : LocalizedView
         }
         else if (row.Status == SupplierInvoiceStatus.Blocked)
         {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
+            // A blocked invoice is not urgent: its pill and its number say it, not the whole row.
+            if (_grid.Columns[e.ColumnIndex].Name is "number")
+                e.CellStyle!.ForeColor = UiTheme.Abnormal;
         }
         else if (!row.IsOpen)
         {
@@ -246,8 +246,20 @@ public sealed class SupplierInvoiceView : LocalizedView
         }
     }
 
+    private static StockPill StatusPill(SupplierInvoiceRow row) => row switch
+    {
+        { IsOverdue: true } => StockPill.Critical,
+        { Status: SupplierInvoiceStatus.Blocked } => StockPill.Warning,
+        { Status: SupplierInvoiceStatus.Cancelled } => StockPill.Waiting,
+        { IsOpen: false } => StockPill.Done,
+        { Status: SupplierInvoiceStatus.PartiallyPaid } => StockPill.Running,
+        _ => StockPill.Waiting
+    };
+
     protected override void ApplyTexts()
     {
+        _search.Placeholder = T("StocksUi.SearchInvoices");
+        _headerMoreButton.Text = _detailMoreButton.Text = T("ResultEntry.MoreActions");
         _refresh.Text = T("Action.Refresh");
         _newInvoice.Text = T("SupplierInvoices.New");
         _rematch.Text = T("SupplierInvoices.Rematch");
@@ -295,6 +307,7 @@ public sealed class SupplierInvoiceView : LocalizedView
         _payments.Column("by").HeaderText = T("Field.CreatedBy");
 
         _filter.Refresh();
+        _detailCard.Title.Text = T("StocksUi.SelectedInvoice");
         RenderHeading();
         if (_rows.Count > 0) Render();
         RenderDetail();
@@ -358,6 +371,7 @@ public sealed class SupplierInvoiceView : LocalizedView
         }
 
         _grid.ResumeLayout(performLayout: true);
+        StockGrid.Filter(_grid, _search.Query);
         RenderHeading();
 
         if (keep is null && _grid.Rows.Count > 0) _grid.CurrentCell = _grid.Rows[0].Cells[0];
@@ -370,7 +384,22 @@ public sealed class SupplierInvoiceView : LocalizedView
 
     private void RenderHeading()
     {
-        _heading.Text = $"{T("SupplierInvoices.Title")} — {_rows.Count}";
+        _heading.Text = T("SupplierInvoices.Title");
+        _count.Text = T("StocksUi.Invoices", _rows.Count);
+        foreach (var chip in _chips)
+        {
+            var filter = (SupplierInvoiceFilter)chip.Tag!;
+            int? count = _due is not { } due ? null : filter switch
+            {
+                SupplierInvoiceFilter.Overdue => due.Overdue,
+                SupplierInvoiceFilter.DueWithin7Days => due.DueWithin7Days,
+                SupplierInvoiceFilter.DueWithin15Days => due.DueWithin15Days,
+                SupplierInvoiceFilter.Blocked => due.Blocked,
+                _ => null
+            };
+            chip.Text = count is { } n ? $"{T($"SupplierInvoiceFilter.{filter}")} · {n}" : T($"SupplierInvoiceFilter.{filter}");
+        }
+
         _summary.Text = _due is { } d
             ? T("SupplierInvoices.DueSummary", d.Overdue, Amount(d.OverdueAmount), d.DueWithin7Days,
                 Amount(d.DueWithin7DaysAmount), d.DueWithin15Days, Amount(d.DueWithin15DaysAmount), d.Blocked)
@@ -410,7 +439,7 @@ public sealed class SupplierInvoiceView : LocalizedView
 
         if (_detail is not { } d)
         {
-            _detailHeading.Text = string.Empty;
+            _detailCard.Note.Text = string.Empty;
             _detailInfo.Text = string.Empty;
             RefreshButtons();
             return;
@@ -428,7 +457,7 @@ public sealed class SupplierInvoiceView : LocalizedView
                                p.Reference ?? string.Empty, p.RecordedByName);
 
         var h = d.Header;
-        _detailHeading.Text = $"{h.InvoiceNumber} · {h.SupplierName} · {T($"SupplierInvoiceStatus.{h.Status}")}";
+        _detailCard.Note.Text = $"{h.InvoiceNumber} · {h.SupplierName} · {T($"SupplierInvoiceStatus.{h.Status}")}";
 
         var info = T("SupplierInvoices.DetailInfo", Amount(h.TotalExcludingVat),
                      Amount(h.TotalIncludingVat - h.TotalExcludingVat), Amount(h.TotalIncludingVat),

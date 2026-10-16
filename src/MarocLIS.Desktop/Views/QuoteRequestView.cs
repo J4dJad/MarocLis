@@ -302,7 +302,7 @@ public sealed class QuoteRequestView : LocalizedView
     private void RenderHeading()
     {
         var open = _rows.Count(r => r.Status == QuoteRequestStatus.Open);
-        _count.Text = $"{_rows.Count}" + (open > 0 ? $" · {T("Quotes.OpenCount")} {open}" : string.Empty);
+        _count.Text = T("StocksUi.Quotes", _rows.Count) + (open > 0 ? $" · {T("Quotes.OpenCount")} {open}" : string.Empty);
     }
 
     private async Task LoadDetailAsync()

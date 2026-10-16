@@ -27,19 +27,22 @@ public sealed class TemperatureView : LocalizedView
 
     private readonly DataGridView _units = UiTheme.Grid();
     private readonly DataGridView _readings = UiTheme.Grid();
-    private readonly Label _heading = new();
-    private readonly Label _readingsHeading = new();
+    // Direction A: title and count, search and chip, the units card and the month's readings card.
+    private readonly Label _heading = StockPage.Title();
+    private readonly Label _count = StockPage.Count();
+    private readonly StockSearchBox _search = new();
+    private readonly StockCard _readingsCard;
     private readonly Button _record = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _newUnit = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _editUnit = UiTheme.SecondaryButton(string.Empty);
-    private readonly CheckBox _includeInactive = new();
+    private readonly CheckBox _includeInactive = new StockChip();
     private readonly DateTimePicker _month = new()
     {
         Format = DateTimePickerFormat.Custom, CustomFormat = "MM/yyyy", ShowUpDown = true
     };
     private readonly Button _pdf = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _csv = UiTheme.SecondaryButton(string.Empty);
-    private readonly Label _status = new();
+    private readonly StockFooter _status = new();
 
     private IReadOnlyList<StorageUnitRow> _unitRows = [];
     private IReadOnlyList<TemperatureReadingRow> _readingRows = [];
@@ -55,6 +58,7 @@ public sealed class TemperatureView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
 
+        _readingsCard = new StockCard(_readings);
         BuildLayout();
 
         _units.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadReadingsAsync());
@@ -96,31 +100,12 @@ public sealed class TemperatureView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = StockPage.ContentPadding;
 
-        var split = new ProportionalSplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 240,
-            SplitterWidth = 6,
-            BackColor = UiTheme.Surface
-        };
-
-        var bar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = UiTheme.Surface };
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _record.Bounds = new Rectangle(0, 30, 200, UiTheme.ButtonHeight);
-        _newUnit.Bounds = new Rectangle(210, 30, 170, UiTheme.ButtonHeight);
-        _editUnit.Bounds = new Rectangle(390, 30, 170, UiTheme.ButtonHeight);
-        _includeInactive.Font = UiTheme.Small;
-        _includeInactive.ForeColor = UiTheme.TextSecondary;
-        _includeInactive.AutoSize = true;
-        _includeInactive.Location = new Point(574, 36);
-        bar.Controls.AddRange([_heading, _record, _newUnit, _editUnit, _includeInactive]);
+        // The reading is the daily act: the primary, on Ctrl+N.
+        var header = StockPage.Header(_heading, _count, _newUnit, _editUnit, _record);
+        ShortcutHints.Attach(_record, NewKey);
+        var filters = StockPage.Filters(_search, _includeInactive);
 
         foreach (var (name, weight) in new[]
                  {
@@ -131,7 +116,12 @@ public sealed class TemperatureView : LocalizedView
             _units.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = name, FillWeight = weight, ReadOnly = true,
-                SortMode = DataGridViewColumnSortMode.NotSortable
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Font = name is "range" or "today" or "last" or "lastat" ? UiTheme.Monospace
+                        : name is "state" ? UiTheme.SmallBold : UiTheme.Body
+                }
             });
         }
 
@@ -150,26 +140,28 @@ public sealed class TemperatureView : LocalizedView
             }
             else if (row.MissingToday || row.IsActive && row.ReadingsToday < row.ReadingsPerDay)
             {
-                e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-                e.CellStyle.ForeColor = UiTheme.Abnormal;
+                // Not urgent: the readings of the day and the pill carry it, not the whole row.
+                if (_units.Columns[e.ColumnIndex].Name is "today")
+                {
+                    e.CellStyle!.ForeColor = UiTheme.Abnormal;
+                    e.CellStyle.Font = UiTheme.MonospaceBold;
+                }
             }
         };
+        StockGrid.Pills(_units, "state", tag => tag is StorageUnitRow row ? row switch
+        {
+            { IsActive: false } => StockPill.Waiting,
+            { LastOutOfRange: true } => StockPill.Critical,
+            { MissingToday: true } => StockPill.Warning,
+            _ => StockPill.Done
+        } : null);
+        _search.Changed += (_, _) => StockGrid.Filter(_units, _search.Query);
 
-        var top = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        top.Controls.Add(_units);
-        top.Controls.Add(bar);
-
-        var readingsBar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
-        _readingsHeading.Font = UiTheme.SectionTitle;
-        _readingsHeading.ForeColor = UiTheme.TextPrimary;
-        // Fixed width: the heading grows with the selection and must not run under the buttons.
-        _readingsHeading.AutoSize = false;
-        _readingsHeading.AutoEllipsis = true;
-        _readingsHeading.Bounds = new Rectangle(0, 10, 370, 26);
-        _month.Bounds = new Rectangle(380, 8, 100, UiTheme.InputHeight);
-        _pdf.Bounds = new Rectangle(490, 6, 200, UiTheme.ButtonHeight);
-        _csv.Bounds = new Rectangle(700, 6, 200, UiTheme.ButtonHeight);
-        readingsBar.Controls.AddRange([_readingsHeading, _month, _pdf, _csv]);
+        // The month shown, and its sheet printed or exported for the file.
+        _month.Width = 100;
+        _month.Font = UiTheme.Monospace;
+        foreach (var button in new[] { _pdf, _csv }) StockPage.Action(button);
+        _readingsCard.Heading.End(_month, _pdf, _csv);
 
         foreach (var (name, weight) in new[]
                  {
@@ -180,7 +172,12 @@ public sealed class TemperatureView : LocalizedView
             _readings.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = name, FillWeight = weight, ReadOnly = true,
-                SortMode = DataGridViewColumnSortMode.NotSortable
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Font = name is "date" or "value" or "min" or "max" or "nc" ? UiTheme.Monospace
+                        : name is "state" ? UiTheme.SmallBold : UiTheme.Body
+                }
             });
         }
 
@@ -195,19 +192,27 @@ public sealed class TemperatureView : LocalizedView
             }
         };
 
-        _status.Dock = DockStyle.Bottom;
-        _status.Height = 30;
-        _status.Font = UiTheme.Small;
-        _status.ForeColor = UiTheme.TextSecondary;
+        StockGrid.Pills(_readings, "state", tag => tag is TemperatureReadingRow row
+                            ? row.IsOutOfRange ? StockPill.Critical : StockPill.Done
+                            : null);
 
-        var bottom = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        bottom.Controls.Add(_readings);
-        bottom.Controls.Add(readingsBar);
-        bottom.Controls.Add(_status);
+        Controls.Add(StockPage.Stack(new StockCard(_units, heading: false, footer: _status), _readingsCard, 240));
+        Controls.Add(filters);
+        Controls.Add(header);
+    }
 
-        split.Panel1.Controls.Add(top);
-        split.Panel2.Controls.Add(bottom);
-        Controls.Add(split);
+    private const string NewKey = "Ctrl+N";
+
+    /// <summary>Ctrl+N records a reading for the selected unit, as the key drawn on the button says.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.N) && _record.Enabled && _record.Visible)
+        {
+            _record.PerformClick();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private IReadOnlyList<string> ReadingHeaders() =>
@@ -219,6 +224,8 @@ public sealed class TemperatureView : LocalizedView
     protected override void ApplyTexts()
     {
         _heading.Text = T("Nav.Temperatures");
+        _search.Placeholder = T("StocksUi.SearchUnits");
+        _readingsCard.Title.Text = T("Temperatures.Readings");
         _record.Text = T("Temperatures.Record");
         _newUnit.Text = T("Temperatures.NewUnit");
         _editUnit.Text = T("Temperatures.EditUnit");
@@ -281,6 +288,8 @@ public sealed class TemperatureView : LocalizedView
             if (u.StorageUnitId == select) _units.CurrentCell = _units.Rows[index].Cells[0];
         }
 
+        StockGrid.Filter(_units, _search.Query);
+        _count.Text = T("StocksUi.Units", _unitRows.Count);
         var missing = _unitRows.Count(u => u.MissingToday);
         _status.Text = missing > 0 ? T("Temperatures.MissingCount", missing) : string.Empty;
         _status.ForeColor = missing > 0 ? UiTheme.Abnormal : UiTheme.TextSecondary;
@@ -315,9 +324,7 @@ public sealed class TemperatureView : LocalizedView
             _readings.Rows[index].Tag = r;
         }
 
-        _readingsHeading.Text = CurrentUnit is { } unit
-            ? $"{T("Temperatures.Readings")} — {unit.Name} · {_readingRows.Count}"
-            : T("Temperatures.Readings");
+        _readingsCard.Note.Text = CurrentUnit is { } unit ? $"{unit.Name} · {_readingRows.Count}" : string.Empty;
         RefreshButtons();
     }
 

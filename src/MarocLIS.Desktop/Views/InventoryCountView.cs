@@ -33,18 +33,23 @@ public sealed class InventoryCountView : LocalizedView
 
     private readonly DataGridView _list = UiTheme.Grid();
     private readonly DataGridView _lines = UiTheme.Grid();
-    private readonly Label _heading = new();
-    private readonly Label _linesHeading = new();
-    private readonly CheckBox _includeClosed = new();
+    // Direction A: title and count, search and chip, the counts card and the sheet's card.
+    private readonly Label _heading = StockPage.Title();
+    private readonly Label _count = StockPage.Count();
+    private readonly StockSearchBox _search = new();
+    private readonly CheckBox _includeClosed = new StockChip();
+    private readonly StockCard _linesCard;
+    private readonly ContextMenuStrip _more = new();
+    private readonly Button _moreButton;
     private readonly Button _new = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _start = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _close = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _cancel = UiTheme.SecondaryButton(string.Empty);
+    private readonly StockMenuButton _cancel = new();
     private readonly Button _sheet = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _sheetCsv = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _variances = UiTheme.SecondaryButton(string.Empty);
-    private readonly Label _status = new();
-    private readonly Label _sheetTimeLabel = new();
+    private readonly StockFooter _status = new();
+    private readonly Label _sheetTimeLabel = StockPage.Caption(new Label());
     private readonly DateTimePicker _sheetTime = new()
     {
         Format = DateTimePickerFormat.Custom, CustomFormat = "dd/MM/yyyy HH:mm", ShowCheckBox = true, Checked = false
@@ -74,6 +79,8 @@ public sealed class InventoryCountView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
 
+        _linesCard = new StockCard(_lines, footer: _status);
+        _moreButton = StockMenu.More(_more, localizer);
         BuildLayout();
 
         _includeClosed.CheckedChanged += async (_, _) => await ActivateAsync();
@@ -97,35 +104,13 @@ public sealed class InventoryCountView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = StockPage.ContentPadding;
 
-        var split = new ProportionalSplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 220,
-            SplitterWidth = 6,
-            BackColor = UiTheme.Surface
-        };
-
-        var bar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _includeClosed.Font = UiTheme.Small;
-        _includeClosed.ForeColor = UiTheme.TextSecondary;
-        _includeClosed.AutoSize = true;
-        _includeClosed.Location = new Point(0, 34);
-
-        _new.Bounds = new Rectangle(220, 26, 170, UiTheme.ButtonHeight);
-        _start.Bounds = new Rectangle(400, 26, 170, UiTheme.ButtonHeight);
-        _close.Bounds = new Rectangle(580, 26, 170, UiTheme.ButtonHeight);
-        _cancel.Bounds = new Rectangle(760, 26, 130, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _includeClosed, _new, _start, _close, _cancel]);
+        // Opening a count is the main act of the header; cancelling one is rare.
+        _more.Items.Add(StockMenu.Entry(_cancel));
+        var header = StockPage.Header(_heading, _count, _start, _moreButton, _new);
+        ShortcutHints.Attach(_new, NewKey);
+        var filters = StockPage.Filters(_search, _includeClosed);
 
         foreach (var (name, weight) in new[]
                  {
@@ -136,38 +121,39 @@ public sealed class InventoryCountView : LocalizedView
             _list.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = name, FillWeight = weight, ReadOnly = true,
-                SortMode = DataGridViewColumnSortMode.NotSortable
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Font = name switch
+                    {
+                        "number" => UiTheme.MonospaceBold,
+                        "scope" => UiTheme.Body,
+                        "status" => UiTheme.SmallBold,
+                        _ => UiTheme.Monospace
+                    },
+                    Alignment = name is "lines" or "counted" or "variances"
+                        ? DataGridViewContentAlignment.MiddleRight
+                        : DataGridViewContentAlignment.MiddleLeft
+                }
             });
         }
 
         _list.Dock = DockStyle.Fill;
+        StockGrid.Pills(_list, "status", tag => tag is InventoryCountRow row ? row.Status switch
+        {
+            InventoryCountStatus.Counting => StockPill.Running,
+            InventoryCountStatus.Closed => StockPill.Done,
+            _ => StockPill.Waiting
+        } : null);
+        _search.Changed += (_, _) => StockGrid.Filter(_list, _search.Query);
 
-        var top = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        top.Controls.Add(_list);
-        top.Controls.Add(bar);
-
-        // Two lines: the sheet time sits under the buttons so that it stays visible at the shell's
-        // minimum width (the bar keeps its own layout and is not wrapped).
-        var linesBar = new Panel { Dock = DockStyle.Top, Height = 78, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
-        _linesHeading.Font = UiTheme.SectionTitle;
-        _linesHeading.ForeColor = UiTheme.TextPrimary;
-        // Fixed width: the heading grows with the selection and must not run under the buttons.
-        _linesHeading.AutoSize = false;
-        _linesHeading.AutoEllipsis = true;
-        _linesHeading.Bounds = new Rectangle(0, 10, 250, 26);
-
-        _sheet.Bounds = new Rectangle(260, 6, 220, UiTheme.ButtonHeight);
-        _sheetCsv.Bounds = new Rectangle(490, 6, 170, UiTheme.ButtonHeight);
-        _variances.Bounds = new Rectangle(670, 6, 220, UiTheme.ButtonHeight);
-
+        // The sheet's tools, the time a paper sheet was filled in, and the closing as the primary.
         // Unticked, a figure is the shelf as it is now; ticked, the time the paper sheet was filled in.
-        _sheetTimeLabel.Font = UiTheme.Small;
-        _sheetTimeLabel.ForeColor = UiTheme.TextSecondary;
-        _sheetTimeLabel.AutoSize = true;
-        _sheetTimeLabel.Location = new Point(260, 48);
-        _sheetTime.Bounds = new Rectangle(490, 44, 170, UiTheme.InputHeight);
+        _sheetTime.Width = 170;
+        _sheetTime.Font = UiTheme.Monospace;
         _sheetTime.Value = DateTime.Now;
-        linesBar.Controls.AddRange([_linesHeading, _sheet, _sheetCsv, _variances, _sheetTimeLabel, _sheetTime]);
+        foreach (var button in new[] { _sheet, _sheetCsv, _variances, _close }) StockPage.Action(button);
+        _linesCard.Heading.End(_sheet, _sheetCsv, _variances, _sheetTimeLabel, _sheetTime, _close);
 
         foreach (var (name, weight, editable) in new[]
                  {
@@ -185,7 +171,11 @@ public sealed class InventoryCountView : LocalizedView
                     Alignment = name is "expected" or "stockAtCount" or "counted" or "variance"
                         ? DataGridViewContentAlignment.MiddleRight
                         : DataGridViewContentAlignment.MiddleLeft,
-                    BackColor = editable ? UiTheme.SurfaceRaised : Color.Empty
+                    BackColor = editable ? UiTheme.SurfaceRaised : Color.Empty,
+                    Font = name is "code" or "lot" or "expiry" or "expected" or "stockAtCount" or "counted"
+                                or "countedAt" or "variance" or "line"
+                        ? UiTheme.Monospace
+                        : UiTheme.Body
                 }
             });
         }
@@ -202,19 +192,23 @@ public sealed class InventoryCountView : LocalizedView
             }
         };
 
-        _status.Dock = DockStyle.Bottom;
-        _status.Height = 30;
-        _status.Font = UiTheme.Small;
-        _status.ForeColor = UiTheme.TextSecondary;
+        Controls.Add(StockPage.Stack(new StockCard(_list, heading: false), _linesCard, 220));
+        Controls.Add(filters);
+        Controls.Add(header);
+    }
 
-        var bottom = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        bottom.Controls.Add(_lines);
-        bottom.Controls.Add(linesBar);
-        bottom.Controls.Add(_status);
+    private const string NewKey = "Ctrl+N";
 
-        split.Panel1.Controls.Add(top);
-        split.Panel2.Controls.Add(bottom);
-        Controls.Add(split);
+    /// <summary>Ctrl+N opens a new count, as the key drawn on the button says.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.N) && _new.Enabled && _new.Visible)
+        {
+            _new.PerformClick();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     // The variance is counted less the stock when the shelf was counted: that is the column next
@@ -235,6 +229,8 @@ public sealed class InventoryCountView : LocalizedView
     protected override void ApplyTexts()
     {
         _heading.Text = T("Nav.InventoryCounts");
+        _search.Placeholder = T("StocksUi.SearchCounts");
+        _moreButton.Text = T("ResultEntry.MoreActions");
         _includeClosed.Text = T("InventoryCount.IncludeClosed");
         _new.Text = T("InventoryCount.New");
         _start.Text = T("InventoryCount.Start");
@@ -243,7 +239,7 @@ public sealed class InventoryCountView : LocalizedView
         _sheet.Text = T("InventoryCount.Sheet");
         _sheetCsv.Text = T("InventoryCount.SheetCsv");
         _variances.Text = T("InventoryCount.VarianceReport");
-        _linesHeading.Text = T("InventoryCount.Lines");
+        _linesCard.Title.Text = T("InventoryCount.Lines");
         _sheetTimeLabel.Text = T("InventoryCount.SheetTime");
 
         var listHeaders = new[]
@@ -300,6 +296,9 @@ public sealed class InventoryCountView : LocalizedView
             if (r.InventoryCountId == select) _list.CurrentCell = _list.Rows[index].Cells[0];
         }
 
+        StockGrid.Filter(_list, _search.Query);
+        _count.Text = T("StocksUi.Counts", _rows.Count);
+
         UpdateButtons();
     }
 
@@ -327,7 +326,7 @@ public sealed class InventoryCountView : LocalizedView
         try
         {
             _lines.Rows.Clear();
-            if (_detail is null) { UpdateButtons(); return; }
+            if (_detail is null) { _linesCard.Note.Text = string.Empty; UpdateButtons(); return; }
 
             var counting = _detail.Count.Status == InventoryCountStatus.Counting;
             static string N(decimal? v) => v?.ToString("0.###", CultureInfo.CurrentCulture) ?? string.Empty;
@@ -343,7 +342,7 @@ public sealed class InventoryCountView : LocalizedView
                                                            && !PermissionGate.Allows(Permissions.Inventory.CloseCounts);
             }
 
-            _linesHeading.Text = $"{T("InventoryCount.Lines")} — {_detail.Count.Number} · {_detail.Count.Counted}/{_detail.Count.Lines}";
+            _linesCard.Note.Text = $"{_detail.Count.Number} · {_detail.Count.Counted}/{_detail.Count.Lines}";
             _status.Text = counting ? $"{T("InventoryCount.CountingNotice")} {T("InventoryCount.SheetTimeNotice")}" : string.Empty;
 
             if (row >= 0 && row < _lines.Rows.Count && column >= 0 && column < _lines.Columns.Count)
@@ -499,7 +498,7 @@ public sealed class InventoryCountView : LocalizedView
         if (_detail is null) return;
         var count = _detail.Count;
 
-        _linesHeading.Text = $"{T("InventoryCount.Lines")} — {count.Number} · {count.Counted}/{count.Lines}";
+        _linesCard.Note.Text = $"{count.Number} · {count.Counted}/{count.Lines}";
         _rows = [.. _rows.Select(r => r.InventoryCountId == count.InventoryCountId ? count : r)];
 
         foreach (DataGridViewRow row in _list.Rows)

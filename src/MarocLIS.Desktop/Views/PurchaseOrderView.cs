@@ -366,7 +366,7 @@ public sealed class PurchaseOrderView : LocalizedView
         var overdue = _rows.Count(r => r.IsOverdue);
         var toApprove = _rows.Count(r => r.Status == PurchaseOrderStatus.Draft && r.LineCount > 0);
 
-        var text = $"{_rows.Count}";
+        var text = T("StocksUi.Orders", _rows.Count);
         if (toApprove > 0) text += $" · {T("PurchaseOrders.ToApprove")} {toApprove}";
         if (overdue > 0) text += $" · {T("PurchaseOrders.Late")} {overdue}";
         _count.Text = text;
