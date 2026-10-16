@@ -31,16 +31,24 @@ public sealed class SubcontractingView : LocalizedView
     private readonly ICurrentUser _currentUser;
     private readonly ILogger<SubcontractingView>? _logger;
 
-    private readonly Label _heading = new();
-    private readonly TextBox _search = UiTheme.Input(260);
-    private readonly ComboBox _stageFilter = new();
+    private readonly PageHead _head = new();
+    private readonly FilterRow _filters = new();
+    private readonly SearchField _searchField = new(340);
+    private TextBox _search => _searchField.Box;
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly DataGridView _grid = UiTheme.Grid();
+    private readonly ListCard _card;
 
     private readonly Button _send = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _reprint = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _reference = UiTheme.SecondaryButton(string.Empty);
-    private readonly Label _status = new();
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly Button _more;
+    private readonly ToolStripMenuItem _reference = Pilotage.MenuItem("Subcontract.PartnerReference");
+    private Label _status => _card.Footer;
+
+    // The stage filter, as chips: all, to send, awaiting return, late — the order of the old list.
+    private int _stage;
+    private readonly ChipButton[] _stageChips;
 
     private IReadOnlyList<SubcontractRow> _rows = [];
 
@@ -57,6 +65,10 @@ public sealed class SubcontractingView : LocalizedView
         _currentUser = currentUser;
         _logger = logger;
 
+        _card = new ListCard(_grid);
+        _more = Pilotage.MoreButton(_moreMenu);
+        _stageChips = [.. Enumerable.Range(0, 4).Select(i => _filters.Chip((_, _) => ChooseStage(i)))];
+
         BuildLayout();
         WireBehaviour();
     }
@@ -67,46 +79,34 @@ public sealed class SubcontractingView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(24, 16, 24, 16);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
+        _moreMenu.Items.Add(_reference);
+        _head.Add(_refresh, _more, _reprint, _send);
+        ShortcutHints.Attach(_refresh, "F5");
 
-        _heading.Font = UiTheme.SectionTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 2);
-
-        _search.Location = new Point(0, 28);
-
-        _stageFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-        _stageFilter.FlatStyle = FlatStyle.Flat;
-        _stageFilter.Font = UiTheme.Small;
-        _stageFilter.Bounds = new Rectangle(272, 28, 240, UiTheme.InputHeight);
-
-        _refresh.Bounds = new Rectangle(522, 27, 110, UiTheme.ButtonHeight - 4);
-
-        bar.Controls.AddRange([_heading, _search, _stageFilter, _refresh]);
+        _filters.Controls.Add(_searchField);
+        _filters.Controls.SetChildIndex(_searchField, 0);
 
         BuildColumns();
 
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        host.Controls.Add(_grid);
+        // The stage as a pill: to send in accent, awaiting return in grey, late in red.
+        Pilotage.Pills(_grid, "stage", row => row.Tag is not SubcontractRow r ? null
+            : IsLate(r) ? (UiTheme.CriticalBackground, UiTheme.CriticalInk, "!")
+            : r.Stage == SubcontractStage.ToSend ? (UiTheme.InfoBackground, UiTheme.Info, "→")
+            : (UiTheme.SurfaceSunken, UiTheme.TextPrimary, "◐"));
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = UiTheme.Surface };
+        Controls.Add(_card);
+        Controls.Add(Pilotage.Gap(14));
+        Controls.Add(_filters);
+        Controls.Add(Pilotage.Gap(10));
+        Controls.Add(_head);
+    }
 
-        _send.Bounds = new Rectangle(0, 10, 280, UiTheme.ButtonHeight);
-        _reprint.Bounds = new Rectangle(290, 10, 220, UiTheme.ButtonHeight);
-        _reference.Bounds = new Rectangle(520, 10, 240, UiTheme.ButtonHeight);
-
-        _status.Font = UiTheme.Small;
-        _status.AutoSize = false;
-        _status.Bounds = new Rectangle(772, 16, 600, 20);
-
-        actions.Controls.AddRange([_send, _reprint, _reference, _status]);
-
-        Controls.Add(host);
-        Controls.Add(actions);
-        Controls.Add(bar);
+    private void ChooseStage(int stage)
+    {
+        _stage = stage;
+        Render();
     }
 
     private void BuildColumns()
@@ -148,7 +148,6 @@ public sealed class SubcontractingView : LocalizedView
             Render();
         };
 
-        _stageFilter.SelectedIndexChanged += (_, _) => Render();
         _refresh.Click += async (_, _) => await ActivateAsync();
 
         _send.Click += async (_, _) => await RunBusyAsync(SendAsync);
@@ -156,7 +155,9 @@ public sealed class SubcontractingView : LocalizedView
         _reference.Click += async (_, _) => await RunBusyAsync(SetReferenceAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
-        PermissionGate.Require(Permissions.Samples.Dispatch, _send, _reference);
+        PermissionGate.Require(Permissions.Samples.Dispatch, _send);
+        // A menu entry is not a control the gate can hold: the right is checked here instead.
+        _reference.Enabled = PermissionGate.Allows(Permissions.Samples.Dispatch);
 
         _grid.CellFormatting += OnCellFormatting;
 
@@ -197,17 +198,10 @@ public sealed class SubcontractingView : LocalizedView
         _send.Text = T("Subcontract.Send");
         _reprint.Text = T("Subcontract.ReprintSlip");
         _reference.Text = T("Subcontract.PartnerReference");
+        _more.Text = T("ResultEntry.MoreActions");
+        _head.Title.Text = T("Nav.Subcontracting");
         _refresh.Text = T("Action.Refresh");
 
-        var selected = _stageFilter.SelectedIndex;
-        _stageFilter.BeginUpdate();
-        _stageFilter.Items.Clear();
-        _stageFilter.Items.Add(T("Subcontract.StageAll"));
-        _stageFilter.Items.Add(T("Subcontract.StageToSend"));
-        _stageFilter.Items.Add(T("Subcontract.StageAwaitingReturn"));
-        _stageFilter.Items.Add(T("Subcontract.Late"));
-        _stageFilter.SelectedIndex = selected >= 0 ? selected : 0;
-        _stageFilter.EndUpdate();
 
         if (_grid.Columns.Count > 0)
         {
@@ -223,7 +217,7 @@ public sealed class SubcontractingView : LocalizedView
             _grid.Column("due").HeaderText = T("Subcontract.DueAt");
         }
 
-        if (_rows.Count > 0) Render();
+        Render();
     }
 
     // ---- Loading -------------------------------------------------------------------------------------
@@ -250,7 +244,7 @@ public sealed class SubcontractingView : LocalizedView
 
     private IEnumerable<SubcontractRow> Visible()
     {
-        var rows = _stageFilter.SelectedIndex switch
+        var rows = _stage switch
         {
             1 => _rows.Where(r => r.Stage == SubcontractStage.ToSend),
             2 => _rows.Where(r => r.Stage == SubcontractStage.AwaitingReturn),
@@ -304,7 +298,16 @@ public sealed class SubcontractingView : LocalizedView
         var awaiting = _rows.Count(r => r.Stage == SubcontractStage.AwaitingReturn);
         var late = _rows.Count(IsLate);
 
-        _heading.Text = T("Subcontract.Heading", toSend, awaiting, late);
+        _head.Count.Text = T("Subcontract.Count", toSend, awaiting, late);
+
+        var counts = new[] { _rows.Count, toSend, awaiting, late };
+        var captions = new[] { "Subcontract.StageAll", "Subcontract.StageToSend", "Subcontract.StageAwaitingReturn", "Subcontract.Late" };
+        for (var i = 0; i < _stageChips.Length; i++)
+        {
+            _stageChips[i].Text = $"{T(captions[i])} · {counts[i]}";
+            _stageChips[i].Selected = i == _stage;
+        }
+        _filters.PerformLayout();
     }
 
     private List<SubcontractRow> Ticked()
@@ -496,36 +499,33 @@ internal sealed class SubcontractDispatchDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(520, 330);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
-        var summary = new Label
-        {
-            Text = localizer.Format("Subcontract.SendSummary", rows.Count,
-                                    rows.Select(r => r.LabOrderId).Distinct().Count()),
-            Font = UiTheme.BodyBold,
-            AutoSize = false,
-            Bounds = new Rectangle(20, 16, 480, 22)
-        };
+        var head = DialogFrame.Head(localizer["Subcontract.Send"],
+                                    localizer.Format("Subcontract.SendSummary", rows.Count,
+                                                     rows.Select(r => r.LabOrderId).Distinct().Count()), 520);
+
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised };
 
         var list = new ListBox
         {
-            Bounds = new Rectangle(20, 44, 480, 150),
-            Font = UiTheme.Small,
-            IntegralHeight = false
+            Bounds = new Rectangle(20, 14, 480, 150),
+            Font = UiTheme.Monospace,
+            IntegralHeight = false,
+            BorderStyle = BorderStyle.FixedSingle
         };
 
         foreach (var row in rows)
             list.Items.Add($"{row.AccessionNumber}  ·  {row.AnalysisCode}  ·  {row.Barcode}  →  " +
                            (row.PartnerCode ?? localizer["Subcontract.NoPartner"]));
 
-        var partnerLabel = UiTheme.FieldLabel(localizer["Catalog.SubcontractorSite"]);
-        partnerLabel.Location = new Point(20, 204);
+        var partnerLabel = Pilotage.Caption(localizer["Catalog.SubcontractorSite"]);
+        partnerLabel.Location = new Point(20, 176);
 
         _partner.DropDownStyle = ComboBoxStyle.DropDownList;
         _partner.FlatStyle = FlatStyle.Flat;
-        _partner.Bounds = new Rectangle(20, 222, 480, UiTheme.InputHeight);
+        _partner.Bounds = new Rectangle(20, 196, 480, UiTheme.InputHeight);
         _partner.Items.Add(new PartnerChoice(null, localizer["Subcontract.PartnerFromCatalogue"]));
 
         foreach (var partner in partners)
@@ -533,15 +533,18 @@ internal sealed class SubcontractDispatchDialog : Form
 
         _partner.SelectedIndex = 0;
 
+        body.Controls.AddRange([list, partnerLabel, _partner]);
+
         var ok = UiTheme.PrimaryButton(localizer["Subcontract.SendAndPrint"]);
-        ok.Bounds = new Rectangle(20, 274, 240, UiTheme.ButtonHeight);
         ok.DialogResult = DialogResult.OK;
 
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
-        cancel.Bounds = new Rectangle(270, 274, 230, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
-        Controls.AddRange([summary, list, partnerLabel, _partner, ok, cancel]);
+        ClientSize = new Size(520, head.Height + 238 + 58);
+        Controls.Add(body);
+        Controls.Add(DialogFrame.Foot(cancel, ok));
+        Controls.Add(head);
 
         AcceptButton = ok;
         CancelButton = cancel;
