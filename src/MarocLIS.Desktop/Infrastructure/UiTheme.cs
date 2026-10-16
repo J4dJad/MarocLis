@@ -18,47 +18,8 @@ namespace MarocLIS.Desktop.Infrastructure;
 /// some users never receive.
 /// </para>
 /// </summary>
-public static class UiTheme
+public static partial class UiTheme
 {
-    // ---- Neutrals -------------------------------------------------------------------------------
-
-    public static readonly Color Surface = Color.FromArgb(0xFA, 0xFA, 0xFB);
-    public static readonly Color SurfaceRaised = Color.White;
-    public static readonly Color SurfaceSunken = Color.FromArgb(0xF0, 0xF1, 0xF3);
-    public static readonly Color Border = Color.FromArgb(0xD8, 0xDA, 0xDE);
-    public static readonly Color BorderStrong = Color.FromArgb(0xB4, 0xB8, 0xBF);
-
-    public static readonly Color TextPrimary = Color.FromArgb(0x1C, 0x1E, 0x21);
-    public static readonly Color TextSecondary = Color.FromArgb(0x5C, 0x61, 0x6A);
-    public static readonly Color TextMuted = Color.FromArgb(0x8A, 0x8F, 0x98);
-    public static readonly Color TextOnAccent = Color.White;
-
-    // ---- Accent ---------------------------------------------------------------------------------
-
-    /// <summary>Single accent, used for focus, selection and the primary action only.</summary>
-    public static readonly Color Accent = Color.FromArgb(0x1B, 0x5E, 0x8C);
-    public static readonly Color AccentHover = Color.FromArgb(0x16, 0x4E, 0x75);
-    public static readonly Color AccentSubtle = Color.FromArgb(0xE6, 0xEE, 0xF4);
-
-    // ---- Clinical semantics ---------------------------------------------------------------------
-
-    /// <summary>Out of the reference interval but not critical.</summary>
-    public static readonly Color Abnormal = Color.FromArgb(0x9A, 0x5B, 0x00);
-    public static readonly Color AbnormalBackground = Color.FromArgb(0xFD, 0xF4, 0xE3);
-
-    /// <summary>A panic value: immediately actionable, must be communicated.</summary>
-    public static readonly Color Critical = Color.FromArgb(0xA8, 0x1B, 0x1B);
-    public static readonly Color CriticalBackground = Color.FromArgb(0xFC, 0xEB, 0xEB);
-
-    public static readonly Color Normal = Color.FromArgb(0x1E, 0x6B, 0x3A);
-    public static readonly Color NormalBackground = Color.FromArgb(0xEC, 0xF6, 0xEF);
-
-    /// <summary>Past its promised turnaround.</summary>
-    public static readonly Color Overdue = Color.FromArgb(0xA8, 0x1B, 0x1B);
-
-    /// <summary>Awaiting an action from someone.</summary>
-    public static readonly Color Pending = Color.FromArgb(0x5C, 0x61, 0x6A);
-
     // ---- Typography -----------------------------------------------------------------------------
 
     private const string UiFamily = "Segoe UI";
@@ -69,12 +30,59 @@ public static class UiTheme
     /// </summary>
     private const string ArabicFamily = "Segoe UI";
 
-    public static Font Body { get; } = new(UiFamily, 9f);
-    public static Font BodyBold { get; } = new(UiFamily, 9f, FontStyle.Bold);
-    public static Font Small { get; } = new(UiFamily, 8f);
-    public static Font SmallBold { get; } = new(UiFamily, 8f, FontStyle.Bold);
-    public static Font SectionTitle { get; } = new(UiFamily, 11f, FontStyle.Bold);
-    public static Font PageTitle { get; } = new(UiFamily, 15f, FontStyle.Bold);
+    // GDI+ quietly substitutes Microsoft Sans Serif for a family that is not installed, so each
+    // preferred face is checked first: Cascadia Mono ships with Windows 11 and recent Terminal
+    // installs only, and "Segoe UI Semibold" is missing from some older images.
+    private static readonly HashSet<string> Installed = InstalledFamilies();
+
+    private static HashSet<string> InstalledFamilies()
+    {
+        try
+        {
+            using var fonts = new System.Drawing.Text.InstalledFontCollection();
+            return fonts.Families.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception)
+        {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private static bool IsInstalled(string family) => Installed.Contains(family);
+
+    /// <summary>Weight 600 of the type scale: Segoe UI Semibold, or bold where it is missing.</summary>
+    private static Font Semibold(float size) =>
+        IsInstalled("Segoe UI Semibold") ? new Font("Segoe UI Semibold", size) : new Font(UiFamily, size, FontStyle.Bold);
+
+    /// <summary>body: 13 px.</summary>
+    public static Font Body { get; } = new(UiFamily, 9.75f);
+    public static Font BodyBold { get; } = Semibold(9.75f);
+
+    /// <summary>
+    /// The cells of a grid: 12 px rather than the body's 13. The grids' columns are sized for it,
+    /// and at 13 px a 1366-pixel screen lost whole columns ("Volume" on the collection screen).
+    /// </summary>
+    public static Font GridBody { get; } = new(UiFamily, 9f);
+
+    /// <summary>
+    /// Field captions and metadata: 11 px. The type scale's label is 12 px, but the captions sit
+    /// at fixed places above their fields, and at 12 px the longer ones ran into the next column
+    /// ("N° d'autorisation du ministère de la Santé" over its neighbour's tick box).
+    /// </summary>
+    public static Font Small { get; } = new(UiFamily, 8.25f);
+    public static Font SmallBold { get; } = Semibold(8.25f);
+
+    /// <summary>overline: 11 px, the navigation's group titles, in capitals.</summary>
+    public static Font Overline { get; } = Semibold(8.25f);
+
+    /// <summary>heading: 15 px, titles of cards and panels.</summary>
+    public static Font SectionTitle { get; } = Semibold(11.25f);
+
+    /// <summary>screen-title: 22 px.</summary>
+    public static Font PageTitle { get; } = Semibold(16.5f);
+
+    /// <summary>kpi: 26 px, the figures of the indicators.</summary>
+    public static Font Kpi { get; } = Semibold(19.5f);
 
     /// <summary>
     /// Fixed-pitch, for result values, barcodes and accession numbers.
@@ -83,11 +91,23 @@ public static class UiTheme
     /// how a technician scanning forty values spots the one with an extra digit. It also prevents
     /// the 1/l and 0/O confusion that a proportional face invites when a value is read aloud.
     /// </para>
+    /// <para>
+    /// Cascadia Mono when installed, at 9 pt, where its wider advance matches Consolas at 9.5 pt:
+    /// columns sized for one fit the other.
+    /// </para>
     /// </summary>
-    public static Font Monospace { get; } = new("Consolas", 9.5f);
-    public static Font MonospaceBold { get; } = new("Consolas", 9.5f, FontStyle.Bold);
+    public static Font Monospace { get; } = Mono(FontStyle.Regular);
+    public static Font MonospaceBold { get; } = Mono(FontStyle.Bold);
 
-    public static Font ForLanguage(Domain.Common.AppLanguage language, float size = 9f,
+    /// <summary>A monospaced font of the given size, Cascadia Mono or Consolas.</summary>
+    public static Font Mono(float consolasSize, FontStyle style = FontStyle.Regular) =>
+        IsInstalled("Cascadia Mono")
+            ? new Font("Cascadia Mono", consolasSize * 9f / 9.5f, style)
+            : new Font("Consolas", consolasSize, style);
+
+    private static Font Mono(FontStyle style) => Mono(9.5f, style);
+
+    public static Font ForLanguage(Domain.Common.AppLanguage language, float size = 9.75f,
                                    FontStyle style = FontStyle.Regular) =>
         new(language == Domain.Common.AppLanguage.Arabic ? ArabicFamily : UiFamily, size, style);
 
@@ -95,10 +115,16 @@ public static class UiTheme
 
     public const int Gutter = 12;
     public const int GutterTight = 6;
-    public const int RowHeight = 24;
+
+    /// <summary>A single-line grid row: comfortable to scan and to click.</summary>
+    public const int RowHeight = 32;
     public const int InputHeight = 26;
     public const int ButtonHeight = 30;
     public const int SidebarWidth = 240;
+
+    /// <summary>radius-md, buttons and fields; radius-lg, cards.</summary>
+    public const int RadiusControl = 6;
+    public const int RadiusCard = 8;
 
     // ---- Clinical state → appearance ------------------------------------------------------------
 
@@ -111,7 +137,7 @@ public static class UiTheme
     {
         ResultInterpretation.CriticalLow => (Critical, CriticalBackground, "↓↓", true),
         ResultInterpretation.CriticalHigh => (Critical, CriticalBackground, "↑↑", true),
-        ResultInterpretation.Low => (Abnormal, AbnormalBackground, "↓", true),
+        ResultInterpretation.Low => (Info, InfoBackground, "↓", true),
         ResultInterpretation.High => (Abnormal, AbnormalBackground, "↑", true),
         ResultInterpretation.Abnormal => (Abnormal, AbnormalBackground, "*", true),
         ResultInterpretation.Normal => (TextPrimary, SurfaceRaised, string.Empty, false),
@@ -149,7 +175,7 @@ public static class UiTheme
         LabOrderStatus.Cancelled => TextMuted,
         LabOrderStatus.Reported => Normal,
         LabOrderStatus.Validated => Normal,
-        LabOrderStatus.PartiallyValidated => Accent,
+        LabOrderStatus.PartiallyValidated => Info,
         _ => Pending
     };
 
@@ -161,42 +187,77 @@ public static class UiTheme
         {
             Text = text,
             Height = ButtonHeight,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Accent,
-            ForeColor = TextOnAccent,
-            Font = BodyBold,
             Cursor = Cursors.Hand,
-            UseVisualStyleBackColor = false,
             Padding = new Padding(10, 0, 10, 0)
         };
 
-        // Windows paints a disabled flat button's caption in its own dark grey and ignores
-        // ForeColor, which on the accent blue left "Prélever" and "Revue du contrôle" unreadable
-        // whenever there was nothing selected. A disabled primary button is shown on a pale fill
-        // instead, where that grey caption reads and plainly looks unavailable.
-        button.EnabledChanged += (_, _) =>
-        {
-            button.BackColor = button.Enabled ? Accent : DisabledFill;
-            button.FlatAppearance.BorderColor = button.Enabled ? Accent : Border;
-        };
-
+        StylePrimary(button);
         return button;
     }
 
-    private static readonly Color DisabledFill = Color.FromArgb(226, 231, 237);
-
-    public static Button SecondaryButton(string text) => new()
+    /// <summary>
+    /// The primary look — accent fill, on-accent caption — for a button made elsewhere. Used by
+    /// <see cref="PrimaryButton"/> and for a dialog's accept button.
+    /// </summary>
+    public static void StylePrimary(Button button)
     {
-        Text = text,
-        Height = ButtonHeight,
-        FlatStyle = FlatStyle.Flat,
-        BackColor = SurfaceRaised,
-        ForeColor = TextPrimary,
-        Font = Body,
-        Cursor = Cursors.Hand,
-        UseVisualStyleBackColor = false,
-        Padding = new Padding(10, 0, 10, 0)
-    };
+        button.FlatStyle = FlatStyle.Flat;
+        button.UseVisualStyleBackColor = false;
+        button.ForeColor = TextOnAccent;
+        button.Font = BodyBold;
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.MouseOverBackColor = AccentHover;
+        button.FlatAppearance.MouseDownBackColor = AccentPressed;
+        ShowPrimaryState(button);
+
+        // Windows paints a disabled flat button's caption in its own dark grey and ignores
+        // ForeColor, which on the accent fill left "Prélever" and "Revue du contrôle" unreadable
+        // whenever there was nothing selected. A disabled primary button is shown on a pale fill
+        // instead, where that grey caption reads and plainly looks unavailable.
+        button.EnabledChanged -= OnPrimaryEnabledChanged;
+        button.EnabledChanged += OnPrimaryEnabledChanged;
+    }
+
+    private static void OnPrimaryEnabledChanged(object? sender, EventArgs e)
+    {
+        if (sender is Button button) ShowPrimaryState(button);
+    }
+
+    private static void ShowPrimaryState(Button button)
+    {
+        button.BackColor = button.Enabled ? Accent : DisabledFill;
+        button.FlatAppearance.BorderColor = button.Enabled ? Accent : Border;
+    }
+
+    private static Color DisabledFill => SurfaceSunken;
+
+    public static Button SecondaryButton(string text)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Height = ButtonHeight,
+            Cursor = Cursors.Hand,
+            Padding = new Padding(10, 0, 10, 0)
+        };
+
+        StyleSecondary(button);
+        return button;
+    }
+
+    /// <summary>The secondary look: white, line-strong border, ink caption.</summary>
+    public static void StyleSecondary(Button button)
+    {
+        button.FlatStyle = FlatStyle.Flat;
+        button.UseVisualStyleBackColor = false;
+        button.BackColor = SurfaceRaised;
+        button.ForeColor = TextPrimary;
+        button.Font = Body;
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.BorderColor = BorderStrong;
+        button.FlatAppearance.MouseOverBackColor = SurfaceSunken;
+        button.FlatAppearance.MouseDownBackColor = Border;
+    }
 
     public static Label FieldLabel(string text) => new()
     {
@@ -207,7 +268,7 @@ public static class UiTheme
         Margin = new Padding(0, 4, 0, 1)
     };
 
-    public static TextBox Input(int width = 200) => new()
+    public static TextBox Input(int width = 200) => new TextBox
     {
         Width = width,
         Height = InputHeight,
@@ -215,7 +276,7 @@ public static class UiTheme
         BorderStyle = BorderStyle.FixedSingle,
         BackColor = SurfaceRaised,
         ForeColor = TextPrimary
-    };
+    }.WithFieldBorder();
 
     /// <summary>
     /// A grid configured the way a laboratory list has to behave: read-only, full-row selection,
@@ -238,7 +299,7 @@ public static class UiTheme
         MultiSelect = false,
         RowHeadersVisible = false,
         AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-        Font = Body,
+        Font = GridBody,
         GridColor = Border,
         // Headers wrap onto a second line rather than ending in "…": "Lieu de conservation" cut
         // to "Lieu de c…" is a column nobody can identify, and the grid is the whole screen.
@@ -250,7 +311,8 @@ public static class UiTheme
             Font = SmallBold,
             Alignment = DataGridViewContentAlignment.MiddleLeft,
             WrapMode = DataGridViewTriState.True,
-            Padding = new Padding(6, 0, 6, 0),
+            // Taller than its text, as in the design system's grids: the headers read as a band.
+            Padding = new Padding(8, 4, 8, 4),
             SelectionBackColor = SurfaceSunken,
             SelectionForeColor = TextSecondary
         },
@@ -260,7 +322,7 @@ public static class UiTheme
             ForeColor = TextPrimary,
             SelectionBackColor = AccentSubtle,
             SelectionForeColor = TextPrimary,
-            Padding = new Padding(6, 0, 6, 0)
+            Padding = new Padding(8, 0, 8, 0)
         },
         RowTemplate = { Height = RowHeight }
     };

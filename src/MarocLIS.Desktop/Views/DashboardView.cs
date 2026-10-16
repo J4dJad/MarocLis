@@ -212,7 +212,7 @@ public sealed class DashboardView : LocalizedView
         var value = new Label
         {
             Text = metric.Value.ToString("N0"),
-            Font = new Font("Segoe UI", 24f, FontStyle.Bold),
+            Font = UiTheme.Kpi,
             ForeColor = foreground,
             AutoSize = true,
             Location = new Point(UiTheme.Gutter, 8)
@@ -228,6 +228,7 @@ public sealed class DashboardView : LocalizedView
         };
 
         tile.Controls.AddRange([value, label]);
+        UiChrome.AsCard(tile);
 
         // A non-zero actionable tile is clickable and says so; a zero one is inert, because there
         // is nothing to go and look at.

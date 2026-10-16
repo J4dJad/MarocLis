@@ -110,7 +110,7 @@ public sealed class SampleReceptionView : LocalizedView
         _scanLabel.Location = new Point(0, 4);
 
         _scan.Tag = UiTags.LatinValue;
-        _scan.Font = new Font("Consolas", 12f);
+        _scan.Font = UiTheme.Mono(12f);
         _scan.Location = new Point(0, 22);
         _scan.Height = 30;
 

@@ -133,7 +133,7 @@ public sealed class CashSessionView : LocalizedView
         _expectedLabel.AutoSize = true;
         _expectedLabel.Location = new Point(490, 40);
 
-        _expected.Font = new Font("Consolas", 16f, FontStyle.Bold);
+        _expected.Font = UiTheme.Mono(16f, FontStyle.Bold);
         _expected.ForeColor = UiTheme.Accent;
         _expected.AutoSize = true;
         _expected.Location = new Point(490, 58);
@@ -144,7 +144,7 @@ public sealed class CashSessionView : LocalizedView
         _countedLabel.Location = new Point(490, 96);
 
         _counted.Location = new Point(490, 114);
-        _counted.Font = new Font("Consolas", 14f, FontStyle.Bold);
+        _counted.Font = UiTheme.Mono(14f, FontStyle.Bold);
         _counted.TextAlign = HorizontalAlignment.Right;
         _counted.Height = 30;
         _counted.Tag = UiTags.LatinValue;
@@ -154,7 +154,7 @@ public sealed class CashSessionView : LocalizedView
         _varianceLabel.AutoSize = true;
         _varianceLabel.Location = new Point(490, 152);
 
-        _variance.Font = new Font("Consolas", 16f, FontStyle.Bold);
+        _variance.Font = UiTheme.Mono(16f, FontStyle.Bold);
         _variance.AutoSize = true;
         _variance.Location = new Point(490, 170);
 

@@ -33,6 +33,10 @@ public sealed class MainShellForm : LocalizedForm
     private readonly Panel _header = new();
     private readonly Panel _content = new();
     private readonly Label _viewTitle = new();
+    private readonly Label _breadcrumb = new();
+    private readonly StatusStrip _statusBar = new();
+    private readonly ToolStripStatusLabel _statusSession = new();
+    private readonly ToolStripStatusLabel _statusShortcuts = new();
     private readonly Label _userInfo = new();
     private readonly Label _siteInfo = new();
     private readonly ComboBox _languagePicker = new();
@@ -83,6 +87,12 @@ public sealed class MainShellForm : LocalizedForm
     private const string ActionShortcuts = "action.shortcuts";
 
     private readonly KeyboardShortcuts _shortcuts;
+
+    // The menu stays at 9 pt: its column is fixed, and at the body size "Réception des
+    // échantillons" no longer fitted beside its icon.
+    private static readonly Font NavigationFont = new(UiTheme.Body.FontFamily, 9f);
+    private static readonly Font NavigationFontActive = new(UiTheme.BodyBold.FontFamily, 9f, UiTheme.BodyBold.Style);
+    private static readonly Font ShortcutFont = new(UiTheme.Body.FontFamily, 8.25f);
     private readonly CollapsedNavigationGroups _collapsedGroups;
     private readonly ToolTip _navTips = new();
 
@@ -117,7 +127,11 @@ public sealed class MainShellForm : LocalizedForm
         DefineShortcuts();
         RenderNavigation();   // again, now that the shortcuts it shows are known
 
-        _navigation.Attach(_content, view => _viewTitle.Text = HelpService.CurrentTitle = view.Title);
+        _navigation.Attach(_content, view =>
+        {
+            _viewTitle.Text = HelpService.CurrentTitle = view.Title;
+            ShowBreadcrumb();
+        });
 
         // F1 opens the help of the screen in use, here through the shortcuts and in the dialogs
         // a screen opens through the filter.
@@ -155,35 +169,44 @@ public sealed class MainShellForm : LocalizedForm
     {
         _header.Dock = DockStyle.Top;
         _header.Height = 52;
-        _header.BackColor = UiTheme.Accent;
+        _header.BackColor = UiTheme.SurfaceRaised;
         _header.Padding = new Padding(UiTheme.Gutter, 0, UiTheme.Gutter, 0);
 
+        // The brand in the accent on the white header, then a thin rule and the breadcrumb.
         var brand = new Label
         {
             Text = "MarocLIS",
-            Font = new Font("Segoe UI", 13f, FontStyle.Bold),
-            ForeColor = UiTheme.TextOnAccent,
+            Font = new Font(UiTheme.SectionTitle.FontFamily, 13f, FontStyle.Bold),
+            ForeColor = UiTheme.Accent,
             AutoSize = true,
             Location = new Point(UiTheme.Gutter, 14)
         };
 
-        _viewTitle.Font = UiTheme.SectionTitle;
-        _viewTitle.ForeColor = UiTheme.TextOnAccent;
-        _viewTitle.AutoSize = true;
-        _viewTitle.Location = new Point(140, 16);
+        var rule = new Panel { BackColor = UiTheme.Border, Bounds = new Rectangle(126, 16, 1, 20) };
 
-        _userInfo.Font = UiTheme.Small;
-        _userInfo.ForeColor = UiTheme.TextOnAccent;
+        _breadcrumb.Font = UiTheme.Body;
+        _breadcrumb.ForeColor = UiTheme.TextSecondary;
+        _breadcrumb.AutoSize = true;
+        _breadcrumb.Location = new Point(140, 17);
+        _breadcrumb.SizeChanged += (_, _) => PlaceViewTitle();
+
+        _viewTitle.Font = UiTheme.SectionTitle;
+        _viewTitle.ForeColor = UiTheme.TextPrimary;
+        _viewTitle.AutoSize = true;
+        _viewTitle.Location = new Point(140, 15);
+
+        _userInfo.Font = UiTheme.SmallBold;
+        _userInfo.ForeColor = UiTheme.TextPrimary;
         _userInfo.AutoSize = true;
         _userInfo.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
         _siteInfo.Font = UiTheme.Small;
-        _siteInfo.ForeColor = Color.FromArgb(0xCC, 0xDD, 0xEE);
+        _siteInfo.ForeColor = UiTheme.TextSecondary;
         _siteInfo.AutoSize = true;
         _siteInfo.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
         _clock.Font = UiTheme.Small;
-        _clock.ForeColor = Color.FromArgb(0xCC, 0xDD, 0xEE);
+        _clock.ForeColor = UiTheme.TextSecondary;
         _clock.AutoSize = true;
         _clock.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
@@ -207,7 +230,7 @@ public sealed class MainShellForm : LocalizedForm
         _help.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         _help.Click += (_, _) => HelpService.ShowCurrent();
 
-        _header.Controls.AddRange([brand, _viewTitle, _userInfo, _siteInfo, _clock, _help, _print,
+        _header.Controls.AddRange([brand, rule, _breadcrumb, _viewTitle, _userInfo, _siteInfo, _clock, _help, _print,
                                    _languagePicker]);
         _header.Resize += (_, _) => PositionHeaderItems();
         // The clock, the print button and the user's name size themselves to their text: the clock
@@ -226,11 +249,84 @@ public sealed class MainShellForm : LocalizedForm
         _content.BackColor = UiTheme.Surface;
         _content.Padding = new Padding(0);
 
-        // Content before sidebar before header, so docking resolves in the right order.
+        // Hairlines in the line colour between the header, the menu and the screen.
+        var headerLine = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = UiTheme.Border };
+        var sidebarLine = new Panel { Dock = DockStyle.Left, Width = 1, BackColor = UiTheme.Border };
+
+        BuildStatusBar();
+
+        // Content before sidebar before header, so docking resolves in the right order; the status
+        // bar runs the whole width under the menu, as the header does above it.
         Controls.Add(_content);
+        Controls.Add(sidebarLine);
         Controls.Add(_sidebar);
+        Controls.Add(headerLine);
+        Controls.Add(_statusBar);
         Controls.Add(_header);
     }
+
+    /// <summary>
+    /// The status bar, in the accent: who is connected on which site at the left, the main
+    /// keyboard shortcuts at the right, as the user has them.
+    /// </summary>
+    private void BuildStatusBar()
+    {
+        _statusBar.Dock = DockStyle.Bottom;
+        _statusBar.SizingGrip = false;
+        _statusBar.AutoSize = false;
+        _statusBar.Height = 26;
+        _statusBar.BackColor = UiTheme.Accent;
+        _statusBar.ForeColor = UiTheme.TextOnAccent;
+        _statusBar.Font = UiTheme.Small;
+        _statusBar.Renderer = new UiChrome.FlatStripRenderer();
+        _statusBar.Padding = new Padding(UiTheme.GutterTight, 0, UiTheme.Gutter, 0);
+
+        _statusSession.ForeColor = UiTheme.TextOnAccent;
+        _statusSession.TextAlign = ContentAlignment.MiddleLeft;
+        _statusSession.Spring = true;
+
+        _statusShortcuts.ForeColor = UiTheme.TextOnAccent;
+        _statusShortcuts.TextAlign = ContentAlignment.MiddleRight;
+
+        _statusBar.Items.AddRange([_statusSession, _statusShortcuts]);
+    }
+
+    private void ShowStatusBar()
+    {
+        _statusSession.Text = $"●  {T("App.ConnectedAs")} {_currentUser.FullName}     " +
+                              $"{T("App.Site")} : {_currentUser.SiteCode}";
+
+        // Only shortcuts that exist, written with the keys this user has.
+        var shortcuts = new (string Action, string Label)[]
+        {
+            (ActionSearch, T("Action.Search")),
+            (ActionSave, T("Action.Save")),
+            (ActionPrint, T("Action.Print")),
+            (ActionRefresh, T("Action.Refresh")),
+            (ActionHelp, T("Help.Title"))
+        };
+
+        _statusShortcuts.Text = string.Join("  ·  ", shortcuts
+            .Select(s => (Keys: _shortcuts.For(s.Action), s.Label))
+            .Where(s => s.Keys != Keys.None)
+            .Select(s => $"{KeyboardShortcuts.Format(s.Keys, Localizer)} {s.Label}"));
+    }
+
+    // "Group ›" before the screen's title, for a screen listed under a group of the menu.
+    private void ShowBreadcrumb()
+    {
+        var group = GroupOf(_activeKey) is { } key ? _entries.FirstOrDefault(e => e.Key == key) : null;
+        var rtl = RightToLeft == RightToLeft.Yes;
+
+        _breadcrumb.Text = group is null ? string.Empty : $"{T(group.LabelKey)}  {(rtl ? "‹" : "›")}";
+        _breadcrumb.Visible = group is not null;
+        PlaceViewTitle();
+    }
+
+    private void PlaceViewTitle() =>
+        _viewTitle.Left = _breadcrumb.Visible && _breadcrumb.Text.Length > 0
+            ? _breadcrumb.Right + UiTheme.GutterTight
+            : _breadcrumb.Left;
 
     private void PositionHeaderItems()
     {
@@ -514,8 +610,8 @@ public sealed class MainShellForm : LocalizedForm
                 var header = new Label
                 {
                     Text = T(entry.LabelKey).ToUpperInvariant(),
-                    Font = UiTheme.SmallBold,
-                    ForeColor = UiTheme.TextMuted,
+                    Font = UiTheme.Overline,
+                    ForeColor = UiTheme.TextSecondary,
                     AutoSize = false,
                     TextAlign = ContentAlignment.MiddleLeft,
                     Cursor = Cursors.Hand,
@@ -534,7 +630,7 @@ public sealed class MainShellForm : LocalizedForm
                     RenderNavigation();
                 };
                 header.MouseEnter += (_, _) => header.ForeColor = UiTheme.Accent;
-                header.MouseLeave += (_, _) => header.ForeColor = UiTheme.TextMuted;
+                header.MouseLeave += (_, _) => header.ForeColor = UiTheme.TextSecondary;
                 _navTips.SetToolTip(header, T(collapsed ? "Nav.ExpandGroup" : "Nav.CollapseGroup"));
 
                 _sidebar.Controls.Add(header);
@@ -561,13 +657,13 @@ public sealed class MainShellForm : LocalizedForm
                 Padding = new Padding(UiTheme.Gutter, 0, 0, 0),
                 BackColor = UiTheme.SurfaceRaised,
                 ForeColor = UiTheme.TextPrimary,
-                Font = UiTheme.Body,
+                Font = NavigationFont,
                 Cursor = Cursors.Hand,
                 UseVisualStyleBackColor = false
             };
 
             button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.MouseOverBackColor = UiTheme.AccentSubtle;
+            button.FlatAppearance.MouseOverBackColor = UiTheme.SurfaceSunken;
 
             if (IconCatalog.Navigation.TryGetValue(entry.Key, out var glyph))
                 ButtonIcons.Set(button, glyph, always: true);
@@ -575,6 +671,7 @@ public sealed class MainShellForm : LocalizedForm
             var captured = entry;
             button.Click += async (_, _) => await ActivateAsync(captured);
             button.Paint += (_, e) => PaintShortcut(button, captured.Key, e);
+            button.Paint += (_, e) => PaintActiveBar(button, e);
             if (_shortcuts.For(ScreenAction(entry.Key)) is var navKeys and not Keys.None)
                 _navTips.SetToolTip(button, $"{T(entry.LabelKey)} ({KeyboardShortcuts.Format(navKeys, Localizer)})");
 
@@ -589,7 +686,7 @@ public sealed class MainShellForm : LocalizedForm
         var shortcuts = UiTheme.SecondaryButton(ShortcutsButtonText());
         shortcuts.Bounds = new Rectangle(UiTheme.GutterTight, y + UiTheme.Gutter, NavigationWidth,
                                          UiTheme.ButtonHeight);
-        shortcuts.FlatAppearance.BorderColor = UiTheme.Border;
+        shortcuts.FlatAppearance.BorderColor = UiTheme.BorderStrong;
         shortcuts.Click += (_, _) => ShowShortcuts();
         _sidebar.Controls.Add(shortcuts);
         y = shortcuts.Bottom;
@@ -598,7 +695,7 @@ public sealed class MainShellForm : LocalizedForm
         var signOut = UiTheme.SecondaryButton(T("Action.Logout"));
         signOut.Bounds = new Rectangle(UiTheme.GutterTight, y + UiTheme.GutterTight, NavigationWidth,
                                        UiTheme.ButtonHeight);
-        signOut.FlatAppearance.BorderColor = UiTheme.Border;
+        signOut.FlatAppearance.BorderColor = UiTheme.BorderStrong;
         signOut.Click += (_, _) => SignOut();
         _sidebar.Controls.Add(signOut);
 
@@ -675,9 +772,26 @@ public sealed class MainShellForm : LocalizedForm
         {
             var active = key == _activeKey;
             button.BackColor = active ? UiTheme.AccentSubtle : UiTheme.SurfaceRaised;
-            button.Font = active ? UiTheme.BodyBold : UiTheme.Body;
-            button.ForeColor = active ? UiTheme.Accent : UiTheme.TextPrimary;
+            button.Font = active ? NavigationFontActive : NavigationFont;
+            // The frame Windows draws round the focused entry takes the entry's own colour.
+            button.FlatAppearance.BorderColor = button.BackColor;
+            button.ForeColor = active ? UiTheme.AccentInk : UiTheme.TextPrimary;
+            button.FlatAppearance.MouseOverBackColor = active ? UiTheme.AccentSubtle : UiTheme.SurfaceSunken;
+            button.Invalidate();
         }
+
+        if (IsHandleCreated) ShowBreadcrumb();
+    }
+
+    // The active entry carries a 3 px accent bar on its leading edge, as in the design system.
+    private void PaintActiveBar(Button button, PaintEventArgs e)
+    {
+        if (!string.Equals(button.Tag as string, _activeKey, StringComparison.Ordinal)) return;
+
+        const int bar = 3;
+        var x = button.RightToLeft == RightToLeft.Yes ? button.Width - bar : 0;
+        using var brush = new SolidBrush(UiTheme.Accent);
+        e.Graphics.FillRectangle(brush, x, 3, bar, button.Height - 6);
     }
 
     // ---- Lifecycle --------------------------------------------------------------------------------
@@ -697,6 +811,8 @@ public sealed class MainShellForm : LocalizedForm
         _help.Text = HelpButtonText();
         _siteInfo.Text = $"{T("App.Site")} : {_currentUser.SiteCode}   ·   " +
                          $"{T("App.Workstation")} : {_currentUser.Workstation}";
+        ShowStatusBar();
+        ShowBreadcrumb();
 
         var selected = _languagePicker.SelectedIndex;
         _languagePicker.BeginUpdate();
@@ -898,6 +1014,7 @@ public sealed class MainShellForm : LocalizedForm
         // The labels that show a shortcut follow the new choice.
         _print.Text = WithShortcut(T("Action.Print"), ActionPrint);
         _help.Text = HelpButtonText();
+        ShowStatusBar();
         RenderNavigation();
     }
 
@@ -921,7 +1038,7 @@ public sealed class MainShellForm : LocalizedForm
         var shortcut = KeyboardShortcuts.Format(keys, Localizer);
         var used = button.Padding.Left + (button.Image?.Width ?? 0) + 8
                    + TextRenderer.MeasureText(button.Text, button.Font).Width;
-        if (used + TextRenderer.MeasureText(shortcut, UiTheme.Small).Width + UiTheme.Gutter > button.Width)
+        if (used + TextRenderer.MeasureText(shortcut, ShortcutFont).Width + UiTheme.Gutter > button.Width)
             return;
 
         var bounds = new Rectangle(0, 0, button.Width - UiTheme.GutterTight, button.Height);
@@ -929,7 +1046,7 @@ public sealed class MainShellForm : LocalizedForm
                     | (button.RightToLeft == RightToLeft.Yes ? TextFormatFlags.Left : TextFormatFlags.Right);
         if (button.RightToLeft == RightToLeft.Yes) bounds.X += UiTheme.GutterTight;
 
-        TextRenderer.DrawText(e.Graphics, shortcut, UiTheme.Small,
+        TextRenderer.DrawText(e.Graphics, shortcut, ShortcutFont,
                               bounds, UiTheme.TextMuted, flags);
     }
 

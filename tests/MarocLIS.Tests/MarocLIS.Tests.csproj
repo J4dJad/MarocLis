@@ -46,6 +46,8 @@
     <Compile Include="..\..\src\MarocLIS.Desktop\Controls\ChartScale.cs" Link="Desktop\ChartScale.cs" />
     <!-- Where F1 finds the help page of a screen. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\HelpCatalog.cs" Link="Desktop\HelpCatalog.cs" />
+    <!-- The colours of the design system, checked against its contrast rules. -->
+    <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\UiTheme.Palette.cs" Link="Desktop\UiTheme.Palette.cs" />
   </ItemGroup>
 
 </Project>

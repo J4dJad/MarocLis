@@ -155,6 +155,7 @@ public abstract class LocalizedForm : Form
     {
         base.OnLoad(e);
         ApplyTexts();
+        UiChrome.Apply(this);
         RtlLayout.Apply(this, _cultureManager.CurrentLanguage);
         ButtonIcons.Apply(this, Localizer);
         GridColumns.Apply(this);
@@ -290,6 +291,7 @@ public abstract class LocalizedView : UserControl
     {
         base.OnLoad(e);
         ApplyTexts();
+        UiChrome.Apply(this);
         RtlLayout.Apply(this, _cultureManager.CurrentLanguage);
         ButtonIcons.Apply(this, Localizer);
         GridColumns.Apply(this);

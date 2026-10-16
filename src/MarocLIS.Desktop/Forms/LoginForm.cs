@@ -262,7 +262,7 @@ public sealed class LoginForm : LocalizedForm
         graphics.FillPath(fill, path);
 
         var glyphSize = size * 5 / 8;
-        if (Icons.Render(Glyph.FlaskConical, Color.White, glyphSize) is { } glyph)
+        if (Icons.Render(Glyph.FlaskConical, UiTheme.TextOnAccent, glyphSize) is { } glyph)
             graphics.DrawImage(glyph, (size - glyph.Width) / 2, (size - glyph.Height) / 2);
 
         return mark;
