@@ -67,6 +67,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<IResultQueries, ResultQueries>();
         services.AddIsolatedQueries<IValidationQueries, ValidationQueries>();
         services.AddIsolatedQueries<IBenchWorksheetQueries, BenchWorksheetQueries>();
+        services.AddIsolatedQueries<IResultEntryContextQueries, ResultEntryContextQueries>();
         services.AddIsolatedQueries<IReportQueries, ReportQueries>();
         services.AddIsolatedQueries<IDashboardQueries, DashboardQueries>();
         services.AddIsolatedQueries<IPatientQueries, PatientQueries>();

@@ -12,6 +12,12 @@ namespace MarocLIS.Desktop.Infrastructure;
 /// </summary>
 public static class ListPrinting
 {
+    /// <summary>
+    /// Tag of a column kept off the screen for room but still printed — the result entry's
+    /// technical comment, edited in a box and printed with the grid as it was when it had a column.
+    /// </summary>
+    public const string PrintedWhenHidden = "printed-when-hidden";
+
     /// <summary>The screen's main list: the largest grid currently visible.</summary>
     public static DataGridView? MainGrid(Control view) =>
         Descendants(view)
@@ -23,7 +29,7 @@ public static class ListPrinting
     public static ListDocument Capture(DataGridView grid, string title, string caption, bool rightToLeft)
     {
         var columns = grid.Columns.Cast<DataGridViewColumn>()
-            .Where(c => c.Visible && c is not DataGridViewImageColumn && c is not DataGridViewButtonColumn)
+            .Where(c => (c.Visible || c.Tag is PrintedWhenHidden) && c is not DataGridViewImageColumn && c is not DataGridViewButtonColumn)
             .OrderBy(c => c.DisplayIndex)
             .ToList();
 

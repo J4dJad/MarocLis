@@ -35,6 +35,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ResultEntryService>();
         services.AddScoped<ValidationService>();
         services.AddScoped<BenchWorksheetService>();
+        services.AddScoped<ResultEntryContextService>();
         services.AddScoped<ReportReleaseService>();
         services.AddScoped<Billing.BillingService>();
         services.AddScoped<Quality.QualityControlService>();
