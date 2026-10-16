@@ -87,7 +87,10 @@ public static class UiChrome
         var painter = new FieldBorder(field);
         if (field.IsHandleCreated) painter.Attach();
         field.HandleCreated += (_, _) => painter.Attach();
-        field.HandleDestroyed += (_, _) => painter.ReleaseHandle();
+        // No release on HandleDestroyed: the painter lets go of the window itself at
+        // WM_NCDESTROY. Released earlier, inside the box's own WM_DESTROY, the box never saw its
+        // WM_NCDESTROY and kept a dead window handle; disposing it then failed with « opération
+        // inter-threads non valide » and every screen with such a box could no longer be left.
         field.GotFocus += (_, _) => painter.Redraw();
         field.LostFocus += (_, _) => painter.Redraw();
         field.EnabledChanged += (_, _) => painter.Redraw();

@@ -539,14 +539,21 @@ public sealed class SampleReceptionView : LocalizedView
                      + decision
                      + 4;
 
-        if (_scanCard.Height == needed) return;
+        // The row is checked as well as the card: measured while the screen was still narrow, the
+        // row kept the height of the wrapped flows after the card had shrunk back, and pushed the
+        // list of tubes awaiting reception off the bottom of the screen.
+        var content = _scanCard.Parent as TableLayoutPanel;
+        var row = needed + _scanCard.Margin.Vertical;
+        if (_scanCard.Height == needed
+            && (content is null || content.RowStyles[0] is { SizeType: SizeType.Absolute } style && (int)style.Height == row))
+            return;
 
         _fitting = true;
         try
         {
             _scanCard.Height = needed;
-            if (_scanCard.Parent is TableLayoutPanel content)
-                content.RowStyles[0] = new RowStyle(SizeType.Absolute, needed + _scanCard.Margin.Vertical);
+            if (content is not null)
+                content.RowStyles[0] = new RowStyle(SizeType.Absolute, row);
         }
         finally
         {
