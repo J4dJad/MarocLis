@@ -352,6 +352,17 @@
   "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
   "Deposit_NotFound": "Acompte introuvable.",
 
+  "Help": {
+    "Screen": "Aide de l'écran affiché",
+    "NotFound": "L'aide n'est pas installée sur ce poste : le dossier Help est introuvable à côté du programme.",
+    "Print": "Imprimer",
+    "Home": "Sommaire",
+    "Forward": "Suivant",
+    "Back": "Précédent",
+    "Title": "Aide",
+    "Button": "Aide (F1)"
+  },
+
   "Steering": {
     "Sites": "{0} site(s)",
     "NoLabel": "(Non renseigné)",
@@ -2077,6 +2088,15 @@
   },
 
   "ResultEntry": {
+    "CorrectedStatus": "« {0} » corrigé — à revalider",
+    "CorrectedNotice": "« {0} » est corrigé. L'ancienne valeur est conservée dans l'historique du résultat. La nouvelle valeur doit être validée techniquement puis biologiquement ; si l'ancienne avait été imprimée, le compte rendu suivant devra être émis comme rectification (Comptes rendus › Émettre une rectification).",
+    "CorrectReasonPrompt": "Motif de la correction de « {0} ». Il est conservé avec l'ancienne valeur dans l'historique du résultat.",
+    "CorrectValuePrompt": "Valeur corrigée pour « {0} » (valeur validée : {1} {2}) :",
+    "CorrectReleased": "Corriger une valeur validée…",
+    "ClearValueConfirm": "Effacer la valeur « {1} » de « {0} » ? La ligne redevient à saisir.",
+    "ClearValue": "Effacer la valeur",
+    "NotDonePrompt": "Pourquoi « {0} » n'a-t-il pas été réalisé ? Le motif est imprimé sur le compte rendu à la place du résultat.",
+    "MarkNotDone": "Non fait…",
     "Departments": "Secteurs",
     "Received": "Reçu",
     "PendingShort": "Analyses",
@@ -2833,6 +2853,7 @@
   },
 
   "Report": {
+    "AmendedParameters": "Résultats corrigés",
     "SmsSent": "{0} : SMS envoyé au {1}.",
     "EmailSent": "{0} : compte rendu envoyé par e-mail à {1}.",
     "SendFailedShort": "{0} : échec de l'envoi, voir le détail des remises.",
@@ -4569,6 +4590,7 @@
   "Item_CannotRepeatFromStatus": "Reprise impossible depuis le statut « {0} ».",
   "Item_RepeatReasonRequired": "Indiquez le motif de la reprise.",
   "Item_RepeatRequiresUnvalidation": "Cette analyse comporte des résultats déjà validés biologiquement : la validation doit d'abord être retirée (droit « dévalider ») avant de reprendre l'analyse.",
+  "Item_CannotCorrectFromStatus": "L'analyse ne peut pas être rouverte pour correction depuis le statut « {0} ».",
 
   "Instrument_NotFound": "Automate introuvable.",
   "Interface_NotFound": "Interface automate introuvable.",
@@ -4937,6 +4959,9 @@
   "Result_ModifyRequiresPermission": "{0} : ce résultat est déjà validé techniquement, le modifier demande le droit « modifier un résultat ».",
   "Result_ItemCancelled": "{0} : cette analyse est annulée, aucun résultat ne peut y être saisi.",
   "Result_SampleNotReceived": "{0} : le tube n'est pas encore réceptionné. Réceptionnez-le avant de saisir le résultat.",
+  "Result_CorrectionValueRequired": "Indiquez la valeur corrigée.",
+  "Result_CorrectionOnlyForReleased": "{0} n'est pas encore validé : corrigez la valeur directement dans la saisie.",
+  "Result_CorrectionUnchanged": "La valeur indiquée pour {0} est celle déjà validée : pour seulement retirer la validation, utilisez « Dévalider ».",
   "BenchSheet_DepartmentNotFound": "Le secteur choisi est introuvable.",
   "BenchSheet_InstrumentNotFound": "L'automate choisi est introuvable sur ce site.",
   "BenchSheet_NothingPending": "Aucune analyse en attente de saisie pour cette sélection.",

@@ -352,6 +352,17 @@
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
 
+  "Help": {
+    "Screen": "Help for the current screen",
+    "NotFound": "Help is not installed on this workstation: the Help folder was not found beside the program.",
+    "Print": "Print",
+    "Home": "Contents",
+    "Forward": "Forward",
+    "Back": "Back",
+    "Title": "Help",
+    "Button": "Help (F1)"
+  },
+
   "Steering": {
     "Sites": "{0} site(s)",
     "NoLabel": "(Not specified)",
@@ -2077,6 +2088,15 @@
   },
 
   "ResultEntry": {
+    "CorrectedStatus": "\"{0}\" corrected — to be validated again",
+    "CorrectedNotice": "\"{0}\" has been corrected. The previous value is kept in the result's history. The new value must be validated technically, then biologically; if the previous one was printed, the next report must be issued as an amendment (Reports › Issue an amendment).",
+    "CorrectReasonPrompt": "Reason for correcting \"{0}\". It is kept with the previous value in the result's history.",
+    "CorrectValuePrompt": "Corrected value for \"{0}\" (validated value: {1} {2}):",
+    "CorrectReleased": "Correct a validated value…",
+    "ClearValueConfirm": "Clear the value \"{1}\" of \"{0}\"? The line goes back to awaiting entry.",
+    "ClearValue": "Clear value",
+    "NotDonePrompt": "Why was \"{0}\" not performed? The reason is printed on the report in place of the result.",
+    "MarkNotDone": "Not done…",
     "Departments": "Sections",
     "Received": "Received",
     "PendingShort": "Tests",
@@ -2833,6 +2853,7 @@
   },
 
   "Report": {
+    "AmendedParameters": "Corrected results",
     "SmsSent": "{0}: SMS sent to {1}.",
     "EmailSent": "{0}: report e-mailed to {1}.",
     "SendFailedShort": "{0}: send failed, see the delivery details.",
@@ -4568,6 +4589,7 @@
   "Item_CannotRepeatFromStatus": "Repeating is not possible from status \"{0}\".",
   "Item_RepeatReasonRequired": "State the reason for repeating.",
   "Item_RepeatRequiresUnvalidation": "This analysis has biologically validated results: the validation must be withdrawn first (\"unvalidate\" right) before the analysis is repeated.",
+  "Item_CannotCorrectFromStatus": "The analysis cannot be reopened for correction from status \"{0}\".",
 
   "Instrument_NotFound": "Analyser not found.",
   "Interface_NotFound": "Analyser interface not found.",
@@ -4936,6 +4958,9 @@
   "Result_ModifyRequiresPermission": "{0}: this result is already technically validated; changing it needs the \"modify a result\" right.",
   "Result_ItemCancelled": "{0}: this analysis is cancelled, no result can be entered on it.",
   "Result_SampleNotReceived": "{0}: the tube has not been received yet. Receive it before entering the result.",
+  "Result_CorrectionValueRequired": "Enter the corrected value.",
+  "Result_CorrectionOnlyForReleased": "{0} is not validated yet: correct the value directly in result entry.",
+  "Result_CorrectionUnchanged": "The value given for {0} is the one already validated: to only withdraw the validation, use \"Unvalidate\".",
   "BenchSheet_DepartmentNotFound": "The selected department cannot be found.",
   "BenchSheet_InstrumentNotFound": "The selected analyser cannot be found on this site.",
   "BenchSheet_NothingPending": "No analysis is awaiting entry for this selection.",
