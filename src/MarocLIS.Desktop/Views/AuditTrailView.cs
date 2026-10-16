@@ -27,7 +27,7 @@ public sealed class AuditTrailView : LocalizedView
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<AuditTrailView>? _logger;
 
-    private readonly TabControl _tabs = new();
+    private readonly TabControl _tabs = new FlatTabControl();
     private readonly TabPage _changeTab = new();
     private readonly TabPage _accessTab = new();
     private readonly TabPage _securityTab = new();

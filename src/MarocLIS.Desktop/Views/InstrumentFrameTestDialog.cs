@@ -80,7 +80,7 @@ internal sealed class InstrumentFrameTestDialog : Form
         run.Click += async (_, _) => await RunAsync();
 
         var last = UiTheme.SecondaryButton(localizer["Interface.TestFrameLoadLast"]);
-        last.Bounds = new Rectangle(216, 6, 240, UiTheme.ButtonHeight);
+        last.Bounds = new Rectangle(216, 6, 260, UiTheme.ButtonHeight);
         last.Click += async (_, _) =>
         {
             var frame = await _loadLast();
@@ -92,12 +92,17 @@ internal sealed class InstrumentFrameTestDialog : Form
         {
             Font = UiTheme.SmallBold,
             AutoSize = false,
-            Bounds = new Rectangle(470, 6, 680, UiTheme.ButtonHeight),
+            Bounds = new Rectangle(490, 6, 660, UiTheme.ButtonHeight),
             TextAlign = ContentAlignment.MiddleLeft,
-            Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            AutoEllipsis = true
         };
 
         actions.Controls.AddRange([run, last, _summary]);
+
+        // Sized from the bar itself: anchored to the right while the bar still had its default
+        // width, the summary came out wider than the dialog.
+        actions.Resize += (_, _) =>
+            _summary.Width = Math.Max(80, actions.ClientSize.Width - _summary.Left - 8);
 
         BuildColumns();
         _grid.Dock = DockStyle.Fill;

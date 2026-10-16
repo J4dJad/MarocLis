@@ -42,7 +42,7 @@ public sealed class CatalogView : LocalizedView
     private readonly IClock _clock;
     private readonly ILogger<CatalogView>? _logger;
 
-    private readonly TabControl _tabs = new();
+    private readonly TabControl _tabs = new FlatTabControl();
 
     // Analyses tab
     private readonly TextBox _search = new();

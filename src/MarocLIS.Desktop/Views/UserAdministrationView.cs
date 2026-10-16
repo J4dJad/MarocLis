@@ -31,7 +31,7 @@ public sealed class UserAdministrationView : LocalizedView
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<UserAdministrationView>? _logger;
 
-    private readonly TabControl _tabs = new();
+    private readonly TabControl _tabs = new FlatTabControl();
     private readonly TabPage _usersTab = new();
     private readonly TabPage _rolesTab = new();
     private readonly TabPage _securityTab = new();
@@ -137,7 +137,7 @@ public sealed class UserAdministrationView : LocalizedView
 
         var aside = BuildUserAside();
         aside.Dock = DockStyle.Right;
-        aside.Width = 330;
+        aside.Width = 356;
 
         var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface, Padding = new Padding(0, 4, 0, 0) };
         body.Controls.Add(AdminLayout.Spaced(list, new Padding(0, 0, AdminLayout.Gap, 0)));
@@ -272,7 +272,7 @@ public sealed class UserAdministrationView : LocalizedView
         aside.AutoScroll = true;
         void Fit()
         {
-            var need = aside.Padding.Vertical + 44;
+            var need = aside.Padding.Vertical + 56;
             foreach (Control child in aside.Controls)
                 if (child.Dock == DockStyle.Top) need += child.Height;
             var min = new Size(0, need);

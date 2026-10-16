@@ -393,7 +393,7 @@ internal sealed class OrderHeaderDialog : Form
 
         _hasPrescriptionDate.Text = localizer["Order.PrescriptionDate"];
         _hasPrescriptionDate.AutoSize = true;
-        _hasPrescriptionDate.Location = new Point(360, 74);
+        _hasPrescriptionDate.Location = new Point(360, 70);
         _hasPrescriptionDate.Checked = detail.PrescriptionDate is not null;
 
         _prescriptionDate.Bounds = new Rectangle(360, 90, 220, UiTheme.InputHeight);

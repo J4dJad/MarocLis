@@ -255,27 +255,20 @@ internal static class AdminLayout
 
     /// <summary>
     /// The flat tab strip: the tab control keeps its pages, captions and order, drawn by
-    /// <see cref="UiChrome"/> with the accent line under the active tab; it sits in a host that
-    /// cuts off the raised frame Windows draws round the pages, so only the strip shows.
+    /// <see cref="UiChrome"/> with the accent line under the active tab; it sits in a host that it
+    /// fills; a <see cref="FlatTabControl"/> lays its pages over the raised frame Windows draws round
+    /// them, so only the strip shows.
     /// </summary>
     public static Panel FlatTabs(TabControl tabs)
     {
         var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
 
-        tabs.Dock = DockStyle.None;
+        tabs.Dock = DockStyle.Fill;
         tabs.Font = UiTheme.Body;
         tabs.Padding = new Point(16, 7);
         tabs.Appearance = TabAppearance.Normal;
 
         host.Controls.Add(tabs);
-        host.Resize += (_, _) => Place();
-        tabs.HandleCreated += (_, _) => Place();
-
-        void Place()
-        {
-            // The page frame is a few pixels on each side; the host clips them.
-            tabs.Bounds = new Rectangle(-4, 0, host.ClientSize.Width + 8, host.ClientSize.Height + 4);
-        }
 
         foreach (TabPage page in tabs.TabPages) page.Padding = new Padding(4, 12, 4, 0);
         tabs.ControlAdded += (_, e) => { if (e.Control is TabPage page) page.Padding = new Padding(4, 12, 4, 0); };
@@ -334,6 +327,27 @@ internal static class AdminLayout
 /// A search box as the design system draws it: a 34 px white field with a line border, the
 /// magnifying glass at its start, and a borderless box inside.
 /// </summary>
+/// <summary>
+/// The tab control of the administration screens: its pages cover the few pixels of raised frame
+/// Windows draws on the sides and at the bottom, so it can fill its host and still show only the
+/// flat strip.
+/// </summary>
+internal sealed class FlatTabControl : TabControl
+{
+    private const int Frame = 4;
+
+    public override Rectangle DisplayRectangle
+    {
+        get
+        {
+            var area = base.DisplayRectangle;
+            return Rectangle.FromLTRB(Math.Max(0, area.Left - Frame), area.Top,
+                                      Math.Min(ClientSize.Width, area.Right + Frame),
+                                      Math.Min(ClientSize.Height, area.Bottom + Frame));
+        }
+    }
+}
+
 internal sealed class AdminSearchBox : Panel
 {
     public TextBox Box { get; }

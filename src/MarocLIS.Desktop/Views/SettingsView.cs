@@ -28,7 +28,7 @@ public sealed class SettingsView : LocalizedView
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<SettingsView>? _logger;
 
-    private readonly TabControl _tabs = new();
+    private readonly TabControl _tabs = new FlatTabControl();
     private readonly TabPage _siteTab = new();
     private readonly TabPage _numberingTab = new();
     private readonly TabPage _settingsTab = new();
@@ -293,7 +293,8 @@ public sealed class SettingsView : LocalizedView
         _ministryAuth.Tag = UiTags.LatinValue;
 
         _hasMinistryDate.AutoSize = true;
-        _hasMinistryDate.Location = new Point(240, y);
+        // Raised a little: the tick box is taller than a caption and otherwise runs onto the picker.
+        _hasMinistryDate.Location = new Point(240, y - 4);
         body.Controls.Add(_hasMinistryDate);
 
         _ministryDate.Bounds = new Rectangle(240, y + 16, 180, UiTheme.InputHeight);

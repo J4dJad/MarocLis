@@ -93,7 +93,8 @@ public sealed class AccountingExportView : LocalizedView
 
         var journals = new FlowLayoutPanel
         {
-            Size = new Size(654, 70),
+            // Three rows of tick boxes: the longer French captions do not go three to a row.
+            Size = new Size(654, 78),
             WrapContents = true,
             BackColor = UiTheme.SurfaceRaised
         };
@@ -130,7 +131,7 @@ public sealed class AccountingExportView : LocalizedView
         var scopeCard = new FinanceCard(scope, FinanceUi.CardHeader(_scopeTitle, null))
         {
             Dock = DockStyle.Top,
-            Height = 232
+            Height = 240
         };
 
         _export.Enabled = false;

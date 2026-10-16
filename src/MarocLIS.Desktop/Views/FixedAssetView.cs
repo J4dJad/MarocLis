@@ -1057,7 +1057,9 @@ internal sealed class FixedAssetAccountsDialog : MasterDataEditor
             var name = new Label
             {
                 Text = localizer[$"FixedAssetCategory.{category}"], Font = UiTheme.BodyBold, AutoSize = false,
-                Bounds = new Rectangle(20, y + 22, 220, 24)
+                // Two lines when the category's name is longer than the column (« Agencements et
+                // aménagements »), centred on the boxes beside it.
+                Bounds = new Rectangle(20, y + 14, 224, 36), TextAlign = ContentAlignment.MiddleLeft
             };
             Controls.Add(name);
             _boxes[category] = (TextField("Assets.AssetAccount", 250, y, 130, accounts.Asset, latin: true, mono: true),

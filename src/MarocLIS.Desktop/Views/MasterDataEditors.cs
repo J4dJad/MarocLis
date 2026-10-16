@@ -280,9 +280,12 @@ internal abstract class MasterDataEditor : Form
         var chrome = Height - ClientSize.Height;
         var available = Screen.FromControl(Owner ?? (Control)this).WorkingArea.Height - chrome;
 
-        if (ClientSize.Height <= available) return;
+        // Windows clamps a form taller than the screen before Load, so the client height alone can
+        // look as if it fits while the buttons lie below it: measure from the buttons instead.
+        var height = Math.Max(ClientSize.Height, Math.Max(_accept.Bottom, _dismiss.Bottom) + 12);
+        if (height <= available) return;
 
-        var shift = ClientSize.Height - available;
+        var shift = height - available;
         var footerTop = Math.Min(_accept.Top, _dismiss.Top) - shift;
 
         if (footerTop <= 0) return;
@@ -294,7 +297,7 @@ internal abstract class MasterDataEditor : Form
             AutoScroll = true,
             AutoScrollMargin = new Size(0, 12),
             BackColor = BackColor,
-            Bounds = new Rectangle(0, 0, ClientSize.Width, footerTop - 4)
+            Bounds = new Rectangle(0, 0, ClientSize.Width, footerTop - 14)
         };
 
         // Moved with their coordinates unchanged: the panel sits at the origin, so the layout the

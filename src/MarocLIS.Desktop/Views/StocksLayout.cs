@@ -114,7 +114,7 @@ internal sealed class StockChip : CheckBox
     {
         base.OnTextChanged(e);
         Width = TextRenderer.MeasureText(Mnemonics.Plain(Text), UiTheme.BodyBold, Size.Empty,
-                                         TextFormatFlags.NoPadding).Width + 28;
+                                         TextFormatFlags.NoPadding).Width + 30;
     }
 
     protected override void OnCheckedChanged(EventArgs e)

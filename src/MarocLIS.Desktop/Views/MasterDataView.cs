@@ -35,7 +35,7 @@ public sealed class MasterDataView : LocalizedView
     private readonly ILogger<MasterDataView>? _logger;
     private readonly Application.Inventory.StockPlanningService? _planning;
 
-    private readonly TabControl _tabs = new();
+    private readonly TabControl _tabs = new FlatTabControl();
     private readonly TabPage _instrumentTab = new();
     private readonly TabPage _qcTab = new();
     private readonly TabPage _stockTab = new();
