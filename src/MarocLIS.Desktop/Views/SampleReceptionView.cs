@@ -553,7 +553,13 @@ public sealed class SampleReceptionView : LocalizedView
         {
             _scanCard.Height = needed;
             if (content is not null)
+            {
                 content.RowStyles[0] = new RowStyle(SizeType.Absolute, row);
+                // Changed from inside a layout pass, the new row height is not laid out until
+                // something else moves: the list kept the place the old row gave it.
+                if (content.IsHandleCreated) content.BeginInvoke(() => content.PerformLayout());
+                else content.PerformLayout();
+            }
         }
         finally
         {
