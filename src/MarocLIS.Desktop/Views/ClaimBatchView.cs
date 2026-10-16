@@ -38,6 +38,7 @@ public sealed class ClaimBatchView : LocalizedView
     private const string ColSelected = "selected";
 
     private readonly Label _heading = new();
+    private readonly Label _outstanding = new();
     private readonly ComboBox _window = new();
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
 
@@ -79,22 +80,16 @@ public sealed class ClaimBatchView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
-
-        var bar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.SectionTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = false;
-        _heading.Bounds = new Rectangle(0, 10, 760, 24);
+        Padding = new Padding(24, 20, 24, 12);
 
         _window.DropDownStyle = ComboBoxStyle.DropDownList;
         _window.FlatStyle = FlatStyle.Flat;
-        _window.Bounds = new Rectangle(780, 8, 170, UiTheme.InputHeight);
+        _window.Width = 170;
 
-        _refresh.Bounds = new Rectangle(962, 7, 110, UiTheme.ButtonHeight - 4);
-
-        bar.Controls.AddRange([_heading, _window, _refresh]);
+        // The title, what is left to recover in grey beside it, the period of the batches and the
+        // refresh at the far end.
+        var header = FinanceUi.PageHeader(_heading, _outstanding, _window, _refresh);
+        _window.Margin = new Padding(8, 5, 0, 0);
 
         BuildCandidateColumns();
         BuildBatchColumns();
@@ -104,75 +99,51 @@ public sealed class ClaimBatchView : LocalizedView
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            SplitterDistance = 230,
-            SplitterWidth = 6,
+            SplitterDistance = 240,
+            SplitterWidth = 12,
             BackColor = UiTheme.Surface
         };
 
-        outer.Panel1.Controls.Add(Pane(_candidateHeading, _candidates,
-                                        [_selectClaimable, _submit]));
+        // Three cards, in the order the money moves: what can be claimed, the batches sent, and
+        // what the selected batch holds.
+        outer.Panel1.Controls.Add(new FinanceCard(
+            _candidates, FinanceUi.CardHeader(_candidateHeading, null, _selectClaimable, _submit)));
 
         var inner = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
             SplitterDistance = 560,
-            SplitterWidth = 6,
+            SplitterWidth = 12,
             BackColor = UiTheme.Surface
         };
 
-        inner.Panel1.Controls.Add(Pane(_batchHeading, _batches, [_recordOutcome]));
-        inner.Panel2.Controls.Add(Pane(_invoiceHeading, _invoices, []));
+        inner.Panel1.Controls.Add(new FinanceCard(_batches, FinanceUi.CardHeader(_batchHeading, null, _recordOutcome)));
+        inner.Panel2.Controls.Add(new FinanceCard(_invoices, FinanceUi.CardHeader(_invoiceHeading, null)));
 
         outer.Panel2.Controls.Add(inner);
 
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 26, BackColor = UiTheme.Surface };
-
-        _status.Font = UiTheme.Small;
-        _status.Dock = DockStyle.Fill;
-        _status.TextAlign = ContentAlignment.MiddleLeft;
-
+        var footer = new Panel { Dock = DockStyle.Bottom, Height = 28, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
+        FinanceUi.Status(_status);
         footer.Controls.Add(_status);
+
+        // The answer of a batch and the state of an invoice as pills.
+        FinanceUi.PillColumn(_batches, "outcome", row => row.Tag is ClaimBatchRow batch
+            ? batch.IsAwaitingOutcome
+                ? batch.NeedsChasing(_clock.Today) ? FinanceUi.PillCritical : FinanceUi.PillRunning
+                : batch.RejectedCount > 0 ? FinanceUi.PillWarning : FinanceUi.PillDone
+            : null);
+
+        FinanceUi.PillColumn(_invoices, "status", row => row.Tag is ClaimInvoiceRow invoice
+            ? invoice.IsAbandoned ? FinanceUi.PillCritical
+              : invoice.WasRejected ? FinanceUi.PillWarning
+              : invoice.ClaimStatus == ClaimStatus.Settled ? FinanceUi.PillDone
+              : FinanceUi.PillRunning
+            : null);
 
         Controls.Add(outer);
         Controls.Add(footer);
-        Controls.Add(bar);
-    }
-
-    private static Panel Pane(Label heading, DataGridView grid, Button[] buttons)
-    {
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-
-        heading.Font = UiTheme.SmallBold;
-        heading.ForeColor = UiTheme.TextSecondary;
-        heading.Dock = DockStyle.Top;
-        heading.Height = 22;
-
-        grid.Dock = DockStyle.Fill;
-
-        host.Controls.Add(grid);
-        host.Controls.Add(heading);
-
-        if (buttons.Length > 0)
-        {
-            var actions = new Panel
-            {
-                Dock = DockStyle.Bottom, Height = 40, BackColor = UiTheme.Surface
-            };
-
-            var x = 0;
-
-            foreach (var button in buttons)
-            {
-                button.Bounds = new Rectangle(x, 6, 220, UiTheme.ButtonHeight);
-                actions.Controls.Add(button);
-                x += 228;
-            }
-
-            host.Controls.Add(actions);
-        }
-
-        return host;
+        Controls.Add(header);
     }
 
     private static void AddColumns(DataGridView grid,
@@ -281,6 +252,7 @@ public sealed class ClaimBatchView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _heading.Text = T("Nav.Claims");
         _refresh.Text = T("Action.Refresh");
         _selectClaimable.Text = T("Claim.SelectClaimable");
         _submit.Text = T("Billing.SubmitClaim");
@@ -409,7 +381,7 @@ public sealed class ClaimBatchView : LocalizedView
             ? T("Claim.ClaimableSummary", claimable, waiting)
             : T("Claim.ClaimableSummaryBlocked", claimable, waiting, blocked);
 
-        _candidateHeading.ForeColor = blocked > 0 ? UiTheme.Abnormal : UiTheme.TextSecondary;
+        _candidateHeading.ForeColor = blocked > 0 ? UiTheme.Abnormal : UiTheme.TextPrimary;
 
         RefreshSelectionSummary();
     }
@@ -480,10 +452,11 @@ public sealed class ClaimBatchView : LocalizedView
             ? T("Claim.BatchSummary", _batchRows.Count, unsettled)
             : T("Claim.BatchSummaryChasing", _batchRows.Count, unsettled, chasing);
 
-        _batchHeading.ForeColor = chasing > 0 ? UiTheme.Critical : UiTheme.TextSecondary;
+        _batchHeading.ForeColor = chasing > 0 ? UiTheme.Critical : UiTheme.TextPrimary;
 
-        _heading.Text = $"{T("Nav.Claims")} — {T("Claim.Outstanding", unsettled)}";
-        _heading.ForeColor = chasing > 0 ? UiTheme.Critical : UiTheme.TextPrimary;
+        _heading.Text = T("Nav.Claims");
+        _outstanding.Text = T("Claim.Outstanding", unsettled);
+        _outstanding.ForeColor = chasing > 0 ? UiTheme.Critical : UiTheme.TextSecondary;
 
         RefreshActions();
     }
