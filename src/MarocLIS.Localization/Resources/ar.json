@@ -370,6 +370,7 @@
   },
 
   "QualityHr": {
+    "Qc.ViolatedRules": "القواعد المخالفة",
     "Hint.AccidentLog": "مرحلة من المتابعة مع المؤمِّن، مؤرخة ومسجلة في الملف.",
     "Hint.Credentials": "الشهادات والفحوص الطبية والتلقيحات… مع تاريخ انتهائها ونسختها الممسوحة.",
     "Hint.Employee": "الملف الإداري للموظف: الهوية والمنصب والعقد.",
@@ -3640,6 +3641,9 @@
   },
 
   "NonConformity": {
+    "RootCauseCategory": "صنف السبب",
+    "ActionKind": "نوع الإجراء",
+    "AllCategories": "كل الأصناف",
     "Title": "عدم المطابقة",
     "Plural": "حالات عدم المطابقة",
     "Reference": "المرجع",
@@ -3751,6 +3755,8 @@
   },
 
   "Inventory": {
+    "DaysToExpiry": "الأيام المتبقية",
+    "ItemKind": "النوع",
     "ApplyReorderProposal": "تطبيق",
     "FromTheoretical": "حسب الاستهلاك النظري",
     "FromIssues": "حسب الإخراجات",
@@ -5308,6 +5314,7 @@
   "Nc_ClinicalImpactAssessmentRequired": "بما أن نتائج قد سُلِّمت، يجب تقييم الأثر السريري.",
   "Nc_AllActionsMustBeFinished": "يجب إنجاز جميع الإجراءات أو إلغاؤها قبل الإغلاق.",
   "Nc_CompletedActionRequiredBeforeClosure": "أُلغيت جميع الإجراءات: يجب إنجاز إجراء واحد على الأقل قبل إغلاق البطاقة.",
+  "Nc_ActionAlreadyCompleted": "هذا الإجراء منجز سابقاً: لا يمكن تعديل تاريخه ولا دليله.",
   "Action_Cancelled": "أُلغي هذا الإجراء.",
 
   "Document_VersionNotFound": "إصدار الوثيقة غير موجود.",
@@ -5725,6 +5732,7 @@
   "Document_NoEffectiveVersion": "لا يوجد إصدار ساري لهذه الوثيقة.",
   "Document_ReasonRequired": "السبب إلزامي.",
   "Document_FileType": "يجب أن تكون الوثيقة ملف PDF أو صورة (JPG أو PNG أو TIFF) أو ملف Word أو Excel بدون وحدات ماكرو (DOCX أو XLSX). لا تُحفظ الملفات الأخرى ولا تُفتح.",
+  "Document_Retired": "الوثيقة {0} مسحوبة: أعد تفعيلها قبل تطوير نسخها.",
   "Eqa_SchemeRequired": "برنامج التقييم الخارجي إلزامي.",
   "Eqa_RoundRequired": "مرجع الحملة إلزامي.",
   "Eqa_ParameterRequired": "اختر مُعاملاً واحداً على الأقل.",

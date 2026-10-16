@@ -370,6 +370,7 @@
   },
 
   "QualityHr": {
+    "Qc.ViolatedRules": "Rules violated",
     "Hint.AccidentLog": "A step of the follow-up with the insurer, dated and kept on the file.",
     "Hint.Credentials": "Diplomas, medical visits, vaccinations… with their expiry and their scan.",
     "Hint.Employee": "The employee's administrative file: identity, post and contract.",
@@ -3640,6 +3641,9 @@
   },
 
   "NonConformity": {
+    "RootCauseCategory": "Root cause category",
+    "ActionKind": "Action type",
+    "AllCategories": "All categories",
     "Title": "Non-conformity",
     "Plural": "Non-conformities",
     "Reference": "Reference",
@@ -3751,6 +3755,8 @@
   },
 
   "Inventory": {
+    "DaysToExpiry": "Days left",
+    "ItemKind": "Type",
     "ApplyReorderProposal": "Apply",
     "FromTheoretical": "from the theoretical consumption",
     "FromIssues": "from the issues",
@@ -5308,6 +5314,7 @@
   "Nc_ClinicalImpactAssessmentRequired": "Since results were already released, the clinical impact must be assessed.",
   "Nc_AllActionsMustBeFinished": "Every action must be completed or cancelled before closure.",
   "Nc_CompletedActionRequiredBeforeClosure": "All actions were cancelled: at least one action must be completed before the file can be closed.",
+  "Nc_ActionAlreadyCompleted": "This action is already completed: its date and evidence cannot be changed.",
   "Action_Cancelled": "This action was cancelled.",
 
   "Document_VersionNotFound": "Document version not found.",
@@ -5725,6 +5732,7 @@
   "Document_NoEffectiveVersion": "This document has no version in force.",
   "Document_ReasonRequired": "A reason is required.",
   "Document_FileType": "The document must be a PDF, an image (JPG, PNG, TIFF) or a Word or Excel file without macros (DOCX, XLSX). Other files are neither stored nor opened.",
+  "Document_Retired": "Document {0} is retired: reactivate it before moving its versions on.",
   "Eqa_SchemeRequired": "The EQA scheme is required.",
   "Eqa_RoundRequired": "The round reference is required.",
   "Eqa_ParameterRequired": "Tick at least one parameter.",

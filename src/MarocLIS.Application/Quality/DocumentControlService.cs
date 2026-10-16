@@ -159,6 +159,7 @@ public sealed class DocumentControlService(
 
         var document = await documents.GetByIdWithDetailsAsync(documentId, ct);
         if (document is null) return Result.Failure<int>(Error.NotFound("Document_NotFound"));
+        if (!document.IsActive) return Result.Failure<int>(Error.Conflict("Document_Retired", document.Reference));
 
         // One open draft at a time. Two parallel drafts of the same procedure means two people
         // rewriting it, and whichever is approved second silently discards the other's changes.
@@ -216,6 +217,7 @@ public sealed class DocumentControlService(
 
         var document = await documents.GetByIdWithDetailsAsync(documentId, ct);
         if (document is null) return Result.Failure(Error.NotFound("Document_NotFound"));
+        if (!document.IsActive) return Result.Failure(Error.Conflict("Document_Retired", document.Reference));
 
         var version = document.Versions.FirstOrDefault(v => v.VersionNumber == versionNumber);
         if (version is null) return Result.Failure(Error.NotFound("Document_VersionNotFound"));
@@ -255,6 +257,7 @@ public sealed class DocumentControlService(
 
         var document = await documents.GetByIdWithDetailsAsync(documentId, ct);
         if (document is null) return Result.Failure(Error.NotFound("Document_NotFound"));
+        if (!document.IsActive) return Result.Failure(Error.Conflict("Document_Retired", document.Reference));
 
         if (document.EffectiveVersion is not { } effective)
             return Result.Failure(Error.Conflict("Document_NoEffectiveVersion"));
@@ -321,6 +324,9 @@ public sealed class DocumentControlService(
 
         var document = await documents.GetByIdWithDetailsAsync(documentId, ct);
         if (document is null) return Result.Failure(Error.NotFound("Document_NotFound"));
+        // A retired document's versions stay as they were: retiring it is not a way round the
+        // review, and putting one of them in force would bring it back without saying so.
+        if (!document.IsActive) return Result.Failure(Error.Conflict("Document_Retired", document.Reference));
 
         var version = document.Versions.FirstOrDefault(v => v.VersionNumber == versionNumber);
         if (version is null) return Result.Failure(Error.NotFound("Document_VersionNotFound"));

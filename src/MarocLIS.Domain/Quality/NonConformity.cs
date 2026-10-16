@@ -118,7 +118,10 @@ public sealed class NonConformity : AuditableAggregateRoot, ISiteScoped
     {
         action.AttachTo(Id);
         _actions.Add(action);
-        if (Status == NonConformityStatus.Open) Status = NonConformityStatus.InProgress;
+        // A new action on a file awaiting verification is work to do again: the register must not
+        // show it waiting for its effectiveness check while an action is still pending.
+        if (Status is NonConformityStatus.Open or NonConformityStatus.AwaitingVerification)
+            Status = NonConformityStatus.InProgress;
         return action;
     }
 
@@ -134,6 +137,13 @@ public sealed class NonConformity : AuditableAggregateRoot, ISiteScoped
     /// </summary>
     public Result Close(DateTimeOffset at, Guid byUserId)
     {
+        // Closing again would move the closure stamp, and closing a dismissed file would count an
+        // unfounded report as a non-conformity that happened.
+        if (Status == NonConformityStatus.Closed)
+            return Result.Failure(Error.Conflict("Nc_AlreadyClosed"));
+        if (Status == NonConformityStatus.Rejected)
+            return Result.Failure(Error.Conflict("Nc_AlreadyDismissed"));
+
         var errors = new List<Error>();
 
         // A cancelled action is finished too: cancelling is how a wrong or superseded action is
@@ -376,6 +386,9 @@ public sealed class CorrectiveAction : Entity, IAuditable
     {
         if (Status == CorrectiveActionStatus.Cancelled)
             return Result.Failure(Error.Conflict("Action_Cancelled"));
+        // The completion date and its evidence are the record; completing twice would rewrite them.
+        if (Status == CorrectiveActionStatus.Completed)
+            return Result.Failure(Error.Conflict("Nc_ActionAlreadyCompleted"));
 
         CompletedOn = on;
         CompletedByUserId = byUserId;

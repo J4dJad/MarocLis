@@ -794,7 +794,10 @@ internal sealed class QhAside : Panel
     // Long texts wrap at the aside's width rather than running under its border.
     private void Wrap()
     {
-        var width = Math.Max(120, _layout.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 4);
+        // Measured on the outer width, room for the scroll bar always kept: on the client width,
+        // the bar appearing under the taller buttons narrowed the aside again, and the buttons were
+        // left sized for two different widths, the wider ones cut by the frame.
+        var width = Math.Max(120, _layout.Width - SystemInformation.VerticalScrollBarWidth - 4);
         foreach (var label in new[] { Heading, Subtitle, Note })
             label.MaximumSize = new Size(width, 0);
         foreach (Label value in _facts.Controls.OfType<Label>())
@@ -804,7 +807,7 @@ internal sealed class QhAside : Panel
         // panels of the other screens: each at its own width, they made a ragged column. A
         // caption longer than the aside wraps on two lines instead of being cut. Only once the
         // aside has its real width: sized against a provisional one, every button would wrap.
-        if (_layout.ClientSize.Width < 160) return;
+        if (_layout.Width < 160) return;
         var changed = false;
         foreach (Button button in ActionsPanel.Controls.OfType<Button>())
         {

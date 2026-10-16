@@ -263,7 +263,7 @@ public sealed class NonConformityView : LocalizedView
         var selected = _categoryFilter.SelectedIndex;
         _categoryFilter.BeginUpdate();
         _categoryFilter.Items.Clear();
-        _categoryFilter.Items.Add(new CategoryChoice(null, T("Action.SelectAll")));
+        _categoryFilter.Items.Add(new CategoryChoice(null, T("NonConformity.AllCategories")));
 
         foreach (var category in Enum.GetValues<NonConformityCategory>())
             _categoryFilter.Items.Add(new CategoryChoice(category, T($"NcCategory.{category}")));
@@ -286,7 +286,7 @@ public sealed class NonConformityView : LocalizedView
 
         if (_actions.Columns.Count > 0)
         {
-            _actions.Column("kind").HeaderText = T("Field.Name");
+            _actions.Column("kind").HeaderText = T("NonConformity.ActionKind");
             _actions.Column("description").HeaderText = T("Field.Description");
             _actions.Column("owner").HeaderText = T("NonConformity.AssignedTo");
             _actions.Column("target").HeaderText = T("NonConformity.DueDate");
@@ -617,7 +617,14 @@ public sealed class NonConformityView : LocalizedView
     {
         if (_register.CurrentRow?.Tag is not NonConformityRow row) return;
 
-        using var dialog = new NonConformityAnalysisDialog(Localizer, row);
+        var recorded = await _service.GetAnalysisAsync(row.Id);
+        if (recorded.IsFailure)
+        {
+            _dialogs.ShowFailure(recorded);
+            return;
+        }
+
+        using var dialog = new NonConformityAnalysisDialog(Localizer, row, recorded.Value);
 
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
@@ -1060,7 +1067,8 @@ internal sealed class NonConformityAnalysisDialog : Form
     private static MultilingualText? Wrap(string? text) =>
         string.IsNullOrWhiteSpace(text) ? null : new MultilingualText(text.Trim());
 
-    internal NonConformityAnalysisDialog(ILocalizer localizer, NonConformityRow row)
+    internal NonConformityAnalysisDialog(ILocalizer localizer, NonConformityRow row,
+                                         NonConformityAnalysis? recorded = null)
     {
         Text = $"{localizer["NonConformity.RecordAnalysis"]} — {row.Reference}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -1082,7 +1090,7 @@ internal sealed class NonConformityAnalysisDialog : Form
             return label;
         }
 
-        Field("NonConformity.RootCause", y);
+        Field("NonConformity.RootCauseCategory", y);
         _rootCause.DropDownStyle = ComboBoxStyle.DropDownList;
         _rootCause.FlatStyle = FlatStyle.Flat;
         _rootCause.Bounds = new Rectangle(20, y + 18, 520, UiTheme.InputHeight);
@@ -1091,7 +1099,9 @@ internal sealed class NonConformityAnalysisDialog : Form
             _rootCause.Items.Add(new NonConformityDialog.Choice<RootCauseCategory>(
                 value, localizer[$"RootCause.{value}"]));
 
-        _rootCause.SelectedIndex = 0;
+        _rootCause.SelectedIndex = recorded?.RootCause is { } cause
+            ? Math.Max(0, Array.IndexOf(Enum.GetValues<RootCauseCategory>(), cause))
+            : 0;
 
         y += 54;
         Field("NonConformity.RootCause", y);
@@ -1126,6 +1136,12 @@ internal sealed class NonConformityAnalysisDialog : Form
 
         Controls.AddRange([_rootCause, _rootCauseAnalysis, _clinicalImpact,
                            _effectiveness, _amendedReports, ok, cancel]);
+
+        // What was already recorded, so completing the file does not mean typing it all again.
+        _rootCauseAnalysis.Text = recorded?.RootCauseAnalysis?.Fr ?? string.Empty;
+        _clinicalImpact.Text = recorded?.ClinicalImpact?.Fr ?? string.Empty;
+        _effectiveness.Text = recorded?.EffectivenessVerification?.Fr ?? string.Empty;
+        _amendedReports.Checked = recorded?.AmendedReportsIssued ?? false;
 
         AcceptButton = ok;
         CancelButton = cancel;

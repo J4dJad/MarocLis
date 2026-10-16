@@ -421,14 +421,21 @@ public sealed class QualityDocumentsView : LocalizedView
         var document = SelectedDocument;
         var version = SelectedVersion;
 
-        _newVersion.Enabled = document is { IsActive: true };
-        _submit.Enabled = version?.Status == DocumentVersionStatus.Draft;
-        _review.Enabled = version?.Status == DocumentVersionStatus.UnderReview;
-        _approve.Enabled = version?.Status is DocumentVersionStatus.UnderReview
-                                            or DocumentVersionStatus.Reviewed;
-        _makeEffective.Enabled = version?.Status == DocumentVersionStatus.Approved;
+        // A retired document is kept for reference only: its versions no longer move until it is
+        // reactivated. One version at a time is in progress, so a new one waits for the last to
+        // be put in force (the service refuses it after the file has been chosen otherwise).
+        var active = document is { IsActive: true };
+        _newVersion.Enabled = active
+                              && document!.LatestStatus is not (DocumentVersionStatus.Draft
+                                  or DocumentVersionStatus.UnderReview or DocumentVersionStatus.Reviewed
+                                  or DocumentVersionStatus.Approved);
+        _submit.Enabled = active && version?.Status == DocumentVersionStatus.Draft;
+        _review.Enabled = active && version?.Status == DocumentVersionStatus.UnderReview;
+        _approve.Enabled = active && version?.Status is DocumentVersionStatus.UnderReview
+                                                     or DocumentVersionStatus.Reviewed;
+        _makeEffective.Enabled = active && version?.Status == DocumentVersionStatus.Approved;
         _open.Enabled = version is { HasContent: true };
-        _acknowledge.Enabled = document is { EffectiveVersion: not null, AcknowledgedByCurrentUser: false };
+        _acknowledge.Enabled = document is { IsActive: true, EffectiveVersion: not null, AcknowledgedByCurrentUser: false };
         _withdraw.Enabled = document is not null;
         _withdraw.Text = document is { IsActive: false } ? T("Documents.Reactivate") : T("Documents.Withdraw");
 
