@@ -853,6 +853,7 @@ internal sealed class QuoteOfferDialog : MasterDataEditor
         _conditions = TextField("Quotes.Conditions", 20, 436, 720);
         _reference.MaxLength = 60;
         _conditions.MaxLength = 1000;
+        _delay.MaxLength = 4;
 
         var attach = UiTheme.SecondaryButton(localizer["Quotes.AttachFile"]);
         attach.Bounds = new Rectangle(20, 492, 200, UiTheme.ButtonHeight);
@@ -910,6 +911,18 @@ internal sealed class QuoteOfferDialog : MasterDataEditor
 
             // A blank price is an article the supplier did not quote.
             if (string.IsNullOrWhiteSpace(row.Cells["price"].Value?.ToString())) continue;
+
+            // « 10 % » in the discount read as no discount, and a slip in the VAT as 20 %: the offer
+            // was compared and awarded on a price the supplier never quoted.
+            foreach (var column in new[] { "price", "discount", "vat" })
+            {
+                var typed = row.Cells[column].Value?.ToString();
+                if (!EditorValues.IsUnreadable(typed)) continue;
+
+                Dialogs.Warn(Localizer.Format("Result_NotANumber", typed!.Trim()), Text);
+                _lines.CurrentCell = row.Cells[column];
+                return;
+            }
 
             if (EditorValues.ParseDecimal(row.Cells["price"].Value?.ToString()) is not { } price || price < 0m)
             {

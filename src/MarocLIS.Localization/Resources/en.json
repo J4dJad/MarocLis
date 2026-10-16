@@ -178,6 +178,7 @@
   "Quote_SupplierAlreadyAsked": "This supplier is already consulted on this request.",
   "Quote_SupplierNotAsked": "This supplier was not consulted on this request: add it first.",
   "Quote_ValidityBeforeReceipt": "The validity date cannot be earlier than the offer's receipt date.",
+  "Quote_DelayOutOfRange": "The delivery delay must be between 0 and {0} days.",
   "Purchasing_EmailNotConfigured": "E-mail (SMTP) is not configured: no e-mail can be sent from the application.",
   "Purchasing_FileEmpty": "The file is empty.",
   "Purchasing_FileNotFound": "No file attached.",

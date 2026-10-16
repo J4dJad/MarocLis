@@ -65,6 +65,9 @@ public sealed class QuoteRequest : AuditableAggregateRoot, ISiteScoped
 
     public bool IsOpen => Status == QuoteRequestStatus.Open;
 
+    /// <summary>The longest delivery delay an offer may promise, in days.</summary>
+    public const int MaximumDelayDays = 3650;
+
     public Result AddItem(Guid stockItemId, decimal quantity, string? description)
     {
         if (!IsOpen) return Result.Failure(Error.Conflict("Quote_NotOpen"));
@@ -114,6 +117,10 @@ public sealed class QuoteRequest : AuditableAggregateRoot, ISiteScoped
             return Result.Failure<SupplierQuote>(Error.Validation("Quote_OfferHasNoPrice"));
         if (deliveryDelayDays is < 0)
             return Result.Failure<SupplierQuote>(Error.Validation("Quote_DelayMustNotBeNegative"));
+        // Choosing an offer dates the order's delivery from it: a delay of millions of days
+        // threw on the date arithmetic, and the offer could then never be chosen.
+        if (deliveryDelayDays > MaximumDelayDays)
+            return Result.Failure<SupplierQuote>(Error.Validation("Quote_DelayOutOfRange", MaximumDelayDays));
         if (validUntil is { } until && until < receivedOn)
             return Result.Failure<SupplierQuote>(Error.Validation("Quote_ValidityBeforeReceipt"));
 

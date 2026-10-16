@@ -178,6 +178,7 @@
   "Quote_SupplierAlreadyAsked": "Ce fournisseur est déjà consulté sur cette demande.",
   "Quote_SupplierNotAsked": "Ce fournisseur n'a pas été consulté sur cette demande : ajoutez-le d'abord.",
   "Quote_ValidityBeforeReceipt": "La date de validité ne peut pas précéder la date de réception de l'offre.",
+  "Quote_DelayOutOfRange": "Le délai de livraison doit être compris entre 0 et {0} jours.",
   "Purchasing_EmailNotConfigured": "La messagerie (SMTP) n'est pas configurée : aucun e-mail ne peut être envoyé depuis le logiciel.",
   "Purchasing_FileEmpty": "Le fichier est vide.",
   "Purchasing_FileNotFound": "Aucun fichier joint.",

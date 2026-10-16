@@ -464,6 +464,7 @@ internal sealed class EqaSubmissionDialog : MasterDataEditor
         _value = TextField("Eqa.ReportedValue", 20, 14, 160,
                            row.ReportedValue?.ToString(CultureInfo.InvariantCulture),
                            latin: true, mono: true, right: true);
+        Numeric(EditorValues.MeasureMaxLength, _value);
 
         Label("Eqa.SubmittedOn", 220, 14);
         _date = new DateTimePicker
@@ -520,6 +521,10 @@ internal sealed class EqaEvaluationDialog : MasterDataEditor
                             latin: true, mono: true, right: true);
         _z = TextField("Quality.ZScore", 410, 14, 130, Raw(row.ZScore),
                        latin: true, mono: true, right: true);
+
+        // A figure typed with its unit (« 12,5 g/l ») was saved as no figure, and the score
+        // worked out without it.
+        Numeric(EditorValues.MeasureMaxLength, _assigned, _peerMean, _peerSd, _z);
 
         Notice(20, 64, 520, 46, "Eqa.ScoreNotice");
 

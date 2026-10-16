@@ -475,6 +475,7 @@ internal sealed class MaintenanceDialog : Form
         _descriptionFr.MaxLength = _descriptionAr.MaxLength = _descriptionEn.MaxLength = 2000;
         _parts.MaxLength = 1000;
         _technician.MaxLength = 200;
+        _downtime.MaxLength = EditorValues.MeasureMaxLength;
 
         Text = $"{localizer["Equipment.RecordMaintenance"]} — {row.Code}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -583,11 +584,15 @@ internal sealed class MaintenanceDialog : Form
                                             _descriptionAr.Text.Trim(),
                                             _descriptionEn.Text.Trim());
 
-        DowntimeHours = decimal.TryParse(_downtime.Text.Replace(',', '.'),
-                                          System.Globalization.NumberStyles.Float,
-                                          System.Globalization.CultureInfo.InvariantCulture,
-                                          out var hours) && hours > 0m
-            ? hours : null;
+        // « 2 h » was saved as no downtime, and « 1e20 » failed the save with « Erreur inattendue ».
+        if (EditorValues.IsUnreadable(_downtime.Text))
+        {
+            _dialogs.Warn(_localizer.Format("Result_NotANumber", _downtime.Text.Trim()));
+            _downtime.Focus();
+            return;
+        }
+
+        DowntimeHours = EditorValues.ParseDecimal(_downtime.Text) is { } hours && hours > 0m ? hours : null;
 
         PartsReplaced = string.IsNullOrWhiteSpace(_parts.Text) ? null : _parts.Text.Trim();
         ExternalTechnician = string.IsNullOrWhiteSpace(_technician.Text)
@@ -631,6 +636,7 @@ internal sealed class CalibrationDialog : Form
         _dialogs = dialogs;
         _calibratorLot.MaxLength = 60;
         _comment.MaxLength = 1000;
+        _slope.MaxLength = _intercept.MaxLength = EditorValues.MeasureMaxLength;
 
         Text = $"{localizer["Equipment.RecordCalibration"]} — {row.Code}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -750,19 +756,23 @@ internal sealed class CalibrationDialog : Form
         ValidUntil = _hasValidity.Checked
             ? DateOnly.FromDateTime(_validUntil.Value.Date) : null;
 
-        Slope = TryParse(_slope.Text);
-        Intercept = TryParse(_intercept.Text);
+        // A slip in the slope or the intercept was saved as no figure, and « 1e20 » failed the save.
+        foreach (var box in new[] { _slope, _intercept })
+        {
+            if (!EditorValues.IsUnreadable(box.Text)) continue;
+
+            _dialogs.Warn(_localizer.Format("Result_NotANumber", box.Text.Trim()));
+            box.Focus();
+            return;
+        }
+
+        Slope = EditorValues.ParseDecimal(_slope.Text);
+        Intercept = EditorValues.ParseDecimal(_intercept.Text);
         Comment = string.IsNullOrWhiteSpace(_comment.Text) ? null : _comment.Text.Trim();
 
         DialogResult = DialogResult.OK;
         Close();
     }
-
-    private static decimal? TryParse(string text) =>
-        decimal.TryParse(text.Replace(',', '.'),
-                         System.Globalization.NumberStyles.Float,
-                         System.Globalization.CultureInfo.InvariantCulture, out var value)
-            ? value : null;
 }
 
 /// <summary>Changing an instrument's status. The reason is mandatory and ends up in the audit trail.</summary>

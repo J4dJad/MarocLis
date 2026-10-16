@@ -400,6 +400,9 @@ internal sealed class TemperatureReadingDialog : MasterDataEditor
         _max = TextField("Temperatures.PeriodMax", 350, 14, 140, null, latin: true, mono: true, right: true);
         _comment = TextField("Field.Comment", 20, 70, 470);
         _comment.MaxLength = 500;   // the column; beyond, the save failed with « Erreur inattendue »
+        // A period minimum typed « -25 C » was dropped without a word: the excursion it showed was
+        // neither asked about nor recorded.
+        Numeric(8, _value, _min, _max);
 
         var notice = Notice(20, 124, 470, 60, "Temperatures.ReadingNotice");
         notice.Text = localizer.Format("Temperatures.ReadingNotice",
@@ -477,6 +480,7 @@ internal sealed class StorageUnitDialog : MasterDataEditor
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
         _name.MaxLength = _location.MaxLength = 100;
         _serial.MaxLength = 60;
+        Numeric(8, _min, _max);
         _active = Check("Field.Active", 20, 186, row?.IsActive ?? true);
 
         // A new unit takes the usual range of its kind; an existing one keeps what was set.
