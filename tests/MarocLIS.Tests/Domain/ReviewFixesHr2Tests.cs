@@ -31,7 +31,7 @@ public sealed class ReviewFixesHr2Tests
 
     private static PersonnelService Personnel(Employee employee, InMemoryRepository<FinalSettlement> settlements,
                                               InMemoryRepository<LeaveLedgerEntry> ledger, FakeHrDocumentQueries? hr = null) =>
-        new(Repo(employee), new InMemoryRepository<CredentialFile>(), settlements, ledger, null!,
+        new(Repo(employee), new InMemoryRepository<CredentialFile>(), settlements, ledger, new InMemoryRepository<LeaveRequest>(), null!,
             hr ?? new FakeHrDocumentQueries(), null!, new FakeUnitOfWork(), new AllowAll(),
             new FakeUser(Permissions.HumanResources.Manage), new FixedClock());
 

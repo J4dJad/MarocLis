@@ -329,6 +329,7 @@
   "Employee_ExitAlreadyEffective": "خروج {0} أصبح نافذاً: لم يعد بالإمكان تصحيحه أو إلغاؤه. استعمل إعادة الإدماج.",
   "Employee_ExitSettled": "تصفية الحساب النهائية لخروج {0} موقعة أو مؤداة (أجور الشهر مغلقة): لم يعد بالإمكان تصحيح الخروج أو إلغاؤه.",
   "Employee_ExitCancelReasonRequired": "سبب إلغاء الخروج إلزامي.",
+  "Employee_LeaveAfterExit": "إجازة مطلوبة أو مصادق عليها ({0} – {1}) تقع بعد تاريخ المغادرة {2}: ألغها في « العطل والغيابات » أو حدد تاريخ المغادرة بعدها.",
   "Recollection_ContactNoteRequired": "أدخل نتيجة المكالمة.",
   "Recollection_AlreadyDrawn": "تم أخذ الأنبوب {0} أو سحبه: تم تحديث القائمة.",
   "Messaging_EmailNotConfigured": "البريد الإلكتروني (SMTP) غير مُعد.",

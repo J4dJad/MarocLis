@@ -329,6 +329,7 @@
   "Employee_ExitAlreadyEffective": "La sortie du {0} a déjà pris effet : elle ne peut plus être corrigée ni annulée. Utilisez la réintégration.",
   "Employee_ExitSettled": "Le solde de tout compte de la sortie du {0} est signé ou déjà payé (paie du mois clôturée) : la sortie ne peut plus être corrigée ni annulée.",
   "Employee_ExitCancelReasonRequired": "Le motif de l'annulation de la sortie est obligatoire.",
+  "Employee_LeaveAfterExit": "Un congé demandé ou validé ({0} – {1}) tombe après la date de sortie du {2} : annulez-le dans « Congés et absences » ou datez la sortie après lui.",
   "Recollection_ContactNoteRequired": "Indiquez le résultat de l'appel.",
   "Recollection_AlreadyDrawn": "Le tube {0} a déjà été prélevé ou retiré : la liste a été mise à jour.",
   "Messaging_EmailNotConfigured": "La messagerie (SMTP) n'est pas configurée.",
