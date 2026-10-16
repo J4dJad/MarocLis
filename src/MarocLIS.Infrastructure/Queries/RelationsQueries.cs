@@ -64,7 +64,7 @@ public sealed class PrescriberStatisticsQueries(LisDbContext db) : IPrescriberSt
             p => p.Id,
             p => new PrescriberLabel(
                 p.Id,
-                p.Kind == PrescriberKind.Institution
+                Prescriber.IsEstablishment(p.Kind)
                     ? p.InstitutionName ?? p.LastName
                     : $"Dr {p.LastName} {p.FirstName}".Trim(),
                 string.IsNullOrWhiteSpace(p.InstitutionName) ? null : p.InstitutionName.Trim(),
@@ -116,7 +116,7 @@ public sealed class RelationsQueries(LisDbContext db) : IRelationsQueries
         return rows.Select(r => new DelegateVisitRow(
             r.Id, r.VisitDate, r.PrescriberId,
             r.Prescriber is null ? "?"
-                : r.Prescriber.Kind == PrescriberKind.Institution
+                : Prescriber.IsEstablishment(r.Prescriber.Kind)
                     ? r.Prescriber.InstitutionName ?? r.Prescriber.LastName
                     : $"Dr {r.Prescriber.LastName} {r.Prescriber.FirstName}".Trim(),
             r.Prescriber?.InstitutionName,
@@ -133,7 +133,8 @@ public sealed class RelationsQueries(LisDbContext db) : IRelationsQueries
 
         var prescribers = await db.Prescribers.AsNoTracking().IgnoreQueryFilters()
             .Where(p => (p.IsActive && !p.IsDeleted && p.Kind != PrescriberKind.SelfReferral) || kept.Contains(p.Id))
-            .OrderBy(p => p.Kind == PrescriberKind.Institution ? p.InstitutionName : p.LastName).ThenBy(p => p.FirstName)
+            .OrderBy(p => p.Kind == PrescriberKind.Institution || p.Kind == PrescriberKind.Laboratory
+                              ? p.InstitutionName : p.LastName).ThenBy(p => p.FirstName)
             .Select(p => new { p.Id, p.Kind, p.LastName, p.FirstName, p.InstitutionName, p.City, p.IsActive, p.IsDeleted })
             .ToListAsync(ct);
 
@@ -147,7 +148,7 @@ public sealed class RelationsQueries(LisDbContext db) : IRelationsQueries
 
         return new RelationOptions(
             prescribers.Select(p => new RelationLookup(p.Id,
-                (p.Kind == PrescriberKind.Institution
+                (Prescriber.IsEstablishment(p.Kind)
                     ? p.InstitutionName ?? p.LastName
                     : $"Dr {p.LastName} {p.FirstName}".Trim())
                 + (string.IsNullOrWhiteSpace(p.City) ? string.Empty : $" — {p.City}"),

@@ -84,7 +84,15 @@ public sealed class Prescriber : AuditableAggregateRoot, ISoftDeletable
     public Guid? DeletedByUserId { get; set; }
     public string? DeletionReason { get; set; }
 
-    public string FullName => Kind == PrescriberKind.Institution
+    /// <summary>
+    /// Named by its establishment, not as a doctor: a clinic, or a laboratory that subcontracts its
+    /// patients' analyses to us. A referring laboratory used to be printed "Dr BIOLAB" as the
+    /// prescriber on the report it receives.
+    /// </summary>
+    public static bool IsEstablishment(PrescriberKind kind) =>
+        kind is PrescriberKind.Institution or PrescriberKind.Laboratory;
+
+    public string FullName => IsEstablishment(Kind)
         ? InstitutionName ?? LastName
         : $"Dr {LastName} {FirstName}".Trim();
 

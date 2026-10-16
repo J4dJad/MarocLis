@@ -142,6 +142,7 @@ public sealed class AdministrationQueries(LisDbContext db) : IAdministrationQuer
             .Select(p => new PrescriberOption(
                 p.Id,
                 p.Kind == Domain.Orders.PrescriberKind.Institution
+                || p.Kind == Domain.Orders.PrescriberKind.Laboratory
                     ? p.InstitutionName ?? p.LastName
                     : "Dr " + p.LastName + " " + p.FirstName,
                 p.City, p.IsActive))

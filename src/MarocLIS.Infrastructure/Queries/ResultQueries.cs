@@ -631,8 +631,14 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
                     {
                         o.AccessionNumber,
                         o.PatientId,
+                        // The establishment's name for a clinic or a referring laboratory, as on
+                        // the report itself: "BIOLAB " told the counter nothing about where to send it.
                         PrescriberName = db.Prescribers.Where(p => p.Id == o.PrescriberId)
-                                                        .Select(p => p.LastName + " " + p.FirstName)
+                                                        .Select(p => (p.Kind == PrescriberKind.Institution
+                                                                      || p.Kind == PrescriberKind.Laboratory)
+                                                                     && p.InstitutionName != null
+                                                            ? p.InstitutionName
+                                                            : p.LastName + " " + p.FirstName)
                                                         .FirstOrDefault(),
                         PrescriberPreference = db.Prescribers
                             .Where(p => p.Id == o.PrescriberId)
