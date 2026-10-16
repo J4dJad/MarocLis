@@ -596,6 +596,10 @@ internal sealed class SampleStorageDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private void Accept()
@@ -698,6 +702,10 @@ internal sealed class SampleAliquotDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     /// <summary>

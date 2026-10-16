@@ -853,6 +853,13 @@ internal sealed class InstrumentMappingDialog : Form
                 return;
             }
 
+            if (Math.Abs(factor ?? 0m) >= InstrumentInterfaceService.MaximumConversion
+                || Math.Abs(offset ?? 0m) >= InstrumentInterfaceService.MaximumConversion)
+            {
+                _dialogs.Warn(_localizer["Interface_ConversionOutOfRange"], Text);
+                return;
+            }
+
             mappings.Add(new MappingRequest(
                 code.Trim(),
                 original.TestParameterId,

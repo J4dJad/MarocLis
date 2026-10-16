@@ -522,6 +522,14 @@ public sealed class Cycle1bPreAnalyticalDatabaseTests(Cycle1bScratchDatabase dat
             s => s.GetStoredSamplesAsync(onlyExpired: true));
         expired.Value.Should().ContainSingle(r => r.SampleId == tube.SampleId).Which.IsPastRetention.Should().BeTrue();
 
+        // Not while its glucose still awaits a value (cycle 2): the file would wait for ever.
+        (await On<SampleWorkflowService, Result>(provider, s => s.DiscardAsync(tube.SampleId, "Conservation dépassée")))
+            .FirstError.ResourceKey.Should().Be("Sample_DiscardAnalysesPending");
+
+        var resultId = (await ResultIdsAsync(order.OrderId)).Single();
+        (await On<ResultEntryService, Result<ResultEntryOutcome>>(provider,
+            s => s.SubmitAsync(order.OrderId, [new ResultEntry(resultId, "5")]))).Value.Accepted.Should().Be(1);
+
         (await On<SampleWorkflowService, Result>(provider, s => s.DiscardAsync(tube.SampleId, new string('x', 500))))
             .IsSuccess.Should().BeTrue();
 

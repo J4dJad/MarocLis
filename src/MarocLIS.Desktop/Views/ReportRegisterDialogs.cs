@@ -26,6 +26,9 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
     /// <summary>The last value this form filled in itself, so it is only replaced, never typed-over text.</summary>
     private string? _autoFilled;
 
+    /// <summary>The recipient name this form filled in itself, replaced in the same way.</summary>
+    private string? _autoFilledName;
+
     private readonly ComboBox _channel, _recipientKind;
     private readonly TextBox _recipientName, _recipientIdentifier, _bearerName, _bearerCin,
                              _consentReference;
@@ -80,6 +83,7 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
 
         _recipientName = TextField("Report.Recipient", 20, 120, 260,
                               row.PatientName);
+        _autoFilledName = row.PatientName;
 
         _recipientIdentifier = TextField("Report.RecipientIdentifier", 300, 120, 280,
                                      null, latin: true);
@@ -110,6 +114,10 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
         RefreshForChannel();
 
         Buttons(400, 600);
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     /// <summary>Maps the prescriber's preference onto the channel that carries it.</summary>
@@ -139,8 +147,18 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
         Enable(_bearerName, counter);
         Enable(_bearerCin, counter);
 
-        if (kind == ReportRecipientKind.Patient && _recipientName.Text.Length == 0)
-            _recipientName.Text = _row.PatientName;
+        // The name follows the recipient chosen: the patient's stayed in the box when the
+        // prescriber was picked, and the hand-over was recorded under the patient's name.
+        if (_recipientName.Text.Length == 0 || _recipientName.Text == _autoFilledName)
+        {
+            _recipientName.Text = kind switch
+            {
+                ReportRecipientKind.Patient => _row.PatientName,
+                ReportRecipientKind.Prescriber => _row.PrescriberName ?? string.Empty,
+                _ => string.Empty
+            };
+            _autoFilledName = _recipientName.Text;
+        }
 
         FillContact();
     }
@@ -273,9 +291,11 @@ internal sealed class ReportAmendmentDialog : MasterDataEditor
     {
         var identity = new Label
         {
-            Text = $"{row.PatientName}   ·   {row.AccessionNumber}   ·   "
-                   + localizer.Format("Report.AmendsVersion", row.VersionNumber,
-                                       row.VersionNumber + 1),
+            // The versions first: a long patient name cut off the new version's number.
+            Text = $"{row.AccessionNumber}   ·   "
+                   + localizer.Format("Report.AmendsVersion", row.VersionNumber, row.VersionNumber + 1)
+                   + $"   ·   {row.PatientName}",
+            AutoEllipsis = true,
             Font = UiTheme.SmallBold,
             ForeColor = UiTheme.Accent,
             AutoSize = false,
@@ -328,6 +348,10 @@ internal sealed class ReportAmendmentDialog : MasterDataEditor
         RefreshKindNotice();
 
         Buttons(400, 620);
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private void RefreshKindNotice() =>

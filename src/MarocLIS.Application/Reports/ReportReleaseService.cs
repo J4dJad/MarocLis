@@ -454,6 +454,19 @@ public sealed class ReportReleaseService(
         var order = await orders.GetByIdAsync(report.LabOrderId, ct);
         if (order is null) return Result.Failure<DeliveryOutcome>(Error.NotFound("Order_NotFound"));
 
+        // The reference typed must be this patient's own disclosure consent, still in force: any
+        // well-formed identifier was accepted, so a report could go to a third party on a consent
+        // that did not exist, was withdrawn, or was another patient's.
+        if (recipientKind == ReportRecipientKind.AuthorizedThirdParty)
+        {
+            var patient = await patients.GetByIdWithDetailsAsync(order.PatientId, ct);
+
+            if (patient?.Consents.FirstOrDefault(c => c.Id == authorizingConsentId) is not
+                { Purpose: ConsentPurpose.ThirdPartyDisclosure } consent
+                || !consent.IsEffectiveOn(clock.Today))
+                return Result.Failure<DeliveryOutcome>(Error.Regulatory("Report_ThirdPartyConsentInvalid"));
+        }
+
         var electronic = channel is DeliveryChannel.Email or DeliveryChannel.SmsLink;
 
         if (electronic && recipientKind == ReportRecipientKind.Patient)

@@ -178,6 +178,9 @@ public sealed class InstrumentInterfaceService(
     ICurrentUser currentUser,
     IClock clock)
 {
+    /// <summary>A conversion factor or offset this large does not fit its column, decimal(18,8).</summary>
+    public const decimal MaximumConversion = 10_000_000_000m;
+
     public async Task<Result<IReadOnlyList<InterfaceRow>>> GetInterfacesAsync(
         CancellationToken ct = default)
     {
@@ -513,6 +516,12 @@ public sealed class InstrumentInterfaceService(
 
         if (mappings.Any(m => m.ConversionFactor is 0m))
             errors.Add(Error.Validation("Interface_ConversionFactorZero"));
+
+        // Within the columns (ten digits before the point): a longer figure was refused by the
+        // database and the whole table's save ended in « Erreur inattendue ».
+        if (mappings.Any(m => Math.Abs(m.ConversionFactor ?? 0m) >= MaximumConversion
+                              || Math.Abs(m.ConversionOffset ?? 0m) >= MaximumConversion))
+            errors.Add(Error.Validation("Interface_ConversionOutOfRange"));
 
         // A code already used, even by a mapping since switched off, stays tied to its parameter:
         // the message log reads old frames through it. Reusing it for another parameter would

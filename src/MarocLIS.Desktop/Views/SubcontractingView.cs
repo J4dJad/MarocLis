@@ -548,6 +548,10 @@ internal sealed class SubcontractDispatchDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private sealed record PartnerChoice(Guid? Id, string Display)

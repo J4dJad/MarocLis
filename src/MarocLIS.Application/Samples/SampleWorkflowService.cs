@@ -553,6 +553,16 @@ public sealed class SampleWorkflowService(
                 .Select(i => i.Id)
                 .ToList() ?? [];
 
+            // An analysis some of whose values are on an issued report cannot be cancelled. Refused
+            // first: the tube was refused anyway, and its analyses stayed waiting on it, with no
+            // replacement, for a value that could never be entered.
+            if (order is not null
+                && order.Items.Any(i => affected.Contains(i.Id) && i.HasReportedResults))
+            {
+                problems.Add(Error.Conflict("Sample_RejectHasReportedResults", sample.Barcode));
+                continue;
+            }
+
             // A new draw for a tube whose analyses are all signed would have nothing to run.
             if (request.RequestRecollection && affected.Count == 0)
             {
@@ -798,6 +808,18 @@ public sealed class SampleWorkflowService(
         var sample = await samples.GetByIdWithDetailsAsync(sampleId, ct);
         if (sample is null) return Result.Failure(Error.NotFound("Sample_NotFound", sampleId));
 
+        // A tube whose analyses still await their value is the only one they can be measured on:
+        // discarded, no value could be entered any more and the file waited for ever. A broken or
+        // unusable tube is refused at reception instead, which issues its replacement.
+        if (sample.Status != SampleStatus.Discarded)
+        {
+            var order = await orders.GetByIdWithDetailsAsync(sample.LabOrderId, ct);
+
+            if (order?.Items.Any(i => i.SampleId == sample.Id && !i.IsCancelled
+                                      && i.Status < LabOrderItemStatus.ResultEntered) == true)
+                return Result.Failure(Error.Conflict("Sample_DiscardAnalysesPending", sample.Barcode));
+        }
+
         var discarded = sample.Discard(clock.Now, currentUser.UserId, note.Trim());
         if (discarded.IsFailure) return discarded;
 
@@ -835,6 +857,16 @@ public sealed class SampleWorkflowService(
         // Within the column (8 digits, 2 decimals): a mistyped volume was refused by the database.
         if (volumeMl is <= 0m or >= 1_000_000m)
             return Result.Failure<string>(Error.Validation("Sample_AliquotVolumeInvalid"));
+
+        // Nor more than the tube still holds, when its volume was recorded at the draw: a 5 mL
+        // aliquot of a 1.6 mL tube was accepted and listed in the serum bank as if it existed.
+        if (volumeMl is { } wanted && sample.VolumeMl is { } drawn)
+        {
+            var left = drawn - sample.Aliquots.Sum(a => a.VolumeMl ?? 0m);
+            if (wanted > left)
+                return Result.Failure<string>(Error.Validation("Sample_AliquotVolumeExceedsTube",
+                                                                Math.Max(0m, left).ToString("0.##")));
+        }
 
         // The barcode comes from the same gapless series as the parent tube, inside a transaction,
         // so an abandoned aliquot does not burn a barcode that a real tube then never carries.
