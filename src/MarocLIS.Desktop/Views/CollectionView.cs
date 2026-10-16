@@ -1459,6 +1459,33 @@ public sealed class CollectionView : LocalizedView
             return;
         }
 
+        // The volumes first: one typed and unreadable, or impossible, is said before anything is
+        // asked or recorded. It used to be dropped without a word and the tube recorded with no
+        // volume, and 5 000 000 typed for 5 mL was kept as what the tube held.
+        var volumes = new List<(Guid Id, decimal? Volume)>(toDraw.Count);
+
+        foreach (DataGridViewRow row in _tubes.Rows)
+        {
+            if (row.Tag is not Guid id || !toDraw.Contains(id)) continue;
+
+            var typed = row.Cells[ColVolume].Value?.ToString()?.Trim();
+
+            // The shared reader, as for an aliquot: the nominal volume pre-filled in the cell is
+            // written with the culture's separators, a figure past 999 with its group space.
+            var volume = EditorValues.ParseDecimal(typed);
+
+            if ((!string.IsNullOrEmpty(typed) && volume is null)
+                || volume is <= 0m or >= Sample.MaximumVolumeMl)
+            {
+                var barcode = _currentSet.FirstOrDefault(e => e.SampleId == id)?.Barcode ?? string.Empty;
+                _dialogs.Warn(T("Sample_CollectedVolumeInvalid", barcode), T("Sample.Volume"));
+                _tubes.CurrentCell = row.Cells[ColVolume];
+                return;
+            }
+
+            volumes.Add((id, volume));
+        }
+
         // Where fasting matters, the answer given in the band is used. Not answered there and not
         // declared before, it is asked now — before the draw is recorded, because afterwards the
         // answer cannot honestly be obtained. « Ne sait pas » records nothing.
@@ -1488,19 +1515,8 @@ public sealed class CollectionView : LocalizedView
 
         var requests = new List<RecordCollectionRequest>(selected.Count);
 
-        foreach (DataGridViewRow row in _tubes.Rows)
+        foreach (var (id, volume) in volumes)
         {
-            if (row.Tag is not Guid id || !toDraw.Contains(id)) continue;
-
-            var typed = row.Cells[ColVolume].Value?.ToString()?.Trim();
-
-            decimal? volume = decimal.TryParse(
-                typed?.Replace(',', '.'),
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var parsed)
-                    ? parsed
-                    : null;
-
             requests.Add(new RecordCollectionRequest
             {
                 SampleId = id,

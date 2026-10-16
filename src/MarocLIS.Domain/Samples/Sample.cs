@@ -126,6 +126,11 @@ public sealed class Sample : AuditableAggregateRoot, ISoftDeletable, ISiteScoped
         if (Status is not (SampleStatus.AwaitingCollection or SampleStatus.Collected))
             return Result.Failure(Error.Conflict("Sample_CannotCollectFromStatus", Status));
 
+        // As for an aliquot: 5 000 000 typed for 5 mL was stored and became the volume every later
+        // aliquot was checked against, and a figure past the column failed the whole draw.
+        if (volumeMl is <= 0m or >= MaximumVolumeMl)
+            return Result.Failure(Error.Validation("Sample_CollectedVolumeInvalid", Barcode));
+
         CollectedAt = at;
         CollectedByUserId = byUserId;
         VolumeMl = volumeMl;
@@ -243,6 +248,9 @@ public sealed class Sample : AuditableAggregateRoot, ISoftDeletable, ISiteScoped
         AddEvent(SampleEventKind.Aliquoted, at, byUserId, barcode);
         return aliquot;
     }
+
+    /// <summary>A drawn or aliquoted volume, in mL, is below this.</summary>
+    public const decimal MaximumVolumeMl = 1_000_000m;
 
     /// <summary>The longest detail an event keeps (its column).</summary>
     public const int EventDetailMaxLength = 500;
