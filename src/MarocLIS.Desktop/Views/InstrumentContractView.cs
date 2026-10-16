@@ -286,11 +286,11 @@ public sealed class InstrumentContractView : LocalizedView
         RenderHeading();
 
         if (keep is null && _grid.Rows.Count > 0) _grid.CurrentCell = _grid.Rows[0].Cells[0];
-        if (_grid.Rows.Count == 0)
-        {
-            _interventionRows = [];
-            RenderInterventions();
-        }
+
+        // The grid makes its first row current as it is added, before the row carries its
+        // contract: that selection loaded nothing, and setting the same row current again raises
+        // no event. The interventions of the contract now shown are loaded here, once the rows are filled.
+        _ = _selectionLoads.RunAsync(() => LoadInterventionsAsync());
 
         RefreshButtons();
     }
@@ -541,7 +541,6 @@ public sealed class InstrumentContractView : LocalizedView
         if (saved.IsFailure) { _dialogs.ShowFailure(saved, _times.Text); return; }
 
         await LoadAsync(contract.Id);
-        await LoadInterventionsAsync();
     }
 }
 

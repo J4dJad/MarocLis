@@ -354,11 +354,11 @@ public sealed class PurchaseOrderView : LocalizedView
 
         if (keep is null && _grid.Rows.Count > 0) _grid.CurrentCell = _grid.Rows[0].Cells[0];
         StockGrid.Filter(_grid, _search.Query);
-        if (_grid.Rows.Count == 0)
-        {
-            _lineRows = [];
-            RenderLines();
-        }
+
+        // The grid makes its first row current as it is added, before the row carries its
+        // order: that selection loaded nothing, and setting the same row current again raises
+        // no event. The lines of the order now shown are loaded here, once the rows are filled.
+        _ = _selectionLoads.RunAsync(() => LoadLinesAsync());
     }
 
     private void RenderHeading()

@@ -326,11 +326,11 @@ public sealed class QualityDocumentsView : LocalizedView
         RenderHeading();
 
         if (keep is null && _grid.Rows.Count > 0) _grid.CurrentCell = _grid.Rows[0].Cells[0];
-        if (_grid.Rows.Count == 0)
-        {
-            _versionRows = [];
-            RenderVersions();
-        }
+
+        // The grid makes its first row current as it is added, before the row carries its
+        // document: that selection loaded nothing, and setting the same row current again raises
+        // no event. The versions of the document now shown are loaded here, once the rows are filled.
+        _ = _selectionLoads.RunAsync(() => LoadVersionsAsync());
     }
 
     private void RenderHeading()
