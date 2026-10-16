@@ -349,7 +349,8 @@ public sealed class QuestPdfReportRenderer : IReportRenderer
                 {
                     block.Item().Text(Label("Report.ReservationNote", model)).FontSize(8).Bold();
                     foreach (var reservation in model.Reservations)
-                        block.Item().Text($"• {Isolate(reservation, model)}").FontSize(7.5f);
+                        block.Item().Text($"• {Isolate(reservation.Describe(key => Label(key, model)), model)}")
+                             .FontSize(7.5f);
                 });
             }
 

@@ -491,7 +491,9 @@ public sealed class NonConformityView : LocalizedView
 
             _actions.ResumeLayout(performLayout: true);
 
-            SetDetailEnabled(row.Status != NonConformityStatus.Closed);
+            // A file is selected: SetDetailEnabled itself narrows the bar to the file's status, so
+            // a closed file keeps only Reopen (passing false here left Reopen unreachable).
+            SetDetailEnabled(true);
         }
         catch (Exception ex)
         {
@@ -545,8 +547,8 @@ public sealed class NonConformityView : LocalizedView
                                                        or CorrectiveActionStatus.InProgress };
 
         // A completed action is evidence and stays; an uncompleted one entered by mistake has to
-        // be removable, because Close() requires every action to be completed and one wrong entry
-        // would otherwise block the file for ever.
+        // be removable, because Close() requires every action to be completed or cancelled and one
+        // wrong entry would otherwise block the file for ever.
         _cancelAction.Enabled = editable
                                 && action is { Status: CorrectiveActionStatus.Planned
                                                      or CorrectiveActionStatus.InProgress };

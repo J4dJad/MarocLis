@@ -124,6 +124,10 @@ public sealed class NonConformity : AuditableAggregateRoot, ISiteScoped
 
     public void MarkAwaitingVerification() => Status = NonConformityStatus.AwaitingVerification;
 
+    /// <summary>Every action is either completed or cancelled — nothing is left to do.</summary>
+    public bool AllActionsFinished =>
+        _actions.All(a => a.Status is CorrectiveActionStatus.Completed or CorrectiveActionStatus.Cancelled);
+
     /// <summary>
     /// Closes the file. A major or critical non-conformity cannot close without a root cause, a
     /// completed action and a documented effectiveness check; a minor one only needs an action.
@@ -132,10 +136,15 @@ public sealed class NonConformity : AuditableAggregateRoot, ISiteScoped
     {
         var errors = new List<Error>();
 
+        // A cancelled action is finished too: cancelling is how a wrong or superseded action is
+        // taken off the file, so it must not hold the closure back. At least one action must still
+        // have been carried out, otherwise cancelling everything would close a file nobody acted on.
         if (_actions.Count == 0)
             errors.Add(Error.Regulatory("Nc_ActionRequiredBeforeClosure"));
-        else if (_actions.Any(a => a.Status != CorrectiveActionStatus.Completed))
-            errors.Add(Error.Regulatory("Nc_AllActionsMustBeCompleted"));
+        else if (!AllActionsFinished)
+            errors.Add(Error.Regulatory("Nc_AllActionsMustBeFinished"));
+        else if (_actions.All(a => a.Status == CorrectiveActionStatus.Cancelled))
+            errors.Add(Error.Regulatory("Nc_CompletedActionRequiredBeforeClosure"));
 
         if (Severity is NonConformitySeverity.Major or NonConformitySeverity.Critical)
         {

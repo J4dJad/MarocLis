@@ -217,8 +217,7 @@ public sealed class NonConformityService(
 
         // Once every action is done the file moves to awaiting-verification rather than closing
         // itself: the effectiveness check is a separate, later judgement.
-        if (nonConformity.Actions.All(a => a.Status is CorrectiveActionStatus.Completed
-                                                    or CorrectiveActionStatus.Cancelled))
+        if (nonConformity.AllActionsFinished)
             nonConformity.MarkAwaitingVerification();
 
         unitOfWork.AuditReason = $"Action soldée — NC {nonConformity.Reference}";
@@ -374,6 +373,12 @@ public sealed class NonConformityService(
             return Result.Failure(Error.Conflict("Nc_CompletedActionCannotBeCancelled"));
 
         action.Cancel(reason);
+
+        // Cancelling the last pending action finishes the file's actions just as completing it
+        // would, provided something was actually carried out.
+        if (nonConformity.IsOpen && nonConformity.AllActionsFinished &&
+            nonConformity.Actions.Any(a => a.Status == CorrectiveActionStatus.Completed))
+            nonConformity.MarkAwaitingVerification();
 
         unitOfWork.AuditReason =
             $"Action annulée sur {nonConformity.Reference} : {reason}";

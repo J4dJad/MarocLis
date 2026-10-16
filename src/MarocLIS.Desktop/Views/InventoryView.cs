@@ -722,8 +722,9 @@ public sealed class InventoryView : LocalizedView
         if (refusedForQc && PermissionGate.Allows(Permissions.Results.BiologicalValidate))
         {
             var justification = _dialogs.PromptForReason(
-                $"{Describe(result)}\n\n{T("Lot.QcOverridePrompt", lot.LotNumber)}",
-                T("Lot.QcOverrideTitle"), minimumLength: 15);
+                $"{Describe(result)}\n\n" +
+                T("Lot.QcOverrideJustificationPrompt", lot.LotNumber, ReagentLot.QcOverrideJustificationMinLength),
+                T("Lot.QcOverrideTitle"), minimumLength: ReagentLot.QcOverrideJustificationMinLength);
 
             if (justification is null) return;
 

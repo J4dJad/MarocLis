@@ -171,12 +171,18 @@ public sealed class CashSessionReviewView : LocalizedView
     private void ShowDetail()
     {
         var row = Current;
-        _reconcile.Enabled = row is { IsReconciled: false }
+        // Disabled up front on one's own till: the domain refuses it (four eyes), and it used to say
+        // so only after the comment had been typed.
+        var ownTill = row is { IsReconciled: false } && PermissionGate.User?.UserId == row.OperatorUserId;
+
+        _reconcile.Enabled = row is not null && PermissionGate.User is { } user
+                             && row.CanBeReconciledBy(user.UserId)
                              && PermissionGate.Allows(Permissions.Billing.ReconcileCashSession);
 
         if (row is null) { _detail.Text = string.Empty; return; }
 
         var lines = new List<string>();
+        if (ownTill) lines.Add(T("CashSession_ReconcilerIsOperator"));
         if (!string.IsNullOrWhiteSpace(row.VarianceExplanation))
             lines.Add($"{T("Payment.VarianceExplanation")} : {row.VarianceExplanation}");
         if (row.IsReconciled)
