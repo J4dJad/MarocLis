@@ -531,12 +531,19 @@ internal static class RolePermissionSets
              Permissions.Results.View, Permissions.Results.Enter, Permissions.Results.Modify,
              Permissions.Results.TechnicalValidate, Permissions.Results.BiologicalValidate,
              Permissions.Results.EnterCritical,
+             // Withdraws a release before it is printed, and corrects a released value: the
+             // biologist who signs must be able to take back what they signed.
+             Permissions.Results.Unvalidate,
              Permissions.Reports.View, Permissions.Reports.Print, Permissions.Reports.Send,
              Permissions.Reports.Amend,
+             // Reprints the archived original: a lost report is handed over again as issued.
+             Permissions.Reports.ReprintValidated,
              Permissions.Quality.View, Permissions.Quality.EnterQc, Permissions.Quality.ReviewQc,
              Permissions.Quality.ManageNonConformity,
              Permissions.Catalog.View,
              Permissions.Equipment.View, Permissions.Instruments.View,
+             // Accepts the analyser transmissions held for review (auto-acceptance is off by default).
+             Permissions.Instruments.ReplayMessages,
              Permissions.Inventory.View, Permissions.Statistics.View,
              Permissions.Inventory.RecordTemperatures,
              Permissions.HumanResources.RequestLeave,
@@ -562,6 +569,10 @@ internal static class RolePermissionSets
              Permissions.Catalog.View,
              Permissions.Equipment.View, Permissions.Equipment.RecordMaintenance,
              Permissions.Instruments.View, Permissions.Instruments.StartStop,
+             // Accepts the analyser transmissions held for review ("Réimporter"): with
+             // auto-acceptance off by default, nothing reaches the bench otherwise. The values
+             // still go through technical and biological validation like keyed ones.
+             Permissions.Instruments.ReplayMessages,
              Permissions.Inventory.View, Permissions.Inventory.Issue,
              // Takes deliveries in: temperature, checklist, GS1 scan. The lot lands quarantined
              // and its release stays with whoever reviews the QC.
@@ -589,8 +600,10 @@ internal static class RolePermissionSets
              Permissions.Orders.View, Permissions.Orders.Create, Permissions.Orders.Edit,
              Permissions.Orders.Cancel, Permissions.Orders.AddUrgent,
              Permissions.Samples.View, Permissions.Samples.Reprint,
-             // Reception hands over reports but never sees an unvalidated result.
+             // Reception hands over reports but never sees an unvalidated result. Reprinting the
+             // archived original is how a lost report is handed over again.
              Permissions.Reports.View, Permissions.Reports.Print, Permissions.Reports.Send,
+             Permissions.Reports.ReprintValidated,
              Permissions.Billing.View, Permissions.Billing.CreateInvoice,
              Permissions.Billing.RecordPayment, Permissions.Billing.CloseCashSession,
              Permissions.Catalog.View,

@@ -271,6 +271,35 @@ public sealed class LabOrderItem : Entity, IAuditable
     }
 
     /// <summary>
+    /// Sends the analysis back to result entry because one of its checked or released values is
+    /// being corrected (<see cref="Results.TestResult.Revise"/>). The corrected figure has been
+    /// checked by nobody: it goes through technical and then biological validation again, like any
+    /// new value, before a report can carry it.
+    /// <para>
+    /// Unlike <see cref="Unvalidate"/>, allowed once the analysis has been reported: correcting a
+    /// printed figure is exactly what an amended report is for. <see cref="ReportedAt"/> is kept,
+    /// so the analysis stays known as printed — it cannot be cancelled, and the next release is
+    /// recognised as a rectification of the version the recipient holds.
+    /// </para>
+    /// </summary>
+    public Result ReopenForCorrection(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Failure(Error.Validation("Result_RevisionReasonRequired"));
+        if (Status is not (LabOrderItemStatus.ResultEntered or LabOrderItemStatus.TechnicallyValidated
+                           or LabOrderItemStatus.Validated or LabOrderItemStatus.Reported))
+            return Result.Failure(Error.Conflict("Item_CannotCorrectFromStatus", Status));
+
+        TechnicallyValidatedAt = null;
+        TechnicallyValidatedByUserId = null;
+        ValidatedAt = null;
+        ValidatedByUserId = null;
+        RepeatReason = reason;
+        Status = LabOrderItemStatus.ResultEntered;
+        return Result.Success();
+    }
+
+    /// <summary>
     /// Records that some of the analysis's results went out on a report while the analysis itself
     /// is not validated yet — the biologist released the haemoglobin of a blood count and not the
     /// rest. The analysis keeps its status; <see cref="ReportedAt"/> is what then stops it being

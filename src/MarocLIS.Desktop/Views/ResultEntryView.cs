@@ -62,6 +62,9 @@ public sealed class ResultEntryView : LocalizedView
     private readonly Button _save = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _validate = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _history = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _notDone = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _clearValue = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _correct = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
 
     // ---- worklist: the dossiers with results to enter ----
@@ -193,7 +196,9 @@ public sealed class ResultEntryView : LocalizedView
 
         // --- actions -----------------------------------------------------------------------------
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = UiTheme.Surface };
+        // Two rows: the everyday actions, then those on the selected line — not done, clear, and the
+        // correction of a released value — with the status line beside them.
+        var actions = new Panel { Dock = DockStyle.Bottom, Height = 92, BackColor = UiTheme.Surface };
 
         _save.Bounds = new Rectangle(0, 10, 190, UiTheme.ButtonHeight);
         _validate.Bounds = new Rectangle(200, 10, 220, UiTheme.ButtonHeight);
@@ -202,12 +207,17 @@ public sealed class ResultEntryView : LocalizedView
         _history.Bounds = new Rectangle(430, 10, 170, UiTheme.ButtonHeight);
         _history.Enabled = false;
 
+        _notDone.Bounds = new Rectangle(0, 52, 150, UiTheme.ButtonHeight);
+        _clearValue.Bounds = new Rectangle(160, 52, 150, UiTheme.ButtonHeight);
+        _correct.Bounds = new Rectangle(320, 52, 240, UiTheme.ButtonHeight);
+        _notDone.Enabled = _clearValue.Enabled = _correct.Enabled = false;
+
         _status.Bounds = new Rectangle(614, 16, 620, 20);
         _status.Font = UiTheme.Small;
         _status.ForeColor = UiTheme.TextSecondary;
         _status.AutoSize = false;
 
-        actions.Controls.AddRange([_save, _validate, _history, _status]);
+        actions.Controls.AddRange([_save, _validate, _history, _notDone, _clearValue, _correct, _status]);
 
         var entryHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
         entryHost.Controls.Add(gridHost);
@@ -511,7 +521,18 @@ public sealed class ResultEntryView : LocalizedView
         _history.Visible = PermissionGate.Allows(Permissions.Results.View);
         PermissionGate.Require(Permissions.Results.View, _history);
         _history.Click += async (_, _) => await ShowHistoryAsync();
-        _grid.CurrentCellChanged += (_, _) => _history.Enabled = ResultHistory.IsCharted(SelectedRow());
+        _grid.CurrentCellChanged += (_, _) =>
+        {
+            _history.Enabled = ResultHistory.IsCharted(SelectedRow());
+            UpdateRowActions();
+        };
+
+        // The selected line's actions. Gated like the buttons beside them; the service checks again.
+        _notDone.Click += async (_, _) => await RunBusyAsync(MarkSelectedNotDoneAsync);
+        _clearValue.Click += async (_, _) => await RunBusyAsync(ClearSelectedAsync);
+        _correct.Click += async (_, _) => await RunBusyAsync(CorrectSelectedAsync);
+        PermissionGate.Require(Permissions.Results.Enter, _notDone, _clearValue);
+        PermissionGate.Require(Permissions.Results.Unvalidate, _correct);
         _grid.CellDoubleClick += async (_, e) =>
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
@@ -621,6 +642,9 @@ public sealed class ResultEntryView : LocalizedView
         _save.Text = T("Action.Save");
         _validate.Text = T("Validation.Technical");
         _history.Text = T("Result.History");
+        _notDone.Text = T("ResultEntry.MarkNotDone");
+        _clearValue.Text = T("ResultEntry.ClearValue");
+        _correct.Text = T("ResultEntry.CorrectReleased");
 
         if (_grid.Columns.Count == 0) return;
 
@@ -878,6 +902,7 @@ public sealed class ResultEntryView : LocalizedView
         // Technical validation only makes sense once something has been entered.
         _validate.Enabled = sheet.Rows.Any(r => r.Status == TestResultStatus.Entered);
         _history.Enabled = ResultHistory.IsCharted(SelectedRow());
+        UpdateRowActions();
 
         // Said once on opening, rather than discovered row by row as cells refuse the cursor.
         var awaiting = sheet.Rows.Where(r => r.IsAwaitingSample).Select(r => r.AnalysisCode).Distinct().ToList();
@@ -1051,11 +1076,26 @@ public sealed class ResultEntryView : LocalizedView
 
         _grid.EndEdit();
 
+        var entries = CollectTypedEntries();
+
+        if (entries.Count == 0)
+        {
+            _status.ForeColor = UiTheme.TextSecondary;
+            _status.Text = T("Message.NothingSelected");
+            return;
+        }
+
+        await SubmitEntriesAsync(entries);
+    }
+
+    /// <summary>The values and comments typed in the grid, except on <paramref name="except"/>.</summary>
+    private List<ResultEntry> CollectTypedEntries(Guid? except = null)
+    {
         var entries = new List<ResultEntry>();
 
         foreach (DataGridViewRow gridRow in _grid.Rows)
         {
-            if (gridRow.Tag is not Guid id) continue;
+            if (gridRow.Tag is not Guid id || id == except) continue;
             if (!_rowsById.TryGetValue(id, out var row)) continue;
             if (row.IsHeading || row.IsReadOnly) continue;
 
@@ -1076,12 +1116,12 @@ public sealed class ResultEntryView : LocalizedView
                                         PrintTechnicalComment: !string.IsNullOrWhiteSpace(comment)));
         }
 
-        if (entries.Count == 0)
-        {
-            _status.ForeColor = UiTheme.TextSecondary;
-            _status.Text = T("Message.NothingSelected");
-            return;
-        }
+        return entries;
+    }
+
+    private async Task SubmitEntriesAsync(List<ResultEntry> entries)
+    {
+        if (_sheet is null) return;
 
         _save.Enabled = false;
         Cursor = Cursors.WaitCursor;
@@ -1117,6 +1157,114 @@ public sealed class ResultEntryView : LocalizedView
             Cursor = Cursors.Default;
             _save.Enabled = true;
         }
+    }
+
+    // ---- Actions on the selected line -------------------------------------------------------------
+
+    /// <summary>A line a value can be keyed on: not derived, not a heading, its tube received, not released.</summary>
+    private static bool IsKeyable(ResultEntryRow? row) =>
+        row is { IsEditable: true, IsAwaitingSample: false }
+        && row.Status is not (TestResultStatus.Validated or TestResultStatus.Reported);
+
+    private void UpdateRowActions()
+    {
+        var row = SelectedRow();
+
+        _notDone.Enabled = IsKeyable(row) && row!.Status != TestResultStatus.NotDone;
+        _clearValue.Enabled = IsKeyable(row) && row!.CurrentValue is not null;
+        _correct.Enabled = row is { IsHeading: false, IsCalculated: false }
+                           && row.Status is TestResultStatus.Validated or TestResultStatus.Reported;
+    }
+
+    /// <summary>
+    /// Records the selected analysis as not done, with the reason printed on the report in the
+    /// value's place. An empty cell used to be skipped on save, so nothing could be recorded as
+    /// not done from this screen. Other values typed meanwhile are saved with it.
+    /// </summary>
+    private async Task MarkSelectedNotDoneAsync()
+    {
+        if (_sheet is null || SelectedRow() is not { } row || !IsKeyable(row)) return;
+
+        _grid.EndEdit();
+
+        var name = row.ParameterName.For(Localizer.CurrentLanguage);
+        var reason = _dialogs.PromptForReason(T("ResultEntry.NotDonePrompt", name),
+                                              T("ResultEntry.MarkNotDone"), minimumLength: 3,
+                                              maxLength: 500);
+        if (reason is null) return;
+
+        var entries = CollectTypedEntries(except: row.TestResultId);
+        entries.Add(new ResultEntry(row.TestResultId, null, reason, PrintTechnicalComment: true,
+                                    Action: ResultEntryAction.NotDone));
+
+        await SubmitEntriesAsync(entries);
+    }
+
+    /// <summary>
+    /// Withdraws a value keyed by mistake (or a "not done"): the line is awaited again. Emptying the
+    /// cell did nothing — an empty cell is skipped on save. Not for a released value, which is
+    /// corrected with a reason instead.
+    /// </summary>
+    private async Task ClearSelectedAsync()
+    {
+        if (_sheet is null || SelectedRow() is not { } row || !IsKeyable(row)) return;
+
+        _grid.EndEdit();
+
+        var name = row.ParameterName.For(Localizer.CurrentLanguage);
+        if (!_dialogs.Confirm(T("ResultEntry.ClearValueConfirm", name, row.CurrentValue ?? string.Empty),
+                              T("ResultEntry.ClearValue")))
+            return;
+
+        var entries = CollectTypedEntries(except: row.TestResultId);
+        entries.Add(new ResultEntry(row.TestResultId, null, Action: ResultEntryAction.Clear));
+
+        await SubmitEntriesAsync(entries);
+    }
+
+    /// <summary>
+    /// Corrects a released value, printed or not: the new figure and a reason. The released value
+    /// is kept in the result's revisions; the new one is validated again, technically then
+    /// biologically, and once printed goes out on a rectified report naming it.
+    /// </summary>
+    private async Task CorrectSelectedAsync()
+    {
+        if (_sheet is not { } sheet || SelectedRow() is not { } row) return;
+        if (row.Status is not (TestResultStatus.Validated or TestResultStatus.Reported)) return;
+
+        var title = T("ResultEntry.CorrectReleased");
+        var name = row.ParameterName.For(Localizer.CurrentLanguage);
+
+        // The values typed elsewhere would be lost by the reload that follows.
+        if (!ConfirmDiscardTyped()) return;
+
+        var value = _dialogs.PromptForText(
+            T("ResultEntry.CorrectValuePrompt", name, row.CurrentValue ?? string.Empty,
+              row.UnitSymbol ?? string.Empty),
+            title, row.CurrentValue, maxLength: 100);
+        if (string.IsNullOrWhiteSpace(value)) return;
+
+        var reason = _dialogs.PromptForReason(T("ResultEntry.CorrectReasonPrompt", name), title,
+                                              minimumLength: 15, maxLength: 500);
+        if (reason is null) return;
+
+        var outcome = await _entry.CorrectReleasedAsync(sheet.LabOrderId, row.TestResultId, value, reason);
+
+        if (outcome.IsFailure)
+        {
+            _dialogs.ShowFailure(outcome, title);
+            return;
+        }
+
+        await LoadOrderAsync(sheet.LabOrderId, CancellationToken.None);
+        await LoadWorklistAsync();
+
+        if (outcome.Value.CriticalFindings.Count > 0) ShowCriticalFindings(outcome.Value);
+
+        _dialogs.Info(T("ResultEntry.CorrectedNotice", name), title);
+
+        _status.ForeColor = UiTheme.Abnormal;
+        _status.Text = T("ResultEntry.CorrectedStatus", name);
     }
 
     /// <summary>
