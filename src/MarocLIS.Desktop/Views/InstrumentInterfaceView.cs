@@ -50,10 +50,10 @@ public sealed class InstrumentInterfaceView : LocalizedView
     private readonly Button _newLink = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _editLink = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _toggleLink = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _editMappings = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _editMappings = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _viewRaw = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _testFrame = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _replay = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _replay = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _purgeLog = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
     private readonly Label _pageTitle = new();
