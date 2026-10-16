@@ -72,6 +72,9 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<IPatientQueries, PatientQueries>();
         services.AddIsolatedQueries<ICatalogQueries, CatalogQueries>();
         services.AddIsolatedQueries<Application.Orders.IOrderQueries, OrderQueries>();
+        services.AddIsolatedQueries<Application.Orders.IOrderEntryQueries, OrderEntryQueries>();
+        // The counter's running quote: the registration's own pricing calls, on a context of their own.
+        services.AddIsolatedQueries<Application.Orders.IOrderQuotes, Application.Orders.OrderQuoteService>();
         services.AddIsolatedQueries<Application.Catalog.ICatalogMaintenanceQueries, CatalogMaintenanceQueries>();
         services.AddIsolatedQueries<Application.Instruments.IInstrumentInterfaceQueries, InstrumentInterfaceQueries>();
         services.AddIsolatedQueries<Application.Samples.ISampleQueries, SampleQueries>();
