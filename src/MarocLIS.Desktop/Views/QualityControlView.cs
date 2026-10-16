@@ -834,7 +834,7 @@ public sealed class QualityControlView : LocalizedView
         var action = _dialogs.PromptForReason(
             $"{row.ParameterName.For(Localizer.CurrentLanguage)} · {WestgardRuleNames.Describe(row.ViolatedRules)}\n\n" +
             T("Quality.CorrectiveActionPrompt"),
-            T("Quality.CorrectiveAction"), minimumLength: 15);
+            T("Quality.CorrectiveAction"), minimumLength: 15, maxLength: 2000);
 
         if (action is null) return;
 
@@ -919,6 +919,13 @@ public sealed class QualityControlView : LocalizedView
         if (!int.TryParse(answer.Trim(), out var days) || days < 1)
         {
             _dialogs.Warn(Localizer.Format("Result_NotANumber", answer));
+            return;
+        }
+
+        // A period beyond the calendar made the date arithmetic throw (« Erreur inattendue »).
+        if (days > 3650)
+        {
+            _dialogs.Warn(Localizer["QcTarget_PeriodOutOfRange"]);
             return;
         }
 

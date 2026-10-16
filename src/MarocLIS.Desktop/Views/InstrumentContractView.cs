@@ -650,6 +650,11 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
         _exit = TextField("Contracts.ExitConditions", 20, 480, 440, detail?.ExitConditions);
         _penalty = TextField("Contracts.PenaltyTerms", 480, 480, 440, detail?.PenaltyTerms);
         _notes = TextField("Field.Notes", 20, 534, 900, detail?.Notes);
+        // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
+        _reference.MaxLength = 60;
+        _codes.MaxLength = 1000;
+        _maintenance.MaxLength = _exit.MaxLength = _penalty.MaxLength = 2000;
+        _training.MaxLength = _notes.MaxLength = 1000;
 
         Notice(20, 590, 900, 60, "Contracts.EditorNotice");
 

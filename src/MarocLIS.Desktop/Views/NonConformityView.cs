@@ -595,7 +595,7 @@ public sealed class NonConformityView : LocalizedView
 
         // Evidence rather than a tick: "what shows this was done?" is what an assessor asks.
         var evidence = _dialogs.PromptForText(
-            T("NonConformity.EvidencePrompt"), T("NonConformity.CompleteAction"));
+            T("NonConformity.EvidencePrompt"), T("NonConformity.CompleteAction"), maxLength: 2000);
 
         if (evidence is null) return;
 
@@ -763,7 +763,7 @@ public sealed class NonConformityView : LocalizedView
         if (_actions.CurrentRow?.Tag is not CorrectiveActionRow action) return;
 
         var reason = _dialogs.PromptForReason(
-            T("NonConformity.CancelActionPrompt"), T("NonConformity.CancelAction"));
+            T("NonConformity.CancelActionPrompt"), T("NonConformity.CancelAction"), maxLength: 1000);
 
         if (reason is null) return;
 
@@ -877,11 +877,13 @@ internal sealed class NonConformityDialog : Form
         Field("Field.Description", y);
         _description.Bounds = new Rectangle(20, y + 18, 520, 66);
         _description.Multiline = true;
+        _description.MaxLength = 2000;   // the column; beyond, the save failed with « Erreur inattendue »
 
         y += 94;
         Field("NonConformity.ImmediateAction", y);
         _immediateAction.Bounds = new Rectangle(20, y + 18, 520, 52);
         _immediateAction.Multiline = true;
+        _immediateAction.MaxLength = 2000;
 
         y += 80;
         _affectedResults.Text = _localizer["NonConformity.AffectedResults"];
@@ -995,6 +997,7 @@ internal sealed class CorrectiveActionDialog : Form
 
         _description.Bounds = new Rectangle(20, 88, 460, 90);
         _description.Multiline = true;
+        _description.MaxLength = 2000;   // the column; beyond, the save failed with « Erreur inattendue »
 
         var targetLabel = UiTheme.FieldLabel(localizer["NonConformity.DueDate"]);
         targetLabel.Location = new Point(20, 190);
@@ -1107,6 +1110,7 @@ internal sealed class NonConformityAnalysisDialog : Form
         Field("NonConformity.RootCause", y);
         _rootCauseAnalysis.Bounds = new Rectangle(20, y + 18, 520, 70);
         _rootCauseAnalysis.Multiline = true;
+        _rootCauseAnalysis.MaxLength = 2000;   // the column; beyond, the save failed with « Erreur inattendue »
 
         y += 98;
         // Emphasised when released results were affected, because the domain will then require it.
@@ -1114,11 +1118,13 @@ internal sealed class NonConformityAnalysisDialog : Form
               row.AffectedReleasedResults ? UiTheme.Critical : null);
         _clinicalImpact.Bounds = new Rectangle(20, y + 18, 520, 70);
         _clinicalImpact.Multiline = true;
+        _clinicalImpact.MaxLength = 2000;
 
         y += 98;
         Field("NonConformity.Effectiveness", y);
         _effectiveness.Bounds = new Rectangle(20, y + 18, 520, 70);
         _effectiveness.Multiline = true;
+        _effectiveness.MaxLength = 2000;
 
         y += 98;
         _amendedReports.Text = localizer["NonConformity.AmendedReportsIssued"];

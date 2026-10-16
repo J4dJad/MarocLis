@@ -554,7 +554,7 @@ public sealed class SupplierInvoiceView : LocalizedView
         if (Selected is not { } row) return;
 
         var reason = _dialogs.PromptForReason(T("SupplierInvoices.UnblockPrompt", row.InvoiceNumber, row.VarianceCount),
-                                              _unblock.Text, 10);
+                                              _unblock.Text, 10, maxLength: 1000);
         if (reason is null) return;
 
         var result = await _invoices.UnblockAsync(row.Id, reason);
@@ -633,7 +633,7 @@ public sealed class SupplierInvoiceView : LocalizedView
     {
         if (Selected is not { } row) return;
 
-        var reason = _dialogs.PromptForReason(T("SupplierInvoices.CancelPrompt", row.InvoiceNumber), _cancel.Text);
+        var reason = _dialogs.PromptForReason(T("SupplierInvoices.CancelPrompt", row.InvoiceNumber), _cancel.Text, maxLength: 500);
         if (reason is null) return;
 
         var result = await _invoices.CancelAsync(row.Id, reason);
@@ -766,6 +766,9 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
         Controls.AddRange([_invoiceDate, _receivedOn]);
 
         _notes = TextField("Field.Notes", 20, 68, 700);
+        // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
+        _number.MaxLength = 60;
+        _notes.MaxLength = 1000;
         _scan = Check("SupplierInvoices.AttachScanAfter", 740, 90, false);
 
         Notice(20, 122, 940, 34, "SupplierInvoices.EntryNotice");

@@ -465,6 +465,10 @@ internal sealed class MaintenanceDialog : Form
     {
         _localizer = localizer;
         _dialogs = dialogs;
+        // Bounded to the columns: beyond, the save failed with « Erreur inattendue » after the dialog closed.
+        _descriptionFr.MaxLength = _descriptionAr.MaxLength = _descriptionEn.MaxLength = 2000;
+        _parts.MaxLength = 1000;
+        _technician.MaxLength = 200;
 
         Text = $"{localizer["Equipment.RecordMaintenance"]} — {row.Code}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -619,6 +623,8 @@ internal sealed class CalibrationDialog : Form
     {
         _localizer = localizer;
         _dialogs = dialogs;
+        _calibratorLot.MaxLength = 60;
+        _comment.MaxLength = 1000;
 
         Text = $"{localizer["Equipment.RecordCalibration"]} — {row.Code}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -771,6 +777,7 @@ internal sealed class EquipmentStatusDialog : Form
     {
         _localizer = localizer;
         _dialogs = dialogs;
+        _reason.MaxLength = 500;
 
         Text = $"{localizer["Equipment.ChangeStatus"]} — {row.Code}";
         FormBorderStyle = FormBorderStyle.FixedDialog;

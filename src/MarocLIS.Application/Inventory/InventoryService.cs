@@ -403,6 +403,14 @@ public sealed class InventoryService(
         if (item is null) return Result.Failure<string>(Error.NotFound("Stock_ItemNotFound"));
 
         var today = clock.Today;
+
+        // Refused before any lot is drawn down. Found short half-way, the lots already drawn and
+        // their movements stayed in the screen's context, and the next save on the screen wrote
+        // them: stock issued that nobody had issued.
+        if (quantity > item.QuantityOnHand(today))
+            return Result.Failure<string>(Error.Validation("Stock_InsufficientUsableStock",
+                                                           item.Code, item.QuantityOnHand(today)));
+
         var remaining = quantity;
         var consumedFrom = new List<string>();
 

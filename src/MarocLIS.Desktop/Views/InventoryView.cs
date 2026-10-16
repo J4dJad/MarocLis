@@ -707,7 +707,7 @@ public sealed class InventoryView : LocalizedView
 
         var evidence = _dialogs.PromptForReason(
             T("Inventory.ReleaseEvidencePrompt", lot.LotNumber),
-            T("Action.Release"), minimumLength: 10);
+            T("Action.Release"), minimumLength: 10, maxLength: 1000);
 
         if (evidence is null) return;
 
@@ -724,7 +724,7 @@ public sealed class InventoryView : LocalizedView
             var justification = _dialogs.PromptForReason(
                 $"{Describe(result)}\n\n" +
                 T("Lot.QcOverrideJustificationPrompt", lot.LotNumber, ReagentLot.QcOverrideJustificationMinLength),
-                T("Lot.QcOverrideTitle"), minimumLength: ReagentLot.QcOverrideJustificationMinLength);
+                T("Lot.QcOverrideTitle"), minimumLength: ReagentLot.QcOverrideJustificationMinLength, maxLength: 1000);
 
             if (justification is null) return;
 
@@ -748,7 +748,7 @@ public sealed class InventoryView : LocalizedView
         if (_lots.CurrentRow?.Tag is not LotRow lot) return;
 
         var reason = _dialogs.PromptForReason(
-            T("Inventory.RejectLotPrompt", lot.LotNumber), T("Action.Reject"));
+            T("Inventory.RejectLotPrompt", lot.LotNumber), T("Action.Reject"), maxLength: 500);
 
         if (reason is null) return;
 
@@ -802,7 +802,7 @@ public sealed class InventoryView : LocalizedView
         if (_lots.CurrentRow?.Tag is not LotRow lot) return;
 
         var reference = _dialogs.PromptForText(
-            T("Inventory.RecallReferencePrompt", lot.LotNumber), T("Inventory.Recall"));
+            T("Inventory.RecallReferencePrompt", lot.LotNumber), T("Inventory.Recall"), maxLength: 100);
 
         if (string.IsNullOrWhiteSpace(reference)) return;
 
@@ -842,7 +842,7 @@ public sealed class InventoryView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T("Inventory.WriteOffPrompt", lot.LotNumber, lot.QuantityRemaining.ToString("N2")),
-            T("Inventory.WriteOff"));
+            T("Inventory.WriteOff"), maxLength: 500);
 
         if (reason is null) return;
 
@@ -899,6 +899,10 @@ internal sealed class ReceiveLotDialog : Form
         _items = items ?? [];
         _findByGtin = findByGtin;
         _checks = new ReceptionChecksPanel(localizer, item.StorageCondition);
+
+        // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
+        _lotNumber.MaxLength = _deliveryNote.MaxLength = 60;
+        _storage.MaxLength = 100;
 
         Text = $"{localizer["Inventory.ReceiveLot"]} — {item.Code}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -1099,7 +1103,7 @@ internal sealed class ReceiveLotDialog : Form
     private void Refuse()
     {
         var reason = _dialogs.PromptForReason(_localizer["Reception.RefusePrompt"],
-                                              _localizer["Reception.Refuse"], minimumLength: 10);
+                                              _localizer["Reception.Refuse"], minimumLength: 10, maxLength: 1000);
         if (reason is null) return;
 
         Refusal = new RefuseDeliveryRequest
