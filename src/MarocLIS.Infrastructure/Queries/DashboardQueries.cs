@@ -1,5 +1,6 @@
 using MarocLIS.Application.Inventory;
 using MarocLIS.Domain.Billing;
+using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Inventory;
 using MarocLIS.Domain.Orders;
@@ -11,7 +12,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MarocLIS.Infrastructure.Queries;
 
-/// <summary>A single dashboard figure, with the navigation target it stands for.</summary>
+/// <summary>
+/// A single dashboard figure, with the navigation target it stands for: the key of the menu entry
+/// whose screen lists what the figure counts.
+/// </summary>
 public sealed record DashboardMetric(
     string LabelKey,
     int Value,
@@ -74,6 +78,26 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
         var awaitingCollection = await db.Samples.AsNoTracking()
             .CountAsync(s => s.SiteId == siteId && s.Status == SampleStatus.AwaitingCollection, ct);
 
+        // Tubes drawn and not yet accepted on the platform: the reception screen's list.
+        var awaitingReception = await db.Samples.AsNoTracking()
+            .CountAsync(s => s.SiteId == siteId
+                             && (s.Status == SampleStatus.Collected || s.Status == SampleStatus.InTransit), ct);
+
+        // Files with a value still to type at the bench, by the entry screen's own selection —
+        // calculated parameters and headings are never typed, so they do not keep a file there.
+        var enterable = db.TestParameters.AsNoTracking()
+            .Where(p => (p.CalculationFormula == null || p.CalculationFormula == "")
+                        && p.ValueType != ResultValueType.Heading)
+            .Select(p => p.Id);
+
+        var awaitingEntry = await BenchWorksheetQueries.PendingItems(db, siteId)
+            .Where(i => db.TestResults.Any(r => r.LabOrderItemId == i.Id
+                                                && r.Status == TestResultStatus.Awaited
+                                                && enterable.Contains(r.TestParameterId)))
+            .Select(i => i.LabOrderId)
+            .Distinct()
+            .CountAsync(ct);
+
         var awaitingValidation = await db.TestResults.AsNoTracking()
             .CountAsync(r => r.SiteId == siteId
                              && r.Status == TestResultStatus.TechnicallyValidated, ct);
@@ -81,6 +105,16 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
         var reportedToday = await db.LabReports.AsNoTracking()
             .CountAsync(r => r.SiteId == siteId
                              && r.ReleasedAt >= today && r.ReleasedAt < tomorrow, ct);
+
+        // Files holding a validated value of an analysis still ordered: the report register's list
+        // of reports to issue (ResultQueries.GetPendingReleaseAsync), counted.
+        var reportsToRelease = await db.LabOrders.AsNoTracking()
+            .CountAsync(o => o.SiteId == siteId && o.Status != LabOrderStatus.Cancelled
+                             && db.TestResults.Any(r => r.LabOrderId == o.Id
+                                                        && r.SiteId == siteId
+                                                        && r.Status == TestResultStatus.Validated
+                                                        && db.LabOrderItems.Any(i => i.Id == r.LabOrderItemId
+                                                                                     && i.Status != LabOrderItemStatus.Cancelled)), ct);
 
         // ---- Alerts -----------------------------------------------------------------------------
 
@@ -193,11 +227,21 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
             [
                 new("Dashboard.OrdersToday", ordersToday, DashboardSeverity.Neutral, "orders"),
                 new("Dashboard.AwaitingCollection", awaitingCollection,
-                    awaitingCollection > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
+                    awaitingCollection > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "collection"),
+                new("Dashboard.AwaitingReception", awaitingReception,
+                    awaitingReception > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "reception"),
+                new("Dashboard.AwaitingEntry", awaitingEntry,
+                    awaitingEntry > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "entry"),
                 new("Dashboard.AwaitingValidation", awaitingValidation,
                     awaitingValidation > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
                     "validation"),
-                new("Report.Plural", reportedToday, DashboardSeverity.Neutral)
+                new("Dashboard.ReportsToRelease", reportsToRelease,
+                    reportsToRelease > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "reports"),
+                new("Report.Plural", reportedToday, DashboardSeverity.Neutral, "reports")
             ],
             Alerts:
             [
@@ -205,18 +249,22 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
                     uncommunicatedCritical > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral,
                     "validation"),
                 new("Dashboard.OverdueOrders", overdueOrders,
-                    overdueOrders > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral),
+                    overdueOrders > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral,
+                    "validation"),
                 new("Dashboard.QcAlerts", qcRejected,
-                    qcRejected > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral),
+                    qcRejected > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral, "qc"),
                 new("Equipment.NextCalibration", calibrationOverdue,
-                    calibrationOverdue > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral),
+                    calibrationOverdue > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral,
+                    "equipment"),
                 new("Dashboard.OpenNonConformities", openNonConformities,
-                    openNonConformities > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
+                    openNonConformities > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "nonconformities"),
                 new("Inventory.ToReorder", toReorder,
                     toReorder > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
                     "inventory"),
                 new("Inventory.ExpiringSoon", expiringLots,
-                    expiringLots > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
+                    expiringLots > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "inventory"),
                 new("Stock.DashboardExpiringCritical", expiringCritical,
                     expiringCritical > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral, "inventory"),
                 new("Stock.DashboardStockOuts", stockOuts,
@@ -225,9 +273,11 @@ public sealed class DashboardQueries(LisDbContext db) : IDashboardQueries
                     unitsWithoutReading > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
                     "temperatures"),
                 new("Dashboard.RejectedSamplesToday", rejectedSamplesToday,
-                    rejectedSamplesToday > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
+                    rejectedSamplesToday > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "recollections"),
                 new("Dashboard.Receivables", unpaidInvoices,
-                    unpaidInvoices > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral),
+                    unpaidInvoices > 0 ? DashboardSeverity.Attention : DashboardSeverity.Neutral,
+                    "billing"),
                 new("SupplierInvoices.DashboardOverdue", supplierInvoicesOverdue,
                     supplierInvoicesOverdue > 0 ? DashboardSeverity.Urgent : DashboardSeverity.Neutral,
                     "supplierinvoices"),

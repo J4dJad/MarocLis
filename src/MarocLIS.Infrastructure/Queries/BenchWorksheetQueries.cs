@@ -21,7 +21,13 @@ public sealed class BenchWorksheetQueries(LisDbContext db) : IBenchWorksheetQuer
     /// left out — they leave in a transport box, not on a bench.
     /// </para>
     /// </summary>
-    private IQueryable<LabOrderItem> PendingItems(Guid siteId) =>
+    private IQueryable<LabOrderItem> PendingItems(Guid siteId) => PendingItems(db, siteId);
+
+    /// <summary>
+    /// The same selection for another reader — the dashboard counts the files it holds, so the
+    /// figure on the opening screen and the list on the entry screen never disagree.
+    /// </summary>
+    internal static IQueryable<LabOrderItem> PendingItems(LisDbContext db, Guid siteId) =>
         db.LabOrderItems.AsNoTracking()
             .Where(i => (i.Status == LabOrderItemStatus.Received
                          || i.Status == LabOrderItemStatus.InProgress)

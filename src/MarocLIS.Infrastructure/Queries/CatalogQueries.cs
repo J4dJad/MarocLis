@@ -55,6 +55,21 @@ public interface ICatalogQueries
     /// own responsibility, and a seeded placeholder left in place is a finding.
     /// </summary>
     Task<IReadOnlyList<string>> GetUnverifiedCatalogueEntriesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// The same checklist as codes, split by kind: the parameters whose reference interval is
+    /// still the seeded placeholder, and the analyses still on the placeholder tariff. The
+    /// dashboard counts them and names the first few.
+    /// </summary>
+    Task<CatalogueSetupStatus> GetCatalogueSetupStatusAsync(CancellationToken ct = default);
+}
+
+/// <summary>Codes still awaiting the laboratory's own check before go-live, in code order.</summary>
+public sealed record CatalogueSetupStatus(
+    IReadOnlyList<string> UnverifiedRangeParameterCodes,
+    IReadOnlyList<string> PlaceholderTariffAnalysisCodes)
+{
+    public bool IsComplete => UnverifiedRangeParameterCodes.Count == 0 && PlaceholderTariffAnalysisCodes.Count == 0;
 }
 
 public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
@@ -230,6 +245,17 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
     public async Task<IReadOnlyList<string>> GetUnverifiedCatalogueEntriesAsync(
         CancellationToken ct = default)
     {
+        var status = await GetCatalogueSetupStatusAsync(ct);
+
+        return
+        [
+            .. status.UnverifiedRangeParameterCodes.Select(c => $"Valeurs usuelles à valider : {c}"),
+            .. status.PlaceholderTariffAnalysisCodes.Select(c => $"Tarif provisoire (lettre-clé non confirmée) : {c}")
+        ];
+    }
+
+    public async Task<CatalogueSetupStatus> GetCatalogueSetupStatusAsync(CancellationToken ct = default)
+    {
         const string pendingMarker = "À vérifier par le laboratoire";
 
         var ranges = await db.ReferenceRanges.AsNoTracking()
@@ -249,10 +275,6 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
             .OrderBy(code => code)
             .ToListAsync(ct);
 
-        return
-        [
-            .. ranges.Select(c => $"Valeurs usuelles à valider : {c}"),
-            .. placeholderTariffs.Select(c => $"Tarif provisoire (lettre-clé non confirmée) : {c}")
-        ];
+        return new CatalogueSetupStatus(ranges, placeholderTariffs);
     }
 }
