@@ -25,17 +25,21 @@ public sealed class ConsumptionView : LocalizedView
     private readonly ILogger<ConsumptionView>? _logger;
 
     private readonly DataGridView _grid = UiTheme.Grid();
-    private readonly Label _heading = new();
-    private readonly Label _fromLabel = new();
-    private readonly Label _toLabel = new();
+    private readonly Label _heading = StockPage.Title();
+    private readonly Label _count = StockPage.Count();
+    private readonly StockSearchBox _search = new();
+    private readonly Label _fromLabel = StockPage.Caption(new Label());
+    private readonly Label _toLabel = StockPage.Caption(new Label());
+    private readonly ContextMenuStrip _more = new();
+    private readonly Button _moreButton;
     private readonly DateTimePicker _from = new() { Format = DateTimePickerFormat.Short };
     private readonly DateTimePicker _to = new() { Format = DateTimePickerFormat.Short };
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _detail = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _detail = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _pdf = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _csv = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _settings = UiTheme.SecondaryButton(string.Empty);
-    private readonly Label _notice = new();
+    private readonly StockMenuButton _settings = new();
+    private readonly StockFooter _notice = new();
 
     private IReadOnlyList<ConsumptionRow> _rows = [];
 
@@ -54,6 +58,7 @@ public sealed class ConsumptionView : LocalizedView
         _from.Value = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
         _to.Value = new DateTime(today.Year, today.Month, 1).AddDays(-1);
 
+        _moreButton = StockMenu.More(_more, localizer);
         BuildLayout();
 
         _refresh.Click += async (_, _) => await ActivateAsync();
@@ -72,34 +77,16 @@ public sealed class ConsumptionView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = StockPage.ContentPadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = UiTheme.Surface };
+        // The breakdown of the selected line is what the screen is read for: the primary, on Entrée.
+        _more.Items.Add(StockMenu.Entry(_settings));
+        var header = StockPage.Header(_heading, _count, _refresh, _pdf, _csv, _moreButton, _detail);
+        ShortcutHints.Attach(_detail, T("StocksUi.EnterKey"));
 
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        foreach (var label in new[] { _fromLabel, _toLabel })
-        {
-            label.Font = UiTheme.Small;
-            label.ForeColor = UiTheme.TextSecondary;
-            label.AutoSize = true;
-        }
-
-        _fromLabel.Location = new Point(0, 34);
-        _from.Bounds = new Rectangle(40, 30, 110, UiTheme.InputHeight);
-        _toLabel.Location = new Point(160, 34);
-        _to.Bounds = new Rectangle(190, 30, 110, UiTheme.InputHeight);
-
-        _refresh.Bounds = new Rectangle(320, 26, 110, UiTheme.ButtonHeight);
-        _detail.Bounds = new Rectangle(440, 26, 150, UiTheme.ButtonHeight);
-        _pdf.Bounds = new Rectangle(600, 26, 110, UiTheme.ButtonHeight);
-        _csv.Bounds = new Rectangle(720, 26, 110, UiTheme.ButtonHeight);
-        _settings.Bounds = new Rectangle(840, 26, 150, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _fromLabel, _from, _toLabel, _to, _refresh, _detail, _pdf, _csv, _settings]);
+        _from.Width = _to.Width = 120;
+        _from.Font = _to.Font = UiTheme.Monospace;
+        var filters = StockPage.Filters(_search, _fromLabel, _from, _toLabel, _to);
 
         foreach (var (name, weight) in new[]
                  {
@@ -114,7 +101,8 @@ public sealed class ConsumptionView : LocalizedView
                 SortMode = DataGridViewColumnSortMode.NotSortable,
                 DefaultCellStyle = new DataGridViewCellStyle
                 {
-                    Font = name is "code" ? UiTheme.Monospace : UiTheme.Body,
+                    Font = name is "code" ? UiTheme.MonospaceBold
+                        : name is "name" or "unit" or "count" ? UiTheme.Body : UiTheme.Monospace,
                     Alignment = name is "code" or "name" or "unit" or "count"
                         ? DataGridViewContentAlignment.MiddleLeft
                         : DataGridViewContentAlignment.MiddleRight
@@ -137,14 +125,23 @@ public sealed class ConsumptionView : LocalizedView
             }
         };
 
-        _notice.Dock = DockStyle.Bottom;
-        _notice.Height = 46;
-        _notice.Font = UiTheme.Small;
-        _notice.ForeColor = UiTheme.TextSecondary;
+        _search.Changed += (_, _) => StockGrid.Filter(_grid, _search.Query);
 
-        Controls.Add(_grid);
-        Controls.Add(_notice);
-        Controls.Add(bar);
+        Controls.Add(new StockCard(_grid, heading: false, footer: _notice));
+        Controls.Add(filters);
+        Controls.Add(header);
+    }
+
+    /// <summary>Entrée on the list opens the selected line's breakdown, as the double-click does.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.Enter && _grid.ContainsFocus && _detail.Enabled)
+        {
+            ShowDetail();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private IReadOnlyList<string> Headers() =>
@@ -158,6 +155,8 @@ public sealed class ConsumptionView : LocalizedView
     protected override void ApplyTexts()
     {
         _heading.Text = T("Nav.Consumption");
+        _search.Placeholder = T("StocksUi.SearchStock");
+        _moreButton.Text = T("ResultEntry.MoreActions");
         _fromLabel.Text = T("Consumption.From");
         _toLabel.Text = T("Consumption.To");
         _refresh.Text = T("Action.Refresh");
@@ -202,7 +201,8 @@ public sealed class ConsumptionView : LocalizedView
         }
 
         var flagged = _rows.Count(r => r.Reconciliation.IsFlagged);
-        _heading.Text = $"{T("Nav.Consumption")} · {_rows.Count}";
+        StockGrid.Filter(_grid, _search.Query);
+        _count.Text = T("StocksUi.Items", _rows.Count);
         _notice.Text = flagged > 0 ? T("Consumption.Flagged", flagged) : T("Consumption.Notice");
         _notice.ForeColor = flagged > 0 ? UiTheme.Critical : UiTheme.TextSecondary;
     }
@@ -320,6 +320,8 @@ internal sealed class ConsumptionDetailDialog : Form
         Controls.Add(analyses);
         Controls.Add(summary);
         Controls.Add(notice);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.ConsumptionDetail");
     }
 }
 
@@ -342,6 +344,8 @@ internal sealed class StockSettingsDialog : MasterDataEditor
         _critical = Number("Stock.ExpiryCriticalDays", 290, 70, 240, current.ExpiryCriticalDays, 365m);
 
         Buttons(160, 560);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.StockSettings");
     }
 
     protected override void Accept()
@@ -441,5 +445,7 @@ internal sealed class StockAlertsDialog : Form
         Controls.Add(stockOuts);
         Controls.Add(Heading(localizer.Format("Stock.StockOuts", alerts.StockOuts.Count)));
         Controls.Add(notice);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.StockAlerts");
     }
 }

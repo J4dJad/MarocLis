@@ -29,21 +29,28 @@ public sealed class PurchaseOrderView : LocalizedView
 
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly DataGridView _lines = UiTheme.Grid();
-    private readonly Label _heading = new();
-    private readonly Label _linesHeading = new();
-    private readonly CheckBox _onlyOpen = new();
+    // Direction A: title and count, search and chip, the orders card and the lines card.
+    private readonly Label _title = StockPage.Title();
+    private readonly Label _count = StockPage.Count();
+    private readonly StockSearchBox _search = new();
+    private readonly CheckBox _onlyOpen = new StockChip();
+    private readonly StockCard _linesCard;
+    private readonly ContextMenuStrip _headerMore = new();
+    private readonly ContextMenuStrip _linesMore = new();
+    private readonly Button _headerMoreButton;
+    private readonly Button _linesMoreButton;
 
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _newOrder = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _printPdf = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _savePdf = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _addLine = UiTheme.PrimaryButton(string.Empty);
+    private readonly StockMenuButton _savePdf = new();
+    private readonly Button _addLine = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _approve = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _send = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _receive = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _cancel = UiTheme.SecondaryButton(string.Empty);
+    private readonly StockMenuButton _cancel = new();
 
-    private readonly Label _totals = new();
+    private readonly StockFooter _totals = new();
 
     private IReadOnlyList<PurchaseOrderRow> _rows = [];
     private IReadOnlyList<PurchaseOrderLineRow> _lineRows = [];
@@ -64,6 +71,10 @@ public sealed class PurchaseOrderView : LocalizedView
         _logger = logger;
         _reception = reception;
 
+        _linesCard = new StockCard(_lines, footer: _totals);
+        _headerMoreButton = StockMenu.More(_headerMore, localizer);
+        _linesMoreButton = StockMenu.More(_linesMore, localizer);
+
         BuildLayout();
         WireBehaviour();
     }
@@ -74,70 +85,42 @@ public sealed class PurchaseOrderView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = StockPage.ContentPadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _onlyOpen.Font = UiTheme.Small;
-        _onlyOpen.ForeColor = UiTheme.TextSecondary;
-        _onlyOpen.AutoSize = true;
-        _onlyOpen.Location = new Point(0, 32);
         _onlyOpen.Checked = true;
+        _headerMore.Items.Add(StockMenu.Entry(_savePdf));
+        var header = StockPage.Header(_title, _count, _refresh, _printPdf, _headerMoreButton, _newOrder);
+        ShortcutHints.Attach(_newOrder, NewKey);
 
-        _refresh.Bounds = new Rectangle(300, 26, 110, UiTheme.ButtonHeight);
-        _newOrder.Bounds = new Rectangle(420, 26, 190, UiTheme.ButtonHeight);
-
-        _printPdf.Bounds = new Rectangle(620, 26, 170, UiTheme.ButtonHeight);
-        _savePdf.Bounds = new Rectangle(800, 26, 190, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _onlyOpen, _refresh, _newOrder, _printPdf, _savePdf]);
-
-        var split = new ProportionalSplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 280,
-            SplitterWidth = 6,
-            BackColor = UiTheme.Surface
-        };
+        var filters = StockPage.Filters(_search, _onlyOpen);
 
         BuildOrderColumns();
         BuildLineColumns();
 
-        split.Panel1.Controls.Add(_grid);
+        var ordersCard = new StockCard(_grid, heading: false);
 
-        _linesHeading.Font = UiTheme.SectionTitle;
-        _linesHeading.ForeColor = UiTheme.TextPrimary;
-        _linesHeading.Dock = DockStyle.Top;
-        _linesHeading.Height = 26;
+        // The selected order's lines and what can be done with it, the receipt being the main one.
+        _linesMore.Items.Add(StockMenu.Entry(_cancel));
+        foreach (var button in new[] { _addLine, _approve, _send, _receive }) StockPage.Action(button);
+        _linesCard.Heading.End(_addLine, _approve, _send, _linesMoreButton, _receive);
 
-        split.Panel2.Controls.Add(_lines);
-        split.Panel2.Controls.Add(_linesHeading);
+        Controls.Add(StockPage.Stack(ordersCard, _linesCard, 270));
+        Controls.Add(filters);
+        Controls.Add(header);
+    }
 
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 84, BackColor = UiTheme.Surface };
+    private const string NewKey = "Ctrl+N";
 
-        _totals.Font = UiTheme.SmallBold;
-        _totals.ForeColor = UiTheme.TextSecondary;
-        _totals.AutoSize = false;
-        _totals.Bounds = new Rectangle(0, 4, 1200, 20);
-
-        var x = 0;
-        foreach (var button in new[] { _addLine, _approve, _send, _receive, _cancel })
+    /// <summary>Ctrl+N raises a new order, as the key drawn on the button says.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.N) && _newOrder.Enabled && _newOrder.Visible)
         {
-            button.Bounds = new Rectangle(x, 36, 170, UiTheme.ButtonHeight);
-            x += 180;
+            _newOrder.PerformClick();
+            return true;
         }
 
-        footer.Controls.AddRange([_totals, _addLine, _approve, _send, _receive, _cancel]);
-
-        Controls.Add(split);
-        Controls.Add(footer);
-        Controls.Add(bar);
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private static void AddColumn(DataGridView grid, string name, int weight, Font? font = null,
@@ -193,6 +176,11 @@ public sealed class PurchaseOrderView : LocalizedView
 
         _grid.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadLinesAsync());
         _grid.CellFormatting += OnOrderFormatting;
+        StockGrid.Pills(_grid, "status", tag => tag is PurchaseOrderRow row ? StatusPill(row.Status) : null);
+        StockGrid.Pills(_grid, "priority", tag => tag is PurchaseOrderRow row
+            ? IsPendingPriority(row) ? StockPill.Critical : StockPill.Waiting
+            : null);
+        _search.Changed += (_, _) => StockGrid.Filter(_grid, _search.Query);
         _lines.SelectionChanged += (_, _) => RefreshButtons();
 
         _newOrder.Click += async (_, _) => await RunActionAsync(CreateOrderAsync);
@@ -215,15 +203,19 @@ public sealed class PurchaseOrderView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count) return;
         if (_grid.Rows[e.RowIndex].Tag is not PurchaseOrderRow row) return;
 
+        // The priority shows on its pill; a late delivery on its date. A whole row in colour is
+        // kept for the critical cases, as the design system has it.
         if (IsPendingPriority(row))
         {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            if (_grid.Columns[e.ColumnIndex].Name == "priority") e.CellStyle.ForeColor = UiTheme.Critical;
+            if (_grid.Columns[e.ColumnIndex].Name == "number") e.CellStyle!.ForeColor = UiTheme.Critical;
         }
         else if (row.IsOverdue)
         {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
+            if (_grid.Columns[e.ColumnIndex].Name == "expected")
+            {
+                e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
+                e.CellStyle.ForeColor = UiTheme.Abnormal;
+            }
         }
         else if (row.Status is PurchaseOrderStatus.Cancelled or PurchaseOrderStatus.Received)
         {
@@ -231,11 +223,21 @@ public sealed class PurchaseOrderView : LocalizedView
         }
     }
 
+    private static StockPill StatusPill(PurchaseOrderStatus status) => status switch
+    {
+        PurchaseOrderStatus.Received => StockPill.Done,
+        PurchaseOrderStatus.Approved or PurchaseOrderStatus.Sent or PurchaseOrderStatus.PartiallyReceived => StockPill.Running,
+        _ => StockPill.Waiting
+    };
+
     private static bool IsPendingPriority(PurchaseOrderRow row) =>
         row.IsPriority && row.Status is not (PurchaseOrderStatus.Received or PurchaseOrderStatus.Cancelled);
 
     protected override void ApplyTexts()
     {
+        _title.Text = T("PurchaseOrders.Title");
+        _search.Placeholder = T("StocksUi.SearchOrders");
+        _headerMoreButton.Text = _linesMoreButton.Text = T("ResultEntry.MoreActions");
         _onlyOpen.Text = T("PurchaseOrders.OnlyOpen");
         _refresh.Text = T("Action.Refresh");
         _newOrder.Text = T("PurchaseOrders.NewOrder");
@@ -351,6 +353,7 @@ public sealed class PurchaseOrderView : LocalizedView
         RenderHeading();
 
         if (keep is null && _grid.Rows.Count > 0) _grid.CurrentCell = _grid.Rows[0].Cells[0];
+        StockGrid.Filter(_grid, _search.Query);
         if (_grid.Rows.Count == 0)
         {
             _lineRows = [];
@@ -363,10 +366,10 @@ public sealed class PurchaseOrderView : LocalizedView
         var overdue = _rows.Count(r => r.IsOverdue);
         var toApprove = _rows.Count(r => r.Status == PurchaseOrderStatus.Draft && r.LineCount > 0);
 
-        var text = $"{T("PurchaseOrders.Title")} — {_rows.Count}";
+        var text = T("StocksUi.Orders", _rows.Count);
         if (toApprove > 0) text += $" · {T("PurchaseOrders.ToApprove")} {toApprove}";
         if (overdue > 0) text += $" · {T("PurchaseOrders.Late")} {overdue}";
-        _heading.Text = text;
+        _count.Text = text;
     }
 
     private async Task LoadLinesAsync()
@@ -429,9 +432,8 @@ public sealed class PurchaseOrderView : LocalizedView
         if (firstOutstanding is not null) _lines.CurrentCell = firstOutstanding.Cells[0];
 
         var order = SelectedOrder;
-        _linesHeading.Text = order is null
-            ? T("PurchaseOrders.Lines")
-            : $"{T("PurchaseOrders.Lines")} — {order.Number} · {order.SupplierName}";
+        _linesCard.Title.Text = T("PurchaseOrders.Lines");
+        _linesCard.Note.Text = order is null ? string.Empty : $"{order.Number} · {order.SupplierName}";
 
         _totals.Text = order is null
             ? string.Empty
@@ -747,6 +749,8 @@ internal sealed class PurchaseOrderDialog : MasterDataEditor
         Notice(20, 182, 480, 46, "PurchaseOrders.ApprovalNotice");
 
         Buttons(248, 520);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.PurchaseOrder");
     }
 
     protected override void Accept()
@@ -809,6 +813,8 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
         FillDefaults();
 
         Buttons(208, 560);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.PurchaseOrderLine");
     }
 
     private OrderableItem? Current =>
@@ -942,6 +948,8 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
             Close();
         };
         Controls.Add(refuse);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.PurchaseOrderReceipt", refuse);
     }
 
     /// <summary>A scan fills the lot and expiry, and says so when the box is not the line's article.</summary>

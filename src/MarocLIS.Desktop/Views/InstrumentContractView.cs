@@ -27,16 +27,21 @@ public sealed class InstrumentContractView : LocalizedView
 
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly DataGridView _interventions = UiTheme.Grid();
-    private readonly Label _heading = new();
-    private readonly Label _interventionsHeading = new();
-    private readonly Label _rule = new();
-    private readonly CheckBox _includeInactive = new();
+    // Direction A: title and count, search and chip, the contracts card and the interventions card.
+    private readonly Label _heading = StockPage.Title();
+    private readonly Label _count = StockPage.Count();
+    private readonly StockSearchBox _search = new();
+    private readonly StockFooter _rule = new();
+    private readonly CheckBox _includeInactive = new StockChip();
+    private readonly StockCard _interventionsCard;
+    private readonly ContextMenuStrip _more = new();
+    private readonly Button _moreButton;
 
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _new = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _edit = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _attach = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _openFile = UiTheme.SecondaryButton(string.Empty);
+    private readonly StockMenuButton _attach = new();
+    private readonly StockMenuButton _openFile = new();
     private readonly Button _times = UiTheme.SecondaryButton(string.Empty);
 
     private IReadOnlyList<InstrumentContractRow> _rows = [];
@@ -52,6 +57,8 @@ public sealed class InstrumentContractView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
 
+        _interventionsCard = new StockCard(_interventions);
+        _moreButton = StockMenu.More(_more, localizer);
         BuildLayout();
         WireBehaviour();
     }
@@ -62,61 +69,46 @@ public sealed class InstrumentContractView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = StockPage.ContentPadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 84, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _includeInactive.Font = UiTheme.Small;
-        _includeInactive.ForeColor = UiTheme.TextSecondary;
-        _includeInactive.AutoSize = true;
-        _includeInactive.Location = new Point(0, 32);
-
-        _refresh.Bounds = new Rectangle(300, 26, 110, UiTheme.ButtonHeight);
-        _new.Bounds = new Rectangle(420, 26, 170, UiTheme.ButtonHeight);
-        _edit.Bounds = new Rectangle(600, 26, 130, UiTheme.ButtonHeight);
-        _attach.Bounds = new Rectangle(740, 26, 170, UiTheme.ButtonHeight);
-        _openFile.Bounds = new Rectangle(920, 26, 170, UiTheme.ButtonHeight);
-
-        _rule.Font = UiTheme.Small;
-        _rule.ForeColor = UiTheme.TextSecondary;
-        _rule.AutoSize = false;
-        _rule.Bounds = new Rectangle(0, 62, 1200, 20);
-
-        bar.Controls.AddRange([_heading, _includeInactive, _refresh, _new, _edit, _attach, _openFile, _rule]);
-
-        var split = new ProportionalSplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 300,
-            SplitterWidth = 6,
-            BackColor = UiTheme.Surface
-        };
+        // The contract's file is reached less often than the contract itself: « Plus d'actions ».
+        foreach (var button in new[] { _attach, _openFile }) _more.Items.Add(StockMenu.Entry(button));
+        var header = StockPage.Header(_heading, _count, _refresh, _edit, _moreButton, _new);
+        ShortcutHints.Attach(_new, NewKey);
+        var filters = StockPage.Filters(_search, _includeInactive);
 
         BuildColumns();
-        split.Panel1.Controls.Add(_grid);
+        StockGrid.Pills(_grid, "alert", tag => tag is InstrumentContractRow row ? AlertPill(row) : null);
+        _search.Changed += (_, _) => StockGrid.Filter(_grid, _search.Query);
+        var contractsCard = new StockCard(_grid, heading: false, footer: _rule);
 
-        _interventionsHeading.Font = UiTheme.SectionTitle;
-        _interventionsHeading.ForeColor = UiTheme.TextPrimary;
-        _interventionsHeading.Dock = DockStyle.Top;
-        _interventionsHeading.Height = 26;
+        StockPage.Action(_times);
+        _interventionsCard.Heading.End(_times);
 
-        split.Panel2.Controls.Add(_interventions);
-        split.Panel2.Controls.Add(_interventionsHeading);
-
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 52, BackColor = UiTheme.Surface };
-        _times.Bounds = new Rectangle(0, 10, 260, UiTheme.ButtonHeight);
-        footer.Controls.Add(_times);
-
-        Controls.Add(split);
-        Controls.Add(footer);
-        Controls.Add(bar);
+        Controls.Add(StockPage.Stack(contractsCard, _interventionsCard, 300));
+        Controls.Add(filters);
+        Controls.Add(header);
     }
+
+    private const string NewKey = "Ctrl+N";
+
+    /// <summary>Ctrl+N enters a new contract, as the key drawn on the button says.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.N) && _new.Enabled && _new.Visible)
+        {
+            _new.PerformClick();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    private static StockPill? AlertPill(InstrumentContractRow row) =>
+        row.Commitment.AtRisk ? StockPill.Critical
+        : row.IsEndingSoon || row.DelaysExceeded > 0 ? StockPill.Warning
+        : !row.IsActive || row.DaysToEnd < 0 ? StockPill.Waiting
+        : null;
 
     private static void AddColumn(DataGridView grid, string name, int weight, Font? font = null,
                                   DataGridViewContentAlignment align = DataGridViewContentAlignment.MiddleLeft) =>
@@ -183,6 +175,10 @@ public sealed class InstrumentContractView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _heading.Text = T("Contracts.Title");
+        _search.Placeholder = T("StocksUi.SearchContracts");
+        _moreButton.Text = T("ResultEntry.MoreActions");
+        _interventionsCard.Title.Text = T("Contracts.Interventions");
         _includeInactive.Text = T("Contracts.IncludeInactive");
         _refresh.Text = T("Action.Refresh");
         _new.Text = T("Contracts.New");
@@ -286,6 +282,7 @@ public sealed class InstrumentContractView : LocalizedView
         }
 
         _grid.ResumeLayout(performLayout: true);
+        StockGrid.Filter(_grid, _search.Query);
         RenderHeading();
 
         if (keep is null && _grid.Rows.Count > 0) _grid.CurrentCell = _grid.Rows[0].Cells[0];
@@ -320,10 +317,10 @@ public sealed class InstrumentContractView : LocalizedView
         var atRisk = _rows.Count(r => r.Commitment.AtRisk);
         var ending = _rows.Count(r => r.IsEndingSoon);
 
-        var text = $"{T("Contracts.Title")} — {_rows.Count}";
+        var text = T("StocksUi.Contracts", _rows.Count);
         if (atRisk > 0) text += $" · {T("Contracts.AtRisk")} {atRisk}";
         if (ending > 0) text += $" · {T("Contracts.EndingSoon")} {ending}";
-        _heading.Text = text;
+        _count.Text = text;
     }
 
     private void OnContractFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -337,8 +334,12 @@ public sealed class InstrumentContractView : LocalizedView
         }
         else if (row.IsEndingSoon || row.DelaysExceeded > 0)
         {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            if (_grid.Columns[e.ColumnIndex].Name == "alert") e.CellStyle.ForeColor = UiTheme.Abnormal;
+            // A reminder, not an emergency: the alert pill and the end date carry it, not the row.
+            if (row.IsEndingSoon && _grid.Columns[e.ColumnIndex].Name == "end")
+            {
+                e.CellStyle!.ForeColor = UiTheme.Abnormal;
+                e.CellStyle.Font = UiTheme.MonospaceBold;
+            }
         }
         else if (!row.IsActive || row.DaysToEnd < 0)
         {
@@ -350,10 +351,11 @@ public sealed class InstrumentContractView : LocalizedView
     {
         if (e.RowIndex < 0 || _interventions.Rows[e.RowIndex].Tag is not ContractInterventionRow row) return;
 
-        if (row.DelayExceeded)
+        // The delay beyond what the contract allows is marked on its own cell, not on the row.
+        if (row.DelayExceeded && _interventions.Columns[e.ColumnIndex].Name == "delay")
         {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            if (_interventions.Columns[e.ColumnIndex].Name == "delay") e.CellStyle.ForeColor = UiTheme.Critical;
+            e.CellStyle!.ForeColor = UiTheme.Critical;
+            e.CellStyle.BackColor = UiTheme.CriticalBackground;
         }
     }
 
@@ -408,11 +410,11 @@ public sealed class InstrumentContractView : LocalizedView
         _interventions.ResumeLayout(performLayout: true);
 
         var contract = SelectedContract;
-        _interventionsHeading.Text = contract is null
-            ? T("Contracts.Interventions")
+        _interventionsCard.Note.Text = contract is null
+            ? string.Empty
             : contract.MaxInterventionDelayHours is { } max
-                ? $"{T("Contracts.Interventions")} — {contract.Reference} · {T("Contracts.MaxDelayShort", max)}"
-                : $"{T("Contracts.Interventions")} — {contract.Reference}";
+                ? $"{contract.Reference} · {T("Contracts.MaxDelayShort", max)}"
+                : contract.Reference;
 
         RefreshButtons();
     }
@@ -653,6 +655,8 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
         Notice(20, 590, 900, 60, "Contracts.EditorNotice");
 
         Buttons(700, 940);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.InstrumentContract");
     }
 
     private sealed record ReagentChoice(Guid Id, string Display);
@@ -762,6 +766,8 @@ internal sealed class InterventionTimesDialog : MasterDataEditor
 
         Notice(20, 76, 440, 40, "Contracts.InterventionTimesNotice");
         Buttons(140, 480);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.InterventionTimes");
     }
 
     private (CheckBox, DateTimePicker) Moment(string key, int x, DateTimeOffset? value, DateTime fallback)

@@ -29,21 +29,27 @@ public sealed class QuoteRequestView : LocalizedView
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly DataGridView _comparison = UiTheme.Grid();
     private readonly DataGridView _suppliers = UiTheme.Grid();
-    private readonly Label _heading = new();
-    private readonly Label _comparisonHeading = new();
+    // Direction A: title and count, search and chip, the requests card and the comparison card
+    // with its suppliers and its action bar.
+    private readonly Label _title = StockPage.Title();
+    private readonly Label _count = StockPage.Count();
+    private readonly StockSearchBox _search = new();
+    private readonly StockCard _comparisonCard;
     private readonly Label _suppliersHeading = new();
-    private readonly Label _legend = new();
-    private readonly CheckBox _onlyOpen = new();
+    private readonly StockFooter _legend = new();
+    private readonly CheckBox _onlyOpen = new StockChip();
+    private readonly ContextMenuStrip _more = new();
+    private readonly Button _moreButton;
 
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _new = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _sendEmail = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _markSent = UiTheme.SecondaryButton(string.Empty);
+    private readonly StockMenuButton _markSent = new();
     private readonly Button _addSupplier = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _recordOffer = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _openFile = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _recordOffer = UiTheme.SecondaryButton(string.Empty);
+    private readonly StockMenuButton _openFile = new();
     private readonly Button _award = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _cancel = UiTheme.SecondaryButton(string.Empty);
+    private readonly StockMenuButton _cancel = new();
 
     private IReadOnlyList<QuoteRequestRow> _rows = [];
     private QuoteRequestDetail? _detail;
@@ -57,6 +63,9 @@ public sealed class QuoteRequestView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
 
+        _moreButton = StockMenu.More(_more, localizer);
+        _comparisonCard = new StockCard(new Panel(), footer: _legend);
+
         BuildLayout();
         WireBehaviour();
     }
@@ -67,83 +76,52 @@ public sealed class QuoteRequestView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = StockPage.ContentPadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _onlyOpen.Font = UiTheme.Small;
-        _onlyOpen.ForeColor = UiTheme.TextSecondary;
-        _onlyOpen.AutoSize = true;
-        _onlyOpen.Location = new Point(0, 32);
         _onlyOpen.Checked = true;
-
-        _refresh.Bounds = new Rectangle(300, 26, 110, UiTheme.ButtonHeight);
-        _new.Bounds = new Rectangle(420, 26, 220, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _onlyOpen, _refresh, _new]);
-
-        var split = new ProportionalSplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 220,
-            SplitterWidth = 6,
-            BackColor = UiTheme.Surface
-        };
-
-        split.Panel1.Controls.Add(_grid);
-
-        var lower = new ProportionalSplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Vertical,
-            SplitterDistance = 640,
-            SplitterWidth = 6,
-            BackColor = UiTheme.Surface
-        };
-
-        foreach (var heading in new[] { _comparisonHeading, _suppliersHeading })
-        {
-            heading.Font = UiTheme.SectionTitle;
-            heading.ForeColor = UiTheme.TextPrimary;
-            heading.Dock = DockStyle.Top;
-            heading.Height = 26;
-        }
-
-        _legend.Font = UiTheme.Small;
-        _legend.ForeColor = UiTheme.TextSecondary;
-        _legend.Dock = DockStyle.Bottom;
-        _legend.Height = 20;
-
-        lower.Panel1.Controls.Add(_comparison);
-        lower.Panel1.Controls.Add(_legend);
-        lower.Panel1.Controls.Add(_comparisonHeading);
-        lower.Panel2.Controls.Add(_suppliers);
-        lower.Panel2.Controls.Add(_suppliersHeading);
-
-        split.Panel2.Controls.Add(lower);
-
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 52, BackColor = UiTheme.Surface };
-
-        var x = 0;
-        foreach (var button in new[] { _sendEmail, _markSent, _addSupplier, _recordOffer, _openFile, _award, _cancel })
-        {
-            button.Bounds = new Rectangle(x, 10, 160, UiTheme.ButtonHeight);
-            x += 168;
-        }
-
-        footer.Controls.AddRange([_sendEmail, _markSent, _addSupplier, _recordOffer, _openFile, _award, _cancel]);
+        var header = StockPage.Header(_title, _count, _refresh, _new);
+        ShortcutHints.Attach(_new, NewKey);
+        var filters = StockPage.Filters(_search, _onlyOpen);
 
         BuildColumns();
 
-        Controls.Add(split);
-        Controls.Add(footer);
-        Controls.Add(bar);
+        var requestsCard = new StockCard(_grid, heading: false);
+
+        // The selected request: the offers side by side, the suppliers asked, and what can be done.
+        var body = (Panel)_comparisonCard.Controls[0];
+        body.BackColor = UiTheme.SurfaceRaised;
+
+        var sides = StockPage.Beside(_comparison, new Panel(), 520);
+        sides.BackColor = sides.Panel1.BackColor = sides.Panel2.BackColor = UiTheme.SurfaceRaised;
+        sides.SplitterWidth = 9;
+        sides.Panel2.Controls.Clear();
+        _suppliers.Dock = DockStyle.Fill;
+        sides.Panel2.Controls.Add(_suppliers);
+        sides.Panel2.Controls.Add(StockPage.GridCaption(_suppliersHeading));
+
+        _more.Items.AddRange([StockMenu.Entry(_markSent), StockMenu.Entry(_openFile), StockMenu.Entry(_cancel)]);
+        var actions = StockPage.ActionBar(_sendEmail, _addSupplier, _recordOffer, _moreButton, _award);
+
+        body.Controls.Add(sides);
+        body.Controls.Add(actions);
+
+        Controls.Add(StockPage.Stack(requestsCard, _comparisonCard, 210));
+        Controls.Add(filters);
+        Controls.Add(header);
+    }
+
+    private const string NewKey = "Ctrl+N";
+
+    /// <summary>Ctrl+N opens a new request, as the key drawn on the button says.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.N) && _new.Enabled && _new.Visible)
+        {
+            _new.PerformClick();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private static void AddColumn(DataGridView grid, string name, int weight, Font? font = null,
@@ -185,6 +163,15 @@ public sealed class QuoteRequestView : LocalizedView
         _onlyOpen.CheckedChanged += async (_, _) => await LoadAsync();
         _grid.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDetailAsync());
         _grid.CellFormatting += OnRequestFormatting;
+        StockGrid.Pills(_grid, "status", tag => tag is QuoteRequestRow row
+            ? row.Status switch
+            {
+                QuoteRequestStatus.Open => StockPill.Running,
+                QuoteRequestStatus.Awarded => StockPill.Done,
+                _ => StockPill.Waiting
+            }
+            : null);
+        _search.Changed += (_, _) => StockGrid.Filter(_grid, _search.Query);
         _suppliers.SelectionChanged += (_, _) => RefreshButtons();
         _suppliers.CellFormatting += OnSupplierFormatting;
         _comparison.CellFormatting += OnComparisonFormatting;
@@ -206,6 +193,9 @@ public sealed class QuoteRequestView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _title.Text = T("Quotes.Title");
+        _search.Placeholder = T("StocksUi.SearchQuotes");
+        _moreButton.Text = T("ResultEntry.MoreActions");
         _onlyOpen.Text = T("Quotes.OnlyOpen");
         _refresh.Text = T("Action.Refresh");
         _new.Text = T("Quotes.New");
@@ -301,6 +291,7 @@ public sealed class QuoteRequestView : LocalizedView
         RenderHeading();
 
         if (keep is null && _grid.Rows.Count > 0) _grid.CurrentCell = _grid.Rows[0].Cells[0];
+        StockGrid.Filter(_grid, _search.Query);
         if (_grid.Rows.Count == 0)
         {
             _detail = null;
@@ -311,7 +302,7 @@ public sealed class QuoteRequestView : LocalizedView
     private void RenderHeading()
     {
         var open = _rows.Count(r => r.Status == QuoteRequestStatus.Open);
-        _heading.Text = $"{T("Quotes.Title")} — {_rows.Count}" + (open > 0 ? $" · {T("Quotes.OpenCount")} {open}" : string.Empty);
+        _count.Text = T("StocksUi.Quotes", _rows.Count) + (open > 0 ? $" · {T("Quotes.OpenCount")} {open}" : string.Empty);
     }
 
     private async Task LoadDetailAsync()
@@ -411,13 +402,15 @@ public sealed class QuoteRequestView : LocalizedView
                 if (supplier.SupplierId == keepSupplier) _suppliers.CurrentCell = _suppliers.Rows[index].Cells[0];
             }
 
-            _comparisonHeading.Text = $"{T("Quotes.Comparison")} — {detail.Number}" +
-                                      (detail.Subject is { Length: > 0 } subject ? $" · {subject}" : string.Empty);
+            _comparisonCard.Title.Text = T("Quotes.Comparison");
+            _comparisonCard.Note.Text = detail.Number +
+                                        (detail.Subject is { Length: > 0 } subject ? $" · {subject}" : string.Empty);
             _suppliersHeading.Text = T("Quotes.SuppliersAsked");
         }
         else
         {
-            _comparisonHeading.Text = T("Quotes.Comparison");
+            _comparisonCard.Title.Text = T("Quotes.Comparison");
+            _comparisonCard.Note.Text = string.Empty;
             _suppliersHeading.Text = T("Quotes.SuppliersAsked");
         }
 
@@ -680,7 +673,7 @@ internal sealed class QuoteRequestDialog : MasterDataEditor
 
         Label("Quotes.ItemsToQuote", 20, 70);
         _items.Dock = DockStyle.None;
-        _items.Bounds = new Rectangle(20, 90, 560, 400);
+        _items.Bounds = new Rectangle(20, 90, 560, 360);
         _items.ReadOnly = false;
         _items.Columns.Add(new DataGridViewCheckBoxColumn { Name = "include", HeaderText = "", FillWeight = 6 });
         _items.Columns.Add(new DataGridViewTextBoxColumn
@@ -718,7 +711,7 @@ internal sealed class QuoteRequestDialog : MasterDataEditor
         Controls.Add(_items);
 
         Label("Quotes.SuppliersToAsk", 600, 70);
-        _suppliers.Bounds = new Rectangle(600, 90, 280, 400);
+        _suppliers.Bounds = new Rectangle(600, 90, 280, 360);
         _suppliers.CheckOnClick = true;
         foreach (var supplier in suppliers)
             _suppliers.Items.Add(supplier.IsApproved
@@ -726,10 +719,12 @@ internal sealed class QuoteRequestDialog : MasterDataEditor
                 : $"{supplier.Name} ({localizer["Quotes.NotApproved"]})");
         Controls.Add(_suppliers);
 
-        _notes = TextField("Field.Notes", 20, 500, 860);
-        Notice(20, 552, 860, 20, "Quotes.OnContractNotice");
+        _notes = TextField("Field.Notes", 20, 460, 860);
+        Notice(20, 512, 860, 20, "Quotes.OnContractNotice");
 
-        Buttons(580, 900);
+        Buttons(540, 900);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.QuoteRequest");
     }
 
     protected override void Accept()
@@ -785,6 +780,8 @@ internal sealed class QuoteSupplierPickDialog : MasterDataEditor
         _supplier = Lookup("Inventory.Supplier", 20, 14, 440,
                            suppliers.Select(s => (s.Id, $"{s.Code} — {s.Name}")), null, allowNone: false);
         Buttons(76, 480);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.QuoteSupplierPick");
     }
 
     protected override void Accept()
@@ -865,6 +862,8 @@ internal sealed class QuoteOfferDialog : MasterDataEditor
         Controls.Add(_file);
 
         Buttons(546, 760);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.QuoteOffer");
     }
 
     private void PickFile()
