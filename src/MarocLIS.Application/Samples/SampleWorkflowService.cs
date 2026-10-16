@@ -103,6 +103,13 @@ public sealed record SampleReceptionCandidate
 
     public required MultilingualText SpecimenTypeName { get; init; }
     public MultilingualText? ContainerName { get; init; }
+
+    /// <summary>The container's cap colour, "#RRGGBB"; null when the tube has no container type.</summary>
+    public string? ContainerColourHex { get; init; }
+
+    /// <summary>Tubes of the order, this one included: the bench knows how many more to expect.</summary>
+    public int TotalSamplesInOrder { get; init; }
+
     public decimal? VolumeMl { get; init; }
     public decimal? MinimumVolumeMl { get; init; }
 
@@ -395,6 +402,18 @@ public sealed class SampleWorkflowService(
         var awaiting = await queries.GetAwaitingReceptionAsync(currentUser.SiteId, clock.Now, ct);
 
         return Result.Success(awaiting);
+    }
+
+    /// <summary>
+    /// The storage places already used on this site, offered at reception so the same fridge is
+    /// written the same way every time. The field stays free: a new place is typed in.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<string>>> GetStorageLocationsAsync(CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Samples.View);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<string>>(permitted.FirstError);
+
+        return Result.Success(await queries.GetStorageLocationsAsync(currentUser.SiteId, ct));
     }
 
     public async Task<Result<ReceptionOutcome>> ReceiveAsync(
@@ -850,6 +869,9 @@ public interface ISampleQueries
 
     Task<IReadOnlyList<SampleLabel>> GetLabelsForOrderAsync(
         Guid labOrderId, DateTimeOffset now, CancellationToken ct = default);
+
+    /// <summary>Storage places already recorded for this site's tubes, distinct and in order.</summary>
+    Task<IReadOnlyList<string>> GetStorageLocationsAsync(Guid siteId, CancellationToken ct = default);
 
     /// <summary>Minimum acceptable volume for the tube's container, for the under-fill check.</summary>
     Task<decimal?> GetMinimumVolumeAsync(Guid sampleId, CancellationToken ct = default);
