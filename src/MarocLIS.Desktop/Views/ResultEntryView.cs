@@ -3,6 +3,7 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Results;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Catalog;
+using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Results;
 using MarocLIS.Localization;
@@ -26,12 +27,17 @@ namespace MarocLIS.Desktop.Views;
 /// looked at.</item>
 /// <item><b>Calculated rows are visibly read-only</b> and recompute after each save, so a
 /// technician never wonders why the LDL will not accept a value.</item>
-/// <item><b>Flags are glyphs in their own column</b>, not colour alone — colour-blind operators
-/// and monochrome screens both exist.</item>
+/// <item><b>Flags are words and glyphs in their own column</b>, not colour alone — colour-blind
+/// operators and monochrome screens both exist.</item>
 /// <item><b>The fiche de paillasse is printed from here</b>, because this is where the values on it
 /// come back to be keyed in: the technician prints the bench's pending work, measures, writes, and
 /// returns to the same screen with the sheet in hand.</item>
 /// </list>
+/// <para>
+/// Laid out as the laboratory's « LIS · A Fluent clair » mock-up: the dossiers waiting on the left
+/// with a sector filter, the patient and the results as cards on the right, the actions on the
+/// selected line in a "more actions" menu, and the primary action last in the bottom bar.
+/// </para>
 /// </summary>
 public sealed class ResultEntryView : LocalizedView
 {
@@ -41,46 +47,73 @@ public sealed class ResultEntryView : LocalizedView
     private const string ColumnUnit = "unit";
     private const string ColumnRange = "range";
     private const string ColumnPrevious = "previous";
+    private const string ColumnOrigin = "origin";
     private const string ColumnComment = "comment";
+
+    /// <summary>The shell's id for the save shortcut, to show the key the user actually has.</summary>
+    private const string SaveShortcutId = "action.save";
+
+    private const int WorklistWidth = 280;
+    private const int WorklistRowHeight = 58;
+    private const int SectionRowHeight = 26;
 
     private readonly ResultEntryService _entry;
     private readonly BenchWorksheetService _benchSheets;
+    private readonly ResultEntryContextService _context;
     private readonly IBenchWorksheetRenderer _benchSheetRenderer;
     private readonly IDocumentOutput _documents;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<ResultEntryView>? _logger;
 
-    private readonly TextBox _scan = UiTheme.Input(260);
-    private readonly Label _scanLabel = new();
+    // ---- worklist: the dossiers with results to enter (left panel) ----
+    private readonly Label _worklistTitle = new();
+    private readonly Button _refreshWorklist = UiTheme.SecondaryButton(string.Empty);
+    private readonly TextBox _scan = UiTheme.Input(160);
     private readonly Button _load = UiTheme.SecondaryButton(string.Empty);
+    private readonly FlowLayoutPanel _sectorChips = new();
+    private readonly DataGridView _worklist = UiTheme.Grid();
     private readonly Button _benchSheet = UiTheme.SecondaryButton(string.Empty);
-    private readonly Panel _patientBar = new();
+    private readonly ToolTip _tips = new();
+    private IReadOnlyList<PendingEntryOrder> _pending = [];
+    private Dictionary<string, ResultEntryProgress> _progress = [];
+    private IReadOnlyList<ResultEntrySector> _sectors = [];
+    private string? _sectorFilter;
+    private bool _renderingWorklist;
+
+    // ---- the open dossier (right) ----
+    private readonly Panel _patientCard = new();
     private readonly Label _patientName = new();
     private readonly Label _patientDetail = new();
-    private readonly Label _orderDetail = new();
+    private readonly PillLabel _priorityPill = new();
+    private readonly PillLabel _duePill = new();
+    private readonly PillLabel _progressPill = new();
     private readonly DataGridView _grid = UiTheme.Grid();
-    private readonly Button _save = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _validate = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _history = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _notDone = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _clearValue = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _correct = UiTheme.SecondaryButton(string.Empty);
+    private readonly FlowLayoutPanel _keyHints = new();
     private readonly Label _status = new();
+    private readonly Panel _statusStrip = new();
 
-    // ---- worklist: the dossiers with results to enter ----
-    private readonly Label _worklistTitle = new();
-    private readonly DataGridView _worklist = UiTheme.Grid();
-    private readonly Button _refreshWorklist = UiTheme.SecondaryButton(string.Empty);
-    private IReadOnlyList<PendingEntryOrder> _pending = [];
-    private bool _renderingWorklist;
+    // ---- bottom bar ----
+    private readonly Button _more = UiTheme.SecondaryButton(string.Empty);
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly ToolStripMenuItem _notDone = new();
+    private readonly ToolStripMenuItem _clearValue = new();
+    private readonly ToolStripMenuItem _correct = new();
+    private readonly ToolStripMenuItem _comment = new();
+    private readonly Button _history = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _remaining = new();
+    private readonly Button _validate = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _save = UiTheme.PrimaryButton(string.Empty);
+    private string _saveShortcut = string.Empty;
 
     private ResultEntrySheet? _sheet;
     private readonly Dictionary<Guid, ResultEntryRow> _rowsById = [];
+    private Dictionary<Guid, ResultEntryOrigin> _origins = [];
 
     /// <summary>The department last printed for, offered again: a technician prints for their own bench.</summary>
     private Guid? _lastBenchDepartmentId;
 
     public ResultEntryView(ResultEntryService entry, BenchWorksheetService benchSheets,
+                           ResultEntryContextService context,
                            IBenchWorksheetRenderer benchSheetRenderer, IDocumentOutput documents,
                            IUserDialogs dialogs, ILocalizer localizer, ICultureManager cultureManager,
                            ILogger<ResultEntryView>? logger = null)
@@ -88,6 +121,7 @@ public sealed class ResultEntryView : LocalizedView
     {
         _entry = entry;
         _benchSheets = benchSheets;
+        _context = context;
         _benchSheetRenderer = benchSheetRenderer;
         _documents = documents;
         _dialogs = dialogs;
@@ -111,291 +145,408 @@ public sealed class ResultEntryView : LocalizedView
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Guid? InitialOrderId { get; set; }
 
+    private bool IsRightToLeft => RightToLeft == RightToLeft.Yes;
+
     // ---- Layout -----------------------------------------------------------------------------------
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter, UiTheme.Gutter, UiTheme.Gutter, UiTheme.Gutter);
+        Padding = new Padding(0);
 
-        // --- scan bar ---------------------------------------------------------------------------
+        // Two columns, the dossiers then the entry. A table rather than docking: it mirrors by
+        // itself in Arabic, the dossiers going to the right.
+        var columns = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+            // White, so the panels inside are not taken for cards on the work surface; the entry
+            // side sets its own surface.
+            BackColor = UiTheme.SurfaceRaised
+        };
+        columns.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, WorklistWidth));
+        columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        columns.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var scanBar = new Panel { Dock = DockStyle.Top, Height = 56, BackColor = UiTheme.Surface };
+        columns.Controls.Add(BuildWorklistPanel(), 0, 0);
+        columns.Controls.Add(BuildEntryPanel(), 1, 0);
 
-        _scanLabel.Font = UiTheme.Small;
-        _scanLabel.ForeColor = UiTheme.TextSecondary;
-        _scanLabel.AutoSize = true;
-        _scanLabel.Location = new Point(0, 4);
+        Controls.Add(columns);
+    }
+
+    /// <summary>« À saisir · N », the scan box, the sector chips, the dossiers, the bench sheet.</summary>
+    private Control BuildWorklistPanel()
+    {
+        var panel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0),
+            Padding = new Padding(0, 0, 1, 0),
+            ColumnCount = 1,
+            RowCount = 5,
+            BackColor = UiTheme.SurfaceRaised
+        };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        // The line between the dossiers and the entry, on whichever side the entry is.
+        panel.Paint += (_, e) =>
+        {
+            using var pen = new Pen(UiTheme.Border);
+            var x = IsRightToLeft ? 0 : panel.ClientSize.Width - 1;
+            e.Graphics.DrawLine(pen, x, 0, x, panel.ClientSize.Height);
+        };
+        panel.RightToLeftChanged += (_, _) =>
+        {
+            panel.Padding = IsRightToLeft ? new Padding(1, 0, 0, 0) : new Padding(0, 0, 1, 0);
+            panel.Invalidate();
+        };
+
+        // --- title and refresh --------------------------------------------------------------------
+
+        var titleRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(14, 12, 14, 6),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        _worklistTitle.Font = EntryPaint.Resized(UiTheme.SectionTitle, 12.75f);
+        _worklistTitle.ForeColor = UiTheme.TextPrimary;
+        _worklistTitle.AutoSize = true;
+        _worklistTitle.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _worklistTitle.Margin = new Padding(0, 2, 0, 0);
+
+        // Icon only: the screen refreshes on F5 as well, and the panel is narrow.
+        _refreshWorklist.Size = new Size(30, 28);
+        _refreshWorklist.Padding = new Padding(0);
+        _refreshWorklist.Margin = new Padding(0);
+        _refreshWorklist.TabStop = false;
+        ButtonIcons.Set(_refreshWorklist, Glyph.RefreshCw, always: true);
+
+        titleRow.Controls.Add(_worklistTitle, 0, 0);
+        titleRow.Controls.Add(_refreshWorklist, 1, 0);
+
+        // --- scan box -------------------------------------------------------------------------------
+
+        var scanRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(14, 0, 14, 8),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        scanRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        scanRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         // An accession number and a barcode are Latin tokens; the field stays LTR in Arabic.
         _scan.Tag = UiTags.LatinValue;
         _scan.Font = UiTheme.Monospace;
-        _scan.Location = new Point(0, 22);
+        _scan.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _scan.Margin = new Padding(0, 1, 6, 0);
 
-        _load.Bounds = new Rectangle(270, 21, 110, UiTheme.ButtonHeight);
+        _load.AutoSize = true;
+        _load.MinimumSize = new Size(0, UiTheme.ButtonHeight - 2);
+        _load.Height = UiTheme.ButtonHeight - 2;
+        _load.Margin = new Padding(0);
 
-        // At the far end of the scan bar, away from the scan box: it is used once a run, not once a
-        // tube, and must not be what an Enter or a stray click lands on mid-entry.
-        _benchSheet.Size = new Size(200, UiTheme.ButtonHeight);
+        scanRow.Controls.Add(_scan, 0, 0);
+        scanRow.Controls.Add(_load, 1, 0);
+
+        // --- sector chips -------------------------------------------------------------------------
+
+        _sectorChips.Dock = DockStyle.Fill;
+        _sectorChips.AutoSize = true;
+        _sectorChips.WrapContents = true;
+        _sectorChips.Margin = new Padding(14, 0, 14, 6);
+        _sectorChips.BackColor = UiTheme.SurfaceRaised;
+
+        // --- the dossiers -------------------------------------------------------------------------
+
+        BuildWorklistColumns();
+        _worklist.ColumnHeadersVisible = false;
+        _worklist.CellBorderStyle = DataGridViewCellBorderStyle.None;
+        _worklist.RowTemplate.Height = WorklistRowHeight;
+        _worklist.Margin = new Padding(0);
+        _worklist.ShowCellToolTips = true;
+        _worklist.CellPainting += PaintWorklistCell;
+
+        // --- bench sheet ----------------------------------------------------------------------------
+
+        // At the foot of the list, away from the scan box: it is used once a run, not once a tube,
+        // and must not be what an Enter or a stray click lands on mid-entry.
+        _benchSheet.Dock = DockStyle.Fill;
+        _benchSheet.Height = UiTheme.ButtonHeight + 2;
+        _benchSheet.Margin = new Padding(14, 10, 14, 14);
         _benchSheet.TabStop = false;
 
-        scanBar.Controls.AddRange([_scanLabel, _scan, _load, _benchSheet]);
-        scanBar.Resize += (_, _) =>
-            _benchSheet.Location = new Point(
-                Math.Max(_load.Right + UiTheme.Gutter, scanBar.ClientSize.Width - _benchSheet.Width), 21);
+        panel.Controls.Add(titleRow, 0, 0);
+        panel.Controls.Add(scanRow, 0, 1);
+        panel.Controls.Add(_sectorChips, 0, 2);
+        panel.Controls.Add(_worklist, 0, 3);
+        panel.Controls.Add(_benchSheet, 0, 4);
 
-        // --- patient context --------------------------------------------------------------------
+        return panel;
+    }
 
-        _patientBar.Dock = DockStyle.Top;
-        _patientBar.Height = 58;
-        _patientBar.BackColor = UiTheme.SurfaceRaised;
-        _patientBar.Padding = new Padding(UiTheme.Gutter, UiTheme.GutterTight, UiTheme.Gutter, 0);
-        _patientBar.Visible = false;
+    /// <summary>The patient card, the results card, the status line and the action bar.</summary>
+    private Control BuildEntryPanel()
+    {
+        var host = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0), BackColor = UiTheme.Surface };
 
-        _patientName.Font = UiTheme.SectionTitle;
+        // --- action bar -----------------------------------------------------------------------------
+
+        // In a strip of its own: a white table straight on the work surface would be drawn as a card.
+        var strip = new EntryStrip { Dock = DockStyle.Bottom, Height = 56, BackColor = UiTheme.SurfaceRaised };
+        var bar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 6,
+            RowCount = 1,
+            Padding = new Padding(24, 11, 24, 11),
+            Margin = new Padding(0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        strip.Controls.Add(bar);
+
+        // On a 1366-pixel screen the count does not fit on one line beside the four buttons: it
+        // takes what is left and wraps onto two, rather than pushing a button out of the bar.
+        void FitRemaining()
+        {
+            var used = bar.Padding.Horizontal + _remaining.Margin.Horizontal
+                       + new[] { _more, _history, _validate, _save }
+                           .Where(b => b.Visible)
+                           .Sum(b => b.PreferredSize.Width + b.Margin.Horizontal);
+            var left = Math.Max(90, bar.ClientSize.Width - used);
+
+            // In the body size when it fits on one line, else smaller, on two lines at most.
+            var font = TextRenderer.MeasureText(_remaining.Text, UiTheme.Body).Width <= left ? UiTheme.Body : UiTheme.Small;
+            if (_remaining.Font != font) _remaining.Font = font;
+            if (_remaining.MaximumSize.Width != left) _remaining.MaximumSize = new Size(left, 0);
+        }
+
+        bar.Resize += (_, _) => FitRemaining();
+        _remaining.TextChanged += (_, _) => FitRemaining();
+
+        foreach (var button in new[] { _more, _history, _validate, _save })
+        {
+            button.AutoSize = true;
+            button.MinimumSize = new Size(0, 34);
+            button.Height = 34;
+            button.Margin = new Padding(0, 0, 8, 0);
+        }
+
+        _save.Margin = new Padding(0);
+
+        // « Plus d'actions ▾ »: the chevron drawn after the caption, where a font may lack the glyph.
+        _more.Paint += PaintMoreChevron;
+        _more.RightToLeftChanged += (_, _) =>
+            _more.Padding = IsRightToLeft ? new Padding(26, 0, 12, 0) : new Padding(12, 0, 26, 0);
+        _more.Padding = new Padding(12, 0, 26, 0);
+        _history.Enabled = false;
+        _validate.Enabled = false;
+
+        _remaining.AutoSize = true;
+        _remaining.Anchor = AnchorStyles.Right;
+        _remaining.TextAlign = ContentAlignment.MiddleRight;
+        _remaining.Font = UiTheme.Body;
+        _remaining.ForeColor = UiTheme.TextSecondary;
+        _remaining.Margin = new Padding(8, 0, 12, 0);
+
+        var spacer = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0), BackColor = UiTheme.SurfaceRaised };
+
+        bar.Controls.Add(_more, 0, 0);
+        bar.Controls.Add(_history, 1, 0);
+        bar.Controls.Add(spacer, 2, 0);
+        bar.Controls.Add(_remaining, 3, 0);
+        bar.Controls.Add(_validate, 4, 0);
+        bar.Controls.Add(_save, 5, 0);
+
+        // The selected line's actions, one click further away than the everyday ones: not done,
+        // clear, correct a released value, and the technical comment.
+        _moreMenu.Items.AddRange([_notDone, _clearValue, _correct, new ToolStripSeparator(), _comment]);
+        _moreMenu.Font = UiTheme.Body;
+        _notDone.Enabled = _clearValue.Enabled = _correct.Enabled = _comment.Enabled = false;
+
+        // --- status line ------------------------------------------------------------------------------
+        // What the last action said — saved, refused, the tube not received. Shown above the bar
+        // only while there is something to say.
+
+        _statusStrip.Dock = DockStyle.Bottom;
+        _statusStrip.Height = 24;
+        _statusStrip.Padding = new Padding(24, 2, 24, 2);
+        _statusStrip.BackColor = UiTheme.Surface;
+        _statusStrip.Tag = UiTags.OwnLayout;
+        _statusStrip.Visible = false;
+
+        _status.Dock = DockStyle.Fill;
+        _status.AutoSize = false;
+        _status.AutoEllipsis = true;
+        _status.Font = UiTheme.Small;
+        _status.ForeColor = UiTheme.TextSecondary;
+        _status.TextAlign = ContentAlignment.MiddleLeft;
+        _status.TextChanged += (_, _) =>
+        {
+            _statusStrip.Visible = !string.IsNullOrEmpty(_status.Text);
+            _tips.SetToolTip(_status, _status.Text);
+        };
+        _statusStrip.Controls.Add(_status);
+
+        // --- cards ------------------------------------------------------------------------------------
+
+        var cards = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Padding = new Padding(24, 18, 24, 14),
+            Margin = new Padding(0),
+            BackColor = UiTheme.Surface
+        };
+        cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        cards.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        cards.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        cards.Controls.Add(BuildPatientCard(), 0, 0);
+        cards.Controls.Add(BuildResultsCard(), 0, 1);
+
+        host.Controls.Add(cards);
+        host.Controls.Add(_statusStrip);
+        host.Controls.Add(strip);
+
+        return host;
+    }
+
+    private Control BuildPatientCard()
+    {
+        _patientCard.Dock = DockStyle.Fill;
+        _patientCard.Height = 66;
+        _patientCard.Margin = new Padding(0, 0, 0, 14);
+        _patientCard.Padding = new Padding(16, 10, 16, 10);
+        _patientCard.BackColor = UiTheme.SurfaceRaised;
+        _patientCard.Visible = false;
+        UiChrome.AsCard(_patientCard);
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 2,
+            Margin = new Padding(0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+
+        _patientName.Font = EntryPaint.Resized(UiTheme.SectionTitle, 12.75f);
         _patientName.ForeColor = UiTheme.TextPrimary;
         _patientName.AutoSize = true;
-        _patientName.Location = new Point(UiTheme.Gutter, 6);
+        _patientName.AutoEllipsis = true;
+        _patientName.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
+        _patientName.Margin = new Padding(0);
 
-        _patientDetail.Font = UiTheme.Small;
+        _patientDetail.Font = UiTheme.Body;
         _patientDetail.ForeColor = UiTheme.TextSecondary;
         _patientDetail.AutoSize = true;
-        _patientDetail.Location = new Point(UiTheme.Gutter, 32);
+        _patientDetail.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+        _patientDetail.Margin = new Padding(0, 2, 0, 0);
 
-        _orderDetail.Font = UiTheme.SmallBold;
-        _orderDetail.ForeColor = UiTheme.Accent;
-        _orderDetail.AutoSize = true;
-        _orderDetail.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        foreach (var pill in new[] { _priorityPill, _duePill, _progressPill })
+        {
+            pill.Font = UiTheme.SmallBold;
+            pill.Anchor = AnchorStyles.None;
+            pill.Margin = new Padding(12, 0, 0, 0);
+            pill.Visible = false;
+        }
 
-        _patientBar.Controls.AddRange([_patientName, _patientDetail, _orderDetail]);
-        // Re-placed when its text changes as well: it sizes itself to the text, and placed from its
-        // previous width it ran off the right edge of the panel.
-        void PlaceOrderDetail() =>
-            _orderDetail.Location = new Point(
-                Math.Max(_patientName.Right + UiTheme.Gutter,
-                         _patientBar.ClientSize.Width - _orderDetail.Width - UiTheme.Gutter), 8);
+        layout.Controls.Add(_patientName, 0, 0);
+        layout.Controls.Add(_patientDetail, 0, 1);
+        layout.Controls.Add(_priorityPill, 1, 0);
+        layout.SetRowSpan(_priorityPill, 2);
+        layout.Controls.Add(_duePill, 2, 0);
+        layout.SetRowSpan(_duePill, 2);
+        layout.Controls.Add(_progressPill, 3, 0);
+        layout.SetRowSpan(_progressPill, 2);
 
-        _patientBar.Resize += (_, _) => PlaceOrderDetail();
-        _orderDetail.SizeChanged += (_, _) => PlaceOrderDetail();
+        _patientCard.Controls.Add(layout);
+        return _patientCard;
+    }
 
-        // --- grid --------------------------------------------------------------------------------
+    private Control BuildResultsCard()
+    {
+        var card = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0),
+            Padding = new Padding(1),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        UiChrome.AsCard(card);
 
         BuildColumns();
-        _grid.ReadOnly = false;          // only the value and comment columns are writable
+        _grid.ReadOnly = false;          // only the value column is writable
         _grid.EditMode = DataGridViewEditMode.EditOnEnter;
         _grid.StandardTab = false;
         _grid.MultiSelect = false;
         _grid.AllowUserToResizeColumns = true;
+        _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(12, 6, 12, 6);
+        _grid.DefaultCellStyle.Padding = new Padding(12, 0, 12, 0);
 
-        var gridHost = new Panel
+        // The keys the grid actually answers to, under it: a hint strip in the work-surface colour.
+        _keyHints.Dock = DockStyle.Bottom;
+        _keyHints.Height = 34;
+        _keyHints.WrapContents = false;
+        _keyHints.AutoScroll = false;
+        _keyHints.Padding = new Padding(10, 9, 10, 0);
+        _keyHints.BackColor = UiTheme.Surface;
+        _keyHints.Paint += (_, e) =>
         {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(0, UiTheme.GutterTight, 0, 0),
-            BackColor = UiTheme.Surface
-        };
-        gridHost.Controls.Add(_grid);
-
-        // --- actions -----------------------------------------------------------------------------
-
-        // Two rows: the everyday actions, then those on the selected line — not done, clear, and the
-        // correction of a released value — with the status line beside them.
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 92, BackColor = UiTheme.Surface };
-
-        _save.Bounds = new Rectangle(0, 10, 190, UiTheme.ButtonHeight);
-        _validate.Bounds = new Rectangle(200, 10, 220, UiTheme.ButtonHeight);
-        _validate.Enabled = false;
-
-        _history.Bounds = new Rectangle(430, 10, 170, UiTheme.ButtonHeight);
-        _history.Enabled = false;
-
-        _notDone.Bounds = new Rectangle(0, 52, 150, UiTheme.ButtonHeight);
-        _clearValue.Bounds = new Rectangle(160, 52, 150, UiTheme.ButtonHeight);
-        _correct.Bounds = new Rectangle(320, 52, 240, UiTheme.ButtonHeight);
-        _notDone.Enabled = _clearValue.Enabled = _correct.Enabled = false;
-
-        _status.Bounds = new Rectangle(614, 16, 620, 20);
-        _status.Font = UiTheme.Small;
-        _status.ForeColor = UiTheme.TextSecondary;
-        _status.AutoSize = false;
-
-        actions.Controls.AddRange([_save, _validate, _history, _notDone, _clearValue, _correct, _status]);
-
-        var entryHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        entryHost.Controls.Add(gridHost);
-        entryHost.Controls.Add(actions);
-        entryHost.Controls.Add(_patientBar);
-        entryHost.Controls.Add(scanBar);
-
-        // --- worklist ----------------------------------------------------------------------------
-        // The screen used to open on an empty grid and a scan box: without a tube in hand there was
-        // no way to see what was waiting. The dossiers with results to enter are listed on the left.
-
-        var worklistBar = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = UiTheme.Surface };
-
-        _worklistTitle.Font = UiTheme.SectionTitle;
-        _worklistTitle.ForeColor = UiTheme.TextPrimary;
-        _worklistTitle.AutoSize = true;
-        _worklistTitle.Location = new Point(0, 8);
-
-        _refreshWorklist.Size = new Size(140, UiTheme.ButtonHeight - 4);
-        _refreshWorklist.TabStop = false;
-
-        worklistBar.Controls.AddRange([_worklistTitle, _refreshWorklist]);
-        // Placed again when the title changes too: "À saisir (12)" is wider than the first caption.
-        void PlaceRefresh() =>
-            _refreshWorklist.Location = new Point(
-                Math.Max(_worklistTitle.Right + UiTheme.Gutter,
-                         worklistBar.ClientSize.Width - _refreshWorklist.Width - UiTheme.GutterTight), 4);
-
-        worklistBar.Resize += (_, _) => PlaceRefresh();
-        _worklistTitle.SizeChanged += (_, _) => PlaceRefresh();
-
-        BuildWorklistColumns();
-
-        var worklistHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        worklistHost.Controls.Add(_worklist);
-        worklistHost.Controls.Add(worklistBar);
-
-        var split = new ProportionalSplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Vertical,
-            SplitterDistance = 360,
-            SplitterWidth = 6,
-            BackColor = UiTheme.Surface
+            using var pen = new Pen(UiTheme.Border);
+            e.Graphics.DrawLine(pen, 0, 0, _keyHints.Width, 0);
         };
 
-        split.Panel1.Controls.Add(worklistHost);
-        split.Panel2.Controls.Add(entryHost);
-        split.Panel2.Padding = new Padding(UiTheme.GutterTight, 0, 0, 0);
-
-        Controls.Add(split);
+        card.Controls.Add(_grid);
+        card.Controls.Add(_keyHints);
+        return card;
     }
 
     private void BuildWorklistColumns()
     {
         _worklist.Columns.Clear();
 
-        void Add(string name, int weight, Font? font = null, bool right = false)
-            => _worklist.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = name, FillWeight = weight, ReadOnly = true,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
-                DefaultCellStyle = new DataGridViewCellStyle
-                {
-                    Font = font ?? UiTheme.Body,
-                    Alignment = right ? DataGridViewContentAlignment.MiddleRight
-                                      : DataGridViewContentAlignment.MiddleLeft
-                }
-            });
-
-        Add("accession", 26, UiTheme.Monospace);
-        Add("patient", 40);
-        Add("pending", 10, UiTheme.MonospaceBold, right: true);
-        Add("received", 16, UiTheme.Monospace, right: true);
-        Add("departments", 14, UiTheme.Small);
-
-        _worklist.Columns["patient"]!.MinimumWidth = 130;
-    }
-
-    // The worklist, a click on it and a scan all read through this screen's one database
-    // context, which refuses a second query while one is running: a click raised both
-    // SelectionChanged and CellClick, and the second load failed with "A second operation was
-    // started on this context instance". Every load now waits for the one before it.
-    private readonly SemaphoreSlim _loadGate = new(1, 1);
-
-    private async Task LoadWorklistAsync(CancellationToken ct = default)
-    {
-        await _loadGate.WaitAsync(CancellationToken.None);
-        try
+        // One painted column: name and status on the first line, file, analyses and due time on
+        // the second. The cell's text is what a print of the list or a screen reader gets.
+        _worklist.Columns.Add(new DataGridViewTextBoxColumn
         {
-            await LoadWorklistCoreAsync(ct);
-        }
-        finally
-        {
-            _loadGate.Release();
-        }
-    }
-
-    private async Task LoadWorklistCoreAsync(CancellationToken ct)
-    {
-        try
-        {
-            var result = await _benchSheets.GetPendingOrdersAsync(ct);
-
-            if (result.IsFailure)
-            {
-                // Without the right to enter results the list stays empty; the scan box still works
-                // for the screens that only read.
-                _pending = [];
-            }
-            else
-            {
-                _pending = result.Value;
-            }
-
-            RenderWorklist();
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away mid-load.
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Loading the result entry worklist failed.");
-        }
-    }
-
-    private void RenderWorklist()
-    {
-        var current = _sheet?.AccessionNumber;
-
-        _renderingWorklist = true;
-
-        try
-        {
-            _worklist.SuspendLayout();
-            _worklist.Rows.Clear();
-
-            foreach (var order in _pending)
-            {
-                var index = _worklist.Rows.Add(
-                    order.AccessionNumber,
-                    order.PatientName,
-                    order.PendingAnalyses.ToString(),
-                    order.ReceivedAt?.ToLocalTime().ToString("dd/MM HH:mm") ?? string.Empty,
-                    order.Departments);
-
-                var row = _worklist.Rows[index];
-                row.Tag = order.AccessionNumber;
-
-                if (order.IsUrgent)
-                {
-                    row.DefaultCellStyle.ForeColor = UiTheme.Critical;
-                    row.DefaultCellStyle.Font = UiTheme.BodyBold;
-                }
-            }
-
-            _worklist.ResumeLayout(performLayout: true);
-            _worklist.ClearSelection();
-
-            if (current is not null)
-            {
-                var row = _worklist.Rows.Cast<DataGridViewRow>()
-                    .FirstOrDefault(r => r.Tag is string accession && accession == current);
-
-                if (row is not null)
-                {
-                    _worklist.CurrentCell = row.Cells[0];
-                    row.Selected = true;
-                }
-            }
-
-            _worklistTitle.Text = T("ResultEntry.Worklist", _pending.Count);
-        }
-        finally
-        {
-            _renderingWorklist = false;
-        }
+            Name = "dossier",
+            ReadOnly = true,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+        });
     }
 
     private void BuildColumns()
@@ -405,76 +556,89 @@ public sealed class ResultEntryView : LocalizedView
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = ColumnParameter,
-            FillWeight = 34,
+            FillWeight = 30,
             ReadOnly = true,
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                Font = EntryPaint.Resized(UiTheme.BodyBold, UiTheme.GridBody.Size)
+            },
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = ColumnValue,
-            FillWeight = 14,
+            FillWeight = 13,
             // Monospaced and right-aligned: digits line up down the column, which is how a
-            // technician spots the value with an extra zero.
+            // technician spots the value with an extra zero. The padding is the input box drawn
+            // round the value; the editor sits inside it.
             DefaultCellStyle = new DataGridViewCellStyle
             {
-                Font = UiTheme.MonospaceBold,
-                Alignment = DataGridViewContentAlignment.MiddleRight
+                Font = UiTheme.Monospace,
+                Alignment = DataGridViewContentAlignment.MiddleRight,
+                Padding = new Padding(14, 6, 14, 6)
             },
+            HeaderCell = { Style = { Alignment = DataGridViewContentAlignment.MiddleRight } },
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = ColumnFlag,
-            FillWeight = 6,
+            FillWeight = 12,
             ReadOnly = true,
+            DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.SmallBold },
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        });
+
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = ColumnUnit, FillWeight = 8, ReadOnly = true,
+            DefaultCellStyle = new DataGridViewCellStyle { ForeColor = UiTheme.TextSecondary },
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        });
+
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = ColumnRange, FillWeight = 14, ReadOnly = true,
             DefaultCellStyle = new DataGridViewCellStyle
             {
-                Font = UiTheme.MonospaceBold,
-                Alignment = DataGridViewContentAlignment.MiddleCenter
+                Font = UiTheme.Monospace, ForeColor = UiTheme.TextSecondary
             },
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
-            Name = ColumnUnit, FillWeight = 9, ReadOnly = true,
-            DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.Small },
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = ColumnRange, FillWeight = 16, ReadOnly = true,
-            DefaultCellStyle = new DataGridViewCellStyle
-            {
-                Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary
-            },
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = ColumnPrevious, FillWeight = 11, ReadOnly = true,
+            Name = ColumnPrevious, FillWeight = 12, ReadOnly = true,
             DefaultCellStyle = new DataGridViewCellStyle
             {
                 Font = UiTheme.Monospace,
-                ForeColor = UiTheme.TextSecondary,
-                Alignment = DataGridViewContentAlignment.MiddleRight
+                ForeColor = UiTheme.TextSecondary
             },
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
-            Name = ColumnComment, FillWeight = 10,
-            DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.Small },
+            Name = ColumnOrigin, FillWeight = 11, ReadOnly = true,
+            DefaultCellStyle = new DataGridViewCellStyle { ForeColor = UiTheme.TextSecondary },
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        });
+
+        // The technical comment keeps its cell — typed comments are read, kept across a language
+        // switch and saved from it as before — but is edited with F3 or "Plus d'actions", and shown
+        // as a mark and a tooltip on the parameter, so the seven columns fit a 1366-pixel screen.
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = ColumnComment, Visible = false,
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
 
         // The parameter name is what the technician reads the value against: never "Polynucléaires …".
-        _grid.Columns[ColumnParameter]!.MinimumWidth = 210;
+        _grid.Columns[ColumnParameter]!.MinimumWidth = 190;
+        _grid.Columns[ColumnValue]!.MinimumWidth = 104;
+        _grid.Columns[ColumnFlag]!.MinimumWidth = 86;
     }
 
     private void WireBehaviour()
@@ -508,6 +672,10 @@ public sealed class ResultEntryView : LocalizedView
             await LoadAsync(_scan.Text);
         };
 
+        // Typing narrows the list to the dossiers whose number or name contains the text; a tube
+        // barcode matches none of them and is resolved on Enter as before.
+        _scan.TextChanged += (_, _) => RenderWorklist();
+
         // Busy while saving: leaving the screen mid-save no longer disposes the context under it.
         _save.Click += async (_, _) => await RunBusyAsync(SubmitAsync);
         _validate.Click += async (_, _) => await RunBusyAsync(TechnicallyValidateAsync);
@@ -527,12 +695,19 @@ public sealed class ResultEntryView : LocalizedView
             UpdateRowActions();
         };
 
-        // The selected line's actions. Gated like the buttons beside them; the service checks again.
+        // The selected line's actions, in the "more actions" menu. Gated like the buttons they
+        // were; the service checks again.
+        _more.Click += (_, _) =>
+        {
+            UpdateRowActions();
+            _moreMenu.RightToLeft = RightToLeft;
+            _moreMenu.Show(_more, new Point(IsRightToLeft ? _more.Width : 0, _more.Height));
+        };
         _notDone.Click += async (_, _) => await RunBusyAsync(MarkSelectedNotDoneAsync);
         _clearValue.Click += async (_, _) => await RunBusyAsync(ClearSelectedAsync);
         _correct.Click += async (_, _) => await RunBusyAsync(CorrectSelectedAsync);
-        PermissionGate.Require(Permissions.Results.Enter, _notDone, _clearValue);
-        PermissionGate.Require(Permissions.Results.Unvalidate, _correct);
+        _comment.Click += (_, _) => EditSelectedComment();
+
         _grid.CellDoubleClick += async (_, e) =>
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
@@ -547,6 +722,55 @@ public sealed class ResultEntryView : LocalizedView
         _grid.KeyDown += OnGridKeyDown;
         _grid.CellFormatting += OnCellFormatting;
         _grid.CellBeginEdit += OnCellBeginEdit;
+        _grid.CellPainting += PaintResultCell;
+        _grid.RowPostPaint += PaintSectionRow;
+        _grid.CellValueChanged += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _grid.Columns[e.ColumnIndex].Name == ColumnValue)
+                ShowRemaining();
+        };
+        _grid.EditingControlShowing += (_, e) =>
+        {
+            // The editor fills the input box drawn in the cell, white on the selected line's tint.
+            e.Control.BackColor = UiTheme.SurfaceRaised;
+            _grid.EditingPanel.BackColor = UiTheme.AccentSubtle;
+        };
+        _grid.EditingPanel.Paint += (_, e) =>
+        {
+            var panel = _grid.EditingPanel;
+            var box = new Rectangle(4, 2, panel.Width - 9, panel.Height - 5);
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var path = UiChrome.RoundedRectangle(box, 4);
+            using var fill = new SolidBrush(UiTheme.SurfaceRaised);
+            e.Graphics.FillPath(fill, path);
+            using var pen = new Pen(UiTheme.Accent, 2);
+            e.Graphics.DrawPath(pen, path);
+        };
+    }
+
+    /// <summary>
+    /// The grid's keys, read before the cell editor gets them: Enter and Shift+Enter move down and
+    /// up the values to enter, F3 opens the technical comment of the line.
+    /// </summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (_grid.ContainsFocus)
+        {
+            switch (keyData)
+            {
+                case Keys.Enter:
+                    MoveToEditable(+1);
+                    return true;
+                case Keys.Shift | Keys.Enter:
+                    MoveToEditable(-1);
+                    return true;
+                case Keys.F3:
+                    EditSelectedComment();
+                    return true;
+            }
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private void OnGridKeyDown(object? sender, KeyEventArgs e)
@@ -554,17 +778,26 @@ public sealed class ResultEntryView : LocalizedView
         if (e.KeyCode != Keys.Enter) return;
 
         e.SuppressKeyPress = true;
+        MoveToEditable(e.Shift ? -1 : +1);
+    }
+
+    /// <summary>
+    /// Commits the cell and moves to the next line that takes a value in <paramref name="step"/>'s
+    /// direction, skipping calculated lines, headings and section rows. Past the last one, the
+    /// focus goes to Enregistrer.
+    /// </summary>
+    private void MoveToEditable(int step)
+    {
         _grid.EndEdit();
 
         var column = _grid.CurrentCell?.ColumnIndex ?? 0;
-        var next = (_grid.CurrentCell?.RowIndex ?? -1) + 1;
+        var next = (_grid.CurrentCell?.RowIndex ?? -1) + step;
 
-        // Skip read-only rows (calculated parameters and headings) on the way down.
-        while (next < _grid.Rows.Count && _grid.Rows[next].Cells[ColumnValue].ReadOnly) next++;
+        while (next >= 0 && next < _grid.Rows.Count && _grid.Rows[next].Cells[ColumnValue].ReadOnly) next += step;
 
-        if (next < _grid.Rows.Count)
+        if (next >= 0 && next < _grid.Rows.Count)
             _grid.CurrentCell = _grid.Rows[next].Cells[column];
-        else
+        else if (step > 0)
             _save.Focus();
     }
 
@@ -592,7 +825,8 @@ public sealed class ResultEntryView : LocalizedView
     }
 
     /// <summary>
-    /// Paints clinical state. Colour <em>and</em> weight <em>and</em> a glyph, never colour alone.
+    /// Paints clinical state. Colour <em>and</em> weight <em>and</em> a word with a glyph, never
+    /// colour alone.
     /// </summary>
     private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
@@ -600,23 +834,35 @@ public sealed class ResultEntryView : LocalizedView
         if (_grid.Rows[e.RowIndex].Tag is not Guid id) return;
         if (!_rowsById.TryGetValue(id, out var row)) return;
 
+        var name = _grid.Columns[e.ColumnIndex].Name;
         var appearance = UiTheme.ForInterpretation(row.Interpretation);
 
-        if (_grid.Columns[e.ColumnIndex].Name is ColumnValue or ColumnFlag)
+        if (name == ColumnValue)
         {
             e.CellStyle!.ForeColor = appearance.Foreground;
-            e.CellStyle.BackColor = appearance.Background;
 
             if (appearance.Bold)
                 e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Monospace, FontStyle.Bold);
         }
 
+        // « — » for no antériorité or no origin yet, in the face of the figures beside it.
+        if (name == ColumnOrigin && e.Value is "—") e.CellStyle!.Font = UiTheme.Monospace;
+
+        // A typed technical comment is marked on the parameter, and read in its tooltip.
+        if (name == ColumnParameter
+            && _grid.Rows[e.RowIndex].Cells[ColumnComment].Value is string comment
+            && !string.IsNullOrWhiteSpace(comment) && e.Value is string text)
+        {
+            e.Value = text + "  ✎";
+            e.FormattingApplied = true;
+        }
+
         if (row.IsHeading)
         {
             e.CellStyle!.BackColor = UiTheme.SurfaceSunken;
-            e.CellStyle.Font = new Font(UiTheme.Body, FontStyle.Bold | FontStyle.Italic);
+            e.CellStyle.Font = new Font(UiTheme.GridBody, FontStyle.Bold | FontStyle.Italic);
         }
-        else if (row.IsReadOnly && _grid.Columns[e.ColumnIndex].Name == ColumnValue)
+        else if (row.IsReadOnly && name == ColumnValue)
         {
             // Calculated: visibly derived rather than simply refusing input.
             e.CellStyle!.BackColor = UiTheme.SurfaceSunken;
@@ -624,36 +870,233 @@ public sealed class ResultEntryView : LocalizedView
         }
     }
 
+    /// <summary>
+    /// The value as an input box on a line that takes one, and the indicator as a pill: « ▲ Haut »
+    /// in the warning pair, « ▼ Bas » in the info pair, critical in the critical pair, then the
+    /// result's other flags (CIQ, Δ, ×…) as before.
+    /// </summary>
+    private void PaintResultCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null) return;
+        if (_grid.Rows[e.RowIndex].Tag is not Guid id || !_rowsById.TryGetValue(id, out var row)) return;
+
+        var name = _grid.Columns[e.ColumnIndex].Name;
+        var rtl = IsRightToLeft;
+
+        if (name == ColumnValue && !_grid.Rows[e.RowIndex].Cells[ColumnValue].ReadOnly)
+        {
+            e.PaintBackground(e.ClipBounds, (e.State & DataGridViewElementStates.Selected) != 0);
+
+            var box = new Rectangle(e.CellBounds.X + 8, e.CellBounds.Y + 4,
+                                    e.CellBounds.Width - 17, e.CellBounds.Height - 9);
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (var path = UiChrome.RoundedRectangle(box, 4))
+            {
+                using var fill = new SolidBrush(UiTheme.SurfaceRaised);
+                e.Graphics.FillPath(fill, path);
+                using var pen = new Pen(UiTheme.BorderStrong);
+                e.Graphics.DrawPath(pen, path);
+            }
+
+            var text = e.FormattedValue?.ToString() ?? string.Empty;
+            var textBounds = new Rectangle(box.X + 8, box.Y, box.Width - 16, box.Height);
+            // A number reads the same in both directions: right-aligned under the header.
+            TextRenderer.DrawText(e.Graphics, text, e.CellStyle?.Font ?? UiTheme.Monospace, textBounds,
+                                  e.CellStyle?.ForeColor ?? UiTheme.TextPrimary,
+                                  TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+                                  | (rtl ? TextFormatFlags.Left : TextFormatFlags.Right)
+                                  | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            e.Handled = true;
+            return;
+        }
+
+        if (name == ColumnFlag)
+        {
+            e.PaintBackground(e.ClipBounds, (e.State & DataGridViewElementStates.Selected) != 0);
+
+            var x = e.CellBounds.X + 10;
+            if (Indicator(row.Interpretation) is { } indicator)
+            {
+                var size = EntryPaint.MeasurePill(indicator.Text, UiTheme.SmallBold, 8);
+                var pill = EntryPaint.Mirror(
+                    new Rectangle(x, e.CellBounds.Y + (e.CellBounds.Height - size.Height) / 2,
+                                  Math.Min(size.Width, e.CellBounds.Width - 14), size.Height),
+                    e.CellBounds, rtl);
+                EntryPaint.DrawPill(e.Graphics, pill, indicator.Text, UiTheme.SmallBold, indicator.Colours, rtl);
+                x += size.Width + 6;
+            }
+
+            var glyphs = UiTheme.FlagGlyphs(row.Flags);
+            if (glyphs.Length > 0 && x < e.CellBounds.Right - 8)
+            {
+                var rest = EntryPaint.Mirror(new Rectangle(x, e.CellBounds.Y, e.CellBounds.Right - x - 4,
+                                                           e.CellBounds.Height), e.CellBounds, rtl);
+                TextRenderer.DrawText(e.Graphics, glyphs, UiTheme.MonospaceBold, rest, UiTheme.Abnormal,
+                                      TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+                                      | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis
+                                      | (rtl ? TextFormatFlags.Right | TextFormatFlags.RightToLeft : TextFormatFlags.Left));
+            }
+
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>The indicator pill of an interpretation; null for a normal or uninterpretable value.</summary>
+    private (string Text, (Color Back, Color Fore) Colours)? Indicator(ResultInterpretation interpretation) =>
+        interpretation switch
+        {
+            ResultInterpretation.High => ($"▲ {T("ResultEntry.FlagHigh")}", EntryPaint.Warning),
+            ResultInterpretation.Low => ($"▼ {T("ResultEntry.FlagLow")}", EntryPaint.Info),
+            ResultInterpretation.CriticalHigh => ($"▲▲ {T("ResultEntry.FlagCritical")}", EntryPaint.Critical),
+            ResultInterpretation.CriticalLow => ($"▼▼ {T("ResultEntry.FlagCritical")}", EntryPaint.Critical),
+            ResultInterpretation.Abnormal => ($"◆ {T("Interpretation.Abnormal")}", EntryPaint.Warning),
+            _ => null
+        };
+
+    /// <summary>A section row, « CODE · SECTEUR », drawn across the whole line.</summary>
+    private void PaintSectionRow(object? sender, DataGridViewRowPostPaintEventArgs e)
+    {
+        if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not EntrySection section) return;
+
+        var bounds = new Rectangle(e.RowBounds.X, e.RowBounds.Y, _grid.ClientSize.Width, e.RowBounds.Height);
+
+        using (var fill = new SolidBrush(EntryPaint.SectionBackground))
+            e.Graphics.FillRectangle(fill, bounds);
+        using (var pen = new Pen(UiTheme.Border))
+            e.Graphics.DrawLine(pen, bounds.Left, bounds.Bottom - 1, bounds.Right, bounds.Bottom - 1);
+
+        var text = new Rectangle(bounds.X + 12, bounds.Y, bounds.Width - 24, bounds.Height);
+        TextRenderer.DrawText(e.Graphics, section.Caption, UiTheme.SmallBold, text, UiTheme.TextSecondary,
+                              TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix
+                              | (IsRightToLeft ? TextFormatFlags.Right | TextFormatFlags.RightToLeft : TextFormatFlags.Left));
+    }
+
+    /// <summary>
+    /// One dossier: NAME and the status pill (« Retard » once past due, else « saisis / total »),
+    /// then the file number, the analyses waiting and the due time, in critical ink when late.
+    /// </summary>
+    private void PaintWorklistCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.Graphics is null) return;
+        if (_worklist.Rows[e.RowIndex].Tag is not string accession) return;
+
+        var order = _pending.FirstOrDefault(p => p.AccessionNumber == accession);
+        if (order is null) return;
+
+        var graphics = e.Graphics;
+        var bounds = e.CellBounds;
+        var rtl = IsRightToLeft;
+        var selected = (e.State & DataGridViewElementStates.Selected) != 0;
+
+        using (var fill = new SolidBrush(selected ? UiTheme.AccentSubtle : UiTheme.SurfaceRaised))
+            graphics.FillRectangle(fill, bounds);
+        using (var line = new Pen(UiTheme.Border))
+            graphics.DrawLine(line, bounds.Left, bounds.Top, bounds.Right, bounds.Top);
+        if (selected)
+        {
+            using var accent = new SolidBrush(UiTheme.Accent);
+            graphics.FillRectangle(accent, EntryPaint.Mirror(new Rectangle(bounds.X, bounds.Y, 3, bounds.Height),
+                                                             bounds, rtl));
+        }
+
+        var now = DateTimeOffset.Now;
+        var late = order.DueAt is { } due && due < now;
+        const int pad = 14;
+        var inner = new Rectangle(bounds.X + pad, bounds.Y + 9, bounds.Width - 2 * pad, bounds.Height - 18);
+        var alignment = rtl ? TextFormatFlags.Right | TextFormatFlags.RightToLeft : TextFormatFlags.Left;
+        var opposite = rtl ? TextFormatFlags.Left | TextFormatFlags.RightToLeft : TextFormatFlags.Right;
+        const TextFormatFlags single = TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix
+                                       | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis;
+
+        // Line 1: the name, and the pill at the far end.
+        var pillText = late
+            ? T("ResultEntry.Late")
+            : _progress.TryGetValue(accession, out var progress)
+                ? $"{progress.Entered} / {progress.Total}"
+                : string.Empty;
+        var pillSize = pillText.Length == 0 ? Size.Empty : EntryPaint.MeasurePill(pillText, UiTheme.SmallBold, 8);
+        var topLine = new Rectangle(inner.X, inner.Y, inner.Width, 20);
+
+        if (pillSize.Width > 0)
+        {
+            var pill = EntryPaint.Mirror(new Rectangle(topLine.Right - pillSize.Width, topLine.Y + 1,
+                                                       pillSize.Width, pillSize.Height), bounds, rtl);
+            EntryPaint.DrawPill(graphics, pill, pillText, UiTheme.SmallBold,
+                                late ? EntryPaint.Critical : EntryPaint.Waiting, rtl);
+        }
+
+        var nameBounds = EntryPaint.Mirror(new Rectangle(topLine.X, topLine.Y, topLine.Width - pillSize.Width - 8, 20),
+                                           bounds, rtl);
+        TextRenderer.DrawText(graphics, order.PatientName, UiTheme.BodyBold, nameBounds,
+                              order.IsUrgent ? UiTheme.Critical : UiTheme.TextPrimary,
+                              single | TextFormatFlags.VerticalCenter | alignment);
+
+        // Line 2: file number · analyses, and the due time.
+        var bottom = new Rectangle(inner.X, inner.Y + 22, inner.Width, 18);
+        var dueText = order.DueAt is { } dueAt
+            ? dueAt.ToLocalTime().Date == now.ToLocalTime().Date
+                ? dueAt.ToLocalTime().ToString("HH:mm")
+                : dueAt.ToLocalTime().ToString("dd/MM HH:mm")
+            : string.Empty;
+        var dueWidth = dueText.Length == 0
+            ? 0
+            : TextRenderer.MeasureText(dueText, UiTheme.Monospace, Size.Empty, TextFormatFlags.NoPadding).Width;
+
+        TextRenderer.DrawText(graphics, dueText, UiTheme.Monospace, EntryPaint.Mirror(bottom, bounds, rtl),
+                              late ? UiTheme.CriticalInk : UiTheme.TextSecondary,
+                              single | TextFormatFlags.VerticalCenter | opposite);
+
+        var fileWidth = TextRenderer.MeasureText(accession, UiTheme.Monospace, Size.Empty, TextFormatFlags.NoPadding).Width;
+        var fileBounds = new Rectangle(bottom.X, bottom.Y, Math.Min(fileWidth, bottom.Width - dueWidth - 8), bottom.Height);
+        TextRenderer.DrawText(graphics, accession, UiTheme.Monospace, EntryPaint.Mirror(fileBounds, bounds, rtl),
+                              UiTheme.TextSecondary, single | TextFormatFlags.VerticalCenter | alignment);
+
+        var count = order.PendingAnalyses == 1
+            ? T("ResultEntry.AnalysisOne")
+            : T("ResultEntry.AnalysisMany", order.PendingAnalyses);
+        var countBounds = new Rectangle(fileBounds.Right, bottom.Y,
+                                        Math.Max(0, bottom.Width - fileBounds.Width - dueWidth - 8), bottom.Height);
+        TextRenderer.DrawText(graphics, $" · {count}", UiTheme.Small, EntryPaint.Mirror(countBounds, bounds, rtl),
+                              UiTheme.TextSecondary, single | TextFormatFlags.VerticalCenter | alignment);
+
+        e.Handled = true;
+    }
+
     protected override void ApplyTexts()
     {
-        _scanLabel.Text = $"{T("Order.AccessionNumber")} / {T("Sample.Barcode")}";
+        _scan.PlaceholderText = T("ResultEntry.ScanPlaceholder");
+        _tips.SetToolTip(_scan, $"{T("Order.AccessionNumber")} / {T("Sample.Barcode")}");
         _load.Text = T("Action.Open");
-        _refreshWorklist.Text = T("Action.Refresh");
-        _worklistTitle.Text = T("ResultEntry.Worklist", _pending.Count);
+        _tips.SetToolTip(_refreshWorklist, T("Action.Refresh"));
+        _refreshWorklist.AccessibleName = T("Action.Refresh");
+        _worklistTitle.Text = T("ResultEntry.WorklistCount", _pending.Count);
         if (_worklist.Columns.Count > 0)
-        {
-            _worklist.Column("accession").HeaderText = T("Order.AccessionNumber");
-            _worklist.Column("patient").HeaderText = T("Patient.Title");
-            _worklist.Column("pending").HeaderText = T("ResultEntry.PendingShort");
-            _worklist.Column("received").HeaderText = T("ResultEntry.Received");
-            _worklist.Column("departments").HeaderText = T("ResultEntry.Departments");
-        }
+            _worklist.Column("dossier").HeaderText = T("ResultEntry.Worklist", _pending.Count);
         _benchSheet.Text = T("BenchSheet.Open");
         _save.Text = T("Action.Save");
         _validate.Text = T("Validation.Technical");
         _history.Text = T("Result.History");
+        _more.Text = T("ResultEntry.MoreActions");
         _notDone.Text = T("ResultEntry.MarkNotDone");
         _clearValue.Text = T("ResultEntry.ClearValue");
         _correct.Text = T("ResultEntry.CorrectReleased");
+        _comment.Text = $"{T("Result.TechnicalComment")}…";
+        _comment.ShortcutKeyDisplayString = "F3";
+
+        ShowSaveShortcut();
+        RenderSectorChips();
+        RenderKeyHints();
+        ShowRemaining();
 
         if (_grid.Columns.Count == 0) return;
 
         _grid.Column(ColumnParameter).HeaderText = T("Result.Parameter");
         _grid.Column(ColumnValue).HeaderText = T("Result.Value");
-        _grid.Column(ColumnFlag).HeaderText = T("Result.Flags");
+        _grid.Column(ColumnFlag).HeaderText = T("ResultEntry.Indicator");
         _grid.Column(ColumnUnit).HeaderText = T("Result.Unit");
         _grid.Column(ColumnRange).HeaderText = T("Result.ReferenceRange");
         _grid.Column(ColumnPrevious).HeaderText = T("Result.Previous");
+        _grid.Column(ColumnOrigin).HeaderText = T("ResultEntry.Origin");
         _grid.Column(ColumnComment).HeaderText = T("Result.TechnicalComment");
 
         // Re-rendered for the new language with what was typed put back: a technician switching
@@ -663,6 +1106,113 @@ public sealed class ResultEntryView : LocalizedView
             _grid.EndEdit();
             RenderSheet(_sheet, CaptureTyped());
         }
+    }
+
+    /// <summary>
+    /// « Enregistrer » carries the key that saves, as the user has it: the shell's save shortcut,
+    /// Ctrl+S unless they changed it. Drawn beside the caption rather than written into it — the
+    /// shell finds the button to press by its caption.
+    /// </summary>
+    protected override void OnRightToLeftChanged(EventArgs e)
+    {
+        base.OnRightToLeftChanged(e);
+
+        // The key drawn on « Enregistrer » moves to the other end of the button.
+        ShowSaveShortcut();
+    }
+
+    private void ShowSaveShortcut()
+    {
+        var keys = Keys.Control | Keys.S;
+
+        try
+        {
+            if (PermissionGate.User is { } user)
+            {
+                var shortcuts = new KeyboardShortcuts(user.UserId);
+                shortcuts.Define(SaveShortcutId, keys);
+                keys = shortcuts.For(SaveShortcutId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Reading the save shortcut failed.");
+        }
+
+        _saveShortcut = KeyboardShortcuts.Format(keys, Localizer);
+
+        var width = _saveShortcut.Length == 0
+            ? 0
+            : TextRenderer.MeasureText(_saveShortcut, UiTheme.Mono(8.25f), Size.Empty, TextFormatFlags.NoPadding).Width + 10;
+        _save.Padding = IsRightToLeft ? new Padding(14 + width, 0, 14, 0) : new Padding(14, 0, 14 + width, 0);
+
+        _save.Paint -= PaintSaveShortcut;
+        _save.Paint += PaintSaveShortcut;
+        _save.Invalidate();
+    }
+
+    private void PaintSaveShortcut(object? sender, PaintEventArgs e)
+    {
+        if (_saveShortcut.Length == 0) return;
+
+        var font = UiTheme.Mono(8.25f);
+        var width = TextRenderer.MeasureText(_saveShortcut, font, Size.Empty, TextFormatFlags.NoPadding).Width;
+        var bounds = IsRightToLeft
+            ? new Rectangle(12, 0, width, _save.Height)
+            : new Rectangle(_save.Width - 12 - width, 0, width, _save.Height);
+
+        // The key at three-quarters of the caption's strength, as the design system shows it.
+        var colour = _save.Enabled ? Color.FromArgb(0xC2, 0xDB, 0xDE) : UiTheme.TextMuted;
+        TextRenderer.DrawText(e.Graphics, _saveShortcut, font, bounds, colour,
+                              TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+    }
+
+    private void PaintMoreChevron(object? sender, PaintEventArgs e)
+    {
+        var x = IsRightToLeft ? 12 : _more.Width - 20;
+        var y = _more.Height / 2 - 2;
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using var pen = new Pen(_more.Enabled ? UiTheme.TextPrimary : UiTheme.TextMuted, 1.6f);
+        e.Graphics.DrawLines(pen, [new Point(x, y), new Point(x + 4, y + 4), new Point(x + 8, y)]);
+    }
+
+    /// <summary>
+    /// The keys the grid answers to — and only those: Enter, Shift+Enter, F3 and the double-click
+    /// on the antériorité. The save key is on « Enregistrer » itself.
+    /// </summary>
+    private void RenderKeyHints()
+    {
+        _keyHints.SuspendLayout();
+        _keyHints.Controls.Clear();
+
+        void Hint(string key, string meaning)
+        {
+            _keyHints.Controls.Add(new Label
+            {
+                Text = key,
+                AutoSize = true,
+                Font = UiTheme.Mono(8.25f, FontStyle.Bold),
+                ForeColor = UiTheme.TextPrimary,
+                Margin = new Padding(0, 0, 4, 0),
+                UseMnemonic = false
+            });
+            _keyHints.Controls.Add(new Label
+            {
+                Text = meaning,
+                AutoSize = true,
+                Font = UiTheme.Small,
+                ForeColor = UiTheme.TextSecondary,
+                Margin = new Padding(0, 1, 16, 0),
+                UseMnemonic = false
+            });
+        }
+
+        Hint(KeyboardShortcuts.Format(Keys.Enter, Localizer), T("ResultEntry.KeyNext"));
+        Hint(KeyboardShortcuts.Format(Keys.Shift | Keys.Enter, Localizer), T("ResultEntry.KeyPrevious"));
+        Hint("F3", T("ResultEntry.KeyComment"));
+        Hint(T("ResultEntry.DoubleClick"), T("ResultEntry.KeyHistory"));
+
+        _keyHints.ResumeLayout(performLayout: true);
     }
 
     public override async Task ActivateAsync(CancellationToken ct = default)
@@ -681,6 +1231,159 @@ public sealed class ResultEntryView : LocalizedView
             // rather than on an empty grid; scanning a tube still jumps straight to it.
             if (_sheet is null && _pending.Count > 0) await LoadAsync(_pending[0].AccessionNumber);
             _scan.Focus();
+        }
+    }
+
+    // ---- Worklist ---------------------------------------------------------------------------------
+
+    // The worklist, a click on it and a scan all read through this screen's one database
+    // context, which refuses a second query while one is running: a click raised both
+    // SelectionChanged and CellClick, and the second load failed with "A second operation was
+    // started on this context instance". Every load now waits for the one before it.
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
+
+    private async Task LoadWorklistAsync(CancellationToken ct = default)
+    {
+        await _loadGate.WaitAsync(CancellationToken.None);
+        try
+        {
+            await LoadWorklistCoreAsync(ct);
+        }
+        finally
+        {
+            _loadGate.Release();
+        }
+    }
+
+    private async Task LoadWorklistCoreAsync(CancellationToken ct)
+    {
+        try
+        {
+            var result = await _benchSheets.GetPendingOrdersAsync(ct);
+
+            // Without the right to enter results the list stays empty; the scan box still works
+            // for the screens that only read.
+            _pending = result.IsFailure ? [] : result.Value;
+
+            // The progress of each dossier and the names of its sectors, beside the list. Either
+            // failing leaves the list as it is, without the pill or with the sector codes.
+            var progress = await _context.GetProgressAsync([.. _pending.Select(p => p.AccessionNumber)], ct);
+            _progress = progress.IsSuccess
+                ? progress.Value.ToDictionary(p => p.AccessionNumber, StringComparer.Ordinal)
+                : [];
+
+            var codes = _pending.SelectMany(SectorsOf).Distinct(StringComparer.Ordinal).ToList();
+            var sectors = await _context.GetSectorsAsync(codes, ct);
+            var named = sectors.IsSuccess ? sectors.Value : [];
+            _sectors =
+            [
+                .. named.Where(s => codes.Contains(s.Code, StringComparer.Ordinal)),
+                .. codes.Where(c => named.All(s => s.Code != c)).Order()
+                        .Select(c => new ResultEntrySector(c, new MultilingualText(c)))
+            ];
+
+            if (_sectorFilter is not null && _sectors.All(s => s.Code != _sectorFilter)) _sectorFilter = null;
+
+            RenderSectorChips();
+            RenderWorklist();
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away mid-load.
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Loading the result entry worklist failed.");
+        }
+    }
+
+    private static IEnumerable<string> SectorsOf(PendingEntryOrder order) =>
+        order.Departments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>« Tous » and one chip per sector present in the list.</summary>
+    private void RenderSectorChips()
+    {
+        _sectorChips.SuspendLayout();
+        _sectorChips.Controls.Clear();
+
+        ChipButton Chip(string text, string? value)
+        {
+            var chip = new ChipButton { Value = value, Text = text, Selected = _sectorFilter == value };
+            chip.Click += (_, _) =>
+            {
+                _sectorFilter = value;
+                foreach (var other in _sectorChips.Controls.OfType<ChipButton>())
+                    other.Selected = other.Value == _sectorFilter;
+                RenderWorklist();
+            };
+            return chip;
+        }
+
+        _sectorChips.Controls.Add(Chip(T("ResultEntry.AllSectors"), null));
+        foreach (var sector in _sectors)
+            _sectorChips.Controls.Add(Chip(sector.Name.For(Localizer.CurrentLanguage), sector.Code));
+
+        _sectorChips.Visible = _sectors.Count > 0;
+        _sectorChips.ResumeLayout(performLayout: true);
+    }
+
+    private void RenderWorklist()
+    {
+        var current = _sheet?.AccessionNumber;
+        var term = _scan.Text.Trim();
+
+        var shown = _pending
+            .Where(o => _sectorFilter is null || SectorsOf(o).Contains(_sectorFilter, StringComparer.Ordinal))
+            .Where(o => term.Length == 0
+                        || o.AccessionNumber.Contains(term, StringComparison.OrdinalIgnoreCase)
+                        || o.PatientName.Contains(term, StringComparison.CurrentCultureIgnoreCase))
+            .ToList();
+
+        _renderingWorklist = true;
+
+        try
+        {
+            _worklist.SuspendLayout();
+            _worklist.Rows.Clear();
+
+            foreach (var order in shown)
+            {
+                var index = _worklist.Rows.Add($"{order.AccessionNumber} — {order.PatientName}");
+
+                var row = _worklist.Rows[index];
+                row.Tag = order.AccessionNumber;
+                row.Height = WorklistRowHeight;
+
+                // What the two lines leave out: reception time, sectors, priority.
+                var tip = new List<string>();
+                if (order.IsUrgent) tip.Add(T($"Priority.{order.Priority}"));
+                if (order.ReceivedAt is { } received)
+                    tip.Add($"{T("ResultEntry.Received")} {received.ToLocalTime():dd/MM HH:mm}");
+                if (order.DueAt is { } due) tip.Add($"{T("Order.DueAt")} {due.ToLocalTime():dd/MM HH:mm}");
+                if (order.Departments.Length > 0) tip.Add($"{T("ResultEntry.Departments")} : {order.Departments}");
+                row.Cells[0].ToolTipText = string.Join("\n", tip);
+            }
+
+            _worklist.ResumeLayout(performLayout: true);
+            _worklist.ClearSelection();
+
+            if (current is not null)
+            {
+                var row = _worklist.Rows.Cast<DataGridViewRow>()
+                    .FirstOrDefault(r => r.Tag is string accession && accession == current);
+
+                if (row is not null)
+                {
+                    _worklist.CurrentCell = row.Cells[0];
+                    row.Selected = true;
+                }
+            }
+
+            _worklistTitle.Text = T("ResultEntry.WorklistCount", _pending.Count);
+        }
+        finally
+        {
+            _renderingWorklist = false;
         }
     }
 
@@ -726,7 +1429,6 @@ public sealed class ResultEntryView : LocalizedView
 
     private async Task LoadCoreAsync(string term)
     {
-
         _status.ForeColor = UiTheme.TextSecondary;
         _status.Text = T("App.Loading");
 
@@ -743,6 +1445,10 @@ public sealed class ResultEntryView : LocalizedView
             return;
         }
 
+        // Scanned or typed into the box: the box is emptied once the file is open, so the list
+        // it narrowed shows every dossier again and the next tube goes into an empty box.
+        if (_scan.Text.Trim() == term.Trim()) _scan.Clear();
+
         await LoadOrderAsync(resolved.Value, CancellationToken.None);
     }
 
@@ -758,6 +1464,11 @@ public sealed class ResultEntryView : LocalizedView
                 _status.Text = Describe(sheet);
                 return;
             }
+
+            // The sector and the origin of each line; without them the lines still show, under
+            // their analysis code alone.
+            var origins = await _context.GetOriginsAsync(orderId, ct);
+            _origins = origins.IsSuccess ? origins.Value.ToDictionary(o => o.TestResultId) : [];
 
             _sheet = sheet.Value;
 
@@ -829,42 +1540,37 @@ public sealed class ResultEntryView : LocalizedView
     {
         _rowsById.Clear();
 
-        _patientBar.Visible = true;
-        _patientName.Text = sheet.PatientName;
-
-        var demographics = new List<string> { T($"Gender.{sheet.Gender}") };
-        if (sheet.AgeYears is { } age) demographics.Add($"{age} {T("Report.Years")}");
-        if (sheet.DateOfBirth is { } dob) demographics.Add(dob.ToString("dd/MM/yyyy"));
-        if (sheet.IsPregnant) demographics.Add(T("Patient.IsPregnant"));
-
-        _patientDetail.Text = string.Join("   ·   ", demographics);
-
-        var orderInfo = new List<string> { sheet.AccessionNumber };
-        if (sheet.Priority != Domain.Orders.OrderPriority.Routine)
-            orderInfo.Add(T($"Priority.{sheet.Priority}").ToUpperInvariant());
-        if (sheet.DueAt is { } due) orderInfo.Add($"{T("Order.DueAt")} {due:dd/MM HH:mm}");
-
-        _orderDetail.Text = string.Join("   ·   ", orderInfo);
-        _orderDetail.ForeColor = sheet.Priority != Domain.Orders.OrderPriority.Routine
-            ? UiTheme.Critical
-            : UiTheme.Accent;
+        RenderPatientCard(sheet);
 
         _grid.SuspendLayout();
         _grid.Rows.Clear();
+
+        string? section = null;
 
         foreach (var row in sheet.Rows)
         {
             _rowsById[row.TestResultId] = row;
 
+            var origin = _origins.GetValueOrDefault(row.TestResultId);
+
+            // One section row per analysis, « CODE · SECTEUR », as the bench reads the panel.
+            var caption = origin?.DepartmentName is { } department
+                ? $"{row.AnalysisCode} · {department.For(Localizer.CurrentLanguage).ToUpper(Localizer.CurrentLanguage.ToCulture())}"
+                : row.AnalysisCode;
+            if (caption != section)
+            {
+                section = caption;
+                AddSectionRow(caption);
+            }
+
             var index = _grid.Rows.Add(
                 Indent(row),
                 row.IsHeading ? string.Empty : row.CurrentValue ?? string.Empty,
-                UiTheme.FlagGlyphs(row.Flags) is { Length: > 0 } glyphs
-                    ? glyphs
-                    : UiTheme.ForInterpretation(row.Interpretation).Glyph,
+                FlagText(row),
                 row.UnitSymbol ?? string.Empty,
                 row.ReferenceRangeText ?? string.Empty,
                 FormatPrevious(row),
+                FormatOrigin(row, origin),
                 row.TechnicalComment ?? string.Empty);
 
             var gridRow = _grid.Rows[index];
@@ -881,12 +1587,6 @@ public sealed class ResultEntryView : LocalizedView
             if (row.IsAwaitingSample)
                 gridRow.Cells[ColumnValue].ToolTipText = T("Result_SampleNotReceived", row.ParameterCode);
 
-            if (row.SampleDefects != Domain.Samples.SampleDefect.None)
-            {
-                gridRow.Cells[ColumnParameter].ToolTipText =
-                    $"{T("Sample.Defects")} : {row.SampleDefects}";
-            }
-
             if (keep is not null)
             {
                 if (!locked && keep.TryGet((row.TestResultId, ColumnValue), out var value))
@@ -895,6 +1595,8 @@ public sealed class ResultEntryView : LocalizedView
                 if (keep.TryGet((row.TestResultId, ColumnComment), out var comment))
                     gridRow.Cells[ColumnComment].Value = comment;
             }
+
+            ShowParameterTip(gridRow, row);
         }
 
         _grid.ResumeLayout(performLayout: true);
@@ -903,6 +1605,7 @@ public sealed class ResultEntryView : LocalizedView
         _validate.Enabled = sheet.Rows.Any(r => r.Status == TestResultStatus.Entered);
         _history.Enabled = ResultHistory.IsCharted(SelectedRow());
         UpdateRowActions();
+        ShowRemaining();
 
         // Said once on opening, rather than discovered row by row as cells refuse the cursor.
         var awaiting = sheet.Rows.Where(r => r.IsAwaitingSample).Select(r => r.AnalysisCode).Distinct().ToList();
@@ -915,14 +1618,128 @@ public sealed class ResultEntryView : LocalizedView
         FocusFirstEditableCell();
     }
 
+    private void AddSectionRow(string caption)
+    {
+        var index = _grid.Rows.Add(caption);
+        var gridRow = _grid.Rows[index];
+        gridRow.Tag = new EntrySection(caption);
+        gridRow.Height = SectionRowHeight;
+        gridRow.ReadOnly = true;
+    }
+
+    /// <summary>The sample's defects and the typed technical comment, on the parameter's tooltip.</summary>
+    private void ShowParameterTip(DataGridViewRow gridRow, ResultEntryRow row)
+    {
+        var tip = new List<string>();
+
+        if (row.SampleDefects != Domain.Samples.SampleDefect.None)
+            tip.Add($"{T("Sample.Defects")} : {row.SampleDefects}");
+
+        if (gridRow.Cells[ColumnComment].Value is string comment && !string.IsNullOrWhiteSpace(comment))
+            tip.Add($"{T("Result.TechnicalComment")} : {comment}");
+
+        gridRow.Cells[ColumnParameter].ToolTipText = string.Join("\n", tip);
+    }
+
+    /// <summary>Name, sex · age · birth date · file, and the pills: priority, due time, progress.</summary>
+    private void RenderPatientCard(ResultEntrySheet sheet)
+    {
+        _patientCard.Visible = true;
+        _patientName.Text = sheet.PatientName;
+
+        var demographics = new List<string> { T($"Gender.{sheet.Gender}") };
+        if (sheet.AgeYears is { } age) demographics.Add($"{age} {T("Report.Years")}");
+        if (sheet.DateOfBirth is { } dob)
+            demographics.Add(T(sheet.Gender == Domain.Patients.Gender.Female ? "ResultEntry.BornOnFemale" : "ResultEntry.BornOn",
+                               dob.ToString("dd/MM/yyyy")));
+        demographics.Add(sheet.AccessionNumber);
+        if (sheet.IsPregnant) demographics.Add(T("Patient.IsPregnant"));
+
+        _patientDetail.Text = string.Join("  ·  ", demographics);
+
+        if (sheet.Priority != Domain.Orders.OrderPriority.Routine)
+            _priorityPill.Show(T($"Priority.{sheet.Priority}").ToUpperInvariant(), EntryPaint.Critical);
+        else
+            _priorityPill.Show(string.Empty, EntryPaint.Waiting);
+
+        if (sheet.DueAt is { } due)
+        {
+            var at = due.ToLocalTime().ToString("dd/MM HH:mm");
+            if (due < DateTimeOffset.Now)
+                _duePill.Show(T("ResultEntry.Overdue", at), EntryPaint.Critical);
+            else
+                _duePill.Show($"{T("Order.DueAt")} · {at}", EntryPaint.Waiting);
+        }
+        else
+        {
+            _duePill.Show(string.Empty, EntryPaint.Waiting);
+        }
+
+        var owed = sheet.Rows.Where(r => !r.IsHeading && !r.IsCalculated).ToList();
+        _progressPill.Show(owed.Count == 0
+                               ? string.Empty
+                               : T("ResultEntry.Progress", owed.Count(r => r.Status != TestResultStatus.Awaited), owed.Count),
+                           EntryPaint.Info);
+    }
+
+    /// <summary>
+    /// « N valeurs restent à saisir »: the lines still awaited whose cell is still empty, so the
+    /// count falls as values are typed, before they are saved.
+    /// </summary>
+    private void ShowRemaining()
+    {
+        if (_sheet is null)
+        {
+            _remaining.Text = string.Empty;
+            return;
+        }
+
+        var left = 0;
+        foreach (DataGridViewRow gridRow in _grid.Rows)
+        {
+            if (gridRow.Tag is not Guid id || !_rowsById.TryGetValue(id, out var row)) continue;
+            if (row.IsHeading || row.IsCalculated || row.Status != TestResultStatus.Awaited) continue;
+            if (!string.IsNullOrWhiteSpace(gridRow.Cells[ColumnValue].Value?.ToString())) continue;
+            left++;
+        }
+
+        _remaining.Text = left switch
+        {
+            0 => T("ResultEntry.RemainingNone"),
+            1 => T("ResultEntry.RemainingOne"),
+            _ => T("ResultEntry.RemainingMany", left)
+        };
+    }
+
     private string Indent(ResultEntryRow row) =>
         new string(' ', row.IndentLevel * 4) + row.ParameterName.For(Localizer.CurrentLanguage) +
         (row.IsCalculated ? "  ƒ" : string.Empty);
 
+    /// <summary>The indicator column's text — what a print of the grid or a screen reader gets.</summary>
+    private string FlagText(ResultEntryRow row)
+    {
+        var parts = new List<string>();
+        if (Indicator(row.Interpretation) is { } indicator) parts.Add(indicator.Text);
+        if (UiTheme.FlagGlyphs(row.Flags) is { Length: > 0 } glyphs) parts.Add(glyphs);
+        return string.Join(" ", parts);
+    }
+
     private static string FormatPrevious(ResultEntryRow row) =>
         row.PreviousValue is { } value
             ? $"{value:N2}" + (row.PreviousDate is { } date ? $"  {date:dd/MM/yy}" : string.Empty)
-            : string.Empty;
+            : "—";
+
+    /// <summary>The analyser that sent the value, « Manuel » for a value keyed in, « — » before any value.</summary>
+    private string FormatOrigin(ResultEntryRow row, ResultEntryOrigin? origin)
+    {
+        if (row.IsHeading) return string.Empty;
+        if (row.IsCalculated || row.CurrentValue is null) return "—";
+
+        if (origin?.InstrumentName is { } name && name.For(Localizer.CurrentLanguage) is { Length: > 0 } text)
+            return text;
+
+        return origin?.InstrumentCode ?? T("ResultEntry.Manual");
+    }
 
     private void FocusFirstEditableCell()
     {
@@ -939,9 +1756,37 @@ public sealed class ResultEntryView : LocalizedView
         _scan.Focus();
     }
 
+    // ---- Technical comment ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// F3, or "Plus d'actions › Commentaire technique…": the comment of the selected line, typed in
+    /// a box and kept in the line's comment cell until it is saved with the values, as when it was
+    /// typed in its own column.
+    /// </summary>
+    private void EditSelectedComment()
+    {
+        if (SelectedRow() is not { } row || _grid.CurrentRow is not { } gridRow) return;
+
+        var cell = gridRow.Cells[ColumnComment];
+        if (cell.ReadOnly) return;
+
+        _grid.EndEdit();
+
+        var name = row.ParameterName.For(Localizer.CurrentLanguage);
+        var comment = _dialogs.PromptForText(T("ResultEntry.CommentPrompt", name), T("Result.TechnicalComment"),
+                                             cell.Value?.ToString(), maxLength: 2000);
+        if (comment is null) return;
+
+        cell.Value = comment.Trim();
+        ShowParameterTip(gridRow, row);
+        _grid.InvalidateRow(gridRow.Index);
+
+        if (gridRow.Cells[ColumnValue] is { ReadOnly: false } value) _grid.CurrentCell = value;
+    }
+
     // ---- Antériorités ---------------------------------------------------------------------------------
 
-    /// <summary>The sheet row under the grid's cursor, or null on a heading or an empty grid.</summary>
+    /// <summary>The sheet row under the grid's cursor, or null on a heading, a section or an empty grid.</summary>
     private ResultEntryRow? SelectedRow() =>
         _grid.CurrentRow?.Tag is Guid id && _rowsById.TryGetValue(id, out var row) ? row : null;
 
@@ -1166,14 +2011,21 @@ public sealed class ResultEntryView : LocalizedView
         row is { IsEditable: true, IsAwaitingSample: false }
         && row.Status is not (TestResultStatus.Validated or TestResultStatus.Reported);
 
+    /// <summary>
+    /// Enables the menu's line actions for the selected line, and only for a user with their right
+    /// — the gate the buttons had; the service checks again.
+    /// </summary>
     private void UpdateRowActions()
     {
         var row = SelectedRow();
+        var canEnter = PermissionGate.Allows(Permissions.Results.Enter);
 
-        _notDone.Enabled = IsKeyable(row) && row!.Status != TestResultStatus.NotDone;
-        _clearValue.Enabled = IsKeyable(row) && row!.CurrentValue is not null;
-        _correct.Enabled = row is { IsHeading: false, IsCalculated: false }
+        _notDone.Enabled = canEnter && IsKeyable(row) && row!.Status != TestResultStatus.NotDone;
+        _clearValue.Enabled = canEnter && IsKeyable(row) && row!.CurrentValue is not null;
+        _correct.Enabled = PermissionGate.Allows(Permissions.Results.Unvalidate)
+                           && row is { IsHeading: false, IsCalculated: false }
                            && row.Status is TestResultStatus.Validated or TestResultStatus.Reported;
+        _comment.Enabled = row is not null && _grid.CurrentRow?.Cells[ColumnComment].ReadOnly == false;
     }
 
     /// <summary>
