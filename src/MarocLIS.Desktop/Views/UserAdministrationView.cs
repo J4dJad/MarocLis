@@ -37,7 +37,7 @@ public sealed class UserAdministrationView : LocalizedView
     private readonly TabPage _securityTab = new();
 
     // Users tab
-    private readonly TextBox _search = UiTheme.Input(260);
+    private readonly TextBox _search = new();
     private readonly CheckBox _includeInactive = new();
     private readonly DataGridView _users = UiTheme.Grid();
     private readonly Label _userCount = new();
@@ -49,6 +49,19 @@ public sealed class UserAdministrationView : LocalizedView
     private readonly Button _unlock = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _toggleActive = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _userNotice = new();
+
+    // Page and selected account
+    private readonly Label _pageTitle = new();
+    private readonly Label _pageCaption = new();
+    private readonly Label _asideName = new();
+    private readonly Label _asideSub = new();
+    private readonly PillLabel _asidePill = new();
+    private readonly TableLayoutPanel _facts = new();
+    private readonly (Label Caption, Label Value)[] _factLabels =
+        [(new(), new()), (new(), new()), (new(), new()), (new(), new()), (new(), new())];
+    private readonly Label _rolesHeading = new();
+    private readonly Label _permissionsHeading = new();
+    private readonly Label _eventCount = new();
 
     // Roles tab
     private readonly DataGridView _roles = UiTheme.Grid();
@@ -87,11 +100,7 @@ public sealed class UserAdministrationView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
-
-        _tabs.Dock = DockStyle.Fill;
-        _tabs.Font = UiTheme.Body;
-        _tabs.Padding = new Point(14, 6);
+        Padding = AdminLayout.Page;
 
         BuildUsersTab();
         BuildRolesTab();
@@ -104,48 +113,100 @@ public sealed class UserAdministrationView : LocalizedView
         if (!PermissionGate.Allows(Permissions.Administration.ViewAuditTrail))
             _tabs.TabPages.Remove(_securityTab);
 
-        Controls.Add(_tabs);
+        Controls.Add(AdminLayout.FlatTabs(_tabs));
+        Controls.Add(AdminLayout.PageHeader(_pageTitle, _pageCaption));
     }
 
+    /// <summary>
+    /// The accounts: search and filter above, the list in a card, and beside it the selected
+    /// account's facts with every action that applies to it — the list pattern of the patients
+    /// screen. Creating and editing stay at the head, where the list's own actions are.
+    /// </summary>
     private void BuildUsersTab()
     {
         _usersTab.BackColor = UiTheme.Surface;
-        _usersTab.Padding = new Padding(UiTheme.Gutter);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = UiTheme.Surface };
-
-        _search.Location = new Point(0, 6);
-
-        _includeInactive.Font = UiTheme.Small;
-        _includeInactive.ForeColor = UiTheme.TextSecondary;
-        _includeInactive.AutoSize = true;
-        _includeInactive.Location = new Point(280, 10);
-
-        _userCount.Font = UiTheme.SmallBold;
-        _userCount.ForeColor = UiTheme.TextSecondary;
-        _userCount.AutoSize = true;
-        _userCount.Location = new Point(470, 10);
-
-        bar.Controls.AddRange([_search, _includeInactive, _userCount]);
+        var filters = AdminLayout.Row(AdminLayout.RowHeight,
+            [new AdminSearchBox(_search, 320), AdminLayout.Filter(_includeInactive), AdminLayout.Muted(_userCount)],
+            AdminLayout.Actions(_newUser, _editUser));
 
         BuildUserColumns();
+        AdminLayout.ListGrid(_users);
 
-        var gridHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        gridHost.Controls.Add(_users);
+        var list = AdminLayout.Card(_users);
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 84, BackColor = UiTheme.Surface };
+        var aside = BuildUserAside();
+        aside.Dock = DockStyle.Right;
+        aside.Width = 330;
+
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface, Padding = new Padding(0, 4, 0, 0) };
+        body.Controls.Add(AdminLayout.Spaced(list, new Padding(0, 0, AdminLayout.Gap, 0)));
+        body.Controls.Add(aside);
+
+        _usersTab.Controls.Add(body);
+        _usersTab.Controls.Add(filters);
+    }
+
+    /// <summary>The selected account: who, in what state, and what can be done with it.</summary>
+    private Panel BuildUserAside()
+    {
+        var aside = new Panel { BackColor = UiTheme.SurfaceRaised, Padding = new Padding(16, 14, 16, 12) };
+
+        _asideName.Font = new Font(UiTheme.SectionTitle.FontFamily, 12.75f, UiTheme.SectionTitle.Style);
+        _asideName.ForeColor = UiTheme.TextPrimary;
+        _asideName.AutoEllipsis = true;
+        _asideName.UseMnemonic = false;
+        _asideName.Dock = DockStyle.Top;
+        _asideName.Height = 26;
+
+        _asideSub.Font = UiTheme.Body;
+        _asideSub.ForeColor = UiTheme.TextSecondary;
+        _asideSub.AutoEllipsis = true;
+        _asideSub.UseMnemonic = false;
+        _asideSub.Dock = DockStyle.Top;
+        _asideSub.Height = 22;
+
+        var pillRow = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = UiTheme.SurfaceRaised, Tag = UiTags.OwnLayout };
+        _asidePill.Location = new Point(0, 7);
+        pillRow.Controls.Add(_asidePill);
+
+        _facts.Dock = DockStyle.Top;
+        _facts.AutoSize = true;
+        _facts.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _facts.ColumnCount = 2;
+        _facts.BackColor = UiTheme.SurfaceRaised;
+        _facts.Margin = Padding.Empty;
+        _facts.Padding = new Padding(0, 4, 0, 4);
+        _facts.Tag = UiTags.OwnLayout;
+        _facts.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
+        _facts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        foreach (var (caption, value) in _factLabels)
+        {
+            caption.Font = UiTheme.Body;
+            caption.ForeColor = UiTheme.TextSecondary;
+            caption.AutoSize = true;
+            caption.MaximumSize = new Size(112, 0);
+            caption.Margin = new Padding(0, 3, 4, 3);
+            caption.UseMnemonic = false;
+
+            value.Font = UiTheme.Body;
+            value.ForeColor = UiTheme.TextPrimary;
+            value.AutoSize = true;
+            value.MaximumSize = new Size(178, 0);
+            value.Margin = new Padding(0, 3, 0, 3);
+            value.UseMnemonic = false;
+
+            _facts.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _facts.Controls.Add(caption);
+            _facts.Controls.Add(value);
+        }
 
         _userNotice.Font = UiTheme.SmallBold;
         _userNotice.AutoSize = false;
-        _userNotice.Bounds = new Rectangle(0, 2, 1200, 18);
-
-        _newUser.Bounds = new Rectangle(0, 26, 170, UiTheme.ButtonHeight);
-        _editUser.Bounds = new Rectangle(180, 26, 140, UiTheme.ButtonHeight);
-        _assignRoles.Bounds = new Rectangle(330, 26, 140, UiTheme.ButtonHeight);
-        _siteAccess.Bounds = new Rectangle(480, 26, 140, UiTheme.ButtonHeight);
-        _resetPassword.Bounds = new Rectangle(630, 26, 190, UiTheme.ButtonHeight);
-        _unlock.Bounds = new Rectangle(830, 26, 150, UiTheme.ButtonHeight);
-        _toggleActive.Bounds = new Rectangle(990, 26, 170, UiTheme.ButtonHeight);
+        _userNotice.Dock = DockStyle.Top;
+        _userNotice.Height = 40;
+        _userNotice.Padding = new Padding(0, 4, 0, 0);
 
         // Spelt out on the screen, not only in the code: an administrator looking for a delete
         // button should learn immediately why there is not one.
@@ -155,15 +216,50 @@ public sealed class UserAdministrationView : LocalizedView
             Font = UiTheme.Small,
             ForeColor = UiTheme.TextMuted,
             AutoSize = false,
-            Bounds = new Rectangle(0, 62, 1200, 18)
+            Dock = DockStyle.Bottom,
+            Height = 58,
+            Padding = new Padding(0, 8, 0, 0)
         };
 
-        actions.Controls.AddRange([_userNotice, _newUser, _editUser, _assignRoles, _siteAccess,
-                                   _resetPassword, _unlock, _toggleActive, retention]);
+        var buttons = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            BackColor = UiTheme.SurfaceRaised,
+            Padding = new Padding(0, 6, 0, 0),
+            Tag = UiTags.OwnLayout
+        };
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        _usersTab.Controls.Add(gridHost);
-        _usersTab.Controls.Add(actions);
-        _usersTab.Controls.Add(bar);
+        foreach (var button in new[] { _assignRoles, _siteAccess, _resetPassword, _unlock, _toggleActive })
+        {
+            UiTheme.StyleSecondary(button);
+            button.Dock = DockStyle.Fill;
+            button.Height = 34;
+            button.Margin = new Padding(0, 0, 0, 6);
+            button.TextAlign = ContentAlignment.MiddleLeft;
+            buttons.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+            buttons.Controls.Add(button);
+        }
+
+        var line = new Label { Dock = DockStyle.Top, Height = 1, BackColor = UiTheme.Border, Margin = Padding.Empty };
+        var gap = new Label { Dock = DockStyle.Top, Height = 8, BackColor = UiTheme.SurfaceRaised };
+
+        // Docked from the top in reverse: the last added sits highest.
+        aside.Controls.Add(retention);
+        aside.Controls.Add(buttons);
+        aside.Controls.Add(gap);
+        aside.Controls.Add(line);
+        aside.Controls.Add(_userNotice);
+        aside.Controls.Add(_facts);
+        aside.Controls.Add(pillRow);
+        aside.Controls.Add(_asideSub);
+        aside.Controls.Add(_asideName);
+
+        UiChrome.AsCard(aside);
+        return aside;
     }
 
     private void BuildUserColumns()
@@ -196,56 +292,46 @@ public sealed class UserAdministrationView : LocalizedView
     private void BuildRolesTab()
     {
         _rolesTab.BackColor = UiTheme.Surface;
-        _rolesTab.Padding = new Padding(UiTheme.Gutter);
 
         var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
             SplitterDistance = 460,
-            SplitterWidth = 6,
+            SplitterWidth = AdminLayout.Gap,
             BackColor = UiTheme.Surface
         };
 
         BuildRoleColumns();
+        AdminLayout.ListGrid(_roles);
 
-        var left = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        var leftActions = new Panel { Dock = DockStyle.Bottom, Height = 44, BackColor = UiTheme.Surface };
-
-        _newRole.Bounds = new Rectangle(0, 8, 180, UiTheme.ButtonHeight);
-        _toggleRole.Bounds = new Rectangle(190, 8, 190, UiTheme.ButtonHeight);
-        leftActions.Controls.AddRange([_newRole, _toggleRole]);
-
-        left.Controls.Add(_roles);
-        left.Controls.Add(leftActions);
-
-        var right = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-
-        _permissions.Dock = DockStyle.Fill;
         _permissions.CheckBoxes = true;
         _permissions.Font = UiTheme.Body;
-        _permissions.BorderStyle = BorderStyle.FixedSingle;
+        _permissions.BorderStyle = BorderStyle.None;
         _permissions.BackColor = UiTheme.SurfaceRaised;
         _permissions.HideSelection = false;
+        _permissions.ItemHeight = 24;
 
-        var rightActions = new Panel { Dock = DockStyle.Bottom, Height = 66, BackColor = UiTheme.Surface };
+        var tree = new Panel { BackColor = UiTheme.SurfaceRaised, Padding = new Padding(12, 0, 4, 0) };
+        tree.Controls.Add(_permissions);
+        _permissions.Dock = DockStyle.Fill;
 
         _roleNotice.Font = UiTheme.Small;
         _roleNotice.ForeColor = UiTheme.Abnormal;
-        _roleNotice.AutoSize = false;
-        _roleNotice.Bounds = new Rectangle(0, 2, 700, 24);
 
-        _savePermissions.Bounds = new Rectangle(0, 30, 230, UiTheme.ButtonHeight);
+        split.Panel1.Controls.Add(AdminLayout.CardSection(_rolesHeading, _roles,
+                                                          AdminLayout.Actions(null, _toggleRole, _newRole)));
 
-        rightActions.Controls.AddRange([_roleNotice, _savePermissions]);
+        var right = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        right.Controls.Add(AdminLayout.CardSection(_permissionsHeading, tree,
+                                                   AdminLayout.Actions(_savePermissions)));
+        right.Controls.Add(AdminLayout.Note(_roleNotice, 30));
 
-        right.Controls.Add(_permissions);
-        right.Controls.Add(rightActions);
-
-        split.Panel1.Controls.Add(left);
         split.Panel2.Controls.Add(right);
 
-        _rolesTab.Controls.Add(split);
+        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface, Padding = new Padding(0, 4, 0, 0) };
+        host.Controls.Add(split);
+        _rolesTab.Controls.Add(host);
     }
 
     private void BuildRoleColumns()
@@ -274,18 +360,11 @@ public sealed class UserAdministrationView : LocalizedView
     private void BuildSecurityTab()
     {
         _securityTab.BackColor = UiTheme.Surface;
-        _securityTab.Padding = new Padding(UiTheme.Gutter);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = UiTheme.Surface };
-
-        _onlySelectedUser.Font = UiTheme.Small;
-        _onlySelectedUser.ForeColor = UiTheme.TextSecondary;
-        _onlySelectedUser.AutoSize = true;
-        _onlySelectedUser.Location = new Point(0, 10);
-
-        _refreshEvents.Bounds = new Rectangle(320, 5, 120, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_onlySelectedUser, _refreshEvents]);
+        var filters = AdminLayout.Row(AdminLayout.RowHeight,
+            [AdminLayout.Filter(_onlySelectedUser), AdminLayout.Muted(_eventCount)],
+            AdminLayout.Actions(null, _refreshEvents));
+        _onlySelectedUser.Margin = Padding.Empty;
 
         _events.Columns.Clear();
 
@@ -303,12 +382,13 @@ public sealed class UserAdministrationView : LocalizedView
         Add("user", 14, UiTheme.Monospace);
         Add("workstation", 12, UiTheme.Monospace);
         Add("reason", 32, UiTheme.Small);
+        AdminLayout.ListGrid(_events);
 
-        var gridHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        gridHost.Controls.Add(_events);
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface, Padding = new Padding(0, 4, 0, 0) };
+        body.Controls.Add(AdminLayout.Card(_events));
 
-        _securityTab.Controls.Add(gridHost);
-        _securityTab.Controls.Add(bar);
+        _securityTab.Controls.Add(body);
+        _securityTab.Controls.Add(filters);
     }
 
     private void WireBehaviour()
@@ -333,6 +413,10 @@ public sealed class UserAdministrationView : LocalizedView
         _toggleActive.Click += async (_, _) => await RunBusyAsync(ToggleActiveAsync);
 
         _users.CellFormatting += OnUserFormatting;
+        AdminLayout.PillColumn(_users, "state", r => r.Tag is UserRow row ? StateColours(row) : null);
+        AdminLayout.PillColumn(_events, "outcome", r => r.Tag is SecurityEventRow row
+            ? row.Succeeded ? AdminLayout.Ok : AdminLayout.Crit
+            : null);
 
         _roles.SelectionChanged += (_, _) => ShowRolePermissions();
         _newRole.Click += async (_, _) => await RunBusyAsync(CreateRoleAsync);
@@ -417,6 +501,13 @@ public sealed class UserAdministrationView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _pageTitle.Text = T("Nav.Users");
+        _pageCaption.Text = T("AdminA.UsersLead");
+        _rolesHeading.Text = T("Nav.Roles");
+
+        var captions = new[] { "Admin.Qualification", "Admin.OrderNumber", "Nav.Roles", "Admin.Departments", "Admin.LastLogin" };
+        for (var i = 0; i < _factLabels.Length; i++) _factLabels[i].Caption.Text = T(captions[i]);
+
         _usersTab.Text = T("Nav.Users");
         _rolesTab.Text = T("Nav.Roles");
         _securityTab.Text = T("Admin.SecurityLog");
@@ -650,6 +741,10 @@ public sealed class UserAdministrationView : LocalizedView
 
         _permissions.EndUpdate();
 
+        _permissionsHeading.Text = role is null
+            ? T("Admin.Permissions")
+            : $"{T("Admin.Permissions")} — {role.Code}";
+
         _permissions.Enabled = role is not null;
         _savePermissions.Enabled = role is not null;
 
@@ -717,6 +812,8 @@ public sealed class UserAdministrationView : LocalizedView
         }
 
         _events.ResumeLayout(performLayout: true);
+
+        _eventCount.Text = T("Audit.RowCount", _eventRows.Count);
     }
 
     /// <summary>Offers only the operations that make sense for the selected account.</summary>
@@ -733,6 +830,8 @@ public sealed class UserAdministrationView : LocalizedView
 
         _toggleActive.Enabled = row is not null;
         _toggleActive.Text = row is { IsActive: false } ? T("Admin.Reactivate") : T("Admin.Deactivate");
+
+        ShowSelectedUser(row);
 
         if (row is null)
         {
@@ -767,6 +866,59 @@ public sealed class UserAdministrationView : LocalizedView
             _userNotice.ForeColor = UiTheme.TextSecondary;
             _userNotice.Text = string.Empty;
         }
+    }
+
+    /// <summary>The selected account's facts in the panel beside the list.</summary>
+    private void ShowSelectedUser(UserRow? row)
+    {
+        if (row is null)
+        {
+            _asideName.Text = T("AdminA.NoUserSelected");
+            _asideSub.Text = string.Empty;
+            _asidePill.Show(string.Empty, EntryPaint.Waiting);
+            foreach (var (_, value) in _factLabels) value.Text = "—";
+            return;
+        }
+
+        _asideName.Text = row.FullName;
+        _asideSub.Text = row.UserName;
+        _asidePill.Show(StateText(row), StateColours(row));
+
+        _factLabels[0].Value.Text = T($"Qualification.{row.Qualification}");
+        _factLabels[1].Value.Text = row.ProfessionalOrderNumber ?? "—";
+        _factLabels[2].Value.Text = row.RoleCodes.Count == 0 ? "—" : string.Join(", ", row.RoleCodes);
+        _factLabels[3].Value.Text = row.AuthorizedDepartmentCodes.Count == 0
+            ? T("Admin.AllDepartments")
+            : string.Join(", ", row.AuthorizedDepartmentCodes);
+        _factLabels[4].Value.Text = row.LastLoginAt?.ToLocalTime().ToString("dd/MM/yy HH:mm") ?? "—";
+
+        _factLabels[1].Value.Font = _factLabels[4].Value.Font = UiTheme.Monospace;
+    }
+
+    private string StateText(UserRow row) =>
+        !row.IsActive ? T("Admin.Inactive")
+        : row.IsLockedOut ? T("Admin.LockedOut")
+        : row.FailedLoginAttempts > 0 ? $"{T("Admin.Active")} ({row.FailedLoginAttempts})"
+        : T("Admin.Active");
+
+    /// <summary>
+    /// The pill of an account's state: the same reading as the row colours — a lockout or a
+    /// biologist who may not sign is critical, an expired credential a warning.
+    /// </summary>
+    private static (Color Back, Color Fore) StateColours(UserRow row)
+    {
+        if (!row.IsActive) return AdminLayout.Wait;
+        if (row.IsLockedOut) return AdminLayout.Crit;
+
+        if (row.Qualification is ProfessionalQualification.MedicalBiologist
+                              or ProfessionalQualification.PharmacistBiologist
+            && !row.QualifiedToValidate)
+            return AdminLayout.Crit;
+
+        if (row.PasswordExpired || row.MustChangePassword || row.QualificationExpired)
+            return AdminLayout.Warn;
+
+        return AdminLayout.Ok;
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -1222,6 +1374,7 @@ internal sealed class UserDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(UserDialog)));
 
         Populate(existing);
         RefreshQualificationNotice();
@@ -1460,6 +1613,7 @@ internal sealed class RoleAssignmentDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(RoleAssignmentDialog)));
 
         if (_list.Items.Count > 0) _list.SelectedIndex = 0;
         ShowSummary();
@@ -1563,6 +1717,7 @@ internal sealed class SiteAccessDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(SiteAccessDialog)));
 
         RefreshDefaults(user.DefaultSiteId);
     }
