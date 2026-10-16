@@ -31,7 +31,8 @@ internal sealed class PaymentPickerDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(640, 320);
+        // Wide enough for the date, the cheque number and the bank in full.
+        ClientSize = new Size(760, 320);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
@@ -63,7 +64,7 @@ internal sealed class PaymentPickerDialog : Form
         _grid.Column("by").HeaderText = localizer["Field.CreatedBy"];
 
         _grid.Dock = DockStyle.None;
-        _grid.Bounds = new Rectangle(20, 20, 600, 210);
+        _grid.Bounds = new Rectangle(20, 20, 720, 210);
 
         foreach (var payment in payments)
         {
@@ -96,6 +97,10 @@ internal sealed class PaymentPickerDialog : Form
         _grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) Accept(); };
 
         _ok.Enabled = _grid.CurrentRow?.Tag is PaymentRow;
+
+        // A plain form, so the screens' column fitting is applied here: the date of the payment
+        // to refund came out as « 15/1… » and the cheque number cut.
+        GridColumns.Apply(this);
 
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.PickPayment"], [], cancel, _ok);
 
@@ -286,13 +291,9 @@ internal sealed class InvoiceIssueDialog : Form
             if (string.IsNullOrWhiteSpace(_discount.Text)) return 0m;
 
             // Both separators accepted: the keypad on a counter terminal produces a full stop and
-            // the French keyboard a comma, and the operator should not have to know which.
-            return decimal.TryParse(_discount.Text.Replace(',', '.'),
-                                     System.Globalization.NumberStyles.Float,
-                                     System.Globalization.CultureInfo.InvariantCulture,
-                                     out var value)
-                ? value
-                : null;
+            // the French keyboard a comma, and the operator should not have to know which. The
+            // shared reader also takes the space French writes between thousands (« 1 200 »).
+            return EditorValues.ParseDecimal(_discount.Text);
         }
     }
 
@@ -371,6 +372,7 @@ internal sealed class InvoiceIssueDialog : Form
 
             _discount.Location = new Point(20, 218);
             _discount.Tag = UiTags.LatinValue;
+            _discount.MaxLength = EditorValues.AmountMaxLength;
             _discount.TextAlign = HorizontalAlignment.Right;
             _discount.TextChanged += (_, _) => RefreshNet();
 
@@ -538,6 +540,7 @@ internal sealed class PayerSettlementDialog : Form
 
         _accepted.Bounds = new Rectangle(20, 70, 160, UiTheme.InputHeight);
         _accepted.Tag = UiTags.LatinValue;
+        _accepted.MaxLength = EditorValues.AmountMaxLength;
         _accepted.TextAlign = HorizontalAlignment.Right;
         _accepted.Font = UiTheme.MonospaceBold;
         _accepted.Text = invoice.PayerShare.ToString("0.00");
@@ -587,10 +590,13 @@ internal sealed class PayerSettlementDialog : Form
         RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
-    private bool TryParseAccepted(out decimal amount) =>
-        decimal.TryParse(_accepted.Text.Replace(',', '.'),
-                         System.Globalization.NumberStyles.Float,
-                         System.Globalization.CultureInfo.InvariantCulture, out amount);
+    // The shared number reader, which takes « 1 250,00 » with its thousands space as well.
+    private bool TryParseAccepted(out decimal amount)
+    {
+        var parsed = EditorValues.ParseDecimal(_accepted.Text);
+        amount = parsed ?? 0m;
+        return parsed is not null;
+    }
 
     private decimal Missing =>
         TryParseAccepted(out var amount) ? Money.Round(_invoice.PayerShare - amount) : 0m;

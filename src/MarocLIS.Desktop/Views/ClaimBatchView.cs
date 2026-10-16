@@ -352,6 +352,8 @@ public sealed class ClaimBatchView : LocalizedView
             await LoadBatchesAsync(ct);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the claim register failed.");
@@ -407,6 +409,10 @@ public sealed class ClaimBatchView : LocalizedView
     private async Task LoadBatchesAsync(CancellationToken ct = default)
     {
         var result = await _billing.GetClaimBatchesAsync(SelectedWindow, ct);
+
+        // Left while the register loaded (a change of period, then another screen): its grids
+        // are gone and adding a row to them threw on the way out.
+        if (IsDisposed || Disposing) return;
 
         if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 
@@ -497,6 +503,8 @@ public sealed class ClaimBatchView : LocalizedView
         }
 
         var result = await _billing.GetClaimInvoicesAsync(batch.ClaimReference, batch.PayerId, ct);
+
+        if (IsDisposed || Disposing) return;
 
         if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 
@@ -655,7 +663,9 @@ public sealed class ClaimBatchView : LocalizedView
         _submit.Enabled = onePayer && ticked.All(t => t.IsClaimable)
                           && _currentUser.Has(Permissions.Billing.ExportAccounting);
 
-        _selectClaimable.Enabled = _candidateRows.Any(c => c.IsClaimable);
+        // Ticking prepares a transmission: greyed, like « Transmettre », for whoever may not send one.
+        _selectClaimable.Enabled = _candidateRows.Any(c => c.IsClaimable)
+                                   && _currentUser.Has(Permissions.Billing.ExportAccounting);
 
         _recordOutcome.Enabled = idle && SelectedBatch is not null
                                  && _currentUser.Has(Permissions.Billing.ExportAccounting);

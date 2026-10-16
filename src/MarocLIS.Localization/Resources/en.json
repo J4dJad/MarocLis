@@ -4998,6 +4998,7 @@
   "Coverage_PriorAgreementRequired": "A prior agreement number is required for a chronic disease scheme.",
   "Coverage_RateOutOfRange": "The reimbursement rate must be between 0 and 100 %.",
   "Coverage_NotYetEffective": "This coverage is not yet in force.",
+  "Coverage_EndDateUnreadable": "\"{0}\" is not a readable date: enter it as dd/mm/yyyy.",
 
   "Test_CodeRequired": "The analysis code is required.",
   "Test_NameFrenchRequired": "The French name is required.",

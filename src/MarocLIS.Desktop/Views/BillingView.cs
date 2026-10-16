@@ -473,6 +473,8 @@ public sealed class BillingView : LocalizedView
             RenderPending();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading uninvoiced orders failed.");
@@ -554,6 +556,8 @@ public sealed class BillingView : LocalizedView
             }
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the invoice ledger failed.");
@@ -562,6 +566,11 @@ public sealed class BillingView : LocalizedView
 
     private void RenderLedger()
     {
+        // The invoice just acted on (ticked) or highlighted stays current once the list is rebuilt.
+        // It went back to the first row, and « Imprimer le reçu » right after a settlement printed
+        // the receipt of another patient's invoice.
+        var kept = PrintTarget()?.InvoiceId ?? (_ledger.CurrentRow?.Tag as InvoiceRow)?.InvoiceId;
+
         _ledger.SuspendLayout();
         _ledger.Rows.Clear();
 
@@ -578,7 +587,8 @@ public sealed class BillingView : LocalizedView
                 row.Outstanding > 0m
                     ? Money.Of(row.Outstanding).Format(Localizer.CurrentLanguage)
                     : string.Empty,
-                row.DaysOverdue > 0 ? $"{row.DaysOverdue} j" : string.Empty,
+                // « 12 j » in French, « 12 ي » in Arabic: the unit was written in French in every language.
+                row.DaysOverdue > 0 ? T("Stock.Days", row.DaysOverdue) : string.Empty,
                 T($"InvoiceStatus.{row.Status}"));
 
             _ledger.Rows[index].Tag = row;
@@ -590,6 +600,12 @@ public sealed class BillingView : LocalizedView
         }
 
         _ledger.ResumeLayout(performLayout: true);
+
+        if (kept is { } keptId
+            && _ledger.Rows.Cast<DataGridViewRow>()
+                   .FirstOrDefault(r => (r.Tag as InvoiceRow)?.InvoiceId == keptId) is { } keptRow)
+            _ledger.MakeCurrent(keptRow);
+
         UpdatePrintButtons();
 
         var outstanding = Money.Of(_ledgerPage.Items.Sum(r => r.Outstanding));
@@ -773,7 +789,7 @@ public sealed class BillingView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T(bounce ? "Payment.BouncePrompt" : "Payment.RefundPrompt",
-              $"{payment.Amount:N2} DH", T($"PaymentMethod.{payment.Method}")),
+              Money.Of(payment.Amount).Format(Localizer.CurrentLanguage), T($"PaymentMethod.{payment.Method}")),
             T(bounce ? "Payment.MarkBounced" : "Payment.Refund"), maxLength: 500);
 
         if (reason is null) return;
@@ -1043,7 +1059,8 @@ public sealed class BillingView : LocalizedView
 
         if (invoice.Outstanding <= 0m)
         {
-            _dialogs.Info(T("InvoiceStatus.Paid"));
+            // The invoice named: a box reading « Réglée » alone did not say what was settled.
+            _dialogs.Info($"{invoice.Number} — {T("InvoiceStatus.Paid")}", T("Payment.Title"));
             return;
         }
 
@@ -1159,6 +1176,14 @@ public sealed class BillingView : LocalizedView
             _status.Text = T("Billing.NoClaimableInvoices");
             return;
         }
+
+        // Asked first, as on the claims screen: the invoices leave for the payer under a batch
+        // number drawn from its series. Here one click sent them, with nothing to confirm.
+        var payers = string.Join(", ", selected.Select(i => i.BilledToName).Distinct());
+        var value = Money.Of(selected.Sum(i => i.PayerShare)).Format(Localizer.CurrentLanguage);
+
+        if (!_dialogs.Confirm(T("Claim.ConfirmSubmit", selected.Count, payers, value), T("Billing.SubmitClaim")))
+            return;
 
         // Off until the service answers: a double click used to send the same invoices in two
         // batches. The service re-checks the claim status as well.
@@ -1411,6 +1436,7 @@ internal sealed class PaymentDialog : Form
         _amount.Font = UiTheme.MonospaceBold;
         // Pre-filled with the balance: settling in full is by far the commonest case.
         _amount.Text = _ceiling.ToString("0.00");
+        _amount.MaxLength = EditorValues.AmountMaxLength;
 
         _referenceLabel.Location = new Point(20, 106);
         _reference.Bounds = new Rectangle(20, 124, 200, UiTheme.InputHeight);
@@ -1503,13 +1529,25 @@ internal sealed class PaymentDialog : Form
         }
     }
 
-    private bool TryParseAmount(out decimal amount) =>
-        decimal.TryParse(_amount.Text.Replace(',', '.'),
-                         System.Globalization.NumberStyles.Float,
-                         System.Globalization.CultureInfo.InvariantCulture, out amount);
+    // The shared number reader: « 1 500,00 », typed with the space French writes between
+    // thousands, read as no number and was refused as an amount that is not positive.
+    private bool TryParseAmount(out decimal amount)
+    {
+        var parsed = EditorValues.ParseDecimal(_amount.Text);
+        amount = parsed ?? 0m;
+        return parsed is not null;
+    }
 
     private void Accept()
     {
+        if (EditorValues.IsUnreadable(_amount.Text))
+        {
+            _dialogs.Warn(_localizer.Format("Result_NotANumber", _amount.Text.Trim()));
+            _amount.Focus();
+            _amount.SelectAll();
+            return;
+        }
+
         if (!TryParseAmount(out var amount) || amount <= 0m)
         {
             _dialogs.Warn(_localizer["Payment_AmountMustBePositive"]);

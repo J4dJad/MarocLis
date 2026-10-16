@@ -1685,6 +1685,14 @@ public sealed class OrderDetailView : LocalizedView
 
     private void RenderItems(OrderDetail detail, AppLanguage language)
     {
+        // The analysis just acted on stays current when its file is shown again (after a repeat,
+        // a cancellation, an addition): the list went back to its first analysis, and the next
+        // action from « Plus d'actions » was pointed at another one.
+        var kept = _items.CurrentRow?.Tag is OrderItemDetail current
+                   && detail.Items.Any(i => i.ItemId == current.ItemId)
+            ? current.ItemId
+            : (Guid?)null;
+
         _items.SuspendLayout();
         _items.Rows.Clear();
 
@@ -1712,9 +1720,11 @@ public sealed class OrderDetailView : LocalizedView
 
         _items.ResumeLayout(performLayout: true);
 
-        // Select the first live row rather than the first row: the cancelled ones are history and
-        // are not what an operator wants an action pointed at.
+        // Otherwise the first live row rather than the first row: the cancelled ones are history
+        // and are not what an operator wants an action pointed at.
         var live = _items.Rows.Cast<DataGridViewRow>()
+                              .FirstOrDefault(r => kept is { } id && r.Tag is OrderItemDetail item && item.ItemId == id)
+                   ?? _items.Rows.Cast<DataGridViewRow>()
                               .FirstOrDefault(r => r.Tag is OrderItemDetail { IsCancelled: false });
 
         if (live is not null)

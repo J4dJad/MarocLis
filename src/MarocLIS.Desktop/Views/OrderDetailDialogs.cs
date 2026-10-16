@@ -101,6 +101,9 @@ internal sealed class AnalysisPickerDialog : Form
         reasonLabel.Location = new Point(16, 418);
 
         _reason.Bounds = new Rectangle(16, 436, 560, UiTheme.InputHeight);
+        // As long as the reasons asked elsewhere on the file: the audit trail keeps 1000
+        // characters and cut a longer reason without a word.
+        _reason.MaxLength = 500;
 
         var notice = new Label
         {
@@ -364,7 +367,7 @@ internal sealed class OrderHeaderDialog : Form
         foreach (var (box, length) in new[]
                  {
                      (_prescriber, 200), (_clinical, 2000), (_diagnosis, 20), (_ward, 120), (_room, 60),
-                     (_note, 1000)
+                     (_note, 1000), (_reason, 500)
                  })
             box.MaxLength = length;
 

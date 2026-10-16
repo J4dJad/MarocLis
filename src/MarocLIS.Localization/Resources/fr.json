@@ -4999,6 +4999,7 @@
   "Coverage_PriorAgreementRequired": "Un numéro d'accord préalable est obligatoire pour une prise en charge ALD.",
   "Coverage_RateOutOfRange": "Le taux de remboursement doit être compris entre 0 et 100 %.",
   "Coverage_NotYetEffective": "Cette couverture n'est pas encore entrée en vigueur.",
+  "Coverage_EndDateUnreadable": "« {0} » n'est pas une date lisible : saisissez-la sous la forme jj/mm/aaaa.",
 
   "Test_CodeRequired": "Le code de l'analyse est obligatoire.",
   "Test_NameFrenchRequired": "La désignation française est obligatoire.",

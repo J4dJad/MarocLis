@@ -285,6 +285,8 @@ public sealed class CashSessionView : LocalizedView
             _counted.Focus();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the cash session failed.");
@@ -374,19 +376,29 @@ public sealed class CashSessionView : LocalizedView
             : string.Empty;
     }
 
-    private bool TryParseCounted(out decimal value) =>
-        decimal.TryParse(_counted.Text.Replace(',', '.'),
-                         System.Globalization.NumberStyles.Float,
-                         System.Globalization.CultureInfo.InvariantCulture, out value);
+    // The shared number reader: « 1 250,00 », typed with the space French writes between
+    // thousands, showed no variance and was refused at closing as an amount that is not positive.
+    private static bool TryParseAmount(TextBox box, out decimal value)
+    {
+        var parsed = EditorValues.ParseDecimal(box.Text);
+        value = parsed ?? 0m;
+        return parsed is not null;
+    }
+
+    private bool TryParseCounted(out decimal value) => TryParseAmount(_counted, out value);
 
     // ---- Actions ---------------------------------------------------------------------------------------
 
     private async Task OpenSessionAsync()
     {
-        if (!decimal.TryParse(_openingFloat.Text.Replace(',', '.'),
-                              System.Globalization.NumberStyles.Float,
-                              System.Globalization.CultureInfo.InvariantCulture, out var opening)
-            || opening < 0m)
+        if (EditorValues.IsUnreadable(_openingFloat.Text))
+        {
+            _dialogs.Warn(Localizer.Format("Result_NotANumber", _openingFloat.Text.Trim()));
+            _openingFloat.Focus();
+            return;
+        }
+
+        if (!TryParseAmount(_openingFloat, out var opening) || opening < 0m)
         {
             _dialogs.Warn(T("Payment_AmountMustBePositive"));
             _openingFloat.Focus();
@@ -428,10 +440,7 @@ public sealed class CashSessionView : LocalizedView
 
         if (string.IsNullOrWhiteSpace(answer)) return;
 
-        if (!decimal.TryParse(answer.Replace(',', '.'),
-                               System.Globalization.NumberStyles.Float,
-                               System.Globalization.CultureInfo.InvariantCulture, out var amount)
-            || amount <= 0m)
+        if (EditorValues.ParseDecimal(answer) is not { } amount || amount <= 0m)
         {
             _dialogs.Warn(Localizer.Format("Result_NotANumber", answer));
             return;
@@ -452,7 +461,7 @@ public sealed class CashSessionView : LocalizedView
         }
 
         _status.ForeColor = UiTheme.TextSecondary;
-        _status.Text = $"{T("Payment.Withdrawals")} −{amount:N2} DH";
+        _status.Text = $"{T("Payment.Withdrawals")} −{Money.Of(amount).Format(Localizer.CurrentLanguage)}";
 
         await ActivateAsync();
     }
@@ -460,6 +469,13 @@ public sealed class CashSessionView : LocalizedView
     private async Task CloseSessionAsync()
     {
         if (_summary is null) return;
+
+        if (EditorValues.IsUnreadable(_counted.Text))
+        {
+            _dialogs.Warn(Localizer.Format("Result_NotANumber", _counted.Text.Trim()));
+            _counted.Focus();
+            return;
+        }
 
         if (!TryParseCounted(out var counted) || counted < 0m)
         {

@@ -190,7 +190,7 @@ public sealed class PatientEditorForm : LocalizedForm
                      (_placeOfBirth, 120), (_cin, 20), (_passport, 30), (_nationality, 2),
                      (_guardianName, 200), (_guardianCin, 20), (_guardianRelationship, 60),
                      (_address, 400), (_city, 100), (_postalCode, 10), (_mobile, 20), (_altPhone, 20),
-                     (_email, 200), (_treatment, 1000), (_allergies, 500)
+                     (_email, 200), (_treatment, 1000), (_allergies, 500), (_weight, 8), (_height, 8)
                  })
             box.MaxLength = length;
 
@@ -1006,10 +1006,12 @@ public sealed class PatientEditorForm : LocalizedForm
         if (!string.IsNullOrWhiteSpace(normalised)) box.Text = normalised;
     }
 
-    private static bool TryParseDecimal(string text, out decimal value) =>
-        decimal.TryParse((text ?? string.Empty).Replace(',', '.'),
-                         System.Globalization.NumberStyles.Float,
-                         System.Globalization.CultureInfo.InvariantCulture, out value);
+    private static bool TryParseDecimal(string text, out decimal value)
+    {
+        var parsed = EditorValues.ParseDecimal(text);
+        value = parsed ?? 0m;
+        return parsed is not null;
+    }
 
     // ---- Coverage ----------------------------------------------------------------------------------
 
@@ -1115,7 +1117,8 @@ public sealed class PatientEditorForm : LocalizedForm
 
         if (!DateTime.TryParse(answer, out var parsed))
         {
-            _dialogs.Warn(Localizer.Format("Result_NotANumber", answer));
+            // Said as a date: the message read « … n'est pas une valeur numérique valide ».
+            _dialogs.Warn(Localizer.Format("Coverage_EndDateUnreadable", answer.Trim()));
             return;
         }
 
@@ -1355,6 +1358,24 @@ public sealed class PatientEditorForm : LocalizedForm
             _tabs.SelectedTab = _identityTab;
             _dialogs.Warn(T("Patient_FirstNameRequired"));
             _firstName.Focus();
+            return;
+        }
+
+        // A weight or height the form cannot read (« 72 kg », « 1m70 ») or below zero was saved
+        // as no value without a word, and the calculations that use it (clearance, body surface)
+        // then had none.
+        foreach (var box in new[] { _weight, _height })
+        {
+            if (!EditorValues.IsUnreadable(box.Text) && !(TryParseDecimal(box.Text, out var measure) && measure < 0m))
+                continue;
+
+            _tabs.SelectedTab = _clinicalTab;
+            _dialogs.Warn(EditorValues.IsUnreadable(box.Text)
+                ? Localizer.Format("Result_NotANumber", box.Text.Trim())
+                : Localizer.Format("Patient_BodyMeasureOutOfRange", PatientRegistrationService.MaxWeightKg,
+                                   PatientRegistrationService.MaxHeightCm));
+            box.Focus();
+            box.SelectAll();
             return;
         }
 

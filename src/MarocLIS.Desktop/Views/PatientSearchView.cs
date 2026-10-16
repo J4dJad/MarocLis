@@ -459,6 +459,9 @@ public sealed class PatientSearchView : LocalizedView
             caption.Dock = DockStyle.Fill;
             caption.TextAlign = ContentAlignment.MiddleLeft;
             caption.Margin = Padding.Empty;
+            // One line, cut with an ellipsis: a caption longer than its column (« البطاقة الوطنية »
+            // in Arabic) wrapped and lost its lower half in the 24-pixel row.
+            caption.AutoEllipsis = true;
 
             value.Font = mono ? UiTheme.Monospace : UiTheme.Body;
             value.ForeColor = UiTheme.TextPrimary;
@@ -801,7 +804,10 @@ public sealed class PatientSearchView : LocalizedView
         _status.ForeColor = UiTheme.Normal;
         _status.Text = T("Patient.Merged");
 
+        // The surviving file stays selected, as after an edit: the list went back to its first row,
+        // and the clerk's next action (a request, the history) went to another patient.
         await SearchAsync();
+        SelectRow(dialog.SurvivingPatientId);
     }
 
     /// <summary>
@@ -855,6 +861,7 @@ public sealed class PatientSearchView : LocalizedView
         _status.Text = T("Patient.Anonymized");
 
         await SearchAsync();
+        SelectRow(row.Id);
     }
 
     private void SelectRow(Guid patientId)
@@ -931,6 +938,11 @@ public sealed class PatientSearchView : LocalizedView
                                               recordCount: _page.TotalCount,
                                               queryDescription: term);
         }
+        // Left before the search answered (the isolated query is cancelled with the screen, or
+        // its emptied grid refuses the rows): the clerk, already on the next screen, was shown
+        // « Erreur inattendue » for this one.
+        catch (OperationCanceledException) { }
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Patient search failed for '{Term}'.", term);
