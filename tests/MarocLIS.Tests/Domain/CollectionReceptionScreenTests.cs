@@ -37,7 +37,7 @@ public sealed class CollectionReceptionScreenTests
             {
                 ["Require"] = args => allowed && (string)args![0]! == Permissions.Samples.View
                     ? Result.Success()
-                    : Result.Failure(Error.Forbidden("Security_PermissionDenied"))
+                    : Result.Failure(Error.Forbidden("Forbidden"))
             }),
             Stub.Of<ICurrentUser>(new()
             {
