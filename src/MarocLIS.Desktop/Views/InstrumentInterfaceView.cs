@@ -56,6 +56,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
     private readonly Button _replay = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _purgeLog = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
+    private readonly Label _pageTitle = new();
 
     private readonly System.Windows.Forms.Timer _poll = new() { Interval = 5000 };
 
@@ -87,89 +88,50 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
-
-        var bar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UiTheme.Surface };
-
-        _hostState.Font = UiTheme.BodyBold;
-        _hostState.AutoSize = false;
-        _hostState.Bounds = new Rectangle(0, 10, 900, 22);
-
-        _refresh.Bounds = new Rectangle(920, 7, 110, UiTheme.ButtonHeight - 4);
-
-        bar.Controls.AddRange([_hostState, _refresh]);
+        Padding = AdminLayout.Page;
 
         BuildLinkColumns();
         BuildMappingColumns();
         BuildMessageColumns();
+
+        foreach (var grid in new[] { _links, _mappings, _messages }) AdminLayout.ListGrid(grid);
 
         var outer = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
             SplitterDistance = 220,
-            SplitterWidth = 6,
+            SplitterWidth = AdminLayout.Gap,
             BackColor = UiTheme.Surface
         };
 
-        outer.Panel1.Controls.Add(Pane(_linkHeading, _links,
-                                        [_newLink, _editLink, _toggleLink]));
+        outer.Panel1.Controls.Add(AdminLayout.CardSection(_linkHeading, _links,
+                                                          AdminLayout.Actions(_newLink, _toggleLink, _editLink)));
 
         var inner = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
             SplitterDistance = 620,
-            SplitterWidth = 6,
+            SplitterWidth = AdminLayout.Gap,
             BackColor = UiTheme.Surface
         };
 
-        inner.Panel1.Controls.Add(Pane(_mappingHeading, _mappings, [_editMappings, _testFrame]));
-        inner.Panel2.Controls.Add(Pane(_messageHeading, _messages, [_viewRaw, _replay, _purgeLog]));
+        // One primary action on the screen, the new interface; the others are the cards' own.
+        inner.Panel1.Controls.Add(AdminLayout.CardSection(_mappingHeading, _mappings,
+                                                          AdminLayout.Actions(null, _testFrame, _editMappings),
+                                                          footer: true));
+        inner.Panel2.Controls.Add(AdminLayout.CardSection(_messageHeading, _messages,
+                                                          AdminLayout.Actions(null, _viewRaw, _purgeLog, _replay),
+                                                          footer: true));
 
         outer.Panel2.Controls.Add(inner);
 
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 26, BackColor = UiTheme.Surface };
-
-        _status.Font = UiTheme.Small;
-        _status.Dock = DockStyle.Fill;
         _status.TextAlign = ContentAlignment.MiddleLeft;
 
-        footer.Controls.Add(_status);
-
         Controls.Add(outer);
-        Controls.Add(footer);
-        Controls.Add(bar);
-    }
-
-    private static Panel Pane(Label heading, DataGridView grid, Button[] buttons)
-    {
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-
-        heading.Font = UiTheme.SmallBold;
-        heading.ForeColor = UiTheme.TextSecondary;
-        heading.Dock = DockStyle.Top;
-        heading.Height = 22;
-
-        grid.Dock = DockStyle.Fill;
-
-        host.Controls.Add(grid);
-        host.Controls.Add(heading);
-
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 40, BackColor = UiTheme.Surface };
-
-        var x = 0;
-
-        foreach (var button in buttons)
-        {
-            button.Bounds = new Rectangle(x, 6, 180, UiTheme.ButtonHeight);
-            actions.Controls.Add(button);
-            x += 188;
-        }
-
-        host.Controls.Add(actions);
-
-        return host;
+        Controls.Add(AdminLayout.Note(_status, 26));
+        Controls.Add(AdminLayout.PageHeader(_pageTitle, _hostState, AdminLayout.Actions(null, _refresh)));
     }
 
     private static void AddColumns(DataGridView grid,
@@ -229,6 +191,31 @@ public sealed class InstrumentInterfaceView : LocalizedView
         _links.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _editLink.Enabled) await EditLinkAsync(); };
 
         _mappings.CellFormatting += OnMappingFormatting;
+
+        AdminLayout.PillColumn(_links, "live", r =>
+        {
+            if (r.Tag is not InterfaceRow link || !_options.EnableInstrumentHost || !link.IsEnabled)
+                return AdminLayout.Wait;
+            return _monitor.For(link.Id)?.Status switch
+            {
+                InstrumentLinkStatus.Running => AdminLayout.Ok,
+                InstrumentLinkStatus.Failed or InstrumentLinkStatus.Misconfigured => AdminLayout.Crit,
+                InstrumentLinkStatus.Stopped => AdminLayout.Wait,
+                _ => AdminLayout.Run
+            };
+        });
+
+        AdminLayout.PillColumn(_messages, "status", r => r.Tag is MessageLogRow message
+            ? message.Status switch
+            {
+                InstrumentMessageProcessingStatus.Imported => AdminLayout.Ok,
+                InstrumentMessageProcessingStatus.Failed => AdminLayout.Crit,
+                InstrumentMessageProcessingStatus.PartiallyImported
+                    or InstrumentMessageProcessingStatus.AwaitingAcceptance => AdminLayout.Warn,
+                InstrumentMessageProcessingStatus.Received => AdminLayout.Run,
+                _ => AdminLayout.Wait
+            }
+            : null);
         _messages.CellFormatting += OnMessageFormatting;
         _messages.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _viewRaw.Enabled) await ViewRawAsync(); };
 
@@ -256,6 +243,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _pageTitle.Text = T("Nav.Instruments");
         _refresh.Text = T("Action.Refresh");
         _newLink.Text = T("Interface.New");
         _editLink.Text = T("Interface.Edit");
