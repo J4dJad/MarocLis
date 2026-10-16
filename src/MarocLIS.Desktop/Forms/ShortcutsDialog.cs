@@ -4,7 +4,7 @@ using MarocLIS.Localization;
 namespace MarocLIS.Desktop.Forms;
 
 /// <summary>
-/// The list of keyboard shortcuts, opened with F1, where each user can change their own.
+/// The list of keyboard shortcuts, opened with Maj+F1, where each user can change their own.
 /// <para>
 /// The operator selects a line and presses the keys they want. A combination already used by
 /// another line moves to the new one and the other is left without a shortcut, with a note saying

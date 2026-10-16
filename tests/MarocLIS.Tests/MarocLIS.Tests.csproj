@@ -44,6 +44,8 @@
     <Compile Include="..\..\src\MarocLIS.Desktop\Composition\IsolatedQueries.cs" Link="Desktop\IsolatedQueries.cs" />
     <!-- The value-axis arithmetic of the hand-drawn charts. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Controls\ChartScale.cs" Link="Desktop\ChartScale.cs" />
+    <!-- Where F1 finds the help page of a screen. -->
+    <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\HelpCatalog.cs" Link="Desktop\HelpCatalog.cs" />
   </ItemGroup>
 
 </Project>
