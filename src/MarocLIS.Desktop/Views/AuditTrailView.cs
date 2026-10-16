@@ -39,7 +39,7 @@ public sealed class AuditTrailView : LocalizedView
     private readonly DateTimePicker _from = new();
     private readonly DateTimePicker _to = new();
     private readonly TextBox _user = UiTheme.Input(160);
-    private readonly TextBox _search = UiTheme.Input(220);
+    private readonly TextBox _search = new();
     private readonly TextBox _recordNumber = UiTheme.Input(150);
     private readonly Button _apply = UiTheme.PrimaryButton(string.Empty);
     private readonly Label _fromLabel = new();
@@ -47,6 +47,8 @@ public sealed class AuditTrailView : LocalizedView
 
     private readonly Label _status = new();
     private readonly Label _detail = new();
+    private readonly Label _pageTitle = new();
+    private readonly Label _detailHeading = new();
 
     private IReadOnlyList<AuditEntryRow> _changeRows = [];
     private IReadOnlyList<DataAccessRow> _accessRows = [];
@@ -77,58 +79,52 @@ public sealed class AuditTrailView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
-
-        var bar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = UiTheme.Surface };
+        Padding = AdminLayout.Page;
 
         foreach (var picker in new[] { _from, _to })
         {
             picker.Format = DateTimePickerFormat.Short;
             picker.Width = 130;
+            picker.Anchor = AnchorStyles.Left;
+            picker.Margin = new Padding(6, 0, 12, 0);
         }
 
         foreach (var label in new[] { _fromLabel, _toLabel })
         {
-            label.Font = UiTheme.Small;
-            label.ForeColor = UiTheme.TextSecondary;
-            label.AutoSize = true;
+            AdminLayout.Muted(label);
+            label.Margin = Padding.Empty;
         }
 
-        _fromLabel.Location = new Point(0, 2);
-        _from.Location = new Point(0, 20);
-        _toLabel.Location = new Point(142, 2);
-        _to.Location = new Point(142, 20);
-        _user.Location = new Point(284, 20);
-        _search.Location = new Point(456, 20);
+        foreach (var box in new[] { _user, _recordNumber })
+        {
+            box.Anchor = AnchorStyles.Left;
+            box.Margin = new Padding(0, 0, 8, 0);
+        }
 
         // The file number is a Latin value and must not be mirrored or digit-shaped in Arabic: it
         // gets read back to the person at the counter.
-        _recordNumber.Location = new Point(688, 20);
         _recordNumber.Tag = UiTags.LatinValue;
         _recordNumber.Font = UiTheme.Monospace;
 
-        _apply.Bounds = new Rectangle(850, 18, 130, UiTheme.ButtonHeight);
+        var search = new AdminSearchBox(_search, 240) { Margin = new Padding(0, 0, 8, 0) };
 
-        _status.Font = UiTheme.Small;
-        _status.AutoSize = false;
-        _status.Bounds = new Rectangle(994, 24, 620, 20);
-
-        bar.Controls.AddRange([_fromLabel, _from, _toLabel, _to, _user, _search, _recordNumber,
-                               _apply, _status]);
+        var filters = AdminLayout.Row(AdminLayout.RowHeight,
+            [_fromLabel, _from, _toLabel, _to, _user, search, _recordNumber],
+            AdminLayout.Actions(_apply));
 
         // The selected row's full payload. A change entry's before-and-after JSON and a
         // break-glass justification are both too long for a grid cell and are the whole point of
         // opening the row.
         _detail.Font = UiTheme.Monospace;
-        _detail.AutoSize = false;
-        _detail.Dock = DockStyle.Bottom;
-        _detail.Height = 76;
+        _detail.ForeColor = UiTheme.TextSecondary;
         _detail.BackColor = UiTheme.SurfaceRaised;
-        _detail.Padding = new Padding(UiTheme.GutterTight);
+        _detail.AutoSize = false;
+        _detail.Padding = new Padding(15, 0, 15, 6);
+        _detail.UseMnemonic = false;
 
-        _tabs.Dock = DockStyle.Fill;
-        _tabs.Font = UiTheme.Body;
-        _tabs.Padding = new Point(14, 6);
+        var detail = AdminLayout.CardSection(_detailHeading, _detail);
+        detail.Dock = DockStyle.Bottom;
+        detail.Height = 118;
 
         BuildChangeTab();
         BuildAccessTab();
@@ -136,9 +132,15 @@ public sealed class AuditTrailView : LocalizedView
 
         _tabs.TabPages.AddRange([_changeTab, _accessTab, _securityTab]);
 
-        Controls.Add(_tabs);
-        Controls.Add(_detail);
-        Controls.Add(bar);
+        var tabs = AdminLayout.FlatTabs(_tabs);
+
+        var gap = new Label { Dock = DockStyle.Bottom, Height = AdminLayout.Gap, BackColor = UiTheme.Surface };
+
+        Controls.Add(tabs);
+        Controls.Add(gap);
+        Controls.Add(detail);
+        Controls.Add(filters);
+        Controls.Add(AdminLayout.PageHeader(_pageTitle, _status));
     }
 
     private static void Columns(DataGridView grid,
@@ -165,7 +167,6 @@ public sealed class AuditTrailView : LocalizedView
     private void BuildChangeTab()
     {
         _changeTab.BackColor = UiTheme.Surface;
-        _changeTab.Padding = new Padding(UiTheme.Gutter);
 
         Columns(_changes,
             ("when", 12, UiTheme.Monospace, false),
@@ -177,14 +178,13 @@ public sealed class AuditTrailView : LocalizedView
             ("reason", 19, UiTheme.Small, false),
             ("workstation", 8, UiTheme.Small, false));
 
-        _changes.Dock = DockStyle.Fill;
-        _changeTab.Controls.Add(_changes);
+        AdminLayout.ListGrid(_changes);
+        _changeTab.Controls.Add(AdminLayout.Card(_changes));
     }
 
     private void BuildAccessTab()
     {
         _accessTab.BackColor = UiTheme.Surface;
-        _accessTab.Padding = new Padding(UiTheme.Gutter);
 
         Columns(_access,
             ("when", 12, UiTheme.Monospace, false),
@@ -197,14 +197,13 @@ public sealed class AuditTrailView : LocalizedView
             ("breakglass", 9, UiTheme.SmallBold, false),
             ("workstation", 8, UiTheme.Small, false));
 
-        _access.Dock = DockStyle.Fill;
-        _accessTab.Controls.Add(_access);
+        AdminLayout.ListGrid(_access);
+        _accessTab.Controls.Add(AdminLayout.Card(_access));
     }
 
     private void BuildSecurityTab()
     {
         _securityTab.BackColor = UiTheme.Surface;
-        _securityTab.Padding = new Padding(UiTheme.Gutter);
 
         Columns(_security,
             ("when", 13, UiTheme.Monospace, false),
@@ -215,8 +214,8 @@ public sealed class AuditTrailView : LocalizedView
             ("details", 17, UiTheme.Small, false),
             ("workstation", 13, UiTheme.Small, false));
 
-        _security.Dock = DockStyle.Fill;
-        _securityTab.Controls.Add(_security);
+        AdminLayout.ListGrid(_security);
+        _securityTab.Controls.Add(AdminLayout.Card(_security));
     }
 
     private void WireBehaviour()
@@ -239,6 +238,16 @@ public sealed class AuditTrailView : LocalizedView
         _changes.CellFormatting += OnChangeFormatting;
         _access.CellFormatting += OnAccessFormatting;
         _security.CellFormatting += OnSecurityFormatting;
+
+        AdminLayout.PillColumn(_security, "outcome", r => r.Tag is SecurityEventRow row
+            ? row.Succeeded ? AdminLayout.Ok : AdminLayout.Crit
+            : null);
+        AdminLayout.PillColumn(_access, "breakglass", r => r.Tag is DataAccessRow { IsBreakGlass: true }
+            ? AdminLayout.Crit
+            : null);
+        AdminLayout.PillColumn(_changes, "operation", r => r.Tag is AuditEntryRow row
+            ? row.Operation is AuditOperation.SoftDelete or AuditOperation.Delete ? AdminLayout.Crit : AdminLayout.Wait
+            : null);
     }
 
     // ---- Conditional formatting ---------------------------------------------------------------------
@@ -302,6 +311,9 @@ public sealed class AuditTrailView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _pageTitle.Text = T("Nav.AuditTrail");
+        _detailHeading.Text = T("AdminA.RowDetail");
+
         _changeTab.Text = T("Audit.Changes");
         _accessTab.Text = T("Audit.Consultations");
         _securityTab.Text = T("Audit.SecurityEvents");
