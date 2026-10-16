@@ -45,7 +45,7 @@ public sealed class CatalogView : LocalizedView
     private readonly TabControl _tabs = new();
 
     // Analyses tab
-    private readonly TextBox _search = UiTheme.Input(260);
+    private readonly TextBox _search = new();
     private readonly ComboBox _departmentFilter = new();
     private readonly CheckBox _includeInactive = new();
     private readonly DataGridView _analyses = UiTheme.Grid();
@@ -88,6 +88,17 @@ public sealed class CatalogView : LocalizedView
 
     private readonly Label _status = new();
 
+    // Page, chips and the headings of the cards that had none
+    private readonly Label _pageTitle = new();
+    private readonly Label _pageCaption = new();
+    private readonly ChipButton _allChip = new();
+    private readonly ChipButton _toCompleteChip = new();
+    private readonly Label _panelHeading = new();
+    private readonly Label _panelMembersHeading = new();
+    private readonly Label _reflexHeading = new();
+    private readonly Label _nomenclatureHeading = new();
+    private bool _onlyToComplete;
+
     private IReadOnlyList<AnalysisRow> _analysisRows = [];
     private IReadOnlyList<ParameterRow> _parameterRows = [];
     private IReadOnlyList<ReferenceRangeRow> _rangeRows = [];
@@ -116,10 +127,7 @@ public sealed class CatalogView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
-
-        _tabs.Dock = DockStyle.Fill;
-        _tabs.Font = UiTheme.Body;
+        Padding = AdminLayout.Page;
 
         _tabs.TabPages.Add(BuildAnalysesTab());
         _tabs.TabPages.Add(BuildTariffsTab());
@@ -127,37 +135,30 @@ public sealed class CatalogView : LocalizedView
         _tabs.TabPages.Add(BuildReflexTab());
         _tabs.TabPages.Add(BuildNomenclatureTab());
 
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 26, BackColor = UiTheme.Surface };
-
-        _status.Font = UiTheme.Small;
-        _status.Dock = DockStyle.Fill;
         _status.TextAlign = ContentAlignment.MiddleLeft;
 
-        footer.Controls.Add(_status);
-
-        Controls.Add(_tabs);
-        Controls.Add(footer);
+        Controls.Add(AdminLayout.FlatTabs(_tabs));
+        Controls.Add(AdminLayout.Note(_status, 26));
+        Controls.Add(AdminLayout.PageHeader(_pageTitle, _pageCaption));
     }
 
     private TabPage BuildAnalysesTab()
     {
-        var page = new TabPage { BackColor = UiTheme.Surface, Padding = new Padding(8) };
+        var page = new TabPage { BackColor = UiTheme.Surface };
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = UiTheme.Surface };
-
-        _search.Location = new Point(0, 4);
-
-        _departmentFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-        _departmentFilter.FlatStyle = FlatStyle.Flat;
-        _departmentFilter.Bounds = new Rectangle(270, 4, 220, UiTheme.InputHeight);
-
-        _includeInactive.Font = UiTheme.Small;
-        _includeInactive.ForeColor = UiTheme.TextSecondary;
-        _includeInactive.AutoSize = true;
-        _includeInactive.Location = new Point(504, 8);
+        AdminLayout.Filter(_departmentFilter, 220);
         _includeInactive.Checked = true;
 
-        bar.Controls.AddRange([_search, _departmentFilter, _includeInactive]);
+        _allChip.Click += async (_, _) => await ChooseChipAsync(onlyToComplete: false);
+        _toCompleteChip.Click += async (_, _) => await ChooseChipAsync(onlyToComplete: true);
+        _allChip.Selected = true;
+        _allChip.Margin = new Padding(12, 0, 6, 0);
+        _toCompleteChip.Margin = new Padding(0, 0, 0, 0);
+        _allChip.Anchor = _toCompleteChip.Anchor = AnchorStyles.None;
+
+        var bar = AdminLayout.Row(AdminLayout.RowHeight,
+            [new AdminSearchBox(_search, 300), _departmentFilter, _allChip, _toCompleteChip,
+             AdminLayout.Filter(_includeInactive)], []);
 
         // Analyses on the left, the selected analysis's parameters top right, the selected
         // parameter's intervals bottom right.
@@ -165,8 +166,8 @@ public sealed class CatalogView : LocalizedView
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
-            SplitterDistance = 640,
-            SplitterWidth = 6,
+            SplitterDistance = 570,
+            SplitterWidth = AdminLayout.Gap,
             BackColor = UiTheme.Surface
         };
 
@@ -174,19 +175,21 @@ public sealed class CatalogView : LocalizedView
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            SplitterDistance = 230,
-            SplitterWidth = 6,
+            SplitterDistance = 300,
+            SplitterWidth = AdminLayout.Gap,
             BackColor = UiTheme.Surface
         };
 
-        outer.Panel1.Controls.Add(Section(_analysisHeading, _analyses,
-                                           [_newAnalysis, _editAnalysis]));
+        outer.Panel1.Controls.Add(Section(_analysisHeading, _analyses, [_editAnalysis], _newAnalysis));
 
-        inner.Panel1.Controls.Add(Section(_parameterHeading, _parameters,
-                                           [_newParameter, _editParameter]));
+        inner.Panel1.Controls.Add(Section(_parameterHeading, _parameters, [_editParameter, _newParameter], null,
+                                          footer: true));
 
-        inner.Panel2.Controls.Add(Section(_rangeHeading, _ranges,
-                                           [_newRange, _editRange, _reviewRange]));
+        // The review beside the title, editing along the foot: one row each at 1366x768.
+        AdminLayout.ListGrid(_ranges);
+        inner.Panel2.Controls.Add(AdminLayout.CardSection(_rangeHeading, _ranges,
+                                                          AdminLayout.Actions(null, _reviewRange),
+                                                          AdminLayout.Actions(null, _editRange, _newRange)));
 
         outer.Panel2.Controls.Add(inner);
 
@@ -194,7 +197,7 @@ public sealed class CatalogView : LocalizedView
         BuildParameterColumns();
         BuildRangeColumns();
 
-        page.Controls.Add(outer);
+        page.Controls.Add(Below(outer));
         page.Controls.Add(bar);
 
         return page;
@@ -202,22 +205,13 @@ public sealed class CatalogView : LocalizedView
 
     private TabPage BuildTariffsTab()
     {
-        var page = new TabPage { BackColor = UiTheme.Surface, Padding = new Padding(8) };
+        var page = new TabPage { BackColor = UiTheme.Surface };
 
         BuildTariffColumns();
 
-        var notice = new Label
-        {
-            Text = T("Catalog.TariffNotice"),
-            Font = UiTheme.Small,
-            ForeColor = UiTheme.TextSecondary,
-            Dock = DockStyle.Bottom,
-            Height = 34
-        };
+        var notice = AdminLayout.Note(new Label { Text = T("Catalog.TariffNotice"), Name = "tariffNotice" }, 40);
 
-        notice.Name = "tariffNotice";
-
-        page.Controls.Add(Section(_tariffHeading, _tariffs, [_newTariff, _editTariff]));
+        page.Controls.Add(Section(_tariffHeading, _tariffs, [_editTariff], _newTariff));
         page.Controls.Add(notice);
 
         return page;
@@ -225,7 +219,7 @@ public sealed class CatalogView : LocalizedView
 
     private TabPage BuildPanelsTab()
     {
-        var page = new TabPage { BackColor = UiTheme.Surface, Padding = new Padding(8) };
+        var page = new TabPage { BackColor = UiTheme.Surface };
 
         BuildPanelColumns();
 
@@ -234,12 +228,12 @@ public sealed class CatalogView : LocalizedView
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
             SplitterDistance = 640,
-            SplitterWidth = 6,
+            SplitterWidth = AdminLayout.Gap,
             BackColor = UiTheme.Surface
         };
 
-        split.Panel1.Controls.Add(Section(new Label(), _panels, [_newPanel, _editPanel]));
-        split.Panel2.Controls.Add(Section(new Label(), _panelMembers, []));
+        split.Panel1.Controls.Add(Section(_panelHeading, _panels, [_editPanel], _newPanel));
+        split.Panel2.Controls.Add(Section(_panelMembersHeading, _panelMembers, [], null));
 
         page.Controls.Add(split);
 
@@ -248,21 +242,13 @@ public sealed class CatalogView : LocalizedView
 
     private TabPage BuildReflexTab()
     {
-        var page = new TabPage { BackColor = UiTheme.Surface, Padding = new Padding(8) };
+        var page = new TabPage { BackColor = UiTheme.Surface };
 
         BuildReflexColumns();
 
-        var notice = new Label
-        {
-            Text = T("Catalog.ReflexNotice"),
-            Font = UiTheme.Small,
-            ForeColor = UiTheme.TextSecondary,
-            Dock = DockStyle.Bottom,
-            Height = 34,
-            Name = "reflexNotice"
-        };
+        var notice = AdminLayout.Note(new Label { Text = T("Catalog.ReflexNotice"), Name = "reflexNotice" }, 40);
 
-        page.Controls.Add(Section(new Label(), _reflex, [_newReflex, _editReflex]));
+        page.Controls.Add(Section(_reflexHeading, _reflex, [_editReflex], _newReflex));
         page.Controls.Add(notice);
 
         return page;
@@ -270,61 +256,37 @@ public sealed class CatalogView : LocalizedView
 
     private TabPage BuildNomenclatureTab()
     {
-        var page = new TabPage { BackColor = UiTheme.Surface, Padding = new Padding(8) };
+        var page = new TabPage { BackColor = UiTheme.Surface };
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = UiTheme.Surface };
+        AdminLayout.Filter(_nomenclatureKind, 260);
+        _nomenclatureKind.Margin = Padding.Empty;
 
-        _nomenclatureKind.DropDownStyle = ComboBoxStyle.DropDownList;
-        _nomenclatureKind.FlatStyle = FlatStyle.Flat;
-        _nomenclatureKind.Bounds = new Rectangle(0, 4, 260, UiTheme.InputHeight);
-
-        bar.Controls.Add(_nomenclatureKind);
+        var bar = AdminLayout.Row(AdminLayout.RowHeight, [_nomenclatureKind], []);
 
         BuildNomenclatureColumns();
 
-        page.Controls.Add(Section(new Label(), _nomenclature,
-                                   [_newNomenclature, _editNomenclature]));
+        page.Controls.Add(Below(Section(_nomenclatureHeading, _nomenclature, [_editNomenclature], _newNomenclature)));
         page.Controls.Add(bar);
 
         return page;
     }
 
-    /// <summary>A heading, a grid and a row of buttons — the shape every section of this screen has.</summary>
-    private static Panel Section(Label heading, DataGridView grid, Button[] buttons)
+    /// <summary>
+    /// A card holding a heading, a grid and its actions — the shape every section of this screen
+    /// has. The one primary action of the tab ends the card's head; a narrow card carries its
+    /// actions along its foot instead.
+    /// </summary>
+    private static Panel Section(Label heading, DataGridView grid, Button[] secondary, Button? primary,
+                                 bool footer = false)
     {
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-
-        heading.Font = UiTheme.SmallBold;
-        heading.ForeColor = UiTheme.TextSecondary;
-        heading.Dock = DockStyle.Top;
-        heading.Height = heading.Text.Length == 0 && buttons.Length == 0 ? 0 : 22;
-
-        grid.Dock = DockStyle.Fill;
-
-        host.Controls.Add(grid);
-        host.Controls.Add(heading);
-
-        if (buttons.Length > 0)
-        {
-            var actions = new Panel
-            {
-                Dock = DockStyle.Bottom, Height = 40, BackColor = UiTheme.Surface
-            };
-
-            var x = 0;
-
-            foreach (var button in buttons)
-            {
-                button.Bounds = new Rectangle(x, 6, 170, UiTheme.ButtonHeight);
-                actions.Controls.Add(button);
-                x += 178;
-            }
-
-            host.Controls.Add(actions);
-        }
-
-        return host;
+        AdminLayout.ListGrid(grid);
+        var actions = AdminLayout.Actions(primary, secondary);
+        return AdminLayout.CardSection(heading, grid, actions, footer);
     }
+
+    /// <summary>A little space between a row of filters and what it filters.</summary>
+    private static Panel Below(Control content) =>
+        AdminLayout.Spaced(content, new Padding(0, 4, 0, 0));
 
     private static void AddColumns(DataGridView grid,
                                     params (string Name, int Weight, Font? Font, bool Right)[] columns)
@@ -484,6 +446,14 @@ public sealed class CatalogView : LocalizedView
             _tabs.TabPages[4].Text = T("Catalog.Nomenclature");
         }
 
+        _pageTitle.Text = T("Nav.Catalog");
+        _pageCaption.Text = T("AdminA.CatalogLead");
+        _panelHeading.Text = T("Catalog.Panels");
+        _reflexHeading.Text = T("Catalog.ReflexRules");
+        _panelMembersHeading.Text = SelectedPanel is { } panel
+            ? $"{T("AdminA.PanelMembers")} — {panel.Code}"
+            : T("AdminA.PanelMembers");
+
         _search.PlaceholderText = T("Order.CatalogSearchPlaceholder");
         _includeInactive.Text = T("Catalog.IncludeInactive");
 
@@ -506,8 +476,10 @@ public sealed class CatalogView : LocalizedView
         ApplyHeaders();
         RefreshDepartmentFilter();
         RefreshNomenclatureKinds();
+        _nomenclatureHeading.Text = _nomenclatureKind.SelectedItem?.ToString() ?? T("Catalog.Nomenclature");
 
         if (_analysisRows.Count > 0) RenderAnalyses();
+        else RefreshChips();
         if (_panelRows.Count > 0) RenderPanels();
 
         RefreshActions();
@@ -650,6 +622,30 @@ public sealed class CatalogView : LocalizedView
         }
     }
 
+    /// <summary>
+    /// An analysis somebody has to come back to: one that cannot be ordered (no tariff, no active
+    /// parameter) or has age bands whose unit is still to confirm — the warnings of the list.
+    /// </summary>
+    private static bool NeedsAttention(AnalysisRow row) => !row.IsOrderable || row.UnconfirmedAgeBandCount > 0;
+
+    /// <summary>The two chips above the list, with the number of analyses each one shows.</summary>
+    private void RefreshChips()
+    {
+        _allChip.Text = $"{T("AdminA.ChipAll")} · {_analysisRows.Count}";
+        _toCompleteChip.Text = $"{T("AdminA.ChipToComplete")} · {_analysisRows.Count(NeedsAttention)}";
+        _allChip.Selected = !_onlyToComplete;
+        _toCompleteChip.Selected = _onlyToComplete;
+    }
+
+    private async Task ChooseChipAsync(bool onlyToComplete)
+    {
+        if (_onlyToComplete == onlyToComplete) return;
+
+        _onlyToComplete = onlyToComplete;
+        RenderAnalyses();
+        await _selectionLoads.RunAsync(() => OnAnalysisSelectedAsync());
+    }
+
     private async Task LoadAnalysesAsync(CancellationToken ct = default)
     {
         var department = (_departmentFilter.SelectedItem as GuidChoice)?.Value;
@@ -674,7 +670,7 @@ public sealed class CatalogView : LocalizedView
         _analyses.SuspendLayout();
         _analyses.Rows.Clear();
 
-        foreach (var row in _analysisRows)
+        foreach (var row in _onlyToComplete ? _analysisRows.Where(NeedsAttention) : _analysisRows)
         {
             var flags = new List<string>(4);
 
@@ -707,6 +703,8 @@ public sealed class CatalogView : LocalizedView
         _analyses.ResumeLayout(performLayout: true);
 
         RestoreSelection(_analyses, selected, r => (r as AnalysisRow)?.Id);
+
+        RefreshChips();
 
         _analysisHeading.Text =
             $"{T("Catalog.Analyses")} — {_analysisRows.Count}"
@@ -970,6 +968,11 @@ public sealed class CatalogView : LocalizedView
         }
 
         _panelMembers.ResumeLayout(performLayout: true);
+
+        _panelMembersHeading.Text = SelectedPanel is { } selected
+            ? $"{T("AdminA.PanelMembers")} — {selected.Code}"
+            : T("AdminA.PanelMembers");
+
         RefreshActions();
     }
 
@@ -1013,6 +1016,7 @@ public sealed class CatalogView : LocalizedView
     private async Task LoadNomenclatureAsync(CancellationToken ct = default)
     {
         var kind = SelectedNomenclatureKind;
+        _nomenclatureHeading.Text = _nomenclatureKind.SelectedItem?.ToString() ?? T("Catalog.Nomenclature");
 
         var result = await _catalog.GetNomenclatureAsync(kind, ct);
 

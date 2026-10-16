@@ -106,6 +106,11 @@ public sealed class SettingsView : LocalizedView
     private readonly Button _reloadPrinters = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _printersStatus = new();
 
+    private readonly Label _pageTitle = new();
+    private readonly Label _pageCaption = new();
+    private readonly Label _sequencesHeading = new();
+    private readonly Label _settingsHeading = new();
+
     private IReadOnlyList<SiteDetail> _sites = [];
     private IReadOnlyList<UserRow> _biologists = [];
     private IReadOnlyList<SequenceRow> _sequenceRows = [];
@@ -137,11 +142,7 @@ public sealed class SettingsView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
-
-        _tabs.Dock = DockStyle.Fill;
-        _tabs.Font = UiTheme.Body;
-        _tabs.Padding = new Point(14, 6);
+        Padding = AdminLayout.Page;
 
         BuildSiteTab();
         BuildNumberingTab();
@@ -149,39 +150,62 @@ public sealed class SettingsView : LocalizedView
         BuildPrintersTab();
 
         _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _printersTab]);
-        Controls.Add(_tabs);
+        Controls.Add(AdminLayout.FlatTabs(_tabs));
+        Controls.Add(AdminLayout.PageHeader(_pageTitle, _pageCaption));
+    }
+
+    /// <summary>
+    /// The bar along the foot of a form tab: what the last action said at the start, the actions at
+    /// the end with the primary last — always in view, however far the form is scrolled.
+    /// </summary>
+    private static EntryStrip ActionBar(Label status, Button primary, params Button[] secondary)
+    {
+        AdminLayout.Muted(status, UiTheme.SmallBold);
+        status.Margin = Padding.Empty;
+        status.AutoSize = true;
+        status.MaximumSize = new Size(640, 0);
+
+        var row = AdminLayout.Row(AdminLayout.RowHeight + 12, [status], AdminLayout.Actions(primary, secondary),
+                                  UiTheme.SurfaceRaised);
+        row.Dock = DockStyle.Fill;
+
+        var bar = new EntryStrip { Dock = DockStyle.Bottom, Height = AdminLayout.RowHeight + 13,
+                                   BackColor = UiTheme.SurfaceRaised, Tag = UiTags.OwnLayout };
+        bar.Padding = new Padding(16, 1, 16, 0);
+        bar.Controls.Add(row);
+        return bar;
     }
 
     private void BuildSiteTab()
     {
         _siteTab.BackColor = UiTheme.Surface;
-        _siteTab.Padding = new Padding(UiTheme.Gutter);
-        _siteTab.AutoScroll = true;
 
-        var header = new Panel { Dock = DockStyle.Top, Height = 92, BackColor = UiTheme.Surface };
-
-        _sitePicker.DropDownStyle = ComboBoxStyle.DropDownList;
-        _sitePicker.FlatStyle = FlatStyle.Flat;
-        _sitePicker.Bounds = new Rectangle(0, 4, 360, UiTheme.InputHeight);
+        AdminLayout.Filter(_sitePicker, 380);
+        _sitePicker.Margin = Padding.Empty;
 
         // Next to the picker: a partner laboratory for subcontracting, or a further site, is created
         // here and then completed with the form below like any other.
-        _newSite.Bounds = new Rectangle(372, 2, 180, UiTheme.ButtonHeight);
+        AdminLayout.Action(_newSite);
 
         // Two banners rather than one: invoicing and report release are blocked by different
         // fields, and a laboratory can legitimately be able to do one and not the other.
-        _invoicingBanner.Font = UiTheme.SmallBold;
-        _invoicingBanner.AutoSize = false;
-        _invoicingBanner.Bounds = new Rectangle(0, 36, 1300, 24);
+        foreach (var banner in new[] { _invoicingBanner, _operationBanner })
+        {
+            banner.Font = UiTheme.SmallBold;
+            banner.AutoSize = true;
+            banner.Anchor = AnchorStyles.Left;
+            banner.Margin = new Padding(16, 0, 0, 0);
+            banner.UseMnemonic = false;
+        }
 
-        _operationBanner.Font = UiTheme.SmallBold;
-        _operationBanner.AutoSize = false;
-        _operationBanner.Bounds = new Rectangle(0, 62, 1300, 24);
+        var header = AdminLayout.Row(AdminLayout.RowHeight, [_sitePicker, _newSite, _invoicingBanner], []);
+        var banners = AdminLayout.Row(26, [_operationBanner], []);
+        _operationBanner.Margin = Padding.Empty;
+        banners.Padding = new Padding(0, 0, 0, 6);
+        banners.Height = 30;
 
-        header.Controls.AddRange([_sitePicker, _newSite, _invoicingBanner, _operationBanner]);
-
-        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface,
-                               AutoScroll = true };
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised,
+                               AutoScroll = true, AutoScrollMargin = new Size(0, 16) };
 
         var y = 4;
 
@@ -366,31 +390,29 @@ public sealed class SettingsView : LocalizedView
         _logoHint.AutoSize = false;
         _logoHint.Bounds = new Rectangle(444, y + 24, 520, 60);
 
-        y += 124;
-
-        _saveSite.Bounds = new Rectangle(0, y, 260, 34);
-        _reloadSite.Bounds = new Rectangle(270, y, 150, 34);
-
-        _siteStatus.Font = UiTheme.Small;
-        _siteStatus.AutoSize = false;
-        _siteStatus.Bounds = new Rectangle(430, y + 8, 800, 20);
-
         body.Controls.AddRange([_code, _nameFr, _nameAr, _kind, _legalName, _ice, _fiscalId,
                                 _taxNumber, _rc, _rcCourt, _cnss, _inpe, _ministryAuth,
                                 _ministryDate, _responsible, _accreditationNumber,
                                 _accreditationUntil, _addressFr, _addressAr, _city, _region,
                                 _postalCode, _phone, _fax, _email, _website,
-                                _logo, _chooseLogo, _removeLogo, _logoHint,
-                                _saveSite, _reloadSite, _siteStatus]);
+                                _logo, _chooseLogo, _removeLogo, _logoHint]);
 
-        _siteTab.Controls.Add(body);
+        // The form in a white card, its fields where they were; Save and Reload in the bar at
+        // the card's foot rather than at the end of a page that has to be scrolled to reach them.
+        var card = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised,
+                               Padding = new Padding(20, 14, 2, 1) };
+        card.Controls.Add(body);
+        card.Controls.Add(ActionBar(_siteStatus, _saveSite, _reloadSite));
+        UiChrome.AsCard(card);
+
+        _siteTab.Controls.Add(AdminLayout.Spaced(card, new Padding(0, 2, 0, 0)));
+        _siteTab.Controls.Add(banners);
         _siteTab.Controls.Add(header);
     }
 
     private void BuildNumberingTab()
     {
         _numberingTab.BackColor = UiTheme.Surface;
-        _numberingTab.Padding = new Padding(UiTheme.Gutter);
 
         _sequences.Columns.Clear();
         void Add(string name, int w, Font? f = null, string align = "")
@@ -415,29 +437,15 @@ public sealed class SettingsView : LocalizedView
         Add("used", 9, UiTheme.Monospace, "r");
         Add("state", 9, UiTheme.SmallBold);
 
-        _sequences.Dock = DockStyle.Fill;
-
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 78,
-                                  BackColor = UiTheme.Surface };
-
-        _editFormat.Bounds = new Rectangle(0, 8, 240, UiTheme.ButtonHeight);
-        _toggleClosed.Bounds = new Rectangle(250, 8, 220, UiTheme.ButtonHeight);
-
-        _numberingNotice.Font = UiTheme.Small;
-        _numberingNotice.ForeColor = UiTheme.TextSecondary;
-        _numberingNotice.AutoSize = false;
-        _numberingNotice.Bounds = new Rectangle(0, 44, 1300, 32);
-
-        actions.Controls.AddRange([_editFormat, _toggleClosed, _numberingNotice]);
-
-        _numberingTab.Controls.Add(_sequences);
-        _numberingTab.Controls.Add(actions);
+        AdminLayout.ListGrid(_sequences);
+        _numberingTab.Controls.Add(AdminLayout.CardSection(_sequencesHeading, _sequences,
+                                                           AdminLayout.Actions(_editFormat, _toggleClosed)));
+        _numberingTab.Controls.Add(AdminLayout.Note(_numberingNotice, 40));
     }
 
     private void BuildSettingsTab()
     {
         _settingsTab.BackColor = UiTheme.Surface;
-        _settingsTab.Padding = new Padding(UiTheme.Gutter);
 
         _settings.Columns.Clear();
         void Add(string name, int w, Font? f = null)
@@ -454,30 +462,15 @@ public sealed class SettingsView : LocalizedView
         Add("description", 34, UiTheme.Small);
         Add("sensitive", 10, UiTheme.SmallBold);
 
-        _settings.Dock = DockStyle.Fill;
-
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 78,
-                                  BackColor = UiTheme.Surface };
-
-        _editSetting.Bounds = new Rectangle(0, 8, 220, UiTheme.ButtonHeight);
-        _addSetting.Bounds = new Rectangle(230, 8, 220, UiTheme.ButtonHeight);
-
-        _settingsNotice.Font = UiTheme.Small;
-        _settingsNotice.ForeColor = UiTheme.TextSecondary;
-        _settingsNotice.AutoSize = false;
-        _settingsNotice.Bounds = new Rectangle(0, 44, 1300, 32);
-
-        actions.Controls.AddRange([_editSetting, _addSetting, _settingsNotice]);
-
-        _settingsTab.Controls.Add(_settings);
-        _settingsTab.Controls.Add(actions);
+        AdminLayout.ListGrid(_settings);
+        _settingsTab.Controls.Add(AdminLayout.CardSection(_settingsHeading, _settings,
+                                                          AdminLayout.Actions(_editSetting, _addSetting)));
+        _settingsTab.Controls.Add(AdminLayout.Note(_settingsNotice, 40));
     }
 
     private void BuildPrintersTab()
     {
         _printersTab.BackColor = UiTheme.Surface;
-        _printersTab.Padding = new Padding(UiTheme.Gutter);
-        _printersTab.AutoScroll = true;
 
         Label Text(Label label, Font font, Color colour, Rectangle bounds)
         {
@@ -510,18 +503,20 @@ public sealed class SettingsView : LocalizedView
         Text(_labelPrinterLabel, UiTheme.BodyBold, UiTheme.TextPrimary, new Rectangle(0, 182, 760, 22));
         Picker(_labelPrinterPicker, 206);
 
-        _savePrinters.Bounds = new Rectangle(0, 256, 180, UiTheme.ButtonHeight);
-        _testLabel.Bounds = new Rectangle(190, 256, 230, UiTheme.ButtonHeight);
-        _reloadPrinters.Bounds = new Rectangle(430, 256, 150, UiTheme.ButtonHeight);
-
-        Text(_printersStatus, UiTheme.SmallBold, UiTheme.TextSecondary, new Rectangle(0, 298, 760, 40));
-
-        _printersTab.Controls.AddRange(
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised, AutoScroll = true };
+        body.Controls.AddRange(
         [
             _printersIntro, _documentPrinterLabel, _documentPrinter, _printDirectly, _printDirectlyHint,
-            _labelPrinterLabel, _labelPrinterPicker, _savePrinters, _testLabel, _reloadPrinters,
-            _printersStatus
+            _labelPrinterLabel, _labelPrinterPicker
         ]);
+
+        var card = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised,
+                               Padding = new Padding(20, 16, 2, 1) };
+        card.Controls.Add(body);
+        card.Controls.Add(ActionBar(_printersStatus, _savePrinters, _testLabel, _reloadPrinters));
+        UiChrome.AsCard(card);
+
+        _printersTab.Controls.Add(card);
 
         _printDirectly.CheckedChanged += (_, _) => UpdatePrinterControls();
         _documentPrinter.SelectedIndexChanged += (_, _) => UpdatePrinterControls();
@@ -629,6 +624,7 @@ public sealed class SettingsView : LocalizedView
     private void Field(Control parent, string key, int top, int left)
     {
         var label = UiTheme.FieldLabel(T(key));
+        label.Font = UiTheme.SmallBold;
         label.Name = "lbl_" + key;
         label.Location = new Point(left, top);
         parent.Controls.Add(label);
@@ -709,6 +705,11 @@ public sealed class SettingsView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _pageTitle.Text = T("Nav.Settings");
+        _pageCaption.Text = T("AdminA.SettingsLead");
+        _sequencesHeading.Text = T("Admin.Sequences");
+        _settingsHeading.Text = T("Nav.Settings");
+
         _siteTab.Text = T("Site.Title");
         _numberingTab.Text = T("Admin.Sequences");
         _settingsTab.Text = T("Nav.Settings");

@@ -1,4 +1,5 @@
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Desktop.Views;
 using MarocLIS.Localization;
 
 namespace MarocLIS.Desktop.Forms;
@@ -41,11 +42,14 @@ public sealed class HelpForm : LocalizedForm
 
     private void BuildLayout()
     {
+        BackColor = UiTheme.SurfaceRaised;
+
+        // A white tool bar with the line of the design system under it, as the shell's header.
         var bar = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = UiTheme.ButtonHeight + 2 * UiTheme.GutterTight,
-            Padding = new Padding(UiTheme.GutterTight),
+            Height = 52,
+            Padding = new Padding(14, 10, 14, 0),
             BackColor = UiTheme.SurfaceRaised,
             WrapContents = false,
             Tag = UiTags.OwnLayout
@@ -54,12 +58,13 @@ public sealed class HelpForm : LocalizedForm
         foreach (var (button, glyph) in new[] { (_back, Glyph.ChevronLeft), (_forward, Glyph.ChevronRight),
                                                 (_home, Glyph.BookOpen), (_print, Glyph.Printer) })
         {
-            button.AutoSize = true;
-            button.Height = UiTheme.ButtonHeight;
-            button.Margin = new Padding(0, 0, UiTheme.GutterTight, 0);
+            AdminLayout.Action(button);
+            button.Margin = new Padding(0, 0, 8, 0);
             ButtonIcons.Set(button, glyph);
             bar.Controls.Add(button);
         }
+
+        var line = new Label { Dock = DockStyle.Top, Height = 1, BackColor = UiTheme.Border };
 
         _back.Enabled = _forward.Enabled = false;
         _back.Click += (_, _) => _browser?.GoBack();
@@ -90,6 +95,7 @@ public sealed class HelpForm : LocalizedForm
             _browser = null;
         }
 
+        Controls.Add(line);
         Controls.Add(bar);
     }
 

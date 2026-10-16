@@ -115,6 +115,7 @@ internal sealed class InstrumentFrameTestDialog : Form
         Controls.Add(close);
 
         CancelButton = close;
+        AdminDialogFrame.Attach(this, localizer, AdminDialogFrame.Lead(localizer, nameof(InstrumentFrameTestDialog)));
 
         if (!string.IsNullOrWhiteSpace(initialFrame))
             Shown += async (_, _) => await RunAsync();
