@@ -38,6 +38,9 @@ public sealed class BankReconciliationView : LocalizedView
 
     // Withdrawing a whole import is rare and heavy: under « Plus d'actions ▾ ».
     private readonly ContextMenuStrip _moreMenu = new();
+
+    // Kept to translate it with the screen: it stayed « Plus d'actions » in Arabic and English.
+    private Button? _more;
     private readonly MenuAction _withdrawImport = new();
 
     // « Lignes ouvertes seulement » is kept as the tick box it was, off screen; a chip sets it.
@@ -96,8 +99,8 @@ public sealed class BankReconciliationView : LocalizedView
     {
         Padding = new Padding(24, 20, 24, 16);
 
-        var more = FinanceUi.MoreButton(_moreMenu, Localizer, _withdrawImport);
-        var header = FinanceUi.PageHeader(_heading, null, more, _accounts, _import);
+        _more = FinanceUi.MoreButton(_moreMenu, Localizer, _withdrawImport);
+        var header = FinanceUi.PageHeader(_heading, null, _more, _accounts, _import);
 
         _account.Width = 320;
         _from.Width = 120;
@@ -196,6 +199,7 @@ public sealed class BankReconciliationView : LocalizedView
         _fromLabel.Text = T("Field.From");
         _toLabel.Text = T("Field.To");
         _refresh.Text = T("Action.Refresh");
+        if (_more is not null) _more.Text = T("ResultEntry.MoreActions");
         _accounts.Text = T("Treasury.BankAccounts");
         _import.Text = T("Treasury.ImportStatement");
         _auto.Text = T("Treasury.AutoMatch");

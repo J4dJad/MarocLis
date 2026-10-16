@@ -45,6 +45,9 @@ public sealed class FixedAssetView : LocalizedView
 
     // The register's printouts and the accounts, under « Plus d'actions ▾ ».
     private readonly ContextMenuStrip _moreMenu = new();
+
+    // Kept to translate it with the screen: it stayed « Plus d'actions » in Arabic and English.
+    private Button? _more;
     private readonly MenuAction _pdf = new();
     private readonly MenuAction _csv = new();
     private readonly MenuAction _accounts = new();
@@ -90,8 +93,8 @@ public sealed class FixedAssetView : LocalizedView
 
         // The title, the register's summary in grey under it (it is long: a line of its own), and
         // the actions at the far end, a new asset the primary.
-        var more = FinanceUi.MoreButton(_moreMenu, Localizer, _pdf, _csv, _accounts);
-        var header = FinanceUi.PageHeader(_title, null, more, _fromInstrument, _new);
+        _more = FinanceUi.MoreButton(_moreMenu, Localizer, _pdf, _csv, _accounts);
+        var header = FinanceUi.PageHeader(_title, null, _more, _fromInstrument, _new);
         header.Padding = new Padding(0);
 
         FinanceUi.Muted(_heading);
@@ -229,6 +232,7 @@ public sealed class FixedAssetView : LocalizedView
         _yearLabel.Text = T("Assets.Year");
         _refresh.Text = T("Action.Refresh");
         _new.Text = T("Assets.New");
+        if (_more is not null) _more.Text = T("ResultEntry.MoreActions");
         _fromInstrument.Text = T("Assets.FromInstrument");
         _edit.Text = T("Action.Edit");
         _schedule.Text = T("Assets.Schedule");

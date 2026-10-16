@@ -782,8 +782,20 @@ public sealed class SettingsView : LocalizedView
         }
     }
 
+    private static void Relabel(ComboBox box, Func<int, string> label)
+    {
+        var selected = box.SelectedIndex;
+        for (var i = 0; i < box.Items.Count; i++)
+            if (box.Items[i] is EnumChoice choice) box.Items[i] = choice with { Display = label(choice.Value) };
+        if (box.SelectedIndex != selected) box.SelectedIndex = selected;
+    }
+
     protected override void ApplyTexts()
     {
+        // The site's kind and region lists are filled once: they stayed in French after a switch
+        // to Arabic or English.
+        Relabel(_kind, v => T($"LabSiteKind.{(LabSiteKind)v}"));
+        Relabel(_region, v => T($"MoroccanRegion.{(MoroccanRegion)v}"));
         _pageTitle.Text = T("Nav.Settings");
         _pageCaption.Text = T("AdminA.SettingsLead");
         _sequencesHeading.Text = T("Admin.Sequences");
