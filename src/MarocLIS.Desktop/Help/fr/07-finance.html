@@ -3,47 +3,469 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>Finance</title>
+<title>Finances</title>
 <style>
-body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.5;
-       color: #1f2933; background: #ffffff; margin: 0; padding: 0; }
-.page { max-width: 900px; margin: 0 auto; padding: 16px 24px 48px 24px; }
-h1 { font-size: 26px; color: #0b4f8a; border-bottom: 2px solid #0b4f8a; padding-bottom: 6px; }
-h2 { font-size: 20px; color: #0b4f8a; margin-top: 32px; }
-a { color: #0b5fa5; }
-img { max-width: 100%; border: 1px solid #d0d7de; }
+body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.55;
+       color: #1c1e21; background: #ffffff; margin: 0; padding: 0; }
+.page { max-width: 940px; margin: 0 auto; padding: 16px 28px 56px 28px; }
+.crumb { font-size: 13px; color: #5c616a; margin-bottom: 4px; }
+h1 { font-size: 26px; color: #1b5e8c; border-bottom: 2px solid #1b5e8c; padding-bottom: 6px; margin-top: 8px; }
+h2 { font-size: 21px; color: #1b5e8c; margin-top: 36px; border-bottom: 1px solid #d8dade; padding-bottom: 4px; }
+h3 { font-size: 17px; color: #1c1e21; margin-top: 26px; }
+h4 { font-size: 15px; color: #1c1e21; margin-top: 20px; }
+a { color: #1b5e8c; }
+code { font-family: Consolas, monospace; font-size: 13px; background: #f0f1f3; padding: 1px 4px; }
+pre { background: #f0f1f3; padding: 10px; overflow: auto; }
+table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+th, td { border: 1px solid #d8dade; padding: 6px 8px; text-align: left; vertical-align: top; font-size: 14px; }
+th { background: #e6eef4; }
+.diagram { margin: 16px 0 20px 0; text-align: center; }
+.diagram img { max-width: 100%; border: 1px solid #d8dade; padding: 8px; background: #ffffff; }
 ul.toc li { margin: 4px 0; }
-section { margin-bottom: 24px; }
+.top { font-size: 13px; margin-top: 32px; }
 </style>
 </head>
 <body>
 <div class="page">
-<p><a href="index.html">Sommaire</a></p>
-<h1>Finance</h1>
-<section id="accountingexport">
-<h2>Export comptable</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="accountingsettings">
-<h2>Comptes et journaux</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="fixedassets">
-<h2>Immobilisations</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="bankreconciliation">
-<h2>Rapprochement bancaire</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="cashforecast">
-<h2>Prévision de trésorerie</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="costmargin">
-<h2>Coût de revient et marge</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
+<div class="crumb"><a href="index.html">Sommaire</a></div>
+<h1>Finances</h1>
+<p>Le groupe <strong>Finances</strong> du menu réunit les écrans qui préparent le travail du comptable et suivent l'argent du laboratoire : l'export des écritures, le paramétrage des comptes, le registre des immobilisations, le rapprochement bancaire, la prévision de trésorerie et le coût de revient des analyses. L'écran <strong>Visa des caisses</strong>, rangé dans le même groupe, est décrit avec la caisse (chapitre facturation).</p>
+<p>Principe général : MarocLIS ne tient pas la comptabilité générale. Il produit des écritures propres (plan comptable marocain, CGNC) que le cabinet comptable importe dans son logiciel (Sage ou autre). Aucun écran de ce groupe ne passe d'écriture lui-même.</p>
+<div class="diagram"><img src="img/diagramme-69bac0a03683bde5.png" alt="Diagramme"></div>
+
+<p>Le titre du groupe s'affiche dès que l'utilisateur a le droit d'ouvrir au moins un de ses écrans. Un bouton pour lequel l'utilisateur n'a pas le droit reste visible mais grisé (sauf <strong>Quote-part des frais…</strong>, qui est masqué).</p>
+<p>Droits par défaut (rôles livrés avec l'application) :</p>
+<table>
+<thead>
+<tr>
+<th>Droit</th>
+<th>Écrans concernés</th>
+<th>Rôles qui l'ont par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Export comptable</td>
+<td>Export comptable, Comptes et journaux</td>
+<td>Administrateur, Biologiste responsable, Comptabilité</td>
+</tr>
+<tr>
+<td>Immobilisations — consulter</td>
+<td>Immobilisations (lecture)</td>
+<td>Administrateur, Biologiste responsable, Comptabilité, Responsable qualité</td>
+</tr>
+<tr>
+<td>Immobilisations — gérer</td>
+<td>Immobilisations (saisie, sortie, comptes)</td>
+<td>Administrateur, Biologiste responsable, Comptabilité</td>
+</tr>
+<tr>
+<td>Trésorerie — consulter / gérer</td>
+<td>Rapprochement bancaire, Prévision de trésorerie</td>
+<td>Administrateur, Biologiste responsable, Comptabilité (les deux droits)</td>
+</tr>
+<tr>
+<td>Pilotage — consulter</td>
+<td>Coût de revient et marge</td>
+<td>Administrateur, Biologiste responsable</td>
+</tr>
+<tr>
+<td>Pilotage — paramètres de coût</td>
+<td>bouton « Quote-part des frais… »</td>
+<td>Administrateur, Biologiste responsable</td>
+</tr>
+</tbody>
+</table>
+<p>Le rôle Comptabilité n'a pas accès à <strong>Coût de revient et marge</strong>.</p>
+<hr />
+<h3 id="accountingexport">Export comptable</h3>
+<p>Produire, pour une période, le fichier des écritures comptables (ventes, encaissements, opérations diverses, paie, dotations, achats) à remettre au comptable, et l'état de TVA de la même période.</p>
+<p><strong>Qui y a accès</strong> : droit « Export comptable » — Administrateur, Biologiste responsable, Comptabilité.</p>
+<p><strong>L'écran</strong>
+- En haut : <strong>Du</strong> / <strong>Au</strong> (par défaut, le mois civil précédent), <strong>Format du fichier</strong> (« Sage (écritures, séparateur point-virgule) » ou « CSV générique (dates ISO, point décimal) »).
+- <strong>Sites</strong> : la liste des sites auxquels l'utilisateur a accès, tous cochés au départ.
+- <strong>Journaux à exporter</strong> : six cases, toutes cochées au départ :
+  - « Ventes et avoirs »
+  - « Encaissements, acomptes et caisse »
+  - « Opérations diverses (pertes, imputations) »
+  - « Paie »
+  - « Dotations aux amortissements »
+  - « Achats fournisseurs »
+- Boutons : <strong>Contrôler</strong>, <strong>Exporter</strong>, <strong>État de TVA (CSV)</strong>, <strong>État de TVA (PDF)</strong>.
+- Au milieu : un tableau récapitulatif par journal (<strong>Journal</strong>, <strong>Nature</strong>, <strong>Écritures</strong>, <strong>Débit</strong>, <strong>Crédit</strong>).
+- Une ligne d'état (en vert, rouge ou gris).
+- En bas : la liste des anomalies en rouge (<strong>Anomalie</strong>, <strong>Date</strong>, <strong>Journal</strong>, <strong>N° pièce</strong>, <strong>Libellé</strong>, <strong>Compte ou montants</strong>).</p>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><em>Exporter les écritures du mois pour le comptable</em></li>
+<li>Vérifier <strong>Du</strong> et <strong>Au</strong> (le mois précédent est proposé).</li>
+<li>Cocher les sites voulus et les journaux voulus.</li>
+<li>Choisir le <strong>Format du fichier</strong> (Sage en général).</li>
+<li>Cliquer <strong>Contrôler</strong>. Le récapitulatif par journal s'affiche.</li>
+<li>Si la ligne d'état dit « N écriture(s), toutes équilibrées et affectées à un compte : l'export est possible. », cliquer <strong>Exporter</strong>. Le fichier CSV s'ouvre (Excel ou programme associé). L'enregistrer et le transmettre au comptable.</li>
+<li><em>Corriger un export refusé</em></li>
+<li>Après <strong>Contrôler</strong>, si la ligne d'état dit « Export refusé : N anomalie(s) à corriger… », lire la liste du bas.</li>
+<li>« Compte manquant ou invalide » : un compte n'est pas renseigné ou n'est pas un compte CGNC. Selon le cas, corriger dans <strong>Comptes et journaux</strong>, dans la fiche de l'organisme payeur (champ <strong>Compte comptable</strong>), dans la fiche fournisseur (<strong>Compte auxiliaire</strong>) ou dans les comptes des immobilisations.</li>
+<li>« Écriture déséquilibrée » : la colonne <strong>Compte ou montants</strong> donne les totaux débit et crédit. Signaler l'écriture à l'administrateur (à vérifier : cas rare, normalement impossible).</li>
+<li>Cliquer de nouveau <strong>Contrôler</strong>, puis <strong>Exporter</strong>.</li>
+<li><em>Exporter un seul journal</em> (par exemple la paie) : décocher les autres journaux, puis <strong>Contrôler</strong> → <strong>Exporter</strong>.</li>
+<li><em>Imprimer l'état de TVA de la période</em></li>
+<li>Régler <strong>Du</strong>, <strong>Au</strong> et les <strong>Sites</strong>.</li>
+<li>Cliquer <strong>État de TVA (PDF)</strong> ou <strong>État de TVA (CSV)</strong>. Il n'est pas nécessaire de cliquer <strong>Contrôler</strong> avant.</li>
+<li>L'état donne :<ul>
+<li>le chiffre d'affaires exonéré (analyses, art. 91 CGI) ;</li>
+<li>le chiffre d'affaires taxable par taux avec la TVA collectée ;</li>
+<li>les achats et les immobilisations par taux avec leur TVA ;</li>
+<li>le prorata de déduction, la TVA déductible après prorata et la TVA due (crédit si négatif).</li>
+</ul>
+</li>
+<li>Il porte la mention « Document de travail à vérifier avec votre comptable : ce n'est pas la déclaration de TVA. »</li>
+</ol>
+<p><strong>Règles et contrôles</strong>
+- <strong>Exporter</strong> reste grisé tant qu'on n'a pas cliqué <strong>Contrôler</strong>, et tant qu'il reste une anomalie ou qu'il n'y a aucune écriture. Le fichier n'est jamais produit à moitié.
+- Si l'on change la période, les sites ou les journaux après <strong>Contrôler</strong>, le bouton <strong>Exporter</strong> reste actif. Le fichier est quand même recalculé et recontrôlé avec les nouveaux choix, mais le récapitulatif affiché est alors celui de l'ancien contrôle. Recliquez <strong>Contrôler</strong> après tout changement.
+- « Cochez au moins un site. » / « Cochez au moins un journal. » / « La date de début doit précéder la date de fin. »
+- « Aucun registre des immobilisations installé : pas de dotations aux amortissements. » apparaît si le journal des dotations est coché sans registre.
+- Chaque export est tracé dans le journal des accès aux données, car les libellés contiennent des noms de patients (loi 09-08). Le fichier sort du laboratoire : transmettez-le par un moyen sûr.
+- <strong>Ne pas exporter deux fois la même période vers le logiciel comptable.</strong> Un second export de la même période redonne les mêmes écritures, et les importer deux fois les doublerait.
+- Les achats peuvent aussi être exportés depuis <strong>Factures fournisseurs</strong> &gt; <strong>Export comptable</strong>. N'utilisez qu'un seul des deux chemins pour une période donnée, sinon les achats seront importés deux fois.
+- Format Sage : le N° de pièce est limité à 13 caractères et le libellé à 35. Une pièce plus longue est raccourcie et le numéro complet est mis en tête du libellé.</p>
+<p><strong>Choix comptables appliqués (pour le comptable)</strong> — ce sont les comptes proposés par défaut ; tous se changent dans <strong>Comptes et journaux</strong>.
+- <em>Ventes (VT)</em> :
+  - au débit, le patient (3421) et, pour la part réclamée à un tiers payant, l'organisme (3421 ou son compte propre) ;
+  - au crédit, les produits (7124, un compte par département possible) et la TVA facturée (4455) le cas échéant. Les analyses sont exonérées (art. 91 CGI) ;
+  - un avoir passe en sens inverse, d'abord sur la part du patient.
+- <em>Encaissements (CAI / BQ)</em> :
+  - espèces sur la caisse du site (5161) ;
+  - chèque, carte, virement, effet/traite (LCN) et paiement mobile chacun sur son compte de trésorerie (5141 par défaut ; 5111 « Chèques et valeurs à encaisser » si le cabinet le préfère) ;
+  - règlements des organismes sur 5141 ;
+  - un chèque impayé ou un remboursement contre-passe l'encaissement le jour où il survient.
+- <em>Patients en compte global</em> (réglage par défaut) : les encaissements d'une session de caisse sont cumulés par jour et par mode de règlement, sur le compte tiers « PATIENTS ». Le livre de caisse montre la recette de la session, pas chaque ticket. L'autre réglage crée un compte tiers par patient (n° de dossier).
+- <em>Acomptes</em> : 4421 à l'encaissement, puis 4421 vers le patient lorsqu'il règle la facture.
+- <em>Opérations diverses (OD)</em> :
+  - perte sur créance (6585) ;
+  - part refusée par l'organisme et laissée au patient : transfert du compte de l'organisme au compte du patient le jour de la réponse, et retour si le bordereau est rouvert ;
+  - écart de caisse à la clôture : manquant 6588, excédent 7588 ;
+  - espèces envoyées à la banque : 5161 vers 5115.
+- <em>Paie</em> : pour chaque mois de paie clôturé, salaires bruts 6171 et charges patronales 6174 au débit ; au crédit CNSS/AMO 4441, IR 4452, avances 3431, autres retenues 4488 et net à payer 4432.
+- <em>Dotations</em> :
+  - une écriture par immobilisation et par mois, datée du dernier jour du mois (ou de la date de sortie) ;
+  - 6193 au débit, 28xxx au crédit ;
+  - un mois exporté est mémorisé. Si l'immobilisation est corrigée ensuite, les mois déjà exportés sont redonnés à l'identique, et le premier mois non exporté porte la différence (une reprise si elle est négative).
+- <em>Achats (ACH)</em> :
+  - charge par catégorie d'article (6122 par défaut) et TVA récupérable sur charges (34552) au débit, fournisseur 4411 au crédit ;
+  - règlement : fournisseur au débit, banque 5141 ou caisse 5161 au crédit, à la date du règlement saisi. Un règlement par effet (LCN) est donc passé à la date de sa remise, directement en banque. Il n'y a pas de compte d'effets à payer : à valider avec le comptable.
+- <em>Facture d'une immobilisation</em> : quand une immobilisation du registre est liée à une facture fournisseur, cette facture est immobilisée et non passée en charge :
+  - le coût va au compte d'immobilisation (2332… selon la catégorie) ;
+  - la TVA va en 34551 « TVA récupérable sur immobilisations » si elle est récupérable, sinon elle est ajoutée au coût ;
+  - la dette est portée en 4481 « Dettes sur acquisitions d'immobilisations », et ses règlements soldent 4481 ;
+  - si la facture avait déjà été exportée en charges avant le lien, l'écriture déjà partie n'est pas modifiée : une écriture de reclassement, datée du jour du lien, déplace la part de l'immobilisation des charges (et 34552) vers l'immobilisation (et 34551). Le fournisseur reste alors en 4411 (à confirmer avec le comptable).</p>
+<p><strong>Flux</strong> : facturation, caisse, paie, factures fournisseurs et immobilisations alimentent cet écran → fichier CSV → import dans le logiciel du cabinet comptable.</p>
+<div class="diagram"><img src="img/diagramme-4595749e10bc3746.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="accountingsettings">Comptes et journaux</h3>
+<p>Fixer, en un seul tableau, les codes journaux et les comptes CGNC utilisés par l'export comptable (ventes, clients, trésorerie, paie, achats).</p>
+<p><strong>Qui y a accès</strong> : droit « Export comptable » — Administrateur, Biologiste responsable, Comptabilité.</p>
+<p><strong>L'écran</strong>
+- Boutons <strong>Actualiser</strong> et <strong>Enregistrer</strong>.
+- Un avertissement : les comptes proposés sont ceux du CGNC, à faire valider par le comptable. Un département, un site ou un mode de règlement laissé vide suit le compte par défaut de sa rubrique.
+- Un tableau à trois colonnes : <strong>Rubrique</strong>, <strong>Paramètre</strong>, <strong>Compte ou code</strong> (seule cette dernière se modifie). Les rubriques :</p>
+<table>
+<thead>
+<tr>
+<th>Rubrique</th>
+<th>Contenu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Journaux</td>
+<td>Journal des ventes (VT), de caisse (CAI), de banque (BQ), des opérations diverses (OD), de paie (OD), des dotations (OD)</td>
+</tr>
+<tr>
+<td>Clients et organismes</td>
+<td>Clients patients (3421), <strong>Compte des patients</strong> (liste : compte global ou un compte par patient), compte tiers global des patients (PATIENTS), organismes sans compte propre (3421), acomptes reçus (4421), créances irrécouvrables (6585)</td>
+</tr>
+<tr>
+<td>Produits et TVA</td>
+<td>Produits par défaut (7124), produits hors analyses (7124), TVA facturée (4455), puis une ligne par département</td>
+</tr>
+<tr>
+<td>Trésorerie</td>
+<td>Caisse par défaut (5161), une ligne par site, un compte par mode de règlement (chèque, carte, virement, effet/traite, paiement mobile), banque des règlements des organismes (5141), virements de fonds caisse vers banque (5115), manquants (6588) et excédents (7588) de caisse</td>
+</tr>
+<tr>
+<td>Paie</td>
+<td>6171, 6174, 4441, 4452, 3431, 4488, 4432</td>
+</tr>
+<tr>
+<td>Achats</td>
+<td>Journaux achats / banque / caisse fournisseurs, fournisseurs (4411), TVA récupérable sur charges (34552), TVA récupérable sur immobilisations (34551), dettes sur acquisitions d'immobilisations (4481), banque (5141) et caisse (5161) des règlements fournisseurs, un compte d'achat par catégorie d'article</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><em>Adapter les comptes au plan du cabinet comptable</em></li>
+<li>Cliquer dans la colonne <strong>Compte ou code</strong> de la ligne voulue et taper le compte (par exemple 71241 pour un département).</li>
+<li>Répéter pour chaque ligne à changer.</li>
+<li>Cliquer <strong>Enregistrer</strong>. Le message « Enregistré. » confirme.</li>
+<li><em>Donner un compte de produits propre à un département</em> : remplir la ligne « Produits du département … ». La laisser vide pour revenir au compte par défaut.</li>
+<li><em>Passer les patients en compte individuel</em> : dans la ligne <strong>Compte des patients</strong>, choisir « Un compte tiers par patient (n° de dossier) », puis <strong>Enregistrer</strong>.</li>
+<li><em>Abandonner une saisie non enregistrée</em> : cliquer <strong>Actualiser</strong>. Les valeurs enregistrées reviennent, sans confirmation.</li>
+</ol>
+<p><strong>Règles et contrôles</strong>
+- Un compte doit être un compte général CGNC : chiffres, classe 1 à 8, au moins 4 chiffres. Un code journal ou un compte tiers s'écrit en lettres et chiffres, sans espace, 20 caractères au plus. Sinon : « « X » n'est pas un compte valide… ».
+- Seules les lignes de département, de site et de mode de règlement peuvent rester vides. Pour les autres : « Le paramètre … ne peut pas être vide. » Ce message donne le nom technique du paramètre et non son libellé à l'écran.
+- Si une seule valeur est fausse, rien n'est enregistré.
+- Chaque modification est tracée (liste des paramètres changés).
+- Les comptes des immobilisations ne sont pas ici : ils se règlent dans <strong>Immobilisations</strong> &gt; <strong>Comptes</strong>.
+- Le compte d'un organisme payeur se règle dans sa fiche (<strong>Compte comptable</strong>). Le compte d'un fournisseur se règle dans sa fiche (<strong>Compte auxiliaire</strong>).</p>
+<p><strong>Flux</strong> : ces réglages sont lus à chaque <strong>Contrôler</strong> et <strong>Exporter</strong> de l'<strong>Export comptable</strong>.</p>
+<div class="diagram"><img src="img/diagramme-b9af3f69f32f5cd4.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="fixedassets">Immobilisations</h3>
+<p>Tenir le registre des immobilisations par exercice (valeur brute, amortissements, valeur nette), le plan d'amortissement de chaque bien, les sorties, et produire le tableau des immobilisations pour le bilan.</p>
+<p><strong>Qui y a accès</strong>
+- Consultation : Administrateur, Biologiste responsable, Comptabilité, Responsable qualité.
+- Saisie, modification, sortie et comptes : Administrateur, Biologiste responsable, Comptabilité.</p>
+<p><strong>L'écran</strong>
+- En haut : <strong>Exercice</strong> (année civile), <strong>Actualiser</strong>, <strong>Nouvelle immobilisation</strong>, <strong>Depuis un équipement</strong>, <strong>Modifier</strong>, <strong>Plan d'amortissement</strong>, <strong>Sortie</strong> (devient <strong>Annuler la sortie</strong> sur un bien déjà sorti), <strong>Tableau (PDF)</strong>, <strong>Export CSV</strong>, <strong>Comptes</strong>.
+- Le titre résume l'exercice : nombre d'immobilisations, valeur brute, dotation, VNA, et le nombre d'équipements mis à disposition.
+- Le registre a une ligne par bien : <strong>Code</strong>, <strong>Désignation</strong>, <strong>Catégorie</strong>, <strong>Compte</strong>, <strong>Date d'acquisition</strong>, <strong>Mise en service</strong>, <strong>Valeur brute</strong>, <strong>Méthode</strong>, <strong>Durée (ans)</strong>, <strong>Taux</strong>, <strong>Amort. cumulés début</strong>, <strong>Dotation</strong>, <strong>Sorties valeur brute</strong>, <strong>Sorties amort.</strong>, <strong>Valeur brute fin</strong>, <strong>Amort. cumulés fin</strong>, <strong>VNA</strong>, <strong>Date de sortie</strong>, <strong>Prix de cession</strong>, <strong>Résultat de cession</strong>, <strong>Équipement</strong>.
+  - Un bien sorti s'affiche en gris.
+  - Les équipements mis à disposition par un fournisseur (mise à disposition, comodat, location) viennent en fin de liste, en petit et en gris, sans montant.
+- En bas : <strong>Équipement lié — maintenance et pannes</strong>. Cette partie donne, pour l'équipement lié à la ligne choisie, le fabricant, le n° de série, les interventions et les pannes, l'arrêt cumulé, le coût, la prochaine maintenance et le prochain étalonnage, ainsi que la liste des interventions (pannes sur fond orangé). Ces informations viennent du module Équipements et ne se modifient pas ici.</p>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><em>Inscrire une nouvelle immobilisation</em></li>
+<li>Cliquer <strong>Nouvelle immobilisation</strong>.</li>
+<li>Remplir <strong>Code</strong> (n° d'inventaire), <strong>Désignation</strong> et <strong>Catégorie</strong> (matériel de laboratoire, matériel informatique, mobilier, matériel de transport, agencements et aménagements, autres).</li>
+<li>Saisir <strong>Date d'acquisition</strong> et <strong>Mise en service</strong>.</li>
+<li>Choisir la <strong>Méthode</strong> (Linéaire ou Dégressif) et la <strong>Durée (ans)</strong>. La durée proposée est de 5 ans, ou de 10 ans pour le mobilier et les agencements. La <strong>Valeur résiduelle (MAD)</strong> se laisse en général à zéro.</li>
+<li>Saisir <strong>Coût HT (MAD)</strong> (frais de transport et d'installation compris), <strong>TVA (MAD)</strong>, et cocher <strong>TVA récupérable</strong> seulement si le comptable le confirme.</li>
+<li>Choisir le <strong>Fournisseur</strong>. La liste <strong>Facture fournisseur</strong> propose alors ses factures. En choisir une remplit le <strong>N° de facture</strong>, ainsi que le coût, la TVA et la date d'acquisition s'ils sont encore vides. Le <strong>N° de facture</strong> peut aussi être tapé à la main.</li>
+<li>Choisir l'<strong>Équipement</strong> lié s'il s'agit d'un appareil suivi dans le module Équipements.</li>
+<li>Contrôler la ligne d'aide, qui indique la base amortissable et le taux (ou le coefficient dégressif).</li>
+<li>Cliquer <strong>Enregistrer</strong>.</li>
+<li><em>Immobiliser un appareil déjà déclaré dans les équipements</em></li>
+<li>Cliquer <strong>Depuis un équipement</strong>. La liste montre les appareils achetés (date d'achat renseignée), pas encore immobilisés et non mis à disposition par un fournisseur.</li>
+<li>Double-cliquer l'appareil, ou le choisir puis <strong>Sélectionner</strong>.</li>
+<li>La fiche s'ouvre pré-remplie (code, nom, fournisseur, dates, matériel de laboratoire, linéaire). Saisir le coût, puis <strong>Enregistrer</strong>.</li>
+<li><em>Corriger une immobilisation</em> : choisir la ligne, <strong>Modifier</strong>, corriger, <strong>Enregistrer</strong>.</li>
+<li><em>Consulter le plan d'amortissement</em></li>
+<li>Choisir la ligne, puis <strong>Plan d'amortissement</strong> (ou double-clic sur la ligne).</li>
+<li>La fenêtre montre le plan <strong>Par exercice</strong> et <strong>Par mois</strong>.</li>
+<li><strong>Export CSV</strong> dans cette fenêtre exporte le plan mois par mois. <strong>Fermer</strong> la referme.</li>
+<li><em>Enregistrer la sortie d'un bien (cession, rebut, vol)</em></li>
+<li>Choisir la ligne, puis <strong>Sortie</strong>.</li>
+<li>Saisir <strong>Date de sortie</strong> (pas dans le futur), <strong>Prix de cession</strong> (0 pour un rebut) et <strong>Motif de la sortie</strong> (obligatoire).</li>
+<li>Cliquer <strong>Enregistrer</strong>.</li>
+<li><em>Annuler une sortie saisie par erreur</em> : choisir la ligne grisée, cliquer <strong>Annuler la sortie</strong>, puis confirmer. Les dotations reprennent jusqu'à la fin du plan.</li>
+<li><em>Imprimer le tableau des immobilisations et des amortissements</em> :</li>
+<li>Choisir l'<strong>Exercice</strong>, puis cliquer <strong>Tableau (PDF)</strong> (A3 paysage, sous-totaux par catégorie, total, puis les équipements mis à disposition).</li>
+<li><strong>Export CSV</strong> donne le même tableau avec, en plus, fournisseur, n° de facture et équipement.</li>
+<li><em>Changer les comptes d'une catégorie</em></li>
+<li>Cliquer <strong>Comptes</strong>. Pour chaque catégorie, saisir <strong>Immobilisation</strong>, <strong>Amortissement</strong> et <strong>Dotation</strong>.</li>
+<li>Cliquer <strong>Enregistrer</strong>.</li>
+<li>Les comptes par défaut : 2332/28332 (matériel de laboratoire), 2355/28355 (informatique), 2351/28351 (mobilier), 2340/28340 (transport), 2327/28327 (agencements), 2380/28380 (autres), et 6193 pour la dotation.</li>
+</ol>
+<p><strong>Règles et contrôles</strong>
+- Code, désignation et coût HT supérieur à zéro sont obligatoires. Le code est unique sur le site (« Le code … est déjà utilisé par une autre immobilisation. »).
+- La mise en service ne peut pas précéder l'acquisition. La durée doit être comprise entre 1 et 50 ans. Le dégressif n'est possible qu'à partir de 3 ans. La valeur résiduelle doit être inférieure à la valeur brute.
+- <em>Base amortissable</em> : coût HT, plus la TVA quand elle n'est pas récupérable. C'est le cas courant d'un laboratoire dont les analyses sont exonérées (art. 91 CGI), à confirmer avec le comptable.
+- <em>Linéaire</em> : prorata par mois à partir du mois de mise en service. Le dernier mois absorbe l'arrondi.
+- <em>Dégressif</em> : coefficient 1,5 (3 à 4 ans), 2 (5 à 6 ans) ou 3 (au-delà), à partir du mois d'acquisition, avec passage au linéaire quand celui-ci devient plus favorable.
+- Les exercices sont des années civiles.
+- <strong>Équipement mis à disposition</strong> (mise à disposition, comodat, location) : il reste la propriété du fournisseur et est refusé (« Cet équipement est mis à disposition par son fournisseur… »). Un équipement ne peut être immobilisé qu'une fois (« Cet équipement est déjà inscrit au registre sous le code … »).
+- <em>Sortie</em> :
+  - les dotations s'arrêtent au mois de la sortie ;
+  - le <strong>Résultat de cession</strong> (prix moins valeur nette) figure au tableau ;
+  - l'écriture de cession elle-même est passée par le comptable : elle ne fait pas partie de l'export.
+- <em>Comptes</em> : immobilisation en classe 2 (hors 28), amortissement en 28…, dotation en classe 6, chiffres uniquement, quatre au moins.
+- <em>Changement de catégorie</em> d'un bien déjà exporté (dotations ou facture) : un virement de compte à compte est préparé automatiquement, daté du jour, pour le prochain export. Le comptable peut préférer une date de début d'exercice : à vérifier avec lui.
+- Il n'existe pas de bouton de suppression d'une immobilisation.</p>
+<p><strong>Flux</strong> : facture fournisseur et fiche équipement → immobilisation → dotations mensuelles reprises par l'<strong>Export comptable</strong> (journal « Dotations aux amortissements ») → tableau annuel pour le bilan.</p>
+<div class="diagram"><img src="img/diagramme-6edb23d99171e5e5.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="bankreconciliation">Rapprochement bancaire</h3>
+<p>Comparer, pour un compte bancaire et une période, les lignes du relevé de la banque avec les mouvements que l'application a enregistrés (règlements, remises carte, versements d'espèces, paiements fournisseurs, salaires…), et justifier ce qui reste.</p>
+<p><strong>Qui y a accès</strong> : droits « Trésorerie » — Administrateur, Biologiste responsable, Comptabilité. Avec la seule consultation, tous les boutons d'action sont grisés.</p>
+<p><strong>L'écran</strong>
+- En haut : <strong>Compte bancaire</strong> (liste des comptes actifs), <strong>Du</strong> / <strong>Au</strong> (par défaut du 1er du mois précédent à aujourd'hui), <strong>Actualiser</strong>, <strong>Comptes bancaires</strong>, <strong>Importer un relevé…</strong>.
+- Deuxième rangée : <strong>Rapprochement automatique</strong>, <strong>Rapprocher la sélection</strong>, <strong>Justifier…</strong>, <strong>Annuler le rapprochement</strong>, <strong>Annuler l'import</strong>, et la case <strong>Lignes non rapprochées seulement</strong>.
+- À gauche, <strong>Relevé bancaire</strong> : <strong>Date</strong>, <strong>Libellé</strong>, <strong>Référence</strong>, <strong>Montant</strong>, <strong>Statut</strong>.
+  - Le statut vaut « Non rapprochée », ou la nature du rapprochement, avec « (auto) » s'il est automatique et l'écart éventuel.
+  - Une ligne rapprochée s'affiche en vert, ou en orange s'il reste un écart.
+  - Le commentaire s'affiche en survolant le statut.
+- À droite, <strong>Mouvements enregistrés non rapprochés</strong> : <strong>Date</strong>, <strong>Nature</strong>, <strong>Libellé</strong>, <strong>Référence</strong>, <strong>Montant</strong>. La nature peut être :
+  - Règlement patient, Acompte, Remise carte, Règlement organisme ;
+  - Versement d'espèces, Paiement fournisseur, Virement des salaires ;
+  - Chèque impayé, Remboursement patient.
+- En bas, les soldes :
+  - Solde du relevé, Solde rapproché ;
+  - Lignes du relevé non rapprochées, Mouvements non rapprochés (tout le site) ;
+  - Solde d'ouverture, nombre de lignes et de mouvements restants.</p>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><em>Déclarer un compte bancaire (une fois)</em></li>
+<li>Cliquer <strong>Comptes bancaires</strong>, puis <strong>Nouveau</strong>.</li>
+<li>Saisir <strong>Banque</strong>, <strong>Intitulé du compte</strong>, <strong>RIB (24 chiffres)</strong> et <strong>Compte comptable</strong> (5141 proposé ; mettre le sous-compte du cabinet).</li>
+<li>Saisir le <strong>Solde d'ouverture (DH)</strong> et la date <strong>Au</strong> : le solde du relevé à cette date. Seules les lignes postérieures le font varier.</li>
+<li>Laisser <strong>Actif</strong> coché, puis <strong>Enregistrer</strong>.</li>
+<li><em>Corriger ou clôturer un compte</em> : <strong>Comptes bancaires</strong> → choisir le compte → <strong>Modifier</strong> (ou double-clic). Décocher <strong>Actif</strong> pour le clôturer. <strong>Fermer</strong> pour revenir.</li>
+<li><em>Importer un relevé CSV</em></li>
+<li>Choisir le <strong>Compte bancaire</strong>, puis cliquer <strong>Importer un relevé…</strong> et choisir le fichier (.csv ou .txt, 10 Mo au plus).</li>
+<li>La fenêtre affiche le fichier brut en colonnes numérotées et l'aperçu des lignes lues.</li>
+<li>Ajuster si besoin :<ul>
+<li><strong>Séparateur</strong> (Automatique, « ; », « , », Tabulation), <strong>Lignes à ignorer</strong>, <strong>Format de date</strong> (jj/MM/aaaa par défaut), <strong>Décimales</strong> (Automatique, « , », « . »), <strong>Ligne d'en-têtes</strong> ;</li>
+<li><strong>Col. date</strong>, <strong>Col. date valeur</strong>, <strong>Col. libellé</strong>, <strong>Col. référence</strong> ;</li>
+<li>soit <strong>Col. montant</strong> (montant signé), soit <strong>Col. débit</strong> et <strong>Col. crédit</strong>. Mettre 0 pour une colonne absente.</li>
+</ul>
+</li>
+<li>Cliquer <strong>Aperçu</strong>. Chaque ligne indique « Nouvelle », « Déjà importée » (en gris) ou la raison du refus en rouge (Date illisible, Montant illisible, Montant nul, Libellé vide). Le bas résume le nombre de lignes nouvelles et leur total.</li>
+<li>Cliquer <strong>Importer</strong>. Si des lignes sont illisibles, confirmer qu'on importe les autres.</li>
+<li>Le paramétrage des colonnes est mémorisé pour le prochain relevé de ce compte.</li>
+<li><em>Rapprochement automatique</em> : régler <strong>Du</strong> / <strong>Au</strong>, puis cliquer <strong>Rapprochement automatique</strong>. Un message indique le nombre de lignes rapprochées ; les autres restent à faire à la main.</li>
+<li><em>Rapprocher à la main (une remise de chèques, un lot carte payé net de commission)</em></li>
+<li>Cliquer une ligne non rapprochée du relevé, à gauche.</li>
+<li>À droite, sélectionner le ou les mouvements correspondants (Ctrl+clic ou Maj+clic pour en prendre plusieurs).</li>
+<li>Cliquer <strong>Rapprocher la sélection</strong>.</li>
+<li>Si les montants ne sont pas égaux, une fenêtre demande la raison de l'écart (commission, frais…) : la saisir (5 caractères au moins), puis <strong>OK</strong>.</li>
+<li><em>Justifier une ligne sans mouvement (frais bancaires, agios, timbre)</em> : choisir la ligne, cliquer <strong>Justifier…</strong>, écrire la justification, puis <strong>OK</strong>. Le comptable passera l'écriture d'après ce texte.</li>
+<li><em>Défaire un rapprochement ou une justification</em> : choisir la ligne rapprochée, cliquer <strong>Annuler le rapprochement</strong>, puis confirmer. Les mouvements redeviennent disponibles. L'historique est conservé.</li>
+<li><em>Retirer un relevé importé avec un mauvais paramétrage</em></li>
+<li>Choisir une ligne de ce relevé, puis <strong>Annuler l'import</strong>, puis confirmer.</li>
+<li>Toutes les lignes de ce fichier sont retirées. Le fichier peut ensuite être réimporté avec le bon paramétrage.</li>
+<li><em>Ne voir que le reste à faire</em> : cocher <strong>Lignes non rapprochées seulement</strong>.</li>
+</ol>
+<p><strong>Règles et contrôles</strong>
+- Après un changement de <strong>Du</strong> ou <strong>Au</strong>, cliquer <strong>Actualiser</strong> : l'écran ne se recharge pas tout seul (il se recharge au changement de compte).
+- <em>Rapprochement automatique</em> : il ne retient que les cas certains. Il faut le même montant au centime, le même sens et une date dans la fenêtre du mouvement :
+  - 2 jours avant ;
+  - 5 jours après ;
+  - 45 jours après pour un chèque ou un effet émis par le laboratoire.</p>
+<p>Il rapproche d'abord par référence (n° de chèque, de virement ou de remise d'au moins 4 caractères trouvé dans le libellé), puis les paires uniques. Tout cas ambigu est laissé à l'utilisateur.
+- <em>Effet (LCN) ou chèque post-daté payé à un fournisseur</em> : il est attendu à la banque à sa date d'échéance, et non à sa date de saisie.
+- Les doublons sont ignorés : réimporter un relevé qui chevauche le précédent n'ajoute rien deux fois, même si le format de la banque a changé.
+- Refus possibles :
+  - « RIB invalide : 24 chiffres, dont la clé de contrôle des deux derniers. » ;
+  - « Ce RIB est déjà déclaré pour un autre compte bancaire. » ;
+  - compte comptable qui ne commence pas par 51 ;
+  - « Aucune ligne nouvelle à importer… » ;
+  - « Le fichier dépasse 10 Mo… ».
+- Rapprochement manuel :
+  - un encaissement ne peut pas expliquer un débit, ni un décaissement un crédit ;
+  - un mouvement ne peut servir qu'à une seule ligne ;
+  - un écart exige une raison.
+- Si l'on modifie un réglage du relevé après l'<strong>Aperçu</strong>, <strong>Importer</strong> se grise (« Le paramétrage a changé : cliquez sur « Aperçu » avant d'importer. »).
+- <strong>Annuler l'import</strong> est refusé tant qu'une ligne du fichier est rapprochée : annulez d'abord ces rapprochements.
+- Un compte clôturé ne reçoit plus de relevé.
+- Les mouvements proposés à droite sont ceux de tout le site, pas d'un seul compte.
+- Rien ici ne passe d'écriture comptable.</p>
+<p><strong>Flux</strong> : encaissements (caisse, organismes), versements, paiements fournisseurs et paie créent les mouvements → import du relevé → rapprochement → les lignes justifiées sont passées par le comptable. Les soldes alimentent la <strong>Prévision de trésorerie</strong>.</p>
+<div class="diagram"><img src="img/diagramme-7e5fb3aec55eb4c1.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="cashforecast">Prévision de trésorerie</h3>
+<p>Prévoir, semaine par semaine sur 90 jours, le solde des comptes bancaires, pour voir à l'avance une semaine où le compte passerait dans le rouge.</p>
+<p><strong>Qui y a accès</strong> : droits « Trésorerie » — Administrateur, Biologiste responsable, Comptabilité. Avec la seule consultation, la liste des flux s'ouvre en lecture seule.</p>
+<p><strong>L'écran</strong>
+- En haut : les cases <strong>Encaissements patients (moyenne)</strong> et <strong>Bordereaux en retard en semaine 1</strong>, le champ <strong>Jour de paie (0 = fin de mois)</strong>, et les boutons <strong>Actualiser</strong>, <strong>Autres flux prévus…</strong> et <strong>CSV</strong>.
+- Tableau par semaine : <strong>Sem.</strong>, <strong>Du</strong>, <strong>Au</strong>, <strong>Solde début</strong>, <strong>Organismes</strong>, <strong>Patients</strong>, <strong>Fournisseurs</strong>, <strong>Salaires</strong>, <strong>Autres flux</strong>, <strong>Variation</strong>, <strong>Solde fin</strong>. Une semaine dont le solde de fin est négatif est en rouge.
+- En bas :
+  - le solde d'ouverture par compte ;
+  - ce qui n'est pas compté (bordereaux en retard, factures fournisseurs non approuvées) ;
+  - la dernière paie nette et la moyenne des encaissements patients ;
+  - le solde le plus bas sur la période et la méthode de calcul.</p>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><em>Consulter la prévision</em> : ouvrir l'écran. Le calcul se fait à l'ouverture. Repérer les lignes rouges et le « Solde le plus bas sur la période ».</li>
+<li><em>Inclure les encaissements au comptoir</em> : cocher <strong>Encaissements patients (moyenne)</strong>. Le calcul est relancé aussitôt.</li>
+<li><em>Compter les bordereaux en retard comme payés en semaine 1</em> : cocher <strong>Bordereaux en retard en semaine 1</strong>.</li>
+<li><em>Fixer le jour de paie</em> : saisir le jour (par exemple 28, ou 0 pour la fin du mois), puis cliquer <strong>Actualiser</strong>. Ce champ ne relance pas le calcul tout seul.</li>
+<li><em>Ajouter une sortie ou une rentrée prévue (loyer, leasing, CNSS, IR, échéance d'emprunt)</em></li>
+<li>Cliquer <strong>Autres flux prévus…</strong>, puis <strong>Nouveau</strong>.</li>
+<li>Saisir le <strong>Libellé</strong> et le <strong>Montant (DH, négatif = sortie)</strong>.</li>
+<li>Choisir la <strong>Périodicité</strong> (Une fois, Chaque semaine, Chaque mois, Chaque trimestre, Chaque année), la <strong>Première date</strong> et, si besoin, une <strong>Date de fin</strong>.</li>
+<li>Laisser <strong>Actif</strong> coché, puis <strong>Enregistrer</strong>. <strong>Fermer</strong> recalcule la prévision.</li>
+<li><em>Arrêter un flux prévu</em> : <strong>Autres flux prévus…</strong> → choisir la ligne → <strong>Modifier</strong> → décocher <strong>Actif</strong> (ou mettre une <strong>Date de fin</strong>) → <strong>Enregistrer</strong>.</li>
+<li><em>Exporter la prévision</em> : cliquer <strong>CSV</strong>.</li>
+</ol>
+<p><strong>Règles et contrôles</strong>
+- <em>Solde de départ</em> : solde de chaque relevé à sa dernière ligne importée, plus ce que l'application a enregistré après cette date et qu'aucun relevé ne montre encore. Un effet (LCN) ou un chèque post-daté non encore échu compte à sa date d'échéance.
+- <em>Organismes</em> : bordereaux non réglés, pour le reste dû. Chacun est placé à sa date d'envoi plus le délai de paiement réellement constaté de l'organisme (médiane des 12 derniers mois, sinon délai contractuel). Un bordereau déjà en retard n'est pas compté, sauf si la case correspondante est cochée.
+- <em>Fournisseurs</em> : factures approuvées, pour le reste à payer, à leur échéance. Une facture échue tombe en semaine 1. Les factures non approuvées ne sont pas comptées (leur montant est rappelé en bas).
+- <em>Salaires</em> : net de la dernière paie clôturée, au jour de paie.
+- Un flux saisi à la main doit avoir un libellé et un montant non nul (« Saisissez un montant non nul : positif pour une rentrée, négatif pour une sortie. »). La date de fin ne peut pas précéder la première date.
+- Il n'existe pas de bouton de suppression d'un flux : on le désactive.
+- Sans compte bancaire actif : « Aucun compte bancaire actif : déclarez-en un dans « Comptes bancaires ». »</p>
+<p><strong>Flux</strong> : relevés importés et rapprochement → solde de départ ; bordereaux de tiers payant, factures fournisseurs approuvées et paie clôturée → flux prévus → décision du directeur (relance d'organisme, report d'un paiement).</p>
+<div class="diagram"><img src="img/diagramme-b8c921b6db162864.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="costmargin">Coût de revient et marge</h3>
+<p>Mesurer, pour une période, ce que rapporte chaque analyse (prix net moyen facturé) face à ce qu'elle coûte en réactifs et en frais indirects, par analyse, par site et par automate.</p>
+<p><strong>Qui y a accès</strong>
+- Droit « Pilotage — consulter » : Administrateur, Biologiste responsable.
+- Le bouton <strong>Quote-part des frais…</strong> n'apparaît qu'avec le droit « Pilotage — paramètres de coût », qu'ont les mêmes rôles.</p>
+<p><strong>L'écran</strong>
+- En haut : la période (liste « Ce mois-ci », « Le mois dernier », « Cette année », « L'année dernière », « Période libre », puis <strong>Du</strong> / <strong>Au</strong>), <strong>Calculer</strong>, <strong>Exporter (CSV)</strong> et <strong>Quote-part des frais…</strong>.
+- Quatre cases de chiffres clés :
+  - CA (MAD) avec le nombre d'analyses ;
+  - Coût réactifs, en orange s'il y a des analyses sans coût connu ;
+  - Quote-part frais, avec le montant par analyse ;
+  - Marge, avec le pourcentage.
+- Une ligne qui rappelle la méthode de calcul.
+- Trois onglets : <strong>Par analyse</strong>, <strong>Par site</strong>, <strong>Par automate</strong>. Chacun a les mêmes colonnes : <strong>Code</strong>, <strong>Libellé</strong>, <strong>Analyses</strong>, <strong>CA (MAD)</strong>, <strong>Prix net moyen</strong>, <strong>Coût réactifs</strong>, <strong>Quote-part frais</strong>, <strong>Coût / analyse</strong>, <strong>Marge / analyse</strong>, <strong>Marge</strong>, <strong>Marge %</strong>, <strong>Sans coût connu</strong>.
+  - Une ligne à marge négative est en rouge.
+  - La colonne <strong>Sans coût connu</strong> est en orange quand elle n'est pas vide.
+  - Les lignes sont triées par chiffre d'affaires décroissant.</p>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><em>Voir la marge du mois</em> : ouvrir l'écran (le mois en cours est calculé à l'ouverture), ou choisir une période, puis cliquer <strong>Calculer</strong>.</li>
+<li><em>Comparer les automates ou les sites</em> : ouvrir l'onglet <strong>Par automate</strong> ou <strong>Par site</strong>. Les résultats saisis à la main, sans automate, sont regroupés sous « — ».</li>
+<li><em>Exporter un tableau</em> : ouvrir l'onglet voulu, puis cliquer <strong>Exporter (CSV)</strong>. Seul l'onglet affiché est exporté.</li>
+<li><em>Régler la quote-part des frais indirects</em></li>
+<li>Cliquer <strong>Quote-part des frais…</strong>.</li>
+<li>Saisir la <strong>Quote-part par analyse (MAD)</strong> : le montant ajouté au coût de chaque analyse pour les contrôles, calibrants, consommables, personnel et locaux.</li>
+<li>Cliquer <strong>Enregistrer</strong>. Le calcul est relancé.</li>
+<li>Mettre 0 pour obtenir une marge sur réactifs seulement. La méthode est à valider avec le comptable.</li>
+<li><em>Réduire les analyses « Sans coût connu »</em></li>
+<li>Pour chaque réactif concerné, ouvrir sa fiche article (menu <strong>Données de référence</strong>).</li>
+<li>Renseigner :<ul>
+<li><strong>Analyses consommatrices (codes séparés par des virgules)</strong> ;</li>
+<li><strong>Tests par coffret</strong> ;</li>
+<li>si besoin, <strong>Tests par résultat (ex. HBA1C=2 ; défaut 1)</strong> et <strong>Volume mort par ouverture (%)</strong>.</li>
+</ul>
+</li>
+<li>S'assurer qu'un prix d'achat existe (réception d'un lot avec prix ou commande).</li>
+<li>Revenir à l'écran et cliquer <strong>Calculer</strong>.</li>
+</ol>
+<p><strong>Comment le coût réactif d'une analyse est calculé</strong>
+- On prend tous les articles de stock du site qui déclarent l'analyse parmi leurs <strong>Analyses consommatrices</strong>.
+- Pour chaque article :
+  - si un contrat d'automate en vigueur fixe un coût par test pour ce réactif (en priorité le contrat de l'automate qui a passé l'analyse), ce coût est retenu ;
+  - sinon, on prend le prix unitaire, dans cet ordre : prix du lot noté sur le résultat, sinon du dernier lot reçu, sinon dernier prix commandé, sinon prix unitaire du contrat ;
+  - ce prix est divisé par les <strong>Tests par coffret</strong>, multiplié par le facteur <strong>Tests par résultat</strong>, puis augmenté du <strong>Volume mort</strong>. Par exemple, avec 10 % de volume mort, le coût est divisé par 0,9.
+- Les coûts de tous les réactifs de l'analyse s'additionnent.
+- Contrôles, calibrants et consommables ne sont pas comptés analyse par analyse : ils relèvent de la quote-part des frais.
+- <strong>Sans coût connu</strong> compte les analyses dont au moins un réactif n'a ni prix ni nombre de tests par coffret, ou pour lesquelles aucun réactif ne déclare l'analyse. Dans le premier cas, le coût affiché ne comprend que les réactifs connus et il est sous-estimé.
+- <strong>Quote-part frais</strong> = quote-part par analyse × nombre d'analyses.
+- <strong>Coût / analyse</strong> = (coût réactifs + quote-part) ÷ analyses.
+- <strong>Marge</strong> = CA − coût réactifs − quote-part.
+- <strong>Marge %</strong> = marge ÷ CA.
+- <strong>CA</strong> est le prix net facturé (remises déduites, au tarif figé sur le dossier).</p>
+<p><strong>Règles et contrôles</strong>
+- La période est comptée sur la date d'enregistrement des dossiers. Elle ne peut pas dépasser 366 jours (« La période ne peut pas dépasser 366 jours. »). La fin ne peut pas précéder le début.
+- Les analyses annulées et les analyses sous-traitées à un laboratoire partenaire sont exclues : le coût de ces dernières est la facture du partenaire.
+- Le calcul porte sur tous les sites accessibles à l'utilisateur.
+- La quote-part doit être comprise entre 0 et 100 000 MAD.</p>
+<p><strong>Flux</strong> : catalogue (prix), stocks et achats (prix des lots, tests par coffret), contrats d'automates (coût par test) et résultats (automate, lot) → cet écran → décisions de tarif, choix de fournisseur ou d'automate.</p>
+<div class="diagram"><img src="img/diagramme-169c6eb996fab26b.png" alt="Diagramme"></div><p class="top"><a href="index.html">Retour au sommaire</a></p>
 </div>
 </body>
 </html>

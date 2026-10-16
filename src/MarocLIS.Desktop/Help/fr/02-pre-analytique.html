@@ -3,43 +3,527 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>Pré-analytique</title>
+<title>Pré-analytique : prélèvement, réception, re-prélèvement, sérothèque, sous-traitance</title>
 <style>
-body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.5;
-       color: #1f2933; background: #ffffff; margin: 0; padding: 0; }
-.page { max-width: 900px; margin: 0 auto; padding: 16px 24px 48px 24px; }
-h1 { font-size: 26px; color: #0b4f8a; border-bottom: 2px solid #0b4f8a; padding-bottom: 6px; }
-h2 { font-size: 20px; color: #0b4f8a; margin-top: 32px; }
-a { color: #0b5fa5; }
-img { max-width: 100%; border: 1px solid #d0d7de; }
+body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.55;
+       color: #1c1e21; background: #ffffff; margin: 0; padding: 0; }
+.page { max-width: 940px; margin: 0 auto; padding: 16px 28px 56px 28px; }
+.crumb { font-size: 13px; color: #5c616a; margin-bottom: 4px; }
+h1 { font-size: 26px; color: #1b5e8c; border-bottom: 2px solid #1b5e8c; padding-bottom: 6px; margin-top: 8px; }
+h2 { font-size: 21px; color: #1b5e8c; margin-top: 36px; border-bottom: 1px solid #d8dade; padding-bottom: 4px; }
+h3 { font-size: 17px; color: #1c1e21; margin-top: 26px; }
+h4 { font-size: 15px; color: #1c1e21; margin-top: 20px; }
+a { color: #1b5e8c; }
+code { font-family: Consolas, monospace; font-size: 13px; background: #f0f1f3; padding: 1px 4px; }
+pre { background: #f0f1f3; padding: 10px; overflow: auto; }
+table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+th, td { border: 1px solid #d8dade; padding: 6px 8px; text-align: left; vertical-align: top; font-size: 14px; }
+th { background: #e6eef4; }
+.diagram { margin: 16px 0 20px 0; text-align: center; }
+.diagram img { max-width: 100%; border: 1px solid #d8dade; padding: 8px; background: #ffffff; }
 ul.toc li { margin: 4px 0; }
-section { margin-bottom: 24px; }
+.top { font-size: 13px; margin-top: 32px; }
 </style>
 </head>
 <body>
 <div class="page">
-<p><a href="index.html">Sommaire</a></p>
-<h1>Pré-analytique</h1>
-<section id="collection">
-<h2>Prélèvements</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="reception">
-<h2>Réception des échantillons</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="recollections">
-<h2>Re-prélèvements</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="serumbank">
-<h2>Sérothèque</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="subcontracting">
-<h2>Sous-traitance</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
+<div class="crumb"><a href="index.html">Sommaire</a></div>
+<h1>Pré-analytique : prélèvement, réception, re-prélèvement, sérothèque, sous-traitance</h1>
+<p>Ce chapitre suit le tube, du prélèvement jusqu'à son élimination : prélever et expédier, accepter ou refuser le tube à la réception, rappeler le patient quand un tube est refusé, ranger et éliminer les tubes dans la sérothèque, envoyer à un laboratoire partenaire les analyses que le laboratoire ne fait pas lui-même.</p>
+<p>Écrans concernés (groupe <strong>Liste de travail</strong> du menu) :</p>
+<table>
+<thead>
+<tr>
+<th>Menu</th>
+<th>Raccourci par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Prélèvements</strong></td>
+<td>Ctrl+4</td>
+</tr>
+<tr>
+<td><strong>Réception des échantillons</strong></td>
+<td>Ctrl+5</td>
+</tr>
+<tr>
+<td><strong>Re-prélèvements</strong></td>
+<td>aucun (on peut en définir un)</td>
+</tr>
+<tr>
+<td><strong>Sérothèque</strong></td>
+<td>aucun</td>
+</tr>
+<tr>
+<td><strong>Sous-traitance</strong></td>
+<td>aucun</td>
+</tr>
+</tbody>
+</table>
+<p>Raccourcis valables partout : <strong>F5</strong> actualise l'écran, <strong>Ctrl+F</strong> place le curseur dans la zone de recherche, <strong>F1</strong> affiche la liste des raccourcis.</p>
+<h3>Vue d'ensemble du circuit du tube</h3>
+<div class="diagram"><img src="img/diagramme-7d78c073af538993.png" alt="Diagramme"></div>
+
+<p><strong>Statuts d'un tube</strong></p>
+<table>
+<thead>
+<tr>
+<th>Statut affiché</th>
+<th>Signification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>À prélever</td>
+<td>Le tube existe (étiquette imprimée à l'enregistrement du dossier) mais rien n'est prélevé.</td>
+</tr>
+<tr>
+<td>Prélevé</td>
+<td>Le prélèvement est enregistré (heure, préleveur, volume).</td>
+</tr>
+<tr>
+<td>En transit</td>
+<td>Le tube est parti vers le laboratoire (expédié depuis un centre ou une tournée).</td>
+</tr>
+<tr>
+<td>Réceptionné</td>
+<td>Le tube a été accepté à la réception, avec ou sans réserve.</td>
+</tr>
+<tr>
+<td>En analyse</td>
+<td>Le tube est sur le plateau technique.</td>
+</tr>
+<tr>
+<td>Conservé</td>
+<td>Le tube est rangé dans la sérothèque.</td>
+</tr>
+<tr>
+<td>Refusé</td>
+<td>Le tube a été refusé, avec un motif.</td>
+</tr>
+<tr>
+<td>Éliminé</td>
+<td>Le tube a été jeté ; plus aucune analyse ne peut être refaite dessus.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="collection">Prélèvements</h3>
+<p>Liste de travail du préleveur : un patient à la fois, ses tubes dans l'ordre de prélèvement, avec les consignes de jeûne et les alertes affichées avant le geste.</p>
+<p><strong>Qui y a accès</strong></p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Droit nécessaire</th>
+<th>Rôles par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ouvrir l'écran, <strong>Prélever</strong></td>
+<td>Prélever</td>
+<td>Administrateur, Biologiste responsable, Technicien de laboratoire, Préleveur</td>
+</tr>
+<tr>
+<td><strong>Expédier</strong></td>
+<td>Expédier les échantillons</td>
+<td>Administrateur, Biologiste responsable, Technicien de laboratoire, Préleveur</td>
+</tr>
+<tr>
+<td><strong>Imprimer les étiquettes</strong></td>
+<td>Réimprimer une étiquette</td>
+<td>Administrateur, Biologiste responsable, Technicien de laboratoire, Préleveur, Secrétariat / accueil</td>
+</tr>
+</tbody>
+</table>
+<p>Le rôle <strong>Biologiste</strong> n'a pas le droit de prélever : l'écran n'apparaît pas dans son menu. Le Secrétariat peut réimprimer des étiquettes, mais depuis l'écran <strong>Consultation d'un dossier</strong> (bouton <strong>Imprimer les étiquettes</strong>), car il n'a pas accès à cet écran.</p>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>À gauche, la liste <strong>Prélèvements</strong> : une ligne par dossier (pas par tube), colonnes <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Âge</strong>, <strong>Priorité</strong>, <strong>Tubes</strong>, <strong>Statut</strong>, <strong>Arrivée</strong> (heure d'enregistrement). Les urgences sont en tête et en gras ; une ligne sur fond rouge signale un patient avec une alerte.</li>
+<li><strong>Statut</strong> affiche « <em>n</em> à prélever » (orange) ou « Prélevé · à expédier » (vert).</li>
+<li>Case <strong>Urgent</strong> : n'affiche que les dossiers urgents.</li>
+<li>À droite, le bandeau du patient sélectionné : nom, sexe, âge, date de naissance, n° de dossier ; une bande <strong>Jeûne requis</strong> (avec « Patient à jeun ✓ », « Jeûne non respecté » ou « à confirmer auprès du patient ») ; une bande rouge ⚠ avec les alertes du patient (risque infectieux, prélèvement difficile, impayé…).</li>
+<li>En dessous, les tubes du patient, triés dans l'ordre de prélèvement : case à cocher, <strong>#</strong> (rang), pastille de la couleur du bouchon, <strong>Type de tube</strong>, <strong>Nature du prélèvement</strong> (avec « à l'abri de la lumière » ou « transport sous glace » en orange si besoin), <strong>Code-barres</strong>, <strong>Statut</strong> (« À prélever » ou « Prélevé HH:mm »), <strong>Volume (mL)</strong> (modifiable), <strong>Analyses</strong>. Une bulle d'aide sur le type de tube donne les consignes de prélèvement et le volume minimum.</li>
+<li>En bas : <strong>Prélever</strong>, <strong>Expédier</strong>, <strong>Imprimer les étiquettes</strong>, <strong>Actualiser</strong>, et une ligne d'état.</li>
+</ul>
+<p>Ne figurent dans la liste que les dossiers de votre site, non annulés et pas encore rendus, et les tubes « À prélever » ou « Prélevé » non encore expédiés.</p>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><strong>Prélever un patient</strong></li>
+<li>Cliquez sur le patient dans la liste de gauche. Ses tubes s'affichent ; ceux qui restent à prélever sont déjà cochés.</li>
+<li>Lisez la bande <strong>Jeûne requis</strong> et la bande d'alertes.</li>
+<li>Prélevez dans l'ordre de la colonne <strong>#</strong>, en contrôlant la couleur du bouchon.</li>
+<li>Si vous connaissez le volume réellement prélevé, tapez-le dans <strong>Volume (mL)</strong> (virgule ou point acceptés).</li>
+<li>Décochez un tube que vous n'avez pas pu prélever.</li>
+<li>Cliquez sur <strong>Prélever</strong>.</li>
+<li>Si une analyse exige le jeûne et que la question n'a pas encore été posée, la fenêtre « Le patient déclare-t-il être à jeun depuis au moins <em>n</em> heures ? » s'ouvre : répondez <strong>Oui</strong> ou <strong>Non</strong>. La réponse est enregistrée sur le dossier et servira au biologiste.</li>
+<li>La ligne d'état affiche « <em>n</em> prélevé » ; les tubes passent en vert.</li>
+<li><strong>Prélever puis expédier en une fois</strong> (centre de prélèvement, domicile) : cochez les tubes et cliquez sur <strong>Expédier</strong>. Les tubes cochés non encore prélevés sont d'abord enregistrés comme prélevés, puis tous passent « En transit ».</li>
+<li><strong>Prélever une série de patients et expédier plus tard</strong> : prélevez chaque patient avec <strong>Prélever</strong>. Les patients restent dans la liste avec « Prélevé · à expédier ». Au départ du coursier, sélectionnez chaque patient (ses tubes prélevés sont alors tous cochés) et cliquez sur <strong>Expédier</strong>.</li>
+<li><strong>Réimprimer les étiquettes d'un patient</strong></li>
+<li>Sélectionnez le patient, cliquez sur <strong>Imprimer les étiquettes</strong>.</li>
+<li>Saisissez le motif (« étiquette abîmée, illisible, tube supplémentaire… ») : il est obligatoire et enregistré dans l'historique de chaque tube.</li>
+<li>Toutes les étiquettes du dossier sont réimprimées. Sans imprimante d'étiquettes sur le poste, un PDF s'ouvre (« vérifiez l'échelle avant d'imprimer »).</li>
+<li><strong>Prélever le nouveau tube d'un re-prélèvement</strong> : le tube de remplacement apparaît ici comme n'importe quel tube « À prélever », avec son nouveau code-barres. Le prélever le fait sortir de la liste <strong>Re-prélèvements</strong>.</li>
+</ol>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>« Aucun élément sélectionné. » : aucun tube n'est coché.</li>
+<li>« Les tubes cochés sont déjà prélevés : utilisez « Expédier ». » : <strong>Prélever</strong> ne sert qu'aux tubes encore à prélever.</li>
+<li>« Prélèvement impossible depuis le statut « … » » : le tube a déjà été réceptionné, refusé ou éliminé.</li>
+<li>« L'échantillon doit être prélevé avant d'être expédié. » : un tube ne s'expédie qu'au statut Prélevé.</li>
+<li>Si le volume saisi est inférieur au minimum du tube, le défaut « Quantité insuffisante » est noté sur le tube ; il sera coché d'office à la réception.</li>
+<li>L'expédition n'est pas obligatoire : un tube prélevé au laboratoire peut être réceptionné directement.</li>
+<li>La réimpression d'étiquettes exige un motif (« La réimpression d'une étiquette doit être motivée. ») : deux tubes portant le même code-barres sont un risque d'erreur d'identité.</li>
+<li>L'écran ne permet pas de saisir le nombre de tentatives, le site anatomique, un commentaire de prélèvement ni le lieu de prélèvement, ni de rattacher l'expédition à une tournée (voir la fiche de vérification).</li>
+</ul>
+<p><strong>Flux</strong> : Dossiers (étiquettes) → <strong>Prélèvements</strong> (Prélever, éventuellement Expédier) → <strong>Réception des échantillons</strong>.</p>
+<div class="diagram"><img src="img/diagramme-abe8b12407697a62.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="reception">Réception des échantillons</h3>
+<p>Poste où l'on décide si un tube est apte à être analysé : on scanne, on regarde ce que l'application a calculé (délai, défauts déjà notés), on coche ce qu'on constate, puis on accepte, on accepte sous réserve ou on refuse.</p>
+<p><strong>Qui y a accès</strong></p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Droit nécessaire</th>
+<th>Rôles par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ouvrir l'écran, scanner, <strong>Accepter</strong>, <strong>Accepter sous réserve</strong></td>
+<td>Réceptionner</td>
+<td>Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire</td>
+</tr>
+<tr>
+<td><strong>Refuser</strong></td>
+<td>Refuser un échantillon</td>
+<td>Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire</td>
+</tr>
+</tbody>
+</table>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>En haut, la zone <strong>Scannez le code-barres du tube</strong>. Elle garde toujours le curseur : on peut scanner tube après tube sans toucher la souris.</li>
+<li>Le bloc du tube scanné : patient (nom, sexe, date de naissance) ; n° de dossier, priorité en majuscules si urgent, codes des analyses ; code-barres, nature, type de tube, volume ; et une ligne de verdict :</li>
+<li>en rouge « ⚠ Délai d'acheminement dépassé — 5h10 &gt; 4 h » si le délai depuis le prélèvement dépasse la stabilité la plus courte des analyses du tube ;</li>
+<li>en vert « Délai de transport : 1h20 / 4 h » sinon ;</li>
+<li>en orange « Cet échantillon n'a pas été prélevé. » si le tube n'a jamais été prélevé.</li>
+<li>Le cadre <strong>Non-conformités constatées</strong> : une case par défaut possible — Hémolysé, Coagulé, Quantité insuffisante, Lactescent, Ictérique, Tube inadapté, Défaut d'étiquetage, Rupture de la chaîne du froid, Délai d'acheminement dépassé, Contenant détérioré, Souillé, Jeûne non respecté. Les défauts déjà connus sont cochés d'office (délai dépassé, volume insuffisant noté au prélèvement, défauts signalés en amont).</li>
+<li>À droite : <strong>Température (°C)</strong> et <strong>Chaîne du froid respectée</strong> (seulement si une analyse du tube exige la chaîne du froid), et <strong>Lieu de conservation</strong> (facultatif).</li>
+<li>Les boutons <strong>Accepter</strong>, <strong>Accepter sous réserve</strong>, <strong>Refuser</strong>, la liste des motifs de refus et la case <strong>Demander un nouveau prélèvement</strong> (cochée par défaut).</li>
+<li>En bas, la liste <strong>En attente de réception — <em>n</em></strong> : tubes prélevés ou en transit de votre site, pas encore reçus. Colonnes <strong>Code-barres</strong>, <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Nature du prélèvement</strong>, <strong>Priorité</strong>, <strong>Prélevé le</strong>, <strong>Délai de transport</strong>, <strong>Statut</strong>. Rouge = délai dépassé ; orange = non-conformité déjà notée ; couleur de priorité pour les urgences. Un double-clic sur une ligne équivaut à scanner ce tube.</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><strong>Accepter un tube conforme</strong></li>
+<li>Scannez le tube (le lecteur envoie <strong>Entrée</strong>), ou tapez le code-barres puis <strong>Entrée</strong>, ou double-cliquez la ligne dans la liste.</li>
+<li>Vérifiez l'identité affichée contre l'étiquette et la demande.</li>
+<li>Si les champs sont visibles, saisissez la <strong>Température (°C)</strong> et laissez ou décochez <strong>Chaîne du froid respectée</strong>.</li>
+<li>Facultatif : saisissez le <strong>Lieu de conservation</strong> (le tube est alors directement rangé, voir <strong>Sérothèque</strong>).</li>
+<li>Cliquez sur <strong>Accepter</strong>. La ligne d'état affiche « <em>code-barres</em> — Réceptionné » ; le bloc se vide et le curseur revient dans la zone de scan.</li>
+<li><strong>Accepter un tube non conforme mais exploitable (sous réserve)</strong></li>
+<li>Scannez le tube et cochez chaque défaut constaté (par exemple <strong>Hémolysé</strong>).</li>
+<li>Le bouton <strong>Accepter</strong> se grise ; <strong>Accepter sous réserve</strong> passe en gras orange.</li>
+<li>Cliquez sur <strong>Accepter sous réserve</strong>. Les défauts sont enregistrés sur le tube ; le compte rendu portera la mention « Résultat obtenu sur échantillon accepté sous réserve » suivie du code-barres et des défauts.</li>
+<li><strong>Refuser un tube</strong></li>
+<li>Scannez le tube, cochez au besoin les défauts constatés.</li>
+<li>Choisissez le motif dans la liste : Discordance d'identité, Étiquette absente ou illisible, Quantité insuffisante, Échantillon hémolysé, Échantillon coagulé, Tube inadapté à l'analyse, Délai d'acheminement excessif, Rupture de la chaîne du froid, Contenant cassé ou fuite, Prélèvement souillé, Ordonnance manquante, Consentement manquant, Jeûne non respecté, Demande en doublon, Refus du patient, Autre motif. <strong>Attention : le premier motif de la liste (« Discordance d'identité ») est présélectionné.</strong></li>
+<li>Laissez <strong>Demander un nouveau prélèvement</strong> coché si le patient doit revenir ; décochez-le pour refuser le tube seul.</li>
+<li>Cliquez sur <strong>Refuser</strong>. Une fenêtre demande un <strong>Commentaire</strong> (facultatif, mais utile), puis une confirmation « Confirmez-vous le refus du tube … pour le motif « … » ? ».</li>
+<li>Avec nouveau prélèvement : un nouveau tube est créé avec un <strong>nouveau code-barres</strong>, les analyses non encore validées du tube refusé passent sur ce nouveau tube (même prix : le patient ne paie pas deux fois), et son étiquette s'imprime aussitôt. La ligne d'état affiche « Refusé · Nouveau tube généré ». Le patient apparaît dans <strong>Re-prélèvements</strong>.</li>
+<li>Sans nouveau prélèvement : les analyses non encore validées du tube sont annulées avec le motif du refus ; les analyses déjà validées restent.</li>
+<li><strong>Refuser un tube déjà sur le plateau</strong> (caillot découvert après centrifugation) : scannez-le. <strong>Accepter</strong> et <strong>Accepter sous réserve</strong> sont grisés, mais <strong>Refuser</strong> reste possible. Suivez le scénario 3.</li>
+<li><strong>Retrouver un tube qui n'est jamais arrivé</strong> : consultez la liste <strong>En attente de réception</strong> ; un tube prélevé en centre et jamais reçu y reste visible.</li>
+<li><strong>Scanner un tube pendant qu'une décision s'enregistre</strong> : le tube est mis en attente (« Tube … lu : il s'affichera dès que la décision en cours sera enregistrée. ») puis affiché.</li>
+<li><strong>Déclarer une non-conformité au registre qualité</strong> (par exemple des refus répétés venant d'un même centre) : cela ne se fait pas depuis cet écran. Ouvrez <strong>Non-conformités</strong> (droit réservé par défaut à l'Administrateur, au Biologiste responsable, au Biologiste et au Responsable qualité), <strong>Ouvrir une non-conformité</strong>, catégorie « Pré-analytique ». La fiche ne peut pas être rattachée au tube ni au dossier : notez le code-barres et le n° de dossier dans la description.</li>
+</ol>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>La recherche du code-barres est exacte (majuscules comprises), jamais approximative : « Aucun échantillon ne porte le code-barres « … ». » Corrigez la lecture, ne devinez pas.</li>
+<li>Accepter un tube avec un défaut coché sans passer par <strong>Accepter sous réserve</strong> est refusé : « Des non-conformités ont été constatées (…) : acceptez sous réserve ou refusez l'échantillon. »</li>
+<li>« Réception impossible depuis le statut « … » » : le tube est déjà reçu, en analyse, conservé, refusé ou éliminé. Un tube ne se reçoit qu'une fois.</li>
+<li>« Cet échantillon n'a pas été prélevé. » : le prélèvement doit d'abord être enregistré dans <strong>Prélèvements</strong>.</li>
+<li>« Le tube … est déjà refusé. Son remplacement, s'il a été demandé, existe déjà. » : un tube ne se refuse qu'une fois.</li>
+<li>« Le tube … n'a plus d'analyse en attente : toutes sont validées. (…) Décochez « Demander un nouveau prélèvement » pour refuser le tube seul. »</li>
+<li>Un tube refusé ou éliminé ne permet plus aucune action à la réception.</li>
+<li>Le motif de refus vient d'une liste fermée : le taux de refus par motif est un indicateur qualité obligatoire (ISO 15189). Le tableau de bord compte les échantillons refusés du jour.</li>
+<li>La réception fixe l'heure de rendu promise de chaque analyse (délai du catalogue à partir de l'heure de réception).</li>
+<li>Chaque consultation d'un tube scanné est tracée (loi 09-08).</li>
+</ul>
+<p><strong>Flux</strong> : <strong>Prélèvements</strong> → <strong>Réception des échantillons</strong> → <strong>Saisie des résultats</strong> (ou <strong>Sous-traitance</strong> pour une analyse sous-traitée) ; refus avec nouveau prélèvement → <strong>Re-prélèvements</strong> → <strong>Prélèvements</strong>.</p>
+<div class="diagram"><img src="img/diagramme-a70ad4d91f368c0e.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="recollections">Re-prélèvements</h3>
+<p>Liste des patients à faire revenir après un tube refusé : chaque nouveau tube pas encore prélevé, avec le téléphone du patient et les appels déjà passés.</p>
+<p><strong>Qui y a accès</strong></p>
+<p>L'écran apparaît pour qui a le droit de modifier un dossier <strong>ou</strong> de refuser un échantillon : Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire, Secrétariat / accueil.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Droit nécessaire</th>
+<th>Rôles par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Noter un appel</strong>, <strong>Envoyer un SMS</strong></td>
+<td>Modifier un dossier</td>
+<td>Administrateur, Biologiste responsable, Biologiste, Secrétariat / accueil</td>
+</tr>
+<tr>
+<td><strong>Abandonner</strong></td>
+<td>Annuler un dossier</td>
+<td>Administrateur, Biologiste responsable, Secrétariat / accueil</td>
+</tr>
+</tbody>
+</table>
+<p>Le Technicien voit la liste mais ses boutons sont grisés ; le Biologiste ne peut pas abandonner.</p>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>Titre « Patients à rappeler pour un nouveau prélèvement — <em>n</em> (dont <em>m</em> pas encore contactés) ».</li>
+<li>Zone de recherche (dossier, patient, téléphone, code-barres du nouveau tube ; validez par <strong>Entrée</strong>) et <strong>Actualiser</strong>.</li>
+<li>Colonnes <strong>Refusé le</strong>, <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Téléphone</strong>, <strong>Analyses</strong>, <strong>Motif du refus</strong> (avec le commentaire), <strong>Nouveau tube</strong> (code-barres), <strong>Dernier contact</strong> (date, résultat, nombre d'appels « ×3 ») ou « Pas encore contacté ».</li>
+<li>En rouge : les dossiers urgents et ceux refusés depuis plus de 24 h sans aucun contact. En gris : déjà contactés.</li>
+<li>En bas : <strong>Noter un appel</strong>, <strong>Envoyer un SMS</strong>, <strong>Abandonner</strong>.</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><strong>Appeler un patient et noter le résultat</strong></li>
+<li>Sélectionnez la ligne, appelez le numéro affiché.</li>
+<li>Cliquez sur <strong>Noter un appel</strong> et tapez le résultat (« joint, passe demain matin », « pas de réponse »…). Le texte est obligatoire.</li>
+<li>La colonne <strong>Dernier contact</strong> est mise à jour.</li>
+<li><strong>Envoyer un SMS de rappel</strong></li>
+<li>Sélectionnez la ligne, cliquez sur <strong>Envoyer un SMS</strong>.</li>
+<li>Le numéro du patient est proposé ; corrigez-le si besoin et validez.</li>
+<li>Le message envoyé contient seulement : « <em>Nom du laboratoire</em> : merci de repasser au laboratoire pour un nouveau prélèvement (dossier <em>n°</em>). Tél. <em>du site</em> ». Ni l'analyse ni le motif du refus.</li>
+<li>Le bouton est grisé si aucun fournisseur SMS n'est configuré.</li>
+<li><strong>Le patient revient</strong> : rien à faire ici. Prélevez le nouveau tube dans <strong>Prélèvements</strong> ; la ligne disparaît d'elle-même.</li>
+<li><strong>Le patient ne reviendra pas</strong></li>
+<li>Sélectionnez la ligne, cliquez sur <strong>Abandonner</strong>.</li>
+<li>Lisez l'avertissement (« Les analyses en attente du nouveau tube (…) seront annulées. ») et saisissez le motif (obligatoire).</li>
+<li>Les analyses du nouveau tube sont annulées avec ce motif et le nouveau tube passe « Éliminé ». Le reste du dossier continue jusqu'au compte rendu.</li>
+</ol>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>« Sélectionnez un patient dans la liste. » : aucune ligne sélectionnée.</li>
+<li>« Indiquez le résultat de l'appel. » : texte d'appel vide.</li>
+<li>« Le tube … a déjà été prélevé ou retiré : la liste a été mise à jour. » : quelqu'un a prélevé ou abandonné ce tube entre-temps.</li>
+<li>« Le fournisseur SMS n'est pas configuré. »</li>
+<li>« Une annulation doit être motivée. » : motif d'abandon vide.</li>
+<li>Seul le canal « Appel » est proposé par <strong>Noter un appel</strong> ; une venue sur place ne peut pas être notée comme telle (notez-la en texte).</li>
+</ul>
+<p><strong>Flux</strong> : <strong>Réception des échantillons</strong> (refus + nouveau prélèvement) → <strong>Re-prélèvements</strong> (appel, SMS) → <strong>Prélèvements</strong> (nouveau tube) → <strong>Réception des échantillons</strong> ; ou → <strong>Abandonner</strong>.</p>
+<div class="diagram"><img src="img/diagramme-f8f29337501d5dfe.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="serumbank">Sérothèque</h3>
+<p>Registre de tous les tubes reçus et pas encore éliminés : où ils sont rangés, jusqu'à quand les garder, et l'élimination des tubes périmés.</p>
+<p><strong>Qui y a accès</strong></p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Droit nécessaire</th>
+<th>Rôles par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ouvrir l'écran, <strong>Ranger dans la sérothèque</strong>, <strong>Créer une aliquote</strong></td>
+<td>Réceptionner</td>
+<td>Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire</td>
+</tr>
+<tr>
+<td><strong>Éliminer le tube</strong>, <strong>Éliminer les tubes périmés</strong></td>
+<td>Refuser un échantillon</td>
+<td>mêmes rôles</td>
+</tr>
+</tbody>
+</table>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>Titre « Sérothèque — <em>n</em> · <em>x</em> conservation dépassée · <em>y</em> non rangé ».</li>
+<li>Zone de recherche (validez par <strong>Entrée</strong>), case <strong>Uniquement les tubes dont la durée de conservation est dépassée</strong>, <strong>Actualiser</strong>.</li>
+<li>Colonnes <strong>Code-barres</strong>, <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Nature du prélèvement</strong>, <strong>Réceptionné le</strong>, <strong>Lieu de conservation</strong> (lieu / position, ou « Non rangé »), <strong>Conserver jusqu'au</strong>, <strong>Jours</strong> (restants ; négatif = dépassé), <strong>Volume (mL)</strong>, <strong>Aliquotes</strong>, et une colonne de repères : <strong>?</strong> non rangé, <strong>!</strong> non-conformité notée, <strong>R</strong> accepté sous réserve.</li>
+<li>Couleurs : rouge = conservation dépassée ; orange sur fond = reçu mais jamais rangé ; texte orange = 7 jours ou moins restants.</li>
+<li>Tri : par date de fin de conservation, les tubes sans date à la fin.</li>
+<li>En bas : <strong>Ranger dans la sérothèque</strong>, <strong>Créer une aliquote</strong>, <strong>Éliminer le tube</strong>, <strong>Éliminer les tubes périmés</strong>.</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><strong>Ranger un tube (ou le déplacer)</strong></li>
+<li>Sélectionnez le tube, cliquez sur <strong>Ranger dans la sérothèque</strong>.</li>
+<li>Saisissez <strong>Lieu de conservation</strong> (obligatoire, par exemple « Frigo 2 ») et <strong>Position (portoir / case)</strong>.</li>
+<li>Cochez <strong>Conserver jusqu'au</strong> et choisissez la date ; laissez la case décochée pour une conservation sans terme fixé.</li>
+<li><strong>Enregistrer</strong> (ou <strong>Entrée</strong>) ; <strong>Annuler</strong> (ou <strong>Échap</strong>) pour sortir.</li>
+<li>Le tube passe « Conservé ».</li>
+<li><strong>Ranger dès la réception</strong> : saisissez le <strong>Lieu de conservation</strong> sur l'écran de réception avant d'accepter. La date de fin de conservation est alors fixée automatiquement à aujourd'hui + 7 jours (durée réglable par l'administrateur).</li>
+<li><strong>Créer une aliquote</strong></li>
+<li>Sélectionnez le tube (impossible sur un tube refusé), cliquez sur <strong>Créer une aliquote</strong>.</li>
+<li>Saisissez <strong>Volume (mL)</strong>, <strong>Destination de l'aliquote</strong> (envoi en sous-traitance, conservation…), et le <strong>Lieu de conservation</strong> (par défaut celui du tube).</li>
+<li><strong>Enregistrer</strong>. Un message donne le nouveau code-barres : « Aliquote créée. Étiquetez le tube avec le code-barres … ». L'étiquette n'est pas imprimée automatiquement : écrivez ou imprimez ce code vous-même.</li>
+<li><strong>Éliminer un tube</strong></li>
+<li>Sélectionnez le tube, cliquez sur <strong>Éliminer le tube</strong>.</li>
+<li>Confirmez « Éliminer le tube … ? Aucune analyse ne pourra plus être répétée sur cet échantillon. »</li>
+<li>Saisissez le motif (obligatoire). Le tube disparaît de la liste.</li>
+<li><strong>Purger les tubes périmés</strong></li>
+<li>Cliquez sur <strong>Éliminer les tubes périmés</strong> (actif seulement s'il y a des tubes en rouge).</li>
+<li>Confirmez « Éliminer les <em>n</em> tubes dont la durée de conservation est dépassée ? », saisissez un motif unique, consigné pour chaque tube.</li>
+<li>Résultat : « <em>n</em> tubes éliminés. » ou « <em>n</em> tubes éliminés. Échecs : … ».</li>
+<li><strong>Retrouver un tube pour une analyse complémentaire</strong> : tapez le code-barres, le n° de dossier ou l'emplacement, puis <strong>Entrée</strong>.</li>
+</ol>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>« L'emplacement de rangement est obligatoire. »</li>
+<li>« L'élimination d'un échantillon doit être motivée : elle met fin à toute possibilité de reprise. »</li>
+<li>« Aliquotage impossible depuis le statut « … » » : tube refusé ou éliminé.</li>
+<li>L'application <strong>ne vérifie pas</strong> que les analyses du tube sont terminées avant de l'éliminer : contrôlez-le vous-même.</li>
+<li>La purge porte sur les tubes <strong>affichés</strong> (recherche en cours comprise), et la liste est limitée à 1 000 tubes.</li>
+<li>La recherche ne trouve pas un patient par son nom (seulement code-barres, n° de dossier, emplacement), bien que la zone l'annonce.</li>
+<li>Chaque ouverture de la liste est tracée comme une consultation de données personnelles (loi 09-08).</li>
+</ul>
+<p><strong>Flux</strong> : <strong>Réception des échantillons</strong> (accepté) → <strong>Sérothèque</strong> (rangé, éventuellement aliquoté) → élimination à échéance.</p>
+<div class="diagram"><img src="img/diagramme-974d958d317f7089.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="subcontracting">Sous-traitance</h3>
+<p>Suivi des analyses que le laboratoire envoie à un laboratoire partenaire : ce qui attend de partir, ce qui est parti (avec son bordereau), et ce qui tarde à revenir.</p>
+<p><strong>Qui y a accès</strong></p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Droit nécessaire</th>
+<th>Rôles par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ouvrir l'écran, <strong>Envoyer en sous-traitance</strong>, <strong>Référence du partenaire</strong></td>
+<td>Expédier les échantillons</td>
+<td>Administrateur, Biologiste responsable, Technicien de laboratoire, Préleveur</td>
+</tr>
+<tr>
+<td><strong>Réimprimer le bordereau</strong></td>
+<td>(aucun droit particulier une fois l'écran ouvert)</td>
+<td>mêmes rôles</td>
+</tr>
+<tr>
+<td>Déclarer un laboratoire partenaire (<strong>Paramètres</strong>)</td>
+<td>Gérer les sites</td>
+<td>Administrateur</td>
+</tr>
+<tr>
+<td>Marquer une analyse sous-traitée (<strong>Catalogue des analyses</strong>)</td>
+<td>Gérer le catalogue</td>
+<td>Administrateur, Biologiste responsable</td>
+</tr>
+</tbody>
+</table>
+<p>Le rôle <strong>Biologiste</strong> n'a pas cet écran dans son menu.</p>
+<h4>Mise en place (une fois)</h4>
+<ol>
+<li><strong>Déclarer le laboratoire partenaire</strong> (Administrateur)
+   - Dans <strong>Paramètres</strong>, onglet <strong>Site</strong>, cliquez <strong>Nouveau site</strong> à côté de la liste des sites.
+   - Saisissez le <strong>Code</strong> (majuscules, chiffres, - et _), le nom en français (obligatoire) et en arabe, et gardez le type « Laboratoire partenaire (sous-traitance) », proposé par défaut. Validez.
+   - Le nouveau site est sélectionné : complétez sa fiche (adresse, téléphone, e-mail) puis <strong>Enregistrer</strong>.
+   - Un partenaire n'est jamais proposé comme site de travail à la connexion ni dans les accès des utilisateurs. Un site déjà utilisé (utilisateurs, documents numérotés) ne peut pas être transformé en partenaire.
+   - Seuls les sites actifs de ce type sont proposés comme partenaires.</li>
+<li><strong>Marquer l'analyse comme sous-traitée</strong> (Administrateur, Biologiste responsable)</li>
+<li><strong>Catalogue des analyses</strong>, sélectionnez l'analyse, <strong>Modifier l'analyse</strong>.</li>
+<li>Cochez <strong>Sous-traitée</strong>, choisissez le <strong>Laboratoire partenaire</strong>.</li>
+<li>Réglez <strong>Délai routine (h)</strong> en comptant le transport et le délai du partenaire : c'est lui qui fixe la date <strong>Retour attendu</strong> et donc le passage « En retard ».</li>
+<li><strong>Enregistrer</strong>.
+   - Messages : « Désignez le laboratoire sous-traitant. » (case cochée sans partenaire) ; « Aucun laboratoire partenaire n'est configuré : déclarez-le dans les paramètres avant de sous-traiter une analyse. »
+   - Le marquage s'applique aux <strong>nouveaux dossiers</strong> : il est copié sur l'analyse au moment de l'enregistrement du dossier. Les dossiers déjà enregistrés gardent ce qu'ils avaient. L'analyse porte alors la mention « Sous-traitée » dans <strong>Dossiers</strong> et <strong>Consultation d'un dossier</strong>.</li>
+</ol>
+<h4>L'écran</h4>
+<ul>
+<li>Titre « Sous-traitance — <em>n</em> à envoyer · <em>m</em> en attente de retour · <em>k</em> en retard ».</li>
+<li>Zone de recherche (dossier, patient, code-barres, bordereau, référence du partenaire ; <strong>Entrée</strong>), liste de filtre <strong>Tout afficher</strong> / <strong>À envoyer</strong> / <strong>En attente de retour</strong> / <strong>En retard</strong>, <strong>Actualiser</strong>.</li>
+<li>Colonnes : case à cocher, <strong>Statut</strong> (À envoyer, En attente de retour, En retard), <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Analyse</strong>, <strong>Code-barres</strong>, <strong>Laboratoire partenaire</strong> (ou « Aucun laboratoire désigné »), <strong>Bordereau</strong> (numéro et date d'envoi), <strong>Réf. partenaire</strong>, <strong>Retour attendu</strong>.</li>
+<li>Ordre : d'abord les analyses à envoyer (urgences en tête, plus ancienne réception d'abord), puis celles envoyées (plus ancien envoi d'abord). Lignes en retard en rouge.</li>
+<li>Une analyse n'apparaît « À envoyer » qu'une fois son tube <strong>réceptionné</strong>. Elle quitte la liste dès qu'un résultat est saisi.</li>
+<li>En bas : <strong>Envoyer en sous-traitance</strong>, <strong>Réimprimer le bordereau</strong>, <strong>Référence du partenaire</strong>.</li>
+</ul>
+<h4>Scénarios</h4>
+<ol>
+<li><strong>Envoyer des analyses et imprimer le bordereau</strong></li>
+<li>Filtrez sur <strong>À envoyer</strong> si besoin, cochez les analyses à faire partir (sans case cochée, la ligne sélectionnée est prise).</li>
+<li>Cliquez sur <strong>Envoyer en sous-traitance</strong>. La fenêtre récapitule « <em>n</em> analyse(s) de <em>m</em> dossier(s) à envoyer » avec, pour chacune, le partenaire prévu.</li>
+<li>Dans <strong>Laboratoire partenaire</strong>, laissez « Laboratoire prévu au catalogue pour chaque analyse », ou choisissez un autre partenaire pour <strong>tout</strong> le lot (jour où le partenaire habituel ne peut pas recevoir).</li>
+<li>Cliquez sur <strong>Envoyer et imprimer</strong> (ou <strong>Annuler</strong>).</li>
+<li>Un bordereau est numéroté <strong>par partenaire</strong> (format par défaut <code>ST/2026/00001</code>, série continue par site et par année). Chaque bordereau s'ouvre en PDF : n° de dossier, patient, sexe et date de naissance, code-barres, analyse, tube, date de prélèvement, priorité, et deux zones de signature (« Remis au coursier » / « Reçu par le laboratoire partenaire »).</li>
+<li>Les lignes passent « En attente de retour » ; l'historique du tube note le bordereau et le partenaire.</li>
+<li><strong>Réimprimer un bordereau</strong> : cochez une ou plusieurs analyses déjà envoyées, cliquez sur <strong>Réimprimer le bordereau</strong>. Chaque bordereau concerné s'ouvre une fois.</li>
+<li><strong>Noter la référence donnée par le partenaire</strong></li>
+<li>Cochez ou sélectionnez une analyse « En attente de retour ».</li>
+<li><strong>Référence du partenaire</strong>, saisissez le numéro (60 caractères au plus). Un champ vidé efface la référence.</li>
+<li>La référence apparaît dans <strong>Réf. partenaire</strong> et se retrouve par la recherche.</li>
+<li><strong>Relancer les retards</strong> : filtre <strong>En retard</strong> ; appelez le partenaire en citant la <strong>Réf. partenaire</strong> ou le n° de bordereau.</li>
+<li><strong>Enregistrer le retour des résultats</strong></li>
+<li>Il n'y a pas de bouton « retour » ici. Ouvrez <strong>Saisie des résultats</strong>, le dossier, et saisissez les valeurs du compte rendu du partenaire comme d'habitude.</li>
+<li>Chaque résultat saisi est marqué « ST » (sous-traité) dans la colonne des repères ; aucun lot de réactif du laboratoire ne lui est attribué.</li>
+<li>L'analyse quitte la liste <strong>Sous-traitance</strong>.</li>
+<li>Validation biologique normale ; le compte rendu porte, pour l'analyse, « Sous-traitée : <em>nom du partenaire</em> ».</li>
+</ol>
+<h4>Règles et contrôles</h4>
+<ul>
+<li>« Cochez au moins une analyse à envoyer. » : rien de sélectionné au statut « À envoyer ».</li>
+<li>« Aucun laboratoire partenaire n'est configuré : … » : aucun site « Laboratoire partenaire (sous-traitance) » actif : créez-le avec <strong>Nouveau site</strong>.</li>
+<li>« Aucun laboratoire partenaire n'est désigné pour une des analyses : choisissez-en un dans la fenêtre d'envoi. »</li>
+<li>« Une analyse du dossier … n'est pas sous-traitée. » / « … est annulée. » / « … est déjà partie en sous-traitance. » / « Le tube du dossier … n'est pas encore réceptionné. »</li>
+<li>Un envoi est tout ou rien : si une seule analyse est refusée, aucun bordereau n'est créé et aucun numéro n'est consommé.</li>
+<li>Seules les analyses de votre site peuvent être envoyées depuis votre poste.</li>
+<li>« Sélectionnez une analyse déjà envoyée. » : réimpression ou référence demandée sur une ligne non envoyée.</li>
+<li>« La référence ne doit pas dépasser 60 caractères. »</li>
+<li><strong>Retour attendu</strong> = heure de réception du tube + <strong>Délai routine (h)</strong> du catalogue (ou délai urgent pour un dossier urgent) ; il n'est pas recalculé à l'envoi.</li>
+<li>Si un résultat est saisi avant l'envoi, l'analyse quitte quand même la liste (elle est considérée comme revenue).</li>
+<li>Si le tube est refusé avec nouveau prélèvement, le nouveau tube garde le caractère « sous-traitée » et le partenaire.</li>
+</ul>
+<h4>Flux</h4>
+<p><strong>Catalogue des analyses</strong> (Sous-traitée + partenaire) → <strong>Dossiers</strong> → <strong>Prélèvements</strong> → <strong>Réception des échantillons</strong> → <strong>Sous-traitance</strong> (envoi + bordereau, référence) → <strong>Saisie des résultats</strong> (retour) → <strong>Validation</strong> → <strong>Comptes rendus</strong>.</p>
+<div class="diagram"><img src="img/diagramme-9b1568fadb8ae8c6.png" alt="Diagramme"></div>
+
+<h4>Quand nous sommes le laboratoire sous-traitant</h4>
+<p>Le cas inverse : un autre laboratoire nous confie ses tubes. Il n'y a pas d'écran dédié : le circuit passe par les écrans ordinaires. Il a été testé de bout en bout : le patient ne paie rien, le laboratoire adresseur reçoit le compte rendu, la facture et le bordereau, et son règlement solde la facture.</p>
+<p><strong>Mise en place, une fois par laboratoire adresseur</strong></p>
+<ol>
+<li><strong>Données de référence</strong> › onglet <strong>Organismes payeurs</strong> › <strong>Nouvel organisme payeur</strong> :
+   - <strong>Type d'organisme</strong> = « Établissement adresseur », <strong>Taux de remboursement (%)</strong> = 100 ;
+   - <strong>Tarification sur la TNR</strong> décoché, <strong>Convention de tiers payant</strong> coché, <strong>Délai de règlement (jours)</strong> ;
+   - <strong>Ordonnance obligatoire</strong> décoché : sinon chaque envoi au tiers payant reste bloqué en attendant un INPE de prescripteur. Attention, l'organisme livré « LABO_TIERS » a cette case cochée ;
+   - adresse, ICE et <strong>Compte comptable</strong>.</li>
+<li><strong>Données de référence</strong> › onglet <strong>Prescripteurs</strong> › <strong>Nouveau prescripteur</strong> (ou le <strong>+</strong> de l'écran Dossiers) : type « Laboratoire correspondant », nom court, <strong>Établissement</strong> = nom complet du laboratoire, e-mail et <strong>Remise</strong> = Courriel. Le compte rendu et la facture portent le nom du laboratoire, pas « Dr ».</li>
+<li><strong>Visites et conventions</strong> › <strong>Nouvelle convention</strong> : <strong>Type de partenaire</strong> « Laboratoire », <strong>Type de convention</strong> « Sous-traitance », remise et délai convenus. Cette fiche sert de référence : la remise n'est pas appliquée automatiquement.</li>
+</ol>
+<p><strong>Pour chaque patient envoyé</strong></p>
+<ol>
+<li><strong>Patients</strong> › <strong>Modifier</strong> › <strong>Couvertures</strong> › <strong>Ajouter une couverture</strong> : <strong>Organisme payeur</strong> = le laboratoire, <strong>N° d'immatriculation</strong> (obligatoire ; on y note souvent le numéro du dossier chez le laboratoire adresseur), <strong>Couverture principale</strong> et <strong>Tiers payant</strong> cochés.</li>
+<li><strong>Dossiers</strong> : choisissez le patient, <strong>Origine</strong> = « Sous-traitance reçue », <strong>Prescripteur</strong> = le laboratoire, ajoutez les analyses, laissez <strong>Paiement direct</strong> décoché, <strong>Enregistrer</strong>. Le montant à encaisser au comptoir est 0.</li>
+<li><strong>Prélèvements</strong> › <strong>Prélever</strong> (obligatoire avant la réception ; l'heure enregistrée est celle du clic), puis <strong>Réception des échantillons</strong> › <strong>Accepter</strong>.</li>
+<li><strong>Saisie des résultats</strong>, <strong>Validation biologique</strong>, comme pour tout dossier.</li>
+<li><strong>Comptes rendus</strong> › <strong>Enregistrer une remise</strong> : mode Courriel, et passez <strong>Qualité du destinataire</strong> sur « Prescripteur » (proposé « Patient » par défaut).</li>
+<li><strong>Facturation</strong> › <strong>Émettre la facture</strong> : facture adressée au laboratoire, part patient 0. Une remise en DH peut être saisie ici.</li>
+<li><strong>Tiers payant</strong> › <strong>Cocher tout ce qui est transmissible</strong> › <strong>Transmettre au tiers payant</strong>.</li>
+<li>À réception du virement : <strong>Facturation</strong> › <strong>Montant accepté par l'organisme</strong>, avec la référence du virement. La facture passe à « Réglée ».</li>
+</ol>
+<p><strong>Limites actuelles</strong></p>
+<ul>
+<li>La remise de la convention n'est appliquée nulle part : saisissez-la à la facture.</li>
+<li>L'organisme payeur vient toujours de la couverture principale du patient : pensez à clôturer cette couverture si le patient revient plus tard à titre personnel.</li>
+<li>Pas de champ pour le numéro de dossier du laboratoire adresseur, ni pour l'heure ou le lieu réels du prélèvement.</li>
+<li>Une facture par patient ; le bordereau du tiers payant les regroupe mais ne s'imprime pas encore.</li>
+</ul>
+<div class="diagram"><img src="img/diagramme-f10e382af9cfe092.png" alt="Diagramme"></div><p class="top"><a href="index.html">Retour au sommaire</a></p>
 </div>
 </body>
 </html>

@@ -5,25 +5,463 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>Prise en main</title>
 <style>
-body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.5;
-       color: #1f2933; background: #ffffff; margin: 0; padding: 0; }
-.page { max-width: 900px; margin: 0 auto; padding: 16px 24px 48px 24px; }
-h1 { font-size: 26px; color: #0b4f8a; border-bottom: 2px solid #0b4f8a; padding-bottom: 6px; }
-h2 { font-size: 20px; color: #0b4f8a; margin-top: 32px; }
-a { color: #0b5fa5; }
-img { max-width: 100%; border: 1px solid #d0d7de; }
+body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.55;
+       color: #1c1e21; background: #ffffff; margin: 0; padding: 0; }
+.page { max-width: 940px; margin: 0 auto; padding: 16px 28px 56px 28px; }
+.crumb { font-size: 13px; color: #5c616a; margin-bottom: 4px; }
+h1 { font-size: 26px; color: #1b5e8c; border-bottom: 2px solid #1b5e8c; padding-bottom: 6px; margin-top: 8px; }
+h2 { font-size: 21px; color: #1b5e8c; margin-top: 36px; border-bottom: 1px solid #d8dade; padding-bottom: 4px; }
+h3 { font-size: 17px; color: #1c1e21; margin-top: 26px; }
+h4 { font-size: 15px; color: #1c1e21; margin-top: 20px; }
+a { color: #1b5e8c; }
+code { font-family: Consolas, monospace; font-size: 13px; background: #f0f1f3; padding: 1px 4px; }
+pre { background: #f0f1f3; padding: 10px; overflow: auto; }
+table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+th, td { border: 1px solid #d8dade; padding: 6px 8px; text-align: left; vertical-align: top; font-size: 14px; }
+th { background: #e6eef4; }
+.diagram { margin: 16px 0 20px 0; text-align: center; }
+.diagram img { max-width: 100%; border: 1px solid #d8dade; padding: 8px; background: #ffffff; }
 ul.toc li { margin: 4px 0; }
-section { margin-bottom: 24px; }
+.top { font-size: 13px; margin-top: 32px; }
 </style>
 </head>
 <body>
 <div class="page">
-<p><a href="index.html">Sommaire</a></p>
+<div class="crumb"><a href="index.html">Sommaire</a></div>
 <h1>Prise en main</h1>
-<section id="dashboard">
-<h2>Tableau de bord</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
+<p>Ce chapitre explique comment ouvrir une session, se repérer dans la fenêtre principale, qui voit quoi selon son rôle, comment fonctionne le mode démonstration, et comment lire le <strong>Tableau de bord</strong>.</p>
+<p>Vue d'ensemble :</p>
+<div class="diagram"><img src="img/diagramme-3aca0454981dce1c.png" alt="Diagramme"></div>
+
+<h3>Connexion</h3>
+<p>Ouvrir une session de travail sur un site du laboratoire, avec son identifiant personnel.</p>
+<p><strong>Qui y a accès</strong> : toute personne qui possède un compte actif, rattaché au site choisi. Les comptes sont créés par l'administrateur dans <strong>Administration › Utilisateurs</strong>.</p>
+<p><strong>L'écran</strong> (fenêtre « Connexion »)</p>
+<ul>
+<li>Logo du site choisi (ou le logo MarocLIS si le site n'en a pas), avec le sous-titre « Système de gestion de laboratoire d'analyses de biologie médicale ».</li>
+<li><strong>Identifiant</strong> et <strong>Mot de passe</strong>.</li>
+<li><strong>Site</strong> : liste des sites actifs, sous la forme « CODE — Nom du site ».</li>
+<li><strong>Langue</strong> : Français, العربية, English. Le changement s'applique tout de suite, avant même la connexion.</li>
+<li>Case <strong>Se souvenir de l'identifiant</strong>.</li>
+<li>Bouton <strong>Se connecter</strong> (la touche Entrée fait de même).</li>
+<li>Une ligne rouge sous le bouton affiche les messages (erreur, majuscules activées).</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><em>Se connecter normalement</em></li>
+<li>Choisir la <strong>Langue</strong> si besoin.</li>
+<li>Saisir l'<strong>Identifiant</strong> puis le <strong>Mot de passe</strong>.</li>
+<li>Choisir le <strong>Site</strong> où vous travaillez aujourd'hui.</li>
+<li>Cocher <strong>Se souvenir de l'identifiant</strong> si le poste est le vôtre (l'identifiant sera pré-rempli la prochaine fois sur ce poste ; le mot de passe n'est jamais retenu).</li>
+<li>Cliquer <strong>Se connecter</strong> ou appuyer sur Entrée.</li>
+<li>
+<p>La fenêtre principale s'ouvre sur le <strong>Tableau de bord</strong>, dans <strong>votre</strong> langue préférée (celle de votre fiche utilisateur), même si une autre langue était choisie sur l'écran de connexion.</p>
+</li>
+<li>
+<p><em>Première connexion (compte « admin » livré avec l'application) ou mot de passe réinitialisé par l'administrateur</em></p>
+</li>
+<li>Se connecter avec le mot de passe provisoire.</li>
+<li>Le message « Votre mot de passe doit être modifié avant de continuer. » s'affiche (titre « Changement de mot de passe requis »). Cliquer OK.</li>
+<li>La fenêtre <strong>Changer le mot de passe</strong> s'ouvre. Le champ <strong>Mot de passe actuel</strong> est déjà rempli et grisé.</li>
+<li>Saisir le <strong>Nouveau mot de passe</strong> puis le <strong>Confirmer le mot de passe</strong>. La règle est rappelée dans la fenêtre : au moins 10 caractères (réglage livré), avec lettres, chiffres et caractères spéciaux.</li>
+<li>Cliquer <strong>Enregistrer</strong>. Le message « Enregistré. » confirme ; la session s'ouvre.</li>
+<li>
+<p>Cette fenêtre ne peut pas être fermée sans changer le mot de passe (pas de bouton <strong>Annuler</strong>, la croix est refusée). Si elle se ferme quand même, la session est fermée et il faut recommencer.</p>
+</li>
+<li>
+<p><em>Mot de passe expiré</em> : même déroulement que le scénario 2. Le mot de passe expire après 180 jours (réglage livré).</p>
+</li>
+<li>
+<p><em>Changer de site</em> : il n'existe pas de bouton pour changer de site dans la fenêtre principale. Cliquer <strong>Déconnexion</strong>, puis se reconnecter en choisissant l'autre <strong>Site</strong>.</p>
+</li>
+<li>
+<p><em>Se déconnecter</em></p>
+</li>
+<li>Cliquer <strong>Déconnexion</strong> en bas du menu de gauche, puis confirmer.</li>
+<li>L'application se ferme et se rouvre sur l'écran <strong>Connexion</strong>. Fermer la fenêtre principale (croix, Alt+F4) ferme aussi la session et l'inscrit au journal de sécurité.</li>
+</ol>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>« Identifiant ou mot de passe incorrect. » : nom inconnu ou mauvais mot de passe. Le même message s'affiche pour un <strong>compte désactivé</strong> (volontairement, pour ne pas révéler quels comptes existent).</li>
+<li>« Compte verrouillé jusqu'à HH:MM après plusieurs tentatives infructueuses. » : après 5 essais faux (réglage livré), le compte est bloqué 15 minutes. Ce message n'apparaît que si le mot de passe saisi est le bon ; sinon on voit le message d'identifiant incorrect.</li>
+<li>« Vous n'êtes pas habilité à travailler sur ce site. » : le compte n'a pas accès au site choisi. Demander à l'administrateur d'ajouter le site sur la fiche utilisateur.</li>
+<li>« Attention : le verrouillage des majuscules est activé. » s'affiche dès que vous tapez le mot de passe avec la touche Verr. Maj.</li>
+<li>Nouveau mot de passe : « Les deux mots de passe saisis ne correspondent pas. », « Ce mot de passe a déjà été utilisé récemment. » (les 5 derniers sont refusés, réglage livré).</li>
+<li><strong>Verrouillage automatique</strong> : après 15 minutes sans clavier ni souris (réglage livré), toutes les fenêtres sont masquées, la session est fermée, puis le message « Votre session a expiré. Reconnectez-vous. » s'affiche. Ce qui n'était pas enregistré est perdu.</li>
+<li><strong>Compte modifié pendant la session</strong> : toutes les minutes, l'application vérifie le compte. S'il a été désactivé, si son mot de passe a été réinitialisé ou si ses droits ont changé, la session est fermée avec le message « Votre compte a été modifié (désactivation, mot de passe réinitialisé ou droits changés). La session est fermée ; reconnectez-vous. »</li>
+<li>Il n'y a <strong>pas</strong> de bouton pour changer volontairement son mot de passe une fois connecté (à signaler à l'administrateur, qui peut le réinitialiser).</li>
+</ul>
+<p><strong>Flux</strong> : Connexion → (changement de mot de passe obligatoire si demandé) → fenêtre principale ouverte sur le <strong>Tableau de bord</strong>.</p>
+<div class="diagram"><img src="img/diagramme-9c5545c7482220b8.png" alt="Diagramme"></div>
+
+<h3>Fenêtre principale</h3>
+<p>Le cadre commun à tous les écrans : bandeau du haut, menu de gauche, zone de travail.</p>
+<p><strong>Qui y a accès</strong> : toute personne connectée. Le menu ne montre que les écrans autorisés par votre rôle.</p>
+<p><strong>L'écran</strong></p>
+<ul>
+<li><strong>Bandeau du haut</strong> (de gauche à droite) : « MarocLIS », le nom de l'écran ouvert, votre nom avec en dessous « Site : CODE · Poste : NOM-DU-POSTE », la date et l'heure (mises à jour toutes les 30 secondes), le bouton <strong>Imprimer (Ctrl+P)</strong> et la liste des langues.</li>
+<li><strong>Menu de gauche</strong> : en haut, sans titre de groupe, <strong>Tableau de bord</strong>, <strong>Statistiques</strong>, <strong>Pilotage</strong> ; puis les groupes en majuscules : ACCUEIL / ENREGISTREMENT, LISTE DE TRAVAIL, FACTURATION, QUALITÉ, STOCKS, PERSONNEL, RELATIONS, FINANCES, ADMINISTRATION. Tout en bas : <strong>Raccourcis clavier (F1)</strong> et <strong>Déconnexion</strong>.</li>
+<li>Un écran sans droit n'apparaît pas du tout (il n'est pas grisé). Un groupe n'apparaît que si vous pouvez ouvrir au moins un de ses écrans.</li>
+<li>L'écran en cours est surligné dans le menu. Le raccourci clavier d'un écran est écrit à droite de son nom (ou dans l'info-bulle si le nom est long).</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><em>Ouvrir un écran</em> : cliquer son nom dans le menu, ou utiliser son raccourci. Si l'écran que vous quittez contient des saisies non enregistrées (par exemple des résultats tapés), il peut refuser de se fermer : vous restez dessus.</li>
+<li><em>Replier / déplier un groupe du menu</em> : cliquer le titre du groupe (petit triangle à gauche ; info-bulle « Replier ce groupe » / « Déplier ce groupe »). Le choix est retenu pour vous sur ce poste. Un écran ouvert par raccourci dans un groupe replié déplie ce groupe.</li>
+<li><em>Changer la langue</em> : choisir Français, العربية ou English dans la liste en haut à droite. Tout l'écran est retraduit. En arabe, la fenêtre passe de droite à gauche ; les identifiants, mots de passe et codes restent écrits de gauche à droite. Ce choix vaut pour la session en cours ; à la connexion suivante, la langue de votre fiche utilisateur s'applique de nouveau (à vérifier si vous souhaitez la changer durablement : c'est l'administrateur qui modifie la langue préférée).</li>
+<li><em>Imprimer la liste affichée</em></li>
+<li>Ouvrir l'écran voulu, filtrer la liste.</li>
+<li>Cliquer <strong>Imprimer</strong> ou appuyer sur <strong>Ctrl+P</strong>.</li>
+<li>Un PDF s'ouvre avec la plus grande liste visible de l'écran, telle qu'affichée (colonnes visibles, ordre affiché), avec en-tête : site, votre nom, date et heure, nombre de lignes. L'imprimer depuis le lecteur PDF.</li>
+<li>Si l'écran n'a pas de liste ou si elle est vide : « Cet écran n'affiche aucune liste à imprimer. »</li>
+<li><em>Utiliser les raccourcis clavier</em></li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Touche</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td>Raccourcis clavier (cette liste)</td>
+</tr>
+<tr>
+<td>Ctrl+S</td>
+<td>Clique le bouton <strong>Enregistrer</strong> de l'écran, s'il existe et est actif</td>
+</tr>
+<tr>
+<td>Ctrl+F</td>
+<td>Place le curseur dans la première zone de saisie de l'écran (sa recherche)</td>
+</tr>
+<tr>
+<td>Ctrl+P</td>
+<td>Imprimer la liste de l'écran</td>
+</tr>
+<tr>
+<td>F5</td>
+<td>Actualiser l'écran</td>
+</tr>
+<tr>
+<td>Ctrl+1</td>
+<td>Patients</td>
+</tr>
+<tr>
+<td>Ctrl+2</td>
+<td>Dossiers</td>
+</tr>
+<tr>
+<td>Ctrl+3</td>
+<td>Consultation d'un dossier</td>
+</tr>
+<tr>
+<td>Ctrl+4</td>
+<td>Prélèvements</td>
+</tr>
+<tr>
+<td>Ctrl+5</td>
+<td>Réception des échantillons</td>
+</tr>
+<tr>
+<td>Ctrl+6</td>
+<td>Saisie des résultats</td>
+</tr>
+<tr>
+<td>Ctrl+7</td>
+<td>Validation biologique</td>
+</tr>
+<tr>
+<td>Ctrl+8</td>
+<td>Comptes rendus</td>
+</tr>
+<tr>
+<td>Ctrl+9</td>
+<td>Facturation</td>
+</tr>
+<tr>
+<td>Ctrl+0</td>
+<td>Caisse</td>
+</tr>
+</tbody>
+</table>
+<p>Un raccourci d'écran ne fonctionne que si vous avez le droit d'ouvrir cet écran. Dans chaque fenêtre, Alt + la lettre soulignée active le bouton ou le champ.
+6. <em>Personnaliser ses raccourcis</em>
+   1. Cliquer <strong>Raccourcis clavier</strong> (ou F1). La fenêtre liste chaque <strong>Action</strong> et son <strong>Raccourci</strong> ; les autres écrans autorisés y figurent sans raccourci (« Ouvrir : Nom de l'écran »).
+   2. Sélectionner une ligne puis appuyer sur la combinaison voulue (Ctrl ou Alt + une touche, ou une touche F1 à F12). Suppr retire le raccourci.
+   3. Si la combinaison était déjà prise, elle est déplacée et un message l'indique (« Ctrl+… était le raccourci de « … », qui n'en a plus. »).
+   4. <strong>Rétablir les raccourcis par défaut</strong> remet la liste d'origine.
+   5. Cliquer <strong>Enregistrer</strong> (ou <strong>Annuler</strong>). Les raccourcis sont propres à votre compte, sur ce poste.</p>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>« Utilisez Ctrl ou Alt avec une touche, ou une touche F1 à F12. » : une lettre seule ne peut pas servir de raccourci.</li>
+<li>« Les raccourcis n'ont pas pu être enregistrés. » : problème d'écriture sur le poste ; prévenir l'informatique.</li>
+<li>Masquer un écran du menu n'est pas la seule protection : même atteint autrement, une opération sans droit est refusée.</li>
+<li>Au démarrage, si la base de données est injoignable, un message d'erreur s'affiche avant l'écran de connexion. Si une police des comptes rendus manque (police arabe surtout), un avertissement s'affiche au démarrage : prévenir l'informatique avant de diffuser des comptes rendus en arabe.</li>
+</ul>
+<p><strong>Flux</strong> : la fenêtre principale est le point de départ de tous les circuits. L'ordre des raccourcis Ctrl+1 à Ctrl+0 suit le parcours d'un dossier : patient → dossier → prélèvement → réception → saisie → validation → compte rendu → facturation → caisse.</p>
+<div class="diagram"><img src="img/diagramme-97e8b90267d3056f.png" alt="Diagramme"></div>
+
+<p>Fin de session :</p>
+<div class="diagram"><img src="img/diagramme-cf1362fa36edc496.png" alt="Diagramme"></div>
+
+<h3>Rôles et droits (vue d'ensemble)</h3>
+<p>Chaque utilisateur reçoit un ou plusieurs rôles ; un rôle est un ensemble de droits. Les rôles livrés sont décrits ci-dessous. L'administrateur peut les modifier ou en créer d'autres dans <strong>Administration › Utilisateurs</strong>, onglet <strong>Rôles et droits</strong>. Les droits que l'administrateur a retirés à un rôle livré ne sont pas remis lors d'une mise à jour.</p>
+<table>
+<thead>
+<tr>
+<th>Rôle livré</th>
+<th>Pour qui</th>
+<th>Écrans visibles dans le menu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Administrateur</td>
+<td>Informatique / gérant</td>
+<td>Tous les écrans, y compris <strong>Paramètres</strong>. N'a pas de qualification de biologiste : il ne peut pas valider biologiquement un résultat.</td>
+</tr>
+<tr>
+<td>Biologiste responsable</td>
+<td>Directeur du laboratoire</td>
+<td>Presque tout : Tableau de bord, Statistiques, Pilotage, accueil, technique, validation, comptes rendus, Facturation, Tiers payant, qualité, stocks (sauf Demandes de devis et Évaluation fournisseurs), équipements, tout le personnel y compris Paie, RELATIONS (les trois écrans), FINANCES (tous), Utilisateurs, Journal d'audit, Catalogue, Automates, Données de référence. Pas <strong>Caisse</strong> (n'encaisse pas), pas <strong>Paramètres</strong>.</td>
+</tr>
+<tr>
+<td>Biologiste</td>
+<td>Biologiste médical</td>
+<td>Tableau de bord, Statistiques, Patients, Dossiers, Consultation d'un dossier, Réception des échantillons, Re-prélèvements, Sérothèque, Saisie des résultats, Validation biologique, Comptes rendus, Contrôle interne, Non-conformités, Évaluation externe, Documents qualité, Stocks, Bons de commande, Consommation, Températures, Équipements, Congés et absences, Accidents du travail, Catalogue des analyses, Automates.</td>
+</tr>
+<tr>
+<td>Technicien de laboratoire</td>
+<td>Paillasse</td>
+<td>Tableau de bord, Patients, Consultation d'un dossier, Prélèvements, Réception des échantillons, Re-prélèvements, Sérothèque, Sous-traitance, Saisie des résultats, Comptes rendus, Contrôle interne, Non-conformités, Évaluation externe, Documents qualité, Stocks, Bons de commande, Consommation, Inventaires, Températures, Équipements, Congés et absences, Catalogue des analyses, Automates. Saisit et valide techniquement, <strong>ne valide jamais biologiquement</strong>.</td>
+</tr>
+<tr>
+<td>Préleveur</td>
+<td>Infirmier, préleveur</td>
+<td>Tableau de bord, Patients (peut créer un patient), Consultation d'un dossier, Prélèvements, Sous-traitance, Congés et absences, Catalogue des analyses.</td>
+</tr>
+<tr>
+<td>Secrétariat / accueil</td>
+<td>Accueil, secrétaires</td>
+<td>Tableau de bord, Patients, Dossiers, Consultation d'un dossier, Re-prélèvements, Comptes rendus (remise et envoi, jamais un résultat non validé), Facturation, Caisse, Tiers payant, Congés et absences, Catalogue des analyses.</td>
+</tr>
+<tr>
+<td>Responsable qualité</td>
+<td>Qualité</td>
+<td>Tableau de bord, Statistiques, Patients, Consultation d'un dossier, Comptes rendus, tout le groupe QUALITÉ, Stocks, Bons de commande, Consommation, Inventaires, Températures, Équipements, Contrats automates, Dossiers du personnel, Habilitations, Échéances RH, Congés et absences, Planning des gardes, Accidents du travail, Immobilisations (lecture), Utilisateurs (lecture), Journal d'audit, Catalogue, Automates, Données de référence.</td>
+</tr>
+<tr>
+<td>Comptabilité</td>
+<td>Comptable, facturation</td>
+<td>Tableau de bord, Statistiques, Patients, Consultation d'un dossier, Facturation, Caisse, Tiers payant, Stocks, Bons de commande, Demandes de devis, Factures fournisseurs, Évaluation fournisseurs, Consommation, Contrats automates, Congés et absences, Statistiques prescripteurs, Visites et conventions (lecture seule), tout le groupe FINANCES sauf Coût de revient et marge, Données de référence. Aucun accès aux résultats.</td>
+</tr>
+<tr>
+<td>Prescripteur</td>
+<td>Médecin extérieur</td>
+<td>Tableau de bord, Patients, Consultation d'un dossier, Comptes rendus — en lecture, limité à <strong>ses propres</strong> patients, réimpression du compte rendu déjà validé uniquement.</td>
+</tr>
+</tbody>
+</table>
+<p>À retenir :</p>
+<ul>
+<li>Une personne peut cumuler plusieurs rôles (par exemple secrétaire + comptabilité) : elle voit l'union des écrans.</li>
+<li>À l'intérieur d'un écran, certains boutons n'apparaissent ou ne sont actifs qu'avec un droit précis (par exemple <strong>Nouvelle visite</strong> dans Visites et conventions). Chaque chapitre le précise.</li>
+<li>La validation biologique exige à la fois le droit et une qualification de biologiste (médecin ou pharmacien biologiste) en cours de validité sur la fiche utilisateur.</li>
+<li>Les comptes « admin » (premier administrateur) et « interface » (compte de service des automates, qui ne peut pas se connecter) sont créés automatiquement à la première installation.</li>
+</ul>
+<h3>Mode démonstration</h3>
+<p>Une base remplie d'une journée de laboratoire fictive, pour la formation ou la présentation.</p>
+<p><strong>Qui y a accès</strong> : il est activé par l'informatique, sur un poste ou une base de formation uniquement (réglage « SeedDemoDataOnFirstRun »). Il est désactivé dans la version livrée.</p>
+<p><strong>Ce que l'on voit</strong></p>
+<ul>
+<li>Des patients dont le numéro de dossier commence par <strong>DEMO-</strong>, des dossiers portant dans leur note interne « JEU DE DÉMONSTRATION — NE PAS UTILISER EN PRODUCTION » (visible sur les listes de travail, jamais imprimée), des fournisseurs, articles, automates, lots de contrôle et une mutuelle aux codes <strong>DEMO-</strong>, des noms suivis de « (démo) ».</li>
+<li>Des comptes de démonstration, un par métier :</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Identifiant</th>
+<th>Rôle(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>demo.biologiste</td>
+<td>Biologiste responsable</td>
+</tr>
+<tr>
+<td>demo.technicien</td>
+<td>Technicien de laboratoire</td>
+</tr>
+<tr>
+<td>demo.secretaire</td>
+<td>Secrétariat / accueil + Comptabilité</td>
+</tr>
+<tr>
+<td>demo.qualite</td>
+<td>Responsable qualité</td>
+</tr>
+</tbody>
+</table>
+<p>Leurs mots de passe sont publics (fournis par l'informatique pour la formation).</p>
+<p><strong>Scénario</strong> : <em>Se former sur la base de démonstration</em> — se connecter avec un compte demo.*, parcourir les écrans : chaque écran contient des exemples réalistes (dossiers à tous les stades, contrôles qualité avec graphique, factures, etc.).</p>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li><strong>Jamais sur la base réelle du laboratoire.</strong> Si la base contient déjà un vrai patient (sans DEMO-) ou une vraie facture émise, aucune donnée de démonstration n'est créée.</li>
+<li>Dès que des données réelles apparaissent, chaque compte demo.* qui a encore son mot de passe public est désactivé (au démarrage et à sa prochaine tentative de connexion), avec le message « Ce compte de démonstration a été désactivé : la base contient désormais des données réelles et son mot de passe est publié. Utilisez un compte nominatif. »</li>
+<li>Les factures de démonstration prennent des numéros dans la vraie série de facturation : c'est une raison de plus pour ne jamais activer ce mode en production.</li>
+</ul>
+<p><strong>Flux</strong> : la base de démonstration suit le même parcours que la vraie (tous les dossiers ont été créés par les mêmes fonctions que celles des écrans).</p>
+<div class="diagram"><img src="img/diagramme-dbf7ea3b81d02c13.png" alt="Diagramme"></div>
+
+<h3 id="dashboard">Tableau de bord</h3>
+<p>L'écran d'accueil : ce qui demande une action aujourd'hui, du plus urgent au moins urgent.</p>
+<p><strong>Qui y a accès</strong> : tout le monde. Chaque tuile n'est montrée qu'à ceux qui ont le droit correspondant (par exemple la caissière ne voit pas les résultats critiques, le technicien ne voit pas les créances).</p>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>En haut, « Connecté en tant que : Votre nom ».</li>
+<li>Bandeau orange (si besoin) « configuration à compléter » : il liste jusqu'à trois éléments du catalogue non finalisés, sous la forme « Valeurs usuelles à valider : CODE » ou « Tarif provisoire (lettre-clé non confirmée) : CODE », puis « (+N) » s'il y en a d'autres. Il disparaît quand le catalogue est complété.</li>
+<li><strong>À traiter en priorité</strong> puis <strong>Activité du jour</strong> : des tuiles avec un nombre et un libellé. Rouge = urgent, orange = à surveiller, neutre = rien à faire ou simple compteur. Les tuiles sont triées par gravité puis par nombre.</li>
+<li>En bas : « Actualiser — HH:MM:SS » (heure du calcul).</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Tuile</th>
+<th>Ce qu'elle compte (site en cours)</th>
+<th>Couleur si &gt; 0</th>
+<th>Droit pour la voir</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Résultats critiques non communiqués</td>
+<td>Résultats critiques sans appel au prescripteur confirmé (acquitté et relu)</td>
+<td>Rouge</td>
+<td>Résultats (consultation)</td>
+</tr>
+<tr>
+<td>Dossiers en retard</td>
+<td>Dossiers dont l'heure de rendu promise est passée, ni rendus ni annulés</td>
+<td>Rouge</td>
+<td>Dossiers (consultation)</td>
+</tr>
+<tr>
+<td>Alertes contrôle interne</td>
+<td>Contrôles rejetés non encore revus</td>
+<td>Rouge</td>
+<td>Qualité (consultation)</td>
+</tr>
+<tr>
+<td>Prochain étalonnage</td>
+<td>Automates en service dont l'étalonnage est <strong>dépassé</strong></td>
+<td>Rouge</td>
+<td>Équipements (consultation)</td>
+</tr>
+<tr>
+<td>Lots périmés ou à moins de 7 jours</td>
+<td>Lots de réactifs avec stock, périmés ou proches (seuil critique)</td>
+<td>Rouge</td>
+<td>Stocks (consultation)</td>
+</tr>
+<tr>
+<td>Ruptures prévues avant livraison</td>
+<td>Articles qui seront épuisés avant l'arrivée d'une commande passée aujourd'hui</td>
+<td>Rouge</td>
+<td>Stocks (consultation)</td>
+</tr>
+<tr>
+<td>Factures fournisseurs en retard de paiement</td>
+<td>Factures fournisseurs échues non payées</td>
+<td>Rouge</td>
+<td>Saisie des factures fournisseurs</td>
+</tr>
+<tr>
+<td>Non-conformités ouvertes</td>
+<td>Ouvertes, en cours ou en attente de vérification</td>
+<td>Orange</td>
+<td>Qualité (consultation)</td>
+</tr>
+<tr>
+<td>Articles à commander</td>
+<td>Articles au seuil de commande ou en dessous (lots utilisables seulement)</td>
+<td>Orange</td>
+<td>Stocks (consultation)</td>
+</tr>
+<tr>
+<td>Péremption proche</td>
+<td>Lots avec stock qui périment dans le délai d'alerte (30 jours par défaut)</td>
+<td>Orange</td>
+<td>Stocks (consultation)</td>
+</tr>
+<tr>
+<td>Enceintes sans relevé de température aujourd'hui</td>
+<td>Réfrigérateurs / congélateurs actifs sans relevé du jour</td>
+<td>Orange</td>
+<td>Relevé des températures</td>
+</tr>
+<tr>
+<td>Échantillons refusés aujourd'hui</td>
+<td>Échantillons refusés depuis minuit</td>
+<td>Orange</td>
+<td>Échantillons (consultation)</td>
+</tr>
+<tr>
+<td>Créances</td>
+<td>Factures patients émises ou partiellement payées, échues</td>
+<td>Orange</td>
+<td>Facturation (consultation)</td>
+</tr>
+<tr>
+<td>Factures fournisseurs à payer sous 7 jours</td>
+<td>Factures fournisseurs à échéance dans la semaine</td>
+<td>Orange</td>
+<td>Saisie des factures fournisseurs</td>
+</tr>
+<tr>
+<td>Dossiers du jour</td>
+<td>Dossiers enregistrés aujourd'hui, hors annulés</td>
+<td>Neutre</td>
+<td>Dossiers (consultation)</td>
+</tr>
+<tr>
+<td>À prélever</td>
+<td>Échantillons en attente de prélèvement</td>
+<td>Orange</td>
+<td>Échantillons (consultation)</td>
+</tr>
+<tr>
+<td>À valider</td>
+<td>Résultats validés techniquement, en attente de validation biologique</td>
+<td>Orange</td>
+<td>Résultats (consultation)</td>
+</tr>
+<tr>
+<td>Comptes rendus</td>
+<td>Comptes rendus diffusés aujourd'hui</td>
+<td>Neutre</td>
+<td>Comptes rendus (consultation)</td>
+</tr>
+</tbody>
+</table>
+<p>Les quatre dernières lignes (Dossiers du jour, À prélever, À valider, Comptes rendus) forment le bloc <strong>Activité du jour</strong> ; les autres sont sous <strong>À traiter en priorité</strong>.</p>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><em>Faire le point en début de journée</em> : ouvrir <strong>Tableau de bord</strong> (il s'ouvre seul à la connexion). Traiter d'abord les tuiles rouges : appeler les résultats critiques (écran <strong>Validation biologique</strong>), relancer les dossiers en retard, revoir les contrôles rejetés (<strong>Contrôle interne</strong>).</li>
+<li><em>Mettre à jour les chiffres</em> : appuyer sur <strong>F5</strong> ou rouvrir l'écran depuis le menu. Il n'y a pas de bouton « Actualiser » sur l'écran ; l'heure du dernier calcul est affichée en bas.</li>
+<li><em>Aller traiter une alerte</em> : ouvrir l'écran concerné <strong>depuis le menu</strong> (voir colonne ci-dessus). Le curseur prend la forme d'une main sur certaines tuiles non nulles, mais <strong>cliquer une tuile n'ouvre rien</strong> (à corriger).</li>
+</ol>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>Les chiffres concernent le <strong>site sur lequel vous êtes connecté</strong>.</li>
+<li>Le bandeau « configuration à compléter » signale un catalogue pas prêt pour la production (tarifs provisoires, valeurs usuelles non validées par le biologiste) : à régler avant d'émettre de vraies factures et comptes rendus.</li>
+<li>En cas d'erreur de calcul, la ligne du bas affiche « Une erreur inattendue est survenue. L'incident a été journalisé. »</li>
+<li><strong>Imprimer</strong> (Ctrl+P) ne fonctionne pas sur cet écran : il n'a pas de liste.</li>
+</ul>
+<p><strong>Flux</strong> : Tableau de bord → écran du menu correspondant à l'alerte (Validation biologique, Dossiers, Contrôle interne, Stocks, Températures, Factures fournisseurs, Facturation…).</p>
+<div class="diagram"><img src="img/diagramme-01f271b71faa77da.png" alt="Diagramme"></div><p class="top"><a href="index.html">Retour au sommaire</a></p>
 </div>
 </body>
 </html>

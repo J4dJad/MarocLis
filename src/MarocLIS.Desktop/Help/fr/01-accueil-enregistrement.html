@@ -3,35 +3,486 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>Accueil et enregistrement</title>
+<title>Accueil / Enregistrement</title>
 <style>
-body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.5;
-       color: #1f2933; background: #ffffff; margin: 0; padding: 0; }
-.page { max-width: 900px; margin: 0 auto; padding: 16px 24px 48px 24px; }
-h1 { font-size: 26px; color: #0b4f8a; border-bottom: 2px solid #0b4f8a; padding-bottom: 6px; }
-h2 { font-size: 20px; color: #0b4f8a; margin-top: 32px; }
-a { color: #0b5fa5; }
-img { max-width: 100%; border: 1px solid #d0d7de; }
+body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.55;
+       color: #1c1e21; background: #ffffff; margin: 0; padding: 0; }
+.page { max-width: 940px; margin: 0 auto; padding: 16px 28px 56px 28px; }
+.crumb { font-size: 13px; color: #5c616a; margin-bottom: 4px; }
+h1 { font-size: 26px; color: #1b5e8c; border-bottom: 2px solid #1b5e8c; padding-bottom: 6px; margin-top: 8px; }
+h2 { font-size: 21px; color: #1b5e8c; margin-top: 36px; border-bottom: 1px solid #d8dade; padding-bottom: 4px; }
+h3 { font-size: 17px; color: #1c1e21; margin-top: 26px; }
+h4 { font-size: 15px; color: #1c1e21; margin-top: 20px; }
+a { color: #1b5e8c; }
+code { font-family: Consolas, monospace; font-size: 13px; background: #f0f1f3; padding: 1px 4px; }
+pre { background: #f0f1f3; padding: 10px; overflow: auto; }
+table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+th, td { border: 1px solid #d8dade; padding: 6px 8px; text-align: left; vertical-align: top; font-size: 14px; }
+th { background: #e6eef4; }
+.diagram { margin: 16px 0 20px 0; text-align: center; }
+.diagram img { max-width: 100%; border: 1px solid #d8dade; padding: 8px; background: #ffffff; }
 ul.toc li { margin: 4px 0; }
-section { margin-bottom: 24px; }
+.top { font-size: 13px; margin-top: 32px; }
 </style>
 </head>
 <body>
 <div class="page">
-<p><a href="index.html">Sommaire</a></p>
-<h1>Accueil et enregistrement</h1>
-<section id="patients">
-<h2>Patients</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="orders">
-<h2>Dossiers</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="orderdetail">
-<h2>Consultation d&#x27;un dossier</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
+<div class="crumb"><a href="index.html">Sommaire</a></div>
+<h1>Accueil / Enregistrement</h1>
+<p>Ce groupe du menu réunit les trois écrans de l'accueil : la fiche des patients, l'enregistrement d'un nouveau dossier (la demande d'analyses) et la consultation d'un dossier déjà enregistré. Tout le reste du travail du laboratoire (prélèvement, réception des tubes, saisie, validation, facturation) part de ce qui est saisi ici.</p>
+<p>Vue d'ensemble du groupe :</p>
+<div class="diagram"><img src="img/diagramme-475049f96a7f297a.png" alt="Diagramme"></div>
+
+<p>Raccourcis clavier valables dans tout le groupe (réglables dans <strong>Raccourcis clavier</strong>, touche <strong>F1</strong>) :</p>
+<table>
+<thead>
+<tr>
+<th>Touche</th>
+<th>Effet</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Ctrl+1</strong></td>
+<td>ouvre l'écran <strong>Patients</strong></td>
+</tr>
+<tr>
+<td><strong>Ctrl+2</strong></td>
+<td>ouvre l'écran <strong>Dossiers</strong> (enregistrement)</td>
+</tr>
+<tr>
+<td><strong>Ctrl+3</strong></td>
+<td>ouvre l'écran <strong>Consultation d'un dossier</strong></td>
+</tr>
+<tr>
+<td><strong>Ctrl+S</strong></td>
+<td>appuie sur le bouton <strong>Enregistrer</strong> de l'écran, s'il est actif</td>
+</tr>
+<tr>
+<td><strong>Ctrl+F</strong></td>
+<td>place le curseur dans la première zone de recherche de l'écran</td>
+</tr>
+<tr>
+<td><strong>Ctrl+P</strong></td>
+<td>imprime la liste affichée</td>
+</tr>
+<tr>
+<td><strong>F5</strong></td>
+<td>actualise l'écran</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="patients">Patients</h3>
+<p>Rechercher un patient, créer ou corriger sa fiche, gérer ses couvertures (AMO, mutuelle…), ses consentements et ses alertes, fusionner deux fiches en double et anonymiser une fiche.</p>
+<p><strong>Qui y a accès</strong></p>
+<ul>
+<li>Ouvrir l'écran : droit « consulter les patients ». Par défaut : tous les rôles (Administrateur, Biologiste responsable, Biologiste, Technicien, Préleveur, Secrétariat / accueil, Responsable qualité, Comptabilité, Prescripteur).</li>
+<li><strong>Nouveau patient</strong> : droit « créer un patient » — Administrateur, Biologiste responsable, Secrétariat / accueil, Préleveur. (Le rôle Biologiste ne l'a pas.)</li>
+<li>Modifier une fiche, ajouter une couverture, un consentement ou une alerte : droit « modifier un patient » — Administrateur, Biologiste responsable, Biologiste, Secrétariat / accueil. Les autres utilisateurs peuvent ouvrir la fiche par <strong>Modifier</strong>, mais en lecture seule (bouton <strong>Enregistrer</strong> grisé).</li>
+<li><strong>Fusionner les dossiers</strong> : Administrateur et Biologiste responsable uniquement.</li>
+<li><strong>Anonymiser</strong> : Administrateur uniquement.</li>
+</ul>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>En haut : une seule zone de recherche (<strong>Rechercher…</strong>), le nombre de résultats (« 50 / 312 » par exemple), puis les boutons <strong>Nouveau patient</strong>, <strong>Modifier</strong>, <strong>Fusionner les dossiers</strong>, <strong>Anonymiser</strong>.</li>
+<li>Au milieu : la liste des patients, colonnes <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Sexe</strong>, <strong>Âge</strong>, <strong>Date de naissance</strong>, <strong>CIN</strong>, <strong>Téléphone mobile</strong>, <strong>Organisme payeur</strong> (couverture principale en cours), <strong>Dossiers</strong> (nombre de dossiers non annulés), <strong>Date</strong> (dernier dossier). Une ligne en rouge signale un patient qui a une alerte critique en cours.</li>
+<li>En bas : <strong>Antécédents d'analyses</strong> du patient sélectionné (30 derniers dossiers) : <strong>N° de dossier</strong>, <strong>Enregistré le</strong>, <strong>Statut</strong>, <strong>Priorité</strong>, <strong>Analyses</strong>, <strong>Prescripteur</strong>.</li>
+</ul>
+<p>La recherche se lance seule, environ 0,3 seconde après la dernière frappe. Elle cherche à la fois dans le nom et le prénom, le numéro de fiche, la CIN et, à partir de 4 chiffres, le numéro de mobile. Il faut au moins 3 caractères ; avec 1 ou 2 caractères la liste reste vide. Une zone vide affiche les premiers patients par ordre alphabétique. Seuls les 50 premiers résultats sont affichés : s'il y en a plus, affinez la recherche (il n'y a pas de page suivante).</p>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><strong>Retrouver un patient</strong></li>
+<li>Tapez dans <strong>Rechercher…</strong> le nom, le prénom, la CIN, le numéro de fiche ou le mobile (au moins 3 caractères).</li>
+<li>Sélectionnez la ligne : ses antécédents d'analyses s'affichent en bas.</li>
+<li>
+<p>Pour ouvrir un ancien dossier, double-cliquez sur la ligne dans <strong>Antécédents d'analyses</strong> : l'écran <strong>Consultation d'un dossier</strong> s'ouvre sur ce dossier (il faut le droit « consulter les dossiers »).</p>
+</li>
+<li>
+<p><strong>Créer la fiche d'un nouveau patient</strong></p>
+</li>
+<li>Recherchez d'abord le patient (scénario 1) : ne créez la fiche que si la recherche ne donne rien.</li>
+<li>Cliquez <strong>Nouveau patient</strong>. La fenêtre de fiche s'ouvre sur l'onglet <strong>Identité</strong>.</li>
+<li>Saisissez <strong>Nom</strong>, <strong>Prénom</strong> (obligatoires), <strong>Sexe</strong>, et soit la <strong>Date de naissance</strong> (case cochée), soit, en décochant la case, l'<strong>Âge déclaré</strong>. L'âge calculé s'affiche à côté pour contrôle.</li>
+<li>Complétez si possible les noms en arabe, <strong>Lieu de naissance</strong>, <strong>CIN</strong>, <strong>Passeport</strong>, <strong>Nationalité</strong> (MA par défaut).</li>
+<li>Si le patient a moins de 18 ans, un encadré apparaît : saisissez le <strong>Tuteur légal</strong> (obligatoire), sa <strong>CIN du tuteur</strong> et le <strong>Lien de parenté</strong>.</li>
+<li>Onglet <strong>Coordonnées</strong> : <strong>Adresse</strong>, <strong>Ville</strong>, <strong>Région</strong>, <strong>Code postal</strong>, <strong>Téléphone mobile</strong>, <strong>Autre téléphone</strong>, <strong>Courriel</strong>, <strong>Langue du compte rendu</strong>. Le mobile est réécrit au format +212… en quittant le champ : c'est le format qu'exige l'envoi de SMS. Cochez « Le patient refuse toute utilisation de ses données au-delà des soins » si le patient s'y oppose (loi 08-09).</li>
+<li>Onglet <strong>Contexte clinique</strong> : <strong>Grossesse en cours</strong> (femme uniquement) et <strong>Date des dernières règles</strong>, <strong>Poids (kg)</strong>, <strong>Taille (cm)</strong> (la surface corporelle s'affiche), <strong>Groupe sanguin</strong>, <strong>Traitement en cours</strong>, <strong>Allergies connues</strong>.</li>
+<li>Si besoin, ajoutez dès maintenant une couverture, un consentement ou une alerte (scénarios 4, 6, 8) : ils apparaissent avec la mention « à enregistrer » et seront créés avec la fiche.</li>
+<li>
+<p>Cliquez <strong>Enregistrer</strong> (ou <strong>Entrée</strong>). Le numéro de fiche est attribué automatiquement. La liste se recharge et sélectionne le nouveau patient.</p>
+</li>
+<li>
+<p><strong>Répondre à l'alerte « Doublon possible »</strong>
+   - Dès que vous quittez les champs Nom, Prénom, CIN ou Date de naissance, un message orange peut s'afficher en bas de la fiche : « Dossier(s) possiblement en double… ». Vérifiez avec le patient.
+   - Au moment d'<strong>Enregistrer</strong>, si des fiches proches existent, la fenêtre <strong>Doublon possible</strong> liste les fiches trouvées et la raison de la ressemblance (colonne <strong>Correspondance</strong> : CIN, date de naissance ou nom).</p>
+<ul>
+<li>Si c'est la même personne : sélectionnez la fiche et cliquez <strong>Utiliser ce dossier</strong>. Rien n'est créé ; c'est cette fiche existante qui est retenue.</li>
+<li>Si c'est une autre personne : remplissez <strong>Motif : pourquoi s'agit-il d'une autre personne ?</strong> (10 caractères au moins), cliquez <strong>Créer un nouveau dossier</strong> et confirmez. Le motif est gardé au journal d'audit.</li>
+<li><strong>Annuler</strong> revient à la fiche sans rien créer.</li>
+</ul>
+</li>
+<li>
+<p><strong>Ajouter une couverture (AMO, mutuelle, assurance, convention)</strong></p>
+</li>
+<li>Ouvrez la fiche (<strong>Modifier</strong>, ou pendant la création) et allez dans l'onglet <strong>Couvertures</strong>.</li>
+<li>Cliquez <strong>Ajouter une couverture</strong>.</li>
+<li>Choisissez l'<strong>Organisme payeur</strong> : sous la liste s'affichent son taux de remboursement, s'il facture sur la TNR ou sur le tarif du laboratoire, et si l'ordonnance est obligatoire.</li>
+<li>Saisissez le <strong>N° d'immatriculation</strong> (obligatoire), la <strong>Qualité du bénéficiaire</strong> (Assuré lui-même, Conjoint, Enfant, Ascendant, Autre ayant droit). Pour un ayant droit, renseignez <strong>Assuré principal</strong> et <strong>CIN de l'assuré principal</strong>.</li>
+<li>Facultatif : <strong>Employeur</strong>, <strong>Taux dérogatoire (%)</strong> (seulement si la convention du patient diffère du taux de l'organisme), <strong>Valide du</strong> et, en cochant, <strong>Valide au</strong>.</li>
+<li>Laissez cochée <strong>Couverture principale</strong> si c'est celle qui doit servir aux prochains dossiers (cocher une nouvelle couverture principale retire ce statut aux autres). Laissez <strong>Tiers payant</strong> coché si le laboratoire facture directement l'organisme.</li>
+<li>Pour une ALD, cochez <strong>Affection de longue durée (ALD)</strong> et saisissez le <strong>N° d'accord préalable</strong> (obligatoire) et <strong>Accord valable jusqu'au</strong>.</li>
+<li>
+<p>Cliquez <strong>Enregistrer</strong>. La couverture apparaît dans la liste (en gras si principale, en gris si elle n'est plus valide aujourd'hui).</p>
+</li>
+<li>
+<p><strong>Clore une couverture</strong> (fin de droits, changement de mutuelle)</p>
+</li>
+<li>Onglet <strong>Couvertures</strong>, sélectionnez une couverture sans date de fin.</li>
+<li>
+<p>Cliquez <strong>Clore la couverture</strong>, saisissez la date de fin au format jj/mm/aaaa et validez.
+   La couverture n'est jamais supprimée : les factures déjà émises restent explicables.</p>
+</li>
+<li>
+<p><strong>Recueillir un consentement</strong></p>
+</li>
+<li>Onglet <strong>Consentements</strong>, cliquez <strong>Recueillir un consentement</strong>.</li>
+<li>Choisissez la <strong>Finalité</strong> (Analyses prescrites et traitement du dossier, Analyse génétique, Sérologie VIH, Dépistage prénatal, Conservation de l'échantillon, Utilisation à des fins de recherche, Transmission électronique du compte rendu, Communication à un tiers, Sous-traitance de l'analyse, Messages de suivi).</li>
+<li>Choisissez la <strong>Modalité</strong> (Formulaire signé, Signature électronique, Accord verbal, Portail en ligne) et <strong>Présenté en</strong> (langue).</li>
+<li>Renseignez <strong>Signé par</strong>, <strong>CIN du signataire</strong>, <strong>Qualité du signataire</strong> (pré-rempli « Tuteur légal » pour un mineur), <strong>Version du formulaire</strong>, éventuellement <strong>Expire le</strong> et <strong>Observations</strong>.</li>
+<li>
+<p>Cliquez <strong>Enregistrer</strong>.</p>
+</li>
+<li>
+<p><strong>Retirer un consentement</strong></p>
+</li>
+<li>Onglet <strong>Consentements</strong>, sélectionnez un consentement en vigueur, cliquez <strong>Retirer le consentement</strong>.</li>
+<li>
+<p>Saisissez le motif du retrait et validez. La ligne passe en gris avec l'état « Retiré ».</p>
+</li>
+<li>
+<p><strong>Ajouter une alerte sur la fiche</strong> (accès veineux difficile, risque infectieux, impayé…)</p>
+</li>
+<li>Onglet <strong>Alertes</strong>, cliquez <strong>Ajouter une alerte</strong>.</li>
+<li>Choisissez la <strong>Gravité</strong> (Information, Avertissement, Critique), saisissez le <strong>Message (français)</strong> (obligatoire) et si possible le <strong>Message (arabe)</strong>.</li>
+<li>Cochez <strong>Expire le</strong> et donnez une date si l'alerte n'est vraie qu'un temps (une alerte sans date est permanente).</li>
+<li>
+<p>Cliquez <strong>Ajouter</strong>. Pour une alerte <strong>Critique</strong>, confirmez.</p>
+</li>
+<li>
+<p><strong>Corriger l'identité d'un patient</strong> (faute de frappe, date de naissance, sexe)</p>
+</li>
+<li>Sélectionnez le patient, cliquez <strong>Modifier</strong>, corrigez, cliquez <strong>Enregistrer</strong>.</li>
+<li>
+<p>Si le sexe, l'âge, la grossesse, le poids ou la taille changent, les résultats non encore validés sont réinterprétés automatiquement. Les résultats déjà validés ne changent pas : le journal d'audit indique combien sont à revoir par le biologiste (et à corriger par un compte rendu rectifié si nécessaire).</p>
+</li>
+<li>
+<p><strong>Compléter l'identité d'un patient « X urgence »</strong></p>
+<ol>
+<li>Recherchez « X-URG » ou le numéro de fiche provisoire.</li>
+<li>Cliquez <strong>Modifier</strong>, remplacez le nom « X-URG » et le prénom provisoire par la vraie identité, complétez la fiche, <strong>Enregistrer</strong>. Le journal d'audit note que l'identité provisoire a été complétée ; les résultats déjà rendus sous « X-URG » sont désormais au nom du patient.</li>
+</ol>
+</li>
+<li>
+<p><strong>Fusionner deux fiches en double</strong></p>
+<ol>
+<li>Recherchez de façon à faire apparaître <strong>les deux</strong> fiches dans la liste (le bouton n'est actif que s'il y a au moins deux résultats).</li>
+<li>Sélectionnez la fiche <strong>à faire disparaître</strong> (le doublon), cliquez <strong>Fusionner les dossiers</strong>.</li>
+<li>Dans la fenêtre, vérifiez le <strong>Dossier à fusionner</strong>, choisissez le <strong>Dossier conservé</strong>, saisissez le <strong>Motif</strong> (5 caractères au moins), cliquez <strong>Fusionner les dossiers</strong> et confirmez.</li>
+<li>Le doublon disparaît des recherches ; ses dossiers d'analyses sont rattachés à la fiche conservée pour l'historique et les contrôles d'antériorité.</li>
+</ol>
+</li>
+<li>
+<p><strong>Anonymiser une fiche</strong> (demande d'effacement, loi 08-09)</p>
+<ol>
+<li>Sélectionnez la fiche, cliquez <strong>Anonymiser</strong>, confirmez.</li>
+<li>Saisissez le motif (demande du patient, décision CNDP…, 10 caractères au moins).</li>
+<li>Si la durée légale de conservation n'est pas écoulée, un message donne la date de fin et demande « Anonymiser malgré l'obligation de conservation encore en cours ? ». Répondez Non sauf décision écrite contraire.</li>
+<li>La fiche devient « ANONYME-… » ; l'historique des analyses et la facturation sont conservés, la fiche n'est plus modifiable.</li>
+</ol>
+</li>
+</ol>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>Nom, prénom, et date de naissance <strong>ou</strong> âge déclaré sont obligatoires.</li>
+<li>CIN : 1 ou 2 lettres suivies de 5 ou 6 chiffres, sinon « Le numéro de CIN est invalide ».</li>
+<li>La date de naissance ne peut pas être dans le futur. Une grossesse n'est possible que pour le sexe féminin.</li>
+<li>Patient mineur : « Pour un patient mineur, l'identité du tuteur légal est obligatoire. »</li>
+<li>Le numéro de fiche est attribué par une suite sans trou ; il n'est jamais modifié.</li>
+<li>Couverture : n° d'immatriculation obligatoire ; assuré principal obligatoire pour un ayant droit ; taux dérogatoire entre 0 et 100 % ; date de fin pas avant la date de début ; une couverture dont la date de début est dans le futur est refusée (« Cette couverture n'est pas encore entrée en vigueur ») ; ALD sans n° d'accord préalable refusée. Une ALD avec accord valide est remboursée à 100 %.</li>
+<li>Le taux s'applique au tarif de référence, non au prix facturé : le dépassement reste à la charge du patient.</li>
+<li>Analyse génétique, sérologie VIH, dépistage prénatal, conservation de l'échantillon et recherche exigent un consentement <strong>écrit</strong> : un « Accord verbal » est refusé (« Un consentement écrit est exigé pour… »). Un consentement écrit sans pièce jointe s'affiche « Pièce absente » (en orange).</li>
+<li>Les couvertures, consentements et alertes ne se suppriment pas : on les clôt, on les retire ou on les laisse expirer.</li>
+<li>Fusion : impossible d'une fiche dans elle-même ; refusée si le doublon est déjà fusionné, ou si la fiche conservée a elle-même été fusionnée (« choisissez le dossier final »). La fusion ne se défait pas depuis l'application.</li>
+<li>Anonymisation : refusée tant que court l'obligation de conservation (10 ans après le dernier dossier, durée réglable), sauf confirmation explicite ; refusée si déjà anonymisée.</li>
+<li>Toute recherche et toute ouverture de fiche sont tracées (loi 08-09).</li>
+</ul>
+<p><strong>Flux</strong></p>
+<p>Patient trouvé ou créé → <strong>Dossiers</strong> (enregistrement de la demande). On revient ici pour corriger l'identité, ajouter une couverture ou un consentement manquant avant d'enregistrer une analyse qui l'exige.</p>
+<p>Création d'une fiche :</p>
+<div class="diagram"><img src="img/diagramme-0c57ab08bf8ae28c.png" alt="Diagramme"></div>
+
+<p>Fusion et anonymisation :</p>
+<div class="diagram"><img src="img/diagramme-765754833636c4d1.png" alt="Diagramme"></div>
+
+<p>Couverture et consentement :</p>
+<div class="diagram"><img src="img/diagramme-c595f7aa0663f5ae.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="orders">Dossiers</h3>
+<p>Enregistrer une nouvelle demande d'analyses (un « dossier ») pour un patient : choix du patient, du prescripteur, des analyses, calcul du montant, impression immédiate des étiquettes des tubes.</p>
+<p><strong>Qui y a accès</strong></p>
+<ul>
+<li>L'écran et le bouton <strong>Enregistrer</strong> : droit « créer un dossier » — Administrateur, Biologiste responsable, Biologiste, Secrétariat / accueil.</li>
+<li>Priorité <strong>Urgent</strong> ou <strong>Urgence vitale</strong> : droit « dossier urgent » — Administrateur, Biologiste responsable, Secrétariat / accueil. <strong>Le rôle Biologiste ne l'a pas</strong> : un dossier urgent saisi par un biologiste est refusé.</li>
+<li><strong>Nouveau patient</strong> et <strong>Patient X urgence</strong> : droit « créer un patient » (pas le rôle Biologiste).</li>
+<li><strong>+</strong> (nouveau prescripteur) : droit « créer un dossier » ou « gérer le catalogue ».</li>
+</ul>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>Bandeau <strong>patient</strong> : zone de recherche, liste déroulante des patients trouvés (« N° — Nom, âge [organisme] »), boutons <strong>Nouveau patient</strong> et <strong>Patient X urgence</strong> (en rouge). Sous la liste, un résumé : nom, sexe, âge, CIN, organisme payeur ou « Paiement direct ».</li>
+<li>Bandeau <strong>contexte</strong> : <strong>Priorité</strong> (Routine, Urgent, Urgence vitale), <strong>Origine</strong> (Patient au comptoir, Prélèvement à domicile, Clinique / hôpital, Centre de prélèvement, Sous-traitance reçue, Médecine du travail, Demande du patient), <strong>Prescripteur</strong> (liste ou saisie libre) avec le bouton <strong>+</strong> (« Nouveau prescripteur »), <strong>Renseignements cliniques</strong>, cases <strong>Patient à jeun</strong> (cochée par défaut) et <strong>Paiement direct</strong>.</li>
+<li>À gauche, le catalogue <strong>Analyses / Profils</strong> : <strong>Code</strong>, <strong>Désignation</strong>, <strong>Secteur</strong>, <strong>Prix</strong>, <strong>Délai de rendu</strong>, <strong>Observations</strong> (nombre d'analyses d'un profil, jeûne, « Consentement requis avant enregistrement », « Sous-traitée »). Les profils sont en gras.</li>
+<li>À droite, <strong>Analyses demandées</strong> : <strong>Code</strong>, <strong>Désignation</strong>, <strong>Prix</strong>, <strong>Observations</strong>.</li>
+<li>En bas : le total indicatif (<strong>Montant brut</strong>, nombre d'<strong>Analyses</strong>, <strong>Jeûne requis</strong>, mention de consentement), un message d'état, et les boutons <strong>Effacer</strong> et <strong>Enregistrer</strong>.</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><strong>Enregistrer un dossier pour un patient connu</strong></li>
+<li>Dans la zone de recherche patient, tapez nom, CIN, n° de fiche ou mobile (3 caractères au moins). Le premier patient trouvé est sélectionné ; changez-le dans la liste déroulante si besoin. Vérifiez le résumé (si le patient a une alerte critique, un message s'affiche et le résumé passe en rouge : ouvrez la fiche pour lire l'alerte).</li>
+<li>Choisissez la <strong>Priorité</strong> et l'<strong>Origine</strong>.</li>
+<li>Choisissez le <strong>Prescripteur</strong> dans la liste (tapez les premières lettres) ou tapez son nom librement s'il n'est pas dans l'annuaire.</li>
+<li>Saisissez les <strong>Renseignements cliniques</strong> si l'ordonnance en donne. Décochez <strong>Patient à jeun</strong> si le patient n'est pas à jeun.</li>
+<li>Ajoutez les analyses (scénario 4).</li>
+<li>Cochez <strong>Paiement direct</strong> si le patient ne veut pas utiliser sa couverture pour ce dossier.</li>
+<li>Cliquez <strong>Enregistrer</strong> (ou <strong>Ctrl+S</strong>).</li>
+<li>Une fenêtre <strong>Facture</strong> affiche le récapitulatif : <strong>N° de dossier</strong>, <strong>Montant brut</strong>, éventuellement <strong>Remise</strong>, <strong>Total à payer</strong>, <strong>Part organisme</strong> et <strong>Part patient</strong> (si une couverture s'applique), <strong>Dépassement du tarif de référence</strong> s'il y en a, et <strong>Règlement</strong> = ce que le patient paie au comptoir aujourd'hui.</li>
+<li>Les étiquettes des tubes s'impriment aussitôt (ou s'ouvrent à l'écran si aucune imprimante d'étiquettes n'est réglée).</li>
+<li>
+<p>Le message en bas indique le n° de dossier et le nombre d'échantillons ; l'écran se vide pour le patient suivant.</p>
+</li>
+<li>
+<p><strong>Enregistrer un dossier pour un nouveau patient</strong> (sans quitter l'écran)</p>
+</li>
+<li>Cliquez <strong>Nouveau patient</strong>, remplissez la fiche (voir écran <strong>Patients</strong>, scénarios 2 à 4), <strong>Enregistrer</strong>.</li>
+<li>
+<p>Le patient est sélectionné automatiquement (y compris si, dans la fenêtre « Doublon possible », vous avez choisi <strong>Utiliser ce dossier</strong>). Continuez au point 2 du scénario 1.</p>
+</li>
+<li>
+<p><strong>Patient non identifiable (urgence)</strong></p>
+</li>
+<li>Cliquez <strong>Patient X urgence</strong>.</li>
+<li>Choisissez le <strong>Sexe</strong> et l'<strong>Âge estimé (ans)</strong>, cliquez <strong>Ouvrir le dossier provisoire</strong>.</li>
+<li>Une fiche « X-URG » est créée et sélectionnée, la priorité passe à <strong>Urgent</strong>. Continuez l'enregistrement normalement.</li>
+<li>
+<p>Plus tard, complétez l'identité depuis l'écran <strong>Patients</strong> (scénario 10).</p>
+</li>
+<li>
+<p><strong>Choisir les analyses</strong>
+   - Tapez un code ou un nom dans la zone <strong>Analyses / Profils</strong> puis <strong>Entrée</strong> : l'analyse dont le code est exactement celui tapé est ajoutée (sinon le premier code qui commence ainsi, sinon le premier nom trouvé), et la zone se vide pour la suivante.
+   - Ou bien <strong>flèche bas</strong> pour descendre dans la liste, puis <strong>Entrée</strong> sur la ligne voulue ; ou double-clic sur la ligne.
+   - Pour retirer une analyse demandée : double-clic sur sa ligne dans <strong>Analyses demandées</strong>, ou sélection puis touche <strong>Suppr</strong>.
+   - Préférez le profil à ses analyses séparées. Si vous ajoutez un profil qui contient une analyse déjà choisie seule, celle-ci est retirée (message « déjà compris dans le profil… ») ; si vous ajoutez seule une analyse déjà comprise dans un profil choisi, elle est refusée. Deux profils qui partagent une analyse ne la comptent qu'une fois (« analyse(s) déjà comptée(s) »).</p>
+</li>
+<li>
+<p><strong>Créer un prescripteur pendant l'enregistrement</strong></p>
+</li>
+<li>Tapez le nom du médecin dans <strong>Prescripteur</strong>, puis cliquez <strong>+</strong>.</li>
+<li>La fenêtre <strong>Nouveau prescripteur</strong> reprend le nom tapé. Complétez <strong>Nom</strong> (obligatoire), <strong>Prénom</strong>, nom arabe, type de prescripteur (liste sous l'étiquette « Désignation » : Médecin généraliste, Médecin spécialiste, Chirurgien-dentiste, Sage-femme, Établissement de santé, Laboratoire correspondant, Médecin du travail, Demande directe du patient), <strong>Spécialité</strong>, <strong>Établissement</strong>, <strong>N° Ordre des médecins / pharmaciens</strong>, <strong>INPE</strong>, <strong>ICE</strong>, téléphones, <strong>Fax</strong>, <strong>Courriel</strong>, <strong>Ville</strong>, <strong>Adresse</strong>, <strong>Téléphone résultats critiques</strong>, mode de <strong>Remise</strong> des comptes rendus, <strong>Envoyer les comptes rendus partiels</strong>, <strong>Remise</strong>, <strong>Observations</strong>, <strong>Actif</strong>.</li>
+<li>
+<p>Cliquez <strong>Enregistrer</strong>. Le prescripteur est créé et sélectionné. En cas de refus, la fenêtre reste ouverte avec ce qui a été tapé.
+   - Un avertissement rouge rappelle que, sans INPE, une facture en tiers payant ne peut pas être transmise.</p>
+</li>
+<li>
+<p><strong>Dossier reçu d'un autre laboratoire (« Sous-traitance reçue »)</strong></p>
+</li>
+<li>Créez ou retrouvez le patient. Pour que le laboratoire adresseur soit facturé, la fiche doit porter une couverture sur l'organisme « Laboratoire adresseur » (ou celui que vous avez créé pour ce correspondant) — <strong>à vérifier</strong> selon votre paramétrage.</li>
+<li>Origine : <strong>Sous-traitance reçue</strong>. Prescripteur : choisissez le laboratoire correspondant dans l'annuaire (type « Laboratoire correspondant ») ou créez-le par <strong>+</strong>.</li>
+<li>
+<p>Ajoutez les analyses et <strong>Enregistrer</strong>.
+   - Il n'y a pas, sur cet écran, de champ pour la référence du dossier chez le laboratoire adresseur ; notez-la dans <strong>Renseignements cliniques</strong> si besoin (<strong>à vérifier</strong> : pas d'autre emplacement prévu ici).</p>
+</li>
+<li>
+<p><strong>Demande directe du patient</strong> (sans ordonnance)
+   - Origine : <strong>Demande du patient</strong>. C'est la seule origine où le prescripteur n'est pas obligatoire.</p>
+</li>
+<li>
+<p><strong>Abandonner une saisie en cours</strong>
+   - Cliquez <strong>Effacer</strong> : le patient, les analyses et le contexte sont vidés. Rien n'est enregistré.</p>
+</li>
+</ol>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li><strong>Enregistrer</strong> reste grisé tant qu'aucun patient n'est choisi ou qu'aucune analyse n'est demandée.</li>
+<li>Prescripteur obligatoire sauf origine « Demande du patient » : « Le prescripteur est obligatoire, sauf pour une demande directe du patient. »</li>
+<li>Consentements : une analyse génétique, une sérologie VIH ou un dépistage prénatal est <strong>refusé</strong> sans consentement en vigueur sur la fiche (« Le consentement spécifique requis pour … n'a pas été recueilli »), ou si ce consentement n'est que verbal. Recueillez-le d'abord sur la fiche patient.</li>
+<li>Jeûne : si <strong>Patient à jeun</strong> est décoché et qu'une analyse demande un jeûne, le dossier est enregistré mais un avertissement s'affiche (« le résultat devra être interprété avec réserve »).</li>
+<li>Une analyse sans tarif en vigueur (ni pour l'organisme, ni dans la liste du laboratoire) est refusée : il faut lui ajouter un tarif dans le Catalogue des analyses.</li>
+<li>Une analyse désactivée dans le catalogue est refusée.</li>
+<li>Couverture utilisée : la couverture <strong>principale valide aujourd'hui</strong> de la fiche. Un seul organisme par dossier ; une couverture complémentaire (mutuelle en plus de l'AMO) n'est pas utilisée pour répartir la part patient à cet endroit (<strong>à vérifier</strong> au chapitre Facturation). Avec <strong>Paiement direct</strong>, ou sans couverture valide, tout est à la charge du patient. Si l'accord de tiers payant de l'organisme est expiré, le patient avance la somme.</li>
+<li>Le prix affiché dans le catalogue et le total du bas sont <strong>indicatifs</strong> (liste de prix du laboratoire). Le montant exact, avec la part organisme et la part patient, est celui de la fenêtre <strong>Facture</strong> après enregistrement : la répartition y est figée pour la suite.</li>
+<li>La remise ne se saisit pas ici : elle se donne au moment de la facturation (droit « appliquer une remise », rôle Comptabilité par défaut).</li>
+<li>Le n° de dossier vient d'une suite annuelle sans trou ; un enregistrement qui échoue ne consomme pas de numéro.</li>
+<li>Chaque enregistrement relance le délai légal de conservation de la fiche patient (10 ans par défaut).</li>
+<li>La date d'échéance du rendu est calculée dès l'enregistrement à partir du délai de rendu des analyses (plus court si urgent).</li>
+</ul>
+<p><strong>Flux</strong></p>
+<p>Enregistrement → étiquettes collées → <strong>Prélèvement</strong> puis <strong>Réception des échantillons</strong> → saisie → validation → compte rendu. L'encaissement se fait en <strong>Caisse</strong> / <strong>Facturation</strong>. Toute modification ultérieure du dossier se fait dans <strong>Consultation d'un dossier</strong>.</p>
+<div class="diagram"><img src="img/diagramme-fd6623cfd14bb293.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="orderdetail">Consultation d'un dossier</h3>
+<p>Afficher un dossier enregistré dans son ensemble (analyses, tubes, montants) et faire les corrections encore possibles : ajouter des analyses, annuler une analyse ou tout le dossier, repasser une analyse, corriger l'en-tête, réimprimer les étiquettes, ouvrir le compte rendu PDF.</p>
+<p><strong>Qui y a accès</strong></p>
+<ul>
+<li>L'écran : droit « consulter les dossiers » — tous les rôles par défaut. Un compte Prescripteur ne voit que les dossiers de ce prescripteur.</li>
+<li><strong>Ajouter des analyses</strong>, <strong>Modifier l'en-tête</strong> : droit « modifier un dossier » — Administrateur, Biologiste responsable, Biologiste, Secrétariat / accueil.</li>
+<li><strong>Annuler l'analyse</strong>, <strong>Annuler le dossier</strong> : droit « annuler un dossier » — Administrateur, Biologiste responsable, Secrétariat / accueil (pas le Biologiste).</li>
+<li><strong>Repasser l'analyse</strong> : droit « saisir des résultats » — Administrateur, Biologiste responsable, Biologiste, Technicien. Si l'analyse est déjà validée techniquement, il faut aussi le droit « modifier un résultat » (Biologistes, Administrateur).</li>
+<li><strong>Imprimer les étiquettes</strong> : droit « réimprimer une étiquette » — Administrateur, Biologiste responsable, Technicien, Préleveur, Secrétariat / accueil.</li>
+<li><strong>Compte rendu (PDF)</strong> : droit « réimprimer un compte rendu validé » — Administrateur, Biologiste responsable, Prescripteur. <strong>Ni le Secrétariat ni le Biologiste ne l'ont par défaut.</strong></li>
+</ul>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>À gauche : la liste des dossiers récents du site (les 200 plus récents), colonnes <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Enregistré le</strong>, <strong>Statut</strong>, <strong>Priorité</strong>, <strong>Analyses</strong>. Les dossiers annulés restent visibles, en gris. Au-dessus : la zone de recherche (« N° de dossier, code-barres, nom du patient, CIN ou n° de fiche ») et <strong>Actualiser</strong>.</li>
+<li>À droite, l'en-tête du dossier : numéro, statut, patient (âge, sexe, n° de fiche, téléphone), prescripteur (INPE), date de l'ordonnance, date d'enregistrement et opérateur, origine, priorité ; organisme payeur et taux (ou « Sans prise en charge — à la charge du patient »), n° d'accord préalable ; renseignements cliniques, code diagnostic, service / chambre, « patient non à jeun », note interne ; en rouge la date et le motif d'annulation, sinon le n° de <strong>Facture</strong>.</li>
+<li>Tableau des analyses : <strong>Analyse</strong>, <strong>Désignation</strong>, <strong>Secteur</strong>, <strong>Statut</strong>, <strong>Résultats</strong> (saisis / attendus), <strong>Code-barres</strong>, <strong>Montant net</strong>, <strong>Part patient</strong>, <strong>Commentaire</strong> (motif d'annulation, « Passage n° … — motif », « Validé par … », « Sous-traitée »). Une analyse annulée est barrée ; repassée, en orange ; en retard, dans la couleur du retard ; validée, en vert.</li>
+<li>Tableau des tubes : <strong>Tube n°</strong>, <strong>Code-barres</strong>, <strong>Nature du prélèvement</strong>, <strong>Type de tube</strong>, <strong>Statut</strong>, <strong>Prélevé le</strong>, <strong>Réceptionné le</strong>, <strong>Lieu de conservation</strong>. Tube refusé ou éliminé en rouge ; tube à prélever en orange.</li>
+<li>En bas : le résumé (nombre d'analyses, montant, part patient) et les boutons <strong>Ajouter des analyses</strong>, <strong>Annuler l'analyse</strong>, <strong>Repasser l'analyse</strong>, <strong>Modifier l'en-tête</strong>, <strong>Annuler le dossier</strong>, <strong>Imprimer les étiquettes</strong>, <strong>Compte rendu (PDF)</strong>.</li>
+</ul>
+<p>Statuts d'un dossier :</p>
+<table>
+<thead>
+<tr>
+<th>Statut</th>
+<th>Signification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Enregistré / À prélever</td>
+<td>demande saisie, tubes pas encore prélevés</td>
+</tr>
+<tr>
+<td>Partiellement prélevé</td>
+<td>une partie des tubes prélevée</td>
+</tr>
+<tr>
+<td>Réceptionné</td>
+<td>tubes arrivés au laboratoire</td>
+</tr>
+<tr>
+<td>En cours</td>
+<td>analyses en cours</td>
+</tr>
+<tr>
+<td>Partiellement validé</td>
+<td>une partie des analyses validée par le biologiste</td>
+</tr>
+<tr>
+<td>Validé</td>
+<td>toutes les analyses validées</td>
+</tr>
+<tr>
+<td>Rendu</td>
+<td>compte rendu diffusé : dossier clos</td>
+</tr>
+<tr>
+<td>Annulé</td>
+<td>dossier annulé (motif affiché)</td>
+</tr>
+</tbody>
+</table>
+<p>Statuts d'une analyse : En attente de prélèvement, Prélevé, Réceptionné, En cours d'analyse, Résultat saisi, Validé techniquement, Validé biologiquement, Rendu, Annulée.</p>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li>
+<p><strong>Retrouver un dossier</strong>
+   - À l'ouverture, l'écran affiche le dossier le plus récent.
+   - Tapez dans la zone de recherche un nom, une CIN, un n° de fiche ou une partie de numéro : la liste se filtre. Cliquez la ligne voulue (ou <strong>flèche bas</strong> puis flèches).
+   - Scannez ou tapez un n° de dossier ou le code-barres d'un tube puis <strong>Entrée</strong> : le dossier s'ouvre directement. Si rien ne correspond exactement, <strong>Entrée</strong> ouvre le premier dossier de la liste filtrée ; s'il n'y en a aucun : « Aucun dossier ne correspond à … ».
+   - Depuis l'écran <strong>Patients</strong>, un double-clic sur un antécédent ouvre aussi le dossier ici.</p>
+</li>
+<li>
+<p><strong>Ajouter des analyses à un dossier</strong> (le médecin téléphone pour ajouter une TSH)</p>
+</li>
+<li>Ouvrez le dossier, cliquez <strong>Ajouter des analyses</strong>.</li>
+<li>Dans la fenêtre, cherchez par code, nom ou synonyme, <strong>Entrée</strong> ; double-cliquez pour mettre l'analyse dans <strong>Analyses à ajouter</strong> (<strong>Retirer</strong> pour l'enlever). Les analyses déjà au dossier sont signalées « déjà au dossier ».</li>
+<li>Saisissez le <strong>Motif de la modification</strong> (obligatoire), cliquez <strong>Ajouter des analyses</strong>.</li>
+<li>Les étiquettes des nouveaux tubes s'impriment. Si l'analyse a été ajoutée sur un tube déjà réceptionné, un avertissement demande de vérifier qu'il reste du volume.</li>
+<li>
+<p>Le message indique le nombre d'analyses ajoutées et leur montant.</p>
+</li>
+<li>
+<p><strong>Annuler une analyse</strong></p>
+</li>
+<li>Sélectionnez l'analyse dans le tableau, cliquez <strong>Annuler l'analyse</strong>.</li>
+<li>Saisissez le motif (5 caractères au moins), validez.</li>
+<li>
+<p>L'analyse apparaît barrée avec son motif. Si le dossier était déjà facturé, le message rappelle que la régularisation passe par un avoir (en Facturation). Si c'était la dernière analyse du dossier, le dossier devient annulé.</p>
+</li>
+<li>
+<p><strong>Repasser une analyse</strong> (valeur douteuse, dilution, contrôle rejeté)</p>
+</li>
+<li>Sélectionnez l'analyse, cliquez <strong>Repasser l'analyse</strong>.</li>
+<li>Saisissez le motif de la reprise, validez.</li>
+<li>
+<p>L'analyse retourne au poste technique (« passage n° 2 »…) sur le même tube ; elle n'est pas facturée une seconde fois. Les anciennes valeurs restent visibles jusqu'à la nouvelle saisie mais perdent leur validation technique.</p>
+</li>
+<li>
+<p><strong>Corriger l'en-tête du dossier</strong></p>
+</li>
+<li>Cliquez <strong>Modifier l'en-tête</strong>.</li>
+<li>Corrigez au besoin : <strong>Prescripteur</strong> (seulement s'il avait été saisi en texte libre), <strong>Date de l'ordonnance</strong>, <strong>Priorité</strong>, <strong>Langue du compte rendu</strong>, <strong>Renseignements cliniques</strong>, <strong>Code diagnostic (CIM-10)</strong>, <strong>Service / unité</strong>, <strong>Chambre / lit</strong>, <strong>Note interne</strong>.</li>
+<li>
+<p>Saisissez le <strong>Motif de la modification</strong> (obligatoire), cliquez <strong>Enregistrer</strong>.
+   - L'organisme payeur est rappelé en haut mais ne se modifie pas ici (il faut un avoir puis une nouvelle facture).</p>
+</li>
+<li>
+<p><strong>Annuler tout le dossier</strong> (patient parti avant le prélèvement, doublon de saisie)</p>
+</li>
+<li>Cliquez <strong>Annuler le dossier</strong>. Le message indique le nombre d'analyses et de tubes ; confirmez.</li>
+<li>Saisissez le motif, validez.</li>
+<li>
+<p>Le dossier passe « Annulé », ses tubes encore présents sont éliminés (sauf un tube déjà en analyse, laissé tel quel). S'il était facturé : « Dossier annulé. La facture … reste due : émettez un avoir. »</p>
+</li>
+<li>
+<p><strong>Réimprimer les étiquettes</strong></p>
+</li>
+<li>Cliquez <strong>Imprimer les étiquettes</strong>.</li>
+<li>
+<p>Saisissez le motif (étiquette abîmée, illisible, tube supplémentaire…). Toutes les étiquettes du dossier sont réimprimées ; la réimpression est tracée.</p>
+</li>
+<li>
+<p><strong>Ouvrir le compte rendu</strong>
+   - Cliquez <strong>Compte rendu (PDF)</strong> : la dernière version diffusée s'ouvre, telle qu'elle a été archivée. S'il n'y en a pas : « Aucun compte rendu n'a encore été diffusé pour ce dossier. »</p>
+</li>
+<li>
+<p><strong>Rafraîchir</strong> : <strong>Actualiser</strong> ou <strong>F5</strong> recharge la liste et le dossier affiché.</p>
+</li>
+</ol>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>Tous les boutons sont grisés sur un dossier annulé (sauf <strong>Compte rendu (PDF)</strong>).</li>
+<li>Toute modification d'un dossier enregistré demande un motif, conservé au journal d'audit (exigence ISO 15189).</li>
+<li>Ajout d'analyses refusé : sur un dossier annulé ; sur un dossier « Rendu » (« Ce dossier est clos ») ; sur un dossier <strong>déjà facturé</strong> (enregistrez un nouveau dossier, ou émettez d'abord un avoir total) ; pour une analyse déjà présente. Les mêmes contrôles de consentement, de tarif et de jeûne qu'à l'enregistrement s'appliquent. Le prix est calculé avec la couverture du dossier d'origine, pas avec la couverture actuelle du patient.</li>
+<li>Annulation d'une analyse impossible une fois validée biologiquement ou rendue : « Une analyse validée biologiquement ne peut être annulée ; émettez un compte rendu rectifié. »</li>
+<li>Annulation du dossier impossible dès qu'une analyse est validée ou rendue : « Le dossier comporte des analyses validées et ne peut plus être annulé. »</li>
+<li>Repasser : impossible pour une analyse validée, rendue ou annulée. Si un résultat est déjà validé biologiquement, il faut d'abord retirer la validation (droit « dévalider »). Si l'analyse est validée techniquement, il faut le droit « modifier un résultat ».</li>
+<li>Passer la priorité en Urgent par <strong>Modifier l'en-tête</strong> demande le droit « dossier urgent ».</li>
+<li>Un dossier facturé puis annulé (en tout ou en partie) se régularise par un avoir : la facture émise n'est jamais modifiée.</li>
+<li>L'ouverture d'un dossier est tracée (loi 08-09) ; un dossier n'est visible que sur le site qui l'a enregistré.</li>
+</ul>
+<p><strong>Flux</strong></p>
+<p>Ce dossier suit la chaîne : prélèvement → réception → saisie → validation → <strong>Comptes rendus</strong>. Les ajouts créent de nouveaux tubes à prélever ; une reprise renvoie l'analyse en <strong>Saisie des résultats</strong> ; une annulation sur dossier facturé se termine en <strong>Facturation</strong> par un avoir.</p>
+<p>Statuts du dossier :</p>
+<div class="diagram"><img src="img/diagramme-78788b0929423f4a.png" alt="Diagramme"></div>
+
+<p>Actions sur une analyse :</p>
+<div class="diagram"><img src="img/diagramme-f088d55aca8564ec.png" alt="Diagramme"></div>
+
+<p>Ajout d'analyses :</p>
+<div class="diagram"><img src="img/diagramme-945a18b0e89b0810.png" alt="Diagramme"></div><p class="top"><a href="index.html">Retour au sommaire</a></p>
 </div>
 </body>
 </html>

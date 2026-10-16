@@ -5,49 +5,654 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>Qualité et équipements</title>
 <style>
-body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.5;
-       color: #1f2933; background: #ffffff; margin: 0; padding: 0; }
-.page { max-width: 900px; margin: 0 auto; padding: 16px 24px 48px 24px; }
-h1 { font-size: 26px; color: #0b4f8a; border-bottom: 2px solid #0b4f8a; padding-bottom: 6px; }
-h2 { font-size: 20px; color: #0b4f8a; margin-top: 32px; }
-a { color: #0b5fa5; }
-img { max-width: 100%; border: 1px solid #d0d7de; }
+body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.55;
+       color: #1c1e21; background: #ffffff; margin: 0; padding: 0; }
+.page { max-width: 940px; margin: 0 auto; padding: 16px 28px 56px 28px; }
+.crumb { font-size: 13px; color: #5c616a; margin-bottom: 4px; }
+h1 { font-size: 26px; color: #1b5e8c; border-bottom: 2px solid #1b5e8c; padding-bottom: 6px; margin-top: 8px; }
+h2 { font-size: 21px; color: #1b5e8c; margin-top: 36px; border-bottom: 1px solid #d8dade; padding-bottom: 4px; }
+h3 { font-size: 17px; color: #1c1e21; margin-top: 26px; }
+h4 { font-size: 15px; color: #1c1e21; margin-top: 20px; }
+a { color: #1b5e8c; }
+code { font-family: Consolas, monospace; font-size: 13px; background: #f0f1f3; padding: 1px 4px; }
+pre { background: #f0f1f3; padding: 10px; overflow: auto; }
+table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+th, td { border: 1px solid #d8dade; padding: 6px 8px; text-align: left; vertical-align: top; font-size: 14px; }
+th { background: #e6eef4; }
+.diagram { margin: 16px 0 20px 0; text-align: center; }
+.diagram img { max-width: 100%; border: 1px solid #d8dade; padding: 8px; background: #ffffff; }
 ul.toc li { margin: 4px 0; }
-section { margin-bottom: 24px; }
+.top { font-size: 13px; margin-top: 32px; }
 </style>
 </head>
 <body>
 <div class="page">
-<p><a href="index.html">Sommaire</a></p>
+<div class="crumb"><a href="index.html">Sommaire</a></div>
 <h1>Qualité et équipements</h1>
-<section id="qc">
-<h2>Contrôle interne</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="nonconformities">
-<h2>Non-conformités</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="eqa">
-<h2>Évaluation externe</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="documents">
-<h2>Documents qualité</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="equipment">
-<h2>Équipements</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="contracts">
-<h2>Contrats automates</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
-<section id="temperatures">
-<h2>Températures</h2>
-<p>Aide en cours de rédaction.</p>
-</section>
+<p>Ce chapitre couvre deux groupes du menu de gauche :</p>
+<ul>
+<li>le groupe <strong>Qualité</strong> : <strong>Contrôle interne</strong>, <strong>Non-conformités</strong>, <strong>Évaluation externe</strong>, <strong>Documents qualité</strong> ;</li>
+<li>dans le groupe <strong>Stocks</strong> : <strong>Températures</strong>, <strong>Équipements</strong>, <strong>Contrats automates</strong>.</li>
+</ul>
+<p>Ces écrans forment le système de management de la qualité du laboratoire (ISO 15189) : maîtrise analytique, traitement des écarts, maîtrise documentaire, suivi du matériel et de la chaîne du froid.</p>
+<p>Quelques règles communes à tous les écrans :</p>
+<ul>
+<li>Un bouton auquel vous n'avez pas droit reste visible mais <strong>grisé</strong>. Un écran auquel vous n'avez pas droit n'apparaît pas dans le menu.</li>
+<li><strong>F5</strong> actualise l'écran, <strong>Ctrl+P</strong> imprime la liste principale de l'écran, <strong>F1</strong> affiche la liste des raccourcis. <strong>Ctrl+S</strong> déclenche le bouton <strong>Enregistrer</strong> de l'écran quand il en a un (c'est le cas du <strong>Contrôle interne</strong>).</li>
+<li>Toute action enregistrée (saisie, revue, clôture, changement de statut…) est tracée dans le journal d'audit avec son auteur, sa date et, quand il est demandé, son motif.</li>
+<li>Les non-conformités ouvertes automatiquement (contrôle rejeté, évaluation externe non satisfaisante, température hors limites) reçoivent un numéro dans la même série continue que les non-conformités ouvertes à la main.</li>
+</ul>
+<p>Vue d'ensemble des flux du groupe :</p>
+<div class="diagram"><img src="img/diagramme-5dfa854656cdf073.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="qc">Contrôle interne</h3>
+<p>Saisir les résultats des contrôles de qualité interne, les voir sur la carte de Levey-Jennings et revoir les contrôles rejetés, sur un seul écran.</p>
+<p><strong>Qui y a accès</strong></p>
+<table>
+<thead>
+<tr>
+<th>Droit</th>
+<th>Ce qu'il permet</th>
+<th>Rôles par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Saisie du contrôle interne</td>
+<td>Voir l'écran, <strong>Enregistrer</strong> une série, <strong>Démarrer / Arrêter l'évaluation</strong> d'un lot</td>
+<td>Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité, Administrateur</td>
+</tr>
+<tr>
+<td>Revue du contrôle interne</td>
+<td>Voir l'écran, <strong>Revue du contrôle</strong></td>
+<td>Biologiste responsable, Biologiste, Responsable qualité, Administrateur</td>
+</tr>
+<tr>
+<td>Règles du contrôle interne</td>
+<td><strong>Établir les limites du laboratoire</strong>, <strong>Règles de Westgard</strong></td>
+<td>Biologiste responsable, Responsable qualité, Administrateur</td>
+</tr>
+</tbody>
+</table>
+<p>Le secrétariat, les préleveurs, la comptabilité et les prescripteurs n'ont pas accès à cet écran.</p>
+<p><strong>L'écran</strong></p>
+<p>L'écran est divisé en trois zones.</p>
+<ol>
+<li><strong>En haut à gauche — Saisie du contrôle interne</strong> (le titre indique le nombre de lignes). Une ligne par cible de contrôle active : colonnes <strong>Paramètre</strong>, <strong>Niveau</strong> (Bas, Normal, Élevé, Complémentaire), <strong>Lot de contrôle</strong>, <strong>Automate</strong>, <strong>Résultat</strong> (seule colonne saisissable), <strong>Cible</strong> (moyenne ± écart-type), <strong>Antériorité</strong> (dernière valeur), <strong>Règles de Westgard actives</strong> (nombre de règles ; le détail, le CV et le nombre de points s'affichent au survol).
+   - Une ligne en rouge signale un matériau de contrôle périmé ou hors stabilité après ouverture.
+   - Une cible écrite en orange signifie que les limites utilisées sont celles du fournisseur, et non celles du laboratoire.
+   - Sous la grille : <strong>Enregistrer</strong>, <strong>Actualiser</strong>, la liste du lot de réactif (par défaut <strong>Lot de réactif en cours (automatique)</strong>), la liste <strong>Automate du lot…</strong>, <strong>Démarrer l'évaluation</strong>, <strong>Arrêter l'évaluation</strong>.</li>
+<li><strong>En haut à droite — Carte de Levey-Jennings</strong> du contrôle sélectionné (60 derniers jours). L'axe vertical est en écarts-types (de −4 à +4) ; la moyenne et les limites ±1, ±2, ±3 s sont tracées et étiquetées avec leur valeur. Un point accepté est un rond vert, un avertissement un triangle orange, un rejet un carré rouge ; un rejet entouré de pointillés a fait l'objet d'une dérogation à la validation. L'en-tête indique le paramètre, le lot, l'automate, le CV et la base des limites (« limites fournisseur » ou « limites du laboratoire »). Au survol d'un point : valeur, Z, date, règles violées, commentaire. Un clic sur un point affiche son détail en bas de l'écran. Boutons : <strong>Établir les limites du laboratoire</strong>, <strong>Règles de Westgard</strong>.</li>
+<li><strong>En bas — Contrôles rejetés à revoir</strong> : tous les points rejetés non encore revus, colonnes <strong>Mesuré le</strong>, <strong>Paramètre</strong>, <strong>Automate</strong>, <strong>Lot de contrôle</strong>, <strong>Niveau</strong>, <strong>Résultat</strong>, <strong>Écart normalisé (Z)</strong>, <strong>Règles de Westgard actives</strong>, <strong>Résultats déjà diffusés concernés</strong> (en gras si des résultats patients sont touchés). Bouton <strong>Revue du contrôle</strong> et une ligne d'état.</li>
+</ol>
+<p>Sélectionner une ligne en haut ou en bas affiche sa carte de Levey-Jennings.</p>
+<p><strong>Scénarios</strong></p>
+<p><em>1. Saisir une série de contrôles (routine du matin)</em>
+1. Ouvrez <strong>Qualité &gt; Contrôle interne</strong>.
+2. Laissez la liste du lot sur <strong>Lot de réactif en cours (automatique)</strong>.
+3. Cliquez dans la colonne <strong>Résultat</strong> de la première ligne, tapez la valeur, appuyez sur <strong>Entrée</strong> : le curseur descend à la ligne suivante. La virgule et le point sont acceptés.
+4. Saisissez tous les niveaux passés ensemble (bas, normal, élevé) : ils forment une même série, ce qui permet d'appliquer les règles qui comparent les niveaux entre eux (2₂ₛ, R₄ₛ). Les lignes laissées vides sont ignorées.
+5. Cliquez <strong>Enregistrer</strong> (ou <strong>Ctrl+S</strong>, ou <strong>Entrée</strong> sur la dernière ligne puis <strong>Enregistrer</strong>).
+6. Lisez le résultat :
+   - la ligne d'état indique « x/y accepté » ;
+   - si un contrôle est <strong>Rejeté</strong>, une fenêtre liste chaque paramètre rejeté avec sa valeur, son Z et la règle violée, et rappelle qu'une action corrective est exigée ;
+   - une seconde fenêtre peut signaler un matériau périmé, un contrôle sans cible, ou le nombre de résultats patients bloqués.
+7. Les valeurs saisies sont effacées, la grille et la liste des rejets sont rechargées.</p>
+<p>Si vous quittez l'écran avec des valeurs saisies et non enregistrées, l'application demande confirmation.</p>
+<p><em>2. Consulter la carte de Levey-Jennings</em>
+1. Sélectionnez une ligne de la grille de saisie ou de la liste des rejets.
+2. La carte s'affiche à droite. Passez la souris sur un point pour lire la valeur ; cliquez pour l'afficher en bas.
+3. Pour imprimer la carte : non prévu à l'écran (seule la liste principale s'imprime avec <strong>Ctrl+P</strong>).</p>
+<p><em>3. Revoir un contrôle rejeté (action corrective)</em>
+1. Dans <strong>Contrôles rejetés à revoir</strong>, sélectionnez la ligne.
+2. Cliquez <strong>Revue du contrôle</strong>.
+3. Décrivez l'action corrective (au moins 15 caractères) : recalibration, nouveau flacon, maintenance…
+4. Si des résultats patients sont concernés, une non-conformité est ouverte automatiquement. Sinon, l'application demande « Ouvrir une fiche de non-conformité pour ce rejet ? » : répondez Oui ou Non.
+5. La ligne quitte la liste. La non-conformité ouverte (catégorie Analytique, gravité Majeure, échéance à 14 jours, action immédiate = votre texte) apparaît dans <strong>Non-conformités</strong>.</p>
+<p><em>4. Établir les limites propres au laboratoire</em>
+1. Sélectionnez la ligne du contrôle dans la grille de saisie.
+2. Cliquez <strong>Établir les limites du laboratoire</strong>.
+3. Indiquez sur combien de jours d'antériorité calculer (60 par défaut). Il faut au moins 20 points acceptés sur cette période.
+4. L'application affiche la <strong>Moyenne du laboratoire</strong>, l'<strong>Écart-type du laboratoire</strong> et le <strong>Nombre de points</strong>. Ces limites remplacent celles du fournisseur dès 20 points.
+5. Pour exclure une période déjà expliquée, choisissez un nombre de jours qui ne la couvre pas.</p>
+<p><em>5. Choisir les règles de Westgard d'un contrôle</em>
+1. Sélectionnez la ligne du contrôle.
+2. Cliquez <strong>Règles de Westgard</strong>.
+3. Cochez ou décochez les règles (1₂ₛ, 1₃ₛ, 2₂ₛ, R₄ₛ, 3₁ₛ, 4₁ₛ, 2/3₂ₛ, 7ₜ, 8ₓ, 10ₓ, 12ₓ). La description de la règle sélectionnée s'affiche dessous.
+4. Raccourcis : <strong>Multirègle classique (1₂ₛ 1₃ₛ 2₂ₛ R₄ₛ 4₁ₛ 10ₓ)</strong> ou <strong>1₃ₛ seule</strong>.
+5. Cliquez <strong>Enregistrer</strong>. Si aucune règle n'est cochée, un avertissement rouge rappelle que le contrôle n'enregistrera jamais de rejet.</p>
+<p><em>6. Évaluer un nouveau lot de réactif avant sa libération</em>
+1. Dans la liste du lot, choisissez le lot à évaluer (les lots en quarantaine sont marqués « en quarantaine »).
+2. Dans <strong>Automate du lot…</strong>, choisissez l'automate sur lequel il est chargé (choisi d'office s'il n'y en a qu'un).
+3. Saisie manuelle : saisissez les valeurs des contrôles de cet automate et cliquez <strong>Enregistrer</strong>. Seules les lignes de cet automate sont attribuées au nouveau lot ; les autres automates restent en contrôle de routine.
+4. Contrôles transmis par l'automate : cliquez <strong>Démarrer l'évaluation</strong>. Le prochain contrôle de chaque niveau transmis aujourd'hui par l'automate sera attribué au lot. Recommencez chaque jour d'une évaluation sur plusieurs jours.
+5. Cliquez <strong>Arrêter l'évaluation</strong> pour que les contrôles transmis reviennent au lot en cours.
+6. La libération du lot se fait ensuite dans l'écran <strong>Stocks</strong> (fiche du lot).</p>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>Un contrôle <strong>Rejeté</strong> bloque les résultats patients non encore diffusés du même paramètre sur le même automate, produits depuis le dernier contrôle accepté. Le biologiste ne pourra les valider qu'avec une dérogation motivée (écran <strong>Validation biologique</strong>).</li>
+<li>Un rejet sur un lot en cours d'évaluation ne bloque aucun résultat patient (aucun patient n'a été analysé avec ce lot).</li>
+<li>Un contrôle sans cible est enregistré avec le verdict <strong>À évaluer</strong> : « Aucune cible (moyenne et écart-type) n'est établie pour ce contrôle. » Créez la cible dans <strong>Données de référence</strong>.</li>
+<li>Un matériau périmé est signalé ; le point est quand même enregistré.</li>
+<li>Seuls les points acceptés (ou en avertissement) entrent dans le calcul des limites du laboratoire ; les points rejetés et les points d'évaluation d'un nouveau lot n'y entrent pas.</li>
+<li>Un lot de réactif choisi ne s'applique qu'à un seul automate : « Le lot de réactif choisi ne s'applique qu'aux contrôles d'un seul automate… ».</li>
+<li><strong>Démarrer l'évaluation</strong> est refusé si le lot n'est plus en attente de libération.</li>
+<li>La revue d'un rejet exige une action corrective ; sans elle : « Un contrôle rejeté exige la description de l'action corrective entreprise. »</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Verdict</th>
+<th>Signification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Accepté</td>
+<td>Dans les limites, aucune règle de rejet déclenchée</td>
+</tr>
+<tr>
+<td>Avertissement</td>
+<td>Règle d'avertissement (1₂ₛ) : série utilisable, à surveiller</td>
+</tr>
+<tr>
+<td>Rejeté</td>
+<td>Règle de rejet déclenchée : résultats patients bloqués, revue obligatoire</td>
+</tr>
+<tr>
+<td>À évaluer</td>
+<td>Pas de cible : point non interprétable</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Flux</strong></p>
+<p>Données de référence (matériau + cible) → <strong>Contrôle interne</strong> (saisie, revue) → <strong>Non-conformités</strong> si besoin → <strong>Validation biologique</strong> (dérogation pour les résultats bloqués). Pour un nouveau lot : réception en <strong>Stocks</strong> → évaluation ici → libération en <strong>Stocks</strong>.</p>
+<p>Saisie et revue d'une série :</p>
+<div class="diagram"><img src="img/diagramme-0dac29227ae42f53.png" alt="Diagramme"></div>
+
+<p>Évaluation d'un nouveau lot de réactif :</p>
+<div class="diagram"><img src="img/diagramme-2ab38ec34ddf2099.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="nonconformities">Non-conformités</h3>
+<p>Tenir le registre des non-conformités : déclarer un écart, planifier et solder les actions, analyser les causes, vérifier l'efficacité, clôturer.</p>
+<p><strong>Qui y a accès</strong></p>
+<ul>
+<li><strong>Voir le registre</strong> : toute personne ayant le droit de consultation qualité (Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité, Administrateur).</li>
+<li><strong>Ouvrir et traiter une non-conformité</strong> (tous les boutons) : Biologiste responsable, Biologiste, Responsable qualité, Administrateur. Le technicien voit le registre mais tous les boutons sont grisés.</li>
+</ul>
+<p><strong>L'écran</strong></p>
+<ul>
+<li><strong>En haut, le registre</strong> : titre <strong>Non-conformités</strong> (avec le nombre et le nombre en retard), case <strong>Ouverte</strong> (cochée par défaut : n'affiche que les fiches Ouvertes, En cours, En attente de vérification), liste des catégories (<strong>Tout sélectionner</strong> ou une catégorie), boutons <strong>Ouvrir une non-conformité</strong> et <strong>Actualiser</strong>. Colonnes : <strong>Référence</strong>, <strong>Gravité</strong>, <strong>Catégorie</strong>, <strong>Description</strong>, <strong>Détectée le</strong>, <strong>Pilote</strong>, <strong>Échéance</strong>, <strong>Actions</strong> (soldées / total), <strong>Statut</strong>. Après la référence, « ↻ » signale une récidive, « ⚠ » des résultats déjà diffusés concernés. Les fiches critiques sont en rouge, les majeures en orange, les fiches en retard en gras.</li>
+<li><strong>En bas, la fiche sélectionnée</strong> : description, source de détection, auteur, jours d'ouverture, récidive, résultats concernés ; puis la liste des <strong>Actions</strong> (colonnes <strong>Désignation</strong> (le type d'action), <strong>Description</strong>, <strong>Pilote</strong>, <strong>Échéance</strong>, <strong>Statut</strong>, <strong>Date</strong> de solde). Deux rangées de boutons :</li>
+<li>actions : <strong>Ajouter une action</strong>, <strong>Démarrer l'action</strong>, <strong>Solder l'action</strong>, <strong>Annuler l'action</strong> ;</li>
+<li>fiche : <strong>Analyse des causes et efficacité</strong>, <strong>Clôturer la fiche</strong>, <strong>Réouvrir</strong>, <strong>Écarter la fiche</strong>.</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<p><em>1. Déclarer une non-conformité</em>
+1. Cliquez <strong>Ouvrir une non-conformité</strong>.
+2. Choisissez la <strong>Catégorie</strong> (Pré-analytique, Analytique, Post-analytique, Équipement, Réactif / consommable, Personnel, Documentation, Système d'information, Réclamation, Sécurité / biosécurité, Protection des données, Prestataire externe).
+3. Choisissez la <strong>Gravité</strong> (Mineure, Majeure, Critique, Observation).
+4. Choisissez la <strong>Source de détection</strong> (Observation du personnel, Contrôle interne de qualité, Évaluation externe de la qualité, Audit interne, Audit externe, Réclamation du patient, Réclamation du prescripteur, Revue de direction, Alarme automate, Information du fournisseur).
+5. Rédigez la <strong>Description</strong> (obligatoire) et, si une mesure a été prise sur le champ, l'<strong>Action immédiate</strong>.
+6. Si des résultats déjà remis aux patients sont touchés, cochez <strong>Résultats déjà diffusés concernés</strong> et indiquez le nombre de patients.
+7. Ajustez l'<strong>Échéance</strong> (J+14 par défaut).
+8. Cliquez <strong>Enregistrer</strong>. La référence attribuée s'affiche en bas. Vous êtes le pilote de la fiche.</p>
+<p><em>2. Ajouter une action</em>
+1. Sélectionnez la fiche, cliquez <strong>Ajouter une action</strong>.
+2. Choisissez le type : Correction (traite cette occurrence), Action corrective (supprime la cause) — choix par défaut —, Action préventive, Action d'amélioration.
+3. Décrivez l'action (obligatoire), fixez l'<strong>Échéance</strong>, cliquez <strong>Enregistrer</strong>.
+4. L'action est « Planifiée » ; vous en êtes le pilote. La fiche passe « En cours ».</p>
+<p><em>3. Faire avancer une action</em>
+1. Sélectionnez l'action dans la liste du bas.
+2. <strong>Démarrer l'action</strong> : l'action passe « En cours » (seulement depuis « Planifiée »).
+3. <strong>Solder l'action</strong> : indiquez la preuve de réalisation (« Quelle preuve atteste que l'action a bien été réalisée ? »). L'action passe « Soldée ». Quand toutes les actions sont soldées, la fiche passe « En attente de vérification ».</p>
+<p><em>4. Annuler une action saisie par erreur</em>
+1. Sélectionnez l'action (planifiée ou en cours), cliquez <strong>Annuler l'action</strong>, donnez le motif.
+2. Une action soldée ne peut pas être annulée.
+3. Attention : voir « Règles et contrôles » ci-dessous, une action annulée empêche actuellement la clôture (à vérifier).</p>
+<p><em>5. Enregistrer l'analyse des causes et la vérification d'efficacité</em>
+1. Sélectionnez la fiche, cliquez <strong>Analyse des causes et efficacité</strong>.
+2. Choisissez la catégorie de cause (Erreur humaine, Formation insuffisante, Procédure absente ou imprécise, Procédure non respectée, Défaillance d'équipement, Défaut de réactif, Dérive d'étalonnage, Anomalie logicielle, Défaut de communication, Prestataire externe, Charge de travail, Conditions environnementales, Non déterminée).
+3. Rédigez l'analyse des causes, l'<strong>Évaluation de l'impact clinique</strong> (en rouge et obligatoire si des résultats diffusés sont concernés), la <strong>Vérification de l'efficacité</strong>.
+4. Si des résultats diffusés sont concernés, cochez <strong>Comptes rendus rectifiés émis</strong> quand c'est fait.
+5. Cliquez <strong>Enregistrer</strong>. Vous pouvez rouvrir la fenêtre plus tard pour compléter : un champ laissé vide ne remplace pas le texte déjà enregistré. La fenêtre ne réaffiche pas les textes déjà saisis, et la catégorie de cause choisie est toujours réenregistrée.</p>
+<p><em>6. Clôturer une fiche</em>
+1. Sélectionnez la fiche, cliquez <strong>Clôturer la fiche</strong>, confirmez.
+2. Si quelque chose manque, la liste complète des manques s'affiche (voir règles). Complétez puis recommencez.</p>
+<p><em>7. Écarter un signalement non fondé</em>
+1. Sélectionnez la fiche, cliquez <strong>Écarter la fiche</strong>, confirmez.
+2. Rédigez la justification (au moins 15 caractères).
+3. La fiche passe « Non retenue » et ne compte pas parmi les non-conformités de la période.</p>
+<p><em>8. Réouvrir une fiche clôturée</em>
+1. Décochez <strong>Ouverte</strong> pour afficher les fiches clôturées, sélectionnez la fiche.
+2. Bouton <strong>Réouvrir</strong> : il reste grisé pour une fiche clôturée dans la version actuelle (voir le document de vérification). Cette opération n'est donc pas réalisable aujourd'hui depuis l'écran.</p>
+<p><em>9. Filtrer le registre</em>
+- Décochez <strong>Ouverte</strong> pour voir aussi les fiches clôturées et non retenues.
+- Choisissez une catégorie dans la liste.</p>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>Numérotation : chaque fiche reçoit une référence dans une série annuelle continue, partagée avec les fiches ouvertes automatiquement.</li>
+<li>Récidive : une fiche est marquée récidive si une fiche de même catégorie a été ouverte dans les 12 derniers mois.</li>
+<li>Clôture refusée tant que :</li>
+<li>aucune action n'est enregistrée ;</li>
+<li>toutes les actions ne sont pas soldées ;</li>
+<li>pour une fiche <strong>Majeure</strong> ou <strong>Critique</strong> : la catégorie de cause et l'analyse des causes manquent, ou la vérification d'efficacité manque ;</li>
+<li>si des résultats diffusés sont concernés : l'évaluation de l'impact clinique manque.</li>
+<li>Une fiche avec des résultats déjà diffusés ne peut pas être écartée : « Des résultats ont déjà été diffusés : quelque chose est parvenu au patient… ».</li>
+<li>Une fiche clôturée ou non retenue n'est plus modifiable.</li>
+<li>Une action annulée n'est pas « soldée » : la clôture la compte comme non soldée et refuse (« Toutes les actions doivent être soldées avant la clôture. ») — à vérifier, voir vérification.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Statut</th>
+<th>Signification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ouverte</td>
+<td>Déclarée, aucune action encore</td>
+</tr>
+<tr>
+<td>En cours</td>
+<td>Au moins une action enregistrée</td>
+</tr>
+<tr>
+<td>En attente de vérification</td>
+<td>Toutes les actions soldées ; reste l'analyse / l'efficacité puis la clôture</td>
+</tr>
+<tr>
+<td>Clôturée</td>
+<td>Traitée et close</td>
+</tr>
+<tr>
+<td>Non retenue</td>
+<td>Écartée comme signalement non fondé</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Flux</strong></p>
+<p>Sources : saisie directe, <strong>Contrôle interne</strong> (revue d'un rejet), <strong>Évaluation externe</strong> (verdict non satisfaisant), <strong>Températures</strong> (relevé hors limites), réception en <strong>Stocks</strong>. Tout aboutit dans ce registre, qui alimente la revue de direction.</p>
+<p>Cycle de vie d'une fiche (tel que le code le fait aujourd'hui) :</p>
+<div class="diagram"><img src="img/diagramme-6c8a8015a7aa6166.png" alt="Diagramme"></div>
+
+<p>Une action <strong>Annulée</strong> fait passer la fiche « En attente de vérification » mais bloque ensuite la clôture (elle n'est pas « Soldée »).</p>
+<hr />
+<h3 id="eqa">Évaluation externe</h3>
+<p>Suivre les campagnes d'évaluation externe de la qualité (EEQ) : inscription des paramètres, valeur transmise à l'organisateur, verdict reçu.</p>
+<p><strong>Qui y a accès</strong></p>
+<ul>
+<li><strong>Voir</strong> : Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité, Administrateur.</li>
+<li><strong>Saisir le résultat transmis</strong> : droit de saisie du contrôle interne (les mêmes, y compris le technicien).</li>
+<li><strong>Enregistrer une campagne</strong> et <strong>Saisir l'évaluation</strong> : droit de revue du contrôle interne (Biologiste responsable, Biologiste, Responsable qualité, Administrateur).</li>
+</ul>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>En haut : titre avec le nombre de lignes, le taux de résultats satisfaisants et le nombre de réponses en retard ; <strong>Année</strong> ; case <strong>Évaluations en attente seulement</strong> ; <strong>Actualiser</strong>.</li>
+<li>Grille, une ligne par paramètre et par campagne : <strong>Programme</strong>, <strong>Campagne</strong>, <strong>Date</strong>, <strong>Paramètre</strong>, <strong>Automate</strong>, <strong>Date limite de réponse</strong> (« ! » si dépassée), <strong>Valeur transmise</strong>, <strong>Valeur assignée</strong>, <strong>Z</strong>, <strong>Biais (%)</strong>, <strong>Verdict</strong>, <strong>Non-conformité</strong>. Couleurs : rouge pour Non satisfaisant et Non transmis, orange pour Douteux et pour une réponse en retard, vert pour Satisfaisant.</li>
+<li>En bas : détail (date de transmission, groupe de pairs, commentaires) et boutons <strong>Enregistrer une campagne</strong>, <strong>Saisir le résultat transmis</strong>, <strong>Saisir l'évaluation</strong>.</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<p><em>1. Enregistrer une campagne à réception des échantillons</em>
+1. Cliquez <strong>Enregistrer une campagne</strong>.
+2. Saisissez le <strong>Programme</strong> (ex. nom de l'organisateur) et la <strong>Campagne</strong> (référence), la <strong>Date de la campagne</strong>, cochez et réglez la <strong>Date limite de réponse</strong> si besoin, choisissez l'<strong>Automate</strong> (facultatif).
+3. Cochez les <strong>Paramètres couverts par la campagne</strong>.
+4. Cliquez <strong>Enregistrer</strong>. Le message indique combien de paramètres ont été ajoutés. Un paramètre déjà inscrit pour la même campagne est ignoré.</p>
+<p><em>2. Saisir la valeur transmise à l'organisateur</em>
+1. Sélectionnez la ligne (verdict « En attente »), cliquez <strong>Saisir le résultat transmis</strong>.
+2. Saisissez la <strong>Valeur transmise</strong> exactement comme envoyée et la date <strong>Transmis le</strong> (pas dans le futur).
+3. Cliquez <strong>Enregistrer</strong>. La valeur reste modifiable jusqu'à la saisie de l'évaluation.</p>
+<p><em>3. Saisir le rapport d'évaluation de l'organisateur</em>
+1. Sélectionnez la ligne, cliquez <strong>Saisir l'évaluation</strong>.
+2. Saisissez la <strong>Valeur assignée</strong>, la <strong>Moyenne des pairs</strong>, l'<strong>Écart-type des pairs</strong> et, si le rapport le donne, l'<strong>Écart normalisé (Z)</strong> (il fait foi ; sinon il est calculé).
+3. Laissez <strong>Verdict</strong> sur <strong>Déduit de l'écart normalisé</strong>, ou choisissez <strong>Non transmis</strong> ou <strong>Exclu</strong> pour ces cas particuliers.
+4. Ajoutez l'analyse et les commentaires (français, arabe).
+5. Cliquez <strong>Enregistrer</strong>. En cas de verdict <strong>Non satisfaisant</strong>, une non-conformité est ouverte et son numéro s'affiche : complétez-la dans <strong>Non-conformités</strong>.</p>
+<p><em>4. Consulter le bilan annuel</em>
+1. Choisissez l'<strong>Année</strong>, décochez <strong>Évaluations en attente seulement</strong>.
+2. Lisez le taux de satisfaisants dans le titre ; <strong>Ctrl+P</strong> imprime la liste.</p>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>Programme, campagne et au moins un paramètre sont obligatoires ; la date limite ne peut pas précéder la date de campagne.</li>
+<li>La valeur transmise ne peut plus changer une fois l'évaluation saisie.</li>
+<li>Seuls « Non transmis » et « Exclu » se choisissent à la main ; les autres verdicts découlent du Z.</li>
+<li>L'écart-type des pairs doit être strictement positif.</li>
+<li>Sans Z ni moyenne/écart-type des pairs, l'évaluation est refusée : « Saisissez l'écart normalisé, ou la moyenne et l'écart-type des pairs pour le calculer. »</li>
+<li>Classement appliqué : |Z| ≤ 2 Satisfaisant ; 2 &lt; |Z| ≤ 3 Douteux ; |Z| &gt; 3 Non satisfaisant (non-conformité Majeure, catégorie Analytique, échéance J+14). Le texte d'aide de la fenêtre indique « |Z| ≥ 3 » : pour un Z exactement égal à 3, le verdict sera Douteux (à vérifier).</li>
+<li>Le biais (%) est calculé par rapport à la valeur assignée.</li>
+</ul>
+<p><strong>Flux</strong></p>
+<p>Réception des échantillons EEQ → analyse comme un échantillon patient → <strong>Saisir le résultat transmis</strong> → rapport de l'organisateur → <strong>Saisir l'évaluation</strong> → <strong>Non-conformités</strong> si non satisfaisant.</p>
+<div class="diagram"><img src="img/diagramme-84aa12882d53a75a.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="documents">Documents qualité</h3>
+<p>Gérer les procédures, modes opératoires, formulaires et autres documents maîtrisés : rédaction, vérification, approbation, mise en application, prise de connaissance.</p>
+<p><strong>Qui y a accès</strong></p>
+<ul>
+<li><strong>Consulter, ouvrir un fichier, déclarer « J'ai pris connaissance »</strong> : droit de consultation qualité (Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité, Administrateur). Le secrétariat, les préleveurs et la comptabilité n'ont pas accès à cet écran.</li>
+<li><strong>Nouveau document, Nouvelle version, Soumettre à la revue, Enregistrer la revue</strong> : gestion documentaire (Biologiste responsable, Responsable qualité, Administrateur).</li>
+<li><strong>Approuver, Mettre en application, Retirer / Réactiver le document</strong> : approbation documentaire (Biologiste responsable, Responsable qualité, Administrateur).</li>
+</ul>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>En haut : titre <strong>Documents qualité</strong> (avec le nombre de revues dépassées et de documents à lire), case <strong>Afficher aussi les documents retirés</strong>, <strong>Actualiser</strong>.</li>
+<li>Liste des documents : <strong>Référence</strong>, <strong>Titre</strong>, <strong>Type</strong>, <strong>Processus</strong>, <strong>Version en vigueur</strong>, <strong>En vigueur le</strong>, <strong>Prochaine revue</strong>, <strong>Version en cours</strong>, <strong>Responsable</strong>, <strong>Lu</strong>.</li>
+<li>Liste des <strong>Versions</strong> du document sélectionné : <strong>Version</strong>, <strong>Statut</strong>, <strong>Modifications</strong>, <strong>Fichier</strong>, <strong>Rédacteur</strong>, <strong>Créé le</strong>, <strong>Vérificateur</strong>, <strong>Approbateur</strong>, dates d'application et de retrait (<strong>Retiré le</strong>).</li>
+<li>Boutons : <strong>Nouveau document</strong>, <strong>Nouvelle version</strong>, <strong>Soumettre à la revue</strong>, <strong>Enregistrer la revue</strong>, <strong>Approuver</strong>, <strong>Mettre en application</strong>, <strong>Ouvrir le fichier</strong>, <strong>J'ai pris connaissance</strong>, <strong>Retirer le document</strong> (ou <strong>Réactiver le document</strong>). Un message signale « Aucune version en vigueur » ou « La revue périodique est dépassée ».</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<p><em>1. Créer un document</em>
+1. Cliquez <strong>Nouveau document</strong>.
+2. Saisissez la <strong>Référence</strong> (définitive, unique), le <strong>Type</strong> (Manuel qualité, Procédure, Mode opératoire, Formulaire / enregistrement, Fiche technique, Fiche de données de sécurité, Document externe, Habilitation / fiche de poste), le <strong>Processus</strong> (facultatif), le <strong>Titre (français)</strong> (obligatoire) et, si souhaité, les titres arabe et anglais.
+3. Réglez la <strong>Périodicité de revue (mois)</strong> (24 par défaut) et cochez <strong>Prise de connaissance obligatoire</strong> si le personnel doit attester sa lecture.
+4. Cliquez <strong>Enregistrer</strong>. L'application propose de joindre tout de suite le fichier de la première version.</p>
+<p><em>2. Rédiger une nouvelle version</em>
+1. Sélectionnez le document, cliquez <strong>Nouvelle version</strong>.
+2. <strong>Parcourir…</strong> pour choisir le fichier (PDF, JPG, PNG, TIFF, DOCX, XLSX ; 20 Mo maximum).
+3. Résumez les modifications (français, arabe facultatif). Cliquez <strong>Enregistrer</strong>.
+4. La version est un <strong>Brouillon</strong> ; la version en vigueur reste applicable.</p>
+<p><em>3. Faire vérifier et approuver</em>
+1. Le rédacteur sélectionne le brouillon et clique <strong>Soumettre à la revue</strong> (statut <strong>En revue</strong>).
+2. Une autre personne clique <strong>Enregistrer la revue</strong> (statut <strong>Revu</strong>).
+3. Une personne ayant le droit d'approbation, autre que le rédacteur, clique <strong>Approuver</strong> (statut <strong>Approuvé</strong>). L'approbation est possible directement depuis « En revue ».</p>
+<p><em>4. Mettre en application</em>
+1. Sélectionnez la version approuvée, cliquez <strong>Mettre en application</strong>.
+2. Choisissez la date (aujourd'hui ou plus tard, le temps de former le personnel). La fenêtre rappelle que la version précédente sera retirée la veille.
+3. Cliquez <strong>Enregistrer</strong>. La nouvelle version devient <strong>En vigueur</strong>, l'ancienne passe <strong>Remplacé</strong>.</p>
+<p><em>5. Lire un document et attester sa lecture</em>
+1. Sélectionnez le document, puis sa version, cliquez <strong>Ouvrir le fichier</strong>.
+2. Cliquez <strong>J'ai pris connaissance</strong>, confirmez. La colonne <strong>Lu</strong> est mise à jour pour vous.</p>
+<p><em>6. Retirer ou réactiver un document</em>
+1. Sélectionnez le document, cliquez <strong>Retirer le document</strong>, donnez le motif. Ses versions restent consultables (cochez <strong>Afficher aussi les documents retirés</strong>).
+2. Pour le remettre en usage : sélectionnez-le, cliquez <strong>Réactiver le document</strong>, donnez le motif.</p>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>Une seule version en préparation à la fois : « Une version de ce document est déjà en cours de rédaction ou d'approbation. Terminez-la avant d'en ouvrir une autre. »</li>
+<li>Le vérificateur ne peut pas être le rédacteur ; l'approbateur ne peut pas être l'auteur.</li>
+<li>Une version doit être approuvée avant d'entrer en application ; la date d'application ne peut pas être passée.</li>
+<li>Un brouillon sans fichier ne peut pas être soumis.</li>
+<li>Un fichier d'un type non autorisé n'est ni enregistré ni ouvert.</li>
+<li>Un brouillon ne peut pas être abandonné ni supprimé depuis l'écran (à vérifier : seul moyen de le dépasser, le mener jusqu'à l'application).</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Statut de version</th>
+<th>Signification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Brouillon</td>
+<td>En rédaction</td>
+</tr>
+<tr>
+<td>En revue</td>
+<td>Soumis à vérification</td>
+</tr>
+<tr>
+<td>Revu</td>
+<td>Vérifié, en attente d'approbation</td>
+</tr>
+<tr>
+<td>Approuvé</td>
+<td>Approuvé, pas encore applicable</td>
+</tr>
+<tr>
+<td>En vigueur</td>
+<td>Version applicable</td>
+</tr>
+<tr>
+<td>Remplacé</td>
+<td>Remplacé par une version plus récente</td>
+</tr>
+<tr>
+<td>Périmé</td>
+<td>Plus applicable</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Flux</strong></p>
+<p>Rédaction → <strong>Soumettre à la revue</strong> → <strong>Enregistrer la revue</strong> → <strong>Approuver</strong> → <strong>Mettre en application</strong> → lecture par le personnel (<strong>J'ai pris connaissance</strong>) → revue périodique (nouvelle version).</p>
+<div class="diagram"><img src="img/diagramme-a99a9198aaae0a02.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="temperatures">Températures</h3>
+<p>Enregistrer les relevés de température des réfrigérateurs, congélateurs et pièces, et sortir la fiche mensuelle.</p>
+<p>Menu : groupe <strong>Stocks &gt; Températures</strong>.</p>
+<p><strong>Qui y a accès</strong></p>
+<ul>
+<li><strong>Saisir un relevé</strong> : Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité, Administrateur.</li>
+<li><strong>Nouvelle enceinte / Modifier l'enceinte</strong> : Biologiste responsable, Responsable qualité, Administrateur.</li>
+<li>Toute personne qui voit l'écran peut consulter et exporter la fiche du mois.</li>
+</ul>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>En haut : <strong>Saisir un relevé…</strong>, <strong>Nouvelle enceinte…</strong>, <strong>Modifier l'enceinte…</strong>, case <strong>Afficher les enceintes désactivées</strong>, sélecteur du mois, <strong>Fiche du mois (PDF)</strong>, <strong>Fiche du mois (CSV)</strong>, et un message « x enceinte(s) sans relevé aujourd'hui ».</li>
+<li>Liste des enceintes : <strong>Désignation</strong>, <strong>Type</strong>, <strong>Emplacement</strong>, <strong>Plage acceptable</strong>, <strong>Relevés du jour</strong> (faits / attendus), <strong>Dernier relevé</strong>, <strong>Date</strong>, <strong>Statut</strong> (Conforme, Hors limites, Pas de relevé aujourd'hui, Désactivée).</li>
+<li>Liste des <strong>Relevés</strong> du mois de l'enceinte sélectionnée : <strong>Date</strong>, <strong>Température (°C)</strong>, <strong>Min. de la période (°C)</strong>, <strong>Max. de la période (°C)</strong>, <strong>Statut</strong>, <strong>Relevé par</strong>, <strong>Commentaire</strong>, <strong>Non-conformité</strong>.</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<p><em>1. Saisir le relevé du matin ou du soir</em>
+1. Sélectionnez l'enceinte (active), cliquez <strong>Saisir un relevé…</strong> ou double-cliquez sur la ligne.
+2. Saisissez la <strong>Température (°C)</strong> ; si le thermomètre les donne, le <strong>Min. de la période</strong> et le <strong>Max. de la période</strong>.
+3. La fenêtre rappelle la plage acceptable. Si une valeur est hors limites, le <strong>Commentaire</strong> est obligatoire : décrivez ce qui a été fait (produits déplacés, technicien appelé…).
+4. Cliquez <strong>Enregistrer</strong>. Hors limites : un message annonce la non-conformité ouverte.</p>
+<p><em>2. Déclarer une nouvelle enceinte</em>
+1. Cliquez <strong>Nouvelle enceinte…</strong>.
+2. Saisissez la <strong>Désignation</strong>, le <strong>Type</strong> (Réfrigérateur (2 à 8 °C), Congélateur −20 °C, Congélateur −80 °C, Pièce / ambiant) : la plage par défaut se remplit (2/8, −25/−15, −90/−70, 15/25 °C).
+3. Ajustez <strong>Minimum (°C)</strong>, <strong>Maximum (°C)</strong>, <strong>Relevés par jour</strong> (2 par défaut), <strong>Emplacement</strong>, <strong>N° de série / inventaire</strong>. Laissez <strong>Actif</strong> coché.
+4. Cliquez <strong>Enregistrer</strong>.</p>
+<p><em>3. Modifier ou désactiver une enceinte</em>
+1. Sélectionnez l'enceinte, cliquez <strong>Modifier l'enceinte…</strong>.
+2. Modifiez ; décochez <strong>Actif</strong> pour la retirer du service. Cliquez <strong>Enregistrer</strong>.
+3. Pour la retrouver : cochez <strong>Afficher les enceintes désactivées</strong>.</p>
+<p><em>4. Imprimer la fiche mensuelle</em>
+1. Sélectionnez l'enceinte, choisissez le mois.
+2. Cliquez <strong>Fiche du mois (PDF)</strong> ou <strong>Fiche du mois (CSV)</strong>. La fiche reprend tous les relevés, leurs auteurs, le nombre de dépassements, le minimum et le maximum du mois.</p>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>Une valeur hors plage (relevé, minimum ou maximum) exige un commentaire et ouvre une non-conformité (catégorie Équipement, gravité Majeure, échéance J+7, action immédiate = votre commentaire).</li>
+<li>Valeurs refusées : température invraisemblable (en dessous de −200 °C ou au-dessus de 100 °C), minimum supérieur au maximum, relevé en dehors de l'intervalle minimum–maximum saisi.</li>
+<li>Pas de relevé sur une enceinte désactivée.</li>
+<li>Le nom d'une enceinte est unique ; le minimum doit être inférieur au maximum.</li>
+<li>Un relevé enregistré ne se corrige ni ne se supprime depuis l'écran.</li>
+<li>L'enceinte est distincte de la fiche <strong>Équipements</strong> : un réfrigérateur peut exister dans les deux écrans sans lien entre eux (à vérifier).</li>
+</ul>
+<p><strong>Flux</strong></p>
+<p>Relevé quotidien → hors limites → <strong>Non-conformités</strong> (à traiter et clôturer) → fiche mensuelle archivée au dossier qualité.</p>
+<div class="diagram"><img src="img/diagramme-a453cac5d5356baa.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="equipment">Équipements</h3>
+<p>Suivre le parc d'équipements : échéances de maintenance et d'étalonnage, interventions, statut (en service, en maintenance, hors service, réformé).</p>
+<p>Menu : groupe <strong>Stocks &gt; Équipements</strong>.</p>
+<p><strong>Qui y a accès</strong></p>
+<table>
+<thead>
+<tr>
+<th>Droit</th>
+<th>Bouton</th>
+<th>Rôles par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Consultation des équipements</td>
+<td>Voir l'écran</td>
+<td>Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité, Administrateur</td>
+</tr>
+<tr>
+<td>Maintenance</td>
+<td><strong>Enregistrer une intervention</strong></td>
+<td>Biologiste responsable, Technicien de laboratoire, Responsable qualité, Administrateur</td>
+</tr>
+<tr>
+<td>Étalonnage</td>
+<td><strong>Enregistrer un étalonnage</strong></td>
+<td>Biologiste responsable, Responsable qualité, Administrateur</td>
+</tr>
+<tr>
+<td>Gestion des équipements</td>
+<td><strong>Changer le statut</strong></td>
+<td>Biologiste responsable, Responsable qualité, Administrateur</td>
+</tr>
+</tbody>
+</table>
+<p>La création d'un équipement et le réglage de ses périodicités se font dans <strong>Administration &gt; Données de référence</strong>, onglet <strong>Automates</strong>, bouton <strong>Nouvel équipement</strong>.</p>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>En haut : titre <strong>Équipement</strong> (avec le nombre d'échéances dépassées), case <strong>N'afficher que les échéances dépassées et les équipements hors service</strong>, <strong>Actualiser</strong>.</li>
+<li>Grille : <strong>Code</strong>, <strong>Désignation</strong>, <strong>Type d'équipement</strong>, <strong>Statut</strong>, <strong>N° de série</strong>, <strong>Emplacement</strong>, <strong>Prochaine maintenance</strong>, <strong>Prochain étalonnage</strong>, <strong>Contrat de maintenance</strong> (date de fin). Une date échue est précédée de « ! ». Étalonnage échu ou hors service : ligne rouge ; maintenance échue, contrat expiré ou en maintenance : ligne orange ; réformé : grisé.</li>
+<li>En bas : détail (fabricant, modèle, série, emplacement, motif du dernier changement de statut), message d'alerte (« Étalonnage échu : aucun résultat patient ne peut être produit sur cet équipement. », « Maintenance préventive échue. », « Le contrat de maintenance a expiré. ») et boutons <strong>Enregistrer une intervention</strong>, <strong>Enregistrer un étalonnage</strong>, <strong>Changer le statut</strong>.</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<p><em>1. Enregistrer une intervention (maintenance, panne, nettoyage…)</em>
+1. Sélectionnez l'équipement, cliquez <strong>Enregistrer une intervention</strong>.
+2. Choisissez la <strong>Nature de l'intervention</strong> : Maintenance préventive, Réparation après panne, Entretien courant, Vérification métrologique, Qualification, Mise à jour logicielle, Nettoyage, Déplacement.
+3. Saisissez la description (français obligatoire, arabe et anglais facultatifs), l'<strong>Immobilisation (h)</strong>, les <strong>Pièces remplacées</strong>, le <strong>Technicien externe</strong>.
+4. Laissez cochée <strong>Contrôle après intervention conforme</strong>, ou décochez-la si le contrôle n'est pas conforme.
+5. Cliquez <strong>Enregistrer</strong>. L'intervention est datée du jour. Une maintenance préventive recale la date de <strong>Prochaine maintenance</strong>.
+6. Si un contrat couvre l'équipement, notez ensuite les heures d'appel et d'arrivée dans <strong>Contrats automates</strong>.</p>
+<p><em>2. Enregistrer un étalonnage</em>
+1. Sélectionnez l'équipement, cliquez <strong>Enregistrer un étalonnage</strong>.
+2. Choisissez le <strong>Résultat de l'étalonnage</strong> : Conforme, Non conforme, Conforme sous réserve, Interrompu.
+3. Saisissez le <strong>Lot d'étalon</strong> (obligatoire pour « Conforme »), <strong>Valable jusqu'au</strong> (facultatif), <strong>Pente</strong>, <strong>Ordonnée à l'origine</strong>, <strong>Commentaire</strong>.
+4. Cliquez <strong>Enregistrer</strong>. Seul un étalonnage « Conforme » recale la date de <strong>Prochain étalonnage</strong>.</p>
+<p><em>3. Mettre un équipement en maintenance ou hors service</em>
+1. Sélectionnez l'équipement, cliquez <strong>Changer le statut</strong>.
+2. Choisissez le <strong>Nouveau statut</strong> : En maintenance ou Hors service. Saisissez le <strong>Motif</strong> (obligatoire). Cliquez <strong>Enregistrer</strong>.
+3. L'automate ne peut plus produire de résultats patients tant qu'il n'est pas « En service ».</p>
+<p><em>4. Remettre en service</em>
+1. Enregistrez d'abord l'étalonnage conforme si l'étalonnage est échu.
+2. <strong>Changer le statut</strong> → <strong>En service</strong>, motif, <strong>Enregistrer</strong>. Refusé tant que l'étalonnage est échu : « Un étalonnage est requis avant la remise en service. »</p>
+<p><em>5. Réformer un équipement</em>
+1. <strong>Changer le statut</strong> → <strong>Réformé</strong>, motif, <strong>Enregistrer</strong>. La réforme est définitive.</p>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>Un automate dont l'étalonnage est échu, ou qui n'est pas « En service », ne peut produire aucun résultat patient.</li>
+<li>Les échéances se calculent à partir de la dernière maintenance préventive ou du dernier étalonnage conforme et de la périodicité saisie dans <strong>Données de référence</strong>. Sans périodicité, aucune alerte.</li>
+<li>Un étalonnage « Conforme » sans lot d'étalon est refusé (raccordement métrologique, ISO 15189).</li>
+<li>Tout changement de statut doit être motivé ; « En qualification » et « Secours » ne se règlent pas depuis cet écran.</li>
+<li>Décocher <strong>Contrôle après intervention conforme</strong> est enregistré, mais ne change pas le statut de l'équipement : changez-le vous-même (à vérifier).</li>
+<li>L'historique des interventions et des étalonnages ne s'affiche pas sur cet écran (les interventions des automates sous contrat sont visibles dans <strong>Contrats automates</strong>).</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Statut</th>
+<th>Signification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>En service</td>
+<td>Utilisable</td>
+</tr>
+<tr>
+<td>En maintenance</td>
+<td>Intervention en cours, pas de résultat patient</td>
+</tr>
+<tr>
+<td>Hors service</td>
+<td>En panne, pas de résultat patient</td>
+</tr>
+<tr>
+<td>En qualification</td>
+<td>En cours de mise en service (réglé à la création)</td>
+</tr>
+<tr>
+<td>Secours</td>
+<td>Équipement de remplacement (réglé à la création)</td>
+</tr>
+<tr>
+<td>Réformé</td>
+<td>Retiré définitivement</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Flux</strong></p>
+<p>Données de référence (création, périodicités) → <strong>Équipements</strong> (interventions, étalonnages, statut) → <strong>Contrats automates</strong> (délais d'intervention) ; un automate hors service ou non étalonné bloque la <strong>Saisie des résultats</strong>.</p>
+<div class="diagram"><img src="img/diagramme-da3520e6bb28adb0.png" alt="Diagramme"></div>
+
+<hr />
+<h3 id="contracts">Contrats automates</h3>
+<p>Suivre les contrats d'automates, en particulier la mise à disposition de réactifs (automate prêté contre un engagement d'achat de réactifs ou de volume de tests) : engagement contre consommation, fin de contrat, délais d'intervention du fournisseur.</p>
+<p>Menu : groupe <strong>Stocks &gt; Contrats automates</strong>.</p>
+<p><strong>Qui y a accès</strong></p>
+<table>
+<thead>
+<tr>
+<th>Droit</th>
+<th>Boutons</th>
+<th>Rôles par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Consultation des contrats</td>
+<td>Voir l'écran, <strong>Ouvrir le contrat joint</strong></td>
+<td>Biologiste responsable, Responsable qualité, Comptabilité, Administrateur</td>
+</tr>
+<tr>
+<td>Gestion des contrats</td>
+<td><strong>Nouveau contrat</strong>, <strong>Modifier</strong>, <strong>Joindre le contrat…</strong></td>
+<td>Biologiste responsable, Comptabilité, Administrateur</td>
+</tr>
+<tr>
+<td>Maintenance</td>
+<td><strong>Heures d'appel et d'arrivée…</strong></td>
+<td>Biologiste responsable, Responsable qualité, Administrateur</td>
+</tr>
+</tbody>
+</table>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>En haut : titre <strong>Contrats automates</strong> (nombre, contrats à risque, fins proches), case <strong>Afficher aussi les contrats résiliés</strong>, <strong>Actualiser</strong>, et la règle d'alerte (« risque de non-atteinte » quand la projection est sous 90 % de l'engagement ; fin de contrat signalée 90 jours avant).</li>
+<li>Grille des contrats : <strong>Référence</strong>, <strong>Fournisseur</strong>, <strong>Type de contrat</strong>, <strong>Automates</strong>, <strong>Fin</strong> (avec le nombre de jours restants), <strong>Engagement</strong>, <strong>Période mesurée</strong>, <strong>Engagé</strong>, <strong>Attendu à ce jour</strong>, <strong>Consommé</strong>, <strong>Projection fin de période</strong>, <strong>Projection / engagé</strong>, <strong>Alertes</strong> (Résilié, Échu, Risque de non-atteinte, Fin proche, délais dépassés), <strong>Interventions</strong> (nombre et heures d'arrêt). Risque : rouge ; fin proche ou délais dépassés : orange.</li>
+<li>Boutons : <strong>Nouveau contrat</strong>, <strong>Modifier</strong>, <strong>Joindre le contrat…</strong>, <strong>Ouvrir le contrat joint</strong>.</li>
+<li>En bas : <strong>Interventions sur les automates du contrat</strong> : <strong>Date</strong>, <strong>Automate</strong>, <strong>Nature de l'intervention</strong>, <strong>Description</strong>, <strong>Immobilisation (h)</strong>, <strong>Appel au fournisseur</strong>, <strong>Arrivée du technicien</strong>, <strong>Délai (h)</strong>, <strong>Technicien externe</strong> ; bouton <strong>Heures d'appel et d'arrivée…</strong>.</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<p><em>1. Saisir un contrat de mise à disposition</em>
+1. Cliquez <strong>Nouveau contrat</strong> (ou double-cliquez sur une ligne pour la modifier).
+2. Saisissez la <strong>Référence</strong>, le <strong>Fournisseur</strong>, le <strong>Type de contrat</strong> (Mise à disposition par défaut ; aussi Location, Achat, Comodat (prêt à usage)), cochez <strong>Contrat en vigueur</strong>.
+3. <strong>Début</strong> et <strong>Durée (mois)</strong> (60 par défaut).
+4. <strong>Engagement</strong> : Tests par an, Tests sur la durée, Achats de réactifs par an (MAD HT), Achats de réactifs sur la durée (MAD HT), ou Sans engagement ; puis <strong>Engagé</strong> (volume ou montant).
+5. <strong>Analyses comptées</strong> : codes séparés par des virgules (vide = toutes).
+6. <strong>Pénalité (MAD)</strong>, <strong>Visites préventives / an</strong>, <strong>Délai max. d'intervention (h)</strong>.
+7. Cochez les <strong>Automates</strong> couverts.
+8. <strong>Réactifs captifs et prix contractuels</strong> : une ligne par article, avec <strong>Prix contrat HT / unité</strong> et <strong>Coût par test</strong>.
+9. Clauses : <strong>Maintenance (préventive, curative, pièces)</strong>, <strong>Formation</strong>, <strong>Conditions de sortie</strong>, <strong>Pénalités</strong>, <strong>Observations</strong>.
+10. Cliquez <strong>Enregistrer</strong>.</p>
+<p><em>2. Joindre et consulter le contrat signé</em>
+1. Sélectionnez le contrat, cliquez <strong>Joindre le contrat…</strong>, choisissez le fichier (PDF, image, DOCX). Si un fichier existe déjà, l'application demande confirmation ; l'ancien reste archivé.
+2. <strong>Ouvrir le contrat joint</strong> affiche le fichier courant.</p>
+<p><em>3. Suivre l'engagement</em>
+1. Lisez <strong>Attendu à ce jour</strong>, <strong>Consommé</strong>, <strong>Projection fin de période</strong> et <strong>Projection / engagé</strong>.
+2. Engagement en tests : compté sur les résultats produits par les automates du contrat (une analyse demandée = un test). Engagement en montant : compté sur les commandes approuvées des réactifs captifs à ce fournisseur. Un engagement annuel est mesuré par année de contrat.
+3. Alerte « Risque de non-atteinte » si la projection est sous 90 % de l'engagement (pas d'alerte pendant les 30 premiers jours d'une période).</p>
+<p><em>4. Mesurer le délai d'intervention du fournisseur</em>
+1. L'intervention est d'abord enregistrée dans <strong>Équipements</strong> (<strong>Enregistrer une intervention</strong>).
+2. Ici, sélectionnez le contrat puis l'intervention, cliquez <strong>Heures d'appel et d'arrivée…</strong>.
+3. Cochez et renseignez <strong>Appel au fournisseur</strong> et <strong>Arrivée du technicien</strong> (date et heure, pas dans le futur). Cliquez <strong>Enregistrer</strong>.
+4. Le <strong>Délai (h)</strong> est calculé et comparé au délai maximal du contrat ; un dépassement s'affiche en orange et dans <strong>Alertes</strong>.</p>
+<p><em>5. Résilier un contrat</em>
+1. <strong>Modifier</strong>, décochez <strong>Contrat en vigueur</strong>, <strong>Enregistrer</strong>. Le contrat apparaît « Résilié » ; cochez <strong>Afficher aussi les contrats résiliés</strong> pour le revoir.</p>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>Référence et fournisseur obligatoires ; une même référence ne peut pas exister deux fois chez le même fournisseur.</li>
+<li>Durée entre 1 et 240 mois ; engagement obligatoire sauf « Sans engagement » ; visites, délai et pénalité positifs ; prix non négatifs.</li>
+<li>L'heure d'arrivée ne peut pas précéder l'heure d'appel.</li>
+<li>Fichier joint : PDF, image, DOCX (le service accepte aussi XLSX), taille limitée.</li>
+</ul>
+<p><strong>Flux</strong></p>
+<p><strong>Équipements</strong> (intervention) → <strong>Contrats automates</strong> (délai) ; consommation mesurée à partir de la <strong>Saisie des résultats</strong> et des <strong>Bons de commande</strong> ; alertes utilisées pour la renégociation avec le fournisseur.</p>
+<div class="diagram"><img src="img/diagramme-de0f79030f4c0a11.png" alt="Diagramme"></div><p class="top"><a href="index.html">Retour au sommaire</a></p>
 </div>
 </body>
 </html>
