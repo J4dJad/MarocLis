@@ -30,20 +30,26 @@ public sealed class InventoryView : LocalizedView
     private readonly DataGridView _stock = UiTheme.Grid();
     private readonly DataGridView _lots = UiTheme.Grid();
 
-    private readonly Label _stockHeading = new();
-    private readonly Label _lotsHeading = new();
-    private readonly CheckBox _onlyAlerts = new();
-    private readonly CheckBox _onlyQuarantined = new();
+    // Direction A: the title and its count, the search, the filter chips and the two cards.
+    private readonly Label _title = StockPage.Title();
+    private readonly Label _count = StockPage.Count();
+    private readonly StockSearchBox _search = new();
+    private readonly CheckBox _onlyAlerts = new StockChip();
+    private readonly CheckBox _onlyQuarantined = new StockChip();
+    private readonly StockCard _lotCard;
+    private readonly ContextMenuStrip _lotMore = new();
+    private readonly Button _lotMoreButton;
 
     private readonly Button _receive = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _issue = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _release = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _rejectLot = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _clearRejection = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _recall = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _writeOff = UiTheme.SecondaryButton(string.Empty);
+    // Rarer lot operations, run from « Plus d'actions ▾ ».
+    private readonly StockMenuButton _clearRejection = new();
+    private readonly StockMenuButton _recall = new();
+    private readonly StockMenuButton _writeOff = new();
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
-    private readonly Label _status = new();
+    private readonly StockFooter _status = new();
 
     private IReadOnlyList<StockRow> _stockRows = [];
     private IReadOnlyList<LotRow> _lotRows = [];
@@ -73,6 +79,9 @@ public sealed class InventoryView : LocalizedView
         _lotQuality = lotQuality;
         _output = output;
 
+        _lotCard = new StockCard(_lots, footer: _status);
+        _lotMoreButton = StockMenu.More(_lotMore, localizer);
+
         BuildLayout();
         WireBehaviour();
     }
@@ -83,97 +92,49 @@ public sealed class InventoryView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = StockPage.ContentPadding;
 
-        var split = new ProportionalSplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 290,
-            SplitterWidth = 6,
-            BackColor = UiTheme.Surface
-        };
+        // --- title, actions and filters ----------------------------------------------------------------
 
-        // --- stock ------------------------------------------------------------------------------------
-
-        var top = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-
-        var stockBar = new Panel { Dock = DockStyle.Top, Height = 54, BackColor = UiTheme.Surface };
-
-        _stockHeading.Font = UiTheme.SectionTitle;
-        _stockHeading.ForeColor = UiTheme.TextPrimary;
-        _stockHeading.AutoSize = true;
-        _stockHeading.Location = new Point(0, 2);
-
-        _onlyAlerts.Font = UiTheme.Small;
-        _onlyAlerts.ForeColor = UiTheme.TextSecondary;
-        _onlyAlerts.AutoSize = true;
-        _onlyAlerts.Location = new Point(0, 28);
-
-        _receive.Bounds = new Rectangle(240, 24, 200, UiTheme.ButtonHeight);
-        _issue.Bounds = new Rectangle(450, 24, 170, UiTheme.ButtonHeight);
-        _refresh.Bounds = new Rectangle(630, 24, 110, UiTheme.ButtonHeight);
-
-        _alerts.Bounds = new Rectangle(750, 24, 170, UiTheme.ButtonHeight);
+        // One primary action, the receipt, with its key; the issue is a secondary action now.
+        UiTheme.StyleSecondary(_issue);
         _alerts.Visible = _planning is not null;
+        var header = StockPage.Header(_title, _count, _refresh, _alerts, _issue, _receive);
+        ShortcutHints.Attach(_receive, NewKey);
 
-        stockBar.Controls.AddRange([_stockHeading, _onlyAlerts, _receive, _issue, _refresh, _alerts]);
+        var filters = StockPage.Filters(_search, _onlyAlerts);
+
+        // --- stock -------------------------------------------------------------------------------------
 
         BuildStockColumns();
+        var stockCard = new StockCard(_stock, heading: false);
 
-        var stockHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        stockHost.Controls.Add(_stock);
-
-        top.Controls.Add(stockHost);
-        top.Controls.Add(stockBar);
-
-        // --- lots -------------------------------------------------------------------------------------
-
-        var bottom = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-
-        var lotBar = new Panel { Dock = DockStyle.Top, Height = 30, BackColor = UiTheme.Surface };
-
-        _lotsHeading.Font = UiTheme.SectionTitle;
-        _lotsHeading.ForeColor = UiTheme.TextPrimary;
-        _lotsHeading.AutoSize = true;
-        _lotsHeading.Location = new Point(0, 2);
-
-        _onlyQuarantined.Font = UiTheme.Small;
-        _onlyQuarantined.ForeColor = UiTheme.TextSecondary;
-        _onlyQuarantined.AutoSize = true;
-        _onlyQuarantined.Location = new Point(280, 6);
-
-        lotBar.Controls.AddRange([_lotsHeading, _onlyQuarantined]);
+        // --- lots --------------------------------------------------------------------------------------
 
         BuildLotColumns();
 
-        var lotHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        lotHost.Controls.Add(_lots);
+        StockPage.Action(_rejectLot);
+        StockPage.Action(_release);
+        _lotCard.Heading.Start(_onlyQuarantined);
+        _lotCard.Heading.End(_rejectLot, _lotMoreButton, _release);
 
-        var lotActions = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = UiTheme.Surface };
+        Controls.Add(StockPage.Stack(stockCard, _lotCard, 280));
+        Controls.Add(filters);
+        Controls.Add(header);
+    }
 
-        _release.Bounds = new Rectangle(0, 10, 200, UiTheme.ButtonHeight);
-        _rejectLot.Bounds = new Rectangle(210, 10, 160, UiTheme.ButtonHeight);
-        _clearRejection.Bounds = new Rectangle(380, 10, 210, UiTheme.ButtonHeight);
-        _recall.Bounds = new Rectangle(600, 10, 190, UiTheme.ButtonHeight);
-        _writeOff.Bounds = new Rectangle(800, 10, 180, UiTheme.ButtonHeight);
+    private const string NewKey = "Ctrl+N";
 
-        _status.Bounds = new Rectangle(992, 16, 600, 20);
-        _status.Font = UiTheme.Small;
-        _status.ForeColor = UiTheme.TextSecondary;
-        _status.AutoSize = false;
+    /// <summary>Ctrl+N receives a lot of the selected article, as the key drawn on the button says.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.N) && _receive.Enabled && _receive.Visible)
+        {
+            _receive.PerformClick();
+            return true;
+        }
 
-        lotActions.Controls.AddRange([_release, _rejectLot, _clearRejection, _recall, _writeOff,
-                                      _status]);
-
-        bottom.Controls.Add(lotHost);
-        bottom.Controls.Add(lotActions);
-        bottom.Controls.Add(lotBar);
-
-        split.Panel1.Controls.Add(top);
-        split.Panel2.Controls.Add(bottom);
-
-        Controls.Add(split);
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private void BuildStockColumns()
@@ -235,6 +196,7 @@ public sealed class InventoryView : LocalizedView
         _refresh.Click += async (_, _) => await ActivateAsync();
         _onlyAlerts.CheckedChanged += async (_, _) => await LoadStockAsync();
         _onlyQuarantined.CheckedChanged += async (_, _) => await LoadLotsAsync();
+        _search.Changed += (_, _) => StockGrid.Filter(_stock, _search.Query);
 
         _stock.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadLotsAsync());
 
@@ -258,6 +220,7 @@ public sealed class InventoryView : LocalizedView
 
         _stock.CellFormatting += OnStockFormatting;
         _lots.CellFormatting += OnLotFormatting;
+        StockGrid.Pills(_lots, "state", tag => tag is LotRow lot ? LotPill(lot) : null);
 
         WireLotMenu();
     }
@@ -288,6 +251,27 @@ public sealed class InventoryView : LocalizedView
         };
 
         _lots.ContextMenuStrip = _lotMenu;
+
+        // The lot card's « Plus d'actions ▾ »: the rarer lot operations, then the same quality
+        // records as the right click.
+        var moreResults = new ToolStripMenuItem { Tag = "Recall.Menu" };
+        moreResults.Click += async (_, _) => await RunBusyAsync(() => ShowRecallListAsync());
+        var moreCompare = new ToolStripMenuItem { Tag = "LotComparison.Menu" };
+        moreCompare.Click += async (_, _) => await RunBusyAsync(CompareLotsAsync);
+        var moreCertificates = new ToolStripMenuItem { Tag = "Certificates.Menu" };
+        moreCertificates.Click += (_, _) => ShowCertificates();
+
+        _lotMore.Items.AddRange([StockMenu.Entry(_clearRejection), StockMenu.Entry(_recall),
+                                 StockMenu.Entry(_writeOff), new ToolStripSeparator(),
+                                 moreResults, moreCompare, moreCertificates]);
+        _lotMore.Opening += (_, _) =>
+        {
+            var row = _lots.CurrentRow?.Tag as LotRow;
+            foreach (var item in new[] { moreResults, moreCompare, moreCertificates }) item.Text = T((string)item.Tag!);
+            moreResults.Enabled = row is not null && _lotQuality is not null && PermissionGate.Allows(Permissions.Results.View);
+            moreCompare.Enabled = row is not null && _lotQuality is not null;
+            moreCertificates.Enabled = row is not null && _reception is not null && _output is not null;
+        };
         _lots.CellMouseDown += (_, e) =>
         {
             if (e.Button == MouseButtons.Right && e.RowIndex >= 0 && e.RowIndex < _lots.Rows.Count)
@@ -338,6 +322,10 @@ public sealed class InventoryView : LocalizedView
         dialog.ShowDialog(this);
     }
 
+    // The cells that carry a warning, coloured on their own: a whole row in colour is kept for the
+    // critical cases, as the design system has it.
+    private static readonly HashSet<string> StockWarningCells = ["onhand", "lots", "expiry", "alert"];
+
     private void OnStockFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _stock.Rows.Count) return;
@@ -356,7 +344,8 @@ public sealed class InventoryView : LocalizedView
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
         }
-        else if (row.NeedsReorder || row.DaysToEarliestExpiry is <= 30 || row.QuarantinedLotCount > 0)
+        else if ((row.NeedsReorder || row.DaysToEarliestExpiry is <= 30 || row.QuarantinedLotCount > 0)
+                 && StockWarningCells.Contains(_stock.Columns[e.ColumnIndex].Name))
         {
             e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
             e.CellStyle.ForeColor = UiTheme.Abnormal;
@@ -373,10 +362,11 @@ public sealed class InventoryView : LocalizedView
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
         }
-        else if (row.IsQuarantined || row.IsBeyondOpenStability || row.DaysToExpiry <= 30)
+        else if ((row.IsQuarantined || row.IsBeyondOpenStability || row.DaysToExpiry <= 30)
+                 && _lots.Columns[e.ColumnIndex].Name is "expiry" or "days")
         {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
+            e.CellStyle.Font = UiTheme.MonospaceBold;
         }
         else if (row.IsUsable)
         {
@@ -384,10 +374,18 @@ public sealed class InventoryView : LocalizedView
         }
     }
 
+    /// <summary>The lot's state as a pill: usable, waiting for a decision, or out of use.</summary>
+    private static StockPill LotPill(LotRow row) =>
+        row.IsRejected || row.IsRecalled || row.IsExpired ? StockPill.Critical
+        : row.IsBeyondOpenStability || row.IsQuarantined ? StockPill.Warning
+        : StockPill.Done;
+
     protected override void ApplyTexts()
     {
-        _stockHeading.Text = T("Inventory.Title");
-        _lotsHeading.Text = T("Inventory.Lots");
+        _title.Text = T("Inventory.Title");
+        _lotCard.Title.Text = T("Inventory.Lots");
+        _lotMoreButton.Text = T("ResultEntry.MoreActions");
+        _search.Placeholder = T("StocksUi.SearchStock");
         _onlyAlerts.Text = T("Inventory.OnlyAlerts");
         _onlyQuarantined.Text = T("Inventory.Quarantined");
         _receive.Text = T("Inventory.ReceiveLot");
@@ -524,10 +522,11 @@ public sealed class InventoryView : LocalizedView
 
         var alertCount = _stockRows.Count(r => r.BelowMinimum || r.NeedsReorder);
 
-        _stockHeading.Text = $"{T("Inventory.Title")} — {_stockRows.Count}" +
-                             (alertCount > 0 ? $" · {alertCount} {T("Inventory.BelowMinimum").ToLowerInvariant()}" : string.Empty);
+        _count.Text = $"{T("StocksUi.Items", _stockRows.Count)}" +
+                      (alertCount > 0 ? $" · {alertCount} {T("Inventory.BelowMinimum").ToLowerInvariant()}" : string.Empty);
 
         if (_stock.Rows.Count > 0) _stock.SelectFirstRow();
+        StockGrid.Filter(_stock, _search.Query);
     }
 
     private async Task LoadLotsAsync(CancellationToken ct = default)
@@ -583,8 +582,9 @@ public sealed class InventoryView : LocalizedView
 
         var quarantined = _lotRows.Count(r => r.IsQuarantined && !r.IsRejected);
 
-        _lotsHeading.Text = $"{T("Inventory.Lots")} — {_lotRows.Count}" +
-                            (quarantined > 0 ? $" · {quarantined} {T("Inventory.Quarantined").ToLowerInvariant()}" : string.Empty);
+        var item = _onlyQuarantined.Checked ? null : (_stock.CurrentRow?.Tag as StockRow)?.Code;
+        _lotCard.Note.Text = (item is null ? string.Empty : $"{item} · ") + $"{_lotRows.Count}" +
+                             (quarantined > 0 ? $" · {quarantined} {T("Inventory.Quarantined").ToLowerInvariant()}" : string.Empty);
 
         RefreshLotActions();
         _lots.SelectionChanged -= OnLotSelectionChanged;
@@ -1009,6 +1009,8 @@ internal sealed class ReceiveLotDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.ReceiveLot", refuse);
     }
 
     private void Accept()

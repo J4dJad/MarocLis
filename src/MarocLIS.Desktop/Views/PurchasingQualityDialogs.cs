@@ -236,6 +236,8 @@ internal sealed class RecallListDialog : Form
         Controls.Add(grid);
         Controls.Add(bar);
         CancelButton = close;
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.RecallList");
     }
 
     private static IEnumerable<(string Name, string Header, int Weight)> Columns(ILocalizer l) =>
@@ -310,6 +312,8 @@ internal sealed class LotComparisonDialog : Form
 
         Controls.Add(grid);
         Controls.Add(notice);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.LotComparison");
     }
 }
 
@@ -361,6 +365,10 @@ internal sealed class LotCertificatesDialog : Form
 
         Controls.AddRange([_list, _attach, _open, close]);
         CancelButton = close;
+
+        _list.BorderStyle = BorderStyle.FixedSingle;
+        _list.IntegralHeight = false;
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.Certificates");
 
         Shown += async (_, _) => await LoadAsync();
     }

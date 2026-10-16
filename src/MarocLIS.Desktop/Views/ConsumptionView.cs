@@ -320,6 +320,8 @@ internal sealed class ConsumptionDetailDialog : Form
         Controls.Add(analyses);
         Controls.Add(summary);
         Controls.Add(notice);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.ConsumptionDetail");
     }
 }
 
@@ -342,6 +344,8 @@ internal sealed class StockSettingsDialog : MasterDataEditor
         _critical = Number("Stock.ExpiryCriticalDays", 290, 70, 240, current.ExpiryCriticalDays, 365m);
 
         Buttons(160, 560);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.StockSettings");
     }
 
     protected override void Accept()
@@ -441,5 +445,7 @@ internal sealed class StockAlertsDialog : Form
         Controls.Add(stockOuts);
         Controls.Add(Heading(localizer.Format("Stock.StockOuts", alerts.StockOuts.Count)));
         Controls.Add(notice);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.StockAlerts");
     }
 }

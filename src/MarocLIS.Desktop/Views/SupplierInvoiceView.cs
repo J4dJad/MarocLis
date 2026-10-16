@@ -764,6 +764,8 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
 
         Buttons(540, 980);
         Shown += async (_, _) => await LoadLinesAsync();
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.SupplierInvoiceEntry");
     }
 
     private void BuildColumns()
@@ -962,6 +964,8 @@ internal sealed class SupplierPaymentDialog : MasterDataEditor
         Notice(20, 124, 480, 60, "SupplierInvoices.PaymentNotice");
 
         Buttons(210, 520);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.SupplierPayment");
     }
 
     protected override void Accept()
@@ -1047,6 +1051,8 @@ internal sealed class PurchasingPeriodDialog : MasterDataEditor
             Notice(20, 70, 480, 50, "SupplierInvoices.LatePaymentsNotice");
 
         Buttons(withLayout ? 190 : 140, 520, "Action.Export");
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.PurchasingPeriod");
     }
 
     protected override void Accept()
@@ -1118,6 +1124,8 @@ internal sealed class PurchasingSettingsDialog : MasterDataEditor
         }
 
         Buttons(560, 760);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.PurchasingSettings");
     }
 
     protected override void Accept()

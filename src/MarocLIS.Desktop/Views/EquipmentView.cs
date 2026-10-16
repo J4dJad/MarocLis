@@ -507,6 +507,8 @@ internal sealed class MaintenanceDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.Maintenance");
     }
 
     private void Accept()
@@ -655,6 +657,8 @@ internal sealed class CalibrationDialog : Form
         CancelButton = cancel;
 
         RefreshLotRequirement();
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.Calibration");
     }
 
     /// <summary>
@@ -790,6 +794,8 @@ internal sealed class EquipmentStatusDialog : Form
         CancelButton = cancel;
 
         RefreshNotice();
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.EquipmentStatus");
     }
 
     private void RefreshNotice()

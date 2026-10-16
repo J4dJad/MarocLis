@@ -653,6 +653,8 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
         Notice(20, 590, 900, 60, "Contracts.EditorNotice");
 
         Buttons(700, 940);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.InstrumentContract");
     }
 
     private sealed record ReagentChoice(Guid Id, string Display);
@@ -762,6 +764,8 @@ internal sealed class InterventionTimesDialog : MasterDataEditor
 
         Notice(20, 76, 440, 40, "Contracts.InterventionTimesNotice");
         Buttons(140, 480);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.InterventionTimes");
     }
 
     private (CheckBox, DateTimePicker) Moment(string key, int x, DateTimeOffset? value, DateTime fallback)

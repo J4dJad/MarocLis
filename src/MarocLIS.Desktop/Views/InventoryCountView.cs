@@ -639,6 +639,8 @@ internal sealed class InventoryCountDialog : MasterDataEditor
         Sync();
 
         Buttons(240, 560);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.InventoryCount");
     }
 
     protected override void Accept()

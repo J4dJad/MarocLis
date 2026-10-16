@@ -397,6 +397,8 @@ internal sealed class TemperatureReadingDialog : MasterDataEditor
                                        unit.MaximumCelsius.ToString("0.0", CultureInfo.CurrentCulture));
 
         Buttons(200, 520);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.TemperatureReading");
     }
 
     protected override void Accept()
@@ -474,6 +476,8 @@ internal sealed class StorageUnitDialog : MasterDataEditor
         };
 
         Buttons(240, 560);
+
+        StockDialog.Frame(this, localizer, "StocksUi.Dialog.StorageUnit");
     }
 
     protected override void Accept()
