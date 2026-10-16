@@ -331,6 +331,11 @@ public sealed class AccidentView : LocalizedView
                 _current = detail.Value;
                 RenderDetail();
             }
+            // Left while the accident was loading: the screen is gone, there is nothing to report on it.
+            catch (Exception) when (IsDisposed || Disposing)
+            {
+                return;
+            }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Loading a work accident failed.");

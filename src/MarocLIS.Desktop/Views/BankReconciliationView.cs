@@ -67,8 +67,8 @@ public sealed class BankReconciliationView : LocalizedView
 
         BuildLayout();
 
-        _refresh.Click += async (_, _) => await LoadAsync();
-        _account.SelectedIndexChanged += async (_, _) => await LoadAsync();
+        _refresh.Click += async (_, _) => await ReloadAsync();
+        _account.SelectedIndexChanged += async (_, _) => await ReloadAsync();
         _openOnly.CheckedChanged += (_, _) => Render();
         _openOnly.CheckedChanged += (_, _) => RenderChip();
         _accounts.Click += async (_, _) => await RunBusyAsync(ManageAccountsAsync);
@@ -226,6 +226,8 @@ public sealed class BankReconciliationView : LocalizedView
             await LoadAsync(ct);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the bank reconciliation failed.");
@@ -248,6 +250,25 @@ public sealed class BankReconciliationView : LocalizedView
 
         var index = _accountRows.ToList().FindIndex(a => a.Id == previous);
         if (_accountRows.Count > 0) _account.SelectedIndex = index >= 0 ? index : 0;
+    }
+
+    /// <summary>
+    /// <see cref="LoadAsync"/> from a button or the account list. Choosing the account while the
+    /// screen opens runs it too: leaving the screen then let its cancellation escape as an
+    /// unexpected error.
+    /// </summary>
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            await LoadAsync();
+        }
+        catch (Exception) when (IsDisposed || Disposing) { }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Loading the bank reconciliation failed.");
+            _dialogs.Error(T("Message.UnexpectedError"));
+        }
     }
 
     private async Task LoadAsync(CancellationToken ct = default)
