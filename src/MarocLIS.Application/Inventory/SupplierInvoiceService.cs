@@ -30,7 +30,8 @@ public sealed record SupplierInvoiceRow(
     decimal AmountPaid,
     int VarianceCount,
     bool HasScan,
-    string EnteredByName)
+    string EnteredByName,
+    Guid EnteredByUserId = default)
 {
     public decimal AmountOutstanding => Math.Max(0m, TotalIncludingVat - AmountPaid);
 

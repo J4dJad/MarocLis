@@ -321,6 +321,8 @@ public sealed class NonConformityView : LocalizedView
             RenderRegister(keep);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the non-conformity register failed.");
@@ -438,6 +440,8 @@ public sealed class NonConformityView : LocalizedView
             // a closed file keeps only Reopen (passing false here left Reopen unreachable).
             SetDetailEnabled(true);
         }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the corrective actions failed.");

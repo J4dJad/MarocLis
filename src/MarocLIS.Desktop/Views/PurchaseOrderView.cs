@@ -312,6 +312,8 @@ public sealed class PurchaseOrderView : LocalizedView
             Render(keep);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading purchase orders failed.");
@@ -395,6 +397,8 @@ public sealed class PurchaseOrderView : LocalizedView
             _lineRows = result.Value;
             RenderLines();
         }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading purchase order lines failed.");
@@ -809,6 +813,9 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
         _price = TextField("PurchaseOrders.UnitPrice", 200, 68, 120, null, latin: true, mono: true, right: true);
         _discount = TextField("PurchaseOrders.DiscountPercent", 340, 68, 90, "0", latin: true, mono: true, right: true);
         _vat = TextField("PurchaseOrders.VatPercent", 450, 68, 90, "20", latin: true, mono: true, right: true);
+        // « 10 % » in the discount was ordered with no discount, and a slip in the VAT at 20 %.
+        Numeric(EditorValues.MeasureMaxLength, _quantity, _discount, _vat);
+        Numeric(EditorValues.AmountMaxLength, _price);
 
         Notice(20, 124, 520, 46, "PurchaseOrders.LineNotice");
 
@@ -931,6 +938,7 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
         _location = TextField("Inventory.DefaultLocation", 270, 68, 230);
         _lot.MaxLength = _deliveryNote.MaxLength = 60;
         _location.MaxLength = 100;
+        Numeric(EditorValues.MeasureMaxLength, _quantity);
 
         _checks = new ReceptionChecksPanel(localizer, condition) { Location = new Point(20, 122) };
         _checks.Scanned += async data => await OnScannedAsync(data);

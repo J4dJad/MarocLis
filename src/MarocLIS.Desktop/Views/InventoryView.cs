@@ -477,6 +477,8 @@ public sealed class InventoryView : LocalizedView
             RenderStock();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading stock failed.");
@@ -551,6 +553,8 @@ public sealed class InventoryView : LocalizedView
             RenderLots();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading lots failed.");
@@ -690,10 +694,7 @@ public sealed class InventoryView : LocalizedView
 
         if (answer is null) return;
 
-        if (!decimal.TryParse(answer.Replace(',', '.'),
-                              System.Globalization.NumberStyles.Float,
-                              System.Globalization.CultureInfo.InvariantCulture, out var quantity)
-            || quantity <= 0m)
+        if (EditorValues.ParseDecimal(answer) is not { } quantity || quantity <= 0m)
         {
             _dialogs.Warn(Localizer.Format("Result_NotANumber", answer));
             return;
@@ -917,6 +918,8 @@ internal sealed class ReceiveLotDialog : Form
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
         _lotNumber.MaxLength = _deliveryNote.MaxLength = 60;
         _storage.MaxLength = 100;
+        _quantity.MaxLength = EditorValues.MeasureMaxLength;
+        _unitPrice.MaxLength = EditorValues.AmountMaxLength;
 
         Text = $"{localizer["Inventory.ReceiveLot"]} — {item.Code}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -1047,6 +1050,14 @@ internal sealed class ReceiveLotDialog : Form
             return;
         }
 
+        // A price typed with its currency was saved as no price, and the lot valued at nothing.
+        if (EditorValues.IsUnreadable(_unitPrice.Text))
+        {
+            _dialogs.Warn(_localizer.Format("Result_NotANumber", _unitPrice.Text.Trim()));
+            _unitPrice.Focus();
+            return;
+        }
+
         var check = _checks.Build(_dialogs, Text);
         if (check is null) return;
 
@@ -1134,10 +1145,14 @@ internal sealed class ReceiveLotDialog : Form
         Close();
     }
 
-    private static bool TryParse(string text, out decimal value) =>
-        decimal.TryParse(text.Replace(',', '.'),
-                         System.Globalization.NumberStyles.Float,
-                         System.Globalization.CultureInfo.InvariantCulture, out value);
+    // Read as the editors read numbers: « 1e20 » was taken, and the save then failed with
+    // « Erreur inattendue »; « 1 000 », as the French culture writes it, was refused.
+    private static bool TryParse(string text, out decimal value)
+    {
+        var parsed = EditorValues.ParseDecimal(text);
+        value = parsed ?? 0m;
+        return parsed is not null;
+    }
 
     private sealed record SupplierChoice(Guid? Id, string Display)
     {

@@ -280,6 +280,8 @@ public sealed class InventoryCountView : LocalizedView
             await LoadDetailAsync(ct);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the inventories failed.");
@@ -627,7 +629,9 @@ internal sealed class InventoryCountDialog : MasterDataEditor
         {
             DropDownStyle = ComboBoxStyle.DropDown,
             FlatStyle = FlatStyle.Flat,
-            Bounds = new Rectangle(20, 88, 240, UiTheme.InputHeight)
+            Bounds = new Rectangle(20, 88, 240, UiTheme.InputHeight),
+            // The column; a longer place typed in failed the save with « Erreur inattendue ».
+            MaxLength = 100
         };
         _location.Items.AddRange([.. locations]);
         Controls.Add(_location);

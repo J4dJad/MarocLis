@@ -509,6 +509,8 @@ public sealed class QualityControlView : LocalizedView
             await LoadChartAsync();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the quality control screen failed.");
@@ -689,6 +691,8 @@ public sealed class QualityControlView : LocalizedView
                 _establishLimits.Enabled = true;
             }
         }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the Levey-Jennings chart failed.");

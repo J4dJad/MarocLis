@@ -244,6 +244,8 @@ public sealed class InstrumentContractView : LocalizedView
             Render(keep);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading instrument contracts failed.");
@@ -377,6 +379,8 @@ public sealed class InstrumentContractView : LocalizedView
             _interventionRows = result.Value;
             RenderInterventions();
         }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading contract interventions failed.");
@@ -655,6 +659,9 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
         _codes.MaxLength = 1000;
         _maintenance.MaxLength = _exit.MaxLength = _penalty.MaxLength = 2000;
         _training.MaxLength = _notes.MaxLength = 1000;
+        // A penalty typed with its currency (« 5000 DH ») was saved as no penalty.
+        Numeric(EditorValues.AmountMaxLength, _committed, _penaltyAmount);
+        Numeric(6, _visits, _maxDelay);
 
         Notice(20, 590, 900, 60, "Contracts.EditorNotice");
 
@@ -701,6 +708,18 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
         foreach (DataGridViewRow row in _reagents.Rows)
         {
             if (row.IsNewRow || row.Cells["item"].Value is not Guid itemId) continue;
+
+            // An unreadable contract price was saved as no price, and the reagent then ordered at
+            // whatever the last order said.
+            foreach (var column in new[] { "price", "costPerTest" })
+            {
+                var typed = row.Cells[column].Value?.ToString();
+                if (!EditorValues.IsUnreadable(typed)) continue;
+
+                Dialogs.Warn(Localizer.Format("Result_NotANumber", typed!.Trim()), Text);
+                _reagents.CurrentCell = row.Cells[column];
+                return;
+            }
 
             var price = EditorValues.ParseDecimal(row.Cells["price"].Value?.ToString());
             var cost = EditorValues.ParseDecimal(row.Cells["costPerTest"].Value?.ToString());

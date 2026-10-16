@@ -178,6 +178,7 @@
   "Quote_SupplierAlreadyAsked": "تمت استشارة هذا المورد بالفعل في هذا الطلب.",
   "Quote_SupplierNotAsked": "لم تتم استشارة هذا المورد في هذا الطلب: أضفه أولًا.",
   "Quote_ValidityBeforeReceipt": "لا يمكن أن يسبق تاريخ الصلاحية تاريخ استلام العرض.",
+  "Quote_DelayOutOfRange": "يجب أن يكون أجل التسليم بين 0 و{0} يومًا.",
   "Purchasing_EmailNotConfigured": "البريد الإلكتروني (SMTP) غير مُعدّ: لا يمكن إرسال أي بريد من البرنامج.",
   "Purchasing_FileEmpty": "الملف فارغ.",
   "Purchasing_FileNotFound": "لا يوجد ملف مرفق.",

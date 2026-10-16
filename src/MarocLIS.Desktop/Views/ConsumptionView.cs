@@ -184,6 +184,8 @@ public sealed class ConsumptionView : LocalizedView
             Render();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Computing the consumption failed.");
@@ -192,12 +194,15 @@ public sealed class ConsumptionView : LocalizedView
 
     private void Render()
     {
+        // The article looked at stays the current one when the period or the settings change.
+        var keep = Current?.StockItemId;
         _grid.Rows.Clear();
 
         foreach (var row in _rows)
         {
             var index = _grid.Rows.Add([.. StockCsv.ConsumptionCells(row, Localizer.CurrentLanguage)]);
             _grid.Rows[index].Tag = row;
+            if (row.StockItemId == keep) _grid.MakeCurrent(_grid.Rows[index]);
         }
 
         var flagged = _rows.Count(r => r.Reconciliation.IsFlagged);

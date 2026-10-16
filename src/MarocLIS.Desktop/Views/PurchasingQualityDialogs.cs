@@ -61,6 +61,7 @@ internal sealed class ReceptionChecksPanel : Panel
         temperatureLabel.Location = new Point(0, 52);
         _temperature.Location = new Point(0, 70);
         _temperature.Tag = UiTags.LatinValue;
+        _temperature.MaxLength = 8;
         _temperature.TextAlign = HorizontalAlignment.Right;
         _temperature.Font = UiTheme.MonospaceBold;
 
@@ -110,9 +111,11 @@ internal sealed class ReceptionChecksPanel : Panel
         _range.ForeColor = ColdChain.RequiresTemperature(condition) ? UiTheme.Abnormal : UiTheme.TextSecondary;
     }
 
-    public decimal? Temperature =>
-        decimal.TryParse(_temperature.Text.Trim().Replace(',', '.'), NumberStyles.Float,
-                         CultureInfo.InvariantCulture, out var value) ? value : null;
+    /// <summary>
+    /// The temperature typed, read as the editors read numbers: « 1e20 » was taken, and the
+    /// reception then failed to save with « Erreur inattendue ».
+    /// </summary>
+    public decimal? Temperature => EditorValues.ParseDecimal(_temperature.Text);
 
     /// <summary>
     /// The checks as entered, or null with a message when the temperature is unreadable or missing

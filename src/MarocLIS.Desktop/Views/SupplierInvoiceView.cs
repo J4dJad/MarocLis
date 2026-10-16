@@ -342,6 +342,8 @@ public sealed class SupplierInvoiceView : LocalizedView
             Render(keep);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading supplier invoices failed.");
@@ -425,6 +427,8 @@ public sealed class SupplierInvoiceView : LocalizedView
             _detail = result.Value;
             RenderDetail();
         }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading a supplier invoice failed.");
@@ -552,6 +556,14 @@ public sealed class SupplierInvoiceView : LocalizedView
     private async Task UnblockAsync()
     {
         if (Selected is not { } row) return;
+
+        // Said before the justification is asked for: whoever entered the invoice typed the whole
+        // justification and was only then told that releasing it was someone else's to do.
+        if (row.EnteredByUserId == PermissionGate.User?.UserId)
+        {
+            _dialogs.Warn(T("SupplierInvoice_UnblockerMustDifferFromEnterer"), _unblock.Text);
+            return;
+        }
 
         var reason = _dialogs.PromptForReason(T("SupplierInvoices.UnblockPrompt", row.InvoiceNumber, row.VarianceCount),
                                               _unblock.Text, 10, maxLength: 1000);
@@ -970,6 +982,7 @@ internal sealed class SupplierPaymentDialog : MasterDataEditor
                          "SupplierPaymentMethod");
         _reference = TextField("SupplierInvoices.Reference", 20, 68, 320, null, latin: true, mono: true);
         _reference.MaxLength = 60;
+        Numeric(EditorValues.AmountMaxLength, _amount);
 
         // An LCN or a post-dated cheque reaches the bank on its due date, which the bank
         // reconciliation looks for it on; the payment date by default.
@@ -1134,6 +1147,7 @@ internal sealed class PurchasingSettingsDialog : MasterDataEditor
         _fineNext = TextField("SupplierInvoices.FineNextMonths", 560, 68, 160, N(current.FineAdditionalMonthPercent),
                               latin: true, mono: true, right: true);
         Notice(20, 122, 720, 46, "SupplierInvoices.RatesNotice", UiTheme.Abnormal);
+        Numeric(EditorValues.AmountMaxLength, _tolPercent, _tolMad, _keyRate, _margin, _fineFirst, _fineNext);
 
         _purchaseJournal = TextField("SupplierInvoices.PurchaseJournal", 20, 176, 160, current.PurchaseJournal, latin: true, mono: true);
         _bankJournal = TextField("SupplierInvoices.BankJournal", 200, 176, 160, current.BankJournal, latin: true, mono: true);
@@ -1154,6 +1168,11 @@ internal sealed class PurchasingSettingsDialog : MasterDataEditor
                                        latin: true, mono: true);
             i++;
         }
+
+        // The service takes journal and account codes of 20 characters at most.
+        foreach (var code in new[] { _purchaseJournal, _bankJournal, _cashJournal, _supplierAccount, _vatAccount,
+                                     _bankAccount, _cashAccount }.Concat(_charges.Values))
+            code.MaxLength = 20;
 
         Buttons(560, 760);
 
