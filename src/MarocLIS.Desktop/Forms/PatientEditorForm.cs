@@ -108,6 +108,7 @@ public sealed class PatientEditorForm : LocalizedForm
     private bool _saving;
     private readonly Label _status = new();
     private readonly Label _header = new();
+    private PatientDialogFrame? _frame;
 
     /// <summary>
     /// Whether the status line currently carries a duplicate warning, so clearing it cannot wipe
@@ -150,6 +151,12 @@ public sealed class PatientEditorForm : LocalizedForm
 
         BuildLayout();
         WireBehaviour();
+
+        // Title, then the file's number and name (or what to do first) as the muted sentence; the
+        // status line takes the footer's start, « Annuler » then « Enregistrer » its end.
+        _frame = PatientDialogFrame.Apply(this, string.Empty,
+                                          _patientId is null ? T("PatientDialog.EditorNewHint") : string.Empty, _header,
+                                          _status, _cancel, _save);
     }
 
     // ---- Layout ------------------------------------------------------------------------------------
@@ -655,6 +662,7 @@ public sealed class PatientEditorForm : LocalizedForm
     protected override void ApplyTexts()
     {
         Text = _patientId is null ? T("Patient.NewFile") : T("Patient.EditFile");
+        _frame?.SetTexts(Text, _patientId is null ? T("PatientDialog.EditorNewHint") : null);
 
         _identityTab.Text = T("Patient.Identity");
         _contactTab.Text = T("Patient.Contact");

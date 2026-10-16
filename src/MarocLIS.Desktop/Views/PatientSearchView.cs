@@ -280,7 +280,7 @@ public sealed class PatientSearchView : LocalizedView
         };
 
         var searchHost = PatientPaint.SearchHost(_search);
-        searchHost.Width = 400;
+        searchHost.Width = 360;
         searchHost.Margin = new Padding(0, 0, 8, 0);
 
         foreach (var (chip, _) in Chips())
@@ -308,8 +308,10 @@ public sealed class PatientSearchView : LocalizedView
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        // The aside keeps the width of its facts and buttons; the list takes the rest, which at
+        // 1366 pixels is just what its seven columns need.
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
         body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         body.Controls.Add(BuildListCard(), 0, 0);
@@ -472,11 +474,13 @@ public sealed class PatientSearchView : LocalizedView
 
         // --- the patient's actions -------------------------------------------------------------------
 
+        // On two lines when the aside is too narrow for both: "Modifier" goes under the primary.
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 48,
-            WrapContents = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = true,
             BackColor = UiTheme.SurfaceRaised,
             Padding = new Padding(0, 6, 0, 6)
         };
@@ -486,7 +490,7 @@ public sealed class PatientSearchView : LocalizedView
             button.AutoSize = true;
             button.MinimumSize = new Size(0, 34);
             button.Height = 34;
-            button.Margin = new Padding(0, 0, 8, 0);
+            button.Margin = new Padding(0, 0, 8, 6);
         }
 
         buttons.Controls.AddRange([_newOrder, _detailEdit]);
@@ -569,7 +573,11 @@ public sealed class PatientSearchView : LocalizedView
         }
 
         // The list is in name order: the patient column says so with its arrow.
+        // The patient and payer columns wrap (the first is painted on two lines anyway), so their
+        // longest name does not set their width: it shares what the codes leave.
         var name = Add("name", 26);
+        name.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        name.MinimumWidth = 130;
         name.SortMode = DataGridViewColumnSortMode.Programmatic;
         name.HeaderCell.SortGlyphDirection = SortOrder.Ascending;
 
@@ -579,7 +587,7 @@ public sealed class PatientSearchView : LocalizedView
         Add("record", 13, UiTheme.Monospace);
         Add("cin", 10, UiTheme.Monospace);
         Add("phone", 14, UiTheme.Monospace);
-        Add("payer", 14);
+        Add("payer", 14).DefaultCellStyle.WrapMode = DataGridViewTriState.True;
 
         var orders = Add("orders", 8);
         orders.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
@@ -974,7 +982,10 @@ public sealed class PatientSearchView : LocalizedView
         RenderCounts();
 
         if (_results.Rows.Count > 0) _results.SelectFirstRow();
-        else OnSelectionChanged();
+
+        // The rows were added before their tags: the selection the grid reported while filling had
+        // no patient behind it yet.
+        OnSelectionChanged();
     }
 
     /// <summary>The patient cell: the name in semibold, then sex · age · born on, or what the identity lacks.</summary>

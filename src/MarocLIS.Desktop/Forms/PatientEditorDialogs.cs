@@ -174,6 +174,8 @@ internal sealed class CoverageDialog : Form
         AcceptButton = ok;
         CancelButton = cancel;
 
+        PatientDialogFrame.Apply(this, Text, localizer["PatientDialog.CoverageHint"], null, null, cancel, ok);
+
         RefreshRateNotice();
         RefreshInsuredFields();
         RefreshAldFields();
@@ -441,6 +443,8 @@ internal sealed class ConsentDialog : Form
         AcceptButton = ok;
         CancelButton = cancel;
 
+        PatientDialogFrame.Apply(this, Text, localizer["PatientDialog.ConsentHint"], null, null, cancel, ok);
+
         RefreshWrittenRequirement();
     }
 
@@ -635,6 +639,9 @@ internal sealed class DuplicateWarningForm : Form
         // No AcceptButton: neither choice should be reachable by a reflexive Enter.
         CancelButton = cancel;
 
+        PatientDialogFrame.Apply(this, Text, explanation.Text, explanation, null,
+                                 cancel, _createAnyway, _useExisting);
+
         if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
 
         _reason.TextChanged += (_, _) => RefreshButtons();
@@ -792,6 +799,8 @@ internal sealed class PatientAlertDialog : Form
         CancelButton = _cancel;
 
         ApplyTexts();
+
+        PatientDialogFrame.Apply(this, Text, _localizer["PatientDialog.AlertHint"], null, null, _cancel, _ok);
     }
 
     private void ApplyTexts()

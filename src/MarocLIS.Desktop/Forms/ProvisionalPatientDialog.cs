@@ -67,5 +67,8 @@ internal sealed class ProvisionalPatientDialog : Form
 
         AcceptButton = create;
         CancelButton = cancel;
+
+        // The help text is the dialog's sentence, under its title.
+        PatientDialogFrame.Apply(this, Text, help.Text, help, null, cancel, create);
     }
 }

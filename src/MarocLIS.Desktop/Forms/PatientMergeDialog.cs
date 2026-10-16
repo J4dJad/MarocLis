@@ -104,6 +104,8 @@ internal sealed class PatientMergeDialog : Form
 
         CancelButton = cancel;
 
+        PatientDialogFrame.Apply(this, Text, localizer["PatientDialog.MergeHint"], null, null, cancel, _ok);
+
         RefreshDirection();
         RefreshOk();
     }
