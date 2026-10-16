@@ -324,6 +324,11 @@ public sealed class FixedAssetView : LocalizedView
 
         RenderHeading();
         RefreshButtons();
+
+        // The grid makes its first row current as it is added, before the row carries its
+        // asset: that selection loaded nothing, and setting the same row current again raises
+        // no event. The instrument of the asset now shown is loaded here, once the rows are filled.
+        _ = _selectionLoads.RunAsync(() => LoadInstrumentAsync());
     }
 
     private void RenderHeading()
