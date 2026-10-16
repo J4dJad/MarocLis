@@ -306,7 +306,7 @@ public sealed class LeaveView : LocalizedView
     {
         if (Current() is not { Status: LeaveStatus.Pending } row) return;
 
-        var reason = _dialogs.PromptForReason(T("Leave.RefusePrompt", row.EmployeeName), _refuse.Text);
+        var reason = _dialogs.PromptForReason(T("Leave.RefusePrompt", row.EmployeeName), _refuse.Text, maxLength: 500);
         if (reason is null) return;
 
         var done = await _leave.RefuseAsync(row.LeaveRequestId, reason);
@@ -319,7 +319,7 @@ public sealed class LeaveView : LocalizedView
         if (Current() is not { IsLive: true } row) return;
 
         var reason = _dialogs.PromptForText(T("Leave.CancelPrompt", T($"LeaveType.{row.Type}"),
-                                              row.StartDate.ToString("dd/MM/yyyy")), _cancel.Text);
+                                              row.StartDate.ToString("dd/MM/yyyy")), _cancel.Text, maxLength: 500);
         if (reason is null) return;
 
         var done = await _leave.CancelAsync(row.LeaveRequestId, reason);
@@ -392,6 +392,7 @@ internal sealed class LeaveRequestDialog : MasterDataEditor
         _endsMorning = Check("Leave.EndsMorning", 210, 188, false);
 
         _reason = TextField("Leave.Reason", 20, 218, 560);
+        _reason.MaxLength = 500;
         _proof = Check("Leave.ProofProvided", 20, 274, false);
 
         _count = new Label
@@ -597,6 +598,7 @@ internal sealed class LeaveAdjustmentDialog : MasterDataEditor
     {
         _days = TextField("Leave.AdjustDays", 20, 10, 140, mono: true, right: true);
         _comment = TextField("Leave.AdjustReason", 180, 10, 320);
+        _comment.MaxLength = 500;
         Notice(20, 66, 480, 90, "Leave.AdjustNotice");
         Buttons(172, 520);
         QhDialog.Dress(this, localizer, null);
@@ -757,6 +759,7 @@ internal sealed class HolidayEditorDialog : MasterDataEditor
         Controls.Add(_date);
 
         _name = TextField("Field.Name", 220, 10, 280);
+        _name.MaxLength = 150;
         _religious = Check("Holiday.Religious", 20, 76, true);
         Buttons(132, 520);
         QhDialog.Dress(this, localizer, null);

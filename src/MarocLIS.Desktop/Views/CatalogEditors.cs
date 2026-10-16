@@ -69,6 +69,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _code.ReadOnly = !_isNew;
         if (!_isNew) _code.BackColor = UiTheme.SurfaceSunken;
         _code.CharacterCasing = CharacterCasing.Upper;
+        _code.MaxLength = 30;
 
         Notice(170, 34, 560, 26,
                _isNew ? "Catalog.CodeSetOnce" : "Catalog.CodeImmutableNotice",
@@ -79,6 +80,11 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _nameEn = TextField("Field.NameEn", 20, 104, 340, existing?.Name.En);
         _shortName = TextField("Catalog.ShortName", 372, 104, 160, _stored?.ShortName?.Fr);
         _aliases = TextField("Catalog.SearchAliases", 20, 148, 692, _stored?.SearchAliases);
+        // The lengths of the columns: a longer value was refused by the database with an unexpected
+        // error, and the form was lost with it.
+        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = 300;
+        _shortName.MaxLength = 60;
+        _aliases.MaxLength = 500;
 
         // --- classification --------------------------------------------------------------------
 
@@ -102,6 +108,8 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _loinc = TextField("Catalog.Loinc", 152, 236, 160, _stored?.LoincCode, latin: true, mono: true);
         _actCode = TextField("Catalog.NationalActCode", 324, 236, 160, existing?.NationalActCode,
                         latin: true, mono: true);
+        _loinc.MaxLength = 20;
+        _actCode.MaxLength = 30;
 
         _consent = Choice("Catalog.ConsentRequired", 496, 236, 216,
                           existing?.ConsentRequirement ?? ConsentRequirement.None,
@@ -111,6 +119,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         _methodFr = TextField("Catalog.Method", 20, 280, 340, _stored?.Method?.Fr);
         _reagent = TextField("Catalog.ReagentReference", 372, 280, 340, _stored?.ReagentReference);
+        _methodFr.MaxLength = _reagent.MaxLength = 200;
 
         _accredited = Check("Catalog.Accredited", 20, 334, existing?.IsAccredited ?? false);
         _subcontracted = Check("Catalog.Subcontracted", 20, 358, existing?.IsSubcontracted ?? false);
@@ -151,6 +160,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         _clinicalInfo = TextField("Catalog.RequiredClinicalInformation", 20, 540, 692,
                                   _stored?.RequiredClinicalInformation?.Fr);
+        _clinicalInfo.MaxLength = 500;
 
         // --- price ------------------------------------------------------------------------------
         // The laboratory's own price list (patients paying themselves, and the fallback for any
@@ -160,6 +170,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         _letterKey = TextField("Billing.LetterKey", 20, 612, 70, labTariff?.LetterKey ?? "B",
                                latin: true, mono: true);
+        _letterKey.MaxLength = 5;
         _letterKey.CharacterCasing = CharacterCasing.Upper;
 
         _coefficient = TextField("Billing.Coefficient", 102, 612, 100,
@@ -420,6 +431,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _code.ReadOnly = !_isNew;
         if (!_isNew) _code.BackColor = UiTheme.SurfaceSunken;
         _code.CharacterCasing = CharacterCasing.Upper;
+        _code.MaxLength = 30;
 
         _valueType = Choice("Catalog.ValueType", 172, 16, 200,
                             existing?.ValueType ?? ResultValueType.Numeric, "ResultValueType");
@@ -451,6 +463,11 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _shortName = TextField("Catalog.ShortName", 20, 130, 160, _stored?.ShortName?.Fr);
         _loinc = TextField("Catalog.Loinc", 192, 130, 160, _stored?.LoincCode,
                            latin: true, mono: true);
+        // The lengths of the columns: a longer value was refused by the database with an unexpected
+        // error, and the form was lost with it.
+        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = 300;
+        _shortName.MaxLength = 60;
+        _loinc.MaxLength = 20;
         _cv = TextField("Catalog.AnalyticalCv", 364, 130, 100,
                    existing?.AnalyticalCvPercent?.ToString("0.##"), latin: true, right: true);
 
@@ -488,6 +505,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
 
         _formula = TextField("Catalog.Formula", 20, 320, 712, existing?.CalculationFormula,
                         latin: true, mono: true);
+        _formula.MaxLength = 1000;
 
         _formulaNotice = Notice(20, 366, 712, 34, "Catalog.FormulaNotice");
 
@@ -918,6 +936,7 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
 
         _expectedCoded = TextField("Catalog.ExpectedCodedValue", 284, 158, 180,
                               existing?.ExpectedCodedValue);
+        _expectedCoded.MaxLength = 60;
 
         _decisionThreshold = Check("Catalog.DecisionThreshold", 480, 176,
                                    existing?.IsDecisionThreshold ?? false);
@@ -925,12 +944,16 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
         _displayFr = TextField("Catalog.PrintedInterval", 20, 212, 320,
                           existing?.DisplayText?.Fr);
         _displayAr = TextField("Field.NameAr", 352, 212, 316, existing?.DisplayText?.Ar, arabic: true);
+        // The lengths of the columns: a longer value was refused by the database with an unexpected
+        // error, and the form was lost with it.
+        _displayFr.MaxLength = _displayAr.MaxLength = 200;
 
         Notice(20, 256, 648, 20, "Catalog.PrintedIntervalNotice");
 
         // --- provenance and validity -------------------------------------------------------------
 
         _source = TextField("Catalog.RangeSource", 20, 284, 400, existing?.Source);
+        _source.MaxLength = 300;
 
         _reviewed = OptionalDate("Catalog.LastReviewed", 436, 302, existing?.LastReviewedOn,
                                   max: today.ToDateTime(TimeOnly.MinValue));
@@ -1111,6 +1134,7 @@ internal sealed class RangeReviewDialog : Form
 
         _source.Location = new Point(20, 116);
         _source.Text = range.Source ?? string.Empty;
+        _source.MaxLength = 300;
 
         var stamp = new Label
         {
@@ -1222,6 +1246,7 @@ internal sealed class TariffEditorDialog : MasterDataEditor
 
         _letterKey = TextField("Billing.LetterKey", 20, 110, 80, editing?.LetterKey ?? "B",
                                latin: true, mono: true);
+        _letterKey.MaxLength = 5;
         _letterKey.CharacterCasing = CharacterCasing.Upper;
 
         _coefficient = TextField("Billing.Coefficient", 112, 110, 120,

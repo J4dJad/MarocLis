@@ -581,8 +581,15 @@ internal static class AdminDialogFrame
 
         form.SuspendLayout();
 
+        var width = form.ClientSize.Width;
+
         if (absolute)
         {
+            // Wider by the scroll bar: the fields were drawn to the dialog's full width, and the bar
+            // took its last pixels, which added a horizontal bar and hid the edge of a column (in
+            // Arabic, the whole layout opened scrolled sideways).
+            width += SystemInformation.VerticalScrollBarWidth;
+
             var body = new Panel
             {
                 AutoScroll = true,
@@ -601,7 +608,7 @@ internal static class AdminDialogFrame
             body.BringToFront();
         }
 
-        form.ClientSize = new Size(form.ClientSize.Width, available);
+        form.ClientSize = new Size(width, available);
         form.ResumeLayout(performLayout: true);
     }
 

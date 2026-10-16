@@ -470,7 +470,7 @@ public sealed class AccidentView : LocalizedView
     private async Task CloseAsync()
     {
         if (_current is not { } a || a.Request.AccidentId is not { } id) return;
-        var note = _dialogs.PromptForText(T("Accident.ClosePrompt"), $"{T("Accident.Close")} — {a.Number}");
+        var note = _dialogs.PromptForText(T("Accident.ClosePrompt"), $"{T("Accident.Close")} — {a.Number}", maxLength: 1000);
         if (note is null) return;
         await Run(() => _accidents.CloseAsync(id, note), _close.Text);
     }
@@ -545,13 +545,17 @@ internal sealed class AccidentDialog : MasterDataEditor
         _time.Value = DateTime.Today + (r?.OccurredAt ?? now).TimeOfDay;
         Controls.AddRange([_date, _time]);
         _place = TextField("Accident.Place", 380, 62, 360, r?.Place);
+        _place.MaxLength = 200;
 
         _circumstances = TextField("Accident.Circumstances", 20, 114, 720, r?.Circumstances);
         _circumstances.Multiline = true;
         _circumstances.Height = 60;
         _circumstances.ScrollBars = ScrollBars.Vertical;
+        _circumstances.MaxLength = 2000;
         _injuries = TextField("Accident.Injuries", 20, 196, 450, r?.Injuries);
         _witnesses = TextField("Accident.Witnesses", 490, 196, 250, r?.Witnesses);
+        _injuries.MaxLength = 1000;
+        _witnesses.MaxLength = 500;
         _firstAid = Check("Accident.FirstAid", 20, 250, r?.FirstAidGiven ?? false);
 
         _exposure = Choice("Accident.Exposure", 20, 280, 340, r?.Exposure ?? ExposureType.Needlestick, "ExposureType");
@@ -561,11 +565,14 @@ internal sealed class AccidentDialog : MasterDataEditor
 
         _insurer = TextField("Accident.Insurer", 20, 340, 340, r?.InsurerName ?? lastInsurer);
         _claim = TextField("Accident.ClaimNumber", 380, 340, 170, r?.InsurerClaimNumber);
+        _insurer.MaxLength = 150;
+        _claim.MaxLength = 60;
         _declared = OptionalDate("Accident.DeclaredOn", 560, 340, r?.DeclaredToInsurerOn, max: now.Date);
         _subrogation = Check("Accident.SubrogationAsk", 20, 396, r?.Subrogation ?? false);
         _rate = TextField("Accident.Incapacity", 560, 392, 180,
                           r?.IncapacityRate?.ToString("0.##", CultureInfo.InvariantCulture), mono: true, right: true);
         _note = TextField("Field.Notes", 20, 444, 720, r?.Note);
+        _note.MaxLength = 1000;
 
         Notice(20, 498, 720, 64, "Accident.Notice");
         Buttons(578, 760);
@@ -724,6 +731,7 @@ internal sealed class AccidentLogDialog : MasterDataEditor
         _text = TextField("Accident.EventText", 20, 62, 520);
         _text.Multiline = true;
         _text.Height = 70;
+        _text.MaxLength = 1000;
         Buttons(186, 560);
         QhDialog.Dress(this, localizer, "QualityHr.Hint.AccidentLog");
     }

@@ -96,29 +96,40 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
         _lastName = TextField("Personnel.LastName", c1, y, w, r?.LastName);
         _firstName = TextField("Personnel.FirstName", c2, y, w, r?.FirstName);
         _arabicName = TextField("Personnel.ArabicName", c3, y, w, r?.FullNameArabic, arabic: true);
+        // The lengths of the columns: a longer value was refused by the database with an unexpected
+        // error, and the form was lost with it.
+        _lastName.MaxLength = _firstName.MaxLength = 100;
+        _arabicName.MaxLength = 200;
 
         y += 52;
         _gender = Choice("Field.Gender", c1, y, w, r?.Gender ?? Gender.Unknown, "Gender");
         _birth = OptionalDate("Personnel.BirthDate", c2, y - 2, r?.BirthDate, max: DateTime.Today);
         _cin = TextField("Personnel.Cin", c3, y, w, r?.Cin, latin: true, mono: true);
+        _cin.MaxLength = 20;
 
         y += 52;
         _cnss = TextField("Personnel.Cnss", c1, y, w, r?.CnssNumber, latin: true, mono: true);
+        _cnss.MaxLength = 20;
         _family = Choice("Personnel.FamilyStatus", c2, y, w, r?.FamilyStatus ?? FamilyStatus.Unmarried, "FamilyStatus");
-        _children = Number("Personnel.Children", c3, y, 80, r?.DependentChildren ?? 0, max: 20);
+        _children = Number("Personnel.Children", c3, y, 120, r?.DependentChildren ?? 0, max: 20);
 
         y += 52;
         _phone = TextField("Field.Phone", c1, y, w, r?.Phone, latin: true);
         _email = TextField("Field.Email", c2, y, w, r?.Email, latin: true);
         _city = TextField("Personnel.City", c3, y, w, r?.City);
+        _phone.MaxLength = 30;
+        _email.MaxLength = 200;
+        _city.MaxLength = 100;
 
         y += 52;
         _address = TextField("Personnel.Address", c1, y, FormWidth - 40, r?.Address);
+        _address.MaxLength = 300;
 
         y += 58;
         Section("Personnel.Position", y); y += 22;
         _job = Choice("Personnel.Job", c1, y, w, r?.Job ?? EmployeeJob.Technician, "EmployeeJob");
         _jobTitle = TextField("Personnel.JobTitle", c2, y, w, r?.JobTitle);
+        _jobTitle.MaxLength = 150;
         _department = Lookup("Field.Department", c3, y, w,
                              lookups.Departments.Select(d => (d.Id, d.Label)), r?.DepartmentId);
 
@@ -151,7 +162,7 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
 
         y += 52;
         _trialEnd = OptionalDate("Personnel.TrialEnd", c1, y - 2, r?.TrialPeriodEndDate);
-        _weeklyHours = Number("Personnel.WeeklyHours", c2, y, 80, r?.WeeklyHours ?? 44m, max: 60m, decimals: 2);
+        _weeklyHours = Number("Personnel.WeeklyHours", c2, y, 120, r?.WeeklyHours ?? 44m, max: 60m, decimals: 2);
 
         var endNotice = Notice(c3, y + 4, w, 34, "Personnel.ContractEndNotice", UiTheme.Abnormal);
         void RefreshEndNotice() => endNotice.Visible = Employee.RequiresEndDate(Selected<ContractType>(_contract));
@@ -172,6 +183,8 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
                                 latin: true, right: true);
             _rib = TextField("Personnel.Rib", c2, y, w, r?.Rib, latin: true, mono: true);
             _bank = TextField("Personnel.Bank", c3, y, w, r?.BankName);
+            _rib.MaxLength = 30;
+            _bank.MaxLength = 100;
             y += 58;
         }
         else
@@ -565,6 +578,9 @@ internal sealed class CredentialEditorDialog : MasterDataEditor
                                  max: DateTime.Today);
         _expires = OptionalDate("Credential.ExpiresOn", 270, 164, null);
         _note = TextField("Field.Notes", 20, 216, 480);
+        _title.MaxLength = _issuer.MaxLength = 200;
+        _reference.MaxLength = 60;
+        _note.MaxLength = 500;
         Notice(20, 266, 480, 34, "Credential.NoDiagnosisNotice");
 
         if (existing is not null)
@@ -666,6 +682,7 @@ internal sealed class EmployeeExitDialog : MasterDataEditor
 
         _reason = Choice("Personnel.ExitReason", 270, 10, 230, current?.Reason ?? ExitReason.Resignation, "ExitReason");
         _comment = TextField("Field.Comment", 20, 64, 480, current?.Comment);
+        _comment.MaxLength = 500;
         Notice(20, 116, 480, 40, "Personnel.ExitNoticeAfterLastDay", UiTheme.Abnormal);
 
         Buttons(200, 520);
@@ -747,6 +764,7 @@ internal sealed class HabilitationGrantDialog : MasterDataEditor
                                DateOnly.FromDateTime(DateTime.Today.AddYears(1)), min: DateTime.Today);
 
         _evidence = TextField("Habilitation.Evidence", 20, 166, 520);
+        _evidence.MaxLength = 500;
         Notice(20, 216, 520, 70, "Habilitation.SignatureNotice");
 
         _activity.SelectedIndexChanged += (_, _) => FillSubjects(null);
@@ -838,6 +856,7 @@ internal sealed class SettlementDialog : MasterDataEditor
             : localizer["Settlement.SeveranceNotDue"]);
 
         _note = TextField("Field.Notes", 20, 252, 680, a.Note);
+        _note.MaxLength = 500;
 
         _total = new Label { Font = UiTheme.BodyBold, ForeColor = UiTheme.TextPrimary, AutoSize = false, Bounds = new Rectangle(20, 306, 680, 22) };
         Controls.Add(_total);

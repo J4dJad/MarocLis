@@ -35,7 +35,7 @@ public sealed class ReviewFixesRound3RestTests
 
     private static PersonnelService Personnel(Employee employee, InMemoryRepository<FinalSettlement> settlements,
                                               InMemoryRepository<LeaveLedgerEntry> ledger) =>
-        new(Repo(employee), new InMemoryRepository<CredentialFile>(), settlements, ledger, null!,
+        new(Repo(employee), new InMemoryRepository<CredentialFile>(), settlements, ledger, new InMemoryRepository<LeaveRequest>(), null!,
             new FakeHrDocumentQueries(), null!, new FakeUnitOfWork(), new AllowAll(),
             new FakeUser(Permissions.HumanResources.Manage), new FixedClock());
 

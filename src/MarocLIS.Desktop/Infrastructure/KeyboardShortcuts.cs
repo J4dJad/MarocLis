@@ -119,8 +119,8 @@ public sealed class KeyboardShortcuts
         {
             >= Keys.D0 and <= Keys.D9 => ((char)('0' + (code - Keys.D0))).ToString(),
             >= Keys.NumPad0 and <= Keys.NumPad9 => ((char)('0' + (code - Keys.NumPad0))).ToString(),
-            Keys.Return => "Entrée",
-            Keys.Delete => "Suppr",
+            Keys.Return => localizer["Shortcut.EnterKey"],
+            Keys.Delete => localizer["Shortcut.DeleteKey"],
             Keys.Oemcomma => ",",
             Keys.OemPeriod => ".",
             Keys.OemMinus => "-",

@@ -478,6 +478,7 @@ internal sealed class ShiftDialog : MasterDataEditor
         Controls.Add(_hours);
 
         _note = TextField("Field.Notes", 20, 84, 480, current?.Note);
+        _note.MaxLength = 300;
         Notice(20, 138, 480, 56, "Planning.ShiftNotice");
 
         SetHours(current?.Start, current?.End);

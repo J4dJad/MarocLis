@@ -609,6 +609,7 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
         _advance = Field("Payroll.Advance", 220, 114, v.AdvanceDeduction);
         _other = Field("Payroll.OtherDeduction", 420, 114, v.OtherDeduction);
         _note = TextField("Field.Notes", 20, 166, 580, v.Note);
+        _note.MaxLength = 300;
 
         var a = row.Amounts;
         var fr = CultureInfo.GetCultureInfo("fr-FR");
@@ -702,6 +703,7 @@ internal sealed class PayrollParametersDialog : MasterDataEditor
         ];
 
         _scale = TextField("PayrollRate.Scale", 20, 270, 660, p.IncomeTaxScale, latin: true, mono: true);
+        _scale.MaxLength = 300;
         Notice(20, 322, 660, 84, "PayrollRate.Notice");
         Buttons(414, 700);
         QhDialog.Dress(this, localizer, null);

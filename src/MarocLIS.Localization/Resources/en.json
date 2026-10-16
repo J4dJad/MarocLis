@@ -329,6 +329,7 @@
   "Employee_ExitAlreadyEffective": "The departure of {0} has already taken effect: it can no longer be corrected or withdrawn. Use the rehire.",
   "Employee_ExitSettled": "The final settlement of the departure of {0} is signed or already paid (the month's payroll is closed): the departure can no longer be corrected or withdrawn.",
   "Employee_ExitCancelReasonRequired": "A reason is required to withdraw the departure.",
+  "Employee_LeaveAfterExit": "A leave asked for or approved ({0} – {1}) falls after the exit date of {2}: cancel it in \"Leave and absences\" or date the exit after it.",
   "Recollection_ContactNoteRequired": "Enter the outcome of the call.",
   "Recollection_AlreadyDrawn": "Tube {0} has already been drawn or withdrawn: the list has been refreshed.",
   "Messaging_EmailNotConfigured": "E-mail (SMTP) is not configured.",
@@ -2376,6 +2377,8 @@
   },
 
   "Shortcut": {
+    "DeleteKey": "Del",
+    "EnterKey": "Enter",
     "ShiftKey": "Shift",
     "Screen": "Open: {0}",
     "Refresh": "Refresh the screen",

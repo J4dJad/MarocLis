@@ -1263,7 +1263,7 @@ public sealed class SettingsView : LocalizedView
 
         var answer = _dialogs.PromptForText(
             T("Admin.SequenceFormatPrompt", T($"SequencePurpose.{row.Purpose}")),
-            T("Admin.EditSequenceFormat"), row.Format);
+            T("Admin.EditSequenceFormat"), row.Format, maxLength: 100);
 
         if (string.IsNullOrWhiteSpace(answer) || answer.Trim() == row.Format) return;
 

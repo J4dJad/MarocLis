@@ -292,6 +292,7 @@ public sealed class PersonnelService(
     IRepository<CredentialFile> credentialFiles,
     IRepository<FinalSettlement> settlements,
     IRepository<LeaveLedgerEntry> ledger,
+    IRepository<LeaveRequest> leaveRequests,
     IPersonnelQueries queries,
     IHrDocumentQueries hrQueries,
     ISequenceAllocator sequences,
@@ -465,6 +466,9 @@ public sealed class PersonnelService(
         var employee = await employees.GetByIdWithDetailsAsync(employeeId, ct);
         if (employee is null) return Result.Failure(Error.NotFound("Employee_NotFound"));
 
+        var leave = await LeaveAfterExitAsync(employeeId, on, ct);
+        if (leave.IsFailure) return leave;
+
         var done = employee.RecordExit(on, reason, comment);
         if (done.IsFailure) return done;
 
@@ -490,6 +494,12 @@ public sealed class PersonnelService(
 
         var settled = await PendingSettlementAsync(employee, before, ct);
         if (settled.IsFailure) return settled;
+
+        if (on < before)
+        {
+            var leave = await LeaveAfterExitAsync(employeeId, on, ct);
+            if (leave.IsFailure) return leave;
+        }
 
         var beforeReason = employee.ExitReason;
         var done = employee.CorrectExit(on, reason, comment, clock.Today);
@@ -540,6 +550,27 @@ public sealed class PersonnelService(
         unitOfWork.AuditReason = $"Sortie de {employee.Number} ({employee.FullName}) du {before:dd/MM/yyyy} annulée : {reason.Trim()}";
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Refuses a departure before a leave still asked for or approved and not started: the leave
+    /// would stay booked on days no longer worked, and its days, taken off the account, would be
+    /// missing from the indemnity the settlement pays. The leave is cancelled first (its days come
+    /// back) or the exit is dated after it. A leave already running cannot be cancelled and does
+    /// not stop the exit.
+    /// </summary>
+    private async Task<Result> LeaveAfterExitAsync(Guid employeeId, DateOnly exit, CancellationToken ct)
+    {
+        var today = clock.Today;
+        var clash = (await leaveRequests.ListAsync(r => r.EmployeeId == employeeId && r.EndDate > exit
+                                                        && (r.Status == LeaveStatus.Pending
+                                                            || (r.Status == LeaveStatus.Approved && r.StartDate > today)), ct))
+            .OrderBy(r => r.StartDate)
+            .FirstOrDefault();
+
+        return clash is null
+            ? Result.Success()
+            : Result.Failure(Error.Conflict("Employee_LeaveAfterExit", clash.StartDate, clash.EndDate, exit));
     }
 
     /// <summary>
