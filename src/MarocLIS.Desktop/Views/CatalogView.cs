@@ -166,7 +166,7 @@ public sealed class CatalogView : LocalizedView
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
-            SplitterDistance = 600,
+            SplitterDistance = 570,
             SplitterWidth = AdminLayout.Gap,
             BackColor = UiTheme.Surface
         };
@@ -175,7 +175,7 @@ public sealed class CatalogView : LocalizedView
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            SplitterDistance = 230,
+            SplitterDistance = 300,
             SplitterWidth = AdminLayout.Gap,
             BackColor = UiTheme.Surface
         };
@@ -185,8 +185,11 @@ public sealed class CatalogView : LocalizedView
         inner.Panel1.Controls.Add(Section(_parameterHeading, _parameters, [_editParameter, _newParameter], null,
                                           footer: true));
 
-        inner.Panel2.Controls.Add(Section(_rangeHeading, _ranges, [_reviewRange, _editRange, _newRange], null,
-                                          footer: true));
+        // The review beside the title, editing along the foot: one row each at 1366x768.
+        AdminLayout.ListGrid(_ranges);
+        inner.Panel2.Controls.Add(AdminLayout.CardSection(_rangeHeading, _ranges,
+                                                          AdminLayout.Actions(null, _reviewRange),
+                                                          AdminLayout.Actions(null, _editRange, _newRange)));
 
         outer.Panel2.Controls.Add(inner);
 
