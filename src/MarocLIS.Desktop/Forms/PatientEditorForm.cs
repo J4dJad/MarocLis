@@ -182,6 +182,18 @@ public sealed class PatientEditorForm : LocalizedForm
         _tabs.TabPages.AddRange([_identityTab, _contactTab, _clinicalTab, _coverageTab,
                                  _consentTab, _alertTab]);
 
+        // The lengths of the patient's columns: a longer name, address or treatment pasted in
+        // failed the save with an unexpected error and lost the whole form.
+        foreach (var (box, length) in new[]
+                 {
+                     (_lastName, 120), (_firstName, 120), (_lastNameAr, 120), (_firstNameAr, 120),
+                     (_placeOfBirth, 120), (_cin, 20), (_passport, 30), (_nationality, 2),
+                     (_guardianName, 200), (_guardianCin, 20), (_guardianRelationship, 60),
+                     (_address, 400), (_city, 100), (_postalCode, 10), (_mobile, 20), (_altPhone, 20),
+                     (_email, 200), (_treatment, 1000), (_allergies, 500)
+                 })
+            box.MaxLength = length;
+
         _save.Bounds = new Rectangle(12, 600, 240, UiTheme.ButtonHeight);
         _cancel.Bounds = new Rectangle(262, 600, 140, UiTheme.ButtonHeight);
 
@@ -1190,7 +1202,7 @@ public sealed class PatientEditorForm : LocalizedForm
 
         var reason = _dialogs.PromptForReason(
             T("Consent.WithdrawPrompt", T($"ConsentPurpose.{row.Purpose}")),
-            T("Consent.Withdraw"));
+            T("Consent.Withdraw"), maxLength: 500);
 
         if (reason is null) return;
 

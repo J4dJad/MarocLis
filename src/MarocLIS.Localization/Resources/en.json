@@ -4970,6 +4970,7 @@
   "Claim_OutcomeSkippedSettled": "Invoice {0} already has its payer settlement recorded: the batch-level answer does not change it.",
   "Claim_MixedPayers": "Invoice {0} belongs to a different payer than the rest of the batch: a batch covers a single payer, so it must be sent separately.",
   "Claim_SettledRecordedPerInvoice": "\"Settled\" cannot be recorded as a batch answer: it records no amount. Enter the amount accepted by the payer invoice by invoice; the status then becomes \"Settled\".",
+  "Claim_ShortfallPaidByPatient": "Invoice {0}: the patient has already paid {1} MAD of the share the payer refused. Refund the patient before sending the invoice to the payer again.",
 
   "Sample_StorageLocationRequired": "The storage location is mandatory.",
   "Sample_DiscardNoteRequired": "Discarding a sample must be justified: it ends any possibility of a repeat.",

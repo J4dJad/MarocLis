@@ -1204,7 +1204,8 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
         _order = TextField("Admin.OrderNumber", 20, 122, 200, row?.ProfessionalOrderNumber,
                        latin: true, mono: true);
         _inpe = TextField("Site.Inpe", 240, 122, 170, row?.Inpe, latin: true, mono: true);
-        _ice = TextField("Site.Ice", 430, 122, 170, _stored?.Ice, latin: true, mono: true);
+        // Clear of the INPE caption, which runs past its box in Arabic.
+        _ice = TextField("Site.Ice", 470, 122, 170, _stored?.Ice, latin: true, mono: true);
 
         _inpeNotice = Notice(20, 174, 680, 30, "Order.InpeNotice", UiTheme.Abnormal);
 

@@ -105,7 +105,9 @@ public sealed record OrderItemDetail(
                                             or LabOrderItemStatus.Cancelled);
 
     /// <summary>Mirrors <see cref="LabOrderItem.Repeat"/>.</summary>
-    public bool CanRepeat => Status is not (LabOrderItemStatus.Validated
+    public bool CanRepeat => Status is not (LabOrderItemStatus.Pending
+                                            or LabOrderItemStatus.Collected
+                                            or LabOrderItemStatus.Validated
                                             or LabOrderItemStatus.Reported
                                             or LabOrderItemStatus.Cancelled);
 

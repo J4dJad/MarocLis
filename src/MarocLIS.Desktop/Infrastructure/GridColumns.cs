@@ -28,7 +28,8 @@ public static class GridColumns
 {
     private const int HeaderSlack = 24;   // header padding plus a sort glyph
     private const int CellSlack = 16;     // cell padding
-    private const int MaxMinimum = 220;
+    // An invoice number of the default site, « FAC/PRINCIPAL/2026/000005 », needs about 230.
+    private const int MaxMinimum = 260;
     private const int MaxTextMinimum = 170;
     private const int SampledRows = 200;
 

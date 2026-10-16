@@ -166,6 +166,8 @@ public sealed class CashSessionView : LocalizedView
         _counted.Width = 200;
 
         _explanation.Width = 420;
+        // The longest explanation its column holds: a longer one failed the closing with an unexpected error.
+        _explanation.MaxLength = 1000;
 
         var countForm = new FlowLayoutPanel
         {

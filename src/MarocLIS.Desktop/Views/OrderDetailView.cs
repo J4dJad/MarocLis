@@ -2072,7 +2072,7 @@ public sealed class OrderDetailView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T("Order.CancelAnalysisPrompt", item.Code, item.Name.For(Localizer.CurrentLanguage)),
-            T("Order.CancelAnalysis"));
+            T("Order.CancelAnalysis"), maxLength: 500);
 
         if (reason is null) return;
 
@@ -2097,7 +2097,7 @@ public sealed class OrderDetailView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T("Order.RepeatAnalysisPrompt", item.Code, item.RunCount),
-            T("Order.RepeatAnalysis"));
+            T("Order.RepeatAnalysis"), maxLength: 500);
 
         if (reason is null) return;
 
@@ -2145,7 +2145,7 @@ public sealed class OrderDetailView : LocalizedView
             return;
 
         var reason = _dialogs.PromptForReason(
-            T("Order.CancelOrderPrompt", detail.AccessionNumber), T("Order.CancelOrder"));
+            T("Order.CancelOrderPrompt", detail.AccessionNumber), T("Order.CancelOrder"), maxLength: 500);
 
         if (reason is null) return;
 

@@ -124,6 +124,10 @@ internal sealed class AnalysisPickerDialog : Form
 
         CancelButton = cancel;
 
+        // A plain form, so the screens' column fitting is applied here: the codes and amounts came
+        // out as « BI… » and « 89… ».
+        GridColumns.Apply(this);
+
         _search.KeyDown += async (_, e) =>
         {
             if (e.KeyCode != Keys.Enter) return;
@@ -351,6 +355,14 @@ internal sealed class OrderHeaderDialog : Form
         _localizer = localizer;
         _dialogs = dialogs;
         _detail = detail;
+
+        // The lengths of the order's columns: a longer text failed the save with an unexpected error.
+        foreach (var (box, length) in new[]
+                 {
+                     (_prescriber, 200), (_clinical, 2000), (_diagnosis, 20), (_ward, 120), (_room, 60),
+                     (_note, 1000)
+                 })
+            box.MaxLength = length;
 
         Text = $"{localizer["Order.EditHeader"]} — {detail.AccessionNumber}";
         FormBorderStyle = FormBorderStyle.FixedDialog;

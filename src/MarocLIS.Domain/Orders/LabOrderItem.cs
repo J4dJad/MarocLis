@@ -330,10 +330,15 @@ public sealed class LabOrderItem : Entity, IAuditable
     /// could never be validated again. The validation is withdrawn first, by somebody entitled to
     /// withdraw it, and the analysis can then be repeated.
     /// </para>
+    /// <para>
+    /// Nor before its tube has reached the bench: a repeat sets the analysis back to received, and
+    /// an analysis whose tube was never drawn or never received showed as received on the worklist.
+    /// </para>
     /// </summary>
     public Result Repeat(string reason, DateTimeOffset at)
     {
-        if (Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported
+        if (Status is LabOrderItemStatus.Pending or LabOrderItemStatus.Collected
+                   or LabOrderItemStatus.Validated or LabOrderItemStatus.Reported
                    or LabOrderItemStatus.Cancelled)
             return Result.Failure(Error.Conflict("Item_CannotRepeatFromStatus", Status));
         if (string.IsNullOrWhiteSpace(reason))

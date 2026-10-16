@@ -762,7 +762,7 @@ public sealed class BillingView : LocalizedView
         var reason = _dialogs.PromptForReason(
             T(bounce ? "Payment.BouncePrompt" : "Payment.RefundPrompt",
               $"{payment.Amount:N2} DH", T($"PaymentMethod.{payment.Method}")),
-            T(bounce ? "Payment.MarkBounced" : "Payment.Refund"));
+            T(bounce ? "Payment.MarkBounced" : "Payment.Refund"), maxLength: 500);
 
         if (reason is null) return;
 
@@ -933,7 +933,7 @@ public sealed class BillingView : LocalizedView
             T("Deposit.RefundPrompt", order.AccessionNumber,
               Money.Of(held.Sum(d => d.Remaining)).Format(Localizer.CurrentLanguage),
               string.Join(", ", held.Select(d => $"{d.Number} ({T($"PaymentMethod.{d.Method}")})"))),
-            T("Deposit.Refund"));
+            T("Deposit.Refund"), maxLength: 500);
 
         if (reason is null) return;
 
@@ -1103,7 +1103,7 @@ public sealed class BillingView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T("Billing.CreditNoteReasonPrompt", invoice.Number),
-            T("Billing.CreditNote"), minimumLength: 10);
+            T("Billing.CreditNote"), minimumLength: 10, maxLength: 500);
 
         if (reason is null) return;
 
@@ -1403,6 +1403,9 @@ internal sealed class PaymentDialog : Form
         _referenceLabel.Location = new Point(20, 106);
         _reference.Bounds = new Rectangle(20, 124, 200, UiTheme.InputHeight);
         _reference.Tag = UiTags.LatinValue;
+        // The longest texts their columns hold: a longer one failed the save with an unexpected error.
+        _reference.MaxLength = 60;
+        _bank.MaxLength = 120;
 
         _bankLabel.Location = new Point(240, 106);
         _bank.Bounds = new Rectangle(240, 124, 160, UiTheme.InputHeight);

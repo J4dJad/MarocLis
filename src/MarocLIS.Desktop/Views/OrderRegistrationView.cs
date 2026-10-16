@@ -341,6 +341,9 @@ public sealed class OrderRegistrationView : LocalizedView
         }
 
         _clinicalInfo.Font = UiTheme.Body;
+        // The length of its column: a longer text failed the registration with an unexpected error.
+        _clinicalInfo.MaxLength = 2000;
+        _prescriber.MaxLength = 200;
         _selfPay.Font = UiTheme.Body;
         _selfPay.ForeColor = UiTheme.TextPrimary;
         _selfPay.AutoSize = true;

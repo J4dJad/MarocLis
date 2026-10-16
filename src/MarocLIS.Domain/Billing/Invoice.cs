@@ -428,6 +428,11 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     /// was meant to pay. The write-off is cancelled — not deleted, it stays on the record — and
     /// the payer's answer is cleared.
     /// </para>
+    /// <para>
+    /// Refused while the patient has already paid the share left to them: the payer would be asked
+    /// for money the laboratory holds, and its payment could not be entered on an invoice that is
+    /// settled. The patient is refunded first, then the claim goes out again.
+    /// </para>
     /// </summary>
     /// <param name="on">The day of the reopening: a refused share left to the patient goes back to the payer that day.</param>
     public Result ReopenRejectedClaim(string reason, DateOnly? on = null)
@@ -441,6 +446,15 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
             || _payments.Any(p => p.Method == PaymentMethod.ThirdPartyPayer
                                   && p.Status == PaymentStatus.Settled))
             return Result.Failure(Error.Conflict("Claim_SettlementAlreadyRecorded", Number));
+
+        // What would be owed once the write-offs are cancelled: the payer's share must fit in it.
+        var reopenedOutstanding = Money.Round(OutstandingAmount
+            + _payments.Where(p => p.Method == PaymentMethod.WriteOff && p.Status == PaymentStatus.Settled)
+                       .Sum(p => p.Amount));
+
+        if (reopenedOutstanding < PayerDueAmount)
+            return Result.Failure(Error.Conflict("Claim_ShortfallPaidByPatient", Number,
+                                                 Money.Round(PayerDueAmount - reopenedOutstanding)));
 
         foreach (var writeOff in _payments.Where(p => p.Method == PaymentMethod.WriteOff
                                                       && p.Status == PaymentStatus.Settled))

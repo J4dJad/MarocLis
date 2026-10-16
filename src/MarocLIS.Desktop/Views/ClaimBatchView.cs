@@ -590,16 +590,26 @@ public sealed class ClaimBatchView : LocalizedView
     /// Ticks every invoice that can actually be claimed, for the commonest action on this screen:
     /// send everything that is ready. Blocked invoices are left alone rather than ticked and then
     /// refused, so the selection is always submittable.
+    /// <para>
+    /// One payer at a time — the highlighted row's, or else the first one ready — since a batch
+    /// holds one payer. Ticking every payer's invoices at once left the transmission greyed out
+    /// as soon as the list held two payers, which is the usual case.
+    /// </para>
     /// </summary>
     private void SelectClaimable()
     {
         _candidates.EndEdit();
 
+        var payerId = _candidates.CurrentRow?.Tag is ClaimCandidateRow { IsClaimable: true } current
+            ? current.PayerId
+            : _candidates.Rows.Cast<DataGridViewRow>().Select(r => r.Tag).OfType<ClaimCandidateRow>()
+                .FirstOrDefault(c => c.IsClaimable)?.PayerId;
+
         foreach (DataGridViewRow row in _candidates.Rows)
         {
             if (row.Tag is not ClaimCandidateRow candidate) continue;
 
-            row.Cells[ColSelected].Value = candidate.IsClaimable;
+            row.Cells[ColSelected].Value = candidate.IsClaimable && candidate.PayerId == payerId;
         }
 
         RefreshSelectionSummary();

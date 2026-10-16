@@ -4971,6 +4971,7 @@
   "Claim_OutcomeSkippedSettled": "La facture {0} a déjà son règlement organisme saisi : le retour global du bordereau ne la modifie pas.",
   "Claim_MixedPayers": "La facture {0} relève d'un autre organisme que le reste du bordereau : un bordereau ne concerne qu'un seul organisme, elle sera transmise séparément.",
   "Claim_SettledRecordedPerInvoice": "« Réglé » ne s'enregistre pas comme retour de lot : il n'enregistre aucun montant. Saisissez le montant accepté par l'organisme facture par facture, le statut passe alors à « Réglé ».",
+  "Claim_ShortfallPaidByPatient": "Facture {0} : le patient a déjà réglé {1} DH de la part refusée par l'organisme. Remboursez-le avant de renvoyer la facture au tiers payant.",
 
   "Sample_StorageLocationRequired": "L'emplacement de rangement est obligatoire.",
   "Sample_DiscardNoteRequired": "L'élimination d'un échantillon doit être motivée : elle met fin à toute possibilité de reprise.",

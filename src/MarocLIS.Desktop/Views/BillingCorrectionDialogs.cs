@@ -139,6 +139,9 @@ internal sealed class ClaimOutcomeDialog : Form
         _localizer = localizer;
         _dialogs = dialogs;
 
+        // The longest text its column holds: a longer one failed the save with an unexpected error.
+        _reason.MaxLength = 500;
+
         Text = localizer["Billing.RecordClaimOutcome"];
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
@@ -293,6 +296,7 @@ internal sealed class InvoiceIssueDialog : Form
         _dialogs = dialogs;
         _gross = gross.Amount;
         _canDiscount = canDiscount;
+        _reason.MaxLength = 300;
 
         Text = localizer["Billing.IssueInvoice"];
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -495,6 +499,8 @@ internal sealed class PayerSettlementDialog : Form
         _localizer = localizer;
         _dialogs = dialogs;
         _invoice = invoice;
+        _remittance.MaxLength = 60;
+        _reason.MaxLength = 500;
 
         Text = $"{localizer["Claim.Settlement"]} — {invoice.Number}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
