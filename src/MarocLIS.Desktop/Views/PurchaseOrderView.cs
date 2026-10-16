@@ -650,7 +650,7 @@ public sealed class PurchaseOrderView : LocalizedView
 
             using var dialog = new SaveFileDialog
             {
-                Title = _savePdf.Text,
+                Title = UserDialogs.CaptionOf(_savePdf.Text, _savePdf.Text),
                 FileName = pdf.Value.FileName,
                 Filter = "PDF (*.pdf)|*.pdf",
                 DefaultExt = "pdf",

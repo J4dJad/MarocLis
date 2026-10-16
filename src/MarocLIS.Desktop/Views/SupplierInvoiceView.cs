@@ -584,7 +584,7 @@ public sealed class SupplierInvoiceView : LocalizedView
 
         using var picker = new OpenFileDialog
         {
-            Title = _attach.Text,
+            Title = UserDialogs.CaptionOf(_attach.Text, _attach.Text),
             Filter = $"{T("Credential.ScanFiles")} (*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff)|*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff",
             CheckFileExists = true
         };
