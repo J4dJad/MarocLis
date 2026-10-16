@@ -27,6 +27,9 @@ public sealed class CashSessionView : LocalizedView
     private readonly ILogger<CashSessionView>? _logger;
 
     private readonly Label _heading = new();
+    private readonly Label _openTitle = new();
+    private readonly Label _breakdownTitle = new();
+    private readonly Label _closingTitle = new();
     private readonly Panel _closedPanel = new();
     private readonly Panel _openPanel = new();
 
@@ -78,115 +81,141 @@ public sealed class CashSessionView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter * 2);
+        Padding = new Padding(24, 20, 24, 16);
 
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.Dock = DockStyle.Top;
-        _heading.Height = 40;
+        // The title, and the open session's operator, opening time and count of payments in grey.
+        var header = FinanceUi.PageHeader(_heading, _sessionInfo);
 
-        // --- no open session ------------------------------------------------------------------------
+        // --- no open session: a card to open one ----------------------------------------------------
 
-        _closedPanel.Dock = DockStyle.Top;
-        _closedPanel.Height = 150;
-        _closedPanel.BackColor = UiTheme.SurfaceRaised;
-        _closedPanel.Padding = new Padding(UiTheme.Gutter);
+        _closedPanel.Dock = DockStyle.Fill;
+        _closedPanel.BackColor = UiTheme.Surface;
         _closedPanel.Visible = false;
 
-        _openingFloatLabel.Font = UiTheme.Small;
-        _openingFloatLabel.ForeColor = UiTheme.TextSecondary;
-        _openingFloatLabel.AutoSize = true;
-        _openingFloatLabel.Location = new Point(UiTheme.Gutter, 20);
-
-        _openingFloat.Location = new Point(UiTheme.Gutter, 40);
         _openingFloat.Font = UiTheme.MonospaceBold;
         _openingFloat.TextAlign = HorizontalAlignment.Right;
         _openingFloat.Tag = UiTags.LatinValue;
         _openingFloat.Text = "0.00";
 
-        _open.Bounds = new Rectangle(UiTheme.Gutter, 84, 260, UiTheme.ButtonHeight);
+        var openForm = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            WrapContents = true,
+            Padding = new Padding(16, 4, 16, 16),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        openForm.Controls.Add(FinanceUi.Stacked(_openingFloatLabel, _openingFloat));
 
-        _closedPanel.Controls.AddRange([_openingFloatLabel, _openingFloat, _open]);
+        FinanceUi.Fit(_open);
+        _open.Margin = new Padding(0, 22, 0, 0);
+        openForm.Controls.Add(_open);
 
-        // --- open session ---------------------------------------------------------------------------
+        var openCard = new FinanceCard(openForm, FinanceUi.CardHeader(_openTitle, null))
+        {
+            Dock = DockStyle.Top,
+            Height = 160
+        };
+        _closedPanel.Controls.Add(openCard);
+
+        // --- open session: the takings, the count and the closing ---------------------------------
 
         _openPanel.Dock = DockStyle.Fill;
         _openPanel.BackColor = UiTheme.Surface;
         _openPanel.Visible = false;
-
-        _sessionInfo.Font = UiTheme.Body;
-        _sessionInfo.ForeColor = UiTheme.TextSecondary;
-        _sessionInfo.AutoSize = false;
-        _sessionInfo.Bounds = new Rectangle(0, 4, 700, 22);
 
         // The takings breakdown, monospaced so the columns line up and a total can be checked
         // by eye against the drawer.
         _breakdown.Font = UiTheme.Monospace;
         _breakdown.ForeColor = UiTheme.TextPrimary;
         _breakdown.AutoSize = false;
-        _breakdown.Bounds = new Rectangle(0, 34, 460, 170);
         _breakdown.BackColor = UiTheme.SurfaceRaised;
-        _breakdown.Padding = new Padding(UiTheme.Gutter);
+        _breakdown.Padding = new Padding(16, 4, 16, 12);
+        _breakdown.RightToLeft = RightToLeft.No;
 
-        _expectedLabel.Font = UiTheme.Small;
-        _expectedLabel.ForeColor = UiTheme.TextSecondary;
-        _expectedLabel.AutoSize = true;
-        _expectedLabel.Location = new Point(490, 40);
+        var breakdownCard = new FinanceCard(_breakdown, FinanceUi.CardHeader(_breakdownTitle, null));
 
-        _expected.Font = UiTheme.Mono(16f, FontStyle.Bold);
+        // The closing: what the drawer should hold, what was counted, the difference.
+        _expected.Font = UiTheme.Kpi;
         _expected.ForeColor = UiTheme.Accent;
-        _expected.AutoSize = true;
-        _expected.Location = new Point(490, 58);
+        _variance.Font = UiTheme.Kpi;
 
-        _countedLabel.Font = UiTheme.Small;
-        _countedLabel.ForeColor = UiTheme.TextSecondary;
-        _countedLabel.AutoSize = true;
-        _countedLabel.Location = new Point(490, 96);
+        var expectedTile = new KpiTile(_expected, _expectedLabel) { Margin = new Padding(0, 0, 8, 0) };
+        var varianceTile = new KpiTile(_variance, _varianceLabel) { Margin = new Padding(8, 0, 0, 0) };
 
-        _counted.Location = new Point(490, 114);
+        var tiles = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 92,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0),
+            Padding = new Padding(16, 4, 16, 12),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        tiles.Controls.Add(expectedTile, 0, 0);
+        tiles.Controls.Add(varianceTile, 1, 0);
+        // Inside a white card: the tiles take the sunken surface to stand out from it.
+        foreach (var tile in new Control[] { expectedTile, varianceTile }) tile.BackColor = UiTheme.SurfaceSunken;
+        foreach (var label in new[] { _expected, _expectedLabel, _variance, _varianceLabel }) label.BackColor = UiTheme.SurfaceSunken;
+
         _counted.Font = UiTheme.Mono(14f, FontStyle.Bold);
         _counted.TextAlign = HorizontalAlignment.Right;
-        _counted.Height = 30;
         _counted.Tag = UiTags.LatinValue;
+        _counted.Width = 200;
 
-        _varianceLabel.Font = UiTheme.Small;
-        _varianceLabel.ForeColor = UiTheme.TextSecondary;
-        _varianceLabel.AutoSize = true;
-        _varianceLabel.Location = new Point(490, 152);
+        _explanation.Width = 420;
 
-        _variance.Font = UiTheme.Mono(16f, FontStyle.Bold);
-        _variance.AutoSize = true;
-        _variance.Location = new Point(490, 170);
+        var countForm = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            WrapContents = true,
+            Padding = new Padding(16, 4, 16, 8),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        countForm.Controls.Add(FinanceUi.Stacked(_countedLabel, _counted));
 
-        _explanationLabel.Font = UiTheme.Small;
-        _explanationLabel.ForeColor = UiTheme.TextSecondary;
-        _explanationLabel.AutoSize = true;
-        _explanationLabel.Location = new Point(0, 218);
+        // The explanation appears only when it is required; its caption goes with it.
+        var explanation = FinanceUi.Stacked(_explanationLabel, _explanation);
+        _explanation.VisibleChanged += (_, _) => explanation.Visible = _explanation.Visible;
+        countForm.Controls.Add(explanation);
 
-        _explanation.Location = new Point(0, 236);
-        _explanation.Width = 680;
+        var closingBody = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised };
+        closingBody.Controls.Add(countForm);
+        closingBody.Controls.Add(tiles);
 
-        _close.Bounds = new Rectangle(0, 278, 260, UiTheme.ButtonHeight + 6);
-        _refresh.Bounds = new Rectangle(272, 278, 130, UiTheme.ButtonHeight + 6);
+        var closingCard = new FinanceCard(closingBody, FinanceUi.CardHeader(_closingTitle, null));
+
+        var cards = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0),
+            Padding = new Padding(0, 0, 0, 12),
+            BackColor = UiTheme.Surface
+        };
+        cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46));
+        cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 54));
+        cards.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        breakdownCard.Margin = new Padding(0, 0, 8, 0);
+        closingCard.Margin = new Padding(8, 0, 0, 0);
+        cards.Controls.Add(breakdownCard, 0, 0);
+        cards.Controls.Add(closingCard, 1, 0);
 
         // A counter does not hold a day's takings in the drawer. Without a way to record banking,
         // the expected cash at closing includes money already at the bank and every shift that
         // banked anything closes on a large unexplained variance.
-        _withdraw.Bounds = new Rectangle(412, 278, 250, UiTheme.ButtonHeight + 6);
+        var bar = FinanceUi.ActionBar(_status, [_refresh, _withdraw], _close);
+        UiChrome.AsCard(bar);
 
-        _status.Bounds = new Rectangle(0, 322, 680, 40);
-        _status.Font = UiTheme.Small;
-        _status.ForeColor = UiTheme.TextSecondary;
-        _status.AutoSize = false;
-
-        _openPanel.Controls.AddRange([_sessionInfo, _breakdown, _expectedLabel, _expected,
-                                      _countedLabel, _counted, _varianceLabel, _variance,
-                                      _explanationLabel, _explanation, _close, _refresh,
-                                      _withdraw, _status]);
+        _openPanel.Controls.Add(cards);
+        _openPanel.Controls.Add(bar);
 
         Controls.Add(_openPanel);
         Controls.Add(_closedPanel);
-        Controls.Add(_heading);
+        Controls.Add(header);
     }
 
     private void WireBehaviour()
@@ -207,6 +236,9 @@ public sealed class CashSessionView : LocalizedView
     protected override void ApplyTexts()
     {
         _heading.Text = T("Payment.CashSession");
+        _openTitle.Text = T("Payment.OpenSession");
+        _breakdownTitle.Text = T("Finance.SessionDetail");
+        _closingTitle.Text = T("Payment.CloseSession");
         _openingFloatLabel.Text = T("Payment.OpeningFloat");
         _open.Text = T("Payment.OpenSession");
         _expectedLabel.Text = T("Payment.ExpectedCash");
@@ -234,6 +266,7 @@ public sealed class CashSessionView : LocalizedView
                 _summary = null;
                 _closedPanel.Visible = true;
                 _openPanel.Visible = false;
+                _sessionInfo.Visible = false;
                 _openingFloat.Focus();
                 return;
             }
@@ -241,6 +274,7 @@ public sealed class CashSessionView : LocalizedView
             _summary = result.Value;
             _closedPanel.Visible = false;
             _openPanel.Visible = true;
+            _sessionInfo.Visible = true;
 
             RenderSummary(_summary);
             _counted.Focus();
