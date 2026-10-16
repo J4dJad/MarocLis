@@ -52,6 +52,11 @@ public sealed class RelationsView : LocalizedView
     private int _visitCount, _dueCount, _partnershipCount;
     private bool _loaded;
 
+    // The lists as last read, filled again on a language change: their purpose and state columns
+    // are translated, and stayed in the previous language until the next refresh.
+    private IReadOnlyList<DelegateVisitRow> _visitRows = [], _dueRows = [];
+    private IReadOnlyList<PartnershipRow> _partnershipRows = [];
+
     public RelationsView(RelationsService relations, ICurrentUser currentUser, IDocumentOutput output,
                          IUserDialogs dialogs, ILocalizer localizer, ICultureManager cultureManager,
                          ILogger<RelationsView>? logger = null)
@@ -198,7 +203,13 @@ public sealed class RelationsView : LocalizedView
             foreach (DataGridViewColumn column in grid.Columns)
                 column.HeaderText = T($"Relations.Column.{column.Name}");
 
-        if (_loaded) ShowCounts();
+        if (_loaded)
+        {
+            FillVisits(_visits, _visitRows);
+            FillVisits(_due, _dueRows);
+            FillPartnerships(_partnershipRows);
+            ShowCounts();
+        }
         UpdateButtons();
     }
 
@@ -215,10 +226,10 @@ public sealed class RelationsView : LocalizedView
             var due = await _relations.GetDueVisitsAsync(ct);
             var partnerships = await _relations.GetPartnershipsAsync(_inactive.Checked, ct);
 
-            FillVisits(_visits, visits.Value);
+            FillVisits(_visits, _visitRows = visits.Value);
             _visitCount = visits.Value.Count;
-            if (due.IsSuccess) { FillVisits(_due, due.Value); _dueCount = due.Value.Count; }
-            if (partnerships.IsSuccess) { FillPartnerships(partnerships.Value); _partnershipCount = partnerships.Value.Count; }
+            if (due.IsSuccess) { FillVisits(_due, _dueRows = due.Value); _dueCount = due.Value.Count; }
+            if (partnerships.IsSuccess) { FillPartnerships(_partnershipRows = partnerships.Value); _partnershipCount = partnerships.Value.Count; }
             _loaded = true;
             ShowCounts();
             UpdateButtons();
@@ -240,35 +251,43 @@ public sealed class RelationsView : LocalizedView
 
     private void FillVisits(DataGridView grid, IReadOnlyList<DelegateVisitRow> rows)
     {
-        grid.Rows.Clear();
-        foreach (var v in rows)
+        // Kept on the visit just edited: a save sent the list back to its first row.
+        grid.RebuildKeeping<DelegateVisitRow, Guid>(r => r.Id, () =>
         {
-            var index = grid.Rows.Add(Date(v.VisitDate), v.PrescriberName, v.Institution ?? string.Empty, v.DelegateName,
-                                      T($"VisitPurpose.{v.Purpose}"), v.Notes ?? string.Empty, Date(v.NextVisitOn));
-            grid.Rows[index].Tag = v;
-            if (v.NextVisitDue) grid.Rows[index].Cells["next"].Style.ForeColor = UiTheme.Overdue;
-        }
+            grid.Rows.Clear();
+            foreach (var v in rows)
+            {
+                var index = grid.Rows.Add(Date(v.VisitDate), v.PrescriberName, v.Institution ?? string.Empty, v.DelegateName,
+                                          T($"VisitPurpose.{v.Purpose}"), v.Notes ?? string.Empty, Date(v.NextVisitOn));
+                grid.Rows[index].Tag = v;
+                if (v.NextVisitDue) grid.Rows[index].Cells["next"].Style.ForeColor = UiTheme.Overdue;
+            }
+        });
     }
 
     private void FillPartnerships(IReadOnlyList<PartnershipRow> rows)
     {
-        _partnerships.Rows.Clear();
-        foreach (var p in rows)
+        // Kept on the agreement just edited or with its file just attached.
+        _partnerships.RebuildKeeping<PartnershipRow, Guid>(r => r.Id, () =>
         {
-            var state = !p.IsActive ? T("Relations.State.Inactive")
-                : p.EndingSoon ? T("Relations.State.EndingSoon")
-                : p.InForce ? T("Relations.State.InForce")
-                : T("Relations.State.NotInForce");
-            var index = _partnerships.Rows.Add(p.PartnerName, T($"PartnerKind.{p.PartnerKind}"),
-                                               T($"PartnershipKind.{p.Kind}"), p.Reference ?? string.Empty,
-                                               Date(p.StartDate), Date(p.EndDate), state,
-                                               p.DiscountPercent is { } d ? $"{d:0.##} %" : string.Empty,
-                                               string.Join(" · ", new[] { p.ContactName, p.ContactPhone }
-                                                   .Where(s => !string.IsNullOrWhiteSpace(s))),
-                                               p.FileName ?? string.Empty);
-            _partnerships.Rows[index].Tag = p;
-            if (p.EndingSoon) _partnerships.Rows[index].DefaultCellStyle.BackColor = UiTheme.AbnormalBackground;
-        }
+            _partnerships.Rows.Clear();
+            foreach (var p in rows)
+            {
+                var state = !p.IsActive ? T("Relations.State.Inactive")
+                    : p.EndingSoon ? T("Relations.State.EndingSoon")
+                    : p.InForce ? T("Relations.State.InForce")
+                    : T("Relations.State.NotInForce");
+                var index = _partnerships.Rows.Add(p.PartnerName, T($"PartnerKind.{p.PartnerKind}"),
+                                                   T($"PartnershipKind.{p.Kind}"), p.Reference ?? string.Empty,
+                                                   Date(p.StartDate), Date(p.EndDate), state,
+                                                   p.DiscountPercent is { } d ? $"{d:0.##} %" : string.Empty,
+                                                   string.Join(" · ", new[] { p.ContactName, p.ContactPhone }
+                                                       .Where(s => !string.IsNullOrWhiteSpace(s))),
+                                                   p.FileName ?? string.Empty);
+                _partnerships.Rows[index].Tag = p;
+                if (p.EndingSoon) _partnerships.Rows[index].DefaultCellStyle.BackColor = UiTheme.AbnormalBackground;
+            }
+        });
     }
 
     // ---- Visits --------------------------------------------------------------------------------------
@@ -328,7 +347,8 @@ public sealed class RelationsView : LocalizedView
     private async Task DeleteVisitAsync()
     {
         if (SelectedVisit is not { } visit) return;
-        var reason = _dialogs.PromptForReason(T("Message.ConfirmDelete", $"{Date(visit.VisitDate)} — {visit.PrescriberName}"));
+        var reason = _dialogs.PromptForReason(T("Message.ConfirmDelete", $"{Date(visit.VisitDate)} — {visit.PrescriberName}"),
+                                              maxLength: RelationsService.DeletionReasonMaxLength);
         if (reason is null) return;
 
         var deleted = await _relations.DeleteVisitAsync(visit.Id, reason);

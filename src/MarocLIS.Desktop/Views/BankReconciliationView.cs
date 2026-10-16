@@ -273,30 +273,36 @@ public sealed class BankReconciliationView : LocalizedView
 
     private void Render()
     {
-        _lines.Rows.Clear();
         _movements.Rows.Clear();
         RenderChip();
 
         if (_data is null)
         {
+            _lines.Rows.Clear();
             _summary.Text = _accountRows.Count == 0 ? T("Treasury.NoBankAccount") : string.Empty;
             RefreshButtons();
             return;
         }
 
-        foreach (var line in _data.Lines.Where(l => !_openOnly.Checked || !l.IsReconciled))
+        // Kept on the line just matched or justified, or on the next one when « open only » hides it:
+        // the list went back to its first line after each one.
+        _lines.RebuildKeeping<StatementLineRow, Guid>(r => r.Id, () =>
         {
-            var status = !line.IsReconciled
-                ? T("Treasury.Unreconciled")
-                : string.Join(", ", line.MatchKinds.Select(Kind))
-                  + (line.IsAutomatic ? $" ({T("Treasury.Automatic")})" : string.Empty)
-                  + (line.DifferenceMad != 0m ? $" — {T("Treasury.Difference")} {Amount(line.DifferenceMad)}" : string.Empty);
+            _lines.Rows.Clear();
+            foreach (var line in _data.Lines.Where(l => !_openOnly.Checked || !l.IsReconciled))
+            {
+                var status = !line.IsReconciled
+                    ? T("Treasury.Unreconciled")
+                    : string.Join(", ", line.MatchKinds.Select(Kind))
+                      + (line.IsAutomatic ? $" ({T("Treasury.Automatic")})" : string.Empty)
+                      + (line.DifferenceMad != 0m ? $" — {T("Treasury.Difference")} {Amount(line.DifferenceMad)}" : string.Empty);
 
-            var index = _lines.Rows.Add(line.OperationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                                        line.Label, line.Reference ?? string.Empty, Amount(line.AmountMad), status);
-            _lines.Rows[index].Tag = line;
-            if (line.MatchComment is { } comment) _lines.Rows[index].Cells["status"].ToolTipText = comment;
-        }
+                var index = _lines.Rows.Add(line.OperationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                                            line.Label, line.Reference ?? string.Empty, Amount(line.AmountMad), status);
+                _lines.Rows[index].Tag = line;
+                if (line.MatchComment is { } comment) _lines.Rows[index].Cells["status"].ToolTipText = comment;
+            }
+        });
 
         foreach (var movement in _data.UnmatchedMovements)
         {

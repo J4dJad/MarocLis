@@ -249,25 +249,29 @@ public sealed class PersonnelView : LocalizedView
                                || (r.JobTitle?.Contains(term, StringComparison.CurrentCultureIgnoreCase) ?? false));
 
         _grid.SuspendLayout();
-        _grid.Rows.Clear();
-
-        foreach (var row in rows)
+        // Kept on the file just edited, its departure just recorded or the language just switched.
+        _grid.RebuildKeeping<EmployeeRow, Guid>(r => r.EmployeeId, () =>
         {
-            var index = _grid.Rows.Add(
-                row.Number,
-                row.ExitDate is { } left
-                    ? $"{row.FullName}  ({T(OnStaff(row) ? "Personnel.LeavingOn" : "Personnel.ExitedOn", left.ToString("dd/MM/yyyy"))})"
-                    : row.FullName,
-                T($"EmployeeJob.{row.Job}"),
-                row.JobTitle ?? string.Empty,
-                row.DepartmentName ?? string.Empty,
-                T($"ContractType.{row.ContractType}"),
-                row.HireDate.ToString("dd/MM/yyyy"),
-                row.ContractEndDate?.ToString("dd/MM/yyyy") ?? "—",
-                row.UserName ?? string.Empty);
+            _grid.Rows.Clear();
 
-            _grid.Rows[index].Tag = row;
-        }
+            foreach (var row in rows)
+            {
+                var index = _grid.Rows.Add(
+                    row.Number,
+                    row.ExitDate is { } left
+                        ? $"{row.FullName}  ({T(OnStaff(row) ? "Personnel.LeavingOn" : "Personnel.ExitedOn", left.ToString("dd/MM/yyyy"))})"
+                        : row.FullName,
+                    T($"EmployeeJob.{row.Job}"),
+                    row.JobTitle ?? string.Empty,
+                    row.DepartmentName ?? string.Empty,
+                    T($"ContractType.{row.ContractType}"),
+                    row.HireDate.ToString("dd/MM/yyyy"),
+                    row.ContractEndDate?.ToString("dd/MM/yyyy") ?? "—",
+                    row.UserName ?? string.Empty);
+
+                _grid.Rows[index].Tag = row;
+            }
+        });
 
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();
@@ -637,6 +641,13 @@ public sealed class HabilitationView : LocalizedView
     {
         if (_matrix is null) return;
 
+        // The cell the operator was on, put back after the rebuild: a grant or a withdrawal used to
+        // send the matrix back to its first employee, with the detail and the actions beside it.
+        var keptEmployee = _grid.CurrentCell is { } before ? (_grid.Rows[before.RowIndex].Tag as EmployeeRow)?.EmployeeId : null;
+        (HabilitationActivity, Guid?)? keptColumn = _grid.CurrentCell is { ColumnIndex: >= 3 } c && c.ColumnIndex - 3 < _columns.Count
+            ? (_columns[c.ColumnIndex - 3].Activity, _columns[c.ColumnIndex - 3].SubjectId)
+            : null;
+
         // Every activity anyone holds gets a column; the collection activities are always there, as
         // they are the ones a new préleveur is placed on first.
         _columns =
@@ -694,6 +705,20 @@ public sealed class HabilitationView : LocalizedView
         }
 
         _grid.ResumeLayout(performLayout: true);
+
+        if (keptEmployee is { } employeeId
+            && _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => (r.Tag as EmployeeRow)?.EmployeeId == employeeId) is { } kept)
+        {
+            var column = keptColumn is { } key ? _columns.FindIndex(x => x.Activity == key.Item1 && x.SubjectId == key.Item2) : -1;
+            try
+            {
+                _grid.CurrentCell = kept.Cells[column >= 0 ? 3 + column : 0];
+            }
+            catch (InvalidOperationException)
+            {
+                // Mid-layout: the first row stays current.
+            }
+        }
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         _heading.Text = T("QualityHr.Habilitations.Count", _matrix.Employees.Count, _matrix.Habilitations.Count,
@@ -759,7 +784,7 @@ public sealed class HabilitationView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T("Habilitation.WithdrawPrompt", T($"HabilitationActivity.{h.Activity}"), employee.FullName),
-            _withdraw.Text);
+            _withdraw.Text, maxLength: 500);
         if (reason is null) return;
 
         var result = await _personnel.WithdrawAsync(employee.EmployeeId, h.HabilitationId, reason);
@@ -964,22 +989,27 @@ public sealed class PersonnelDeadlinesView : LocalizedView
         var today = DateOnly.FromDateTime(DateTime.Today);
 
         _grid.SuspendLayout();
-        _grid.Rows.Clear();
-
-        foreach (var row in _rows)
+        // Kept on the deadline just dealt with: its file edited, it moves or leaves the list.
+        _grid.RebuildKeeping<DeadlineRow, (Guid, DeadlineKind, HabilitationActivity?, string?)>(
+            r => (r.EmployeeId, r.Kind, r.Activity, r.Subject), () =>
         {
-            var state = row.DueOn is null ? T("Deadline.Missing")
-                      : row.IsOverdue ? T("Deadline.Overdue")
-                      : T("Deadline.InDays", row.DueOn.Value.DayNumber - today.DayNumber);
+            _grid.Rows.Clear();
 
-            var subject = row.Kind == DeadlineKind.HabilitationReview && row.Activity is { } activity
-                ? T($"HabilitationActivity.{activity}") + (row.Subject is null ? string.Empty : $" — {row.Subject}")
-                : row.Subject ?? string.Empty;
+            foreach (var row in _rows)
+            {
+                var state = row.DueOn is null ? T("Deadline.Missing")
+                          : row.IsOverdue ? T("Deadline.Overdue")
+                          : T("Deadline.InDays", row.DueOn.Value.DayNumber - today.DayNumber);
 
-            var index = _grid.Rows.Add(state, row.DueOn?.ToString("dd/MM/yyyy") ?? "—", row.Number, row.FullName,
-                                       T($"EmployeeJob.{row.Job}"), T($"DeadlineKind.{row.Kind}"), subject);
-            _grid.Rows[index].Tag = row;
-        }
+                var subject = row.Kind == DeadlineKind.HabilitationReview && row.Activity is { } activity
+                    ? T($"HabilitationActivity.{activity}") + (row.Subject is null ? string.Empty : $" — {row.Subject}")
+                    : row.Subject ?? string.Empty;
+
+                var index = _grid.Rows.Add(state, row.DueOn?.ToString("dd/MM/yyyy") ?? "—", row.Number, row.FullName,
+                                           T($"EmployeeJob.{row.Job}"), T($"DeadlineKind.{row.Kind}"), subject);
+                _grid.Rows[index].Tag = row;
+            }
+        });
 
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();

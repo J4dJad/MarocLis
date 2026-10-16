@@ -24,6 +24,7 @@ public sealed class HelpForm : LocalizedForm
     private readonly Button _print = UiTheme.SecondaryButton(string.Empty);
     private WebBrowser? _browser;
     private string? _screenTitle;
+    private string? _screenKey;
 
     public HelpForm(ILocalizer localizer, ICultureManager cultureManager, HelpCatalog catalog)
         : base(localizer, cultureManager)
@@ -105,6 +106,7 @@ public sealed class HelpForm : LocalizedForm
         if (_browser is null) return false;
 
         _screenTitle = screenTitle;
+        _screenKey = topic.Anchor;
         ApplyTexts();
 
         try
@@ -168,6 +170,9 @@ public sealed class HelpForm : LocalizedForm
 
     protected override void ApplyTexts()
     {
+        // On a language change the shell has the screen's title in the new language: the caption
+        // kept the old one beside translated buttons.
+        if (_screenKey is not null && _screenKey == HelpService.CurrentKey) _screenTitle = HelpService.CurrentTitle;
         Text = string.IsNullOrWhiteSpace(_screenTitle) ? T("Help.Title") : $"{T("Help.Title")} — {_screenTitle}";
         _back.Text = T("Help.Back");
         _forward.Text = T("Help.Forward");

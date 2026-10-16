@@ -207,9 +207,20 @@ public sealed class PatientMessagingView : LocalizedView
                 column.HeaderText = T($"Messaging.Column.{column.Name}");
 
         UpdateButtons();
+
+        // The rules (« Oui »/« Non ») and the log (kind, status) carry translated words that stayed
+        // in the previous language until the next refresh. The previews are left as they are: read
+        // again they would lose the patients the operator unticked.
+        if (_activated && (_tabs.SelectedTab == _rulePage || _tabs.SelectedTab == _logPage)) _ = LoadAsync();
     }
 
-    public override Task ActivateAsync(CancellationToken ct = default) => LoadAsync(ct);
+    private bool _activated;
+
+    public override Task ActivateAsync(CancellationToken ct = default)
+    {
+        _activated = true;
+        return LoadAsync(ct);
+    }
 
     // The reminder, survey and log lists name patients, their mobile and the analyses in the texts:
     // their export is in the data-access log, like any patient list that leaves as a file.
@@ -259,14 +270,18 @@ public sealed class PatientMessagingView : LocalizedView
             {
                 var rules = await _messaging.GetRulesAsync(ct);
                 if (rules.IsFailure) { _dialogs.ShowFailure(rules, Title); return; }
-                _rules.Rows.Clear();
-                var language = Localizer.CurrentLanguage;
-                foreach (var r in rules.Value)
+                // Kept on the rule just edited.
+                _rules.RebuildKeeping<ReminderRuleRow, Guid>(r => r.Id, () =>
                 {
-                    var i = _rules.Rows.Add(r.Code, r.Name.For(language), r.DelayMonths, r.WindowDays,
-                                            r.Template.For(language), r.IsActive ? T("Action.Yes") : T("Action.No"));
-                    _rules.Rows[i].Tag = r;
-                }
+                    _rules.Rows.Clear();
+                    var language = Localizer.CurrentLanguage;
+                    foreach (var r in rules.Value)
+                    {
+                        var i = _rules.Rows.Add(r.Code, r.Name.For(language), r.DelayMonths, r.WindowDays,
+                                                r.Template.For(language), r.IsActive ? T("Action.Yes") : T("Action.No"));
+                        _rules.Rows[i].Tag = r;
+                    }
+                });
             }
             else if (tab == _surveyPage)
             {

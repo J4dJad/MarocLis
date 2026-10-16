@@ -119,33 +119,37 @@ public sealed class AccountingSettingsView : LocalizedView
 
     private void Render(IReadOnlyDictionary<string, string?>? typed)
     {
-        _grid.Rows.Clear();
-
-        foreach (var row in _rows)
+        // Kept on the account just typed: saving sent the list back to its first row.
+        _grid.RebuildKeeping<AccountingSettingRow, string>(r => r.Key, () =>
         {
-            var argument = row.Argument is null ? null : row.ArgumentKey ? T(row.Argument) : row.Argument;
-            var label = argument is null ? T(row.LabelKey) : T(row.LabelKey, argument);
-            var value = typed is not null && typed.TryGetValue(row.Key, out var v) ? v : row.Value;
+            _grid.Rows.Clear();
 
-            var index = _grid.Rows.Add(T($"AccountingSection.{row.Section}"), label, value ?? string.Empty);
-            var gridRow = _grid.Rows[index];
-            gridRow.Tag = row;
-
-            if (row.Kind == AccountingSettingKind.PatientMode)
+            foreach (var row in _rows)
             {
-                var cell = new DataGridViewComboBoxCell
+                var argument = row.Argument is null ? null : row.ArgumentKey ? T(row.Argument) : row.Argument;
+                var label = argument is null ? T(row.LabelKey) : T(row.LabelKey, argument);
+                var value = typed is not null && typed.TryGetValue(row.Key, out var v) ? v : row.Value;
+
+                var index = _grid.Rows.Add(T($"AccountingSection.{row.Section}"), label, value ?? string.Empty);
+                var gridRow = _grid.Rows[index];
+                gridRow.Tag = row;
+
+                if (row.Kind == AccountingSettingKind.PatientMode)
                 {
-                    DisplayMember = nameof(ModeChoice.Display),
-                    ValueMember = nameof(ModeChoice.Value),
-                    DataSource = Enum.GetValues<PatientThirdPartyMode>()
-                                     .Select(m => new ModeChoice(m.ToString(), T($"PatientThirdPartyMode.{m}")))
-                                     .ToList(),
-                    FlatStyle = FlatStyle.Flat
-                };
-                gridRow.Cells[ColValue] = cell;
-                cell.Value = value;
+                    var cell = new DataGridViewComboBoxCell
+                    {
+                        DisplayMember = nameof(ModeChoice.Display),
+                        ValueMember = nameof(ModeChoice.Value),
+                        DataSource = Enum.GetValues<PatientThirdPartyMode>()
+                                         .Select(m => new ModeChoice(m.ToString(), T($"PatientThirdPartyMode.{m}")))
+                                         .ToList(),
+                        FlatStyle = FlatStyle.Flat
+                    };
+                    gridRow.Cells[ColValue] = cell;
+                    cell.Value = value;
+                }
             }
-        }
+        });
     }
 
     private IReadOnlyDictionary<string, string?> Values()

@@ -714,21 +714,25 @@ public sealed class MasterDataView : LocalizedView
     {
         if (_instruments.Columns.Count == 0) return;
 
-        _instruments.Rows.Clear();
-
-        foreach (var row in _instrumentRows)
+        // Kept on the record just edited: a save used to send the list back to its first row.
+        _instruments.RebuildKeeping<InstrumentMasterRow, Guid>(r => r.InstrumentId, () =>
         {
-            var index = _instruments.Rows.Add(
-                row.Code, row.Name.For(Localizer.CurrentLanguage),
-                T($"EquipmentKind.{row.Kind}"), T($"EquipmentStatus.{row.Status}"),
-                row.SerialNumber ?? string.Empty, row.Location ?? string.Empty,
-                row.PreventiveMaintenanceIntervalDays is { } m ? $"{m} j" : "—",
-                row.CalibrationIntervalDays is { } c ? $"{c} j" : "—",
-                row.QcTargetCount.ToString(),
-                row.HasInterfaceConfigured ? "✓" : string.Empty);
+            _instruments.Rows.Clear();
 
-            _instruments.Rows[index].Tag = row;
-        }
+            foreach (var row in _instrumentRows)
+            {
+                var index = _instruments.Rows.Add(
+                    row.Code, row.Name.For(Localizer.CurrentLanguage),
+                    T($"EquipmentKind.{row.Kind}"), T($"EquipmentStatus.{row.Status}"),
+                    row.SerialNumber ?? string.Empty, row.Location ?? string.Empty,
+                    row.PreventiveMaintenanceIntervalDays is { } m ? T("Stock.Days", m) : "—",
+                    row.CalibrationIntervalDays is { } c ? T("Stock.Days", c) : "—",
+                    row.QcTargetCount.ToString(),
+                    row.HasInterfaceConfigured ? "✓" : string.Empty);
+
+                _instruments.Rows[index].Tag = row;
+            }
+        });
 
         _editInstrument.Enabled = _instruments.Rows.Count > 0;
         RefreshHeadings();
@@ -738,56 +742,66 @@ public sealed class MasterDataView : LocalizedView
     {
         if (_qcMaterials.Columns.Count == 0) return;
 
-        _qcMaterials.Rows.Clear();
+        var hadMaterial = _qcMaterials.CurrentRow?.Tag is QcMaterialRow;
 
-        foreach (var row in _materialRows)
+        // Kept on the record just edited: a save used to send the list back to its first row.
+        _qcMaterials.RebuildKeeping<QcMaterialRow, Guid>(r => r.QcMaterialId, () =>
         {
-            var state = !row.IsActive ? T("Admin.Inactive")
-                : row.DaysToExpiry < 0 ? T("Inventory.Expired")
-                : row.TargetCount == 0 ? T("Quality.NoTarget")
-                : T("Inventory.Usable");
+            _qcMaterials.Rows.Clear();
 
-            var index = _qcMaterials.Rows.Add(
-                row.LotNumber, row.Name.For(Localizer.CurrentLanguage),
-                T($"QcLevel.{row.Level}"), row.ExpiryDate.ToString("dd/MM/yy"),
-                row.DaysToExpiry.ToString(), row.Manufacturer ?? string.Empty,
-                row.TargetCount.ToString(), state);
+            foreach (var row in _materialRows)
+            {
+                var state = !row.IsActive ? T("Admin.Inactive")
+                    : row.DaysToExpiry < 0 ? T("Inventory.Expired")
+                    : row.TargetCount == 0 ? T("Quality.NoTarget")
+                    : T("Inventory.Usable");
 
-            _qcMaterials.Rows[index].Tag = row;
-        }
+                var index = _qcMaterials.Rows.Add(
+                    row.LotNumber, row.Name.For(Localizer.CurrentLanguage),
+                    T($"QcLevel.{row.Level}"), row.ExpiryDate.ToString("dd/MM/yy"),
+                    row.DaysToExpiry.ToString(), row.Manufacturer ?? string.Empty,
+                    row.TargetCount.ToString(), state);
+
+                _qcMaterials.Rows[index].Tag = row;
+            }
+        });
 
         _editMaterial.Enabled = _qcMaterials.Rows.Count > 0;
         RefreshHeadings();
-        if (_qcMaterials.Rows.Count > 0) _qcMaterials.SelectFirstRow();
+        if (!hadMaterial && _qcMaterials.Rows.Count > 0) _qcMaterials.SelectFirstRow();
     }
 
     private void RenderTargets()
     {
         if (_qcTargets.Columns.Count == 0) return;
 
-        _qcTargets.Rows.Clear();
-
-        foreach (var row in _targetRows)
+        // Kept on the record just edited: a save used to send the list back to its first row.
+        _qcTargets.RebuildKeeping<QcTargetRow, Guid>(r => r.QcTargetId, () =>
         {
-            var state = !row.HasUsableLimits ? T("Qc_NoTargetEstablished")
-                : !row.IsActive ? T("Admin.Inactive")
-                : row.LaboratoryMean is null ? T("Quality.SupplierLimits")
-                : T("Quality.LaboratoryLimits");
+            _qcTargets.Rows.Clear();
 
-            var index = _qcTargets.Rows.Add(
-                row.MaterialLotNumber, T($"QcLevel.{row.Level}"),
-                $"{row.ParameterCode} — {row.ParameterName.For(Localizer.CurrentLanguage)}",
-                row.InstrumentCode,
-                row.AssignedMean is { } am && row.AssignedSd is { } asd
-                    ? $"{am:N3} ± {asd:N3}" : "—",
-                row.LaboratoryMean is { } lm && row.LaboratorySd is { } lsd
-                    ? $"{lm:N3} ± {lsd:N3}" : "—",
-                row.LaboratoryPointCount.ToString(),
-                CountRules(row.ActiveRules).ToString(),
-                state);
+            foreach (var row in _targetRows)
+            {
+                var state = !row.HasUsableLimits ? T("Qc_NoTargetEstablished")
+                    : !row.IsActive ? T("Admin.Inactive")
+                    : row.LaboratoryMean is null ? T("Quality.SupplierLimits")
+                    : T("Quality.LaboratoryLimits");
 
-            _qcTargets.Rows[index].Tag = row;
-        }
+                var index = _qcTargets.Rows.Add(
+                    row.MaterialLotNumber, T($"QcLevel.{row.Level}"),
+                    $"{row.ParameterCode} — {row.ParameterName.For(Localizer.CurrentLanguage)}",
+                    row.InstrumentCode,
+                    row.AssignedMean is { } am && row.AssignedSd is { } asd
+                        ? $"{am:N3} ± {asd:N3}" : "—",
+                    row.LaboratoryMean is { } lm && row.LaboratorySd is { } lsd
+                        ? $"{lm:N3} ± {lsd:N3}" : "—",
+                    row.LaboratoryPointCount.ToString(),
+                    CountRules(row.ActiveRules).ToString(),
+                    state);
+
+                _qcTargets.Rows[index].Tag = row;
+            }
+        });
 
         _editTarget.Enabled = _qcTargets.Rows.Count > 0;
         RefreshHeadings();
@@ -801,24 +815,28 @@ public sealed class MasterDataView : LocalizedView
     {
         if (_stock.Columns.Count == 0) return;
 
-        _stock.Rows.Clear();
-
-        foreach (var row in _stockRows)
+        // Kept on the record just edited: a save used to send the list back to its first row.
+        _stock.RebuildKeeping<StockItemMasterRow, Guid>(r => r.StockItemId, () =>
         {
-            var flags = new List<string>(3);
-            if (row.IsCritical) flags.Add("★");
-            if (row.IsHazardous) flags.Add("☣");
-            if (row.LotCount == 0) flags.Add("∅");
+            _stock.Rows.Clear();
 
-            var index = _stock.Rows.Add(
-                row.Code, row.Name.For(Localizer.CurrentLanguage),
-                T($"StockItemKind.{row.Kind}"), row.UnitOfMeasure,
-                row.ReorderPoint.ToString("N2"), row.MinimumStock.ToString("N2"),
-                T($"StorageCondition.{row.StorageCondition}"),
-                row.SupplierName ?? string.Empty, string.Join(" ", flags));
+            foreach (var row in _stockRows)
+            {
+                var flags = new List<string>(3);
+                if (row.IsCritical) flags.Add("★");
+                if (row.IsHazardous) flags.Add("☣");
+                if (row.LotCount == 0) flags.Add("∅");
 
-            _stock.Rows[index].Tag = row;
-        }
+                var index = _stock.Rows.Add(
+                    row.Code, row.Name.For(Localizer.CurrentLanguage),
+                    T($"StockItemKind.{row.Kind}"), row.UnitOfMeasure,
+                    row.ReorderPoint.ToString("N2"), row.MinimumStock.ToString("N2"),
+                    T($"StorageCondition.{row.StorageCondition}"),
+                    row.SupplierName ?? string.Empty, string.Join(" ", flags));
+
+                _stock.Rows[index].Tag = row;
+            }
+        });
 
         _editStock.Enabled = _stock.Rows.Count > 0;
         RefreshHeadings();
@@ -828,21 +846,25 @@ public sealed class MasterDataView : LocalizedView
     {
         if (_suppliers.Columns.Count == 0) return;
 
-        _suppliers.Rows.Clear();
-
-        foreach (var row in _supplierRows)
+        // Kept on the record just edited: a save used to send the list back to its first row.
+        _suppliers.RebuildKeeping<SupplierRow, Guid>(r => r.SupplierId, () =>
         {
-            var index = _suppliers.Rows.Add(
-                row.Code, row.Name, row.Ice ?? string.Empty, row.ContactName ?? string.Empty,
-                row.Phone ?? string.Empty, $"{row.LeadTimeDays} j",
-                row.IsApproved ? T("Inventory.Approved") : string.Empty,
-                row.LastEvaluationDate is { } date
-                    ? $"{date:dd/MM/yy}" + (row.EvaluationScore is { } score ? $" ({score})" : string.Empty)
-                    : "—",
-                row.StockItemCount.ToString());
+            _suppliers.Rows.Clear();
 
-            _suppliers.Rows[index].Tag = row;
-        }
+            foreach (var row in _supplierRows)
+            {
+                var index = _suppliers.Rows.Add(
+                    row.Code, row.Name, row.Ice ?? string.Empty, row.ContactName ?? string.Empty,
+                    row.Phone ?? string.Empty, T("Stock.Days", row.LeadTimeDays),
+                    row.IsApproved ? T("Inventory.Approved") : string.Empty,
+                    row.LastEvaluationDate is { } date
+                        ? $"{date:dd/MM/yy}" + (row.EvaluationScore is { } score ? $" ({score})" : string.Empty)
+                        : "—",
+                    row.StockItemCount.ToString());
+
+                _suppliers.Rows[index].Tag = row;
+            }
+        });
 
         _editSupplier.Enabled = _suppliers.Rows.Count > 0;
         RefreshHeadings();
@@ -852,25 +874,29 @@ public sealed class MasterDataView : LocalizedView
     {
         if (_prescribers.Columns.Count == 0) return;
 
-        _prescribers.Rows.Clear();
-
-        foreach (var row in _prescriberRows)
+        // Kept on the record just edited: a save used to send the list back to its first row.
+        _prescribers.RebuildKeeping<PrescriberRow, Guid>(r => r.PrescriberId, () =>
         {
-            var index = _prescribers.Rows.Add(
-                Localizer.CurrentLanguage == Domain.Common.AppLanguage.Arabic
-                    && row.FullNameArabic is { Length: > 0 }
-                        ? row.FullNameArabic : row.FullName,
-                T($"PrescriberKind.{row.Kind}"),
-                row.Speciality?.For(Localizer.CurrentLanguage) ?? string.Empty,
-                row.ProfessionalOrderNumber ?? string.Empty,
-                row.Inpe ?? string.Empty,
-                row.InstitutionName ?? string.Empty,
-                row.Phone ?? string.Empty,
-                T($"ReportDeliveryPreference.{row.DeliveryPreference}"),
-                row.OrderCount.ToString());
+            _prescribers.Rows.Clear();
 
-            _prescribers.Rows[index].Tag = row;
-        }
+            foreach (var row in _prescriberRows)
+            {
+                var index = _prescribers.Rows.Add(
+                    Localizer.CurrentLanguage == Domain.Common.AppLanguage.Arabic
+                        && row.FullNameArabic is { Length: > 0 }
+                            ? row.FullNameArabic : row.FullName,
+                    T($"PrescriberKind.{row.Kind}"),
+                    row.Speciality?.For(Localizer.CurrentLanguage) ?? string.Empty,
+                    row.ProfessionalOrderNumber ?? string.Empty,
+                    row.Inpe ?? string.Empty,
+                    row.InstitutionName ?? string.Empty,
+                    row.Phone ?? string.Empty,
+                    T($"ReportDeliveryPreference.{row.DeliveryPreference}"),
+                    row.OrderCount.ToString());
+
+                _prescribers.Rows[index].Tag = row;
+            }
+        });
 
         _editPrescriber.Enabled = _prescribers.Rows.Count > 0;
         RefreshHeadings();
@@ -880,27 +906,31 @@ public sealed class MasterDataView : LocalizedView
     {
         if (_payers.Columns.Count == 0) return;
 
-        _payers.Rows.Clear();
-
-        foreach (var row in _payerRows)
+        // Kept on the record just edited: a save used to send the list back to its first row.
+        _payers.RebuildKeeping<PayerRow, Guid>(r => r.PayerId, () =>
         {
-            var index = _payers.Rows.Add(
-                row.Code,
-                row.Name.For(Localizer.CurrentLanguage),
-                T($"PayerKind.{row.Kind}"),
-                // The percentage, because that is the unit a convention is written in. The stored
-                // value is the fraction the pricing calculator needs.
-                $"{row.ReimbursementPercent:0.##} %",
-                row.UsesNationalReferenceTariff ? T("Coverage.Tnr") : string.Empty,
-                row.ThirdPartyPaymentAgreement ? T("Action.Yes") : string.Empty,
-                row.AgreementNumber ?? string.Empty,
-                $"{row.PaymentTermsDays} j",
-                row.CoveredPatientCount.ToString(CultureInfo.CurrentCulture),
-                row.OpenInvoiceCount.ToString(CultureInfo.CurrentCulture),
-                string.Join(" · ", row.Problems.Select(T)));
+            _payers.Rows.Clear();
 
-            _payers.Rows[index].Tag = row;
-        }
+            foreach (var row in _payerRows)
+            {
+                var index = _payers.Rows.Add(
+                    row.Code,
+                    row.Name.For(Localizer.CurrentLanguage),
+                    T($"PayerKind.{row.Kind}"),
+                    // The percentage, because that is the unit a convention is written in. The stored
+                    // value is the fraction the pricing calculator needs.
+                    $"{row.ReimbursementPercent:0.##} %",
+                    row.UsesNationalReferenceTariff ? T("Coverage.Tnr") : string.Empty,
+                    row.ThirdPartyPaymentAgreement ? T("Action.Yes") : string.Empty,
+                    row.AgreementNumber ?? string.Empty,
+                    T("Stock.Days", row.PaymentTermsDays),
+                    row.CoveredPatientCount.ToString(CultureInfo.CurrentCulture),
+                    row.OpenInvoiceCount.ToString(CultureInfo.CurrentCulture),
+                    string.Join(" · ", row.Problems.Select(T)));
+
+                _payers.Rows[index].Tag = row;
+            }
+        });
 
         _editPayer.Enabled = _payers.Rows.Count > 0;
         RefreshHeadings();

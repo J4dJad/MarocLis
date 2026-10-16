@@ -807,6 +807,9 @@ public sealed class MainShellForm : LocalizedForm
         Text = $"{T("App.Title")} — {_currentUser.FullName}";
 
         _userInfo.Text = _currentUser.FullName;
+        // The screen's title in the header, set at each navigation, follows a language change too:
+        // it stayed in the previous language above a screen already translated.
+        if (_navigation.Current is { } view) _viewTitle.Text = HelpService.CurrentTitle = view.Title;
         _print.Text = WithShortcut(T("Action.Print"), ActionPrint);
         _help.Text = HelpButtonText();
         _siteInfo.Text = $"{T("App.Site")} : {_currentUser.SiteCode}   ·   " +

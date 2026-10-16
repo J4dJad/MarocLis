@@ -179,11 +179,17 @@ public sealed class RelationsService(
         return Result.Success(visit.Id);
     }
 
+    public const int DeletionReasonMaxLength = 500;
+
     public async Task<Result> DeleteVisitAsync(Guid id, string reason, CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Relations.Manage);
         if (permitted.IsFailure) return permitted;
         if (string.IsNullOrWhiteSpace(reason)) return Result.Failure(Error.Validation("Relations_ReasonRequired"));
+        // The deletion reason column holds 500 characters: a longer reason failed the delete with
+        // an unexpected error.
+        if (reason.Trim().Length > DeletionReasonMaxLength)
+            return Result.Failure(Error.Validation("Relations_TextTooLong", DeletionReasonMaxLength));
 
         var visit = await visits.GetByIdAsync(id, ct);
         if (visit is null) return Result.Failure(Error.NotFound("Visit_NotFound"));

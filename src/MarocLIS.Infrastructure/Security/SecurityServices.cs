@@ -343,7 +343,10 @@ public sealed class SecurityAuditor(IServiceScopeFactory scopes, IClock clock, I
                 : null,
             FailureReasonKey = failureReasonKey,
             TargetUserId = targetUserId,
-            Details = details
+            // The column holds 2000 characters. The details quote what the operator typed (a
+            // reason for closing a numbering series); written after the change it records, a
+            // longer one failed with an unexpected error once the change was already saved.
+            Details = details is { Length: > 2000 } ? string.Concat(details.AsSpan(0, 1999), "…") : details
         };
 
         await using var scope = scopes.CreateAsyncScope();

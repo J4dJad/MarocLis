@@ -705,27 +705,34 @@ public sealed class UserAdministrationView : LocalizedView
 
     private void RenderRoles()
     {
+        var hadRole = _roles.CurrentRow?.Tag is RoleRow;
+
         _roles.SuspendLayout();
-        _roles.Rows.Clear();
-
-        foreach (var row in _roleRows)
+        // Kept on the role whose permissions were just saved or which was just switched off: the tree
+        // beside the list follows the current row, and showed the first role's permissions instead.
+        _roles.RebuildKeeping<RoleRow, Guid>(r => r.RoleId, () =>
         {
-            var index = _roles.Rows.Add(
-                row.Code,
-                row.Name.For(Localizer.CurrentLanguage),
-                row.ActiveUserCount.ToString(),
-                row.Permissions.Count.ToString(),
-                row.IsBuiltIn ? T("Admin.BuiltIn") : string.Empty);
+            _roles.Rows.Clear();
 
-            _roles.Rows[index].Tag = row;
+            foreach (var row in _roleRows)
+            {
+                var index = _roles.Rows.Add(
+                    row.Code,
+                    row.Name.For(Localizer.CurrentLanguage),
+                    row.ActiveUserCount.ToString(),
+                    row.Permissions.Count.ToString(),
+                    row.IsBuiltIn ? T("Admin.BuiltIn") : string.Empty);
 
-            if (!row.IsActive)
-                _roles.Rows[index].DefaultCellStyle.ForeColor = UiTheme.TextMuted;
-        }
+                _roles.Rows[index].Tag = row;
+
+                if (!row.IsActive)
+                    _roles.Rows[index].DefaultCellStyle.ForeColor = UiTheme.TextMuted;
+            }
+        });
 
         _roles.ResumeLayout(performLayout: true);
 
-        if (_roles.Rows.Count > 0) _roles.SelectFirstRow();
+        if (!hadRole && _roles.Rows.Count > 0) _roles.SelectFirstRow();
 
         ShowRolePermissions();
     }
@@ -1104,10 +1111,12 @@ public sealed class UserAdministrationView : LocalizedView
 
     private async Task CreateRoleAsync()
     {
-        var code = _dialogs.PromptForText(T("Admin.NewRoleCodePrompt"), T("Admin.NewRole"));
+        // Capped to their columns (code 40, name 300): a longer one failed the save with an
+        // unexpected error.
+        var code = _dialogs.PromptForText(T("Admin.NewRoleCodePrompt"), T("Admin.NewRole"), maxLength: 40);
         if (string.IsNullOrWhiteSpace(code)) return;
 
-        var name = _dialogs.PromptForText(T("Admin.NewRoleNamePrompt"), T("Admin.NewRole"));
+        var name = _dialogs.PromptForText(T("Admin.NewRoleNamePrompt"), T("Admin.NewRole"), maxLength: 300);
         if (string.IsNullOrWhiteSpace(name)) return;
 
         // Created with no permissions at all, then granted in the tree. A role that arrives with a
@@ -1122,6 +1131,14 @@ public sealed class UserAdministrationView : LocalizedView
         }
 
         await LoadRolesAsync();
+
+        // The new role made current: the notice sends the administrator to the tree to grant it
+        // its permissions, and the tree showed the role that was current before.
+        if (_roles.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => (r.Tag as RoleRow)?.RoleId == result.Value) is { } created)
+        {
+            _roles.MakeCurrent(created);
+            ShowRolePermissions();
+        }
 
         _dialogs.Info(T("Admin.RoleCreatedNoPermissions"), T("Admin.NewRole"));
     }
