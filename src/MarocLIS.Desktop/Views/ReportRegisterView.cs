@@ -933,6 +933,9 @@ public sealed class ReportRegisterView : LocalizedView
             await LoadDeliveriesAsync(ct);
         }
         catch (OperationCanceledException) { }
+        // Left while the register loaded: its grids are emptied with the screen.
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException
+                                   && (IsDisposed || Disposing)) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the report register failed.");
@@ -1260,7 +1263,9 @@ public sealed class ReportRegisterView : LocalizedView
     {
         if (SelectedPending is not { } row) return;
 
-        if (!_dialogs.Confirm($"{T("Report.Title")} — {row.AccessionNumber}")) return;
+        // A question, not the bare file number: Yes/No under « Compte rendu — 2610-000007 » did
+        // not say that answering Yes signs and issues it.
+        if (!_dialogs.Confirm(T("Report.ConfirmIssue", row.AccessionNumber), T("Report.Issue"))) return;
 
         UseWaitCursor = true;
 

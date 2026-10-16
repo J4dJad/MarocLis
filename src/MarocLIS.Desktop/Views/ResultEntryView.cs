@@ -1295,6 +1295,9 @@ public sealed class ResultEntryView : LocalizedView
         {
             // Navigated away mid-load.
         }
+        // Left while the list loaded: its grid is emptied with the screen.
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException
+                                   && (IsDisposed || Disposing)) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the result entry worklist failed.");
@@ -1485,6 +1488,12 @@ public sealed class ResultEntryView : LocalizedView
         catch (OperationCanceledException)
         {
             // Navigated away mid-load.
+        }
+        // Left while the dossier opened: the screen's context is gone with it, and the next screen
+        // showed « Erreur inattendue ».
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException
+                                   && (IsDisposed || Disposing))
+        {
         }
         catch (Exception ex)
         {
@@ -2026,7 +2035,10 @@ public sealed class ResultEntryView : LocalizedView
 
         _notDone.Enabled = canEnter && IsKeyable(row) && row!.Status != TestResultStatus.NotDone;
         _clearValue.Enabled = canEnter && IsKeyable(row) && row!.CurrentValue is not null;
+        // Both rights, as the service asks: with the withdrawal right alone the menu offered a
+        // correction the service then refused.
         _correct.Enabled = PermissionGate.Allows(Permissions.Results.Unvalidate)
+                           && PermissionGate.Allows(Permissions.Results.Modify)
                            && row is { IsHeading: false, IsCalculated: false }
                            && row.Status is TestResultStatus.Validated or TestResultStatus.Reported;
         _comment.Enabled = row is not null && _grid.CurrentRow?.Cells[ColumnComment].ReadOnly == false;

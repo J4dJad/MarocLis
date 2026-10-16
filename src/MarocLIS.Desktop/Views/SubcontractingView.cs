@@ -166,6 +166,32 @@ public sealed class SubcontractingView : LocalizedView
             if (_grid.IsCurrentCellDirty && _grid.CurrentCell?.OwningColumn?.Name == ColSelected)
                 _grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
         };
+
+        _grid.SelectionChanged += (_, _) => RefreshActions();
+        _grid.CellValueChanged += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && _grid.Columns[e.ColumnIndex].Name == ColSelected) RefreshActions();
+        };
+    }
+
+    /// <summary>
+    /// Each action is offered for the rows it applies to — the ticked ones, or the highlighted one —
+    /// as <see cref="Ticked"/> reads them. « Envoyer » and « Réimprimer » stayed enabled on an
+    /// empty list and answered with a line in the footer.
+    /// </summary>
+    private void RefreshActions()
+    {
+        var ticked = _grid.Rows.Cast<DataGridViewRow>()
+            .Where(r => r.Cells[ColSelected].Value is true)
+            .Select(r => r.Tag).OfType<SubcontractRow>().ToList();
+
+        if (ticked.Count == 0 && _grid.CurrentRow?.Tag is SubcontractRow current) ticked.Add(current);
+
+        _send.Enabled = ticked.Any(r => r.Stage == SubcontractStage.ToSend);
+        _reprint.Enabled = ticked.Any(r => r.DispatchNumber is not null);
+        // A menu entry is not a control the gate can hold: the right is checked here instead.
+        _reference.Enabled = PermissionGate.Allows(Permissions.Samples.Dispatch)
+                             && ticked.Any(r => r.Stage == SubcontractStage.AwaitingReturn);
     }
 
     private bool IsLate(SubcontractRow row) =>
@@ -234,6 +260,9 @@ public sealed class SubcontractingView : LocalizedView
             Render();
         }
         catch (OperationCanceledException) { }
+        // Left while the list loaded: its grid is emptied with the screen.
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException
+                                   && (IsDisposed || Disposing)) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the subcontracting list failed.");
@@ -267,6 +296,7 @@ public sealed class SubcontractingView : LocalizedView
     private void Render()
     {
         var language = Localizer.CurrentLanguage;
+        var kept = (_grid.CurrentRow?.Tag as SubcontractRow)?.ItemId;
 
         _grid.SuspendLayout();
         _grid.Rows.Clear();
@@ -293,6 +323,14 @@ public sealed class SubcontractingView : LocalizedView
         }
 
         _grid.ResumeLayout(performLayout: true);
+
+        // The act just given its partner reference stays highlighted, rather than the first line.
+        if (kept is { } keptId
+            && _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Tag is SubcontractRow s && s.ItemId == keptId)
+                is { Index: > 0 } keptRow)
+            _grid.MakeCurrent(keptRow);
+
+        RefreshActions();
 
         var toSend = _rows.Count(r => r.Stage == SubcontractStage.ToSend);
         var awaiting = _rows.Count(r => r.Stage == SubcontractStage.AwaitingReturn);
@@ -374,7 +412,7 @@ public sealed class SubcontractingView : LocalizedView
         finally
         {
             Cursor = Cursors.Default;
-            _send.Enabled = true;
+            RefreshActions();
         }
     }
 

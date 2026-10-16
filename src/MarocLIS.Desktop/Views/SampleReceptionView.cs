@@ -404,6 +404,7 @@ public sealed class SampleReceptionView : LocalizedView
         _temperature.Tag = UiTags.LatinValue;
         _temperature.Font = UiTheme.Monospace;
         _temperature.PlaceholderText = "—";
+        _temperature.MaxLength = EditorValues.MeasureMaxLength;
         _temperatureField = CollectionStackedField.Of(_temperatureLabel, _temperature, 120, new Padding(0, 0, 16, 0));
 
         _coldChain.Font = UiTheme.Body;
@@ -961,6 +962,9 @@ public sealed class SampleReceptionView : LocalizedView
         {
             // Superseded.
         }
+        // Left while the list loaded: its grid is emptied with the screen.
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException
+                                   && (IsDisposed || Disposing)) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the reception list failed.");

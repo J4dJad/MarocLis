@@ -3270,6 +3270,7 @@
   },
 
   "Report": {
+    "ConfirmIssue": "Issue and sign the report for file {0}?",
     "PageCountShort": "{0} p.",
     "IssuedVersions": "{0} issued — this one will be v{1}",
     "NoneIssued": "None issued",

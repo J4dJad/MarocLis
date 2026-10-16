@@ -1084,6 +1084,9 @@ public sealed class ValidationView : LocalizedView
         {
             // Superseded.
         }
+        // Left while the list loaded: its grid is emptied with the screen.
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException
+                                   && (IsDisposed || Disposing)) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the validation worklist failed.");
@@ -1782,7 +1785,9 @@ public sealed class ValidationView : LocalizedView
         // modal, and a selection load finishing behind it had replaced it with the next file.
         if (_sheet is not { } sheet) return;
 
-        if (!_dialogs.Confirm($"{T("Report.Title")} — {sheet.AccessionNumber}")) return;
+        // A question, not the bare file number: Yes/No under « Compte rendu — 2610-000007 » did
+        // not say that answering Yes signs and issues it.
+        if (!_dialogs.Confirm(T("Report.ConfirmIssue", sheet.AccessionNumber), T("Report.Issue"))) return;
 
         _release.Enabled = false;
         Cursor = Cursors.WaitCursor;

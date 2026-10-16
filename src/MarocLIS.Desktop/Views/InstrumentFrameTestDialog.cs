@@ -132,18 +132,20 @@ internal sealed class InstrumentFrameTestDialog : Form
 
     private void BuildColumns()
     {
+        // « Code lu », « Valeur reçue » and « Type » get a little of the outcome's room: in Arabic their
+        // headers were cut, the outcome column has room to spare.
         (string Name, string Key, int Weight, bool Mono)[] columns =
         [
             ("specimen", "Interface.TestFrameSpecimen", 14, true),
             ("order", "Interface.TestFrameOrder", 16, false),
             ("raw", "Interface.TestFrameRawTest", 12, true),
-            ("code", "Interface.TestFrameCode", 8, true),
+            ("code", "Interface.TestFrameCode", 10, true),
             ("parameter", "Interface.TestFrameParameter", 10, true),
-            ("value", "Interface.TestFrameValue", 9, true),
+            ("value", "Interface.TestFrameValue", 11, true),
             ("stored", "Interface.TestFrameStored", 9, true),
             ("flags", "Result.InstrumentFlags", 10, false),
-            ("type", "Interface.TestFrameType", 6, true),
-            ("outcome", "Interface.TestFrameOutcome", 30, false)
+            ("type", "Interface.TestFrameType", 8, true),
+            ("outcome", "Interface.TestFrameOutcome", 24, false)
         ];
 
         _grid.Columns.Clear();
