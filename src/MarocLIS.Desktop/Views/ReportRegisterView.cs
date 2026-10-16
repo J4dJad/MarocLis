@@ -3,6 +3,7 @@ using MarocLIS.Application.Reports;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Reports;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -28,9 +29,17 @@ namespace MarocLIS.Desktop.Views;
 /// undelivered report carrying one is the row somebody has to act on today — not a row to be
 /// found by scrolling.
 /// </para>
+/// <para>
+/// Laid out as the laboratory's « LIS · A Fluent clair » mock-up: « Comptes rendus » with three
+/// tabs — À émettre, Émis, À remettre — the search and the period, the list in a card with the
+/// hand-overs of the selected version under it, an « Aperçu » card beside it, and the actions in
+/// the bottom bar with « Émettre le compte rendu » last.
+/// </para>
 /// </summary>
 public sealed class ReportRegisterView : LocalizedView
 {
+    private const int AsideWidth = 330;
+
     private readonly SelectionLoads _selectionLoads = new();
     private readonly ReportReleaseService _reports;
     private readonly IDocumentOutput _documents;
@@ -38,25 +47,46 @@ public sealed class ReportRegisterView : LocalizedView
     private readonly ICurrentUser _currentUser;
     private readonly ILogger<ReportRegisterView>? _logger;
 
-    private readonly TextBox _search = UiTheme.Input(280);
-    private readonly CheckBox _onlyUndelivered = new();
-    private readonly ComboBox _window = new();
-    private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
+    // ---- heading: title, tabs, search, period ----
     private readonly Label _heading = new();
+    private readonly Dictionary<ReportTab, FlatTab> _tabs = [];
+    private ReportTab _tab = ReportRegisterRules.DefaultTab;
+    private readonly TextBox _search = UiTheme.Input(260);
+    private readonly ComboBox _window = new();
+    private readonly ToolTip _tips = new();
 
+    // ---- « À émettre » ----
+    private readonly Panel _pendingPanel = new();
     private readonly DataGridView _pending = UiTheme.Grid();
-    private readonly Label _pendingHeading = new();
-    private readonly Panel _pendingSection = new() { Dock = DockStyle.Top, Height = 170 };
+    private readonly Label _partialNote = new();
 
+    // ---- « Émis » / « À remettre » ----
+    private readonly Panel _registerPanel = new();
     private readonly DataGridView _register = UiTheme.Grid();
     private readonly DataGridView _deliveries = UiTheme.Grid();
     private readonly Label _deliveryHeading = new();
 
+    // ---- « Aperçu » ----
+    private readonly Label _previewTitle = new();
+    private readonly LinkLabel _openPdf = new();
+    private readonly ReportPagePreview _preview = new();
+    private readonly TableLayoutPanel _facts = new();
+    private readonly Label _signatoryCaption = new(), _signatory = new(),
+                           _prescriberCaption = new(), _prescriber = new(),
+                           _versionsCaption = new(), _versions = new(),
+                           _deliveryCaption = new(), _delivery = new();
+
+    // ---- bottom bar ----
+    private readonly Button _more = UiTheme.SecondaryButton(string.Empty);
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly ToolStripMenuItem _amend = new();
+    private readonly ToolStripMenuItem _refresh = new();
+    private readonly Button _reprint = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _recordDelivery = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _hint = new();
     private readonly Button _issue = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _reprint = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _recordDelivery = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _amend = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
+    private readonly Panel _statusStrip = new();
 
     private IReadOnlyList<ReportRegisterRow> _rows = [];
     private IReadOnlyList<PendingReportRow> _pendingRows = [];
@@ -79,161 +109,441 @@ public sealed class ReportRegisterView : LocalizedView
 
     public override string Title => T("Nav.Reports");
 
+    private bool IsRightToLeft => RightToLeft == RightToLeft.Yes;
+
     // ---- Layout ------------------------------------------------------------------------------------
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(0);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
+        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
 
-        _heading.Font = UiTheme.SectionTitle;
+        var page = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Padding = new Padding(24, 12, 24, 12),
+            Margin = new Padding(0),
+            BackColor = UiTheme.Surface
+        };
+        page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        page.Controls.Add(BuildHeadingRow(), 0, 0);
+        page.Controls.Add(BuildCards(), 0, 1);
+
+        host.Controls.Add(page);
+        host.Controls.Add(BuildStatusStrip());
+        host.Controls.Add(BuildActionBar());
+
+        Controls.Add(host);
+    }
+
+    /// <summary>« Comptes rendus », the three tabs, and the search and period at the far end.</summary>
+    private TableLayoutPanel BuildHeadingRow()
+    {
+        var row = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 5,
+            RowCount = 1,
+            Margin = new Padding(0, 0, 0, 12),
+            BackColor = UiTheme.Surface
+        };
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        _heading.Font = UiTheme.PageTitle;
         _heading.ForeColor = UiTheme.TextPrimary;
         _heading.AutoSize = true;
-        _heading.Location = new Point(0, 2);
+        _heading.Anchor = AnchorStyles.Left;
+        _heading.Margin = new Padding(0, 0, 12, 0);
 
-        _search.Location = new Point(0, 28);
+        var tabs = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0),
+            BackColor = UiTheme.Surface
+        };
+
+        foreach (var tab in new[] { ReportTab.ToIssue, ReportTab.Issued, ReportTab.ToDeliver })
+        {
+            var control = new FlatTab { Selected = tab == _tab };
+            control.Click += async (_, _) => await SelectTabAsync(tab);
+            _tabs[tab] = control;
+            tabs.Controls.Add(control);
+        }
+
         _search.Tag = UiTags.LatinValue;
-
-        _onlyUndelivered.Font = UiTheme.Small;
-        _onlyUndelivered.ForeColor = UiTheme.TextSecondary;
-        _onlyUndelivered.AutoSize = true;
-        _onlyUndelivered.Location = new Point(296, 34);
+        _search.Anchor = AnchorStyles.Right;
+        _search.Margin = new Padding(12, 0, 8, 0);
 
         _window.DropDownStyle = ComboBoxStyle.DropDownList;
         _window.FlatStyle = FlatStyle.Flat;
-        _window.Bounds = new Rectangle(620, 28, 160, UiTheme.InputHeight);
+        _window.Width = 160;
+        _window.Anchor = AnchorStyles.Right;
+        _window.Margin = new Padding(0);
 
-        _refresh.Bounds = new Rectangle(792, 27, 110, UiTheme.ButtonHeight - 4);
+        row.Controls.Add(_heading, 0, 0);
+        row.Controls.Add(tabs, 1, 0);
+        row.Controls.Add(_search, 3, 0);
+        row.Controls.Add(_window, 4, 0);
+        return row;
+    }
 
-        bar.Controls.AddRange([_heading, _search, _onlyUndelivered, _window, _refresh]);
+    /// <summary>The list card and the « Aperçu » card beside it.</summary>
+    private TableLayoutPanel BuildCards()
+    {
+        var row = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+            BackColor = UiTheme.Surface
+        };
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, AsideWidth));
+        row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        row.Controls.Add(BuildListCard(), 0, 0);
+        row.Controls.Add(BuildAsideCard(), 1, 0);
+        return row;
+    }
+
+    private Panel BuildListCard()
+    {
+        var card = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 0, 14, 0),
+            Padding = new Padding(1),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        UiChrome.AsCard(card);
+        card.RightToLeftChanged += (_, _) =>
+            card.Margin = IsRightToLeft ? new Padding(14, 0, 0, 0) : new Padding(0, 0, 14, 0);
 
         BuildPendingColumns();
         BuildRegisterColumns();
         BuildDeliveryColumns();
 
-        var split = new ProportionalSplitContainer
+        foreach (var grid in new[] { _pending, _register, _deliveries })
         {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 440,
-            SplitterWidth = 6,
-            BackColor = UiTheme.Surface
+            grid.RowTemplate.Height = 34;
+            grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(10, 6, 10, 6);
+            grid.DefaultCellStyle.Padding = new Padding(10, 0, 10, 0);
+        }
+
+        _deliveries.RowTemplate.Height = 28;
+        _pending.CellPainting += PaintPendingCell;
+        _register.CellPainting += PaintRegisterCell;
+
+        // « À émettre »: the files, and the note on partial reports at the foot.
+        _pendingPanel.Dock = DockStyle.Fill;
+        _pendingPanel.BackColor = UiTheme.SurfaceRaised;
+        _pendingPanel.Margin = new Padding(0);
+
+        _partialNote.Dock = DockStyle.Bottom;
+        _partialNote.AutoSize = false;
+        _partialNote.Height = 34;
+        _partialNote.Padding = new Padding(12, 0, 12, 0);
+        _partialNote.TextAlign = ContentAlignment.MiddleLeft;
+        _partialNote.Font = UiTheme.Small;
+        _partialNote.ForeColor = UiTheme.TextSecondary;
+        _partialNote.AutoEllipsis = true;
+        _partialNote.Paint += (_, e) =>
+        {
+            using var pen = new Pen(Color.FromArgb(0xE6, 0xEB, 0xEF));
+            e.Graphics.DrawLine(pen, 0, 0, _partialNote.Width, 0);
         };
 
-        // Validated results that no report carries yet, above the register: the validation worklist
-        // drops an order once nothing on it awaits a biologist, so this is the only place a partial
-        // validation can still be released. Hidden when there is nothing to release.
-        _pendingHeading.Font = UiTheme.SmallBold;
-        _pendingHeading.ForeColor = UiTheme.Abnormal;
-        _pendingHeading.Dock = DockStyle.Top;
-        _pendingHeading.Height = 22;
+        _pendingPanel.Controls.Add(_pending);
+        _pendingPanel.Controls.Add(_partialNote);
 
-        _pending.Dock = DockStyle.Fill;
+        // « Émis » / « À remettre »: the versions, and the hand-overs of the selected one under them.
+        _registerPanel.Dock = DockStyle.Fill;
+        _registerPanel.BackColor = UiTheme.SurfaceRaised;
+        _registerPanel.Margin = new Padding(0);
 
-        var gap = new Panel { Dock = DockStyle.Bottom, Height = 8, BackColor = UiTheme.Surface };
-
-        _pendingSection.Controls.Add(_pending);
-        _pendingSection.Controls.Add(gap);
-        _pendingSection.Controls.Add(_pendingHeading);
-        _pendingSection.Visible = false;
-
-        split.Panel1.Controls.Add(_register);
-        split.Panel1.Controls.Add(_pendingSection);
-
+        var deliveries = new Panel { Dock = DockStyle.Bottom, Height = 150, BackColor = UiTheme.SurfaceRaised };
+        _deliveryHeading.Dock = DockStyle.Top;
+        _deliveryHeading.Height = 30;
+        _deliveryHeading.Padding = new Padding(12, 0, 12, 0);
+        _deliveryHeading.TextAlign = ContentAlignment.MiddleLeft;
         _deliveryHeading.Font = UiTheme.SmallBold;
         _deliveryHeading.ForeColor = UiTheme.TextSecondary;
-        _deliveryHeading.Dock = DockStyle.Top;
-        _deliveryHeading.Height = 22;
+        _deliveryHeading.AutoEllipsis = true;
+        _deliveryHeading.UseMnemonic = false;
+        _deliveryHeading.Paint += (_, e) =>
+        {
+            using var pen = new Pen(UiTheme.Border);
+            e.Graphics.DrawLine(pen, 0, 0, _deliveryHeading.Width, 0);
+        };
 
-        split.Panel2.Controls.Add(_deliveries);
-        split.Panel2.Controls.Add(_deliveryHeading);
+        deliveries.Controls.Add(_deliveries);
+        deliveries.Controls.Add(_deliveryHeading);
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = UiTheme.Surface };
+        _registerPanel.Controls.Add(_register);
+        _registerPanel.Controls.Add(deliveries);
 
-        _issue.Bounds = new Rectangle(0, 10, 220, UiTheme.ButtonHeight);
-        _reprint.Bounds = new Rectangle(230, 10, 200, UiTheme.ButtonHeight);
-        _recordDelivery.Bounds = new Rectangle(440, 10, 220, UiTheme.ButtonHeight);
-        _amend.Bounds = new Rectangle(670, 10, 220, UiTheme.ButtonHeight);
+        card.Controls.Add(_pendingPanel);
+        card.Controls.Add(_registerPanel);
+        return card;
+    }
 
-        _status.Font = UiTheme.Small;
+    /// <summary>« Aperçu · N° », « Ouvrir en PDF », the page, and who signs, who prescribed, which versions.</summary>
+    private Panel BuildAsideCard()
+    {
+        var card = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0),
+            Padding = new Padding(1),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        UiChrome.AsCard(card);
+
+        var body = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 3,
+            Padding = new Padding(14, 12, 14, 12),
+            Margin = new Padding(0),
+            AutoScroll = true,
+            BackColor = UiTheme.SurfaceRaised
+        };
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 250));
+        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        _previewTitle.Font = UiTheme.SectionTitle;
+        _previewTitle.ForeColor = UiTheme.TextPrimary;
+        _previewTitle.AutoSize = true;
+        _previewTitle.AutoEllipsis = true;
+        _previewTitle.Anchor = AnchorStyles.Left;
+        _previewTitle.Margin = new Padding(0, 0, 8, 10);
+        _previewTitle.UseMnemonic = false;
+
+        _openPdf.AutoSize = true;
+        _openPdf.Font = UiTheme.Small;
+        _openPdf.LinkColor = UiTheme.Accent;
+        _openPdf.ActiveLinkColor = UiTheme.AccentInk;
+        _openPdf.DisabledLinkColor = UiTheme.TextMuted;
+        _openPdf.LinkBehavior = LinkBehavior.HoverUnderline;
+        _openPdf.Anchor = AnchorStyles.Right;
+        _openPdf.Margin = new Padding(0, 0, 0, 10);
+
+        _preview.Dock = DockStyle.Fill;
+        _preview.Margin = new Padding(0, 0, 0, 12);
+
+        _facts.AutoSize = true;
+        _facts.Dock = DockStyle.Fill;
+        _facts.ColumnCount = 2;
+        _facts.RowCount = 4;
+        _facts.Margin = new Padding(0);
+        _facts.BackColor = UiTheme.SurfaceRaised;
+        _facts.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        _facts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        var pairs = new (Label Caption, Label Value)[]
+        {
+            (_signatoryCaption, _signatory), (_prescriberCaption, _prescriber),
+            (_versionsCaption, _versions), (_deliveryCaption, _delivery)
+        };
+
+        for (var i = 0; i < pairs.Length; i++)
+        {
+            _facts.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var (caption, value) = pairs[i];
+            caption.AutoSize = true;
+            caption.Font = UiTheme.Body;
+            caption.ForeColor = UiTheme.TextSecondary;
+            caption.Margin = new Padding(0, 0, 8, 6);
+
+            value.AutoSize = true;
+            value.Font = UiTheme.Body;
+            value.ForeColor = UiTheme.TextPrimary;
+            value.Margin = new Padding(0, 0, 0, 6);
+            value.MaximumSize = new Size(AsideWidth - 36 - 118, 0);
+            value.UseMnemonic = false;
+
+            _facts.Controls.Add(caption, 0, i);
+            _facts.Controls.Add(value, 1, i);
+        }
+
+        body.Controls.Add(_previewTitle, 0, 0);
+        body.Controls.Add(_openPdf, 1, 0);
+        body.Controls.Add(_preview, 0, 1);
+        body.SetColumnSpan(_preview, 2);
+        body.Controls.Add(_facts, 0, 2);
+        body.SetColumnSpan(_facts, 2);
+
+        card.Controls.Add(body);
+        return card;
+    }
+
+    /// <summary>What the last action said. Shown only while there is something to say.</summary>
+    private Panel BuildStatusStrip()
+    {
+        _statusStrip.Dock = DockStyle.Bottom;
+        _statusStrip.Height = 24;
+        _statusStrip.Padding = new Padding(24, 2, 24, 2);
+        _statusStrip.BackColor = UiTheme.Surface;
+        _statusStrip.Tag = UiTags.OwnLayout;
+        _statusStrip.Visible = false;
+
+        _status.Dock = DockStyle.Fill;
         _status.AutoSize = false;
-        _status.Bounds = new Rectangle(902, 16, 600, 20);
+        _status.AutoEllipsis = true;
+        _status.Font = UiTheme.Small;
+        _status.TextAlign = ContentAlignment.MiddleLeft;
+        _status.UseMnemonic = false;
+        _status.TextChanged += (_, _) =>
+        {
+            _statusStrip.Visible = !string.IsNullOrEmpty(_status.Text);
+            _tips.SetToolTip(_status, _status.Text);
+        };
+        _statusStrip.Controls.Add(_status);
+        return _statusStrip;
+    }
 
-        actions.Controls.AddRange([_issue, _reprint, _recordDelivery, _amend, _status]);
+    /// <summary>« Plus d'actions ▾ », Réimprimer l'original, Enregistrer une remise, the hint, « Émettre le compte rendu ».</summary>
+    private EntryStrip BuildActionBar()
+    {
+        var strip = new EntryStrip { Dock = DockStyle.Bottom, Height = 56, BackColor = UiTheme.SurfaceRaised };
+        var bar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 6,
+            RowCount = 1,
+            Padding = new Padding(24, 11, 24, 11),
+            Margin = new Padding(0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        for (var i = 0; i < 3; i++) bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        strip.Controls.Add(bar);
 
-        Controls.Add(split);
-        Controls.Add(actions);
-        Controls.Add(bar);
+        var buttons = new[] { _more, _reprint, _recordDelivery, _issue };
+
+        void FitHint()
+        {
+            var used = bar.Padding.Horizontal + _hint.Margin.Horizontal
+                       + buttons.Sum(b => b.PreferredSize.Width + b.Margin.Horizontal);
+            var left = Math.Max(90, bar.ClientSize.Width - used);
+            var font = TextRenderer.MeasureText(_hint.Text, UiTheme.Body).Width <= left ? UiTheme.Body : UiTheme.Small;
+            if (_hint.Font != font) _hint.Font = font;
+            if (_hint.MaximumSize.Width != left) _hint.MaximumSize = new Size(left, 0);
+        }
+
+        bar.Resize += (_, _) => FitHint();
+        _hint.TextChanged += (_, _) => FitHint();
+
+        foreach (var button in buttons)
+        {
+            button.AutoSize = true;
+            button.MinimumSize = new Size(0, 34);
+            button.Height = 34;
+            button.Margin = new Padding(0, 0, 8, 0);
+        }
+
+        _issue.Margin = new Padding(0);
+        ButtonKey.ShowChevron(_more);
+
+        _hint.AutoSize = true;
+        _hint.Anchor = AnchorStyles.Right;
+        _hint.TextAlign = ContentAlignment.MiddleRight;
+        _hint.Font = UiTheme.Body;
+        _hint.ForeColor = UiTheme.TextSecondary;
+        _hint.Margin = new Padding(8, 0, 12, 0);
+        _hint.UseMnemonic = false;
+
+        var spacer = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0), BackColor = UiTheme.SurfaceRaised };
+
+        bar.Controls.Add(_more, 0, 0);
+        bar.Controls.Add(_reprint, 1, 0);
+        bar.Controls.Add(_recordDelivery, 2, 0);
+        bar.Controls.Add(spacer, 3, 0);
+        bar.Controls.Add(_hint, 4, 0);
+        bar.Controls.Add(_issue, 5, 0);
+
+        _moreMenu.Items.AddRange([_amend, new ToolStripSeparator(), _refresh]);
+        _moreMenu.Font = UiTheme.Body;
+        _amend.Image = Icons.Render(Glyph.FilePen, UiTheme.TextPrimary, 16);
+        _refresh.Image = Icons.Render(Glyph.RefreshCw, UiTheme.TextPrimary, 16);
+        _refresh.ShortcutKeyDisplayString = "F5";
+
+        return strip;
+    }
+
+    private static void AddColumn(DataGridView grid, string name, int weight, Font? font = null, bool right = false)
+    {
+        var column = new DataGridViewTextBoxColumn
+        {
+            Name = name, FillWeight = weight, ReadOnly = true,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                Font = font ?? UiTheme.GridBody,
+                Alignment = right ? DataGridViewContentAlignment.MiddleRight
+                                  : DataGridViewContentAlignment.MiddleLeft
+            }
+        };
+        if (right) column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
+        grid.Columns.Add(column);
     }
 
     private void BuildPendingColumns()
     {
-        void Add(string name, int weight, Font? font = null, bool right = false)
-            => _pending.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = name, FillWeight = weight, ReadOnly = true,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
-                DefaultCellStyle = new DataGridViewCellStyle
-                {
-                    Font = font ?? UiTheme.Body,
-                    Alignment = right ? DataGridViewContentAlignment.MiddleRight
-                                      : DataGridViewContentAlignment.MiddleLeft
-                }
-            });
-
-        Add("accession", 11, UiTheme.MonospaceBold);
-        Add("patient", 20);
-        Add("priority", 8, UiTheme.SmallBold);
-        Add("validated", 9, UiTheme.MonospaceBold, right: true);
-        Add("awaiting", 9, UiTheme.MonospaceBold, right: true);
-        Add("validatedat", 11, UiTheme.Monospace);
-        Add("kind", 14, UiTheme.SmallBold);
+        AddColumn(_pending, "accession", 12, UiTheme.Monospace);
+        AddColumn(_pending, "patient", 20);
+        AddColumn(_pending, "priority", 10);
+        AddColumn(_pending, "validated", 10, UiTheme.Monospace, right: true);
+        AddColumn(_pending, "awaiting", 9, UiTheme.Monospace, right: true);
+        AddColumn(_pending, "validatedat", 14, UiTheme.Monospace);
+        AddColumn(_pending, "kind", 12);
     }
 
     private void BuildRegisterColumns()
     {
-        void Add(string name, int weight, Font? font = null, bool right = false)
-            => _register.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = name, FillWeight = weight, ReadOnly = true,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
-                DefaultCellStyle = new DataGridViewCellStyle
-                {
-                    Font = font ?? UiTheme.Body,
-                    Alignment = right ? DataGridViewContentAlignment.MiddleRight
-                                      : DataGridViewContentAlignment.MiddleLeft
-                }
-            });
-
-        Add("accession", 11, UiTheme.MonospaceBold);
-        Add("patient", 18);
-        Add("version", 6, UiTheme.MonospaceBold, right: true);
-        Add("completeness", 9, UiTheme.SmallBold);
-        Add("released", 11, UiTheme.Monospace);
-        Add("signatory", 13, UiTheme.Small);
-        Add("prescriber", 13, UiTheme.Small);
-        Add("delivery", 13, UiTheme.SmallBold);
-        Add("flags", 12, UiTheme.SmallBold);
+        AddColumn(_register, "accession", 11, UiTheme.Monospace);
+        AddColumn(_register, "patient", 16);
+        AddColumn(_register, "version", 6, UiTheme.MonospaceBold, right: true);
+        AddColumn(_register, "completeness", 10);
+        AddColumn(_register, "released", 11, UiTheme.Monospace);
+        AddColumn(_register, "signatory", 12, UiTheme.Small);
+        AddColumn(_register, "prescriber", 12, UiTheme.Small);
+        AddColumn(_register, "delivery", 12, UiTheme.SmallBold);
+        AddColumn(_register, "flags", 14, UiTheme.SmallBold);
     }
 
     private void BuildDeliveryColumns()
     {
-        void Add(string name, int weight, Font? font = null)
-            => _deliveries.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = name, FillWeight = weight, ReadOnly = true,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
-                DefaultCellStyle = new DataGridViewCellStyle { Font = font ?? UiTheme.Body }
-            });
-
-        Add("when", 14, UiTheme.Monospace);
-        Add("channel", 14, UiTheme.Small);
-        Add("recipientkind", 14, UiTheme.Small);
-        Add("recipient", 18);
-        Add("bearer", 16, UiTheme.Small);
-        Add("status", 10, UiTheme.SmallBold);
-        Add("by", 14, UiTheme.Small);
+        AddColumn(_deliveries, "when", 14, UiTheme.Monospace);
+        AddColumn(_deliveries, "channel", 14, UiTheme.Small);
+        AddColumn(_deliveries, "recipientkind", 14, UiTheme.Small);
+        AddColumn(_deliveries, "recipient", 18);
+        AddColumn(_deliveries, "bearer", 16, UiTheme.Small);
+        AddColumn(_deliveries, "status", 10, UiTheme.SmallBold);
+        AddColumn(_deliveries, "by", 14, UiTheme.Small);
     }
 
     private void WireBehaviour()
@@ -245,21 +555,50 @@ public sealed class ReportRegisterView : LocalizedView
             await ActivateAsync();
         };
 
-        _onlyUndelivered.CheckedChanged += async (_, _) => await ActivateAsync();
         _window.SelectedIndexChanged += async (_, _) => await ActivateAsync();
         _refresh.Click += async (_, _) => await ActivateAsync();
 
-        _pending.SelectionChanged += (_, _) => RefreshActions();
+        _pending.SelectionChanged += (_, _) =>
+        {
+            RefreshActions();
+            ShowPreview();
+        };
         _pending.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _issue.Enabled) await RunActionAsync(IssueAsync); };
         _issue.Click += async (_, _) => await RunActionAsync(IssueAsync);
 
-        _register.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDeliveriesAsync());
+        _register.SelectionChanged += async (_, _) =>
+        {
+            ShowPreview();
+            await _selectionLoads.RunAsync(() => LoadDeliveriesAsync());
+        };
         _register.CellFormatting += OnRegisterFormatting;
         _register.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _reprint.Enabled) await RunActionAsync(ReprintAsync); };
 
         _reprint.Click += async (_, _) => await RunActionAsync(ReprintAsync);
+        _openPdf.LinkClicked += async (_, _) => { if (_reprint.Enabled) await RunActionAsync(ReprintAsync); };
         _recordDelivery.Click += async (_, _) => await RunActionAsync(RecordDeliveryAsync);
         _amend.Click += async (_, _) => await RunActionAsync(AmendAsync);
+
+        _more.Click += (_, _) =>
+        {
+            RefreshActions();
+            _moreMenu.RightToLeft = RightToLeft;
+            _moreMenu.Show(_more, new Point(IsRightToLeft ? _more.Width : 0, _more.Height));
+        };
+
+        ShowTab();
+    }
+
+    /// <summary>Ctrl+E issues the selected file's report, exactly as « Émettre le compte rendu » does.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.E) && _issue.Enabled && _issue.Visible && !IsBusy)
+        {
+            _issue.PerformClick();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     /// <summary>
@@ -278,6 +617,100 @@ public sealed class ReportRegisterView : LocalizedView
 
         if (ran && !IsDisposed) RefreshActions();
     }
+
+    // ---- Tabs ---------------------------------------------------------------------------------------
+
+    private async Task SelectTabAsync(ReportTab tab)
+    {
+        if (_tab == tab) return;
+
+        _tab = tab;
+        ShowTab();
+
+        if (tab != ReportTab.ToIssue)
+        {
+            Render();
+            await _selectionLoads.RunAsync(() => LoadDeliveriesAsync());
+        }
+    }
+
+    /// <summary>Shows the selected tab's list and the matching hint, preview and actions.</summary>
+    private void ShowTab()
+    {
+        foreach (var (tab, control) in _tabs) control.Selected = tab == _tab;
+
+        _pendingPanel.Visible = _tab == ReportTab.ToIssue;
+        _registerPanel.Visible = _tab != ReportTab.ToIssue;
+
+        // A list filled while hidden has no current row: the first one is taken, so the preview
+        // and the actions have something to work on.
+        var shown = _tab == ReportTab.ToIssue ? _pending : _register;
+        if (shown.CurrentRow is null && shown.Rows.Count > 0) shown.SelectFirstRow();
+
+        RenderTabs();
+        RenderHint();
+        ShowPreview();
+        RefreshActions();
+    }
+
+    private void RenderTabs()
+    {
+        foreach (var (tab, control) in _tabs)
+        {
+            var caption = tab switch
+            {
+                ReportTab.ToIssue => T("Report.TabToIssue"),
+                ReportTab.ToDeliver => T("Report.TabToDeliver"),
+                _ => T("Report.TabIssued")
+            };
+
+            var count = ReportRegisterRules.Count(_pendingRows, _rows, tab);
+
+            // Work to do is counted in a pill: files to issue in the warning pair, versions to hand
+            // over in the critical pair when one of them carries a critical value.
+            (Color Back, Color Fore)? pill = count == 0 ? null
+                : tab == ReportTab.ToIssue ? EntryPaint.Warning
+                : ReportRegisterRules.IsUrgent(_rows, tab) ? EntryPaint.Critical
+                : tab == ReportTab.ToDeliver ? EntryPaint.Warning
+                : null;
+
+            control.Show(caption, count, pill);
+        }
+
+        _tips.SetToolTip(_tabs[ReportTab.ToIssue], T("Report.PendingRelease", _pendingRows.Count));
+        _tips.SetToolTip(_tabs[ReportTab.ToDeliver], T("Report.OnlyUndelivered"));
+    }
+
+    /// <summary>
+    /// The line beside the buttons: on « À émettre », that hand-overs and rectifications come after
+    /// issue; on the register, its count, the versions awaiting hand-over and the critical ones —
+    /// what the register's heading said before, in critical ink when a critical report waits.
+    /// </summary>
+    private void RenderHint()
+    {
+        if (_tab == ReportTab.ToIssue)
+        {
+            _hint.Text = T("Report.ActionsAfterIssue");
+            _hint.ForeColor = UiTheme.TextSecondary;
+            return;
+        }
+
+        var undelivered = _rows.Count(r => r.AwaitingDelivery);
+        var urgent = _rows.Count(r => r.IsUrgentToDeliver);
+
+        var parts = new List<string>(3) { T("Report.VersionCount", _rows.Count) };
+
+        if (undelivered > 0)
+            parts.Add($"{undelivered} {T("Report.AwaitingDelivery").ToLowerInvariant()}");
+
+        if (urgent > 0)
+            parts.Add($"{urgent} {T("Report.CriticalUndelivered").ToLowerInvariant()}");
+
+        _hint.Text = string.Join(" · ", parts);
+        _hint.ForeColor = urgent > 0 ? UiTheme.Critical : UiTheme.TextSecondary;
+    }
+
+    // ---- Painting -------------------------------------------------------------------------------------
 
     private void OnRegisterFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
@@ -307,24 +740,110 @@ public sealed class ReportRegisterView : LocalizedView
         }
     }
 
+    /// <summary>The nature of a report as a pill: « Définitif » in the ok pair, « Partiel » in the info pair.</summary>
+    private static (Color Back, Color Fore) CompletenessColours(bool final) =>
+        final ? ValidationPaint.Ok : EntryPaint.Info;
+
+    private void PaintPendingCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null) return;
+        if (_pending.Rows[e.RowIndex].Tag is not PendingReportRow row) return;
+
+        var name = _pending.Columns[e.ColumnIndex].Name;
+        if (name is not ("priority" or "kind" or "patient")) return;
+
+        var rtl = IsRightToLeft;
+        e.PaintBackground(e.ClipBounds, (e.State & DataGridViewElementStates.Selected) != 0);
+
+        switch (name)
+        {
+            case "patient":
+                TextRenderer.DrawText(e.Graphics, e.FormattedValue?.ToString() ?? string.Empty, GridBold,
+                                      EntryPaint.Mirror(new Rectangle(e.CellBounds.X + 10, e.CellBounds.Y,
+                                                                      e.CellBounds.Width - 20, e.CellBounds.Height),
+                                                        e.CellBounds, rtl),
+                                      row.Priority != OrderPriority.Routine ? UiTheme.Critical : UiTheme.TextPrimary,
+                                      TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix
+                                      | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding
+                                      | (rtl ? TextFormatFlags.Right | TextFormatFlags.RightToLeft : TextFormatFlags.Left));
+                break;
+
+            case "priority":
+                PaintPriority(e, row.Priority, rtl);
+                break;
+
+            case "kind":
+                var (final, _) = ReportRegisterRules.NextRelease(row);
+                ValidationPaint.DrawPills(e.Graphics, e.CellBounds,
+                    [(e.FormattedValue?.ToString() ?? string.Empty, CompletenessColours(final))], rtl);
+                break;
+        }
+
+        e.Handled = true;
+    }
+
+    private void PaintRegisterCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null) return;
+        if (_register.Columns[e.ColumnIndex].Name != "completeness") return;
+        if (_register.Rows[e.RowIndex].Tag is not ReportRegisterRow row) return;
+
+        e.PaintBackground(e.ClipBounds, (e.State & DataGridViewElementStates.Selected) != 0);
+        ValidationPaint.DrawPills(e.Graphics, e.CellBounds,
+            [(e.FormattedValue?.ToString() ?? string.Empty,
+              row.IsSuperseded ? EntryPaint.Waiting : CompletenessColours(row.Completeness == ReportCompleteness.Final))],
+            IsRightToLeft);
+        e.Handled = true;
+    }
+
+    /// <summary>« Urgent » as a pill, « Routine » in plain muted text, as in the mock-up.</summary>
+    private void PaintPriority(DataGridViewCellPaintingEventArgs e, OrderPriority priority, bool rtl)
+    {
+        if (priority == OrderPriority.Routine)
+        {
+            TextRenderer.DrawText(e.Graphics!, T("Priority.Routine"), UiTheme.GridBody,
+                                  EntryPaint.Mirror(new Rectangle(e.CellBounds.X + 10, e.CellBounds.Y,
+                                                                  e.CellBounds.Width - 20, e.CellBounds.Height),
+                                                    e.CellBounds, rtl),
+                                  UiTheme.TextSecondary,
+                                  TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix
+                                  | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis
+                                  | (rtl ? TextFormatFlags.Right | TextFormatFlags.RightToLeft : TextFormatFlags.Left));
+            return;
+        }
+
+        ValidationPaint.DrawPills(e.Graphics!, e.CellBounds,
+            [(T($"Priority.{priority}"),
+              priority == OrderPriority.VitalEmergency ? EntryPaint.Critical : EntryPaint.Warning)], rtl);
+    }
+
+    private static readonly Font GridBold = EntryPaint.Resized(UiTheme.BodyBold, UiTheme.GridBody.Size);
+
     protected override void ApplyTexts()
     {
+        _heading.Text = T("Report.Plural");
         _search.PlaceholderText = T("Report.RegisterSearchPlaceholder");
-        _onlyUndelivered.Text = T("Report.OnlyUndelivered");
-        _refresh.Text = T("Action.Refresh");
+        _partialNote.Text = T("Report.PartialNote");
+        _openPdf.Text = T("Report.OpenPdf");
 
+        _more.Text = T("ResultEntry.MoreActions");
+        _amend.Text = $"{T("Report.IssueAmendment")}…";
+        _refresh.Text = T("Action.Refresh");
         _issue.Text = T("Report.Issue");
         _reprint.Text = T("Report.Reprint");
         _recordDelivery.Text = T("Report.RecordDelivery");
-        _amend.Text = T("Report.IssueAmendment");
+        ButtonKey.Show(_issue, KeyboardShortcuts.Format(Keys.Control | Keys.E, Localizer));
 
-        _deliveryHeading.Text = T("Report.Deliveries");
+        _signatoryCaption.Text = T("Report.Signatory");
+        _prescriberCaption.Text = T("Order.Prescriber");
+        _versionsCaption.Text = T("Report.Versions");
+        _deliveryCaption.Text = T("Report.Delivery");
 
         RefreshWindows();
 
         if (_register.Columns.Count > 0)
         {
-            _register.Column("accession").HeaderText = T("Order.AccessionNumber");
+            _register.Column("accession").HeaderText = T("Order.Title");
             _register.Column("patient").HeaderText = T("Patient.Title");
             _register.Column("version").HeaderText = T("Report.Version");
             _register.Column("completeness").HeaderText = T("Report.Completeness");
@@ -337,11 +856,11 @@ public sealed class ReportRegisterView : LocalizedView
 
         if (_pending.Columns.Count > 0)
         {
-            _pending.Column("accession").HeaderText = T("Order.AccessionNumber");
+            _pending.Column("accession").HeaderText = T("Order.Title");
             _pending.Column("patient").HeaderText = T("Patient.Title");
             _pending.Column("priority").HeaderText = T("Field.Priority");
             _pending.Column("validated").HeaderText = T("Report.ValidatedResults");
-            _pending.Column("awaiting").HeaderText = T("Report.AwaitingAnalyses");
+            _pending.Column("awaiting").HeaderText = T("Report.AwaitingShort");
             _pending.Column("validatedat").HeaderText = T("Report.LastValidatedAt");
             _pending.Column("kind").HeaderText = T("Report.Completeness");
         }
@@ -359,7 +878,8 @@ public sealed class ReportRegisterView : LocalizedView
 
         if (_rows.Count > 0) Render();
         RenderPending();
-        RefreshActions();
+        if (_deliveryHeading.Text.Length == 0) _deliveryHeading.Text = T("Report.Deliveries");
+        ShowTab();
     }
 
     private void RefreshWindows()
@@ -388,9 +908,9 @@ public sealed class ReportRegisterView : LocalizedView
             _pendingRows = pending.IsSuccess ? pending.Value : [];
             RenderPending();
 
-            var result = await _reports.GetRegisterAsync(
-                string.IsNullOrWhiteSpace(_search.Text) ? null : _search.Text.Trim(),
-                _onlyUndelivered.Checked, SelectedWindow, ct);
+            // The whole register, every time: « À remettre » is a tab over it, and the tabs show
+            // their counts. The tick box it replaces asked the query for exactly those rows.
+            var result = await _reports.GetRegisterAsync(search, onlyUndelivered: false, SelectedWindow, ct);
 
             if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 
@@ -408,44 +928,28 @@ public sealed class ReportRegisterView : LocalizedView
         }
     }
 
+    private string PatientName(string latin, string? arabic) =>
+        Localizer.CurrentLanguage == AppLanguage.Arabic && arabic is { Length: > 0 } ? arabic : latin;
+
     private void Render()
     {
-        var language = Localizer.CurrentLanguage;
-        var selected = Selected?.ReportId;
+        var selected = Selected?.ReportId ?? (_register.CurrentRow?.Tag as ReportRegisterRow)?.ReportId;
 
         _register.SuspendLayout();
         _register.Rows.Clear();
 
-        foreach (var row in _rows)
+        foreach (var row in ReportRegisterRules.RegisterRows(_rows, _tab))
         {
-            var flags = new List<string>(4);
-
-            if (row.IsSuperseded) flags.Add(T("Report.Superseded"));
-            if (row.IsAmendment) flags.Add(T($"ReportAmendmentKind.{row.AmendmentKind}"));
-            if (row.ContainsCriticalResults) flags.Add(T("Flag.Critical"));
-            if (row.ContainsReservations) flags.Add(T("Report.WithReservations"));
-            if (row.ContainsSubcontractedResults) flags.Add(T("Catalog.Subcontracted"));
-            if (!row.AllResultsAccredited) flags.Add(T("Report.PartlyOutsideScope"));
-
-            var delivery = row.WasDelivered
-                ? $"{row.LastDeliveredAt!.Value.ToLocalTime():dd/MM/yy HH:mm}"
-                  + (row.DeliveryCount > 1 ? $" ({row.DeliveryCount})" : string.Empty)
-                : row.AwaitingDelivery
-                    ? T($"ReportDeliveryPreference.{row.PrescriberPreference}")
-                    : "—";
-
             var index = _register.Rows.Add(
                 row.AccessionNumber,
-                language == AppLanguage.Arabic && row.PatientNameArabic is { Length: > 0 } arabic
-                    ? arabic
-                    : row.PatientName,
+                PatientName(row.PatientName, row.PatientNameArabic),
                 $"v{row.VersionNumber}",
                 T($"ReportCompleteness.{row.Completeness}"),
                 row.ReleasedAt.ToLocalTime().ToString("dd/MM/yy HH:mm"),
                 row.SignatoryName,
                 row.PrescriberName ?? string.Empty,
-                delivery,
-                string.Join(" · ", flags));
+                DeliveryText(row),
+                string.Join(" · ", Flags(row)));
 
             _register.Rows[index].Tag = row;
         }
@@ -467,52 +971,57 @@ public sealed class ReportRegisterView : LocalizedView
         if (_register.CurrentRow is null && _register.Rows.Count > 0)
             _register.SelectFirstRow();
 
-        var undelivered = _rows.Count(r => r.AwaitingDelivery);
-        var urgent = _rows.Count(r => r.IsUrgentToDeliver);
-
-        var parts = new List<string>(3) { $"{_rows.Count}" };
-
-        if (undelivered > 0)
-            parts.Add($"{undelivered} {T("Report.AwaitingDelivery").ToLowerInvariant()}");
-
-        if (urgent > 0)
-            parts.Add($"{urgent} {T("Report.CriticalUndelivered").ToLowerInvariant()}");
-
-        _heading.Text = $"{T("Report.Register")} — {string.Join(" · ", parts)}";
-        _heading.ForeColor = urgent > 0 ? UiTheme.Critical : UiTheme.TextPrimary;
-
+        RenderTabs();
+        RenderHint();
+        ShowPreview();
         RefreshActions();
     }
 
+    private List<string> Flags(ReportRegisterRow row)
+    {
+        var flags = new List<string>(4);
+
+        if (row.IsSuperseded) flags.Add(T("Report.Superseded"));
+        if (row.IsAmendment) flags.Add(T($"ReportAmendmentKind.{row.AmendmentKind}"));
+        if (row.ContainsCriticalResults) flags.Add(T("Flag.Critical"));
+        if (row.ContainsReservations) flags.Add(T("Report.WithReservations"));
+        if (row.ContainsSubcontractedResults) flags.Add(T("Catalog.Subcontracted"));
+        if (!row.AllResultsAccredited) flags.Add(T("Report.PartlyOutsideScope"));
+
+        return flags;
+    }
+
+    private string DeliveryText(ReportRegisterRow row) =>
+        row.WasDelivered
+            ? $"{row.LastDeliveredAt!.Value.ToLocalTime():dd/MM/yy HH:mm}"
+              + (row.DeliveryCount > 1 ? $" ({row.DeliveryCount})" : string.Empty)
+            : row.AwaitingDelivery
+                ? T($"ReportDeliveryPreference.{row.PrescriberPreference}")
+                : "—";
+
     private void RenderPending()
     {
-        var language = Localizer.CurrentLanguage;
-        var selected = SelectedPending?.LabOrderId;
+        var selected = (_pending.CurrentRow?.Tag as PendingReportRow)?.LabOrderId;
 
         _pending.SuspendLayout();
         _pending.Rows.Clear();
 
         foreach (var row in _pendingRows)
         {
-            var kind = T($"ReportCompleteness.{(row.AwaitingAnalyses == 0 ? "Final" : "Partial")}")
-                       + (row.ReleasedVersions > 0 ? $" · v{row.ReleasedVersions + 1}" : string.Empty);
+            var (final, next) = ReportRegisterRules.NextRelease(row);
+            var kind = T($"ReportCompleteness.{(final ? "Final" : "Partial")}")
+                       + (row.ReleasedVersions > 0 ? $" · v{next}" : string.Empty);
 
             var index = _pending.Rows.Add(
                 row.AccessionNumber,
-                language == AppLanguage.Arabic && row.PatientNameArabic is { Length: > 0 } arabic
-                    ? arabic
-                    : row.PatientName,
-                row.Priority == Domain.Orders.OrderPriority.Routine ? string.Empty : T($"Priority.{row.Priority}"),
+                PatientName(row.PatientName, row.PatientNameArabic),
+                T($"Priority.{row.Priority}"),
                 row.ValidatedResults.ToString(),
                 row.AwaitingAnalyses.ToString(),
-                row.LastValidatedAt?.ToLocalTime().ToString("dd/MM/yy HH:mm") ?? string.Empty,
+                row.LastValidatedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—",
                 kind);
 
-            var grid = _pending.Rows[index];
-            grid.Tag = row;
-
-            if (row.Priority != Domain.Orders.OrderPriority.Routine)
-                grid.DefaultCellStyle.ForeColor = UiTheme.Critical;
+            _pending.Rows[index].Tag = row;
         }
 
         _pending.ResumeLayout(performLayout: true);
@@ -529,14 +1038,21 @@ public sealed class ReportRegisterView : LocalizedView
             }
         }
 
-        _pendingHeading.Text = T("Report.PendingRelease", _pendingRows.Count);
-        _pendingSection.Visible = _pendingRows.Count > 0;
+        if (_pending.CurrentRow is null && _pending.Rows.Count > 0)
+            _pending.SelectFirstRow();
 
+        RenderTabs();
+        ShowPreview();
         RefreshActions();
     }
 
+    /// <summary>The waiting file under the cursor, while « À émettre » is shown.</summary>
     private PendingReportRow? SelectedPending =>
-        _pendingSection.Visible ? _pending.CurrentRow?.Tag as PendingReportRow : null;
+        _tab == ReportTab.ToIssue ? _pending.CurrentRow?.Tag as PendingReportRow : null;
+
+    /// <summary>The released version under the cursor, while the register is shown.</summary>
+    private ReportRegisterRow? Selected =>
+        _tab != ReportTab.ToIssue ? _register.CurrentRow?.Tag as ReportRegisterRow : null;
 
     private async Task LoadDeliveriesAsync(CancellationToken ct = default)
     {
@@ -545,6 +1061,7 @@ public sealed class ReportRegisterView : LocalizedView
         if (Selected is not { } row)
         {
             _deliveryHeading.Text = T("Report.Deliveries");
+            _deliveryHeading.ForeColor = UiTheme.TextSecondary;
             RefreshActions();
             return;
         }
@@ -591,7 +1108,69 @@ public sealed class ReportRegisterView : LocalizedView
         RefreshActions();
     }
 
-    private ReportRegisterRow? Selected => _register.CurrentRow?.Tag as ReportRegisterRow;
+    /// <summary>
+    /// « Aperçu »: the selected file or version, sketched as its first page, with who signs, who
+    /// prescribed and which versions exist. A waiting file has no signatory yet — the release
+    /// resolves it — and no document to open.
+    /// </summary>
+    private void ShowPreview()
+    {
+        var site = _currentUser.SiteCode;
+
+        if (SelectedPending is { } pending)
+        {
+            var (final, next) = ReportRegisterRules.NextRelease(pending);
+            var kind = T($"ReportCompleteness.{(final ? "Final" : "Partial")}");
+            var name = PatientName(pending.PatientName, pending.PatientNameArabic);
+
+            _previewTitle.Text = $"{T("Report.Preview")} · {pending.AccessionNumber}";
+            _preview.Show(site, $"v{next}", name, $"{pending.AccessionNumber} · {kind}", T("Validation.Signature"));
+            _preview.Visible = true;
+            _openPdf.Visible = false;
+
+            _signatory.Text = T("Report.SignatoryAtRelease");
+            _signatory.ForeColor = UiTheme.TextSecondary;
+            _prescriber.Text = pending.PrescriberName ?? "—";
+            _versions.Text = pending.ReleasedVersions == 0
+                ? T("Report.NoneIssued")
+                : T("Report.IssuedVersions", pending.ReleasedVersions, next);
+            _versions.ForeColor = UiTheme.TextSecondary;
+            _delivery.Text = "—";
+            return;
+        }
+
+        if (Selected is { } row)
+        {
+            var name = PatientName(row.PatientName, row.PatientNameArabic);
+            var kind = T($"ReportCompleteness.{row.Completeness}");
+
+            _previewTitle.Text = $"{T("Report.Preview")} · {row.AccessionNumber}";
+            _preview.Show(site, $"v{row.VersionNumber}", name,
+                          $"{row.AccessionNumber} · {kind} · {row.ReleasedAt.ToLocalTime():dd/MM/yyyy}",
+                          row.SignatoryName);
+            _preview.Visible = true;
+            _openPdf.Visible = row.HasStoredPdf;
+
+            _signatory.Text = row.SignatoryName.Length > 0 ? row.SignatoryName : "—";
+            _signatory.ForeColor = UiTheme.TextPrimary;
+            _prescriber.Text = row.PrescriberName ?? "—";
+
+            var version = new List<string>(4) { $"v{row.VersionNumber} · {kind}" };
+            if (row.IsAmendment) version.Add(T($"ReportAmendmentKind.{row.AmendmentKind}"));
+            if (row.IsSuperseded) version.Add(T("Report.Superseded"));
+            if (row.PageCount > 0) version.Add(T("Report.PageCountShort", row.PageCount));
+            _versions.Text = string.Join(" · ", version);
+            _versions.ForeColor = row.IsSuperseded ? UiTheme.TextMuted : UiTheme.TextPrimary;
+
+            _delivery.Text = DeliveryText(row);
+            return;
+        }
+
+        _previewTitle.Text = T("Report.Preview");
+        _preview.Visible = false;
+        _openPdf.Visible = false;
+        _signatory.Text = _prescriber.Text = _versions.Text = _delivery.Text = "—";
+    }
 
     private void RefreshActions()
     {
@@ -604,6 +1183,7 @@ public sealed class ReportRegisterView : LocalizedView
 
         _reprint.Enabled = idle && row is { HasStoredPdf: true }
                            && _currentUser.Has(Permissions.Reports.ReprintValidated);
+        _openPdf.Enabled = _reprint.Enabled;
 
         _recordDelivery.Enabled = idle && row is not null
                                   && (_currentUser.Has(Permissions.Reports.Print)
@@ -612,6 +1192,8 @@ public sealed class ReportRegisterView : LocalizedView
         // An amendment supersedes the current version, so it is offered on that version only.
         _amend.Enabled = idle && row is { IsSuperseded: false }
                          && _currentUser.Has(Permissions.Reports.Amend);
+
+        _refresh.Enabled = idle;
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -758,6 +1340,10 @@ public sealed class ReportRegisterView : LocalizedView
     private async Task AmendAsync()
     {
         if (Selected is not { } row) return;
+
+        // The menu item is not a gated control: the right is checked again here. The service
+        // refuses in any case.
+        if (row.IsSuperseded || !_currentUser.Has(Permissions.Reports.Amend)) return;
 
         using var dialog = new ReportAmendmentDialog(Localizer, _dialogs, row);
 
