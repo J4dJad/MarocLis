@@ -1470,12 +1470,9 @@ public sealed class CollectionView : LocalizedView
 
             var typed = row.Cells[ColVolume].Value?.ToString()?.Trim();
 
-            decimal? volume = decimal.TryParse(
-                typed?.Replace(',', '.'),
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var parsed)
-                    ? parsed
-                    : null;
+            // The shared reader, as for an aliquot: the nominal volume pre-filled in the cell is
+            // written with the culture's separators, a figure past 999 with its group space.
+            var volume = EditorValues.ParseDecimal(typed);
 
             if ((!string.IsNullOrEmpty(typed) && volume is null)
                 || volume is <= 0m or >= Sample.MaximumVolumeMl)

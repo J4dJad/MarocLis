@@ -276,6 +276,10 @@ public sealed class RecollectionView : LocalizedView
     /// <summary>The card of the highlighted patient, or the line that asks for one.</summary>
     private void ShowSelected()
     {
+        // « Noter un appel » sits above the list: greyed out while no patient is highlighted (a
+        // filter or a search that leaves nothing), rather than answering with a warning.
+        _call.Enabled = _grid.CurrentRow?.Tag is RecollectionRow;
+
         if (_grid.CurrentRow?.Tag is not RecollectionRow row)
         {
             _aside.ShowRow(false);

@@ -404,8 +404,10 @@ public sealed class SubcontractingView : LocalizedView
         }
         catch (Exception ex)
         {
+            // Logged with its detail; the operator gets the message in their language, not the
+            // runtime's English text.
             _logger?.LogError(ex, "Printing dispatch slip {Number} failed.", number);
-            _dialogs.Error(ex.Message, T("Action.Print"));
+            _dialogs.Error(T("Message.UnexpectedError"), T("Action.Print"));
         }
     }
 
@@ -459,7 +461,7 @@ public sealed class SubcontractingView : LocalizedView
 
         var value = _dialogs.PromptForText(
             T("Subcontract.PartnerReferencePrompt", row.AccessionNumber, row.PartnerName?.For(Localizer.CurrentLanguage)),
-            T("Subcontract.PartnerReference"), row.PartnerReference);
+            T("Subcontract.PartnerReference"), row.PartnerReference, maxLength: 60);
 
         if (value is null) return;
 
