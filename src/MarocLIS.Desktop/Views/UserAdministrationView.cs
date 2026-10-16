@@ -1331,6 +1331,15 @@ internal sealed class UserDialog : Form
         _validUntil.Value = DateTime.Today.AddYears(1);
         _validUntil.Enabled = false;
 
+        // The lengths of the columns: a longer value was refused by the database with an unexpected
+        // error, and the form was lost with it.
+        _userName.MaxLength = 60;
+        _fullName.MaxLength = _fullNameArabic.MaxLength = _email.MaxLength = 200;
+        _phone.MaxLength = 30;
+        _orderNumber.MaxLength = 40;
+        _inpe.MaxLength = 20;
+        _departments.MaxLength = 500;
+
         y += 54;
 
         _qualificationNotice.Font = UiTheme.Small;
