@@ -4943,6 +4943,7 @@
   "Patient_AnonymizeJustificationRequired": "Anonymisation must be justified: it answers a patient request and has to be defensible to the CNDP.",
   "Patient_RetentionNotExpired": "The retention obligation runs until {0}, and outranks the erasure request.",
   "Patient_EstimatedAgeInvalid": "The estimated age must be between 0 and 130 years.",
+  "Patient_BodyMeasureOutOfRange": "Implausible weight or height: weight goes up to {0} kg and height up to {1} cm.",
 
   "Coverage_NotFound": "Coverage not found.",
 
@@ -5283,6 +5284,7 @@
   "CashSession_NotFound": "Cash session not found.",
   "CashSession_ReconcilerIsOperator": "The sign-off must come from someone other than the cashier: you ran this till.",
   "CashSession_ReconciliationCommentRequired": "The till shows a variance of {0} MAD: a comment is required to sign it off.",
+  "CashSession_WithdrawalExceedsCash": "The withdrawal exceeds the cash expected in the till ({0} MAD).",
 
   "Qc_RejectionRequiresCorrectiveAction": "A rejected control requires the corrective action taken to be described.",
   "Qc_NotRejected": "This control is not rejected.",

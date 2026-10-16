@@ -4943,6 +4943,7 @@
   "Patient_AnonymizeJustificationRequired": "إخفاء الهوية يجب تعليله: فهو استجابة لطلب المريض ويجب أن يكون قابلاً للتبرير أمام اللجنة الوطنية.",
   "Patient_RetentionNotExpired": "التزام الاحتفاظ ساري إلى غاية {0}: وهو يعلو على طلب المحو.",
   "Patient_EstimatedAgeInvalid": "يجب أن يكون السن التقديري بين 0 و130 سنة.",
+  "Patient_BodyMeasureOutOfRange": "وزن أو طول غير معقول: الوزن حتى {0} كغ والطول حتى {1} سم.",
 
   "Coverage_NotFound": "التغطية غير موجودة.",
 
@@ -5283,6 +5284,7 @@
   "CashSession_NotFound": "جلسة الصندوق غير موجودة.",
   "CashSession_ReconcilerIsOperator": "يجب أن يمنح التأشير شخص غير أمين الصندوق: أنت من تولى هذا الصندوق.",
   "CashSession_ReconciliationCommentRequired": "يظهر الصندوق فرقاً قدره {0} درهم: التعليق إلزامي للتأشير عليه.",
+  "CashSession_WithdrawalExceedsCash": "يتجاوز السحب النقد المتوقع في الصندوق ({0} درهم).",
 
   "Qc_RejectionRequiresCorrectiveAction": "المراقبة المرفوضة تستلزم وصف الإجراء التصحيحي المُتخذ.",
   "Qc_NotRejected": "هذه المراقبة غير مرفوضة.",

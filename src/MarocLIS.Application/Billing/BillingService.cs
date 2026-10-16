@@ -531,7 +531,7 @@ public sealed class BillingService(
         if (partialAmount is { } partial)
         {
             // A partial reversal is one line for the agreed amount, described by its reason.
-            var added = creditNote.AddLine(new InvoiceLine($"Avoir partiel — {reason}", partial));
+            var added = creditNote.AddLine(new InvoiceLine(LineDescription($"Avoir partiel — {reason}"), partial));
             if (added.IsFailure) return Result.Failure<Guid>(added.Errors);
         }
         else if (original.CreditedAmount > 0m)
@@ -539,7 +539,7 @@ public sealed class BillingService(
             // Part of the invoice was already reversed: mirroring every line again would credit it
             // twice. The balance is credited as one line.
             var added = creditNote.AddLine(
-                new InvoiceLine($"Avoir du solde de la facture {original.Number} — {reason}", creditable));
+                new InvoiceLine(LineDescription($"Avoir du solde de la facture {original.Number} — {reason}"), creditable));
             if (added.IsFailure) return Result.Failure<Guid>(added.Errors);
         }
         else
@@ -602,6 +602,16 @@ public sealed class BillingService(
 
         return Result.Success(creditNote.Id);
     }
+
+    /// <summary>
+    /// A credit note's line quotes its reason, which may run to 500 characters while a line holds
+    /// 300: the longer reasons failed the credit note with an unexpected error. The line is cut;
+    /// the reason stays whole on the credit note itself.
+    /// </summary>
+    private static string LineDescription(string text) =>
+        text.Length <= InvoiceLineDescriptionMaxLength ? text : string.Concat(text.AsSpan(0, InvoiceLineDescriptionMaxLength - 1), "…");
+
+    private const int InvoiceLineDescriptionMaxLength = 300;
 
     // ---- Deposits -------------------------------------------------------------------------------
 
@@ -1009,6 +1019,12 @@ public sealed class BillingService(
 
         var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
         if (session is null) return Result.Failure(Error.Conflict("CashSession_NotOpen"));
+
+        // Never more than the drawer should hold: a mistyped 5 000 for 500 left the expected cash
+        // negative, and the shift closed on a surplus as large as the typing error.
+        if (Money.Round(amount) > session.ExpectedClosingCash)
+            return Result.Failure(Error.Validation("CashSession_WithdrawalExceedsCash",
+                                                   session.ExpectedClosingCash));
 
         session.RecordWithdrawal(amount, clock.Now, reason);
 

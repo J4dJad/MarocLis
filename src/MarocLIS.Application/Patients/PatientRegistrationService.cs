@@ -179,6 +179,9 @@ public sealed class PatientRegistrationService(
         if (permitted.IsFailure)
             return Result.Failure<PatientRegistrationOutcome>(permitted.FirstError);
 
+        var measures = CheckBodyMeasures(identity);
+        if (measures.IsFailure) return Result.Failure<PatientRegistrationOutcome>(measures.Errors);
+
         var today = clock.Today;
         var cin = Normalise(identity.Cin);
 
@@ -328,6 +331,9 @@ public sealed class PatientRegistrationService(
     {
         var permitted = guard.Require(Permissions.Patients.Edit);
         if (permitted.IsFailure) return permitted;
+
+        var measures = CheckBodyMeasures(identity);
+        if (measures.IsFailure) return measures;
 
         var patient = await patients.GetByIdWithDetailsAsync(patientId, ct);
         if (patient is null) return Result.Failure(Error.NotFound("Patient_NotFound"));
@@ -635,6 +641,11 @@ public sealed class PatientRegistrationService(
         if (surviving.MergedIntoPatientId is not null)
             return Result.Failure(Error.Conflict("Patient_SurvivorAlreadyMerged"));
 
+        // An anonymised file is the trace of an erasure, not a live file: merged into, it took a
+        // living file's history under a pseudonym; merged away, a search led to it again.
+        if (duplicate.IsAnonymized || surviving.IsAnonymized)
+            return Result.Failure(Error.Regulatory("Patient_AnonymizedIsReadOnly"));
+
         // The duplicate's pending orders were interpreted with the duplicate's demographics and
         // checked against the duplicate's history, which is usually none; from now on they are the
         // survivor's, the file that gets corrected and holds the years of history. Read before the
@@ -733,6 +744,19 @@ public sealed class PatientRegistrationService(
     }
 
     // ---- Internals -----------------------------------------------------------------------------
+
+    /// <summary>The heaviest weight and the tallest height a file accepts.</summary>
+    public const decimal MaxWeightKg = 500m, MaxHeightCm = 300m;
+
+    /// <summary>
+    /// A weight or a height typed with a few digits too many: beyond what its column holds the save
+    /// failed with an unexpected error and the form was lost; below that, it went into the body
+    /// surface area used by the calculated results.
+    /// </summary>
+    private static Result CheckBodyMeasures(PatientIdentityRequest identity) =>
+        identity.WeightKg is > MaxWeightKg || identity.HeightCm is > MaxHeightCm
+            ? Result.Failure(Error.Validation("Patient_BodyMeasureOutOfRange", MaxWeightKg, MaxHeightCm))
+            : Result.Success();
 
     private async Task<IReadOnlyList<DuplicateCandidate>> FindCandidatesAsync(
         string lastName, string firstName, string? cin, DateOnly? dateOfBirth,

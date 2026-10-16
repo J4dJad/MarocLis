@@ -4944,6 +4944,7 @@
   "Patient_AnonymizeJustificationRequired": "L'anonymisation doit être motivée : elle répond à une demande du patient et doit pouvoir être justifiée à la CNDP.",
   "Patient_RetentionNotExpired": "L'obligation de conservation court jusqu'au {0} : elle prime sur la demande de suppression.",
   "Patient_EstimatedAgeInvalid": "L'âge estimé doit être compris entre 0 et 130 ans.",
+  "Patient_BodyMeasureOutOfRange": "Poids ou taille invraisemblable : le poids va jusqu'à {0} kg et la taille jusqu'à {1} cm.",
 
   "Coverage_NotFound": "Couverture introuvable.",
 
@@ -5284,6 +5285,7 @@
   "CashSession_NotFound": "Session de caisse introuvable.",
   "CashSession_ReconcilerIsOperator": "Le visa est donné par un autre que le caissier : vous avez tenu cette caisse.",
   "CashSession_ReconciliationCommentRequired": "La caisse présente un écart de {0} DH : un commentaire est obligatoire pour la viser.",
+  "CashSession_WithdrawalExceedsCash": "Le prélèvement dépasse les espèces attendues en caisse ({0} DH).",
 
   "Qc_RejectionRequiresCorrectiveAction": "Un contrôle rejeté exige la description de l'action corrective entreprise.",
   "Qc_NotRejected": "Ce contrôle n'est pas rejeté.",

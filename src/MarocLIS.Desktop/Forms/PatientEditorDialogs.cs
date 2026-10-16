@@ -48,6 +48,15 @@ internal sealed class CoverageDialog : Form
         _dialogs = dialogs;
         _payers = payers;
 
+        // The lengths of the coverage's columns: a longer text failed the patient's save with an
+        // unexpected error, and on a new patient the whole form was lost with it.
+        foreach (var (box, length) in new[]
+                 {
+                     (_membership, 40), (_insuredName, 200), (_insuredCin, 20), (_employer, 200),
+                     (_priorAgreement, 60), (_rateOverride, 10)
+                 })
+            box.MaxLength = length;
+
         Text = localizer["Coverage.Add"];
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
@@ -340,6 +349,14 @@ internal sealed class ConsentDialog : Form
         _localizer = localizer;
         _dialogs = dialogs;
         _isMinor = isMinor;
+
+        // The lengths of the consent's columns: a longer text failed the save with an unexpected error.
+        foreach (var (box, length) in new[]
+                 {
+                     (_signedBy, 200), (_signedByCin, 20), (_signedByRelationship, 60), (_formVersion, 40),
+                     (_notes, 1000)
+                 })
+            box.MaxLength = length;
 
         Text = localizer["Consent.Record"];
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -738,6 +755,9 @@ internal sealed class PatientAlertDialog : Form
     {
         _localizer = localizer;
         _dialogs = dialogs;
+
+        // The length of the alert's message columns: a longer one failed the save with an unexpected error.
+        _messageFr.MaxLength = _messageAr.MaxLength = 500;
 
         Text = localizer["Patient.AddAlert"];
         StartPosition = FormStartPosition.CenterParent;

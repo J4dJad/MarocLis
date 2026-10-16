@@ -177,7 +177,10 @@ public sealed class ClaimBatchView : LocalizedView
         // and sending a mixed batch is how a payer rejects the whole thing.
         _candidates.Columns.Add(new DataGridViewCheckBoxColumn
         {
-            Name = ColSelected, HeaderText = string.Empty, FillWeight = 5
+            Name = ColSelected, HeaderText = string.Empty, FillWeight = 5,
+            // Fixed: in fill mode the box took a share of the width (140 px at 1366) and pushed
+            // « Ce qui bloque » out of sight behind a sideways scroll.
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None, Width = 36, Resizable = DataGridViewTriState.False
         });
 
         AddColumns(_candidates,

@@ -28,6 +28,9 @@ public sealed record PatientSearchRow(
 {
     /// <summary>What the file's identity still lacks; <see cref="PatientIdentityGap.None"/> when complete.</summary>
     public PatientIdentityGap IdentityGaps { get; init; }
+
+    /// <summary>The file was anonymised: kept as the trace of an erasure, closed to any change.</summary>
+    public bool IsAnonymized { get; init; }
 }
 
 /// <summary>
@@ -319,6 +322,7 @@ public sealed class PatientQueries(LisDbContext db, IClock clock, IPermissionGua
             r.OrderCount,
             r.HasCriticalAlert)
         {
+            IsAnonymized = r.IsAnonymized,
             IdentityGaps = r.IsAnonymized
                 ? PatientIdentityGap.None
                 : (r.IsProvisionalIdentity ? PatientIdentityGap.Provisional : PatientIdentityGap.None)
