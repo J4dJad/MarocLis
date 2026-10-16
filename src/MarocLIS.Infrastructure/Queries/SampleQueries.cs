@@ -247,10 +247,12 @@ public sealed class SampleQueries(LisDbContext db) : ISampleQueries
                           .Select(c => new
                           {
                               c.Name,
+                              c.CapColourHex,
                               c.MinimumVolumeMl,
                               c.RequiresIceTransport
                           })
-                          .FirstOrDefault()
+                          .FirstOrDefault(),
+                      TotalSamplesInOrder = db.Samples.Count(t => t.LabOrderId == x.Sample.LabOrderId)
                   })
             .OrderByDescending(x => x.Priority)
             .ThenBy(x => x.CollectedAt)
@@ -306,6 +308,8 @@ public sealed class SampleQueries(LisDbContext db) : ISampleQueries
                     Elapsed = elapsed,
                     SpecimenTypeName = r.SpecimenTypeName ?? new Domain.Common.MultilingualText("-"),
                     ContainerName = r.Container?.Name,
+                    ContainerColourHex = r.Container?.CapColourHex,
+                    TotalSamplesInOrder = r.TotalSamplesInOrder,
                     VolumeMl = r.VolumeMl,
                     MinimumVolumeMl = r.Container?.MinimumVolumeMl,
                     ExistingDefects = r.Defects,
@@ -317,6 +321,20 @@ public sealed class SampleQueries(LisDbContext db) : ISampleQueries
                 };
             })
         ];
+    }
+
+    public async Task<IReadOnlyList<string>> GetStorageLocationsAsync(Guid siteId, CancellationToken ct = default)
+    {
+        var places = await db.Samples.AsNoTracking()
+            .Where(s => s.SiteId == siteId && s.StorageLocation != null && s.StorageLocation != "")
+            .Select(s => s.StorageLocation!)
+            .Distinct()
+            .OrderBy(l => l)
+            .Take(100)
+            .ToListAsync(ct);
+
+        // Trailing spaces make two entries of one fridge in the database, not in the list.
+        return [.. places.Select(p => p.Trim()).Distinct(StringComparer.CurrentCultureIgnoreCase)];
     }
 
     public async Task<IReadOnlyList<SampleLabel>> GetLabelsForOrderAsync(

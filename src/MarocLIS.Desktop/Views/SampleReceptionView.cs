@@ -26,9 +26,23 @@ namespace MarocLIS.Desktop.Views;
 /// <item><b>A rejection reason comes from a closed list.</b> The rejection rate by reason is a
 /// mandatory quality indicator, and free text cannot be counted.</item>
 /// </list>
+/// <para>
+/// Laid out as the design system's « Réception des échantillons » screen: one card for the scanned
+/// tube — scan box, the tube's band with its transport delay, the non-conformities as toggles, the
+/// conditions and the decision — and below it the card of tubes awaiting reception, with chips.
+/// </para>
 /// </summary>
 public sealed class SampleReceptionView : LocalizedView
 {
+    private const string ColBarcode = "barcode";
+    private const string ColAccession = "accession";
+    private const string ColPatient = "patient";
+    private const string ColSpecimen = "specimen";
+    private const string ColPriority = "priority";
+    private const string ColCollected = "collected";
+    private const string ColElapsed = "elapsed";
+    private const string ColVerdict = "verdict";
+
     private readonly SampleWorkflowService _workflow;
     private readonly ISampleLabelRenderer _labels;
     private readonly ILabelPrinter _labelPrinter;
@@ -37,38 +51,55 @@ public sealed class SampleReceptionView : LocalizedView
     private readonly ILogger<SampleReceptionView>? _logger;
 
     // Scan
-    private readonly TextBox _scan = UiTheme.Input(280);
+    private readonly TextBox _scan = UiTheme.Input(320);
     private readonly Label _scanLabel = new();
+    private readonly Label _scanHint = new();
 
     // Candidate detail
     private readonly Panel _detail = new();
+    private readonly TubeCapControl _detailCap = new();
     private readonly Label _patientLine = new();
+    private readonly Label _accessionLine = new();
+    private readonly PillLabel _priorityPill = new();
     private readonly Label _orderLine = new();
     private readonly Label _tubeLine = new();
+    private readonly Label _delayCaption = new();
+    private readonly Label _delayValue = new();
     private readonly Label _delayLine = new();
 
     // Conformity
-    private readonly GroupBox _defectBox = new();
+    private readonly Label _defectLegend = new();
+    private readonly FlowLayoutPanel _defectBox = new();
     private readonly Dictionary<SampleDefect, CheckBox> _defectChecks = [];
     private readonly Label _temperatureLabel = new();
-    private readonly TextBox _temperature = UiTheme.Input(80);
+    private readonly TextBox _temperature = UiTheme.Input(120);
     private readonly CheckBox _coldChain = new();
     private readonly Label _storageLabel = new();
-    private readonly TextBox _storage = UiTheme.Input(140);
+    private readonly ComboBox _storage = new();
+    private Control? _temperatureField;
 
     // Actions
     private readonly Button _accept = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _acceptReserved = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _reject = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _rejectReasonLabel = new();
     private readonly ComboBox _rejectReason = new();
     private readonly CheckBox _requestRecollection = new();
+    private readonly Panel _statusStrip = new();
     private readonly Label _status = new();
+    private readonly ToolTip _tips = new();
 
     // Pending list
     private readonly DataGridView _awaiting = UiTheme.Grid();
     private readonly Label _awaitingHeading = new();
+    private readonly Label _awaitingCount = new();
+    private readonly ChipButton _chipAll = new();
+    private readonly ChipButton _chipUrgent = new();
+    private readonly ChipButton _chipLongDelay = new();
 
     private SampleReceptionCandidate? _candidate;
+    private IReadOnlyList<SampleReceptionCandidate> _awaitingRows = [];
+    private AwaitingFilter _filter = AwaitingFilter.All;
 
     // Set while an accept or reject for the displayed tube is being recorded. A scan arriving then
     // is held and shown once the decision is in, rather than replacing the tube being decided.
@@ -94,147 +125,453 @@ public sealed class SampleReceptionView : LocalizedView
 
     public override string Title => T("Nav.SampleReception");
 
+    private bool IsRightToLeft => RightToLeft == RightToLeft.Yes;
+
+    private enum AwaitingFilter { All, Urgent, LongDelay }
+
     // ---- Layout ------------------------------------------------------------------------------------
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(0);
 
-        // --- scan bar -----------------------------------------------------------------------------
+        var statusStrip = BuildStatusStrip();
 
-        var scanBar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
-
-        _scanLabel.Font = UiTheme.Small;
-        _scanLabel.ForeColor = UiTheme.TextSecondary;
-        _scanLabel.AutoSize = true;
-        _scanLabel.Location = new Point(0, 4);
-
-        _scan.Tag = UiTags.LatinValue;
-        _scan.Font = UiTheme.Mono(12f);
-        _scan.Location = new Point(0, 22);
-        _scan.Height = 30;
-
-        scanBar.Controls.AddRange([_scanLabel, _scan]);
-
-        // --- candidate detail ----------------------------------------------------------------------
-
-        _detail.Dock = DockStyle.Top;
-        _detail.Height = 104;
-        _detail.BackColor = UiTheme.SurfaceRaised;
-        _detail.Padding = new Padding(UiTheme.Gutter, UiTheme.GutterTight, UiTheme.Gutter, 0);
-        _detail.Visible = false;
-
-        _patientLine.Font = UiTheme.SectionTitle;
-        _patientLine.ForeColor = UiTheme.TextPrimary;
-        _patientLine.Dock = DockStyle.Top;
-        _patientLine.Height = 26;
-
-        _orderLine.Font = UiTheme.Body;
-        _orderLine.ForeColor = UiTheme.TextSecondary;
-        _orderLine.Dock = DockStyle.Top;
-        _orderLine.Height = 20;
-
-        _tubeLine.Font = UiTheme.Body;
-        _tubeLine.ForeColor = UiTheme.TextSecondary;
-        _tubeLine.Dock = DockStyle.Top;
-        _tubeLine.Height = 20;
-
-        // The computed verdict, in its own emphasised band.
-        _delayLine.Font = UiTheme.BodyBold;
-        _delayLine.Dock = DockStyle.Top;
-        _delayLine.Height = 22;
-
-        _detail.Controls.Add(_delayLine);
-        _detail.Controls.Add(_tubeLine);
-        _detail.Controls.Add(_orderLine);
-        _detail.Controls.Add(_patientLine);
-
-        // --- conformity panel ----------------------------------------------------------------------
-
-        var conformity = new Panel
+        var content = new TableLayoutPanel
         {
-            Dock = DockStyle.Top, Height = 196,
-            BackColor = UiTheme.Surface, Padding = new Padding(0, UiTheme.GutterTight, 0, 0)
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Padding = new Padding(24, 16, 24, 12),
+            Margin = new Padding(0),
+            BackColor = UiTheme.Surface
         };
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        _defectBox.Text = string.Empty;
-        _defectBox.Font = UiTheme.Small;
-        _defectBox.ForeColor = UiTheme.TextSecondary;
-        _defectBox.Bounds = new Rectangle(0, 4, 520, 150);
+        content.Controls.Add(BuildScanCard(), 0, 0);
+        content.Controls.Add(BuildAwaitingCard(), 0, 1);
 
-        BuildDefectChecks();
-
-        _temperatureLabel.Font = UiTheme.Small;
-        _temperatureLabel.ForeColor = UiTheme.TextSecondary;
-        _temperatureLabel.AutoSize = true;
-        _temperatureLabel.Location = new Point(540, 10);
-
-        _temperature.Location = new Point(540, 28);
-        _temperature.Tag = UiTags.LatinValue;
-
-        _coldChain.Font = UiTheme.Small;
-        _coldChain.ForeColor = UiTheme.TextSecondary;
-        _coldChain.AutoSize = true;
-        _coldChain.Location = new Point(540, 62);
-        _coldChain.Checked = true;
-
-        _storageLabel.Font = UiTheme.Small;
-        _storageLabel.ForeColor = UiTheme.TextSecondary;
-        _storageLabel.AutoSize = true;
-        _storageLabel.Location = new Point(540, 92);
-
-        _storage.Location = new Point(540, 110);
-
-        _accept.Bounds = new Rectangle(0, 160, 180, UiTheme.ButtonHeight);
-        _acceptReserved.Bounds = new Rectangle(190, 160, 220, UiTheme.ButtonHeight);
-        _reject.Bounds = new Rectangle(420, 160, 140, UiTheme.ButtonHeight);
-
-        _rejectReason.DropDownStyle = ComboBoxStyle.DropDownList;
-        _rejectReason.FlatStyle = FlatStyle.Flat;
-        _rejectReason.Font = UiTheme.Small;
-        _rejectReason.Bounds = new Rectangle(570, 160, 260, UiTheme.InputHeight);
-
-        _requestRecollection.Font = UiTheme.Small;
-        _requestRecollection.ForeColor = UiTheme.TextSecondary;
-        _requestRecollection.AutoSize = true;
-        _requestRecollection.Location = new Point(840, 164);
-        _requestRecollection.Checked = true;
-
-        conformity.Controls.AddRange([_defectBox, _temperatureLabel, _temperature, _coldChain,
-                                      _storageLabel, _storage,
-                                      _accept, _acceptReserved, _reject,
-                                      _rejectReason, _requestRecollection]);
-
-        // --- awaiting list --------------------------------------------------------------------------
-
-        _awaitingHeading.Font = UiTheme.SmallBold;
-        _awaitingHeading.ForeColor = UiTheme.TextSecondary;
-        _awaitingHeading.Dock = DockStyle.Top;
-        _awaitingHeading.Height = 24;
-
-        BuildAwaitingColumns();
-
-        var awaitingHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        awaitingHost.Controls.Add(_awaiting);
-        awaitingHost.Controls.Add(_awaitingHeading);
-
-        var statusBar = new Panel { Dock = DockStyle.Bottom, Height = 28, BackColor = UiTheme.Surface };
-        _status.Dock = DockStyle.Fill;
-        _status.Font = UiTheme.Small;
-        _status.ForeColor = UiTheme.TextSecondary;
-        statusBar.Controls.Add(_status);
-
-        Controls.Add(awaitingHost);
-        Controls.Add(statusBar);
-        Controls.Add(conformity);
-        Controls.Add(_detail);
-        Controls.Add(scanBar);
+        Controls.Add(content);
+        Controls.Add(statusStrip);
 
         SetActionsEnabled(false);
     }
 
+    private Control BuildStatusStrip()
+    {
+        _statusStrip.Dock = DockStyle.Bottom;
+        _statusStrip.Height = 26;
+        _statusStrip.Padding = new Padding(24, 2, 24, 4);
+        _statusStrip.BackColor = UiTheme.Surface;
+        _statusStrip.Tag = UiTags.OwnLayout;
+
+        _status.Dock = DockStyle.Fill;
+        _status.AutoSize = false;
+        _status.AutoEllipsis = true;
+        _status.Font = UiTheme.Small;
+        _status.ForeColor = UiTheme.TextSecondary;
+        _status.TextAlign = ContentAlignment.MiddleLeft;
+        _status.TextChanged += (_, _) => _tips.SetToolTip(_status, _status.Text);
+        _statusStrip.Controls.Add(_status);
+
+        return _statusStrip;
+    }
+
+    /// <summary>The scanned tube: scan box, the tube's band, the non-conformities, the decision.</summary>
+    private Control BuildScanCard()
+    {
+        var card = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Margin = new Padding(0, 0, 0, 14),
+            Padding = new Padding(16, 14, 16, 14),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        UiChrome.AsCard(card);
+
+        var stack = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 6,
+            Margin = new Padding(0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (var i = 0; i < 6; i++) stack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        // --- scan row -------------------------------------------------------------------------------
+
+        var scanRow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = true,
+            Margin = new Padding(0, 0, 0, 12),
+            BackColor = UiTheme.SurfaceRaised
+        };
+
+        _scanLabel.Font = UiTheme.BodyBold;
+        _scanLabel.ForeColor = UiTheme.TextPrimary;
+        _scanLabel.AutoSize = true;
+        _scanLabel.Margin = new Padding(0, 10, 12, 0);
+
+        _scan.Tag = UiTags.LatinValue;
+        _scan.Font = UiTheme.Mono(12f, FontStyle.Bold);
+        _scan.Width = 320;
+        _scan.Margin = new Padding(0, 0, 12, 0);
+
+        _scanHint.Font = UiTheme.Body;
+        _scanHint.ForeColor = UiTheme.TextSecondary;
+        _scanHint.AutoSize = true;
+        _scanHint.Margin = new Padding(0, 10, 0, 0);
+
+        scanRow.Controls.AddRange([_scanLabel, _scan, _scanHint]);
+
+        // --- the tube's band ------------------------------------------------------------------------
+
+        _detail.Dock = DockStyle.Fill;
+        _detail.Height = 96;
+        _detail.Margin = new Padding(0, 0, 0, 12);
+        _detail.Padding = new Padding(14, 10, 14, 10);
+        _detail.BackColor = UiTheme.AccentSubtle;
+        _detail.Visible = false;
+        UiChrome.AsCard(_detail, UiTheme.AccentSubtle);
+
+        var band = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 1,
+            Margin = new Padding(0),
+            BackColor = UiTheme.AccentSubtle
+        };
+        band.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        band.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        band.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        band.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        _detailCap.Anchor = AnchorStyles.Left;
+        _detailCap.Margin = new Padding(0, 0, 16, 0);
+
+        var lines = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Margin = new Padding(0),
+            BackColor = UiTheme.AccentSubtle
+        };
+        lines.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (var i = 0; i < 4; i++) lines.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        // Line 1: the patient, the file number and the priority.
+        var first = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0),
+            BackColor = UiTheme.AccentSubtle
+        };
+
+        _patientLine.Font = EntryPaint.Resized(UiTheme.SectionTitle, 12f);
+        _patientLine.ForeColor = UiTheme.AccentInk;
+        _patientLine.AutoSize = true;
+        _patientLine.Margin = new Padding(0, 0, 8, 0);
+
+        _accessionLine.Font = UiTheme.Monospace;
+        _accessionLine.ForeColor = UiTheme.TextPrimary;
+        _accessionLine.AutoSize = true;
+        _accessionLine.Margin = new Padding(0, 3, 8, 0);
+
+        _priorityPill.Margin = new Padding(0, 2, 0, 0);
+
+        first.Controls.AddRange([_patientLine, _accessionLine, _priorityPill]);
+
+        foreach (var label in new[] { _orderLine, _tubeLine })
+        {
+            label.Font = UiTheme.Body;
+            label.ForeColor = UiTheme.TextSecondary;
+            label.AutoSize = false;
+            label.AutoEllipsis = true;
+            label.Dock = DockStyle.Fill;
+            label.Height = 19;
+            label.Margin = new Padding(0, 2, 0, 0);
+        }
+
+        // The computed verdict, in its own emphasised line.
+        _delayLine.Font = UiTheme.BodyBold;
+        _delayLine.AutoSize = false;
+        _delayLine.AutoEllipsis = true;
+        _delayLine.Dock = DockStyle.Fill;
+        _delayLine.Height = 19;
+        _delayLine.Margin = new Padding(0, 2, 0, 0);
+        _delayLine.Visible = false;
+
+        lines.Controls.Add(first, 0, 0);
+        lines.Controls.Add(_tubeLine, 0, 1);
+        lines.Controls.Add(_orderLine, 0, 2);
+        lines.Controls.Add(_delayLine, 0, 3);
+
+        var delay = new TableLayoutPanel
+        {
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 2,
+            Anchor = AnchorStyles.Right,
+            Margin = new Padding(16, 0, 0, 0),
+            BackColor = UiTheme.AccentSubtle
+        };
+        delay.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        delay.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        _delayCaption.Font = UiTheme.Small;
+        _delayCaption.ForeColor = UiTheme.TextSecondary;
+        _delayCaption.AutoSize = true;
+        _delayCaption.Anchor = AnchorStyles.Right;
+        _delayCaption.Margin = new Padding(0);
+
+        _delayValue.Font = UiTheme.Mono(13.5f, FontStyle.Bold);
+        _delayValue.AutoSize = true;
+        _delayValue.Anchor = AnchorStyles.Right;
+        _delayValue.Margin = new Padding(0, 2, 0, 0);
+
+        delay.Controls.Add(_delayCaption, 0, 0);
+        delay.Controls.Add(_delayValue, 0, 1);
+
+        band.Controls.Add(_detailCap, 0, 0);
+        band.Controls.Add(lines, 1, 0);
+        band.Controls.Add(delay, 2, 0);
+        _detail.Controls.Add(band);
+
+        // --- non-conformities -----------------------------------------------------------------------
+
+        _defectLegend.Font = UiTheme.SmallBold;
+        _defectLegend.ForeColor = UiTheme.TextSecondary;
+        _defectLegend.AutoSize = true;
+        _defectLegend.Margin = new Padding(0, 0, 0, 8);
+
+        _defectBox.Dock = DockStyle.Fill;
+        _defectBox.AutoSize = true;
+        _defectBox.WrapContents = true;
+        _defectBox.Margin = new Padding(0, 0, 0, 6);
+        _defectBox.BackColor = UiTheme.SurfaceRaised;
+
+        BuildDefectChecks();
+
+        // --- conditions and decision ----------------------------------------------------------------
+
+        var decision = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 2,
+            Margin = new Padding(0),
+            Padding = new Padding(0, 12, 0, 0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        decision.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        decision.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        decision.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        decision.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        // The line of the design system above the conditions.
+        decision.Paint += (_, e) =>
+        {
+            using var pen = new Pen(Color.FromArgb(0xE6, 0xEB, 0xEF));
+            e.Graphics.DrawLine(pen, 0, 0, decision.ClientSize.Width, 0);
+        };
+
+        var conditions = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = true,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+
+        _temperature.Tag = UiTags.LatinValue;
+        _temperature.Font = UiTheme.Monospace;
+        _temperature.PlaceholderText = "—";
+        _temperatureField = StackedField.Of(_temperatureLabel, _temperature, 120, new Padding(0, 0, 16, 0));
+
+        _coldChain.Font = UiTheme.Body;
+        _coldChain.ForeColor = UiTheme.TextPrimary;
+        _coldChain.AutoSize = true;
+        _coldChain.Margin = new Padding(0, 26, 16, 0);
+        _coldChain.Checked = true;
+
+        // Editable: the places already used are offered, a new one is typed in.
+        _storage.DropDownStyle = ComboBoxStyle.DropDown;
+        _storage.FlatStyle = FlatStyle.Flat;
+        _storage.Font = UiTheme.Body;
+        _storage.MaxLength = 100;
+        var storageField = StackedField.Of(_storageLabel, _storage, 240, new Padding(0, 0, 16, 0));
+
+        conditions.Controls.AddRange([_temperatureField, _coldChain, storageField]);
+
+        var acceptButtons = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
+            Margin = new Padding(12, 0, 0, 0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+
+        _acceptReserved.AutoSize = true;
+        _acceptReserved.MinimumSize = new Size(0, 34);
+        _acceptReserved.Margin = new Padding(0, 6, 8, 0);
+
+        _accept.AutoSize = true;
+        _accept.MinimumSize = new Size(0, 40);
+        _accept.Margin = new Padding(0, 3, 0, 0);
+
+        acceptButtons.Controls.AddRange([_acceptReserved, _accept]);
+
+        // The refusal, with its reason from the closed list and the recollection, on a line of its own.
+        var refusal = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = true,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 10, 0, 0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+
+        _rejectReasonLabel.Font = UiTheme.SmallBold;
+        _rejectReasonLabel.ForeColor = UiTheme.TextSecondary;
+        _rejectReasonLabel.AutoSize = true;
+        _rejectReasonLabel.Margin = new Padding(0, 10, 8, 0);
+
+        _rejectReason.DropDownStyle = ComboBoxStyle.DropDownList;
+        _rejectReason.FlatStyle = FlatStyle.Flat;
+        _rejectReason.Font = UiTheme.Body;
+        _rejectReason.Width = 260;
+        _rejectReason.Margin = new Padding(0, 5, 12, 0);
+
+        _requestRecollection.Font = UiTheme.Body;
+        _requestRecollection.ForeColor = UiTheme.TextSecondary;
+        _requestRecollection.AutoSize = true;
+        _requestRecollection.Margin = new Padding(0, 8, 12, 0);
+        _requestRecollection.Checked = true;
+
+        _reject.AutoSize = true;
+        _reject.MinimumSize = new Size(0, 34);
+        _reject.Margin = new Padding(0, 0, 0, 0);
+        _reject.ForeColor = UiTheme.CriticalInk;
+
+        refusal.Controls.AddRange([_rejectReasonLabel, _rejectReason, _requestRecollection, _reject]);
+
+        decision.Controls.Add(conditions, 0, 0);
+        decision.Controls.Add(acceptButtons, 1, 0);
+        decision.Controls.Add(refusal, 0, 1);
+        decision.SetColumnSpan(refusal, 2);
+
+        stack.Controls.Add(scanRow, 0, 0);
+        stack.Controls.Add(_detail, 0, 1);
+        stack.Controls.Add(_defectLegend, 0, 2);
+        stack.Controls.Add(_defectBox, 0, 3);
+        stack.Controls.Add(decision, 0, 4);
+
+        card.Controls.Add(stack);
+        return card;
+    }
+
+    /// <summary>« En attente de réception », the count, the chips and the tubes.</summary>
+    private Control BuildAwaitingCard()
+    {
+        var card = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0),
+            Padding = new Padding(1),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        UiChrome.AsCard(card);
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = new Padding(0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 3,
+            RowCount = 1,
+            Margin = new Padding(14, 10, 14, 8),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        _awaitingHeading.Font = UiTheme.SectionTitle;
+        _awaitingHeading.ForeColor = UiTheme.TextPrimary;
+        _awaitingHeading.AutoSize = true;
+        _awaitingHeading.Anchor = AnchorStyles.Left;
+        _awaitingHeading.Margin = new Padding(0, 0, 10, 0);
+
+        _awaitingCount.Font = UiTheme.Body;
+        _awaitingCount.ForeColor = UiTheme.TextSecondary;
+        _awaitingCount.AutoSize = true;
+        _awaitingCount.Anchor = AnchorStyles.Left;
+        _awaitingCount.Margin = new Padding(0, 2, 0, 0);
+
+        var chips = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            Anchor = AnchorStyles.Right,
+            Margin = new Padding(12, 0, 0, 0),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        foreach (var chip in new[] { _chipAll, _chipUrgent, _chipLongDelay })
+        {
+            chip.Height = 28;
+            chip.Margin = new Padding(0, 0, 6, 0);
+        }
+        _chipAll.Selected = true;
+        chips.Controls.AddRange([_chipAll, _chipUrgent, _chipLongDelay]);
+
+        header.Controls.Add(_awaitingHeading, 0, 0);
+        header.Controls.Add(_awaitingCount, 1, 0);
+        header.Controls.Add(chips, 2, 0);
+
+        BuildAwaitingColumns();
+        _awaiting.Dock = DockStyle.Fill;
+        _awaiting.Margin = new Padding(0);
+        _awaiting.RowTemplate.Height = 34;
+        _awaiting.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        _awaiting.MinimumSize = new Size(0, 110);
+
+        layout.Controls.Add(header, 0, 0);
+        layout.Controls.Add(_awaiting, 0, 1);
+
+        card.Controls.Add(layout);
+        return card;
+    }
+
     /// <summary>
-    /// One checkbox per observable defect.
+    /// One toggle per observable defect.
     /// <para>
     /// Every member of the flags enum is offered, because the rejection and reservation statistics
     /// are only meaningful if the operator can record what they actually saw rather than picking the
@@ -250,27 +587,14 @@ public sealed class SampleReceptionView : LocalizedView
                           .Where(d => d != SampleDefect.None)
                           .ToList();
 
-        var column = 0;
-        var row = 0;
-
         foreach (var defect in defects)
         {
-            var check = new CheckBox
-            {
-                Tag = defect,
-                AutoSize = true,
-                Font = UiTheme.Small,
-                ForeColor = UiTheme.TextPrimary,
-                Location = new Point(12 + column * 250, 20 + row * 22)
-            };
+            var check = new DefectToggle { Tag = defect };
 
             check.CheckedChanged += (_, _) => RefreshActionAvailability();
 
             _defectChecks[defect] = check;
             _defectBox.Controls.Add(check);
-
-            row++;
-            if (row >= 6) { row = 0; column++; }
         }
     }
 
@@ -279,8 +603,9 @@ public sealed class SampleReceptionView : LocalizedView
         _awaiting.Columns.Clear();
 
         void Add(string name, int weight, Font? font = null,
-                 DataGridViewContentAlignment align = DataGridViewContentAlignment.MiddleLeft)
-            => _awaiting.Columns.Add(new DataGridViewTextBoxColumn
+                 DataGridViewContentAlignment align = DataGridViewContentAlignment.MiddleLeft, int minimum = 0)
+        {
+            var column = new DataGridViewTextBoxColumn
             {
                 Name = name, FillWeight = weight, ReadOnly = true,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
@@ -288,25 +613,36 @@ public sealed class SampleReceptionView : LocalizedView
                 {
                     Font = font ?? UiTheme.Body, Alignment = align
                 }
-            });
+            };
+            if (minimum > 0) column.MinimumWidth = minimum;
+            _awaiting.Columns.Add(column);
+        }
 
-        Add("barcode", 13, UiTheme.Monospace);
-        Add("accession", 13, UiTheme.Monospace);
-        Add("patient", 22);
-        Add("specimen", 14, UiTheme.Small);
-        Add("priority", 9);
-        Add("collected", 10, UiTheme.Monospace);
-        Add("elapsed", 9, UiTheme.MonospaceBold, DataGridViewContentAlignment.MiddleRight);
-        Add("verdict", 10, UiTheme.SmallBold);
+        Add(ColBarcode, 12, UiTheme.Monospace, minimum: 96);
+        Add(ColAccession, 12, UiTheme.Monospace, minimum: 92);
+        Add(ColPatient, 20, minimum: 130);
+        Add(ColSpecimen, 15, UiTheme.Body, minimum: 110);
+        Add(ColPriority, 9, UiTheme.SmallBold, minimum: 74);
+        Add(ColCollected, 10, UiTheme.Monospace, minimum: 86);
+        Add(ColElapsed, 9, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight, minimum: 70);
+        Add(ColVerdict, 13, UiTheme.SmallBold, minimum: 110);
     }
 
     private void WireBehaviour()
     {
-        // A scanner terminates its scan with Enter.
+        // A scanner terminates its scan with Enter. Enter on an empty box accepts the tube shown,
+        // when it is conforming — the « Entrée » the accept button shows.
         _scan.KeyDown += async (_, e) =>
         {
             if (e.KeyCode != Keys.Enter) return;
             e.SuppressKeyPress = true;
+
+            if (string.IsNullOrWhiteSpace(_scan.Text))
+            {
+                if (_candidate is not null && _accept.Enabled) _accept.PerformClick();
+                return;
+            }
+
             await ScanAsync(_scan.Text);
         };
 
@@ -323,11 +659,18 @@ public sealed class SampleReceptionView : LocalizedView
         _awaiting.CellDoubleClick += async (_, e) =>
         {
             if (e.RowIndex < 0) return;
-            var barcode = _awaiting.Rows[e.RowIndex].Cells["barcode"].Value?.ToString();
+            var barcode = _awaiting.Rows[e.RowIndex].Cells[ColBarcode].Value?.ToString();
             if (!string.IsNullOrWhiteSpace(barcode)) await ScanAsync(barcode);
         };
 
         _awaiting.CellFormatting += OnAwaitingFormatting;
+        _awaiting.CellPainting += OnAwaitingPainting;
+
+        _chipAll.Click += (_, _) => SetFilter(AwaitingFilter.All);
+        _chipUrgent.Click += (_, _) => SetFilter(AwaitingFilter.Urgent);
+        _chipLongDelay.Click += (_, _) => SetFilter(AwaitingFilter.LongDelay);
+
+        TranslatedKeyHint.Attach(_accept, () => T("Sample.EnterKey"));
     }
 
     private void OnAwaitingFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -335,34 +678,113 @@ public sealed class SampleReceptionView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _awaiting.Rows.Count) return;
         if (_awaiting.Rows[e.RowIndex].Tag is not SampleReceptionCandidate candidate) return;
 
+        // The tube on the bench is the highlighted line.
+        if (_candidate is { } shown && shown.SampleId == candidate.SampleId)
+        {
+            e.CellStyle!.BackColor = UiTheme.AccentSubtle;
+            e.CellStyle.SelectionBackColor = UiTheme.AccentSubtle;
+        }
+
+        var column = _awaiting.Columns[e.ColumnIndex].Name;
+
+        if (column == ColBarcode && _candidate?.SampleId == candidate.SampleId)
+            e.CellStyle!.Font = UiTheme.MonospaceBold;
+    }
+
+    /// <summary>
+    /// The specimen with its cap-colour dot, the priority, the transport time and the status as
+    /// pills: an exceeded stability window in critical colours, recorded defects in warning colours.
+    /// </summary>
+    private void OnAwaitingPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null) return;
+        if (_awaiting.Rows[e.RowIndex].Tag is not SampleReceptionCandidate candidate) return;
+
+        var column = _awaiting.Columns[e.ColumnIndex].Name;
+        var rtl = IsRightToLeft;
+        var bounds = e.CellBounds;
+        var selected = (e.State & DataGridViewElementStates.Selected) != 0;
+
+        void Pill(string text, (Color Back, Color Fore) colours, bool atEnd = false)
+        {
+            e.PaintBackground(e.ClipBounds, selected);
+            if (text.Length == 0) return;
+            var size = EntryPaint.MeasurePill(text, UiTheme.SmallBold, 8);
+            var x = atEnd ? bounds.Right - 10 - size.Width : bounds.X + 10;
+            var rectangle = new Rectangle(x, bounds.Y + (bounds.Height - size.Height) / 2,
+                                          Math.Min(size.Width, bounds.Width - 16), size.Height);
+            EntryPaint.DrawPill(e.Graphics, EntryPaint.Mirror(rectangle, bounds, rtl), text, UiTheme.SmallBold, colours, rtl);
+            e.Handled = true;
+        }
+
+        switch (column)
+        {
+            case ColSpecimen:
+            {
+                e.PaintBackground(e.ClipBounds, selected);
+                var dot = EntryPaint.Mirror(new Rectangle(bounds.X + 10, bounds.Y, 10, bounds.Height), bounds, rtl);
+                TubeSwatch.Dot(e.Graphics, dot, candidate.ContainerColourHex);
+                var text = EntryPaint.Mirror(new Rectangle(bounds.X + 26, bounds.Y, bounds.Width - 32, bounds.Height),
+                                             bounds, rtl);
+                TextRenderer.DrawText(e.Graphics, e.FormattedValue?.ToString() ?? string.Empty, UiTheme.Body, text,
+                                      UiTheme.TextPrimary,
+                                      TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix
+                                      | TextFormatFlags.EndEllipsis
+                                      | (rtl ? TextFormatFlags.Right | TextFormatFlags.RightToLeft : TextFormatFlags.Left));
+                e.Handled = true;
+                return;
+            }
+
+            case ColPriority:
+                if (candidate.Priority == OrderPriority.Routine) return;
+                Pill(T($"Priority.{candidate.Priority}"),
+                     candidate.Priority == OrderPriority.Routine ? EntryPaint.Waiting
+                     : (UiTheme.AbnormalBackground, UiTheme.ForPriority(candidate.Priority)));
+                return;
+
+            case ColElapsed when candidate.StabilityExceeded:
+                Pill(FormatElapsed(candidate.Elapsed), EntryPaint.Critical, atEnd: true);
+                return;
+
+            case ColVerdict:
+            {
+                var (text, colours) = Verdict(candidate);
+                Pill(text, colours);
+                return;
+            }
+        }
+    }
+
+    /// <summary>The status pill of a waiting tube.</summary>
+    private (string Text, (Color Back, Color Fore) Colours) Verdict(SampleReceptionCandidate candidate)
+    {
+        if (_candidate is { } shown && shown.SampleId == candidate.SampleId)
+            return (T("Sample.Scanned"), (UiTheme.Accent, UiTheme.TextOnAccent));
         if (candidate.StabilityExceeded)
-        {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (candidate.ExistingDefects != SampleDefect.None)
-        {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
-        }
-        else if (candidate.Priority != OrderPriority.Routine)
-        {
-            e.CellStyle!.ForeColor = UiTheme.ForPriority(candidate.Priority);
-        }
+            return (T("SampleDefect.ExcessiveDelay"), EntryPaint.Critical);
+        if (candidate.ExistingDefects != SampleDefect.None)
+            return (T("Sample.Defects"), EntryPaint.Warning);
+        return (T("SampleStatus." + candidate.Status),
+                candidate.Status == SampleStatus.InTransit ? EntryPaint.Info : EntryPaint.Waiting);
     }
 
     protected override void ApplyTexts()
     {
-        _scanLabel.Text = T("Sample.ScanPrompt");
-        _defectBox.Text = T("Sample.Defects");
+        _scanLabel.Text = T("Sample.ScanTube");
+        _scan.PlaceholderText = T("Sample.ScanPrompt");
+        _scanHint.Text = T("Sample.ScannerReady");
+        _defectLegend.Text = T("Sample.DefectsLegend");
         _temperatureLabel.Text = T("Sample.Temperature");
         _coldChain.Text = T("Sample.ColdChain");
         _storageLabel.Text = T("Sample.Storage");
         _accept.Text = T("Action.Accept");
+        TranslatedKeyHint.Reserve(_accept, T("Sample.EnterKey"));
         _acceptReserved.Text = T("Action.AcceptWithReservation");
         _reject.Text = T("Action.Reject");
+        _rejectReasonLabel.Text = T("Recollection.Reason");
         _requestRecollection.Text = T("Sample.RequestRecollection");
         _awaitingHeading.Text = T("Sample.AwaitingReception");
+        _delayCaption.Text = T("Sample.TransportDelay");
 
         foreach (var (defect, check) in _defectChecks)
             check.Text = T($"SampleDefect.{defect}");
@@ -391,15 +813,17 @@ public sealed class SampleReceptionView : LocalizedView
 
         if (_awaiting.Columns.Count > 0)
         {
-            _awaiting.Column("barcode").HeaderText = T("Sample.Barcode");
-            _awaiting.Column("accession").HeaderText = T("Order.AccessionNumber");
-            _awaiting.Column("patient").HeaderText = T("Patient.Title");
-            _awaiting.Column("specimen").HeaderText = T("Sample.SpecimenType");
-            _awaiting.Column("priority").HeaderText = T("Field.Priority");
-            _awaiting.Column("collected").HeaderText = T("Sample.CollectedAt");
-            _awaiting.Column("elapsed").HeaderText = T("Sample.TransportDelay");
-            _awaiting.Column("verdict").HeaderText = T("Field.Status");
+            _awaiting.Column(ColBarcode).HeaderText = T("Sample.Barcode");
+            _awaiting.Column(ColAccession).HeaderText = T("Order.AccessionNumber");
+            _awaiting.Column(ColPatient).HeaderText = T("Patient.Title");
+            _awaiting.Column(ColSpecimen).HeaderText = T("Sample.SpecimenType");
+            _awaiting.Column(ColPriority).HeaderText = T("Field.Priority");
+            _awaiting.Column(ColCollected).HeaderText = T("Sample.CollectedAt");
+            _awaiting.Column(ColElapsed).HeaderText = T("Sample.TransportDelay");
+            _awaiting.Column(ColVerdict).HeaderText = T("Field.Status");
         }
+
+        RenderAwaiting();
 
         if (_candidate is not null) ShowCandidate(_candidate);
     }
@@ -409,7 +833,34 @@ public sealed class SampleReceptionView : LocalizedView
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
         await RefreshAwaitingAsync(ct);
+        await LoadStorageLocationsAsync(ct);
         _scan.Focus();
+    }
+
+    /// <summary>The storage places already used on the site, offered in the editable list.</summary>
+    private async Task LoadStorageLocationsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var places = await _workflow.GetStorageLocationsAsync(ct);
+            if (places.IsFailure) return;
+
+            var typed = _storage.Text;
+            _storage.BeginUpdate();
+            _storage.Items.Clear();
+            foreach (var place in places.Value) _storage.Items.Add(place);
+            _storage.EndUpdate();
+            _storage.Text = typed;
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded.
+        }
+        catch (Exception ex)
+        {
+            // The list is a convenience: the place can still be typed.
+            _logger?.LogError(ex, "Loading the storage places failed.");
+        }
     }
 
     private async Task RefreshAwaitingAsync(CancellationToken ct = default)
@@ -420,34 +871,8 @@ public sealed class SampleReceptionView : LocalizedView
 
             if (awaiting.IsFailure) return;
 
-            _awaiting.SuspendLayout();
-            _awaiting.Rows.Clear();
-
-            foreach (var candidate in awaiting.Value)
-            {
-                var index = _awaiting.Rows.Add(
-                    candidate.Barcode,
-                    candidate.AccessionNumber,
-                    candidate.PatientName,
-                    candidate.SpecimenTypeName.For(Localizer.CurrentLanguage),
-                    candidate.Priority == OrderPriority.Routine
-                        ? string.Empty
-                        : T($"Priority.{candidate.Priority}"),
-                    candidate.CollectedAt?.ToString("dd/MM HH:mm") ?? string.Empty,
-                    FormatElapsed(candidate.Elapsed),
-                    candidate.StabilityExceeded
-                        ? T("SampleDefect.ExcessiveDelay")
-                        : candidate.ExistingDefects != SampleDefect.None
-                            ? T("Sample.Defects")
-                            : T("SampleStatus." + candidate.Status));
-
-                _awaiting.Rows[index].Tag = candidate;
-            }
-
-            _awaiting.ResumeLayout(performLayout: true);
-
-            _awaitingHeading.Text =
-                $"{T("Sample.AwaitingReception")} — {awaiting.Value.Count}";
+            _awaitingRows = awaiting.Value;
+            RenderAwaiting();
         }
         catch (OperationCanceledException)
         {
@@ -457,6 +882,59 @@ public sealed class SampleReceptionView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the reception list failed.");
         }
+    }
+
+    private void SetFilter(AwaitingFilter filter)
+    {
+        _filter = filter;
+        _chipAll.Selected = filter == AwaitingFilter.All;
+        _chipUrgent.Selected = filter == AwaitingFilter.Urgent;
+        _chipLongDelay.Selected = filter == AwaitingFilter.LongDelay;
+        RenderAwaiting();
+    }
+
+    private static bool Matches(SampleReceptionCandidate candidate, AwaitingFilter filter) => filter switch
+    {
+        AwaitingFilter.Urgent => candidate.Priority != OrderPriority.Routine,
+        AwaitingFilter.LongDelay => candidate.StabilityExceeded,
+        _ => true
+    };
+
+    private void RenderAwaiting()
+    {
+        _chipAll.Text = T("Collection.FilterAll", _awaitingRows.Count);
+        _chipUrgent.Text = T("Collection.FilterUrgent", _awaitingRows.Count(c => Matches(c, AwaitingFilter.Urgent)));
+        _chipLongDelay.Text = T("Sample.FilterLongDelay", _awaitingRows.Count(c => Matches(c, AwaitingFilter.LongDelay)));
+        _awaitingCount.Text = _awaitingRows.Count == 1
+            ? T("Collection.OneTube")
+            : T("Collection.ManyTubes", _awaitingRows.Count);
+
+        _awaiting.SuspendLayout();
+        _awaiting.Rows.Clear();
+
+        foreach (var candidate in _awaitingRows.Where(c => Matches(c, _filter)))
+        {
+            var index = _awaiting.Rows.Add(
+                candidate.Barcode,
+                candidate.AccessionNumber,
+                candidate.PatientName,
+                candidate.SpecimenTypeName.For(Localizer.CurrentLanguage),
+                candidate.Priority == OrderPriority.Routine
+                    ? T("Priority.Routine")
+                    : T($"Priority.{candidate.Priority}"),
+                candidate.CollectedAt?.ToLocalTime().ToString("dd/MM HH:mm") ?? string.Empty,
+                FormatElapsed(candidate.Elapsed),
+                Verdict(candidate).Text);
+
+            var row = _awaiting.Rows[index];
+            row.Tag = candidate;
+
+            if (candidate.Priority == OrderPriority.Routine)
+                row.Cells[ColPriority].Style.ForeColor = UiTheme.TextSecondary;
+        }
+
+        _awaiting.ResumeLayout(performLayout: true);
+        _awaiting.ClearSelection();
     }
 
     private static string FormatElapsed(TimeSpan? elapsed) =>
@@ -509,45 +987,60 @@ public sealed class SampleReceptionView : LocalizedView
     private void ShowCandidate(SampleReceptionCandidate candidate)
     {
         _detail.Visible = true;
+        _detailCap.ColourHex = candidate.ContainerColourHex ?? "#FFFFFF";
 
-        var identity = new List<string>
-        {
-            candidate.PatientName,
-            T($"Gender.{candidate.Gender}")
-        };
-
+        // Line 1: the patient, the file number, the priority; then sex and date of birth.
+        var identity = new List<string> { T($"Gender.{candidate.Gender}") };
         if (candidate.DateOfBirth is { } dob) identity.Add(dob.ToString("dd/MM/yyyy"));
 
-        _patientLine.Text = string.Join("   ·   ", identity);
-
-        var orderInfo = new List<string> { candidate.AccessionNumber };
+        _patientLine.Text = candidate.PatientName;
+        _accessionLine.Text = $"{candidate.AccessionNumber}   {string.Join(" · ", identity)}";
+        _accessionLine.Font = UiTheme.Monospace;
 
         if (candidate.Priority != OrderPriority.Routine)
-            orderInfo.Add(T($"Priority.{candidate.Priority}").ToUpperInvariant());
+            _priorityPill.Show(T($"Priority.{candidate.Priority}"),
+                               (UiTheme.AbnormalBackground, UiTheme.ForPriority(candidate.Priority)));
+        else
+            _priorityPill.Show(string.Empty, EntryPaint.Waiting);
 
-        orderInfo.Add(string.Join(" ", candidate.AnalysisCodes));
-
-        _orderLine.Text = string.Join("   ·   ", orderInfo);
-
-        var tubeInfo = new List<string>
-        {
-            candidate.Barcode,
-            candidate.SpecimenTypeName.For(Localizer.CurrentLanguage)
-        };
+        // Line 2: the tube — specimen, container, barcode, volume, when it was drawn, and how many
+        // tubes the order has.
+        var tubeInfo = new List<string> { candidate.SpecimenTypeName.For(Localizer.CurrentLanguage) };
 
         if (candidate.ContainerName is { } container)
             tubeInfo.Add(container.For(Localizer.CurrentLanguage));
 
+        tubeInfo.Add(candidate.Barcode);
+
         if (candidate.VolumeMl is { } volume) tubeInfo.Add($"{volume:N1} mL");
 
-        _tubeLine.Text = string.Join("   ·   ", tubeInfo);
+        if (candidate.CollectedAt is { } collected)
+        {
+            var local = collected.ToLocalTime();
+            tubeInfo.Add(T("Sample.CollectedOnAt", local.ToString("dd/MM"), local.ToString("HH:mm")));
+        }
+
+        if (candidate.TotalSamplesInOrder > 0)
+            tubeInfo.Add(candidate.TotalSamplesInOrder == 1
+                ? T("Sample.TubesInOrderOne")
+                : T("Sample.TubesInOrder", candidate.TotalSamplesInOrder));
+
+        _tubeLine.Text = string.Join(" · ", tubeInfo);
+        _tips.SetToolTip(_tubeLine, _tubeLine.Text);
+
+        // Line 3: the analyses.
+        _orderLine.Text = string.Join(" ", candidate.AnalysisCodes);
+        _tips.SetToolTip(_orderLine, _orderLine.Text);
 
         // The verdict, computed rather than left to the operator to infer.
         if (candidate.StabilityExceeded)
         {
+            _delayValue.Text = FormatElapsed(candidate.Elapsed);
+            _delayValue.ForeColor = UiTheme.Critical;
             _delayLine.Text = $"⚠ {T("SampleDefect.ExcessiveDelay")} — " +
                               $"{FormatElapsed(candidate.Elapsed)} > {candidate.ShortestStabilityHours} h";
             _delayLine.ForeColor = UiTheme.Critical;
+            _delayLine.Visible = true;
 
             // Pre-tick the defect: the operator still decides, but is not left to notice it.
             if (_defectChecks.TryGetValue(SampleDefect.ExcessiveDelay, out var check))
@@ -555,17 +1048,21 @@ public sealed class SampleReceptionView : LocalizedView
         }
         else if (candidate.Elapsed is { } elapsed)
         {
-            _delayLine.Text = $"{T("Sample.TransportDelay")} : {FormatElapsed(elapsed)}" +
-                              (candidate.ShortestStabilityHours is { } hours
-                                  ? $" / {hours} h"
-                                  : string.Empty);
-            _delayLine.ForeColor = UiTheme.Normal;
+            _delayValue.Text = FormatElapsed(elapsed) +
+                               (candidate.ShortestStabilityHours is { } hours ? $" / {hours} h" : string.Empty);
+            _delayValue.ForeColor = UiTheme.Normal;
+            _delayLine.Visible = false;
         }
         else
         {
+            _delayValue.Text = "—";
+            _delayValue.ForeColor = UiTheme.Abnormal;
             _delayLine.Text = T("Sample_NotCollected");
             _delayLine.ForeColor = UiTheme.Abnormal;
+            _delayLine.Visible = true;
         }
+
+        _detail.Height = _delayLine.Visible ? 112 : 92;
 
         // Volume already recorded as insufficient at the draw.
         if (candidate.VolumeMl is { } drawn && candidate.MinimumVolumeMl is { } minimum
@@ -579,8 +1076,7 @@ public sealed class SampleReceptionView : LocalizedView
             if (candidate.ExistingDefects.HasFlag(defect)) check.Checked = true;
 
         _coldChain.Visible = candidate.RequiresColdChain;
-        _temperature.Visible = candidate.RequiresColdChain;
-        _temperatureLabel.Visible = candidate.RequiresColdChain;
+        if (_temperatureField is not null) _temperatureField.Visible = candidate.RequiresColdChain;
 
         SetActionsEnabled(true);
         RefreshActionAvailability();
@@ -592,6 +1088,24 @@ public sealed class SampleReceptionView : LocalizedView
             _status.ForeColor = UiTheme.Abnormal;
             _status.Text = $"{candidate.Barcode} — {T("SampleStatus." + candidate.Status)}";
         }
+
+        _awaiting.Invalidate();
+        SelectAwaitingRow(candidate.SampleId);
+    }
+
+    /// <summary>Brings the scanned tube's line into view in the waiting list, without selecting it.</summary>
+    private void SelectAwaitingRow(Guid sampleId)
+    {
+        foreach (DataGridViewRow row in _awaiting.Rows)
+        {
+            if (row.Tag is not SampleReceptionCandidate candidate || candidate.SampleId != sampleId) continue;
+            row.Cells[ColVerdict].Value = Verdict(candidate).Text;
+            if (!row.Displayed && row.Index >= 0)
+            {
+                try { _awaiting.FirstDisplayedScrollingRowIndex = row.Index; }
+                catch (InvalidOperationException) { /* not laid out yet */ }
+            }
+        }
     }
 
     private void ClearCandidate()
@@ -602,6 +1116,7 @@ public sealed class SampleReceptionView : LocalizedView
         ResetTubeInputs();
 
         SetActionsEnabled(false);
+        _awaiting.Invalidate();
     }
 
     /// <summary>
@@ -615,7 +1130,7 @@ public sealed class SampleReceptionView : LocalizedView
 
         _temperature.Clear();
         _coldChain.Checked = true;
-        _storage.Clear();
+        _storage.Text = string.Empty;
         _requestRecollection.Checked = true;
 
         _rejectReason.SelectedIndex = -1;
@@ -752,6 +1267,10 @@ public sealed class SampleReceptionView : LocalizedView
 
             if (ReferenceEquals(_candidate, candidate)) ClearCandidate();
             await RefreshAwaitingAsync();
+
+            // A place typed for the first time joins the list for the next tube.
+            if (request.StorageLocation is { } place && !_storage.Items.Contains(place))
+                _storage.Items.Add(place);
         }
         finally
         {
