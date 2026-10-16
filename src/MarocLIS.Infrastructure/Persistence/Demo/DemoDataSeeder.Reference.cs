@@ -793,7 +793,7 @@ public sealed partial class DemoDataSeeder
     /// Moroccan laboratories without a chemiluminescence platform for it send out. The starter
     /// catalogue has no analysis that is commonly sent out, so this one is added, demonstration-coded.
     /// <para>
-    /// The partner is written directly, since no service creates a site; the analysis, its
+    /// The partner is written directly, without the settings screen's permission check; the analysis, its
     /// parameter, interval and price go through the catalogue screens' service. Each part is looked
     /// for first, so an interrupted run is completed rather than repeated.
     /// </para>

@@ -1,5 +1,6 @@
 using MarocLIS.Application.Administration;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Organization;
 using MarocLIS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -151,8 +152,13 @@ public sealed class AdministrationQueries(LisDbContext db) : IAdministrationQuer
     public Task<bool> PrescriberExistsAsync(Guid prescriberId, CancellationToken ct = default) =>
         db.Prescribers.AnyAsync(p => p.Id == prescriberId, ct);
 
+    /// <summary>
+    /// The sites an account may be given access to. A partner laboratory is left out: it is where
+    /// samples are sent, and nobody signs in to work there.
+    /// </summary>
     public async Task<IReadOnlyList<SiteRow>> GetSitesAsync(CancellationToken ct = default) =>
         await db.Sites.AsNoTracking()
+            .Where(s => s.Kind != LabSiteKind.ReferralPartner)
             .OrderBy(s => s.Code)
             .Select(s => new SiteRow(s.Id, s.Code, s.Name, s.IsActive))
             .ToListAsync(ct);
@@ -322,8 +328,21 @@ public sealed class AdministrationQueries(LisDbContext db) : IAdministrationQuer
         // against a unique index.
         var normalised = code.Trim().ToUpperInvariant();
 
-        return db.Sites.AsNoTracking()
+        // A deleted site still holds its code under the unique index, so it is looked for too:
+        // otherwise the duplicate would surface as a database error instead of this refusal.
+        return db.Sites.AsNoTracking().IgnoreQueryFilters()
                  .AnyAsync(s => s.Id != excludingSiteId && s.Code == normalised, ct);
+    }
+
+    public Task<bool> SiteHasUserAccessAsync(Guid siteId, CancellationToken ct = default) =>
+        db.UserSiteAccess.AsNoTracking().AnyAsync(a => a.SiteId == siteId, ct);
+
+    public Task<bool> AnyPartnerSiteAsync(IReadOnlyCollection<Guid> siteIds,
+                                          CancellationToken ct = default)
+    {
+        var ids = siteIds.ToList();
+        return db.Sites.AsNoTracking().IgnoreQueryFilters()
+                 .AnyAsync(s => ids.Contains(s.Id) && s.Kind == LabSiteKind.ReferralPartner, ct);
     }
 
     public async Task<IReadOnlyList<SequenceRow>> GetSequencesAsync(

@@ -56,6 +56,22 @@ public sealed record SiteRequest
     public bool IsActive { get; init; } = true;
 }
 
+/// <summary>
+/// What a new site needs to exist: the rest of its identity is completed afterwards through
+/// <see cref="ConfigurationService.SaveSiteAsync"/>, on the same screen.
+/// </summary>
+public sealed record NewSiteRequest
+{
+    public required string Code { get; init; }
+    public required MultilingualText Name { get; init; }
+
+    /// <summary>
+    /// The partner laboratory by default: the first site of an installation is seeded, so a site
+    /// created afterwards is most often the laboratory analyses are subcontracted to.
+    /// </summary>
+    public LabSiteKind Kind { get; init; } = LabSiteKind.ReferralPartner;
+}
+
 public sealed record SiteDetail(
     Guid Id,
     string Code,
@@ -152,6 +168,61 @@ public sealed class ConfigurationService(
     }
 
     /// <summary>
+    /// Creates a site from its code, name and kind: a partner laboratory analyses are sent to, or a
+    /// further laboratory or collection centre of the same installation.
+    /// <para>
+    /// Only what the site cannot exist without is asked for here. Its legal identity, address and
+    /// responsible biologist are completed through <see cref="SaveSiteAsync"/>, which reports what
+    /// is still missing; a partner laboratory needs none of the operating set-up (numbering,
+    /// accounts, printers), since nothing is invoiced or released there. A working site is not
+    /// opened to anyone by its creation: access is granted in the user administration.
+    /// </para>
+    /// </summary>
+    public async Task<Result<Guid>> CreateSiteAsync(NewSiteRequest request,
+                                                     CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Administration.ManageSites);
+        if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
+
+        var errors = new List<Error>();
+        var code = (request.Code ?? string.Empty).Trim().ToUpperInvariant();
+
+        if (code.Length == 0)
+            errors.Add(Error.Validation("Site_CodeRequired"));
+        else if (!IsValidSiteCode(code))
+            errors.Add(Error.Validation("Site_CodeInvalid", MaxSiteCodeLength));
+
+        if (string.IsNullOrWhiteSpace(request.Name?.Fr))
+            errors.Add(Error.Validation("Site_NameRequired"));
+
+        if (!Enum.IsDefined(request.Kind))
+            errors.Add(Error.Validation("Site_KindInvalid"));
+
+        if (errors.Count > 0) return Result.Failure<Guid>(errors);
+
+        if (await queries.SiteCodeExistsAsync(code, Guid.Empty, ct))
+            return Result.Failure<Guid>(Error.Conflict("Site_CodeAlreadyTaken", code));
+
+        var site = new LabSite(code,
+                               new MultilingualText(request.Name!.Fr.Trim(),
+                                                    Blank(request.Name.Ar),
+                                                    Blank(request.Name.En)),
+                               request.Kind);
+
+        await sites.AddAsync(site, ct);
+
+        unitOfWork.AuditReason = $"Création du site {site.Code} ({site.Kind}) — {site.Name.Fr}";
+        await unitOfWork.SaveChangesAsync(ct);
+
+        // Logged like the identity itself: a new site is a new place documents can claim to come
+        // from, or be sent to.
+        await securityAuditor.LogAsync(SecurityEventKind.SecuritySettingChanged, succeeded: true,
+                                        details: $"Site {site.Code} créé ({site.Kind})", ct: ct);
+
+        return Result.Success(site.Id);
+    }
+
+    /// <summary>
     /// Saves the site's identity.
     /// <para>
     /// Deliberately does <b>not</b> refuse an incomplete record: an administrator configuring a new
@@ -227,9 +298,21 @@ public sealed class ConfigurationService(
         if (codeChanged && await queries.SiteHasNumberedDocumentsAsync(site.Id, ct))
             return Result.Failure<SiteSaveOutcome>(Error.Conflict("Site_CodeFrozenAfterFirstDocument"));
 
+        if (codeChanged && !IsValidSiteCode(request.Code.Trim().ToUpperInvariant()))
+            return Result.Failure<SiteSaveOutcome>(Error.Validation("Site_CodeInvalid",
+                                                                     MaxSiteCodeLength));
+
         if (codeChanged && await queries.SiteCodeExistsAsync(request.Code.Trim(), site.Id, ct))
             return Result.Failure<SiteSaveOutcome>(Error.Conflict("Site_CodeAlreadyTaken",
                                                                    request.Code.Trim()));
+
+        // A site people work on, or that has numbered documents, cannot be turned into a partner
+        // laboratory: nobody may sign in to a partner, so its users would be locked out and its
+        // series orphaned. Before site creation existed this was the only way to obtain a partner.
+        if (request.Kind == LabSiteKind.ReferralPartner && site.Kind != LabSiteKind.ReferralPartner
+            && (await queries.SiteHasUserAccessAsync(site.Id, ct)
+                || await queries.SiteHasNumberedDocumentsAsync(site.Id, ct)))
+            return Result.Failure<SiteSaveOutcome>(Error.Conflict("Site_CannotBecomePartner"));
 
         site.Code = request.Code.Trim().ToUpperInvariant();
         site.Name = request.Name;
@@ -445,6 +528,17 @@ public sealed class ConfigurationService(
 
         return Result.Success();
     }
+
+    /// <summary>The length of <c>LabSite.Code</c> in the database.</summary>
+    public const int MaxSiteCodeLength = 20;
+
+    /// <summary>
+    /// Capital letters, digits, hyphen and underscore: the code is printed inside accession and
+    /// invoice numbers (<c>FAC/{SITE}/…</c>), where a slash or a space would break the number apart.
+    /// </summary>
+    public static bool IsValidSiteCode(string code) =>
+        code.Length is > 0 and <= MaxSiteCodeLength
+        && code.All(c => c is (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '-' or '_');
 
     private static string? Blank(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

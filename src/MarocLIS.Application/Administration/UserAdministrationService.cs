@@ -288,6 +288,10 @@ public sealed class UserAdministrationService(
             ? request.SiteIds
             : [currentUser.SiteId];
 
+        // A partner laboratory is where samples are sent, not a place anyone signs in to work.
+        if (await queries.AnyPartnerSiteAsync([.. sites.Distinct()], ct))
+            return Result.Failure<Guid>(Error.Validation("User_PartnerSiteNotAccessible"));
+
         var defaultSite = request.DefaultSiteId is { } preferred && sites.Contains(preferred)
             ? preferred
             : sites[0];
@@ -473,6 +477,9 @@ public sealed class UserAdministrationService(
         if (user is null) return Result.Failure(Error.NotFound("User_NotFound"));
 
         var wanted = siteIds.Distinct().ToList();
+
+        if (await queries.AnyPartnerSiteAsync(wanted, ct))
+            return Result.Failure(Error.Validation("User_PartnerSiteNotAccessible"));
 
         var preferred = defaultSiteId is { } candidate && wanted.Contains(candidate)
             ? candidate : wanted[0];
@@ -888,6 +895,19 @@ public interface IAdministrationQueries
 
     Task<bool> SiteCodeExistsAsync(string code, Guid excludingSiteId,
                                     CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether anybody may work on the site. A site that people sign in to cannot become a partner
+    /// laboratory: their next sign-in would be refused there.
+    /// </summary>
+    Task<bool> SiteHasUserAccessAsync(Guid siteId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether any of these sites is a partner laboratory
+    /// (<see cref="Domain.Organization.LabSiteKind.ReferralPartner"/>): somewhere the laboratory
+    /// sends samples, never somewhere one of its accounts works.
+    /// </summary>
+    Task<bool> AnyPartnerSiteAsync(IReadOnlyCollection<Guid> siteIds, CancellationToken ct = default);
 
     Task<IReadOnlyList<SequenceRow>> GetSequencesAsync(DateTimeOffset now,
                                                         CancellationToken ct = default);

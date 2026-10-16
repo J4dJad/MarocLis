@@ -36,6 +36,8 @@ public sealed class SettingsView : LocalizedView
 
     // ---- Site tab ----
     private readonly ComboBox _sitePicker = new();
+    private readonly Button _newSite = UiTheme.SecondaryButton(string.Empty);
+    private Guid? _selectAfterLoad;
     private readonly Label _invoicingBanner = new();
     private readonly Label _operationBanner = new();
 
@@ -162,6 +164,10 @@ public sealed class SettingsView : LocalizedView
         _sitePicker.FlatStyle = FlatStyle.Flat;
         _sitePicker.Bounds = new Rectangle(0, 4, 360, UiTheme.InputHeight);
 
+        // Next to the picker: a partner laboratory for subcontracting, or a further site, is created
+        // here and then completed with the form below like any other.
+        _newSite.Bounds = new Rectangle(372, 2, 180, UiTheme.ButtonHeight);
+
         // Two banners rather than one: invoicing and report release are blocked by different
         // fields, and a laboratory can legitimately be able to do one and not the other.
         _invoicingBanner.Font = UiTheme.SmallBold;
@@ -172,7 +178,7 @@ public sealed class SettingsView : LocalizedView
         _operationBanner.AutoSize = false;
         _operationBanner.Bounds = new Rectangle(0, 62, 1300, 24);
 
-        header.Controls.AddRange([_sitePicker, _invoicingBanner, _operationBanner]);
+        header.Controls.AddRange([_sitePicker, _newSite, _invoicingBanner, _operationBanner]);
 
         var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface,
                                AutoScroll = true };
@@ -642,6 +648,7 @@ public sealed class SettingsView : LocalizedView
         };
 
         _saveSite.Click += async (_, _) => await SaveSiteAsync();
+        _newSite.Click += async (_, _) => await CreateSiteAsync();
         _chooseLogo.Click += (_, _) => ChooseLogo();
         _removeLogo.Click += (_, _) =>
         {
@@ -660,7 +667,7 @@ public sealed class SettingsView : LocalizedView
         _addSetting.Click += async (_, _) => await AddSettingAsync();
 
         // Greyed out for a user without the right; the service refuses them in any case.
-        PermissionGate.Require(Permissions.Administration.ManageSites, _saveSite, _chooseLogo, _removeLogo);
+        PermissionGate.Require(Permissions.Administration.ManageSites, _saveSite, _chooseLogo, _removeLogo, _newSite);
         PermissionGate.Require(Permissions.Administration.ManageSettings, _editFormat, _toggleClosed, _editSetting, _addSetting);
 
         _sequences.CellFormatting += OnSequenceFormatting;
@@ -725,6 +732,7 @@ public sealed class SettingsView : LocalizedView
         _accredited.Text = T("Site.IsAccredited");
 
         _saveSite.Text = T("Action.Save");
+        _newSite.Text = T("Site.New");
         _chooseLogo.Text = T("Site.ChooseLogo");
         _removeLogo.Text = T("Site.RemoveLogo");
         _logoHint.Text = T("Site.LogoHint");
@@ -811,11 +819,12 @@ public sealed class SettingsView : LocalizedView
 
             _sites = sites.Value;
 
-            var selected = (_sitePicker.SelectedItem as SiteChoice)?.Id;
+            var selected = _selectAfterLoad ?? (_sitePicker.SelectedItem as SiteChoice)?.Id;
+            _selectAfterLoad = null;
 
             _sitePicker.Items.Clear();
             foreach (var site in _sites)
-                _sitePicker.Items.Add(new SiteChoice(site.Id, $"{site.Code} — {site.LegalName}"));
+                _sitePicker.Items.Add(new SiteChoice(site.Id, SiteDisplay(site)));
 
             if (_sitePicker.Items.Count > 0)
             {
@@ -837,6 +846,14 @@ public sealed class SettingsView : LocalizedView
             _siteStatus.Text = T("Message.UnexpectedError");
         }
     }
+
+    /// <summary>
+    /// The code, the legal name (the site's name while it has none, as a site just created) and
+    /// the kind, so a partner laboratory is not mistaken for one of the laboratory's own sites.
+    /// </summary>
+    private string SiteDisplay(SiteDetail site) =>
+        $"{site.Code} — {(string.IsNullOrWhiteSpace(site.LegalName) ? site.Name.Fr : site.LegalName)}"
+        + $" ({T($"LabSiteKind.{site.Kind}")})";
 
     private SiteDetail? Current =>
         _sitePicker.SelectedItem is SiteChoice choice
@@ -945,6 +962,16 @@ public sealed class SettingsView : LocalizedView
     /// </summary>
     private void RenderBanners(IReadOnlyList<string> invoicing, IReadOnlyList<string> operation)
     {
+        // A partner laboratory neither invoices nor releases reports here: only its identity and
+        // contact details are used, on the dispatch slips. Its blockers would only be noise.
+        if ((_kind.SelectedItem as EnumChoice)?.Value == (int)LabSiteKind.ReferralPartner)
+        {
+            _invoicingBanner.ForeColor = UiTheme.TextSecondary;
+            _invoicingBanner.Text = T("Site.PartnerNotice");
+            _operationBanner.Text = string.Empty;
+            return;
+        }
+
         if (invoicing.Count == 0)
         {
             _invoicingBanner.ForeColor = UiTheme.Normal;
@@ -1042,6 +1069,60 @@ public sealed class SettingsView : LocalizedView
             : T("Message.Saved");
 
         await ActivateAsync();
+    }
+
+    // ---- Site creation -------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Asks for what a site cannot exist without — code, name, kind — creates it, and selects it so
+    /// the rest of its identity is filled in with the form. Asked again with the same values when
+    /// refused, so a taken code costs one correction rather than retyping everything.
+    /// </summary>
+    private async Task CreateSiteAsync()
+    {
+        string? code = null, nameFr = null, nameAr = null;
+        var kind = LabSiteKind.ReferralPartner;
+
+        while (true)
+        {
+            using var dialog = new FieldDialog(Localizer, T("Site.New"), height: 400);
+            dialog.Note(T("Site.NewHelp"));
+            var codeBox = dialog.TextField(T("Field.Code"), code, ConfigurationService.MaxSiteCodeLength);
+            codeBox.CharacterCasing = CharacterCasing.Upper;
+            codeBox.Tag = UiTags.LatinValue;
+            var frBox = dialog.TextField(T("Field.NameFr"), nameFr);
+            var arBox = dialog.TextField(T("Field.NameAr"), nameAr);
+            arBox.RightToLeft = RightToLeft.Yes;
+            var kindBox = dialog.Choice(T("Site.Kind"),
+                Enum.GetValues<LabSiteKind>().Select(k => (k, T($"LabSiteKind.{k}"))), kind);
+
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+            code = codeBox.Text.Trim();
+            nameFr = frBox.Text.Trim();
+            nameAr = arBox.Text.Trim();
+            kind = FieldDialog.Selected<LabSiteKind>(kindBox);
+
+            var result = await _configuration.CreateSiteAsync(new NewSiteRequest
+            {
+                Code = code,
+                Name = new MultilingualText(nameFr, nameAr.Length == 0 ? null : nameAr),
+                Kind = kind
+            });
+
+            if (result.IsFailure)
+            {
+                _dialogs.ShowFailure(result, T("Site.New"));
+                continue;
+            }
+
+            _selectAfterLoad = result.Value;
+            await ActivateAsync();
+
+            _siteStatus.ForeColor = UiTheme.Normal;
+            _siteStatus.Text = T("Site.Created", code.ToUpperInvariant());
+            return;
+        }
     }
 
     // ---- Numbering -----------------------------------------------------------------------------------

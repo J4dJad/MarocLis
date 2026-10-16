@@ -194,11 +194,12 @@ public sealed class LoginForm : LocalizedForm
         try
         {
             // Pre-authentication the site query filter is inert, so every active site is visible —
-            // which is correct here: the operator has to pick one before they have any scope.
+            // which is correct here: the operator has to pick one before they have any scope. A
+            // partner laboratory is not offered: samples are sent there, nobody works there.
             using var scope = _services.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IRepository<LabSite>>();
 
-            _sites = await repository.ListAsync(s => s.IsActive);
+            _sites = await repository.ListAsync(s => s.IsActive && s.Kind != LabSiteKind.ReferralPartner);
             RefreshSiteList();
         }
         catch (Exception ex)
