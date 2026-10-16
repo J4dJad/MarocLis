@@ -1,4 +1,5 @@
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Desktop.Views;
 using MarocLIS.Localization;
 
 namespace MarocLIS.Desktop.Forms;
@@ -37,7 +38,7 @@ public sealed class ShortcutsDialog : LocalizedForm
         MaximizeBox = false;
         MinimizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(620, 600);
+        ClientSize = new Size(620, 520);
         BackColor = UiTheme.SurfaceRaised;
         KeyPreview = true;
 
@@ -52,39 +53,47 @@ public sealed class ShortcutsDialog : LocalizedForm
 
     private void BuildLayout()
     {
-        var gutter = UiTheme.Gutter;
-        Padding = new Padding(gutter);
+        Padding = Padding.Empty;
 
         _hint.Font = UiTheme.Small;
         _hint.ForeColor = UiTheme.TextSecondary;
         _hint.AutoSize = false;
         _hint.Dock = DockStyle.Top;
-        _hint.Height = 58;
+        _hint.Height = 50;
+        _hint.Padding = new Padding(18, 0, 20, 4);
 
         _grid.Columns.Add("action", string.Empty);
         _grid.Columns.Add("keys", string.Empty);
         _grid.Columns["action"]!.FillWeight = 70;
         _grid.Columns["keys"]!.FillWeight = 30;
-        _grid.Columns["keys"]!.DefaultCellStyle.Font = UiTheme.BodyBold;
+        _grid.Columns["keys"]!.DefaultCellStyle.Font = UiTheme.MonospaceBold;
+        _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(12, 6, 12, 6);
+        _grid.DefaultCellStyle.Padding = new Padding(12, 0, 12, 0);
 
-        _status.Font = UiTheme.Small;
+        // The list in a card, inset from the dialog's edges like the fields of the other dialogs.
+        var list = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised, Padding = new Padding(20, 0, 20, 0) };
+        var card = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised, Padding = new Padding(1, 1, 1, 6) };
+        _grid.Dock = DockStyle.Fill;
+        card.Controls.Add(_grid);
+        UiChrome.AsCard(card);
+        list.Controls.Add(card);
+
+        _status.Font = UiTheme.SmallBold;
         _status.ForeColor = UiTheme.Abnormal;
         _status.AutoSize = false;
         _status.Dock = DockStyle.Bottom;
-        _status.Height = 40;
+        _status.Height = 36;
+        _status.Padding = new Padding(18, 0, 20, 0);
         _status.TextAlign = ContentAlignment.MiddleLeft;
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = UiTheme.ButtonHeight + 8, Tag = UiTags.OwnLayout };
-        _restore.Bounds = new Rectangle(0, 8, 270, UiTheme.ButtonHeight);
-        _restore.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-        _cancel.Bounds = new Rectangle(ClientSize.Width - 2 * gutter - 120, 8, 120, UiTheme.ButtonHeight);
-        _save.Bounds = new Rectangle(_cancel.Left - 10 - 150, 8, 150, UiTheme.ButtonHeight);
-        _cancel.Anchor = _save.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        actions.Width = ClientSize.Width - 2 * gutter;
-        actions.Controls.AddRange([_restore, _save, _cancel]);
+        // The buttons go to the footer bar: Restore at its start, Cancel then Save at its end.
+        _restore.Location = _save.Location = _cancel.Location = new Point(0, 0);
 
-        // Fill first so it docks last, between the hint above and the message and buttons below.
-        Controls.AddRange([_grid, _status, actions, _hint]);
+        // Fill first so it docks last, between the hint above and the message below.
+        Controls.AddRange([list, _status, _hint, _restore, _cancel, _save]);
+
+        DialogFrame.Attach(this, Localizer, DialogFrame.Lead(Localizer, nameof(ShortcutsDialog)),
+                           () => Localizer["Shortcut.Title"]);
     }
 
     protected override void ApplyTexts()

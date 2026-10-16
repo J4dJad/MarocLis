@@ -1,5 +1,6 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Desktop.Views;
 using MarocLIS.Localization;
 
 namespace MarocLIS.Desktop.Forms;
@@ -86,41 +87,53 @@ public sealed class ChangePasswordForm : LocalizedForm
 
     private void BuildLayout()
     {
-        var y = 20;
+        var y = 4;
 
         // Sized to their text: a label built in code is 100 x 23 by default, which cut
         // "Nouveau mot de passe" down to "Nouveau mot".
         foreach (var label in new[] { _currentLabel, _newLabel, _confirmLabel })
+        {
             label.AutoSize = true;
+            label.Font = UiTheme.SmallBold;
+            label.ForeColor = UiTheme.TextSecondary;
+        }
 
-        _currentLabel.Location = new Point(24, y);
-        _current.Location = new Point(24, y + 18);
+        _currentLabel.Location = new Point(20, y);
+        _current.Location = new Point(20, y + 18);
 
         y += 54;
-        _newLabel.Location = new Point(24, y);
-        _new.Location = new Point(24, y + 18);
+        _newLabel.Location = new Point(20, y);
+        _new.Location = new Point(20, y + 18);
 
         y += 54;
-        _confirmLabel.Location = new Point(24, y);
-        _confirm.Location = new Point(24, y + 18);
+        _confirmLabel.Location = new Point(20, y);
+        _confirm.Location = new Point(20, y + 18);
+
+        foreach (var box in new[] { _current, _new, _confirm }) box.Width = 400;
 
         y += 56;
-        _rules.Bounds = new Rectangle(24, y, 392, 70);
+        _rules.Bounds = new Rectangle(20, y, 400, 62);
         _rules.Font = UiTheme.Small;
         _rules.ForeColor = UiTheme.TextSecondary;
         _rules.AutoSize = false;
 
-        y += 78;
-        _save.Bounds = new Rectangle(24, y, 180, UiTheme.ButtonHeight);
-        _cancel.Bounds = new Rectangle(214, y, 110, UiTheme.ButtonHeight);
-
-        _status.Bounds = new Rectangle(24, y + 36, 392, 30);
-        _status.Font = UiTheme.Small;
+        // What went wrong, above the buttons rather than under them.
+        y += 62;
+        _status.Bounds = new Rectangle(20, y, 400, 34);
+        _status.Font = UiTheme.SmallBold;
         _status.ForeColor = UiTheme.Critical;
         _status.AutoSize = false;
 
+        y += 44;
+        _save.Bounds = new Rectangle(20, y, 180, UiTheme.ButtonHeight);
+        _cancel.Bounds = new Rectangle(210, y, 110, UiTheme.ButtonHeight);
+
         Controls.AddRange([_currentLabel, _current, _newLabel, _new, _confirmLabel, _confirm,
-                           _rules, _save, _cancel, _status]);
+                           _rules, _status, _save, _cancel]);
+
+        // The title, one sentence and the footer bar of the other dialogs.
+        DialogFrame.Attach(this, Localizer, DialogFrame.Lead(Localizer, nameof(ChangePasswordForm)),
+                           () => Localizer["Action.ChangePassword"]);
     }
 
     protected override void ApplyTexts()
