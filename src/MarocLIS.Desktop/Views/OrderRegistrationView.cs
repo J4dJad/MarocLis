@@ -129,7 +129,7 @@ public sealed class OrderRegistrationView : LocalizedView
     private readonly Panel _actionBar = new() { Dock = DockStyle.Bottom, Height = 56, Tag = UiTags.OwnLayout };
     private readonly Button _clear = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new() { AutoSize = false, AutoEllipsis = true };
-    private readonly Button _registerAndPrint = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _registerWithoutLabels = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _register = UiTheme.PrimaryButton(string.Empty);
 
     // State
@@ -488,8 +488,8 @@ public sealed class OrderRegistrationView : LocalizedView
         _clear.ForeColor = UiTheme.CriticalInk;
         _clear.Height = 34;
         ButtonIcons.Set(_clear, Glyph.Eraser, always: true);
-        _registerAndPrint.Height = 34;
-        ButtonIcons.Set(_registerAndPrint, Glyph.Tag, always: true);
+        _registerWithoutLabels.Height = 34;
+        ButtonIcons.Set(_registerWithoutLabels, Glyph.Tag, always: true);
         _register.Height = 34;
 
         _status.Font = UiTheme.Body;
@@ -497,7 +497,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _status.TextAlign = ContentAlignment.MiddleRight;
         _status.BackColor = UiTheme.SurfaceRaised;
 
-        _actionBar.Controls.AddRange([_clear, _status, _registerAndPrint, _register]);
+        _actionBar.Controls.AddRange([_clear, _status, _registerWithoutLabels, _register]);
         _actionBar.Resize += (_, _) => LayoutActionBar();
 
         // --- assembly ------------------------------------------------------------------------------
@@ -877,9 +877,9 @@ public sealed class OrderRegistrationView : LocalizedView
         _clear.Bounds = new Rectangle(20, top, ButtonWidth(_clear, EscapeHint, icon: true), 34);
         var registerWidth = ButtonWidth(_register, "F12", icon: true);
         _register.Bounds = new Rectangle(width - 20 - registerWidth, top, registerWidth, 34);
-        var printWidth = ButtonWidth(_registerAndPrint, "F8", icon: true);
-        _registerAndPrint.Bounds = new Rectangle(_register.Left - 8 - printWidth, top, printWidth, 34);
-        _status.Bounds = new Rectangle(_clear.Right + 12, top, Math.Max(0, _registerAndPrint.Left - 12 - _clear.Right - 12), 34);
+        var printWidth = ButtonWidth(_registerWithoutLabels, "F8", icon: true);
+        _registerWithoutLabels.Bounds = new Rectangle(_register.Left - 8 - printWidth, top, printWidth, 34);
+        _status.Bounds = new Rectangle(_clear.Right + 12, top, Math.Max(0, _registerWithoutLabels.Left - 12 - _clear.Right - 12), 34);
     }
 
     /// <summary>
@@ -960,7 +960,7 @@ public sealed class OrderRegistrationView : LocalizedView
         PermissionGate.Require(Permissions.Patients.Create, _newPatient);
         PermissionGate.Require(Permissions.Patients.Create, _emergencyPatient);
         PermissionGate.Require(Permissions.Orders.Create, _register);
-        PermissionGate.Require(Permissions.Orders.Create, _registerAndPrint);
+        PermissionGate.Require(Permissions.Orders.Create, _registerWithoutLabels);
         PermissionGate.Require([Permissions.Catalog.Manage, Permissions.Orders.Create], _newPrescriber);
         _newPrescriber.Click += async (_, _) => await CreatePrescriberAsync();
 
@@ -1057,16 +1057,17 @@ public sealed class OrderRegistrationView : LocalizedView
         _removeAll.Click += (_, _) => RemoveAll();
 
         _selfPay.CheckedChanged += (_, _) => { Changed(); RequestQuote(); };
-        _register.Click += async (_, _) => await RunBusyAsync(() => RegisterAsync(printLabels: false));
-        _registerAndPrint.Click += async (_, _) => await RunBusyAsync(() => RegisterAsync(printLabels: true));
+        _register.Click += async (_, _) => await RunBusyAsync(() => RegisterAsync(OrderRegistrationRules.PrintsLabels(withoutLabels: false)));
+        _registerWithoutLabels.Click += async (_, _) => await RunBusyAsync(() => RegisterAsync(OrderRegistrationRules.PrintsLabels(withoutLabels: true)));
         _clear.Click += (_, _) => CancelEntry();
 
         ShortcutHints.Attach(_register, "F12");
-        ShortcutHints.Attach(_registerAndPrint, "F8");
+        ShortcutHints.Attach(_registerWithoutLabels, "F8");
     }
 
     /// <summary>
-    /// The screen's own keys: F12 saves, F8 saves and prints the labels, Échap abandons the entry
+    /// The screen's own keys: F12 saves and prints the labels, as before; F8 saves
+    /// without them; Échap abandons the entry
     /// (after asking, when something was typed), F4 goes to the analyses. Échap first closes an open
     /// suggestion list or drop-down.
     /// </summary>
@@ -1078,7 +1079,7 @@ public sealed class OrderRegistrationView : LocalizedView
                 if (_register.Enabled) _register.PerformClick();
                 return true;
             case Keys.F8:
-                if (_registerAndPrint.Enabled) _registerAndPrint.PerformClick();
+                if (_registerWithoutLabels.Enabled) _registerWithoutLabels.PerformClick();
                 return true;
             case Keys.F4:
                 _catalogSearch.Focus();
@@ -1137,7 +1138,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _dueLabel.Text = T("OrderEntry.PatientRemainder");
 
         _clear.Text = T("OrderEntry.CancelEntry");
-        _registerAndPrint.Text = T("OrderEntry.SaveAndPrint");
+        _registerWithoutLabels.Text = T("OrderEntry.SaveWithoutLabels");
         _register.Text = T("Action.Save");
         _clear.Padding = new Padding(10, 0, ShortcutHints.Width(EscapeHint), 0);
 
@@ -2034,7 +2035,7 @@ public sealed class OrderRegistrationView : LocalizedView
         var hasPatient = _patient is not null;
         var hasAnalyses = _selected.Count > 0;
         _register.Enabled = hasPatient && hasAnalyses;
-        _registerAndPrint.Enabled = hasPatient && hasAnalyses;
+        _registerWithoutLabels.Enabled = hasPatient && hasAnalyses;
 
         if (_notice is { } notice)
         {
@@ -2483,7 +2484,7 @@ public sealed class OrderRegistrationView : LocalizedView
         };
 
         _register.Enabled = false;
-        _registerAndPrint.Enabled = false;
+        _registerWithoutLabels.Enabled = false;
         Cursor = Cursors.WaitCursor;
 
         try
@@ -2567,8 +2568,8 @@ public sealed class OrderRegistrationView : LocalizedView
 
     /// <summary>
     /// Renders and opens the tube labels immediately. The labels have to be in the phlebotomist's
-    /// hand before the patient leaves the counter; « Enregistrer et imprimer les étiquettes » (F8)
-    /// does both in one step, and they can be reprinted from the file at any time.
+    /// hand before the patient leaves the counter, so « Enregistrer » (F12, Ctrl+S) prints them as it
+    /// always has; « Enregistrer sans étiquettes » (F8) skips them, and they can be reprinted from the file.
     /// </summary>
     private async Task PrintLabelsAsync(RegisteredOrder registered)
     {

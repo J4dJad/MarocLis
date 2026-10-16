@@ -16,6 +16,12 @@ public static class OrderRegistrationRules
     public const int RepeatWindowDays = 30;
 
     /// <summary>
+    /// Whether a save prints the tube labels: « Enregistrer » (F12, Ctrl+S) does, as it always has;
+    /// « Enregistrer sans étiquettes » (F8) does not.
+    /// </summary>
+    public static bool PrintsLabels(bool withoutLabels) => !withoutLabels;
+
+    /// <summary>
     /// What Enter adds: an exact code wins ("NFS" is the blood count, not every analysis whose name
     /// holds "nfs"), then a code that starts with what was typed, then the first match by name.
     /// </summary>

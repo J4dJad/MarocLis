@@ -85,4 +85,11 @@ public sealed class OrderRegistrationScreenTests
         groups[0].Select(a => a.Test.Code).Should().Equal("NFS", "HBA1C");
         groups[1].Single().Test.Code.Should().Be("POT");
     }
+
+    [Fact]
+    public void Save_PrintsTheLabelsAsBefore_UnlessSavedWithoutLabels()
+    {
+        OrderRegistrationRules.PrintsLabels(withoutLabels: false).Should().BeTrue();
+        OrderRegistrationRules.PrintsLabels(withoutLabels: true).Should().BeFalse();
+    }
 }
