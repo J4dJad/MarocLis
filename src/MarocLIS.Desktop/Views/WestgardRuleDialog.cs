@@ -113,6 +113,9 @@ internal sealed class WestgardRuleDialog : Form
         AcceptButton = ok;
         CancelButton = cancel;
 
+        // The explanation above the list is the dialog's sentence: no second one under the title.
+        QhDialog.Dress(this, localizer, null);
+
         if (_list.Items.Count > 0) _list.SelectedIndex = 0;
         ShowDescription();
     }
