@@ -74,6 +74,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<ICatalogQueries, CatalogQueries>();
         services.AddIsolatedQueries<Application.Orders.IOrderQueries, OrderQueries>();
         services.AddIsolatedQueries<Application.Orders.IOrderEntryQueries, OrderEntryQueries>();
+        services.AddIsolatedQueries<Application.Orders.IOrderFileQueries, OrderFileQueries>();
         // The counter's running quote: the registration's own pricing calls, on a context of their own.
         services.AddIsolatedQueries<Application.Orders.IOrderQuotes, Application.Orders.OrderQuoteService>();
         services.AddIsolatedQueries<Application.Catalog.ICatalogMaintenanceQueries, CatalogMaintenanceQueries>();
