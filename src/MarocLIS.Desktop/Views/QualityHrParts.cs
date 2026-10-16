@@ -800,25 +800,21 @@ internal sealed class QhAside : Panel
         foreach (Label value in _facts.Controls.OfType<Label>())
             value.MaximumSize = new Size(_facts.GetColumn(value) == 0 ? 108 : Math.Max(80, width - 116), 0);
         ActionsPanel.MaximumSize = new Size(width, 0);
-        // A caption longer than the aside wraps on two lines instead of being cut. Only once the
+        // The actions are stacked one under the other, all as wide as the aside, as the side
+        // panels of the other screens: each at its own width, they made a ragged column. A
+        // caption longer than the aside wraps on two lines instead of being cut. Only once the
         // aside has its real width: sized against a provisional one, every button would wrap.
         if (_layout.ClientSize.Width < 160) return;
         var changed = false;
         foreach (Button button in ActionsPanel.Controls.OfType<Button>())
         {
-            var wide = button.GetPreferredSize(Size.Empty).Width > width - 8;
-            if (wide == !button.AutoSize) continue;
+            // A little room kept: a caption measured to the pixel was still cut by the frame.
+            var wide = button.GetPreferredSize(Size.Empty).Width > width - 20;
+            var size = new Size(width - 8, wide ? 50 : 34);
+            if (!button.AutoSize && button.Size == size) continue;
             changed = true;
-            if (wide)
-            {
-                button.AutoSize = false;
-                button.Size = new Size(width - 8, 50);
-            }
-            else
-            {
-                button.AutoSize = true;
-                button.Height = 34;
-            }
+            button.AutoSize = false;
+            button.Size = size;
         }
         if (changed) ActionsPanel.Invalidate(true);
     }
