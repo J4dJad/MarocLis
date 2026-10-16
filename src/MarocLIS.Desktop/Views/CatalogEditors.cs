@@ -105,7 +105,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         _volume = TextField("Catalog.RequiredVolume", 20, 236, 120, Editable(_stored?.RequiredVolumeMl),
                             latin: true, right: true);
-        _volume.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _volume);
         _loinc = TextField("Catalog.Loinc", 152, 236, 160, _stored?.LoincCode, latin: true, mono: true);
         _actCode = TextField("Catalog.NationalActCode", 324, 236, 160, existing?.NationalActCode,
                         latin: true, mono: true);
@@ -177,19 +177,19 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _coefficient = TextField("Billing.Coefficient", 102, 612, 100,
                                  labTariff?.Coefficient.ToString("0.##"),
                                  latin: true, right: true, mono: true);
-        _coefficient.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _coefficient);
 
         _letterKeyValue = TextField("Catalog.LetterKeyValue", 214, 612, 120,
                                     (labTariff is { LetterKeyValue: > 0m }
                                          ? labTariff.LetterKeyValue
                                          : knownLetterKeyValue)?.ToString("0.####"),
                                     latin: true, right: true, mono: true);
-        _letterKeyValue.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _letterKeyValue);
 
         _price = TextField("Catalog.LabPrice", 346, 612, 130,
                            labTariff?.Price.ToString("0.00"),
                            latin: true, right: true, mono: true);
-        _price.MaxLength = EditorValues.AmountMaxLength;
+        Numeric(EditorValues.AmountMaxLength, _price);
 
         _computed = Notice(488, 626, 224, 44, "Catalog.TariffComputedNotice", UiTheme.Accent);
 
@@ -474,7 +474,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _loinc.MaxLength = 20;
         _cv = TextField("Catalog.AnalyticalCv", 364, 130, 100,
                    existing?.AnalyticalCvPercent?.ToString("0.##"), latin: true, right: true);
-        _cv.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _cv);
 
         _displayOrder = Number("Field.DisplayOrder", 476, 130, 100,
                                existing?.DisplayOrder ?? 0, max: 9999);
@@ -484,21 +484,21 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
 
         Label("Catalog.MeasuringRange", 20, 182);
         _measuringLow = Bare(20, 200, 100, existing?.MeasuringRangeLow);
-        _measuringLow.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _measuringLow);
         _measuringHigh = Bare(128, 200, 100, existing?.MeasuringRangeHigh);
-        _measuringHigh.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _measuringHigh);
 
         Label("Catalog.TechnicalLimits", 244, 182);
         _technicalLow = Bare(244, 200, 100, existing?.TechnicalLimitLow);
-        _technicalLow.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _technicalLow);
         _technicalHigh = Bare(352, 200, 100, existing?.TechnicalLimitHigh);
-        _technicalHigh.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _technicalHigh);
 
         Label("Catalog.CriticalLimits", 468, 182);
         _criticalLow = Bare(468, 200, 100, existing?.CriticalLow);
-        _criticalLow.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _criticalLow);
         _criticalHigh = Bare(576, 200, 100, existing?.CriticalHigh);
-        _criticalHigh.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _criticalHigh);
 
         Notice(20, 234, 712, 26, "Catalog.LimitsNotice");
 
@@ -506,7 +506,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
 
         _delta = TextField("Catalog.DeltaCheck", 20, 262, 100,
                       existing?.DeltaCheckPercent?.ToString("0.##"), latin: true, right: true);
-        _delta.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _delta);
 
         _deltaWindow = Number("Catalog.DeltaWindow", 132, 262, 100,
                               existing?.DeltaCheckWindowDays, max: 3650);
@@ -944,9 +944,9 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
 
         Label("Result.ReferenceRange", 20, 158);
         _lower = Bare(20, 176, 120, existing?.LowerLimit, parameter.Decimals);
-        _lower.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _lower);
         _upper = Bare(148, 176, 120, existing?.UpperLimit, parameter.Decimals);
-        _upper.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _upper);
 
         _expectedCoded = TextField("Catalog.ExpectedCodedValue", 284, 158, 180,
                               existing?.ExpectedCodedValue);
@@ -1266,17 +1266,17 @@ internal sealed class TariffEditorDialog : MasterDataEditor
         _coefficient = TextField("Billing.Coefficient", 112, 110, 120,
                             (editing?.Coefficient ?? analysis.CurrentCoefficient)?.ToString("0.##"),
                             latin: true, right: true, mono: true);
-        _coefficient.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _coefficient);
 
         _letterKeyValue = TextField("Catalog.LetterKeyValue", 244, 110, 120,
                                knownLetterKeyValue?.ToString("0.####"),
                                latin: true, right: true, mono: true);
-        _letterKeyValue.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _letterKeyValue);
 
         _price = TextField("Field.Price", 376, 110, 140,
                       (editing?.Price ?? analysis.CurrentPrice)?.ToString("0.00"),
                       latin: true, right: true, mono: true);
-        _price.MaxLength = EditorValues.AmountMaxLength;
+        Numeric(EditorValues.AmountMaxLength, _price);
 
         _computed = Notice(20, 158, 580, 44, "Catalog.TariffComputedNotice", UiTheme.Accent);
 
@@ -1285,7 +1285,7 @@ internal sealed class TariffEditorDialog : MasterDataEditor
         _vatRate = TextField("Billing.Vat", 440, 206, 100,
                              editing is { IsVatExempt: false } ? editing.VatRate.ToString("0.####") : null,
                              latin: true, right: true);
-        _vatRate.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _vatRate);
 
         Notice(20, 244, 580, 44, "Catalog.VatNotice");
 
@@ -1463,10 +1463,15 @@ internal sealed class PanelEditorDialog : MasterDataEditor
 
         _aliases = TextField("Catalog.SearchAliases", 20, 60, 392, null);
 
+        // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
+        _code.MaxLength = 30;
+        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = 300;
+        _aliases.MaxLength = 500;
+
         _packagePrice = TextField("Catalog.PackagePrice", 424, 60, 160,
                              existing?.PackagePrice?.ToString("0.00"),
                              latin: true, right: true, mono: true);
-        _packagePrice.MaxLength = EditorValues.AmountMaxLength;
+        Numeric(EditorValues.AmountMaxLength, _packagePrice);
 
         _displayOrder = Number("Field.DisplayOrder", 596, 60, 100,
                                existing?.DisplayOrder ?? 0, max: 9999);
@@ -1491,13 +1496,14 @@ internal sealed class PanelEditorDialog : MasterDataEditor
 
         _candidates.Columns.Add(new DataGridViewCheckBoxColumn
         {
-            Name = "optional", HeaderText = localizer["Catalog.Optional"], FillWeight = 10
+            // Wide enough for its caption: « facultative » was cut to « facultativ ».
+            Name = "optional", HeaderText = localizer["Catalog.Optional"], FillWeight = 13
         });
 
         foreach (var (name, header, weight, font, right) in new[]
                  {
                      ("code", localizer["Field.Code"], 14, UiTheme.MonospaceBold, false),
-                     ("name", localizer["Field.Name"], 38, UiTheme.Body, false),
+                     ("name", localizer["Field.Name"], 35, UiTheme.Body, false),
                      ("department", localizer["Field.Department"], 14, UiTheme.Small, false),
                      ("price", localizer["Field.Price"], 18, UiTheme.Monospace, true)
                  })
@@ -1699,12 +1705,12 @@ internal sealed class ReflexRuleEditorDialog : MasterDataEditor
         _threshold = TextField("Catalog.Threshold", 252, 64, 120,
                           existing?.Threshold?.ToString("0.###"),
                           latin: true, right: true, mono: true);
-        _threshold.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _threshold);
 
         _thresholdUpper = TextField("Catalog.ThresholdUpper", 384, 64, 120,
                                existing?.ThresholdUpper?.ToString("0.###"),
                                latin: true, right: true, mono: true);
-        _thresholdUpper.MaxLength = EditorValues.MeasureMaxLength;
+        Numeric(EditorValues.MeasureMaxLength, _thresholdUpper);
 
         _codedValue = TextField("Catalog.TriggerCodedValue", 516, 64, 104,
                            existing?.TriggerCodedValue, latin: true, mono: true);
@@ -1721,6 +1727,8 @@ internal sealed class ReflexRuleEditorDialog : MasterDataEditor
         _descriptionFr = TextField("Field.DescriptionFr", 20, 202, 300, existing?.Description.Fr);
         _descriptionAr = TextField("Field.DescriptionAr", 332, 202, 288, existing?.Description.Ar,
                               arabic: true);
+        _descriptionFr.MaxLength = _descriptionAr.MaxLength = 500;
+        _codedValue.MaxLength = 60;
 
         _automatic = Check("Catalog.AddAutomatically", 20, 250,
                            existing?.AddAutomatically ?? false);
@@ -1944,7 +1952,7 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
             _factor = TextField("Catalog.FactorToSi", 20, y, 160,
                            existing?.FactorToSi?.ToString("0.######"),
                            latin: true, right: true, mono: true);
-            _factor.MaxLength = EditorValues.MeasureMaxLength;
+            Numeric(EditorValues.MeasureMaxLength, _factor);
 
             _siUnit = TextField("Catalog.SiUnitCode", 192, y, 160, existing?.SiUnitCode,
                            latin: true, mono: true);
@@ -1969,6 +1977,13 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
             y += 48;
         }
 
+        // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
+        _code.MaxLength = kind == NomenclatureKind.Department ? 20 : 30;
+        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength =
+            kind == NomenclatureKind.MeasurementUnit ? 40 : 300;
+        if (_ucum is not null) _ucum.MaxLength = 40;
+        if (_siUnit is not null) _siUnit.MaxLength = 30;
+
         switch (kind)
         {
             case NomenclatureKind.Department:
@@ -1991,10 +2006,12 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
 
                 _collectionInstructions = TextField("Catalog.CollectionInstructions", 20, y, 580,
                                                 existing?.CollectionInstructions?.Fr);
+                _collectionInstructions.MaxLength = 1000;
                 y += 48;
 
                 _patientInstructions = TextField("Catalog.PatientInstructions", 20, y, 580,
                                              existing?.PatientInstructions?.Fr);
+                _patientInstructions.MaxLength = 1000;
                 y += 48;
 
                 Notice(20, y, 580, 20, "Catalog.PatientInstructionsNotice");
@@ -2004,6 +2021,7 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
             case NomenclatureKind.ContainerType:
                 _capColour = TextField("Catalog.CapColour", 20, y, 110,
                                    existing?.CapColourHex ?? "#FFFFFF", latin: true, mono: true);
+                _capColour.MaxLength = 9;
 
                 _colourSwatch = new Panel
                 {
@@ -2014,6 +2032,7 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
                 Controls.Add(_colourSwatch);
 
                 _additive = TextField("Catalog.Additive", 176, y, 200, existing?.Additive?.Fr);
+                _additive.MaxLength = 200;
 
                 _drawOrder = Number("Sample.DrawOrder", 388, y, 90, existing?.DrawOrder ?? 0,
                                      max: 99);
@@ -2023,12 +2042,12 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
                 _nominalVolume = TextField("Catalog.NominalVolume", 20, y, 110,
                                        existing?.NominalVolumeMl?.ToString("0.#"),
                                        latin: true, right: true);
-                _nominalVolume.MaxLength = EditorValues.MeasureMaxLength;
+                Numeric(EditorValues.MeasureMaxLength, _nominalVolume);
 
                 _minimumVolume = TextField("Catalog.MinimumVolume", 142, y, 110,
                                        existing?.MinimumVolumeMl?.ToString("0.#"),
                                        latin: true, right: true);
-                _minimumVolume.MaxLength = EditorValues.MeasureMaxLength;
+                Numeric(EditorValues.MeasureMaxLength, _minimumVolume);
 
                 _protectFromLight = Check("Collection.ProtectFromLight", 264, y + 20,
                                            existing?.RequiresProtectionFromLight ?? false);

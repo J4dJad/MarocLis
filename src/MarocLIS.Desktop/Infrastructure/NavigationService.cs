@@ -71,10 +71,11 @@ public sealed class NavigationService(
 
         var scope = rootProvider.CreateScope();
         var installed = false;
+        TView? view = null;
 
         try
         {
-            var view = scope.ServiceProvider.GetRequiredService<TView>();
+            view = scope.ServiceProvider.GetRequiredService<TView>();
             configure?.Invoke(view);
 
             _host.SuspendLayout();
@@ -104,6 +105,14 @@ public sealed class NavigationService(
         catch (OperationCanceledException)
         {
             if (!installed) scope.Dispose();
+        }
+        // A screen left before its first load finished is disposed under it, and the load then
+        // failed on its emptied grids ("cannot add a row to a DataGridView without columns"):
+        // the operator, already on the next screen, got that message for a screen they had left.
+        catch (Exception ex) when (installed && view is { } left
+                                   && (left.IsDisposed || !ReferenceEquals(Current, left)))
+        {
+            logger?.LogDebug(ex, "The load of {View}, left before it finished, was abandoned.", typeof(TView).Name);
         }
         catch (Exception ex)
         {

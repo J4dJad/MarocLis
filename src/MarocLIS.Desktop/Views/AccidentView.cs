@@ -571,6 +571,7 @@ internal sealed class AccidentDialog : MasterDataEditor
         _subrogation = Check("Accident.SubrogationAsk", 20, 396, r?.Subrogation ?? false);
         _rate = TextField("Accident.Incapacity", 560, 392, 180,
                           r?.IncapacityRate?.ToString("0.##", CultureInfo.InvariantCulture), mono: true, right: true);
+        Numeric(EditorValues.MeasureMaxLength, _rate);
         _note = TextField("Field.Notes", 20, 444, 720, r?.Note);
         _note.MaxLength = 1000;
 

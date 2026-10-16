@@ -67,6 +67,10 @@ internal sealed class BankAccountsDialog : Form
         _grid.SelectionChanged += (_, _) => _edit.Enabled = _grid.CurrentRow?.Tag is BankAccountRow;
         _grid.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditAsync(_grid.Rows[e.RowIndex].Tag as BankAccountRow); };
         Shown += async (_, _) => await LoadAsync();
+
+        // Mirrored in Arabic like every other window: this one was left to right, its labels on
+        // the left of their fields and its buttons in the wrong corner.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private async Task LoadAsync()
@@ -125,7 +129,7 @@ internal sealed class BankAccountEditor : MasterDataEditor
         _opening = TextField("Treasury.OpeningBalance", 20, 122, 180,
                              (row?.OpeningBalanceMad ?? 0m).ToString("0.00", CultureInfo.InvariantCulture),
                              latin: true, mono: true, right: true);
-        _opening.MaxLength = EditorValues.AmountMaxLength;
+        Numeric(EditorValues.AmountMaxLength, _opening);
 
         Label("Treasury.OpeningBalanceDate", 220, 122);
         _openingDate = new DateTimePicker
@@ -242,6 +246,10 @@ internal sealed class BankStatementImportDialog : Form
         // Kept with the account's mapping, a column of 1000 characters: a long paste there failed the import.
         _dateFormat.MaxLength = 30;
         Shown += async (_, _) => await PreviewAsync();
+
+        // Mirrored in Arabic like every other window: this one was left to right, its labels on
+        // the left of their fields and its buttons in the wrong corner.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private void BuildLayout()
@@ -518,6 +526,10 @@ internal sealed class ForecastItemsDialog : Form
         if (canManage)
             _grid.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditAsync(_grid.Rows[e.RowIndex].Tag as ForecastItemRow); };
         Shown += async (_, _) => await LoadAsync();
+
+        // Mirrored in Arabic like every other window: this one was left to right, its labels on
+        // the left of their fields and its buttons in the wrong corner.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private async Task LoadAsync()
@@ -572,7 +584,7 @@ internal sealed class ForecastItemEditor : MasterDataEditor
         _amount = TextField("Treasury.SignedAmount", 370, 14, 170,
                             (row?.AmountMad ?? 0m).ToString("0.00", CultureInfo.InvariantCulture),
                             latin: true, mono: true, right: true);
-        _amount.MaxLength = EditorValues.AmountMaxLength;
+        Numeric(EditorValues.AmountMaxLength, _amount);
         _recurrence = Choice("Treasury.Recurrence", 20, 68, 200, row?.Recurrence ?? ForecastRecurrence.Monthly,
                              "ForecastRecurrence");
 

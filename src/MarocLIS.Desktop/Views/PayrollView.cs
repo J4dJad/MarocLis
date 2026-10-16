@@ -599,7 +599,7 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
         TextBox Field(string key, int x, int y, decimal value)
         {
             var box = TextField(key, x, y, 180, N(value), mono: true, right: true);
-            box.MaxLength = EditorValues.AmountMaxLength;
+            Numeric(EditorValues.AmountMaxLength, box);
             return box;
         }
 
@@ -688,7 +688,9 @@ internal sealed class PayrollParametersDialog : MasterDataEditor
         (TextBox, Action<PayrollParameters, decimal>) F(string key, int x, int y, decimal value, Action<PayrollParameters, decimal> set)
         {
             var box = TextField(key, x, y, 200, N(value), mono: true, right: true);
-            box.MaxLength = EditorValues.AmountMaxLength;
+            // decimal(18,6) columns, ceilings and SMIG included: the shared check refuses a
+            // fifteen-figure amount the save could not store.
+            Numeric(EditorValues.AmountMaxLength, box);
             return (box, set);
         }
 

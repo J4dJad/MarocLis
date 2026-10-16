@@ -135,6 +135,8 @@ public sealed class RelationsView : LocalizedView
             await ExportAsync(Pilotage.GridOf(_tabs.SelectedTab), _output, _dialogs,
                               _bar.Export.Text, Localizer);
         _tabs.SelectedIndexChanged += (_, _) => UpdateButtons();
+        foreach (var grid in new[] { _visits, _due, _partnerships })
+            grid.SelectionChanged += (_, _) => UpdateButtons();
         _inactive.CheckedChanged += async (_, _) => await LoadAsync();
         _newVisit.Click += async (_, _) => await EditVisitAsync(null);
         _editVisit.Click += async (_, _) => { if (SelectedVisit is { } v) await EditVisitAsync(v); };
@@ -164,6 +166,12 @@ public sealed class RelationsView : LocalizedView
         _newPartnership.Visible = _editPartnership.Visible = manage && OnPartnerships;
         _attach.Available = manage && OnPartnerships;
         _openFile.Available = _inactive.Visible = OnPartnerships;
+
+        // Only with a row to act on: with an empty list « Modifier », « Supprimer » and the
+        // document actions were offered and did nothing when clicked.
+        _editVisit.Enabled = _deleteVisit.Enabled = SelectedVisit is not null;
+        _editPartnership.Enabled = _attach.Enabled = SelectedPartnership is not null;
+        _openFile.Enabled = SelectedPartnership is { FileName: not null };
         Pilotage.SyncMore(_more, _moreMenu);
     }
 
@@ -213,6 +221,7 @@ public sealed class RelationsView : LocalizedView
             if (partnerships.IsSuccess) { FillPartnerships(partnerships.Value); _partnershipCount = partnerships.Value.Count; }
             _loaded = true;
             ShowCounts();
+            UpdateButtons();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)

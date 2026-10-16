@@ -389,11 +389,14 @@ public sealed class CatalogView : LocalizedView
         {
             if (e.KeyCode != Keys.Enter) return;
             e.SuppressKeyPress = true;
-            await LoadAnalysesAsync();
+            await _selectionLoads.RunAsync(() => LoadAnalysesAsync());
         };
 
-        _departmentFilter.SelectedIndexChanged += async (_, _) => await LoadAnalysesAsync();
-        _includeInactive.CheckedChanged += async (_, _) => await LoadAnalysesAsync();
+        // Through the selection queue, like the detail loads: the filters are also set while the
+        // screen loads, and a load started that way and still running when the operator moved to
+        // another screen came back to fill the grids of a disposed view, which raised an error.
+        _departmentFilter.SelectedIndexChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadAnalysesAsync());
+        _includeInactive.CheckedChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadAnalysesAsync());
 
         _analyses.SelectionChanged += async (_, _) =>
         {
@@ -440,9 +443,9 @@ public sealed class CatalogView : LocalizedView
         _newNomenclature.Click += async (_, _) => await EditNomenclatureAsync(create: true);
         _editNomenclature.Click += async (_, _) => await EditNomenclatureAsync();
 
-        _nomenclatureKind.SelectedIndexChanged += async (_, _) => await LoadNomenclatureAsync();
+        _nomenclatureKind.SelectedIndexChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadNomenclatureAsync());
 
-        _tabs.SelectedIndexChanged += async (_, _) => await LoadSelectedTabAsync();
+        _tabs.SelectedIndexChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadSelectedTabAsync());
     }
 
     protected override void ApplyTexts()
@@ -621,6 +624,8 @@ public sealed class CatalogView : LocalizedView
             await LoadSelectedTabAsync(ct);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the catalogue failed.");

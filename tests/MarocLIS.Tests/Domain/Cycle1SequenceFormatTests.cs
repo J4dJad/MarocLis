@@ -38,7 +38,12 @@ public sealed class Cycle1SequenceFormatTests
         });
 
         var service = new ConfigurationService(Stub<IRepository<LabSite>>.Create(), Stub<IRepository<AppUser>>.Create(),
-                                               Stub<IAdministrationQueries>.Create(), writer, unitOfWork, guard,
+                                               Stub<IAdministrationQueries>.Create(new()
+                                               {
+                                                   // The format is now measured against the longest site code.
+                                                   [nameof(IAdministrationQueries.GetSiteDetailsAsync)] =
+                                                       _ => Task.FromResult<IReadOnlyList<SiteDetail>>([])
+                                               }), writer, unitOfWork, guard,
                                                auditor, Stub<IClock>.Create());
         return (service, sequence);
     }

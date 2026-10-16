@@ -407,6 +407,18 @@ public sealed class ConfigurationService(
             return Result.Failure(Error.Regulatory("Sequence_FormatFrozenAfterFirstUse",
                                                      sequence.LastAllocatedValue));
 
+        // The number this format gives, with the longest site code it may carry, must fit the
+        // column it is written to; otherwise every document of the series fails to save.
+        var siteCodes = (await queries.GetSiteDetailsAsync(clock.Today, ct))
+            .Where(s => sequence.SiteId is null || s.Id == sequence.SiteId)
+            .Select(s => s.Code);
+        var longestSite = siteCodes.MaxBy(c => c.Length) ?? string.Empty;
+        var sample = new NumberSequence(sequence.Purpose, sequence.SiteId, sequence.Year, format.Trim())
+            .Render(1, clock.Now, longestSite);
+        var maxLength = NumberSequence.MaxLength(sequence.Purpose);
+        if (sample.Length > maxLength)
+            return Result.Failure(Error.Validation("Sequence_FormatTooLong", sample, maxLength));
+
         var previous = sequence.Format;
         sequence.Format = format.Trim();
 

@@ -228,7 +228,18 @@ internal abstract class MasterDataEditor : Form
     {
         var ok = UiTheme.PrimaryButton(Localizer[acceptKey]);
         ok.Bounds = new Rectangle(20, y, (width - 60) / 2, UiTheme.ButtonHeight);
-        ok.Click += (_, _) => Accept();
+        ok.Click += (_, _) =>
+        {
+            if (UnreadableNumber() is { } box)
+            {
+                Dialogs.Warn(Localizer.Format("Result_NotANumber", box.Text.Trim()), Text);
+                box.Focus();
+                box.SelectAll();
+                return;
+            }
+
+            Accept();
+        };
 
         var cancel = UiTheme.SecondaryButton(Localizer["Action.Cancel"]);
         cancel.Bounds = new Rectangle(20 + (width - 60) / 2 + 20, y, (width - 60) / 2,
@@ -317,12 +328,41 @@ internal abstract class MasterDataEditor : Form
 
         _accept.Top -= shift;
         _dismiss.Top -= shift;
+        var drawn = ClientSize.Width;
         ClientSize = new Size(ClientSize.Width + bar, available);
+
+        // In Arabic the window mirrors its own children, not those of a panel inside it: moved
+        // into the body, every field went back to the left-to-right layout (captions on the left,
+        // the first field of each row at the left edge). They are mirrored here instead, across
+        // the width they were drawn on, which is what the body shows beside its scroll bar.
+        if (RightToLeft == RightToLeft.Yes && RightToLeftLayout)
+            foreach (Control control in body.Controls) control.Left = drawn - control.Right;
 
         ResumeLayout(performLayout: true);
     }
 
     protected abstract void Accept();
+
+    private readonly List<TextBox> _numbers = [];
+
+    /// <summary>
+    /// Marks boxes that hold a number: capped to <paramref name="maxLength"/> characters, and
+    /// checked before <see cref="Accept"/>. <see cref="DecimalOrNull"/> reads text it cannot read
+    /// as "no value", so "10 %" in a discount, a slip in a critical limit or a figure too large
+    /// for its column was saved as an empty limit or a zero — or failed the save — without a word.
+    /// </summary>
+    protected void Numeric(int maxLength, params TextBox[] boxes)
+    {
+        foreach (var box in boxes)
+        {
+            box.MaxLength = maxLength;
+            _numbers.Add(box);
+        }
+    }
+
+    /// <summary>The first enabled number box whose text is no number the editor can save.</summary>
+    private TextBox? UnreadableNumber() =>
+        _numbers.FirstOrDefault(b => b.Enabled && EditorValues.IsUnreadable(b.Text));
 
     protected static string? Blank(TextBox box) =>
         string.IsNullOrWhiteSpace(box.Text) ? null : box.Text.Trim();
@@ -602,6 +642,12 @@ internal sealed class QcMaterialEditorDialog : MasterDataEditor
         _reference = TextField("Inventory.SupplierReference", 300, 122, 300, row?.CatalogueReference,
                            latin: true);
 
+        // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
+        _lot.MaxLength = 60;
+        _nameFr.MaxLength = _nameAr.MaxLength = 300;
+        _manufacturer.MaxLength = 150;
+        _reference.MaxLength = 100;
+
         _opened = OptionalDate("Inventory.OpenedOn", 20, 180, row?.OpenedOn, max: DateTime.Today);
 
         _stability = Number("Inventory.OpenStabilityDays", 240, 180, 120,
@@ -712,6 +758,8 @@ internal sealed class QcTargetEditorDialog : MasterDataEditor
 
         _cv = TextField("Quality.MaxCv", 340, 162, 140,
                     row?.MaxAcceptableCvPercent?.ToString("0.##"), latin: true, right: true);
+
+        Numeric(EditorValues.MeasureMaxLength, _mean, _sd, _cv);
 
         _cvEcho = Notice(500, 180, 120, 20, "Quality.CvEcho", UiTheme.TextSecondary);
 
@@ -863,15 +911,19 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
 
         Notice(20, 230, 680, 30, "Inventory.ReorderNotice", UiTheme.Accent);
 
-        _minimum = TextField("Inventory.MinimumStock", 20, 266, 140,
+        // The reorder point's caption is the longest: its column is wider so it no longer runs
+        // into « Quantité à commander ».
+        _minimum = TextField("Inventory.MinimumStock", 20, 266, 130,
                          row?.MinimumStock.ToString("0.##"), latin: true, right: true);
-        _reorder = TextField("Inventory.ReorderPoint", 180, 266, 140,
+        _reorder = TextField("Inventory.ReorderPoint", 170, 266, 170,
                          row?.ReorderPoint.ToString("0.##"), latin: true, right: true);
-        _reorderQuantity = TextField("Inventory.ReorderQuantity", 340, 266, 140,
+        _reorderQuantity = TextField("Inventory.ReorderQuantity", 360, 266, 160,
                                  row is null ? null : row.ReorderQuantity.ToString("0.##"),
                                  latin: true, right: true);
-        _maximum = TextField("Inventory.MaximumStock", 500, 266, 140, row?.MaximumStock?.ToString("0.##"),
+        _maximum = TextField("Inventory.MaximumStock", 540, 266, 160, row?.MaximumStock?.ToString("0.##"),
                              latin: true, right: true);
+
+        Numeric(EditorValues.MeasureMaxLength, _minimum, _reorder, _reorderQuantity, _maximum);
 
         _critical = Check("Inventory.IsCritical", 20, 330, row?.IsCritical ?? false, bold: true);
         Notice(20, 354, 680, 30, "Inventory.CriticalNotice");
@@ -895,10 +947,22 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
 
         Notice(20, 540, 680, 20, "Inventory.ConsumptionNotice", UiTheme.Accent);
         _testsPerResult = TextField("Inventory.TestsPerResult", 20, 562, 300, policy.TestsPerResultCsv, latin: true, mono: true);
+
+        // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
+        _code.MaxLength = 40;
+        _nameFr.MaxLength = _nameAr.MaxLength = 300;
+        _unit.MaxLength = 30;
+        _manufacturer.MaxLength = 150;
+        _reference.MaxLength = _location.MaxLength = 100;
+        _analyses.MaxLength = 2000;
+        _hazardClass.MaxLength = 60;
+        _gtin.MaxLength = 14;
+        _testsPerResult.MaxLength = 500;
         _deadPercent = TextField("Inventory.DeadVolumePercent", 340, 562, 170, N(policy.DeadVolumePercent),
                                  latin: true, right: true);
         _deadTests = TextField("Inventory.DeadVolumeTests", 530, 562, 170, N(policy.DeadVolumeTestsPerOpening),
                                latin: true, right: true);
+        Numeric(EditorValues.MeasureMaxLength, _deadPercent, _deadTests);
 
         _calibrationTests = Number("Inventory.TestsPerCalibration", 20, 616, 150, policy.TestsPerCalibration, 1000m);
         _safetyDays = Number("Inventory.SafetyStockDays", 190, 616, 150, policy.SafetyStockDays, 365m);
@@ -1084,6 +1148,18 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
         // Loi 84-12: the establishment's registration with the AMMPS / DMP to sell IVD devices.
         _registration = TextField("Inventory.RegulatoryRegistration", 20, 478, 300, row?.RegistrationNumber,
                                   latin: true);
+
+        // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
+        _code.MaxLength = 30;
+        _name.MaxLength = _contact.MaxLength = _email.MaxLength = 200;
+        _ice.MaxLength = 15;
+        _fiscalId.MaxLength = _account.MaxLength = 20;
+        _rc.MaxLength = 40;
+        _phone.MaxLength = 30;
+        _address.MaxLength = 400;
+        _city.MaxLength = 100;
+        _notes.MaxLength = 1000;
+        _registration.MaxLength = 60;
         _registrationValidUntil = OptionalDate("Inventory.RegulatoryRegistrationValidUntil", 340, 478,
                                                row?.RegistrationValidUntil);
         _registrationNotice = Notice(20, 530, 660, 30, "Supplier_RegistrationExpiredNotice", UiTheme.Abnormal);
@@ -1252,8 +1328,21 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
 
         _discount = TextField("Billing.Discount", 20, 458, 120,
                           row?.DiscountPercent?.ToString("0.##"), latin: true, right: true);
+        Numeric(EditorValues.MeasureMaxLength, _discount);
 
         _notes = TextField("Field.Notes", 160, 458, 380, _stored?.Notes);
+
+        // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
+        _lastName.MaxLength = _firstName.MaxLength = 120;
+        _nameAr.MaxLength = _email.MaxLength = _institution.MaxLength = 200;
+        _specialityFr.MaxLength = 150;
+        _order.MaxLength = 40;
+        _inpe.MaxLength = _mobile.MaxLength = _criticalPhone.MaxLength = 20;
+        _ice.MaxLength = 15;
+        _phone.MaxLength = _fax.MaxLength = 30;
+        _address.MaxLength = 400;
+        _city.MaxLength = 100;
+        _notes.MaxLength = 1000;
         _active = Check("Field.Active", 560, 476, row?.IsActive ?? true);
 
         Buttons(560, 720);
@@ -1372,13 +1461,15 @@ internal sealed class PayerEditorDialog : MasterDataEditor
         _kind = Choice("Coverage.PayerKind", 280, 68, 240, row?.Kind ?? PayerKind.AmoCnss,
                         "PayerKind");
 
+        // A column each as wide as its caption: 132 pixels apart, « Taux de remboursement (%) »,
+        // « Délai de règlement (jours) » and « ICE » were written over one another.
         _rate = Number("Coverage.ReimbursementRatePercent", 20, 122, 120,
                         row?.ReimbursementPercent ?? 70m, max: 100m, decimals: 2);
 
-        _terms = Number("Coverage.PaymentTermsDays", 152, 122, 120,
+        _terms = Number("Coverage.PaymentTermsDays", 230, 122, 120,
                          row?.PaymentTermsDays ?? 60, max: 365m);
 
-        _ice = TextField("Site.Ice", 284, 122, 180, row?.Ice, latin: true, mono: true);
+        _ice = TextField("Site.Ice", 440, 122, 180, row?.Ice, latin: true, mono: true);
 
         _tnr = Check("Coverage.ReferenceTariff", 20, 190,
                       row?.UsesNationalReferenceTariff ?? true, bold: true);
@@ -1407,6 +1498,17 @@ internal sealed class PayerEditorDialog : MasterDataEditor
 
         _address = TextField("Patient.Address", 20, 414, 410, row?.AddressLine);
         _city = TextField("Patient.City", 450, 414, 260, row?.City);
+
+        // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
+        _code.MaxLength = 30;
+        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = 300;
+        _agreementNumber.MaxLength = 60;
+        _ice.MaxLength = 15;
+        _contact.MaxLength = _email.MaxLength = 200;
+        _phone.MaxLength = 30;
+        _address.MaxLength = 400;
+        _city.MaxLength = 100;
+        _accountingAccount.MaxLength = 20;
 
         Notice(20, 476, 690, 30, "Coverage.PayerRateNotice");
 

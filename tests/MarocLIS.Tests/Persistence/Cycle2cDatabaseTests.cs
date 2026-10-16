@@ -165,11 +165,13 @@ public sealed class Cycle2cDatabaseTests(Cycle2cScratchDatabase database) : ICla
     {
         var lab = await LabAsync();
 
-        var longest = EditorValues.ParseDecimal(new string('9', EditorValues.AmountMaxLength))!.Value;
+        // Since cycle 3 the reader refuses twelve figures and beyond: "999 999 999 999" is the longest it reads.
+        var longest = EditorValues.ParseDecimal("999 999 999 999")!.Value;
         var saved = await On<FixedAssetService, Result<Guid>>(lab, s => s.SaveAsync(Asset(longest)));
         saved.IsSuccess.Should().BeTrue(Errors(saved));
 
-        var tooLong = EditorValues.ParseDecimal(new string('9', 17))!.Value;
+        EditorValues.ParseDecimal(new string('9', 17)).Should().BeNull();
+        var tooLong = decimal.Parse(new string('9', 17), System.Globalization.CultureInfo.InvariantCulture);
         var refused = async () => await On<FixedAssetService, Result<Guid>>(lab, s => s.SaveAsync(Asset(tooLong)));
         await refused.Should().ThrowAsync<DbUpdateException>();
     }

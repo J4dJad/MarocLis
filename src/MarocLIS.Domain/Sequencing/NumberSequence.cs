@@ -113,6 +113,20 @@ public sealed class NumberSequence : Entity
         return result;
     }
 
+    /// <summary>
+    /// The longest number the column a series is written to holds. A format rendering longer —
+    /// « LABO-{SITE}-{YEAR}-{MM}-{SEQ:10} » for the file numbers, kept in thirty characters — was
+    /// accepted, and from then on every registration failed with an unexpected error.
+    /// </summary>
+    public static int MaxLength(SequencePurpose purpose) => purpose switch
+    {
+        SequencePurpose.Accession or SequencePurpose.MedicalRecord
+            or SequencePurpose.NonConformity or SequencePurpose.SubcontractDispatch => 30,
+        SequencePurpose.EmployeeNumber or SequencePurpose.WorkAccident => 20,
+        SequencePurpose.ClaimBatch => 60,
+        _ => 40
+    };
+
     public void Close(DateTimeOffset at)
     {
         IsClosed = true;

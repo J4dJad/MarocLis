@@ -597,6 +597,7 @@ internal sealed class LeaveAdjustmentDialog : MasterDataEditor
         : base(localizer, dialogs, "Leave.Adjust", employee, 520, 230)
     {
         _days = TextField("Leave.AdjustDays", 20, 10, 140, mono: true, right: true);
+        Numeric(EditorValues.MeasureMaxLength, _days);
         _comment = TextField("Leave.AdjustReason", 180, 10, 320);
         _comment.MaxLength = 500;
         Notice(20, 66, 480, 90, "Leave.AdjustNotice");

@@ -653,7 +653,7 @@ internal sealed class FixedAssetDialog : MasterDataEditor
         _cost = TextField("Assets.CostExcludingVat", 20, 122, 160, Amount(values?.CostExcludingVatMad ?? 0m),
                           latin: true, mono: true, right: true);
         _vat = TextField("Assets.Vat", 200, 122, 140, Amount(values?.VatAmountMad ?? 0m), latin: true, mono: true, right: true);
-        _residual.MaxLength = _cost.MaxLength = _vat.MaxLength = EditorValues.AmountMaxLength;
+        Numeric(EditorValues.AmountMaxLength, _residual, _cost, _vat);
         _vatRecoverable = Check("Assets.VatRecoverable", 360, 144, values?.VatRecoverable ?? false);
         _plan = new Label
         {
@@ -710,6 +710,10 @@ internal sealed class FixedAssetDialog : MasterDataEditor
         RenderInstrumentState();
         Buttons(460, 900);
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.FixedAsset"]);
+
+        // Mirrored in Arabic like every other window: this one was left to right, its labels on
+        // the left of their fields and its buttons in the wrong corner.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     protected override async void OnShown(EventArgs e)
@@ -909,6 +913,10 @@ internal sealed class InstrumentCandidateDialog : Form
         Controls.Add(footer);
 
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.FromInstrument"], [], cancel, ok);
+
+        // Mirrored in Arabic like every other window: this one was left to right, its labels on
+        // the left of their fields and its buttons in the wrong corner.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private void Choose()
@@ -996,6 +1004,10 @@ internal sealed class DepreciationScheduleDialog : Form
         Controls.Add(footer);
 
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.Schedule"], [csv], close, null);
+
+        // Mirrored in Arabic like every other window: this one was left to right, its labels on
+        // the left of their fields and its buttons in the wrong corner.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 }
 
@@ -1022,12 +1034,16 @@ internal sealed class AssetDisposalDialog : MasterDataEditor
         };
         Controls.Add(_date);
         _price = TextField("Assets.DisposalPrice", 200, 14, 140, null, latin: true, mono: true, right: true);
-        _price.MaxLength = EditorValues.AmountMaxLength;
+        Numeric(EditorValues.AmountMaxLength, _price);
         _reason = TextField("Assets.DisposalReason", 20, 68, 480);
         _reason.MaxLength = FixedAsset.DisposalReasonMaxLength;
         Notice(20, 122, 480, 60, "Assets.DisposalNotice");
         Buttons(190, 520);
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.Disposal"]);
+
+        // Mirrored in Arabic like every other window: this one was left to right, its labels on
+        // the left of their fields and its buttons in the wrong corner.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     protected override void Accept()
@@ -1078,6 +1094,10 @@ internal sealed class FixedAssetAccountsDialog : MasterDataEditor
         Notice(20, y + 4, 660, 50, "Assets.AccountsNotice");
         Buttons(y + 64, 700);
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.AssetAccounts"]);
+
+        // Mirrored in Arabic like every other window: this one was left to right, its labels on
+        // the left of their fields and its buttons in the wrong corner.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     protected override void Accept()

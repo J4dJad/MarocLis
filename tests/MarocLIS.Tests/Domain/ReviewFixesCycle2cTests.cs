@@ -25,15 +25,15 @@ public sealed class ReviewFixesCycle2cTests
 
     /// <summary>
     /// The longest figure a money box lets through, with or without its grouping spaces and
-    /// decimals, still fits a decimal(18,2) column.
+    /// decimals, still fits a decimal(18,2) column. Since cycle 3 the reader itself refuses twelve
+    /// figures and beyond (<see cref="EditorValues.Limit"/>), so the longest accepted amount is
+    /// "999 999 999 999".
     /// </summary>
     [Theory]
-    [InlineData('9', 0)]
-    [InlineData('9', 3)]
-    public void TheLongestAmountABoxTakes_FitsTheColumn(char digit, int decimals)
+    [InlineData("999 999 999 999")]
+    [InlineData("999999999999,99")]
+    public void TheLongestAmountABoxTakes_FitsTheColumn(string text)
     {
-        var integerDigits = EditorValues.AmountMaxLength - (decimals > 0 ? decimals + 1 : 0);
-        var text = new string(digit, integerDigits) + (decimals > 0 ? "," + new string(digit, decimals) : string.Empty);
         text.Length.Should().BeLessThanOrEqualTo(EditorValues.AmountMaxLength);
 
         var value = EditorValues.ParseDecimal(text);
