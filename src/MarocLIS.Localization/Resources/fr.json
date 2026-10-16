@@ -3270,6 +3270,7 @@
   },
 
   "Report": {
+    "ConfirmIssue": "Émettre et signer le compte rendu du dossier {0} ?",
     "PageCountShort": "{0} p.",
     "IssuedVersions": "{0} émise(s) — celle-ci sera la v{1}",
     "NoneIssued": "Aucune émise",

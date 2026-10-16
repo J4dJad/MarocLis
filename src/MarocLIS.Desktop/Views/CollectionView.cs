@@ -860,6 +860,9 @@ public sealed class CollectionView : LocalizedView
         {
             // Superseded by a newer navigation.
         }
+        // Left while the list loaded: its grid is emptied with the screen.
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException
+                                   && (IsDisposed || Disposing)) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the collection worklist failed.");

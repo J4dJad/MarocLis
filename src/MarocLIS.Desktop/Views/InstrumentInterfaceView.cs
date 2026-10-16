@@ -373,6 +373,9 @@ public sealed class InstrumentInterfaceView : LocalizedView
             _poll.Start();
         }
         catch (OperationCanceledException) { }
+        // Left while the links loaded: their grids are emptied with the screen.
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException
+                                   && (IsDisposed || Disposing)) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the analyser interfaces failed.");
@@ -805,7 +808,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T(enabling ? "Interface.EnablePrompt" : "Interface.DisablePrompt", row.InstrumentCode),
-            T(enabling ? "Interface.Enable" : "Interface.Disable"));
+            T(enabling ? "Interface.Enable" : "Interface.Disable"), maxLength: 500);
 
         if (reason is null) return;
 

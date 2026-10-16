@@ -206,6 +206,9 @@ public sealed class RecollectionView : LocalizedView
             Render();
         }
         catch (OperationCanceledException) { }
+        // Left while the list loaded: its grid is emptied with the screen.
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException
+                                   && (IsDisposed || Disposing)) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the recollection list failed.");
@@ -217,6 +220,7 @@ public sealed class RecollectionView : LocalizedView
     private void Render()
     {
         var term = _search.Text.Trim();
+        var kept = (_grid.CurrentRow?.Tag as RecollectionRow)?.ReplacementSampleId;
 
         var rows = _filter switch
         {
@@ -259,6 +263,13 @@ public sealed class RecollectionView : LocalizedView
         }
 
         _grid.ResumeLayout(performLayout: true);
+
+        // The patient just called stays highlighted: back on the first line after « Noter un
+        // appel », the card and the next click were another patient's.
+        if (kept is { } keptId
+            && _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Tag is RecollectionRow c && c.ReplacementSampleId == keptId)
+                is { Index: > 0 } keptRow)
+            _grid.MakeCurrent(keptRow);
 
         var notContacted = _rows.Count(r => r.ContactCount == 0);
         _head.Count.Text = T("Recollection.Count", _rows.Count, notContacted);

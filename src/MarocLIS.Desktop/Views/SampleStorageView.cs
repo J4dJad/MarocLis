@@ -252,6 +252,9 @@ public sealed class SampleStorageView : LocalizedView
             Render();
         }
         catch (OperationCanceledException) { }
+        // Left while the list loaded: its grid is emptied with the screen.
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException
+                                   && (IsDisposed || Disposing)) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the serum bank failed.");
@@ -262,6 +265,8 @@ public sealed class SampleStorageView : LocalizedView
 
     private void Render()
     {
+        var kept = Selected?.SampleId;
+
         _grid.SuspendLayout();
         _grid.Rows.Clear();
 
@@ -314,7 +319,14 @@ public sealed class SampleStorageView : LocalizedView
         _unshelvedChip.Selected = _onlyUnshelved;
         _filters.PerformLayout();
 
-        if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
+        // The tube just shelved or aliquoted stays highlighted: back on the first line, the card
+        // beside the list showed another patient's tube under the same buttons.
+        var keptRow = kept is { } id
+            ? _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Tag is StoredSampleRow s && s.SampleId == id)
+            : null;
+
+        if (keptRow is { Index: > 0 }) _grid.MakeCurrent(keptRow);
+        else if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
 
         RefreshActions();
         ShowSelected();
@@ -674,6 +686,7 @@ internal sealed class SampleAliquotDialog : Form
         _volume.Bounds = new Rectangle(20, 72, 120, UiTheme.InputHeight);
         _volume.Tag = UiTags.LatinValue;
         _volume.TextAlign = HorizontalAlignment.Right;
+        _volume.MaxLength = EditorValues.MeasureMaxLength;
 
         var purposeLabel = Pilotage.Caption(localizer["Sample.AliquotPurpose"]);
         purposeLabel.Location = new Point(160, 52);

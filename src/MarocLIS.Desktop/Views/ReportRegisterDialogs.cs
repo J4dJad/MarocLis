@@ -103,6 +103,7 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
 
         _consentReference = TextField("Report.AuthorizingConsent", 20, 280, 380, null,
                                  latin: true, mono: true);
+        _consentReference.MaxLength = 38; // a consent identifier, braces included
 
         _consentNotice = Notice(20, 326, 560, 44, "Report.ThirdPartyConsentNotice",
                                  UiTheme.Abnormal);

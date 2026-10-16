@@ -137,6 +137,7 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _host.MaxLength = 150;
         _inbound.MaxLength = _processed.MaxLength = _outbound.MaxLength = 300;
         _pattern.MaxLength = 60;
+        _tcpPort.MaxLength = 5;
 
         // --- protocol settings -----------------------------------------------------------------
 
@@ -205,6 +206,9 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
         _resultTypes = TextField("Interface.FormatResultTypes", fx, 184, fw,
                                  format.AcceptedResultTypes, latin: true, mono: true);
+        // The lengths the service accepts: past them the save refused the whole configuration.
+        _codeSuffix.MaxLength = 10;
+        _resultTypes.MaxLength = 60;
 
         Notice(fx, 230, fw, 46, "Interface.FormatResultTypesNotice");
 
