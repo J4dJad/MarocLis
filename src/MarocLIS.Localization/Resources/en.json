@@ -1077,6 +1077,7 @@
   },
 
   "Lot": {
+    "QcOverrideJustificationPrompt": "Release lot {0} as an exception? Justify the biologist's decision (at least {1} characters):",
     "QcOverrideTitle": "Release as an exception",
     "QcOverridePrompt": "Release lot {0} as an exception? Justify the biologist's decision (at least 10 characters):"
   },
@@ -4503,6 +4504,7 @@
   "Claim_AlreadySubmitted": "Invoice {0} has already been submitted to the payer: it cannot go into a second claim batch.",
   "Claim_OutcomeSkippedSettled": "Invoice {0} already has its payer settlement recorded: the batch-level answer does not change it.",
   "Claim_MixedPayers": "Invoice {0} belongs to a different payer than the rest of the batch: a batch covers a single payer, so it must be sent separately.",
+  "Claim_SettledRecordedPerInvoice": "\"Settled\" cannot be recorded as a batch answer: it records no amount. Enter the amount accepted by the payer invoice by invoice; the status then becomes \"Settled\".",
 
   "Sample_StorageLocationRequired": "The storage location is mandatory.",
   "Sample_DiscardNoteRequired": "Discarding a sample must be justified: it ends any possibility of a repeat.",
@@ -4839,6 +4841,8 @@
   "Nc_RootCauseRequiredForMajor": "A major or critical non-conformity requires a root cause analysis.",
   "Nc_EffectivenessVerificationRequired": "Verification of the actions' effectiveness is required before closure.",
   "Nc_ClinicalImpactAssessmentRequired": "Since results were already released, the clinical impact must be assessed.",
+  "Nc_AllActionsMustBeFinished": "Every action must be completed or cancelled before closure.",
+  "Nc_CompletedActionRequiredBeforeClosure": "All actions were cancelled: at least one action must be completed before the file can be closed.",
   "Action_Cancelled": "This action was cancelled.",
 
   "Document_VersionNotFound": "Document version not found.",
@@ -4883,6 +4887,7 @@
   "Lot_ReceiveIntoRefusedLot": "Lot {0} of this item is rejected or recalled: a new delivery of this lot cannot enter the stock. Refuse the delivery.",
   "Lot_ReceiveExpiryDiffers": "Lot {0} is already in stock with expiry {1:dd/MM/yyyy}: a new delivery of the same lot has the same expiry. Check the date or the lot number.",
   "Lot_ReceiveNonConformingIntoReleased": "Lot {0} is already released: a non-conforming delivery of this lot cannot be added to released stock. Refuse the delivery.",
+  "Lot_QcOverrideJustificationTooShort": "The derogation justification must be at least {0} characters long.",
 
   "Stock_ItemNotFound": "Stock item not found.",
   "Stock_InsufficientUsableStock": "Insufficient usable stock for {0}: {1} available. A quarantined, expired or recalled lot cannot be issued.",
@@ -5031,6 +5036,7 @@
   "Sample_ReprintReasonRequired": "Reprinting a label must be justified.",
   "Sample_AlreadyRejected": "Tube {0} is already refused. Its replacement, if one was requested, already exists.",
   "Sample_NothingToRecollect": "Tube {0} has no analysis left to run: all are validated. A new draw would have nothing to analyse. Untick \"recollection\" to refuse the tube alone.",
+  "Sample_RejectionReasonRequired": "Choose the rejection reason from the list before rejecting the tube.",
   "Formula_Empty": "The calculation formula is empty.",
   "Formula_DivisionByZero": "Division by zero in the calculation formula.",
   "Formula_Overflow": "Arithmetic overflow in the calculation formula.",

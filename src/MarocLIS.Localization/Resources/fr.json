@@ -1077,6 +1077,7 @@
   },
 
   "Lot": {
+    "QcOverrideJustificationPrompt": "Libérer le lot {0} par dérogation ? Justification de la décision du biologiste (au moins {1} caractères) :",
     "QcOverrideTitle": "Libération par dérogation",
     "QcOverridePrompt": "Libérer le lot {0} par dérogation ? Justification de la décision du biologiste (au moins 10 caractères) :"
   },
@@ -4504,6 +4505,7 @@
   "Claim_AlreadySubmitted": "La facture {0} a déjà été transmise à l'organisme : elle ne peut pas figurer dans un second bordereau.",
   "Claim_OutcomeSkippedSettled": "La facture {0} a déjà son règlement organisme saisi : le retour global du bordereau ne la modifie pas.",
   "Claim_MixedPayers": "La facture {0} relève d'un autre organisme que le reste du bordereau : un bordereau ne concerne qu'un seul organisme, elle sera transmise séparément.",
+  "Claim_SettledRecordedPerInvoice": "« Réglé » ne s'enregistre pas comme retour de lot : il n'enregistre aucun montant. Saisissez le montant accepté par l'organisme facture par facture, le statut passe alors à « Réglé ».",
 
   "Sample_StorageLocationRequired": "L'emplacement de rangement est obligatoire.",
   "Sample_DiscardNoteRequired": "L'élimination d'un échantillon doit être motivée : elle met fin à toute possibilité de reprise.",
@@ -4840,6 +4842,8 @@
   "Nc_RootCauseRequiredForMajor": "Une non-conformité majeure ou critique exige une analyse des causes.",
   "Nc_EffectivenessVerificationRequired": "La vérification de l'efficacité des actions est obligatoire avant la clôture.",
   "Nc_ClinicalImpactAssessmentRequired": "Des résultats ayant déjà été diffusés, l'impact clinique doit être évalué.",
+  "Nc_AllActionsMustBeFinished": "Toutes les actions doivent être soldées ou annulées avant la clôture.",
+  "Nc_CompletedActionRequiredBeforeClosure": "Toutes les actions ont été annulées : au moins une action doit être soldée avant de clôturer la fiche.",
   "Action_Cancelled": "Cette action a été annulée.",
 
   "Document_VersionNotFound": "Version du document introuvable.",
@@ -4884,6 +4888,7 @@
   "Lot_ReceiveIntoRefusedLot": "Le lot {0} de cet article est refusé ou rappelé : une nouvelle livraison de ce lot ne peut pas entrer en stock. Refusez la livraison.",
   "Lot_ReceiveExpiryDiffers": "Le lot {0} est déjà en stock avec la péremption {1:dd/MM/yyyy} : une nouvelle livraison du même lot a la même péremption. Vérifiez la date ou le numéro de lot.",
   "Lot_ReceiveNonConformingIntoReleased": "Le lot {0} est déjà libéré : une livraison non conforme de ce lot ne peut pas être ajoutée au stock libéré. Refusez la livraison.",
+  "Lot_QcOverrideJustificationTooShort": "La justification de la dérogation doit compter au moins {0} caractères.",
 
   "Stock_ItemNotFound": "Article de stock introuvable.",
   "Stock_InsufficientUsableStock": "Stock utilisable insuffisant pour {0} : {1} disponible. Un lot en quarantaine, périmé ou rappelé ne peut pas être sorti.",
@@ -5032,6 +5037,7 @@
   "Sample_ReprintReasonRequired": "La réimpression d'une étiquette doit être motivée.",
   "Sample_AlreadyRejected": "Le tube {0} est déjà refusé. Son remplacement, s'il a été demandé, existe déjà.",
   "Sample_NothingToRecollect": "Le tube {0} n'a plus d'analyse en attente : toutes sont validées. Un nouveau prélèvement n'aurait rien à analyser. Décochez « Demander un nouveau prélèvement » pour refuser le tube seul.",
+  "Sample_RejectionReasonRequired": "Choisissez le motif du refus dans la liste avant de refuser le tube.",
   "Formula_Empty": "La formule de calcul est vide.",
   "Formula_DivisionByZero": "Division par zéro dans la formule de calcul.",
   "Formula_Overflow": "Dépassement de capacité dans la formule de calcul.",
