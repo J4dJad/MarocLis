@@ -334,6 +334,19 @@ public sealed class OrderComposer(
     // ---- Samples and awaited results -----------------------------------------------------------
 
     /// <summary>
+    /// The tubes a set of analyses needs: one per specimen and container, in the order they are
+    /// created. Shared by registration and by the counter's preview, so the tubes announced before
+    /// saving are the tubes that get labelled.
+    /// </summary>
+    public static List<IGrouping<(Guid SpecimenTypeId, Guid? ContainerTypeId), SelectedAnalysis>> GroupByTube(
+        IEnumerable<SelectedAnalysis> selected) =>
+        // Subcontracted analyses still need a tube; analyses with no container defined (a
+        // patient-brought urine pot, say) group under a null key and get one container each.
+        [.. selected
+            .GroupBy(a => (a.Test.SpecimenTypeId, a.Test.ContainerTypeId))
+            .OrderBy(g => g.Key.ContainerTypeId is null ? 1 : 0)];
+
+    /// <summary>
     /// Creates one sample per distinct container the order needs and assigns each analysis to it.
     /// <para>
     /// Grouping by container rather than by analysis is what keeps the draw to the minimum number
@@ -352,12 +365,7 @@ public sealed class OrderComposer(
         LabOrder order, Patient patient, IReadOnlyList<SelectedAnalysis> selected,
         IReadOnlyList<Sample>? reusable = null, CancellationToken ct = default)
     {
-        // Subcontracted analyses still need a tube; analyses with no container defined (a
-        // patient-brought urine pot, say) group under a null key and get one container each.
-        var groups = selected
-            .GroupBy(a => (a.Test.SpecimenTypeId, a.Test.ContainerTypeId))
-            .OrderBy(g => g.Key.ContainerTypeId is null ? 1 : 0)
-            .ToList();
+        var groups = GroupByTube(selected);
 
         var labels = new List<SampleLabel>(groups.Count);
         var sequence = (reusable?.Count ?? 0) + 1;
