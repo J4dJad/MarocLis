@@ -50,6 +50,8 @@
     <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\UiTheme.Palette.cs" Link="Desktop\UiTheme.Palette.cs" />
     <!-- The rules of the "Nouvelle demande" screen: Enter's match, the repeat reminder, initials. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\OrderRegistrationRules.cs" Link="Desktop\OrderRegistrationRules.cs" />
+    <!-- The progress line of the "Consultation d'un dossier" screen. -->
+    <Compile Include="..\..\src\MarocLIS.Desktop\Views\OrderFileProgress.cs" Link="Desktop\OrderFileProgress.cs" />
   </ItemGroup>
 
 </Project>

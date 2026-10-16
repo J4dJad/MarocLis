@@ -18,12 +18,19 @@ public static class ListPrinting
     /// </summary>
     public const string PrintedWhenHidden = "printed-when-hidden";
 
-    /// <summary>The screen's main list: the largest grid currently visible.</summary>
+    /// <summary>
+    /// Tag of the grid a screen names as its main list, printed with Ctrl+P whatever its size — the
+    /// file screen's list of files, which is no longer its largest grid.
+    /// </summary>
+    public const string MainList = "main-list";
+
+    /// <summary>The screen's main list: the grid tagged as such, else the largest grid currently visible.</summary>
     public static DataGridView? MainGrid(Control view) =>
         Descendants(view)
             .OfType<DataGridView>()
             .Where(g => g.Visible && g.Columns.Count > 0 && IsOnScreen(g))
-            .OrderByDescending(g => g.Width * g.Height)
+            .OrderByDescending(g => g.Tag is MainList)
+            .ThenByDescending(g => g.Width * g.Height)
             .FirstOrDefault();
 
     public static ListDocument Capture(DataGridView grid, string title, string caption, bool rightToLeft)
