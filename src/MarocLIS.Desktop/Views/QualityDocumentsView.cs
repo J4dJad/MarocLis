@@ -654,11 +654,11 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
     internal DocumentVersionDialog(ILocalizer localizer, IUserDialogs dialogs, string reference)
         : base(localizer, dialogs, "Documents.NewVersion", reference, 560, 300)
     {
-        _file = TextField("Documents.File", 20, 14, 390, null, latin: true);
+        _file = TextField("Documents.File", 20, 14, 380, null, latin: true);
         _file.ReadOnly = true;
 
         var browse = UiTheme.SecondaryButton(localizer["Documents.Browse"]);
-        browse.Bounds = new Rectangle(420, 31, 120, UiTheme.ButtonHeight);
+        browse.Bounds = new Rectangle(410, 31, 130, UiTheme.ButtonHeight);
         browse.Click += (_, _) => Browse();
         Controls.Add(browse);
 

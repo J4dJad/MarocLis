@@ -927,6 +927,15 @@ internal static class QhDialog
                                                          && c.Top >= caption.Top && c.Top - caption.Top <= 40);
                 var bold = TextRenderer.MeasureText(caption.Text, UiTheme.SmallBold).Width;
                 if (field is null || bold <= field.Width) caption.Font = UiTheme.SmallBold;
+
+                // A caption wider than its field (a long translation) stops at the field's edge,
+                // so that mirrored in Arabic it does not run over the caption beside it.
+                if (field is not null && caption.PreferredWidth > field.Width + 8)
+                {
+                    caption.AutoSize = false;
+                    caption.AutoEllipsis = true;
+                    caption.Size = new Size(field.Width + 8, caption.PreferredHeight);
+                }
             }
         }
 
