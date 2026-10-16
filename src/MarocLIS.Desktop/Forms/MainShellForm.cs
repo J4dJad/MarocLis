@@ -37,6 +37,8 @@ public sealed class MainShellForm : LocalizedForm
     private readonly Label _siteInfo = new();
     private readonly ComboBox _languagePicker = new();
     private readonly Button _print = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _help = UiTheme.SecondaryButton(string.Empty);
+    private readonly HelpService.F1Filter _helpKey = new();
     private readonly IListPdfRenderer _lists;
     private readonly IDocumentOutput _documents;
     private readonly Label _clock = new();
@@ -78,6 +80,7 @@ public sealed class MainShellForm : LocalizedForm
     private const string ActionPrint = "action.print";
     private const string ActionRefresh = "action.refresh";
     private const string ActionHelp = "action.help";
+    private const string ActionShortcuts = "action.shortcuts";
 
     private readonly KeyboardShortcuts _shortcuts;
     private readonly CollapsedNavigationGroups _collapsedGroups;
@@ -114,7 +117,12 @@ public sealed class MainShellForm : LocalizedForm
         DefineShortcuts();
         RenderNavigation();   // again, now that the shortcuts it shows are known
 
-        _navigation.Attach(_content, view => _viewTitle.Text = view.Title);
+        _navigation.Attach(_content, view => _viewTitle.Text = HelpService.CurrentTitle = view.Title);
+
+        // F1 opens the help of the screen in use, here through the shortcuts and in the dialogs
+        // a screen opens through the filter.
+        HelpService.Configure(localizer, cultureManager);
+        System.Windows.Forms.Application.AddMessageFilter(_helpKey);
 
         _clockTimer.Tick += (_, _) => UpdateClock();
         _clockTimer.Start();
@@ -193,13 +201,19 @@ public sealed class MainShellForm : LocalizedForm
         _print.Click += async (_, _) => await PrintCurrentListAsync();
         ButtonIcons.Set(_print, Glyph.Printer);
 
-        _header.Controls.AddRange([brand, _viewTitle, _userInfo, _siteInfo, _clock, _print,
+        // Help of the current screen, left of printing: the same window F1 opens.
+        _help.Width = 120;
+        _help.Height = 28;
+        _help.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        _help.Click += (_, _) => HelpService.ShowCurrent();
+
+        _header.Controls.AddRange([brand, _viewTitle, _userInfo, _siteInfo, _clock, _help, _print,
                                    _languagePicker]);
         _header.Resize += (_, _) => PositionHeaderItems();
         // The clock, the print button and the user's name size themselves to their text: the clock
         // was placed while still empty and then grew rightwards under the print button. Each
         // change of size places the header items again.
-        foreach (var item in new Control[] { _clock, _print, _languagePicker, _userInfo, _siteInfo })
+        foreach (var item in new Control[] { _clock, _help, _print, _languagePicker, _userInfo, _siteInfo })
             item.SizeChanged += (_, _) => PositionHeaderItems();
 
         _sidebar.Dock = DockStyle.Left;
@@ -227,6 +241,9 @@ public sealed class MainShellForm : LocalizedForm
 
         _print.Location = new Point(right - _print.Width, 12);
         right -= _print.Width + UiTheme.Gutter;
+
+        _help.Location = new Point(right - _help.Width, 12);
+        right -= _help.Width + UiTheme.Gutter;
 
         _clock.Location = new Point(right - _clock.Width, 18);
         right -= _clock.Width + UiTheme.Gutter * 2;
@@ -568,7 +585,7 @@ public sealed class MainShellForm : LocalizedForm
             if (!folded) y += 34;
         }
 
-        // The shortcuts list is one key away (F1), and also here for whoever does not know that.
+        // The shortcuts list is one key away (Maj+F1), and also here for whoever does not know that.
         var shortcuts = UiTheme.SecondaryButton(ShortcutsButtonText());
         shortcuts.Bounds = new Rectangle(UiTheme.GutterTight, y + UiTheme.Gutter, NavigationWidth,
                                          UiTheme.ButtonHeight);
@@ -648,6 +665,8 @@ public sealed class MainShellForm : LocalizedForm
             _activeKey = previousKey;
             HighlightActive();
         }
+
+        HelpService.CurrentKey = _activeKey;
     }
 
     private void HighlightActive()
@@ -675,6 +694,7 @@ public sealed class MainShellForm : LocalizedForm
 
         _userInfo.Text = _currentUser.FullName;
         _print.Text = WithShortcut(T("Action.Print"), ActionPrint);
+        _help.Text = HelpButtonText();
         _siteInfo.Text = $"{T("App.Site")} : {_currentUser.SiteCode}   ·   " +
                          $"{T("App.Workstation")} : {_currentUser.Workstation}";
 
@@ -767,6 +787,7 @@ public sealed class MainShellForm : LocalizedForm
         _shortcuts.Define(ActionPrint, Keys.Control | Keys.P);
         _shortcuts.Define(ActionRefresh, Keys.F5);
         _shortcuts.Define(ActionHelp, Keys.F1);
+        _shortcuts.Define(ActionShortcuts, Keys.Shift | Keys.F1);
     }
 
     private static string ScreenAction(string key) => "screen." + key;
@@ -776,7 +797,8 @@ public sealed class MainShellForm : LocalizedForm
     {
         var actions = new List<ShortcutAction>
         {
-            new(ActionHelp, T("Shortcut.Help"), _shortcuts.Default(ActionHelp)),
+            new(ActionHelp, T("Help.Screen"), _shortcuts.Default(ActionHelp)),
+            new(ActionShortcuts, T("Shortcut.Help"), _shortcuts.Default(ActionShortcuts)),
             new(ActionSave, T("Action.Save"), _shortcuts.Default(ActionSave)),
             new(ActionSearch, T("Shortcut.Search"), _shortcuts.Default(ActionSearch)),
             new(ActionPrint, T("Shortcut.Print"), _shortcuts.Default(ActionPrint)),
@@ -795,6 +817,9 @@ public sealed class MainShellForm : LocalizedForm
         switch (action)
         {
             case ActionHelp:
+                HelpService.ShowCurrent();
+                return true;
+            case ActionShortcuts:
                 ShowShortcuts();
                 return true;
             case ActionRefresh:
@@ -872,6 +897,7 @@ public sealed class MainShellForm : LocalizedForm
 
         // The labels that show a shortcut follow the new choice.
         _print.Text = WithShortcut(T("Action.Print"), ActionPrint);
+        _help.Text = HelpButtonText();
         RenderNavigation();
     }
 
@@ -880,7 +906,11 @@ public sealed class MainShellForm : LocalizedForm
             ? $"{text}  ({KeyboardShortcuts.Format(keys, Localizer)})"
             : text;
 
-    private string ShortcutsButtonText() => WithShortcut(T("Shortcut.Title"), ActionHelp);
+    private string ShortcutsButtonText() => WithShortcut(T("Shortcut.Title"), ActionShortcuts);
+
+    // "Aide (F1)" as written, unless the user moved help to another key.
+    private string HelpButtonText() =>
+        _shortcuts.For(ActionHelp) == Keys.F1 ? T("Help.Button") : WithShortcut(T("Help.Title"), ActionHelp);
 
     private void PaintShortcut(Button button, string key, PaintEventArgs e)
     {
@@ -1088,6 +1118,7 @@ public sealed class MainShellForm : LocalizedForm
         if (disposing)
         {
             System.Windows.Forms.Application.RemoveMessageFilter(_activity);
+            System.Windows.Forms.Application.RemoveMessageFilter(_helpKey);
             _clockTimer.Dispose();
             _idleTimer.Dispose();
             _sessionTimer.Dispose();
