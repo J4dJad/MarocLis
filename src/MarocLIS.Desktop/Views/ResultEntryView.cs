@@ -632,6 +632,8 @@ public sealed class ResultEntryView : LocalizedView
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = ColumnComment, Visible = false,
+            // Still printed with Ctrl+P, as when it was on screen.
+            Tag = ListPrinting.PrintedWhenHidden,
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
 
