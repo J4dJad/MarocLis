@@ -28,6 +28,7 @@ public sealed class FixedAssetView : LocalizedView
 
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly DataGridView _interventions = UiTheme.Grid();
+    private readonly Label _title = new();
     private readonly Label _heading = new();
     private readonly Label _yearLabel = new();
     private readonly NumericUpDown _year = new() { Minimum = 1990, Maximum = 2100 };
@@ -41,9 +42,12 @@ public sealed class FixedAssetView : LocalizedView
     private readonly Button _edit = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _schedule = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _disposal = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _pdf = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _csv = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _accounts = UiTheme.SecondaryButton(string.Empty);
+
+    // The register's printouts and the accounts, under « Plus d'actions ▾ ».
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly MenuAction _pdf = new();
+    private readonly MenuAction _csv = new();
+    private readonly MenuAction _accounts = new();
 
     private FixedAssetRegister? _register;
     private AssetInstrumentSummary? _summary;
@@ -82,69 +86,71 @@ public sealed class FixedAssetView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(24, 20, 24, 12);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = UiTheme.Surface };
+        // The title, the register's summary in grey under it (it is long: a line of its own), and
+        // the actions at the far end, a new asset the primary.
+        var more = FinanceUi.MoreButton(_moreMenu, Localizer, _pdf, _csv, _accounts);
+        var header = FinanceUi.PageHeader(_title, null, more, _fromInstrument, _new);
+        header.Padding = new Padding(0);
 
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
+        FinanceUi.Muted(_heading);
+        _heading.Dock = DockStyle.Top;
+        _heading.Height = 26;
+        _heading.AutoEllipsis = true;
+        _heading.TextAlign = ContentAlignment.MiddleLeft;
 
-        _yearLabel.Font = UiTheme.Small;
-        _yearLabel.ForeColor = UiTheme.TextSecondary;
-        _yearLabel.AutoSize = true;
-        _yearLabel.Location = new Point(0, 38);
-        _year.Bounds = new Rectangle(70, 34, 80, UiTheme.InputHeight);
-
-        _refresh.Bounds = new Rectangle(160, 30, 110, UiTheme.ButtonHeight);
-        _new.Bounds = new Rectangle(280, 30, 150, UiTheme.ButtonHeight);
-        _fromInstrument.Bounds = new Rectangle(440, 30, 190, UiTheme.ButtonHeight);
-        _edit.Bounds = new Rectangle(640, 30, 120, UiTheme.ButtonHeight);
-        _schedule.Bounds = new Rectangle(770, 30, 170, UiTheme.ButtonHeight);
-        _disposal.Bounds = new Rectangle(950, 30, 140, UiTheme.ButtonHeight);
-
-        _pdf.Bounds = new Rectangle(160, 68, 110, UiTheme.ButtonHeight);
-        _csv.Bounds = new Rectangle(280, 68, 110, UiTheme.ButtonHeight);
-        _accounts.Bounds = new Rectangle(400, 68, 190, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _yearLabel, _year, _refresh, _new, _fromInstrument, _edit, _schedule,
-                               _disposal, _pdf, _csv, _accounts]);
+        _year.Width = 80;
+        _year.TextAlign = HorizontalAlignment.Right;
+        var filters = FinanceUi.FilterRow(FinanceUi.Inline(_yearLabel, _year), _refresh);
+        filters.Padding = new Padding(0, 6, 0, 8);
 
         var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            SplitterDistance = 360,
-            SplitterWidth = 6,
+            SplitterDistance = 330,
+            SplitterWidth = 12,
             BackColor = UiTheme.Surface
         };
 
         BuildColumns();
-        split.Panel1.Controls.Add(_grid);
+
+        // The selected line's actions at the foot of the register.
+        var registerBar = FinanceUi.ActionBar(null, [_edit, _schedule, _disposal]);
+        split.Panel1.Controls.Add(new FinanceCard(_grid, footer: registerBar));
 
         _instrumentHeading.Font = UiTheme.SectionTitle;
         _instrumentHeading.ForeColor = UiTheme.TextPrimary;
         _instrumentHeading.Dock = DockStyle.Top;
-        _instrumentHeading.Height = 26;
+        _instrumentHeading.Height = 30;
+        _instrumentHeading.Padding = new Padding(16, 8, 16, 0);
+        _instrumentHeading.AutoEllipsis = true;
 
         _instrumentSummary.Font = UiTheme.Small;
         _instrumentSummary.ForeColor = UiTheme.TextSecondary;
         _instrumentSummary.Dock = DockStyle.Top;
         _instrumentSummary.Height = 40;
+        _instrumentSummary.Padding = new Padding(16, 2, 16, 4);
 
-        split.Panel2.Controls.Add(_interventions);
-        split.Panel2.Controls.Add(_instrumentSummary);
-        split.Panel2.Controls.Add(_instrumentHeading);
+        var instrument = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised };
+        instrument.Controls.Add(_interventions);
+        instrument.Controls.Add(_instrumentSummary);
+        instrument.Controls.Add(_instrumentHeading);
+        split.Panel2.Controls.Add(new FinanceCard(instrument));
 
         _notice.Dock = DockStyle.Bottom;
-        _notice.Height = 40;
+        _notice.Height = 36;
         _notice.Font = UiTheme.Small;
         _notice.ForeColor = UiTheme.TextSecondary;
+        _notice.Padding = new Padding(0, 6, 0, 0);
+        _notice.AutoEllipsis = true;
 
         Controls.Add(split);
         Controls.Add(_notice);
-        Controls.Add(bar);
+        Controls.Add(filters);
+        Controls.Add(_heading);
+        Controls.Add(header);
     }
 
     private static void AddColumn(DataGridView grid, string name, int weight, Font? font = null,
@@ -219,6 +225,7 @@ public sealed class FixedAssetView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _title.Text = T("Assets.Title");
         _yearLabel.Text = T("Assets.Year");
         _refresh.Text = T("Action.Refresh");
         _new.Text = T("Assets.New");
@@ -323,7 +330,7 @@ public sealed class FixedAssetView : LocalizedView
     {
         if (_register is not { } r)
         {
-            _heading.Text = T("Assets.Title");
+            _heading.Text = string.Empty;
             return;
         }
 
