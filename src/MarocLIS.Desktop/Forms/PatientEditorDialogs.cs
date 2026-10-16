@@ -185,6 +185,10 @@ internal sealed class CoverageDialog : Form
 
         PatientDialogFrame.Apply(this, Text, localizer["PatientDialog.CoverageHint"], null, null, cancel, ok);
 
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
+
         RefreshRateNotice();
         RefreshInsuredFields();
         RefreshAldFields();
@@ -462,6 +466,10 @@ internal sealed class ConsentDialog : Form
 
         PatientDialogFrame.Apply(this, Text, localizer["PatientDialog.ConsentHint"], null, null, cancel, ok);
 
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
+
         RefreshWrittenRequirement();
     }
 
@@ -659,6 +667,10 @@ internal sealed class DuplicateWarningForm : Form
         PatientDialogFrame.Apply(this, Text, explanation.Text, explanation, null,
                                  cancel, _createAnyway, _useExisting);
 
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
+
         if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
 
         _reason.TextChanged += (_, _) => RefreshButtons();
@@ -821,6 +833,13 @@ internal sealed class PatientAlertDialog : Form
         ApplyTexts();
 
         PatientDialogFrame.Apply(this, Text, _localizer["PatientDialog.AlertHint"], null, null, _cancel, _ok);
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        // The French message stays left to right, the Arabic one right to left, whatever the language.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
+        _messageFr.RightToLeft = RightToLeft.No;
+        _messageAr.RightToLeft = RightToLeft.Yes;
     }
 
     private void ApplyTexts()

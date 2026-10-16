@@ -98,6 +98,10 @@ internal sealed class PaymentPickerDialog : Form
         _ok.Enabled = _grid.CurrentRow?.Tag is PaymentRow;
 
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.PickPayment"], [], cancel, _ok);
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private void Accept()
@@ -207,6 +211,10 @@ internal sealed class ClaimOutcomeDialog : Form
         RefreshReason();
 
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.ClaimOutcome"], [], cancel, ok);
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private bool ReasonRequired =>
@@ -406,6 +414,10 @@ internal sealed class InvoiceIssueDialog : Form
         CancelButton = cancel;
 
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.IssueInvoice"], [], cancel, ok);
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private void RefreshNet()
@@ -569,6 +581,10 @@ internal sealed class PayerSettlementDialog : Form
         RefreshShortfall();
 
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.Settlement"], [], cancel, ok);
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private bool TryParseAccepted(out decimal amount) =>

@@ -5267,6 +5267,7 @@
   "Invoice_ClaimRequiresPrescriberInpe": "La facture {0} doit porter l'INPE du prescripteur pour être transmise à cet organisme.",
   "Invoice_CreditNoteClaimSent": "La facture {0} a déjà été transmise à l'organisme payeur, ou réglée par lui : un avoir ferait réclamer une seconde fois les mêmes actes. Enregistrez d'abord le rejet de l'organisme, puis émettez l'avoir.",
   "Invoice_PayerAgreementNotValid": "{0} n'a pas de convention de tiers payant en cours de validité : la facture ne peut pas lui être adressée. Établissez-la au nom du patient.",
+  "Invoice_OrderCancelled": "Le dossier {0} est annulé : il ne se facture pas. L'acompte encore détenu se rembourse.",
 
   "Payment_AmountMustBePositive": "Le montant du règlement doit être positif.",
   "Payment_ExceedsOutstanding": "Le montant dépasse le reste à payer ({0}).",

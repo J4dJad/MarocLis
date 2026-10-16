@@ -310,11 +310,15 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
         if (Status != CashSessionStatus.Open)
             return Result.Failure(Error.Conflict("CashSession_NotOpen"));
 
-        CountedCash = Money.Round(countedCash);
+        var counted = Money.Round(countedCash);
+        var variance = Money.Round(counted - ExpectedClosingCash);
 
-        if (Math.Abs(Variance!.Value) > toleranceMad && string.IsNullOrWhiteSpace(explanation))
-            return Result.Failure(Error.Validation("CashSession_VarianceExplanationRequired", Variance));
+        // Checked before anything is set: a refused closing left the count on the open session,
+        // and the next save on the screen wrote it there.
+        if (Math.Abs(variance) > toleranceMad && string.IsNullOrWhiteSpace(explanation))
+            return Result.Failure(Error.Validation("CashSession_VarianceExplanationRequired", variance));
 
+        CountedCash = counted;
         VarianceExplanation = explanation;
         ClosedAt = at;
         ClosedByUserId = byUserId;

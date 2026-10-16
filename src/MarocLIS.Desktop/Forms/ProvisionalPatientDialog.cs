@@ -70,5 +70,9 @@ internal sealed class ProvisionalPatientDialog : Form
 
         // The help text is the dialog's sentence, under its title.
         PatientDialogFrame.Apply(this, Text, help.Text, help, null, cancel, create);
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 }
