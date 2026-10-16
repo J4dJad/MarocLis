@@ -210,8 +210,8 @@ public sealed class OrderQueries(LisDbContext db, IResultQueries results) : IOrd
 
         var prescriberName = header.Prescriber is null
             ? null
-            : header.Prescriber.Kind == Domain.Orders.PrescriberKind.Institution
-                ? header.Prescriber.InstitutionName
+            : Domain.Orders.Prescriber.IsEstablishment(header.Prescriber.Kind)
+                ? header.Prescriber.InstitutionName ?? header.Prescriber.LastName
                 : $"{header.Prescriber.LastName} {header.Prescriber.FirstName}".Trim();
 
         return new OrderDetail(
