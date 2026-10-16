@@ -161,9 +161,11 @@ internal sealed class ClaimOutcomeDialog : Form
         _outcome.FlatStyle = FlatStyle.Flat;
         _outcome.Bounds = new Rectangle(20, 68, 300, UiTheme.InputHeight);
 
+        // No "Settled" here: a batch answer records no money, so "Settled" left the payer's share
+        // owing while reading as paid. Settlement goes through the per-invoice accepted amount.
         foreach (var status in new[]
                  {
-                     ClaimStatus.Accepted, ClaimStatus.Settled, ClaimStatus.PartiallyAccepted,
+                     ClaimStatus.Accepted, ClaimStatus.PartiallyAccepted,
                      ClaimStatus.Rejected, ClaimStatus.Resubmitted
                  })
         {

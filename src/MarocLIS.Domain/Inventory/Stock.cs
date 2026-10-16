@@ -406,6 +406,12 @@ public sealed class ReagentLot : Entity, IAuditable
     public bool? CertificateOfAnalysisReceived { get; private set; }
 
     /// <summary>Released although the QC on the lot did not conform, by a biologist's derogation.</summary>
+    /// <summary>
+    /// Shortest derogation justification accepted. One constant for the rule and the prompt that
+    /// states it: the prompt said 10 while the dialog demanded 15.
+    /// </summary>
+    public const int QcOverrideJustificationMinLength = 15;
+
     public bool ReleasedWithQcOverride { get; private set; }
     public string? QcOverrideJustification { get; private set; }
 
@@ -434,6 +440,10 @@ public sealed class ReagentLot : Entity, IAuditable
     {
         if (string.IsNullOrWhiteSpace(justification))
             return Result.Failure(Error.Regulatory("Lot_QcOverrideJustificationRequired"));
+
+        if (justification.Trim().Length < QcOverrideJustificationMinLength)
+            return Result.Failure(Error.Validation("Lot_QcOverrideJustificationTooShort",
+                                                   QcOverrideJustificationMinLength));
 
         var released = Release(on, byUserId, evidence);
         if (released.IsFailure) return released;

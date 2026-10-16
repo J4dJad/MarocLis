@@ -120,7 +120,16 @@ public sealed record CashSessionReviewRow(
     bool IsReconciled,
     string? ReconciledByName,
     DateTimeOffset? ReconciledAt,
-    string? ReconciliationComment);
+    string? ReconciliationComment,
+    Guid OperatorUserId)
+{
+    /// <summary>
+    /// Whether <paramref name="userId"/> may sign this till off: still to review, and not their own
+    /// (the four-eyes rule of <see cref="Domain.Billing.CashSession.Reconcile"/>). The screen used
+    /// to offer the button on one's own till and refuse only after the comment had been typed.
+    /// </summary>
+    public bool CanBeReconciledBy(Guid userId) => !IsReconciled && userId != OperatorUserId;
+}
 
 public interface ITreasuryQueries
 {

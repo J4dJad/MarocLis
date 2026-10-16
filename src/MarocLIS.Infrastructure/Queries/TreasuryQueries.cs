@@ -567,7 +567,7 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
                 s.CashWithdrawals, Money.Round(s.ChequeReceipts + s.CardReceipts + s.TransferReceipts),
                 s.Status == CashSessionStatus.Reconciled,
                 s.ReconciledByUserId is { } by ? names.GetValueOrDefault(by) : null,
-                s.ReconciledAt, s.ReconciliationComment))
+                s.ReconciledAt, s.ReconciliationComment, s.OperatorUserId))
         ];
     }
 }

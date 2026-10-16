@@ -1028,9 +1028,14 @@ public sealed class BillingService(
         if (invoiceIds.Count == 0)
             return Result.Failure<ClaimOutcomeRecorded>(Error.Validation("Billing.SelectOneInvoice"));
 
+        // Settled is refused: this records a status, not money, so an invoice marked settled here
+        // still owed the payer's share. It is set by RecordPayerSettlementAsync with the amount.
+        if (outcome == ClaimStatus.Settled)
+            return Result.Failure<ClaimOutcomeRecorded>(
+                Error.Validation("Claim_SettledRecordedPerInvoice"));
+
         if (outcome is not (ClaimStatus.Accepted or ClaimStatus.PartiallyAccepted
-                         or ClaimStatus.Rejected or ClaimStatus.Resubmitted
-                         or ClaimStatus.Settled))
+                         or ClaimStatus.Rejected or ClaimStatus.Resubmitted))
             return Result.Failure<ClaimOutcomeRecorded>(
                 Error.Validation("Claim_OutcomeNotRecordable", outcome));
 

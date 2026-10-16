@@ -84,7 +84,22 @@ public sealed record ReportModel
     public bool AllResultsAccredited { get; init; }
 
     /// <summary>Pre-analytical reservations disclosed at the foot of the report.</summary>
-    public IReadOnlyList<string> Reservations { get; init; } = [];
+    public IReadOnlyList<ReportReservation> Reservations { get; init; } = [];
+}
+
+/// <summary>
+/// A sample accepted with reservation. Kept as the defect flags rather than a ready-made string so
+/// the renderer names each defect in the report's language: formatting the enum here printed its
+/// internal English names ("Haemolysed, Icteric") on a French or Arabic report.
+/// </summary>
+public sealed record ReportReservation(string Barcode, SampleDefect Defects)
+{
+    /// <summary>"barcode : Hémolysé, Ictérique", each defect named through <paramref name="label"/>.</summary>
+    public string Describe(Func<string, string> label) =>
+        $"{Barcode} : " + string.Join(", ",
+            Enum.GetValues<SampleDefect>()
+                .Where(d => d != SampleDefect.None && Defects.HasFlag(d))
+                .Select(d => label($"SampleDefect.{d}")));
 }
 
 /// <summary>One discipline's block on the report.</summary>
@@ -669,7 +684,7 @@ public sealed class ReportReleaseService(
                 partnerNames[partnerId] = partner.Name.For(language);
         }
 
-        var reservations = new List<string>();
+        var reservations = new List<ReportReservation>();
         DateTimeOffset? earliestCollection = null;
         DateTimeOffset? earliestReception = null;
 
@@ -690,7 +705,7 @@ public sealed class ReportReleaseService(
 
             // A defect the laboratory accepted is disclosed, so the clinician can weigh it.
             if (sample.IsAcceptedWithReservation && sample.HasDefects)
-                reservations.Add($"{sample.Barcode} : {sample.Defects}");
+                reservations.Add(new ReportReservation(sample.Barcode, sample.Defects));
         }
 
         // Group by discipline, then by analysis, preserving the catalogue's display order so the

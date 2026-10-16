@@ -375,7 +375,9 @@ public sealed class SampleReceptionView : LocalizedView
         foreach (var reason in Enum.GetValues<SampleRejectionReason>())
             _rejectReason.Items.Add(new ReasonChoice(reason, T($"RejectionReason.{reason}")));
 
-        _rejectReason.SelectedIndex = 0;
+        // No reason preselected: the reason is counted monthly as a quality indicator, and a
+        // refusal confirmed too quickly was filed under the first one (identity mismatch).
+        _rejectReason.SelectedIndex = -1;
 
         if (selectedReason is not null)
         {
@@ -616,7 +618,7 @@ public sealed class SampleReceptionView : LocalizedView
         _storage.Clear();
         _requestRecollection.Checked = true;
 
-        if (_rejectReason.Items.Count > 0) _rejectReason.SelectedIndex = 0;
+        _rejectReason.SelectedIndex = -1;
     }
 
     /// <summary>
@@ -766,7 +768,8 @@ public sealed class SampleReceptionView : LocalizedView
 
         if (_rejectReason.SelectedItem is not ReasonChoice reason)
         {
-            _dialogs.Warn(T("RejectionReason.Other"));
+            _dialogs.Warn(T("Sample_RejectionReasonRequired"), T("Action.Reject"));
+            _rejectReason.Focus();
             return;
         }
 
