@@ -45,6 +45,29 @@ public enum WestgardRule
 }
 
 /// <summary>
+/// The rules by the short names the bench uses (1-2s, 1-3s, R-4s…), for everything people read:
+/// the enum's own names are identifiers, not labels.
+/// </summary>
+public static class WestgardRuleNames
+{
+    // Plain characters: the subscript letters are missing from the interface fonts.
+    private static readonly (WestgardRule Rule, string Name)[] Names =
+    [
+        (WestgardRule.OneTwoS, "1-2s"), (WestgardRule.OneThreeS, "1-3s"), (WestgardRule.TwoTwoS, "2-2s"),
+        (WestgardRule.R4S, "R-4s"), (WestgardRule.ThreeOneS, "3-1s"), (WestgardRule.FourOneS, "4-1s"),
+        (WestgardRule.TwoOfThreeTwoS, "2/3-2s"), (WestgardRule.SevenT, "7T"), (WestgardRule.EightX, "8x"),
+        (WestgardRule.TenX, "10x"), (WestgardRule.TwelveX, "12x")
+    ];
+
+    /// <summary>The short name of each rule set in <paramref name="rules"/>, in the usual order.</summary>
+    public static IReadOnlyList<string> Of(WestgardRule rules) =>
+        [.. Names.Where(n => (rules & n.Rule) != 0).Select(n => n.Name)];
+
+    public static string Describe(WestgardRule rules, string separator = ", ") =>
+        string.Join(separator, Of(rules));
+}
+
+/// <summary>
 /// One control point reduced to what the rules actually need. Using a projection rather than the
 /// entity keeps the evaluator pure and trivially testable.
 /// </summary>

@@ -318,7 +318,7 @@ public sealed class LeveyJenningsChart : Control
                 point.MeasuredAt.ToString("dd/MM/yyyy HH:mm")
             };
 
-            if (point.ViolatedRules != WestgardRule.None) lines.Add(point.ViolatedRules.ToString());
+            if (point.ViolatedRules != WestgardRule.None) lines.Add(WestgardRuleNames.Describe(point.ViolatedRules));
             if (point.WasOverridden) lines.Add("dérogation");
             if (!string.IsNullOrWhiteSpace(point.Comment)) lines.Add(point.Comment);
 

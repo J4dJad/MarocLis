@@ -95,6 +95,8 @@ public sealed class TemperatureView : LocalizedView
     private void RefreshButtons()
     {
         _record.Enabled = CanRecord;
+        // The month's sheet is that of the unit selected: with none, the buttons did nothing.
+        _pdf.Enabled = _csv.Enabled = CurrentUnit is not null;
         _editUnit.Enabled = CurrentUnit is not null && PermissionGate.Allows(Permissions.Inventory.ManageStorageUnits);
     }
 

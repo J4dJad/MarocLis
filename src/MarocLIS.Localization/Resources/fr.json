@@ -370,6 +370,7 @@
   },
 
   "QualityHr": {
+    "Qc.ViolatedRules": "Règles en défaut",
     "Hint.AccidentLog": "Une étape du suivi avec l'assureur, datée et tracée au dossier.",
     "Hint.Credentials": "Diplômes, visites médicales, vaccinations… avec leur échéance et leur scan.",
     "Hint.Employee": "Le dossier administratif du salarié : identité, poste et contrat.",
@@ -3641,6 +3642,9 @@
   },
 
   "NonConformity": {
+    "RootCauseCategory": "Catégorie de cause",
+    "ActionKind": "Type d'action",
+    "AllCategories": "Toutes les catégories",
     "Title": "Non-conformité",
     "Plural": "Non-conformités",
     "Reference": "Référence",
@@ -3752,6 +3756,8 @@
   },
 
   "Inventory": {
+    "DaysToExpiry": "Jours restants",
+    "ItemKind": "Type",
     "ApplyReorderProposal": "Appliquer",
     "FromTheoretical": "d'après la consommation théorique",
     "FromIssues": "d'après les sorties",
@@ -5310,6 +5316,7 @@
   "Nc_ClinicalImpactAssessmentRequired": "Des résultats ayant déjà été diffusés, l'impact clinique doit être évalué.",
   "Nc_AllActionsMustBeFinished": "Toutes les actions doivent être soldées ou annulées avant la clôture.",
   "Nc_CompletedActionRequiredBeforeClosure": "Toutes les actions ont été annulées : au moins une action doit être soldée avant de clôturer la fiche.",
+  "Nc_ActionAlreadyCompleted": "Cette action est déjà soldée : sa date et sa preuve ne se modifient pas.",
   "Action_Cancelled": "Cette action a été annulée.",
 
   "Document_VersionNotFound": "Version du document introuvable.",
@@ -5728,6 +5735,7 @@
   "Document_NoEffectiveVersion": "Ce document n'a aucune version en vigueur.",
   "Document_ReasonRequired": "Le motif est obligatoire.",
   "Document_FileType": "Le document doit être un PDF, une image (JPG, PNG, TIFF) ou un fichier Word ou Excel sans macros (DOCX, XLSX). Les autres fichiers ne sont ni enregistrés ni ouverts.",
+  "Document_Retired": "Le document {0} est retiré : réactivez-le avant de faire évoluer ses versions.",
   "Eqa_SchemeRequired": "Le programme d'évaluation externe est obligatoire.",
   "Eqa_RoundRequired": "La référence de la campagne est obligatoire.",
   "Eqa_ParameterRequired": "Cochez au moins un paramètre.",

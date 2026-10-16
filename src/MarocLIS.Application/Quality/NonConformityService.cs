@@ -58,6 +58,15 @@ public sealed record CreateNonConformityRequest
     public DateOnly? DueDate { get; init; }
 }
 
+/// <summary>What has been recorded of a file's analysis, for the dialog that completes it.</summary>
+public sealed record NonConformityAnalysis(
+    RootCauseCategory? RootCause,
+    MultilingualText? RootCauseAnalysis,
+    MultilingualText? ClinicalImpact,
+    MultilingualText? EffectivenessVerification,
+    DateOnly? EffectivenessVerifiedOn,
+    bool AmendedReportsIssued);
+
 public sealed record AddActionRequest(
     Guid NonConformityId,
     ActionKind Kind,
@@ -105,6 +114,26 @@ public sealed class NonConformityService(
             return Result.Failure<IReadOnlyList<CorrectiveActionRow>>(permitted.FirstError);
 
         return Result.Success(await queries.GetActionsAsync(nonConformityId, clock.Today, ct));
+    }
+
+    /// <summary>
+    /// The analysis recorded so far. The dialog opens on it: opened blank, it showed nothing of
+    /// the analysis already done and saved its first root-cause category over the one recorded.
+    /// </summary>
+    public async Task<Result<NonConformityAnalysis>> GetAnalysisAsync(Guid nonConformityId,
+                                                                       CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Quality.View);
+        if (permitted.IsFailure) return Result.Failure<NonConformityAnalysis>(permitted.FirstError);
+
+        var nonConformity = await nonConformities.GetByIdAsync(nonConformityId, ct);
+        if (nonConformity is null)
+            return Result.Failure<NonConformityAnalysis>(Error.NotFound("Nc_NotFound", nonConformityId));
+
+        return Result.Success(new NonConformityAnalysis(
+            nonConformity.RootCause, nonConformity.RootCauseAnalysis, nonConformity.ClinicalImpactAssessment,
+            nonConformity.EffectivenessVerification, nonConformity.EffectivenessVerifiedOn,
+            nonConformity.AmendedReportsIssued));
     }
 
     /// <summary>
@@ -181,6 +210,9 @@ public sealed class NonConformityService(
         if (nonConformity is null)
             return Result.Failure(Error.NotFound("Nc_NotFound", request.NonConformityId));
 
+        var open = EnsureOpen(nonConformity);
+        if (open.IsFailure) return open;
+
         if (string.IsNullOrWhiteSpace(request.Description.Fr))
             return Result.Failure(Error.Validation("Nc_ActionDescriptionRequired"));
 
@@ -208,6 +240,9 @@ public sealed class NonConformityService(
 
         var nonConformity = await nonConformities.GetByIdWithDetailsAsync(nonConformityId, ct);
         if (nonConformity is null) return Result.Failure(Error.NotFound("Nc_NotFound", nonConformityId));
+
+        var open = EnsureOpen(nonConformity);
+        if (open.IsFailure) return open;
 
         var action = nonConformity.Actions.FirstOrDefault(a => a.Id == actionId);
         if (action is null) return Result.Failure(Error.NotFound("Nc_ActionNotFound", actionId));
@@ -247,11 +282,17 @@ public sealed class NonConformityService(
         var nonConformity = await nonConformities.GetByIdWithDetailsAsync(nonConformityId, ct);
         if (nonConformity is null) return Result.Failure(Error.NotFound("Nc_NotFound", nonConformityId));
 
+        var open = EnsureOpen(nonConformity);
+        if (open.IsFailure) return open;
+
         if (rootCause is { } cause) nonConformity.RootCause = cause;
         if (rootCauseAnalysis is not null) nonConformity.RootCauseAnalysis = rootCauseAnalysis;
         if (clinicalImpact is not null) nonConformity.ClinicalImpactAssessment = clinicalImpact;
 
-        if (effectivenessVerification is not null)
+        // The check is dated and signed when it is written or changed, not each time the rest of
+        // the analysis is saved again with it.
+        if (effectivenessVerification is not null
+            && effectivenessVerification.Fr.Trim() != nonConformity.EffectivenessVerification?.Fr.Trim())
         {
             nonConformity.EffectivenessVerification = effectivenessVerification;
             nonConformity.EffectivenessVerifiedOn = clock.Today;
@@ -366,11 +407,16 @@ public sealed class NonConformityService(
         var nonConformity = await nonConformities.GetByIdWithDetailsAsync(nonConformityId, ct);
         if (nonConformity is null) return Result.Failure(Error.NotFound("Nc_NotFound", nonConformityId));
 
+        var open = EnsureOpen(nonConformity);
+        if (open.IsFailure) return open;
+
         var action = nonConformity.Actions.FirstOrDefault(a => a.Id == actionId);
         if (action is null) return Result.Failure(Error.NotFound("Nc_ActionNotFound"));
 
         if (action.Status == CorrectiveActionStatus.Completed)
             return Result.Failure(Error.Conflict("Nc_CompletedActionCannotBeCancelled"));
+        if (action.Status == CorrectiveActionStatus.Cancelled)
+            return Result.Failure(Error.Conflict("Action_Cancelled"));
 
         action.Cancel(reason);
 
@@ -402,6 +448,9 @@ public sealed class NonConformityService(
         var nonConformity = await nonConformities.GetByIdWithDetailsAsync(nonConformityId, ct);
         if (nonConformity is null) return Result.Failure(Error.NotFound("Nc_NotFound", nonConformityId));
 
+        var open = EnsureOpen(nonConformity);
+        if (open.IsFailure) return open;
+
         var action = nonConformity.Actions.FirstOrDefault(a => a.Id == actionId);
         if (action is null) return Result.Failure(Error.NotFound("Nc_ActionNotFound"));
 
@@ -415,6 +464,17 @@ public sealed class NonConformityService(
 
         return Result.Success();
     }
+
+    /// <summary>
+    /// A closed or dismissed file is read-only until reopened. The screen greys these operations
+    /// out, but a register loaded before someone else closed the file still offers them.
+    /// </summary>
+    private static Result EnsureOpen(NonConformity nonConformity) => nonConformity.Status switch
+    {
+        NonConformityStatus.Closed => Result.Failure(Error.Conflict("Nc_AlreadyClosed")),
+        NonConformityStatus.Rejected => Result.Failure(Error.Conflict("Nc_AlreadyDismissed")),
+        _ => Result.Success()
+    };
 }
 
 /// <summary>Read-side queries for the quality screens.</summary>

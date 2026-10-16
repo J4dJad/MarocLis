@@ -402,7 +402,7 @@ public sealed class InventoryView : LocalizedView
         {
             _stock.Column("code").HeaderText = T("Field.Code");
             _stock.Column("name").HeaderText = T("Inventory.Item");
-            _stock.Column("kind").HeaderText = T("Field.Name");
+            _stock.Column("kind").HeaderText = T("Inventory.ItemKind");
             _stock.Column("onhand").HeaderText = T("Inventory.QuantityOnHand");
             _stock.Column("reorder").HeaderText = T("Inventory.ReorderPoint");
             _stock.Column("lots").HeaderText = T("Inventory.Lot");
@@ -416,10 +416,10 @@ public sealed class InventoryView : LocalizedView
             _lots.Column("item").HeaderText = T("Inventory.Item");
             _lots.Column("lot").HeaderText = T("Inventory.LotNumber");
             _lots.Column("expiry").HeaderText = T("Inventory.Expiry");
-            _lots.Column("days").HeaderText = T("Field.Date");
+            _lots.Column("days").HeaderText = T("Inventory.DaysToExpiry");
             _lots.Column("remaining").HeaderText = T("Field.Quantity");
             _lots.Column("received").HeaderText = T("Inventory.Receipt");
-            _lots.Column("opened").HeaderText = T("Field.Date");
+            _lots.Column("opened").HeaderText = T("Inventory.OpenedOn");
             _lots.Column("state").HeaderText = T("Field.Status");
             _lots.Column("location").HeaderText = T("Sample.Storage");
         }

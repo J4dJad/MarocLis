@@ -298,7 +298,7 @@ public sealed class QualityControlView : LocalizedView
                            $"Z {point.ZScore:N2}" +
                            (point.ViolatedRules == WestgardRule.None
                                ? string.Empty
-                               : $" · {point.ViolatedRules}");
+                               : $" · {WestgardRuleNames.Describe(point.ViolatedRules)}");
         };
     }
 
@@ -387,7 +387,7 @@ public sealed class QualityControlView : LocalizedView
             _review.Column("level").HeaderText = T("Quality.QcLevel");
             _review.Column("value").HeaderText = T("Result.Value");
             _review.Column("z").HeaderText = T("Quality.ZScore");
-            _review.Column("rules").HeaderText = T("Quality.Rules");
+            _review.Column("rules").HeaderText = T("QualityHr.Qc.ViolatedRules");
             _review.Column("affected").HeaderText = T("NonConformity.AffectedResults");
         }
 
@@ -574,7 +574,7 @@ public sealed class QualityControlView : LocalizedView
             if (keep is not null && keep.TryGet(row.QcTargetId, out var pending))
                 gridRow.Cells[ColValue].Value = pending;
 
-            var tooltip = new List<string> { row.ActiveRules.ToString() };
+            var tooltip = new List<string> { WestgardRuleNames.Describe(row.ActiveRules, " · ") };
 
             if (row.CvPercent is { } cv)
             {
@@ -599,16 +599,6 @@ public sealed class QualityControlView : LocalizedView
     private void RenderCount() =>
         _count.Text = Localizer.Format("QualityHr.Qc.Count", _rows.Count, _pendingReview.Count);
 
-    /// <summary>The Westgard rules by their short names, as the bench says them: 1-2s, 1-3s, R-4s…</summary>
-    private static readonly (WestgardRule Rule, string Name)[] RuleNames =
-    [
-        // Plain characters: the subscript letters are missing from the interface fonts.
-        (WestgardRule.OneTwoS, "1-2s"), (WestgardRule.OneThreeS, "1-3s"), (WestgardRule.TwoTwoS, "2-2s"),
-        (WestgardRule.R4S, "R-4s"), (WestgardRule.ThreeOneS, "3-1s"), (WestgardRule.FourOneS, "4-1s"),
-        (WestgardRule.TwoOfThreeTwoS, "2/3-2s"), (WestgardRule.SevenT, "7T"), (WestgardRule.EightX, "8x"),
-        (WestgardRule.TenX, "10x"), (WestgardRule.TwelveX, "12x")
-    ];
-
     /// <summary>The rules in force for the control shown, under its chart, by their short names.</summary>
     private void ShowControlFacts(Guid qcTargetId)
     {
@@ -620,7 +610,7 @@ public sealed class QualityControlView : LocalizedView
             return;
         }
 
-        var active = RuleNames.Where(r => row.ActiveRules.HasFlag(r.Rule)).Select(r => r.Name).ToList();
+        var active = WestgardRuleNames.Of(row.ActiveRules);
         _rulesLine.ForeColor = active.Count == 0 ? UiTheme.Critical : UiTheme.TextSecondary;
         _rulesLine.Text = Localizer.Format("QualityHr.Qc.ActiveRules", active.Count == 0 ? "—" : string.Join(" · ", active));
     }
@@ -643,7 +633,7 @@ public sealed class QualityControlView : LocalizedView
                 T($"QcLevel.{row.Level}"),
                 row.Value.ToString("N3"),
                 row.ZScore?.ToString("N2") ?? string.Empty,
-                row.ViolatedRules.ToString(),
+                WestgardRuleNames.Describe(row.ViolatedRules),
                 row.AffectedResultCount > 0 ? row.AffectedResultCount.ToString() : string.Empty);
 
             _review.Rows[index].Tag = row;
@@ -842,7 +832,7 @@ public sealed class QualityControlView : LocalizedView
         }
 
         var action = _dialogs.PromptForReason(
-            $"{row.ParameterName.For(Localizer.CurrentLanguage)} · {row.ViolatedRules}\n\n" +
+            $"{row.ParameterName.For(Localizer.CurrentLanguage)} · {WestgardRuleNames.Describe(row.ViolatedRules)}\n\n" +
             T("Quality.CorrectiveActionPrompt"),
             T("Quality.CorrectiveAction"), minimumLength: 15);
 

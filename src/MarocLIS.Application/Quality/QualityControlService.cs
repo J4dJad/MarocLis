@@ -465,9 +465,9 @@ public sealed class QualityControlService(
                 NonConformityCategory.Analytical,
                 NonConformitySeverity.Major,
                 new MultilingualText(
-                    $"Contrôle interne rejeté — {parameterCode} : {result.ViolatedRules}",
+                    $"Contrôle interne rejeté — {parameterCode} : {WestgardRuleNames.Describe(result.ViolatedRules)}",
                     $"مراقبة داخلية مرفوضة — {parameterCode}",
-                    $"Internal QC rejected — {parameterCode}: {result.ViolatedRules}"),
+                    $"Internal QC rejected — {parameterCode}: {WestgardRuleNames.Describe(result.ViolatedRules)}"),
                 clock.Now,
                 currentUser.UserId)
             {
