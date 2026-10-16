@@ -77,12 +77,12 @@ public sealed class CollectionView : LocalizedView
     // Alerts and fasting
     private readonly Label _alertBanner = new();
     private readonly Panel _fastingBand = new();
-    private readonly ClockGlyph _fastingClock = new();
+    private readonly CollectionClockGlyph _fastingClock = new();
     private readonly Label _fastingBanner = new();
     private readonly FlowLayoutPanel _fastingChoice = new();
-    private readonly SegmentButton _fastedYes = new();
-    private readonly SegmentButton _fastedNo = new();
-    private readonly SegmentButton _fastedUnknown = new();
+    private readonly CollectionSegmentButton _fastedYes = new();
+    private readonly CollectionSegmentButton _fastedNo = new();
+    private readonly CollectionSegmentButton _fastedUnknown = new();
 
     // Tubes
     private readonly Label _tubesHeading = new();
@@ -214,10 +214,34 @@ public sealed class CollectionView : LocalizedView
             panel.Invalidate();
         };
 
+        // « À prélever » and, at the far end, the refresh: as on the result entry screen, an icon
+        // beside the list it reloads (F5 does the same), which leaves the action bar room.
+        var titleRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(14, 12, 14, 2),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
         _patientsHeading.Font = EntryPaint.Resized(UiTheme.SectionTitle, 12.75f);
         _patientsHeading.ForeColor = UiTheme.TextPrimary;
         _patientsHeading.AutoSize = true;
-        _patientsHeading.Margin = new Padding(14, 14, 14, 4);
+        _patientsHeading.Anchor = AnchorStyles.Left;
+        _patientsHeading.Margin = new Padding(0, 2, 0, 0);
+
+        _refresh.Size = new Size(30, 28);
+        _refresh.Padding = new Padding(0);
+        _refresh.Margin = new Padding(0);
+        _refresh.TabStop = false;
+        ButtonIcons.Set(_refresh, Glyph.RefreshCw, always: true);
+
+        titleRow.Controls.Add(_patientsHeading, 0, 0);
+        titleRow.Controls.Add(_refresh, 1, 0);
 
         _patientsCount.Font = UiTheme.Body;
         _patientsCount.ForeColor = UiTheme.TextSecondary;
@@ -241,7 +265,7 @@ public sealed class CollectionView : LocalizedView
         _patients.ShowCellToolTips = true;
         _patients.CellPainting += PaintPatientCell;
 
-        panel.Controls.Add(_patientsHeading, 0, 0);
+        panel.Controls.Add(titleRow, 0, 0);
         panel.Controls.Add(_patientsCount, 0, 1);
         panel.Controls.Add(_chips, 0, 2);
         panel.Controls.Add(_patients, 0, 3);
@@ -261,7 +285,7 @@ public sealed class CollectionView : LocalizedView
         var bar = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 6,
+            ColumnCount = 4,
             RowCount = 1,
             Padding = new Padding(24, 11, 24, 11),
             Margin = new Padding(0),
@@ -269,14 +293,12 @@ public sealed class CollectionView : LocalizedView
         };
         bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         strip.Controls.Add(bar);
 
-        foreach (var button in new[] { _reprint, _refresh, _dispatch, _record })
+        foreach (var button in new[] { _reprint, _dispatch, _record })
         {
             button.AutoSize = true;
             button.MinimumSize = new Size(0, 34);
@@ -286,21 +308,19 @@ public sealed class CollectionView : LocalizedView
 
         _record.Margin = new Padding(0);
 
-        _remaining.AutoSize = true;
-        _remaining.Anchor = AnchorStyles.Right;
+        // Takes what the buttons leave, cut with an ellipsis rather than pushing a button out.
+        _remaining.AutoSize = false;
+        _remaining.AutoEllipsis = true;
+        _remaining.Dock = DockStyle.Fill;
         _remaining.TextAlign = ContentAlignment.MiddleRight;
         _remaining.Font = UiTheme.Body;
         _remaining.ForeColor = UiTheme.TextSecondary;
-        _remaining.Margin = new Padding(8, 8, 12, 0);
-
-        var spacer = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0), BackColor = UiTheme.SurfaceRaised };
+        _remaining.Margin = new Padding(8, 0, 12, 0);
 
         bar.Controls.Add(_reprint, 0, 0);
-        bar.Controls.Add(_refresh, 1, 0);
-        bar.Controls.Add(spacer, 2, 0);
-        bar.Controls.Add(_remaining, 3, 0);
-        bar.Controls.Add(_dispatch, 4, 0);
-        bar.Controls.Add(_record, 5, 0);
+        bar.Controls.Add(_remaining, 1, 0);
+        bar.Controls.Add(_dispatch, 2, 0);
+        bar.Controls.Add(_record, 3, 0);
 
         // --- status line ----------------------------------------------------------------------------
         // What the last action said — drawn, sent, printed, refused. Shown only while there is
@@ -517,7 +537,7 @@ public sealed class CollectionView : LocalizedView
 
         // A barcode is a Latin token; the field stays LTR in Arabic.
         _scan.Tag = UiTags.LatinValue;
-        _scan.Font = UiTheme.Monospace;
+        _scan.Font = UiTheme.Body;
         _scan.Width = 320;
         _scan.Anchor = AnchorStyles.Right;
         _scan.Margin = new Padding(12, 0, 0, 0);
@@ -562,9 +582,9 @@ public sealed class CollectionView : LocalizedView
             Margin = new Padding(0),
             BackColor = UiTheme.SurfaceRaised
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 18));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 21));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 23));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -737,7 +757,9 @@ public sealed class CollectionView : LocalizedView
     protected override void ApplyTexts()
     {
         _patientsHeading.Text = T("SampleStatus.AwaitingCollection");
-        _refresh.Text = T("Action.Refresh");
+        // Icon only; the caption is its tooltip.
+        _refresh.Text = string.Empty;
+        _tips.SetToolTip(_refresh, $"{T("Action.Refresh")} (F5)");
         _record.Text = T("Collection.ValidateDraw");
         _dispatch.Text = T("Collection.DispatchToBench");
         _reprint.Text = T("Action.PrintLabels");
@@ -746,6 +768,13 @@ public sealed class CollectionView : LocalizedView
         // The captions follow the design system; the icons stay those of « Prélever » and « Expédier ».
         ButtonIcons.Set(_record, Glyph.Syringe, always: true);
         ButtonIcons.Set(_dispatch, Glyph.Truck, always: true);
+
+        // Sized by hand: an auto-sized button does not count the icon or the key drawn on it, and
+        // the bar's buttons then overlapped on a 1366-pixel screen.
+        _reprint.MinimumSize = new Size(ButtonWidth(_reprint, "F8"), 34);
+        _dispatch.MinimumSize = new Size(ButtonWidth(_dispatch), 34);
+        _record.MinimumSize = new Size(ButtonWidth(_record, "F12"), 34);
+        _openFile.MinimumSize = new Size(ButtonWidth(_openFile), 34);
 
         _fastedYes.Text = T("Action.Yes");
         _fastedNo.Text = T("Action.No");
@@ -778,6 +807,10 @@ public sealed class CollectionView : LocalizedView
 
         RenderPatients();
     }
+
+    private static int ButtonWidth(Button button, string? hint = null) =>
+        TextRenderer.MeasureText(Mnemonics.Plain(button.Text), button.Font).Width + 28 + 24
+        + (hint is null ? 0 : ShortcutHints.Width(hint));
 
     /// <summary>The places of collection, in the current language; the selection is kept.</summary>
     private void FillLocations()
@@ -1256,7 +1289,7 @@ public sealed class CollectionView : LocalizedView
             {
                 e.PaintBackground(e.ClipBounds, (e.State & DataGridViewElementStates.Selected) != 0);
                 var tube = new Rectangle(bounds.X + (bounds.Width - 14) / 2, bounds.Y + 5, 14, bounds.Height - 10);
-                TubeCap.Draw(e.Graphics, tube, entry.ContainerColourHex);
+                CollectionTubeCap.Draw(e.Graphics, tube, entry.ContainerColourHex);
                 e.Handled = true;
                 return;
             }

@@ -57,9 +57,10 @@ public sealed class SampleReceptionView : LocalizedView
 
     // Candidate detail
     private readonly Panel _detail = new();
-    private readonly TubeCapControl _detailCap = new();
+    private readonly CollectionTubeCapControl _detailCap = new();
     private readonly Label _patientLine = new();
     private readonly Label _accessionLine = new();
+    private readonly Label _identityLine = new();
     private readonly PillLabel _priorityPill = new();
     private readonly Label _orderLine = new();
     private readonly Label _tubeLine = new();
@@ -182,26 +183,18 @@ public sealed class SampleReceptionView : LocalizedView
     /// <summary>The scanned tube: scan box, the tube's band, the non-conformities, the decision.</summary>
     private Control BuildScanCard()
     {
-        var card = new Panel
+        // The card is the table itself, its height measured for the width it is given (see
+        // FitScanCard): auto-sized, it kept the height of the flows wrapped at their narrowest.
+        var stack = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            RowCount = 6,
             Margin = new Padding(0, 0, 0, 14),
             Padding = new Padding(16, 14, 16, 14),
             BackColor = UiTheme.SurfaceRaised
         };
-        UiChrome.AsCard(card);
-
-        var stack = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            ColumnCount = 1,
-            RowCount = 6,
-            Margin = new Padding(0),
-            BackColor = UiTheme.SurfaceRaised
-        };
+        UiChrome.AsCard(stack);
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (var i = 0; i < 6; i++) stack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
@@ -223,6 +216,7 @@ public sealed class SampleReceptionView : LocalizedView
 
         _scan.Tag = UiTags.LatinValue;
         _scan.Font = UiTheme.Mono(12f, FontStyle.Bold);
+        _scan.Height = 34;
         _scan.Width = 320;
         _scan.Margin = new Padding(0, 0, 12, 0);
 
@@ -290,9 +284,14 @@ public sealed class SampleReceptionView : LocalizedView
         _accessionLine.AutoSize = true;
         _accessionLine.Margin = new Padding(0, 3, 8, 0);
 
-        _priorityPill.Margin = new Padding(0, 2, 0, 0);
+        _priorityPill.Margin = new Padding(0, 2, 8, 0);
 
-        first.Controls.AddRange([_patientLine, _accessionLine, _priorityPill]);
+        _identityLine.Font = UiTheme.Body;
+        _identityLine.ForeColor = UiTheme.TextSecondary;
+        _identityLine.AutoSize = true;
+        _identityLine.Margin = new Padding(0, 3, 0, 0);
+
+        first.Controls.AddRange([_patientLine, _accessionLine, _priorityPill, _identityLine]);
 
         foreach (var label in new[] { _orderLine, _tubeLine })
         {
@@ -357,8 +356,11 @@ public sealed class SampleReceptionView : LocalizedView
         _defectLegend.AutoSize = true;
         _defectLegend.Margin = new Padding(0, 0, 0, 8);
 
+        // Sized by FitScanCard: auto-sized in the table, it was measured unwrapped and its last
+        // line ran over the conditions below.
         _defectBox.Dock = DockStyle.Fill;
-        _defectBox.AutoSize = true;
+        _defectBox.AutoSize = false;
+        _defectBox.Height = 72;
         _defectBox.WrapContents = true;
         _defectBox.Margin = new Padding(0, 0, 0, 6);
         _defectBox.BackColor = UiTheme.SurfaceRaised;
@@ -401,7 +403,7 @@ public sealed class SampleReceptionView : LocalizedView
         _temperature.Tag = UiTags.LatinValue;
         _temperature.Font = UiTheme.Monospace;
         _temperature.PlaceholderText = "—";
-        _temperatureField = StackedField.Of(_temperatureLabel, _temperature, 120, new Padding(0, 0, 16, 0));
+        _temperatureField = CollectionStackedField.Of(_temperatureLabel, _temperature, 120, new Padding(0, 0, 16, 0));
 
         _coldChain.Font = UiTheme.Body;
         _coldChain.ForeColor = UiTheme.TextPrimary;
@@ -414,7 +416,7 @@ public sealed class SampleReceptionView : LocalizedView
         _storage.FlatStyle = FlatStyle.Flat;
         _storage.Font = UiTheme.Body;
         _storage.MaxLength = 100;
-        var storageField = StackedField.Of(_storageLabel, _storage, 240, new Padding(0, 0, 16, 0));
+        var storageField = CollectionStackedField.Of(_storageLabel, _storage, 240, new Padding(0, 0, 16, 0));
 
         conditions.Controls.AddRange([_temperatureField, _coldChain, storageField]);
 
@@ -482,8 +484,74 @@ public sealed class SampleReceptionView : LocalizedView
         stack.Controls.Add(_defectBox, 0, 3);
         stack.Controls.Add(decision, 0, 4);
 
-        card.Controls.Add(stack);
-        return card;
+        _scanCard = stack;
+        _scanRow = scanRow;
+        _decision = decision;
+        _conditions = conditions;
+        _acceptButtons = acceptButtons;
+        _refusal = refusal;
+        stack.SizeChanged += (_, _) => FitScanCard();
+        _detail.VisibleChanged += (_, _) => FitScanCard();
+        _detail.SizeChanged += (_, _) => FitScanCard();
+        _defectBox.ControlAdded += (_, _) => FitScanCard();
+
+        return stack;
+    }
+
+    private TableLayoutPanel? _scanCard;
+    private Control? _scanRow;
+    private Control? _decision;
+    private Control? _conditions;
+    private Control? _acceptButtons;
+    private Control? _refusal;
+    private bool _fitting;
+
+    /// <summary>
+    /// Sets the scanned-tube card to the height its rows need at its present width, so the list
+    /// below gets the rest of the screen.
+    /// </summary>
+    private void FitScanCard()
+    {
+        if (_fitting || _scanCard is null || _scanRow is null || _decision is null || _conditions is null
+            || _acceptButtons is null || _refusal is null) return;
+
+        var width = _scanCard.ClientSize.Width - _scanCard.Padding.Horizontal;
+        if (width <= 0) return;
+
+        int Height(Control control, int at) =>
+            control.GetPreferredSize(new Size(Math.Max(1, at - control.Margin.Horizontal), 0)).Height
+            + control.Margin.Vertical;
+
+        var buttons = _acceptButtons.GetPreferredSize(Size.Empty);
+        var decision = _decision.Padding.Vertical
+                       + Math.Max(Height(_conditions, width - buttons.Width - _acceptButtons.Margin.Horizontal),
+                                  buttons.Height + _acceptButtons.Margin.Vertical)
+                       + Height(_refusal, width);
+
+        var defects = _defectBox.GetPreferredSize(new Size(width, 0)).Height;
+        if (_defectBox.Height != defects) _defectBox.Height = defects;
+
+        var needed = _scanCard.Padding.Vertical
+                     + Height(_scanRow, width)
+                     + (_detail.Visible ? _detail.Height + _detail.Margin.Vertical : 0)
+                     + Height(_defectLegend, width)
+                     + defects + _defectBox.Margin.Vertical
+                     + decision
+                     + 4;
+
+        if (_scanCard.Height == needed) return;
+
+        _fitting = true;
+        try
+        {
+            _scanCard.Height = needed;
+            if (_scanCard.Parent is TableLayoutPanel content)
+                content.RowStyles[0] = new RowStyle(SizeType.Absolute, needed + _scanCard.Margin.Vertical);
+        }
+        finally
+        {
+            _fitting = false;
+        }
     }
 
     /// <summary>« En attente de réception », the count, the chips and the tubes.</summary>
@@ -589,7 +657,7 @@ public sealed class SampleReceptionView : LocalizedView
 
         foreach (var defect in defects)
         {
-            var check = new DefectToggle { Tag = defect };
+            var check = new CollectionDefectToggle();
 
             check.CheckedChanged += (_, _) => RefreshActionAvailability();
 
@@ -670,7 +738,7 @@ public sealed class SampleReceptionView : LocalizedView
         _chipUrgent.Click += (_, _) => SetFilter(AwaitingFilter.Urgent);
         _chipLongDelay.Click += (_, _) => SetFilter(AwaitingFilter.LongDelay);
 
-        TranslatedKeyHint.Attach(_accept, () => T("Sample.EnterKey"));
+        CollectionKeyHint.Attach(_accept, () => T("Sample.EnterKey"));
     }
 
     private void OnAwaitingFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -778,7 +846,7 @@ public sealed class SampleReceptionView : LocalizedView
         _coldChain.Text = T("Sample.ColdChain");
         _storageLabel.Text = T("Sample.Storage");
         _accept.Text = T("Action.Accept");
-        TranslatedKeyHint.Reserve(_accept, T("Sample.EnterKey"));
+        CollectionKeyHint.Reserve(_accept, T("Sample.EnterKey"));
         _acceptReserved.Text = T("Action.AcceptWithReservation");
         _reject.Text = T("Action.Reject");
         _rejectReasonLabel.Text = T("Recollection.Reason");
@@ -826,6 +894,7 @@ public sealed class SampleReceptionView : LocalizedView
         RenderAwaiting();
 
         if (_candidate is not null) ShowCandidate(_candidate);
+        FitScanCard();
     }
 
     // ---- Loading -------------------------------------------------------------------------------------
@@ -994,8 +1063,8 @@ public sealed class SampleReceptionView : LocalizedView
         if (candidate.DateOfBirth is { } dob) identity.Add(dob.ToString("dd/MM/yyyy"));
 
         _patientLine.Text = candidate.PatientName;
-        _accessionLine.Text = $"{candidate.AccessionNumber}   {string.Join(" · ", identity)}";
-        _accessionLine.Font = UiTheme.Monospace;
+        _accessionLine.Text = candidate.AccessionNumber;
+        _identityLine.Text = string.Join(" · ", identity);
 
         if (candidate.Priority != OrderPriority.Routine)
             _priorityPill.Show(T($"Priority.{candidate.Priority}"),

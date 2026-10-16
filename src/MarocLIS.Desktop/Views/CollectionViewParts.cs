@@ -8,7 +8,7 @@ namespace MarocLIS.Desktop.Views;
 // the non-conformity toggles. Kept beside the screens rather than in the shared theme.
 
 /// <summary>A tube drawn in its cap colour, rounded more at the bottom than at the top.</summary>
-internal static class TubeCap
+internal static class CollectionTubeCap
 {
     public static void Draw(Graphics g, Rectangle tube, string? hex)
     {
@@ -49,11 +49,11 @@ internal static class TubeCap
 }
 
 /// <summary>A tube in its cap colour as a control, at the head of the scanned tube's band.</summary>
-internal sealed class TubeCapControl : Control
+internal sealed class CollectionTubeCapControl : Control
 {
     private string? _hex;
 
-    public TubeCapControl()
+    public CollectionTubeCapControl()
     {
         SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
         Size = new Size(14, 42);
@@ -71,14 +71,14 @@ internal sealed class TubeCapControl : Control
     {
         using (var back = new SolidBrush(Parent?.BackColor ?? UiTheme.SurfaceRaised))
             e.Graphics.FillRectangle(back, ClientRectangle);
-        if (_hex is not null) TubeCap.Draw(e.Graphics, new Rectangle(0, 0, Width - 1, Height - 1), _hex);
+        if (_hex is not null) CollectionTubeCap.Draw(e.Graphics, new Rectangle(0, 0, Width - 1, Height - 1), _hex);
     }
 }
 
 /// <summary>The clock at the head of the fasting band, in the band's warning ink.</summary>
-internal sealed class ClockGlyph : Control
+internal sealed class CollectionClockGlyph : Control
 {
-    public ClockGlyph()
+    public CollectionClockGlyph()
     {
         SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
         Size = new Size(20, 20);
@@ -106,11 +106,11 @@ internal sealed class ClockGlyph : Control
 /// One segment of a choice such as « Oui / Non / Ne sait pas »: white, or in the accent once chosen.
 /// Sits in a row of segments with a line between them.
 /// </summary>
-internal sealed class SegmentButton : Button
+internal sealed class CollectionSegmentButton : Button
 {
     private bool _pressed;
 
-    public SegmentButton()
+    public CollectionSegmentButton()
     {
         SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
         FlatStyle = FlatStyle.Flat;
@@ -168,9 +168,9 @@ internal sealed class SegmentButton : Button
 /// warning colours once signalled. Still a <see cref="CheckBox"/>, so Space toggles it and the
 /// screen reads <see cref="CheckBox.Checked"/> as before.
 /// </summary>
-internal sealed class DefectToggle : CheckBox
+internal sealed class CollectionDefectToggle : CheckBox
 {
-    public DefectToggle()
+    public CollectionDefectToggle()
     {
         SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
         Appearance = Appearance.Button;
@@ -184,10 +184,11 @@ internal sealed class DefectToggle : CheckBox
         UseMnemonic = false;
     }
 
+    // The screen gives a check box its Alt+letter mark: it is drawn underlined, as on a button.
     protected override void OnTextChanged(EventArgs e)
     {
         base.OnTextChanged(e);
-        Width = TextRenderer.MeasureText(Text, UiTheme.BodyBold).Width + 26;
+        Width = TextRenderer.MeasureText(Mnemonics.Plain(Text), UiTheme.BodyBold).Width + 30;
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -205,8 +206,7 @@ internal sealed class DefectToggle : CheckBox
         var border = Focused ? UiTheme.Accent : Checked ? UiTheme.Abnormal : UiTheme.BorderStrong;
         using (var pen = new Pen(border)) g.DrawPath(pen, path);
 
-        var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
-                    | TextFormatFlags.NoPrefix;
+        var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
         if (RightToLeft == RightToLeft.Yes) flags |= TextFormatFlags.RightToLeft;
         TextRenderer.DrawText(g, Text, Checked ? UiTheme.BodyBold : UiTheme.Body, ClientRectangle,
                               !Enabled ? UiTheme.TextMuted : Checked ? UiTheme.Abnormal : UiTheme.TextPrimary, flags);
@@ -214,7 +214,7 @@ internal sealed class DefectToggle : CheckBox
 }
 
 /// <summary>A label above its field, as the design system's forms stack them.</summary>
-internal static class StackedField
+internal static class CollectionStackedField
 {
     public static TableLayoutPanel Of(Label label, Control field, int width, Padding margin)
     {
@@ -249,7 +249,7 @@ internal static class StackedField
 /// Like <see cref="ShortcutHints"/>, for a key whose name is translated (« Entrée », « Enter »):
 /// the hint is read at each paint, so it follows a change of language.
 /// </summary>
-internal static class TranslatedKeyHint
+internal static class CollectionKeyHint
 {
     private static readonly Font HintFont = UiTheme.Mono(8.5f);
 
