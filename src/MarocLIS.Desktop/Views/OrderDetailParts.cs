@@ -40,9 +40,6 @@ internal static class FilePaint
         SampleStatus.Stored => Ok,
         _ => EntryPaint.Info
     };
-
-    /// <summary>A released state is written with a tick before it, as the mockup does.</summary>
-    public static string Ticked(string text, bool released) => released ? "✓ " + text : text;
 }
 
 /// <summary>
@@ -107,9 +104,11 @@ internal sealed class FileProgressLine : Control
             {
                 case FileStageState.Done:
                     using (var fill = new SolidBrush(UiTheme.Accent)) g.FillEllipse(fill, dotBox);
-                    TextRenderer.DrawText(g, "✓", UiTheme.SmallBold, dotBox, UiTheme.TextOnAccent,
-                                          TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
-                                          | TextFormatFlags.NoPadding);
+                    // The tick drawn rather than written: not every font carries « ✓ ».
+                    using (var tick = new Pen(UiTheme.TextOnAccent, 1.8f))
+                        g.DrawLines(tick, [new PointF(dotBox.X + 5.5f, dotBox.Y + 10.5f),
+                                           new PointF(dotBox.X + 8.5f, dotBox.Y + 13.5f),
+                                           new PointF(dotBox.X + 14.5f, dotBox.Y + 6.5f)]);
                     break;
                 case FileStageState.Current:
                     using (var fill = new SolidBrush(UiTheme.SurfaceRaised)) g.FillEllipse(fill, dotBox);

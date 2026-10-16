@@ -41,7 +41,7 @@ public sealed class OrderDetailView : LocalizedView
     private const int ListWidth = 300;
     private const int ListRowHeight = 54;
     private const int ItemRowHeight = 46;
-    private const int HeaderCardHeight = 226;
+    private const int HeaderCardHeight = 240;
     private const int CancellationHeight = 24;
 
     private readonly OrderAmendmentService _orders;
@@ -121,6 +121,9 @@ public sealed class OrderDetailView : LocalizedView
     private readonly ToolStripMenuItem _cancelItem = new();
     private readonly ToolStripMenuItem _repeatItem = new();
     private readonly ToolStripMenuItem _cancelOrder = new();
+    private readonly ToolStripMenuItem _editHeaderItem = new();
+    private readonly ToolStripMenuItem _printReportItem = new();
+    private TableLayoutPanel? _bar;
     private readonly Panel _statusStrip = new();
     private readonly Label _status = new();
 
@@ -217,7 +220,7 @@ public sealed class OrderDetailView : LocalizedView
     }
 
     /// <summary>The search box, the quick filters, the count and the files.</summary>
-    private Control BuildListPanel()
+    private TableLayoutPanel BuildListPanel()
     {
         var panel = new TableLayoutPanel
         {
@@ -310,7 +313,7 @@ public sealed class OrderDetailView : LocalizedView
     }
 
     /// <summary>The note, the header card, the content card, the status line and the action bar.</summary>
-    private Control BuildFilePanel()
+    private Panel BuildFilePanel()
     {
         var host = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0), BackColor = UiTheme.Surface };
 
@@ -323,7 +326,7 @@ public sealed class OrderDetailView : LocalizedView
             Dock = DockStyle.Fill,
             ColumnCount = 6,
             RowCount = 1,
-            Padding = new Padding(24, 11, 24, 11),
+            Padding = new Padding(20, 11, 20, 11),
             Margin = new Padding(0),
             BackColor = UiTheme.SurfaceRaised
         };
@@ -332,6 +335,8 @@ public sealed class OrderDetailView : LocalizedView
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         strip.Controls.Add(bar);
+        _bar = bar;
+        bar.Resize += (_, _) => FitBar();
 
         foreach (var button in new[] { _addAnalyses, _printLabels, _printReport, _editHeader, _more })
         {
@@ -361,7 +366,13 @@ public sealed class OrderDetailView : LocalizedView
 
         // The actions that undo something, one click further away than the everyday ones; each
         // keeps the icon its button had.
-        _moreMenu.Items.AddRange([_cancelItem, _repeatItem, new ToolStripSeparator(), _cancelOrder]);
+        // « Modifier l'en-tête », then « Compte rendu (PDF) », join them only when the bar is too
+        // narrow for their buttons (a 1366-pixel screen).
+        _moreMenu.Items.AddRange([_editHeaderItem, _printReportItem, _cancelItem, _repeatItem,
+                                  new ToolStripSeparator(), _cancelOrder]);
+        _editHeaderItem.Visible = _printReportItem.Visible = false;
+        _editHeaderItem.Image = Icons.Render(Glyph.Pencil, UiTheme.TextPrimary, 16);
+        _printReportItem.Image = Icons.Render(Glyph.FileText, UiTheme.TextPrimary, 16);
         _moreMenu.Font = UiTheme.Body;
         _itemMenu.Items.AddRange([_itemCancel, _itemRepeat]);
         _itemMenu.Font = UiTheme.Body;
@@ -418,7 +429,7 @@ public sealed class OrderDetailView : LocalizedView
     }
 
     /// <summary>The file's internal note, in the warning colours above the cards: « ! note ».</summary>
-    private Control BuildNoteBanner()
+    private Panel BuildNoteBanner()
     {
         _noteBanner.Dock = DockStyle.Fill;
         _noteBanner.Height = 28;
@@ -441,7 +452,7 @@ public sealed class OrderDetailView : LocalizedView
         return _noteBanner;
     }
 
-    private Control BuildHeaderCard()
+    private Panel BuildHeaderCard()
     {
         _headerCard.Dock = DockStyle.Fill;
         _headerCard.Margin = new Padding(0, 0, 0, 14);
@@ -458,10 +469,10 @@ public sealed class OrderDetailView : LocalizedView
         _headerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
-        _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 17));
+        _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 13));
         _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
-        _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 17));
+        _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 13));
         _headerLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         // --- number, state, priority, registration ------------------------------------------------
@@ -584,10 +595,10 @@ public sealed class OrderDetailView : LocalizedView
     }
 
     /// <summary>A hairline across the card, centred in its row.</summary>
-    private static Control Rule() => new FileRule { Dock = DockStyle.Top, Margin = new Padding(0, 8, 0, 8) };
+    private static FileRule Rule() => new FileRule { Dock = DockStyle.Top, Margin = new Padding(0, 6, 0, 6) };
 
     /// <summary>A caption in small muted type, its value in semibold, and a note under it.</summary>
-    private static Control Fact(Label caption, Label value, Label note)
+    private static TableLayoutPanel Fact(Label caption, Label value, Label note)
     {
         var cell = new TableLayoutPanel
         {
@@ -626,7 +637,7 @@ public sealed class OrderDetailView : LocalizedView
     }
 
     /// <summary>The tabs, and under them the analyses, the tubes, the billing or the history.</summary>
-    private Control BuildContentCard()
+    private Panel BuildContentCard()
     {
         var card = new Panel
         {
@@ -672,42 +683,28 @@ public sealed class OrderDetailView : LocalizedView
         _items.DefaultCellStyle.Padding = new Padding(12, 0, 12, 0);
         _items.ShowCellToolTips = true;
 
-        // The tubes of the file and the totals, under the analyses on the work-surface colour.
-        var footer = new TableLayoutPanel
-        {
-            Dock = DockStyle.Bottom,
-            Height = 42,
-            ColumnCount = 2,
-            RowCount = 1,
-            Padding = new Padding(12, 1, 12, 0),
-            Margin = new Padding(0),
-            BackColor = UiTheme.Surface
-        };
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        footer.Paint += (_, e) =>
+        // The tubes of the file and the totals, under the analyses on the work-surface colour; the
+        // totals go to a line of their own when the tubes take the width.
+        _tubeLegend.Dock = DockStyle.Bottom;
+        _tubeLegend.AutoSize = true;
+        _tubeLegend.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _tubeLegend.WrapContents = true;
+        _tubeLegend.Padding = new Padding(12, 8, 12, 4);
+        _tubeLegend.Margin = new Padding(0);
+        _tubeLegend.BackColor = UiTheme.Surface;
+        _tubeLegend.Paint += (_, e) =>
         {
             using var pen = new Pen(UiTheme.Border);
-            e.Graphics.DrawLine(pen, 0, 0, footer.Width, 0);
+            e.Graphics.DrawLine(pen, 0, 0, _tubeLegend.Width, 0);
         };
 
-        _tubeLegend.Dock = DockStyle.Fill;
-        _tubeLegend.WrapContents = false;
-        _tubeLegend.AutoScroll = false;
-        _tubeLegend.Margin = new Padding(0, 7, 8, 0);
-        _tubeLegend.BackColor = UiTheme.Surface;
-
         _totals.AutoSize = true;
-        _totals.Anchor = AnchorStyles.Right;
         _totals.Font = UiTheme.Body;
         _totals.ForeColor = UiTheme.TextPrimary;
-        _totals.Margin = new Padding(0);
+        _totals.Margin = new Padding(0, 5, 0, 4);
         _totals.UseMnemonic = false;
 
-        footer.Controls.Add(_tubeLegend, 0, 0);
-        footer.Controls.Add(_totals, 1, 0);
-
+        var footer = _tubeLegend;
         page.Controls.Add(_items);
         page.Controls.Add(footer);
     }
@@ -846,23 +843,42 @@ public sealed class OrderDetailView : LocalizedView
         _list.Columns.Add(Column("count", 8, UiTheme.Monospace, right: true, printedHidden: true));
     }
 
+    /// <summary>
+    /// The grid moves its fill weights about as columns reach their minimum widths; after a few
+    /// widenings (wider figures in Arabic) the name kept a share it no longer had room for and the
+    /// grid scrolled sideways. Once the columns overflow, the declared weights are put back.
+    /// </summary>
+    private void RefitItemColumns()
+    {
+        var visible = _items.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).ToList();
+        if (visible.Sum(c => c.Width) <= _items.DisplayRectangle.Width) return;
+        _items.RestoreFillWeights();
+    }
+
     private void BuildItemColumns()
     {
         // The analysis is drawn on two lines — its name, then « CODE · secteur » and the remark —
         // so code, sector and remark keep hidden columns of their own for printing.
         _items.Columns.Add(Column("code", 9, UiTheme.MonospaceBold, printedHidden: true));
-        _items.Columns.Add(Column("name", 36));
+        _items.Columns.Add(Column("name", 30));
         _items.Columns.Add(Column("department", 8, UiTheme.Small, printedHidden: true));
-        _items.Columns.Add(Column("status", 17, UiTheme.SmallBold));
-        _items.Columns.Add(Column("progress", 9, UiTheme.Monospace, right: true));
-        _items.Columns.Add(Column("barcode", 15, UiTheme.Monospace));
-        _items.Columns.Add(Column("price", 11, UiTheme.Monospace, right: true));
-        _items.Columns.Add(Column("share", 11, UiTheme.Monospace, right: true));
+        _items.Columns.Add(Column("status", 19, UiTheme.SmallBold));
+        _items.Columns.Add(Column("progress", 8, UiTheme.Monospace, right: true));
+        _items.Columns.Add(Column("barcode", 16, UiTheme.Monospace));
+        _items.Columns.Add(Column("price", 10, UiTheme.Monospace, right: true));
+        _items.Columns.Add(Column("share", 10, UiTheme.Monospace, right: true));
         _items.Columns.Add(Column("note", 20, UiTheme.Small, printedHidden: true));
 
         // The analysis's name is what the operator reads the line by: never « Glycémie à… ».
-        _items.Columns["name"]!.MinimumWidth = 190;
-        _items.Columns["status"]!.MinimumWidth = 130;
+        foreach (DataGridViewColumn column in _items.Columns)
+            if (column.Visible) column.Tag = (int)column.FillWeight;
+        _items.Columns["name"]!.MinimumWidth = 160;
+        // The name is painted on two lines: marked as wrapping so that the grid's own fitting does
+        // not widen it to its longest name and push the figures out of sight.
+        _items.Columns["name"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        _items.Columns["status"]!.MinimumWidth = 140;
+        // The cap's colour and the ten digits of the barcode, never « 0000… ».
+        _items.Columns["barcode"]!.MinimumWidth = 140;
     }
 
     private void BuildSampleColumns()
@@ -957,11 +973,15 @@ public sealed class OrderDetailView : LocalizedView
         {
             RefreshActions();
             _moreMenu.RightToLeft = RightToLeft;
-            _moreMenu.Show(_more, new Point(IsRightToLeft ? _more.Width : 0, _more.Height));
+            // The bar sits at the foot of the screen: the menu opens upward, along the button's outer edge.
+            _moreMenu.Show(_more, new Point(IsRightToLeft ? 0 : _more.Width, 0),
+                           IsRightToLeft ? ToolStripDropDownDirection.AboveRight : ToolStripDropDownDirection.AboveLeft);
         };
         _cancelItem.Click += async (_, _) => await RunBusyAsync(CancelItemAsync);
         _repeatItem.Click += async (_, _) => await RunBusyAsync(RepeatItemAsync);
         _cancelOrder.Click += async (_, _) => await RunBusyAsync(CancelOrderAsync);
+        _editHeaderItem.Click += async (_, _) => await RunBusyAsync(EditHeaderAsync);
+        _printReportItem.Click += async (_, _) => await RunBusyAsync(OpenReportAsync);
         _itemCancel.Click += async (_, _) => await RunBusyAsync(CancelItemAsync);
         _itemRepeat.Click += async (_, _) => await RunBusyAsync(RepeatItemAsync);
 
@@ -980,6 +1000,7 @@ public sealed class OrderDetailView : LocalizedView
         _items.SelectionChanged += (_, _) => RefreshActions();
         _items.CellFormatting += OnItemFormatting;
         _items.CellPainting += PaintItemCell;
+        _items.SizeChanged += (_, _) => RefitItemColumns();
         _samples.CellPainting += PaintSampleCell;
         _samples.CellFormatting += OnSampleFormatting;
     }
@@ -1014,6 +1035,8 @@ public sealed class OrderDetailView : LocalizedView
         _cancelItem.Text = _itemCancel.Text = T("Order.CancelAnalysis");
         _repeatItem.Text = _itemRepeat.Text = T("Order.RepeatAnalysis");
         _cancelOrder.Text = T("Order.CancelOrder");
+        _editHeaderItem.Text = T("Order.EditHeader");
+        _printReportItem.Text = T("Order.PrintReport");
         _openBilling.Text = T("OrderFile.OpenBilling");
         _paymentsTitle.Text = T("Payment.Plural");
 
@@ -1070,6 +1093,29 @@ public sealed class OrderDetailView : LocalizedView
         else RenderTabs(null);
 
         RefreshActions();
+        FitBar();
+    }
+
+    /// <summary>
+    /// Keeps every button of the bar whole: when they do not all fit, « Modifier l'en-tête », then
+    /// « Compte rendu (PDF) », move into « Plus d'actions », where they do the same thing under the
+    /// same right.
+    /// </summary>
+    private void FitBar()
+    {
+        if (_bar is null || _bar.ClientSize.Width <= 0) return;
+
+        static int Width(Button b) => b.GetPreferredSize(Size.Empty).Width + b.Margin.Horizontal;
+
+        var available = _bar.ClientSize.Width - _bar.Padding.Horizontal;
+        var fixedWidth = Width(_addAnalyses) + Width(_printLabels) + Width(_more);
+        var showReport = fixedWidth + Width(_printReport) <= available;
+        var showHeader = showReport && fixedWidth + Width(_printReport) + Width(_editHeader) <= available;
+
+        if (_printReport.Visible != showReport) _printReport.Visible = showReport;
+        if (_editHeader.Visible != showHeader) _editHeader.Visible = showHeader;
+        _printReportItem.Visible = !showReport;
+        _editHeaderItem.Visible = !showHeader;
     }
 
     private void PaintMoreChevron(object? sender, PaintEventArgs e)
@@ -1408,11 +1454,11 @@ public sealed class OrderDetailView : LocalizedView
         }
     }
 
-    /// <summary>The text and colours of a file's state pill: « ✓ Validé », « À valider · Urgent ».</summary>
+    /// <summary>The text and colours of a file's state pill: « Validé » in green, « En cours · Urgent » in amber.</summary>
     private (string Text, (Color Back, Color Fore) Colours) OrderPill(LabOrderStatus status, OrderPriority priority)
     {
         var released = status is LabOrderStatus.Validated or LabOrderStatus.Reported;
-        var text = FilePaint.Ticked(T($"OrderStatus.{status}"), released);
+        var text = T($"OrderStatus.{status}");
 
         // Urgent work still to do is flagged in the warning colours; done or cancelled, it no longer matters.
         if (priority != OrderPriority.Routine && !released && status != LabOrderStatus.Cancelled)
@@ -1569,6 +1615,11 @@ public sealed class OrderDetailView : LocalizedView
         RenderHistory();
 
         RefreshActions();
+
+        // The card was hidden until the first file: repainted whole, or what lay under it shows through.
+        // After the grid's own fitting, which is queued once the rows are in.
+        if (IsHandleCreated) BeginInvoke(RefitItemColumns);
+        _content.Invalidate(invalidateChildren: true);
     }
 
     private void SetFact(int index, string value, string note)
@@ -1606,7 +1657,7 @@ public sealed class OrderDetailView : LocalizedView
             FileStage.Collected or FileStage.Received => T("OrderFile.StepTubes", step.Done, step.Total),
             FileStage.Results => T("OrderFile.StepValues", step.Done, step.Total),
             FileStage.Validated => T("OrderFile.StepAnalyses", step.Done, step.Total),
-            _ => step.State == FileStageState.Done ? "✓" : "—"
+            _ => "—"
         };
     }
 
@@ -1652,6 +1703,8 @@ public sealed class OrderDetailView : LocalizedView
                 ItemNote(item));
 
             _items.Rows[index].Tag = item;
+            if (item.IsOverdueAt(_clock.Now))
+                _items.Rows[index].Cells["status"].ToolTipText = $"{T($"OrderItemStatus.{item.Status}")} · {T("Order.Overdue")}";
             _items.Rows[index].Cells["name"].ToolTipText =
                 string.Join(" · ", new[] { item.Code, item.DepartmentCode, ItemNote(item) }
                                        .Where(s => !string.IsNullOrEmpty(s)));
@@ -1672,7 +1725,7 @@ public sealed class OrderDetailView : LocalizedView
 
         // The tubes of the file, by colour, under the analyses; then what the analyses cost.
         _tubeLegend.SuspendLayout();
-        foreach (Control old in _tubeLegend.Controls.Cast<Control>().ToList()) old.Dispose();
+        foreach (Control old in _tubeLegend.Controls.Cast<Control>().Where(c => c != _totals).ToList()) old.Dispose();
         _tubeLegend.Controls.Clear();
 
         foreach (var sample in detail.Samples.Where(s => s.Status is not (SampleStatus.Rejected or SampleStatus.Discarded)))
@@ -1688,6 +1741,7 @@ public sealed class OrderDetailView : LocalizedView
             _tubeLegend.Controls.Add(chip);
         }
 
+        _tubeLegend.Controls.Add(_totals);
         _tubeLegend.ResumeLayout(performLayout: true);
 
         _totals.Text = T("OrderFile.Totals", detail.LiveItemCount,
@@ -1861,19 +1915,13 @@ public sealed class OrderDetailView : LocalizedView
             case "status":
             {
                 var released = item.Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported;
-                var text = FilePaint.Ticked(T($"OrderItemStatus.{item.Status}"), released);
+                var text = T($"OrderItemStatus.{item.Status}");
                 var colours = FilePaint.ForItem(item.Status);
 
-                // Late, or on a second run: said in the pill, in the warning colours.
-                if (item.IsOverdueAt(_clock.Now))
-                {
-                    text += " · " + T("Order.Overdue");
+                // Late, or on a second run: the pill in the warning colours, the reason in its tooltip
+                // (« En retard ») or on the line's remark (the run and its reason).
+                if (item.IsOverdueAt(_clock.Now) || (item.RunCount > 1 && !item.IsCancelled && !released))
                     colours = EntryPaint.Warning;
-                }
-                else if (item.RunCount > 1 && !item.IsCancelled && !released)
-                {
-                    colours = EntryPaint.Warning;
-                }
 
                 var size = EntryPaint.MeasurePill(text, UiTheme.SmallBold, 10);
                 var pill = EntryPaint.Mirror(
@@ -1961,7 +2009,7 @@ public sealed class OrderDetailView : LocalizedView
         var editable = detail is { IsCancelled: false };
 
         _addAnalyses.Enabled = editable && _currentUser.Has(Permissions.Orders.Edit);
-        _editHeader.Enabled = editable && _currentUser.Has(Permissions.Orders.Edit);
+        _editHeader.Enabled = _editHeaderItem.Enabled = editable && _currentUser.Has(Permissions.Orders.Edit);
 
         _cancelOrder.Enabled = detail is { CanCancel: true }
                                && _currentUser.Has(Permissions.Orders.Cancel);
@@ -1969,7 +2017,8 @@ public sealed class OrderDetailView : LocalizedView
         _printLabels.Enabled = detail is { IsCancelled: false }
                                && _currentUser.Has(Permissions.Samples.Reprint);
 
-        _printReport.Enabled = detail is not null && _currentUser.Has(Permissions.Reports.ReprintValidated);
+        _printReport.Enabled = _printReportItem.Enabled =
+            detail is not null && _currentUser.Has(Permissions.Reports.ReprintValidated);
 
         _cancelItem.Enabled = _itemCancel.Enabled = item is { CanCancel: true }
                                                     && _currentUser.Has(Permissions.Orders.Cancel);
