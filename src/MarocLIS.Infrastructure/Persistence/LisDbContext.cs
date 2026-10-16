@@ -127,6 +127,7 @@ public class LisDbContext : DbContext
     public DbSet<Sample> Samples => Set<Sample>();
     public DbSet<SampleEvent> SampleEvents => Set<SampleEvent>();
     public DbSet<SampleAliquot> SampleAliquots => Set<SampleAliquot>();
+    public DbSet<SampleStorageLocation> SampleStorageLocations => Set<SampleStorageLocation>();
     public DbSet<TestResult> TestResults => Set<TestResult>();
     public DbSet<ResultRevision> ResultRevisions => Set<ResultRevision>();
     public DbSet<CriticalResultNotification> CriticalResultNotifications => Set<CriticalResultNotification>();

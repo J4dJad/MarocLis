@@ -1,5 +1,11 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "SampleStorageLocation_NameRequired": "The storage location's name is required.",
+  "SampleStorageLocation_NameTooLong": "The storage location's name must not exceed {0} characters.",
+  "SampleStorageLocation_NameTaken": "A storage location « {0} » already exists on this site (active or deactivated).",
+  "SampleStorageLocation_NotFound": "Storage location not found.",
+  "SampleStorageLocation_AlreadyInactive": "The storage location « {0} » is already deactivated.",
+  "SampleStorageLocation_AlreadyActive": "The storage location « {0} » is already active.",
   "Steering_AllocationOutOfRange": "The allocation must be between 0 and 100,000 MAD.",
   "Survey_AlreadyAnswered": "Survey {0} has already been answered.",
   "Survey_ScoreOutOfRange": "The score must be between 1 and 5.",
@@ -351,6 +357,17 @@
   "Deposit_ExceedsOrderTotal": "The deposit exceeds what is left to cover on the request ({0}).",
   "Deposit_OrderCancelled": "Request {0} is cancelled: deposits can only be refunded now.",
   "Deposit_NotFound": "Deposit not found.",
+
+  "StorageLocations": {
+    "DeactivateConfirm": "Deactivate « {0} »? It will no longer be offered at reception or in the serum bank. The {1} tube(s) stored there keep this location.",
+    "RenamePrompt": "New name for « {0} ». Tubes already stored keep the old name.",
+    "NewPrompt": "Name of the new storage location (fridge, freezer, bench…):",
+    "Notice": "Only active locations are offered at reception and in the serum bank. Renaming or deactivating a location does not change tubes already stored: they keep the recorded name.",
+    "Rename": "Rename",
+    "StoredSamples": "Tubes stored",
+    "Name": "Storage location",
+    "Title": "Storage locations"
+  },
 
   "QualityHr": {
     "Hint.AccidentLog": "A step of the follow-up with the insurer, dated and kept on the file.",
@@ -2933,6 +2950,10 @@
   },
 
   "Sample": {
+    "StorageListEmpty": "No storage location is defined for this site: create them in Settings › Storage locations.",
+    "StorageOutOfList": "{0} (not in the list)",
+    "StorageChoose": "— Choose a location —",
+    "StorageNotSpecified": "— Not specified —",
     "EnterKey": "Enter",
     "Scanned": "Scanned",
     "FilterLongDelay": "Long delay · {0}",

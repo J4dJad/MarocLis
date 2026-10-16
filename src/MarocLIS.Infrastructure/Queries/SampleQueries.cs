@@ -323,19 +323,12 @@ public sealed class SampleQueries(LisDbContext db) : ISampleQueries
         ];
     }
 
-    public async Task<IReadOnlyList<string>> GetStorageLocationsAsync(Guid siteId, CancellationToken ct = default)
-    {
-        var places = await db.Samples.AsNoTracking()
-            .Where(s => s.SiteId == siteId && s.StorageLocation != null && s.StorageLocation != "")
-            .Select(s => s.StorageLocation!)
-            .Distinct()
-            .OrderBy(l => l)
-            .Take(100)
+    public async Task<IReadOnlyList<string>> GetStorageLocationsAsync(Guid siteId, CancellationToken ct = default) =>
+        await db.SampleStorageLocations.AsNoTracking()
+            .Where(l => l.SiteId == siteId && l.IsActive)
+            .OrderBy(l => l.Name)
+            .Select(l => l.Name)
             .ToListAsync(ct);
-
-        // Trailing spaces make two entries of one fridge in the database, not in the list.
-        return [.. places.Select(p => p.Trim()).Distinct(StringComparer.CurrentCultureIgnoreCase)];
-    }
 
     public async Task<IReadOnlyList<SampleLabel>> GetLabelsForOrderAsync(
         Guid labOrderId, DateTimeOffset now, CancellationToken ct = default)

@@ -8855,6 +8855,48 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("SampleEvents", "smp");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Samples.SampleStorageLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_StorageLocations_Site_Name");
+
+                    b.ToTable("StorageLocations", "smp");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Sequencing.NumberSequence", b =>
                 {
                     b.Property<Guid>("Id")

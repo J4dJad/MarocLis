@@ -1,5 +1,11 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "SampleStorageLocation_NameRequired": "Le nom du lieu de stockage est obligatoire.",
+  "SampleStorageLocation_NameTooLong": "Le nom du lieu de stockage ne doit pas dépasser {0} caractères.",
+  "SampleStorageLocation_NameTaken": "Un lieu de stockage « {0} » existe déjà sur ce site (actif ou désactivé).",
+  "SampleStorageLocation_NotFound": "Lieu de stockage introuvable.",
+  "SampleStorageLocation_AlreadyInactive": "Le lieu de stockage « {0} » est déjà désactivé.",
+  "SampleStorageLocation_AlreadyActive": "Le lieu de stockage « {0} » est déjà actif.",
   "Steering_AllocationOutOfRange": "La quote-part doit être comprise entre 0 et 100 000 MAD.",
   "Survey_AlreadyAnswered": "L'enquête {0} a déjà une réponse.",
   "Survey_ScoreOutOfRange": "La note doit être comprise entre 1 et 5.",
@@ -351,6 +357,17 @@
   "Deposit_ExceedsOrderTotal": "L'acompte dépasse ce qui reste à couvrir sur le dossier ({0}).",
   "Deposit_OrderCancelled": "Le dossier {0} est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser.",
   "Deposit_NotFound": "Acompte introuvable.",
+
+  "StorageLocations": {
+    "DeactivateConfirm": "Désactiver « {0} » ? Il ne sera plus proposé à la réception ni à la sérothèque. Les {1} tube(s) qui y sont rangés gardent ce lieu.",
+    "RenamePrompt": "Nouveau nom du lieu « {0} ». Les tubes déjà rangés gardent l'ancien nom.",
+    "NewPrompt": "Nom du nouveau lieu de stockage (réfrigérateur, congélateur, paillasse…) :",
+    "Notice": "Seuls les lieux actifs sont proposés à la réception et à la sérothèque. Renommer ou désactiver un lieu ne modifie pas les tubes déjà rangés : ils gardent le nom enregistré.",
+    "Rename": "Renommer",
+    "StoredSamples": "Tubes rangés",
+    "Name": "Lieu de stockage",
+    "Title": "Lieux de stockage"
+  },
 
   "QualityHr": {
     "Hint.AccidentLog": "Une étape du suivi avec l'assureur, datée et tracée au dossier.",
@@ -2933,6 +2950,10 @@
   },
 
   "Sample": {
+    "StorageListEmpty": "Aucun lieu de stockage n'est défini pour ce site : créez-les dans Paramètres › Lieux de stockage.",
+    "StorageOutOfList": "{0} (hors liste)",
+    "StorageChoose": "— Choisir un lieu —",
+    "StorageNotSpecified": "— Non précisé —",
     "EnterKey": "Entrée",
     "Scanned": "Scanné",
     "FilterLongDelay": "Délai long · {0}",

@@ -53,8 +53,8 @@ public sealed class CollectionReceptionScratchDatabase : IDisposable
 
 /// <summary>
 /// What the rebuilt « Réception des échantillons » screen reads beyond what it read before: the
-/// scanned tube's cap colour and the number of tubes in its order, and the storage places already
-/// used on the site.
+/// scanned tube's cap colour and the number of tubes in its order, and the active places of the
+/// site's storage list.
 /// </summary>
 public sealed class CollectionReceptionScreenDatabaseTests(CollectionReceptionScratchDatabase database)
     : IClassFixture<CollectionReceptionScratchDatabase>
@@ -104,7 +104,7 @@ public sealed class CollectionReceptionScreenDatabaseTests(CollectionReceptionSc
     }
 
     [SqlServerFact]
-    public async Task StorageLocations_AreThoseOfTheSite_DistinctAndInOrder()
+    public async Task StorageLocations_AreTheActivePlacesOfTheSitesList_InOrder()
     {
         var site = Guid.NewGuid();
         var otherSite = Guid.NewGuid();
@@ -112,24 +112,21 @@ public sealed class CollectionReceptionScreenDatabaseTests(CollectionReceptionSc
         var specimen = new SpecimenType(Unique("S"), new MultilingualText("Sérum"));
         var order = new LabOrder(Unique("A"), Guid.NewGuid(), site, Now.AddHours(-3), user);
 
-        Sample Stored(Guid at, string? place)
-        {
-            var tube = new Sample(Unique("T"), order.Id, specimen.Id, at) { StorageLocation = place };
-            return tube;
-        }
+        var closed = SampleStorageLocation.Create(site, "Congélateur ancien").Value;
+        closed.Deactivate();
 
         await using (var context = database.Context())
         {
             context.SpecimenTypes.Add(specimen);
             context.LabOrders.Add(order);
-            context.Samples.AddRange(
-                Stored(site, "Réfrigérateur R1"),
-                Stored(site, "Paillasse hémostase"),
-                Stored(site, "Réfrigérateur R1"),
-                Stored(site, "Paillasse hémostase "),
-                Stored(site, null),
-                Stored(site, ""),
-                Stored(otherSite, "Congélateur C9"));
+            context.SampleStorageLocations.AddRange(
+                SampleStorageLocation.Create(site, "Réfrigérateur R1").Value,
+                SampleStorageLocation.Create(site, "Paillasse hémostase").Value,
+                closed,
+                SampleStorageLocation.Create(otherSite, "Congélateur C9").Value);
+
+            // A place written on a tube but not in the list is not offered: the list is closed.
+            context.Samples.Add(new Sample(Unique("T"), order.Id, specimen.Id, site) { StorageLocation = "Frigo tapé" });
             await context.SaveChangesAsync();
         }
 

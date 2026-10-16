@@ -1,5 +1,11 @@
 {
   "$comment": "الفهرس العربي — يُعرض من اليمين إلى اليسار. الأرقام تبقى بالصيغة اللاتينية (0-9) تفاديًا لأخطاء النقل في النتائج الطبية.",
+  "SampleStorageLocation_NameRequired": "اسم مكان التخزين إلزامي.",
+  "SampleStorageLocation_NameTooLong": "يجب ألا يتجاوز اسم مكان التخزين {0} حرفًا.",
+  "SampleStorageLocation_NameTaken": "يوجد مكان تخزين « {0} » في هذا الموقع (نشط أو معطّل).",
+  "SampleStorageLocation_NotFound": "مكان التخزين غير موجود.",
+  "SampleStorageLocation_AlreadyInactive": "مكان التخزين « {0} » معطّل أصلًا.",
+  "SampleStorageLocation_AlreadyActive": "مكان التخزين « {0} » نشط أصلًا.",
   "Steering_AllocationOutOfRange": "يجب أن تكون الحصة بين 0 و100000 درهم.",
   "Survey_AlreadyAnswered": "تمت الإجابة عن الاستطلاع {0} مسبقًا.",
   "Survey_ScoreOutOfRange": "يجب أن يكون التقييم بين 1 و5.",
@@ -351,6 +357,17 @@
   "Deposit_ExceedsOrderTotal": "التسبيق يتجاوز المتبقي للتغطية في الملف ({0}).",
   "Deposit_OrderCancelled": "الملف {0} ملغى: لا يمكن سوى إرجاع التسبيق.",
   "Deposit_NotFound": "التسبيق غير موجود.",
+
+  "StorageLocations": {
+    "DeactivateConfirm": "تعطيل « {0} »؟ لن يُقترح بعد الآن في الاستقبال ولا في بنك المصل. تحتفظ الأنابيب المخزنة فيه ({1}) بهذا المكان.",
+    "RenamePrompt": "الاسم الجديد للمكان « {0} ». تحتفظ الأنابيب المخزنة سابقًا بالاسم القديم.",
+    "NewPrompt": "اسم مكان التخزين الجديد (ثلاجة، مجمّد، طاولة عمل…):",
+    "Notice": "لا تُقترح في الاستقبال وبنك المصل إلا الأماكن النشطة. إعادة تسمية مكان أو تعطيله لا تغيّر الأنابيب المخزنة سابقًا: فهي تحتفظ بالاسم المسجّل.",
+    "Rename": "إعادة التسمية",
+    "StoredSamples": "الأنابيب المخزنة",
+    "Name": "مكان التخزين",
+    "Title": "أماكن التخزين"
+  },
 
   "QualityHr": {
     "Hint.AccidentLog": "مرحلة من المتابعة مع المؤمِّن، مؤرخة ومسجلة في الملف.",
@@ -2933,6 +2950,10 @@
   },
 
   "Sample": {
+    "StorageListEmpty": "لا يوجد أي مكان تخزين معرّف لهذا الموقع: أنشئها في الإعدادات › أماكن التخزين.",
+    "StorageOutOfList": "{0} (خارج القائمة)",
+    "StorageChoose": "— اختر مكانًا —",
+    "StorageNotSpecified": "— غير محدد —",
     "EnterKey": "إدخال",
     "Scanned": "تم المسح",
     "FilterLongDelay": "تأخر طويل · {0}",
