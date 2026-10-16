@@ -23,27 +23,18 @@ public sealed class StatisticsView : LocalizedView
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<StatisticsView>? _logger;
 
-    private readonly Label _heading = new();
-    private readonly Label _fromLabel = new();
-    private readonly Label _toLabel = new();
-    private readonly DateTimePicker _from = new();
-    private readonly DateTimePicker _to = new();
-    private readonly ComboBox _preset = new();
-    private readonly Button _compute = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _export = UiTheme.SecondaryButton(string.Empty);
-
-    private readonly Label[] _figures = Enumerable.Range(0, 8).Select(_ => new Label()).ToArray();
+    private readonly PeriodBar _bar;
+    private readonly KpiTile[] _figures = Enumerable.Range(0, 8).Select(_ => new KpiTile()).ToArray();
 
     private readonly TabControl _tabs = new();
-    private readonly TabPage _departmentPage = new();
-    private readonly TabPage _testPage = new();
-    private readonly TabPage _payerPage = new();
-    private readonly TabPage _dayPage = new();
-
     private readonly DataGridView _departments = UiTheme.Grid();
     private readonly DataGridView _tests = UiTheme.Grid();
     private readonly DataGridView _payers = UiTheme.Grid();
     private readonly DataGridView _days = UiTheme.Grid();
+    private readonly TabPage _departmentPage;
+    private readonly TabPage _testPage;
+    private readonly TabPage _payerPage;
+    private readonly TabPage _dayPage;
 
     private ActivityStatistics? _result;
 
@@ -56,6 +47,12 @@ public sealed class StatisticsView : LocalizedView
         _output = output;
         _dialogs = dialogs;
         _logger = logger;
+        _bar = new PeriodBar(localizer);
+
+        _departmentPage = Pilotage.CardPage(_departments);
+        _testPage = Pilotage.CardPage(_tests);
+        _payerPage = Pilotage.CardPage(_payers);
+        _dayPage = Pilotage.CardPage(_days);
 
         BuildLayout();
         WireBehaviour();
@@ -63,102 +60,25 @@ public sealed class StatisticsView : LocalizedView
 
     public override string Title => T("Nav.Statistics");
 
-    private enum Preset { ThisMonth, LastMonth, ThisYear, LastYear, Custom }
-
     // ---- Layout ------------------------------------------------------------------------------------
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
-
-        var bar = new Panel { Dock = DockStyle.Top, Height = 86, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        foreach (var label in new[] { _fromLabel, _toLabel })
-        {
-            label.Font = UiTheme.Small;
-            label.ForeColor = UiTheme.TextSecondary;
-            label.AutoSize = true;
-        }
-
-        _preset.DropDownStyle = ComboBoxStyle.DropDownList;
-        _preset.FlatStyle = FlatStyle.Flat;
-        _preset.Bounds = new Rectangle(0, 52, 180, UiTheme.InputHeight);
-
-        _fromLabel.Location = new Point(196, 34);
-        _from.Format = DateTimePickerFormat.Short;
-        _from.Bounds = new Rectangle(196, 52, 130, UiTheme.InputHeight);
-
-        _toLabel.Location = new Point(338, 34);
-        _to.Format = DateTimePickerFormat.Short;
-        _to.Bounds = new Rectangle(338, 52, 130, UiTheme.InputHeight);
-
-        _compute.Bounds = new Rectangle(484, 50, 140, UiTheme.ButtonHeight);
-        _export.Bounds = new Rectangle(634, 50, 160, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _preset, _fromLabel, _from, _toLabel, _to, _compute, _export]);
-
-        // Key figures: two rows of four, large enough to read across a meeting room.
-        var figures = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            Height = 150,
-            ColumnCount = 4,
-            RowCount = 2,
-            BackColor = UiTheme.Surface,
-            Padding = new Padding(0, 6, 0, 6)
-        };
-        for (var i = 0; i < 4; i++)
-            figures.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
-        figures.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
-        figures.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
-
-        for (var i = 0; i < _figures.Length; i++)
-        {
-            var label = _figures[i];
-            label.Dock = DockStyle.Fill;
-            label.Font = UiTheme.SectionTitle;
-            label.ForeColor = UiTheme.TextPrimary;
-            label.BackColor = UiTheme.SurfaceRaised;
-            label.Margin = new Padding(0, 0, 8, 6);
-            label.Padding = new Padding(8, 4, 8, 4);
-            label.TextAlign = ContentAlignment.MiddleLeft;
-            figures.Controls.Add(label, i % 4, i / 4);
-        }
+        Padding = new Padding(24, 16, 24, 16);
 
         BuildColumns();
-
-        foreach (var (page, grid) in new[] { (_departmentPage, _departments), (_testPage, _tests),
-                                             (_payerPage, _payers), (_dayPage, _days) })
-        {
-            page.BackColor = UiTheme.Surface;
-            page.Controls.Add(grid);
-            _tabs.TabPages.Add(page);
-        }
-
+        _tabs.TabPages.AddRange([_departmentPage, _testPage, _payerPage, _dayPage]);
         _tabs.Dock = DockStyle.Fill;
 
+        // Key figures: two rows of four, large enough to read across a meeting room.
         Controls.Add(_tabs);
-        Controls.Add(figures);
-        Controls.Add(bar);
+        Controls.Add(ReportGrids.Tiles(_figures, 4, 172));
+        Controls.Add(Pilotage.Gap(14));
+        Controls.Add(_bar);
     }
 
     private static void AddColumn(DataGridView grid, string name, int weight, bool numeric = false) =>
-        grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = name, FillWeight = weight, ReadOnly = true,
-            SortMode = DataGridViewColumnSortMode.NotSortable,
-            DefaultCellStyle = new DataGridViewCellStyle
-            {
-                Font = numeric ? UiTheme.Monospace : UiTheme.Body,
-                Alignment = numeric ? DataGridViewContentAlignment.MiddleRight
-                                    : DataGridViewContentAlignment.MiddleLeft
-            }
-        });
+        ReportGrids.AddColumn(grid, name, weight, numeric);
 
     private void BuildColumns()
     {
@@ -186,75 +106,22 @@ public sealed class StatisticsView : LocalizedView
         AddColumn(_days, "date", 12);
         AddColumn(_days, "orders", 10, numeric: true);
         AddColumn(_days, "tests", 10, numeric: true);
+
+        // Codes and dates in the fixed-pitch face, as everywhere an identifier is read off a list.
+        foreach (var column in new[] { _departments.Column("code"), _tests.Column("code"), _days.Column("date") })
+            column.DefaultCellStyle.Font = UiTheme.Monospace;
     }
 
     private void WireBehaviour()
     {
-        _preset.SelectedIndexChanged += (_, _) => ApplyPreset();
-        _from.ValueChanged += (_, _) => MarkCustom();
-        _to.ValueChanged += (_, _) => MarkCustom();
-        _compute.Click += async (_, _) => await LoadAsync();
-        _export.Click += async (_, _) => await ExportAsync();
-    }
-
-    private bool _applyingPreset;
-
-    private void ApplyPreset()
-    {
-        if (_preset.SelectedItem is not EnumChoice { Value: var value }) return;
-
-        var today = DateTime.Today;
-        var month = new DateTime(today.Year, today.Month, 1);
-
-        (DateTime From, DateTime To)? range = (Preset)value switch
-        {
-            Preset.ThisMonth => (month, today),
-            Preset.LastMonth => (month.AddMonths(-1), month.AddDays(-1)),
-            Preset.ThisYear => (new DateTime(today.Year, 1, 1), today),
-            Preset.LastYear => (new DateTime(today.Year - 1, 1, 1), new DateTime(today.Year - 1, 12, 31)),
-            _ => null
-        };
-
-        if (range is not { } r) return;
-
-        _applyingPreset = true;
-        try
-        {
-            // Widened first so that a new start after the old end is never rejected by the picker.
-            _from.Value = r.From;
-            _to.Value = r.To;
-        }
-        finally
-        {
-            _applyingPreset = false;
-        }
-    }
-
-    private void MarkCustom()
-    {
-        if (_applyingPreset) return;
-        var custom = _preset.Items.Cast<EnumChoice>().FirstOrDefault(c => c.Value == (int)Preset.Custom);
-        if (custom is not null && !Equals(_preset.SelectedItem, custom)) _preset.SelectedItem = custom;
+        _bar.Compute.Click += async (_, _) => await LoadAsync();
+        _bar.Export.Click += async (_, _) => await ExportAsync();
     }
 
     protected override void ApplyTexts()
     {
-        _heading.Text = T("Statistics.Title");
-        _fromLabel.Text = T("Field.From");
-        _toLabel.Text = T("Field.To");
-        _compute.Text = T("Statistics.Compute");
-        _export.Text = T("Statistics.ExportCsv");
-
-        var selected = (_preset.SelectedItem as EnumChoice)?.Value ?? (int)Preset.ThisMonth;
-        _applyingPreset = true;
-        _preset.Items.Clear();
-        foreach (var preset in Enum.GetValues<Preset>())
-        {
-            var index = _preset.Items.Add(new EnumChoice((int)preset, T($"Statistics.Preset{preset}")));
-            if ((int)preset == selected) _preset.SelectedIndex = index;
-        }
-        _applyingPreset = false;
-        if (_result is null) ApplyPreset();
+        _bar.ApplyTexts();
+        _bar.Heading.Text = T("Statistics.Title");
 
         _departmentPage.Text = T("Statistics.ByDepartment");
         _testPage.Text = T("Statistics.ByTest");
@@ -298,11 +165,10 @@ public sealed class StatisticsView : LocalizedView
         try
         {
             UseWaitCursor = true;
-            var result = await _statistics.GetActivityAsync(DateOnly.FromDateTime(_from.Value.Date),
-                                                            DateOnly.FromDateTime(_to.Value.Date), ct);
+            var result = await _statistics.GetActivityAsync(_bar.From, _bar.To, ct);
             if (result.IsFailure)
             {
-                _dialogs.ShowFailure(result, _compute.Text);
+                _dialogs.ShowFailure(result, _bar.Compute.Text);
                 return;
             }
 
@@ -313,7 +179,7 @@ public sealed class StatisticsView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Computing activity statistics failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _compute.Text);
+            _dialogs.Warn(T("Message.UnexpectedError"), _bar.Compute.Text);
         }
         finally
         {
@@ -332,7 +198,8 @@ public sealed class StatisticsView : LocalizedView
         if (_result is not { } stats)
         {
             foreach (var label in _figures) label.Text = string.Empty;
-            _export.Enabled = false;
+            _bar.Subtitle.Text = string.Empty;
+            _bar.Export.Enabled = false;
             return;
         }
 
@@ -372,8 +239,8 @@ public sealed class StatisticsView : LocalizedView
             _days.Rows.Add(day.Date.ToString("ddd dd/MM/yy", CultureInfo.CurrentCulture),
                            day.OrderCount, day.TestCount);
 
-        _heading.Text = $"{T("Statistics.Title")} — {stats.From:dd/MM/yy} → {stats.To:dd/MM/yy}";
-        _export.Enabled = true;
+        _bar.Subtitle.Text = $"{ReportGrids.Date(stats.From)} → {ReportGrids.Date(stats.To)}";
+        _bar.Export.Enabled = true;
     }
 
     /// <summary>
@@ -382,7 +249,7 @@ public sealed class StatisticsView : LocalizedView
     /// </summary>
     private async Task ExportAsync()
     {
-        var grid = _tabs.SelectedTab?.Controls.OfType<DataGridView>().FirstOrDefault();
+        var grid = Pilotage.GridOf(_tabs.SelectedTab);
         if (grid is null || grid.Rows.Count == 0) return;
 
         // Patient, prescriber and test names come from the database: the shared cell neutralises
@@ -404,12 +271,12 @@ public sealed class StatisticsView : LocalizedView
         {
             var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray();
             var opened = await _output.OpenAsync(bytes, "csv");
-            if (opened.IsFailure) _dialogs.ShowFailure(opened, _export.Text);
+            if (opened.IsFailure) _dialogs.ShowFailure(opened, _bar.Export.Text);
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Exporting statistics failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _export.Text);
+            _dialogs.Warn(T("Message.UnexpectedError"), _bar.Export.Text);
         }
     }
 }

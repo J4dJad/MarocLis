@@ -20,7 +20,7 @@ public sealed class PrescriberStatisticsView : LocalizedView
     private readonly ILogger<PrescriberStatisticsView>? _logger;
 
     private readonly PeriodBar _bar;
-    private readonly Label[] _tiles = Enumerable.Range(0, 4).Select(_ => new Label()).ToArray();
+    private readonly KpiTile[] _tiles = Enumerable.Range(0, 4).Select(_ => new KpiTile()).ToArray();
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
 
     private readonly DataGridView _prescribers = UiTheme.Grid();
@@ -44,7 +44,7 @@ public sealed class PrescriberStatisticsView : LocalizedView
         _logger = logger;
         _bar = new PeriodBar(localizer);
 
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(24, 16, 24, 16);
 
         foreach (var grid in new[] { _prescribers, _new, _lost })
         {
@@ -73,16 +73,20 @@ public sealed class PrescriberStatisticsView : LocalizedView
         AddColumn(_detail, "tests", 9, numeric: true);
         AddColumn(_detail, "revenue", 12, numeric: true);
 
-        _pages = [Page(_prescribers), Page(_institutions), Page(_months), Page(_new), Page(_lost), Page(_detail)];
+        _months.Column("month").DefaultCellStyle.Font = UiTheme.Monospace;
+        _detail.Column("month").DefaultCellStyle.Font = UiTheme.Monospace;
+
+        _pages = [.. new[] { _prescribers, _institutions, _months, _new, _lost, _detail }.Select(Pilotage.CardPage)];
         _tabs.TabPages.AddRange(_pages);
 
         Controls.Add(_tabs);
-        Controls.Add(Tiles(_tiles, 4, 80));
+        Controls.Add(Tiles(_tiles, 4, 92));
+        Controls.Add(Pilotage.Gap(14));
         Controls.Add(_bar);
 
         _bar.Compute.Click += async (_, _) => await LoadAsync();
         _bar.Export.Click += async (_, _) =>
-            await ExportAsync(_tabs.SelectedTab?.Controls.OfType<DataGridView>().FirstOrDefault(), _output, _dialogs,
+            await ExportAsync(Pilotage.GridOf(_tabs.SelectedTab), _output, _dialogs,
                               _bar.Export.Text, Localizer);
     }
 
@@ -156,6 +160,7 @@ public sealed class PrescriberStatisticsView : LocalizedView
         if (_result is not { } s)
         {
             foreach (var tile in _tiles) tile.Text = string.Empty;
+            _bar.Subtitle.Text = string.Empty;
             return;
         }
 
@@ -199,7 +204,7 @@ public sealed class PrescriberStatisticsView : LocalizedView
                              d.Month.ToString("MM/yyyy", System.Globalization.CultureInfo.CurrentCulture),
                              Count(d.Figures.Orders), Count(d.Figures.Tests), Amount(d.Figures.Revenue));
 
-        _bar.Heading.Text = $"{T("Relations.PrescriberStatisticsTitle")} — {Date(s.From)} → {Date(s.To)}"
-                            + $"  ({T("Relations.ComparedWith")} {Date(s.PreviousFrom)} → {Date(s.PreviousTo)})";
+        _bar.Subtitle.Text = $"{Date(s.From)} → {Date(s.To)}"
+                             + $"  ({T("Relations.ComparedWith")} {Date(s.PreviousFrom)} → {Date(s.PreviousTo)})";
     }
 }

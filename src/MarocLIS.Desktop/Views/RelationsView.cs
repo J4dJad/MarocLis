@@ -31,18 +31,26 @@ public sealed class RelationsView : LocalizedView
     private readonly TabPage _duePage;
     private readonly TabPage _partnershipPage;
 
-    private readonly Button _newVisit = UiTheme.SecondaryButton(string.Empty);
+    // The main action of the tab in view is the page's primary button; the rare ones are under
+    // « Plus d'actions ».
+    private readonly Button _newVisit = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _editVisit = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _deleteVisit = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _newPartnership = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _newPartnership = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _editPartnership = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _attach = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _openFile = UiTheme.SecondaryButton(string.Empty);
-    private readonly CheckBox _inactive = new() { AutoSize = true, Margin = new Padding(8, 8, 0, 0) };
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly Button _more;
+    private readonly ToolStripMenuItem _deleteVisit = Pilotage.MenuItem("Action.Delete");
+    private readonly ToolStripMenuItem _attach = Pilotage.MenuItem();
+    private readonly ToolStripMenuItem _openFile = Pilotage.MenuItem();
+    private readonly CheckBox _inactive = new() { AutoSize = true };
     private readonly Label _notice = new()
     {
-        Dock = DockStyle.Top, Height = 22, Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary
+        Dock = DockStyle.Top, Height = 30, Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary,
+        TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true
     };
+
+    private int _visitCount, _dueCount, _partnershipCount;
+    private bool _loaded;
 
     public RelationsView(RelationsService relations, ICurrentUser currentUser, IDocumentOutput output,
                          IUserDialogs dialogs, ILocalizer localizer, ICultureManager cultureManager,
@@ -54,8 +62,9 @@ public sealed class RelationsView : LocalizedView
         _output = output;
         _dialogs = dialogs;
         _logger = logger;
-        _bar = new PeriodBar(localizer);
-        Padding = new Padding(UiTheme.Gutter);
+        _bar = new PeriodBar(localizer, primaryCompute: false);
+        _more = Pilotage.MoreButton(_moreMenu);
+        Padding = new Padding(24, 16, 24, 16);
 
         foreach (var grid in new[] { _visits, _due })
         {
@@ -79,28 +88,51 @@ public sealed class RelationsView : LocalizedView
         AddColumn(_partnerships, "contact", 14);
         AddColumn(_partnerships, "file", 12);
 
-        _visitPage = Page(_visits);
-        _duePage = Page(_due);
-        _partnershipPage = Page(_partnerships);
+        foreach (var grid in new[] { _visits, _due })
+        {
+            grid.Column("date").DefaultCellStyle.Font = UiTheme.Monospace;
+            grid.Column("next").DefaultCellStyle.Font = UiTheme.Monospace;
+        }
+        _partnerships.Column("start").DefaultCellStyle.Font = UiTheme.Monospace;
+        _partnerships.Column("end").DefaultCellStyle.Font = UiTheme.Monospace;
+        _partnerships.Column("reference").DefaultCellStyle.Font = UiTheme.Monospace;
+
+        // The state of a convention as a pill: in force, ending soon, or out of force.
+        Pilotage.Pills(_partnerships, "state", row => row.Tag is not PartnershipRow p ? null
+            : !p.IsActive ? (UiTheme.SurfaceSunken, UiTheme.TextSecondary, "○")
+            : p.EndingSoon ? (UiTheme.AbnormalBackground, UiTheme.Abnormal, "!")
+            : p.InForce ? (UiTheme.NormalBackground, UiTheme.Normal, "✓")
+            : (UiTheme.SurfaceSunken, UiTheme.TextSecondary, "○"));
+
+        _visitPage = Pilotage.CardPage(_visits);
+        _duePage = Pilotage.CardPage(_due);
+        _partnershipPage = Pilotage.CardPage(_partnerships);
         _tabs.TabPages.AddRange([_visitPage, _duePage, _partnershipPage]);
 
         var manage = currentUser.Has(Permissions.Relations.Manage);
-        foreach (var button in new[] { _newVisit, _editVisit, _deleteVisit, _newPartnership, _editPartnership, _attach })
-        {
-            button.AutoSize = true;
+        foreach (var button in new[] { _newVisit, _editVisit, _newPartnership, _editPartnership })
             button.Visible = manage;
-        }
-        _openFile.AutoSize = true;
-        _bar.Extra.Controls.AddRange([_newVisit, _editVisit, _deleteVisit, _newPartnership, _editPartnership, _attach,
-                                      _openFile, _inactive]);
+        _deleteVisit.Available = _attach.Available = manage;
+
+        _moreMenu.Items.AddRange([_deleteVisit, _attach, _openFile]);
+        _bar.Extra.Controls.AddRange([_editVisit, _editPartnership, _more]);
+        _bar.Lead.Controls.AddRange([_newVisit, _newPartnership]);
+        // The tick box goes at the end of the notice line: beside the dates it ran off a
+        // 1366-pixel screen.
+        var noticeLine = new Panel { Dock = DockStyle.Top, Height = _notice.Height, BackColor = UiTheme.Surface };
+        _notice.Dock = DockStyle.Fill;
+        _inactive.Dock = DockStyle.Right;
+        _inactive.Padding = new Padding(12, 0, 0, 0);
+        noticeLine.Controls.Add(_notice);
+        noticeLine.Controls.Add(_inactive);
 
         Controls.Add(_tabs);
-        Controls.Add(_notice);
+        Controls.Add(noticeLine);
         Controls.Add(_bar);
 
         _bar.Compute.Click += async (_, _) => await LoadAsync();
         _bar.Export.Click += async (_, _) =>
-            await ExportAsync(_tabs.SelectedTab?.Controls.OfType<DataGridView>().FirstOrDefault(), _output, _dialogs,
+            await ExportAsync(Pilotage.GridOf(_tabs.SelectedTab), _output, _dialogs,
                               _bar.Export.Text, Localizer);
         _tabs.SelectedIndexChanged += (_, _) => UpdateButtons();
         _inactive.CheckedChanged += async (_, _) => await LoadAsync();
@@ -127,9 +159,12 @@ public sealed class RelationsView : LocalizedView
     private void UpdateButtons()
     {
         var manage = _currentUser.Has(Permissions.Relations.Manage);
-        _newVisit.Visible = _editVisit.Visible = _deleteVisit.Visible = manage && !OnPartnerships;
-        _newPartnership.Visible = _editPartnership.Visible = _attach.Visible = manage && OnPartnerships;
-        _openFile.Visible = _inactive.Visible = OnPartnerships;
+        _newVisit.Visible = _editVisit.Visible = manage && !OnPartnerships;
+        _deleteVisit.Available = manage && !OnPartnerships;
+        _newPartnership.Visible = _editPartnership.Visible = manage && OnPartnerships;
+        _attach.Available = manage && OnPartnerships;
+        _openFile.Available = _inactive.Visible = OnPartnerships;
+        Pilotage.SyncMore(_more, _moreMenu);
     }
 
     protected override void ApplyTexts()
@@ -148,12 +183,14 @@ public sealed class RelationsView : LocalizedView
         _attach.Text = T("Relations.AttachDocument");
         _openFile.Text = T("Relations.OpenDocument");
         _inactive.Text = T("Relations.ShowInactive");
+        _more.Text = T("ResultEntry.MoreActions");
         _notice.Text = T("Relations.FollowUpNotice");
 
         foreach (var grid in new[] { _visits, _due, _partnerships })
             foreach (DataGridViewColumn column in grid.Columns)
                 column.HeaderText = T($"Relations.Column.{column.Name}");
 
+        if (_loaded) ShowCounts();
         UpdateButtons();
     }
 
@@ -171,8 +208,11 @@ public sealed class RelationsView : LocalizedView
             var partnerships = await _relations.GetPartnershipsAsync(_inactive.Checked, ct);
 
             FillVisits(_visits, visits.Value);
-            if (due.IsSuccess) FillVisits(_due, due.Value);
-            if (partnerships.IsSuccess) FillPartnerships(partnerships.Value);
+            _visitCount = visits.Value.Count;
+            if (due.IsSuccess) { FillVisits(_due, due.Value); _dueCount = due.Value.Count; }
+            if (partnerships.IsSuccess) { FillPartnerships(partnerships.Value); _partnershipCount = partnerships.Value.Count; }
+            _loaded = true;
+            ShowCounts();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -185,6 +225,9 @@ public sealed class RelationsView : LocalizedView
             UseWaitCursor = false;
         }
     }
+
+    private void ShowCounts() =>
+        _bar.Subtitle.Text = T("Relations.Counts", _visitCount, _dueCount, _partnershipCount);
 
     private void FillVisits(DataGridView grid, IReadOnlyList<DelegateVisitRow> rows)
     {
@@ -238,7 +281,7 @@ public sealed class RelationsView : LocalizedView
                 return false;
             }
             return true;
-        });
+        }, intro: T("Relations.VisitIntro"));
 
         date = dialog.Date(T("Field.Date"), existing?.VisitDate);
         prescriber = dialog.Choice(T("Relations.Column.prescriber"),
@@ -308,7 +351,7 @@ public sealed class RelationsView : LocalizedView
                 return false;
             }
             return true;
-        }, height: 640);
+        }, height: 640, intro: T("Relations.PartnershipIntro"));
 
         name = dialog.TextField(T("Relations.Column.partner"), existing?.PartnerName);
         var partnerKind = dialog.Choice(T("Relations.Column.partnerKind"),

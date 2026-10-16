@@ -21,7 +21,7 @@ public sealed class SteeringView : LocalizedView
     private readonly ILogger<SteeringView>? _logger;
 
     private readonly PeriodBar _bar;
-    private readonly Label[] _tiles = Enumerable.Range(0, 8).Select(_ => new Label()).ToArray();
+    private readonly KpiTile[] _tiles = Enumerable.Range(0, 8).Select(_ => new KpiTile()).ToArray();
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
     private readonly DataGridView _days = UiTheme.Grid();
     private readonly DataGridView _sites = UiTheme.Grid();
@@ -42,7 +42,7 @@ public sealed class SteeringView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
         _bar = new PeriodBar(localizer);
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(24, 16, 24, 16);
 
         foreach (var grid in new[] { _days, _sites, _payers, _prescribers })
         {
@@ -60,16 +60,17 @@ public sealed class SteeringView : LocalizedView
         AddColumn(_quality, "indicator", 40);
         AddColumn(_quality, "value", 20, numeric: true);
 
-        _pages = [Page(_days), Page(_sites), Page(_payers), Page(_prescribers), Page(_ageing), Page(_quality)];
+        _pages = [.. new[] { _days, _sites, _payers, _prescribers, _ageing, _quality }.Select(Pilotage.CardPage)];
         _tabs.TabPages.AddRange(_pages);
 
         Controls.Add(_tabs);
-        Controls.Add(Tiles(_tiles, 4, 150));
+        Controls.Add(Tiles(_tiles, 4, 172));
+        Controls.Add(Pilotage.Gap(14));
         Controls.Add(_bar);
 
         _bar.Compute.Click += async (_, _) => await LoadAsync();
         _bar.Export.Click += async (_, _) =>
-            await ExportAsync(_tabs.SelectedTab?.Controls.OfType<DataGridView>().FirstOrDefault(), _output, _dialogs,
+            await ExportAsync(Pilotage.GridOf(_tabs.SelectedTab), _output, _dialogs,
                               _bar.Export.Text, Localizer);
     }
 
@@ -123,6 +124,7 @@ public sealed class SteeringView : LocalizedView
         if (_result is not { } d)
         {
             foreach (var tile in _tiles) tile.Text = string.Empty;
+            _bar.Subtitle.Text = string.Empty;
             return;
         }
 
@@ -134,7 +136,7 @@ public sealed class SteeringView : LocalizedView
         _tiles[2].Text = Tile("Steering.Column.reagentCost", Mad(d.Margin.ReagentCost));
         _tiles[3].Text = Tile("Steering.Column.margin", $"{Mad(d.Margin.Margin)} · {Share(d.Margin.MarginPercent)}");
         _tiles[4].Text = Tile("Steering.OverdueReceivables", $"{Mad(d.Overdue)} / {Mad(d.Outstanding)}");
-        _tiles[4].ForeColor = d.Overdue > 0m ? UiTheme.Overdue : UiTheme.TextPrimary;
+        _tiles[4].Emphasis = d.Overdue > 0m ? UiTheme.Overdue : null;
 
         // Without the salary right the payroll tile is not shown at all, not shown empty.
         _tiles[5].Visible = d.Payroll is not null;
@@ -179,6 +181,6 @@ public sealed class SteeringView : LocalizedView
                           d.AverageTurnaroundHours is { } tat ? $"{tat:0.0} h" : "—");
         _quality.Rows.Add(T("Statistics.OnTime"), Share(d.OnTimePercent));
 
-        _bar.Heading.Text = $"{T("Steering.Title")} — {Date(d.From)} → {Date(d.To)} · {T("Steering.Sites", d.SiteCount)}";
+        _bar.Subtitle.Text = $"{Date(d.From)} → {Date(d.To)} · {T("Steering.Sites", d.SiteCount)}";
     }
 }

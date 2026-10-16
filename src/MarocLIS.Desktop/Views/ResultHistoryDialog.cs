@@ -39,11 +39,10 @@ internal sealed class ResultHistoryDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(800, 500);
-        MinimumSize = new Size(560, 400);
-        BackColor = UiTheme.SurfaceRaised;
+        ClientSize = new Size(800, 560);
+        MinimumSize = new Size(560, 460);
+        BackColor = UiTheme.Surface;
         Font = UiTheme.Body;
-        Padding = new Padding(UiTheme.Gutter);
         KeyPreview = true;
 
         _chart.Dock = DockStyle.Fill;
@@ -52,23 +51,28 @@ internal sealed class ResultHistoryDialog : Form
         _chart.SetSeries(series);
 
         BuildColumns();
-        _grid.Dock = DockStyle.Bottom;
-        _grid.Height = 160;
         _grid.MultiSelect = false;
         _grid.CellFormatting += (_, e) => OnCellFormatting(e, series);
 
-        var gap = new Panel { Dock = DockStyle.Bottom, Height = UiTheme.GutterTight, BackColor = BackColor };
+        // The curve and the table each in a white card on the work surface, between the head and
+        // the foot of the dialog.
+        var chartCard = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised, Padding = new Padding(8) };
+        chartCard.Controls.Add(_chart);
+        UiChrome.AsCard(chartCard);
 
-        var buttons = new Panel { Dock = DockStyle.Bottom, Height = 44, BackColor = BackColor };
+        var tableCard = new ListCard(_grid) { Dock = DockStyle.Bottom, Height = 170 };
+
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface, Padding = new Padding(16, 14, 16, 14) };
+        body.Controls.Add(chartCard);
+        body.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 12, BackColor = UiTheme.Surface });
+        body.Controls.Add(tableCard);
+
         var close = UiTheme.SecondaryButton(T("Action.Close"));
-        close.Size = new Size(140, UiTheme.ButtonHeight);
         close.DialogResult = DialogResult.Cancel;
-        buttons.Controls.Add(close);
-        buttons.Resize += (_, _) =>
-            close.Location = new Point(buttons.ClientSize.Width - close.Width, 10);
 
-        // First in the collection docks last: the chart takes what the table and buttons leave.
-        Controls.AddRange([_chart, gap, _grid, buttons]);
+        Controls.Add(body);
+        Controls.Add(DialogFrame.Foot(null, close));
+        Controls.Add(DialogFrame.Head(Text, Summary(series), 800));
 
         CancelButton = close;
 
@@ -78,6 +82,21 @@ internal sealed class ResultHistoryDialog : Form
     }
 
     private string T(string key) => _localizer[key];
+
+    /// <summary>The head's sentence: how many validated values, and the interval they are read against.</summary>
+    private string Summary(ResultTrendSeries series)
+    {
+        var count = _localizer.Format("Result.HistoryCount", series.Points.Count);
+        var format = "N" + series.Decimals;
+        var interval = (series.LowerLimit, series.UpperLimit) switch
+        {
+            ({ } low, { } high) => $"{low.ToString(format)} – {high.ToString(format)}",
+            ({ } low, null) => $"≥ {low.ToString(format)}",
+            (null, { } high) => $"≤ {high.ToString(format)}",
+            _ => null
+        };
+        return interval is null ? count : $"{count} · {_localizer.Format("Result.HistoryInterval", interval)}";
+    }
 
     private void BuildColumns()
     {
