@@ -2376,6 +2376,8 @@
   },
 
   "Shortcut": {
+    "DeleteKey": "Suppr",
+    "EnterKey": "Entrée",
     "ShiftKey": "Maj",
     "Screen": "Ouvrir : {0}",
     "Refresh": "Actualiser l'écran",

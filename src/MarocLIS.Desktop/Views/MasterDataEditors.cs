@@ -307,9 +307,17 @@ internal abstract class MasterDataEditor : Form
 
         Controls.Add(body);
 
+        // Wider by the scroll bar: the fields were drawn to the dialog's full width, and the bar
+        // took its last pixels, which added a horizontal bar and hid the edge of the right column
+        // (the start of each row in Arabic).
+        var bar = SystemInformation.VerticalScrollBarWidth;
+        body.Width += bar;
+        _accept.Left += bar;
+        _dismiss.Left += bar;
+
         _accept.Top -= shift;
         _dismiss.Top -= shift;
-        ClientSize = new Size(ClientSize.Width, available);
+        ClientSize = new Size(ClientSize.Width + bar, available);
 
         ResumeLayout(performLayout: true);
     }
@@ -424,6 +432,14 @@ internal sealed class InstrumentEditorDialog : MasterDataEditor
                               _stored?.MaintenanceContractReference, latin: true);
         _support = TextField("Equipment.SupportPhone", 560, 176, 140, _stored?.SupportPhone,
                              latin: true, mono: true);
+        // The lengths of the columns: a longer value was refused by the database with an unexpected
+        // error, and the form was lost with it.
+        _code.MaxLength = 30;
+        _nameFr.MaxLength = _nameAr.MaxLength = 300;
+        _location.MaxLength = _manufacturer.MaxLength = _model.MaxLength = 150;
+        _serial.MaxLength = _contract.MaxLength = 100;
+        _software.MaxLength = 60;
+        _support.MaxLength = 30;
 
         _contractUntil = OptionalDate("Equipment.ContractValidUntil", 20, 232,
                                        row?.ContractValidUntil);

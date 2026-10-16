@@ -111,7 +111,7 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
         _cnss = TextField("Personnel.Cnss", c1, y, w, r?.CnssNumber, latin: true, mono: true);
         _cnss.MaxLength = 20;
         _family = Choice("Personnel.FamilyStatus", c2, y, w, r?.FamilyStatus ?? FamilyStatus.Unmarried, "FamilyStatus");
-        _children = Number("Personnel.Children", c3, y, 80, r?.DependentChildren ?? 0, max: 20);
+        _children = Number("Personnel.Children", c3, y, 120, r?.DependentChildren ?? 0, max: 20);
 
         y += 52;
         _phone = TextField("Field.Phone", c1, y, w, r?.Phone, latin: true);
@@ -162,7 +162,7 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
 
         y += 52;
         _trialEnd = OptionalDate("Personnel.TrialEnd", c1, y - 2, r?.TrialPeriodEndDate);
-        _weeklyHours = Number("Personnel.WeeklyHours", c2, y, 80, r?.WeeklyHours ?? 44m, max: 60m, decimals: 2);
+        _weeklyHours = Number("Personnel.WeeklyHours", c2, y, 120, r?.WeeklyHours ?? 44m, max: 60m, decimals: 2);
 
         var endNotice = Notice(c3, y + 4, w, 34, "Personnel.ContractEndNotice", UiTheme.Abnormal);
         void RefreshEndNotice() => endNotice.Visible = Employee.RequiresEndDate(Selected<ContractType>(_contract));

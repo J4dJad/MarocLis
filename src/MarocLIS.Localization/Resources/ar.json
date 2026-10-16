@@ -924,7 +924,7 @@
     "PlanStraightLine": "أساس الاهتلاك {0} درهم · النسبة الثابتة {1}",
     "VatRecoverable": "ضريبة قابلة للاسترجاع",
     "Vat": "الضريبة على القيمة المضافة (درهم)",
-    "CostExcludingVat": "التكلفة دون احتساب الضريبة (درهم)",
+    "CostExcludingVat": "التكلفة دون الضريبة (درهم)",
     "ResidualValue": "القيمة المتبقية (درهم)",
     "InstrumentNoPurchaseDate": "لا يوجد تاريخ شراء في بطاقة الجهاز.",
     "InstrumentBought": "جهاز تم شراؤه في {0}.",
@@ -2376,6 +2376,8 @@
   },
 
   "Shortcut": {
+    "DeleteKey": "Del",
+    "EnterKey": "Enter",
     "ShiftKey": "Shift",
     "Screen": "فتح: {0}",
     "Refresh": "تحديث الشاشة",
