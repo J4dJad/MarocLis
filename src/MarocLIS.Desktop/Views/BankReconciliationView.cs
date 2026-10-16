@@ -35,8 +35,14 @@ public sealed class BankReconciliationView : LocalizedView
     private readonly Button _match = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _justify = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _unmatch = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _withdrawImport = UiTheme.SecondaryButton(string.Empty);
+
+    // Withdrawing a whole import is rare and heavy: under « Plus d'actions ▾ ».
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly MenuAction _withdrawImport = new();
+
+    // « Lignes ouvertes seulement » is kept as the tick box it was, off screen; a chip sets it.
     private readonly CheckBox _openOnly = new() { AutoSize = true };
+    private readonly ChipButton _openChip = new() { Height = 30 };
 
     private readonly Label _linesTitle = new();
     private readonly Label _movementsTitle = new();
@@ -64,6 +70,7 @@ public sealed class BankReconciliationView : LocalizedView
         _refresh.Click += async (_, _) => await LoadAsync();
         _account.SelectedIndexChanged += async (_, _) => await LoadAsync();
         _openOnly.CheckedChanged += (_, _) => Render();
+        _openOnly.CheckedChanged += (_, _) => RenderChip();
         _accounts.Click += async (_, _) => await RunBusyAsync(ManageAccountsAsync);
         _import.Click += async (_, _) => await RunBusyAsync(ImportAsync);
         _auto.Click += async (_, _) => await RunBusyAsync(AutoMatchAsync);
@@ -87,46 +94,28 @@ public sealed class BankReconciliationView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(24, 20, 24, 16);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 110, BackColor = UiTheme.Surface };
+        var more = FinanceUi.MoreButton(_moreMenu, Localizer, _withdrawImport);
+        var header = FinanceUi.PageHeader(_heading, null, more, _accounts, _import);
 
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
+        _account.Width = 320;
+        _from.Width = 120;
+        _to.Width = 120;
+        _openChip.Click += (_, _) => _openOnly.Checked = !_openOnly.Checked;
 
-        foreach (var label in new[] { _accountLabel, _fromLabel, _toLabel })
-        {
-            label.Font = UiTheme.Small;
-            label.ForeColor = UiTheme.TextSecondary;
-            label.AutoSize = true;
-        }
-
-        _accountLabel.Location = new Point(0, 34);
-        _account.Bounds = new Rectangle(0, 52, 320, UiTheme.InputHeight);
-        _fromLabel.Location = new Point(332, 34);
-        _from.Bounds = new Rectangle(332, 52, 120, UiTheme.InputHeight);
-        _toLabel.Location = new Point(462, 34);
-        _to.Bounds = new Rectangle(462, 52, 120, UiTheme.InputHeight);
-        _refresh.Bounds = new Rectangle(592, 50, 110, UiTheme.ButtonHeight);
-        _accounts.Bounds = new Rectangle(712, 50, 150, UiTheme.ButtonHeight);
-        _import.Bounds = new Rectangle(872, 50, 170, UiTheme.ButtonHeight);
-
-        _auto.Bounds = new Rectangle(0, 82, 220, UiTheme.ButtonHeight);
-        _match.Bounds = new Rectangle(230, 82, 170, UiTheme.ButtonHeight);
-        _justify.Bounds = new Rectangle(410, 82, 150, UiTheme.ButtonHeight);
-        _unmatch.Bounds = new Rectangle(570, 82, 170, UiTheme.ButtonHeight);
-        _withdrawImport.Bounds = new Rectangle(750, 82, 190, UiTheme.ButtonHeight);
-        _openOnly.Location = new Point(952, 86);
-
-        bar.Controls.AddRange([_heading, _accountLabel, _account, _fromLabel, _from, _toLabel, _to, _refresh,
-                               _accounts, _import, _auto, _match, _justify, _unmatch, _withdrawImport, _openOnly]);
+        var filters = FinanceUi.FilterRow(FinanceUi.Inline(_accountLabel, _account), FinanceUi.Inline(_fromLabel, _from),
+                                          FinanceUi.Inline(_toLabel, _to), _refresh, _openChip);
 
         AddColumns(_lines, ("date", 9), ("label", 30), ("reference", 12), ("amount", 11), ("status", 18));
         AddColumns(_movements, ("date", 9), ("kind", 16), ("label", 26), ("reference", 13), ("amount", 11));
-        _lines.Columns["amount"]!.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
-        _movements.Columns["amount"]!.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        foreach (var grid in new[] { _lines, _movements })
+        {
+            grid.Columns["amount"]!.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+            grid.Columns["amount"]!.DefaultCellStyle.Font = UiTheme.Monospace;
+            grid.Columns["date"]!.DefaultCellStyle.Font = UiTheme.Monospace;
+            grid.Columns["reference"]!.DefaultCellStyle.Font = UiTheme.Monospace;
+        }
 
         // Several movements against one line: a cheque remittance, a day's card batch split in two.
         _movements.MultiSelect = true;
@@ -138,22 +127,45 @@ public sealed class BankReconciliationView : LocalizedView
             e.CellStyle!.ForeColor = row.DifferenceMad != 0m ? UiTheme.Abnormal : UiTheme.Normal;
         };
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, SplitterWidth = 6 };
-        split.Panel1.Controls.Add(_lines);
-        split.Panel1.Controls.Add(SectionLabel(_linesTitle));
-        split.Panel2.Controls.Add(_movements);
-        split.Panel2.Controls.Add(SectionLabel(_movementsTitle));
+        // A line still open as a pill; a reconciled one keeps its text, which names the match.
+        FinanceUi.PillColumn(_lines, "status", row => row.Tag is StatementLineRow { IsReconciled: false }
+            ? FinanceUi.PillWarning
+            : null);
+
+        var split = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            SplitterWidth = 12,
+            BackColor = UiTheme.Surface
+        };
+        split.Panel1.Controls.Add(new FinanceCard(_lines, FinanceUi.CardHeader(_linesTitle, null)));
+        split.Panel2.Controls.Add(new FinanceCard(_movements, FinanceUi.CardHeader(_movementsTitle, null)));
         split.HandleCreated += (_, _) => split.SplitterDistance = Math.Max(100, split.Width / 2);
 
-        _summary.Dock = DockStyle.Bottom;
-        _summary.Height = 64;
+        // The balances, then the actions on the selected line; the automatic match at the far end.
+        _summary.Dock = DockStyle.Fill;
         _summary.Font = UiTheme.Monospace;
         _summary.ForeColor = UiTheme.TextPrimary;
-        _summary.Padding = new Padding(0, 6, 0, 0);
+        _summary.Padding = new Padding(16, 8, 16, 0);
+        _summary.RightToLeft = RightToLeft.No;
+
+        var bar = FinanceUi.ActionBar(null, [_match, _justify, _unmatch], _auto);
+        var footer = new FinanceCard(_summary, footer: bar) { Dock = DockStyle.Bottom, Height = 132 };
+        var gap = new Panel { Dock = DockStyle.Bottom, Height = 12, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
 
         Controls.Add(split);
-        Controls.Add(_summary);
-        Controls.Add(bar);
+        Controls.Add(gap);
+        Controls.Add(footer);
+        Controls.Add(filters);
+        Controls.Add(header);
+    }
+
+    private void RenderChip()
+    {
+        var open = _data?.Lines.Count(l => !l.IsReconciled);
+        _openChip.Text = open is { } count ? $"{T("Treasury.OpenOnly")} · {count}" : T("Treasury.OpenOnly");
+        _openChip.Selected = _openOnly.Checked;
     }
 
     internal static Label SectionLabel(Label label)
@@ -263,6 +275,7 @@ public sealed class BankReconciliationView : LocalizedView
     {
         _lines.Rows.Clear();
         _movements.Rows.Clear();
+        RenderChip();
 
         if (_data is null)
         {
