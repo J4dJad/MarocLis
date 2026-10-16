@@ -198,6 +198,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         RefreshSubcontracting();
 
         Buttons(710, 760);
+        UseAdminFrame();
     }
 
     private void RefreshComputed()
@@ -530,6 +531,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         RefreshEnablement();
 
         Buttons(644, 780);
+        UseAdminFrame();
     }
 
     private TextBox Bare(int x, int y, int width, decimal? value)
@@ -957,6 +959,7 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
         RefreshSpecificity();
 
         Buttons(500, 700);
+        UseAdminFrame();
     }
 
     private TextBox Bare(int x, int y, int width, decimal? value, int decimals)
@@ -1130,6 +1133,7 @@ internal sealed class RangeReviewDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(RangeReviewDialog)));
     }
 }
 
@@ -1264,6 +1268,7 @@ internal sealed class TariffEditorDialog : MasterDataEditor
         RefreshComputed();
 
         Buttons(400, 620);
+        UseAdminFrame();
     }
 
     private void RefreshVat()
@@ -1499,6 +1504,7 @@ internal sealed class PanelEditorDialog : MasterDataEditor
         RefreshTotal();
 
         Buttons(548, 780);
+        UseAdminFrame();
     }
 
     private void RefreshTotal()
@@ -1690,6 +1696,7 @@ internal sealed class ReflexRuleEditorDialog : MasterDataEditor
         Shown += async (_, _) => await LoadParametersAsync(existing?.TriggerParameterId);
 
         Buttons(440, 660);
+        UseAdminFrame();
     }
 
     private async Task LoadParametersAsync(Guid? preselect = null)
@@ -1997,6 +2004,7 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
                 .Text = Localizer.Format("Catalog.NomenclatureInUseNotice", existing.UsageCount);
 
         Buttons(ClientSize.Height - 54, 620);
+        UseAdminFrame();
     }
 
     /// <summary>
