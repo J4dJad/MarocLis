@@ -464,6 +464,12 @@ internal sealed class QhSelectionBar : Panel
         Place();
     }
 
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        Place();
+    }
+
     private void Place()
     {
         if (_placing || Width <= 0) return;
@@ -472,7 +478,9 @@ internal sealed class QhSelectionBar : Panel
         {
             var rtl = RightToLeft == RightToLeft.Yes;
             var inner = new Rectangle(Padding.Left, Padding.Top, Width - Padding.Horizontal, 0);
-            var shown = _actions.Where(a => a.Visible || !IsHandleCreated).ToList();
+            // While the bar itself is not shown (the view still loading, a hidden tab), every
+            // child reports Visible = false, so only an action hidden on purpose is left out then.
+            var shown = _actions.Where(a => a.Visible || !Visible || !IsHandleCreated).ToList();
 
             // The actions from the far end inwards, the last given at the far end.
             var lines = new List<List<Control>> { new() };
@@ -526,7 +534,14 @@ internal sealed class QhSelectionBar : Panel
             }
 
             var wanted = Padding.Vertical + Math.Max(actionsHeight, 20);
-            if (Height != wanted) Height = wanted;
+            if (Height != wanted)
+            {
+                Height = wanted;
+                // Changed while the parent docks its children: the parent has to dock again, or
+                // the bar keeps its old top and slides under the list or off the card.
+                if (Parent is { IsHandleCreated: true } parent)
+                    parent.BeginInvoke(new Action(() => parent.PerformLayout()));
+            }
         }
         finally
         {
@@ -769,6 +784,14 @@ internal sealed class QhAside : Panel
         foreach (Label value in _facts.Controls.OfType<Label>())
             value.MaximumSize = new Size(_facts.GetColumn(value) == 0 ? 108 : Math.Max(80, width - 116), 0);
         ActionsPanel.MaximumSize = new Size(width, 0);
+        // A caption longer than the aside wraps on two lines instead of being cut.
+        foreach (Button button in ActionsPanel.Controls.OfType<Button>())
+        {
+            button.AutoSize = true;
+            if (button.PreferredSize.Width <= width - 8) continue;
+            button.AutoSize = false;
+            button.Size = new Size(width - 8, 50);
+        }
     }
 }
 

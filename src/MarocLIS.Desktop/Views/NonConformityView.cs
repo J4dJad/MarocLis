@@ -42,7 +42,8 @@ public sealed class NonConformityView : LocalizedView
     private readonly Button _addAction = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _completeAction = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _analysis = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _close = UiTheme.PrimaryButton(string.Empty);
+    // Secondary: opening a file is the screen's one primary action.
+    private readonly Button _close = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _reopen = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _dismiss = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _cancelAction = UiTheme.SecondaryButton(string.Empty);
@@ -117,7 +118,7 @@ public sealed class NonConformityView : LocalizedView
         _aside.SetActions(_analysis, _close, _reopen, _dismiss);
         _aside.AddBelow(QhPage.StatusLine(_status));
 
-        Controls.Add(QhPage.Frame(2, header, toolbar, QhPage.WithAside(split, _aside, 300)));
+        Controls.Add(QhPage.Frame(2, header, toolbar, QhPage.WithAside(split, _aside, 320)));
 
         SetDetailEnabled(false);
     }

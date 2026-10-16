@@ -52,6 +52,10 @@ public sealed class QualityControlView : LocalizedView
     private readonly Button _reviewAction = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _establishLimits = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _editRules = UiTheme.SecondaryButton(string.Empty);
+    // The control's limits and rules are set once in a while: they wait behind « Plus d'actions »
+    // in the chart's heading, the two buttons kept (hidden) for their rights and their state.
+    private readonly Button _chartMore = UiTheme.SecondaryButton(string.Empty);
+    private readonly ContextMenuStrip _chartMenu = new();
     private readonly Label _status = new();
 
     private readonly Label _title = new();
@@ -148,13 +152,22 @@ public sealed class QualityControlView : LocalizedView
         var chartBody = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
 
         _chart.Dock = DockStyle.Fill;
+        // The chart asks 200 px; at 1366 × 768 the card leaves it a little less under the rules
+        // line, and a docked control larger than its room covers the line.
+        _chart.MinimumSize = new Size(280, 140);
 
-        var chartBar = new QhSelectionBar(_rulesLine, _establishLimits, _editRules);
+        var chartBar = new QhSelectionBar(_rulesLine);
 
         chartBody.Controls.Add(_chart);
         chartBody.Controls.Add(chartBar);
+        chartBody.Controls.Add(QhMenu.Holder(_establishLimits, _editRules));
 
-        var chartCard = QhPage.TitledCard(_chartHeading, null, chartBody);
+        _chartMenu.Items.Add(QhMenu.For(_establishLimits, async (_, _) => await RunBusyAsync(EstablishLimitsAsync)));
+        _chartMenu.Items.Add(QhMenu.For(_editRules, async (_, _) => await RunBusyAsync(EditRulesAsync)));
+        _chartMenu.Opening += (_, e) => e.Cancel = !_establishLimits.Enabled && !_editRules.Enabled;
+        _chartMore.Margin = new Padding(8, 6, 0, 0);
+
+        var chartCard = QhPage.TitledCard(_chartHeading, null, chartBody, QhPage.MoreButton(_chartMore, _chartMenu));
         chartCard.Dock = DockStyle.Fill;
 
         topSplit.Panel1.Controls.Add(entryCard);
@@ -347,6 +360,7 @@ public sealed class QualityControlView : LocalizedView
         _reviewAction.Text = T("Quality.Review");
         _establishLimits.Text = T("Quality.EstablishLimits");
         _editRules.Text = T("Quality.EditRules");
+        _chartMore.Text = T("ResultEntry.MoreActions");
         _startEvaluation.Text = T("Qc.StartEvaluation");
         _stopEvaluation.Text = T("Qc.StopEvaluation");
         if (_lotAnalyser.Items.Count > 0 && _lotAnalyser.Items[0] is AnalyserChoice { Id: null })
@@ -585,13 +599,14 @@ public sealed class QualityControlView : LocalizedView
     private void RenderCount() =>
         _count.Text = Localizer.Format("QualityHr.Qc.Count", _rows.Count, _pendingReview.Count);
 
-    /// <summary>The Westgard rules by their short names, as the bench says them: 1₂ₛ, 1₃ₛ, R₄ₛ…</summary>
+    /// <summary>The Westgard rules by their short names, as the bench says them: 1-2s, 1-3s, R-4s…</summary>
     private static readonly (WestgardRule Rule, string Name)[] RuleNames =
     [
-        (WestgardRule.OneTwoS, "1₂ₛ"), (WestgardRule.OneThreeS, "1₃ₛ"), (WestgardRule.TwoTwoS, "2₂ₛ"),
-        (WestgardRule.R4S, "R₄ₛ"), (WestgardRule.ThreeOneS, "3₁ₛ"), (WestgardRule.FourOneS, "4₁ₛ"),
-        (WestgardRule.TwoOfThreeTwoS, "2/3₂ₛ"), (WestgardRule.SevenT, "7ₜ"), (WestgardRule.EightX, "8ₓ"),
-        (WestgardRule.TenX, "10ₓ"), (WestgardRule.TwelveX, "12ₓ")
+        // Plain characters: the subscript letters are missing from the interface fonts.
+        (WestgardRule.OneTwoS, "1-2s"), (WestgardRule.OneThreeS, "1-3s"), (WestgardRule.TwoTwoS, "2-2s"),
+        (WestgardRule.R4S, "R-4s"), (WestgardRule.ThreeOneS, "3-1s"), (WestgardRule.FourOneS, "4-1s"),
+        (WestgardRule.TwoOfThreeTwoS, "2/3-2s"), (WestgardRule.SevenT, "7T"), (WestgardRule.EightX, "8x"),
+        (WestgardRule.TenX, "10x"), (WestgardRule.TwelveX, "12x")
     ];
 
     /// <summary>The rules in force for the control shown, under its chart, by their short names.</summary>
@@ -672,8 +687,9 @@ public sealed class QualityControlView : LocalizedView
 
             if (chart.IsSuccess)
             {
-                _chartHeading.Text = $"{T("Quality.LeveyJennings")} — " +
-                                     $"{chart.Value.ParameterCode} · {chart.Value.MaterialLotNumber}";
+                // The chart writes the parameter, the lot and the analyser above its points; the
+                // heading keeps to its name so « Plus d'actions » stays in the card.
+                _chartHeading.Text = T("Quality.LeveyJennings");
 
                 _establishLimits.Enabled = true;
             }
