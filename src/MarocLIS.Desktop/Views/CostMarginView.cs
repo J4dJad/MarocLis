@@ -22,10 +22,12 @@ public sealed class CostMarginView : LocalizedView
     private readonly ILogger<CostMarginView>? _logger;
 
     private readonly PeriodBar _bar;
-    private readonly Label[] _tiles = Enumerable.Range(0, 4).Select(_ => new Label()).ToArray();
+    // The four key figures as the design system's indicator cards: caption above, figure below.
+    private readonly KpiTile[] _tiles = [.. Enumerable.Range(0, 4).Select(_ => new KpiTile())];
     private readonly Label _method = new()
     {
-        Dock = DockStyle.Top, Height = 40, Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary
+        Dock = DockStyle.Top, Height = 44, Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary,
+        Padding = new Padding(0, 8, 0, 4)
     };
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
     private readonly DataGridView _byAnalysis = UiTheme.Grid();
@@ -64,7 +66,7 @@ public sealed class CostMarginView : LocalizedView
             AddColumn(grid, "withoutCost", 7, numeric: true);
         }
 
-        _pages = [Page(_byAnalysis), Page(_bySite), Page(_byInstrument)];
+        _pages = [CardPage(_byAnalysis), CardPage(_bySite), CardPage(_byInstrument)];
         _tabs.TabPages.AddRange(_pages);
 
         _allocation.AutoSize = true;
@@ -73,17 +75,55 @@ public sealed class CostMarginView : LocalizedView
 
         Controls.Add(_tabs);
         Controls.Add(_method);
-        Controls.Add(Tiles(_tiles, 4, 80));
+        Controls.Add(KpiRow(_tiles));
         Controls.Add(_bar);
 
         _bar.Compute.Click += async (_, _) => await LoadAsync();
         _bar.Export.Click += async (_, _) =>
-            await ExportAsync(_tabs.SelectedTab?.Controls.OfType<DataGridView>().FirstOrDefault(), _output, _dialogs,
-                              _bar.Export.Text, Localizer);
+            await ExportAsync(SelectedGrid, _output, _dialogs, _bar.Export.Text, Localizer);
         _allocation.Click += async (_, _) => await EditAllocationAsync();
     }
 
     public override string Title => T("Nav.CostMargin");
+
+    /// <summary>The grid of the tab in front, the one the CSV export writes.</summary>
+    private DataGridView? SelectedGrid => _tabs.SelectedIndex switch
+    {
+        0 => _byAnalysis,
+        1 => _bySite,
+        2 => _byInstrument,
+        _ => null
+    };
+
+    /// <summary>A tab whose grid sits in a white card on the work surface.</summary>
+    private static TabPage CardPage(DataGridView grid)
+    {
+        var page = new TabPage { BackColor = UiTheme.Surface, Padding = new Padding(0, 12, 0, 0) };
+        page.Controls.Add(new FinanceCard(grid));
+        return page;
+    }
+
+    private static TableLayoutPanel KpiRow(KpiTile[] tiles)
+    {
+        var row = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 104,
+            ColumnCount = tiles.Length,
+            RowCount = 1,
+            Padding = new Padding(0, 8, 0, 8),
+            BackColor = UiTheme.Surface
+        };
+        row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        for (var i = 0; i < tiles.Length; i++)
+        {
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / tiles.Length));
+            tiles[i].Value.Font = UiTheme.SectionTitle;
+            tiles[i].Margin = new Padding(i == 0 ? 0 : 6, 0, i == tiles.Length - 1 ? 0 : 6, 0);
+            row.Controls.Add(tiles[i], i, 0);
+        }
+        return row;
+    }
 
     protected override void ApplyTexts()
     {
@@ -131,16 +171,16 @@ public sealed class CostMarginView : LocalizedView
         foreach (var grid in new[] { _byAnalysis, _bySite, _byInstrument }) grid.Rows.Clear();
         if (_result is not { } r)
         {
-            foreach (var tile in _tiles) tile.Text = string.Empty;
+            foreach (var tile in _tiles) tile.Caption.Text = tile.Value.Text = string.Empty;
             return;
         }
 
-        string Tile(string key, string value) => $"{T(key)}\n{value}";
-        _tiles[0].Text = Tile("Steering.Column.revenue", $"{Amount(r.Totals.Revenue)} MAD · {Count(r.Totals.Tests)} {T("Steering.TestsUnit")}");
-        _tiles[1].Text = Tile("Steering.Column.reagentCost", $"{Amount(r.Totals.ReagentCost)} MAD");
-        _tiles[2].Text = Tile("Steering.Column.allocation", $"{Amount(r.Totals.Allocation)} MAD ({Amount(r.AllocationPerTest)} {T("Steering.PerTest")})");
-        _tiles[3].Text = Tile("Steering.Column.margin", $"{Amount(r.Totals.Margin)} MAD · {Share(r.Totals.MarginPercent)}");
-        _tiles[1].ForeColor = r.Totals.TestsWithoutCost > 0 ? UiTheme.Abnormal : UiTheme.TextPrimary;
+        void Tile(int i, string key, string value) => (_tiles[i].Caption.Text, _tiles[i].Value.Text) = (T(key), value);
+        Tile(0, "Steering.Column.revenue", $"{Amount(r.Totals.Revenue)} MAD · {Count(r.Totals.Tests)} {T("Steering.TestsUnit")}");
+        Tile(1, "Steering.Column.reagentCost", $"{Amount(r.Totals.ReagentCost)} MAD");
+        Tile(2, "Steering.Column.allocation", $"{Amount(r.Totals.Allocation)} MAD ({Amount(r.AllocationPerTest)} {T("Steering.PerTest")})");
+        Tile(3, "Steering.Column.margin", $"{Amount(r.Totals.Margin)} MAD · {Share(r.Totals.MarginPercent)}");
+        _tiles[1].Value.ForeColor = r.Totals.TestsWithoutCost > 0 ? UiTheme.Abnormal : UiTheme.TextPrimary;
 
         void Fill(DataGridView grid, IEnumerable<MarginRow> rows)
         {
