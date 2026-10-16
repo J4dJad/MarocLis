@@ -2,6 +2,7 @@
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Organization;
 using MarocLIS.Infrastructure.Persistence;
 using MarocLIS.Infrastructure.Persistence.Demo;
 using Microsoft.EntityFrameworkCore;
@@ -128,7 +129,9 @@ public sealed class AuthenticationService(
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == resolvedSiteId && !s.IsDeleted, ct);
 
-        if (site is null || !site.IsActive)
+        // A partner laboratory is where samples are sent, not a place to work: an access row to one
+        // (granted before the user administration refused it) opens nothing.
+        if (site is null || !site.IsActive || site.Kind == LabSiteKind.ReferralPartner)
             return await FailAsync(normalised, "Auth_SiteNotAuthorized", ct, discloseReason: true);
 
         // Transparently upgrade a hash produced under an older work factor. The hash only: the
@@ -246,7 +249,8 @@ public sealed class AuthenticationService(
             return Result.Failure(Error.Forbidden("Auth_SiteNotAuthorized"));
 
         var site = await db.Sites.IgnoreQueryFilters().AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == siteId && !s.IsDeleted && s.IsActive, ct);
+            .FirstOrDefaultAsync(s => s.Id == siteId && !s.IsDeleted && s.IsActive
+                                      && s.Kind != LabSiteKind.ReferralPartner, ct);
 
         if (site is null) return Result.Failure(Error.NotFound("Auth_SiteNotAuthorized"));
 
