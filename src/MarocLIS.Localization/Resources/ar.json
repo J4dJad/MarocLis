@@ -301,6 +301,7 @@
   "Habilitation_BiologistSignatureRequired": "لا يمكن إلا لبيولوجي تأهيل مستخدم للعمل بمفرده أو للتكوين. يمكنك وضعه «في طور التكوين».",
   "Habilitation_BiologicalValidationBiologistOnly": "لا تُمنح المصادقة البيولوجية إلا لبيولوجي (القانون 12-01).",
   "Habilitation_GrantInFuture": "لا يمكن أن يكون تاريخ القرار في المستقبل.",
+  "Habilitation_BeforeHire": "لا يمكن أن يسبق تاريخ القرار تاريخ التوظيف ({0}).",
   "Credential_TitleRequired": "عنوان الوثيقة إلزامي.",
   "Credential_ExpiryBeforeIssue": "تاريخ التجديد يسبق تاريخ الحصول.",
   "Credential_NotFound": "الوثيقة غير موجودة.",

@@ -376,6 +376,10 @@ public sealed class Employee : AuditableAggregateRoot, ISiteScoped
         if (ExitDate is { } exit && grantedOn > exit)
             return Result.Failure<EmployeeHabilitation>(Error.Conflict("Habilitation_EmployeeExited"));
 
+        // Nor before the first day: the matrix would show the person authorised before they worked here.
+        if (grantedOn < HireDate)
+            return Result.Failure<EmployeeHabilitation>(Error.Validation("Habilitation_BeforeHire", HireDate));
+
         if (EmployeeHabilitation.RequiresSubject(activity) && subjectId is null)
             return Result.Failure<EmployeeHabilitation>(Error.Validation("Habilitation_SubjectRequired"));
 
