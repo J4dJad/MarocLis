@@ -31,6 +31,9 @@ public sealed class CashForecastView : LocalizedView
     private readonly Button _csv = UiTheme.SecondaryButton(string.Empty);
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly Label _notes = new();
+    private readonly Label _count = new();
+    private readonly Label _weeksTitle = new();
+    private readonly Label _notesTitle = new();
 
     private CashForecastResult? _forecast;
 
@@ -57,33 +60,27 @@ public sealed class CashForecastView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(24, 20, 24, 16);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 66, BackColor = UiTheme.Surface };
+        // The title, the lowest closing balance in grey, and the actions at the far end.
+        var header = FinanceUi.PageHeader(_heading, _count, _items, _csv, _refresh);
 
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _patients.Location = new Point(0, 40);
-        _overdue.Location = new Point(250, 40);
-        _payDayLabel.Font = UiTheme.Small;
-        _payDayLabel.ForeColor = UiTheme.TextSecondary;
-        _payDayLabel.AutoSize = true;
-        _payDayLabel.Location = new Point(520, 42);
-        _payDay.Bounds = new Rectangle(640, 38, 60, UiTheme.InputHeight);
-        _refresh.Bounds = new Rectangle(716, 34, 110, UiTheme.ButtonHeight);
-        _items.Bounds = new Rectangle(836, 34, 190, UiTheme.ButtonHeight);
-        _csv.Bounds = new Rectangle(1036, 34, 110, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _patients, _overdue, _payDayLabel, _payDay, _refresh, _items, _csv]);
+        _payDay.Width = 60;
+        _patients.Margin = new Padding(0, 8, 16, 0);
+        _overdue.Margin = new Padding(0, 8, 16, 0);
+        var filters = FinanceUi.FilterRow(_patients, _overdue, FinanceUi.Inline(_payDayLabel, _payDay));
+        _patients.Margin = new Padding(0, 8, 16, 0);
+        _overdue.Margin = new Padding(0, 8, 16, 0);
 
         BankReconciliationView.AddColumns(_grid, ("week", 5), ("from", 9), ("to", 9), ("opening", 11), ("payers", 11),
                                           ("patients", 11), ("suppliers", 11), ("payroll", 11), ("other", 10),
                                           ("net", 11), ("closing", 12));
         foreach (DataGridViewColumn column in _grid.Columns)
+        {
+            column.DefaultCellStyle.Font = UiTheme.Monospace;
             if (column.Index >= 3) column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        }
+        _grid.Columns["closing"]!.DefaultCellStyle.Font = UiTheme.MonospaceBold;
 
         _grid.CellFormatting += (_, e) =>
         {
@@ -95,14 +92,23 @@ public sealed class CashForecastView : LocalizedView
             }
         };
 
-        _notes.Dock = DockStyle.Bottom;
-        _notes.Height = 96;
+        _notes.Dock = DockStyle.Fill;
         _notes.Font = UiTheme.Small;
         _notes.ForeColor = UiTheme.TextSecondary;
+        _notes.Padding = new Padding(16, 0, 16, 4);
 
-        Controls.Add(_grid);
-        Controls.Add(_notes);
-        Controls.Add(bar);
+        var notesCard = new FinanceCard(_notes, FinanceUi.CardHeader(_notesTitle, null))
+        {
+            Dock = DockStyle.Bottom,
+            Height = 150
+        };
+        var gap = new Panel { Dock = DockStyle.Bottom, Height = 12, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
+
+        Controls.Add(new FinanceCard(_grid, FinanceUi.CardHeader(_weeksTitle, null)));
+        Controls.Add(gap);
+        Controls.Add(notesCard);
+        Controls.Add(filters);
+        Controls.Add(header);
     }
 
     private IReadOnlyList<string> Headers() =>
@@ -121,6 +127,8 @@ public sealed class CashForecastView : LocalizedView
         _refresh.Text = T("Action.Refresh");
         _items.Text = T("Treasury.ForecastItems");
         _csv.Text = T("Treasury.Csv");
+        _weeksTitle.Text = T("Finance.ForecastWeeks");
+        _notesTitle.Text = T("Finance.ForecastAssumptions");
 
         var headers = Headers();
         for (var i = 0; i < _grid.Columns.Count; i++) _grid.Columns[i].HeaderText = headers[i];
@@ -157,7 +165,10 @@ public sealed class CashForecastView : LocalizedView
     private void Render()
     {
         _grid.Rows.Clear();
-        if (_forecast is null) { _notes.Text = string.Empty; return; }
+        if (_forecast is null) { _notes.Text = string.Empty; _count.Text = string.Empty; return; }
+
+        _count.Text = $"{T("Treasury.LowestClosing")} : {Amount(_forecast.LowestClosingMad)}";
+        _count.ForeColor = _forecast.LowestClosingMad < 0m ? UiTheme.Critical : UiTheme.TextSecondary;
 
         foreach (var w in _forecast.Weeks)
         {

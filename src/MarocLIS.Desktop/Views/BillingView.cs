@@ -33,24 +33,36 @@ public sealed class BillingView : LocalizedView
     private readonly ICurrentUser _currentUser;
     private readonly ILogger<BillingView>? _logger;
 
+    private readonly Label _title = new();
+    private readonly Label _count = new();
     private readonly Label _pendingHeading = new();
+    private readonly Label _pendingCount = new();
     private readonly Label _ledgerHeading = new();
     private readonly DataGridView _pending = UiTheme.Grid();
     private readonly DataGridView _ledger = UiTheme.Grid();
 
-    private readonly TextBox _search = UiTheme.Input(260);
+    private readonly TextBox _search = new();
+
+    // The status filter is kept as the list it always was, off screen: the chips choose in it, and
+    // the ledger is loaded from it as before.
     private readonly ComboBox _statusFilter = new();
+    private readonly FlowLayoutPanel _chips = new();
+    private IReadOnlyDictionary<InvoiceStatus, int> _statusCounts = new Dictionary<InvoiceStatus, int>();
+
     private readonly Button _issue = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _deposit = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _refundDeposit = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _payerSettlement = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _pay = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _creditNote = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _submitClaim = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _claimOutcome = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _refund = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _bounced = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
+
+    // Less frequent, under « Plus d'actions ▾ »: the corrections and the third-party lifecycle.
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly MenuAction _refund = new();
+    private readonly MenuAction _bounced = new();
+    private readonly MenuAction _submitClaim = new();
+    private readonly MenuAction _claimOutcome = new();
+    private readonly MenuAction _payerSettlement = new();
     private readonly Button _printInvoice = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _printReceipt = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
@@ -82,107 +94,105 @@ public sealed class BillingView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(24, 20, 24, 16);
+
+        // --- page header ------------------------------------------------------------------------------
+
+        var header = FinanceUi.PageHeader(_title, _count, _refresh);
 
         var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            SplitterDistance = 250,
-            SplitterWidth = 6,
+            SplitterDistance = 230,
+            SplitterWidth = 12,
             BackColor = UiTheme.Surface
         };
 
-        // --- unbilled work -------------------------------------------------------------------------
-
-        var top = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-
-        _pendingHeading.Font = UiTheme.SectionTitle;
-        _pendingHeading.ForeColor = UiTheme.TextPrimary;
-        _pendingHeading.Dock = DockStyle.Top;
-        _pendingHeading.Height = 26;
+        // --- unbilled work ----------------------------------------------------------------------------
 
         BuildPendingColumns();
 
-        var pendingHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        pendingHost.Controls.Add(_pending);
+        var pendingCard = new FinanceCard(
+            _pending, FinanceUi.CardHeader(_pendingHeading, _pendingCount, _deposit, _refundDeposit, _issue));
 
-        var pendingActions = new Panel
-        {
-            Dock = DockStyle.Bottom, Height = 42, BackColor = UiTheme.Surface
-        };
-
-        _issue.Bounds = new Rectangle(0, 8, 240, UiTheme.ButtonHeight);
-        _deposit.Bounds = new Rectangle(250, 8, 220, UiTheme.ButtonHeight);
-        _refundDeposit.Bounds = new Rectangle(480, 8, 220, UiTheme.ButtonHeight);
-        pendingActions.Controls.AddRange([_issue, _deposit, _refundDeposit]);
-
-        top.Controls.Add(pendingHost);
-        top.Controls.Add(pendingActions);
-        top.Controls.Add(_pendingHeading);
-
-        // --- receivables ----------------------------------------------------------------------------
-
-        var bottom = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-
-        var filterBar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
+        // --- receivables ------------------------------------------------------------------------------
 
         _ledgerHeading.Font = UiTheme.SectionTitle;
         _ledgerHeading.ForeColor = UiTheme.TextPrimary;
         _ledgerHeading.AutoSize = true;
-        _ledgerHeading.Location = new Point(0, 2);
-
-        _search.Location = new Point(0, 28);
+        _ledgerHeading.Margin = new Padding(0, 6, 16, 0);
 
         _statusFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-        _statusFilter.FlatStyle = FlatStyle.Flat;
-        _statusFilter.Font = UiTheme.Small;
-        _statusFilter.Bounds = new Rectangle(272, 28, 200, UiTheme.InputHeight);
 
-        _refresh.Bounds = new Rectangle(482, 27, 110, UiTheme.ButtonHeight - 4);
+        _search.Tag = UiTags.LatinValue;
 
-        filterBar.Controls.AddRange([_ledgerHeading, _search, _statusFilter, _refresh]);
+        _chips.AutoSize = true;
+        _chips.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _chips.WrapContents = false;
+        _chips.BackColor = UiTheme.Surface;
+
+        var filters = FinanceUi.FilterRow(_ledgerHeading, new SearchField(_search, 340), _chips);
+        _ledgerHeading.Margin = new Padding(0, 6, 16, 0);
+        _chips.Margin = new Padding(0, 0, 0, 0);
 
         BuildLedgerColumns();
 
-        var ledgerHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        ledgerHost.Controls.Add(_ledger);
+        // Settlement at the far end; a refund and a bounced cheque one click further, away from the
+        // button that takes money.
+        var more = FinanceUi.MoreButton(_moreMenu, Localizer, _refund, _bounced, _submitClaim, _claimOutcome,
+                                        _payerSettlement);
+        var ledgerBar = FinanceUi.ActionBar(_status, [more, _creditNote, _printInvoice, _printReceipt], _pay);
+        var ledgerCard = new FinanceCard(_ledger, footer: ledgerBar);
 
-        // Two rows: settlement on the first, corrections and the third-party lifecycle on the
-        // second. A refund and a bounced cheque should not sit next to the button that takes money.
-        var ledgerActions = new Panel
-        {
-            Dock = DockStyle.Bottom, Height = 76, BackColor = UiTheme.Surface
-        };
+        var bottom = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        bottom.Controls.Add(ledgerCard);
+        bottom.Controls.Add(filters);
 
-        _pay.Bounds = new Rectangle(0, 4, 200, UiTheme.ButtonHeight);
-        _refund.Bounds = new Rectangle(210, 4, 180, UiTheme.ButtonHeight);
-        _bounced.Bounds = new Rectangle(400, 4, 200, UiTheme.ButtonHeight);
-        _creditNote.Bounds = new Rectangle(610, 4, 190, UiTheme.ButtonHeight);
-        _printInvoice.Bounds = new Rectangle(810, 4, 170, UiTheme.ButtonHeight);
-        _printReceipt.Bounds = new Rectangle(990, 4, 170, UiTheme.ButtonHeight);
-
-        _submitClaim.Bounds = new Rectangle(0, 40, 230, UiTheme.ButtonHeight);
-        _claimOutcome.Bounds = new Rectangle(240, 40, 250, UiTheme.ButtonHeight);
-        _payerSettlement.Bounds = new Rectangle(500, 40, 250, UiTheme.ButtonHeight);
-
-        _status.Bounds = new Rectangle(762, 44, 600, 20);
-        _status.Font = UiTheme.Small;
-        _status.ForeColor = UiTheme.TextSecondary;
-        _status.AutoSize = false;
-
-        ledgerActions.Controls.AddRange([_pay, _refund, _bounced, _creditNote, _printInvoice,
-                                         _printReceipt, _submitClaim, _claimOutcome, _payerSettlement,
-                                         _status]);
-
-        bottom.Controls.Add(ledgerHost);
-        bottom.Controls.Add(ledgerActions);
-        bottom.Controls.Add(filterBar);
-
-        split.Panel1.Controls.Add(top);
+        split.Panel1.Controls.Add(pendingCard);
         split.Panel2.Controls.Add(bottom);
 
         Controls.Add(split);
+        Controls.Add(header);
+    }
+
+    /// <summary>The status chips, with the ledger's count for each under the current search.</summary>
+    private void RenderChips()
+    {
+        _chips.SuspendLayout();
+        _chips.Controls.Clear();
+
+        for (var i = 0; i < _statusFilter.Items.Count; i++)
+        {
+            if (_statusFilter.Items[i] is not StatusChoice choice) continue;
+
+            var count = choice.Value is { } status
+                ? _statusCounts.GetValueOrDefault(status)
+                : _statusCounts.Values.Sum();
+            var text = choice.Value is null
+                ? T("Finance.ChipAll", count)
+                : $"{choice.Display} · {count}";
+
+            var index = i;
+            var chip = new ChipButton { Text = text, Selected = _statusFilter.SelectedIndex == i, Height = 30 };
+            chip.Margin = new Padding(0, 2, 6, 2);
+            chip.Click += (_, _) =>
+            {
+                if (_statusFilter.SelectedIndex == index) return;
+                _statusFilter.SelectedIndex = index;
+                foreach (var other in _chips.Controls.OfType<ChipButton>()) other.Selected = other == chip;
+            };
+            chip.RightToLeft = RightToLeft;
+            _chips.Controls.Add(chip);
+        }
+
+        _chips.ResumeLayout(performLayout: true);
+    }
+
+    private void RenderCount()
+    {
+        var invoiceable = _pendingRows.Count(r => r.IsInvoiceable);
+        _count.Text = T("Finance.BillingCount", invoiceable, _statusCounts.Values.Sum());
     }
 
     private void BuildPendingColumns()
@@ -289,6 +299,18 @@ public sealed class BillingView : LocalizedView
         _printReceipt.Click += async (_, _) => await RunBusyAsync(() => PrintAsync(receipt: true));
 
         _ledger.CellFormatting += OnLedgerFormatting;
+
+        // The status as a pill: a symbol and the word, on the pair of its state.
+        FinanceUi.PillColumn(_ledger, "status", row => row.Tag is InvoiceRow invoice
+            ? invoice.Status switch
+            {
+                InvoiceStatus.Issued => FinanceUi.PillRunning,
+                InvoiceStatus.PartiallyPaid => FinanceUi.PillWarning,
+                InvoiceStatus.Paid => FinanceUi.PillDone,
+                InvoiceStatus.WrittenOff => FinanceUi.PillWaiting,
+                _ => null
+            }
+            : null);
         _pending.CellFormatting += OnPendingFormatting;
 
         // The print buttons follow the selection. A ticked box only reaches the cell's value once
@@ -360,8 +382,10 @@ public sealed class BillingView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _title.Text = T("Nav.Billing");
         _pendingHeading.Text = T("Billing.Uninvoiced");
         _ledgerHeading.Text = T("Billing.Invoices");
+        _search.PlaceholderText = T("Finance.InvoiceSearchHint");
         _issue.Text = T("Billing.IssueInvoice");
         _pay.Text = T("Payment.Title");
         _refund.Text = T("Payment.Refund");
@@ -388,6 +412,8 @@ public sealed class BillingView : LocalizedView
 
         _statusFilter.SelectedIndex = selected >= 0 ? selected : 0;
         _statusFilter.EndUpdate();
+        RenderChips();
+        RenderCount();
 
         if (_pending.Columns.Count > 0)
         {
@@ -488,13 +514,15 @@ public sealed class BillingView : LocalizedView
         var invoiceable = _pendingRows.Where(r => r.IsInvoiceable).ToList();
         var total = Money.Of(invoiceable.Sum(r => r.Total));
 
-        _pendingHeading.Text = $"{T("Billing.Uninvoiced")} — {invoiceable.Count} · " +
-                               total.Format(Localizer.CurrentLanguage);
+        _pendingHeading.Text = T("Billing.Uninvoiced");
+        _pendingCount.Text = $"{invoiceable.Count} · " + total.Format(Localizer.CurrentLanguage);
 
         // Capped at the most recent: said, so an older order missing from the list is not taken
         // for one that needs no invoice.
         if (_pendingRows.Count >= IBillingQueries.UninvoicedOrdersLimit)
-            _pendingHeading.Text += " — " + T("Billing.UninvoicedTruncated", IBillingQueries.UninvoicedOrdersLimit);
+            _pendingCount.Text += " — " + T("Billing.UninvoicedTruncated", IBillingQueries.UninvoicedOrdersLimit);
+
+        RenderCount();
     }
 
     private async Task LoadLedgerAsync(CancellationToken ct = default)
@@ -513,6 +541,15 @@ public sealed class BillingView : LocalizedView
 
             _ledgerPage = result.Value;
             RenderLedger();
+
+            // The counts on the chips, for the same search; a failure leaves the last ones.
+            var counts = await _billing.GetInvoiceStatusCountsAsync(_search.Text.Trim(), ct);
+            if (counts.IsSuccess)
+            {
+                _statusCounts = counts.Value;
+                RenderChips();
+                RenderCount();
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -1398,6 +1435,8 @@ internal sealed class PaymentDialog : Form
         _referenceLabel.Text = _localizer["Payment.Reference"];
         _bankLabel.Text = _localizer["Payment.Bank"];
         _maturityLabel.Text = _localizer["Payment.Maturity"];
+
+        DialogFrame.Apply(this, _localizer["Finance.Dialog.Payment"], [], cancel, ok);
     }
 
     private PaymentMethod SelectedMethod =>

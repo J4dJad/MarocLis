@@ -48,23 +48,25 @@ public sealed class AccountingSettingsView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(24, 20, 24, 16);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = UiTheme.Surface };
+        var header = FinanceUi.PageHeader(_heading, null, _reload, _save);
 
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
+        // Ctrl+S, answered by the shell, presses « Enregistrer »: the key is written on it.
+        ShortcutHints.Attach(_save, "Ctrl+S");
 
-        _reload.Bounds = new Rectangle(0, 34, 140, UiTheme.ButtonHeight);
-        _save.Bounds = new Rectangle(150, 34, 160, UiTheme.ButtonHeight);
-
+        // A warning band under the title: what a blank line means, and that the export follows it.
+        _notice.Dock = DockStyle.Top;
+        _notice.AutoSize = false;
+        _notice.Height = 44;
         _notice.Font = UiTheme.Small;
         _notice.ForeColor = UiTheme.Abnormal;
-        _notice.Bounds = new Rectangle(0, 70, 900, 32);
+        _notice.BackColor = UiTheme.AbnormalBackground;
+        _notice.Padding = new Padding(12, 6, 12, 6);
+        _notice.TextAlign = ContentAlignment.MiddleLeft;
+        _notice.AutoEllipsis = true;
 
-        bar.Controls.AddRange([_heading, _reload, _save, _notice]);
+        var gap = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
 
         _grid.ReadOnly = false;
         _grid.SelectionMode = DataGridViewSelectionMode.CellSelect;
@@ -76,10 +78,11 @@ public sealed class AccountingSettingsView : LocalizedView
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = ColValue, FillWeight = 24, MaxInputLength = 20,
                                                           SortMode = DataGridViewColumnSortMode.NotSortable });
         _grid.Columns[2].DefaultCellStyle.Font = UiTheme.Monospace;
-        _grid.Dock = DockStyle.Fill;
 
-        Controls.Add(_grid);
-        Controls.Add(bar);
+        Controls.Add(new FinanceCard(_grid));
+        Controls.Add(gap);
+        Controls.Add(_notice);
+        Controls.Add(header);
     }
 
     protected override void ApplyTexts()
