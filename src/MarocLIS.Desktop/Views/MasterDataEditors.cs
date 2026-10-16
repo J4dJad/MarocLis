@@ -249,7 +249,22 @@ internal abstract class MasterDataEditor : Form
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        FitToScreen();
+        if (!_framed) FitToScreen();
+    }
+
+    private bool _framed;
+
+    /// <summary>
+    /// Gives this editor the frame of the administration dialogs — a title with one sentence, and
+    /// the buttons in a footer bar — which also keeps a tall editor within the screen. Called by
+    /// the editors of the administration screens at the end of their constructor; the other
+    /// editors keep the plain layout and <see cref="FitToScreen"/>.
+    /// </summary>
+    protected void UseAdminFrame()
+    {
+        if (_framed) return;
+        _framed = true;
+        DialogFrame.Attach(this, Localizer, DialogFrame.Lead(Localizer, GetType().Name));
     }
 
     /// <summary>
@@ -448,6 +463,7 @@ internal sealed class InstrumentEditorDialog : MasterDataEditor
         Notice(20, 486, 680, 46, "Equipment.LastDatesNotice");
 
         Buttons(552, 720);
+        UseAdminFrame();
         RefreshKindNotice();
     }
 
@@ -577,6 +593,7 @@ internal sealed class QcMaterialEditorDialog : MasterDataEditor
         Notice(20, 276, 580, 46, "Quality.MaterialStabilityNotice");
 
         Buttons(352, 620);
+        UseAdminFrame();
     }
 
     protected override void Accept()
@@ -693,6 +710,7 @@ internal sealed class QcTargetEditorDialog : MasterDataEditor
         Notice(20, 316, 580, 46, "Quality.TargetLifecycleNotice");
 
         Buttons(410, 640);
+        UseAdminFrame();
 
         RefreshCv();
         RefreshRuleButton();
@@ -884,6 +902,7 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
         }
 
         Buttons(750, 720);
+        UseAdminFrame();
     }
 
     protected override void Accept()
@@ -1053,6 +1072,7 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
         _registrationValidUntil.Picker.ValueChanged += (_, _) => RefreshApproval();
 
         Buttons(580, 700);
+        UseAdminFrame();
         RefreshApproval();
     }
 
@@ -1217,6 +1237,7 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
         _active = Check("Field.Active", 560, 476, row?.IsActive ?? true);
 
         Buttons(560, 720);
+        UseAdminFrame();
         RefreshNotices();
     }
 
@@ -1377,6 +1398,7 @@ internal sealed class PayerEditorDialog : MasterDataEditor
         ApplyKindRules();
 
         Buttons(542, 740);
+        UseAdminFrame();
     }
 
     /// <summary>
