@@ -25,7 +25,8 @@ public sealed class PatientMessagingView : LocalizedView
     private readonly PeriodBar _bar;
     private readonly Label _notice = new()
     {
-        Dock = DockStyle.Top, Height = 40, Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary
+        Dock = DockStyle.Top, Height = 44, Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary,
+        TextAlign = ContentAlignment.MiddleLeft
     };
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
 
@@ -34,20 +35,24 @@ public sealed class PatientMessagingView : LocalizedView
     private readonly DataGridView _surveys = UiTheme.Grid();
     private readonly DataGridView _comments = UiTheme.Grid();
     private readonly DataGridView _log = UiTheme.Grid();
-    private readonly Label[] _resultTiles = Enumerable.Range(0, 4).Select(_ => new Label()).ToArray();
+    private readonly KpiTile[] _resultTiles = Enumerable.Range(0, 4).Select(_ => new KpiTile()).ToArray();
     private readonly TabPage _reminderPage;
     private readonly TabPage _rulePage;
     private readonly TabPage _surveyPage;
-    private readonly TabPage _resultPage = new() { BackColor = UiTheme.Surface };
+    private readonly TabPage _resultPage = new() { BackColor = UiTheme.Surface, Padding = new Padding(0, 10, 0, 0) };
     private readonly TabPage _logPage;
 
+    // The main action of the tab in view is the page's primary button; the survey's occasional
+    // actions are under « Plus d'actions ».
     private readonly Button _sendReminders = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _newRule = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _newRule = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _editRule = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _sendSurveys = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _recordAnswer = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _importReplies = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _settings = UiTheme.SecondaryButton(string.Empty);
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly Button _more;
+    private readonly ToolStripMenuItem _recordAnswer = Pilotage.MenuItem();
+    private readonly ToolStripMenuItem _importReplies = Pilotage.MenuItem();
+    private readonly ToolStripMenuItem _settings = Pilotage.MenuItem();
 
     private IReadOnlyList<ReminderTarget> _targets = [];
 
@@ -60,8 +65,9 @@ public sealed class PatientMessagingView : LocalizedView
         _output = output;
         _dialogs = dialogs;
         _logger = logger;
-        _bar = new PeriodBar(localizer);
-        Padding = new Padding(UiTheme.Gutter);
+        _bar = new PeriodBar(localizer, primaryCompute: false);
+        _more = Pilotage.MoreButton(_moreMenu);
+        Padding = new Padding(24, 16, 24, 16);
 
         foreach (var grid in new[] { _reminders, _surveys })
         {
@@ -102,17 +108,30 @@ public sealed class PatientMessagingView : LocalizedView
         AddColumn(_log, "status", 9);
         AddColumn(_log, "text", 40);
 
-        _reminderPage = Page(_reminders);
-        _rulePage = Page(_rules);
-        _surveyPage = Page(_surveys);
-        _logPage = Page(_log);
-        _resultPage.Controls.Add(_comments);
-        _resultPage.Controls.Add(Tiles(_resultTiles, 4, 80));
+        foreach (var (grid, column) in new[] { (_reminders, "phone"), (_reminders, "resultDate"), (_reminders, "dueOn"),
+                                               (_rules, "code"), (_surveys, "phone"), (_surveys, "order"),
+                                               (_surveys, "reportedAt"), (_comments, "date"), (_log, "sentAt"),
+                                               (_log, "phone") })
+            grid.Column(column).DefaultCellStyle.Font = UiTheme.Monospace;
+
+        // A message refused by the gateway reads as such without the colour of its row.
+        Pilotage.Pills(_log, "status", row => row.Tag is PatientMessageStatus status
+            ? status == PatientMessageStatus.Failed
+                ? (UiTheme.CriticalBackground, UiTheme.CriticalInk, "!")
+                : (UiTheme.NormalBackground, UiTheme.Normal, "✓")
+            : null);
+
+        _reminderPage = Pilotage.CardPage(_reminders);
+        _rulePage = Pilotage.CardPage(_rules);
+        _surveyPage = Pilotage.CardPage(_surveys);
+        _logPage = Pilotage.CardPage(_log);
+        _resultPage.Controls.Add(new ListCard(_comments));
+        _resultPage.Controls.Add(Tiles(_resultTiles, 4, 92));
         _tabs.TabPages.AddRange([_reminderPage, _rulePage, _surveyPage, _resultPage, _logPage]);
 
-        foreach (var b in new[] { _sendReminders, _newRule, _editRule, _sendSurveys, _recordAnswer, _importReplies, _settings })
-            b.AutoSize = true;
-        _bar.Extra.Controls.AddRange([_sendReminders, _newRule, _editRule, _sendSurveys, _recordAnswer, _importReplies, _settings]);
+        _moreMenu.Items.AddRange([_recordAnswer, _importReplies, _settings]);
+        _bar.Extra.Controls.AddRange([_editRule, _more]);
+        _bar.Lead.Controls.AddRange([_sendReminders, _newRule, _sendSurveys]);
 
         Controls.Add(_tabs);
         Controls.Add(_notice);
@@ -154,13 +173,18 @@ public sealed class PatientMessagingView : LocalizedView
         _sendReminders.Visible = tab == _reminderPage;
         _newRule.Visible = _editRule.Visible = tab == _rulePage;
         _sendSurveys.Visible = tab == _surveyPage;
-        _recordAnswer.Visible = _importReplies.Visible = _settings.Visible = tab == _surveyPage || tab == _resultPage;
+        _recordAnswer.Available = _importReplies.Available = _settings.Available = tab == _surveyPage || tab == _resultPage;
+        Pilotage.SyncMore(_more, _moreMenu);
     }
 
     protected override void ApplyTexts()
     {
         _bar.ApplyTexts();
-        _bar.Heading.Text = T("Messaging.Title");
+        // The menu's short name as the title: the full one, beside it, did not leave room for the
+        // actions on a 1366-pixel screen.
+        _bar.Heading.Text = T("Nav.PatientMessaging");
+        _bar.Subtitle.Text = T("Messaging.Title");
+        _more.Text = T("ResultEntry.MoreActions");
         _reminderPage.Text = T("Messaging.Reminders");
         _rulePage.Text = T("Messaging.Rules");
         _surveyPage.Text = T("Messaging.Surveys");
@@ -193,7 +217,7 @@ public sealed class PatientMessagingView : LocalizedView
     {
         if (IsBusy) return;
         var tab = _tabs.SelectedTab;
-        var grid = tab?.Controls.OfType<DataGridView>().FirstOrDefault();
+        var grid = Pilotage.GridOf(tab);
         var context = tab == _reminderPage ? "Relations/ReminderPreview"
             : tab == _surveyPage ? "Relations/SurveyPreview"
             : tab == _logPage ? "Relations/MessageLog"
@@ -283,6 +307,7 @@ public sealed class PatientMessagingView : LocalizedView
                                           T($"PatientMessageKind.{m.Kind}"), m.PatientName, m.Phone,
                                           T($"PatientMessageStatus.{m.Status}"),
                                           m.Failure is null ? m.Text : $"{m.Text}  [{m.Failure}]");
+                    _log.Rows[i].Tag = m.Status;
                     if (m.Status == PatientMessageStatus.Failed) _log.Rows[i].DefaultCellStyle.ForeColor = UiTheme.Critical;
                 }
             }
@@ -360,7 +385,7 @@ public sealed class PatientMessagingView : LocalizedView
             targets.Add(new ReminderTarget(current, existing.TestPanelId is not null, existing.Code, existing.Name));
 
         using var dialog = new FieldDialog(Localizer, existing is null ? T("Messaging.NewRule") : T("Messaging.EditRule"),
-                                           height: 600);
+                                           height: 600, intro: T("Messaging.RuleIntro"));
         var target = dialog.Choice(T("Messaging.Column.analysis"),
             targets.Select(t => (t.Id, $"{t.Code} — {t.Name.For(language)}{(t.IsPanel ? " (" + T("Messaging.Panel") + ")" : string.Empty)}")),
             current);
@@ -395,7 +420,8 @@ public sealed class PatientMessagingView : LocalizedView
 
     private async Task RecordAnswerAsync()
     {
-        using var dialog = new FieldDialog(Localizer, T("Messaging.RecordAnswer"), height: 330);
+        using var dialog = new FieldDialog(Localizer, T("Messaging.RecordAnswer"), height: 330,
+                                           intro: T("Messaging.RecordAnswerIntro"));
         var code = dialog.TextField(T("Messaging.SurveyCode"), null, 12);
         var score = dialog.Number(T("Messaging.Column.score"), 5, 1, 5);
         var comment = dialog.TextField(T("Messaging.Column.comment"), null, SurveyInvitation.CommentMaxLength, multiline: true);
@@ -410,7 +436,8 @@ public sealed class PatientMessagingView : LocalizedView
 
     private async Task ImportRepliesAsync()
     {
-        using var dialog = new FieldDialog(Localizer, T("Messaging.ImportReplies"), height: 420);
+        using var dialog = new FieldDialog(Localizer, T("Messaging.ImportReplies"), height: 420,
+                                           intro: T("Messaging.ImportRepliesIntro"));
         dialog.Note(T("Messaging.ImportRepliesHelp"));
         var text = dialog.TextField(T("Messaging.Replies"), null, 100_000, multiline: true);
         text.Height = 220;
@@ -432,7 +459,8 @@ public sealed class PatientMessagingView : LocalizedView
         if (current.IsFailure) { _dialogs.ShowFailure(current, _settings.Text); return; }
         var s = current.Value;
 
-        using var dialog = new FieldDialog(Localizer, T("Messaging.SurveySettings"), height: 560);
+        using var dialog = new FieldDialog(Localizer, T("Messaging.SurveySettings"), height: 560,
+                                           intro: T("Messaging.SurveySettingsIntro"));
         var fr = dialog.TextField(T("Messaging.TemplateFr"), s.SurveyTemplateFr, MessageWording.MaximumLength, multiline: true);
         var ar = dialog.TextField(T("Messaging.TemplateAr"), s.SurveyTemplateAr, MessageWording.MaximumLength, multiline: true);
         dialog.Note(T("Messaging.PlaceholdersHelp", string.Join(" ", MessageWording.Placeholders)));
