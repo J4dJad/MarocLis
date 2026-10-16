@@ -92,7 +92,7 @@ public sealed class ShortcutsDialog : LocalizedForm
         // Fill first so it docks last, between the hint above and the message below.
         Controls.AddRange([list, _status, _hint, _restore, _cancel, _save]);
 
-        DialogFrame.Attach(this, Localizer, DialogFrame.Lead(Localizer, nameof(ShortcutsDialog)),
+        AdminDialogFrame.Attach(this, Localizer, AdminDialogFrame.Lead(Localizer, nameof(ShortcutsDialog)),
                            () => Localizer["Shortcut.Title"]);
     }
 

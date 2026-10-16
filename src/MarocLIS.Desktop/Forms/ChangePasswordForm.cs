@@ -132,7 +132,7 @@ public sealed class ChangePasswordForm : LocalizedForm
                            _rules, _status, _save, _cancel]);
 
         // The title, one sentence and the footer bar of the other dialogs.
-        DialogFrame.Attach(this, Localizer, DialogFrame.Lead(Localizer, nameof(ChangePasswordForm)),
+        AdminDialogFrame.Attach(this, Localizer, AdminDialogFrame.Lead(Localizer, nameof(ChangePasswordForm)),
                            () => Localizer["Action.ChangePassword"]);
     }
 

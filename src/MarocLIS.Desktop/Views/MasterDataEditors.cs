@@ -264,7 +264,7 @@ internal abstract class MasterDataEditor : Form
     {
         if (_framed) return;
         _framed = true;
-        DialogFrame.Attach(this, Localizer, DialogFrame.Lead(Localizer, GetType().Name));
+        AdminDialogFrame.Attach(this, Localizer, AdminDialogFrame.Lead(Localizer, GetType().Name));
     }
 
     /// <summary>

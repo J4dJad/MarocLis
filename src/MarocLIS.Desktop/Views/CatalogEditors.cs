@@ -1133,7 +1133,7 @@ internal sealed class RangeReviewDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
-        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(RangeReviewDialog)));
+        AdminDialogFrame.Attach(this, localizer, AdminDialogFrame.Lead(localizer, nameof(RangeReviewDialog)));
     }
 }
 

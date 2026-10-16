@@ -175,7 +175,14 @@ internal static class AdminLayout
     /// card's foot when <paramref name="footer"/>: for a narrow card, whose head cannot hold its
     /// title and three buttons. The row wraps rather than hiding a button.
     /// </summary>
-    public static Panel CardSection(Label heading, Control body, Control[] actions, bool footer)
+    public static Panel CardSection(Label heading, Control body, Control[] actions, bool footer) =>
+        footer ? CardSection(heading, body, [], actions) : CardSection(heading, body, actions, []);
+
+    /// <summary>
+    /// A card with actions in its head and others along its foot: the head takes the action that
+    /// fits beside the title, the foot the rest, so neither row has to wrap.
+    /// </summary>
+    public static Panel CardSection(Label heading, Control body, Control[] headActions, Control[] footActions)
     {
         heading.Font = UiTheme.SectionTitle;
         heading.ForeColor = UiTheme.TextPrimary;
@@ -184,7 +191,7 @@ internal static class AdminLayout
         heading.Margin = Padding.Empty;
         heading.UseMnemonic = false;
 
-        var head = Row(RowHeight + 4, [heading], footer ? [] : actions, UiTheme.SurfaceRaised);
+        var head = Row(RowHeight + 4, [heading], headActions, UiTheme.SurfaceRaised);
         head.Padding = new Padding(15, 0, 11, 0);
 
         var card = new Panel
@@ -197,7 +204,7 @@ internal static class AdminLayout
         body.Dock = DockStyle.Fill;
         card.Controls.Add(body);
 
-        if (footer && actions.Length > 0)
+        if (footActions.Length > 0)
         {
             var foot = new FlowLayoutPanel
             {
@@ -210,7 +217,7 @@ internal static class AdminLayout
                 Tag = UiTags.OwnLayout
             };
 
-            foreach (var action in actions)
+            foreach (var action in footActions)
             {
                 action.Margin = new Padding(0, 0, 8, 6);
                 foot.Controls.Add(action);
@@ -383,7 +390,7 @@ internal sealed class AdminSearchBox : Panel
 /// the screen gets a scrolling body with the footer pinned, as the reference-data editors had.
 /// </para>
 /// </summary>
-internal static class DialogFrame
+internal static class AdminDialogFrame
 {
     private const int HeaderWithLead = 70;
     private const int HeaderPlain = 52;
@@ -492,6 +499,27 @@ internal static class DialogFrame
         ButtonIcons.Apply(form, localizer);
 
         FitToScreen(form, header, footer, absolute);
+        Recenter(form);
+    }
+
+    /// <summary>
+    /// The frame makes a dialog taller after Windows has placed it: centre it again on its owner
+    /// and keep it inside the working area, so its foot is never below the screen.
+    /// </summary>
+    private static void Recenter(Form form)
+    {
+        var area = Screen.FromControl(form.Owner ?? (Control)form).WorkingArea;
+        var around = form.StartPosition == FormStartPosition.CenterParent && form.Owner is { } owner
+            ? owner.Bounds
+            : area;
+
+        var x = around.Left + (around.Width - form.Width) / 2;
+        var y = around.Top + (around.Height - form.Height) / 2;
+        x = Math.Max(area.Left, Math.Min(x, area.Right - form.Width));
+        y = Math.Max(area.Top, Math.Min(y, area.Bottom - form.Height));
+
+        form.StartPosition = FormStartPosition.Manual;
+        form.Location = new Point(x, y);
     }
 
     private static Panel BuildFooter(List<Button> buttons, Button? accept, Button? cancel)

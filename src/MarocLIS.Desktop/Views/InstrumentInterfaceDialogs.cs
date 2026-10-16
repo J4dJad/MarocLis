@@ -647,7 +647,7 @@ internal sealed class InstrumentMappingDialog : Form
         Controls.AddRange([notice, _grid, _summary, add, remove, ok, cancel]);
 
         CancelButton = cancel;
-        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(InstrumentMappingDialog)));
+        AdminDialogFrame.Attach(this, localizer, AdminDialogFrame.Lead(localizer, nameof(InstrumentMappingDialog)));
 
         _grid.CellFormatting += OnFormatting;
         _grid.UserDeletedRow += (_, _) => RefreshSummary();
@@ -955,7 +955,7 @@ internal sealed class MappableParameterPicker : Form
         Controls.AddRange([prompt, _query, _all, _grid, _ok, cancel]);
         CancelButton = cancel;
         AcceptButton = _ok;
-        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(MappableParameterPicker)));
+        AdminDialogFrame.Attach(this, localizer, AdminDialogFrame.Lead(localizer, nameof(MappableParameterPicker)));
 
         _query.TextChanged += (_, _) => { _debounce.Stop(); _debounce.Start(); };
         _debounce.Tick += async (_, _) => { _debounce.Stop(); await LoadAsync(); };
@@ -1149,7 +1149,7 @@ internal sealed class InstrumentRawMessageDialog : Form
 
         CancelButton = close;
         AcceptButton = close;
-        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(InstrumentRawMessageDialog)));
+        AdminDialogFrame.Attach(this, localizer, AdminDialogFrame.Lead(localizer, nameof(InstrumentRawMessageDialog)));
     }
 
     /// <summary>
