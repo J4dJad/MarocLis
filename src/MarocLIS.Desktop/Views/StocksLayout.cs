@@ -208,8 +208,10 @@ internal sealed class StockSearchBox : Panel
     protected override void OnLayout(LayoutEventArgs levent)
     {
         base.OnLayout(levent);
-        Box.Bounds = new Rectangle(34, (Height - Box.PreferredHeight) / 2 + 1, Math.Max(40, Width - 44),
-                                   Box.PreferredHeight);
+        var box = new Rectangle(34, (Height - Box.PreferredHeight) / 2 + 1, Math.Max(40, Width - 44),
+                                Box.PreferredHeight);
+        // Arabic: the magnifier on the right, where the reading starts.
+        Box.Bounds = RightToLeft == RightToLeft.Yes ? box with { X = Width - box.Right } : box;
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -221,7 +223,7 @@ internal sealed class StockSearchBox : Panel
         e.Graphics.DrawRectangle(pen, inset, inset, Width - 1 - inset * 2, Height - 1 - inset * 2);
 
         if (Icons.Render(Glyph.Search, UiTheme.TextSecondary, 16) is { } icon)
-            e.Graphics.DrawImage(icon, 10, (Height - 16) / 2, 16, 16);
+            e.Graphics.DrawImage(icon, RightToLeft == RightToLeft.Yes ? Width - 26 : 10, (Height - 16) / 2, 16, 16);
     }
 }
 
@@ -299,6 +301,12 @@ internal sealed class StockBar : Panel
         Arrange();
     }
 
+    protected override void OnRightToLeftChanged(EventArgs e)
+    {
+        base.OnRightToLeftChanged(e);
+        Arrange();
+    }
+
     // Visible reads false for every child while the screen is not shown yet: then each one counts.
     private bool Shown(Control control) => control.Visible || !Visible;
 
@@ -314,6 +322,10 @@ internal sealed class StockBar : Panel
         try
         {
             var width = ClientSize.Width - Padding.Horizontal;
+            // Arabic: the line reads from the right. Nested panels are not mirrored by the form, so
+            // each position is mirrored here.
+            var rtl = RightToLeft == RightToLeft.Yes;
+            Rectangle Place(Rectangle r) => rtl ? r with { X = ClientSize.Width - r.Right } : r;
             var start = _start.Where(Shown).ToList();
             var end = _end.Where(Shown).ToList();
 
@@ -350,7 +362,7 @@ internal sealed class StockBar : Panel
                     var w = Wanted(control);
                     if (control == Stretch)
                         w = Math.Clamp(w + Math.Max(0, room), StretchMinimum, Math.Max(StretchMinimum, StretchMaximum));
-                    control.Bounds = new Rectangle(Padding.Left + x, y + (LineHeight - control.Height) / 2, w, control.Height);
+                    control.Bounds = Place(new Rectangle(Padding.Left + x, y + (LineHeight - control.Height) / 2, w, control.Height));
                     x += w + Gap;
                 }
 
@@ -366,7 +378,8 @@ internal sealed class StockBar : Panel
                 {
                     var control = line[i];
                     x -= control.Width;
-                    control.Location = new Point(x, y + (LineHeight - control.Height) / 2);
+                    control.Location = Place(new Rectangle(x, y + (LineHeight - control.Height) / 2,
+                                                           control.Width, control.Height)).Location;
                     x -= Gap;
                 }
 

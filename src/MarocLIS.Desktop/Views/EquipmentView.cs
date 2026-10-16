@@ -112,9 +112,14 @@ public sealed class EquipmentView : LocalizedView
         // The aside keeps its width; the register takes the rest.
         _asideCard.Dock = DockStyle.Right;
         _asideCard.Width = 380;
+        var gap = new Panel { Dock = DockStyle.Right, Width = 12, BackColor = UiTheme.Surface };
         Controls.Add(registerCard);
-        Controls.Add(new Panel { Dock = DockStyle.Right, Width = 12, BackColor = UiTheme.Surface });
+        Controls.Add(gap);
         Controls.Add(_asideCard);
+
+        // Arabic: the aside goes to the left, the side the reading ends on.
+        _asideCard.RightToLeftChanged += (_, _) =>
+            gap.Dock = _asideCard.Dock = _asideCard.RightToLeft == RightToLeft.Yes ? DockStyle.Left : DockStyle.Right;
         Controls.Add(filters);
         Controls.Add(header);
     }
