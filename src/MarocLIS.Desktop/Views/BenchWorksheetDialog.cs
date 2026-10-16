@@ -45,14 +45,36 @@ internal sealed class BenchWorksheetDialog : MasterDataEditor
 
         _onlyUrgent = Check("BenchSheet.OnlyUrgent", 20, 130, false, bold: true);
 
-        Notice(20, 160, 420, 48, "BenchSheet.Notice");
-
         _department.SelectedIndexChanged += (_, _) => FillInstruments();
         FillInstruments();
 
         Buttons(226, 460, "Action.Print");
+        Frame();
 
         RtlLayout.Apply(this, language);
+    }
+
+    /// <summary>
+    /// The direction-A frame round the fields the editor base laid out: the title in 17 px with the
+    /// notice as its sentence, the fields under it, and Cancel then Print at the far end of the foot.
+    /// </summary>
+    private void Frame()
+    {
+        var head = DialogFrame.Head(Localizer["BenchSheet.Title"], Localizer["BenchSheet.Notice"], 460);
+        var print = (Button)AcceptButton!;
+        var cancel = (Button)CancelButton!;
+        Controls.Remove(print);
+        Controls.Remove(cancel);
+
+        foreach (Control field in Controls)
+        {
+            field.Top += head.Height - 4;
+            if (field is Label caption) { caption.Font = UiTheme.SmallBold; caption.ForeColor = UiTheme.TextSecondary; }
+        }
+
+        ClientSize = new Size(460, head.Height + 162 + 58);
+        Controls.Add(DialogFrame.Foot(cancel, print));
+        Controls.Add(head);
     }
 
     /// <summary>
