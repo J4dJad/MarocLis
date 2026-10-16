@@ -25,7 +25,8 @@ public sealed class PersonnelView : LocalizedView
     private readonly ILogger<PersonnelView>? _logger;
 
     private readonly Label _heading = new();
-    private readonly TextBox _search = UiTheme.Input(260);
+    // A plain box: the search host draws its frame (an Input box keeps painting its own).
+    private readonly TextBox _search = new() { Width = 260, BorderStyle = BorderStyle.None };
     private readonly CheckBox _includeExited = new();
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly DataGridView _grid = UiTheme.Grid();
@@ -43,6 +44,8 @@ public sealed class PersonnelView : LocalizedView
     private readonly ToolStripMenuItem _employmentItem = new(), _salaryItem = new(), _certificateItem = new();
     private readonly ToolStripMenuItem _computeItem = new(), _receiptItem = new(), _signedItem = new();
     private readonly Label _status = new();
+    private readonly Label _title = new();
+    private readonly QhAside _aside = new();
 
     private IReadOnlyList<EmployeeRow> _rows = [];
 
@@ -81,24 +84,13 @@ public sealed class PersonnelView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = QhPage.PagePadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.SectionTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 2);
-
-        _search.Location = new Point(0, 28);
-        _refresh.Bounds = new Rectangle(272, 27, 110, UiTheme.ButtonHeight - 4);
-
-        _includeExited.Font = UiTheme.Small;
-        _includeExited.ForeColor = UiTheme.TextSecondary;
-        _includeExited.AutoSize = true;
-        _includeExited.Location = new Point(396, 32);
-
-        bar.Controls.AddRange([_heading, _search, _refresh, _includeExited]);
+        // Direction A, a list screen: the title and the count, Refresh and the one primary action
+        // on the right; the search and the chip under them; the list in a card and the selected
+        // file in an aside with its facts and the actions on it.
+        var header = QhPage.Header(_title, _heading, _refresh, _new);
+        var toolbar = QhPage.Toolbar(QhPage.Search(_search, 340), QhPage.Chip(_includeExited), _includeExited);
 
         void Add(string name, int weight, Font? font = null)
             => _grid.Columns.Add(new DataGridViewTextBoxColumn
@@ -118,31 +110,14 @@ public sealed class PersonnelView : LocalizedView
         Add("end", 8, UiTheme.Monospace);
         Add("user", 10, UiTheme.Monospace);
 
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        host.Controls.Add(_grid);
-
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = UiTheme.Surface };
-
-        _new.Bounds = new Rectangle(0, 10, 190, UiTheme.ButtonHeight);
-        _edit.Bounds = new Rectangle(200, 10, 170, UiTheme.ButtonHeight);
-        _documents.Bounds = new Rectangle(380, 10, 190, UiTheme.ButtonHeight);
-        _exit.Bounds = new Rectangle(580, 10, 190, UiTheme.ButtonHeight);
-        _letters.Bounds = new Rectangle(780, 10, 170, UiTheme.ButtonHeight);
-        _settlement.Bounds = new Rectangle(960, 10, 210, UiTheme.ButtonHeight);
-
-        _status.Font = UiTheme.Small;
-        _status.AutoSize = false;
-        _status.Bounds = new Rectangle(1182, 16, 400, 20);
-
         _lettersMenu.Items.AddRange([_employmentItem, _salaryItem, _certificateItem]);
         _settlementMenu.Items.AddRange([_computeItem, _receiptItem, _signedItem]);
         _exitMenu.Items.AddRange([_correctExitItem, _cancelExitItem]);
 
-        actions.Controls.AddRange([_new, _edit, _documents, _exit, _letters, _settlement, _status]);
+        _aside.SetActions(_edit, _documents, _exit, _letters, _settlement);
+        _aside.AddBelow(QhPage.StatusLine(_status));
 
-        Controls.Add(host);
-        Controls.Add(actions);
-        Controls.Add(bar);
+        Controls.Add(QhPage.Frame(2, header, toolbar, QhPage.WithAside(QhPage.Card(_grid), _aside)));
     }
 
     private void WireBehaviour()
@@ -186,6 +161,7 @@ public sealed class PersonnelView : LocalizedView
         _receiptItem.Click += async (_, _) => await Guarded(ReceiptAsync);
         _signedItem.Click += async (_, _) => await Guarded(ReceiptSignedAsync);
         _grid.SelectionChanged += (_, _) => RefreshExitCaption();
+        _grid.SelectionChanged += (_, _) => ShowFile();
 
         PermissionGate.Require(Permissions.HumanResources.Manage, _new, _edit, _exit);
         PermissionGate.Require([Permissions.HumanResources.Manage, Permissions.HumanResources.Salary], _letters);
@@ -207,6 +183,7 @@ public sealed class PersonnelView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _title.Text = T("Nav.Personnel");
         _search.PlaceholderText = T("Personnel.SearchPlaceholder");
         _refresh.Text = T("Action.Refresh");
         _includeExited.Text = T("Personnel.IncludeExited");
@@ -295,8 +272,39 @@ public sealed class PersonnelView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();
 
-        _heading.Text = T("Personnel.Heading", _rows.Count(OnStaff));
+        _heading.Text = T("QualityHr.Personnel.Count", _rows.Count(OnStaff), _grid.Rows.Count);
         RefreshExitCaption();
+        ShowFile();
+    }
+
+    /// <summary>The selected file in the aside: its name, post, where it stands and its key dates.</summary>
+    private void ShowFile()
+    {
+        if (Current() is not { } row)
+        {
+            _aside.Clear(T("Nav.Personnel"));
+            return;
+        }
+
+        (string, (Color, Color))? pill = row.ExitDate switch
+        {
+            { } exit when exit >= Today => (T("Personnel.LeavingOn", exit.ToString("dd/MM/yyyy")), QhTone.Warn),
+            { } exit => (T("Personnel.ExitedOn", exit.ToString("dd/MM/yyyy")), QhTone.Muted),
+            _ when row.ContractEndDate is { } end && end < Today => (T("Personnel.ContractEnd") + " " + end.ToString("dd/MM/yyyy"), QhTone.Crit),
+            _ => (T($"ContractType.{row.ContractType}"), QhTone.Ok)
+        };
+
+        var subtitle = string.Join(" · ", new[] { row.JobTitle, row.DepartmentName }.Where(v => !string.IsNullOrWhiteSpace(v)));
+
+        _aside.Show(row.FullName, subtitle, pill,
+        [
+            (T("Personnel.Number"), row.Number, true),
+            (T("Personnel.Job"), T($"EmployeeJob.{row.Job}"), false),
+            (T("Personnel.ContractType"), T($"ContractType.{row.ContractType}"), false),
+            (T("Personnel.HireDate"), row.HireDate.ToString("dd/MM/yyyy"), true),
+            (T("Personnel.ContractEnd"), row.ContractEndDate?.ToString("dd/MM/yyyy") ?? "—", true),
+            (T("Personnel.LinkedUser"), row.UserName ?? "—", true)
+        ]);
     }
 
     private EmployeeRow? Current() => _grid.CurrentRow?.Tag as EmployeeRow;
@@ -509,6 +517,7 @@ public sealed class HabilitationView : LocalizedView
     private readonly Button _grant = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _withdraw = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _detail = new();
+    private readonly Label _title = new();
 
     private HabilitationMatrix? _matrix;
     private List<(HabilitationActivity Activity, Guid? SubjectId, string? Label)> _columns = [];
@@ -531,44 +540,24 @@ public sealed class HabilitationView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = QhPage.PagePadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.SectionTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 2);
-
-        _refresh.Bounds = new Rectangle(0, 27, 110, UiTheme.ButtonHeight - 4);
-        _export.Bounds = new Rectangle(120, 27, 190, UiTheme.ButtonHeight - 4);
-
-        bar.Controls.AddRange([_heading, _refresh, _export]);
+        // Direction A: the title and the count, Refresh and the export on the right; the matrix in a
+        // card; under it the selected cell — what it says, Withdraw, and Grant at the far end.
+        var header = QhPage.Header(_title, _heading, _refresh, _export);
 
         // Cells, not rows: each cell is one decision.
         _grid.SelectionMode = DataGridViewSelectionMode.CellSelect;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         _grid.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        _grid.Dock = DockStyle.Fill;
 
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        host.Controls.Add(_grid);
+        var body = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        body.Controls.Add(_grid);
+        body.Controls.Add(new QhSelectionBar(_detail, _withdraw, _grant));
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 76, BackColor = UiTheme.Surface };
-
-        _detail.Font = UiTheme.Small;
-        _detail.ForeColor = UiTheme.TextSecondary;
-        _detail.AutoSize = false;
-        _detail.Bounds = new Rectangle(0, 4, 1300, 20);
-
-        _grant.Bounds = new Rectangle(0, 30, 230, UiTheme.ButtonHeight);
-        _withdraw.Bounds = new Rectangle(240, 30, 230, UiTheme.ButtonHeight);
-
-        actions.Controls.AddRange([_detail, _grant, _withdraw]);
-
-        Controls.Add(host);
-        Controls.Add(actions);
-        Controls.Add(bar);
+        Controls.Add(QhPage.Frame(1, header, QhPage.Card(body)));
     }
 
     private void WireBehaviour()
@@ -610,6 +599,7 @@ public sealed class HabilitationView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _title.Text = T("Nav.Habilitations");
         _refresh.Text = T("Action.Refresh");
         _export.Text = T("Habilitation.Export");
         _grant.Text = T("Habilitation.Grant");
@@ -706,7 +696,7 @@ public sealed class HabilitationView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
 
         var today = DateOnly.FromDateTime(DateTime.Today);
-        _heading.Text = T("Habilitation.Heading", _matrix.Employees.Count, _matrix.Habilitations.Count,
+        _heading.Text = T("QualityHr.Habilitations.Count", _matrix.Employees.Count, _matrix.Habilitations.Count,
                           _matrix.Habilitations.Count(h => h.ReviewDueOn is { } d && d < today));
         _export.Enabled = _matrix.Employees.Count > 0;
         ShowDetail();
@@ -841,6 +831,7 @@ public sealed class PersonnelDeadlinesView : LocalizedView
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly Button _documents = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _edit = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _title = new();
 
     private IReadOnlyList<DeadlineRow> _rows = [];
 
@@ -862,21 +853,16 @@ public sealed class PersonnelDeadlinesView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = QhPage.PagePadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.SectionTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 2);
+        // Direction A, a work queue: the title and the count, Refresh on the right; the horizon
+        // under them; the list in a card, its state as a pill; the two ways into the file in the
+        // bar under it, the documents (the usual answer) at the far end.
+        var header = QhPage.Header(_title, _heading, _refresh);
 
         _horizon.DropDownStyle = ComboBoxStyle.DropDownList;
         _horizon.FlatStyle = FlatStyle.Flat;
-        _horizon.Bounds = new Rectangle(0, 28, 200, UiTheme.InputHeight);
-        _refresh.Bounds = new Rectangle(212, 27, 110, UiTheme.ButtonHeight - 4);
-
-        bar.Controls.AddRange([_heading, _horizon, _refresh]);
+        var toolbar = QhPage.Toolbar(QhPage.Filter(_horizon, 200));
 
         void Add(string name, int weight, Font? font = null)
             => _grid.Columns.Add(new DataGridViewTextBoxColumn
@@ -886,7 +872,7 @@ public sealed class PersonnelDeadlinesView : LocalizedView
                 DefaultCellStyle = new DataGridViewCellStyle { Font = font ?? UiTheme.Body }
             });
 
-        Add("state", 8, UiTheme.SmallBold);
+        Add("state", 9, UiTheme.SmallBold);
         Add("due", 9, UiTheme.Monospace);
         Add("number", 7, UiTheme.Monospace);
         Add("name", 16);
@@ -894,17 +880,12 @@ public sealed class PersonnelDeadlinesView : LocalizedView
         Add("what", 20);
         Add("subject", 24, UiTheme.Small);
 
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        host.Controls.Add(_grid);
+        _grid.Dock = DockStyle.Fill;
+        var body = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        body.Controls.Add(_grid);
+        body.Controls.Add(new QhSelectionBar(null, _edit, _documents));
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = UiTheme.Surface };
-        _documents.Bounds = new Rectangle(0, 10, 220, UiTheme.ButtonHeight);
-        _edit.Bounds = new Rectangle(230, 10, 220, UiTheme.ButtonHeight);
-        actions.Controls.AddRange([_documents, _edit]);
-
-        Controls.Add(host);
-        Controls.Add(actions);
-        Controls.Add(bar);
+        Controls.Add(QhPage.Frame(2, header, toolbar, QhPage.Card(body)));
     }
 
     private void WireBehaviour()
@@ -916,25 +897,29 @@ public sealed class PersonnelDeadlinesView : LocalizedView
 
         PermissionGate.Require(Permissions.HumanResources.Manage, _edit);
 
+        // The state as a pill (overdue or missing in red, within 30 days in amber), the due date in
+        // the same ink: the row itself stays white, as in every list of direction A.
+        QhGridPills.Attach(_grid, "state", r => r.Tag is DeadlineRow row ? Tone(row) : null);
+
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not DeadlineRow row) return;
+            if (_grid.Columns[e.ColumnIndex].Name != "due") return;
 
-            if (row.IsOverdue)
-            {
-                e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-                e.CellStyle.ForeColor = UiTheme.Critical;
-            }
+            if (row.IsOverdue || row.DueOn is null) e.CellStyle!.ForeColor = UiTheme.Critical;
             else if (row.DueOn is { } due && due <= DateOnly.FromDateTime(DateTime.Today).AddDays(30))
-            {
-                e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-                e.CellStyle.ForeColor = UiTheme.Abnormal;
-            }
+                e.CellStyle!.ForeColor = UiTheme.Abnormal;
         };
     }
 
+    private static (Color Back, Color Fore) Tone(DeadlineRow row) =>
+        row.IsOverdue || row.DueOn is null ? QhTone.Crit
+        : row.DueOn.Value <= DateOnly.FromDateTime(DateTime.Today).AddDays(30) ? QhTone.Warn
+        : QhTone.Info;
+
     protected override void ApplyTexts()
     {
+        _title.Text = T("Nav.PersonnelDeadlines");
         var selected = Math.Max(_horizon.SelectedIndex, 1);
         _horizon.Items.Clear();
         foreach (var days in Horizons) _horizon.Items.Add(T("Deadline.Horizon", days));
@@ -999,7 +984,7 @@ public sealed class PersonnelDeadlinesView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();
 
-        _heading.Text = T("Deadline.Heading", _rows.Count, _rows.Count(r => r.IsOverdue));
+        _heading.Text = T("QualityHr.Deadlines.Count", _rows.Count, _rows.Count(r => r.IsOverdue));
         _documents.Enabled = _edit.Enabled = _rows.Count > 0;
     }
 

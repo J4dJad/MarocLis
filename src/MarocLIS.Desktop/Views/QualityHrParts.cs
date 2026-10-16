@@ -96,13 +96,25 @@ internal static class QhPage
             Padding = Padding.Empty,
             BackColor = UiTheme.Surface
         };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        // The actions keep their room; the count takes what is left and ends in « … » on a narrow
+        // window rather than pushing a button out of sight.
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         header.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         header.Controls.Add(Title(title), 0, 0);
-        if (count is not null) header.Controls.Add(Count(count), 1, 0);
+        if (count is not null)
+        {
+            Count(count);
+            count.AutoSize = false;
+            count.AutoEllipsis = true;
+            count.Height = 22;
+            count.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            count.TextAlign = ContentAlignment.MiddleLeft;
+            count.Margin = new Padding(0, 6, 12, 0);
+            header.Controls.Add(count, 1, 0);
+        }
 
         var bar = Actions(actions);
         bar.Anchor = AnchorStyles.Right;
@@ -703,6 +715,7 @@ internal sealed class QhAside : Panel
         {
             if (action is Button button) QhPage.Fit(button);
             action.Margin = new Padding(0, 0, 8, 8);
+            action.TextChanged += (_, _) => Wrap();
             ActionsPanel.Controls.Add(action);
         }
     }
@@ -766,6 +779,9 @@ internal sealed class QhAside : Panel
 
         Wrap();
         ResumeLayout(true);
+        // The parts move when a line appears or goes: repaint the whole card, or the place an
+        // action button left keeps its old image.
+        _layout.Invalidate(true);
     }
 
     /// <summary>Empties the aside: <paramref name="heading"/> alone, muted.</summary>
@@ -784,14 +800,27 @@ internal sealed class QhAside : Panel
         foreach (Label value in _facts.Controls.OfType<Label>())
             value.MaximumSize = new Size(_facts.GetColumn(value) == 0 ? 108 : Math.Max(80, width - 116), 0);
         ActionsPanel.MaximumSize = new Size(width, 0);
-        // A caption longer than the aside wraps on two lines instead of being cut.
+        // A caption longer than the aside wraps on two lines instead of being cut. Only once the
+        // aside has its real width: sized against a provisional one, every button would wrap.
+        if (_layout.ClientSize.Width < 160) return;
+        var changed = false;
         foreach (Button button in ActionsPanel.Controls.OfType<Button>())
         {
-            button.AutoSize = true;
-            if (button.PreferredSize.Width <= width - 8) continue;
-            button.AutoSize = false;
-            button.Size = new Size(width - 8, 50);
+            var wide = button.GetPreferredSize(Size.Empty).Width > width - 8;
+            if (wide == !button.AutoSize) continue;
+            changed = true;
+            if (wide)
+            {
+                button.AutoSize = false;
+                button.Size = new Size(width - 8, 50);
+            }
+            else
+            {
+                button.AutoSize = true;
+                button.Height = 34;
+            }
         }
+        if (changed) ActionsPanel.Invalidate(true);
     }
 }
 
@@ -884,13 +913,21 @@ internal static class QhDialog
         var accept = form.AcceptButton as Button;
         var cancel = form.CancelButton as Button;
 
-        foreach (Control control in form.Controls)
-        {
-            control.Top += shift;
+        var children = form.Controls.Cast<Control>().ToList();
+        foreach (var control in children) control.Top += shift;
 
-            // The captions over the fields: 12 px semibold, in the muted ink.
+        foreach (var control in children)
+        {
+            // The captions over the fields: 12 px semibold, in the muted ink — unless the bolder
+            // caption would run past the field under it (and, in Arabic, into the next caption).
             if (control is Label { AutoSize: true } caption && caption.Font.Equals(UiTheme.Small))
-                caption.Font = UiTheme.SmallBold;
+            {
+                var field = children.FirstOrDefault(c => c != caption && c is not Label
+                                                         && Math.Abs(c.Left - caption.Left) <= 4
+                                                         && c.Top >= caption.Top && c.Top - caption.Top <= 40);
+                var bold = TextRenderer.MeasureText(caption.Text, UiTheme.SmallBold).Width;
+                if (field is null || bold <= field.Width) caption.Font = UiTheme.SmallBold;
+            }
         }
 
         form.Controls.Add(title);
