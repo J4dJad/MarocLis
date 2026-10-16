@@ -858,7 +858,16 @@ public sealed class ResultEntryService(
         var errors = new List<Error>();
         var now = clock.Now;
 
-        foreach (var result in selected.Where(r => r.HasValue))
+        // A repeated analysis whose new run is not in yet still carries the run that was set aside,
+        // and a cancelled one is off the file: neither is checked. Validating the whole file
+        // re-checked the first run, which the biologist could then release value by value.
+        var setAside = order.Items
+            .Where(i => i.IsCancelled
+                        || ResultPostEntryPipeline.AwaitsRerun(i, stored.Where(r => r.LabOrderItemId == i.Id)))
+            .Select(i => i.Id)
+            .ToHashSet();
+
+        foreach (var result in selected.Where(r => r.HasValue && !setAside.Contains(r.LabOrderItemId)))
         {
             var validated = result.TechnicallyValidate(now, currentUser.UserId);
             if (validated.IsFailure) errors.Add(validated.FirstError);

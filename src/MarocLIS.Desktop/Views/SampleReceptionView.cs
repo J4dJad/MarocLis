@@ -1304,12 +1304,18 @@ public sealed class SampleReceptionView : LocalizedView
             return;
         }
 
-        decimal? temperature = decimal.TryParse(
-            _temperature.Text.Replace(',', '.'),
-            System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture, out var parsed)
-                ? parsed
-                : null;
+        // A figure that cannot be read is said, not dropped: the tube used to be received with no
+        // temperature at all, cold chain or not, and a figure beyond the column failed the save.
+        var temperature = EditorValues.ParseDecimal(_temperature.Text);
+
+        if ((!string.IsNullOrWhiteSpace(_temperature.Text) && temperature is null)
+            || temperature is < Sample.MinimumReceptionTemperature or > Sample.MaximumReceptionTemperature)
+        {
+            _dialogs.Warn(T("Temperature_ValueImplausible"), T("Sample.Temperature"));
+            _temperature.Focus();
+            _temperature.SelectAll();
+            return;
+        }
 
         var request = new ReceiveSampleRequest
         {
@@ -1372,9 +1378,10 @@ public sealed class SampleReceptionView : LocalizedView
             return;
         }
 
+        // As long as the tube's comment column, which a longer comment failed on.
         var comment = _dialogs.PromptForText(
             $"{candidate.Barcode} — {reason.Display}\n\n{T("Field.Comment")}",
-            T("Action.Reject"));
+            T("Action.Reject"), maxLength: 500);
 
         if (comment is null) return;
 

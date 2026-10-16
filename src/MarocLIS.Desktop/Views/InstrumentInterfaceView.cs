@@ -919,8 +919,9 @@ public sealed class InstrumentInterfaceView : LocalizedView
                 T("Interface.PurgeLog")))
             return;
 
+        // Within the security journal's details, after the count and the cut-off it records.
         var reason = _dialogs.PromptForReason(T("Interface.PurgeLogPrompt"),
-                                               T("Interface.PurgeLog"));
+                                               T("Interface.PurgeLog"), maxLength: 1000);
 
         if (string.IsNullOrWhiteSpace(reason)) return;
 

@@ -1569,7 +1569,7 @@ public sealed class CollectionView : LocalizedView
         if (_currentSet.Count == 0) return;
 
         var reason = _dialogs.PromptForReason(
-            T("Sample.ReprintReasonPrompt"), T("Action.PrintLabels"));
+            T("Sample.ReprintReasonPrompt"), T("Action.PrintLabels"), maxLength: 500);
 
         if (reason is null) return;
 

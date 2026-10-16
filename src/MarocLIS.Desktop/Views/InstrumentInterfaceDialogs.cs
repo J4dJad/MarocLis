@@ -131,6 +131,13 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
         Notice(352, 292, 324, 30, "Interface.ProcessedNotice");
 
+        // As long as the interface's columns: a longer path or host failed the save of the whole
+        // configuration with no word on which field.
+        _serialPort.MaxLength = 20;
+        _host.MaxLength = 150;
+        _inbound.MaxLength = _processed.MaxLength = _outbound.MaxLength = 300;
+        _pattern.MaxLength = 60;
+
         // --- protocol settings -----------------------------------------------------------------
 
         _encoding = Picker("Interface.Encoding", 20, 326, 160,
@@ -730,6 +737,8 @@ internal sealed class InstrumentMappingDialog : Form
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = "code", HeaderText = _localizer["Interface.InstrumentCode"], FillWeight = 11,
+            // Each editable column as long as its field: a longer entry failed the whole table's save.
+            MaxInputLength = 40,
             DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.MonospaceBold }
         });
 
@@ -744,7 +753,7 @@ internal sealed class InstrumentMappingDialog : Form
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = "instrumentUnit", HeaderText = _localizer["Interface.InstrumentUnit"],
-            FillWeight = 11,
+            FillWeight = 11, MaxInputLength = 40,
             DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.Monospace }
         });
 
@@ -778,6 +787,7 @@ internal sealed class InstrumentMappingDialog : Form
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = "codeMap", HeaderText = _localizer["Interface.CodedValueMap"], FillWeight = 12,
+            MaxInputLength = 1000,
             DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.Monospace }
         });
     }

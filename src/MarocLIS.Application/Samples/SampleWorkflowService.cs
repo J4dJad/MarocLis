@@ -576,6 +576,9 @@ public sealed class SampleWorkflowService(
                                      ? string.Empty
                                      : $" — {request.Comment}");
 
+                // Within the analyses' cancellation-reason column, which the comment alone may fill.
+                if (reasonText.Length > 500) reasonText = reasonText[..500];
+
                 if (request.RequestRecollection && affected.Count > 0)
                 {
                     var replacement = await CreateReplacementAsync(order, sample, affected, reasonText, ct);
@@ -829,12 +832,18 @@ public sealed class SampleWorkflowService(
         if (sample.CollectedAt is null)
             return Result.Failure<string>(Error.Validation("Sample_NotCollected"));
 
+        // Within the column (8 digits, 2 decimals): a mistyped volume was refused by the database.
+        if (volumeMl is <= 0m or >= 1_000_000m)
+            return Result.Failure<string>(Error.Validation("Sample_AliquotVolumeInvalid"));
+
         // The barcode comes from the same gapless series as the parent tube, inside a transaction,
         // so an abandoned aliquot does not burn a barcode that a real tube then never carries.
+        // The series is the installation's, with no site, as at registration: asked for with the
+        // site, it opened a counter of its own that started again at 0000000001 and gave the
+        // aliquot the barcode of another patient's tube.
         await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
 
-        var barcode = await sequences.NextAsync(SequencePurpose.SampleBarcode, currentUser.SiteId,
-                                                 ct: ct);
+        var barcode = await sequences.NextAsync(SequencePurpose.SampleBarcode, null, null, ct);
 
         if (barcode.IsFailure) return Result.Failure<string>(barcode.FirstError);
 

@@ -307,7 +307,8 @@ public sealed class SampleStorageView : LocalizedView
         // counts are not known and are not shown.
         _allChip.Text = T("Sample.FilterAll");
         _expiredChip.Text = $"{T("Sample.PastRetention")} · {expired}";
-        _unshelvedChip.Text = $"{T("Sample.NotShelved")} · {unshelved}";
+        // Counted among the past-retention tubes only, the figure read as the whole bank's.
+        _unshelvedChip.Text = _onlyExpired ? T("Sample.NotShelved") : $"{T("Sample.NotShelved")} · {unshelved}";
         _allChip.Selected = !_onlyExpired && !_onlyUnshelved;
         _expiredChip.Selected = _onlyExpired;
         _unshelvedChip.Selected = _onlyUnshelved;
@@ -393,7 +394,7 @@ public sealed class SampleStorageView : LocalizedView
     {
         if (Selected is not { } row) return;
 
-        using var dialog = new SampleAliquotDialog(Localizer, row, await StoragePlacesAsync());
+        using var dialog = new SampleAliquotDialog(Localizer, _dialogs, row, await StoragePlacesAsync());
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
 
@@ -438,7 +439,7 @@ public sealed class SampleStorageView : LocalizedView
             return;
 
         var note = _dialogs.PromptForReason(T("Sample.DiscardPrompt", row.Barcode),
-                                             T("Sample.Discard"));
+                                             T("Sample.Discard"), maxLength: Sample.EventDetailMaxLength);
 
         if (note is null) return;
 
@@ -470,7 +471,7 @@ public sealed class SampleStorageView : LocalizedView
             return;
 
         var note = _dialogs.PromptForReason(T("Sample.PurgePrompt", expired.Count),
-                                             T("Sample.PurgeExpired"));
+                                             T("Sample.PurgeExpired"), maxLength: Sample.EventDetailMaxLength);
 
         if (note is null) return;
 
@@ -553,6 +554,7 @@ internal sealed class SampleStorageDialog : Form
         positionLabel.Location = new Point(276, 14);
         _position.Bounds = new Rectangle(276, 34, 184, UiTheme.InputHeight);
         _position.Text = row.StoragePosition ?? string.Empty;
+        _position.MaxLength = 40;
         _position.Tag = UiTags.LatinValue;
 
         _hasKeepUntil.Text = localizer["Sample.KeepUntil"];
@@ -622,24 +624,24 @@ internal sealed class SampleStorageDialog : Form
 /// </summary>
 internal sealed class SampleAliquotDialog : Form
 {
+    private readonly ILocalizer _localizer;
+    private readonly IUserDialogs _dialogs;
     private readonly TextBox _volume = UiTheme.Input(120);
     private readonly TextBox _purpose = UiTheme.Input(280);
     private readonly ComboBox _location = new();
 
-    internal decimal? VolumeMl =>
-        decimal.TryParse(_volume.Text.Replace(',', '.'),
-                         System.Globalization.NumberStyles.Float,
-                         System.Globalization.CultureInfo.InvariantCulture, out var value)
-            && value > 0m
-            ? value : null;
+    internal decimal? VolumeMl => EditorValues.ParseDecimal(_volume.Text);
 
     internal string? Purpose => string.IsNullOrWhiteSpace(_purpose.Text) ? null : _purpose.Text.Trim();
 
     /// <summary>The place chosen; null for the empty entry, which keeps the parent tube's place.</summary>
     internal string? StorageLocation => StoragePlacePicker.Selected(_location);
 
-    internal SampleAliquotDialog(ILocalizer localizer, StoredSampleRow row, IReadOnlyList<string> places)
+    internal SampleAliquotDialog(ILocalizer localizer, IUserDialogs dialogs, StoredSampleRow row,
+                                 IReadOnlyList<string> places)
     {
+        _localizer = localizer;
+        _dialogs = dialogs;
         Text = $"{localizer["Sample.CreateAliquot"]} — {row.Barcode}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
@@ -672,6 +674,7 @@ internal sealed class SampleAliquotDialog : Form
         var purposeLabel = Pilotage.Caption(localizer["Sample.AliquotPurpose"]);
         purposeLabel.Location = new Point(160, 52);
         _purpose.Bounds = new Rectangle(160, 72, 300, UiTheme.InputHeight);
+        _purpose.MaxLength = 200;
 
         var locationLabel = Pilotage.Caption(localizer["Sample.Storage"]);
         locationLabel.Location = new Point(20, 110);
@@ -683,7 +686,7 @@ internal sealed class SampleAliquotDialog : Form
         body.Controls.AddRange([notice, volumeLabel, _volume, purposeLabel, _purpose, locationLabel, _location]);
 
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
-        ok.DialogResult = DialogResult.OK;
+        ok.Click += (_, _) => Accept();
 
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
         cancel.DialogResult = DialogResult.Cancel;
@@ -695,5 +698,23 @@ internal sealed class SampleAliquotDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+    }
+
+    /// <summary>
+    /// The volume is optional, but one typed and unreadable (or not positive) is said: it used to
+    /// be dropped without a word and the aliquot recorded with no volume.
+    /// </summary>
+    private void Accept()
+    {
+        if (!string.IsNullOrWhiteSpace(_volume.Text) && VolumeMl is not (> 0m and < 1_000_000m))
+        {
+            _dialogs.Warn(_localizer["Sample_AliquotVolumeInvalid"]);
+            _volume.Focus();
+            _volume.SelectAll();
+            return;
+        }
+
+        DialogResult = DialogResult.OK;
+        Close();
     }
 }

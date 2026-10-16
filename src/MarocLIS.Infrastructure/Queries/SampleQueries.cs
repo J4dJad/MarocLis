@@ -1,6 +1,7 @@
 using MarocLIS.Application.Orders;
 using MarocLIS.Application.Samples;
 using MarocLIS.Domain.Orders;
+using MarocLIS.Domain.Patients;
 using MarocLIS.Domain.Samples;
 using MarocLIS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -423,12 +424,16 @@ public sealed class SampleQueries(LisDbContext db) : ISampleQueries
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
+            // The patient as the box announces it, found the way the patient list finds a name.
+            var name = PatientSearchKey.Normalise(term);
 
             query = query.Where(s => s.Barcode.Contains(term)
                                      || (s.StorageLocation != null
                                          && s.StorageLocation.Contains(term))
                                      || db.LabOrders.Any(o => o.Id == s.LabOrderId
-                                                              && o.AccessionNumber.Contains(term)));
+                                                              && (o.AccessionNumber.Contains(term)
+                                                                  || (name.Length > 0
+                                                                      && o.Patient!.SearchKey.Contains(name)))));
         }
 
         var rows = await query
