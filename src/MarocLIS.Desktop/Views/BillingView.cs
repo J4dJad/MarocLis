@@ -641,6 +641,16 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
+        // A cancelled request is listed for the deposit it still holds, to be refunded, not invoiced.
+        var cancelled = selected.Where(s => s.Status == Domain.Orders.LabOrderStatus.Cancelled).ToList();
+
+        if (cancelled.Count > 0)
+        {
+            _dialogs.Warn(T("Invoice_OrderCancelled", string.Join(", ", cancelled.Select(s => s.AccessionNumber))),
+                          T("Billing.IssueInvoice"));
+            return;
+        }
+
         // Nor orders registered with different payers: each was split with its own at registration.
         // The service refuses it too; said here before the issue dialog is filled in for nothing.
         if (selected.Select(s => (s.PayerId, s.DirectBilling)).Distinct().Count() > 1)
@@ -1442,6 +1452,10 @@ internal sealed class PaymentDialog : Form
         _maturityLabel.Text = _localizer["Payment.Maturity"];
 
         FinanceDialogFrame.Apply(this, _localizer["Finance.Dialog.Payment"], [], cancel, ok);
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, _localizer.CurrentLanguage);
     }
 
     private PaymentMethod SelectedMethod =>

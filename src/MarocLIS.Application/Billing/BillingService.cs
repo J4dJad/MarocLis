@@ -293,6 +293,11 @@ public sealed class BillingService(
                 return Result.Failure<Guid>(Error.Conflict("Invoice_OrderAlreadyInvoiced",
                                                             order.AccessionNumber));
 
+            // Listed at the billing desk only for the deposit it still holds, which is refunded:
+            // its analyses are all cancelled, and the refusal said the invoice had no line.
+            if (order.Status == LabOrderStatus.Cancelled)
+                return Result.Failure<Guid>(Error.Conflict("Invoice_OrderCancelled", order.AccessionNumber));
+
             loaded.Add(order);
         }
 

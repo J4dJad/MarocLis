@@ -36,7 +36,10 @@ public sealed class SelectionLoads
             if (_versions[key] != version || IsGone(owner)) return;
             await load();
         }
+        // The view's queries report a closed screen as a cancellation (IsolatedQueries): leaving the
+        // validation screen while a row was loading ended in « Erreur inattendue ».
         catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException
+                                       or OperationCanceledException
                                    && IsGone(owner))
         {
             // The screen was closed while the load ran: there is nothing left to fill.

@@ -2008,7 +2008,9 @@ public sealed class OrderDetailView : LocalizedView
 
         var editable = detail is { IsCancelled: false };
 
-        _addAnalyses.Enabled = editable && _currentUser.Has(Permissions.Orders.Edit);
+        // Off on an invoiced or reported file, which the service refuses: offered, the operator
+        // picked the analyses and typed the reason before being told so.
+        _addAnalyses.Enabled = detail is { CanAddAnalyses: true } && _currentUser.Has(Permissions.Orders.Edit);
         _editHeader.Enabled = _editHeaderItem.Enabled = editable && _currentUser.Has(Permissions.Orders.Edit);
 
         _cancelOrder.Enabled = detail is { CanCancel: true }

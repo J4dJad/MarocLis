@@ -5266,6 +5266,7 @@
   "Invoice_ClaimRequiresPrescriberInpe": "Invoice {0} must carry the prescriber's INPE to be sent to this payer.",
   "Invoice_CreditNoteClaimSent": "Invoice {0} has already been sent to the payer, or settled by it: a credit note would have the same acts claimed a second time. Record the payer's rejection first, then issue the credit note.",
   "Invoice_PayerAgreementNotValid": "{0} has no third-party payment agreement in force: the invoice cannot be addressed to it. Issue it in the patient's name.",
+  "Invoice_OrderCancelled": "Request {0} is cancelled: it is not invoiced. Any deposit still held is refunded.",
 
   "Payment_AmountMustBePositive": "The payment amount must be positive.",
   "Payment_ExceedsOutstanding": "The amount exceeds the outstanding balance ({0}).",

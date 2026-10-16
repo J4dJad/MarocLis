@@ -69,6 +69,13 @@ public sealed record OrderDetail(
     public bool CanCancel => Status != LabOrderStatus.Cancelled
                              && Items.All(i => i.Status != LabOrderItemStatus.Validated
                                                && i.Status != LabOrderItemStatus.Reported);
+
+    /// <summary>
+    /// Whether analyses can still be added. Mirrors <see cref="OrderAmendmentService.AddAnalysesAsync"/>:
+    /// a cancelled or reported file takes none, nor an invoiced one, whose new acts would be on no invoice.
+    /// </summary>
+    public bool CanAddAnalyses => Status is not (LabOrderStatus.Cancelled or LabOrderStatus.Reported)
+                                  && !IsInvoiced;
 }
 
 public sealed record OrderItemDetail(
@@ -624,6 +631,12 @@ public sealed class OrderAmendmentService(
         if (request.PrescriberId is null && string.IsNullOrWhiteSpace(request.PrescriberFreeText)
             && LabOrder.RequiresPrescriber(order.Origin))
             return Result.Failure(Error.Validation("Order_PrescriberRequired"));
+
+        // The rule registration applies: the screen only stops at today, so a file registered
+        // yesterday took a prescription written after it.
+        if (request.PrescriptionDate is { } prescribed
+            && prescribed > DateOnly.FromDateTime(order.RegisteredAt.Date))
+            return Result.Failure(Error.Validation("Order_PrescriptionDateInFuture"));
 
         order.PrescriberId = request.PrescriberId;
         order.PrescriberFreeText = string.IsNullOrWhiteSpace(request.PrescriberFreeText)

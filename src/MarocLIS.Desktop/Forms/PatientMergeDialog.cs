@@ -106,6 +106,10 @@ internal sealed class PatientMergeDialog : Form
 
         PatientDialogFrame.Apply(this, Text, localizer["PatientDialog.MergeHint"], null, null, cancel, _ok);
 
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
+
         RefreshDirection();
         RefreshOk();
     }

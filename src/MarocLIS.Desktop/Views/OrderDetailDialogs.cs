@@ -128,6 +128,10 @@ internal sealed class AnalysisPickerDialog : Form
         // out as « BI… » and « 89… ».
         GridColumns.Apply(this);
 
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
+
         _search.KeyDown += async (_, e) =>
         {
             if (e.KeyCode != Keys.Enter) return;
@@ -413,7 +417,9 @@ internal sealed class OrderHeaderDialog : Form
         _prescriptionDate.Enabled = _hasPrescriptionDate.Checked;
         _prescriptionDate.Value = detail.PrescriptionDate?.ToDateTime(TimeOnly.MinValue)
                                   ?? DateTime.Today;
-        _prescriptionDate.MaxDate = DateTime.Today;
+        // Not after the file's registration, as the service requires: a later date was refused
+        // only once the dialog was filled in.
+        _prescriptionDate.MaxDate = detail.RegisteredAt.Date < DateTime.Today ? detail.RegisteredAt.Date : DateTime.Today;
 
         _hasPrescriptionDate.CheckedChanged +=
             (_, _) => _prescriptionDate.Enabled = _hasPrescriptionDate.Checked;
@@ -494,6 +500,10 @@ internal sealed class OrderHeaderDialog : Form
                            ok, cancel]);
 
         CancelButton = cancel;
+
+        // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
+        // on the wrong side.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
     private void Accept()
