@@ -88,12 +88,12 @@ public sealed class AccountingExportView : LocalizedView
         _from.Width = _to.Width = 150;
         _layout.FlatStyle = FlatStyle.Flat;
         _layout.Width = 330;
-        _sites.Size = new Size(320, 70);
+        _sites.Size = new Size(290, 70);
         _sites.BorderStyle = BorderStyle.FixedSingle;
 
         var journals = new FlowLayoutPanel
         {
-            Size = new Size(690, 70),
+            Size = new Size(654, 70),
             WrapContents = true,
             BackColor = UiTheme.SurfaceRaised
         };
@@ -103,7 +103,7 @@ public sealed class AccountingExportView : LocalizedView
             var box = new CheckBox
             {
                 AutoSize = true,
-                MinimumSize = new Size(225, 24),
+                MinimumSize = new Size(214, 24),
                 Checked = true,
                 Font = UiTheme.Body,
                 Margin = new Padding(0, 0, 4, 2)
@@ -116,6 +116,7 @@ public sealed class AccountingExportView : LocalizedView
         {
             Dock = DockStyle.Fill,
             WrapContents = true,
+            AutoScroll = true,
             Padding = new Padding(16, 4, 16, 4),
             BackColor = UiTheme.SurfaceRaised
         };
