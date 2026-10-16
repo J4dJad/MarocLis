@@ -957,7 +957,19 @@ public sealed class MasterDataView : LocalizedView
 
     private async Task EditInstrumentAsync(InstrumentMasterRow? row)
     {
-        using var dialog = new InstrumentEditorDialog(Localizer, _dialogs, row, _supplierRows);
+        // The whole stored instrument: the grid row has no software version, supplier, contract,
+        // support number or commissioning date, and an editor filled from it saved blanks there.
+        InstrumentRequest? stored = null;
+
+        if (row is not null)
+        {
+            var full = await _master.GetInstrumentForEditAsync(row.InstrumentId);
+            if (full.IsFailure) { _dialogs.ShowFailure(full, T("Nav.Instruments")); return; }
+
+            stored = full.Value;
+        }
+
+        using var dialog = new InstrumentEditorDialog(Localizer, _dialogs, row, _supplierRows, stored);
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;
 
@@ -1047,7 +1059,19 @@ public sealed class MasterDataView : LocalizedView
 
     private async Task EditPrescriberAsync(PrescriberRow? row)
     {
-        using var dialog = new PrescriberEditorDialog(Localizer, _dialogs, row);
+        // The whole stored prescriber: the grid row has one telephone and no ICE, fax, address,
+        // critical-result number, notes or default payer.
+        PrescriberRequest? stored = null;
+
+        if (row is not null)
+        {
+            var full = await _master.GetPrescriberForEditAsync(row.PrescriberId);
+            if (full.IsFailure) { _dialogs.ShowFailure(full, T("Order.NewPrescriber")); return; }
+
+            stored = full.Value;
+        }
+
+        using var dialog = new PrescriberEditorDialog(Localizer, _dialogs, row, stored: stored);
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;
 

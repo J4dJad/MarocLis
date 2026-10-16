@@ -304,6 +304,29 @@ internal abstract class MasterDataEditor : Form
     protected static int? IntOrNull(NumericUpDown box) =>
         box.Value > 0 ? (int)box.Value : null;
 
+    /// <summary>
+    /// <see cref="IntOrNull"/>, except that a box left at the stored value returns that value: a
+    /// stored zero shows as 0 and would otherwise come back as "not set".
+    /// </summary>
+    protected static int? IntOrStored(NumericUpDown box, int? stored) =>
+        stored is { } value && box.Value == Math.Clamp(value, box.Minimum, box.Maximum)
+            ? stored
+            : IntOrNull(box);
+
+    /// <summary>
+    /// A text the dialog edits in French only. While the French is unchanged the stored text is
+    /// kept whole, translations included; rebuilding it from the one box dropped the Arabic and
+    /// English on every save, even when nothing was touched.
+    /// </summary>
+    protected static MultilingualText? FrenchEdited(MultilingualText? stored, string? french) =>
+        french is null ? null
+        : stored is not null && string.Equals(stored.Fr, french, StringComparison.Ordinal) ? stored
+        : new MultilingualText(french);
+
+    /// <summary>A stored decimal written for an editable box, or empty when there is none.</summary>
+    protected static string? Editable(decimal? value) =>
+        value is { } number ? EditorValues.FormatForEditing(number, 0) : null;
+
     protected static decimal? DecimalOrNull(TextBox box) => EditorValues.ParseDecimal(box.Text);
 
     protected static TEnum Selected<TEnum>(ComboBox combo) where TEnum : struct, Enum =>
@@ -341,15 +364,22 @@ internal sealed class InstrumentEditorDialog : MasterDataEditor
                                                                _lastVerification, _contractUntil,
                                                                _commissioning;
     private readonly Label _kindNotice;
+    private readonly InstrumentRequest? _stored;
 
     internal InstrumentRequest? Request { get; private set; }
 
+    /// <param name="stored">
+    /// The whole stored instrument when editing. The fields are filled from it, and the request
+    /// saved is built on it, so whatever the dialog does not show is carried through as stored.
+    /// </param>
     internal InstrumentEditorDialog(ILocalizer localizer, IUserDialogs dialogs,
-                                    InstrumentMasterRow? row, IReadOnlyList<SupplierRow> suppliers)
+                                    InstrumentMasterRow? row, IReadOnlyList<SupplierRow> suppliers,
+                                    InstrumentRequest? stored = null)
         : base(localizer, dialogs,
                row is null ? "Equipment.NewInstrument" : "Action.Edit", row?.Code, 720, 600)
     {
         _id = row?.InstrumentId;
+        _stored = row is null ? null : stored;
 
         _code = TextField("Field.Code", 20, 14, 160, row?.Code, latin: true, mono: true);
         _nameFr = TextField("Field.NameFr", 200, 14, 240, row?.Name.Fr);
@@ -365,19 +395,23 @@ internal sealed class InstrumentEditorDialog : MasterDataEditor
 
         _manufacturer = TextField("Equipment.Manufacturer", 20, 122, 200, row?.Manufacturer);
         _model = TextField("Equipment.Model", 240, 122, 200, row?.Model);
-        _software = TextField("Equipment.SoftwareVersion", 460, 122, 240, null, latin: true);
+        _software = TextField("Equipment.SoftwareVersion", 460, 122, 240, _stored?.SoftwareVersion,
+                              latin: true);
 
         _supplier = Lookup("Inventory.Supplier", 20, 176, 300,
-                            suppliers.Select(s => (s.SupplierId, $"{s.Code} — {s.Name}")), null);
+                            suppliers.Select(s => (s.SupplierId, $"{s.Code} — {s.Name}")),
+                            _stored?.SupplierId);
 
-        _contract = TextField("Equipment.Contract", 340, 176, 200, null, latin: true);
-        _support = TextField("Equipment.SupportPhone", 560, 176, 140, null, latin: true, mono: true);
+        _contract = TextField("Equipment.Contract", 340, 176, 200,
+                              _stored?.MaintenanceContractReference, latin: true);
+        _support = TextField("Equipment.SupportPhone", 560, 176, 140, _stored?.SupportPhone,
+                             latin: true, mono: true);
 
         _contractUntil = OptionalDate("Equipment.ContractValidUntil", 20, 232,
                                        row?.ContractValidUntil);
 
-        _commissioning = OptionalDate("Equipment.Commissioning", 240, 232, null,
-                                       max: DateTime.Today);
+        _commissioning = OptionalDate("Equipment.Commissioning", 240, 232,
+                                       _stored?.CommissioningDate, max: DateTime.Today);
 
         // Interval block, set apart because it is the part that matters.
         var intervalHeading = new Label
@@ -402,14 +436,14 @@ internal sealed class InstrumentEditorDialog : MasterDataEditor
         _verificationInterval = Number("Equipment.VerificationInterval", 460, 366, 180,
                                         row?.VerificationIntervalDays, 3650);
 
-        _lastMaintenance = OptionalDate("Equipment.LastMaintenance", 20, 420, null,
-                                         max: DateTime.Today);
+        _lastMaintenance = OptionalDate("Equipment.LastMaintenance", 20, 420,
+                                         _stored?.LastPreventiveMaintenanceOn, max: DateTime.Today);
 
         _lastCalibration = OptionalDate("Equipment.LastCalibration", 240, 420,
                                          row?.LastCalibrationOn, max: DateTime.Today);
 
-        _lastVerification = OptionalDate("Equipment.LastVerification", 460, 420, null,
-                                          max: DateTime.Today);
+        _lastVerification = OptionalDate("Equipment.LastVerification", 460, 420,
+                                          _stored?.LastVerificationOn, max: DateTime.Today);
 
         Notice(20, 486, 680, 46, "Equipment.LastDatesNotice");
 
@@ -448,11 +482,18 @@ internal sealed class InstrumentEditorDialog : MasterDataEditor
             return;
         }
 
-        Request = new InstrumentRequest
+        // Built on the stored instrument, so a field this dialog does not show (the department, the
+        // purchase date) is saved as it was rather than reset.
+        var basis = _stored ?? new InstrumentRequest { Code = string.Empty, Name = new MultilingualText() };
+
+        Request = basis with
         {
             InstrumentId = _id,
             Code = _code.Text.Trim(),
-            Name = new MultilingualText(_nameFr.Text.Trim(), _nameAr.Text.Trim()),
+            // No English box: the stored English name is kept while the French one is unchanged.
+            Name = new MultilingualText(
+                _nameFr.Text.Trim(), _nameAr.Text.Trim(),
+                _stored?.Name.Fr == _nameFr.Text.Trim() ? _stored.Name.En : null),
             Kind = Selected<EquipmentKind>(_kind),
             Manufacturer = Blank(_manufacturer),
             Model = Blank(_model),
@@ -1100,6 +1141,7 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
     private readonly ComboBox _kind, _delivery;
     private readonly CheckBox _partial, _active;
     private readonly Label _inpeNotice, _deliveryNotice;
+    private readonly PrescriberRequest? _stored;
 
     internal PrescriberRequest? Request { get; private set; }
 
@@ -1107,17 +1149,26 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
     /// For a new prescriber created from the order screen: the name already typed in the list, so
     /// it is not typed twice.
     /// </param>
+    /// <param name="stored">
+    /// The whole stored prescriber when editing. The fields are filled from it, and the request
+    /// saved is built on it, so whatever the dialog does not show is carried through as stored.
+    /// </param>
     internal PrescriberEditorDialog(ILocalizer localizer, IUserDialogs dialogs, PrescriberRow? row,
-                                    string? typedName = null)
+                                    string? typedName = null, PrescriberRequest? stored = null)
         : base(localizer, dialogs,
                row is null ? "Order.NewPrescriber" : "Action.Edit", row?.FullName, 720, 620)
     {
         _id = row?.PrescriberId;
+        _stored = row is null ? null : stored;
 
+        // The stored names as they are: splitting the displayed full name at its first space moved
+        // half of a compound surname ("El Amrani") into the first name on every save.
         var parts = (row?.FullName ?? typedName?.Trim() ?? string.Empty).Split(' ', 2);
 
-        _lastName = TextField("Patient.LastName", 20, 14, 200, parts.ElementAtOrDefault(0));
-        _firstName = TextField("Patient.FirstName", 240, 14, 200, parts.ElementAtOrDefault(1));
+        _lastName = TextField("Patient.LastName", 20, 14, 200,
+                              _stored?.LastName ?? parts.ElementAtOrDefault(0));
+        _firstName = TextField("Patient.FirstName", 240, 14, 200,
+                               _stored?.FirstName ?? parts.ElementAtOrDefault(1));
         _nameAr = TextField("Patient.LastNameArabic", 460, 14, 240, row?.FullNameArabic, arabic: true);
 
         _kind = Choice("Field.Name", 20, 68, 220, row?.Kind ?? PrescriberKind.GeneralPractitioner,
@@ -1130,19 +1181,23 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
         _order = TextField("Admin.OrderNumber", 20, 122, 200, row?.ProfessionalOrderNumber,
                        latin: true, mono: true);
         _inpe = TextField("Site.Inpe", 240, 122, 170, row?.Inpe, latin: true, mono: true);
-        _ice = TextField("Site.Ice", 430, 122, 170, null, latin: true, mono: true);
+        _ice = TextField("Site.Ice", 430, 122, 170, _stored?.Ice, latin: true, mono: true);
 
         _inpeNotice = Notice(20, 174, 680, 30, "Order.InpeNotice", UiTheme.Abnormal);
 
-        _phone = TextField("Site.Phone", 20, 210, 180, null, latin: true, mono: true);
-        _mobile = TextField("Patient.MobilePhone", 220, 210, 180, row?.Phone, latin: true, mono: true);
-        _fax = TextField("Site.Fax", 420, 210, 160, null, latin: true, mono: true);
+        // Each number in its own box. The row carries one telephone (the mobile, else the
+        // landline), which used to be offered as the mobile.
+        _phone = TextField("Site.Phone", 20, 210, 180, _stored?.Phone, latin: true, mono: true);
+        _mobile = TextField("Patient.MobilePhone", 220, 210, 180,
+                            _stored is null ? row?.Phone : _stored.MobilePhone,
+                            latin: true, mono: true);
+        _fax = TextField("Site.Fax", 420, 210, 160, _stored?.Fax, latin: true, mono: true);
         _email = TextField("Field.Email", 20, 264, 280, row?.Email, latin: true);
         _city = TextField("Patient.City", 320, 264, 180, row?.City);
-        _address = TextField("Patient.Address", 520, 264, 180, null);
+        _address = TextField("Patient.Address", 520, 264, 180, _stored?.AddressLine);
 
-        _criticalPhone = TextField("Order.CriticalResultPhone", 20, 318, 220, null,
-                               latin: true, mono: true);
+        _criticalPhone = TextField("Order.CriticalResultPhone", 20, 318, 220,
+                                   _stored?.CriticalResultPhone, latin: true, mono: true);
 
         Notice(260, 336, 440, 30, "Order.CriticalPhoneNotice");
 
@@ -1158,7 +1213,7 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
         _discount = TextField("Billing.Discount", 20, 458, 120,
                           row?.DiscountPercent?.ToString("0.##"), latin: true, right: true);
 
-        _notes = TextField("Field.Notes", 160, 458, 380, null);
+        _notes = TextField("Field.Notes", 160, 458, 380, _stored?.Notes);
         _active = Check("Field.Active", 560, 476, row?.IsActive ?? true);
 
         Buttons(560, 720);
@@ -1193,15 +1248,18 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
             return;
         }
 
-        Request = new PrescriberRequest
+        // Built on the stored prescriber, so a field this dialog does not show (the default payer)
+        // is saved as it was rather than reset.
+        var basis = _stored ?? new PrescriberRequest { LastName = string.Empty, FirstName = string.Empty };
+
+        Request = basis with
         {
             PrescriberId = _id,
             LastName = _lastName.Text.Trim(),
             FirstName = _firstName.Text.Trim(),
             FullNameArabic = Blank(_nameAr),
             Kind = Selected<PrescriberKind>(_kind),
-            Speciality = string.IsNullOrWhiteSpace(_specialityFr.Text)
-                ? null : new MultilingualText(_specialityFr.Text.Trim()),
+            Speciality = FrenchEdited(_stored?.Speciality, Blank(_specialityFr)),
             ProfessionalOrderNumber = Blank(_order),
             Inpe = Blank(_inpe),
             Ice = Blank(_ice),

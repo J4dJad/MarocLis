@@ -20,6 +20,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 {
     private readonly Guid? _id;
     private readonly bool _isNew;
+    private readonly AnalysisRequest? _stored;
 
     private readonly TextBox _code, _nameFr, _nameAr, _nameEn, _shortName, _aliases,
                              _loinc, _actCode, _methodFr, _reagent, _volume, _clinicalInfo;
@@ -43,10 +44,14 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
     /// <param name="labTariff">The laboratory price-list tariff in force, if any.</param>
     /// <param name="knownLetterKeyValue">The latest letter-key value known, to prefill a first tariff.</param>
     /// <param name="canPrice">Whether the operator may set tariffs; the price fields are read-only otherwise.</param>
+    /// <param name="stored">
+    /// The whole stored analysis when editing. The fields are filled from it, and the request saved
+    /// is built on it, so whatever the dialog does not show is carried through as stored.
+    /// </param>
     internal AnalysisEditorDialog(ILocalizer localizer, IUserDialogs dialogs,
                                   CatalogLookups lookups, AnalysisRow? existing,
                                   TariffRow? labTariff = null, decimal? knownLetterKeyValue = null,
-                                  bool canPrice = false)
+                                  bool canPrice = false, AnalysisRequest? stored = null)
         : base(localizer, dialogs, existing is null ? "Catalog.NewAnalysis" : "Catalog.EditAnalysis",
                existing?.Code, 760, 764)
     {
@@ -54,6 +59,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _canPrice = canPrice;
         _id = existing?.Id;
         _isNew = existing is null;
+        _stored = existing is null ? null : stored;
 
         var language = localizer.CurrentLanguage;
 
@@ -71,8 +77,8 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _nameFr = TextField("Field.NameFr", 20, 60, 340, existing?.Name.Fr);
         _nameAr = TextField("Field.NameAr", 372, 60, 340, existing?.Name.Ar, arabic: true);
         _nameEn = TextField("Field.NameEn", 20, 104, 340, existing?.Name.En);
-        _shortName = TextField("Catalog.ShortName", 372, 104, 160, null);
-        _aliases = TextField("Catalog.SearchAliases", 20, 148, 692, null);
+        _shortName = TextField("Catalog.ShortName", 372, 104, 160, _stored?.ShortName?.Fr);
+        _aliases = TextField("Catalog.SearchAliases", 20, 148, 692, _stored?.SearchAliases);
 
         // --- classification --------------------------------------------------------------------
 
@@ -91,8 +97,9 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
                                    .Select(c => (c.Id, c.Name.For(language))),
                             existing?.ContainerTypeId);
 
-        _volume = TextField("Catalog.RequiredVolume", 20, 236, 120, null, latin: true, right: true);
-        _loinc = TextField("Catalog.Loinc", 152, 236, 160, null, latin: true, mono: true);
+        _volume = TextField("Catalog.RequiredVolume", 20, 236, 120, Editable(_stored?.RequiredVolumeMl),
+                            latin: true, right: true);
+        _loinc = TextField("Catalog.Loinc", 152, 236, 160, _stored?.LoincCode, latin: true, mono: true);
         _actCode = TextField("Catalog.NationalActCode", 324, 236, 160, existing?.NationalActCode,
                         latin: true, mono: true);
 
@@ -102,16 +109,16 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         // --- method ----------------------------------------------------------------------------
 
-        _methodFr = TextField("Catalog.Method", 20, 280, 340, null);
-        _reagent = TextField("Catalog.ReagentReference", 372, 280, 340, null);
+        _methodFr = TextField("Catalog.Method", 20, 280, 340, _stored?.Method?.Fr);
+        _reagent = TextField("Catalog.ReagentReference", 372, 280, 340, _stored?.ReagentReference);
 
         _accredited = Check("Catalog.Accredited", 20, 334, existing?.IsAccredited ?? false);
         _subcontracted = Check("Catalog.Subcontracted", 20, 358, existing?.IsSubcontracted ?? false);
-        _notifiable = Check("Catalog.Notifiable", 20, 382, false);
+        _notifiable = Check("Catalog.Notifiable", 20, 382, _stored?.IsNotifiableDisease ?? false);
 
         _subcontractor = Lookup("Catalog.SubcontractorSite", 372, 334, 340,
                                 lookups.PartnerSites.Select(s => (s.Id, $"{s.Code}  {s.Name.For(language)}")),
-                                null);
+                                _stored?.SubcontractorSiteId);
 
         // The picker follows the tick box: an analysis marked subcontracted with no partner site is
         // refused by the domain, and a laboratory with no partner configured needs to be told that
@@ -123,20 +130,27 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _routine = Number("Catalog.RoutineTurnaround", 20, 412, 140,
                           existing?.RoutineTurnaroundHours ?? 24, max: 8760);
 
-        _urgent = Number("Catalog.UrgentTurnaround", 180, 412, 140, 120, max: 10080);
+        _urgent = Number("Catalog.UrgentTurnaround", 180, 412, 140,
+                         _stored?.UrgentTurnaroundMinutes ?? 120, max: 10080);
 
-        _urgentAvailable = Check("Catalog.AvailableUrgently", 340, 432, true);
+        _urgentAvailable = Check("Catalog.AvailableUrgently", 340, 432,
+                                 _stored?.IsAvailableUrgently ?? true);
 
         Notice(20, 460, 692, 20, "Catalog.TurnaroundNotice");
 
         // --- pre-analytical --------------------------------------------------------------------
 
-        _fasting = Number("Catalog.FastingOverride", 20, 488, 140, null, max: 48);
-        _stabilityRoom = Number("Catalog.StabilityRoom", 180, 488, 140, null, max: 8760);
-        _stabilityFridge = Number("Catalog.StabilityFridge", 340, 488, 140, null, max: 8760);
-        _displayOrder = Number("Field.DisplayOrder", 500, 488, 120, 0, max: 9999);
+        _fasting = Number("Catalog.FastingOverride", 20, 488, 140,
+                          _stored?.FastingHoursOverride, max: 48);
+        _stabilityRoom = Number("Catalog.StabilityRoom", 180, 488, 140,
+                                _stored?.StabilityAtRoomTemperatureHours, max: 8760);
+        _stabilityFridge = Number("Catalog.StabilityFridge", 340, 488, 140,
+                                  _stored?.StabilityRefrigeratedHours, max: 8760);
+        _displayOrder = Number("Field.DisplayOrder", 500, 488, 120, _stored?.DisplayOrder ?? 0,
+                               max: 9999);
 
-        _clinicalInfo = TextField("Catalog.RequiredClinicalInformation", 20, 540, 692, null);
+        _clinicalInfo = TextField("Catalog.RequiredClinicalInformation", 20, 540, 692,
+                                  _stored?.RequiredClinicalInformation?.Fr);
 
         // --- price ------------------------------------------------------------------------------
         // The laboratory's own price list (patients paying themselves, and the fallback for any
@@ -177,11 +191,9 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         _active = Check("Field.Active", 20, 670, existing?.IsActive ?? true, bold: true);
 
-        // Pre-fill the fields the row does not carry. The grid row is a summary, so the editor
-        // opens on what it knows and leaves the rest blank rather than inventing values — an
-        // operator correcting a turnaround must not silently clear a stability window.
-        if (existing is not null)
-            Notice(200, 666, 512, 34, "Catalog.PartialEditNotice", UiTheme.Abnormal);
+        // Editing opens on the whole stored analysis (see CatalogMaintenanceService
+        // .GetAnalysisForEditAsync), not on the grid row: the row is a summary, and an editor
+        // filled from it saved blanks over the LOINC code, the stabilities and the partner site.
 
         RefreshSubcontracting();
 
@@ -304,13 +316,22 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         PriceRequest = priceRequest;
 
-        Request = new AnalysisRequest
+        // Built on the stored analysis, so a field this dialog does not show (the execution days)
+        // is saved as it was rather than reset.
+        var basis = _stored ?? new AnalysisRequest
+        {
+            Code = string.Empty,
+            Name = new MultilingualText(),
+            DepartmentId = Guid.Empty,
+            SpecimenTypeId = Guid.Empty
+        };
+
+        Request = basis with
         {
             Id = _id,
             Code = _code.Text.Trim().ToUpperInvariant(),
             Name = new MultilingualText(_nameFr.Text.Trim(), Blank(_nameAr), Blank(_nameEn)),
-            ShortName = Blank(_shortName) is { } shortName
-                ? new MultilingualText(shortName) : null,
+            ShortName = FrenchEdited(_stored?.ShortName, Blank(_shortName)),
             SearchAliases = Blank(_aliases),
             DepartmentId = SelectedId(_department)!.Value,
             SpecimenTypeId = SelectedId(_specimen)!.Value,
@@ -318,7 +339,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
             RequiredVolumeMl = DecimalOrNull(_volume),
             LoincCode = Blank(_loinc),
             NationalActCode = Blank(_actCode),
-            Method = Blank(_methodFr) is { } method ? new MultilingualText(method) : null,
+            Method = FrenchEdited(_stored?.Method, Blank(_methodFr)),
             ReagentReference = Blank(_reagent),
             IsAccredited = _accredited.Checked,
             IsSubcontracted = _subcontracted.Checked,
@@ -326,11 +347,13 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
             RoutineTurnaroundHours = (int)_routine.Value,
             UrgentTurnaroundMinutes = (int)_urgent.Value,
             IsAvailableUrgently = _urgentAvailable.Checked,
-            FastingHoursOverride = IntOrNull(_fasting),
-            StabilityAtRoomTemperatureHours = IntOrNull(_stabilityRoom),
-            StabilityRefrigeratedHours = IntOrNull(_stabilityFridge),
-            RequiredClinicalInformation = Blank(_clinicalInfo) is { } info
-                ? new MultilingualText(info) : null,
+            FastingHoursOverride = IntOrStored(_fasting, _stored?.FastingHoursOverride),
+            StabilityAtRoomTemperatureHours =
+                IntOrStored(_stabilityRoom, _stored?.StabilityAtRoomTemperatureHours),
+            StabilityRefrigeratedHours =
+                IntOrStored(_stabilityFridge, _stored?.StabilityRefrigeratedHours),
+            RequiredClinicalInformation =
+                FrenchEdited(_stored?.RequiredClinicalInformation, Blank(_clinicalInfo)),
             ConsentRequirement = Selected<ConsentRequirement>(_consent),
             IsNotifiableDisease = _notifiable.Checked,
             IsActive = _active.Checked,
@@ -357,6 +380,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
     private readonly Guid _analysisId;
     private readonly bool _isNew;
     private readonly IReadOnlyList<ParameterRow> _siblings;
+    private readonly ParameterRequest? _stored;
 
     private readonly TextBox _code, _nameFr, _nameAr, _nameEn, _shortName, _loinc,
                              _measuringLow, _measuringHigh, _technicalLow, _technicalHigh,
@@ -370,9 +394,14 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
 
     internal ParameterRequest? Request { get; private set; }
 
+    /// <param name="stored">
+    /// The whole stored parameter when editing, allowed answers included. The fields and the answer
+    /// list are filled from it, and the request saved is built on it.
+    /// </param>
     internal ParameterEditorDialog(ILocalizer localizer, IUserDialogs dialogs,
                                    CatalogLookups lookups, AnalysisRow analysis,
-                                   ParameterRow? existing, IReadOnlyList<ParameterRow> siblings)
+                                   ParameterRow? existing, IReadOnlyList<ParameterRow> siblings,
+                                   ParameterRequest? stored = null)
         : base(localizer, dialogs,
                existing is null ? "Catalog.NewParameter" : "Catalog.EditParameter",
                $"{analysis.Code} {(existing is null ? string.Empty : "/ " + existing.Code)}".Trim(),
@@ -382,6 +411,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _analysisId = analysis.Id;
         _isNew = existing is null;
         _siblings = siblings;
+        _stored = existing is null ? null : stored;
 
         var language = localizer.CurrentLanguage;
 
@@ -417,8 +447,9 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _nameAr = TextField("Field.NameAr", 262, 86, 230, existing?.Name.Ar, arabic: true);
         _nameEn = TextField("Field.NameEn", 504, 86, 228, existing?.Name.En);
 
-        _shortName = TextField("Catalog.ShortName", 20, 130, 160, null);
-        _loinc = TextField("Catalog.Loinc", 192, 130, 160, null, latin: true, mono: true);
+        _shortName = TextField("Catalog.ShortName", 20, 130, 160, _stored?.ShortName?.Fr);
+        _loinc = TextField("Catalog.Loinc", 192, 130, 160, _stored?.LoincCode,
+                           latin: true, mono: true);
         _cv = TextField("Catalog.AnalyticalCv", 364, 130, 100,
                    existing?.AnalyticalCvPercent?.ToString("0.##"), latin: true, right: true);
 
@@ -470,6 +501,12 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _options.EditMode = DataGridViewEditMode.EditOnEnter;
 
         BuildOptionColumns();
+
+        // The stored answers, so a coded parameter is not saved with a list to retype from memory:
+        // the list is replaced as a whole on save, and an empty grid was refused or dropped them.
+        foreach (var option in _stored?.CodedOptions ?? [])
+            _options.Rows.Add(option.Code, option.Label.Fr, option.Label.Ar ?? string.Empty,
+                              option.IsExpectedNormal, option.IsAbnormal, option.IsCritical);
 
         Controls.Add(_options);
 
@@ -650,14 +687,22 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
             }
         }
 
-        Request = new ParameterRequest
+        // Built on the stored parameter, so a field this dialog does not show is saved as it was.
+        var basis = _stored ?? new ParameterRequest
+        {
+            AnalysisTestId = _analysisId,
+            Code = string.Empty,
+            Name = new MultilingualText(),
+            ValueType = type
+        };
+
+        Request = basis with
         {
             Id = _id,
             AnalysisTestId = _analysisId,
             Code = _code.Text.Trim().ToUpperInvariant(),
             Name = new MultilingualText(_nameFr.Text.Trim(), Blank(_nameAr), Blank(_nameEn)),
-            ShortName = Blank(_shortName) is { } shortName
-                ? new MultilingualText(shortName) : null,
+            ShortName = FrenchEdited(_stored?.ShortName, Blank(_shortName)),
             ValueType = type,
             LoincCode = Blank(_loinc),
             UnitId = SelectedId(_unit),
@@ -699,11 +744,21 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
             if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(label)) continue;
 
             var arabic = row.Cells["labelAr"].Value?.ToString();
+            code = code.Trim().ToUpperInvariant();
+
+            var text = new MultilingualText(label.Trim(),
+                                            string.IsNullOrWhiteSpace(arabic) ? null : arabic.Trim());
+
+            // The grid has no English column: a stored answer whose French and Arabic are unchanged
+            // keeps its English label rather than losing it on save.
+            if (_stored?.CodedOptions.FirstOrDefault(
+                    o => string.Equals(o.Code, code, StringComparison.OrdinalIgnoreCase)) is { } stored
+                && stored.Label.Fr == text.Fr && stored.Label.Ar == text.Ar)
+                text = stored.Label;
 
             options.Add(new CodedOptionRequest(
-                code.Trim().ToUpperInvariant(),
-                new MultilingualText(label.Trim(),
-                                      string.IsNullOrWhiteSpace(arabic) ? null : arabic.Trim()),
+                code,
+                text,
                 order++,
                 row.Cells["abnormal"].Value is true,
                 row.Cells["critical"].Value is true,

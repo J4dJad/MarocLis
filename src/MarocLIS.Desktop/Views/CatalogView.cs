@@ -1219,9 +1219,17 @@ public sealed class CatalogView : LocalizedView
         // value is national, so a first tariff starts from the latest one known on any analysis.
         TariffRow? labTariff = null;
         decimal? knownLetterKeyValue = null;
+        AnalysisRequest? stored = null;
 
         if (existing is not null)
         {
+            // The whole stored analysis: the grid row is a summary, and an editor filled from it
+            // saved blanks over every field the row does not carry.
+            var full = await _catalog.GetAnalysisForEditAsync(existing.Id);
+            if (full.IsFailure) { _dialogs.ShowFailure(full); return; }
+
+            stored = full.Value;
+
             var tariffs = await _catalog.GetTariffsAsync(existing.Id);
             if (tariffs.IsFailure) { _dialogs.ShowFailure(tariffs); return; }
 
@@ -1236,7 +1244,8 @@ public sealed class CatalogView : LocalizedView
         }
 
         using var dialog = new AnalysisEditorDialog(Localizer, _dialogs, _lookups, existing,
-                                                    labTariff, knownLetterKeyValue, canPrice);
+                                                    labTariff, knownLetterKeyValue, canPrice,
+                                                    stored);
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;
 
@@ -1283,11 +1292,22 @@ public sealed class CatalogView : LocalizedView
 
         if (!create && existing is null) return;
 
+        // The whole stored parameter, allowed answers included, which the grid row does not carry.
+        ParameterRequest? stored = null;
+
+        if (existing is not null)
+        {
+            var full = await _catalog.GetParameterForEditAsync(analysis.Id, existing.Id);
+            if (full.IsFailure) { _dialogs.ShowFailure(full); return; }
+
+            stored = full.Value;
+        }
+
         // The sibling codes are handed to the editor so a calculation formula can be checked
         // against them as it is typed, rather than refused on save.
         using var dialog = new ParameterEditorDialog(
             Localizer, _dialogs, _lookups, analysis, existing,
-            [.. _parameterRows.Where(p => existing is null || p.Id != existing.Id)]);
+            [.. _parameterRows.Where(p => existing is null || p.Id != existing.Id)], stored);
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;
 
