@@ -57,7 +57,6 @@ public sealed class QualityControlView : LocalizedView
     private readonly Label _title = new();
     private readonly Label _count = new();
     private readonly Label _lotCaption = new();
-    private readonly Label _chartFacts = new();
     private readonly Label _rulesLine = new();
     private readonly PillLabel _blocked = new();
 
@@ -126,7 +125,7 @@ public sealed class QualityControlView : LocalizedView
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            SplitterDistance = 300,
+            SplitterDistance = 330,
             SplitterWidth = 14,
             BackColor = UiTheme.Surface
         };
@@ -135,7 +134,7 @@ public sealed class QualityControlView : LocalizedView
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
-            SplitterDistance = 600,
+            SplitterDistance = 640,
             SplitterWidth = 14,
             BackColor = UiTheme.Surface
         };
@@ -143,18 +142,10 @@ public sealed class QualityControlView : LocalizedView
         var entryCard = QhPage.TitledCard(_entryHeading, null, _entry);
         entryCard.Dock = DockStyle.Fill;
 
-        // The chart's card: what the control is, the points, then the rules in force and the two
-        // actions on the control's limits and rules (the E2 board's statistics panel, reduced to
-        // what the laboratory has on file).
+        // The chart's card: the points (the chart writes the control, its lot and limits above
+        // them), then the rules in force and the two actions on the control's limits and rules —
+        // the E2 board's rules panel, reduced to what the laboratory has on file.
         var chartBody = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
-
-        _chartFacts.Dock = DockStyle.Top;
-        _chartFacts.AutoSize = false;
-        _chartFacts.AutoEllipsis = true;
-        _chartFacts.Height = 24;
-        _chartFacts.Padding = new Padding(14, 0, 14, 4);
-        _chartFacts.Font = UiTheme.Small;
-        _chartFacts.ForeColor = UiTheme.TextSecondary;
 
         _chart.Dock = DockStyle.Fill;
 
@@ -162,7 +153,6 @@ public sealed class QualityControlView : LocalizedView
 
         chartBody.Controls.Add(_chart);
         chartBody.Controls.Add(chartBar);
-        chartBody.Controls.Add(_chartFacts);
 
         var chartCard = QhPage.TitledCard(_chartHeading, null, chartBody);
         chartCard.Dock = DockStyle.Fill;
@@ -604,34 +594,16 @@ public sealed class QualityControlView : LocalizedView
         (WestgardRule.TenX, "10ₓ"), (WestgardRule.TwelveX, "12ₓ")
     ];
 
-    /// <summary>
-    /// The line over the chart and the rules under it, for the control shown: its analyser, level
-    /// and lot, the target it is judged against, and the rules in force.
-    /// </summary>
+    /// <summary>The rules in force for the control shown, under its chart, by their short names.</summary>
     private void ShowControlFacts(Guid qcTargetId)
     {
         var row = _rows.FirstOrDefault(r => r.QcTargetId == qcTargetId);
 
         if (row is null)
         {
-            _chartFacts.Text = string.Empty;
             _rulesLine.Text = string.Empty;
             return;
         }
-
-        var parts = new List<string>
-        {
-            row.InstrumentCode,
-            T($"QcLevel.{row.Level}"),
-            row.MaterialLotNumber
-        };
-
-        if (row.TargetMean is { } mean && row.TargetSd is { } sd)
-            parts.Add($"{T("Quality.Target")} {mean.ToString("N" + row.Decimals)} ± {sd.ToString("N" + row.Decimals)}");
-        if (row.CvPercent is { } cv) parts.Add($"CV {cv:N2} %");
-        parts.Add($"{row.PointCount} {T("Quality.PointCount").ToLowerInvariant()}");
-
-        _chartFacts.Text = string.Join("  ·  ", parts);
 
         var active = RuleNames.Where(r => row.ActiveRules.HasFlag(r.Rule)).Select(r => r.Name).ToList();
         _rulesLine.ForeColor = active.Count == 0 ? UiTheme.Critical : UiTheme.TextSecondary;

@@ -414,69 +414,124 @@ internal static class QhPage
 }
 
 /// <summary>
-/// The foot of a card: what is known of the selected line on the left, its actions on the right
-/// with the main one at the far end, a line above. Laid out by a table, so it mirrors in Arabic;
-/// the actions wrap onto a second line on a narrow window.
+/// The foot of a card: what is known of the selected line on the start side, its actions on the
+/// end side with the main one at the far end, a line above. Laid out here rather than by a table:
+/// the actions keep their natural width, wrap onto a further line on a narrow window, and the
+/// whole is mirrored in Arabic.
 /// </summary>
-internal sealed class QhSelectionBar : TableLayoutPanel
+internal sealed class QhSelectionBar : Panel
 {
-    private readonly FlowLayoutPanel _actions = new()
-    {
-        AutoSize = true,
-        AutoSizeMode = AutoSizeMode.GrowAndShrink,
-        WrapContents = true,
-        FlowDirection = FlowDirection.LeftToRight,
-        Margin = Padding.Empty,
-        Padding = Padding.Empty,
-        BackColor = UiTheme.SurfaceRaised,
-        Anchor = AnchorStyles.Right
-    };
+    private const int Gap = 8;
+    private readonly Label? _detail;
+    private readonly List<Control> _actions = [];
+    private bool _placing;
 
     public QhSelectionBar(Label? detail, params Control[] actions)
     {
-        SetStyle(ControlStyles.ResizeRedraw, true);
-        ColumnCount = 2;
-        RowCount = 1;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        SetStyle(ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer, true);
         Dock = DockStyle.Bottom;
         Margin = Padding.Empty;
-        Padding = new Padding(14, 11, 14, 11);
+        Padding = new Padding(14, 10, 14, 10);
         BackColor = UiTheme.SurfaceRaised;
-        ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Tag = UiTags.OwnLayout;
+        Height = 54;
 
+        _detail = detail;
         if (detail is not null)
         {
-            detail.AutoSize = true;
-            detail.AutoEllipsis = false;
+            detail.AutoSize = false;
+            detail.AutoEllipsis = true;
             detail.Font = UiTheme.Small;
             if (detail.ForeColor == DefaultForeColor) detail.ForeColor = UiTheme.TextSecondary;
-            detail.Anchor = AnchorStyles.Left;
-            detail.Margin = new Padding(0, 2, 12, 2);
-            Controls.Add(detail, 0, 0);
+            detail.TextAlign = ContentAlignment.MiddleLeft;
+            detail.TextChanged += (_, _) => Place();
+            Controls.Add(detail);
         }
 
         foreach (var action in actions)
         {
             if (action is Button button) QhPage.Fit(button);
-            action.Margin = new Padding(8, 2, 0, 2);
-            _actions.Controls.Add(action);
+            action.SizeChanged += (_, _) => Place();
+            action.VisibleChanged += (_, _) => Place();
+            _actions.Add(action);
+            Controls.Add(action);
         }
-
-        Controls.Add(_actions, 1, 0);
-        Resize += (_, _) => Fit(detail);
     }
 
-    // The actions take up to three quarters of the width and wrap beyond; the detail the rest.
-    private void Fit(Label? detail)
+    protected override void OnLayout(LayoutEventArgs levent)
     {
-        var width = ClientSize.Width - Padding.Horizontal;
-        if (width <= 0) return;
-        _actions.MaximumSize = new Size(Math.Max(200, width * 3 / 4), 0);
-        if (detail is not null)
-            detail.MaximumSize = new Size(Math.Max(120, width - _actions.PreferredSize.Width - 20), 0);
+        base.OnLayout(levent);
+        Place();
+    }
+
+    private void Place()
+    {
+        if (_placing || Width <= 0) return;
+        _placing = true;
+        try
+        {
+            var rtl = RightToLeft == RightToLeft.Yes;
+            var inner = new Rectangle(Padding.Left, Padding.Top, Width - Padding.Horizontal, 0);
+            var shown = _actions.Where(a => a.Visible || !IsHandleCreated).ToList();
+
+            // The actions from the far end inwards, the last given at the far end.
+            var lines = new List<List<Control>> { new() };
+            var used = 0;
+            var room = _detail is null ? inner.Width : Math.Max(160, inner.Width * 3 / 4);
+            foreach (var action in Enumerable.Reverse(shown))
+            {
+                var width = action.Width;
+                if (lines[^1].Count > 0 && used + Gap + width > room)
+                {
+                    lines.Add([]);
+                    used = 0;
+                }
+                used += (lines[^1].Count > 0 ? Gap : 0) + width;
+                lines[^1].Add(action);
+            }
+
+            var y = inner.Top;
+            var widest = 0;
+            foreach (var line in lines)
+            {
+                var x = inner.Right;
+                var height = 0;
+                foreach (var action in line)
+                {
+                    x -= action.Width;
+                    var bounds = new Rectangle(x, y, action.Width, action.Height);
+                    action.Location = rtl ? new Point(Width - bounds.Right, y) : bounds.Location;
+                    x -= Gap;
+                    height = Math.Max(height, action.Height);
+                }
+                widest = Math.Max(widest, inner.Right - x - Gap);
+                if (line.Count > 0) y += height + 6;
+            }
+
+            var actionsHeight = Math.Max(0, y - inner.Top - 6);
+
+            if (_detail is not null)
+            {
+                var width = Math.Max(80, inner.Width - (lines.Count == 1 ? widest + 16 : 0));
+                var textHeight = string.IsNullOrEmpty(_detail.Text)
+                    ? 0
+                    : TextRenderer.MeasureText(_detail.Text, _detail.Font, new Size(width, 0),
+                                               TextFormatFlags.WordBreak).Height;
+                var detailTop = lines.Count == 1 ? inner.Top : inner.Top + actionsHeight + 6;
+                var detailHeight = Math.Min(Math.Max(textHeight, Math.Min(34, Math.Max(actionsHeight, 18))), 48);
+                if (lines.Count == 1) detailHeight = Math.Max(detailHeight, actionsHeight);
+                var bounds = new Rectangle(inner.Left, detailTop, width, detailHeight);
+                _detail.Bounds = rtl ? new Rectangle(Width - bounds.Right, bounds.Top, bounds.Width, bounds.Height) : bounds;
+                actionsHeight = Math.Max(actionsHeight, _detail.Bottom - inner.Top);
+            }
+
+            var wanted = Padding.Vertical + Math.Max(actionsHeight, 20);
+            if (Height != wanted) Height = wanted;
+        }
+        finally
+        {
+            _placing = false;
+        }
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -605,7 +660,7 @@ internal sealed class QhAside : Panel
         Padding = new Padding(16, 14, 10, 12);
         UiChrome.AsCard(this);
 
-        _facts.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
+        _facts.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
         _facts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
@@ -614,6 +669,13 @@ internal sealed class QhAside : Panel
             _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             _layout.Controls.Add(part);
         }
+
+        // Scrolls up and down when the item has more to say than the aside holds, never sideways.
+        _layout.AutoScroll = false;
+        _layout.HorizontalScroll.Enabled = false;
+        _layout.HorizontalScroll.Visible = false;
+        _layout.HorizontalScroll.Maximum = 0;
+        _layout.AutoScroll = true;
 
         _layout.Resize += (_, _) => Wrap();
         Controls.Add(_layout);
@@ -668,7 +730,7 @@ internal sealed class QhAside : Panel
             _facts.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             _facts.Controls.Add(new Label
             {
-                Text = label, AutoSize = true, Font = UiTheme.Body, ForeColor = UiTheme.TextSecondary,
+                Text = label, AutoSize = true, Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary,
                 Margin = new Padding(0, 3, 8, 3), RightToLeft = RightToLeft
             }, 0, row);
             _facts.Controls.Add(new Label
@@ -701,11 +763,11 @@ internal sealed class QhAside : Panel
     // Long texts wrap at the aside's width rather than running under its border.
     private void Wrap()
     {
-        var width = Math.Max(120, _layout.ClientSize.Width - 4);
+        var width = Math.Max(120, _layout.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 4);
         foreach (var label in new[] { Heading, Subtitle, Note })
             label.MaximumSize = new Size(width, 0);
         foreach (Label value in _facts.Controls.OfType<Label>())
-            value.MaximumSize = new Size(_facts.GetColumn(value) == 0 ? 114 : Math.Max(80, width - 122), 0);
+            value.MaximumSize = new Size(_facts.GetColumn(value) == 0 ? 108 : Math.Max(80, width - 116), 0);
         ActionsPanel.MaximumSize = new Size(width, 0);
     }
 }

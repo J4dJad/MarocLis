@@ -25,14 +25,16 @@ public sealed class EqaView : LocalizedView
 
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly Label _heading = new();
+    private readonly Label _count = new();
     private readonly Label _yearLabel = new();
     private readonly NumericUpDown _year = new();
     private readonly CheckBox _onlyPending = new();
 
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _register = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _submission = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _evaluation = UiTheme.PrimaryButton(string.Empty);
+    // Secondary: registering a round is the screen's one primary action.
+    private readonly Button _submission = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _evaluation = UiTheme.SecondaryButton(string.Empty);
 
     private readonly Label _detail = new();
 
@@ -56,55 +58,25 @@ public sealed class EqaView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
-
-        var bar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _yearLabel.Font = UiTheme.Small;
-        _yearLabel.ForeColor = UiTheme.TextSecondary;
-        _yearLabel.AutoSize = true;
-        _yearLabel.Location = new Point(0, 34);
+        Padding = QhPage.PagePadding;
 
         _year.Minimum = 2000;
         _year.Maximum = 2100;
         _year.Value = DateTime.Today.Year;
-        _year.Bounds = new Rectangle(60, 30, 80, UiTheme.InputHeight);
-
-        _onlyPending.Font = UiTheme.Small;
-        _onlyPending.ForeColor = UiTheme.TextSecondary;
-        _onlyPending.AutoSize = true;
-        _onlyPending.Location = new Point(160, 34);
-
-        _refresh.Bounds = new Rectangle(420, 26, 110, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _yearLabel, _year, _onlyPending, _refresh]);
 
         BuildColumns();
 
-        var gridHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        gridHost.Controls.Add(_grid);
+        var header = QhPage.Header(_heading, _count, _refresh, _register);
+        var toolbar = QhPage.Toolbar(QhPage.Caption(_yearLabel), QhPage.Filter(_year, 80),
+                                     QhPage.Chip(_onlyPending), _onlyPending);
 
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 92, BackColor = UiTheme.Surface };
+        // The selected participation's detail and its two steps at the foot of the list.
+        var body = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        _grid.Dock = DockStyle.Fill;
+        body.Controls.Add(_grid);
+        body.Controls.Add(new QhSelectionBar(_detail, _submission, _evaluation));
 
-        _detail.Font = UiTheme.Small;
-        _detail.ForeColor = UiTheme.TextSecondary;
-        _detail.AutoSize = false;
-        _detail.Bounds = new Rectangle(0, 4, 1200, 32);
-
-        _register.Bounds = new Rectangle(0, 42, 220, UiTheme.ButtonHeight);
-        _submission.Bounds = new Rectangle(230, 42, 220, UiTheme.ButtonHeight);
-        _evaluation.Bounds = new Rectangle(460, 42, 220, UiTheme.ButtonHeight);
-
-        footer.Controls.AddRange([_detail, _register, _submission, _evaluation]);
-
-        Controls.Add(gridHost);
-        Controls.Add(footer);
-        Controls.Add(bar);
+        Controls.Add(QhPage.Frame(2, header, toolbar, QhPage.Card(body)));
     }
 
     private void BuildColumns()
@@ -144,6 +116,7 @@ public sealed class EqaView : LocalizedView
 
         _grid.SelectionChanged += (_, _) => ShowDetail();
         _grid.CellFormatting += OnCellFormatting;
+        QhGridPills.Attach(_grid, "outcome", r => r.Tag is EqaRow row ? OutcomeTone(row) : null);
 
         _register.Click += async (_, _) => await RegisterRoundAsync();
         _submission.Click += async (_, _) => await RecordSubmissionAsync();
@@ -159,25 +132,25 @@ public sealed class EqaView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count) return;
         if (_grid.Rows[e.RowIndex].Tag is not EqaRow row) return;
 
-        switch (row.Outcome)
-        {
-            case EqaOutcome.Unsatisfactory or EqaOutcome.NotSubmitted:
-                e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-                e.CellStyle.ForeColor = UiTheme.Critical;
-                break;
-            case EqaOutcome.Questionable:
-                e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-                e.CellStyle.ForeColor = UiTheme.Abnormal;
-                break;
-            case EqaOutcome.Satisfactory:
-                e.CellStyle!.ForeColor = UiTheme.Normal;
-                break;
-            case EqaOutcome.Pending when row.IsSubmissionOverdue:
-                e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-                e.CellStyle.ForeColor = UiTheme.Abnormal;
-                break;
-        }
+        // The verdict is a pill; a submission past its deadline keeps its date in the warning ink,
+        // and a bad z-score its value in the critical one.
+        var column = _grid.Columns[e.ColumnIndex].Name;
+        if (column == "deadline" && row is { Outcome: EqaOutcome.Pending, IsSubmissionOverdue: true })
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
+        else if (column == "z" && row.Outcome == EqaOutcome.Unsatisfactory)
+            e.CellStyle!.ForeColor = UiTheme.Critical;
+        else if (column == "z" && row.Outcome == EqaOutcome.Questionable)
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
     }
+
+    private static (Color Back, Color Fore) OutcomeTone(EqaRow row) => row.Outcome switch
+    {
+        EqaOutcome.Satisfactory => QhTone.Ok,
+        EqaOutcome.Questionable => QhTone.Warn,
+        EqaOutcome.Unsatisfactory or EqaOutcome.NotSubmitted => QhTone.Crit,
+        EqaOutcome.Excluded => QhTone.Muted,
+        _ => row.IsSubmissionOverdue ? QhTone.Warn : QhTone.Wait
+    };
 
     protected override void ApplyTexts()
     {
@@ -278,11 +251,13 @@ public sealed class EqaView : LocalizedView
         var satisfactory = _rows.Count(r => r.Outcome == EqaOutcome.Satisfactory);
         var overdue = _rows.Count(r => r.IsSubmissionOverdue);
 
-        var text = $"{T("Quality.Eqa")} — {_rows.Count}";
+        _heading.Text = T("Quality.Eqa");
+
+        var text = Localizer.Format("QualityHr.Eqa.Count", _rows.Count);
         if (evaluated > 0)
             text += $" · {T("Eqa.SatisfactoryRate")} {100.0 * satisfactory / evaluated:0}%";
         if (overdue > 0) text += $" · {T("Eqa.Overdue")} {overdue}";
-        _heading.Text = text;
+        _count.Text = text;
     }
 
     private void ShowDetail()
@@ -421,6 +396,7 @@ internal sealed class EqaRoundDialog : MasterDataEditor
         Notice(20, 452, 520, 46, "Eqa.RegisterNotice");
 
         Buttons(512, 560);
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.EqaRound");
     }
 
     protected override void Accept()
@@ -492,6 +468,7 @@ internal sealed class EqaSubmissionDialog : MasterDataEditor
         Notice(20, 76, 380, 46, "Eqa.SubmissionNotice");
 
         Buttons(146, 420);
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.EqaSubmission");
     }
 
     protected override void Accept()
@@ -555,6 +532,7 @@ internal sealed class EqaEvaluationDialog : MasterDataEditor
         Notice(20, 290, 520, 60, "Eqa.UnsatisfactoryNotice", UiTheme.Abnormal);
 
         Buttons(372, 560);
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.EqaEvaluation");
     }
 
     protected override void Accept()

@@ -29,16 +29,18 @@ public sealed class QualityDocumentsView : LocalizedView
     private readonly DataGridView _grid = UiTheme.Grid();
     private readonly DataGridView _versions = UiTheme.Grid();
     private readonly Label _heading = new();
+    private readonly Label _count = new();
     private readonly Label _versionsHeading = new();
     private readonly CheckBox _includeInactive = new();
 
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _newDocument = UiTheme.PrimaryButton(string.Empty);
-    private readonly Button _newVersion = UiTheme.PrimaryButton(string.Empty);
+    // Secondary, as the other steps: a new document is the screen's one primary action.
+    private readonly Button _newVersion = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _submit = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _review = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _approve = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _makeEffective = UiTheme.PrimaryButton(string.Empty);
+    private readonly Button _makeEffective = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _open = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _acknowledge = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _withdraw = UiTheme.SecondaryButton(string.Empty);
@@ -69,74 +71,44 @@ public sealed class QualityDocumentsView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = QhPage.PagePadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = UiTheme.Surface };
+        BuildDocumentColumns();
+        BuildVersionColumns();
 
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        _includeInactive.Font = UiTheme.Small;
-        _includeInactive.ForeColor = UiTheme.TextSecondary;
-        _includeInactive.AutoSize = true;
-        _includeInactive.Location = new Point(0, 32);
-
-        _refresh.Bounds = new Rectangle(300, 26, 110, UiTheme.ButtonHeight);
-        _newDocument.Bounds = new Rectangle(420, 26, 190, UiTheme.ButtonHeight);
-
-        bar.Controls.AddRange([_heading, _includeInactive, _refresh, _newDocument]);
+        var header = QhPage.Header(_heading, _count, _refresh, _newDocument);
+        var toolbar = QhPage.Toolbar(QhPage.Chip(_includeInactive), _includeInactive);
 
         var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            SplitterDistance = 300,
-            SplitterWidth = 6,
+            SplitterDistance = 280,
+            SplitterWidth = 14,
             BackColor = UiTheme.Surface
         };
 
-        BuildDocumentColumns();
-        BuildVersionColumns();
+        // The register, with what concerns the whole document at its foot: the file, reading it,
+        // withdrawing it — and why it needs attention.
+        var registerBody = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        _grid.Dock = DockStyle.Fill;
+        registerBody.Controls.Add(_grid);
+        registerBody.Controls.Add(new QhSelectionBar(_message, _open, _acknowledge, _withdraw));
+        var registerCard = QhPage.Card(registerBody);
+        registerCard.Dock = DockStyle.Fill;
 
-        split.Panel1.Controls.Add(_grid);
+        // The versions, with the steps of a version's life at their foot, in their order.
+        var versionsBody = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        _versions.Dock = DockStyle.Fill;
+        versionsBody.Controls.Add(_versions);
+        versionsBody.Controls.Add(new QhSelectionBar(null, _newVersion, _submit, _review, _approve, _makeEffective));
+        var versionsCard = QhPage.TitledCard(_versionsHeading, null, versionsBody);
+        versionsCard.Dock = DockStyle.Fill;
 
-        _versionsHeading.Font = UiTheme.SectionTitle;
-        _versionsHeading.ForeColor = UiTheme.TextPrimary;
-        _versionsHeading.Dock = DockStyle.Top;
-        _versionsHeading.Height = 26;
+        split.Panel1.Controls.Add(registerCard);
+        split.Panel2.Controls.Add(versionsCard);
 
-        split.Panel2.Controls.Add(_versions);
-        split.Panel2.Controls.Add(_versionsHeading);
-
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 84, BackColor = UiTheme.Surface };
-
-        var x = 0;
-        foreach (var button in new[] { _newVersion, _submit, _review, _approve, _makeEffective })
-        {
-            button.Bounds = new Rectangle(x, 8, 170, UiTheme.ButtonHeight);
-            x += 180;
-        }
-
-        x = 0;
-        foreach (var button in new[] { _open, _acknowledge, _withdraw })
-        {
-            button.Bounds = new Rectangle(x, 46, 170, UiTheme.ButtonHeight);
-            x += 180;
-        }
-
-        _message.Font = UiTheme.SmallBold;
-        _message.ForeColor = UiTheme.TextSecondary;
-        _message.AutoSize = false;
-        _message.Bounds = new Rectangle(560, 52, 640, 20);
-
-        footer.Controls.AddRange([_newVersion, _submit, _review, _approve, _makeEffective,
-                                  _open, _acknowledge, _withdraw, _message]);
-
-        Controls.Add(split);
-        Controls.Add(footer);
-        Controls.Add(bar);
+        Controls.Add(QhPage.Frame(2, header, toolbar, split));
     }
 
     private static void AddColumn(DataGridView grid, string name, int weight, Font? font = null,
@@ -186,6 +158,16 @@ public sealed class QualityDocumentsView : LocalizedView
 
         _grid.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadVersionsAsync());
         _grid.CellFormatting += OnDocumentFormatting;
+        QhGridPills.Attach(_versions, "status", r => r.Tag is DocumentVersionRow version
+            ? version.Status switch
+            {
+                DocumentVersionStatus.Effective => QhTone.Ok,
+                DocumentVersionStatus.Approved or DocumentVersionStatus.Reviewed => QhTone.Info,
+                DocumentVersionStatus.UnderReview => QhTone.Warn,
+                DocumentVersionStatus.Draft => QhTone.Wait,
+                _ => QhTone.Muted
+            }
+            : null);
         _versions.SelectionChanged += (_, _) => RefreshButtons();
 
         _newDocument.Click += async (_, _) => await CreateDocumentAsync();
@@ -214,13 +196,18 @@ public sealed class QualityDocumentsView : LocalizedView
         if (!row.IsActive)
         {
             e.CellStyle!.ForeColor = UiTheme.TextMuted;
+            return;
         }
-        else if (row.IsReviewOverdue || row.EffectiveVersion is null)
+
+        // Overdue review, or nothing in force at all: either way staff are working from a text the
+        // laboratory has not currently vouched for. Said in the warning ink on the cell concerned.
+        var column = _grid.Columns[e.ColumnIndex].Name;
+        if ((column == "review" && row.IsReviewOverdue)
+            || (column is "effective" or "effectiveFrom" && row.EffectiveVersion is null)
+            || column == "reference" && (row.IsReviewOverdue || row.EffectiveVersion is null))
         {
-            // Overdue review, or nothing in force at all: either way staff are working from a text
-            // the laboratory has not currently vouched for.
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
+            e.CellStyle.Font = UiTheme.MonospaceBold;
         }
     }
 
@@ -352,10 +339,12 @@ public sealed class QualityDocumentsView : LocalizedView
         var unread = _rows.Count(r => r.RequiresAcknowledgement && r.EffectiveVersion is not null
                                       && !r.AcknowledgedByCurrentUser);
 
-        var text = $"{T("Documents.Title")} — {_rows.Count}";
+        _heading.Text = T("Documents.Title");
+
+        var text = Localizer.Format("QualityHr.Documents.Count", _rows.Count);
         if (overdue > 0) text += $" · {T("Documents.ReviewOverdue")} {overdue}";
         if (unread > 0) text += $" · {T("Documents.ToRead")} {unread}";
-        _heading.Text = text;
+        _count.Text = text;
     }
 
     private async Task LoadVersionsAsync()
@@ -619,6 +608,7 @@ internal sealed class ControlledDocumentDialog : MasterDataEditor
         Notice(20, 290, 520, 46, "Documents.NewDocumentNotice");
 
         Buttons(352, 560);
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.Document");
     }
 
     protected override void Accept()
@@ -678,6 +668,7 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
         Notice(20, 180, 520, 46, "Documents.NewVersionNotice");
 
         Buttons(252, 560);
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.DocumentVersion");
     }
 
     private void Browse()
@@ -761,6 +752,7 @@ internal sealed class EffectiveDateDialog : MasterDataEditor
             notice.Text = localizer.Format("Documents.ReplacesVersion", previous) + " " + notice.Text;
 
         Buttons(170, 460);
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.EffectiveDate");
     }
 
     protected override void Accept()
