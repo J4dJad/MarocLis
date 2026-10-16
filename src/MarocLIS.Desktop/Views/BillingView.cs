@@ -203,7 +203,9 @@ public sealed class BillingView : LocalizedView
         _pending.Columns.Add(new DataGridViewCheckBoxColumn
         {
             Name = ColSelected, FillWeight = 5,
-            SortMode = DataGridViewColumnSortMode.NotSortable
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            // Fixed: in fill mode the box took a share of the width (130 px at 1366).
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None, Width = 36, Resizable = DataGridViewTriState.False
         });
 
         void Add(string name, int weight, Font? font = null,

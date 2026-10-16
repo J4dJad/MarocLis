@@ -721,13 +721,17 @@ public sealed class PatientSearchView : LocalizedView
 
         _editPatient.Enabled = row is not null;
         _detailEdit.Enabled = row is not null;
-        _anonymize.Enabled = row is not null && PermissionGate.Allows(Permissions.Patients.Anonymize);
+        // An anonymised file is the trace of an erasure: it is not anonymised again, merged or
+        // given a new request, all three of which the services refuse.
+        var live = row is { IsAnonymized: false };
+
+        _anonymize.Enabled = live && PermissionGate.Allows(Permissions.Patients.Anonymize);
 
         // Merging needs two files, so it is only offered once a search has produced more than one
         // candidate — which is exactly the situation a duplicate creates.
-        _merge.Enabled = row is not null && _page.Items.Count > 1 && PermissionGate.Allows(Permissions.Patients.Merge);
+        _merge.Enabled = live && _page.Items.Count > 1 && PermissionGate.Allows(Permissions.Patients.Merge);
 
-        if (!PermissionGate.IsBlocked(_newOrder)) _newOrder.Enabled = row is not null;
+        if (!PermissionGate.IsBlocked(_newOrder)) _newOrder.Enabled = live;
     }
 
     private async Task CreatePatientAsync()
@@ -773,7 +777,8 @@ public sealed class PatientSearchView : LocalizedView
     {
         if (Selected is not { } duplicate) return;
 
-        var others = _page.Items.Where(p => p.Id != duplicate.Id).ToList();
+        // An anonymised file is never a merge target: the service refuses it.
+        var others = _page.Items.Where(p => p.Id != duplicate.Id && !p.IsAnonymized).ToList();
 
         if (others.Count == 0)
         {
