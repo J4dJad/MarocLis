@@ -4098,6 +4098,10 @@
   },
 
   "Site": {
+    "PartnerNotice": "Partner laboratory: no invoicing and no report release at this site; its identity and contact details appear on dispatch slips.",
+    "Created": "Site {0} created: complete its form below, then save.",
+    "NewHelp": "A partner (subcontracting) laboratory or another site of the laboratory. Only the code, name and kind are asked for here; then complete the identity and contact details in the site form.",
+    "New": "New site",
     "LogoInvalid": "This file is not a readable image. Choose a PNG, JPG or BMP file.",
     "LogoHint": "PNG, JPG or BMP. Printed at the head of reports and invoices with the identity above. Applied on save.",
     "RemoveLogo": "Remove logo",
@@ -4366,6 +4370,9 @@
   "Site_CnssInvalid": "The CNSS affiliation number is invalid.",
   "Site_AccreditationNumberRequired": "A site declared accredited must carry its accreditation number.",
   "Site_ResponsibleMustBeBiologist": "The responsible biologist must be a medical or pharmacist biologist registered with the Ordre (loi no. 12-01).",
+  "Site_CodeInvalid": "The site code may only contain unaccented capital letters, digits, \"-\" and \"_\", up to {0} characters.",
+  "Site_KindInvalid": "The site kind is invalid.",
+  "Site_CannotBecomePartner": "This site cannot become a partner laboratory: users have access to it or files and invoices are numbered there. Create the partner with \"New site\".",
 
   "Sequence_NotFound": "Number sequence not found.",
   "Sequence_FormatRequired": "The sequence format is mandatory.",
@@ -4887,6 +4894,7 @@
   "User_ResetPasswordExceedsOwnPermissions": "Refused: account {0} holds permissions you do not have. Only a user with at least the same rights can reset its password.",
   "User_CannotEditOwnQualification": "You cannot change your own qualification, Order registration number, its validity, your authorised departments or your linked prescriber. Ask another administrator.",
   "User_PrescriberNotFound": "The selected prescriber cannot be found.",
+  "User_PartnerSiteNotAccessible": "A partner (subcontracting) laboratory cannot be given to a user as a working site.",
 
   "Role_NotFound": "Role not found.",
   "Role_CodeRequired": "The role code is mandatory.",

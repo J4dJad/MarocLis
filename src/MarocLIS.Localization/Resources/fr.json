@@ -4099,6 +4099,10 @@
   },
 
   "Site": {
+    "PartnerNotice": "Laboratoire partenaire : aucune facturation ni validation de compte rendu sur ce site ; son identité et ses coordonnées figurent sur les bordereaux d'envoi.",
+    "Created": "Site {0} créé : complétez sa fiche ci-dessous puis enregistrez.",
+    "NewHelp": "Un laboratoire partenaire (sous-traitance) ou un autre site du laboratoire. Seuls le code, le nom et le type sont demandés ici ; complétez ensuite l'identité et les coordonnées dans la fiche du site.",
+    "New": "Nouveau site",
     "LogoInvalid": "Ce fichier n'est pas une image lisible. Choisissez un fichier PNG, JPG ou BMP.",
     "LogoHint": "PNG, JPG ou BMP. Imprimé en tête des comptes rendus et des factures avec l'identité ci-dessus. Pris en compte à l'enregistrement.",
     "RemoveLogo": "Retirer le logo",
@@ -4367,6 +4371,9 @@
   "Site_CnssInvalid": "Le numéro d'affiliation CNSS est invalide.",
   "Site_AccreditationNumberRequired": "Un site déclaré accrédité doit porter son numéro d'accréditation.",
   "Site_ResponsibleMustBeBiologist": "Le biologiste responsable doit être un médecin ou un pharmacien biologiste inscrit à l'Ordre (loi n° 12-01).",
+  "Site_CodeInvalid": "Le code du site ne peut contenir que des lettres majuscules sans accent, des chiffres, « - » et « _ », sur {0} caractères au plus.",
+  "Site_KindInvalid": "Le type de site est invalide.",
+  "Site_CannotBecomePartner": "Ce site ne peut pas devenir un laboratoire partenaire : des utilisateurs y ont accès ou des dossiers et factures y sont numérotés. Créez le partenaire avec « Nouveau site ».",
 
   "Sequence_NotFound": "Numérotation introuvable.",
   "Sequence_FormatRequired": "Le format de la numérotation est obligatoire.",
@@ -4888,6 +4895,7 @@
   "User_ResetPasswordExceedsOwnPermissions": "Opération refusée : le compte {0} détient des permissions que vous n'avez pas. Seul un utilisateur disposant au moins des mêmes droits peut réinitialiser son mot de passe.",
   "User_CannotEditOwnQualification": "Vous ne pouvez pas modifier votre propre qualification, votre numéro d'inscription à l'Ordre, sa validité, vos secteurs autorisés ni votre prescripteur associé. Demandez-le à un autre administrateur.",
   "User_PrescriberNotFound": "Le prescripteur sélectionné est introuvable.",
+  "User_PartnerSiteNotAccessible": "Un laboratoire partenaire (sous-traitance) ne peut pas être attribué comme site de travail à un utilisateur.",
 
   "Role_NotFound": "Rôle introuvable.",
   "Role_CodeRequired": "Le code du rôle est obligatoire.",
