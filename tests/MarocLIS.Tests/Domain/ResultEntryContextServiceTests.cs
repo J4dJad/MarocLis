@@ -50,7 +50,7 @@ public sealed class ResultEntryContextServiceTests
         {
             ["Require"] = args => granted.Contains((string)args![0]!)
                 ? Result.Success()
-                : Result.Failure(Error.Forbidden("Auth_Forbidden"))
+                : Result.Failure(Error.Forbidden("Forbidden"))
         });
 
         var user = Stub.Of<ICurrentUser>(new() { ["get_SiteId"] = _ => Site });
