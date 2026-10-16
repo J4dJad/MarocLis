@@ -334,7 +334,7 @@ public static class ReferenceDataSeeder
         [
             (SequencePurpose.MedicalRecord,     null,   null,            "P-{SEQ:8}"),
             (SequencePurpose.SampleBarcode,     null,   null,            "{SEQ:10}"),
-            (SequencePurpose.Accession,         siteId, clock.Today.Year, "{YY}{MM}-{SEQ:6}"),
+            (SequencePurpose.Accession,         null,   clock.Today.Year, "{YY}{MM}-{SEQ:6}"),
             (SequencePurpose.Invoice,           siteId, clock.Today.Year, "FAC/{SITE}/{YEAR}/{SEQ:6}"),
             (SequencePurpose.CreditNote,        siteId, clock.Today.Year, "AV/{SITE}/{YEAR}/{SEQ:6}"),
             (SequencePurpose.Receipt,           siteId, clock.Today.Year, "REC/{SITE}/{YEAR}/{SEQ:6}"),

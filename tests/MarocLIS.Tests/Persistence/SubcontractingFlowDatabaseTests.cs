@@ -256,11 +256,6 @@ public sealed class SubcontractingFlowDatabaseTests(SubcontractingScratchDatabas
 
         await using var context = database.Context();
 
-        // The file numbers carry the site's code here: the shipped format does not, and the
-        // accession number is unique across sites, so two sites of one database collide on their
-        // first file (reported separately; not a subcontracting matter).
-        context.NumberSequences.Add(new NumberSequence(SequencePurpose.Accession, site.Id, DateTime.Today.Year,
-                                                       "{SITE}-{YY}{MM}-{SEQ:6}"));
         context.Users.Add(biologist);
         context.Sites.AddRange(site, partner, other);
         context.Departments.Add(department);
@@ -410,7 +405,7 @@ public sealed class SubcontractingFlowDatabaseTests(SubcontractingScratchDatabas
         var dispatched = await DispatchAsync(provider, null, vitD.Id);
         dispatched.IsSuccess.Should().BeTrue();
         var slip = dispatched.Value.Should().ContainSingle().Subject;
-        slip.Number.Should().Be($"ST/{DateTime.Today.Year}/00001");
+        slip.Number.Should().StartWith($"ST/{DateTime.Today.Year}/");
         slip.PartnerSiteId.Should().Be(lab.Partner.Id);
         slip.ItemCount.Should().Be(1);
 
@@ -526,7 +521,7 @@ public sealed class SubcontractingFlowDatabaseTests(SubcontractingScratchDatabas
         dispatched.IsSuccess.Should().BeTrue();
         dispatched.Value.Should().HaveCount(2);
         dispatched.Value.Select(d => d.Number).Should().OnlyHaveUniqueItems()
-            .And.BeEquivalentTo($"ST/{DateTime.Today.Year}/00001", $"ST/{DateTime.Today.Year}/00002");
+            .And.OnlyContain(n => n.StartsWith($"ST/{DateTime.Today.Year}/"));
         dispatched.Value.Select(d => d.PartnerSiteId).Should().BeEquivalentTo([lab.Partner.Id, lab.OtherPartner.Id]);
 
         foreach (var dispatch in dispatched.Value)
@@ -612,12 +607,13 @@ public sealed class SubcontractingFlowDatabaseTests(SubcontractingScratchDatabas
             .Should().Be("Subcontract_NotSubcontracted");
 
         // One bad act in the batch sends none of them, and gives its number back.
+        var next = await NextSlipNumberAsync();
         (await DispatchAsync(provider, lab.Partner.Id, vitD.Id, glucose.Id)).IsFailure.Should().BeTrue();
         (await WorklistAsync(provider)).Single().Stage.Should().Be(SubcontractStage.ToSend);
 
         var sent = await DispatchAsync(provider, null, vitD.Id);
         sent.IsSuccess.Should().BeTrue();
-        sent.Value.Single().Number.Should().Be($"ST/{DateTime.Today.Year}/00001", "the refused batch consumed no number");
+        sent.Value.Single().Number.Should().Be(next, "the refused batch consumed no number");
 
         // Already sent.
         var again = await DispatchAsync(provider, null, vitD.Id);
@@ -756,16 +752,16 @@ public sealed class SubcontractingFlowDatabaseTests(SubcontractingScratchDatabas
         (await On<SubcontractingService, Result>(here, s => s.SetPartnerReferenceAsync(theirItem.Id, "X")))
             .FirstError.ResourceKey.Should().Be("Subcontract_NothingSelected");
 
-        // Their own slip, numbered on their own series.
+        // Their own slip.
         var theirSlip = await DispatchAsync(atOther, null, theirItem.Id);
-        theirSlip.Value.Single().Number.Should().Be($"ST/{DateTime.Today.Year}/00001");
+        theirSlip.Value.Single().Number.Should().StartWith($"ST/{DateTime.Today.Year}/");
 
-        // This site's first slip has the same number: each site its own series.
+        // This site's slip takes the next number of the series all sites share.
         var ours = await RegisterAsync(here, lab.Patient, lab.VitaminD);
         await CollectAndReceiveAsync(here, ours);
         var ourItem = await ItemAsync(ours.OrderId, lab.VitaminD);
         var ourSlip = await DispatchAsync(here, null, ourItem.Id);
-        ourSlip.Value.Single().Number.Should().Be(theirSlip.Value.Single().Number);
+        ourSlip.Value.Single().Number.Should().NotBe(theirSlip.Value.Single().Number);
 
         // Reprinted here, it is this site's slip — its acts and its sender.
         var printed = await On<SubcontractingService, Result<SubcontractSlip>>(here,
@@ -801,8 +797,8 @@ public sealed class SubcontractingFlowDatabaseTests(SubcontractingScratchDatabas
             theirItems.Add((await ItemAsync(theirs.OrderId, other.Allergy)).Id);
         }
 
-        (await DispatchAsync(atOther, other.Partner.Id, [.. theirItems])).Value
-            .Should().ContainSingle().Which.Number.Should().Be($"ST/{DateTime.Today.Year}/00001");
+        var theirNumber = (await DispatchAsync(atOther, other.Partner.Id, [.. theirItems])).Value
+            .Should().ContainSingle().Which.Number;
 
         using var here = Services(OperatorOf(lab));
         var ours = await RegisterAsync(here, lab.Patient, lab.VitaminD);
@@ -813,6 +809,19 @@ public sealed class SubcontractingFlowDatabaseTests(SubcontractingScratchDatabas
             s => s.GetSlipAsync(sent.Value.Single().Number));
 
         slip.Value.SentByName.Should().Be("Dr Sous-traitance");
+        // All sites now number their slips from one counter, so a number names one slip only.
+        sent.Value.Single().Number.Should().NotBe(theirNumber);
+    }
+
+    private async Task<string> NextSlipNumberAsync()
+    {
+        await using var context = database.Context();
+        var next = await context.NumberSequences.AsNoTracking()
+            .Where(s => s.Purpose == SequencePurpose.SubcontractDispatch && s.SiteId == null
+                        && s.Year == DateTime.Today.Year)
+            .Select(s => (long?)s.NextValue)
+            .FirstOrDefaultAsync() ?? 1;
+        return $"ST/{DateTime.Today.Year}/{next:00000}";
     }
 
     // ---- 6. Rights --------------------------------------------------------------------------------

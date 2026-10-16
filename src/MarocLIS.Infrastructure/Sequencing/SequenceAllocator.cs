@@ -31,6 +31,8 @@ public sealed class SequenceAllocator(LisDbContext context, IClock clock, ICurre
             return Result.Failure<string>(Error.Conflict("Sequence_RequiresTransaction", purpose));
 
         var effectiveYear = year ?? ResolveYear(purpose, clock.Today);
+        var siteCode = await ResolveSiteCodeAsync(siteId, ct);
+        siteId = CounterSite(purpose, siteId);
 
         var sequence = await LoadLockedAsync(purpose, siteId, effectiveYear, ct);
 
@@ -56,7 +58,6 @@ public sealed class SequenceAllocator(LisDbContext context, IClock clock, ICurre
             }
         }
 
-        var siteCode = await ResolveSiteCodeAsync(siteId, ct);
         var allocated = sequence.Allocate(clock.Now, siteCode);
 
         if (allocated.IsFailure) return allocated;
@@ -69,14 +70,15 @@ public sealed class SequenceAllocator(LisDbContext context, IClock clock, ICurre
                                          int? year = null, CancellationToken ct = default)
     {
         var effectiveYear = year ?? ResolveYear(purpose, clock.Today);
+        var siteCode = await ResolveSiteCodeAsync(siteId, ct);
+        var counterSite = CounterSite(purpose, siteId);
 
         var sequence = await context.NumberSequences
             .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Purpose == purpose && s.SiteId == siteId && s.Year == effectiveYear, ct);
+            .FirstOrDefaultAsync(s => s.Purpose == purpose && s.SiteId == counterSite && s.Year == effectiveYear, ct);
 
         if (sequence is null) return null;
 
-        var siteCode = await ResolveSiteCodeAsync(siteId, ct);
         return sequence.Render(sequence.NextValue, clock.Now, siteCode);
     }
 
@@ -135,6 +137,22 @@ public sealed class SequenceAllocator(LisDbContext context, IClock clock, ICurre
             .Select(s => s.Code)
             .FirstOrDefaultAsync(ct);
     }
+
+    /// <summary>
+    /// The site whose counter a number is taken from: none for the numbers that must be unique
+    /// across the installation.
+    /// <para>
+    /// File numbers are unique in the whole database, but each site had its own counter in the
+    /// same format: the second site's first file took 2610-000001, already the main site's, and
+    /// its registration failed. Slip numbers to partner laboratories repeated the same way. All
+    /// sites now draw these from one counter; the format, and so the numbers, are unchanged.
+    /// </para>
+    /// </summary>
+    public static Guid? CounterSite(SequencePurpose purpose, Guid? siteId) => purpose switch
+    {
+        SequencePurpose.Accession or SequencePurpose.SubcontractDispatch => null,
+        _ => siteId
+    };
 
     /// <summary>
     /// Whether the sequence resets each year. Accounting series do, so the year appears in the
