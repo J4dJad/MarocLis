@@ -1195,6 +1195,13 @@ public sealed class OrderRegistrationView : LocalizedView
         combo.EndUpdate();
     }
 
+    /// <summary>
+    /// A patient to choose when the screen opens: set by "Nouvelle demande pour ce patient" on the
+    /// patient list. Used once, so a refresh (F5) does not choose them again.
+    /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Guid? PatientToSelect { get; set; }
+
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
         await LoadCatalogueReferenceAsync(ct);
@@ -1202,6 +1209,12 @@ public sealed class OrderRegistrationView : LocalizedView
         if (_prescriber.Items.Count == 0) await LoadPrescribersAsync(ct);
         UpdateScrollMinimum();
         _patientSearch.Focus();
+
+        if (PatientToSelect is { } patientId)
+        {
+            PatientToSelect = null;
+            await SelectPatientAsync(patientId);
+        }
     }
 
     /// <summary>

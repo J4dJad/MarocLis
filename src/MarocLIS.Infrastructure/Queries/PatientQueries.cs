@@ -24,7 +24,50 @@ public sealed record PatientSearchRow(
     string? PayerName,
     DateTimeOffset? LastOrderAt,
     int OrderCount,
-    bool HasCriticalAlert);
+    bool HasCriticalAlert)
+{
+    /// <summary>What the file's identity still lacks; <see cref="PatientIdentityGap.None"/> when complete.</summary>
+    public PatientIdentityGap IdentityGaps { get; init; }
+}
+
+/// <summary>
+/// The parts of an identity a file can still be missing. A file opened in an emergency, or typed
+/// from a phone call, is completed later; the patient list shows which ones are still waiting.
+/// </summary>
+[Flags]
+public enum PatientIdentityGap
+{
+    None = 0,
+
+    /// <summary>Opened as "X-URG" before the patient could be identified.</summary>
+    Provisional = 1,
+
+    Gender = 2,
+
+    DateOfBirth = 4
+}
+
+/// <summary>Which files the patient list shows, besides the search term.</summary>
+public enum PatientListScope
+{
+    All = 0,
+
+    /// <summary>Files whose identity is provisional or lacks the sex or the date of birth.</summary>
+    IdentityIncomplete = 1,
+
+    /// <summary>Files with an order registered today at the signed-in site.</summary>
+    SeenToday = 2
+}
+
+/// <summary>The patient list's filters: the search term, the scope chip and the payer.</summary>
+public sealed record PatientListQuery(
+    string? Term,
+    Guid SiteId,
+    PatientListScope Scope = PatientListScope.All,
+    Guid? PayerId = null);
+
+/// <summary>How many files each scope chip would show for the same term and payer.</summary>
+public sealed record PatientListCounts(int All, int IdentityIncomplete, int SeenToday);
 
 /// <summary>An order in the patient's history panel.</summary>
 public sealed record PatientOrderRow(
@@ -144,6 +187,16 @@ public interface IPatientQueries
     Task<PagedResult<PatientSearchRow>> SearchAsync(string? term, Guid siteId, int page = 1,
                                                      int pageSize = 50, CancellationToken ct = default);
 
+    /// <summary>
+    /// The patient list: the same search, narrowed to a scope and to the payer of the file's
+    /// current primary coverage.
+    /// </summary>
+    Task<PagedResult<PatientSearchRow>> ListAsync(PatientListQuery query, int page = 1, int pageSize = 50,
+                                                   CancellationToken ct = default);
+
+    /// <summary>The counts shown on the list's scope chips, for the query's term and payer.</summary>
+    Task<PatientListCounts> CountListAsync(PatientListQuery query, CancellationToken ct = default);
+
     Task<IReadOnlyList<PatientOrderRow>> GetOrderHistoryAsync(Guid patientId, int take = 30,
                                                                CancellationToken ct = default);
 
@@ -195,31 +248,18 @@ public sealed class PatientQueries(LisDbContext db, IClock clock, IPermissionGua
         return db;
     }
 
-    public async Task<PagedResult<PatientSearchRow>> SearchAsync(
-        string? term, Guid siteId, int page = 1, int pageSize = 50, CancellationToken ct = default)
+    public Task<PagedResult<PatientSearchRow>> SearchAsync(
+        string? term, Guid siteId, int page = 1, int pageSize = 50, CancellationToken ct = default) =>
+        ListAsync(new PatientListQuery(term, siteId), page, pageSize, ct);
+
+    public async Task<PagedResult<PatientSearchRow>> ListAsync(
+        PatientListQuery list, int page = 1, int pageSize = 50, CancellationToken ct = default)
     {
         PatientData();
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 10, 200);
 
-        // Merged files are excluded: a search must land on the surviving record, never on the
-        // one that was merged away.
-        var query = db.Patients.AsNoTracking()
-            .Where(p => p.MergedIntoPatientId == null);
-
-        if (!string.IsNullOrWhiteSpace(term))
-        {
-            var raw = term.Trim();
-            var normalised = IPatientQueries.NormaliseForSearch(raw);
-            var digits = new string(raw.Where(char.IsDigit).ToArray());
-            var upper = raw.Replace(" ", string.Empty).ToUpperInvariant();
-
-            query = query.Where(p =>
-                p.SearchKey.Contains(normalised)
-                || p.MedicalRecordNumber.Contains(upper)
-                || (p.Cin != null && p.Cin.Contains(upper))
-                || (digits.Length >= 4 && p.MobilePhone != null && p.MobilePhone.Contains(digits)));
-        }
+        var query = InScope(Matching(list.Term, list.PayerId), list.Scope, list.SiteId);
 
         var total = await query.CountAsync(ct);
 
@@ -243,6 +283,8 @@ public sealed class PatientQueries(LisDbContext db, IClock clock, IPermissionGua
                 p.Cin,
                 p.MobilePhone,
                 p.City,
+                p.IsProvisionalIdentity,
+                p.IsAnonymized,
                 PayerName = p.Coverages
                     .Where(c => c.IsPrimary
                                 && c.ValidFrom <= today
@@ -275,9 +317,88 @@ public sealed class PatientQueries(LisDbContext db, IClock clock, IPermissionGua
             r.PayerName,
             r.LastOrderAt,
             r.OrderCount,
-            r.HasCriticalAlert)).ToList();
+            r.HasCriticalAlert)
+        {
+            IdentityGaps = r.IsAnonymized
+                ? PatientIdentityGap.None
+                : (r.IsProvisionalIdentity ? PatientIdentityGap.Provisional : PatientIdentityGap.None)
+                  | (r.Gender == Gender.Unknown ? PatientIdentityGap.Gender : PatientIdentityGap.None)
+                  | (r.DateOfBirth is null ? PatientIdentityGap.DateOfBirth : PatientIdentityGap.None)
+        }).ToList();
 
         return new PagedResult<PatientSearchRow>(mapped, total, page, pageSize);
+    }
+
+    public async Task<PatientListCounts> CountListAsync(PatientListQuery list, CancellationToken ct = default)
+    {
+        PatientData();
+        var matching = Matching(list.Term, list.PayerId);
+
+        return new PatientListCounts(
+            await matching.CountAsync(ct),
+            await InScope(matching, PatientListScope.IdentityIncomplete, list.SiteId).CountAsync(ct),
+            await InScope(matching, PatientListScope.SeenToday, list.SiteId).CountAsync(ct));
+    }
+
+    // The free-text match and the payer. Merged files are excluded: a search must land on the
+    // surviving record, never on the one that was merged away.
+    private IQueryable<Patient> Matching(string? term, Guid? payerId)
+    {
+        var query = db.Patients.AsNoTracking()
+            .Where(p => p.MergedIntoPatientId == null);
+
+        if (!string.IsNullOrWhiteSpace(term))
+        {
+            var raw = term.Trim();
+            var normalised = IPatientQueries.NormaliseForSearch(raw);
+            var digits = new string(raw.Where(char.IsDigit).ToArray());
+            var upper = raw.Replace(" ", string.Empty).ToUpperInvariant();
+
+            query = query.Where(p =>
+                p.SearchKey.Contains(normalised)
+                || p.MedicalRecordNumber.Contains(upper)
+                || (p.Cin != null && p.Cin.Contains(upper))
+                || (digits.Length >= 4 && p.MobilePhone != null && p.MobilePhone.Contains(digits)));
+        }
+
+        if (payerId is { } payer)
+        {
+            // The payer the list shows: the primary coverage valid today.
+            var today = clock.Today;
+            query = query.Where(p => p.Coverages.Any(c => c.IsPrimary
+                                                          && c.PayerId == payer
+                                                          && c.ValidFrom <= today
+                                                          && (c.ValidUntil == null || c.ValidUntil >= today)));
+        }
+
+        return query;
+    }
+
+    private IQueryable<Patient> InScope(IQueryable<Patient> query, PatientListScope scope, Guid siteId)
+    {
+        switch (scope)
+        {
+            // The same three gaps the row reports; an anonymised file is closed, not incomplete.
+            case PatientListScope.IdentityIncomplete:
+                return query.Where(p => !p.IsAnonymized
+                                        && (p.IsProvisionalIdentity
+                                            || p.Gender == Gender.Unknown
+                                            || p.DateOfBirth == null));
+
+            // Today as the dashboard counts it: registered since midnight at this site, not cancelled.
+            case PatientListScope.SeenToday:
+                var now = clock.Now;
+                var start = new DateTimeOffset(now.Date, now.Offset);
+                var end = start.AddDays(1);
+                return query.Where(p => db.LabOrders.Any(o => o.PatientId == p.Id
+                                                              && o.SiteId == siteId
+                                                              && o.RegisteredAt >= start
+                                                              && o.RegisteredAt < end
+                                                              && o.Status != LabOrderStatus.Cancelled));
+
+            default:
+                return query;
+        }
     }
 
     public async Task<IReadOnlyList<PatientOrderRow>> GetOrderHistoryAsync(
