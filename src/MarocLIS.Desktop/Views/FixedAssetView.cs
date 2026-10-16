@@ -653,6 +653,7 @@ internal sealed class FixedAssetDialog : MasterDataEditor
         _cost = TextField("Assets.CostExcludingVat", 20, 122, 160, Amount(values?.CostExcludingVatMad ?? 0m),
                           latin: true, mono: true, right: true);
         _vat = TextField("Assets.Vat", 200, 122, 140, Amount(values?.VatAmountMad ?? 0m), latin: true, mono: true, right: true);
+        _residual.MaxLength = _cost.MaxLength = _vat.MaxLength = EditorValues.AmountMaxLength;
         _vatRecoverable = Check("Assets.VatRecoverable", 360, 144, values?.VatRecoverable ?? false);
         _plan = new Label
         {
@@ -1021,6 +1022,7 @@ internal sealed class AssetDisposalDialog : MasterDataEditor
         };
         Controls.Add(_date);
         _price = TextField("Assets.DisposalPrice", 200, 14, 140, null, latin: true, mono: true, right: true);
+        _price.MaxLength = EditorValues.AmountMaxLength;
         _reason = TextField("Assets.DisposalReason", 20, 68, 480);
         _reason.MaxLength = FixedAsset.DisposalReasonMaxLength;
         Notice(20, 122, 480, 60, "Assets.DisposalNotice");

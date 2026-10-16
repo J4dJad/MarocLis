@@ -206,7 +206,8 @@ public sealed class CostMarginView : LocalizedView
         var current = await _costs.GetSettingsAsync();
         if (current.IsFailure) { _dialogs.ShowFailure(current, _allocation.Text); return; }
 
-        using var dialog = new FieldDialog(Localizer, _allocation.Text, height: 260);
+        // The window title is the action without its access-key mark and its ellipsis.
+        using var dialog = new FieldDialog(Localizer, UserDialogs.CaptionOf(_allocation.Text, _allocation.Text), height: 260);
         dialog.Note(T("Steering.AllocationHelp"));
         var amount = dialog.Number(T("Steering.AllocationPerTest"), current.Value.AllocationPerTestMad, 0m, 100000m, 2);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;

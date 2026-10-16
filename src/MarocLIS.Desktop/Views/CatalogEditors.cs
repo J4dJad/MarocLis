@@ -105,6 +105,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         _volume = TextField("Catalog.RequiredVolume", 20, 236, 120, Editable(_stored?.RequiredVolumeMl),
                             latin: true, right: true);
+        _volume.MaxLength = EditorValues.MeasureMaxLength;
         _loinc = TextField("Catalog.Loinc", 152, 236, 160, _stored?.LoincCode, latin: true, mono: true);
         _actCode = TextField("Catalog.NationalActCode", 324, 236, 160, existing?.NationalActCode,
                         latin: true, mono: true);
@@ -176,16 +177,19 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _coefficient = TextField("Billing.Coefficient", 102, 612, 100,
                                  labTariff?.Coefficient.ToString("0.##"),
                                  latin: true, right: true, mono: true);
+        _coefficient.MaxLength = EditorValues.MeasureMaxLength;
 
         _letterKeyValue = TextField("Catalog.LetterKeyValue", 214, 612, 120,
                                     (labTariff is { LetterKeyValue: > 0m }
                                          ? labTariff.LetterKeyValue
                                          : knownLetterKeyValue)?.ToString("0.####"),
                                     latin: true, right: true, mono: true);
+        _letterKeyValue.MaxLength = EditorValues.MeasureMaxLength;
 
         _price = TextField("Catalog.LabPrice", 346, 612, 130,
                            labTariff?.Price.ToString("0.00"),
                            latin: true, right: true, mono: true);
+        _price.MaxLength = EditorValues.AmountMaxLength;
 
         _computed = Notice(488, 626, 224, 44, "Catalog.TariffComputedNotice", UiTheme.Accent);
 
@@ -470,6 +474,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _loinc.MaxLength = 20;
         _cv = TextField("Catalog.AnalyticalCv", 364, 130, 100,
                    existing?.AnalyticalCvPercent?.ToString("0.##"), latin: true, right: true);
+        _cv.MaxLength = EditorValues.MeasureMaxLength;
 
         _displayOrder = Number("Field.DisplayOrder", 476, 130, 100,
                                existing?.DisplayOrder ?? 0, max: 9999);
@@ -479,15 +484,21 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
 
         Label("Catalog.MeasuringRange", 20, 182);
         _measuringLow = Bare(20, 200, 100, existing?.MeasuringRangeLow);
+        _measuringLow.MaxLength = EditorValues.MeasureMaxLength;
         _measuringHigh = Bare(128, 200, 100, existing?.MeasuringRangeHigh);
+        _measuringHigh.MaxLength = EditorValues.MeasureMaxLength;
 
         Label("Catalog.TechnicalLimits", 244, 182);
         _technicalLow = Bare(244, 200, 100, existing?.TechnicalLimitLow);
+        _technicalLow.MaxLength = EditorValues.MeasureMaxLength;
         _technicalHigh = Bare(352, 200, 100, existing?.TechnicalLimitHigh);
+        _technicalHigh.MaxLength = EditorValues.MeasureMaxLength;
 
         Label("Catalog.CriticalLimits", 468, 182);
         _criticalLow = Bare(468, 200, 100, existing?.CriticalLow);
+        _criticalLow.MaxLength = EditorValues.MeasureMaxLength;
         _criticalHigh = Bare(576, 200, 100, existing?.CriticalHigh);
+        _criticalHigh.MaxLength = EditorValues.MeasureMaxLength;
 
         Notice(20, 234, 712, 26, "Catalog.LimitsNotice");
 
@@ -495,6 +506,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
 
         _delta = TextField("Catalog.DeltaCheck", 20, 262, 100,
                       existing?.DeltaCheckPercent?.ToString("0.##"), latin: true, right: true);
+        _delta.MaxLength = EditorValues.MeasureMaxLength;
 
         _deltaWindow = Number("Catalog.DeltaWindow", 132, 262, 100,
                               existing?.DeltaCheckWindowDays, max: 3650);
@@ -932,7 +944,9 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
 
         Label("Result.ReferenceRange", 20, 158);
         _lower = Bare(20, 176, 120, existing?.LowerLimit, parameter.Decimals);
+        _lower.MaxLength = EditorValues.MeasureMaxLength;
         _upper = Bare(148, 176, 120, existing?.UpperLimit, parameter.Decimals);
+        _upper.MaxLength = EditorValues.MeasureMaxLength;
 
         _expectedCoded = TextField("Catalog.ExpectedCodedValue", 284, 158, 180,
                               existing?.ExpectedCodedValue);
@@ -1252,14 +1266,17 @@ internal sealed class TariffEditorDialog : MasterDataEditor
         _coefficient = TextField("Billing.Coefficient", 112, 110, 120,
                             (editing?.Coefficient ?? analysis.CurrentCoefficient)?.ToString("0.##"),
                             latin: true, right: true, mono: true);
+        _coefficient.MaxLength = EditorValues.MeasureMaxLength;
 
         _letterKeyValue = TextField("Catalog.LetterKeyValue", 244, 110, 120,
                                knownLetterKeyValue?.ToString("0.####"),
                                latin: true, right: true, mono: true);
+        _letterKeyValue.MaxLength = EditorValues.MeasureMaxLength;
 
         _price = TextField("Field.Price", 376, 110, 140,
                       (editing?.Price ?? analysis.CurrentPrice)?.ToString("0.00"),
                       latin: true, right: true, mono: true);
+        _price.MaxLength = EditorValues.AmountMaxLength;
 
         _computed = Notice(20, 158, 580, 44, "Catalog.TariffComputedNotice", UiTheme.Accent);
 
@@ -1268,6 +1285,7 @@ internal sealed class TariffEditorDialog : MasterDataEditor
         _vatRate = TextField("Billing.Vat", 440, 206, 100,
                              editing is { IsVatExempt: false } ? editing.VatRate.ToString("0.####") : null,
                              latin: true, right: true);
+        _vatRate.MaxLength = EditorValues.MeasureMaxLength;
 
         Notice(20, 244, 580, 44, "Catalog.VatNotice");
 
@@ -1448,6 +1466,7 @@ internal sealed class PanelEditorDialog : MasterDataEditor
         _packagePrice = TextField("Catalog.PackagePrice", 424, 60, 160,
                              existing?.PackagePrice?.ToString("0.00"),
                              latin: true, right: true, mono: true);
+        _packagePrice.MaxLength = EditorValues.AmountMaxLength;
 
         _displayOrder = Number("Field.DisplayOrder", 596, 60, 100,
                                existing?.DisplayOrder ?? 0, max: 9999);
@@ -1680,10 +1699,12 @@ internal sealed class ReflexRuleEditorDialog : MasterDataEditor
         _threshold = TextField("Catalog.Threshold", 252, 64, 120,
                           existing?.Threshold?.ToString("0.###"),
                           latin: true, right: true, mono: true);
+        _threshold.MaxLength = EditorValues.MeasureMaxLength;
 
         _thresholdUpper = TextField("Catalog.ThresholdUpper", 384, 64, 120,
                                existing?.ThresholdUpper?.ToString("0.###"),
                                latin: true, right: true, mono: true);
+        _thresholdUpper.MaxLength = EditorValues.MeasureMaxLength;
 
         _codedValue = TextField("Catalog.TriggerCodedValue", 516, 64, 104,
                            existing?.TriggerCodedValue, latin: true, mono: true);
@@ -1923,6 +1944,7 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
             _factor = TextField("Catalog.FactorToSi", 20, y, 160,
                            existing?.FactorToSi?.ToString("0.######"),
                            latin: true, right: true, mono: true);
+            _factor.MaxLength = EditorValues.MeasureMaxLength;
 
             _siUnit = TextField("Catalog.SiUnitCode", 192, y, 160, existing?.SiUnitCode,
                            latin: true, mono: true);
@@ -2001,10 +2023,12 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
                 _nominalVolume = TextField("Catalog.NominalVolume", 20, y, 110,
                                        existing?.NominalVolumeMl?.ToString("0.#"),
                                        latin: true, right: true);
+                _nominalVolume.MaxLength = EditorValues.MeasureMaxLength;
 
                 _minimumVolume = TextField("Catalog.MinimumVolume", 142, y, 110,
                                        existing?.MinimumVolumeMl?.ToString("0.#"),
                                        latin: true, right: true);
+                _minimumVolume.MaxLength = EditorValues.MeasureMaxLength;
 
                 _protectFromLight = Check("Collection.ProtectFromLight", 264, y + 20,
                                            existing?.RequiresProtectionFromLight ?? false);

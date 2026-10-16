@@ -224,9 +224,10 @@ internal static class ReportGrids
     internal static async Task ExportAsync(DataGridView? grid, IDocumentOutput output, IUserDialogs dialogs,
                                            string title, ILocalizer localizer)
     {
+        // An empty list has nothing to export; « Aucun élément sélectionné » sent the operator looking for a selection.
         if (grid is null || grid.Rows.Count == 0)
         {
-            dialogs.Info(localizer["Message.NothingSelected"], title);
+            dialogs.Info(localizer["App.NoData"], title);
             return;
         }
 

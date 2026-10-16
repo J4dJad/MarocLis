@@ -241,6 +241,9 @@ public static class BankStatementCsv
         return dots > commas ? '.' : ',';
     }
 
+    /// <summary>The first amount the statement line's column cannot hold.</summary>
+    public const decimal MaximumAmount = 10_000_000_000_000_000m;
+
     /// <summary>
     /// An amount as banks print it: "1 234,56", "1.234,56", "-120,00", "(120,00)", "120,00-",
     /// with or without "DH" / "MAD". Null when it is not a number; zero for an empty cell.
@@ -282,6 +285,10 @@ public static class BankStatementCsv
         if (sb.Length == 0) return null;
         if (!decimal.TryParse(sb.ToString(), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
             return null;
+
+        // Beyond what the decimal(18,2) column holds: a mapping pointing at the RIB or a reference
+        // read it as an amount, and the import failed on the database with an unexpected error.
+        if (value >= MaximumAmount) return null;
 
         return Money.Round(negative ? -value : value);
     }

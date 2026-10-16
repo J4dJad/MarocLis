@@ -62,7 +62,9 @@ internal sealed class BankAccountsDialog : Form
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.BankAccounts"], [_edit], _close, _new);
 
         _new.Click += async (_, _) => await EditAsync(null);
-        _edit.Click += async (_, _) => await EditAsync(_grid.CurrentRow?.Tag as BankAccountRow);
+        // Without a row, « Modifier » opened an empty form that saved a new account.
+        _edit.Click += async (_, _) => { if (_grid.CurrentRow?.Tag is BankAccountRow row) await EditAsync(row); };
+        _grid.SelectionChanged += (_, _) => _edit.Enabled = _grid.CurrentRow?.Tag is BankAccountRow;
         _grid.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditAsync(_grid.Rows[e.RowIndex].Tag as BankAccountRow); };
         Shown += async (_, _) => await LoadAsync();
     }
@@ -81,6 +83,7 @@ internal sealed class BankAccountsDialog : Form
                                        a.IsActive ? _localizer["Action.Yes"] : _localizer["Action.No"]);
             _grid.Rows[index].Tag = a;
         }
+        _edit.Enabled = _grid.CurrentRow?.Tag is BankAccountRow;
     }
 
     private async Task EditAsync(BankAccountRow? row)
@@ -122,6 +125,7 @@ internal sealed class BankAccountEditor : MasterDataEditor
         _opening = TextField("Treasury.OpeningBalance", 20, 122, 180,
                              (row?.OpeningBalanceMad ?? 0m).ToString("0.00", CultureInfo.InvariantCulture),
                              latin: true, mono: true, right: true);
+        _opening.MaxLength = EditorValues.AmountMaxLength;
 
         Label("Treasury.OpeningBalanceDate", 220, 122);
         _openingDate = new DateTimePicker
@@ -235,6 +239,8 @@ internal sealed class BankStatementImportDialog : Form
             number.ValueChanged += (_, _) => MappingChanged();
         _header.CheckedChanged += (_, _) => MappingChanged();
         _dateFormat.TextChanged += (_, _) => MappingChanged();
+        // Kept with the account's mapping, a column of 1000 characters: a long paste there failed the import.
+        _dateFormat.MaxLength = 30;
         Shown += async (_, _) => await PreviewAsync();
     }
 
@@ -506,7 +512,9 @@ internal sealed class ForecastItemsDialog : Form
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.ForecastItems"], [_edit], _close, _new);
 
         _new.Click += async (_, _) => await EditAsync(null);
-        _edit.Click += async (_, _) => await EditAsync(_grid.CurrentRow?.Tag as ForecastItemRow);
+        // Without a row, « Modifier » opened an empty form that saved a new flow.
+        _edit.Click += async (_, _) => { if (_grid.CurrentRow?.Tag is ForecastItemRow row) await EditAsync(row); };
+        _grid.SelectionChanged += (_, _) => _edit.Enabled = _new.Enabled && _grid.CurrentRow?.Tag is ForecastItemRow;
         if (canManage)
             _grid.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await EditAsync(_grid.Rows[e.RowIndex].Tag as ForecastItemRow); };
         Shown += async (_, _) => await LoadAsync();
@@ -527,6 +535,7 @@ internal sealed class ForecastItemsDialog : Form
                                        item.IsActive ? _localizer["Action.Yes"] : _localizer["Action.No"]);
             _grid.Rows[index].Tag = item;
         }
+        _edit.Enabled = _new.Enabled && _grid.CurrentRow?.Tag is ForecastItemRow;
     }
 
     private async Task EditAsync(ForecastItemRow? row)
@@ -563,6 +572,7 @@ internal sealed class ForecastItemEditor : MasterDataEditor
         _amount = TextField("Treasury.SignedAmount", 370, 14, 170,
                             (row?.AmountMad ?? 0m).ToString("0.00", CultureInfo.InvariantCulture),
                             latin: true, mono: true, right: true);
+        _amount.MaxLength = EditorValues.AmountMaxLength;
         _recurrence = Choice("Treasury.Recurrence", 20, 68, 200, row?.Recurrence ?? ForecastRecurrence.Monthly,
                              "ForecastRecurrence");
 

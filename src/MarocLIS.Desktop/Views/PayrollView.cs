@@ -514,7 +514,7 @@ public sealed class PayrollView : LocalizedView
     {
         using var saver = new SaveFileDialog
         {
-            Title = title,
+            Title = UserDialogs.CaptionOf(title, title),
             FileName = file.FileName,
             Filter = filter,
             OverwritePrompt = true,
@@ -596,7 +596,12 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
         var v = _original = row.Variables;
         static string N(decimal d) => d == 0 ? string.Empty : d.ToString("0.##", CultureInfo.InvariantCulture);
 
-        TextBox Field(string key, int x, int y, decimal value) => TextField(key, x, y, 180, N(value), mono: true, right: true);
+        TextBox Field(string key, int x, int y, decimal value)
+        {
+            var box = TextField(key, x, y, 180, N(value), mono: true, right: true);
+            box.MaxLength = EditorValues.AmountMaxLength;
+            return box;
+        }
 
         // Only the days entered by hand: those from the leave are taken again at each refresh.
         _absence = Field("Payroll.ManualAbsenceDays", 20, 10, v.ManualAbsenceDays);
@@ -680,8 +685,12 @@ internal sealed class PayrollParametersDialog : MasterDataEditor
         : base(localizer, dialogs, "Payroll.Settings", p.Year.ToString(CultureInfo.InvariantCulture), 700, 470)
     {
         static string N(decimal d) => d.ToString("0.##", CultureInfo.InvariantCulture);
-        (TextBox, Action<PayrollParameters, decimal>) F(string key, int x, int y, decimal value, Action<PayrollParameters, decimal> set) =>
-            (TextField(key, x, y, 200, N(value), mono: true, right: true), set);
+        (TextBox, Action<PayrollParameters, decimal>) F(string key, int x, int y, decimal value, Action<PayrollParameters, decimal> set)
+        {
+            var box = TextField(key, x, y, 200, N(value), mono: true, right: true);
+            box.MaxLength = EditorValues.AmountMaxLength;
+            return (box, set);
+        }
 
         _fields =
         [

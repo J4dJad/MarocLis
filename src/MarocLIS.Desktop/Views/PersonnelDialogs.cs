@@ -183,6 +183,7 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
                                 latin: true, right: true);
             _rib = TextField("Personnel.Rib", c2, y, w, r?.Rib, latin: true, mono: true);
             _bank = TextField("Personnel.Bank", c3, y, w, r?.BankName);
+            _salary.MaxLength = EditorValues.AmountMaxLength;
             _rib.MaxLength = 30;
             _bank.MaxLength = 100;
             y += 58;
@@ -326,7 +327,7 @@ internal sealed class CredentialsDialog : Form
         Add("title", "Credential.Title", 22, 150);
         Add("reference", "Credential.Reference", 13, 120, UiTheme.Monospace);
         Add("issuer", "Credential.IssuedBy", 12, 90, UiTheme.Small);
-        Add("obtained", "Credential.ObtainedOn", 10, 100, UiTheme.Monospace);
+        Add("obtained", "Credential.ObtainedOn", 10, 120, UiTheme.Monospace);
         Add("expires", "Credential.ExpiresOn", 10, 120, UiTheme.Monospace);
         Add("file", "Credential.Scan", 7, 70, UiTheme.Small);
         Add("note", "Field.Notes", 12, 90, UiTheme.Small);
@@ -498,7 +499,7 @@ internal sealed class CredentialsDialog : Form
 
         using var picker = new OpenFileDialog
         {
-            Title = _attach.Text,
+            Title = UserDialogs.CaptionOf(_attach.Text, _attach.Text),
             Filter = $"{_localizer["Credential.ScanFiles"]} (*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff)|*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff",
             CheckFileExists = true
         };
@@ -857,6 +858,9 @@ internal sealed class SettlementDialog : MasterDataEditor
 
         _note = TextField("Field.Notes", 20, 252, 680, a.Note);
         _note.MaxLength = 500;
+        _reference.MaxLength = _leave.MaxLength = _notice.MaxLength = _severance.MaxLength = EditorValues.AmountMaxLength;
+        // A decimal(9,2) column: seven figures before the comma.
+        _leaveDays.MaxLength = 7;
 
         _total = new Label { Font = UiTheme.BodyBold, ForeColor = UiTheme.TextPrimary, AutoSize = false, Bounds = new Rectangle(20, 306, 680, 22) };
         Controls.Add(_total);
