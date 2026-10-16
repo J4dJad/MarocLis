@@ -703,7 +703,7 @@ internal sealed class FixedAssetDialog : MasterDataEditor
         RenderPlan();
         RenderInstrumentState();
         Buttons(460, 900);
-        DialogFrame.Apply(this, localizer["Finance.Dialog.FixedAsset"]);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.FixedAsset"]);
     }
 
     protected override async void OnShown(EventArgs e)
@@ -902,7 +902,7 @@ internal sealed class InstrumentCandidateDialog : Form
         Controls.Add(_grid);
         Controls.Add(footer);
 
-        DialogFrame.Apply(this, localizer["Finance.Dialog.FromInstrument"], [], cancel, ok);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.FromInstrument"], [], cancel, ok);
     }
 
     private void Choose()
@@ -989,7 +989,7 @@ internal sealed class DepreciationScheduleDialog : Form
         Controls.Add(header);
         Controls.Add(footer);
 
-        DialogFrame.Apply(this, localizer["Finance.Dialog.Schedule"], [csv], close, null);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.Schedule"], [csv], close, null);
     }
 }
 
@@ -1020,7 +1020,7 @@ internal sealed class AssetDisposalDialog : MasterDataEditor
         _reason.MaxLength = FixedAsset.DisposalReasonMaxLength;
         Notice(20, 122, 480, 60, "Assets.DisposalNotice");
         Buttons(190, 520);
-        DialogFrame.Apply(this, localizer["Finance.Dialog.Disposal"]);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.Disposal"]);
     }
 
     protected override void Accept()
@@ -1068,7 +1068,7 @@ internal sealed class FixedAssetAccountsDialog : MasterDataEditor
 
         Notice(20, y + 4, 660, 50, "Assets.AccountsNotice");
         Buttons(y + 64, 700);
-        DialogFrame.Apply(this, localizer["Finance.Dialog.AssetAccounts"]);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.AssetAccounts"]);
     }
 
     protected override void Accept()

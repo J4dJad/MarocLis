@@ -132,7 +132,7 @@ public sealed class BillingView : LocalizedView
         _chips.WrapContents = false;
         _chips.BackColor = UiTheme.Surface;
 
-        var filters = FinanceUi.FilterRow(_ledgerHeading, new SearchField(_search, 340), _chips);
+        var filters = FinanceUi.FilterRow(_ledgerHeading, new FinanceSearchField(_search, 340), _chips);
         _ledgerHeading.Margin = new Padding(0, 6, 16, 0);
         _chips.Margin = new Padding(0, 0, 0, 0);
 
@@ -1436,7 +1436,7 @@ internal sealed class PaymentDialog : Form
         _bankLabel.Text = _localizer["Payment.Bank"];
         _maturityLabel.Text = _localizer["Payment.Maturity"];
 
-        DialogFrame.Apply(this, _localizer["Finance.Dialog.Payment"], [], cancel, ok);
+        FinanceDialogFrame.Apply(this, _localizer["Finance.Dialog.Payment"], [], cancel, ok);
     }
 
     private PaymentMethod SelectedMethod =>

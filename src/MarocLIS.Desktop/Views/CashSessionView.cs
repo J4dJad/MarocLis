@@ -139,8 +139,8 @@ public sealed class CashSessionView : LocalizedView
         _expected.ForeColor = UiTheme.Accent;
         _variance.Font = UiTheme.Kpi;
 
-        var expectedTile = new KpiTile(_expected, _expectedLabel) { Margin = new Padding(0, 0, 8, 0) };
-        var varianceTile = new KpiTile(_variance, _varianceLabel) { Margin = new Padding(8, 0, 0, 0) };
+        var expectedTile = new FinanceKpiTile(_expected, _expectedLabel) { Margin = new Padding(0, 0, 8, 0) };
+        var varianceTile = new FinanceKpiTile(_variance, _varianceLabel) { Margin = new Padding(8, 0, 0, 0) };
 
         var tiles = new TableLayoutPanel
         {

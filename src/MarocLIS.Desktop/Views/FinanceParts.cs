@@ -497,12 +497,12 @@ internal sealed class FinanceCard : Panel
 /// A key figure in a card: its caption in grey above, the figure in the kpi size below — the
 /// expected cash of a till, the margin of a period.
 /// </summary>
-internal sealed class KpiTile : Panel
+internal sealed class FinanceKpiTile : Panel
 {
     public Label Caption { get; } = new();
     public Label Value { get; } = new();
 
-    public KpiTile(Label? value = null, Label? caption = null)
+    public FinanceKpiTile(Label? value = null, Label? caption = null)
     {
         if (value is not null) Value = value;
         if (caption is not null) Caption = caption;
@@ -536,11 +536,11 @@ internal sealed class KpiTile : Panel
 /// The search box of a list: a magnifier, then the text, in a field of the design system's
 /// height. The box itself is borderless; the field draws the border, in the accent while typing.
 /// </summary>
-internal sealed class SearchField : Panel
+internal sealed class FinanceSearchField : Panel
 {
     private readonly TextBox _box;
 
-    public SearchField(TextBox box, int width)
+    public FinanceSearchField(TextBox box, int width)
     {
         _box = box;
         SetStyle(ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint
@@ -600,7 +600,7 @@ internal sealed class SearchField : Panel
 /// on a small screen, keeps working.
 /// </para>
 /// </summary>
-internal static class DialogFrame
+internal static class FinanceDialogFrame
 {
     private const int Margin = 20;
     private const int FooterHeight = 60;

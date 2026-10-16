@@ -23,7 +23,7 @@ public sealed class CostMarginView : LocalizedView
 
     private readonly PeriodBar _bar;
     // The four key figures as the design system's indicator cards: caption above, figure below.
-    private readonly KpiTile[] _tiles = [.. Enumerable.Range(0, 4).Select(_ => new KpiTile())];
+    private readonly FinanceKpiTile[] _tiles = [.. Enumerable.Range(0, 4).Select(_ => new FinanceKpiTile())];
     private readonly Label _method = new()
     {
         Dock = DockStyle.Top, Height = 44, Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary,
@@ -103,7 +103,7 @@ public sealed class CostMarginView : LocalizedView
         return page;
     }
 
-    private static TableLayoutPanel KpiRow(KpiTile[] tiles)
+    private static TableLayoutPanel KpiRow(FinanceKpiTile[] tiles)
     {
         var row = new TableLayoutPanel
         {

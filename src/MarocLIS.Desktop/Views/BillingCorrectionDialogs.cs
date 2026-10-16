@@ -97,7 +97,7 @@ internal sealed class PaymentPickerDialog : Form
 
         _ok.Enabled = _grid.CurrentRow?.Tag is PaymentRow;
 
-        DialogFrame.Apply(this, localizer["Finance.Dialog.PickPayment"], [], cancel, _ok);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.PickPayment"], [], cancel, _ok);
     }
 
     private void Accept()
@@ -203,7 +203,7 @@ internal sealed class ClaimOutcomeDialog : Form
 
         RefreshReason();
 
-        DialogFrame.Apply(this, localizer["Finance.Dialog.ClaimOutcome"], [], cancel, ok);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.ClaimOutcome"], [], cancel, ok);
     }
 
     private bool ReasonRequired =>
@@ -401,7 +401,7 @@ internal sealed class InvoiceIssueDialog : Form
         // unbroken, so it is a deliberate click rather than a reflexive Enter on a scanned barcode.
         CancelButton = cancel;
 
-        DialogFrame.Apply(this, localizer["Finance.Dialog.IssueInvoice"], [], cancel, ok);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.IssueInvoice"], [], cancel, ok);
     }
 
     private void RefreshNet()
@@ -562,7 +562,7 @@ internal sealed class PayerSettlementDialog : Form
         _accepted.TextChanged += (_, _) => RefreshShortfall();
         RefreshShortfall();
 
-        DialogFrame.Apply(this, localizer["Finance.Dialog.Settlement"], [], cancel, ok);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.Settlement"], [], cancel, ok);
     }
 
     private bool TryParseAccepted(out decimal amount) =>

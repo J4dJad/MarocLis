@@ -59,7 +59,7 @@ internal sealed class BankAccountsDialog : Form
         Controls.Add(_grid);
         Controls.Add(bar);
 
-        DialogFrame.Apply(this, localizer["Finance.Dialog.BankAccounts"], [_edit], _close, _new);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.BankAccounts"], [_edit], _close, _new);
 
         _new.Click += async (_, _) => await EditAsync(null);
         _edit.Click += async (_, _) => await EditAsync(_grid.CurrentRow?.Tag as BankAccountRow);
@@ -137,7 +137,7 @@ internal sealed class BankAccountEditor : MasterDataEditor
         Notice(20, 180, 520, 70, "Treasury.BankAccountNotice");
 
         Buttons(272, 560);
-        DialogFrame.Apply(this, localizer["Finance.Dialog.BankAccount"]);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.BankAccount"]);
     }
 
     protected override void Accept()
@@ -328,7 +328,7 @@ internal sealed class BankStatementImportDialog : Form
         Controls.Add(top);
         Controls.Add(bottom);
 
-        DialogFrame.Apply(this, _localizer["Finance.Dialog.StatementImport"], [], _cancel, _import);
+        FinanceDialogFrame.Apply(this, _localizer["Finance.Dialog.StatementImport"], [], _cancel, _import);
     }
 
     private void Apply(BankStatementCsvMapping m)
@@ -503,7 +503,7 @@ internal sealed class ForecastItemsDialog : Form
         Controls.Add(_grid);
         Controls.Add(bar);
 
-        DialogFrame.Apply(this, localizer["Finance.Dialog.ForecastItems"], [_edit], _close, _new);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.ForecastItems"], [_edit], _close, _new);
 
         _new.Click += async (_, _) => await EditAsync(null);
         _edit.Click += async (_, _) => await EditAsync(_grid.CurrentRow?.Tag as ForecastItemRow);
@@ -581,7 +581,7 @@ internal sealed class ForecastItemEditor : MasterDataEditor
         Notice(20, 180, 520, 50, "Treasury.ForecastItemNotice");
 
         Buttons(242, 560);
-        DialogFrame.Apply(this, localizer["Finance.Dialog.ForecastItem"]);
+        FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.ForecastItem"]);
     }
 
     protected override void Accept()
