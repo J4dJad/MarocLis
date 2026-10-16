@@ -147,6 +147,15 @@ public sealed class SampleStorageView : LocalizedView
         Add("volume", 6, UiTheme.Monospace, right: true);
         Add("aliquots", 5, UiTheme.Monospace, right: true);
         Add("flags", 6, UiTheme.SmallBold);
+
+        // Read on the card of the selected tube: the list keeps the columns it is scanned by, and
+        // fits beside the card at 1366 pixels.
+        // The printed list (Ctrl+P) keeps them.
+        foreach (var name in new[] { "specimen", "received", "volume", "aliquots" })
+        {
+            _grid.Column(name).Visible = false;
+            _grid.Column(name).Tag = ListPrinting.PrintedWhenHidden;
+        }
     }
 
     private void WireBehaviour()
@@ -319,7 +328,7 @@ public sealed class SampleStorageView : LocalizedView
             return;
         }
 
-        _aside.Heading.Font = UiTheme.MonospaceBold;
+        _aside.Heading.Font = Pilotage.CodeTitle;
         _aside.Heading.Text = row.Barcode;
         _aside.Subtitle.Text = $"{row.PatientName} · {row.SpecimenTypeName}";
         _aside.SetPills(

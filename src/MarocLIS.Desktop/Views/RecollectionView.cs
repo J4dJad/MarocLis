@@ -93,6 +93,15 @@ public sealed class RecollectionView : LocalizedView
         Add("barcode", 10, UiTheme.Monospace);
         Add("contact", 17, UiTheme.Small);
 
+        // The new tube and the number to dial are read on the patient's card, in large: the list
+        // fits beside it at 1366 pixels.
+        // The printed list (Ctrl+P) keeps them.
+        foreach (var name in new[] { "barcode", "phone" })
+        {
+            _grid.Column(name).Visible = false;
+            _grid.Column(name).Tag = ListPrinting.PrintedWhenHidden;
+        }
+
         // The selected patient's card: who to call, why, and the two actions taken from there.
         _aside.AddActions(_sms, _abandon);
 

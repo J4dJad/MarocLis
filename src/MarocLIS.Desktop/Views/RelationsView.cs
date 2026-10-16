@@ -117,10 +117,17 @@ public sealed class RelationsView : LocalizedView
         _moreMenu.Items.AddRange([_deleteVisit, _attach, _openFile]);
         _bar.Extra.Controls.AddRange([_editVisit, _editPartnership, _more]);
         _bar.Lead.Controls.AddRange([_newVisit, _newPartnership]);
-        _bar.Filters.Controls.Add(_inactive);
+        // The tick box goes at the end of the notice line: beside the dates it ran off a
+        // 1366-pixel screen.
+        var noticeLine = new Panel { Dock = DockStyle.Top, Height = _notice.Height, BackColor = UiTheme.Surface };
+        _notice.Dock = DockStyle.Fill;
+        _inactive.Dock = DockStyle.Right;
+        _inactive.Padding = new Padding(12, 0, 0, 0);
+        noticeLine.Controls.Add(_notice);
+        noticeLine.Controls.Add(_inactive);
 
         Controls.Add(_tabs);
-        Controls.Add(_notice);
+        Controls.Add(noticeLine);
         Controls.Add(_bar);
 
         _bar.Compute.Click += async (_, _) => await LoadAsync();

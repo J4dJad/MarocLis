@@ -364,6 +364,16 @@ internal sealed class FieldDialog : Form
         var chrome = Height - ClientSize.Height;
         var available = Screen.FromControl(Owner ?? (Control)this).WorkingArea.Height - chrome;
         if (ClientSize.Height > available) ClientSize = new Size(ClientSize.Width, available);
+
+        // A form shorter than the height its caller reserved does not keep a blank band above
+        // its foot.
+        if (_body.Controls.Count > 0 && _body.VerticalScroll.Visible is false)
+        {
+            var last = _body.Controls[_body.Controls.Count - 1];
+            var content = last.Bottom + last.Margin.Bottom + _body.Padding.Bottom + 8;
+            if (content < _body.ClientSize.Height)
+                ClientSize = new Size(ClientSize.Width, ClientSize.Height - (_body.ClientSize.Height - content));
+        }
     }
 
     private T Add<T>(string label, T control, int height = 0) where T : Control

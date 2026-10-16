@@ -15,6 +15,9 @@ internal static class Pilotage
     /// <summary>The title of a dialog: 17 px semibold.</summary>
     public static readonly Font DialogTitle = EntryPaint.Resized(UiTheme.SectionTitle, 12.75f);
 
+    /// <summary>The title of a card whose name is an identifier (a tube): 17 px fixed-pitch bold.</summary>
+    public static readonly Font CodeTitle = EntryPaint.Resized(UiTheme.MonospaceBold, 12.75f);
+
     /// <summary>The status pairs of the design system, as soft fill and ink.</summary>
     public static readonly (Color Back, Color Fore) Ok = (UiTheme.NormalBackground, UiTheme.Normal);
 
@@ -205,9 +208,10 @@ internal sealed class PageHead : Panel
         Title.Bounds = new Rectangle(0, (Height - title.Height) / 2, titleWidth, title.Height);
 
         var count = TextRenderer.MeasureText(Count.Text, Count.Font);
-        var countWidth = Math.Max(0, Math.Min(count.Width + 4, room - titleWidth - 12));
+        // The count is shown whole or not at all: a cut figure ("0 à…") says less than none.
+        var countWidth = count.Width + 4;
         Count.Bounds = new Rectangle(Title.Right + 12, Title.Bottom - count.Height - 4, countWidth, count.Height);
-        Count.Visible = countWidth > 40;
+        Count.Visible = Count.Text.Length > 0 && countWidth <= room - titleWidth - 12;
     }
 }
 
@@ -512,6 +516,15 @@ internal sealed class KpiTile : Label
         {
             sub = value[(dot + 3)..];
             value = value[..dot];
+
+            // A caption in two parts ("Délai · dans les délais") names the value and the line
+            // under it: its second part goes after that line, where it is read with its figure.
+            var captionDot = caption.IndexOf(" · ", StringComparison.Ordinal);
+            if (captionDot > 0)
+            {
+                sub = $"{sub} {caption[(captionDot + 3)..]}";
+                caption = caption[..captionDot];
+            }
         }
 
         var flags = TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis
@@ -520,9 +533,21 @@ internal sealed class KpiTile : Label
 
         var inner = new Rectangle(14, 0, Width - 28, Height);
         var captionHeight = TextRenderer.MeasureText(caption, UiTheme.SmallBold).Height;
-        var valueFont = ValueFonts.FirstOrDefault(f => TextRenderer.MeasureText(value, f).Width <= inner.Width)
-                        ?? UiTheme.BodyBold;
-        var valueHeight = TextRenderer.MeasureText(value, valueFont).Height;
+        var valueFont = ValueFonts.FirstOrDefault(f => TextRenderer.MeasureText(value, f).Width <= inner.Width);
+        var valueFlags = flags;
+        int valueHeight;
+        if (valueFont is null)
+        {
+            // A sentence rather than a figure ("no closed payroll month…"): on two lines.
+            valueFont = UiTheme.BodyBold;
+            valueFlags = (flags & ~TextFormatFlags.SingleLine) | TextFormatFlags.WordBreak;
+            valueHeight = Math.Min(TextRenderer.MeasureText(value, valueFont, new Size(inner.Width, 0), valueFlags).Height,
+                                   valueFont.Height * 2 + 2);
+        }
+        else
+        {
+            valueHeight = TextRenderer.MeasureText(value, valueFont).Height;
+        }
         var subHeight = sub.Length > 0 ? TextRenderer.MeasureText(sub, UiTheme.Small).Height : 0;
 
         var top = Math.Max(6, (Height - captionHeight - 2 - valueHeight - subHeight) / 2);
@@ -531,7 +556,7 @@ internal sealed class KpiTile : Label
                               UiTheme.TextSecondary, flags);
         top += captionHeight + 2;
         TextRenderer.DrawText(g, value, valueFont, new Rectangle(inner.X, top, inner.Width, valueHeight),
-                              _emphasis ?? ForeColor, flags);
+                              _emphasis ?? ForeColor, valueFlags);
         top += valueHeight;
         if (sub.Length > 0)
             TextRenderer.DrawText(g, sub, UiTheme.Small, new Rectangle(inner.X, top, inner.Width, subHeight),
