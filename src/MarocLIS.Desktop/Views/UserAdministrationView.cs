@@ -216,33 +216,42 @@ public sealed class UserAdministrationView : LocalizedView
             Font = UiTheme.Small,
             ForeColor = UiTheme.TextMuted,
             AutoSize = false,
-            Dock = DockStyle.Bottom,
-            Height = 58,
-            Padding = new Padding(0, 8, 0, 0)
+            Dock = DockStyle.Fill,
+            Padding = new Padding(0, 6, 0, 0)
         };
 
+        // Two columns so the five actions stay visible at 1366x768: the long one (password reset)
+        // takes a whole row, the others go in pairs.
         var buttons = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            ColumnCount = 1,
+            ColumnCount = 2,
             BackColor = UiTheme.SurfaceRaised,
             Padding = new Padding(0, 6, 0, 0),
             Tag = UiTags.OwnLayout
         };
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        for (var i = 0; i < 3; i++) buttons.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
-        foreach (var button in new[] { _assignRoles, _siteAccess, _resetPassword, _unlock, _toggleActive })
+        void Put(Button button, int column, int row, int span = 1)
         {
             UiTheme.StyleSecondary(button);
             button.Dock = DockStyle.Fill;
-            button.Height = 34;
-            button.Margin = new Padding(0, 0, 0, 6);
+            button.Height = 32;
+            button.Margin = new Padding(column == 0 && span == 1 ? 0 : column == 1 ? 3 : 0, 0, column == 0 && span == 1 ? 3 : 0, 6);
             button.TextAlign = ContentAlignment.MiddleLeft;
-            buttons.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-            buttons.Controls.Add(button);
+            buttons.Controls.Add(button, column, row);
+            if (span > 1) buttons.SetColumnSpan(button, span);
         }
+
+        Put(_assignRoles, 0, 0);
+        Put(_siteAccess, 1, 0);
+        Put(_resetPassword, 0, 1, 2);
+        Put(_unlock, 0, 2);
+        Put(_toggleActive, 1, 2);
 
         var line = new Label { Dock = DockStyle.Top, Height = 1, BackColor = UiTheme.Border, Margin = Padding.Empty };
         var gap = new Label { Dock = DockStyle.Top, Height = 8, BackColor = UiTheme.SurfaceRaised };
@@ -257,6 +266,20 @@ public sealed class UserAdministrationView : LocalizedView
         aside.Controls.Add(pillRow);
         aside.Controls.Add(_asideSub);
         aside.Controls.Add(_asideName);
+
+        // Scrolls rather than clipping when the window is short or the captions wrap (Arabic):
+        // the docked stack lays out inside the display rectangle, which this minimum enlarges.
+        aside.AutoScroll = true;
+        void Fit()
+        {
+            var need = aside.Padding.Vertical + 44;
+            foreach (Control child in aside.Controls)
+                if (child.Dock == DockStyle.Top) need += child.Height;
+            var min = new Size(0, need);
+            if (aside.AutoScrollMinSize != min) aside.AutoScrollMinSize = min;
+        }
+        aside.Resize += (_, _) => Fit();
+        _facts.SizeChanged += (_, _) => Fit();
 
         UiChrome.AsCard(aside);
         return aside;
@@ -320,7 +343,7 @@ public sealed class UserAdministrationView : LocalizedView
         _roleNotice.ForeColor = UiTheme.Abnormal;
 
         split.Panel1.Controls.Add(AdminLayout.CardSection(_rolesHeading, _roles,
-                                                          AdminLayout.Actions(null, _toggleRole, _newRole)));
+                                                          AdminLayout.Actions(null, _toggleRole, _newRole), footer: true));
 
         var right = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
         right.Controls.Add(AdminLayout.CardSection(_permissionsHeading, tree,
@@ -1374,7 +1397,7 @@ internal sealed class UserDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
-        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(UserDialog)));
+        AdminDialogFrame.Attach(this, localizer, AdminDialogFrame.Lead(localizer, nameof(UserDialog)));
 
         Populate(existing);
         RefreshQualificationNotice();
@@ -1613,7 +1636,7 @@ internal sealed class RoleAssignmentDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
-        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(RoleAssignmentDialog)));
+        AdminDialogFrame.Attach(this, localizer, AdminDialogFrame.Lead(localizer, nameof(RoleAssignmentDialog)));
 
         if (_list.Items.Count > 0) _list.SelectedIndex = 0;
         ShowSummary();
@@ -1717,7 +1740,7 @@ internal sealed class SiteAccessDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
-        DialogFrame.Attach(this, localizer, DialogFrame.Lead(localizer, nameof(SiteAccessDialog)));
+        AdminDialogFrame.Attach(this, localizer, AdminDialogFrame.Lead(localizer, nameof(SiteAccessDialog)));
 
         RefreshDefaults(user.DefaultSiteId);
     }
