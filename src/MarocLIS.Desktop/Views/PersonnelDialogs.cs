@@ -183,7 +183,7 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
                                 latin: true, right: true);
             _rib = TextField("Personnel.Rib", c2, y, w, r?.Rib, latin: true, mono: true);
             _bank = TextField("Personnel.Bank", c3, y, w, r?.BankName);
-            _salary.MaxLength = EditorValues.AmountMaxLength;
+            Numeric(EditorValues.AmountMaxLength, _salary);
             _rib.MaxLength = 30;
             _bank.MaxLength = 100;
             y += 58;
@@ -393,6 +393,17 @@ internal sealed class CredentialsDialog : Form
                 e.CellStyle.ForeColor = UiTheme.Critical;
             }
         };
+
+        // Wide enough for the actions and « Fermer » side by side: the Arabic captions are longer,
+        // and « Fermer » slid under the last of them, out of reach.
+        var needed = actions.PreferredSize.Width + 12 + 24 + close.Width + 12;
+        if (needed > ClientSize.Width)
+        {
+            var grow = needed - ClientSize.Width;
+            ClientSize = new Size(needed, ClientSize.Height);
+            host.Width += grow;
+            close.Left += grow;
+        }
 
         UpdateButtons();
         QhDialog.Dress(this, localizer, "QualityHr.Hint.Credentials");
@@ -858,7 +869,7 @@ internal sealed class SettlementDialog : MasterDataEditor
 
         _note = TextField("Field.Notes", 20, 252, 680, a.Note);
         _note.MaxLength = 500;
-        _reference.MaxLength = _leave.MaxLength = _notice.MaxLength = _severance.MaxLength = EditorValues.AmountMaxLength;
+        Numeric(EditorValues.AmountMaxLength, _reference, _leave, _notice, _severance);
         // A decimal(9,2) column: seven figures before the comma.
         _leaveDays.MaxLength = 7;
 

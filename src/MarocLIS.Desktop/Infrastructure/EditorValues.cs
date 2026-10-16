@@ -20,6 +20,13 @@ internal static class EditorValues
     public const int MeasureMaxLength = 12;
 
     /// <summary>
+    /// The first magnitude no number box takes: a decimal(18,6) column holds twelve figures before
+    /// the comma. The length caps alone let it through in the "1e17" notation, or in a box that
+    /// takes fifteen characters, and the save then failed with an unexpected error.
+    /// </summary>
+    public const decimal Limit = 1_000_000_000_000m;
+
+    /// <summary>
     /// Reads a number typed, pasted or pre-filled in any of the cultures the application runs in.
     /// <para>
     /// The cultures write "150 000,5" with a space (or a no-break space, which the framework uses
@@ -28,6 +35,7 @@ internal static class EditorValues
     /// point is the decimal separator; when both appear, the last one is, and the other groups
     /// thousands; a separator that repeats ("1.500.000") can only be grouping.
     /// </para>
+    /// <para>A number of <see cref="Limit"/> or more reads as null, like any text that is no number.</para>
     /// </summary>
     public static decimal? ParseDecimal(string? text)
     {
@@ -57,9 +65,19 @@ internal static class EditorValues
 
         return decimal.TryParse(compact.Replace(',', '.'), NumberStyles.Float,
                                 CultureInfo.InvariantCulture, out var value)
+               && Math.Abs(value) < Limit
             ? value
             : null;
     }
+
+    /// <summary>
+    /// True when a box holds text that <see cref="ParseDecimal"/> cannot read — a typing slip, a
+    /// unit typed with the figure ("10 %"), or a number too large for any column. The editors read
+    /// such a box as "no value"; they check this first so it is refused on its box, not saved as
+    /// an empty limit or a zero stock level.
+    /// </summary>
+    public static bool IsUnreadable(string? text) =>
+        !string.IsNullOrWhiteSpace(text) && ParseDecimal(text) is null;
 
     /// <summary>
     /// Writes a value for an editable box: at least <paramref name="decimals"/> decimals, any

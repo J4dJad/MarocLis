@@ -540,8 +540,9 @@ public sealed class UserAdministrationView : LocalizedView
 
         _newUser.Text = T("Admin.NewUser");
         _editUser.Text = T("Action.Edit");
-        _assignRoles.Text = T("Nav.Roles");
-        _siteAccess.Text = T("Admin.SiteAccess");
+        // Captions of their own: in Arabic the screen titles did not fit the half-width buttons.
+        _assignRoles.Text = T("Admin.RolesButton");
+        _siteAccess.Text = T("Admin.SiteAccessButton");
         _resetPassword.Text = T("Admin.ResetPassword");
         _unlock.Text = T("Admin.Unlock");
 

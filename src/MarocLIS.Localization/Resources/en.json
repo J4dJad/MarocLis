@@ -4434,6 +4434,8 @@
   },
 
   "Admin": {
+    "SiteAccessButton": "Accessible sites",
+    "RolesButton": "Roles and permissions",
     "PrescriberHint": "Only for the Prescriber role: the account sees only this prescriber's orders. With no linked prescriber it sees nothing.",
     "NoPrescriber": "(none)",
     "Prescriber": "Linked prescriber",
@@ -5453,6 +5455,7 @@
   "BenchSheet_NothingPending": "No analysis is awaiting entry for this selection.",
 
   "Sequence_RequiresTransaction": "Allocating a number from sequence \"{0}\" requires an open transaction.",
+  "Sequence_FormatTooLong": "This format would give numbers that are too long (\"{0}\"): the register keeps at most {1} characters. Shorten it.",
 
   "Db_SchemaMismatch": "The database exists but does not match the expected schema.",
   "Db_InitializationFailed": "Database initialisation failed: {0}",

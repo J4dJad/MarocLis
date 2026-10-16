@@ -608,7 +608,16 @@ internal static class AdminDialogFrame
             body.BringToFront();
         }
 
+        var drawn = form.ClientSize.Width;
         form.ClientSize = new Size(width, available);
+
+        // In Arabic the window mirrors its own children, not those of a panel inside it: moved
+        // into the body, every field went back to the left-to-right layout. They are mirrored
+        // here instead, across the width they were drawn on.
+        if (absolute && form.RightToLeft == RightToLeft.Yes && form.RightToLeftLayout)
+            foreach (var body in form.Controls.OfType<Panel>().Where(p => p.AutoScroll && p.Dock == DockStyle.Fill))
+                foreach (Control control in body.Controls) control.Left = drawn - control.Right;
+
         form.ResumeLayout(performLayout: true);
     }
 

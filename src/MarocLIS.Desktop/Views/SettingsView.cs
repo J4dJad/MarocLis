@@ -418,6 +418,19 @@ public sealed class SettingsView : LocalizedView
                                 _postalCode, _phone, _fax, _email, _website,
                                 _logo, _chooseLogo, _removeLogo, _logoHint]);
 
+        // The lengths of the site's columns: a longer text failed the save with « Erreur
+        // inattendue ». The identifiers the service checks (ICE, IF, CNSS, INPE) are left to its
+        // message, which says what is wrong with them.
+        _code.MaxLength = ConfigurationService.MaxSiteCodeLength;
+        _nameFr.MaxLength = _nameAr.MaxLength = 300;
+        _legalName.MaxLength = 250;
+        _rc.MaxLength = _taxNumber.MaxLength = 40;
+        _rcCourt.MaxLength = _city.MaxLength = 100;
+        _ministryAuth.MaxLength = _accreditationNumber.MaxLength = 60;
+        _addressFr.MaxLength = _addressAr.MaxLength = 400;
+        _postalCode.MaxLength = 10;
+        _phone.MaxLength = _fax.MaxLength = _email.MaxLength = _website.MaxLength = 400;
+
         // The form in a white card, its fields where they were; Save and Reload in the bar at
         // the card's foot rather than at the end of a page that has to be scrolled to reach them.
         var card = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised,

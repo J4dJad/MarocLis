@@ -4435,6 +4435,8 @@
   },
 
   "Admin": {
+    "SiteAccessButton": "Sites accessibles",
+    "RolesButton": "Rôles et droits",
     "PrescriberHint": "Uniquement pour le rôle Prescripteur : le compte ne voit que les demandes de ce prescripteur. Sans prescripteur associé, il ne voit rien.",
     "NoPrescriber": "(aucun)",
     "Prescriber": "Prescripteur associé",
@@ -5454,6 +5456,7 @@
   "BenchSheet_NothingPending": "Aucune analyse en attente de saisie pour cette sélection.",
 
   "Sequence_RequiresTransaction": "L'attribution d'un numéro de la série « {0} » exige une transaction ouverte.",
+  "Sequence_FormatTooLong": "Ce format donnerait des numéros trop longs (« {0} ») : le registre en garde au plus {1} caractères. Raccourcissez-le.",
 
   "Db_SchemaMismatch": "La base de données existe mais ne correspond pas au schéma attendu.",
   "Db_InitializationFailed": "Échec de l'initialisation de la base de données : {0}",
