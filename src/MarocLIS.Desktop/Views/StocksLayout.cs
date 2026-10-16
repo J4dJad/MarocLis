@@ -874,11 +874,15 @@ internal static class StockDialog
         var bottom = content.Where(c => c.Dock == DockStyle.None).Select(c => c.Bottom).DefaultIfEmpty(header.Height).Max();
         var footerTop = bottom + 16;
 
-        form.ClientSize = new Size(form.ClientSize.Width, footerTop + FooterHeight);
+        var (primary, dismiss, others) = Sort(footer, form);
+
+        // Wide enough for the footer's buttons side by side, with their icons.
+        var needed = 40 + footer.Sum(Width) + 8 * Math.Max(0, footer.Count - 1)
+                     + (others.Count > 0 && (primary ?? dismiss) is not null ? 16 : 0);
+        form.ClientSize = new Size(Math.Max(form.ClientSize.Width, needed), footerTop + FooterHeight);
         foreach (var button in start.Where(b => b.Parent != form)) form.Controls.Add(button);
         form.Controls.Add(header);
 
-        var (primary, dismiss, others) = Sort(footer, form);
         foreach (var button in footer) button.Height = ButtonHeight;
         PlaceFooter(form.ClientSize.Width, footerTop, primary, dismiss, others);
 

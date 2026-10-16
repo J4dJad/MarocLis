@@ -91,7 +91,7 @@ public sealed class QuoteRequestView : LocalizedView
         var body = (Panel)_comparisonCard.Controls[0];
         body.BackColor = UiTheme.SurfaceRaised;
 
-        var sides = StockPage.Beside(_comparison, new Panel(), 660);
+        var sides = StockPage.Beside(_comparison, new Panel(), 520);
         sides.BackColor = sides.Panel1.BackColor = sides.Panel2.BackColor = UiTheme.SurfaceRaised;
         sides.SplitterWidth = 9;
         sides.Panel2.Controls.Clear();

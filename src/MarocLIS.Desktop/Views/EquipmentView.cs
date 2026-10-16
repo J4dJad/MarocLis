@@ -94,7 +94,7 @@ public sealed class EquipmentView : LocalizedView
         _message.ForeColor = UiTheme.TextSecondary;
         _message.AutoSize = false;
         _message.Dock = DockStyle.Top;
-        _message.Height = 40;
+        _message.Height = 56;
 
         var body = (Panel)_asideCard.Controls[0];
         body.Padding = new Padding(15, 0, 15, 4);
@@ -109,7 +109,12 @@ public sealed class EquipmentView : LocalizedView
         actions.BringToFront();
         body.BringToFront();
 
-        Controls.Add(StockPage.Beside(registerCard, _asideCard, 900));
+        // The aside keeps its width; the register takes the rest.
+        _asideCard.Dock = DockStyle.Right;
+        _asideCard.Width = 380;
+        Controls.Add(registerCard);
+        Controls.Add(new Panel { Dock = DockStyle.Right, Width = 12, BackColor = UiTheme.Surface });
+        Controls.Add(_asideCard);
         Controls.Add(filters);
         Controls.Add(header);
     }
