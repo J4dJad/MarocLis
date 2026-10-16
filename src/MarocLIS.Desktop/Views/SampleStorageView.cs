@@ -28,17 +28,30 @@ public sealed class SampleStorageView : LocalizedView
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<SampleStorageView>? _logger;
 
-    private readonly TextBox _search = UiTheme.Input(280);
-    private readonly CheckBox _onlyExpired = new();
-    private readonly Label _heading = new();
+    private readonly PageHead _head = new();
+    private readonly FilterRow _filters = new();
+    private readonly SearchField _searchField = new(340);
+    private TextBox _search => _searchField.Box;
     private readonly DataGridView _grid = UiTheme.Grid();
+    private readonly ListCard _card;
+    private readonly AsideCard _aside = new();
 
     private readonly Button _shelve = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _aliquot = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _discard = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _purge = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
-    private readonly Label _status = new();
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly Button _more;
+    private readonly ToolStripMenuItem _purge = Pilotage.MenuItem("Sample.PurgeExpired");
+    private Label _status => _card.Footer;
+
+    // « Conservation dépassée » asks the server, as the tick box did; « Non rangés » filters the
+    // loaded list.
+    private bool _onlyExpired;
+    private bool _onlyUnshelved;
+    private readonly ChipButton _allChip;
+    private readonly ChipButton _expiredChip;
+    private readonly ChipButton _unshelvedChip;
 
     private IReadOnlyList<StoredSampleRow> _rows = [];
 
@@ -51,6 +64,12 @@ public sealed class SampleStorageView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
 
+        _card = new ListCard(_grid);
+        _more = Pilotage.MoreButton(_moreMenu);
+        _allChip = _filters.Chip(async (_, _) => await FilterAsync(expired: false, unshelved: false));
+        _expiredChip = _filters.Chip(async (_, _) => await FilterAsync(expired: true, unshelved: false));
+        _unshelvedChip = _filters.Chip(async (_, _) => await FilterAsync(expired: false, unshelved: true));
+
         BuildLayout();
         WireBehaviour();
     }
@@ -61,50 +80,43 @@ public sealed class SampleStorageView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(24, 16, 24, 16);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
+        _moreMenu.Items.Add(_purge);
+        _head.Add(_refresh, _more, _shelve);
+        ShortcutHints.Attach(_refresh, "F5");
 
-        _heading.Font = UiTheme.SectionTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 2);
-
-        _search.Location = new Point(0, 28);
-
-        _onlyExpired.Font = UiTheme.Small;
-        _onlyExpired.ForeColor = UiTheme.TextSecondary;
-        _onlyExpired.AutoSize = true;
-        _onlyExpired.Location = new Point(416, 34);
-
-        // Before the tick box, not after it: the tick box sizes itself to its sentence, which in
-        // French ran under a button placed at a fixed position to its right.
-        _refresh.Bounds = new Rectangle(296, 27, 110, UiTheme.ButtonHeight - 4);
-
-        bar.Controls.AddRange([_heading, _search, _onlyExpired, _refresh]);
+        _filters.Controls.Add(_searchField);
+        _filters.Controls.SetChildIndex(_searchField, 0);
 
         BuildColumns();
 
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        host.Controls.Add(_grid);
+        // The selected tube's card: where it is, how long it stays, and what can be done with it.
+        _aside.AddActions(_aliquot, _discard);
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 48,
-                                  BackColor = UiTheme.Surface };
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        body.Controls.Add(_card);
+        body.Controls.Add(new Panel { Dock = DockStyle.Right, Width = 16, BackColor = UiTheme.Surface });
+        body.Controls.Add(_aside);
 
-        _shelve.Bounds = new Rectangle(0, 10, 200, UiTheme.ButtonHeight);
-        _aliquot.Bounds = new Rectangle(210, 10, 190, UiTheme.ButtonHeight);
-        _discard.Bounds = new Rectangle(410, 10, 170, UiTheme.ButtonHeight);
-        _purge.Bounds = new Rectangle(590, 10, 240, UiTheme.ButtonHeight);
+        Controls.Add(body);
+        Controls.Add(Pilotage.Gap(14));
+        Controls.Add(_filters);
+        Controls.Add(Pilotage.Gap(10));
+        Controls.Add(_head);
+    }
 
-        _status.Font = UiTheme.Small;
-        _status.AutoSize = false;
-        _status.Bounds = new Rectangle(842, 16, 640, 20);
-
-        actions.Controls.AddRange([_shelve, _aliquot, _discard, _purge, _status]);
-
-        Controls.Add(host);
-        Controls.Add(actions);
-        Controls.Add(bar);
+    /// <summary>A chip: the server is asked again only when the past-retention filter changes.</summary>
+    private async Task FilterAsync(bool expired, bool unshelved)
+    {
+        _onlyUnshelved = unshelved;
+        if (_onlyExpired != expired)
+        {
+            _onlyExpired = expired;
+            await ActivateAsync();
+            return;
+        }
+        Render();
     }
 
     private void BuildColumns()
@@ -144,7 +156,6 @@ public sealed class SampleStorageView : LocalizedView
             if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await ActivateAsync(); }
         };
 
-        _onlyExpired.CheckedChanged += async (_, _) => await ActivateAsync();
         _refresh.Click += async (_, _) => await ActivateAsync();
 
         // Writes run through RunBusyAsync, as on the billing screens: a double-click records one
@@ -156,9 +167,9 @@ public sealed class SampleStorageView : LocalizedView
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Samples.Receive, _shelve, _aliquot);
-        PermissionGate.Require(Permissions.Samples.Reject, _discard, _purge);
+        PermissionGate.Require(Permissions.Samples.Reject, _discard);
 
-        _grid.SelectionChanged += (_, _) => RefreshActions();
+        _grid.SelectionChanged += (_, _) => { RefreshActions(); ShowSelected(); };
         _grid.CellFormatting += OnCellFormatting;
     }
 
@@ -188,7 +199,9 @@ public sealed class SampleStorageView : LocalizedView
     protected override void ApplyTexts()
     {
         _search.PlaceholderText = T("Sample.StorageSearchPlaceholder");
-        _onlyExpired.Text = T("Sample.OnlyPastRetention");
+        _head.Title.Text = T("Nav.SerumBank");
+        _more.Text = T("ResultEntry.MoreActions");
+        _aside.Empty.Text = T("Sample.SelectTube");
 
         _shelve.Text = T("Sample.Shelve");
         _aliquot.Text = T("Sample.CreateAliquot");
@@ -211,8 +224,7 @@ public sealed class SampleStorageView : LocalizedView
             _grid.Column("flags").HeaderText = string.Empty;
         }
 
-        if (_rows.Count > 0) Render();
-        RefreshActions();
+        Render();
     }
 
     // ---- Loading -------------------------------------------------------------------------------------
@@ -223,7 +235,7 @@ public sealed class SampleStorageView : LocalizedView
         {
             var result = await _samples.GetStoredSamplesAsync(
                 string.IsNullOrWhiteSpace(_search.Text) ? null : _search.Text.Trim(),
-                _onlyExpired.Checked, ct);
+                _onlyExpired, ct);
 
             if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 
@@ -244,7 +256,7 @@ public sealed class SampleStorageView : LocalizedView
         _grid.SuspendLayout();
         _grid.Rows.Clear();
 
-        foreach (var row in _rows)
+        foreach (var row in _onlyUnshelved ? _rows.Where(r => r.IsUnshelved) : _rows)
         {
             var flags = new List<string>(3);
             if (row.IsUnshelved) flags.Add("?");
@@ -280,11 +292,52 @@ public sealed class SampleStorageView : LocalizedView
         if (expired > 0) parts.Add($"{expired} {T("Sample.PastRetention").ToLowerInvariant()}");
         if (unshelved > 0) parts.Add($"{unshelved} {T("Sample.NotShelved").ToLowerInvariant()}");
 
-        _heading.Text = $"{T("Nav.SerumBank")} — {string.Join(" · ", parts)}";
+        _head.Count.Text = string.Join(" · ", parts);
+
+        // While the past-retention filter is on, the list holds only those tubes: the other
+        // counts are not known and are not shown.
+        _allChip.Text = T("Sample.FilterAll");
+        _expiredChip.Text = $"{T("Sample.PastRetention")} · {expired}";
+        _unshelvedChip.Text = $"{T("Sample.NotShelved")} · {unshelved}";
+        _allChip.Selected = !_onlyExpired && !_onlyUnshelved;
+        _expiredChip.Selected = _onlyExpired;
+        _unshelvedChip.Selected = _onlyUnshelved;
+        _filters.PerformLayout();
 
         if (_grid.Rows.Count > 0) _grid.SelectFirstRow();
 
         RefreshActions();
+        ShowSelected();
+    }
+
+    /// <summary>The card of the highlighted tube, or the line that asks for one.</summary>
+    private void ShowSelected()
+    {
+        if (Selected is not { } row)
+        {
+            _aside.ShowRow(false);
+            return;
+        }
+
+        _aside.Heading.Font = UiTheme.MonospaceBold;
+        _aside.Heading.Text = row.Barcode;
+        _aside.Subtitle.Text = $"{row.PatientName} · {row.SpecimenTypeName}";
+        _aside.SetPills(
+            (row.IsPastRetention ? $"! {T("Sample.PastRetention")}" : string.Empty, EntryPaint.Critical),
+            (row.IsUnshelved ? $"? {T("Sample.NotShelved")}" : string.Empty, EntryPaint.Warning),
+            (row.HasDefects ? $"! {T("Sample.HasDefects")}" : string.Empty, EntryPaint.Warning),
+            (row.IsAcceptedWithReservation ? $"R {T("Sample.WithReservation")}" : string.Empty, EntryPaint.Info));
+        _aside.SetFacts(
+            (T("Order.AccessionNumber"), row.AccessionNumber, true),
+            (T("Sample.ReceivedAt"), row.ReceivedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm"), true),
+            (T("Sample.Storage"), row.StorageLocation is { Length: > 0 }
+                ? row.StoragePosition is { Length: > 0 } ? $"{row.StorageLocation} / {row.StoragePosition}" : row.StorageLocation
+                : T("Sample.NotShelved"), true),
+            (T("Sample.KeepUntil"), row.KeepUntil?.ToString("dd/MM/yyyy"), true),
+            (T("Sample.DaysLeft"), row.DaysToKeepUntil?.ToString(), true),
+            (T("Sample.Volume"), row.VolumeMl?.ToString("0.#"), true),
+            (T("Sample.Aliquots"), row.AliquotCount > 0 ? row.AliquotCount.ToString() : string.Empty, true));
+        _aside.ShowRow(true);
     }
 
     private StoredSampleRow? Selected => _grid.CurrentRow?.Tag as StoredSampleRow;
@@ -300,8 +353,10 @@ public sealed class SampleStorageView : LocalizedView
         _aliquot.Enabled = row is { Status: not SampleStatus.Rejected };
 
         var expired = _rows.Count(r => r.IsPastRetention);
-        _purge.Enabled = expired > 0;
-        _purge.ForeColor = expired > 0 ? UiTheme.Abnormal : UiTheme.TextMuted;
+        // A menu entry is not a control the gate can hold: the right is checked here instead.
+        _purge.Enabled = expired > 0 && PermissionGate.Allows(Permissions.Samples.Reject);
+        _purge.ForeColor = _purge.Enabled ? UiTheme.Abnormal : UiTheme.TextMuted;
+        Pilotage.SyncMore(_more, _moreMenu);
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -446,36 +501,34 @@ internal sealed class SampleStorageDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(480, 250);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
-        var identity = new Label
-        {
-            Text = $"{row.PatientName}   ·   {row.AccessionNumber}   ·   {row.SpecimenTypeName}",
-            Font = UiTheme.SmallBold,
-            ForeColor = UiTheme.Accent,
-            AutoSize = false,
-            Bounds = new Rectangle(20, 14, 440, 20)
-        };
+        // The tube in the head, so the shelf is typed against the right one.
+        var head = DialogFrame.Head($"{localizer["Sample.Shelve"]} — {row.Barcode}",
+                                    $"{row.PatientName}   ·   {row.AccessionNumber}   ·   {row.SpecimenTypeName}", 480);
 
-        var locationLabel = UiTheme.FieldLabel(localizer["Sample.Storage"]);
-        locationLabel.Location = new Point(20, 46);
-        _location.Location = new Point(20, 64);
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised };
+
+        var locationLabel = Pilotage.Caption(localizer["Sample.Storage"]);
+        locationLabel.Location = new Point(20, 14);
+        _location.Bounds = new Rectangle(20, 34, 240, UiTheme.InputHeight);
         _location.Text = row.StorageLocation ?? string.Empty;
 
-        var positionLabel = UiTheme.FieldLabel(localizer["Sample.StoragePosition"]);
-        positionLabel.Location = new Point(280, 46);
-        _position.Location = new Point(280, 64);
+        var positionLabel = Pilotage.Caption(localizer["Sample.StoragePosition"]);
+        positionLabel.Location = new Point(276, 14);
+        _position.Bounds = new Rectangle(276, 34, 184, UiTheme.InputHeight);
         _position.Text = row.StoragePosition ?? string.Empty;
         _position.Tag = UiTags.LatinValue;
 
         _hasKeepUntil.Text = localizer["Sample.KeepUntil"];
         _hasKeepUntil.AutoSize = true;
-        _hasKeepUntil.Location = new Point(20, 104);
+        _hasKeepUntil.Font = UiTheme.SmallBold;
+        _hasKeepUntil.ForeColor = UiTheme.TextSecondary;
+        _hasKeepUntil.Location = new Point(20, 76);
         _hasKeepUntil.Checked = row.KeepUntil is not null;
 
-        _keepUntil.Bounds = new Rectangle(20, 126, 200, UiTheme.InputHeight);
+        _keepUntil.Bounds = new Rectangle(20, 100, 200, UiTheme.InputHeight);
         _keepUntil.Format = DateTimePickerFormat.Short;
         _keepUntil.Enabled = _hasKeepUntil.Checked;
         _keepUntil.Value = row.KeepUntil?.ToDateTime(TimeOnly.MinValue)
@@ -489,19 +542,21 @@ internal sealed class SampleStorageDialog : Form
             Font = UiTheme.Small,
             ForeColor = UiTheme.TextSecondary,
             AutoSize = false,
-            Bounds = new Rectangle(20, 160, 440, 30)
+            Bounds = new Rectangle(20, 136, 440, 34)
         };
 
+        body.Controls.AddRange([locationLabel, _location, positionLabel, _position, _hasKeepUntil, _keepUntil, notice]);
+
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
-        ok.Bounds = new Rectangle(20, 200, 210, UiTheme.ButtonHeight);
         ok.Click += (_, _) => Accept();
 
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
-        cancel.Bounds = new Rectangle(250, 200, 210, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
-        Controls.AddRange([identity, locationLabel, _location, positionLabel, _position,
-                           _hasKeepUntil, _keepUntil, notice, ok, cancel]);
+        ClientSize = new Size(480, head.Height + 180 + 58);
+        Controls.Add(body);
+        Controls.Add(DialogFrame.Foot(cancel, ok));
+        Controls.Add(head);
 
         AcceptButton = ok;
         CancelButton = cancel;
@@ -553,19 +608,14 @@ internal sealed class SampleAliquotDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(480, 260);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
-        var parent = new Label
-        {
-            Text = $"{row.PatientName}   ·   {row.SpecimenTypeName}"
-                   + (row.VolumeMl is { } volume ? $"   ·   {volume:0.#} mL" : string.Empty),
-            Font = UiTheme.SmallBold,
-            ForeColor = UiTheme.Accent,
-            AutoSize = false,
-            Bounds = new Rectangle(20, 14, 440, 20)
-        };
+        var head = DialogFrame.Head($"{localizer["Sample.CreateAliquot"]} — {row.Barcode}",
+                                    $"{row.PatientName}   ·   {row.SpecimenTypeName}"
+                                    + (row.VolumeMl is { } volume ? $"   ·   {volume:0.#} mL" : string.Empty), 480);
+
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised };
 
         var notice = new Label
         {
@@ -573,34 +623,36 @@ internal sealed class SampleAliquotDialog : Form
             Font = UiTheme.Small,
             ForeColor = UiTheme.TextSecondary,
             AutoSize = false,
-            Bounds = new Rectangle(20, 40, 440, 44)
+            Bounds = new Rectangle(20, 12, 440, 34)
         };
 
-        var volumeLabel = UiTheme.FieldLabel(localizer["Sample.Volume"]);
-        volumeLabel.Location = new Point(20, 92);
-        _volume.Location = new Point(20, 110);
+        var volumeLabel = Pilotage.Caption(localizer["Sample.Volume"]);
+        volumeLabel.Location = new Point(20, 52);
+        _volume.Bounds = new Rectangle(20, 72, 120, UiTheme.InputHeight);
         _volume.Tag = UiTags.LatinValue;
         _volume.TextAlign = HorizontalAlignment.Right;
 
-        var purposeLabel = UiTheme.FieldLabel(localizer["Sample.AliquotPurpose"]);
-        purposeLabel.Location = new Point(160, 92);
-        _purpose.Location = new Point(160, 110);
+        var purposeLabel = Pilotage.Caption(localizer["Sample.AliquotPurpose"]);
+        purposeLabel.Location = new Point(160, 52);
+        _purpose.Bounds = new Rectangle(160, 72, 300, UiTheme.InputHeight);
 
-        var locationLabel = UiTheme.FieldLabel(localizer["Sample.Storage"]);
-        locationLabel.Location = new Point(20, 148);
-        _location.Location = new Point(20, 166);
+        var locationLabel = Pilotage.Caption(localizer["Sample.Storage"]);
+        locationLabel.Location = new Point(20, 110);
+        _location.Bounds = new Rectangle(20, 130, 240, UiTheme.InputHeight);
         _location.Text = row.StorageLocation ?? string.Empty;
 
+        body.Controls.AddRange([notice, volumeLabel, _volume, purposeLabel, _purpose, locationLabel, _location]);
+
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
-        ok.Bounds = new Rectangle(20, 210, 210, UiTheme.ButtonHeight);
         ok.DialogResult = DialogResult.OK;
 
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
-        cancel.Bounds = new Rectangle(250, 210, 210, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
-        Controls.AddRange([parent, notice, volumeLabel, _volume, purposeLabel, _purpose,
-                           locationLabel, _location, ok, cancel]);
+        ClientSize = new Size(480, head.Height + 172 + 58);
+        Controls.Add(body);
+        Controls.Add(DialogFrame.Foot(cancel, ok));
+        Controls.Add(head);
 
         AcceptButton = ok;
         CancelButton = cancel;
