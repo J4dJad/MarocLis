@@ -4900,6 +4900,7 @@
   "QcTarget_MeanRequiredWithSd": "An SD without a mean allows no calculation: enter both.",
   "QcTarget_CvOutOfRange": "The maximum CV must be between 0 and 100 %.",
   "QcTarget_AtLeastOneRuleRequired": "At least one Westgard rule must be active: a target with no rule records points and never rejects a run.",
+  "QcTarget_PeriodOutOfRange": "The period must be between 1 and 3650 days.",
 
   "Stock_CodeRequired": "The item code is mandatory.",
   "Stock_NameRequired": "The French name of the item is mandatory.",

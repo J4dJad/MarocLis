@@ -53,6 +53,8 @@ public sealed class StorageUnit : AuditableAggregateRoot, ISiteScoped
         var errors = new List<Error>();
         if (string.IsNullOrWhiteSpace(Name)) errors.Add(Error.Validation("StorageUnit_NameRequired"));
         if (MinimumCelsius >= MaximumCelsius) errors.Add(Error.Validation("StorageUnit_RangeInvalid"));
+        // Same bounds as a reading: a range no reading can meet is a typing error.
+        if (MinimumCelsius < -200m || MaximumCelsius > 100m) errors.Add(Error.Validation("Temperature_ValueImplausible"));
         if (ReadingsPerDay is < 1 or > 24) errors.Add(Error.Validation("StorageUnit_ReadingsPerDayInvalid"));
         return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
     }
@@ -129,6 +131,10 @@ public sealed class TemperatureReading : AggregateRoot, IAuditable, ISiteScoped
                                        bool outOfRange, string? comment)
     {
         if (celsius is < -200m or > 100m) return Result.Failure(Error.Validation("Temperature_ValueImplausible"));
+        // The period's extremes too: an implausible one was stored (or, past the column's range,
+        // failed the save with « Erreur inattendue ») and written into the non-conformity.
+        if (periodMinimum is < -200m or > 100m || periodMaximum is < -200m or > 100m)
+            return Result.Failure(Error.Validation("Temperature_ValueImplausible"));
         if (periodMinimum is { } low && periodMaximum is { } high && low > high)
             return Result.Failure(Error.Validation("Temperature_MinAboveMax"));
         if (periodMinimum is { } min && min > celsius || periodMaximum is { } max && max < celsius)

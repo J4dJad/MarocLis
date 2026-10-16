@@ -165,6 +165,8 @@ public sealed class InventoryCountView : LocalizedView
             _lines.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = name, FillWeight = weight, ReadOnly = !editable,
+                // The comment column holds 500 characters; a longer one failed the save with « Erreur inattendue ».
+                MaxInputLength = name == "comment" ? 500 : 32767,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
                 DefaultCellStyle = new DataGridViewCellStyle
                 {
@@ -633,6 +635,7 @@ internal sealed class InventoryCountDialog : MasterDataEditor
         _category = Choice("InventoryCountScope.Category", 290, 70, 240, StockItemKind.Reagent, "StockItemKind");
 
         _notes = TextField("Field.Comment", 20, 126, 510);
+        _notes.MaxLength = 1000;   // the column; beyond, the save failed with « Erreur inattendue »
         Notice(20, 180, 510, 40, "InventoryCount.ScopeNotice");
 
         void Sync()

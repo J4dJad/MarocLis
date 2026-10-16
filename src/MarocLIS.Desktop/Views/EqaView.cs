@@ -369,6 +369,9 @@ internal sealed class EqaRoundDialog : MasterDataEditor
 
         _scheme = TextField("Quality.Scheme", 20, 14, 300);
         _round = TextField("Quality.Round", 340, 14, 200, null, latin: true, mono: true);
+        // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
+        _scheme.MaxLength = 150;
+        _round.MaxLength = 60;
 
         Label("Eqa.RoundDate", 20, 68);
         _roundDate = new DateTimePicker
@@ -528,6 +531,7 @@ internal sealed class EqaEvaluationDialog : MasterDataEditor
 
         _notesFr = TextField("Eqa.InvestigationFr", 20, 176, 520, row.InvestigationNotes?.Fr);
         _notesAr = TextField("Eqa.InvestigationAr", 20, 230, 520, row.InvestigationNotes?.Ar, arabic: true);
+        _notesFr.MaxLength = _notesAr.MaxLength = 2000;
 
         Notice(20, 290, 520, 60, "Eqa.UnsatisfactoryNotice", UiTheme.Abnormal);
 

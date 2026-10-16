@@ -625,7 +625,7 @@ public sealed class QuoteRequestView : LocalizedView
     {
         if (_detail is not { } detail) return;
 
-        var reason = _dialogs.PromptForReason(T("Quotes.CancelPrompt", detail.Number), _cancel.Text);
+        var reason = _dialogs.PromptForReason(T("Quotes.CancelPrompt", detail.Number), _cancel.Text, maxLength: 500);
         if (reason is null) return;
 
         await StepAsync(() => _quotes.CancelAsync(detail.Id, reason), _cancel.Text);
@@ -719,6 +719,9 @@ internal sealed class QuoteRequestDialog : MasterDataEditor
         Controls.Add(_suppliers);
 
         _notes = TextField("Field.Notes", 20, 460, 860);
+        // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
+        _subject.MaxLength = 200;
+        _notes.MaxLength = 1000;
         Notice(20, 512, 860, 20, "Quotes.OnContractNotice");
 
         Buttons(540, 900);
@@ -848,6 +851,8 @@ internal sealed class QuoteOfferDialog : MasterDataEditor
         Notice(20, 396, 720, 34, "Quotes.PriceNotice");
 
         _conditions = TextField("Quotes.Conditions", 20, 436, 720);
+        _reference.MaxLength = 60;
+        _conditions.MaxLength = 1000;
 
         var attach = UiTheme.SecondaryButton(localizer["Quotes.AttachFile"]);
         attach.Bounds = new Rectangle(20, 492, 200, UiTheme.ButtonHeight);

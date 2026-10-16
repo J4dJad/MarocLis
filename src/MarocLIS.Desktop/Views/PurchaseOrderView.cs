@@ -716,7 +716,7 @@ public sealed class PurchaseOrderView : LocalizedView
     {
         if (SelectedOrder is not { } order) return;
 
-        var reason = _dialogs.PromptForReason(T("PurchaseOrders.CancelPrompt", order.Number), _cancel.Text);
+        var reason = _dialogs.PromptForReason(T("PurchaseOrders.CancelPrompt", order.Number), _cancel.Text, maxLength: 1000);
         if (reason is null) return;
 
         await StepAsync(o => _orders.CancelAsync(o.Id, reason), _cancel.Text);
@@ -745,6 +745,9 @@ internal sealed class PurchaseOrderDialog : MasterDataEditor
 
         _supplierReference = TextField("PurchaseOrders.SupplierReference", 240, 68, 260, null, latin: true);
         _notes = TextField("Field.Notes", 20, 128, 480);
+        // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
+        _supplierReference.MaxLength = 60;
+        _notes.MaxLength = 1000;
 
         Notice(20, 182, 480, 46, "PurchaseOrders.ApprovalNotice");
 
@@ -926,6 +929,8 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
 
         _deliveryNote = TextField("Inventory.DeliveryNote", 20, 68, 230, null, latin: true);
         _location = TextField("Inventory.DefaultLocation", 270, 68, 230);
+        _lot.MaxLength = _deliveryNote.MaxLength = 60;
+        _location.MaxLength = 100;
 
         _checks = new ReceptionChecksPanel(localizer, condition) { Location = new Point(20, 122) };
         _checks.Scanned += async data => await OnScannedAsync(data);
@@ -941,7 +946,7 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
         refuse.Click += (_, _) =>
         {
             var reason = Dialogs.PromptForReason(Localizer["Reception.RefusePrompt"],
-                                                 Localizer["Reception.Refuse"], minimumLength: 10);
+                                                 Localizer["Reception.Refuse"], minimumLength: 10, maxLength: 1000);
             if (reason is null) return;
             RefusalReason = reason;
             DialogResult = DialogResult.Abort;

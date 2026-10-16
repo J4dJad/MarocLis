@@ -4901,6 +4901,7 @@
   "QcTarget_MeanRequiredWithSd": "Un écart-type sans moyenne ne permet aucun calcul : renseignez les deux.",
   "QcTarget_CvOutOfRange": "Le CV maximal doit être compris entre 0 et 100 %.",
   "QcTarget_AtLeastOneRuleRequired": "Au moins une règle de Westgard doit être active : une cible sans règle enregistre des points sans jamais rejeter une série.",
+  "QcTarget_PeriodOutOfRange": "La période doit être comprise entre 1 et 3650 jours.",
 
   "Stock_CodeRequired": "Le code de l'article est obligatoire.",
   "Stock_NameRequired": "La désignation française de l'article est obligatoire.",

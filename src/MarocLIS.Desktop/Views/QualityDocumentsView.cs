@@ -608,6 +608,10 @@ internal sealed class ControlledDocumentDialog : MasterDataEditor
         _titleFr = TextField("Documents.TitleFr", 20, 68, 520);
         _titleAr = TextField("Documents.TitleAr", 20, 122, 520, arabic: true);
         _titleEn = TextField("Documents.TitleEn", 20, 176, 520);
+        // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
+        _reference.MaxLength = 40;
+        _process.MaxLength = 30;
+        _titleFr.MaxLength = _titleAr.MaxLength = _titleEn.MaxLength = 300;
 
         _reviewPeriod = Number("Documents.ReviewPeriod", 20, 230, 120, 24, 120);
         _acknowledgement = Check("Documents.RequiresAcknowledgement", 180, 252, false);
@@ -671,6 +675,7 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
 
         _summaryFr = TextField("Documents.ChangeSummaryFr", 20, 68, 520);
         _summaryAr = TextField("Documents.ChangeSummaryAr", 20, 122, 520, arabic: true);
+        _summaryFr.MaxLength = _summaryAr.MaxLength = 2000;
 
         Notice(20, 180, 520, 46, "Documents.NewVersionNotice");
 

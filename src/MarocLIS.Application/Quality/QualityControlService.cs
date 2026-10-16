@@ -166,6 +166,10 @@ public sealed class QualityControlService(
                                                 clock.Today, ct));
     }
 
+    // The value and Z-score columns hold twelve integer digits; a real control is far inside both.
+    private const decimal MaximumQcValue = 10_000_000_000m;
+    private const decimal MaximumZScore = 1_000_000m;
+
     /// <summary>
     /// Records a batch of control values as one run and evaluates each against the active rules.
     /// <para>
@@ -199,6 +203,16 @@ public sealed class QualityControlService(
         var resolvedTargets = new Dictionary<Guid, QcTarget?>();
         foreach (var entry in entries)
             resolvedTargets[entry.QcTargetId] = await targets.GetByIdAsync(entry.QcTargetId, ct);
+
+        // A mistyped value (a key held down) cannot be a measurement: beyond the columns' range it
+        // failed the whole save with « Erreur inattendue », and below it a point millions of SD out
+        // would still be charted. Refused before anything is stored, like an unreadable value.
+        foreach (var entry in entries)
+        {
+            if (Math.Abs(entry.Value) >= MaximumQcValue
+                || resolvedTargets[entry.QcTargetId]?.ZScore(entry.Value) is { } z && Math.Abs(z) >= MaximumZScore)
+                return Result.Failure<QcSubmissionOutcome>(Error.Validation("Result_TechnicallyImpossible", entry.Value));
+        }
 
         // A lot named for the run applies to the entries that name it, which must be one analyser's:
         // the screen's single lot applied to every analyser's rows turned another analyser's
