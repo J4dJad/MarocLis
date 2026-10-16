@@ -544,7 +544,7 @@ public sealed class InstrumentMessageSink(
 
         target.MeasuredAt = incoming.MeasuredAt ?? at;
         target.InstrumentId = link.InstrumentId;
-        target.RawInstrumentValue = raw;
+        target.RawInstrumentValue = TestResult.KeepRaw(raw);
         target.InstrumentFlags = link.KeepInstrumentFlags ? DescribeInstrumentFlags(incoming) : null;
 
         if (incoming.DilutionFactor is { } dilution and > 1m)

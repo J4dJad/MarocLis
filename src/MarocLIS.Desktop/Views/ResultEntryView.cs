@@ -569,6 +569,8 @@ public sealed class ResultEntryView : LocalizedView
         {
             Name = ColumnValue,
             FillWeight = 13,
+            // As long as a text result's column.
+            MaxInputLength = TestResult.TextValueMaxLength,
             // Monospaced and right-aligned: digits line up down the column, which is how a
             // technician spots the value with an extra zero. The padding is the input box drawn
             // round the value; the editor sits inside it.

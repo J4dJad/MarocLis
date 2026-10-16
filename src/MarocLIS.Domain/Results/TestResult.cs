@@ -169,12 +169,31 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
     /// falls outside the measuring range, forces it to be reported as censored rather than as a
     /// bare number the method cannot actually support.
     /// </summary>
+    /// <summary>A stored figure is below this in absolute value (its column: 12 digits, 6 decimals).</summary>
+    public const decimal MaximumMagnitude = 1_000_000_000_000m;
+
+    /// <summary>The longest text result (its column).</summary>
+    public const int TextValueMaxLength = 4000;
+
+    /// <summary>The longest raw value kept as received (its column).</summary>
+    public const int RawValueMaxLength = 200;
+
+    /// <summary>
+    /// The raw value as kept: cut to its column, since it is a trace of what was received, not
+    /// the value. An analyser's long text answer failed the save of its whole transmission.
+    /// </summary>
+    public static string? KeepRaw(string? raw) =>
+        raw is { Length: > RawValueMaxLength } ? raw[..RawValueMaxLength] : raw;
+
     public Result EnterNumeric(TestParameter parameter, decimal value, DateTimeOffset at,
                                Guid byUserId, bool fromInstrument = false, string? rawValue = null)
     {
         if (IsValidated)
             return Result.Failure(Error.Conflict("Result_ValidatedRequiresRevision"));
-        if (parameter.IsTechnicallyImpossible(value))
+        // Whatever the parameter's limits, a figure of thirteen digits is no measurement — a barcode
+        // scanned into the value cell, an analyser's garbled field — and the column cannot hold it:
+        // the save failed for the whole file, or the whole transmission, instead of this one value.
+        if (parameter.IsTechnicallyImpossible(value) || Math.Abs(value) >= MaximumMagnitude)
             return Result.Failure(Error.Validation("Result_TechnicallyImpossible", value));
 
         var rounded = parameter.Round(value);
@@ -196,7 +215,7 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
         TextValue = null;
         CodedValue = null;
         TitreDenominator = null;
-        RawInstrumentValue = rawValue ?? RawInstrumentValue;
+        RawInstrumentValue = KeepRaw(rawValue) ?? RawInstrumentValue;
         AppliedDecimals = parameter.Decimals;
 
         StampEntry(at, byUserId, fromInstrument);
@@ -209,6 +228,8 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
             return Result.Failure(Error.Conflict("Result_ValidatedRequiresRevision"));
         if (string.IsNullOrWhiteSpace(text))
             return Result.Failure(Error.Validation("Result_TextRequired"));
+        if (text.Trim().Length > TextValueMaxLength)
+            return Result.Failure(Error.Validation("Result_TextTooLong", TextValueMaxLength));
 
         TextValue = text.Trim();
         NumericValue = null;
