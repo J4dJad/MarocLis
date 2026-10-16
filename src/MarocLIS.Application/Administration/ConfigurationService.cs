@@ -395,7 +395,9 @@ public sealed class ConfigurationService(
         if (string.IsNullOrWhiteSpace(format))
             return Result.Failure(Error.Validation("Sequence_FormatRequired"));
 
-        if (!format.Contains("{SEQ", StringComparison.Ordinal))
+        // The whole token: an unclosed "{SEQ" is left in the number as it is, and every document
+        // would carry the same one.
+        if (!System.Text.RegularExpressions.Regex.IsMatch(format, @"\{SEQ(:\d+)?\}"))
             return Result.Failure(Error.Validation("Sequence_FormatMustContainSeq"));
 
         var sequence = await writer.GetSequenceAsync(sequenceId, ct);
