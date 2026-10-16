@@ -109,6 +109,14 @@ public sealed class OrderRegistrationService(
         if (patient is null)
             return Result.Failure<RegisteredOrder>(Error.NotFound("Order_PatientNotFound"));
 
+        // A file merged or anonymised since the counter picked it — on another workstation, or
+        // from a list left open — takes no new request: the order went to the redirected file, or
+        // put new clinical data on the trace of an erasure.
+        if (patient.MergedIntoPatientId is not null)
+            return Result.Failure<RegisteredOrder>(Error.Conflict("Patient_AlreadyMerged"));
+        if (patient.IsAnonymized)
+            return Result.Failure<RegisteredOrder>(Error.Conflict("Patient_AnonymizedIsReadOnly"));
+
         // Resolve the analyses: explicit choices plus every panel's mandatory members, de-duplicated.
         var resolved = await composer.ResolveAsync(request.AnalysisTestIds, request.TestPanelIds, ct);
         if (resolved.IsFailure) return Result.Failure<RegisteredOrder>(resolved.FirstError);
