@@ -43,6 +43,9 @@ public sealed class AccountingExportView : LocalizedView
     private readonly Label _status = new();
     private readonly DataGridView _summary = UiTheme.Grid();
     private readonly DataGridView _problems = UiTheme.Grid();
+    private readonly Label _scopeTitle = new();
+    private readonly Label _summaryTitle = new();
+    private readonly Label _problemsTitle = new();
 
     private IReadOnlyList<AccountingSiteOption> _siteOptions = [];
     private AccountingExportPreview? _preview;
@@ -72,62 +75,64 @@ public sealed class AccountingExportView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = new Padding(24, 20, 24, 16);
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 214, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.PageTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 0);
-
-        foreach (var label in new[] { _fromLabel, _toLabel, _layoutLabel, _sitesLabel, _journalsLabel })
-        {
-            label.Font = UiTheme.Small;
-            label.ForeColor = UiTheme.TextSecondary;
-            label.AutoSize = true;
-        }
+        // The title, then the checks and exports; the export itself, the primary, at the far end.
+        var header = FinanceUi.PageHeader(_heading, null, _check, _vatCsv, _vatPdf, _export);
 
         // The last calendar month by default: the usual rhythm of the accountant's entries.
         var firstOfMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
         _from.Format = _to.Format = DateTimePickerFormat.Short;
         _from.Value = firstOfMonth.AddMonths(-1);
         _to.Value = firstOfMonth.AddDays(-1);
+        _from.Width = _to.Width = 150;
+        _layout.FlatStyle = FlatStyle.Flat;
+        _layout.Width = 330;
+        _sites.Size = new Size(320, 70);
+        _sites.BorderStyle = BorderStyle.FixedSingle;
 
-        _fromLabel.Location = new Point(0, 38);
-        _from.Bounds = new Rectangle(0, 56, 150, UiTheme.InputHeight);
-        _toLabel.Location = new Point(170, 38);
-        _to.Bounds = new Rectangle(170, 56, 150, UiTheme.InputHeight);
-        _layoutLabel.Location = new Point(340, 38);
-        _layout.Bounds = new Rectangle(340, 56, 330, UiTheme.InputHeight);
+        var journals = new FlowLayoutPanel
+        {
+            Size = new Size(690, 70),
+            WrapContents = true,
+            BackColor = UiTheme.SurfaceRaised
+        };
 
-        _sitesLabel.Location = new Point(0, 92);
-        _sites.Bounds = new Rectangle(0, 110, 320, 62);
-
-        _journalsLabel.Location = new Point(340, 92);
-        var i = 0;
         foreach (var journal in JournalChoices)
         {
             var box = new CheckBox
             {
                 AutoSize = true,
+                MinimumSize = new Size(225, 24),
                 Checked = true,
-                Location = new Point(340 + i % 3 * 255, 110 + i / 3 * 26),
-                Font = UiTheme.Body
+                Font = UiTheme.Body,
+                Margin = new Padding(0, 0, 4, 2)
             };
             _journals[journal] = box;
-            bar.Controls.Add(box);
-            i++;
+            journals.Controls.Add(box);
         }
 
-        _check.Bounds = new Rectangle(0, 180, 150, UiTheme.ButtonHeight);
-        _export.Bounds = new Rectangle(160, 180, 180, UiTheme.ButtonHeight);
-        _vatCsv.Bounds = new Rectangle(360, 180, 190, UiTheme.ButtonHeight);
-        _vatPdf.Bounds = new Rectangle(560, 180, 190, UiTheme.ButtonHeight);
-        _export.Enabled = false;
+        var scope = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            WrapContents = true,
+            Padding = new Padding(16, 4, 16, 4),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        scope.Controls.Add(FinanceUi.Stacked(_fromLabel, _from));
+        scope.Controls.Add(FinanceUi.Stacked(_toLabel, _to));
+        scope.Controls.Add(FinanceUi.Stacked(_layoutLabel, _layout));
+        scope.SetFlowBreak(scope.Controls[^1], true);
+        scope.Controls.Add(FinanceUi.Stacked(_sitesLabel, _sites));
+        scope.Controls.Add(FinanceUi.Stacked(_journalsLabel, journals));
 
-        bar.Controls.AddRange([_heading, _fromLabel, _from, _toLabel, _to, _layoutLabel, _layout, _sitesLabel, _sites,
-                               _journalsLabel, _check, _export, _vatCsv, _vatPdf]);
+        var scopeCard = new FinanceCard(scope, FinanceUi.CardHeader(_scopeTitle, null))
+        {
+            Dock = DockStyle.Top,
+            Height = 232
+        };
+
+        _export.Enabled = false;
 
         foreach (var (name, weight) in new[] { ("journal", 10), ("kind", 22), ("entries", 10), ("debit", 14), ("credit", 14) })
             _summary.Columns.Add(new DataGridViewTextBoxColumn { Name = name, FillWeight = weight, ReadOnly = true,
@@ -139,21 +144,41 @@ public sealed class AccountingExportView : LocalizedView
             _problems.Columns.Add(new DataGridViewTextBoxColumn { Name = name, FillWeight = weight, ReadOnly = true,
                                                                   SortMode = DataGridViewColumnSortMode.NotSortable });
 
-        _summary.Dock = DockStyle.Top;
-        _summary.Height = 190;
+        // Figures and pieces in the fixed-pitch face, so the columns line up.
+        foreach (var name in new[] { "entries", "debit", "credit" })
+        {
+            _summary.Columns[name]!.DefaultCellStyle.Font = UiTheme.Monospace;
+            _summary.Columns[name]!.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        }
+        _problems.Columns["date"]!.DefaultCellStyle.Font = UiTheme.Monospace;
+        _problems.Columns["piece"]!.DefaultCellStyle.Font = UiTheme.Monospace;
 
         _status.Dock = DockStyle.Top;
-        _status.Height = 44;
+        _status.Height = 40;
         _status.Font = UiTheme.BodyBold;
-        _status.Padding = new Padding(0, 8, 0, 0);
+        _status.Padding = new Padding(0, 12, 0, 6);
+        _status.AutoEllipsis = true;
 
-        _problems.Dock = DockStyle.Fill;
         _problems.DefaultCellStyle.ForeColor = UiTheme.Critical;
 
-        Controls.Add(_problems);
+        var results = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0),
+            BackColor = UiTheme.Surface
+        };
+        results.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
+        results.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
+        results.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        results.Controls.Add(new FinanceCard(_summary, FinanceUi.CardHeader(_summaryTitle, null)) { Margin = new Padding(0, 0, 8, 0) }, 0, 0);
+        results.Controls.Add(new FinanceCard(_problems, FinanceUi.CardHeader(_problemsTitle, null)) { Margin = new Padding(8, 0, 0, 0) }, 1, 0);
+
+        Controls.Add(results);
         Controls.Add(_status);
-        Controls.Add(_summary);
-        Controls.Add(bar);
+        Controls.Add(scopeCard);
+        Controls.Add(header);
     }
 
     protected override void ApplyTexts()
@@ -168,6 +193,9 @@ public sealed class AccountingExportView : LocalizedView
         _export.Text = T("Action.Export");
         _vatCsv.Text = T("Accounting.VatStatementCsv");
         _vatPdf.Text = T("Accounting.VatStatementPdf");
+        _scopeTitle.Text = T("Finance.ExportScope");
+        _summaryTitle.Text = T("Accounting.Journals");
+        _problemsTitle.Text = T("Finance.ExportProblems");
 
         foreach (var (journal, box) in _journals) box.Text = T($"AccountingJournals.{journal}");
 
