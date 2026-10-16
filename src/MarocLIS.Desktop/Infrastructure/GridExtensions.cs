@@ -65,6 +65,33 @@ public static class GridExtensions
     }
 
     /// <summary>
+    /// Makes <paramref name="row"/> (the row a list keeps across a refresh) the current one, not
+    /// only the highlighted one.
+    /// <para>
+    /// <c>row.Selected = true</c> alone left the first row current: the kept row was highlighted
+    /// while the detail panel and the actions, which follow <see cref="DataGridView.CurrentRow"/>,
+    /// showed the first one. Unlike <see cref="SelectFirstRow"/> it does not step off a row that is
+    /// already current, so SelectionChanged is raised only when the current row really changes.
+    /// </para>
+    /// </summary>
+    public static void MakeCurrent(this DataGridView grid, DataGridViewRow row)
+    {
+        // The first visible cell: a cell of a hidden column cannot be made current.
+        var cell = row.Cells.Cast<DataGridViewCell>().FirstOrDefault(c => c.Visible);
+
+        try
+        {
+            if (cell is not null) grid.CurrentCell = cell;
+        }
+        catch (InvalidOperationException)
+        {
+            // Raised when the grid is mid-edit or mid-layout; the highlight below still applies.
+        }
+
+        row.Selected = true;
+    }
+
+    /// <summary>
     /// Puts back the fill weights a screen declared, kept in each column's <see cref="DataGridViewColumn.Tag"/>.
     /// <para>
     /// WinForms rewrites a fill column's weight whenever its minimum width wins over its share. A

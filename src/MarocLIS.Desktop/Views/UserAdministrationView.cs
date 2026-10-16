@@ -684,7 +684,9 @@ public sealed class UserAdministrationView : LocalizedView
                          .FirstOrDefault(r => (r.Tag as UserRow)?.UserId == id)
             : null;
 
-        if (restored is not null) restored.Selected = true;
+        // Made current, not only highlighted: the first user stayed current and the actions
+        // followed it rather than the record kept on screen.
+        if (restored is not null) _users.MakeCurrent(restored);
         else if (_users.Rows.Count > 0) _users.SelectFirstRow();
 
         RefreshUserActions();

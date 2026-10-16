@@ -243,7 +243,16 @@ public sealed class AccidentView : LocalizedView
         _checks.Column("due").HeaderText = T("Deadline.DueOn");
         _checks.Column("done").HeaderText = T("Accident.DoneOn");
 
-        if (_rows.Count > 0) Render(_current?.Request.AccidentId);
+        if (_rows.Count > 0)
+        {
+            Render(_current?.Request.AccidentId);
+
+            // Re-rendering the list for the new language empties it first: the detail was cleared
+            // as the rows went, and putting the same accident back current raises no event. It is
+            // loaded again here (skipped if the re-render already started its load); with no rows
+            // (first opening) there is nothing to load.
+            _ = Guarded(LoadDetailAsync);
+        }
     }
 
     private int Year => _year.SelectedItem is int y ? y : DateTime.Today.Year;

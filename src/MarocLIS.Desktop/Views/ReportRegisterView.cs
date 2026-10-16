@@ -41,6 +41,10 @@ public sealed class ReportRegisterView : LocalizedView
     private const int AsideWidth = 330;
 
     private readonly SelectionLoads _selectionLoads = new();
+
+    // Set while the refreshed register puts its kept version back: the caller loads that version's
+    // deliveries once itself, so the SelectionChanged raised by making it current must not load them again.
+    private bool _restoringSelection;
     private readonly ReportReleaseService _reports;
     private readonly IDocumentOutput _documents;
     private readonly IUserDialogs _dialogs;
@@ -569,7 +573,7 @@ public sealed class ReportRegisterView : LocalizedView
         _register.SelectionChanged += async (_, _) =>
         {
             ShowPreview();
-            await _selectionLoads.RunAsync(() => LoadDeliveriesAsync());
+            if (!_restoringSelection) await _selectionLoads.RunAsync(() => LoadDeliveriesAsync());
         };
         _register.CellFormatting += OnRegisterFormatting;
         _register.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _reprint.Enabled) await RunActionAsync(ReprintAsync); };
@@ -876,7 +880,16 @@ public sealed class ReportRegisterView : LocalizedView
             _deliveries.Column("by").HeaderText = T("Report.HandedOverBy");
         }
 
-        if (_rows.Count > 0) Render();
+        if (_rows.Count > 0)
+        {
+            Render();
+
+            // Re-rendering the register for the new language empties it first: the deliveries
+            // were cleared as the rows went, and putting the kept version back loads nothing.
+            // They are loaded again here; with no rows (first opening) there is nothing to load.
+            _ = _selectionLoads.RunAsync(() => LoadDeliveriesAsync());
+        }
+
         RenderPending();
         if (_deliveryHeading.Text.Length == 0) _deliveryHeading.Text = T("Report.Deliveries");
         ShowTab();
@@ -962,7 +975,12 @@ public sealed class ReportRegisterView : LocalizedView
             {
                 if (row.Tag is ReportRegisterRow candidate && candidate.ReportId == id)
                 {
-                    row.Selected = true;
+                    // Made current, not only highlighted: the first version stayed current and the
+                    // preview, the deliveries and the actions followed it. The callers load the
+                    // deliveries of the version made current here, so the event does not load them again.
+                    _restoringSelection = true;
+                    try { _register.MakeCurrent(row); }
+                    finally { _restoringSelection = false; }
                     break;
                 }
             }
@@ -1032,7 +1050,9 @@ public sealed class ReportRegisterView : LocalizedView
             {
                 if (row.Tag is PendingReportRow candidate && candidate.LabOrderId == id)
                 {
-                    row.Selected = true;
+                    // Made current, not only highlighted: the first file stayed current and the
+                    // preview and the actions followed it.
+                    _pending.MakeCurrent(row);
                     break;
                 }
             }

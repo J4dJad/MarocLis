@@ -343,6 +343,10 @@ public sealed class AuditTrailView : LocalizedView
 
         RenderAll();
         ShowStatus();
+
+        // Re-rendering the lists for the new language makes each first row current before it
+        // carries its entry, so the detail line went blank: it is shown again for the row now current.
+        ShowDetail();
     }
 
     private void Header(DataGridView grid, params (string Column, string Key)[] headers)

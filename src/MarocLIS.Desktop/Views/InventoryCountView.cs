@@ -253,8 +253,16 @@ public sealed class InventoryCountView : LocalizedView
         var lineHeaders = SheetHeaders(withExpected: true);
         for (var i = 0; i < _lines.Columns.Count; i++) _lines.Columns[i].HeaderText = lineHeaders[i];
 
-        if (_rows.Count > 0) RenderList();
-        if (_detail is not null) RenderLines();
+        if (_rows.Count > 0)
+        {
+            RenderList();
+
+            // The grid makes its first row current as it is added, before the row carries its
+            // count: that selection cleared the lines and loaded nothing. The lines of the count
+            // now shown are loaded here; with no rows (first opening) there is nothing to load.
+            _ = _selectionLoads.RunAsync(() => LoadDetailAsync());
+        }
+        else if (_detail is not null) RenderLines();
     }
 
     public override async Task ActivateAsync(CancellationToken ct = default)

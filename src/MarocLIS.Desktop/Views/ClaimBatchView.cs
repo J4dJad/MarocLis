@@ -29,6 +29,10 @@ namespace MarocLIS.Desktop.Views;
 public sealed class ClaimBatchView : LocalizedView
 {
     private readonly SelectionLoads _selectionLoads = new();
+
+    // Set while the refreshed batch list puts its kept batch back: the caller loads that batch's
+    // invoices once itself, so the SelectionChanged raised by making it current must not load them again.
+    private bool _restoringSelection;
     private readonly BillingService _billing;
     private readonly IUserDialogs _dialogs;
     private readonly ICurrentUser _currentUser;
@@ -213,7 +217,10 @@ public sealed class ClaimBatchView : LocalizedView
         _refresh.Click += async (_, _) => await ActivateAsync();
         _window.SelectedIndexChanged += async (_, _) => await LoadBatchesAsync();
 
-        _batches.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadInvoicesAsync());
+        _batches.SelectionChanged += async (_, _) =>
+        {
+            if (!_restoringSelection) await _selectionLoads.RunAsync(() => LoadInvoicesAsync());
+        };
 
         _candidates.CellFormatting += OnCandidateFormatting;
         _batches.CellFormatting += OnBatchFormatting;
@@ -299,7 +306,15 @@ public sealed class ClaimBatchView : LocalizedView
         }
 
         if (_candidateRows.Count > 0) RenderCandidates();
-        if (_batchRows.Count > 0) RenderBatches();
+        if (_batchRows.Count > 0)
+        {
+            RenderBatches();
+
+            // Re-rendering the list for the new language empties it first: the invoices were
+            // cleared as the rows went, and putting the kept batch back loads nothing. They are
+            // loaded again here; with no rows (first opening) there is nothing to load.
+            _ = _selectionLoads.RunAsync(() => LoadInvoicesAsync());
+        }
 
         RefreshActions();
     }
@@ -437,7 +452,12 @@ public sealed class ClaimBatchView : LocalizedView
                 if (row.Tag is ClaimBatchRow candidate
                     && candidate.ClaimReference == reference)
                 {
-                    row.Selected = true;
+                    // Made current, not only highlighted: the first batch stayed current and the
+                    // invoices and the actions followed it. The callers load the invoices of the
+                    // batch made current here, so the selection event does not load them again.
+                    _restoringSelection = true;
+                    try { _batches.MakeCurrent(row); }
+                    finally { _restoringSelection = false; }
                     break;
                 }
             }

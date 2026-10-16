@@ -36,6 +36,10 @@ namespace MarocLIS.Desktop.Views;
 public sealed class CatalogView : LocalizedView
 {
     private readonly SelectionLoads _selectionLoads = new();
+
+    // Set while a refreshed list puts its kept row back: the caller loads that row's detail once
+    // itself, so the SelectionChanged raised by making the row current must not load it again.
+    private bool _restoringSelection;
     private readonly CatalogMaintenanceService _catalog;
     private readonly IUserDialogs _dialogs;
     private readonly ICurrentUser _currentUser;
@@ -391,8 +395,14 @@ public sealed class CatalogView : LocalizedView
         _departmentFilter.SelectedIndexChanged += async (_, _) => await LoadAnalysesAsync();
         _includeInactive.CheckedChanged += async (_, _) => await LoadAnalysesAsync();
 
-        _analyses.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => OnAnalysisSelectedAsync());
-        _parameters.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadRangesAsync());
+        _analyses.SelectionChanged += async (_, _) =>
+        {
+            if (!_restoringSelection) await _selectionLoads.RunAsync(() => OnAnalysisSelectedAsync());
+        };
+        _parameters.SelectionChanged += async (_, _) =>
+        {
+            if (!_restoringSelection) await _selectionLoads.RunAsync(() => LoadRangesAsync());
+        };
         _panels.SelectionChanged += (_, _) => RenderPanelMembers();
 
         _analyses.CellFormatting += OnAnalysisFormatting;
@@ -478,7 +488,15 @@ public sealed class CatalogView : LocalizedView
         RefreshNomenclatureKinds();
         _nomenclatureHeading.Text = _nomenclatureKind.SelectedItem?.ToString() ?? T("Catalog.Nomenclature");
 
-        if (_analysisRows.Count > 0) RenderAnalyses();
+        if (_analysisRows.Count > 0)
+        {
+            RenderAnalyses();
+
+            // Re-rendering the list for the new language empties it first: the parameters and
+            // ranges were cleared as the rows went, and putting the kept analysis back loads
+            // nothing. They are loaded again here; with no rows (first opening) there is nothing to load.
+            _ = _selectionLoads.RunAsync(() => OnAnalysisSelectedAsync());
+        }
         else RefreshChips();
         if (_panelRows.Count > 0) RenderPanels();
 
@@ -1162,21 +1180,25 @@ public sealed class CatalogView : LocalizedView
     private NomenclatureKind SelectedNomenclatureKind =>
         (NomenclatureKind)((_nomenclatureKind.SelectedItem as EnumChoice)?.Value ?? 0);
 
-    private static void RestoreSelection(DataGridView grid, Guid? id,
-                                          Func<object?, Guid?> identify)
+    private void RestoreSelection(DataGridView grid, Guid? id, Func<object?, Guid?> identify)
     {
-        if (id is null)
+        // The kept row is made current, not only highlighted: the first row stayed current and
+        // the detail and the actions followed it. Every caller loads the detail of the row made
+        // current here itself, so the selection event does not load it a second time.
+        _restoringSelection = true;
+        try
         {
-            if (grid.Rows.Count > 0) grid.SelectFirstRow();
-            return;
-        }
+            var kept = id is null
+                ? null
+                : grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(row => identify(row.Tag) == id);
 
-        foreach (DataGridViewRow row in grid.Rows)
+            if (kept is not null) grid.MakeCurrent(kept);
+            else if (grid.Rows.Count > 0) grid.SelectFirstRow();
+        }
+        finally
         {
-            if (identify(row.Tag) == id) { row.Selected = true; return; }
+            _restoringSelection = false;
         }
-
-        if (grid.Rows.Count > 0) grid.SelectFirstRow();
     }
 
     private void RefreshActions()

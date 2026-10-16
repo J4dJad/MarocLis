@@ -28,6 +28,10 @@ namespace MarocLIS.Desktop.Views;
 public sealed class InstrumentInterfaceView : LocalizedView
 {
     private readonly SelectionLoads _selectionLoads = new();
+
+    // Set while the refreshed link list puts its kept link back: the caller loads that link's
+    // detail once itself, so the SelectionChanged raised by making it current must not load it again.
+    private bool _restoringSelection;
     private readonly InstrumentInterfaceService _interfaces;
     private readonly MarocLIS.Application.Administration.MasterDataService _masterData;
     private readonly InstrumentLinkMonitor _monitor;
@@ -186,7 +190,10 @@ public sealed class InstrumentInterfaceView : LocalizedView
     {
         _refresh.Click += async (_, _) => await ActivateAsync();
 
-        _links.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDetailAsync());
+        _links.SelectionChanged += async (_, _) =>
+        {
+            if (!_restoringSelection) await _selectionLoads.RunAsync(() => LoadDetailAsync());
+        };
         _links.CellFormatting += OnLinkFormatting;
         _links.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _editLink.Enabled) await EditLinkAsync(); };
 
@@ -291,7 +298,16 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         RefreshHostState();
 
-        if (_rows.Count > 0) RenderLinks();
+        if (_rows.Count > 0)
+        {
+            RenderLinks();
+
+            // Re-rendering the list for the new language empties it first: the mappings and
+            // messages were cleared as the rows went, and putting the kept link back loads
+            // nothing. They are loaded again here; with no rows (first opening) there is nothing to load.
+            _ = _selectionLoads.RunAsync(() => LoadDetailAsync());
+        }
+
         RefreshActions();
     }
 
@@ -410,7 +426,12 @@ public sealed class InstrumentInterfaceView : LocalizedView
             {
                 if (row.Tag is InterfaceRow candidate && candidate.Id == id)
                 {
-                    row.Selected = true;
+                    // Made current, not only highlighted: the first link stayed current and the
+                    // detail and the actions followed it. The callers load the detail of the link
+                    // made current here, so the selection event does not load it again.
+                    _restoringSelection = true;
+                    try { _links.MakeCurrent(row); }
+                    finally { _restoringSelection = false; }
                     break;
                 }
             }
