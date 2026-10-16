@@ -43,7 +43,8 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 Paid = i.Payments.Sum(p => (decimal?)p.AmountMad) ?? 0m,
                 VarianceCount = i.Variances.Count(),
                 HasScan = i.ScanFileName != null,
-                EnteredBy = db.Users.Where(u => u.Id == i.EnteredByUserId).Select(u => u.FullName).FirstOrDefault()
+                EnteredBy = db.Users.Where(u => u.Id == i.EnteredByUserId).Select(u => u.FullName).FirstOrDefault(),
+                i.EnteredByUserId
             })
             .AsSplitQuery()
             .ToListAsync(ct);
@@ -56,7 +57,7 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 return new SupplierInvoiceRow(
                     i.Id, i.SupplierId, i.SupplierName ?? "?", i.InvoiceNumber, i.InvoiceDate, i.ReceivedOn,
                     i.DeliveryDate, i.DueDate, i.DueDate.DayNumber - today.DayNumber, i.Status, ht, ttc,
-                    i.Paid, i.VarianceCount, i.HasScan, i.EnteredBy ?? "?");
+                    i.Paid, i.VarianceCount, i.HasScan, i.EnteredBy ?? "?", i.EnteredByUserId);
             })
         ];
     }
@@ -85,7 +86,8 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
                 i.UnblockedAt,
                 i.UnblockJustification,
                 i.CancellationReason,
-                i.Notes
+                i.Notes,
+                i.EnteredByUserId
             })
             .FirstOrDefaultAsync(ct);
 
@@ -135,7 +137,7 @@ public sealed class SupplierInvoiceQueries(LisDbContext db) : ISupplierInvoiceQu
             header.Id, header.SupplierId, header.SupplierName ?? "?", header.InvoiceNumber, header.InvoiceDate,
             header.ReceivedOn, header.DeliveryDate, header.DueDate, header.DueDate.DayNumber - today.DayNumber,
             header.Status, ht, ttc, payments.Sum(p => p.AmountMad), variances.Count, header.HasScan,
-            header.EnteredBy ?? "?");
+            header.EnteredBy ?? "?", header.EnteredByUserId);
 
         return new SupplierInvoiceDetail(
             row,

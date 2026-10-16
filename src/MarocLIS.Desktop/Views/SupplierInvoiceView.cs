@@ -553,6 +553,14 @@ public sealed class SupplierInvoiceView : LocalizedView
     {
         if (Selected is not { } row) return;
 
+        // Said before the justification is asked for: whoever entered the invoice typed the whole
+        // justification and was only then told that releasing it was someone else's to do.
+        if (row.EnteredByUserId == PermissionGate.User?.UserId)
+        {
+            _dialogs.Warn(T("SupplierInvoice_UnblockerMustDifferFromEnterer"), _unblock.Text);
+            return;
+        }
+
         var reason = _dialogs.PromptForReason(T("SupplierInvoices.UnblockPrompt", row.InvoiceNumber, row.VarianceCount),
                                               _unblock.Text, 10, maxLength: 1000);
         if (reason is null) return;

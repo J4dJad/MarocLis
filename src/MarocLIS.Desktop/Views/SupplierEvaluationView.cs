@@ -171,12 +171,16 @@ public sealed class SupplierEvaluationView : LocalizedView
 
     private void Render()
     {
+        // The supplier just scored stays the current one: back on the first row after each score
+        // applied, the evaluator had to look the next one up again.
+        var keep = Current?.SupplierId;
         _grid.Rows.Clear();
 
         foreach (var row in _rows)
         {
             var index = _grid.Rows.Add([.. PurchasingCsv.SupplierReportCells(row)]);
             _grid.Rows[index].Tag = row;
+            if (row.SupplierId == keep) _grid.MakeCurrent(_grid.Rows[index]);
         }
 
         StockGrid.Filter(_grid, _search.Query);
