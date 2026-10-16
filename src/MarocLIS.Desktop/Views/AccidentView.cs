@@ -41,6 +41,8 @@ public sealed class AccidentView : LocalizedView
     private readonly Button _checkDone = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _declaration = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _close = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _title = new();
+    private readonly Label _yearCaption = new();
 
     private IReadOnlyList<AccidentRow> _rows = [];
     private AccidentDetail? _current;
@@ -66,26 +68,21 @@ public sealed class AccidentView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = QhPage.PagePadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.SectionTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 2);
+        // Direction A: the title and the year's count; Refresh and the one primary action (declare)
+        // on the right; the year and its register under them; the accidents in a card, their state
+        // as a pill; the selected file in a second card — what it is, its steps and its checks —
+        // with the actions on it at its foot.
+        var header = QhPage.Header(_title, _heading, _refresh, _new);
 
         _year.DropDownStyle = ComboBoxStyle.DropDownList;
         _year.FlatStyle = FlatStyle.Flat;
-        _year.Bounds = new Rectangle(0, 28, 110, UiTheme.InputHeight);
         var thisYear = DateTime.Today.Year;
         for (var y = thisYear; y >= thisYear - 5; y--) _year.Items.Add(y);
         _year.SelectedIndex = 0;
 
-        _refresh.Bounds = new Rectangle(122, 27, 110, UiTheme.ButtonHeight - 4);
-        _new.Bounds = new Rectangle(244, 27, 220, UiTheme.ButtonHeight - 4);
-        _register.Bounds = new Rectangle(476, 27, 200, UiTheme.ButtonHeight - 4);
-        bar.Controls.AddRange([_heading, _year, _refresh, _new, _register]);
+        var toolbar = QhPage.Toolbar(QhPage.Caption(_yearCaption), QhPage.Filter(_year, 110), QhPage.Fit(_register));
 
         static void Add(DataGridView grid, string name, int weight, Font? font = null, bool right = false)
             => grid.Columns.Add(new DataGridViewTextBoxColumn
@@ -119,21 +116,22 @@ public sealed class AccidentView : LocalizedView
         Add(_checks, "due", 9, UiTheme.Monospace);
         Add(_checks, "done", 9, UiTheme.Monospace);
 
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        host.Controls.Add(_grid);
-
-        var lower = new Panel { Dock = DockStyle.Bottom, Height = 250, BackColor = UiTheme.Surface, Padding = new Padding(0, 8, 0, 0) };
+        var listCard = QhPage.Card(_grid);
+        listCard.Dock = DockStyle.Fill;
 
         _detail.Font = UiTheme.Small;
         _detail.ForeColor = UiTheme.TextSecondary;
         _detail.AutoSize = false;
         _detail.AutoEllipsis = true;
         _detail.Dock = DockStyle.Top;
-        _detail.Height = 38;
+        _detail.Height = 46;
+        _detail.Padding = new Padding(14, 8, 14, 4);
+        _detail.BackColor = UiTheme.SurfaceRaised;
 
-        var split = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = UiTheme.Surface };
+        var split = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = UiTheme.SurfaceRaised };
         split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62));
         split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
+        split.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _events.Dock = DockStyle.Fill;
         _checks.Dock = DockStyle.Fill;
         _events.Margin = new Padding(0, 0, 8, 0);
@@ -141,29 +139,21 @@ public sealed class AccidentView : LocalizedView
         split.Controls.Add(_events, 0, 0);
         split.Controls.Add(_checks, 1, 0);
 
-        var actions = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Bottom, Height = 52, BackColor = UiTheme.Surface, WrapContents = false,
-            Padding = new Padding(0, 10, 0, 0)
-        };
-        // Sized to their caption, so the row fits at 1366 pixels in each language.
-        foreach (var button in new[] { _edit, _stoppage, _return, _log, _checkDone, _declaration, _close })
-        {
-            button.AutoSize = true;
-            button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            button.MinimumSize = new Size(96, UiTheme.ButtonHeight);
-            button.Padding = new Padding(4, 0, 4, 0);
-            button.Margin = new Padding(0, 0, 8, 0);
-            actions.Controls.Add(button);
-        }
+        var fileBody = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        fileBody.Controls.Add(split);
+        fileBody.Controls.Add(_detail);
+        fileBody.Controls.Add(new QhSelectionBar(null, _close, _checkDone, _log, _return, _stoppage, _declaration, _edit));
 
-        lower.Controls.Add(split);
-        lower.Controls.Add(_detail);
-        lower.Controls.Add(actions);
+        var fileCard = QhPage.Card(fileBody);
+        fileCard.Dock = DockStyle.Bottom;
+        fileCard.Height = 300;
 
-        Controls.Add(host);
-        Controls.Add(lower);
-        Controls.Add(bar);
+        var main = new Panel { BackColor = UiTheme.Surface, Margin = Padding.Empty };
+        main.Controls.Add(listCard);
+        main.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 14, BackColor = UiTheme.Surface });
+        main.Controls.Add(fileCard);
+
+        Controls.Add(QhPage.Frame(2, header, toolbar, main));
     }
 
     private void WireBehaviour()
@@ -187,6 +177,10 @@ public sealed class AccidentView : LocalizedView
 
         PermissionGate.Require(Permissions.HumanResources.Accidents,
                                _new, _edit, _stoppage, _return, _log, _checkDone, _close);
+
+        // The state as a pill: an open file in amber, a closed one muted. A late declaration and an
+        // overdue check keep their red, on their own cells.
+        QhGridPills.Attach(_grid, "state", r => r.Tag is AccidentRow row ? (row.IsClosed ? QhTone.Muted : QhTone.Warn) : null);
 
         _grid.CellFormatting += (_, e) =>
         {
@@ -217,6 +211,8 @@ public sealed class AccidentView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _title.Text = T("Nav.Accidents");
+        _yearCaption.Text = T("Eqa.Year");
         _refresh.Text = T("Action.Refresh");
         _new.Text = T("Accident.New");
         _register.Text = T("Accident.Register");
@@ -567,6 +563,7 @@ internal sealed class AccidentDialog : MasterDataEditor
 
         _kind.SelectedIndexChanged += (_, _) => Toggle();
         Toggle();
+        QhDialog.Dress(this, localizer, null);
     }
 
     private void Toggle()
@@ -659,6 +656,7 @@ internal sealed class AccidentStoppageDialog : MasterDataEditor
         _relapse = Check("Accident.Relapse", 20, 72, accident.IsClosed);
         Notice(20, 104, 480, 96, "Accident.StoppageNotice");
         Buttons(218, 520);
+        QhDialog.Dress(this, localizer, null);
     }
 
     protected override void Accept()
@@ -694,6 +692,7 @@ internal sealed class AccidentDateDialog : MasterDataEditor
 
         if (noticeKey is not null) Notice(20, 70, 480, 70, noticeKey);
         Buttons(noticeKey is null ? 96 : 166, 520);
+        QhDialog.Dress(this, localizer, null);
     }
 
     protected override void Accept() => DialogResult = DialogResult.OK;
@@ -717,6 +716,7 @@ internal sealed class AccidentLogDialog : MasterDataEditor
         _text.Multiline = true;
         _text.Height = 70;
         Buttons(186, 560);
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.AccidentLog");
     }
 
     protected override void Accept()
