@@ -48,10 +48,21 @@ public sealed class QualityControlView : LocalizedView
     private readonly Label _reviewHeading = new();
     private readonly Button _submit = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _refresh = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _reviewAction = UiTheme.PrimaryButton(string.Empty);
+    // Secondary: the run's Save is the screen's one primary action.
+    private readonly Button _reviewAction = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _establishLimits = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _editRules = UiTheme.SecondaryButton(string.Empty);
+    // The control's limits and rules are set once in a while: they wait behind « Plus d'actions »
+    // in the chart's heading, the two buttons kept (hidden) for their rights and their state.
+    private readonly Button _chartMore = UiTheme.SecondaryButton(string.Empty);
+    private readonly ContextMenuStrip _chartMenu = new();
     private readonly Label _status = new();
+
+    private readonly Label _title = new();
+    private readonly Label _count = new();
+    private readonly Label _lotCaption = new();
+    private readonly Label _rulesLine = new();
+    private readonly PillLabel _blocked = new();
 
     private IReadOnlyList<QcEntryRow> _rows = [];
     private IReadOnlyList<QcReviewRow> _pendingReview = [];
@@ -97,118 +108,89 @@ public sealed class QualityControlView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = QhPage.PagePadding;
+
+        BuildEntryColumns();
+        BuildReviewColumns();
+
+        // --- title, the run's actions, the lot under evaluation --------------------------------------
+
+        var header = QhPage.Header(_title, _count, _refresh, _submit);
+
+        var toolbar = QhPage.Toolbar(QhPage.Caption(_lotCaption),
+                                     QhPage.Filter(_reagentLot, 300),
+                                     QhPage.Filter(_lotAnalyser, 200),
+                                     QhPage.Fit(_startEvaluation),
+                                     QhPage.Fit(_stopEvaluation));
+
+        // --- top: entry plus chart, side by side ----------------------------------------------------
 
         var outerSplit = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            SplitterDistance = 300,
-            SplitterWidth = 6,
+            SplitterDistance = 330,
+            SplitterWidth = 14,
             BackColor = UiTheme.Surface
         };
-
-        // --- top: entry plus chart, side by side ----------------------------------------------------
 
         var topSplit = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
             SplitterDistance = 640,
-            SplitterWidth = 6,
+            SplitterWidth = 14,
             BackColor = UiTheme.Surface
         };
 
-        var entryPanel = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        var entryCard = QhPage.TitledCard(_entryHeading, null, _entry);
+        entryCard.Dock = DockStyle.Fill;
 
-        _entryHeading.Font = UiTheme.SectionTitle;
-        _entryHeading.ForeColor = UiTheme.TextPrimary;
-        _entryHeading.Dock = DockStyle.Top;
-        _entryHeading.Height = 26;
-
-        BuildEntryColumns();
-
-        var entryHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        entryHost.Controls.Add(_entry);
-
-        var entryActions = new Panel
-        {
-            Dock = DockStyle.Bottom, Height = 84, BackColor = UiTheme.Surface
-        };
-
-        _submit.Bounds = new Rectangle(0, 8, 220, UiTheme.ButtonHeight);
-        _refresh.Bounds = new Rectangle(230, 8, 110, UiTheme.ButtonHeight);
-        _reagentLot.Bounds = new Rectangle(350, 10, 280, UiTheme.InputHeight);
-        _lotAnalyser.Bounds = new Rectangle(0, 52, 220, UiTheme.InputHeight);
-        _startEvaluation.Bounds = new Rectangle(230, 50, 220, UiTheme.ButtonHeight);
-        _stopEvaluation.Bounds = new Rectangle(460, 50, 170, UiTheme.ButtonHeight);
-        entryActions.Controls.AddRange([_submit, _refresh, _reagentLot, _lotAnalyser, _startEvaluation, _stopEvaluation]);
-
-        entryPanel.Controls.Add(entryHost);
-        entryPanel.Controls.Add(entryActions);
-        entryPanel.Controls.Add(_entryHeading);
-
-        var chartPanel = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-
-        _chartHeading.Font = UiTheme.SectionTitle;
-        _chartHeading.ForeColor = UiTheme.TextPrimary;
-        _chartHeading.Dock = DockStyle.Top;
-        _chartHeading.Height = 26;
+        // The chart's card: the points (the chart writes the control, its lot and limits above
+        // them), then the rules in force and the two actions on the control's limits and rules —
+        // the E2 board's rules panel, reduced to what the laboratory has on file.
+        var chartBody = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
 
         _chart.Dock = DockStyle.Fill;
+        // The chart asks 200 px; at 1366 × 768 the card leaves it a little less under the rules
+        // line, and a docked control larger than its room covers the line.
+        _chart.MinimumSize = new Size(280, 140);
 
-        var chartActions = new Panel
-        {
-            Dock = DockStyle.Bottom, Height = 42, BackColor = UiTheme.Surface
-        };
+        var chartBar = new QhSelectionBar(_rulesLine);
 
-        _establishLimits.Bounds = new Rectangle(0, 8, 300, UiTheme.ButtonHeight);
-        _editRules.Bounds = new Rectangle(310, 8, 240, UiTheme.ButtonHeight);
-        chartActions.Controls.AddRange([_establishLimits, _editRules]);
+        chartBody.Controls.Add(_chart);
+        chartBody.Controls.Add(chartBar);
+        chartBody.Controls.Add(QhMenu.Holder(_establishLimits, _editRules));
 
-        chartPanel.Controls.Add(_chart);
-        chartPanel.Controls.Add(chartActions);
-        chartPanel.Controls.Add(_chartHeading);
+        _chartMenu.Items.Add(QhMenu.For(_establishLimits, async (_, _) => await RunBusyAsync(EstablishLimitsAsync)));
+        _chartMenu.Items.Add(QhMenu.For(_editRules, async (_, _) => await RunBusyAsync(EditRulesAsync)));
+        _chartMenu.Opening += (_, e) => e.Cancel = !_establishLimits.Enabled && !_editRules.Enabled;
+        _chartMore.Margin = new Padding(8, 6, 0, 0);
 
-        topSplit.Panel1.Controls.Add(entryPanel);
-        topSplit.Panel2.Controls.Add(chartPanel);
+        var chartCard = QhPage.TitledCard(_chartHeading, null, chartBody, QhPage.MoreButton(_chartMore, _chartMenu));
+        chartCard.Dock = DockStyle.Fill;
+
+        topSplit.Panel1.Controls.Add(entryCard);
+        topSplit.Panel2.Controls.Add(chartCard);
 
         // --- bottom: rejections awaiting review -------------------------------------------------------
 
-        var reviewPanel = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        var reviewBody = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        var statusStrip = new QhSelectionBar(_status);
+        reviewBody.Controls.Add(_review);
+        reviewBody.Controls.Add(statusStrip);
+        _review.Dock = DockStyle.Fill;
 
-        _reviewHeading.Font = UiTheme.SectionTitle;
-        _reviewHeading.ForeColor = UiTheme.TextPrimary;
-        _reviewHeading.Dock = DockStyle.Top;
-        _reviewHeading.Height = 26;
-
-        BuildReviewColumns();
-
-        var reviewHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        reviewHost.Controls.Add(_review);
-
-        var reviewActions = new Panel
-        {
-            Dock = DockStyle.Bottom, Height = 46, BackColor = UiTheme.Surface
-        };
-
-        _reviewAction.Bounds = new Rectangle(0, 10, 280, UiTheme.ButtonHeight);
-
-        _status.Bounds = new Rectangle(292, 16, 760, 20);
-        _status.Font = UiTheme.Small;
-        _status.ForeColor = UiTheme.TextSecondary;
-        _status.AutoSize = false;
-
-        reviewActions.Controls.AddRange([_reviewAction, _status]);
-
-        reviewPanel.Controls.Add(reviewHost);
-        reviewPanel.Controls.Add(reviewActions);
-        reviewPanel.Controls.Add(_reviewHeading);
+        var reviewCard = QhPage.TitledCard(_reviewHeading, null, reviewBody, _blocked, _reviewAction);
+        reviewCard.Dock = DockStyle.Fill;
 
         outerSplit.Panel1.Controls.Add(topSplit);
-        outerSplit.Panel2.Controls.Add(reviewPanel);
+        outerSplit.Panel2.Controls.Add(reviewCard);
 
-        Controls.Add(outerSplit);
+        _blocked.Visible = false;
+        _blocked.Margin = new Padding(8, 8, 0, 0);
+
+        Controls.Add(QhPage.Frame(2, header, toolbar, outerSplit));
     }
 
     private void BuildEntryColumns()
@@ -367,6 +349,9 @@ public sealed class QualityControlView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _title.Text = T("Nav.QualityControl");
+        _lotCaption.Text = T("QualityHr.Qc.ReagentLot");
+        RenderCount();
         _entryHeading.Text = T("Quality.QualityControlEntry");
         _chartHeading.Text = T("Quality.LeveyJennings");
         _reviewHeading.Text = T("Quality.PendingReview");
@@ -375,6 +360,7 @@ public sealed class QualityControlView : LocalizedView
         _reviewAction.Text = T("Quality.Review");
         _establishLimits.Text = T("Quality.EstablishLimits");
         _editRules.Text = T("Quality.EditRules");
+        _chartMore.Text = T("ResultEntry.MoreActions");
         _startEvaluation.Text = T("Qc.StartEvaluation");
         _stopEvaluation.Text = T("Qc.StopEvaluation");
         if (_lotAnalyser.Items.Count > 0 && _lotAnalyser.Items[0] is AnalyserChoice { Id: null })
@@ -607,6 +593,36 @@ public sealed class QualityControlView : LocalizedView
         _entry.ResumeLayout(performLayout: true);
 
         _entryHeading.Text = $"{T("Quality.QualityControlEntry")} — {_rows.Count}";
+        RenderCount();
+    }
+
+    private void RenderCount() =>
+        _count.Text = Localizer.Format("QualityHr.Qc.Count", _rows.Count, _pendingReview.Count);
+
+    /// <summary>The Westgard rules by their short names, as the bench says them: 1-2s, 1-3s, R-4s…</summary>
+    private static readonly (WestgardRule Rule, string Name)[] RuleNames =
+    [
+        // Plain characters: the subscript letters are missing from the interface fonts.
+        (WestgardRule.OneTwoS, "1-2s"), (WestgardRule.OneThreeS, "1-3s"), (WestgardRule.TwoTwoS, "2-2s"),
+        (WestgardRule.R4S, "R-4s"), (WestgardRule.ThreeOneS, "3-1s"), (WestgardRule.FourOneS, "4-1s"),
+        (WestgardRule.TwoOfThreeTwoS, "2/3-2s"), (WestgardRule.SevenT, "7T"), (WestgardRule.EightX, "8x"),
+        (WestgardRule.TenX, "10x"), (WestgardRule.TwelveX, "12x")
+    ];
+
+    /// <summary>The rules in force for the control shown, under its chart, by their short names.</summary>
+    private void ShowControlFacts(Guid qcTargetId)
+    {
+        var row = _rows.FirstOrDefault(r => r.QcTargetId == qcTargetId);
+
+        if (row is null)
+        {
+            _rulesLine.Text = string.Empty;
+            return;
+        }
+
+        var active = RuleNames.Where(r => row.ActiveRules.HasFlag(r.Rule)).Select(r => r.Name).ToList();
+        _rulesLine.ForeColor = active.Count == 0 ? UiTheme.Critical : UiTheme.TextSecondary;
+        _rulesLine.Text = Localizer.Format("QualityHr.Qc.ActiveRules", active.Count == 0 ? "—" : string.Join(" · ", active));
     }
 
     private static int CountRules(WestgardRule rules) =>
@@ -638,6 +654,13 @@ public sealed class QualityControlView : LocalizedView
         _reviewHeading.Text = $"{T("Quality.PendingReview")} — {_pendingReview.Count}";
 
         _reviewAction.Enabled = _pendingReview.Count > 0;
+
+        // The patient results these rejections hold back, said where the reviewer looks first.
+        var blocked = _pendingReview.Sum(r => r.AffectedResultCount);
+        if (blocked > 0) _blocked.Show(Localizer.Format("QualityHr.Qc.Blocked", blocked), QhTone.Crit);
+        else _blocked.Visible = false;
+
+        RenderCount();
     }
 
     private async Task LoadChartAsync()
@@ -656,14 +679,17 @@ public sealed class QualityControlView : LocalizedView
     {
         try
         {
+            ShowControlFacts(qcTargetId);
+
             var chart = await _qc.GetChartAsync(qcTargetId);
 
             _chart.SetSeries(chart.IsSuccess ? chart.Value : null);
 
             if (chart.IsSuccess)
             {
-                _chartHeading.Text = $"{T("Quality.LeveyJennings")} — " +
-                                     $"{chart.Value.ParameterCode} · {chart.Value.MaterialLotNumber}";
+                // The chart writes the parameter, the lot and the analyser above its points; the
+                // heading keeps to its name so « Plus d'actions » stays in the card.
+                _chartHeading.Text = T("Quality.LeveyJennings");
 
                 _establishLimits.Enabled = true;
             }

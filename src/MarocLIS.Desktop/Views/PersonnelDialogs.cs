@@ -184,6 +184,7 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
 
         // Sized to what was laid out: the pay section is there or not depending on the right.
         ClientSize = new Size(FormWidth, y + UiTheme.ButtonHeight + 16);
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.Employee");
     }
 
     private void Section(string key, int y)
@@ -380,6 +381,7 @@ internal sealed class CredentialsDialog : Form
         };
 
         UpdateButtons();
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.Credentials");
     }
 
     private CredentialRow? Current() => _grid.CurrentRow?.Tag as CredentialRow;
@@ -580,6 +582,7 @@ internal sealed class CredentialEditorDialog : MasterDataEditor
         OnKindChanged();
 
         Buttons(310, 520);
+        QhDialog.Dress(this, localizer, null);
     }
 
     private static void SetDate((CheckBox Toggle, DateTimePicker Picker) field, DateOnly? value)
@@ -666,6 +669,7 @@ internal sealed class EmployeeExitDialog : MasterDataEditor
         Notice(20, 116, 480, 40, "Personnel.ExitNoticeAfterLastDay", UiTheme.Abnormal);
 
         Buttons(200, 520);
+        QhDialog.Dress(this, localizer, null);
     }
 
     protected override void Accept() => DialogResult = DialogResult.OK;
@@ -691,6 +695,7 @@ internal sealed class EmployeeRehireDialog : MasterDataEditor
 
         Notice(20, 70, 480, 70, "Personnel.RehireNotice", UiTheme.Abnormal);
         Buttons(160, 520);
+        QhDialog.Dress(this, localizer, null);
     }
 
     protected override void Accept() => DialogResult = DialogResult.OK;
@@ -748,6 +753,7 @@ internal sealed class HabilitationGrantDialog : MasterDataEditor
         FillSubjects(subjectId);
 
         Buttons(296, 560);
+        QhDialog.Dress(this, localizer, null);
     }
 
     private void FillSubjects(Guid? current)
@@ -859,6 +865,7 @@ internal sealed class SettlementDialog : MasterDataEditor
         };
         foreach (var box in new[] { _leave, _notice, _severance }) box.TextChanged += (_, _) => ShowTotal();
         ShowTotal();
+        QhDialog.Dress(this, localizer, null);
     }
 
     private void Hint(int x, int y, int width, string text) => Controls.Add(new Label
@@ -953,6 +960,7 @@ internal sealed class SettlementSignedDialog : MasterDataEditor
 
         Notice(20, 70, 480, 70, "Settlement.SignedNotice", UiTheme.Abnormal);
         Buttons(160, 520);
+        QhDialog.Dress(this, localizer, null);
     }
 
     protected override void Accept() => DialogResult = DialogResult.OK;

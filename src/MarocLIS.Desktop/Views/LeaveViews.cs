@@ -31,6 +31,8 @@ public sealed class LeaveView : LocalizedView
     private readonly Button _balances = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _holidays = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _detail = new();
+    private readonly Label _title = new();
+    private readonly Label _yearCaption = new();
 
     private IReadOnlyList<LeaveRow> _rows = [];
 
@@ -52,30 +54,23 @@ public sealed class LeaveView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = QhPage.PagePadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.SectionTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 2);
+        // Direction A, a work queue: the title and the count; Refresh and the one primary action
+        // (a new request) on the right; the year, the chip, the balances and the holidays under
+        // them; the requests in a card, their status as a pill; under the list the selected request
+        // and the decisions on it, Approve at the far end.
+        var header = QhPage.Header(_title, _heading, _refresh, _new);
 
         _year.DropDownStyle = ComboBoxStyle.DropDownList;
         _year.FlatStyle = FlatStyle.Flat;
-        _year.Bounds = new Rectangle(0, 28, 90, UiTheme.InputHeight);
         var thisYear = DateTime.Today.Year;
         for (var y = thisYear - 2; y <= thisYear + 1; y++) _year.Items.Add(y);
         _year.SelectedItem = thisYear;
 
-        _refresh.Bounds = new Rectangle(102, 27, 110, UiTheme.ButtonHeight - 4);
-
-        _pendingOnly.Font = UiTheme.Small;
-        _pendingOnly.ForeColor = UiTheme.TextSecondary;
-        _pendingOnly.AutoSize = true;
-        _pendingOnly.Location = new Point(226, 32);
-
-        bar.Controls.AddRange([_heading, _year, _refresh, _pendingOnly]);
+        var toolbar = QhPage.Toolbar(QhPage.Caption(_yearCaption), QhPage.Filter(_year, 90),
+                                     QhPage.Chip(_pendingOnly), _pendingOnly,
+                                     QhPage.Fit(_balances), QhPage.Fit(_holidays));
 
         void Add(string name, int weight, Font? font = null)
             => _grid.Columns.Add(new DataGridViewTextBoxColumn
@@ -96,29 +91,12 @@ public sealed class LeaveView : LocalizedView
         Add("away", 7, UiTheme.Small);
         Add("decision", 16, UiTheme.Small);
 
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        host.Controls.Add(_grid);
+        _grid.Dock = DockStyle.Fill;
+        var body = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        body.Controls.Add(_grid);
+        body.Controls.Add(new QhSelectionBar(_detail, _cancel, _refuse, _approve));
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 76, BackColor = UiTheme.Surface };
-
-        _detail.Font = UiTheme.Small;
-        _detail.ForeColor = UiTheme.TextSecondary;
-        _detail.AutoSize = false;
-        _detail.AutoEllipsis = true;
-        _detail.Bounds = new Rectangle(0, 4, 1300, 20);
-
-        _new.Bounds = new Rectangle(0, 30, 190, UiTheme.ButtonHeight);
-        _approve.Bounds = new Rectangle(200, 30, 140, UiTheme.ButtonHeight);
-        _refuse.Bounds = new Rectangle(350, 30, 140, UiTheme.ButtonHeight);
-        _cancel.Bounds = new Rectangle(500, 30, 160, UiTheme.ButtonHeight);
-        _balances.Bounds = new Rectangle(690, 30, 190, UiTheme.ButtonHeight);
-        _holidays.Bounds = new Rectangle(890, 30, 170, UiTheme.ButtonHeight);
-
-        actions.Controls.AddRange([_detail, _new, _approve, _refuse, _cancel, _balances, _holidays]);
-
-        Controls.Add(host);
-        Controls.Add(actions);
-        Controls.Add(bar);
+        Controls.Add(QhPage.Frame(2, header, toolbar, QhPage.Card(body)));
     }
 
     private void WireBehaviour()
@@ -141,23 +119,18 @@ public sealed class LeaveView : LocalizedView
                                _new, _cancel);
         PermissionGate.Require(Permissions.HumanResources.ApproveLeave, _approve, _refuse);
 
+        // The status as a pill (waiting in amber, approved in green, refused or cancelled muted);
+        // a closed request keeps its muted ink across the row.
+        QhGridPills.Attach(_grid, "status", r => r.Tag is LeaveRow row ? StatusTone(row.Status) : null);
+
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not LeaveRow row) return;
 
-            switch (row.Status)
-            {
-                case LeaveStatus.Pending:
-                    e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-                    e.CellStyle.ForeColor = UiTheme.Abnormal;
-                    break;
-                case LeaveStatus.Approved when e.ColumnIndex == 0:
-                    e.CellStyle!.ForeColor = UiTheme.Normal;
-                    break;
-                case LeaveStatus.Refused or LeaveStatus.Cancelled:
-                    e.CellStyle!.ForeColor = UiTheme.TextMuted;
-                    break;
-            }
+            if (row.Status is LeaveStatus.Refused or LeaveStatus.Cancelled)
+                e.CellStyle!.ForeColor = UiTheme.TextMuted;
+            else if (row.Status == LeaveStatus.Pending && e.ColumnIndex == _grid.Column("name").Index)
+                e.CellStyle!.Font = UiTheme.BodyBold;
 
             if (e.ColumnIndex == _grid.Column("proof").Index && !row.JustificationProvided
                 && LeaveRules.RequiresJustification(row.Type) && row.Status == LeaveStatus.Pending)
@@ -165,8 +138,17 @@ public sealed class LeaveView : LocalizedView
         };
     }
 
+    private static (Color Back, Color Fore)? StatusTone(LeaveStatus status) => status switch
+    {
+        LeaveStatus.Pending => QhTone.Warn,
+        LeaveStatus.Approved => QhTone.Ok,
+        _ => QhTone.Muted
+    };
+
     protected override void ApplyTexts()
     {
+        _title.Text = T("Nav.Leave");
+        _yearCaption.Text = T("Eqa.Year");
         _pendingOnly.Text = T("Leave.PendingOnly");
         _refresh.Text = T("Action.Refresh");
         _new.Text = T("Leave.New");
@@ -242,7 +224,7 @@ public sealed class LeaveView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();
 
-        _heading.Text = T("Leave.Heading", _rows.Count(r => r.Status == LeaveStatus.Pending),
+        _heading.Text = T("QualityHr.Leave.Count", _rows.Count(r => r.Status == LeaveStatus.Pending),
                           _rows.Count(r => r.Status == LeaveStatus.Approved));
         ShowDetail();
     }
@@ -439,6 +421,7 @@ internal sealed class LeaveRequestDialog : MasterDataEditor
         _endsMorning.CheckedChanged += async (_, _) => await PreviewAsync();
 
         Shown += async (_, _) => await PreviewAsync();
+        QhDialog.Dress(this, localizer, null);
     }
 
     private LeaveType Type => Selected<LeaveType>(_type);
@@ -562,6 +545,7 @@ internal sealed class LeaveBalancesDialog : Form
             if (e.ColumnIndex == _grid.Columns["available"]!.Index && row.Available < 0)
                 e.CellStyle!.ForeColor = UiTheme.Critical;
         };
+        QhDialog.Dress(this, localizer, null);
     }
 
     internal async Task LoadAsync()
@@ -615,6 +599,7 @@ internal sealed class LeaveAdjustmentDialog : MasterDataEditor
         _comment = TextField("Leave.AdjustReason", 180, 10, 320);
         Notice(20, 66, 480, 90, "Leave.AdjustNotice");
         Buttons(172, 520);
+        QhDialog.Dress(this, localizer, null);
     }
 
     protected override void Accept()
@@ -686,11 +671,11 @@ internal sealed class HolidaysDialog : Form
         };
 
         _add.Text = localizer["Holiday.Add"];
-        _add.Bounds = new Rectangle(12, 468, 180, UiTheme.ButtonHeight);
+        _add.Bounds = new Rectangle(12, 468, 210, UiTheme.ButtonHeight);
         _add.Click += async (_, _) => await AddAsync();
 
         _remove.Text = localizer["Holiday.Remove"];
-        _remove.Bounds = new Rectangle(202, 468, 160, UiTheme.ButtonHeight);
+        _remove.Bounds = new Rectangle(232, 468, 170, UiTheme.ButtonHeight);
         _remove.Click += async (_, _) => await RemoveAsync();
 
         var close = UiTheme.SecondaryButton(localizer["Action.Close"]);
@@ -701,6 +686,7 @@ internal sealed class HolidaysDialog : Form
         CancelButton = close;
 
         PermissionGate.Require(Permissions.HumanResources.Manage, _add, _remove);
+        QhDialog.Dress(this, localizer, null);
     }
 
     internal async Task LoadAsync()
@@ -773,6 +759,7 @@ internal sealed class HolidayEditorDialog : MasterDataEditor
         _name = TextField("Field.Name", 220, 10, 280);
         _religious = Check("Holiday.Religious", 20, 76, true);
         Buttons(132, 520);
+        QhDialog.Dress(this, localizer, null);
     }
 
     protected override void Accept() => DialogResult = DialogResult.OK;

@@ -42,6 +42,12 @@ public sealed class PayrollView : LocalizedView
     private readonly Button _close = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _transfer = UiTheme.SecondaryButton(string.Empty);
     private readonly ContextMenuStrip _transferMenu = new();
+    private readonly Label _title = new();
+    private readonly Label _periodCaption = new();
+    // The rates, the Simpl-IR return and the BDS file: kept as buttons (hidden) for their state,
+    // offered from « Plus d'actions ».
+    private readonly Button _more = UiTheme.SecondaryButton(string.Empty);
+    private readonly ContextMenuStrip _moreMenu = new();
 
     private IReadOnlyList<PayrollPeriodRow> _periods = [];
     private PayrollPeriodDetail? _detail;
@@ -70,25 +76,17 @@ public sealed class PayrollView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = QhPage.PagePadding;
 
-        var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface };
-
-        _heading.Font = UiTheme.SectionTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 2);
+        // Direction A: the title and the month's state; Refresh and « Plus d'actions » (the rates,
+        // the yearly Simpl-IR return and the BDS file, the rare ones) on the right; the month and
+        // Open under them; the payslips in a card; under the list the totals and the month's
+        // actions, the variables of the selected payslip (the primary) at the far end.
+        var header = QhPage.Header(_title, _heading, _refresh, QhPage.MoreButton(_more, _moreMenu));
 
         _period.DropDownStyle = ComboBoxStyle.DropDownList;
         _period.FlatStyle = FlatStyle.Flat;
-        _period.Bounds = new Rectangle(0, 28, 260, UiTheme.InputHeight);
-        _open.Bounds = new Rectangle(272, 27, 190, UiTheme.ButtonHeight - 4);
-        _refresh.Bounds = new Rectangle(472, 27, 130, UiTheme.ButtonHeight - 4);
-        _settings.Bounds = new Rectangle(612, 27, 200, UiTheme.ButtonHeight - 4);
-        // The year's return, whichever month is shown.
-        _simplIr.Bounds = new Rectangle(822, 27, 220, UiTheme.ButtonHeight - 4);
-
-        bar.Controls.AddRange([_heading, _period, _open, _refresh, _settings, _simplIr]);
+        var toolbar = QhPage.Toolbar(QhPage.Caption(_periodCaption), QhPage.Filter(_period, 260), QhPage.Fit(_open));
 
         void Add(string name, int weight, Font? font = null, bool right = false)
             => _grid.Columns.Add(new DataGridViewTextBoxColumn
@@ -113,34 +111,17 @@ public sealed class PayrollView : LocalizedView
         Add("cost", 9, UiTheme.Monospace, true);
         Add("alert", 16, UiTheme.Small);
 
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        host.Controls.Add(_grid);
-
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 112, BackColor = UiTheme.Surface };
-
         _totals.Font = UiTheme.SmallBold;
         _totals.ForeColor = UiTheme.TextSecondary;
-        _totals.AutoSize = false;
-        _totals.AutoEllipsis = true;
-        _totals.Bounds = new Rectangle(0, 4, 1300, 20);
 
-        _variables.Bounds = new Rectangle(0, 30, 200, UiTheme.ButtonHeight);
-        _payslip.Bounds = new Rectangle(210, 30, 130, UiTheme.ButtonHeight);
-        _allPayslips.Bounds = new Rectangle(350, 30, 170, UiTheme.ButtonHeight);
-        _journal.Bounds = new Rectangle(530, 30, 160, UiTheme.ButtonHeight);
-        _cnss.Bounds = new Rectangle(700, 30, 160, UiTheme.ButtonHeight);
-        _update.Bounds = new Rectangle(870, 30, 190, UiTheme.ButtonHeight);
-        _close.Bounds = new Rectangle(1070, 30, 170, UiTheme.ButtonHeight);
-        _transfer.Bounds = new Rectangle(1250, 30, 150, UiTheme.ButtonHeight);
-        // Under the CNSS summary it is checked against.
-        _bds.Bounds = new Rectangle(700, 66, 220, UiTheme.ButtonHeight);
+        _grid.Dock = DockStyle.Fill;
+        var body = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        body.Controls.Add(_grid);
+        body.Controls.Add(new QhSelectionBar(_totals, _payslip, _allPayslips, _journal, _cnss, _transfer,
+                                             _update, _close, _variables));
+        body.Controls.Add(QhMenu.Holder(_settings, _simplIr, _bds));
 
-        actions.Controls.AddRange([_totals, _variables, _payslip, _allPayslips, _journal, _cnss, _update, _close, _transfer,
-                                   _bds]);
-
-        Controls.Add(host);
-        Controls.Add(actions);
-        Controls.Add(bar);
+        Controls.Add(QhPage.Frame(2, header, toolbar, QhPage.Card(body)));
     }
 
     private void WireBehaviour()
@@ -164,6 +145,12 @@ public sealed class PayrollView : LocalizedView
         _transfer.Click += (_, _) => _transferMenu.Show(_transfer, new Point(0, _transfer.Height));
         _grid.SelectionChanged += (_, _) => RefreshButtons();
 
+        _moreMenu.Items.Add(QhMenu.For(_settings, async (_, _) => await RunBusyAsync(SettingsAsync)));
+        _moreMenu.Items.Add(QhMenu.For(_simplIr, async (_, _) =>
+            await RunBusyAsync(() => GuardedAsync(SimplIrAsync, "Building the état 9421 failed."))));
+        _moreMenu.Items.Add(QhMenu.For(_bds, async (_, _) =>
+            await RunBusyAsync(() => GuardedAsync(BdsAsync, "Building the CNSS BDS failed."))));
+
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not PayslipRow row) return;
@@ -175,6 +162,9 @@ public sealed class PayrollView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _title.Text = T("Nav.Payroll");
+        _periodCaption.Text = T("Payroll.Month");
+        _more.Text = T("ResultEntry.MoreActions");
         _open.Text = T("Payroll.OpenMonth");
         _refresh.Text = T("Action.Refresh");
         _settings.Text = T("Payroll.Settings");
@@ -295,14 +285,14 @@ public sealed class PayrollView : LocalizedView
 
         if (_detail is { } d)
         {
-            _heading.Text = T("Payroll.Heading", MonthName(d.Period.Year, d.Period.Month), T($"PayrollStatus.{d.Period.Status}"),
+            _heading.Text = T("QualityHr.Payroll.Count", MonthName(d.Period.Year, d.Period.Month), T($"PayrollStatus.{d.Period.Status}"),
                               d.Payslips.Count);
             _totals.Text = T("Payroll.Totals", Dh(d.Total(a => a.Gross)), Dh(d.Total(a => a.CnssEmployee + a.AmoEmployee)),
                              Dh(d.Total(a => a.IncomeTax)), Dh(d.Total(a => a.NetPay)), Dh(d.Total(a => a.EmployerCost)));
         }
         else
         {
-            _heading.Text = T("Nav.Payroll");
+            _heading.Text = string.Empty;
             _totals.Text = T("Payroll.NoPeriod");
         }
 
@@ -586,6 +576,7 @@ internal sealed class PayrollMonthDialog : MasterDataEditor
 
         Notice(20, 66, 380, 60, "Payroll.OpenNotice");
         Buttons(140, 420, "Payroll.OpenMonth");
+        QhDialog.Dress(this, localizer, null);
     }
 
     protected override void Accept() => DialogResult = DialogResult.OK;
@@ -644,6 +635,7 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
 
         Notice(20, 290, 580, 74, "Payroll.VariablesNotice");
         Buttons(374, 620);
+        QhDialog.Dress(this, localizer, null);
     }
 
     private static bool Read(TextBox box, out decimal value)
@@ -712,6 +704,7 @@ internal sealed class PayrollParametersDialog : MasterDataEditor
         _scale = TextField("PayrollRate.Scale", 20, 270, 660, p.IncomeTaxScale, latin: true, mono: true);
         Notice(20, 322, 660, 84, "PayrollRate.Notice");
         Buttons(414, 700);
+        QhDialog.Dress(this, localizer, null);
     }
 
     protected override void Accept()
@@ -768,6 +761,7 @@ internal sealed class SimplIrDialog : MasterDataEditor
 
         Notice(20, 166, 520, 100, "Payroll.SimplIrNotice");
         Buttons(276, 560, "Action.Export");
+        QhDialog.Dress(this, localizer, null);
     }
 
     protected override void Accept()

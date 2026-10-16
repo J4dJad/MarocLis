@@ -34,6 +34,9 @@ public sealed class PlanningView : LocalizedView
     private readonly Button _clear = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _copyWeek = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _detail = new();
+    private readonly Label _title = new();
+    private readonly Label _issuesHeading = new();
+    private readonly Label _issuesCount = new();
 
     private DateOnly _month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private PlanningMonth? _data;
@@ -54,32 +57,30 @@ public sealed class PlanningView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = QhPage.PagePadding;
 
-        // Laid out here: the month stays between its two arrows rather than wrapping off on its own.
-        var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = UiTheme.Surface, Tag = UiTags.OwnLayout };
+        // Direction A: the title and the count, Refresh and the week copy on the right; the month
+        // between its two arrows under them; the month's grid in a card with its legend, the
+        // selected cells and their actions at its foot (Assign, the primary, at the far end); the
+        // points to check in a card of their own below.
+        var header = QhPage.Header(_title, _heading, _refresh, _copyWeek);
 
-        _heading.Font = UiTheme.SectionTitle;
-        _heading.ForeColor = UiTheme.TextPrimary;
-        _heading.AutoSize = true;
-        _heading.Location = new Point(0, 2);
-
-        _previous.Bounds = new Rectangle(0, 27, 175, UiTheme.ButtonHeight - 4);
         _monthLabel.Font = UiTheme.BodyBold;
         _monthLabel.TextAlign = ContentAlignment.MiddleCenter;
         _monthLabel.AutoSize = false;
-        _monthLabel.Bounds = new Rectangle(181, 27, 160, UiTheme.ButtonHeight - 4);
-        _next.Bounds = new Rectangle(347, 27, 175, UiTheme.ButtonHeight - 4);
-        _refresh.Bounds = new Rectangle(534, 27, 130, UiTheme.ButtonHeight - 4);
+        _monthLabel.Size = new Size(160, 34);
+        _monthLabel.Margin = new Padding(0, 0, 8, 0);
 
-        bar.Controls.AddRange([_heading, _previous, _monthLabel, _next, _refresh]);
+        var toolbar = QhPage.Toolbar(QhPage.Fit(_previous), _monthLabel, QhPage.Fit(_next));
 
         _legend.Font = UiTheme.Small;
         _legend.ForeColor = UiTheme.TextSecondary;
         _legend.AutoSize = false;
         _legend.AutoEllipsis = true;
         _legend.Dock = DockStyle.Bottom;
-        _legend.Height = 22;
+        _legend.Height = 24;
+        _legend.Padding = new Padding(14, 0, 14, 0);
+        _legend.BackColor = UiTheme.SurfaceRaised;
         _legend.TextAlign = ContentAlignment.MiddleLeft;
 
         _grid.SelectionMode = DataGridViewSelectionMode.CellSelect;
@@ -88,10 +89,15 @@ public sealed class PlanningView : LocalizedView
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         _grid.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.True;
         _grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        _grid.Dock = DockStyle.Fill;
 
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        host.Controls.Add(_grid);
-        host.Controls.Add(_legend);
+        var gridBody = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        gridBody.Controls.Add(_grid);
+        gridBody.Controls.Add(_legend);
+        gridBody.Controls.Add(new QhSelectionBar(_detail, _clear, _assign));
+
+        var gridCard = QhPage.Card(gridBody);
+        gridCard.Dock = DockStyle.Fill;
 
         void Issue(string name, int weight, Font? font = null)
             => _issues.Columns.Add(new DataGridViewTextBoxColumn
@@ -105,28 +111,17 @@ public sealed class PlanningView : LocalizedView
         Issue("who", 20);
         Issue("what", 70);
 
-        var issuesHost = new Panel { Dock = DockStyle.Bottom, Height = 150, BackColor = UiTheme.Surface,
-                                     Padding = new Padding(0, 6, 0, 0) };
-        issuesHost.Controls.Add(_issues);
+        _issues.Dock = DockStyle.Fill;
+        var issuesCard = QhPage.TitledCard(_issuesHeading, _issuesCount, _issues);
+        issuesCard.Dock = DockStyle.Bottom;
+        issuesCard.Height = 170;
 
-        var actions = new Panel { Dock = DockStyle.Bottom, Height = 76, BackColor = UiTheme.Surface };
+        var main = new Panel { BackColor = UiTheme.Surface, Margin = Padding.Empty };
+        main.Controls.Add(gridCard);
+        main.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 14, BackColor = UiTheme.Surface });
+        main.Controls.Add(issuesCard);
 
-        _detail.Font = UiTheme.Small;
-        _detail.ForeColor = UiTheme.TextSecondary;
-        _detail.AutoSize = false;
-        _detail.AutoEllipsis = true;
-        _detail.Bounds = new Rectangle(0, 4, 1300, 20);
-
-        _assign.Bounds = new Rectangle(0, 30, 200, UiTheme.ButtonHeight);
-        _clear.Bounds = new Rectangle(210, 30, 170, UiTheme.ButtonHeight);
-        _copyWeek.Bounds = new Rectangle(390, 30, 300, UiTheme.ButtonHeight);
-
-        actions.Controls.AddRange([_detail, _assign, _clear, _copyWeek]);
-
-        Controls.Add(host);
-        Controls.Add(actions);
-        Controls.Add(issuesHost);
-        Controls.Add(bar);
+        Controls.Add(QhPage.Frame(2, header, toolbar, main));
     }
 
     private void WireBehaviour()
@@ -178,6 +173,8 @@ public sealed class PlanningView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _title.Text = T("Nav.Planning");
+        _issuesHeading.Text = T("Planning.Issue");
         _refresh.Text = T("Action.Refresh");
         _previous.Text = T("Planning.PreviousMonth");
         _next.Text = T("Planning.NextMonth");
@@ -302,7 +299,8 @@ public sealed class PlanningView : LocalizedView
         }
         _issues.RestoreFillWeights();
 
-        _heading.Text = T("Planning.Heading", _data.Employees.Count, _data.Shifts.Count, _data.Issues.Count);
+        _heading.Text = T("QualityHr.Planning.Count", _data.Employees.Count, _data.Shifts.Count, _data.Issues.Count);
+        _issuesCount.Text = _data.Issues.Count.ToString(CultureInfo.CurrentCulture);
         ShowDetail();
     }
 
@@ -488,6 +486,7 @@ internal sealed class ShiftDialog : MasterDataEditor
         _end.ValueChanged += (_, _) => ShowHours();
 
         Buttons(204, 520);
+        QhDialog.Dress(this, localizer, null);
     }
 
     private void SetHours(TimeOnly? start, TimeOnly? end)

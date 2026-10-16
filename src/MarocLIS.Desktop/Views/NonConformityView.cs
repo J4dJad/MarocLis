@@ -33,7 +33,8 @@ public sealed class NonConformityView : LocalizedView
 
     private readonly Label _registerHeading = new();
     private readonly Label _detailHeading = new();
-    private readonly Label _detail = new();
+    private readonly QhAside _aside = new();
+    private readonly Label _count = new();
     private readonly CheckBox _onlyOpen = new();
     private readonly ComboBox _categoryFilter = new();
 
@@ -41,7 +42,8 @@ public sealed class NonConformityView : LocalizedView
     private readonly Button _addAction = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _completeAction = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _analysis = UiTheme.SecondaryButton(string.Empty);
-    private readonly Button _close = UiTheme.PrimaryButton(string.Empty);
+    // Secondary: opening a file is the screen's one primary action.
+    private readonly Button _close = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _reopen = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _dismiss = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _cancelAction = UiTheme.SecondaryButton(string.Empty);
@@ -71,110 +73,52 @@ public sealed class NonConformityView : LocalizedView
 
     private void BuildLayout()
     {
-        Padding = new Padding(UiTheme.Gutter);
+        Padding = QhPage.PagePadding;
+
+        _categoryFilter.DropDownStyle = ComboBoxStyle.DropDownList;
+        _categoryFilter.FlatStyle = FlatStyle.Flat;
+        _onlyOpen.Checked = true;
+
+        BuildRegisterColumns();
+        BuildActionColumns();
+
+        var header = QhPage.Header(_registerHeading, _count, _refresh, _open);
+        var toolbar = QhPage.Toolbar(QhPage.Chip(_onlyOpen), QhPage.Filter(_categoryFilter, 260), _onlyOpen);
+
+        // --- the register over the selected file's actions ---------------------------------------------
 
         var split = new ProportionalSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            SplitterDistance = 300,
-            SplitterWidth = 6,
+            SplitterDistance = 290,
+            SplitterWidth = 14,
             BackColor = UiTheme.Surface
         };
 
-        // --- register --------------------------------------------------------------------------------
+        var registerCard = QhPage.Card(_register);
+        registerCard.Dock = DockStyle.Fill;
 
-        var top = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+        // The four action-level operations at the foot of the actions, away from the file-level ones
+        // in the aside: "cancel this action" and "dismiss this non-conformity" are very different
+        // acts and should not sit adjacent.
+        var actionBody = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
+        _actions.Dock = DockStyle.Fill;
+        actionBody.Controls.Add(_actions);
+        actionBody.Controls.Add(new QhSelectionBar(null, _addAction, _startAction, _completeAction, _cancelAction));
 
-        var filterBar = new Panel { Dock = DockStyle.Top, Height = 56, BackColor = UiTheme.Surface };
+        var actionsCard = QhPage.TitledCard(_detailHeading, null, actionBody);
+        actionsCard.Dock = DockStyle.Fill;
 
-        _registerHeading.Font = UiTheme.SectionTitle;
-        _registerHeading.ForeColor = UiTheme.TextPrimary;
-        _registerHeading.AutoSize = true;
-        _registerHeading.Location = new Point(0, 2);
+        split.Panel1.Controls.Add(registerCard);
+        split.Panel2.Controls.Add(actionsCard);
 
-        _onlyOpen.Font = UiTheme.Small;
-        _onlyOpen.ForeColor = UiTheme.TextSecondary;
-        _onlyOpen.AutoSize = true;
-        _onlyOpen.Location = new Point(0, 30);
-        _onlyOpen.Checked = true;
+        // --- the selected file: its facts and the file-level operations ----------------------------------
 
-        _categoryFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-        _categoryFilter.FlatStyle = FlatStyle.Flat;
-        _categoryFilter.Font = UiTheme.Small;
-        _categoryFilter.Bounds = new Rectangle(220, 28, 260, UiTheme.InputHeight);
+        _aside.SetActions(_analysis, _close, _reopen, _dismiss);
+        _aside.AddBelow(QhPage.StatusLine(_status));
 
-        _open.Bounds = new Rectangle(492, 27, 220, UiTheme.ButtonHeight - 4);
-        _refresh.Bounds = new Rectangle(722, 27, 110, UiTheme.ButtonHeight - 4);
-
-        filterBar.Controls.AddRange([_registerHeading, _onlyOpen, _categoryFilter, _open, _refresh]);
-
-        BuildRegisterColumns();
-
-        var registerHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-        registerHost.Controls.Add(_register);
-
-        top.Controls.Add(registerHost);
-        top.Controls.Add(filterBar);
-
-        // --- detail and actions ------------------------------------------------------------------------
-
-        var bottom = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
-
-        _detailHeading.Font = UiTheme.SectionTitle;
-        _detailHeading.ForeColor = UiTheme.TextPrimary;
-        _detailHeading.Dock = DockStyle.Top;
-        _detailHeading.Height = 26;
-
-        _detail.Font = UiTheme.Body;
-        _detail.ForeColor = UiTheme.TextSecondary;
-        _detail.Dock = DockStyle.Top;
-        _detail.Height = 62;
-        _detail.BackColor = UiTheme.SurfaceRaised;
-        _detail.Padding = new Padding(UiTheme.Gutter, UiTheme.GutterTight, UiTheme.Gutter, 0);
-
-        BuildActionColumns();
-
-        var actionHost = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = UiTheme.Surface,
-            Padding = new Padding(0, UiTheme.GutterTight, 0, 0)
-        };
-        actionHost.Controls.Add(_actions);
-
-        // Two rows now: the four action-level operations, then the four file-level ones. Grouped
-        // that way because "cancel this action" and "dismiss this non-conformity" are very
-        // different acts and should not sit adjacent.
-        var actionBar = new Panel { Dock = DockStyle.Bottom, Height = 74, BackColor = UiTheme.Surface };
-
-        _addAction.Bounds = new Rectangle(0, 4, 170, UiTheme.ButtonHeight);
-        _startAction.Bounds = new Rectangle(180, 4, 150, UiTheme.ButtonHeight);
-        _completeAction.Bounds = new Rectangle(340, 4, 170, UiTheme.ButtonHeight);
-        _cancelAction.Bounds = new Rectangle(520, 4, 170, UiTheme.ButtonHeight);
-
-        _analysis.Bounds = new Rectangle(0, 40, 230, UiTheme.ButtonHeight);
-        _close.Bounds = new Rectangle(240, 40, 180, UiTheme.ButtonHeight);
-        _reopen.Bounds = new Rectangle(430, 40, 170, UiTheme.ButtonHeight);
-        _dismiss.Bounds = new Rectangle(610, 40, 170, UiTheme.ButtonHeight);
-
-        _status.Bounds = new Rectangle(792, 44, 700, 20);
-        _status.Font = UiTheme.Small;
-        _status.ForeColor = UiTheme.TextSecondary;
-        _status.AutoSize = false;
-
-        actionBar.Controls.AddRange([_addAction, _startAction, _completeAction, _cancelAction,
-                                     _analysis, _close, _reopen, _dismiss, _status]);
-
-        bottom.Controls.Add(actionHost);
-        bottom.Controls.Add(actionBar);
-        bottom.Controls.Add(_detail);
-        bottom.Controls.Add(_detailHeading);
-
-        split.Panel1.Controls.Add(top);
-        split.Panel2.Controls.Add(bottom);
-
-        Controls.Add(split);
+        Controls.Add(QhPage.Frame(2, header, toolbar, QhPage.WithAside(split, _aside, 320)));
 
         SetDetailEnabled(false);
     }
@@ -252,7 +196,20 @@ public sealed class NonConformityView : LocalizedView
         _actions.SelectionChanged += (_, _) => RefreshActionButtons();
 
         _register.CellFormatting += OnRegisterFormatting;
+        QhGridPills.Attach(_register, "severity",
+                           r => r.Tag is NonConformityRow row ? SeverityTone(row.Severity) : null);
+        QhGridPills.Attach(_register, "status",
+                           r => r.Tag is NonConformityRow row ? StatusTone(row.Status) : null);
         _actions.CellFormatting += OnActionFormatting;
+        QhGridPills.Attach(_actions, "status", r => r.Tag is CorrectiveActionRow action
+            ? action.Status switch
+            {
+                CorrectiveActionStatus.Completed => QhTone.Ok,
+                CorrectiveActionStatus.InProgress => QhTone.Info,
+                CorrectiveActionStatus.Cancelled => QhTone.Muted,
+                _ => action.IsOverdue ? QhTone.Crit : QhTone.Wait
+            }
+            : null);
     }
 
     private void OnRegisterFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -260,25 +217,16 @@ public sealed class NonConformityView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _register.Rows.Count) return;
         if (_register.Rows[e.RowIndex].Tag is not NonConformityRow row) return;
 
-        // Severity drives the colour; overdue and recurrence add emphasis on top of it.
-        var (foreground, background) = row.Severity switch
-        {
-            NonConformitySeverity.Critical => (UiTheme.Critical, UiTheme.CriticalBackground),
-            NonConformitySeverity.Major => (UiTheme.Abnormal, UiTheme.AbnormalBackground),
-            _ => (UiTheme.TextPrimary, UiTheme.SurfaceRaised)
-        };
-
-        e.CellStyle!.ForeColor = foreground;
-        e.CellStyle.BackColor = background;
-
+        // Severity and status are pills; a closed file is muted, an overdue one bold, and its due
+        // date in the critical ink.
         if (row.Status == NonConformityStatus.Closed)
         {
-            e.CellStyle.ForeColor = UiTheme.TextMuted;
-            e.CellStyle.BackColor = UiTheme.SurfaceRaised;
+            e.CellStyle!.ForeColor = UiTheme.TextMuted;
         }
         else if (row.IsOverdue)
         {
-            e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
+            e.CellStyle!.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
+            if (_register.Columns[e.ColumnIndex].Name == "due") e.CellStyle.ForeColor = UiTheme.Critical;
         }
     }
 
@@ -425,8 +373,10 @@ public sealed class NonConformityView : LocalizedView
 
         var overdue = _rows.Count(r => r.IsOverdue);
 
-        _registerHeading.Text = $"{T("NonConformity.Plural")} — {_rows.Count}" +
-                                (overdue > 0 ? $" · {overdue} {T("Order.Overdue").ToLowerInvariant()}" : string.Empty);
+        _registerHeading.Text = T("NonConformity.Plural");
+        _count.Text = overdue > 0
+            ? Localizer.Format("QualityHr.Nc.CountOverdue", _rows.Count, overdue)
+            : Localizer.Format("QualityHr.Nc.Count", _rows.Count);
 
         if (_register.Rows.Count > 0) _register.SelectFirstRow();
         else ClearDetail();
@@ -440,28 +390,7 @@ public sealed class NonConformityView : LocalizedView
             return;
         }
 
-        var lines = new List<string>
-        {
-            row.Description.For(Localizer.CurrentLanguage)
-        };
-
-        var facts = new List<string>
-        {
-            $"{T("NonConformity.DetectionSource")} : {T($"DetectionSource.{row.DetectionSource}")}",
-            $"{T("NonConformity.DetectedBy")} : {row.DetectedByName}"
-        };
-
-        if (row.DaysOpen is { } days) facts.Add($"{T("NonConformity.DaysOpen")} : {days}");
-        if (row.IsRecurrence) facts.Add(T("NonConformity.Recurrence"));
-
-        if (row.AffectedReleasedResults)
-            facts.Add($"⚠ {T("NonConformity.AffectedResults")}" +
-                      (row.AffectedPatientCount is { } count ? $" : {count}" : string.Empty));
-
-        lines.Add(string.Join("   ·   ", facts));
-
-        _detail.Text = string.Join(Environment.NewLine, lines);
-        _detail.ForeColor = row.AffectedReleasedResults ? UiTheme.Critical : UiTheme.TextSecondary;
+        ShowFile(row);
 
         _detailHeading.Text = $"{row.Reference} — {T($"NcStatus.{row.Status}")}";
 
@@ -501,11 +430,60 @@ public sealed class NonConformityView : LocalizedView
         }
     }
 
+    /// <summary>
+    /// The selected file in the aside: its reference and status, then how bad, where it came from,
+    /// who found it, how long it has been open, and whether it reached a patient.
+    /// </summary>
+    private void ShowFile(NonConformityRow row)
+    {
+        var reference = row.Reference
+                        + (row.IsRecurrence ? " ↻" : string.Empty)
+                        + (row.AffectedReleasedResults ? " ⚠" : string.Empty);
+
+        var facts = new List<(string, string, bool)>
+        {
+            (T("NonConformity.DetectionSource"), T($"DetectionSource.{row.DetectionSource}"), false),
+            (T("NonConformity.DetectedBy"), row.DetectedByName ?? string.Empty, false),
+            (T("NonConformity.DetectedAt"), row.DetectedAt.ToString("dd/MM/yyyy"), true),
+            (T("NonConformity.AssignedTo"), row.AssignedToName ?? string.Empty, false),
+            (T("NonConformity.DueDate"), row.DueDate?.ToString("dd/MM/yyyy") ?? string.Empty, true),
+            (T("NonConformity.DaysOpen"), row.DaysOpen?.ToString() ?? string.Empty, true)
+        };
+
+        if (row.IsRecurrence) facts.Add((T("NonConformity.Recurrence"), "↻", false));
+
+        if (row.AffectedReleasedResults)
+            facts.Add(($"⚠ {T("NonConformity.AffectedResults")}", row.AffectedPatientCount?.ToString() ?? "?", true));
+
+        _aside.Show(reference,
+                    $"{T($"NcSeverity.{row.Severity}")} · {T($"NcCategory.{row.Category}")}",
+                    (T($"NcStatus.{row.Status}"), StatusTone(row.Status)),
+                    facts,
+                    row.Description.For(Localizer.CurrentLanguage),
+                    row.AffectedReleasedResults ? UiTheme.Critical : null);
+    }
+
+    private static (Color Back, Color Fore) StatusTone(NonConformityStatus status) => status switch
+    {
+        NonConformityStatus.Open => QhTone.Wait,
+        NonConformityStatus.InProgress => QhTone.Info,
+        NonConformityStatus.AwaitingVerification => QhTone.Warn,
+        NonConformityStatus.Closed => QhTone.Ok,
+        _ => QhTone.Muted
+    };
+
+    private static (Color Back, Color Fore) SeverityTone(NonConformitySeverity severity) => severity switch
+    {
+        NonConformitySeverity.Critical => QhTone.Crit,
+        NonConformitySeverity.Major => QhTone.Warn,
+        _ => QhTone.Wait
+    };
+
     private void ClearDetail()
     {
         _currentActions = [];
         _actions.Rows.Clear();
-        _detail.Text = string.Empty;
+        _aside.Clear(T("App.NoData"));
         _detailHeading.Text = T("App.NoData");
         SetDetailEnabled(false);
     }
@@ -928,6 +906,8 @@ internal sealed class NonConformityDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+
+        QhDialog.Dress(this, _localizer, "QualityHr.Hint.NonConformity");
     }
 
     private void Accept()
@@ -1029,6 +1009,8 @@ internal sealed class CorrectiveActionDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.CorrectiveAction");
     }
 
     private void Accept()
@@ -1147,5 +1129,7 @@ internal sealed class NonConformityAnalysisDialog : Form
 
         AcceptButton = ok;
         CancelButton = cancel;
+
+        QhDialog.Dress(this, localizer, "QualityHr.Hint.NcAnalysis");
     }
 }
