@@ -147,6 +147,7 @@ public sealed class Cycle3dWorkflowDatabaseTests(Cycle3dScratchDatabase database
         services.AddIsolatedQueries<IOrderQueries, OrderQueries>();
         services.AddIsolatedQueries<ISampleQueries, SampleQueries>();
         services.AddIsolatedQueries<ISubcontractQueries, SubcontractQueries>();
+        services.AddIsolatedQueries<IRecollectionQueries, RecollectionQueries>();
         return services.BuildServiceProvider();
     }
 
@@ -489,5 +490,53 @@ public sealed class Cycle3dWorkflowDatabaseTests(Cycle3dScratchDatabase database
             .AmendedParameterCodesCsv.Should().Contain(lab.Glucose.Parameters.Single().Code);
         (await context.TestResults.AsNoTracking().SingleAsync(r => r.Id == resultId))
             .NumericValue.Should().Be(6m);
+    }
+
+    // ---- 4. A refused tube after the send-out, and a refused replacement ------------------------
+
+    [SqlServerFact]
+    public async Task E_ATubeRefusedAfterItsSendOut_GivesANewActToSend_AndARefusedReplacementIsRecalledInItsTurn()
+    {
+        var lab = await LabAsync();
+        using var provider = Services(OperatorOf(lab));
+
+        var order = await RegisterAsync(provider, lab.Patient, lab.Vitamin);
+        var tube = order.Labels.Single();
+        await DrawAndReceiveAsync(provider, tube.SampleId);
+
+        var first = (await On<SubcontractingService, Result<IReadOnlyList<SubcontractRow>>>(provider, s => s.GetWorklistAsync()))
+            .Value.Single(r => r.LabOrderId == order.OrderId);
+        var slip = (await On<SubcontractingService, Result<IReadOnlyList<SubcontractDispatch>>>(provider,
+            s => s.DispatchAsync([first.ItemId], null))).Value.Single();
+
+        // The partner calls: the tube arrived broken. Refused, a new draw requested.
+        var refused = await On<SampleWorkflowService, Result<ReceptionOutcome>>(provider, s => s.RejectAsync(
+            [new RejectSampleRequest(tube.SampleId, SampleRejectionReason.ContainerDamagedOrLeaked, "Cassé chez le partenaire", true)]));
+        var replacement = refused.Value.ReplacementLabels.Should().ContainSingle().Subject;
+
+        var worklist = (await On<SubcontractingService, Result<IReadOnlyList<SubcontractRow>>>(provider, s => s.GetWorklistAsync()))
+            .Value.Where(r => r.LabOrderId == order.OrderId).ToList();
+        worklist.Should().NotContain(r => r.ItemId == first.ItemId, "the act sent is cancelled with its tube");
+
+        // The slip as sent can still be printed.
+        (await On<SubcontractingService, Result<SubcontractSlip>>(provider, s => s.GetSlipAsync(slip.Number)))
+            .IsSuccess.Should().BeTrue();
+
+        // The replacement is drawn, received, and its act is to send again, to the same partner.
+        await DrawAndReceiveAsync(provider, replacement.SampleId);
+        var again = (await On<SubcontractingService, Result<IReadOnlyList<SubcontractRow>>>(provider, s => s.GetWorklistAsync()))
+            .Value.Should().ContainSingle(r => r.LabOrderId == order.OrderId).Subject;
+        again.Stage.Should().Be(SubcontractStage.ToSend);
+        again.PartnerSiteId.Should().Be(lab.Partner.Id);
+        again.Barcode.Should().Be(replacement.Barcode);
+
+        // That one is refused in its turn: the recall list shows the newest tube only.
+        var second = await On<SampleWorkflowService, Result<ReceptionOutcome>>(provider, s => s.RejectAsync(
+            [new RejectSampleRequest(replacement.SampleId, SampleRejectionReason.Haemolysed, null, true)]));
+        var third = second.Value.ReplacementLabels.Should().ContainSingle().Subject;
+
+        var recall = (await On<RecollectionService, Result<IReadOnlyList<RecollectionRow>>>(provider, s => s.GetPendingAsync()))
+            .Value.Where(r => r.LabOrderId == order.OrderId).ToList();
+        recall.Should().ContainSingle().Which.ReplacementSampleId.Should().Be(third.SampleId);
     }
 }
