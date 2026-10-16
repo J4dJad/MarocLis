@@ -1435,6 +1435,8 @@ internal sealed class PaymentDialog : Form
         _referenceLabel.Text = _localizer["Payment.Reference"];
         _bankLabel.Text = _localizer["Payment.Bank"];
         _maturityLabel.Text = _localizer["Payment.Maturity"];
+
+        DialogFrame.Apply(this, _localizer["Finance.Dialog.Payment"], [], cancel, ok);
     }
 
     private PaymentMethod SelectedMethod =>

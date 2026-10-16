@@ -689,7 +689,10 @@ internal static class DialogFrame
             var contentBottom = content.Count == 0 ? headerBottom : content.Max(c => c.Bottom);
             var footerTop = contentBottom + 16;
 
+            // Anchored controls would stretch or slide with the new height: keep where they were put.
+            var placed = form.Controls.Cast<Control>().ToDictionary(c => c, c => c.Bounds);
             form.ClientSize = new Size(width, footerTop + FooterHeight);
+            foreach (var (control, bounds) in placed) control.Bounds = bounds;
             Place(width, footerTop + (FooterHeight - FinanceUi.ControlHeight) / 2, start, cancel, primary);
 
             // The footer band, drawn behind the buttons: they stay children of the form.
@@ -711,6 +714,10 @@ internal static class DialogFrame
 
         form.ResumeLayout(performLayout: true);
     }
+
+    /// <summary>For an editor whose Save and Cancel are its AcceptButton and CancelButton.</summary>
+    public static void Apply(Form form, string sentence) =>
+        Apply(form, sentence, [], form.CancelButton as Button, form.AcceptButton as Button);
 
     private static void SizeButton(Button button)
     {
