@@ -286,6 +286,15 @@ public sealed class PurchaseOrderService(
         if (existing is { IsAwaitingRelease: false } && assessment.Value.NeedsNonConformity)
             return Result.Failure(Error.Conflict("Lot_ReceiveNonConformingIntoReleased", lotNumber));
 
+        // Checked before the order counts the quantity: refused afterwards (another expiry date
+        // keyed for the same lot), the order kept it in the screen's context, and the next
+        // reception saved it, the line received twice for one delivery.
+        if (existing is not null)
+        {
+            var joinable = existing.CanReceiveMore(request.Quantity, request.ExpiryDate);
+            if (joinable.IsFailure) return joinable;
+        }
+
         var received = order.ReceiveLine(line.Id, request.Quantity);
         if (received.IsFailure) return received;
         line.LastReceivedOn = clock.Today;

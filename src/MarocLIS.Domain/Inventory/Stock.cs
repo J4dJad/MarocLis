@@ -623,12 +623,8 @@ public sealed class ReagentLot : Entity, IAuditable
     /// </summary>
     public Result ReceiveMore(decimal quantity, DateOnly expiryDate, decimal? unitPriceMad)
     {
-        if (quantity <= 0m)
-            return Result.Failure(Error.Validation("Lot_QuantityMustBePositive"));
-        if (IsRejected || IsRecalled)
-            return Result.Failure(Error.Conflict("Lot_ReceiveIntoRefusedLot", LotNumber));
-        if (expiryDate != ExpiryDate)
-            return Result.Failure(Error.Validation("Lot_ReceiveExpiryDiffers", LotNumber, ExpiryDate));
+        var allowed = CanReceiveMore(quantity, expiryDate);
+        if (allowed.IsFailure) return allowed;
 
         if (unitPriceMad is { } price)
         {
@@ -639,6 +635,21 @@ public sealed class ReagentLot : Entity, IAuditable
 
         QuantityReceived += quantity;
         QuantityRemaining += quantity;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Whether <see cref="ReceiveMore"/> would take the delivery, without changing anything: a
+    /// reception checks it before it counts the quantity against the order.
+    /// </summary>
+    public Result CanReceiveMore(decimal quantity, DateOnly expiryDate)
+    {
+        if (quantity <= 0m)
+            return Result.Failure(Error.Validation("Lot_QuantityMustBePositive"));
+        if (IsRejected || IsRecalled)
+            return Result.Failure(Error.Conflict("Lot_ReceiveIntoRefusedLot", LotNumber));
+        if (expiryDate != ExpiryDate)
+            return Result.Failure(Error.Validation("Lot_ReceiveExpiryDiffers", LotNumber, ExpiryDate));
         return Result.Success();
     }
 
