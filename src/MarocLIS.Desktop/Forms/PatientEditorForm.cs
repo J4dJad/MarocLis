@@ -350,7 +350,7 @@ public sealed class PatientEditorForm : LocalizedForm
         _phoneNotice.Font = UiTheme.Small;
         _phoneNotice.ForeColor = UiTheme.TextSecondary;
         _phoneNotice.AutoSize = false;
-        _phoneNotice.Bounds = new Rectangle(20, 176, 700, 20);
+        _phoneNotice.Bounds = new Rectangle(20, 176, 700, 24);
         t.Controls.Add(_phoneNotice);
 
         Field(t, "Patient.PreferredLanguage", 206, 20);
@@ -596,7 +596,8 @@ public sealed class PatientEditorForm : LocalizedForm
     /// <summary>
     /// Widens a tab's two action buttons to their captions, the second one after the first: at a
     /// fixed 220 and 200, « Recueillir un consentement » and « Retirer le consentement » lost their
-    /// last word.
+    /// last word. The floors cover the captions in the bold button font, which the caption alone
+    /// under-measures.
     /// </summary>
     private static void FitPair(Button first, Button second)
     {
@@ -604,9 +605,9 @@ public sealed class PatientEditorForm : LocalizedForm
             TextRenderer.MeasureText(b.Text, b.Font).Width + b.Padding.Horizontal + 24
             + (b.Image is { } image ? image.Width + 8 : 0);
 
-        first.Width = Math.Max(220, Need(first));
+        first.Width = Math.Max(250, Need(first));
         second.Left = first.Right + 10;
-        second.Width = Math.Max(200, Need(second));
+        second.Width = Math.Max(230, Need(second));
     }
 
     private void OnAlertFormatting(object? sender, DataGridViewCellFormattingEventArgs e)

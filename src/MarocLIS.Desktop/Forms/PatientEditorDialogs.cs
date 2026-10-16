@@ -801,7 +801,7 @@ internal sealed class PatientAlertDialog : Form
         _notice.Font = UiTheme.Small;
         _notice.ForeColor = UiTheme.TextSecondary;
         _notice.AutoSize = false;
-        _notice.Bounds = new Rectangle(240, 230, 240, 44);
+        _notice.Bounds = new Rectangle(240, 228, 240, 52);
 
         _ok = UiTheme.PrimaryButton(string.Empty);
         _ok.Bounds = new Rectangle(20, 284, 230, UiTheme.ButtonHeight);
