@@ -1,3 +1,5 @@
+using MarocLIS.Desktop.Infrastructure;
+
 namespace MarocLIS.Desktop.Views;
 
 /// <summary>

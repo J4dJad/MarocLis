@@ -375,11 +375,11 @@ public sealed class SupplierInvoiceView : LocalizedView
         RenderHeading();
 
         if (keep is null && _grid.Rows.Count > 0) _grid.CurrentCell = _grid.Rows[0].Cells[0];
-        if (_grid.Rows.Count == 0)
-        {
-            _detail = null;
-            RenderDetail();
-        }
+
+        // The grid makes its first row current as it is added, before the row carries its
+        // invoice: that selection loaded nothing, and setting the same row current again raises
+        // no event. The detail of the invoice now shown is loaded here, once the rows are filled.
+        _ = _selectionLoads.RunAsync(() => LoadDetailAsync());
     }
 
     private void RenderHeading()
