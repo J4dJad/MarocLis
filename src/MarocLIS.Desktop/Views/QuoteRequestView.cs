@@ -257,6 +257,8 @@ public sealed class QuoteRequestView : LocalizedView
             Render(keep);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading quotation requests failed.");
@@ -323,6 +325,8 @@ public sealed class QuoteRequestView : LocalizedView
             _detail = result.Value;
             RenderDetail();
         }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading a quotation request failed.");

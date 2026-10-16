@@ -312,6 +312,8 @@ public sealed class PurchaseOrderView : LocalizedView
             Render(keep);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading purchase orders failed.");
@@ -395,6 +397,8 @@ public sealed class PurchaseOrderView : LocalizedView
             _lineRows = result.Value;
             RenderLines();
         }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading purchase order lines failed.");

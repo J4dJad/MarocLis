@@ -286,6 +286,8 @@ public sealed class QualityDocumentsView : LocalizedView
             Render(keep);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the document register failed.");
@@ -371,6 +373,8 @@ public sealed class QualityDocumentsView : LocalizedView
             _versionRows = result.Value;
             RenderVersions();
         }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading document versions failed.");

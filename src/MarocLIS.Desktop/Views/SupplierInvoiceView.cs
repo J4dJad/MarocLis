@@ -342,6 +342,8 @@ public sealed class SupplierInvoiceView : LocalizedView
             Render(keep);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading supplier invoices failed.");
@@ -425,6 +427,8 @@ public sealed class SupplierInvoiceView : LocalizedView
             _detail = result.Value;
             RenderDetail();
         }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading a supplier invoice failed.");

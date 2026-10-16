@@ -477,6 +477,8 @@ public sealed class InventoryView : LocalizedView
             RenderStock();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading stock failed.");
@@ -551,6 +553,8 @@ public sealed class InventoryView : LocalizedView
             RenderLots();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading lots failed.");

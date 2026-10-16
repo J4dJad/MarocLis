@@ -244,6 +244,8 @@ public sealed class InstrumentContractView : LocalizedView
             Render(keep);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading instrument contracts failed.");
@@ -377,6 +379,8 @@ public sealed class InstrumentContractView : LocalizedView
             _interventionRows = result.Value;
             RenderInterventions();
         }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading contract interventions failed.");
