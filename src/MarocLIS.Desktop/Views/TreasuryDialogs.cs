@@ -146,6 +146,11 @@ internal sealed class BankAccountEditor : MasterDataEditor
 
         Buttons(272, 560);
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.BankAccount"]);
+
+        // Mirrored in Arabic like the list it is opened from: it stayed left to right, its labels
+        // on the left of their fields and its buttons in the wrong corner.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
+        _opening.TextAlign = HorizontalAlignment.Right;   // an amount stays aligned on its units, as typed
     }
 
     protected override void Accept()
@@ -579,9 +584,11 @@ internal sealed class ForecastItemEditor : MasterDataEditor
     {
         _id = row?.Id;
 
-        _label = TextField("Treasury.Label", 20, 14, 330, row?.Label);
+        _label = TextField("Treasury.Label", 20, 14, 300, row?.Label);
         _label.MaxLength = TreasuryForecastItem.LabelMaxLength;
-        _amount = TextField("Treasury.SignedAmount", 370, 14, 170,
+        // 200 px: the label above it (« Montant (DH, négatif = sortie) ») runs longer in Arabic and
+        // spilled past the dialog's edge once mirrored.
+        _amount = TextField("Treasury.SignedAmount", 340, 14, 200,
                             (row?.AmountMad ?? 0m).ToString("0.00", CultureInfo.InvariantCulture),
                             latin: true, mono: true, right: true);
         Numeric(EditorValues.AmountMaxLength, _amount);
@@ -604,6 +611,11 @@ internal sealed class ForecastItemEditor : MasterDataEditor
 
         Buttons(242, 560);
         FinanceDialogFrame.Apply(this, localizer["Finance.Dialog.ForecastItem"]);
+
+        // Mirrored in Arabic like the list it is opened from: it stayed left to right, its labels
+        // on the left of their fields and its buttons in the wrong corner.
+        RtlLayout.Apply(this, localizer.CurrentLanguage);
+        _amount.TextAlign = HorizontalAlignment.Right;   // an amount stays aligned on its units, as typed
     }
 
     protected override void Accept()
