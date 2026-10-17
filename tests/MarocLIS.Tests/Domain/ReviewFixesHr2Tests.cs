@@ -33,7 +33,7 @@ public sealed class ReviewFixesHr2Tests
                                               InMemoryRepository<LeaveLedgerEntry> ledger, FakeHrDocumentQueries? hr = null) =>
         new(Repo(employee), new InMemoryRepository<CredentialFile>(), settlements, ledger, new InMemoryRepository<LeaveRequest>(), null!,
             hr ?? new FakeHrDocumentQueries(), null!, new FakeUnitOfWork(), new AllowAll(),
-            new FakeUser(Permissions.HumanResources.Manage), new FixedClock());
+            new FakeUser(Permissions.HumanResources.Manage), new FixedClock(), new NoLinkedAccounts());
 
     // ---- H1 ------------------------------------------------------------------------------------
 
@@ -428,4 +428,14 @@ public sealed class ReviewFixesHr2DatabaseTests : IDisposable
         public bool IsPrescriberScoped => false;
         public string Workstation => "TEST";
     }
+}
+
+/// <summary>No LIS account linked to the personnel files of these in-memory tests.</summary>
+internal sealed class NoLinkedAccounts : IDepartedAccounts
+{
+    public Task<DepartedAccountOutcome?> ApplyExitAsync(Guid employeeId, CancellationToken ct = default) =>
+        Task.FromResult<DepartedAccountOutcome?>(null);
+
+    public Task<IReadOnlyList<string>> DeactivateDueAsync(Guid? userId = null, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
 }

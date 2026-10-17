@@ -686,8 +686,10 @@ internal sealed class EmployeeExitDialog : MasterDataEditor
     internal string? Comment => Blank(_comment);
 
     internal EmployeeExitDialog(ILocalizer localizer, IUserDialogs dialogs, string employee,
-                                (DateOnly Date, ExitReason Reason, string? Comment)? current = null)
-        : base(localizer, dialogs, current is null ? "Personnel.RecordExit" : "Personnel.CorrectExit", employee, 520, 250)
+                                (DateOnly Date, ExitReason Reason, string? Comment)? current = null,
+                                string? linkedUserName = null)
+        : base(localizer, dialogs, current is null ? "Personnel.RecordExit" : "Personnel.CorrectExit", employee, 520,
+               linkedUserName is null ? 250 : 300)
     {
         Label("Personnel.ExitDate", 20, 10);
         _date.Bounds = new Rectangle(20, 28, 180, UiTheme.InputHeight);
@@ -700,7 +702,13 @@ internal sealed class EmployeeExitDialog : MasterDataEditor
         _comment.MaxLength = 500;
         Notice(20, 116, 480, 40, "Personnel.ExitNoticeAfterLastDay", UiTheme.Abnormal);
 
-        Buttons(200, 520);
+        // The linked LIS account stops with the departure (owner decision, cycle 5): said before
+        // the exit is saved, with the account's name.
+        if (linkedUserName is not null)
+            Notice(20, 160, 480, 40, "Personnel.ExitDeactivatesAccount", UiTheme.Abnormal).Text =
+                Localizer.Format("Personnel.ExitDeactivatesAccount", linkedUserName);
+
+        Buttons(linkedUserName is null ? 200 : 250, 520);
         QhDialog.Dress(this, localizer, null);
     }
 

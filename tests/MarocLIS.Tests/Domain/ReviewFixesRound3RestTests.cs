@@ -37,7 +37,7 @@ public sealed class ReviewFixesRound3RestTests
                                               InMemoryRepository<LeaveLedgerEntry> ledger) =>
         new(Repo(employee), new InMemoryRepository<CredentialFile>(), settlements, ledger, new InMemoryRepository<LeaveRequest>(), null!,
             new FakeHrDocumentQueries(), null!, new FakeUnitOfWork(), new AllowAll(),
-            new FakeUser(Permissions.HumanResources.Manage), new FixedClock());
+            new FakeUser(Permissions.HumanResources.Manage), new FixedClock(), new NoLinkedAccounts());
 
     private static (PayrollPeriod Period, Payslip Slip) MonthWithIndemnity(Employee e, int month, decimal indemnity,
                                                                          decimal monthDays = 0m, decimal contractDays = 0m)

@@ -264,6 +264,34 @@ public sealed class LeaveService(
         return Result.Success();
     }
 
+    /// <summary>
+    /// « Justificatif reçu »: HR ticks the supporting document of a waiting request that was entered
+    /// without it (a sick leave keyed before the certificate arrived), so it can be approved without
+    /// being cancelled and entered again. Kept in the audit trail. HR does not tick its own.
+    /// </summary>
+    public async Task<Result> RecordJustificationReceivedAsync(Guid requestId, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.HumanResources.Manage);
+        if (permitted.IsFailure) return permitted;
+
+        var request = await requests.GetByIdAsync(requestId, ct);
+        if (request is null) return Result.Failure(Error.NotFound("Leave_NotFound"));
+
+        if (await OwnEmployeeIdAsync(ct) == request.EmployeeId)
+            return Result.Failure(Error.Forbidden("Leave_CannotDecideOwn"));
+
+        var received = request.RecordJustificationReceived();
+        if (received.IsFailure) return received;
+
+        var employee = await employees.GetByIdAsync(request.EmployeeId, ct);
+
+        requests.Update(request);
+        unitOfWork.AuditReason = $"Justificatif reçu pour le congé {request.Type} de {employee?.Number} du " +
+                                 $"{request.StartDate:dd/MM/yyyy} au {request.EndDate:dd/MM/yyyy}";
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
     public async Task<Result> RefuseAsync(Guid requestId, string comment, CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.HumanResources.ApproveLeave);

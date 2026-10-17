@@ -96,6 +96,23 @@ public sealed class LeaveRequest : AuditableAggregateRoot
         return Result.Success();
     }
 
+    /// <summary>
+    /// The supporting document (medical certificate, civil-status record…) handed to HR after the
+    /// request was entered: ticked by HR on the waiting request, which can then be approved. Only
+    /// for a type that needs one, and only while the request waits: an approved one had it already.
+    /// </summary>
+    public Result RecordJustificationReceived()
+    {
+        if (Status != LeaveStatus.Pending) return Result.Failure(Error.Conflict("Leave_NotPending"));
+        if (!LeaveRules.RequiresJustification(Type))
+            return Result.Failure(Error.Validation("Leave_JustificationNotRequired"));
+        if (JustificationProvided)
+            return Result.Failure(Error.Conflict("Leave_JustificationAlreadyReceived"));
+
+        JustificationProvided = true;
+        return Result.Success();
+    }
+
     /// <summary>A refusal always says why: the employee reads it.</summary>
     public Result Refuse(DateTimeOffset now, Guid byUserId, string comment)
     {

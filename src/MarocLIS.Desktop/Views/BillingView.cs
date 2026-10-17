@@ -349,7 +349,10 @@ public sealed class BillingView : LocalizedView
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Billing.CreateInvoice, _issue);
-        PermissionGate.Require(Permissions.Billing.RecordPayment, _pay, _bounced, _deposit);
+        PermissionGate.Require(Permissions.Billing.RecordPayment, _pay, _deposit);
+        // Declaring a cheque unpaid is the accounts office's (Comptabilité, Administrateur): the
+        // counter sees the entry greyed, with the reason on hover.
+        PermissionGate.Require(Permissions.Billing.DeclareUnpaid, _bounced);
         PermissionGate.Require(Permissions.Billing.CreditNote, _refund, _refundDeposit);
         PermissionGate.Require(Permissions.Billing.ExportAccounting, _claimOutcome, _submitClaim,
                                _payerSettlement);
@@ -453,6 +456,9 @@ public sealed class BillingView : LocalizedView
         _pay.Text = T("Payment.Title");
         _refund.Text = T("Payment.Refund");
         _bounced.Text = T("Payment.MarkBounced");
+        _bounced.DisabledHint = PermissionGate.Allows(Permissions.Billing.DeclareUnpaid)
+            ? null
+            : T("Payment.BounceReservedToAccounting");
         _claimOutcome.Text = T("Billing.RecordClaimOutcome");
         _deposit.Text = T("Deposit.Take");
         _refundDeposit.Text = T("Deposit.Refund");

@@ -308,6 +308,8 @@
   "Leave_AdjustmentReasonRequired": "Le motif de l'ajustement est obligatoire.",
   "Leave_NoEmployees": "Aucun salarié actif : créez d'abord les dossiers dans « Dossiers du personnel ».",
   "Leave_SubmittedByOther": "Cette demande a été saisie par la RH : seule la RH ou un valideur des congés peut l'annuler.",
+  "Leave_JustificationNotRequired": "Ce type de congé ne demande pas de justificatif.",
+  "Leave_JustificationAlreadyReceived": "Le justificatif de cette demande est déjà enregistré.",
   "Habilitation_EmployeeExited": "Ce salarié est sorti : aucune habilitation ne peut lui être accordée.",
   "Habilitation_SubjectRequired": "Choisissez l'automate ou la discipline concernés.",
   "Habilitation_ReviewBeforeGrant": "La réévaluation doit être postérieure à la décision.",
@@ -2140,6 +2142,8 @@
   },
 
   "Leave": {
+    "ProofReceivedPrompt": "Confirmer la réception du justificatif de {0} de {1} du {2} au {3} ? La demande pourra ensuite être validée.",
+    "ProofReceived": "Justificatif reçu",
     "AdjustNotice": "Reliquat de l'année précédente, correction d'une erreur, jours accordés par accord d'entreprise… Le mouvement est tracé dans l'audit avec son motif.",
     "AdjustReason": "Motif",
     "AdjustDays": "Jours (+ ou −)",
@@ -2337,6 +2341,11 @@
   },
 
   "Personnel": {
+    "AccountStillInactive": "Le compte LIS « {0} » est désactivé. Un administrateur peut le réactiver dans Administration › Utilisateurs.",
+    "AccountKeptLastAdministrator": "Le compte LIS « {0} » reste actif : c'est le dernier administrateur. Nommez un autre administrateur, puis désactivez-le dans Administration › Utilisateurs.",
+    "AccountDeactivationScheduled": "Sortie enregistrée. Le compte LIS « {0} » sera désactivé le {1}.",
+    "AccountDeactivated": "Sortie enregistrée. Le compte LIS « {0} » est désactivé.",
+    "ExitDeactivatesAccount": "Le compte LIS « {0} » lié à ce dossier sera désactivé à la date de sortie (dès l'enregistrement si cette date est aujourd'hui ou passée).",
     "ExitNoticeAfterLastDay": "La date de sortie est le dernier jour travaillé : les habilitations prennent fin le lendemain. Le dossier reste consultable.",
     "RehireNotice": "Les dates du contrat précédent sont conservées pour la paie de son dernier mois. Les congés payés par le solde de tout compte sont débités du compte.",
     "RehireDate": "Date de réintégration",
@@ -3654,6 +3663,7 @@
   },
 
   "Payment": {
+    "BounceReservedToAccounting": "Réservé à la comptabilité : déclarer un chèque ou un effet impayé demande le droit billing.payment.bounce (Comptabilité, Administrateur).",
     "PatientShareDue": "Reste à payer par le patient",
     "Title": "Règlement",
     "Plural": "Règlements",
@@ -5444,6 +5454,7 @@
   "CashSession_ReconciliationCommentRequired": "La caisse présente un écart de {0} DH : un commentaire est obligatoire pour la viser.",
   "CashSession_WithdrawalExceedsCash": "Le prélèvement dépasse les espèces attendues en caisse ({0} DH).",
   "CashSession_RefundExceedsCash": "Le remboursement en espèces dépasse les espèces attendues en caisse ({0} DH).",
+  "CashSession_CloserIsNotOperator": "Seul le caissier qui a ouvert cette caisse peut la clôturer avec son comptage.",
 
   "Qc_RejectionRequiresCorrectiveAction": "Un contrôle rejeté exige la description de l'action corrective entreprise.",
   "Qc_NotRejected": "Ce contrôle n'est pas rejeté.",

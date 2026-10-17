@@ -73,7 +73,7 @@ public sealed class Cycle4ReceptionBillingDatabaseTests(OrderEntryScratchDatabas
         Permissions.Billing.View, Permissions.Billing.CreateInvoice, Permissions.Billing.CreditNote,
         Permissions.Billing.RecordPayment, Permissions.Billing.ApplyDiscount,
         Permissions.Billing.CloseCashSession, Permissions.Billing.ExportAccounting,
-        Permissions.Billing.ReconcileCashSession
+        Permissions.Billing.ReconcileCashSession, Permissions.Billing.DeclareUnpaid
     ];
 
     private static string Unique(string prefix) => prefix + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
@@ -268,6 +268,7 @@ public sealed class Cycle4ReceptionBillingDatabaseTests(OrderEntryScratchDatabas
     {
         var lab = await LabAsync();
         using var reception = Services(lab.SiteId, Receptionist);
+        using var accounts = Services(lab.SiteId, Accountant);
 
         var order = await RegisterAsync(reception, lab.SelfPaying.Id, [lab.Nfs.Id, lab.Creat.Id]);
         (await On<BillingService, Result<Guid>>(reception, s => s.OpenCashSessionAsync(0m))).IsSuccess.Should().BeTrue();
@@ -278,14 +279,17 @@ public sealed class Cycle4ReceptionBillingDatabaseTests(OrderEntryScratchDatabas
         (await PayAsync(reception, invoiceId, 50m, PaymentMethod.Cheque, "CHQ-0001")).IsSuccess.Should().BeTrue();
         (await TillAsync(reception)).ChequeReceipts.Should().Be(50m);
 
-        // Returned while the shift is open: off its cheque line, and owed again. A cashier may record it.
+        // Returned while the shift is open: off its cheque line, and owed again. Declaring it is the
+        // accounts office's (owner decision, cycle 5): the counter is refused.
         var cheque = (await On<BillingService, Result<IReadOnlyList<PaymentRow>>>(reception, s => s.GetPaymentsAsync(invoiceId))).Value.Single();
         cheque.CanBounce.Should().BeTrue();
-        (await On<BillingService, Result>(reception, s => s.MarkPaymentBouncedAsync(invoiceId, cheque.PaymentId, "  ")))
-            .FirstError.ResourceKey.Should().Be("Payment_BounceReasonRequired");
         (await On<BillingService, Result>(reception, s => s.MarkPaymentBouncedAsync(invoiceId, cheque.PaymentId, "Sans provision")))
+            .FirstError.ResourceKey.Should().Be("Message.PermissionDenied");
+        (await On<BillingService, Result>(accounts, s => s.MarkPaymentBouncedAsync(invoiceId, cheque.PaymentId, "  ")))
+            .FirstError.ResourceKey.Should().Be("Payment_BounceReasonRequired");
+        (await On<BillingService, Result>(accounts, s => s.MarkPaymentBouncedAsync(invoiceId, cheque.PaymentId, "Sans provision")))
             .IsSuccess.Should().BeTrue();
-        (await On<BillingService, Result>(reception, s => s.MarkPaymentBouncedAsync(invoiceId, cheque.PaymentId, "Encore")))
+        (await On<BillingService, Result>(accounts, s => s.MarkPaymentBouncedAsync(invoiceId, cheque.PaymentId, "Encore")))
             .IsFailure.Should().BeTrue();
         (await TillAsync(reception)).ChequeReceipts.Should().Be(0m);
         var invoice = await ReadInvoiceAsync(invoiceId);
@@ -299,7 +303,7 @@ public sealed class Cycle4ReceptionBillingDatabaseTests(OrderEntryScratchDatabas
 
         var second = (await On<BillingService, Result<IReadOnlyList<PaymentRow>>>(reception, s => s.GetPaymentsAsync(invoiceId)))
             .Value.Single(p => p.Status == PaymentStatus.Settled);
-        (await On<BillingService, Result>(reception, s => s.MarkPaymentBouncedAsync(invoiceId, second.PaymentId, "Compte clôturé")))
+        (await On<BillingService, Result>(accounts, s => s.MarkPaymentBouncedAsync(invoiceId, second.PaymentId, "Compte clôturé")))
             .IsSuccess.Should().BeTrue();
 
         await using var context = database.Context();

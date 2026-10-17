@@ -300,7 +300,7 @@ public sealed class Cycle1HrFlowDatabaseTests(Cycle1HrScratchDatabase database)
 
         // The departure, after the leave: the settlement proposes what is left on the account.
         var exit = new DateOnly(start.AddMonths(1).Year, start.AddMonths(1).Month, 1).AddDays(-1);
-        Ok(await On<PersonnelService, Result>(lab, s => s.RecordExitAsync(employeeId, exit, ExitReason.Resignation,
+        Ok(await On<PersonnelService, Result<DepartedAccountOutcome?>>(lab, s => s.RecordExitAsync(employeeId, exit, ExitReason.Resignation,
                                                                            "Démission, préavis effectué")));
         // The notice is worked with the habilitations: they end on the exit day, not before.
         Ok(await On<PersonnelService, Result<HabilitationMatrix>>(lab, s => s.GetMatrixAsync()))
@@ -360,17 +360,17 @@ public sealed class Cycle1HrFlowDatabaseTests(Cycle1HrScratchDatabase database)
         var leaveId = await ApprovedLeaveAsync(lab, employeeId, start, start.AddDays(4));
         var exit = start.AddDays(-3);
 
-        Refused(await On<PersonnelService, Result>(lab, s => s.RecordExitAsync(employeeId, exit, ExitReason.Resignation, null)),
+        Refused(await On<PersonnelService, Result<DepartedAccountOutcome?>>(lab, s => s.RecordExitAsync(employeeId, exit, ExitReason.Resignation, null)),
                 "Employee_LeaveAfterExit");
 
         // Moved to a date inside the leave, a correction is refused the same way.
-        Ok(await On<PersonnelService, Result>(lab, s => s.RecordExitAsync(employeeId, start.AddDays(10), ExitReason.Resignation, null)));
-        Refused(await On<PersonnelService, Result>(lab, s => s.CorrectExitAsync(employeeId, start.AddDays(2), ExitReason.Resignation, null)),
+        Ok(await On<PersonnelService, Result<DepartedAccountOutcome?>>(lab, s => s.RecordExitAsync(employeeId, start.AddDays(10), ExitReason.Resignation, null)));
+        Refused(await On<PersonnelService, Result<DepartedAccountOutcome?>>(lab, s => s.CorrectExitAsync(employeeId, start.AddDays(2), ExitReason.Resignation, null)),
                 "Employee_LeaveAfterExit");
-        Ok(await On<PersonnelService, Result>(lab, s => s.CancelExitAsync(employeeId, "Saisie à refaire")));
+        Ok(await On<PersonnelService, Result<DepartedAccountOutcome?>>(lab, s => s.CancelExitAsync(employeeId, "Saisie à refaire")));
 
         Ok(await On<LeaveService, Result>(lab, s => s.CancelAsync(leaveId, "Départ avant le congé")));
-        Ok(await On<PersonnelService, Result>(lab, s => s.RecordExitAsync(employeeId, exit, ExitReason.Resignation, null)));
+        Ok(await On<PersonnelService, Result<DepartedAccountOutcome?>>(lab, s => s.RecordExitAsync(employeeId, exit, ExitReason.Resignation, null)));
 
         var settlement = Ok(await On<SettlementService, Result<SettlementDetail>>(lab, s => s.GetAsync(employeeId)));
         settlement.Suggested.LeaveDays.Should().BeGreaterThanOrEqualTo(balance);

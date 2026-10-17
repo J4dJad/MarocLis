@@ -130,7 +130,7 @@ public sealed class ReviewFixesBilling2Tests
         summary.ExpectedClosingCash.Should().Be(session.ExpectedClosingCash);
 
         // Counting exactly what the screen pre-fills records no variance.
-        session.Close(Now.AddHours(8), Guid.NewGuid(), summary.ExpectedClosingCash, null)
+        session.Close(Now.AddHours(8), session.OperatorUserId, summary.ExpectedClosingCash, null)
             .IsSuccess.Should().BeTrue();
         session.Variance.Should().Be(0m);
     }

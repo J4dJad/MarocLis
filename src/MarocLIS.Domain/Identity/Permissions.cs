@@ -75,6 +75,13 @@ public static class Permissions
         public const string CreateInvoice = "billing.invoice.create";
         public const string CreditNote = "billing.credit_note";
         public const string RecordPayment = "billing.payment.record";
+
+        /// <summary>
+        /// Declaring a cheque or bill returned unpaid (« Déclarer impayé »): the receivable is owed
+        /// again and the bank line reversed, which is the accounts office's decision, not the
+        /// counter's. Taking the payment stays with <see cref="RecordPayment"/>.
+        /// </summary>
+        public const string DeclareUnpaid = "billing.payment.bounce";
         public const string ApplyDiscount = "billing.discount";
         public const string ManageTariffs = "billing.tariffs.manage";
         public const string CloseCashSession = "billing.cash.close";

@@ -28,6 +28,7 @@ public sealed class LeaveView : LocalizedView
     private readonly Button _approve = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _refuse = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _cancel = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _proofReceived = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _balances = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _holidays = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _detail = new();
@@ -94,7 +95,7 @@ public sealed class LeaveView : LocalizedView
         _grid.Dock = DockStyle.Fill;
         var body = new Panel { BackColor = UiTheme.SurfaceRaised, Margin = Padding.Empty };
         body.Controls.Add(_grid);
-        body.Controls.Add(new QhSelectionBar(_detail, _cancel, _refuse, _approve));
+        body.Controls.Add(new QhSelectionBar(_detail, _cancel, _proofReceived, _refuse, _approve));
 
         Controls.Add(QhPage.Frame(2, header, toolbar, QhPage.Card(body)));
     }
@@ -111,6 +112,7 @@ public sealed class LeaveView : LocalizedView
         _approve.Click += async (_, _) => await RunBusyAsync(ApproveAsync);
         _refuse.Click += async (_, _) => await RunBusyAsync(RefuseAsync);
         _cancel.Click += async (_, _) => await RunBusyAsync(CancelAsync);
+        _proofReceived.Click += async (_, _) => await RunBusyAsync(ProofReceivedAsync);
         _balances.Click += async (_, _) => await RunBusyAsync(BalancesAsync);
         _holidays.Click += async (_, _) => await RunBusyAsync(HolidaysAsync);
         _grid.SelectionChanged += (_, _) => ShowDetail();
@@ -118,6 +120,8 @@ public sealed class LeaveView : LocalizedView
         PermissionGate.Require([Permissions.HumanResources.RequestLeave, Permissions.HumanResources.Manage],
                                _new, _cancel);
         PermissionGate.Require(Permissions.HumanResources.ApproveLeave, _approve, _refuse);
+        // The certificate handed in after the request was keyed is ticked by HR.
+        PermissionGate.Require(Permissions.HumanResources.Manage, _proofReceived);
 
         // The status as a pill (waiting in amber, approved in green, refused or cancelled muted);
         // a closed request keeps its muted ink across the row.
@@ -155,6 +159,7 @@ public sealed class LeaveView : LocalizedView
         _approve.Text = T("Leave.Approve");
         _refuse.Text = T("Leave.Refuse");
         _cancel.Text = T("Leave.Cancel");
+        _proofReceived.Text = T("Leave.ProofReceived");
         _balances.Text = T("Leave.Balances");
         _holidays.Text = T("Leave.Holidays");
 
@@ -239,6 +244,8 @@ public sealed class LeaveView : LocalizedView
         var pending = row?.Status == LeaveStatus.Pending;
 
         _approve.Enabled = _refuse.Enabled = pending;
+        _proofReceived.Enabled = pending && row is { JustificationProvided: false }
+                                 && LeaveRules.RequiresJustification(row.Type);
         _cancel.Enabled = row is { IsLive: true } && (row.Status == LeaveStatus.Pending
                                                       || row.StartDate > DateOnly.FromDateTime(DateTime.Today));
 
@@ -301,6 +308,20 @@ public sealed class LeaveView : LocalizedView
 
         var done = await _leave.ApproveAsync(row.LeaveRequestId, null);
         if (done.IsFailure) { _dialogs.ShowFailure(done, _approve.Text); return; }
+        await ActivateAsync();
+    }
+
+    private async Task ProofReceivedAsync()
+    {
+        if (Current() is not { Status: LeaveStatus.Pending, JustificationProvided: false } row) return;
+
+        if (!_dialogs.Confirm(T("Leave.ProofReceivedPrompt", T($"LeaveType.{row.Type}"), row.EmployeeName,
+                                row.StartDate.ToString("dd/MM/yyyy"), row.EndDate.ToString("dd/MM/yyyy")),
+                              _proofReceived.Text))
+            return;
+
+        var done = await _leave.RecordJustificationReceivedAsync(row.LeaveRequestId);
+        if (done.IsFailure) { _dialogs.ShowFailure(done, _proofReceived.Text); return; }
         await ActivateAsync();
     }
 

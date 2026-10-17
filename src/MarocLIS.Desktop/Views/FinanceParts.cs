@@ -342,6 +342,7 @@ internal static class FinanceUi
         };
 
         menu.Font = UiTheme.Body;
+        menu.ShowItemToolTips = true;
 
         more.Click += (_, _) =>
         {
@@ -352,7 +353,8 @@ internal static class FinanceUi
                 var item = new ToolStripMenuItem(action.Text)
                 {
                     Enabled = action.Enabled,
-                    Image = IconFor(action.Text, localizer, action.Enabled)
+                    Image = IconFor(action.Text, localizer, action.Enabled),
+                    ToolTipText = action.Enabled ? null : action.DisabledHint
                 };
                 item.Click += (_, _) => action.Fire();
                 menu.Items.Add(item);
@@ -439,6 +441,12 @@ internal sealed class MenuAction : Button
     {
         Visible = false;
     }
+
+    /// <summary>
+    /// Why the entry is greyed when it is for good (no right to it): shown on hover over the menu
+    /// entry. Null when the entry is only off for the current selection.
+    /// </summary>
+    public string? DisabledHint { get; set; }
 
     /// <summary>Runs what a click on the button would, when the action is enabled.</summary>
     public void Fire()

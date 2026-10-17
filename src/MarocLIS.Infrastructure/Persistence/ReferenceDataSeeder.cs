@@ -683,6 +683,9 @@ internal static class RolePermissionSets
              Permissions.Billing.CreditNote, Permissions.Billing.RecordPayment,
              Permissions.Billing.ApplyDiscount, Permissions.Billing.ManageTariffs,
              Permissions.Billing.CloseCashSession, Permissions.Billing.ExportAccounting,
+             // Declares a cheque or bill returned unpaid; reception takes payments and closes its
+             // own till, but the unpaid is the accounts office's call.
+             Permissions.Billing.DeclareUnpaid,
              Permissions.Inventory.View, Permissions.Inventory.ManagePurchaseOrders,
              Permissions.Inventory.ManageQuotes,
              Permissions.Equipment.ViewContracts, Permissions.Equipment.ManageContracts,

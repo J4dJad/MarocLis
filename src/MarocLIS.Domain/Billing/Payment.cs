@@ -320,6 +320,12 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
         if (Status != CashSessionStatus.Open)
             return Result.Failure(Error.Conflict("CashSession_NotOpen"));
 
+        // The count is the operator's own: whoever held the drawer closes it, and the variance is
+        // theirs to explain. A colleague's till waits for its operator; the accounts office checks
+        // it afterwards (Reconcile), it does not close it in their place.
+        if (byUserId != OperatorUserId)
+            return Result.Failure(Error.Forbidden("CashSession_CloserIsNotOperator"));
+
         var counted = Money.Round(countedCash);
         var variance = Money.Round(counted - ExpectedClosingCash);
 

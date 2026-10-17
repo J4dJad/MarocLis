@@ -22,7 +22,7 @@ public sealed class DefectCycle3cReceptionBillingTests
         var session = new CashSession(Guid.NewGuid(), Guid.NewGuid(), Opened, 200m);
         session.Accumulate(PaymentMethod.Cash, 50m);
 
-        var refused = session.Close(Opened.AddHours(8), Guid.NewGuid(), 230m, "  ");
+        var refused = session.Close(Opened.AddHours(8), session.OperatorUserId, 230m, "  ");
 
         refused.FirstError.ResourceKey.Should().Be("CashSession_VarianceExplanationRequired");
         refused.FirstError.Args.Should().ContainSingle().Which.Should().Be(-20m);
@@ -30,7 +30,7 @@ public sealed class DefectCycle3cReceptionBillingTests
         session.CountedCash.Should().BeNull();
         session.Variance.Should().BeNull();
 
-        session.Close(Opened.AddHours(8), Guid.NewGuid(), 230m, "Monnaie rendue en trop").IsSuccess.Should().BeTrue();
+        session.Close(Opened.AddHours(8), session.OperatorUserId, 230m, "Monnaie rendue en trop").IsSuccess.Should().BeTrue();
         session.CountedCash.Should().Be(230m);
         session.Variance.Should().Be(-20m);
         session.Status.Should().Be(CashSessionStatus.Closed);
@@ -41,7 +41,7 @@ public sealed class DefectCycle3cReceptionBillingTests
     {
         var session = new CashSession(Guid.NewGuid(), Guid.NewGuid(), Opened, 100m);
 
-        session.Close(Opened.AddHours(8), Guid.NewGuid(), 90m, null).IsSuccess.Should().BeTrue();
+        session.Close(Opened.AddHours(8), session.OperatorUserId, 90m, null).IsSuccess.Should().BeTrue();
         session.Variance.Should().Be(-10m);
     }
 

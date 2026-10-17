@@ -308,6 +308,8 @@
   "Leave_AdjustmentReasonRequired": "The adjustment needs a reason.",
   "Leave_NoEmployees": "No active employee: create the files in \"Personnel files\" first.",
   "Leave_SubmittedByOther": "This request was entered by HR: only HR or a leave approver can cancel it.",
+  "Leave_JustificationNotRequired": "This type of leave needs no proof.",
+  "Leave_JustificationAlreadyReceived": "The proof for this request is already recorded.",
   "Habilitation_EmployeeExited": "This employee has left: no authorisation can be granted.",
   "Habilitation_SubjectRequired": "Choose the analyser or discipline concerned.",
   "Habilitation_ReviewBeforeGrant": "The review must be after the decision.",
@@ -2140,6 +2142,8 @@
   },
 
   "Leave": {
+    "ProofReceivedPrompt": "Confirm receipt of the proof for {0} of {1} from {2} to {3}? The request can then be approved.",
+    "ProofReceived": "Proof received",
     "AdjustNotice": "Carry-over from last year, an error corrected, days granted by company agreement… The movement is logged in the audit trail with its reason.",
     "AdjustReason": "Reason",
     "AdjustDays": "Days (+ or −)",
@@ -2337,6 +2341,11 @@
   },
 
   "Personnel": {
+    "AccountStillInactive": "The LIS account \"{0}\" is deactivated. An administrator can reactivate it in Administration › Users.",
+    "AccountKeptLastAdministrator": "The LIS account \"{0}\" stays active: it is the last administrator. Appoint another administrator, then deactivate it in Administration › Users.",
+    "AccountDeactivationScheduled": "Exit recorded. The LIS account \"{0}\" will be deactivated on {1}.",
+    "AccountDeactivated": "Exit recorded. The LIS account \"{0}\" is deactivated.",
+    "ExitDeactivatesAccount": "The LIS account \"{0}\" linked to this file will be deactivated on the exit date (as soon as it is saved if that date is today or past).",
     "ExitNoticeAfterLastDay": "The exit date is the last day worked: habilitations end the day after. The file remains available.",
     "RehireNotice": "The dates of the previous contract are kept for the payroll of its last month. The leave paid by the final settlement is debited from the account.",
     "RehireDate": "Rehire date",
@@ -3653,6 +3662,7 @@
   },
 
   "Payment": {
+    "BounceReservedToAccounting": "Reserved to accounting: marking a cheque or bill as returned requires the billing.payment.bounce permission (Accounting, Administrator).",
     "PatientShareDue": "Due from the patient",
     "Title": "Payment",
     "Plural": "Payments",
@@ -5443,6 +5453,7 @@
   "CashSession_ReconciliationCommentRequired": "The till shows a variance of {0} MAD: a comment is required to sign it off.",
   "CashSession_WithdrawalExceedsCash": "The withdrawal exceeds the cash expected in the till ({0} MAD).",
   "CashSession_RefundExceedsCash": "The cash refund exceeds the cash expected in the till ({0} MAD).",
+  "CashSession_CloserIsNotOperator": "Only the cashier who opened this till can close it with their count.",
 
   "Qc_RejectionRequiresCorrectiveAction": "A rejected control requires the corrective action taken to be described.",
   "Qc_NotRejected": "This control is not rejected.",

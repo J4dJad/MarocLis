@@ -926,7 +926,9 @@ public sealed class BillingService(
     public async Task<Result> MarkPaymentBouncedAsync(Guid invoiceId, Guid paymentId, string reason,
                                                        CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Billing.RecordPayment);
+        // The accounts office's decision (Comptabilité, Administrateur): the counter takes the
+        // cheque, but declaring it unpaid reopens the receivable and reverses the bank line.
+        var permitted = guard.Require(Permissions.Billing.DeclareUnpaid);
         if (permitted.IsFailure) return permitted;
 
         if (string.IsNullOrWhiteSpace(reason))

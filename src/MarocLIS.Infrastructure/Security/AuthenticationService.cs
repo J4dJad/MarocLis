@@ -38,6 +38,18 @@ public sealed class AuthenticationService(
 
         var normalised = userName.Trim().ToLowerInvariant();
 
+        // Accounts of employees whose exit date is reached are switched off before anyone signs
+        // in, the one being typed included: a departure recorded ahead takes effect on its day
+        // without anybody having to remember it. Never in the way of signing in.
+        try
+        {
+            await new DepartedAccountDeactivator(db, securityAuditor, clock).DeactivateDueAsync(ct: ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger?.LogWarning(ex, "The accounts of departed employees could not be checked at sign-in.");
+        }
+
         // The site filter must not apply while authenticating: nobody is signed in yet, so there
         // is no scope. IgnoreQueryFilters also lets a deactivated account be found and reported
         // properly instead of silently behaving like a wrong password.

@@ -299,7 +299,8 @@ public sealed class PersonnelService(
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
     ICurrentUser currentUser,
-    IClock clock)
+    IClock clock,
+    IDepartedAccounts departedAccounts)
 {
     private bool CanSeeSalary => currentUser.Permissions.Contains(Permissions.HumanResources.Salary);
 
@@ -457,33 +458,48 @@ public sealed class PersonnelService(
         }
     }
 
-    public async Task<Result> RecordExitAsync(Guid employeeId, DateOnly on, ExitReason reason, string? comment,
-                                              CancellationToken ct = default)
+    /// <summary>
+    /// Records a departure. The LIS account linked to the file is deactivated as of the exit date
+    /// (<see cref="IDepartedAccounts"/>): now when the date is today or past, on the day otherwise;
+    /// the outcome says which, for the screen to tell HR.
+    /// </summary>
+    public async Task<Result<DepartedAccountOutcome?>> RecordExitAsync(Guid employeeId, DateOnly on, ExitReason reason,
+                                                                       string? comment, CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.HumanResources.Manage);
-        if (permitted.IsFailure) return permitted;
+        if (permitted.IsFailure) return Result.Failure<DepartedAccountOutcome?>(permitted.FirstError);
 
         var employee = await employees.GetByIdWithDetailsAsync(employeeId, ct);
-        if (employee is null) return Result.Failure(Error.NotFound("Employee_NotFound"));
+        if (employee is null) return Result.Failure<DepartedAccountOutcome?>(Error.NotFound("Employee_NotFound"));
 
         var leave = await LeaveAfterExitAsync(employeeId, on, ct);
-        if (leave.IsFailure) return leave;
+        if (leave.IsFailure) return Result.Failure<DepartedAccountOutcome?>(leave.Errors);
 
         var done = employee.RecordExit(on, reason, comment);
-        if (done.IsFailure) return done;
+        if (done.IsFailure) return Result.Failure<DepartedAccountOutcome?>(done.Errors);
 
         employees.Update(employee);
         unitOfWork.AuditReason = $"Sortie de {employee.Number} ({employee.FullName}) le {on:dd/MM/yyyy} : {reason}";
         await unitOfWork.SaveChangesAsync(ct);
-        return Result.Success();
+        return Result.Success(await departedAccounts.ApplyExitAsync(employeeId, ct));
     }
 
     /// <summary>
     /// Corrects a departure that has not taken effect yet (<see cref="Employee.CorrectExit"/>). A
     /// settlement computed for the old date is emptied, to be computed again for the new one.
     /// </summary>
-    public async Task<Result> CorrectExitAsync(Guid employeeId, DateOnly on, ExitReason reason, string? comment,
-                                               CancellationToken ct = default)
+    public async Task<Result<DepartedAccountOutcome?>> CorrectExitAsync(Guid employeeId, DateOnly on, ExitReason reason,
+                                                                        string? comment, CancellationToken ct = default)
+    {
+        var corrected = await CorrectExitCoreAsync(employeeId, on, reason, comment, ct);
+        if (corrected.IsFailure) return Result.Failure<DepartedAccountOutcome?>(corrected.Errors);
+
+        // Moved to today or earlier: the account stops now.
+        return Result.Success(await departedAccounts.ApplyExitAsync(employeeId, ct));
+    }
+
+    private async Task<Result> CorrectExitCoreAsync(Guid employeeId, DateOnly on, ExitReason reason, string? comment,
+                                                    CancellationToken ct)
     {
         var permitted = guard.Require(Permissions.HumanResources.Manage);
         if (permitted.IsFailure) return permitted;
@@ -524,7 +540,18 @@ public sealed class PersonnelService(
     /// Withdraws a departure that has not taken effect yet (<see cref="Employee.CancelExit"/>):
     /// a resignation taken back, an exit saved on the wrong file. The reason goes to the audit trail.
     /// </summary>
-    public async Task<Result> CancelExitAsync(Guid employeeId, string reason, CancellationToken ct = default)
+    public async Task<Result<DepartedAccountOutcome?>> CancelExitAsync(Guid employeeId, string reason,
+                                                                       CancellationToken ct = default)
+    {
+        var cancelled = await CancelExitCoreAsync(employeeId, reason, ct);
+        if (cancelled.IsFailure) return Result.Failure<DepartedAccountOutcome?>(cancelled.Errors);
+
+        // An account the departure already switched off is not switched back on by itself:
+        // reactivating is the administrator's decision, with its own reason. The outcome says so.
+        return Result.Success(await departedAccounts.ApplyExitAsync(employeeId, ct));
+    }
+
+    private async Task<Result> CancelExitCoreAsync(Guid employeeId, string reason, CancellationToken ct)
     {
         var permitted = guard.Require(Permissions.HumanResources.Manage);
         if (permitted.IsFailure) return permitted;

@@ -438,10 +438,14 @@ public sealed class PersonnelView : LocalizedView
         {
             case null:
             {
-                using var dialog = new EmployeeExitDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}");
+                using var dialog = new EmployeeExitDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}",
+                                                          linkedUserName: row.UserName);
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
-                result = await _personnel.RecordExitAsync(row.EmployeeId, dialog.ExitDate, dialog.Reason, dialog.Comment);
-                break;
+                var recorded = await _personnel.RecordExitAsync(row.EmployeeId, dialog.ExitDate, dialog.Reason, dialog.Comment);
+                if (recorded.IsFailure) { _dialogs.ShowFailure(recorded); return; }
+                await ActivateAsync();
+                ShowAccountOutcome(recorded.Value);
+                return;
             }
             case { } exit when exit >= Today:
                 // Not reached yet: corrected or withdrawn, not re-hired.
@@ -460,6 +464,24 @@ public sealed class PersonnelView : LocalizedView
         await ActivateAsync();
     }
 
+    /// <summary>
+    /// Says on the status line what the departure did to the linked LIS account: deactivated now,
+    /// to be on the exit date, left active as the last administrator, or still inactive.
+    /// </summary>
+    private void ShowAccountOutcome(DepartedAccountOutcome? outcome)
+    {
+        if (outcome is null) return;
+
+        var date = outcome.ExitDate?.ToString("dd/MM/yyyy") ?? string.Empty;
+        (_status.ForeColor, _status.Text) = outcome.State switch
+        {
+            DepartedAccountState.Deactivated => (UiTheme.Normal, T("Personnel.AccountDeactivated", outcome.UserName)),
+            DepartedAccountState.Scheduled => (UiTheme.Normal, T("Personnel.AccountDeactivationScheduled", outcome.UserName, date)),
+            DepartedAccountState.KeptLastAdministrator => (UiTheme.Critical, T("Personnel.AccountKeptLastAdministrator", outcome.UserName)),
+            _ => (UiTheme.Abnormal, T("Personnel.AccountStillInactive", outcome.UserName))
+        };
+    }
+
     private async Task CorrectExitAsync()
     {
         if (Current() is not { ExitDate: { } exit, ExitReason: { } reason } row) return;
@@ -469,12 +491,13 @@ public sealed class PersonnelView : LocalizedView
             if (detail.IsFailure) { _dialogs.ShowFailure(detail); return; }
 
             using var dialog = new EmployeeExitDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}",
-                                                      (exit, reason, detail.Value.ExitComment));
+                                                      (exit, reason, detail.Value.ExitComment), row.UserName);
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
             var result = await _personnel.CorrectExitAsync(row.EmployeeId, dialog.ExitDate, dialog.Reason, dialog.Comment);
             if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
             await ActivateAsync();
+            ShowAccountOutcome(result.Value);
         }
         catch (Exception ex)
         {
@@ -495,6 +518,7 @@ public sealed class PersonnelView : LocalizedView
             var result = await _personnel.CancelExitAsync(row.EmployeeId, reason);
             if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
             await ActivateAsync();
+            ShowAccountOutcome(result.Value);
         }
         catch (Exception ex)
         {

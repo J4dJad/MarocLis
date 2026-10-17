@@ -119,6 +119,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IDataAccessAuditor>(sp => ActivatorUtilities.CreateInstance<DataAccessAuditor>(sp, ScopedUser(sp)));
         services.AddScoped<IPermissionGuard>(sp => ActivatorUtilities.CreateInstance<PermissionGuard>(sp, ScopedUser(sp)));
         services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddScoped<Application.HumanResources.IDepartedAccounts, DepartedAccountDeactivator>();
         // Its own scope per check, so it is safe to hold for the life of the shell.
         services.AddSingleton<ISessionValidator, SessionValidator>();
 

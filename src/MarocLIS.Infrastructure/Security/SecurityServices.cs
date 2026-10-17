@@ -276,6 +276,20 @@ public sealed class SessionValidator(IServiceScopeFactory scopes, CurrentUserAcc
             })
             .FirstOrDefaultAsync(ct);
 
+        // The exit date of the employee behind the account reached while the workstation stays
+        // signed in: the account is deactivated now and the session ends with it.
+        if (account is { IsActive: true })
+        {
+            var today = scope.ServiceProvider.GetRequiredService<IClock>().Today;
+            var departed = await db.Employees.IgnoreQueryFilters().AsNoTracking()
+                .AnyAsync(e => e.UserId == currentUser.UserId && e.ExitDate != null && e.ExitDate <= today, ct);
+
+            if (departed
+                && (await scope.ServiceProvider.GetRequiredService<Application.HumanResources.IDepartedAccounts>()
+                        .DeactivateDueAsync(currentUser.UserId, ct)).Count > 0)
+                return false;
+        }
+
         return account is not null && Matches(currentUser, currentUser.SecurityStamp,
                                               account.IsActive, account.SecurityStamp,
                                               account.PrescriberId, account.Permissions, account.Sites,
