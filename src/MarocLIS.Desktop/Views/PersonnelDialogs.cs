@@ -405,6 +405,9 @@ internal sealed class CredentialsDialog : Form
             close.Left += grow;
         }
 
+        // Opened read-only from the personnel and deadline screens: the changes were offered to a
+        // user who may only consult the file, then refused by the service.
+        PermissionGate.Require(Permissions.HumanResources.Manage, _add, _edit, _attach, _remove);
         UpdateButtons();
         QhDialog.Dress(this, localizer, "QualityHr.Hint.Credentials");
     }
