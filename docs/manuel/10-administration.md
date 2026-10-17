@@ -8,7 +8,8 @@
 - le catalogue des analyses : analyses, paramètres, valeurs usuelles, tarifs, profils, analyses en cascade, listes de référence, et la nomenclature officielle des actes de biologie médicale (NABM) ;
 - les liaisons avec les automates ;
 - les données de référence : équipements, contrôle interne, articles, fournisseurs, prescripteurs, organismes payeurs ;
-- les paramètres du laboratoire : identité du site, numérotations, paramètres généraux, format des factures, lieux de stockage des tubes, imprimantes du poste.
+- les paramètres du laboratoire : identité du site, numérotations, paramètres généraux, format des factures, lieux de stockage des tubes, imprimantes du poste ;
+- la reprise des données de l'application utilisée avant MarocLIS (patients, prescripteurs, catalogue, antériorités, créances).
 
 **Qui l'utilise.** L'administrateur règle presque tout. Le biologiste responsable tient le catalogue et les automates. Le responsable qualité tient les valeurs usuelles, les équipements et le contrôle interne, et lit le journal d'audit. Le service comptable tient les tarifs, les organismes payeurs, les articles et les fournisseurs. Le détail des droits est donné plus bas.
 
@@ -22,6 +23,7 @@
 | **Automates** | Liaisons avec les automates, table de correspondance, journal des messages | aucun |
 | **Données de référence** | Équipements, contrôle interne, articles, fournisseurs, prescripteurs, organismes payeurs | aucun |
 | **Paramètres** | Identité légale du site, numérotations, paramètres, format des factures, lieux de stockage, imprimantes du poste | aucun |
+| **Reprise de données** | Reprendre les données de l'ancienne application depuis un fichier Excel/CSV ou sa base, contrôlées avant import | aucun |
 
 Le groupe n'apparaît que si vous avez le droit d'ouvrir au moins un de ces écrans. Une entrée pour laquelle vous n'avez pas le droit n'est pas affichée du tout.
 
@@ -79,6 +81,7 @@ flowchart TD
 | `admin.maintenance.run` | Purger le journal des messages automates | Administrateur seul |
 | `admin.sites.manage` | Onglet **Site** des **Paramètres**, **Nouveau site** | Administrateur seul |
 | `admin.settings.manage` | Numérotations, paramètres, format des factures, lieux de stockage | Administrateur seul |
+| `admin.migration` | Ouvrir **Reprise de données** : lire l'ancienne application, simuler, importer, annuler la dernière reprise | Administrateur seul (accordé aussi aux installations existantes au démarrage) |
 
 Changements récents des rôles livrés :
 - le Biologiste et le Technicien de laboratoire peuvent maintenant **Réimporter** une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
@@ -720,6 +723,7 @@ Onglet **Site** :
 
 Onglet **Numérotations** :
 - **Modifier le format** (`admin.settings.manage`) : seulement pour une série au statut « Modifiable ».
+- **Valeur de départ** (`admin.settings.manage`) : le prochain numéro de la série. Libre avant le premier numéro ; ensuite seulement vers l'avant pour les dossiers et les autres séries ; jamais pour les factures et les avoirs une fois utilisés.
 - **Clôturer la série** / **Réouvrir la série** (`admin.settings.manage`) : demande un motif.
 
 Onglet **Paramètres** :
@@ -772,6 +776,8 @@ Onglet **Imprimantes** :
    5. Pour un site de travail, donnez ensuite l'accès aux utilisateurs dans **Utilisateurs** › **Sites accessibles**. Un partenaire n'est jamais proposé à la connexion ni dans les accès des utilisateurs ; il devient choisissable comme **Laboratoire partenaire** dans la fiche d'une analyse sous-traitée.
 
 6. **Ajuster le format d'une numérotation avant le premier numéro** : onglet **Numérotations**, sélectionnez une série au statut « Modifiable », **Modifier le format**, saisissez le format avec les jetons `{SITE}`, `{YEAR}`, `{YY}`, `{MM}`, `{SEQ:n}` (n = nombre de chiffres ; `{SEQ}` obligatoire), validez. Le **Prochain numéro** affiche le résultat.
+
+   **Fixer la valeur de départ** (après une reprise de données, pour ne pas reprendre les numéros de l'ancienne application) : sélectionnez la série, **Valeur de départ**, tapez le prochain numéro (par exemple 50001), validez. Le préfixe se règle avec **Modifier le format** (par exemple `ML{YY}-{SEQ:6}`). Une série de dossiers déjà utilisée ne peut qu'avancer ; une série de factures ou d'avoirs déjà utilisée est figée (série chronologique ininterrompue).
 
 7. **Clôturer une série en fin d'exercice** : sélectionnez la série, **Clôturer la série**, motif obligatoire. Plus aucun document ne peut y être numéroté. **Réouvrir la série** (motif obligatoire) en cas d'erreur.
 
@@ -827,6 +833,102 @@ flowchart TD
     O --> P{Erreur ?}
     P -- oui --> Q[Réouvrir la série + motif]
     R[Nouveau site] --> A
+```
+
+### Reprise de données
+
+**À quoi sert cet écran**
+
+Faire entrer dans MarocLIS les données de l'application que le laboratoire utilisait avant, sans les ressaisir :
+- les **patients** (identité, CIN, date de naissance, sexe, téléphones, adresse, organisme AMO ou mutuelle et n° d'immatriculation) ;
+- les **prescripteurs** ;
+- le **catalogue et les tarifs** (code, libellé, prix ou coefficient B, code d'acte NABM) ;
+- les **antériorités** : les résultats validés des anciens dossiers, gardés en lecture seule et marqués « reprise » ;
+- les **créances ouvertes** : ce que patients et organismes devaient encore à la date de bascule.
+
+Les données viennent d'un fichier Excel (.xlsx) ou CSV, ou directement de la base de l'ancienne application (SQL Server ou SQL Server Express, MySQL ou MariaDB, ou toute autre base par ODBC). Cette base n'est jamais modifiée : elle est lue en lecture seule, et seule une requête SELECT peut y être envoyée.
+
+**Qui y a accès** : droit `admin.migration`, livré à l'administrateur seul. Sans ce droit l'entrée n'apparaît pas dans le menu.
+
+**Fonctionnalités**
+- **Données à reprendre** : Patients, Prescripteurs, Catalogue et tarifs, Antériorités, Créances ouvertes — dans cet ordre, car les antériorités et les créances désignent des patients déjà repris.
+- **Ancienne application** : le nom de l'application quittée (par ex. LABOWIN). Il sert à reconnaître chaque ligne lors d'une nouvelle reprise : gardez le même nom d'un essai à l'autre.
+- **Lire depuis** : **Fichier Excel ou CSV** (**Parcourir…**, choix de la **Feuille**) ou **Base de l'ancienne application** (**Se connecter…**, choix de la **Table ou vue**, ou **Requête SELECT…**).
+- **Télécharger le modèle** : le classeur à remplir pour les données choisies, en-têtes en français, colonnes obligatoires en couleur, une ligne d'exemple. **Plus d'actions** › **Télécharger tous les modèles…** enregistre les cinq modèles, en Excel et en CSV.
+- **Profil de reprise** : la connexion, la correspondance des colonnes de chaque type de données et les correspondances de valeurs, enregistrées sous un nom (**Enregistrer le profil**) pour l'essai suivant et l'import définitif. Le mot de passe n'est conservé que si vous cochez « Mémoriser le mot de passe », chiffré pour votre compte Windows. **Plus d'actions** › **Exporter le profil…** / **Importer un profil…** (sans mot de passe) pour passer d'un poste à l'autre, **Supprimer le profil**.
+- **Rapprocher par nom et date de naissance** : un patient sans CIN commune est rattaché à un patient MarocLIS qui a les mêmes nom, prénom et date de naissance (signalé dans le rapport pour vérification). Décochée, la ligne est ignorée.
+- Onglets : **Aperçu** (200 premières lignes lues), **Colonnes**, **Correspondances**, **Rapport d'anomalies**, **Journal des reprises**, **Ancien n° → patient**, **Créances reprises**.
+- **Simulation** : contrôle toutes les lignes sans rien écrire et compte ce qui serait **à créer**, **à mettre à jour**, **ignoré** et **en erreur**.
+- **Importer** : écrit les lignes par lots de 200, chaque lot dans sa propre transaction ; **Arrêter** interrompt entre deux lots (les lots écrits restent).
+- **Plus d'actions** › **Annuler la dernière reprise…** : retire ce que la dernière reprise a créé et que rien n'a utilisé depuis.
+
+**L'écran** : en haut le titre « Reprise de données » et la phrase « Patients, prescripteurs, catalogue, antériorités et créances de l'ancienne application, contrôlés avant import » ; **Plus d'actions** à droite. Dessous la carte **Source** (données à reprendre, ancienne application, profil, fichier ou base, case de rapprochement par nom), puis les onglets, et en bas la barre d'action avec la progression, **Arrêter**, **Simulation** et **Importer**. En arabe, l'écran est inversé.
+
+**Correspondance des colonnes.** À la lecture, chaque colonne de la source est associée au champ MarocLIS qui porte le même nom ou un nom voisin (« NOM_PAT », « DATE_NAISS », « GSM », « MUTUELLE »…). L'onglet **Colonnes** montre, pour chaque champ, la colonne retenue et des exemples de valeurs ; changez-la dans la liste, ou choisissez « (non reprise) ». **Associer automatiquement** refait la proposition. Un champ obligatoire sans colonne est en rouge et bloque l'import.
+
+**Correspondances de valeurs.** Les champs codés (sexe, organisme, code d'analyse, unité, spécialité du prescripteur, section, type d'échantillon) ne sont pas recopiés tels quels : l'onglet **Correspondances** liste chaque valeur distincte de la source, le nombre de lignes qui l'emploient et la valeur MarocLIS proposée (par le code, le libellé ou le code NABM). État « Proposée », « Validée », « Manquante » ou « Ignorée ». Une valeur **Manquante** bloque l'import et figure au rapport d'anomalies ; choisissez sa valeur MarocLIS, ou « (Ignorer ces lignes) » pour une analyse interne ou un organisme abandonné. Une unité sans correspondance est gardée telle qu'écrite. Les choix sont enregistrés avec le profil.
+
+**Une ligne n'est jamais reprise deux fois.** Chaque ligne est identifiée par l'ancienne application, le type de données et son ancien identifiant (à défaut l'ancien n° de dossier, la CIN, ou les nom et date de naissance). Une deuxième reprise de la même source met donc à jour ce qu'elle avait créé, au lieu de le dupliquer ; une mise à jour ne fait que compléter les champs vides de MarocLIS. Un patient qui n'a pas encore été repris est cherché par sa CIN, puis par nom, prénom et date de naissance.
+
+**Anciens numéros.** L'ancien n° de dossier d'un patient et l'ancien n° de dossier d'une antériorité sont gardés. Tapés dans la recherche des patients (ou dans l'onglet **Ancien n° → patient**), ils retrouvent le patient et ses antériorités. Les nouveaux dossiers reçoivent un numéro MarocLIS ; pour démarrer la série à une valeur choisie, voir **Paramètres** › **Numérotations** › **Valeur de départ**.
+
+**Antériorités.** Les résultats repris apparaissent dans l'historique d'un paramètre en **Saisie des résultats** et en **Validation biologique** (colonne **Antériorité**, courbe, liste avec la mention « reprise » à côté de l'ancien n° de dossier), et servent de valeur précédente pour le contrôle de cohérence (delta check). Ils ne sont ni modifiables ni validables : ce ne sont pas des résultats MarocLIS.
+
+**Créances ouvertes.** Elles sont enregistrées comme soldes d'ouverture, à part : elles ne créent pas de facture et ne consomment aucun numéro de la série des factures. L'onglet **Créances reprises** en donne la liste et le total.
+
+**Reprendre les données d'une autre application**
+
+1. **Préparer la bascule.** Choisissez la date de bascule. Faites d'abord un **essai sur une copie** de la base MarocLIS (ou sur une installation de test) ; gardez l'ancienne application ouverte **en lecture seule** pendant quelques mois pour les questions sur les anciens dossiers.
+2. **Ouvrir l'écran** : **ADMINISTRATION** › **Reprise de données**. Saisissez le nom de l'**Ancienne application**.
+3. **Choisir la source.**
+   - Fichier : **Télécharger le modèle**, remplissez-le (ou exportez depuis l'ancienne application), puis **Parcourir…** et choisissez la feuille.
+   - Base : **Se connecter…**, choisissez le **Type de base** :
+     - **SQL Server / SQL Server Express** : **Serveur** avec l'instance (par ex. `.\SQLEXPRESS` ou `PC-ACCUEIL\SQLEXPRESS`), **Windows** ou **Connexion SQL Server** (utilisateur et mot de passe), **Lister les bases** puis la **Base de données** ;
+     - **MySQL / MariaDB** : **Serveur**, **Port** (3306), **Utilisateur**, **Mot de passe**, **Base de données** ;
+     - **Autre (ODBC)** : une **Source de données ODBC (DSN)** déclarée sur le poste, ou une **chaîne de connexion ODBC**.
+
+     **Tester la connexion**, puis **Se connecter**. Choisissez la **Table ou vue** ; si les données sont réparties sur plusieurs tables, **Requête SELECT…** (une seule requête de lecture, vérifiée avant l'envoi).
+
+4. **Vérifier les colonnes** (onglet **Colonnes**) et les **Correspondances** de valeurs ; corrigez ce qui est proposé à tort.
+
+5. **Simulation.** Lisez le **Rapport d'anomalies** : ligne, champ, gravité (Info, Avertissement, Erreur, Bloquant), problème et suggestion. Une **Erreur** écarte la ligne ; un **Bloquant** empêche l'import. Corrigez la source ou les correspondances et relancez la simulation. **Exporter (CSV)** donne le rapport à l'ancienne équipe ou à votre prestataire.
+
+6. **Enregistrer le profil**, pour refaire la même reprise le jour de la bascule.
+7. **Importer.** Confirmez les nombres annoncés. Le résumé final donne les créés, mis à jour, ignorés et en erreur ; la reprise est inscrite au **Journal des reprises** et au **Journal d'audit**.
+
+8. Recommencez dans l'ordre : **Patients**, **Prescripteurs**, **Catalogue et tarifs**, **Antériorités**, **Créances ouvertes**.
+9. **Le jour de la bascule** : terminez dans l'ancienne application les dossiers en cours (ou ressaisissez-les dans MarocLIS) ; arrêtez la saisie dans l'ancienne application ; relancez les reprises avec le profil enregistré (seules les nouveautés sont créées ou complétées) ; réglez dans **Paramètres** › **Numérotations** la **Valeur de départ** des dossiers et faites démarrer la série des factures à la date de bascule, sans reprendre les anciens numéros de facture ; vérifiez quelques patients par leur ancien n° de dossier.
+10. **En cas d'erreur** : **Plus d'actions** › **Annuler la dernière reprise…** retire les patients, prescripteurs, analyses, antériorités et créances créés par la dernière reprise et que rien n'a utilisés depuis (un patient qui a déjà un dossier reste). Les mises à jour de fiches existantes ne sont pas annulées.
+
+**Règles et contrôles**
+- Champs obligatoires : nom et prénom du patient, et sa date de naissance ou son âge ; nom du prescripteur ; code de l'analyse ; date, code d'analyse et résultat d'une antériorité ; montant d'une créance et son débiteur (patient ou organisme).
+- Dates lues : JJ/MM/AAAA, AAAA-MM-JJ, années sur deux chiffres, dates Excel. Montants : « 1 234,50 », « 1.234,50 », « 1234.5 », « 120 DH ».
+- CIN, INPE, téléphones et e-mail mal formés ne sont pas repris (avertissement) ; la ligne l'est.
+- Doublons dans la source : même ancien identifiant ou même CIN (erreur), mêmes nom, prénom et date de naissance (avertissement).
+- Patients existants : rattachement par la CIN, puis par nom et date de naissance (avertissement à confirmer) ; plusieurs candidats : erreur, fusionnez d'abord les doublons.
+- Catalogue : un prix manquant est calculé par coefficient × valeur de la lettre B ; un code NABM inconnu de la nomenclature n'est pas repris ; une analyse existante n'est que complétée.
+- Une créance négative (avoir) est refusée, une créance nulle ignorée.
+- Au plus 500 000 lignes par reprise ; découpez au-delà (par année).
+- La base de l'ancienne application est lue dans une transaction annulée à la fin ; une requête qui contient INSERT, UPDATE, DELETE, DROP, EXEC, plusieurs instructions ou tout autre ordre d'écriture est refusée.
+
+**Flux**
+
+```mermaid
+flowchart TD
+    A[Choisir les données et l'ancienne application] --> B{Source}
+    B -- fichier --> C[Télécharger le modèle / Parcourir]
+    B -- base --> D[Se connecter : SQL Server, MySQL ou ODBC<br/>table, vue ou requête SELECT]
+    C --> E[Colonnes : correspondance automatique, à vérifier]
+    D --> E
+    E --> F[Correspondances de valeurs]
+    F --> G[Simulation]
+    G --> H{Anomalies bloquantes ?}
+    H -- oui --> F
+    H -- non --> I[Importer par lots]
+    I --> J[Résumé, journal des reprises, journal d'audit]
+    J --> K{Erreur constatée ?}
+    K -- oui --> L[Annuler la dernière reprise]
+    K -- non --> M[Données suivantes]
 ```
 
 ### Messages d'erreur et d'avertissement
@@ -1064,3 +1166,29 @@ flowchart TD
 | « Aucune imprimante n'est installée sur ce poste. » | Onglet **Imprimantes** sans imprimante | Installer une imprimante dans Windows, puis **Actualiser**. |
 | « Imprimantes enregistrées pour ce poste. » / « Étiquette de test envoyée à « … ». » | Enregistrement ou test réussi | Vérifier l'étiquette imprimée. |
 | « Impossible d'enregistrer le choix des imprimantes sur ce poste. » | Écriture du réglage local impossible | Réessayer ; prévenir le support informatique. |
+
+#### Reprise de données
+
+| Message | Quand il apparaît | Que faire |
+|---|---|---|
+| « Indiquez le nom de l'ancienne application. » / « Le nom de l'ancienne application ne peut pas contenir le caractère « \| ». » | **Simulation** ou **Importer** sans nom valide | Saisir le nom, toujours le même d'un essai à l'autre. |
+| « La source ne contient aucune ligne. » / « La source dépasse … lignes : découpez-la (par année par exemple). » | Fichier ou table vide, ou trop grand | Choisir la bonne feuille ou table ; découper la source. |
+| « Le fichier ne peut pas être lu : … » / « Feuille introuvable dans le classeur. » | Fichier ouvert ailleurs, abîmé ou feuille renommée | Fermer le fichier dans Excel, réenregistrer en .xlsx ou CSV. |
+| « Lecture de l'ancienne base impossible : … » | Serveur injoignable, mot de passe refusé, table absente | Lire le message du serveur ; corriger la connexion (**Tester la connexion**). |
+| « Indiquez le serveur. » / « Indiquez l'utilisateur. » / « Choisissez la base de données. » / « Choisissez une source ODBC (DSN) ou saisissez une chaîne de connexion. » | Connexion incomplète | Compléter le champ cité. |
+| « Seule une requête SELECT est permise : l'ancienne base n'est jamais modifiée. » / « Mot interdit dans la requête : … » / « Une seule instruction est permise … » / « Commentaire ou texte entre guillemets non fermé. » | **Requête SELECT…** | Écrire une seule requête de lecture. |
+| « Aucune colonne n'est associée au champ obligatoire « … ». » (Bloquant) | Colonne obligatoire non associée | Onglet **Colonnes** : choisir la colonne. |
+| « La valeur « … » (… ligne(s)) n'a pas de correspondance dans la liste « … ». » (Bloquant) | Valeur codée inconnue | Onglet **Correspondances** : choisir la valeur MarocLIS ou « (Ignorer ces lignes) ». |
+| « Import impossible : … anomalie(s) bloquante(s) à résoudre (colonnes ou correspondances). » | **Importer** avec des bloquants | Résoudre les bloquants, relancer la simulation. |
+| « Champ obligatoire « … » vide. » / « « … » : date « … » illisible. » / « « … » : nombre « … » illisible. » / « « … » : … caractères, au plus … » | Ligne incomplète ou mal saisie | Corriger la source ; la ligne est écartée en attendant. |
+| « Ni date de naissance ni âge : le patient ne peut pas être créé. » | Patient sans date ni âge | Compléter la date de naissance ou l'âge. |
+| « Cet identifiant figure déjà à la ligne … » / « CIN … déjà présente à la ligne … » / « Mêmes nom, prénom et date de naissance qu'à la ligne … » | Doublon dans la source | Supprimer le doublon ou vérifier qu'il s'agit d'une autre personne. |
+| « Rattaché au patient existant … par nom, prénom et date de naissance. » | Patient déjà dans MarocLIS sans CIN commune | Vérifier qu'il s'agit de la même personne. |
+| « Plusieurs patients MarocLIS ont la CIN … » / « … ces nom, prénom et date de naissance … » | Doublons déjà dans MarocLIS | Fusionner d'abord les doublons. |
+| « Patient « … » introuvable dans MarocLIS. » | Antériorité ou créance d'un patient non repris | Reprendre d'abord les patients avec le même nom d'ancienne application. |
+| « Code acte « … » absent de la nomenclature NABM : non repris. » | Catalogue | Vérifier le code dans **Catalogue** › Nomenclature NABM. |
+| « Solde négatif … : un avoir n'est pas une créance. » / « Ni patient ni organisme : la créance n'a pas de débiteur. » | Créances ouvertes | Déduire les avoirs du solde ; indiquer le débiteur. |
+| « Le paramètre … n'existe plus dans le catalogue : import interrompu. » | Paramètre supprimé entre la simulation et l'import | Refaire la correspondance, relancer l'import (les lots écrits restent). |
+| « Aucune reprise à annuler. » | **Annuler la dernière reprise** sans reprise | Rien. |
+| « … enregistrement(s) retiré(s) ; … conservé(s) car utilisé(s) depuis. » | Après l'annulation | Les fiches conservées sont déjà utilisées : les corriger à la main si besoin. |
+| « La valeur de départ doit être un nombre entier entre 1 et 999 999 999 999. » / « Le dernier numéro attribué est … : la valeur suivante doit lui être supérieure. » / « La série fiscale a déjà attribué … numéro(s) : sa valeur de départ ne peut plus changer … » | **Paramètres** › **Numérotations** › **Valeur de départ** | Taper une valeur plus grande ; une série de factures utilisée ne se modifie pas. |
