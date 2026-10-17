@@ -52,5 +52,6 @@
   "catalog": "10-administration.html",
   "interfaces": "10-administration.html",
   "masterdata": "10-administration.html",
+  "migration": "10-administration.html",
   "settings": "10-administration.html"
 }

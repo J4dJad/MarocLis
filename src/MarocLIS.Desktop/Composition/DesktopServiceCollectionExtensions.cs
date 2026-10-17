@@ -172,6 +172,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<CostMarginView>();
         services.AddTransient<UserAdministrationView>();
         services.AddTransient<AuditTrailView>();
+        services.AddTransient<DataMigrationView>();
         services.AddTransient<SettingsView>();
         services.AddTransient<MasterDataView>();
         services.AddTransient<CatalogView>();

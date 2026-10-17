@@ -43,6 +43,9 @@ public sealed record ResultEntryRow
     public decimal? PreviousValue { get; init; }
     public DateOnly? PreviousDate { get; init; }
 
+    /// <summary>The previous value is an antériorité reprise from the old application.</summary>
+    public bool PreviousImported { get; init; }
+
     public ResultInterpretation Interpretation { get; init; }
     public ResultFlag Flags { get; init; }
     public TestResultStatus Status { get; init; }
@@ -288,6 +291,7 @@ public sealed class ResultEntryService(
                 UpperLimit = range?.UpperLimit,
                 PreviousValue = previous?.Value,
                 PreviousDate = previous?.Date,
+                PreviousImported = previous?.Imported ?? false,
                 Interpretation = result.Interpretation,
                 Flags = result.Flags,
                 Status = result.Status,

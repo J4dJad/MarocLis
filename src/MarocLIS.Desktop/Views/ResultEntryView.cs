@@ -1803,9 +1803,10 @@ public sealed class ResultEntryView : LocalizedView
         return string.Join(" ", parts);
     }
 
-    private static string FormatPrevious(ResultEntryRow row) =>
+    private string FormatPrevious(ResultEntryRow row) =>
         row.PreviousValue is { } value
             ? $"{value:N2}" + (row.PreviousDate is { } date ? $"  {date:dd/MM/yy}" : string.Empty)
+              + (row.PreviousImported ? $" · {T("Migration.HistoryMarker")}" : string.Empty)
             : "—";
 
     /// <summary>The analyser that sent the value, « Manuel » for a value keyed in, « — » before any value.</summary>

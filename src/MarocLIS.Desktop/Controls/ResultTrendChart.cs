@@ -6,7 +6,7 @@ namespace MarocLIS.Desktop.Controls;
 
 /// <summary>One value on the antériorité chart.</summary>
 public sealed record ResultTrendPoint(DateTimeOffset At, decimal Value, string? Operator = null,
-                                      string? AccessionNumber = null);
+                                      string? AccessionNumber = null, bool Imported = false);
 
 /// <summary>
 /// What the antériorité chart draws: the patient's validated values, the reference interval in force

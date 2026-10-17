@@ -195,6 +195,14 @@ public sealed class DataMigrationService(
                 progress?.Report(new MigrationProgress(done, toWrite.Count, "Migration.StepImport"));
             }
         }
+        catch (DataMigrationException ex)
+        {
+            // A chunk the store abandoned (a closed numbering series, a parameter removed meanwhile):
+            // the chunks before it stay written, the run is journalled as interrupted.
+            await store.CompleteBatchAsync(batchId, created, updated, analysis.Skipped, analysis.InError,
+                                           interrupted: true, CancellationToken.None);
+            return Result.Failure<MigrationSummary>(Error.Validation(ex.ResourceKey, ex.Args));
+        }
         catch
         {
             await store.CompleteBatchAsync(batchId, created, updated, analysis.Skipped, analysis.InError,
@@ -253,7 +261,8 @@ public sealed class DataMigrationService(
             return Result.Failure(Error.Validation("Migration_SourceSystemInvalid"));
         if (request.Table.Rows.Count == 0)
             return Result.Failure(Error.Validation("Migration_NoRows"));
-        if (request.Table.Rows.Count > MaxRows)
+        // A truncated read stopped at the ceiling: the source holds more rows than one run takes.
+        if (request.Table.Rows.Count > MaxRows || request.Table.Truncated)
             return Result.Failure(Error.Validation("Migration_TooManyRows", MaxRows));
         return Result.Success();
     }
