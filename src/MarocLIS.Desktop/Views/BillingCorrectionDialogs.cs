@@ -289,12 +289,11 @@ internal sealed class InvoiceIssueDialog : Form
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(_discount.Text)) return 0m;
-
-            // Both separators accepted: the keypad on a counter terminal produces a full stop and
-            // the French keyboard a comma, and the operator should not have to know which. The
-            // shared reader also takes the space French writes between thousands (« 1 200 »).
-            return EditorValues.ParseDecimal(_discount.Text);
+            // An amount ("50") or a percentage of the gross ("10 %"): the lab grants both. Both
+            // separators accepted: the keypad on a counter terminal produces a full stop and the
+            // French keyboard a comma, and the operator should not have to know which. The shared
+            // reader also takes the space French writes between thousands (« 1 200 »).
+            return EditorValues.ParseDiscount(_discount.Text, _gross);
         }
     }
 
@@ -368,13 +367,14 @@ internal sealed class InvoiceIssueDialog : Form
 
         if (canDiscount)
         {
-            var discountLabel = UiTheme.FieldLabel(localizer["Billing.Discount"]);
+            var discountLabel = UiTheme.FieldLabel(localizer["Billing.DiscountAmountOrPercent"]);
             discountLabel.Location = new Point(20, 200);
 
             _discount.Location = new Point(20, 218);
             _discount.Tag = UiTags.LatinValue;
             _discount.MaxLength = EditorValues.AmountMaxLength;
             _discount.TextAlign = HorizontalAlignment.Right;
+            _discount.PlaceholderText = localizer["Billing.DiscountPlaceholder"];
             _discount.TextChanged += (_, _) => RefreshNet();
 
             _net.Font = UiTheme.BodyBold;
@@ -432,9 +432,14 @@ internal sealed class InvoiceIssueDialog : Form
             return;
         }
 
+        var language = _localizer.CurrentLanguage;
         _net.ForeColor = UiTheme.Accent;
-        _net.Text = $"{_localizer["Billing.Net"]}   "
-                    + Money.Of(_gross - discount).Format(_localizer.CurrentLanguage);
+
+        // A percentage shows the dirhams it comes to, which is what the invoice will print.
+        _net.Text = EditorValues.IsPercentDiscount(_discount.Text)
+            ? _localizer.Format("Billing.DiscountAndNet", Money.Of(discount).Format(language),
+                         Money.Of(_gross - discount).Format(language))
+            : $"{_localizer["Billing.Net"]}   " + Money.Of(_gross - discount).Format(language);
     }
 
     private void Accept()

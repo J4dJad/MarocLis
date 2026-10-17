@@ -3605,7 +3605,10 @@
     "PayerNotCovered": "بدون تغطية — على حساب المريض",
     "DiscountReason": "سبب التخفيض",
     "DiscountNotice": "يُوزَّع التخفيض على السطور بالتناسب ويبقى مدوَّناً على الفاتورة مع سببه. الفاتورة الصادرة لا يمكن تعديلها بعد ذلك.",
-    "DiscountInvalid": "مبلغ تخفيض غير صالح"
+    "DiscountInvalid": "تخفيض غير صالح (مثلاً 50 أو 10٪)",
+    "DiscountAmountOrPercent": "التخفيض (درهم أو ٪)",
+    "DiscountPlaceholder": "مثلاً 50 أو 10٪",
+    "DiscountAndNet": "التخفيض {0} · الصافي {1}"
   },
 
   "Claim": {

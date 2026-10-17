@@ -3605,7 +3605,10 @@
     "PayerNotCovered": "No cover — payable by the patient",
     "DiscountReason": "Reason for the discount",
     "DiscountNotice": "The discount is spread across the lines pro rata and stays on the invoice with its reason. An issued invoice can no longer be altered.",
-    "DiscountInvalid": "Invalid discount amount"
+    "DiscountInvalid": "Invalid discount (e.g. 50 or 10%)",
+    "DiscountAmountOrPercent": "Discount (DH or %)",
+    "DiscountPlaceholder": "e.g. 50 or 10%",
+    "DiscountAndNet": "Discount {0} · Net {1}"
   },
 
   "Claim": {

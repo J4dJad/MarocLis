@@ -3606,7 +3606,10 @@
     "PayerNotCovered": "Sans prise en charge — à la charge du patient",
     "DiscountReason": "Motif de la remise",
     "DiscountNotice": "La remise est répartie sur les lignes au prorata et reste inscrite sur la facture avec son motif. Une facture émise ne peut plus être modifiée.",
-    "DiscountInvalid": "Montant de remise invalide"
+    "DiscountInvalid": "Remise invalide (ex. 50 ou 10 %)",
+    "DiscountAmountOrPercent": "Remise (DH ou %)",
+    "DiscountPlaceholder": "ex. 50 ou 10 %",
+    "DiscountAndNet": "Remise {0} · Net {1}"
   },
 
   "Claim": {
