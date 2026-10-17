@@ -555,6 +555,19 @@ public sealed partial class DemoDataSeeder
                     CalibrationIntervalDays = 180, LastCalibrationOn = today.AddDays(-210)
                 }),
 
+            // Second biochemistry analyser, on RS-232 with Roche's own host protocol.
+            new(new InstrumentRequest
+                {
+                    Code = "DEMO-INTEGRA", Name = new MultilingualText("Automate de biochimie cobas INTEGRA 400 plus"),
+                    Kind = EquipmentKind.Analyser, Manufacturer = "Roche Diagnostics", Model = "COBAS INTEGRA 400 plus",
+                    SerialNumber = "I400-15022", SoftwareVersion = "3.6",
+                    Location = "Plateau technique — biochimie",
+                    DepartmentId = Department(Domain.Catalog.Department.Codes.Biochemistry),
+                    PurchaseDate = new DateOnly(2016, 6, 1), CommissioningDate = new DateOnly(2016, 7, 4),
+                    PreventiveMaintenanceIntervalDays = 180, LastPreventiveMaintenanceOn = today.AddDays(-60),
+                    CalibrationIntervalDays = 30, LastCalibrationOn = today.AddDays(-5)
+                }),
+
             new(new InstrumentRequest
                 {
                     Code = "DEMO-E411", Name = new MultilingualText("Automate d'immunoanalyse cobas e 411"),
@@ -775,6 +788,149 @@ public sealed partial class DemoDataSeeder
             await store.MarkProcessedAsync(second, InstrumentMessageProcessingStatus.PartiallyImported,
                                            2, 1, "Code automate sans correspondance : ALB",
                                            now.AddMinutes(-20), ct);
+            return true;
+        }, ct);
+    }
+
+    /// <summary>
+    /// COBAS INTEGRA 400 plus test numbers (the Test-ID "0-xxx" of Roche's control value sheets for
+    /// the INTEGRA 400 plus, serum/plasma application) and the catalogue parameter each measures.
+    /// The first parameter code the catalogue has is used, so the table follows the catalogue
+    /// whatever its codes. A test number must be checked against the analyser's own test
+    /// definitions before the link is enabled: the laboratory may run another application of the
+    /// same test (with or without pyridoxal phosphate, urine, STAT).
+    /// </summary>
+    private static readonly (string TestNumber, string[] Parameters)[] IntegraTests =
+    [
+        ("031", ["GLY"]),                       // GLUC3 serum/plasma (0-031)
+        ("003", ["UREE"]),                      // UREAL (0-003)
+        ("445", ["CREAT"]),                     // CREJ2 Jaffé compensé (0-445)
+        ("586", ["CHOL"]),                      // CHOL2 (0-586)
+        ("010", ["TG"]),                        // TRIGL (0-010)
+        ("494", ["ASAT"]),                      // ASTL sans phosphate de pyridoxal (0-494 ; avec : 0-594)
+        ("495", ["ALAT"]),                      // ALTL sans phosphate de pyridoxal (0-495 ; avec : 0-595)
+        ("551", ["PAL", "ALP"]),                // ALP2S (0-551 ; ALP2L : 0-550)
+        ("498", ["GGT", "GAMMA_GT"]),           // GGT-2 IFCC (0-498 ; Szasz : 0-598)
+        ("297", ["BILT", "BT", "BILI_T"]),      // BILT3 (0-297 ; autre application : 0-712)
+        ("735", ["BILD", "BD", "BILI_D"]),      // BILD2 (0-735 ; BIL-D : 0-249)
+        ("615", ["AU", "URIC", "AC_URIQUE"]),   // UA2 (0-615)
+        ("042", ["CA", "CALC"]),                // CA2 (0-042)
+        ("614", ["PHOS", "PHOSPHORE"]),         // PHOS2 (0-614)
+        ("059", ["MG"]),                        // MG (0-059)
+        ("592", ["ALB"]),                       // ALB2 (0-592)
+        ("027", ["PROT", "PROT_T"]),            // TP2 (0-027 ; monochromatique : 0-227)
+        ("596", ["FER", "FE"]),                 // IRON2 (0-596)
+        ("609", ["AMY", "AMYL"]),               // AMYL2 sérum/plasma (0-609)
+        ("052", ["LIP", "LIPASE"]),             // LIPC (0-052 ; autre application : 0-100)
+        ("323", ["CK", "CPK"]),                 // CKL (0-323 ; CK : 0-045)
+        ("607", ["LDH"]),                       // LDHI2 (0-607)
+        ("501", ["NA"]),                        // Na-I ISE indirecte (0-501 ; directe : 0-401)
+        ("502", ["K"]),                         // K-I (0-502 ; directe : 0-402)
+        ("503", ["CL"])                         // CL-I (0-503 ; directe : 0-403)
+        // HDL, LDL direct, CRP and HbA1c: no INTEGRA 400 plus test number in the sources at
+        // hand. Left out rather than guessed; the laboratory adds them from its test definitions.
+    ];
+
+    /// <summary>
+    /// The COBAS INTEGRA 400 plus link: RS-232, Roche's host protocol, the tubes' orders downloaded
+    /// on host query, the test-number table above and one received transmission in the log, for a
+    /// tube of the demonstration whose order holds a glucose, so "Tester une trame" has a real tube
+    /// to show. Left <b>disabled</b>, like the ASTM one: COM1 is a guess.
+    /// </summary>
+    private async Task SeedIntegraInterfaceAsync(CancellationToken ct)
+    {
+        var instruments = await InstrumentIdsAsync(ct);
+        if (!instruments.TryGetValue("DEMO-INTEGRA", out var instrumentId)) return;
+
+        var interfaceId = await QueryAsync(db => db.InstrumentInterfaces.IgnoreQueryFilters().AsNoTracking()
+            .Where(i => i.InstrumentId == instrumentId)
+            .Select(i => (Guid?)i.Id)
+            .FirstOrDefaultAsync(ct));
+
+        if (interfaceId is null)
+        {
+            var saved = await AsAsync<InstrumentInterfaceService, Result<Guid>>(DemoActor.Biologist,
+                s => s.SaveInterfaceAsync(new InterfaceRequest
+                {
+                    InstrumentId = instrumentId,
+                    Protocol = InstrumentProtocol.RocheIntegra,
+                    Transport = InstrumentTransportKind.Serial,
+                    Direction = InstrumentDirection.HostQueryDownload,
+                    IsEnabled = false,
+                    SerialPortName = "COM1",
+                    BaudRate = 9600,
+                    DataBits = 8,
+                    Parity = "None",
+                    StopBits = "One",
+                    Handshake = "XOnXOff",
+                    Encoding = "ASCII",
+                    // The manual's recommended host time-out.
+                    AcknowledgementTimeoutSeconds = 180,
+                    MaxRetries = 3,
+                    AutoAcceptResults = false,
+                    RaiseIssueOnUnmappedCode = true,
+                    RouteControlResultsToQc = true
+                }, ct), ct);
+
+            if (!Check(saved, "Interface DEMO-INTEGRA")) return;
+
+            interfaceId = saved.Value;
+
+            var parameters = await ParameterIdsAsync([.. IntegraTests.SelectMany(t => t.Parameters)], ct);
+
+            var mappings = IntegraTests
+                .Select(t => (t.TestNumber, Parameter: t.Parameters.FirstOrDefault(parameters.ContainsKey)))
+                .Where(t => t.Parameter is not null)
+                .Select(t => new MappingRequest(t.TestNumber, parameters[t.Parameter!], null, null,
+                                                null, null, IsEnabled: true))
+                .ToList();
+
+            if (mappings.Count > 0)
+            {
+                Check(await AsAsync<InstrumentInterfaceService, Result>(DemoActor.Biologist,
+                          s => s.SaveMappingsAsync(interfaceId.Value, mappings, ct), ct),
+                      "Correspondances DEMO-INTEGRA");
+            }
+        }
+
+        var hasTraffic = await QueryAsync(db => db.InstrumentMessageLog.IgnoreQueryFilters()
+            .AnyAsync(m => m.InstrumentInterfaceId == interfaceId, ct));
+
+        if (hasTraffic) return;
+
+        // A tube of the demonstration whose order holds the glucose.
+        var glucose = await ParameterIdsAsync(["GLY"], ct);
+        var tube = glucose.TryGetValue("GLY", out var glyId)
+            ? await QueryAsync(db => db.LabOrderItems.AsNoTracking()
+                .Where(i => i.SampleId != null
+                            && db.AnalysisTests.Any(a => a.Id == i.AnalysisTestId
+                                                         && a.Parameters.Any(p => p.Id == glyId)))
+                .Join(db.Samples.IgnoreQueryFilters(), i => i.SampleId, s => s.Id, (i, s) => s.Barcode)
+                .FirstOrDefaultAsync(ct))
+            : null;
+
+        tube ??= "DEMO-TUBE-INT";
+
+        await ActAsAsync(DemoActor.Administrator, ct);
+
+        var now = clock.Now;
+        var date = now.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+        // Block 04 as the message log stores it: header, then lines 53, 55 and 00, CR between them.
+        var received = new InstrumentMessageLog(interfaceId.Value, _siteId, MessageDirection.Inbound,
+            "14 COBAS INTEGRA400 04\r" +
+            $"53 {tube,-15} {date} SER\r" +
+            "55  31\r" +
+            "00 +9.400000E-01 g/L      0   0   0   0 +0.000000E+00 +0.000000E+00", now.AddMinutes(-15))
+        {
+            SpecimenIds = tube
+        };
+
+        await AsAsync<IInstrumentMessageLogStore, bool>(DemoActor.Administrator, async store =>
+        {
+            var id = await store.RecordAsync(received, ct);
+            await store.MarkProcessedAsync(id, InstrumentMessageProcessingStatus.AwaitingAcceptance, 1, 0,
+                                           "Interface_HeldForAcceptance", now.AddMinutes(-15), ct);
             return true;
         }, ct);
     }
