@@ -229,6 +229,13 @@ public class LisDbContext : DbContext
     public DbSet<NumberSequence> NumberSequences => Set<NumberSequence>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
 
+    // ---- Reprise de données (take-over from the previous application) -------------------------
+
+    public DbSet<Domain.Migration.MigrationBatch> MigrationBatches => Set<Domain.Migration.MigrationBatch>();
+    public DbSet<Domain.Migration.MigrationRecord> MigrationRecords => Set<Domain.Migration.MigrationRecord>();
+    public DbSet<Domain.Migration.HistoricalResult> HistoricalResults => Set<Domain.Migration.HistoricalResult>();
+    public DbSet<Domain.Migration.OpeningBalance> OpeningBalances => Set<Domain.Migration.OpeningBalance>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var builder = modelBuilder;
@@ -334,7 +341,12 @@ public class LisDbContext : DbContext
 
         [typeof(CriticalResultNotification)] = (Expression<Func<CriticalResultNotification, bool>>)(n =>
             !PrescriberScoped
-            || LabOrders.Any(o => o.Id == n.LabOrderId && o.PrescriberId == PrescriberScopeId))
+            || LabOrders.Any(o => o.Id == n.LabOrderId && o.PrescriberId == PrescriberScopeId)),
+
+        // The antériorités taken over from the previous application follow their patient.
+        [typeof(Domain.Migration.HistoricalResult)] = (Expression<Func<Domain.Migration.HistoricalResult, bool>>)(h =>
+            !PrescriberScoped
+            || LabOrders.Any(o => o.PatientId == h.PatientId && o.PrescriberId == PrescriberScopeId))
     };
 
     private void ApplyGlobalFilters(ModelBuilder builder)

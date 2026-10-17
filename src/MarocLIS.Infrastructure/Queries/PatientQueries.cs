@@ -362,7 +362,12 @@ public sealed class PatientQueries(LisDbContext db, IClock clock, IPermissionGua
                 p.SearchKey.Contains(normalised)
                 || p.MedicalRecordNumber.Contains(upper)
                 || (p.Cin != null && p.Cin.Contains(upper))
-                || (digits.Length >= 4 && p.MobilePhone != null && p.MobilePhone.Contains(digits)));
+                || (digits.Length >= 4 && p.MobilePhone != null && p.MobilePhone.Contains(digits))
+                // The previous application's numbers (« reprise de données »): the old file number,
+                // and the old accession number of an antériorité reprise. Exact, as typed or scanned.
+                || db.MigrationRecords.Any(m => m.Kind == Domain.Migration.DataMigrationKind.Patients
+                                                && m.EntityId == p.Id && m.OldNumber == raw)
+                || db.HistoricalResults.Any(h => h.PatientId == p.Id && h.OldAccessionNumber == raw));
         }
 
         if (payerId is { } payer)

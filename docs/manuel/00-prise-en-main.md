@@ -20,7 +20,7 @@
 | PERSONNEL | Dossiers du personnel, habilitations, échéances, congés, gardes, paie, accidents du travail. | 09 Ressources humaines |
 | RELATIONS | Statistiques par prescripteur, visites et conventions, rappels et enquêtes auprès des patients. | 08 Pilotage, statistiques et relations |
 | FINANCES | Export comptable, comptes et journaux, immobilisations, rapprochement bancaire, prévision de trésorerie, visa des caisses, coût de revient et marge. | 07 Finances (et 04 pour le **Visa des caisses**) |
-| ADMINISTRATION | Utilisateurs et rôles, journal d'audit, catalogue des analyses (et nomenclature des actes), automates, données de référence, paramètres (sites, numérotations, format des factures, lieux de stockage, imprimantes). | 10 Administration |
+| ADMINISTRATION | Utilisateurs et rôles, journal d'audit, catalogue des analyses (et nomenclature des actes), automates, données de référence, paramètres (sites, numérotations, format des factures, lieux de stockage, imprimantes), reprise des données de l'ancienne application. | 10 Administration |
 
 **Le parcours d'un dossier patient**, d'un bout à l'autre :
 

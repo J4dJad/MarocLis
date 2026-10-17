@@ -153,3 +153,27 @@ Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? 
 6. Mineurs : message d'erreur à l'ouverture de Données de référence pour la Comptabilité ; libellés « Désignation » sur le type de prescripteur/article, « Inclure les comptes désactivés » sur les données de référence, bouton « Rôles et droits » ambigu ; **Nouveau** paramètre sans site ni description ; **Nouveau rôle** sans description ni traductions ; modules `accounting`/`assets` sans libellé dans l'arbre des droits.
 
 Corrigés depuis la vérification précédente : modification d'une analyse, d'un paramètre, d'un équipement et d'un prescripteur (les fenêtres s'ouvrent sur la fiche complète) ; **Nouveau site** livré (deuxième site, centre de prélèvement, laboratoire partenaire, donc case **Sous-traitée** utilisable) ; **Réimporter** donné au Technicien de laboratoire et au Biologiste.
+
+### Reprise de données
+
+Ajouté sur la branche feat/reprise (2026-10-17). Service : `MarocLIS.Application/Migration/DataMigrationService.cs` ; écriture : `MarocLIS.Infrastructure/Reprise/DataMigrationStore.cs` ; lecture des bases : `MarocLIS.Infrastructure/Reprise/SourceDatabaseReader.cs`.
+
+| Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
+|---|---|---|---|---|
+| Entrée de menu et droit | ADMINISTRATION | **Reprise de données** | Oui | Forms/MainShellForm.cs:569 (`admin.migration`, Domain/Identity/Permissions.cs) ; accordé à l'administrateur au démarrage (rôle « tous les droits ») ; boutons grisés sans le droit V/DataMigrationView.cs:123 |
+| Modèles Excel/CSV | Source | **Télécharger le modèle**, Plus d'actions › **Télécharger tous les modèles…** | Oui | V/DataMigrationView.cs:1457, 1489 ; Application/Migration/MigrationTemplates.cs, Infrastructure/Reprise/MigrationWorkbook.cs |
+| Lire un fichier | Source | **Parcourir…**, **Feuille** | Oui | V/DataMigrationView.cs:575 ; CSV (séparateur et encodage détectés) Application/Migration/SourceTable.cs |
+| Connexion SQL Server / Express, MySQL, ODBC | Connexion à l'ancienne base | **Type de base**, **Serveur (et instance)** (**Serveur** pour MySQL), **Port**, **Windows** / **Connexion SQL Server**, **Lister les bases**, **Source de données ODBC (DSN)**, **Tester la connexion**, **Se connecter** | Oui | V/DataMigrationDialogs.cs:14, 239, 267 ; DSN lus dans le registre l.320 |
+| Mot de passe non conservé en clair | Connexion | **Mémoriser le mot de passe dans le profil…** | Oui | DPAPI utilisateur courant, V/DataMigrationProfiles.cs (`Protect`, `PasswordOf`) ; jamais dans l'export du profil |
+| Table, vue ou requête SELECT en lecture seule | Source / Requête SELECT | **Table ou vue**, **Requête SELECT…**, **Vérifier** | Oui | V/DataMigrationView.cs:701 ; garde Application/Migration/SourceQueryGuard.cs ; transaction toujours annulée SourceDatabaseReader.cs (`QueryAsync`) |
+| Correspondance des colonnes et profil | Colonnes | liste **Colonne de la source**, **Associer automatiquement**, **Enregistrer le profil** | Oui | V/DataMigrationView.cs:782, 1358 ; Application/Migration/ColumnMatcher.cs |
+| Correspondances de valeurs | Correspondances | **Valeur MarocLIS**, « (Ignorer ces lignes) », « (Conserver tel quel) » | Oui | V/DataMigrationView.cs:899 ; Application/Migration/Correspondences.cs ; une valeur manquante est bloquante (MigrationPlanner.cs `Migration_ValueNotMapped`) |
+| Simulation et rapport d'anomalies | Rapport d'anomalies | **Simulation**, **Exporter (CSV)** | Oui | V/DataMigrationView.cs:1045, 1190 |
+| Import par lots, arrêt, résumé | barre d'action | **Importer**, **Arrêter** | Oui | V/DataMigrationView.cs:1062, 1635 ; lots de 200 en transaction, DataMigrationService.cs (`ImportAsync`) |
+| Idempotence | — | — | Oui | clé « application\|type\|ancien identifiant », index unique `mig.MigrationRecords` (migration 20261017113022_RepriseDonnees) |
+| Journal et annulation | Journal des reprises ; Plus d'actions | **Annuler la dernière reprise…** | Oui | V/DataMigrationView.cs:1517, 1539 ; ne retire que ce qui n'a pas servi depuis |
+| Ancien n° → patient | Ancien n° → patient ; recherche des patients | **Ancien n° de dossier**, **Rechercher** | Oui | V/DataMigrationView.cs:1568 ; Infrastructure/Queries/PatientQueries.cs (`Matching`) |
+| Antériorités dans l'historique | Saisie des résultats, Validation biologique | colonne **Antériorité**, historique (« reprise ») | Oui | Infrastructure/Queries/ResultQueries.cs (`GetPreviousValuesAsync`, `GetValidatedHistoryAsync`) ; V/ResultHistoryDialog.cs, V/ResultEntryView.cs (`FormatPrevious`), V/ValidationView.cs |
+| Créances hors séries de factures | Créances reprises | liste et total | Oui | V/DataMigrationView.cs:1610 ; table `mig.OpeningBalances`, aucune facture ni numéro |
+| Valeur de départ d'une numérotation | Paramètres › Numérotations | **Valeur de départ** | Oui | V/SettingsView.cs:1373 ; Domain/Sequencing/NumberSequence.cs (`SetNextValue`) |
+| Quitter pendant une lecture ou un import | — | — | Oui | V/DataMigrationView.cs:546 (`ConfirmLeave`) |

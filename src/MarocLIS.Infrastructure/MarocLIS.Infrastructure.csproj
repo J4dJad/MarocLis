@@ -16,6 +16,9 @@
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="BCrypt.Net-Next" />
+    <PackageReference Include="ClosedXML" />
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="System.Data.Odbc" />
   </ItemGroup>
 
   <ItemGroup>

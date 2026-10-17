@@ -43,6 +43,9 @@ public sealed record ResultEntryRow
     public decimal? PreviousValue { get; init; }
     public DateOnly? PreviousDate { get; init; }
 
+    /// <summary>The previous value is an antériorité reprise from the old application.</summary>
+    public bool PreviousImported { get; init; }
+
     public ResultInterpretation Interpretation { get; init; }
     public ResultFlag Flags { get; init; }
     public TestResultStatus Status { get; init; }
@@ -288,6 +291,7 @@ public sealed class ResultEntryService(
                 UpperLimit = range?.UpperLimit,
                 PreviousValue = previous?.Value,
                 PreviousDate = previous?.Date,
+                PreviousImported = previous?.Imported ?? false,
                 Interpretation = result.Interpretation,
                 Flags = result.Flags,
                 Status = result.Status,
@@ -1004,8 +1008,13 @@ public interface IResultQueries
         CancellationToken ct = default);
 }
 
-public sealed record PreviousValue(decimal Value, DateOnly Date, Guid TestResultId);
+/// <param name="Imported">The value is an antériorité taken over from the previous application (« reprise »).</param>
+public sealed record PreviousValue(decimal Value, DateOnly Date, Guid TestResultId, bool Imported = false);
 
 /// <summary>One validated value on the antériorité chart, with the file it was reported in.</summary>
+/// <param name="Imported">
+/// Taken over from the previous application (« reprise »): <paramref name="TestResultId"/> is then the
+/// imported row's id and <paramref name="AccessionNumber"/> the old file number, possibly empty.
+/// </param>
 public sealed record ResultHistoryPoint(Guid TestResultId, DateTimeOffset ValidatedAt, decimal Value,
-                                        string? ValueOperator, string AccessionNumber);
+                                        string? ValueOperator, string AccessionNumber, bool Imported = false);

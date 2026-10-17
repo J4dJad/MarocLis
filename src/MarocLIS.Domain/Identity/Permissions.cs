@@ -182,6 +182,13 @@ public static class Permissions
         public const string ManageSites = "admin.sites.manage";
         public const string ManageSettings = "admin.settings.manage";
         public const string RunMaintenance = "admin.maintenance.run";
+
+        /// <summary>
+        /// « Reprise de données »: importing patients, prescribers, catalogue, antériorités and open
+        /// balances from the previous application. Administrator only (the role holds every permission,
+        /// so an existing database receives it at the next start).
+        /// </summary>
+        public const string Migration = "admin.migration";
     }
 
     public static class HumanResources

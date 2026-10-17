@@ -1281,7 +1281,8 @@ public sealed class ValidationView : LocalizedView
                 row.ReferenceRangeText ?? string.Empty,
                 row.PreviousValue is { } previous
                     ? $"{previous:N2}" +
-                      (row.PreviousDate is { } date ? $"  {date:dd/MM/yy}" : string.Empty)
+                      (row.PreviousDate is { } date ? $"  {date:dd/MM/yy}" : string.Empty) +
+                      (row.PreviousImported ? $" · {T("Migration.HistoryMarker")}" : string.Empty)
                     : "—",
                 row.InstrumentFlags ?? string.Empty);
 

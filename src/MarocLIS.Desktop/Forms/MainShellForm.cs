@@ -566,6 +566,9 @@ public sealed class MainShellForm : LocalizedForm
                                               Permissions.Billing.ManageTariffs],
                 n => n.NavigateToAsync<MasterDataView>()),
 
+            new("migration", "Nav.Migration", [Permissions.Administration.Migration],
+                n => n.NavigateToAsync<DataMigrationView>()),
+
             new("settings", "Nav.Settings", [Permissions.Administration.ManageSites,
                                               Permissions.Administration.ManageSettings],
                 n => n.NavigateToAsync<SettingsView>())

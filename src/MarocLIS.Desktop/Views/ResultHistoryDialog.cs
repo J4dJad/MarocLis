@@ -144,7 +144,11 @@ internal sealed class ResultHistoryDialog : Form
         _grid.Rows.Add(
             point.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm"),
             $"{point.Operator}{point.Value.ToString("N" + series.Decimals)}",
-            point.AccessionNumber ?? string.Empty);
+            // An antériorité reprise from the old application: its old number, and the word
+            // « reprise » so nobody looks for that file in MarocLIS.
+            point.Imported
+                ? $"{point.AccessionNumber} · {T("Migration.HistoryMarker")}".TrimStart(' ', '·')
+                : point.AccessionNumber ?? string.Empty);
 
     /// <summary>A value outside today's interval in the same colour as on the curve.</summary>
     private void OnCellFormatting(DataGridViewCellFormattingEventArgs e, ResultTrendSeries series)
@@ -176,7 +180,7 @@ internal static class ResultHistory
                                                 string accessionNumber, string? typed = null)
     {
         var points = history
-            .Select(p => new ResultTrendPoint(p.ValidatedAt, p.Value, p.ValueOperator, p.AccessionNumber))
+            .Select(p => new ResultTrendPoint(p.ValidatedAt, p.Value, p.ValueOperator, p.AccessionNumber, p.Imported))
             .ToList();
 
         ResultTrendPoint? current = null;

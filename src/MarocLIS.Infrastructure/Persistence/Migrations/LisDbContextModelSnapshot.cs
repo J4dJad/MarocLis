@@ -5825,6 +5825,283 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("TemperatureReadings", "inv");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Migration.HistoricalResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ImportedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<decimal?>("NumericValue")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("OldAccessionNumber")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReferenceRange")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTimeOffset>("ResultDate")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceCode")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("TestParameterId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("ValueOperator")
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<string>("ValueText")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId")
+                        .HasDatabaseName("IX_HistoricalResults_Batch");
+
+                    b.HasIndex("OldAccessionNumber")
+                        .HasDatabaseName("IX_HistoricalResults_OldAccession")
+                        .HasFilter("[OldAccessionNumber] IS NOT NULL");
+
+                    b.HasIndex("TestParameterId");
+
+                    b.HasIndex("PatientId", "TestParameterId", "ResultDate")
+                        .HasDatabaseName("IX_HistoricalResults_Patient_Parameter");
+
+                    b.ToTable("HistoricalResults", "mig");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Migration.MigrationBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<int>("Created")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Failed")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsInterrupted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsUndone")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RowCount")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Skipped")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceLabel")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<string>("SourceSystem")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<DateTimeOffset?>("UndoneAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<int>("UndoneCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Updated")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UserName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("IX_MigrationBatches_Started");
+
+                    b.ToTable("MigrationBatches", "mig");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Migration.MigrationRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<bool>("CreatedByBatch")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("FirstBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("LastBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OldNumber")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SourceKey")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityId")
+                        .HasDatabaseName("IX_MigrationRecords_Entity");
+
+                    b.HasIndex("LastBatchId")
+                        .HasDatabaseName("IX_MigrationRecords_Batch");
+
+                    b.HasIndex("OldNumber")
+                        .HasDatabaseName("IX_MigrationRecords_OldNumber")
+                        .HasFilter("[OldNumber] IS NOT NULL");
+
+                    b.HasIndex("Kind", "SourceKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_MigrationRecords_Key");
+
+                    b.ToTable("MigrationRecords", "mig");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Migration.OpeningBalance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateOnly>("AsOf")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("OldInvoiceDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("OldInvoiceNumber")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid?>("PatientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PayerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId")
+                        .HasDatabaseName("IX_OpeningBalances_Batch");
+
+                    b.HasIndex("PatientId")
+                        .HasDatabaseName("IX_OpeningBalances_Patient")
+                        .HasFilter("[PatientId] IS NOT NULL");
+
+                    b.HasIndex("PayerId");
+
+                    b.ToTable("OpeningBalances", "mig");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Orders.LabOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -10484,6 +10761,23 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("StorageUnitId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Migration.HistoricalResult", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Catalog.TestParameter", null)
+                        .WithMany()
+                        .HasForeignKey("TestParameterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Migration.OpeningBalance", b =>
+                {
+                    b.HasOne("MarocLIS.Domain.Patients.Payer", null)
+                        .WithMany()
+                        .HasForeignKey("PayerId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Orders.LabOrder", b =>

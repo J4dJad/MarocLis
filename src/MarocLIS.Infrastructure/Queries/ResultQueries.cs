@@ -123,11 +123,34 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
             .Select(g => g.OrderByDescending(x => x.ValidatedAt).First())
             .ToListAsync(ct);
 
-        return rows.ToDictionary(
+        var previous = rows.ToDictionary(
             row => row.TestParameterId,
-            row => new PreviousValue(row.NumericValue!.Value,
+            row => (At: row.ValidatedAt!.Value, Value: new PreviousValue(row.NumericValue!.Value,
                                      DateOnly.FromDateTime(row.ValidatedAt!.Value.Date),
-                                     row.Id));
+                                     row.Id)));
+
+        // The antériorités taken over from the previous application (« reprise de données ») are
+        // part of the history: the last value before the switch is the one a biologist compares the
+        // first MarocLIS value with. A MarocLIS value still wins when it is the later one.
+        var imported = await db.HistoricalResults
+            .AsNoTracking()
+            .Where(h => patientIds.Contains(h.PatientId)
+                        && parameters.Contains(h.TestParameterId)
+                        && h.NumericValue != null
+                        && h.ResultDate < before)
+            .Select(h => new { h.Id, h.TestParameterId, h.NumericValue, h.ResultDate })
+            .GroupBy(h => h.TestParameterId)
+            .Select(g => g.OrderByDescending(h => h.ResultDate).First())
+            .ToListAsync(ct);
+
+        foreach (var row in imported)
+        {
+            if (previous.TryGetValue(row.TestParameterId, out var current) && current.At >= row.ResultDate) continue;
+            previous[row.TestParameterId] = (row.ResultDate, new PreviousValue(row.NumericValue!.Value,
+                DateOnly.FromDateTime(row.ResultDate.Date), row.Id, Imported: true));
+        }
+
+        return previous.ToDictionary(p => p.Key, p => p.Value.Value);
     }
 
     /// <summary>
@@ -160,12 +183,27 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
             .Take(limit)
             .ToListAsync(ct);
 
+        // The antériorités taken over from the previous application, flagged as such.
+        var imported = await db.HistoricalResults
+            .AsNoTracking()
+            .Where(h => patientIds.Contains(h.PatientId) && h.TestParameterId == parameterId && h.NumericValue != null)
+            .OrderByDescending(h => h.ResultDate)
+            .ThenByDescending(h => h.Id)
+            .Take(limit)
+            .Select(h => new { h.Id, h.ResultDate, h.NumericValue, h.ValueOperator, h.OldAccessionNumber })
+            .ToListAsync(ct);
+
         // Taken newest first so the cap keeps the recent values; drawn oldest first.
         return [.. latest
-            .AsEnumerable()
-            .Reverse()
             .Select(x => new ResultHistoryPoint(x.Id, x.ValidatedAt!.Value, x.NumericValue!.Value,
-                                                x.ValueOperator, x.AccessionNumber))];
+                                                x.ValueOperator, x.AccessionNumber))
+            .Concat(imported.Select(h => new ResultHistoryPoint(h.Id, h.ResultDate, h.NumericValue!.Value,
+                                                                h.ValueOperator, h.OldAccessionNumber ?? string.Empty,
+                                                                Imported: true)))
+            .OrderByDescending(p => p.ValidatedAt)
+            .ThenByDescending(p => p.TestResultId)
+            .Take(limit)
+            .Reverse()];
     }
 
     /// <summary>
