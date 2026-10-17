@@ -476,6 +476,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("BillOfExchangeReceipts")
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<decimal>("CardReceipts")
                         .HasColumnType("decimal(18,6)");
 
@@ -504,6 +507,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("ExpectedCashReceipts")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal>("MobileReceipts")
                         .HasColumnType("decimal(18,6)");
 
                     b.Property<DateTimeOffset?>("ModifiedAt")
@@ -4353,6 +4359,10 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("ApprovedByUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset(3)");
