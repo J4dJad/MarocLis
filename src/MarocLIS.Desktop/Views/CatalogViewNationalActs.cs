@@ -322,6 +322,8 @@ public sealed partial class CatalogView
 
         if (result.IsFailure) { _dialogs.ShowFailure(result, _applyOfficial.Text); return; }
 
+        var next = NeighbourGap();
+
         var outcome = result.Value;
         _status.ForeColor = UiTheme.Normal;
         _status.Text = T("Nabm.Applied", gap.AnalysisCode, gap.NationalActCode!,
@@ -329,7 +331,29 @@ public sealed partial class CatalogView
                        + (outcome.SkippedFutureDated > 0 ? " " + T("Nabm.SkippedScheduled", outcome.SkippedFutureDated) : string.Empty);
 
         await LoadGapsAsync();
+        KeepPlace(gap, next);
         await LoadAnalysesAsync();
+    }
+
+    /// <summary>The line below the current one, or above it for the last: where to go once the current line is put right.</summary>
+    private NomenclatureGapRow? NeighbourGap()
+    {
+        var at = _gapGrid.CurrentRow?.Index ?? -1;
+        if (at < 0) return null;
+        var row = at + 1 < _gapGrid.Rows.Count ? _gapGrid.Rows[at + 1] : at > 0 ? _gapGrid.Rows[at - 1] : null;
+        return row?.Tag as NomenclatureGapRow;
+    }
+
+    /// <summary>
+    /// A line put right leaves the list, and the selection went back to the top of it: its neighbour
+    /// becomes current instead, so the analyses are corrected one after the other.
+    /// </summary>
+    private void KeepPlace(NomenclatureGapRow done, NomenclatureGapRow? neighbour)
+    {
+        if (neighbour is null || SelectedGap?.AnalysisId == done.AnalysisId) return;
+
+        RestoreSelection(_gapGrid, neighbour.AnalysisId, r => (r as NomenclatureGapRow)?.AnalysisId);
+        RefreshNationalActActions();
     }
 
     /// <summary>Opens the analysis editor on the analysis of the selected line, to set or correct its act code.</summary>
@@ -354,10 +378,12 @@ public sealed partial class CatalogView
 
         if (row is null) return;
 
+        var next = NeighbourGap();
         RestoreSelection(_analyses, gap.AnalysisId, r => (r as AnalysisRow)?.Id);
         await OnAnalysisSelectedAsync();
         await EditAnalysisAsync();
         await LoadGapsAsync();
+        KeepPlace(gap, next);
     }
 }
 

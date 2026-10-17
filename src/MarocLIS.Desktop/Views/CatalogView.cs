@@ -1326,6 +1326,9 @@ public sealed partial class CatalogView : LocalizedView
             }
         }
 
+        // « Utilisé par » on the Nomenclature tab counts the analyses citing each act: read again,
+        // or the act just linked (or unlinked) stayed counted as before until the screen reopened.
+        await LoadNationalActsAsync();
         await LoadAnalysesAsync();
     }
 

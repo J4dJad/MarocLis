@@ -442,9 +442,9 @@
   },
 
   "Nabm": {
-    "SkippedScheduled": "{0} tarif(s) ont déjà une révision programmée après aujourd'hui : à reprendre dans l'onglet Tarifs.",
-    "Applied": "{0} : coefficient officiel de l'acte {1} appliqué à {2} tarif(s) à compter du {3}.",
-    "ConfirmApply": "Appliquer le coefficient officiel de l'acte {0} (B {1}) à l'analyse {2} ?\n\n{3} tarif(s) en vigueur recevront une nouvelle version à compter du {4} ; un prix qui suivait la base de remboursement la suit. Les demandes déjà tarifées et les factures émises gardent leur prix.",
+    "SkippedScheduled": "{0} {0:plural:tarif a|tarifs ont} déjà une révision programmée après aujourd'hui : à reprendre dans l'onglet Tarifs.",
+    "Applied": "{0} : coefficient officiel de l'acte {1} appliqué à {2} {2:plural:tarif|tarifs} à compter du {3}.",
+    "ConfirmApply": "Appliquer le coefficient officiel de l'acte {0} (B {1}) à l'analyse {2} ?\n\n{3} {3:plural:tarif en vigueur recevra|tarifs en vigueur recevront} une nouvelle version à compter du {4} ; un prix qui suivait la base de remboursement la suit. Les demandes déjà tarifées et les factures émises gardent leur prix.",
     "CodeNotInListConfirm": "Le code d'acte {0} ne figure pas dans la nomenclature officielle des actes de biologie médicale.\n\nEnregistrer l'analyse avec ce code quand même ?",
     "CodeNotInList": "Le code {0} ne figure pas dans la nomenclature des actes.",
     "ActInfo": "Nomenclature : {0} — {1} — coefficient officiel B {2}",

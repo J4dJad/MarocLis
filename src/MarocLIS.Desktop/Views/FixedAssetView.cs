@@ -1094,6 +1094,9 @@ internal sealed class FixedAssetAccountsDialog : MasterDataEditor
             _boxes[category] = (TextField("Assets.AssetAccount", 250, y, 130, accounts.Asset, latin: true, mono: true),
                                 TextField("Assets.DepreciationAccount", 400, y, 130, accounts.Depreciation, latin: true, mono: true),
                                 TextField("Assets.ChargeAccount", 550, y, 130, accounts.Charge, latin: true, mono: true));
+            // A CGNC account has at most 20 digits (FixedAssetSettings.IsValid): typing stops there.
+            foreach (var box in new[] { _boxes[category].Asset, _boxes[category].Depreciation, _boxes[category].Charge })
+                box.MaxLength = 20;
             y += 54;
         }
 
