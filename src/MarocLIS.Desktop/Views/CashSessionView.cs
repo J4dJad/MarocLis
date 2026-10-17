@@ -314,7 +314,9 @@ public sealed class CashSessionView : LocalizedView
             Line("PaymentMethod.Cash", summary.CashReceipts),
             Line("PaymentMethod.Cheque", summary.ChequeReceipts),
             Line("PaymentMethod.Card", summary.CardReceipts),
-            Line("PaymentMethod.BankTransfer", summary.TransferReceipts)
+            Line("PaymentMethod.BankTransfer", summary.TransferReceipts),
+            Line("PaymentMethod.BillOfExchange", summary.BillOfExchangeReceipts),
+            Line("PaymentMethod.MobilePayment", summary.MobileReceipts)
         };
 
         if (summary.CashRefunds > 0m) lines.Add(Line("Payment.Refunds", -summary.CashRefunds));

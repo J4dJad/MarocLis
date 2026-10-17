@@ -49,7 +49,7 @@ public sealed class DefectCycle1ReceptionBillingTests
             new Application.Orders.OrderItemDetail(
                 Guid.NewGuid(), Guid.NewGuid(), "GLU", new MultilingualText("Glycémie"), "BIOCH", status,
                 OrderPriority.Routine, 100m, 70m, 30m, null, null, null, null, null, null, null, 0, null, null,
-                null, false, 1, 0).CanRepeat;
+                null, false, 1, 1).CanRepeat;
 
         Offered(LabOrderItemStatus.Pending).Should().BeFalse();
         Offered(LabOrderItemStatus.Collected).Should().BeFalse();

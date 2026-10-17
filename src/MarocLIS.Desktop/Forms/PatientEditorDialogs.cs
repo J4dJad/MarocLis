@@ -282,6 +282,17 @@ internal sealed class CoverageDialog : Form
                 _rateOverride.Focus();
                 return;
             }
+
+            // « 1 » or « 0,7 » is read as a fraction (100 %, 70 %), not as 1 % or 0,7 %: said back
+            // before it is saved, since a clerk who meant a small percentage would never notice.
+            if (parsed is > 0m and <= 1m
+                && !_dialogs.Confirm(_localizer.Format("Coverage.ConfirmFractionRate",
+                                                       _rateOverride.Text.Trim(), $"{rate * 100m:0.#}"),
+                                     _localizer["Coverage.RateOverride"]))
+            {
+                _rateOverride.Focus();
+                return;
+            }
         }
 
         Request = new CoverageRequest
@@ -551,7 +562,7 @@ internal sealed class DuplicateWarningForm : Form
     private readonly IReadOnlyList<DuplicateCandidate> _candidates;
 
     private readonly DataGridView _grid = UiTheme.Grid();
-    private readonly TextBox _reason = UiTheme.Input(560);
+    private readonly TextBox _reason = UiTheme.Input(720);
     private readonly Button _useExisting;
     private readonly Button _createAnyway;
 
@@ -570,7 +581,8 @@ internal sealed class DuplicateWarningForm : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(620, 400);
+        // 760 wide: at 620 every cell of the candidates was cut, and which file matched could not be read.
+        ClientSize = new Size(760, 400);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
@@ -580,7 +592,7 @@ internal sealed class DuplicateWarningForm : Form
             Font = UiTheme.BodyBold,
             ForeColor = UiTheme.Abnormal,
             AutoSize = false,
-            Bounds = new Rectangle(20, 14, 580, 40)
+            Bounds = new Rectangle(20, 14, 720, 40)
         };
 
         var explanation = new Label
@@ -589,7 +601,7 @@ internal sealed class DuplicateWarningForm : Form
             Font = UiTheme.Small,
             ForeColor = UiTheme.TextSecondary,
             AutoSize = false,
-            Bounds = new Rectangle(20, 54, 580, 32)
+            Bounds = new Rectangle(20, 54, 720, 32)
         };
 
         void Add(string name, int w, Font? f = null)
@@ -600,16 +612,18 @@ internal sealed class DuplicateWarningForm : Form
                 DefaultCellStyle = new DataGridViewCellStyle { Font = f ?? UiTheme.Body }
             });
 
-        Add("record", 16, UiTheme.Monospace);
-        Add("name", 26);
+        // Weighted for the 720 px of the grid: the record number, the telephone and « Correspondance »
+        // whole, the name taking what is left.
+        Add("record", 17, UiTheme.Monospace);
+        Add("name", 21);
         Add("gender", 10, UiTheme.Small);
-        Add("age", 8, UiTheme.Monospace);
-        Add("cin", 14, UiTheme.Monospace);
-        Add("phone", 14, UiTheme.Monospace);
-        Add("matched", 14, UiTheme.SmallBold);
+        Add("age", 7, UiTheme.Monospace);
+        Add("cin", 12, UiTheme.Monospace);
+        Add("phone", 15, UiTheme.Monospace);
+        Add("matched", 18, UiTheme.SmallBold);
 
         _grid.Dock = DockStyle.None;
-        _grid.Bounds = new Rectangle(20, 92, 580, 140);
+        _grid.Bounds = new Rectangle(20, 92, 720, 140);
 
         foreach (var c in candidates)
         {
@@ -828,6 +842,8 @@ internal sealed class PatientAlertDialog : Form
 
         _severity.SelectedIndexChanged += (_, _) => RefreshSeverity();
 
+        // Enter adds the alert, as in the other dialogs; Accept still requires the message.
+        AcceptButton = _ok;
         CancelButton = _cancel;
 
         ApplyTexts();

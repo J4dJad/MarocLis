@@ -564,7 +564,8 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
             .. sessions.Select(s => new CashSessionReviewRow(
                 s.Id, names.GetValueOrDefault(s.OperatorUserId) ?? "?", s.Workstation, s.OpenedAt, s.ClosedAt,
                 s.OpeningFloat, s.ExpectedClosingCash, s.CountedCash, s.Variance, s.VarianceExplanation,
-                s.CashWithdrawals, Money.Round(s.ChequeReceipts + s.CardReceipts + s.TransferReceipts),
+                s.CashWithdrawals, Money.Round(s.ChequeReceipts + s.CardReceipts + s.TransferReceipts
+                                           + s.BillOfExchangeReceipts + s.MobileReceipts),
                 s.Status == CashSessionStatus.Reconciled,
                 s.ReconciledByUserId is { } by ? names.GetValueOrDefault(by) : null,
                 s.ReconciledAt, s.ReconciliationComment, s.OperatorUserId))

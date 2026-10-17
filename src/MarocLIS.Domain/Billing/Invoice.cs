@@ -154,7 +154,11 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
         Math.Min(PayerShareAmount, Math.Max(0m, Money.Round(CreditedAmount - (TotalAmount - PayerShareAmount))));
 
     /// <summary>What the payer still owes on its share before its answer: the share less what the credit notes took off it.</summary>
-    public decimal PayerDueAmount => Money.Round(PayerShareAmount - PayerCreditedAmount);
+    public decimal PayerDueAmount => ComputePayerDue(TotalAmount, PayerShareAmount, CreditedAmount);
+
+    /// <summary>The payer-due rule, shared with the ledger rows that read the stored columns.</summary>
+    public static decimal ComputePayerDue(decimal total, decimal payerShare, decimal credited) =>
+        Money.Round(payerShare - Math.Min(payerShare, Math.Max(0m, Money.Round(credited - (total - payerShare)))));
 
     /// <summary>What a further credit note may still reverse.</summary>
     public decimal CreditableAmount =>

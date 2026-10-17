@@ -239,7 +239,10 @@ public sealed class BillingView : LocalizedView
         _ledger.Columns.Add(new DataGridViewCheckBoxColumn
         {
             Name = ColSelected, FillWeight = 4,
-            SortMode = DataGridViewColumnSortMode.NotSortable
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            // Fixed, as in the list above: in fill mode the box took the width the other columns'
+            // minimums left over (170 px), and the list scrolled sideways at 1366×768.
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None, Width = 36, Resizable = DataGridViewTriState.False
         });
 
         void Add(string name, int weight, Font? font = null,
@@ -263,11 +266,57 @@ public sealed class BillingView : LocalizedView
         Add("outstanding", 9, UiTheme.MonospaceBold, DataGridViewContentAlignment.MiddleRight);
         Add("overdue", 7, UiTheme.MonospaceBold, DataGridViewContentAlignment.MiddleRight);
         Add("status", 10, UiTheme.Small);
+
+        _ledgerWeights = _ledger.Columns.Cast<DataGridViewColumn>().ToDictionary(c => c.Name, c => c.FillWeight);
+    }
+
+    private Dictionary<string, float> _ledgerWeights = [];
+
+    /// <summary>
+    /// Shares the ledger's width between its columns once the rows are in. Each minimum raised to
+    /// fit the values widens its column, and WinForms' own sharing then overshot: the list scrolled
+    /// sideways by about 25 px at 1366×768 although its columns' minimums fit. Each column gets its
+    /// weighted share, raised to its minimum, the rest shared by weight between the others; the
+    /// results become the weights, which WinForms then applies as they are.
+    /// </summary>
+    private void RestoreLedgerFill()
+    {
+        if (IsDisposed || !_ledger.IsHandleCreated) return;
+
+        var fill = _ledger.Columns.Cast<DataGridViewColumn>()
+            .Where(c => c.Visible && c.InheritedAutoSizeMode == DataGridViewAutoSizeColumnMode.Fill
+                        && _ledgerWeights.ContainsKey(c.Name))
+            .ToList();
+        var fixedWidth = _ledger.Columns.Cast<DataGridViewColumn>()
+            .Where(c => c.Visible && !fill.Contains(c)).Sum(c => c.Width);
+        var scrollbar = _ledger.Controls.OfType<VScrollBar>().Any(b => b.Visible) ? SystemInformation.VerticalScrollBarWidth : 0;
+        var available = _ledger.ClientSize.Width - fixedWidth - scrollbar - 2;
+
+        // The minimums do not fit: the list scrolls, as it must.
+        if (fill.Count == 0 || fill.Sum(c => c.MinimumWidth) > available) return;
+
+        var target = new Dictionary<DataGridViewColumn, float>();
+        var open = fill.ToList();
+        var room = (float)available;
+        while (open.Count > 0)
+        {
+            var weights = open.Sum(c => _ledgerWeights[c.Name]);
+            var clamped = open.Where(c => room * _ledgerWeights[c.Name] / weights < c.MinimumWidth).ToList();
+            if (clamped.Count == 0)
+            {
+                foreach (var c in open) target[c] = room * _ledgerWeights[c.Name] / weights;
+                break;
+            }
+            foreach (var c in clamped) { target[c] = c.MinimumWidth; room -= c.MinimumWidth; open.Remove(c); }
+        }
+
+        foreach (var (column, width) in target) column.FillWeight = Math.Max(1f, width);
     }
 
     private void WireBehaviour()
     {
         _refresh.Click += async (_, _) => await ActivateAsync();
+        _ledger.SizeChanged += (_, _) => { if (_ledger.IsHandleCreated) _ledger.BeginInvoke(RestoreLedgerFill); };
         _statusFilter.SelectedIndexChanged += async (_, _) => await LoadLedgerAsync();
 
         _search.KeyDown += async (_, e) =>
@@ -425,7 +474,7 @@ public sealed class BillingView : LocalizedView
             _pending.Column("registered").HeaderText = T("Order.RegisteredAt");
             _pending.Column("payer").HeaderText = T("Coverage.Payer");
             _pending.Column("analyses").HeaderText = T("Catalog.Analyses");
-            _pending.Column("total").HeaderText = T("Billing.TotalDue");
+            _pending.Column("total").HeaderText = T("Billing.TotalShort");
             _pending.Column("payershare").HeaderText = T("Billing.PayerShare");
             _pending.Column("patientshare").HeaderText = T("Billing.PatientShare");
             _pending.Column("deposit").HeaderText = T("Deposit.Title");
@@ -434,11 +483,12 @@ public sealed class BillingView : LocalizedView
         if (_ledger.Columns.Count > 0)
         {
             _ledger.Column(ColSelected).HeaderText = string.Empty;
+            // Short headers: with the long ones the list scrolled sideways at 1366×768.
             _ledger.Column("number").HeaderText = T("Billing.Number");
-            _ledger.Column("kind").HeaderText = T("Field.Name");
-            _ledger.Column("date").HeaderText = T("Billing.IssueDate");
+            _ledger.Column("kind").HeaderText = T("Billing.KindShort");
+            _ledger.Column("date").HeaderText = T("Billing.IssueDateShort");
             _ledger.Column("billedto").HeaderText = T("Billing.BilledTo");
-            _ledger.Column("total").HeaderText = T("Billing.TotalDue");
+            _ledger.Column("total").HeaderText = T("Billing.TotalShort");
             _ledger.Column("paid").HeaderText = T("Billing.Paid");
             _ledger.Column("outstanding").HeaderText = T("Billing.Outstanding");
             _ledger.Column("overdue").HeaderText = T("Order.Overdue");
@@ -600,6 +650,9 @@ public sealed class BillingView : LocalizedView
         }
 
         _ledger.ResumeLayout(performLayout: true);
+
+        // After the minimums the rows raise (measured on the next message loop pass).
+        if (_ledger.IsHandleCreated) _ledger.BeginInvoke(RestoreLedgerFill);
 
         if (kept is { } keptId
             && _ledger.Rows.Cast<DataGridViewRow>()
@@ -769,10 +822,11 @@ public sealed class BillingView : LocalizedView
         }
 
         // Only the ones the chosen correction can actually apply to: a bounce is meaningless for
-        // cash, and neither applies to a payment already refunded.
+        // cash, a refund only gives back what the patient paid, and neither applies to a payment
+        // already refunded.
         var candidates = bounce
             ? payments.Value.Where(p => p.CanBounce).ToList()
-            : payments.Value.Where(p => p.IsCorrectable).ToList();
+            : payments.Value.Where(p => p.CanRefund).ToList();
 
         if (candidates.Count == 0)
         {

@@ -527,8 +527,10 @@ internal sealed class PayerSettlementDialog : Form
 
         var share = new Label
         {
-            Text = $"{localizer["Billing.PayerShare"]} : " +
-                   Money.Of(invoice.PayerShare).Format(localizer.CurrentLanguage),
+            // What the payer still owes: after a credit note, the original share overstated it and
+            // the shortfall was computed on money the payer no longer owed.
+            Text = $"{localizer[invoice.PayerDue < invoice.PayerShare ? "Claim.PayerDue" : "Billing.PayerShare"]} : " +
+                   Money.Of(invoice.PayerDue).Format(localizer.CurrentLanguage),
             Font = UiTheme.SectionTitle,
             ForeColor = UiTheme.Accent,
             AutoSize = false,
@@ -543,7 +545,7 @@ internal sealed class PayerSettlementDialog : Form
         _accepted.MaxLength = EditorValues.AmountMaxLength;
         _accepted.TextAlign = HorizontalAlignment.Right;
         _accepted.Font = UiTheme.MonospaceBold;
-        _accepted.Text = invoice.PayerShare.ToString("0.00");
+        _accepted.Text = invoice.PayerDue.ToString("0.00");
 
         var remittanceLabel = UiTheme.FieldLabel(localizer["Claim.RemittanceReference"]);
         remittanceLabel.Location = new Point(200, 52);
@@ -599,7 +601,7 @@ internal sealed class PayerSettlementDialog : Form
     }
 
     private decimal Missing =>
-        TryParseAccepted(out var amount) ? Money.Round(_invoice.PayerShare - amount) : 0m;
+        TryParseAccepted(out var amount) ? Money.Round(_invoice.PayerDue - amount) : 0m;
 
     private void RefreshShortfall()
     {
@@ -616,10 +618,10 @@ internal sealed class PayerSettlementDialog : Form
 
     private void Accept()
     {
-        if (!TryParseAccepted(out var amount) || amount < 0m || amount > _invoice.PayerShare)
+        if (!TryParseAccepted(out var amount) || amount < 0m || amount > _invoice.PayerDue)
         {
             _dialogs.Warn(_localizer.Format("Claim_AcceptedAmountInvalid",
-                Money.Of(_invoice.PayerShare).Format(_localizer.CurrentLanguage)));
+                Money.Of(_invoice.PayerDue).Format(_localizer.CurrentLanguage)));
             _accepted.Focus();
             return;
         }

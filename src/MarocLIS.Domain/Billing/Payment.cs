@@ -253,8 +253,16 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
     public decimal CardReceipts { get; private set; }
     public decimal TransferReceipts { get; private set; }
 
+    /// <summary>
+    /// Bills of exchange and mobile payments are taken at the counter like cheques; the shift report
+    /// left them out, so its lines never added up to what the operator had taken.
+    /// </summary>
+    public decimal BillOfExchangeReceipts { get; private set; }
+    public decimal MobileReceipts { get; private set; }
+
     public decimal TotalReceipts =>
-        Money.Round(ExpectedCashReceipts + ChequeReceipts + CardReceipts + TransferReceipts);
+        Money.Round(ExpectedCashReceipts + ChequeReceipts + CardReceipts + TransferReceipts
+                    + BillOfExchangeReceipts + MobileReceipts);
 
     /// <summary>Accumulates a settlement into the shift totals.</summary>
     public void Accumulate(PaymentMethod method, decimal amount)
@@ -266,6 +274,8 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
             case PaymentMethod.Cheque: ChequeReceipts = Money.Round(ChequeReceipts + value); break;
             case PaymentMethod.Card: CardReceipts = Money.Round(CardReceipts + value); break;
             case PaymentMethod.BankTransfer: TransferReceipts = Money.Round(TransferReceipts + value); break;
+            case PaymentMethod.BillOfExchange: BillOfExchangeReceipts = Money.Round(BillOfExchangeReceipts + value); break;
+            case PaymentMethod.MobilePayment: MobileReceipts = Money.Round(MobileReceipts + value); break;
         }
     }
 

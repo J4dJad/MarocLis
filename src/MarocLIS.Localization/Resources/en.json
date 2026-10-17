@@ -2730,6 +2730,9 @@
   },
 
   "Coverage": {
+    "RateShort": "Rate",
+    "RelationshipShort": "Relationship",
+    "ConfirmFractionRate": "« {0} » will be saved as a reimbursement rate of {1} %. Confirm this rate?",
     "AccountingAccount": "Accounting account",
     "Title": "Coverage",
     "Payer": "Payer",
@@ -3424,6 +3427,9 @@
   },
 
   "Billing": {
+    "TotalShort": "Total",
+    "IssueDateShort": "Date",
+    "KindShort": "Type",
     "UninvoicedTruncated": "only the {0} most recent orders are shown",
     "ReinvoiceToPayer": "This order is being invoiced again after a credit note. It was registered without third-party payment.\n\nAddress this invoice to the third-party payer {0} (its share claimed from it)?\n\nNo: the invoice is made out to the patient, for the full amount.",
     "InvoicedDepositToRefund": "Invoiced ({0}) — deposit to refund",
@@ -3484,6 +3490,7 @@
   },
 
   "Claim": {
+    "PayerDue": "Still due from the payer",
     "PartiallySubmitted": "Batch {0} sent with {1} invoice(s). {2} invoice(s) were not sent:",
     "SettlementRecorded": "{0}: {1} accepted out of {2}.",
     "ShortfallWriteOff": "Write it off",
@@ -3497,7 +3504,7 @@
     "ClaimableSummaryBlocked": "Ready to claim — {0} invoice(s), {1} · {2} blocked",
     "Blockers": "What blocks it",
     "AgeDays": "Days",
-    "SelectClaimable": "Tick everything claimable",
+    "SelectClaimable": "Tick this payer's claimable invoices",
     "SelectionSummary": "{0} invoice(s) selected — {1}",
     "MixedPayerSelection": "{0} invoice(s) across {1} different payers: a batch concerns one payer only.",
     "ConfirmSubmit": "Submit {0} invoice(s) to {1}, for {2}?",
@@ -4981,7 +4988,7 @@
   "Claim_RejectionReasonRequired": "A rejection or part-payment must carry the reason the payer gave: it is what decides whether the claim is corrected and resubmitted or written off.",
   "Claim_NotSubmitted": "Invoice {0} has not been submitted to a third-party payer.",
   "Claim_SettlementAlreadyRecorded": "The accepted amount has already been recorded for invoice {0}.",
-  "Claim_AcceptedAmountInvalid": "The accepted amount must be between 0 and the payer's share ({0}).",
+  "Claim_AcceptedAmountInvalid": "The accepted amount must be between 0 and what the payer still owes ({0}).",
   "Claim_AlreadySubmitted": "Invoice {0} has already been submitted to the payer: it cannot go into a second claim batch.",
   "Claim_OutcomeSkippedSettled": "Invoice {0} already has its payer settlement recorded: the batch-level answer does not change it.",
   "Claim_MixedPayers": "Invoice {0} belongs to a different payer than the rest of the batch: a batch covers a single payer, so it must be sent separately.",
@@ -5075,6 +5082,7 @@
   "Item_RepeatReasonRequired": "State the reason for repeating.",
   "Item_RepeatRequiresUnvalidation": "This analysis has biologically validated results: the validation must be withdrawn first (\"unvalidate\" right) before the analysis is repeated.",
   "Item_CannotCorrectFromStatus": "The analysis cannot be reopened for correction from status \"{0}\".",
+  "Item_RepeatRequiresValue": "{0} has no value entered yet: the analysis can only be run again after a first run.",
 
   "Instrument_NotFound": "Analyser not found.",
   "Interface_NotFound": "Analyser interface not found.",
@@ -5284,6 +5292,7 @@
   "Payment_CashThresholdWarning": "A cash payment above {0} MAD attracts a tax penalty; prefer a traceable method.",
   "Payment_KindNotPayable": "Payments can only be recorded against an invoice: a credit note or a quotation is not settled.",
   "Payment_ExceedsPatientShare": "The patient owes only {0} on this invoice: the rest is the payer's share, settled through the third-party claim.",
+  "Payment_OnlyPatientPaymentsRefundable": "Only a payment made by the patient can be refunded: not a write-off or a payer's settlement.",
 
   "CashSession_NotOpen": "This cash session is not open.",
   "CashSession_VarianceExplanationRequired": "A till variance of {0} MAD must be explained before closing.",
@@ -5293,6 +5302,7 @@
   "CashSession_ReconcilerIsOperator": "The sign-off must come from someone other than the cashier: you ran this till.",
   "CashSession_ReconciliationCommentRequired": "The till shows a variance of {0} MAD: a comment is required to sign it off.",
   "CashSession_WithdrawalExceedsCash": "The withdrawal exceeds the cash expected in the till ({0} MAD).",
+  "CashSession_RefundExceedsCash": "The cash refund exceeds the cash expected in the till ({0} MAD).",
 
   "Qc_RejectionRequiresCorrectiveAction": "A rejected control requires the corrective action taken to be described.",
   "Qc_NotRejected": "This control is not rejected.",

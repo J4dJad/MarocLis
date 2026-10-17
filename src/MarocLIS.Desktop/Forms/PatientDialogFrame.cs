@@ -94,6 +94,11 @@ internal sealed class PatientDialogFrame
 
         // --- footer ----------------------------------------------------------------------------------
 
+        // Taking a button off the form clears it as the form's default or cancel button: Enter did
+        // nothing in « Alerte patient » and the other framed dialogs. Put back once in the footer.
+        var accept = form.AcceptButton;
+        var cancel = form.CancelButton;
+
         foreach (var button in _buttons)
         {
             button.Parent?.Controls.Remove(button);
@@ -115,10 +120,14 @@ internal sealed class PatientDialogFrame
         _footer.BackColor = UiTheme.SurfaceRaised;
         _footer.Tag = UiTags.OwnLayout;
         _footer.Layout += (_, _) => PlaceFooter();
+        _footer.RightToLeftChanged += (_, _) => PlaceFooter();
 
         form.Controls.Add(_title);
         form.Controls.Add(_sentence);
         form.Controls.Add(_footer);
+
+        form.AcceptButton = accept;
+        form.CancelButton = cancel;
 
         form.ClientSize = new Size(form.ClientSize.Width, _contentTop + (bottom - top) + 16 + FooterHeight);
     }
@@ -139,19 +148,26 @@ internal sealed class PatientDialogFrame
         if (_contentTop == 0) _contentTop = 46 + height + 16;
     }
 
-    // Laid out left to right; a mirrored form mirrors the bar with the rest.
+    // Laid out left to right, then mirrored in Arabic: the form's mirroring does not reach the
+    // children of a panel, and the bar kept « Annuler » then the primary from left to right.
     private void PlaceFooter()
     {
-        var x = _footer.ClientSize.Width - Side;
+        var width = _footer.ClientSize.Width;
+        var rtl = _footer.RightToLeft == RightToLeft.Yes;
+
+        Rectangle Mirrored(Rectangle r) => rtl ? r with { X = width - r.Right } : r;
+
+        var x = width - Side;
         foreach (var button in _buttons.Reverse())
         {
             x -= button.Width;
-            button.Location = new Point(x, (FooterHeight - button.Height) / 2 + 1);
+            button.Bounds = Mirrored(new Rectangle(x, (FooterHeight - button.Height) / 2 + 1,
+                                                   button.Width, button.Height));
             x -= 8;
         }
 
         if (_status is not null)
-            _status.Bounds = new Rectangle(Side, 4, Math.Max(0, x - Side - 4), FooterHeight - 8);
+            _status.Bounds = Mirrored(new Rectangle(Side, 4, Math.Max(0, x - Side - 4), FooterHeight - 8));
     }
 
     // Field captions (UiTheme.FieldLabel: 11 px, muted, sized to their text) become 12 px semibold.

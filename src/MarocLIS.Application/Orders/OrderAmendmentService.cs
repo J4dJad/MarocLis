@@ -111,12 +111,16 @@ public sealed record OrderItemDetail(
                                             or LabOrderItemStatus.Reported
                                             or LabOrderItemStatus.Cancelled);
 
-    /// <summary>Mirrors <see cref="LabOrderItem.Repeat"/>.</summary>
-    public bool CanRepeat => Status is not (LabOrderItemStatus.Pending
-                                            or LabOrderItemStatus.Collected
-                                            or LabOrderItemStatus.Validated
-                                            or LabOrderItemStatus.Reported
-                                            or LabOrderItemStatus.Cancelled);
+    /// <summary>
+    /// Mirrors <see cref="LabOrderItem.Repeat"/>, and the service's rule that a run must have
+    /// produced a value before it can be run again.
+    /// </summary>
+    public bool CanRepeat => EnteredResultCount > 0
+                             && Status is not (LabOrderItemStatus.Pending
+                                               or LabOrderItemStatus.Collected
+                                               or LabOrderItemStatus.Validated
+                                               or LabOrderItemStatus.Reported
+                                               or LabOrderItemStatus.Cancelled);
 
     /// <summary>Mirrors <see cref="LabOrderItem.IsOverdue"/>.</summary>
     public bool IsOverdueAt(DateTimeOffset now) =>
@@ -551,6 +555,12 @@ public sealed class OrderAmendmentService(
         if (item is null) return Result.Failure(Error.NotFound("Order_ItemNotFound"));
 
         var runResults = await results.ListAsync(r => r.LabOrderItemId == item.Id, ct);
+
+        // Nothing to run again until a value is in: the analysis is still waiting for its first run,
+        // and the prompt offered a « passage n° 0 ».
+        if (!runResults.Any(r => r.Status != TestResultStatus.Awaited))
+            return Result.Failure(Error.Conflict("Item_RepeatRequiresValue",
+                                                 item.AnalysisTest?.Code ?? string.Empty));
 
         // A value a biologist released stays released until its validation is withdrawn, which
         // takes the right to withdraw it. Repeating around it left the released figure printing
