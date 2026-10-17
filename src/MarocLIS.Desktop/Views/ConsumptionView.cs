@@ -347,16 +347,17 @@ internal sealed class StockSettingsDialog : MasterDataEditor
     internal StockSettings? Settings { get; private set; }
 
     internal StockSettingsDialog(ILocalizer localizer, IUserDialogs dialogs, StockSettings current)
-        : base(localizer, dialogs, "Stock.Settings", null, 560, 220)
+        : base(localizer, dialogs, "Stock.Settings", null, 640, 220)
     {
         _current = current;
 
-        _threshold = Number("Stock.VarianceThreshold", 20, 14, 240, current.VarianceThresholdPercent, 100m, 1);
-        _window = Number("Stock.ConsumptionWindow", 290, 14, 240, current.ConsumptionWindowDays, 730m);
-        _warning = Number("Stock.ExpiryWarningDays", 20, 70, 240, current.ExpiryWarningDays, 365m);
-        _critical = Number("Stock.ExpiryCriticalDays", 290, 70, 240, current.ExpiryCriticalDays, 365m);
+        // 290 pixels a box: the expiry captions, in Arabic, ran past 240 into their neighbour.
+        _threshold = Number("Stock.VarianceThreshold", 20, 14, 290, current.VarianceThresholdPercent, 100m, 1);
+        _window = Number("Stock.ConsumptionWindow", 330, 14, 290, current.ConsumptionWindowDays, 730m);
+        _warning = Number("Stock.ExpiryWarningDays", 20, 70, 290, current.ExpiryWarningDays, 365m);
+        _critical = Number("Stock.ExpiryCriticalDays", 330, 70, 290, current.ExpiryCriticalDays, 365m);
 
-        Buttons(160, 560);
+        Buttons(160, 640);
 
         StockDialog.Frame(this, localizer, "StocksUi.Dialog.StockSettings");
     }

@@ -113,8 +113,11 @@ internal sealed class StockChip : CheckBox
     protected override void OnTextChanged(EventArgs e)
     {
         base.OnTextChanged(e);
-        Width = TextRenderer.MeasureText(Mnemonics.Plain(Text), UiTheme.BodyBold, Size.Empty,
-                                         TextFormatFlags.NoPadding).Width + 30;
+        // Wide enough for the text in either weight (ticked chips are bold, but an Arabic fallback
+        // font may draw the regular weight as wide as the bold one) with the usual text padding.
+        var plain = Mnemonics.Plain(Text);
+        Width = Math.Max(TextRenderer.MeasureText(plain, UiTheme.BodyBold).Width,
+                         TextRenderer.MeasureText(plain, UiTheme.Body).Width) + 30;
     }
 
     protected override void OnCheckedChanged(EventArgs e)
@@ -783,6 +786,7 @@ internal static class StockDialog
         else FrameAbsolute(form, header, start);
 
         Captions(form);
+        FitCaptions(form);
 
         // The dialogs are plain forms: they get the icons of the catalogue and the Arabic mirroring
         // here, as the screens get them from their base class.
@@ -952,6 +956,49 @@ internal static class StockDialog
         form.Controls.Add(header);
         Place();
     }
+
+    /// <summary>
+    /// Stops a caption longer than the room before the next field of its row (an Arabic caption
+    /// above a narrow box, mostly) from running over its neighbour's caption: it ends with « … »
+    /// at that limit and shows in full when pointed at. Mirroring keeps its end on its box's edge.
+    /// </summary>
+    private static void FitCaptions(Form form)
+    {
+        ToolTip? tip = null;
+
+        void Walk(Control parent)
+        {
+            if (parent is DataGridView or TableLayoutPanel or FlowLayoutPanel) return;
+
+            var siblings = parent.Controls.Cast<Control>().Where(c => c.Dock == DockStyle.None).ToList();
+            foreach (var label in siblings.OfType<Label>().Where(IsCaption).ToList())
+            {
+                var limit = siblings
+                    .Where(c => c != label && c.Left > label.Left && c.Top < label.Bottom && c.Bottom > label.Top)
+                    .Select(c => c.Left - 6)
+                    .DefaultIfEmpty(parent is Form ? parent.ClientSize.Width - 8 : int.MaxValue)
+                    .Min();
+                var room = limit - label.Left;
+                if (label.PreferredWidth <= room || room < 40) continue;
+
+                var height = label.PreferredHeight;
+                label.AutoSize = false;
+                label.AutoEllipsis = true;
+                label.Size = new Size(room, height);
+                tip ??= new ToolTip();
+                tip.SetToolTip(label, label.Text);
+            }
+
+            foreach (Control child in parent.Controls) Walk(child);
+        }
+
+        Walk(form);
+        if (tip is not null) form.Disposed += (_, _) => tip.Dispose();
+    }
+
+    private static bool IsCaption(Label label) =>
+        label.AutoSize && (label.Font.Equals(UiTheme.SmallBold) || label.Font.Equals(UiTheme.Small))
+        && label.ForeColor.ToArgb() == UiTheme.TextSecondary.ToArgb();
 
     // The captions above the fields: 11 px semibold in ink-muted, as on the rebuilt screens.
     private static void Captions(Control parent)

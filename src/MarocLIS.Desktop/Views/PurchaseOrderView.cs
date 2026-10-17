@@ -820,9 +820,11 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
         _unit.Location = new Point(134, 92);
         Controls.Add(_unit);
 
-        _price = TextField("PurchaseOrders.UnitPrice", 200, 68, 120, null, latin: true, mono: true, right: true);
-        _discount = TextField("PurchaseOrders.DiscountPercent", 340, 68, 90, "0", latin: true, mono: true, right: true);
-        _vat = TextField("PurchaseOrders.VatPercent", 450, 68, 90, "20", latin: true, mono: true, right: true);
+        // The price box takes the room the two rates do not need: its caption, in Arabic, ran into
+        // the discount's over 120 pixels.
+        _price = TextField("PurchaseOrders.UnitPrice", 200, 68, 160, null, latin: true, mono: true, right: true);
+        _discount = TextField("PurchaseOrders.DiscountPercent", 380, 68, 70, "0", latin: true, mono: true, right: true);
+        _vat = TextField("PurchaseOrders.VatPercent", 470, 68, 70, "20", latin: true, mono: true, right: true);
         // « 10 % » in the discount was ordered with no discount, and a slip in the VAT at 20 %.
         Numeric(EditorValues.MeasureMaxLength, _quantity, _discount, _vat);
         Numeric(EditorValues.AmountMaxLength, _price);

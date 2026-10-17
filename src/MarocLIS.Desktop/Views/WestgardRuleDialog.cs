@@ -109,6 +109,18 @@ internal sealed class WestgardRuleDialog : Form
         cancel.Bounds = new Rectangle(310, 420, 290, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
+        // The classic preset spells its six rules out; where that is wider than its half of the
+        // row (in Arabic), it takes the whole row and the single-rule preset goes under it.
+        if (TextRenderer.MeasureText(classic.Text, classic.Font).Width + classic.Padding.Horizontal + 24 > classic.Width)
+        {
+            var step = UiTheme.ButtonHeight + 8;
+            classic.Width = 580;
+            minimal.Location = new Point(20, classic.Top + step);
+            ok.Top += step;
+            cancel.Top += step;
+            ClientSize = new Size(ClientSize.Width, ClientSize.Height + step);
+        }
+
         Controls.AddRange([heading, _list, _summary, classic, minimal, ok, cancel]);
 
         AcceptButton = ok;
