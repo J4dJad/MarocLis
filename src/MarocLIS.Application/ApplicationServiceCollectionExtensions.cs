@@ -81,6 +81,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Accounting.IDepreciationEntrySource, Assets.FixedAssetDepreciationSource>();
         services.AddScoped<Treasury.TreasuryService>();
         services.AddScoped<Treasury.CashSessionReviewService>();
+        services.AddScoped<Migration.DataMigrationService>();
 
         return services;
     }

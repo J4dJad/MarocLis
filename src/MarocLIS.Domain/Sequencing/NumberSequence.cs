@@ -127,6 +127,33 @@ public sealed class NumberSequence : Entity
         _ => 40
     };
 
+    /// <summary>The series whose numbers are fiscal documents: the DGI requires them unbroken.</summary>
+    public static bool IsFiscal(SequencePurpose purpose) =>
+        purpose is SequencePurpose.Invoice or SequencePurpose.CreditNote;
+
+    /// <summary>
+    /// Sets the next number the series hands out, so a laboratory taking over from another
+    /// application starts its own numbers where they cannot be confused with the old ones. Any
+    /// value before the first number is handed out; afterwards only forward, and never for a fiscal
+    /// series, whose numbers must follow one another without a gap.
+    /// </summary>
+    public Result SetNextValue(long next)
+    {
+        if (next is < 1 or >= 1_000_000_000_000)
+            return Result.Failure(Error.Validation("Sequence_StartOutOfRange"));
+
+        if (LastAllocatedValue > 0)
+        {
+            if (IsFiscal(Purpose))
+                return Result.Failure(Error.Regulatory("Sequence_StartFrozenAfterFirstUse", LastAllocatedValue));
+            if (next <= LastAllocatedValue)
+                return Result.Failure(Error.Validation("Sequence_StartBelowLastUsed", LastAllocatedValue));
+        }
+
+        NextValue = next;
+        return Result.Success();
+    }
+
     public void Close(DateTimeOffset at)
     {
         IsClosed = true;

@@ -434,6 +434,41 @@ public sealed class ConfigurationService(
     }
 
     /// <summary>
+    /// Sets the next number of a series (« Valeur de départ »): before go-live, so the laboratory's
+    /// new numbers follow on from — or stand well apart from — those of its previous application.
+    /// The rules are <see cref="NumberSequence.SetNextValue"/>'s: free before the first number,
+    /// only forward afterwards, never on an invoice or credit-note series in use.
+    /// </summary>
+    public async Task<Result> SetSequenceStartAsync(Guid sequenceId, long nextValue, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Administration.ManageSettings);
+        if (permitted.IsFailure) return permitted;
+
+        var sequence = await writer.GetSequenceAsync(sequenceId, ct);
+        if (sequence is null) return Result.Failure(Error.NotFound("Sequence_NotFound"));
+
+        var previous = sequence.NextValue;
+        var set = sequence.SetNextValue(nextValue);
+        if (set.IsFailure) return set;
+
+        // The number it gives must still fit its column.
+        var sample = sequence.Render(nextValue, clock.Now, null);
+        var maxLength = NumberSequence.MaxLength(sequence.Purpose);
+        if (sample.Length > maxLength)
+            return Result.Failure(Error.Validation("Sequence_FormatTooLong", sample, maxLength));
+
+        unitOfWork.AuditReason =
+            $"Valeur de départ de la numérotation {sequence.Purpose} : {previous} → {nextValue}";
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        await securityAuditor.LogAsync(SecurityEventKind.SecuritySettingChanged, succeeded: true,
+                                        details: $"{sequence.Purpose} next {previous} → {nextValue}", ct: ct);
+
+        return Result.Success();
+    }
+
+    /// <summary>
     /// Closes a numbering series at a financial-year end, or reopens one closed by mistake.
     /// Reopening is audited separately: it lets a document be numbered into a period whose accounts
     /// may already have been filed.

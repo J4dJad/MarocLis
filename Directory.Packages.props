@@ -52,6 +52,15 @@
     -->
     <PackageVersion Include="SkiaSharp" Version="3.119.0" />
     <PackageVersion Include="ClosedXML" Version="0.105.0" />
+    <!--
+      « Reprise de données »: reading the previous application's database. MySqlConnector for
+      MySQL and MariaDB (MIT, async, no native client to install); System.Data.Odbc for anything
+      else with an ODBC driver on the workstation (Access, Oracle, Firebird…).
+    -->
+    <PackageVersion Include="MySqlConnector" Version="2.4.0" />
+    <PackageVersion Include="System.Data.Odbc" Version="10.0.0" />
+    <!-- Keeps a saved connection's password encrypted for the Windows user (DPAPI). -->
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="9.0.0" />
     <PackageVersion Include="Serilog.Settings.Configuration" Version="9.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.0.0" />

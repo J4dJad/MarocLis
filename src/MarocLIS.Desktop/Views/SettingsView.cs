@@ -88,6 +88,7 @@ public sealed partial class SettingsView : LocalizedView
     private readonly DataGridView _sequences = UiTheme.Grid();
     private readonly Button _editFormat = UiTheme.PrimaryButton(string.Empty);
     private readonly Button _toggleClosed = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _sequenceStart = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _numberingNotice = new();
 
     // ---- Settings tab ----
@@ -481,7 +482,7 @@ public sealed partial class SettingsView : LocalizedView
 
         AdminLayout.ListGrid(_sequences);
         _numberingTab.Controls.Add(AdminLayout.CardSection(_sequencesHeading, _sequences,
-                                                           AdminLayout.Actions(_editFormat, _toggleClosed)));
+                                                           AdminLayout.Actions(_editFormat, _sequenceStart, _toggleClosed)));
         _numberingTab.Controls.Add(AdminLayout.Note(_numberingNotice, 40));
     }
 
@@ -778,6 +779,7 @@ public sealed partial class SettingsView : LocalizedView
         _sequences.SelectionChanged += (_, _) => RefreshSequenceActions();
         _editFormat.Click += async (_, _) => await EditFormatAsync();
         _toggleClosed.Click += async (_, _) => await ToggleClosedAsync();
+        _sequenceStart.Click += async (_, _) => await SetSequenceStartAsync();
 
         _places.SelectionChanged += (_, _) => RefreshPlaceActions();
         _places.CellDoubleClick += async (_, e) =>
@@ -794,7 +796,7 @@ public sealed partial class SettingsView : LocalizedView
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Administration.ManageSites, _saveSite, _chooseLogo, _removeLogo, _newSite);
-        PermissionGate.Require(Permissions.Administration.ManageSettings, _editFormat, _toggleClosed, _editSetting, _addSetting,
+        PermissionGate.Require(Permissions.Administration.ManageSettings, _editFormat, _toggleClosed, _sequenceStart, _editSetting, _addSetting,
                                _addPlace, _renamePlace, _togglePlace);
 
         _sequences.CellFormatting += OnSequenceFormatting;
@@ -890,6 +892,7 @@ public sealed partial class SettingsView : LocalizedView
 
         _editFormat.Text = T("Admin.EditSequenceFormat");
         _toggleClosed.Text = T("Admin.CloseSequence");
+        _sequenceStart.Text = T("Admin.SequenceStart");
         _numberingNotice.Text = T("Admin.SequenceFormatNotice");
 
         _editSetting.Text = T("Action.Edit");
@@ -1337,6 +1340,10 @@ public sealed partial class SettingsView : LocalizedView
         _editFormat.Enabled = row is { HasBeenUsed: false, IsClosed: false };
         _toggleClosed.Enabled = row is not null;
 
+        // Before the first number, or forward on a series that is not fiscal (see SetNextValue).
+        _sequenceStart.Enabled = row is { IsClosed: false }
+                                 && (!row.HasBeenUsed || !Domain.Sequencing.NumberSequence.IsFiscal(row.Purpose));
+
         _toggleClosed.Text = row is { IsClosed: true }
             ? T("Admin.ReopenSequence")
             : T("Admin.CloseSequence");
@@ -1357,6 +1364,36 @@ public sealed partial class SettingsView : LocalizedView
         if (result.IsFailure)
         {
             _dialogs.ShowFailure(result, T("Admin.EditSequenceFormat"));
+            return;
+        }
+
+        await LoadSequencesAsync();
+    }
+
+    private async Task SetSequenceStartAsync()
+    {
+        if (_sequences.CurrentRow?.Tag is not SequenceRow row) return;
+
+        var answer = _dialogs.PromptForText(
+            T("Admin.SequenceStartPrompt", T($"SequencePurpose.{row.Purpose}"), row.LastAllocatedValue),
+            T("Admin.SequenceStart"), row.NextValue.ToString(System.Globalization.CultureInfo.InvariantCulture), maxLength: 12);
+
+        if (string.IsNullOrWhiteSpace(answer)) return;
+
+        if (!long.TryParse(answer.Trim(), System.Globalization.NumberStyles.None,
+                           System.Globalization.CultureInfo.InvariantCulture, out var next))
+        {
+            _dialogs.Warn(T("Sequence_StartOutOfRange"), T("Admin.SequenceStart"));
+            return;
+        }
+
+        if (next == row.NextValue) return;
+
+        var result = await _configuration.SetSequenceStartAsync(row.SequenceId, next);
+
+        if (result.IsFailure)
+        {
+            _dialogs.ShowFailure(result, T("Admin.SequenceStart"));
             return;
         }
 

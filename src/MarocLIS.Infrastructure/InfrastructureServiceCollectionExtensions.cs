@@ -183,6 +183,14 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddScoped<Application.Administration.IConfigurationWriter, ConfigurationWriter>();
 
+        // « Reprise de données »: the take-over store, and the readers of the old application's
+        // database and files. The readers hold nothing between calls.
+        services.AddScoped<Application.Migration.IDataMigrationStore>(
+            sp => ActivatorUtilities.CreateInstance<Reprise.DataMigrationStore>(sp, ScopedUser(sp)));
+        services.AddSingleton<Reprise.ISourceDatabaseFactory, Reprise.SourceDatabaseFactory>();
+        services.AddSingleton<Application.Migration.IMigrationSourceReader, Reprise.SourceDatabaseReader>();
+        services.AddSingleton<Application.Migration.IMigrationWorkbook, Reprise.MigrationWorkbook>();
+
         services.AddScoped<DatabaseInitializer>();
         services.AddScoped<DemoDataSeeder>();
 
