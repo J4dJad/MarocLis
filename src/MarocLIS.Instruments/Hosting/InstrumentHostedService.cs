@@ -201,7 +201,8 @@ public sealed class InstrumentHostedService(
             }
 
             var driver = BuildDriver(link, transport, sink,
-                                      loggerFactory?.CreateLogger("Instrument.Driver"));
+                                      loggerFactory?.CreateLogger("Instrument.Driver"),
+                                      scope.ServiceProvider.GetService<IntegraHostOptions>());
 
             if (driver is null)
             {
@@ -266,12 +267,14 @@ public sealed class InstrumentHostedService(
     private static IInstrumentDriver? BuildDriver(InstrumentInterface link,
                                                    IInstrumentTransport transport,
                                                    IInstrumentMessageSink sink,
-                                                   ILogger? logger) =>
+                                                   ILogger? logger,
+                                                   IntegraHostOptions? integra = null) =>
         link.Protocol switch
         {
             InstrumentProtocol.AstmE1394 => new AstmInstrumentDriver(link, transport, sink, logger),
             InstrumentProtocol.Hl7V2 => new Hl7InstrumentDriver(link, transport, sink, logger),
             InstrumentProtocol.Poct1A => new Poct1AInstrumentDriver(link, transport, sink, logger),
+            InstrumentProtocol.RocheIntegra => new RocheIntegraInstrumentDriver(link, transport, sink, logger, integra),
             _ => null
         };
 

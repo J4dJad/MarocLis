@@ -137,6 +137,8 @@ public sealed partial class DemoDataSeeder(
             await RunSectionAsync("Lieux de stockage", SeedStorageLocationsAsync, ct);
             await RunSectionAsync("Patients", SeedPatientsAsync, ct);
             await RunSectionAsync("Dossiers", SeedOrdersAsync, ct);
+            // After the orders: its received transmission is for one of their tubes.
+            await RunSectionAsync("Interface COBAS INTEGRA", SeedIntegraInterfaceAsync, ct);
 
             // After the orders, so the rejected control flags the results it covers.
             await RunSectionAsync("Contrôle interne du jour", SeedTodaysQcRunsAsync, ct);

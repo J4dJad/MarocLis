@@ -237,6 +237,7 @@ public sealed class InstrumentMessageSink(
                 raw.Split('\r', StringSplitOptions.RemoveEmptyEntries), format),
             InstrumentProtocol.Hl7V2 => Hl7ResultParser.Parse(raw, format),
             InstrumentProtocol.Poct1A => Poct1AResultParser.Parse(raw, format),
+            InstrumentProtocol.RocheIntegra => IntegraMessageParser.Parse(raw, format),
             _ => null
         };
 

@@ -41,6 +41,7 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
     private readonly TextBox _codeSuffix, _resultTypes;
     private readonly CheckBox _keepFlags;
     private readonly Button _testFrame;
+    private readonly Label _formatNotice;
     private bool _applyingProfile;
 
     internal InterfaceRequest? Request { get; private set; }
@@ -69,7 +70,7 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
                            // Only the protocols this build has drivers for. Offering one with no
                            // driver behind it would be a setting that silently does nothing.
                            [InstrumentProtocol.AstmE1394, InstrumentProtocol.Hl7V2,
-                            InstrumentProtocol.Poct1A]);
+                            InstrumentProtocol.Poct1A, InstrumentProtocol.RocheIntegra]);
 
         _transport = Choice("Interface.Transport", 232, 16, 200,
                             existing?.Transport ?? InstrumentTransportKind.Serial,
@@ -192,7 +193,7 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
         _profile = Picker("Interface.FormatProfile", fx, 40, fw,
                           [.. FormatProfiles.Select(p => Localizer[p.Key])],
-                          Localizer[ProfileFor(format).Key]);
+                          Localizer[ProfileFor(existing?.Protocol ?? InstrumentProtocol.AstmE1394, format).Key]);
         _profile.Font = UiTheme.Body;
 
         _codeComponent = Picker("Interface.FormatCodeComponent", fx, 88, 150, Components(),
@@ -217,7 +218,7 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
         _keepFlags = Check("Interface.KeepInstrumentFlags", fx, 332, format.KeepInstrumentFlags);
 
-        Notice(fx, 356, fw, 76, "Interface.FormatNotice");
+        _formatNotice = Notice(fx, 356, fw, 76, "Interface.FormatNotice");
 
         _testFrame = UiTheme.SecondaryButton(Localizer["Interface.TestFrame"]);
         _testFrame.Bounds = new Rectangle(fx, 440, fw, UiTheme.ButtonHeight);
@@ -243,7 +244,10 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         {
             RefreshSpecimenFields(_specimenField.SelectedItem?.ToString());
             SyncProfile();
+            RefreshFormatNotice();
         };
+
+        RefreshFormatNotice();
 
         _transport.SelectedIndexChanged += (_, _) => RefreshTransport();
 
@@ -269,12 +273,22 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         ("Interface.FormatProfile.RocheCobas", MessageFormatSettings.Default with { TestCodeSuffix = "/" }),
         // Architect / Alinity: "^^^16^TSH^UNDILUTED^F" — keep the final value, not the
         // interpretation (I) or the preliminary one (P).
-        ("Interface.FormatProfile.Abbott", MessageFormatSettings.Default with { AcceptedResultTypes = "F" })
+        ("Interface.FormatProfile.Abbott", MessageFormatSettings.Default with { AcceptedResultTypes = "F" }),
+        // COBAS INTEGRA 400 plus: its own host protocol, not ASTM. Choosing it also sets the
+        // protocol and the serial line (see ApplyIntegraPreset); the format stays "Auto".
+        (IntegraProfile, MessageFormatSettings.Default)
     ];
 
-    private static (string Key, MessageFormatSettings? Format) ProfileFor(MessageFormatSettings format)
+    private const string IntegraProfile = "Interface.FormatProfile.RocheIntegra";
+
+    private static (string Key, MessageFormatSettings? Format) ProfileFor(InstrumentProtocol protocol,
+                                                                          MessageFormatSettings format)
     {
-        foreach (var profile in FormatProfiles.Skip(1))
+        // The INTEGRA preset is its protocol: shown for an INTEGRA link, and for no other.
+        if (protocol == InstrumentProtocol.RocheIntegra)
+            return FormatProfiles.First(p => p.Key == IntegraProfile);
+
+        foreach (var profile in FormatProfiles.Skip(1).Where(p => p.Key != IntegraProfile))
         {
             var p = profile.Format!;
             if (p.TestCodeComponent == format.TestCodeComponent
@@ -313,8 +327,9 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
         if (_specimenField.SelectedIndex < 0) _specimenField.SelectedIndex = 0;
 
-        // POCT1-A is XML: an element holds one value, so there is no component to choose.
-        var delimited = protocol != InstrumentProtocol.Poct1A;
+        // POCT1-A is XML: an element holds one value, so there is no component to choose. The
+        // INTEGRA's lines have fixed fields: test number, barcode, value.
+        var delimited = protocol is not (InstrumentProtocol.Poct1A or InstrumentProtocol.RocheIntegra);
         _codeComponent.Enabled = _specimenComponent.Enabled = delimited;
 
         if (!delimited)
@@ -328,12 +343,17 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
     {
         if (_applyingProfile) return;
 
-        var format = FormatProfiles.ElementAtOrDefault(_profile.SelectedIndex).Format;
+        var (key, format) = FormatProfiles.ElementAtOrDefault(_profile.SelectedIndex);
         if (format is null) return;
 
         _applyingProfile = true;
         try
         {
+            if (key == IntegraProfile) ApplyIntegraPreset();
+            else if (Selected<InstrumentProtocol>(_protocol) == InstrumentProtocol.RocheIntegra)
+                // A vendor format chosen on an INTEGRA link: that format is ASTM's.
+                SelectValue(_protocol, InstrumentProtocol.AstmE1394);
+
             Select(_codeComponent, Component(format.TestCodeComponent));
             _codeSuffix.Text = format.TestCodeSuffix ?? string.Empty;
             Select(_specimenField, Auto);
@@ -354,7 +374,8 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _applyingProfile = true;
         try
         {
-            var index = Array.FindIndex(FormatProfiles, p => p.Key == ProfileFor(CurrentFormat()).Key);
+            var index = Array.FindIndex(FormatProfiles,
+                p => p.Key == ProfileFor(Selected<InstrumentProtocol>(_protocol), CurrentFormat()).Key);
             if (index >= 0) _profile.SelectedIndex = index;
         }
         finally
@@ -362,6 +383,48 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
             _applyingProfile = false;
         }
     }
+
+    /// <summary>
+    /// The COBAS INTEGRA 400 plus preset: its host protocol, and an RS-232 line the analyser's
+    /// "Configuration &gt; General &gt; Interface" screen offers. The manual lists the choices but
+    /// recommends no speed, so 9600 8N1 is a starting point to align with the analyser, not a
+    /// fact; it does recommend the software handshake and a host time-out of 180 s.
+    /// </summary>
+    private void ApplyIntegraPreset()
+    {
+        SelectValue(_protocol, InstrumentProtocol.RocheIntegra);
+        SelectValue(_transport, InstrumentTransportKind.Serial);
+        SelectValue(_direction, InstrumentDirection.HostQueryDownload);
+
+        Select(_baud, "9600");
+        Select(_dataBits, "8");
+        Select(_parity, "None");
+        Select(_stopBits, "One");
+        Select(_handshake, "XOnXOff");
+        Select(_encoding, "ASCII");
+
+        _ackTimeout.Value = Math.Min(_ackTimeout.Maximum, 180);
+        _maxRetries.Value = Math.Min(_maxRetries.Maximum, 3);
+    }
+
+    /// <summary>Selects an enum value in a combo filled by <c>Choice</c>.</summary>
+    private static void SelectValue<TEnum>(ComboBox combo, TEnum value) where TEnum : struct, Enum
+    {
+        for (var i = 0; i < combo.Items.Count; i++)
+        {
+            if (combo.Items[i] is EnumChoice item && item.Value == Convert.ToInt32(value))
+            {
+                combo.SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
+    /// <summary>On an INTEGRA link the notice says where its own settings are, instead of the ASTM advice.</summary>
+    private void RefreshFormatNotice() =>
+        _formatNotice.Text = Localizer[Selected<InstrumentProtocol>(_protocol) == InstrumentProtocol.RocheIntegra
+            ? "Interface.IntegraNotice"
+            : "Interface.FormatNotice"];
 
     private static void Select(ComboBox combo, string value)
     {

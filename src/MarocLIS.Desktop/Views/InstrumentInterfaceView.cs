@@ -4,6 +4,8 @@ using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Equipment;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Instruments.Hosting;
+using MarocLIS.Instruments.Protocol;
+using MarocLIS.Instruments.Simulator;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
 
@@ -783,11 +785,35 @@ public sealed class InstrumentInterfaceView : LocalizedView
             return raw.IsSuccess ? raw.Value : null;
         }
 
+        // The INTEGRA speaks a protocol nobody has a frame of before the analyser is cabled: the
+        // simulator writes one, for the tube of the last transmission and the link's own test
+        // numbers, so the mapping can be tried at once.
+        async Task<string> SampleAsync()
+        {
+            var recent = await _interfaces.GetMessagesAsync(link.Id, 50);
+            var tube = recent.IsSuccess
+                ? recent.Value.Where(m => m.Direction == MessageDirection.Inbound)
+                              .Select(m => m.SpecimenIds?.Split(',')[0].Trim())
+                              .FirstOrDefault(id => !string.IsNullOrWhiteSpace(id))
+                : null;
+
+            var tests = mappings.Value
+                .Where(m => m.IsEnabled)
+                .Select(m => RocheIntegra.TestNumber(m.InstrumentTestCode))
+                .OfType<int>()
+                .Distinct()
+                .Take(3)
+                .ToList();
+
+            return IntegraInstrumentEmulator.SampleTranscript(tube ?? "TUBE-0001", tests.Count > 0 ? tests : null);
+        }
+
         using var dialog = new InstrumentFrameTestDialog(
             Localizer, _dialogs,
             $"{link.InstrumentCode} · {T($"InstrumentProtocol.{protocol}")}",
             frame => _interfaces.PreviewMessageAsync(link.Id, protocol, format, frame),
-            LoadLastAsync, parameters, initial);
+            LoadLastAsync, parameters, initial,
+            protocol == InstrumentProtocol.RocheIntegra ? SampleAsync : null);
 
         dialog.ShowDialog(owner);
     }

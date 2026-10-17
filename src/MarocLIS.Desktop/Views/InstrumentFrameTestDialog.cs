@@ -28,11 +28,17 @@ internal sealed class InstrumentFrameTestDialog : Form
     /// <param name="preview">Runs the preview with the protocol and format being tested.</param>
     /// <param name="loadLast">The last frame the link received, or null when there is none.</param>
     /// <param name="parameters">Parameter labels by id, from the mapping table.</param>
+    /// <param name="sampleFrame">
+    /// An example frame in the link's protocol, from the simulator, for a protocol whose frames a
+    /// laboratory has no copy of before the analyser is connected (the COBAS INTEGRA). Null hides
+    /// the button.
+    /// </param>
     internal InstrumentFrameTestDialog(ILocalizer localizer, IUserDialogs dialogs, string subtitle,
                                        Func<string, Task<Result<MessagePreview>>> preview,
                                        Func<Task<string?>> loadLast,
                                        IReadOnlyDictionary<Guid, string> parameters,
-                                       string? initialFrame = null)
+                                       string? initialFrame = null,
+                                       Func<Task<string>>? sampleFrame = null)
     {
         _localizer = localizer;
         _dialogs = dialogs;
@@ -88,16 +94,32 @@ internal sealed class InstrumentFrameTestDialog : Form
             _frame.Text = Displayable(frame);
         };
 
+        var summaryLeft = 490;
+        Button? sample = null;
+
+        if (sampleFrame is not null)
+        {
+            sample = UiTheme.SecondaryButton(localizer["Interface.TestFrameSample"]);
+            sample.Bounds = new Rectangle(484, 6, 230, UiTheme.ButtonHeight);
+            sample.Click += async (_, _) =>
+            {
+                _frame.Text = Displayable(await sampleFrame());
+                await RunAsync();
+            };
+            summaryLeft = 722;
+        }
+
         _summary = new Label
         {
             Font = UiTheme.SmallBold,
             AutoSize = false,
-            Bounds = new Rectangle(490, 6, 660, UiTheme.ButtonHeight),
+            Bounds = new Rectangle(summaryLeft, 6, 1150 - summaryLeft, UiTheme.ButtonHeight),
             TextAlign = ContentAlignment.MiddleLeft,
             AutoEllipsis = true
         };
 
         actions.Controls.AddRange([run, last, _summary]);
+        if (sample is not null) actions.Controls.Add(sample);
 
         // Sized from the bar itself: anchored to the right while the bar still had its default
         // width, the summary came out wider than the dialog.

@@ -197,7 +197,13 @@ public enum InstrumentProtocol
     Csv = 4,
 
     /// <summary>POCT1-A, for point-of-care devices.</summary>
-    Poct1A = 5
+    Poct1A = 5,
+
+    /// <summary>
+    /// Roche COBAS INTEGRA host interface (COBAS INTEGRA 400 plus): Roche's own block protocol over
+    /// RS-232, in which the LIS polls the analyser.
+    /// </summary>
+    RocheIntegra = 6
 }
 
 /// <summary>An unmapped result that is not a number: an analyser alarm, a histogram file name.</summary>
