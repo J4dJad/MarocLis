@@ -581,12 +581,13 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
         _itemOptions = options.StockItems;
 
         _reference = TextField("Contracts.Reference", 20, 14, 180, detail?.Reference, latin: true);
-        _supplier = Lookup("Inventory.Supplier", 220, 14, 300,
+        _supplier = Lookup("Inventory.Supplier", 220, 14, 280,
                            options.Suppliers.Select(s => (s.Id, Display(s))), detail?.SupplierId,
                            allowNone: false);
-        _kind = Choice("Contracts.Kind", 540, 14, 180, detail?.Kind ?? InstrumentContractKind.Placement,
+        _kind = Choice("Contracts.Kind", 520, 14, 180, detail?.Kind ?? InstrumentContractKind.Placement,
                        "InstrumentContractKind");
-        _active = Check("Contracts.Active", 740, 34, detail?.IsActive ?? true);
+        // 220 pixels to the edge: in Arabic the caption ran past the window's edge from 740.
+        _active = Check("Contracts.Active", 720, 34, detail?.IsActive ?? true);
 
         Label("Contracts.Start", 20, 68);
         _start = new DateTimePicker
@@ -607,10 +608,12 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
                                    detail?.PenaltyAmountMad?.ToString("0.00", CultureInfo.InvariantCulture),
                                    latin: true, mono: true, right: true);
 
-        _codes = TextField("Contracts.CountedAnalyses", 20, 122, 560, detail?.CountedAnalysisCodesCsv, latin: true, mono: true);
-        _visits = TextField("Contracts.PreventiveVisits", 600, 122, 140,
+        // The two short boxes are wider than their figures need: their captions, in Arabic, ran
+        // into each other over 140 pixels.
+        _codes = TextField("Contracts.CountedAnalyses", 20, 122, 440, detail?.CountedAnalysisCodesCsv, latin: true, mono: true);
+        _visits = TextField("Contracts.PreventiveVisits", 480, 122, 200,
                             detail?.PreventiveVisitsPerYear?.ToString(CultureInfo.InvariantCulture), latin: true, mono: true, right: true);
-        _maxDelay = TextField("Contracts.MaxDelayHours", 760, 122, 160,
+        _maxDelay = TextField("Contracts.MaxDelayHours", 700, 122, 220,
                               detail?.MaxInterventionDelayHours?.ToString(CultureInfo.InvariantCulture), latin: true, mono: true, right: true);
 
         Label("Contracts.Instruments", 20, 176);

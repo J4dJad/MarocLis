@@ -778,11 +778,12 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
         };
         Controls.AddRange([_invoiceDate, _receivedOn]);
 
-        _notes = TextField("Field.Notes", 20, 68, 700);
+        _notes = TextField("Field.Notes", 20, 68, 600);
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
         _number.MaxLength = 60;
         _notes.MaxLength = 1000;
-        _scan = Check("SupplierInvoices.AttachScanAfter", 740, 90, false);
+        // Clear of the window's edge in Arabic, where the caption runs longer.
+        _scan = Check("SupplierInvoices.AttachScanAfter", 640, 90, false);
 
         Notice(20, 122, 940, 34, "SupplierInvoices.EntryNotice");
 
@@ -834,14 +835,15 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
                 }
             });
 
-        Add("order", "PurchaseOrders.Number", 11);
-        Add("item", "Inventory.Item", 23);
+        // The figures' columns are wide enough for their headings in Arabic, taken from the item's.
+        Add("order", "PurchaseOrders.Number", 9);
+        Add("item", "Inventory.Item", 19);
         Add("ordered", "PurchaseOrders.Ordered", 8, right: true);
-        Add("received", "PurchaseOrders.Received", 7, right: true);
+        Add("received", "PurchaseOrders.Received", 9, right: true);
         Add("invoiced", "SupplierInvoices.AlreadyInvoiced", 7, right: true);
-        Add(ColQuantity, "SupplierInvoices.QuantityInvoiced", 8, editable: true, right: true);
+        Add(ColQuantity, "SupplierInvoices.QuantityInvoiced", 10, editable: true, right: true);
         Add(ColPrice, "SupplierInvoices.InvoicedUnitPrice", 9, editable: true, right: true);
-        Add(ColVat, "PurchaseOrders.VatPercent", 6, editable: true, right: true);
+        Add(ColVat, "PurchaseOrders.VatPercent", 8, editable: true, right: true);
     }
 
     private async Task LoadLinesAsync()
@@ -1140,18 +1142,19 @@ internal sealed class PurchasingSettingsDialog : MasterDataEditor
         _current = current;
         static string N(decimal v) => v.ToString("0.####", CultureInfo.InvariantCulture);
 
-        _tolPercent = TextField("SupplierInvoices.TolerancePercent", 20, 14, 160, N(current.PriceTolerancePercent),
+        // Three rates a row, not four: their captions, in Arabic, ran into each other over 160 pixels.
+        _tolPercent = TextField("SupplierInvoices.TolerancePercent", 20, 14, 220, N(current.PriceTolerancePercent),
                                 latin: true, mono: true, right: true);
-        _tolMad = TextField("SupplierInvoices.ToleranceMad", 200, 14, 160, N(current.PriceToleranceMad),
+        _tolMad = TextField("SupplierInvoices.ToleranceMad", 260, 14, 220, N(current.PriceToleranceMad),
                             latin: true, mono: true, right: true);
-
-        _keyRate = TextField("SupplierInvoices.KeyRate", 20, 68, 160, N(current.KeyRatePercent),
+        _keyRate = TextField("SupplierInvoices.KeyRate", 500, 14, 220, N(current.KeyRatePercent),
                              latin: true, mono: true, right: true);
-        _margin = TextField("SupplierInvoices.PenaltyMargin", 200, 68, 160, N(current.PenaltyMarginPoints),
+
+        _margin = TextField("SupplierInvoices.PenaltyMargin", 20, 68, 220, N(current.PenaltyMarginPoints),
                             latin: true, mono: true, right: true);
-        _fineFirst = TextField("SupplierInvoices.FineFirstMonth", 380, 68, 160, N(current.FineFirstMonthPercent),
+        _fineFirst = TextField("SupplierInvoices.FineFirstMonth", 260, 68, 220, N(current.FineFirstMonthPercent),
                                latin: true, mono: true, right: true);
-        _fineNext = TextField("SupplierInvoices.FineNextMonths", 560, 68, 160, N(current.FineAdditionalMonthPercent),
+        _fineNext = TextField("SupplierInvoices.FineNextMonths", 500, 68, 220, N(current.FineAdditionalMonthPercent),
                               latin: true, mono: true, right: true);
         Notice(20, 122, 720, 46, "SupplierInvoices.RatesNotice", UiTheme.Abnormal);
         Numeric(EditorValues.AmountMaxLength, _tolPercent, _tolMad, _keyRate, _margin, _fineFirst, _fineNext);
