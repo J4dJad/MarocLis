@@ -42,6 +42,23 @@ public sealed class BenchWorksheetQueries(LisDbContext db) : IBenchWorksheetQuer
                         && db.TestResults.Any(r => r.LabOrderItemId == i.Id
                                                    && r.Status == TestResultStatus.Awaited));
 
+    private IQueryable<LabOrderItem> PendingOrEnteredItems(Guid siteId) =>
+        db.LabOrderItems.AsNoTracking()
+            .Where(i => (i.Status == LabOrderItemStatus.Received
+                         || i.Status == LabOrderItemStatus.InProgress
+                         || i.Status == LabOrderItemStatus.ResultEntered)
+                        && !i.IsSubcontracted
+                        && db.LabOrders.Any(o => o.Id == i.LabOrderId
+                                                 && o.SiteId == siteId
+                                                 && o.Status != LabOrderStatus.Cancelled)
+                        && db.Samples.Any(s => s.Id == i.SampleId
+                                               && (s.Status == SampleStatus.Received
+                                                   || s.Status == SampleStatus.InAnalysis
+                                                   || s.Status == SampleStatus.Stored))
+                        && db.TestResults.Any(r => r.LabOrderItemId == i.Id
+                                                   && (r.Status == TestResultStatus.Awaited
+                                                       || r.Status == TestResultStatus.Entered)));
+
     public async Task<BenchWorksheetOptions> GetOptionsAsync(Guid siteId, CancellationToken ct = default)
     {
         var pending = await PendingItems(siteId)
@@ -115,9 +132,12 @@ public sealed class BenchWorksheetQueries(LisDbContext db) : IBenchWorksheetQuer
     /// </summary>
     public async Task<(IReadOnlyList<BenchWorksheetLine> Lines, bool Truncated)> GetPendingWorkAsync(
         Guid siteId, Guid? departmentId, Guid? instrumentId, bool onlyUrgent, DateOnly today,
-        int maximumRows, CancellationToken ct = default)
+        int maximumRows, CancellationToken ct = default, bool includeEntered = false)
     {
-        var items = PendingItems(siteId);
+        // The entry screen also keeps the files whose values are all in but not yet technically
+        // validated: that check is done from the same screen, and a file that left the list once
+        // its last value was typed could no longer be validated without knowing its number.
+        var items = includeEntered ? PendingOrEnteredItems(siteId) : PendingItems(siteId);
 
         if (departmentId is { } department)
             items = items.Where(i => i.DepartmentId == department);
@@ -130,7 +150,9 @@ public sealed class BenchWorksheetQueries(LisDbContext db) : IBenchWorksheetQuer
                                                               && o.Priority != OrderPriority.Routine));
 
         var results = db.TestResults.AsNoTracking()
-            .Where(r => r.SiteId == siteId && r.Status == TestResultStatus.Awaited);
+            .Where(r => r.SiteId == siteId
+                        && (r.Status == TestResultStatus.Awaited
+                            || (includeEntered && r.Status == TestResultStatus.Entered)));
 
         // An analyser's share of the work is what its interface is mapped to measure. Read from the
         // mappings rather than from the analysis, because one analysis is commonly split across two

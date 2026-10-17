@@ -176,7 +176,8 @@ public sealed class BenchWorksheetService(
         if (permitted.IsFailure) return Result.Failure<IReadOnlyList<PendingEntryOrder>>(permitted.FirstError);
 
         var (lines, _) = await queries.GetPendingWorkAsync(
-            currentUser.SiteId, null, null, false, clock.Today, MaximumParameterRows, ct);
+            currentUser.SiteId, null, null, false, clock.Today, MaximumParameterRows, ct,
+            includeEntered: true);
 
         IReadOnlyList<PendingEntryOrder> orders =
         [
@@ -265,11 +266,12 @@ public interface IBenchWorksheetQueries
     /// <summary>
     /// Analyses whose tube is in the laboratory and whose results are not yet entered, urgent first
     /// then oldest received. <c>Truncated</c> is true when more than <paramref name="maximumRows"/>
-    /// parameter rows were waiting.
+    /// parameter rows were waiting. With <paramref name="includeEntered"/>, entered values still
+    /// awaiting technical validation count as waiting too (the entry screen's list).
     /// </summary>
     Task<(IReadOnlyList<BenchWorksheetLine> Lines, bool Truncated)> GetPendingWorkAsync(
         Guid siteId, Guid? departmentId, Guid? instrumentId, bool onlyUrgent, DateOnly today,
-        int maximumRows, CancellationToken ct = default);
+        int maximumRows, CancellationToken ct = default, bool includeEntered = false);
 }
 
 /// <summary>Turns a <see cref="BenchWorksheet"/> into a printable PDF.</summary>

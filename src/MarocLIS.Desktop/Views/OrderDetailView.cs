@@ -452,6 +452,20 @@ public sealed class OrderDetailView : LocalizedView
         return _noteBanner;
     }
 
+    private void CopyAccessionNumber()
+    {
+        if (string.IsNullOrEmpty(_accession.Text)) return;
+        try
+        {
+            Clipboard.SetText(_accession.Text);
+            _status.Text = T("Order.AccessionCopied", _accession.Text);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // Clipboard held by another application: ignore, the user can double-click again.
+        }
+    }
+
     private Panel BuildHeaderCard()
     {
         _headerCard.Dock = DockStyle.Fill;
@@ -497,6 +511,7 @@ public sealed class OrderDetailView : LocalizedView
         _accession.Anchor = AnchorStyles.Left;
         _accession.Margin = new Padding(0, 0, 10, 0);
         _accession.UseMnemonic = false;
+        _accession.Cursor = Cursors.Hand;
 
         foreach (var pill in new[] { _statusPill, _priorityPill })
         {
@@ -958,6 +973,7 @@ public sealed class OrderDetailView : LocalizedView
         _list.CellPainting += PaintListCell;
 
         _refresh.Click += async (_, _) => await ActivateAsync();
+        _accession.DoubleClick += (_, _) => CopyAccessionNumber();
 
         _tabs.SelectedIndexChanged += (_, _) =>
         {
@@ -1025,6 +1041,7 @@ public sealed class OrderDetailView : LocalizedView
         _chipActive.Text = T("OrderFile.FilterActive");
         _chipUrgent.Text = T("OrderFile.FilterUrgent");
         _tips.SetToolTip(_refresh, T("Action.Refresh"));
+        _tips.SetToolTip(_accession, T("Order.AccessionCopyHint"));
         _refresh.AccessibleName = T("Action.Refresh");
 
         _addAnalyses.Text = T("Order.AddAnalyses");

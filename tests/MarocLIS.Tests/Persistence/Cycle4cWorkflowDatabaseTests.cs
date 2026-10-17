@@ -171,6 +171,7 @@ public sealed class Cycle4cWorkflowDatabaseTests(Cycle4cScratchDatabase database
         services.AddIsolatedQueries<ISampleQueries, SampleQueries>();
         services.AddIsolatedQueries<ISubcontractQueries, SubcontractQueries>();
         services.AddIsolatedQueries<IRecollectionQueries, RecollectionQueries>();
+        services.AddIsolatedQueries<IBenchWorksheetQueries, BenchWorksheetQueries>();
         return services.BuildServiceProvider();
     }
 
@@ -543,5 +544,37 @@ public sealed class Cycle4cWorkflowDatabaseTests(Cycle4cScratchDatabase database
         await using var context = database.Context();
         (await context.TestResults.AsNoTracking().SingleAsync(r => r.Id == result.Id))
             .Status.Should().Be(TestResultStatus.Reported);
+    }
+
+    [SqlServerFact]
+    public async Task E_AFileWhoseValuesAreAllEntered_StaysOnTheEntryList_UntilItIsTechnicallyValidated()
+    {
+        var lab = await LabAsync();
+        using var admin = Services(OperatorOf(lab));
+        var technicianUser = OperatorOf(lab, ShippedRole(SystemRoles.Technician));
+        technicianUser.Qualification = ProfessionalQualification.LaboratoryTechnician;
+        using var bench = Services(technicianUser);
+
+        var order = await RegisterAsync(admin, lab.Patient, lab.Glucose);
+        await DrawAndReceiveAsync(admin, order.Labels.Single().SampleId);
+        var result = (await ResultsAsync(order.OrderId)).Values.Single();
+
+        async Task<bool> ListedAsync() =>
+            (await On<BenchWorksheetService, Result<IReadOnlyList<PendingEntryOrder>>>(bench,
+                s => s.GetPendingOrdersAsync())).Value.Any(o => o.AccessionNumber == order.AccessionNumber);
+
+        (await ListedAsync()).Should().BeTrue();
+
+        (await On<ResultEntryService, Result<ResultEntryOutcome>>(bench,
+                s => s.SubmitAsync(order.OrderId, [new ResultEntry(result.Id, "5,4")])))
+            .Value.Accepted.Should().Be(1);
+
+        // Entered, not yet checked: still on the entry list, where the check is made.
+        (await ListedAsync()).Should().BeTrue();
+
+        (await On<ResultEntryService, Result>(bench, s => s.TechnicallyValidateAsync(order.OrderId, [])))
+            .IsSuccess.Should().BeTrue();
+
+        (await ListedAsync()).Should().BeFalse();
     }
 }

@@ -1013,11 +1013,16 @@ public sealed class ResultEntryView : LocalizedView
                                        | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis;
 
         // Line 1: the name, and the pill at the far end.
-        var pillText = late
-            ? T("ResultEntry.Late")
-            : _progress.TryGetValue(accession, out var progress)
-                ? $"{progress.Entered} / {progress.Total}"
-                : string.Empty;
+        // Every value in: the file stays listed for its technical validation, and says so.
+        var known = _progress.TryGetValue(accession, out var progress);
+        var complete = known && progress!.Total > 0 && progress.Entered >= progress.Total;
+        var pillText = complete
+            ? T("ResultEntry.ReadyToValidate")
+            : late
+                ? T("ResultEntry.Late")
+                : known
+                    ? $"{progress!.Entered} / {progress.Total}"
+                    : string.Empty;
         var pillSize = pillText.Length == 0 ? Size.Empty : EntryPaint.MeasurePill(pillText, UiTheme.SmallBold, 8);
         var topLine = new Rectangle(inner.X, inner.Y, inner.Width, 20);
 
@@ -1026,7 +1031,7 @@ public sealed class ResultEntryView : LocalizedView
             var pill = EntryPaint.Mirror(new Rectangle(topLine.Right - pillSize.Width, topLine.Y + 1,
                                                        pillSize.Width, pillSize.Height), bounds, rtl);
             EntryPaint.DrawPill(graphics, pill, pillText, UiTheme.SmallBold,
-                                late ? EntryPaint.Critical : EntryPaint.Waiting, rtl);
+                                complete ? EntryPaint.Info : late ? EntryPaint.Critical : EntryPaint.Waiting, rtl);
         }
 
         var nameBounds = EntryPaint.Mirror(new Rectangle(topLine.X, topLine.Y, topLine.Width - pillSize.Width - 8, 20),
