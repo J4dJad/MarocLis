@@ -28,6 +28,12 @@ public static class InstrumentsServiceCollectionExtensions
 
         services.AddSingleton(options);
 
+        // What the COBAS INTEGRA's own configuration decides (line end, block check, selector,
+        // polling interval): per installation, in appsettings, until a trace has confirmed them.
+        services.AddSingleton(configuration.GetSection(IntegraHostOptions.SectionName)
+                                           .Get<IntegraHostOptions>()
+                              ?? new IntegraHostOptions());
+
         // Singletons: both hold process-wide state the screen reads. The monitor answers "is this
         // link up right now?", and the service account is resolved once at start-up.
         services.AddSingleton<InstrumentLinkMonitor>();

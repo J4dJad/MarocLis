@@ -285,6 +285,9 @@ public sealed partial class InstrumentMessagePreviewer(
     {
         if (protocol == InstrumentProtocol.Poct1A) return raw.Trim();
 
+        // The INTEGRA parser reads its own framing, written out or real; its sums must see every byte.
+        if (protocol == InstrumentProtocol.RocheIntegra) return RocheIntegra.FromTranscript(raw);
+
         var text = raw.Replace("<CR><LF>", "\r", StringComparison.OrdinalIgnoreCase)
                       .Replace("<CR>", "\r", StringComparison.OrdinalIgnoreCase)
                       .Replace("<LF>", "\r", StringComparison.OrdinalIgnoreCase)
