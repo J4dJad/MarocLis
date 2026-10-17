@@ -782,8 +782,20 @@ public sealed class SettingsView : LocalizedView
         }
     }
 
+    private static void Relabel(ComboBox box, Func<int, string> label)
+    {
+        var selected = box.SelectedIndex;
+        for (var i = 0; i < box.Items.Count; i++)
+            if (box.Items[i] is EnumChoice choice) box.Items[i] = choice with { Display = label(choice.Value) };
+        if (box.SelectedIndex != selected) box.SelectedIndex = selected;
+    }
+
     protected override void ApplyTexts()
     {
+        // The site's kind and region lists are filled once: they stayed in French after a switch
+        // to Arabic or English.
+        Relabel(_kind, v => T($"LabSiteKind.{(LabSiteKind)v}"));
+        Relabel(_region, v => T($"MoroccanRegion.{(MoroccanRegion)v}"));
         _pageTitle.Text = T("Nav.Settings");
         _pageCaption.Text = T("AdminA.SettingsLead");
         _sequencesHeading.Text = T("Admin.Sequences");
@@ -933,6 +945,8 @@ public sealed class SettingsView : LocalizedView
             await LoadPlacesAsync(ct);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the configuration failed.");
@@ -1234,24 +1248,28 @@ public sealed class SettingsView : LocalizedView
     {
         if (_sequences.Columns.Count == 0) return;
 
-        _sequences.Rows.Clear();
-
-        foreach (var row in _sequenceRows)
+        // Kept on the series whose format was just changed or which was just closed.
+        _sequences.RebuildKeeping<SequenceRow, Guid>(r => r.SequenceId, () =>
         {
-            var index = _sequences.Rows.Add(
-                T($"SequencePurpose.{row.Purpose}"),
-                row.SiteCode ?? "—",
-                row.Year?.ToString() ?? "—",
-                row.Format,
-                row.Preview,
-                row.NextValue.ToString("N0"),
-                row.HasBeenUsed ? row.LastAllocatedValue.ToString("N0") : "—",
-                row.IsClosed ? T("Admin.SequenceClosed")
-                             : row.HasBeenUsed ? T("Admin.SequenceInUse")
-                                               : T("Admin.SequenceEditable"));
+            _sequences.Rows.Clear();
 
-            _sequences.Rows[index].Tag = row;
-        }
+            foreach (var row in _sequenceRows)
+            {
+                var index = _sequences.Rows.Add(
+                    T($"SequencePurpose.{row.Purpose}"),
+                    row.SiteCode ?? "—",
+                    row.Year?.ToString() ?? "—",
+                    row.Format,
+                    row.Preview,
+                    row.NextValue.ToString("N0"),
+                    row.HasBeenUsed ? row.LastAllocatedValue.ToString("N0") : "—",
+                    row.IsClosed ? T("Admin.SequenceClosed")
+                                 : row.HasBeenUsed ? T("Admin.SequenceInUse")
+                                                   : T("Admin.SequenceEditable"));
+
+                _sequences.Rows[index].Tag = row;
+            }
+        });
 
         RefreshSequenceActions();
     }
@@ -1301,7 +1319,7 @@ public sealed class SettingsView : LocalizedView
             closing
                 ? T("Admin.CloseSequencePrompt", T($"SequencePurpose.{row.Purpose}"))
                 : T("Admin.ReopenSequencePrompt", T($"SequencePurpose.{row.Purpose}")),
-            closing ? T("Admin.CloseSequence") : T("Admin.ReopenSequence"));
+            closing ? T("Admin.CloseSequence") : T("Admin.ReopenSequence"), maxLength: 500);
 
         if (reason is null) return;
 
@@ -1318,6 +1336,10 @@ public sealed class SettingsView : LocalizedView
 
     // ---- Settings ------------------------------------------------------------------------------------
 
+    // The columns of a setting: a longer key or value failed the save with an unexpected error.
+    private const int SettingKeyMaxLength = 120;
+    private const int SettingValueMaxLength = 2000;
+
     private async Task LoadSettingsAsync(CancellationToken ct = default)
     {
         var result = await _configuration.GetSettingsAsync(ct);
@@ -1331,21 +1353,25 @@ public sealed class SettingsView : LocalizedView
     {
         if (_settings.Columns.Count == 0) return;
 
-        _settings.Rows.Clear();
-
-        foreach (var row in _settingRows)
+        // Kept on the setting just changed.
+        _settings.RebuildKeeping<SettingRow, Guid>(r => r.SettingId, () =>
         {
-            var index = _settings.Rows.Add(
-                row.Key,
-                // A sensitive value is not shown: some of these hold credentials, and this screen
-                // is used at a shared administrative workstation.
-                row.IsSecuritySensitive ? "••••••••" : row.Value ?? string.Empty,
-                row.SiteId is null ? "—" : _sites.FirstOrDefault(s => s.Id == row.SiteId)?.Code ?? "?",
-                row.Description ?? string.Empty,
-                row.IsSecuritySensitive ? T("Admin.SettingSensitive") : string.Empty);
+            _settings.Rows.Clear();
 
-            _settings.Rows[index].Tag = row;
-        }
+            foreach (var row in _settingRows)
+            {
+                var index = _settings.Rows.Add(
+                    row.Key,
+                    // A sensitive value is not shown: some of these hold credentials, and this screen
+                    // is used at a shared administrative workstation.
+                    row.IsSecuritySensitive ? "••••••••" : row.Value ?? string.Empty,
+                    row.SiteId is null ? "—" : _sites.FirstOrDefault(s => s.Id == row.SiteId)?.Code ?? "?",
+                    row.Description ?? string.Empty,
+                    row.IsSecuritySensitive ? T("Admin.SettingSensitive") : string.Empty);
+
+                _settings.Rows[index].Tag = row;
+            }
+        });
 
         RefreshSettingActions();
     }
@@ -1359,7 +1385,7 @@ public sealed class SettingsView : LocalizedView
 
         var answer = _dialogs.PromptForText(
             T("Admin.SettingValuePrompt", row.Key),
-            T("Action.Edit"), row.IsSecuritySensitive ? string.Empty : row.Value);
+            T("Action.Edit"), row.IsSecuritySensitive ? string.Empty : row.Value, SettingValueMaxLength);
 
         if (answer is null) return;
 
@@ -1376,11 +1402,11 @@ public sealed class SettingsView : LocalizedView
 
     private async Task AddSettingAsync()
     {
-        var key = _dialogs.PromptForText(T("Admin.SettingKeyPrompt"), T("Action.New"));
+        var key = _dialogs.PromptForText(T("Admin.SettingKeyPrompt"), T("Action.New"), maxLength: SettingKeyMaxLength);
         if (string.IsNullOrWhiteSpace(key)) return;
 
         var value = _dialogs.PromptForText(T("Admin.SettingValuePrompt", key.Trim()),
-                                            T("Action.New"));
+                                            T("Action.New"), maxLength: SettingValueMaxLength);
         if (value is null) return;
 
         var result = await _configuration.SetSettingAsync(key.Trim(), value);

@@ -102,9 +102,19 @@ public static class RtlLayout
     {
         if (grid.Columns.Count == 0) return;
 
+        // From the columns' own order, not their current display order: reversing the display
+        // order flipped it on every switch, so a list came back from Arabic to French or English
+        // with its columns still reversed (the matricule pushed off the right of the personnel
+        // list).
         var ordered = grid.Columns.Cast<DataGridViewColumn>()
-                          .OrderBy(c => c.DisplayIndex)
+                          .OrderBy(c => c.Index)
                           .ToList();
+
+        // A grid with frozen columns (the habilitation matrix, the planning) keeps its order:
+        // WinForms refuses to put a frozen column after an unfrozen one, and switching to Arabic
+        // on those screens closed on an unexpected error. Built after the screen loads, their
+        // columns were never reversed when the screen opened in Arabic either.
+        if (ordered.Any(c => c.Frozen)) rtl = false;
 
         for (var i = 0; i < ordered.Count; i++)
             ordered[i].DisplayIndex = rtl ? ordered.Count - 1 - i : i;

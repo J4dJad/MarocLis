@@ -92,6 +92,46 @@ public static class GridExtensions
     }
 
     /// <summary>
+    /// Rebuilds a list and puts the operator back on the row they were on: the row whose tag has
+    /// the same key, or, when that row left the list (a line just reconciled under « open only »),
+    /// the one now at its place, so a queue worked down from the top carries on where it was.
+    /// <para>
+    /// Rebuilt with <c>Rows.Clear()</c>, a list came back on its first row after every save,
+    /// correction or language change, and the detail and the actions beside it went with it: the
+    /// next click acted on another employee, another role, another line than the one just handled.
+    /// </para>
+    /// </summary>
+    public static void RebuildKeeping<TTag, TKey>(this DataGridView grid, Func<TTag, TKey> keyOf, Action rebuild)
+        where TTag : class
+    {
+        var had = grid.CurrentRow?.Tag is TTag tag;
+        var kept = had ? keyOf((TTag)grid.CurrentRow!.Tag!) : default;
+        var place = grid.CurrentRow?.Index ?? -1;
+        var top = grid.Rows.Count > 0 ? grid.FirstDisplayedScrollingRowIndex : -1;
+
+        rebuild();
+
+        if (!had || grid.Rows.Count == 0) return;
+
+        var row = grid.Rows.Cast<DataGridViewRow>()
+                      .FirstOrDefault(r => r.Tag is TTag t && EqualityComparer<TKey>.Default.Equals(keyOf(t), kept))
+                  ?? grid.Rows[Math.Clamp(place, 0, grid.Rows.Count - 1)];
+
+        grid.MakeCurrent(row);
+
+        try
+        {
+            // Scrolled back to where it was, then to the row if that left it out of view.
+            if (top >= 0 && top < grid.Rows.Count) grid.FirstDisplayedScrollingRowIndex = top;
+            if (!row.Displayed) grid.FirstDisplayedScrollingRowIndex = row.Index;
+        }
+        catch (InvalidOperationException)
+        {
+            // A grid not laid out yet has nothing to scroll.
+        }
+    }
+
+    /// <summary>
     /// Puts back the fill weights a screen declared, kept in each column's <see cref="DataGridViewColumn.Tag"/>.
     /// <para>
     /// WinForms rewrites a fill column's weight whenever its minimum width wins over its share. A

@@ -251,6 +251,8 @@ public sealed class CashSessionReviewView : LocalizedView
             Render();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the tills to sign off failed.");
@@ -265,15 +267,19 @@ public sealed class CashSessionReviewView : LocalizedView
 
     private void Render()
     {
-        _grid.Rows.Clear();
-        foreach (var r in _rows)
+        // Kept on the till just signed off, or the next one when the list hides it.
+        _grid.RebuildKeeping<CashSessionReviewRow, Guid>(r => r.Id, () =>
         {
-            var index = _grid.Rows.Add(When(r.OpenedAt), When(r.ClosedAt), r.OperatorName, r.Workstation ?? string.Empty,
-                                       Amount(r.ExpectedClosingCash), Amount(r.CountedCash), Amount(r.Variance),
-                                       Amount(r.CashWithdrawals), Amount(r.NonCashReceipts),
-                                       r.IsReconciled ? T("Treasury.SessionReconciled") : T("Treasury.SessionToReview"));
-            _grid.Rows[index].Tag = r;
-        }
+            _grid.Rows.Clear();
+            foreach (var r in _rows)
+            {
+                var index = _grid.Rows.Add(When(r.OpenedAt), When(r.ClosedAt), r.OperatorName, r.Workstation ?? string.Empty,
+                                           Amount(r.ExpectedClosingCash), Amount(r.CountedCash), Amount(r.Variance),
+                                           Amount(r.CashWithdrawals), Amount(r.NonCashReceipts),
+                                           r.IsReconciled ? T("Treasury.SessionReconciled") : T("Treasury.SessionToReview"));
+                _grid.Rows[index].Tag = r;
+            }
+        });
 
         _heading.Text = T("Nav.CashSessionReview");
         RenderChips();

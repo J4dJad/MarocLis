@@ -257,7 +257,10 @@ public sealed class AccidentView : LocalizedView
 
     private int Year => _year.SelectedItem is int y ? y : DateTime.Today.Year;
 
-    public override async Task ActivateAsync(CancellationToken ct = default) => await ReloadAsync(_current?.Request.AccidentId, ct);
+    // Kept on the row the operator is on, even while its detail is still loading: the list went
+    // back to its first accident when it was refreshed before the detail arrived.
+    public override async Task ActivateAsync(CancellationToken ct = default) =>
+        await ReloadAsync(Selected()?.AccidentId ?? _current?.Request.AccidentId, ct);
 
     private async Task ReloadAsync(Guid? select, CancellationToken ct = default)
     {
@@ -271,6 +274,8 @@ public sealed class AccidentView : LocalizedView
             Render(select);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the work accidents failed.");
@@ -330,6 +335,11 @@ public sealed class AccidentView : LocalizedView
                 if (detail.IsFailure) { _dialogs.ShowFailure(detail); return; }
                 _current = detail.Value;
                 RenderDetail();
+            }
+            // Left while the accident was loading: the screen is gone, there is nothing to report on it.
+            catch (Exception) when (IsDisposed || Disposing)
+            {
+                return;
             }
             catch (Exception ex)
             {

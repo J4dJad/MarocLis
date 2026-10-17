@@ -107,6 +107,8 @@ public sealed class SteeringView : LocalizedView
             Render();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Computing the steering dashboard failed.");

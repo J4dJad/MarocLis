@@ -405,6 +405,9 @@ internal sealed class CredentialsDialog : Form
             close.Left += grow;
         }
 
+        // Opened read-only from the personnel and deadline screens: the changes were offered to a
+        // user who may only consult the file, then refused by the service.
+        PermissionGate.Require(Permissions.HumanResources.Manage, _add, _edit, _attach, _remove);
         UpdateButtons();
         QhDialog.Dress(this, localizer, "QualityHr.Hint.Credentials");
     }
@@ -870,8 +873,9 @@ internal sealed class SettlementDialog : MasterDataEditor
         _note = TextField("Field.Notes", 20, 252, 680, a.Note);
         _note.MaxLength = 500;
         Numeric(EditorValues.AmountMaxLength, _reference, _leave, _notice, _severance);
-        // A decimal(9,2) column: seven figures before the comma.
-        _leaveDays.MaxLength = 7;
+        // A decimal(9,2) column: seven figures before the comma. Checked as a number like the
+        // amounts: "abc" in the days was refused as a negative amount.
+        Numeric(7, _leaveDays);
 
         _total = new Label { Font = UiTheme.BodyBold, ForeColor = UiTheme.TextPrimary, AutoSize = false, Bounds = new Rectangle(20, 306, 680, 22) };
         Controls.Add(_total);

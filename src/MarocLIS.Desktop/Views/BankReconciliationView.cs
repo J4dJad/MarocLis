@@ -38,6 +38,9 @@ public sealed class BankReconciliationView : LocalizedView
 
     // Withdrawing a whole import is rare and heavy: under « Plus d'actions ▾ ».
     private readonly ContextMenuStrip _moreMenu = new();
+
+    // Kept to translate it with the screen: it stayed « Plus d'actions » in Arabic and English.
+    private Button? _more;
     private readonly MenuAction _withdrawImport = new();
 
     // « Lignes ouvertes seulement » is kept as the tick box it was, off screen; a chip sets it.
@@ -67,8 +70,8 @@ public sealed class BankReconciliationView : LocalizedView
 
         BuildLayout();
 
-        _refresh.Click += async (_, _) => await LoadAsync();
-        _account.SelectedIndexChanged += async (_, _) => await LoadAsync();
+        _refresh.Click += async (_, _) => await ReloadAsync();
+        _account.SelectedIndexChanged += async (_, _) => await ReloadAsync();
         _openOnly.CheckedChanged += (_, _) => Render();
         _openOnly.CheckedChanged += (_, _) => RenderChip();
         _accounts.Click += async (_, _) => await RunBusyAsync(ManageAccountsAsync);
@@ -96,8 +99,8 @@ public sealed class BankReconciliationView : LocalizedView
     {
         Padding = new Padding(24, 20, 24, 16);
 
-        var more = FinanceUi.MoreButton(_moreMenu, Localizer, _withdrawImport);
-        var header = FinanceUi.PageHeader(_heading, null, more, _accounts, _import);
+        _more = FinanceUi.MoreButton(_moreMenu, Localizer, _withdrawImport);
+        var header = FinanceUi.PageHeader(_heading, null, _more, _accounts, _import);
 
         _account.Width = 320;
         _from.Width = 120;
@@ -196,6 +199,7 @@ public sealed class BankReconciliationView : LocalizedView
         _fromLabel.Text = T("Field.From");
         _toLabel.Text = T("Field.To");
         _refresh.Text = T("Action.Refresh");
+        if (_more is not null) _more.Text = T("ResultEntry.MoreActions");
         _accounts.Text = T("Treasury.BankAccounts");
         _import.Text = T("Treasury.ImportStatement");
         _auto.Text = T("Treasury.AutoMatch");
@@ -226,6 +230,8 @@ public sealed class BankReconciliationView : LocalizedView
             await LoadAsync(ct);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the bank reconciliation failed.");
@@ -248,6 +254,25 @@ public sealed class BankReconciliationView : LocalizedView
 
         var index = _accountRows.ToList().FindIndex(a => a.Id == previous);
         if (_accountRows.Count > 0) _account.SelectedIndex = index >= 0 ? index : 0;
+    }
+
+    /// <summary>
+    /// <see cref="LoadAsync"/> from a button or the account list. Choosing the account while the
+    /// screen opens runs it too: leaving the screen then let its cancellation escape as an
+    /// unexpected error.
+    /// </summary>
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            await LoadAsync();
+        }
+        catch (Exception) when (IsDisposed || Disposing) { }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Loading the bank reconciliation failed.");
+            _dialogs.Error(T("Message.UnexpectedError"));
+        }
     }
 
     private async Task LoadAsync(CancellationToken ct = default)
@@ -273,30 +298,36 @@ public sealed class BankReconciliationView : LocalizedView
 
     private void Render()
     {
-        _lines.Rows.Clear();
         _movements.Rows.Clear();
         RenderChip();
 
         if (_data is null)
         {
+            _lines.Rows.Clear();
             _summary.Text = _accountRows.Count == 0 ? T("Treasury.NoBankAccount") : string.Empty;
             RefreshButtons();
             return;
         }
 
-        foreach (var line in _data.Lines.Where(l => !_openOnly.Checked || !l.IsReconciled))
+        // Kept on the line just matched or justified, or on the next one when « open only » hides it:
+        // the list went back to its first line after each one.
+        _lines.RebuildKeeping<StatementLineRow, Guid>(r => r.Id, () =>
         {
-            var status = !line.IsReconciled
-                ? T("Treasury.Unreconciled")
-                : string.Join(", ", line.MatchKinds.Select(Kind))
-                  + (line.IsAutomatic ? $" ({T("Treasury.Automatic")})" : string.Empty)
-                  + (line.DifferenceMad != 0m ? $" — {T("Treasury.Difference")} {Amount(line.DifferenceMad)}" : string.Empty);
+            _lines.Rows.Clear();
+            foreach (var line in _data.Lines.Where(l => !_openOnly.Checked || !l.IsReconciled))
+            {
+                var status = !line.IsReconciled
+                    ? T("Treasury.Unreconciled")
+                    : string.Join(", ", line.MatchKinds.Select(Kind))
+                      + (line.IsAutomatic ? $" ({T("Treasury.Automatic")})" : string.Empty)
+                      + (line.DifferenceMad != 0m ? $" — {T("Treasury.Difference")} {Amount(line.DifferenceMad)}" : string.Empty);
 
-            var index = _lines.Rows.Add(line.OperationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                                        line.Label, line.Reference ?? string.Empty, Amount(line.AmountMad), status);
-            _lines.Rows[index].Tag = line;
-            if (line.MatchComment is { } comment) _lines.Rows[index].Cells["status"].ToolTipText = comment;
-        }
+                var index = _lines.Rows.Add(line.OperationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                                            line.Label, line.Reference ?? string.Empty, Amount(line.AmountMad), status);
+                _lines.Rows[index].Tag = line;
+                if (line.MatchComment is { } comment) _lines.Rows[index].Cells["status"].ToolTipText = comment;
+            }
+        });
 
         foreach (var movement in _data.UnmatchedMovements)
         {

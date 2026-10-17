@@ -441,6 +441,8 @@ internal static class AdminDialogFrame
         form.BackColor = UiTheme.SurfaceRaised;
         form.Padding = Padding.Empty;
 
+        var declaredAccept = form.AcceptButton;
+        var declaredCancel = form.CancelButton;
         var accept = form.AcceptButton as Button;
         var cancel = form.CancelButton as Button;
         var anchor = accept ?? cancel;
@@ -504,6 +506,12 @@ internal static class AdminDialogFrame
         // Added last so they dock first, outside whatever the dialog docked itself.
         form.Controls.Add(header);
         form.Controls.Add(footer);
+
+        // Moving a button out of the form clears the form's AcceptButton and CancelButton: Enter no
+        // longer saved and Escape no longer closed the framed dialogs (password change, users,
+        // catalogue and reference-data editors).
+        form.AcceptButton = declaredAccept;
+        form.CancelButton = declaredCancel;
 
         form.ResumeLayout(performLayout: true);
 
