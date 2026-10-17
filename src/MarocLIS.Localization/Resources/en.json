@@ -3178,7 +3178,7 @@
     "FilterUrgent": "Urgent · {0}",
     "FilterAll": "All · {0}",
     "PatientsAndTubes": "{0} patient(s) · {1} tube(s)",
-    "AlreadyCollected": "The ticked tubes are already drawn: use \"Dispatch\".",
+    "AlreadyCollected": "The ticked tubes are already drawn: use \"Send to the laboratory\".",
     "ReadyToDispatch": "Drawn · to dispatch",
     "ToDraw": "{0} to draw",
     "Registered": "Arrived",

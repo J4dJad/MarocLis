@@ -61,7 +61,7 @@ Légende : **OUI** = présent et utilisable ; **PARTIEL** = présent mais incomp
 **Boutons qui existent mais ne mènent nulle part ou trompent**
 
 - **Re-prélèvements** pour le Technicien : écran visible, tous les boutons grisés.
-- Le message « Les tubes cochés sont déjà prélevés : utilisez « Expédier ». » cite encore l'ancien libellé : le bouton s'appelle maintenant **Expédier au plateau**.
+- Le message « Les tubes cochés sont déjà prélevés : … » cite maintenant le bon libellé **Expédier au plateau** (corrigé le 2026-10-17).
 
 (Corrigés depuis la première vérification : la recherche de la sérothèque trouve le nom du patient ; le motif de refus n'est plus présélectionné.)
 
@@ -74,4 +74,4 @@ Légende : **OUI** = présent et utilisable ; **PARTIEL** = présent mais incomp
 5. Sous-traitance : date de retour calculée depuis la réception et non depuis l'envoi ; pas de désactivation d'un partenaire.
 6. Tournées de transport, canal « Sur place » des re-prélèvements, consentement à la sous-traitance : prévus dans l'application, inaccessibles.
 7. Fenêtre prescripteur : la liste des types est intitulée « Désignation ».
-8. Message « … utilisez « Expédier ». » à mettre au nouveau libellé « Expédier au plateau ».
+8. Message « … utilisez « Expédier ». » corrigé : il cite « Expédier au plateau ».

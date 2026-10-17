@@ -3178,7 +3178,7 @@
     "FilterUrgent": "مستعجل · {0}",
     "FilterAll": "الكل · {0}",
     "PatientsAndTubes": "{0} مريض · {1} أنبوب",
-    "AlreadyCollected": "الأنابيب المحددة مسحوبة بالفعل: استعمل «إرسال».",
+    "AlreadyCollected": "الأنابيب المحددة مسحوبة بالفعل: استعمل «إرسال إلى المختبر».",
     "ReadyToDispatch": "تم السحب · للإرسال",
     "ToDraw": "{0} للسحب",
     "Registered": "الوصول",

@@ -588,7 +588,7 @@ Les textes sont ceux affichés par l'application. « … » remplace une valeur 
 | Message | Quand il apparaît | Que faire |
 |---|---|---|
 | « Aucun élément sélectionné. » | Aucun tube n'est coché au clic sur **Valider le prélèvement** ou **Expédier au plateau**. | Cochez les tubes, ou scannez-les. |
-| « Les tubes cochés sont déjà prélevés : utilisez « Expédier ». » | **Valider le prélèvement** alors que tous les tubes cochés sont déjà prélevés. | Cliquez sur **Expédier au plateau**. |
+| « Les tubes cochés sont déjà prélevés : utilisez « Expédier au plateau ». » | **Valider le prélèvement** alors que tous les tubes cochés sont déjà prélevés. | Cliquez sur **Expédier au plateau**. |
 | « Aucun tube de la liste ne porte le code-barres « … ». » | Le code scanné n'est ni un tube du patient ni un tube d'un autre patient de la liste. | Vérifiez l'étiquette ; le tube n'est peut-être pas de votre site ou déjà expédié. |
 | « Volume prélevé invalide pour le tube … : saisissez un nombre positif, en mL (moins de 1 000 000), ou laissez la case vide. » | Volume illisible, nul, négatif ou trop grand. | Corrigez **Volume (mL)** (par exemple 5 ou 4,5) ou videz la case. |
 | « Le patient déclare-t-il être à jeun depuis au moins … heures ? » | Jeûne requis, pas de réponse dans le bandeau ni de déclaration antérieure. | Demandez au patient et répondez **Oui** ou **Non**. |
