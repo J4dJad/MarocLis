@@ -536,6 +536,8 @@ internal static class RolePermissionSets
              Permissions.Inventory.CloseCounts, Permissions.Inventory.RecordTemperatures,
              Permissions.Inventory.ManageStorageUnits,
              Permissions.Billing.View,
+             // Approves at the counter a discount above the ceiling.
+             Permissions.Billing.ApproveDiscount,
              Permissions.Statistics.View, Permissions.Statistics.EpidemiologicalDeclaration,
              Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail,
              Permissions.HumanResources.View, Permissions.HumanResources.Manage,
@@ -682,6 +684,8 @@ internal static class RolePermissionSets
              Permissions.Billing.View, Permissions.Billing.CreateInvoice,
              Permissions.Billing.CreditNote, Permissions.Billing.RecordPayment,
              Permissions.Billing.ApplyDiscount, Permissions.Billing.ManageTariffs,
+             // Approves a colleague's discount above the ceiling, never their own.
+             Permissions.Billing.ApproveDiscount,
              Permissions.Billing.CloseCashSession, Permissions.Billing.ExportAccounting,
              Permissions.Inventory.View, Permissions.Inventory.ManagePurchaseOrders,
              Permissions.Inventory.ManageQuotes,

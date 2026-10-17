@@ -95,7 +95,19 @@ public interface IAuthenticationService
 
     /// <summary>Switches the working site without a full re-authentication.</summary>
     Task<Result> SwitchSiteAsync(Guid siteId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Checks the user name and password of another user who approves an operation on the spot
+    /// (a discount above the ceiling), and that they hold <paramref name="permission"/>. The
+    /// approver is <b>not</b> signed in and the current session is left as it is; a wrong password
+    /// counts towards the approver's lockout exactly as at the sign-in screen.
+    /// </summary>
+    Task<Result<ApproverIdentity>> VerifyApproverAsync(string userName, string password, string permission,
+                                                       CancellationToken ct = default);
 }
+
+/// <summary>Who approved an operation: recorded in the audit trail of what they approved.</summary>
+public sealed record ApproverIdentity(Guid UserId, string UserName, string FullName);
 
 public sealed record AuthenticatedSession(
     Guid UserId,

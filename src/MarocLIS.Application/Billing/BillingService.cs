@@ -214,7 +214,9 @@ public sealed class BillingService(
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
     ICurrentUser currentUser,
-    IClock clock)
+    IClock clock,
+    IInvoicePrintSettingsQueries? settingsQueries = null,
+    IAuthenticationService? authentication = null)
 {
     // ---- Reading -------------------------------------------------------------------------------
 
@@ -261,10 +263,17 @@ public sealed class BillingService(
     /// gap appears in the series. The lines are built from the order items' <b>frozen</b> prices,
     /// not by re-pricing — a tariff revision must not alter what a patient was told they owed.
     /// </para>
+    /// <para>
+    /// A discount above the ceiling set in Paramètres › Factures (<see cref="DiscountCapSettings"/>)
+    /// is refused unless <paramref name="approval"/> names another active user holding
+    /// <c>billing.discount.approve</c>, with their password; who approved, and the ceiling in force,
+    /// go into the audit trail of the invoice.
+    /// </para>
     /// </summary>
     public async Task<Result<Guid>> IssueInvoiceAsync(
         IReadOnlyList<Guid> labOrderIds, Guid? payerIdOverride = null,
         decimal? discountAmount = null, string? discountReason = null,
+        DiscountApproval? approval = null,
         CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Billing.CreateInvoice);
@@ -358,6 +367,29 @@ public sealed class BillingService(
         if (payerIdOverride is null && !loaded[0].DirectBillingAtRegistration)
             payer = null;
 
+        // The discount ceiling, checked before the transaction: a wrong approver password is
+        // counted towards that user's lockout, and the count must survive the refusal.
+        var cap = DiscountCapSettings.Default;
+        ApproverIdentity? approver = null;
+
+        if (discountAmount is { } asked and > 0m)
+        {
+            cap = await DiscountCapAsync(ct);
+
+            // The gross the invoice will have: the same lines as below, at their frozen prices.
+            var expectedGross = Money.Round(loaded
+                .SelectMany(o => o.Items)
+                .Where(i => !i.IsCancelled && i.ChargedPrice > 0m)
+                .Sum(i => Money.Round(i.ChargedPrice)));
+
+            if (cap.Exceeds(asked, expectedGross))
+            {
+                var approved = await ApproveDiscountAsync(approval, cap, expectedGross, ct);
+                if (approved.IsFailure) return Result.Failure<Guid>(approved.Errors);
+                approver = approved.Value;
+            }
+        }
+
         await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
 
         var invoice = new Invoice(string.Empty, currentUser.SiteId, InvoiceKind.Invoice,
@@ -443,6 +475,10 @@ public sealed class BillingService(
 
         if (discountAmount is { } discount and > 0m)
         {
+            // Again on the invoice's own gross, which is what the ceiling is a share of.
+            if (approver is null && cap.Exceeds(discount, invoice.GrossAmount))
+                return Result.Failure<Guid>(DiscountApprovalRequired(cap, invoice.GrossAmount));
+
             var applied = invoice.ApplyDiscount(discount, discountReason!);
             if (applied.IsFailure) return Result.Failure<Guid>(applied.Errors);
         }
@@ -467,10 +503,63 @@ public sealed class BillingService(
         unitOfWork.AuditReason = depositsApplied.Value > 0m
             ? $"Émission de la facture {invoice.Number}, acompte(s) imputé(s) : {depositsApplied.Value:N2} DH"
             : $"Émission de la facture {invoice.Number}";
+
+        if (approver is not null)
+            unitOfWork.AuditReason += DescribeApproval(approver, cap, invoice.DiscountAmount, invoice.GrossAmount);
+
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);
 
         return Result.Success(invoice.Id);
+    }
+
+    private async Task<DiscountCapSettings> DiscountCapAsync(CancellationToken ct) =>
+        settingsQueries is null
+            ? DiscountCapSettings.Default
+            : DiscountCapSettings.FromValues(await settingsQueries.GetSettingValuesAsync(DiscountCapSettings.Prefix, ct));
+
+    /// <summary>
+    /// The approval of a discount above the ceiling: another user, active, with the right to
+    /// approve, who typed their password. The operator's own name is refused before anything is
+    /// checked, whatever their rights.
+    /// </summary>
+    private async Task<Result<ApproverIdentity>> ApproveDiscountAsync(
+        DiscountApproval? approval, DiscountCapSettings cap, decimal gross, CancellationToken ct)
+    {
+        if (approval is null || string.IsNullOrWhiteSpace(approval.UserName) || string.IsNullOrEmpty(approval.Password))
+            return Result.Failure<ApproverIdentity>(DiscountApprovalRequired(cap, gross));
+
+        if (string.Equals(approval.UserName.Trim(), currentUser.UserName, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_SelfNotAllowed"));
+
+        if (authentication is null)
+            return Result.Failure<ApproverIdentity>(DiscountApprovalRequired(cap, gross));
+
+        var verified = await authentication.VerifyApproverAsync(
+            approval.UserName, approval.Password, Permissions.Billing.ApproveDiscount, ct);
+
+        if (verified.IsFailure) return verified;
+
+        if (verified.Value.UserId == currentUser.UserId)
+            return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_SelfNotAllowed"));
+
+        return verified;
+    }
+
+    private Error DiscountApprovalRequired(DiscountCapSettings cap, decimal gross) =>
+        Error.Forbidden("Invoice_DiscountApprovalRequired", Money.Of(cap.CapFor(gross)).Format(currentUser.Language));
+
+    /// <summary>What the audit trail says of an approved discount: who, when, how much, under which ceiling.</summary>
+    private string DescribeApproval(ApproverIdentity approver, DiscountCapSettings cap, decimal discount, decimal gross)
+    {
+        var fr = CultureInfo.GetCultureInfo("fr-FR");
+        var ceiling = cap.MaxAmount is { } max
+            ? $"{cap.MaxPercent.ToString("0.##", fr)} % du brut, maximum {max.ToString("N2", fr)} DH"
+            : $"{cap.MaxPercent.ToString("0.##", fr)} % du brut";
+
+        return $" ; remise de {discount.ToString("N2", fr)} DH au-delà du plafond de "
+               + $"{cap.CapFor(gross).ToString("N2", fr)} DH ({ceiling}) approuvée par "
+               + $"{approver.FullName} ({approver.UserName}) le {clock.Now.ToString("dd/MM/yyyy HH:mm", fr)}";
     }
 
     /// <summary>

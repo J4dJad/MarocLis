@@ -133,16 +133,62 @@ public sealed class InvoicePrintSettingsService(
         if (!Enum.IsDefined(settings.DefaultFormat))
             return Result.Failure(Error.Validation("InvoicePrint_UnknownFormat"));
 
+        var changed = await WriteAsync(settings.ToValues(),
+                                       "Facturation : format d'impression des factures patients", ct);
+
+        if (changed.Count == 0) return Result.Success();
+
+        unitOfWork.AuditReason = $"Format d'impression des factures modifié : {string.Join(", ", changed)}";
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// The discount ceiling: read by whoever issues an invoice (the issue dialog says when a
+    /// discount goes beyond it), and by whoever manages the settings.
+    /// </summary>
+    public async Task<Result<DiscountCapSettings>> GetDiscountCapAsync(CancellationToken ct = default)
+    {
+        var permitted = guard.RequireAny(Permissions.Billing.View, Permissions.Administration.ManageSettings);
+        if (permitted.IsFailure) return Result.Failure<DiscountCapSettings>(permitted.FirstError);
+
+        return Result.Success(DiscountCapSettings.FromValues(
+            await queries.GetSettingValuesAsync(DiscountCapSettings.Prefix, ct)));
+    }
+
+    /// <summary>Changes the discount ceiling: the right to manage settings, and traced with the values.</summary>
+    public async Task<Result> SaveDiscountCapAsync(DiscountCapSettings cap, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(cap);
+
+        var permitted = guard.Require(Permissions.Administration.ManageSettings);
+        if (permitted.IsFailure) return permitted;
+
+        var valid = cap.Validate();
+        if (valid.IsFailure) return valid;
+
+        var changed = await WriteAsync(cap.ToValues(), "Facturation : plafond des remises", ct);
+        if (changed.Count == 0) return Result.Success();
+
+        // Written in French figures, like the other reasons of the audit trail.
+        var fr = CultureInfo.GetCultureInfo("fr-FR");
+        var amount = cap.MaxAmount is { } max ? max.ToString("N2", fr) + " DH" : "aucun";
+        unitOfWork.AuditReason =
+            $"Plafond des remises modifié : {cap.MaxPercent.ToString("0.##", fr)} % du brut, montant maximal {amount}";
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    private async Task<List<string>> WriteAsync(IEnumerable<(string Key, string Value)> values, string description,
+                                                CancellationToken ct)
+    {
         var changed = new List<string>();
-        foreach (var (key, value) in settings.ToValues())
+        foreach (var (key, value) in values)
         {
             var existing = await settingsWriter.GetSettingAsync(key, null, ct);
             if (existing is null)
             {
-                await settingsWriter.AddSettingAsync(new AppSetting(key, value)
-                {
-                    Description = "Facturation : format d'impression des factures patients"
-                }, ct);
+                await settingsWriter.AddSettingAsync(new AppSetting(key, value) { Description = description }, ct);
                 changed.Add(key);
             }
             else if (existing.Value != value)
@@ -152,11 +198,7 @@ public sealed class InvoicePrintSettingsService(
             }
         }
 
-        if (changed.Count == 0) return Result.Success();
-
-        unitOfWork.AuditReason = $"Format d'impression des factures modifié : {string.Join(", ", changed)}";
-        await unitOfWork.SaveChangesAsync(ct);
-        return Result.Success();
+        return changed;
     }
 }
 

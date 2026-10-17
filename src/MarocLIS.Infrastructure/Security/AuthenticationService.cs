@@ -258,6 +258,97 @@ public sealed class AuthenticationService(
         return Result.Success();
     }
 
+    public async Task<Result<ApproverIdentity>> VerifyApproverAsync(string userName, string password,
+                                                                    string permission, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrEmpty(password))
+            return Result.Failure<ApproverIdentity>(Error.Validation("Approval_CredentialsRequired"));
+
+        var normalised = userName.Trim().ToLowerInvariant();
+
+        // The operator cannot approve their own operation: said before the password is checked,
+        // since the name is their own, and no attempt is counted against them.
+        if (currentUser.IsAuthenticated
+            && string.Equals(normalised, currentUser.UserName, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_SelfNotAllowed"));
+
+        var user = await db.Users
+            .IgnoreQueryFilters()
+            .Include(u => u.Roles).ThenInclude(r => r.Role).ThenInclude(r => r!.Permissions)
+            .FirstOrDefaultAsync(u => u.UserName == normalised, ct);
+
+        // The same order as the sign-in: the password is checked for every outcome, so the
+        // approval box cannot tell which names are accounts, or which accounts are locked.
+        if (user is null)
+        {
+            passwordHasher.Verify(password, DummyHash);
+            return await FailApprovalAsync(normalised, "Approval_InvalidCredentials", ct);
+        }
+
+        if (currentUser.IsAuthenticated && user.Id == currentUser.UserId)
+            return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_SelfNotAllowed"));
+
+        var passwordCorrect = passwordHasher.Verify(password, user.PasswordHash);
+
+        if (!user.IsActive)
+            return await FailApprovalAsync(normalised, "Approval_InvalidCredentials", ct, "Auth_AccountInactive");
+
+        if (user.IsLockedOut(clock.Now))
+        {
+            await securityAuditor.LogAsync(SecurityEventKind.LoginFailed, false, normalised, "Auth_AccountLockedOut",
+                                           details: passwordCorrect ? "Approval; correct password" : "Approval", ct: ct);
+
+            return Result.Failure<ApproverIdentity>(passwordCorrect
+                ? Error.Forbidden("Auth_AccountLockedOut", user.LockedOutUntil!.Value)
+                : Error.Forbidden("Approval_InvalidCredentials"));
+        }
+
+        if (!passwordCorrect)
+        {
+            // Counted like a failed sign-in, and persisted at once: the caller refuses the
+            // operation and saves nothing else, and the counter is what stops guessing.
+            user.RegisterFailedLogin(clock.Now, policy.MaxFailedAttempts, policy.LockoutDuration);
+            await db.SaveChangesAsync(ct);
+
+            var lockedOutNow = user.IsLockedOut(clock.Now);
+
+            await securityAuditor.LogAsync(
+                lockedOutNow ? SecurityEventKind.AccountLockedOut : SecurityEventKind.LoginFailed,
+                false, normalised, "Approval_InvalidCredentials",
+                details: $"Approval; attempt {user.FailedLoginAttempts} of {policy.MaxFailedAttempts}", ct: ct);
+
+            return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_InvalidCredentials"));
+        }
+
+        var granted = user.Roles
+            .Select(r => r.Role)
+            .Where(r => r is { IsActive: true })
+            .Any(r => r!.Permissions.Any(p => p.Permission == permission));
+
+        if (!granted)
+        {
+            await securityAuditor.LogAsync(SecurityEventKind.AuthorizationDenied, false, normalised,
+                                           "Approval_PermissionMissing", details: $"Approval: {permission}", ct: ct);
+            return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_PermissionMissing", user.FullName));
+        }
+
+        if (user.FailedLoginAttempts > 0)
+        {
+            user.RegisterSuccessfulApproval();
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Result.Success(new ApproverIdentity(user.Id, user.UserName, user.FullName));
+    }
+
+    private async Task<Result<ApproverIdentity>> FailApprovalAsync(string userName, string answerKey,
+                                                                   CancellationToken ct, string? reasonKey = null)
+    {
+        await securityAuditor.LogAsync(SecurityEventKind.LoginFailed, false, userName, reasonKey ?? answerKey,
+                                       details: "Approval", ct: ct);
+        return Result.Failure<ApproverIdentity>(Error.Forbidden(answerKey));
+    }
+
     /// <summary>
     /// What a locked account answers: the lockout itself only to whoever typed the right password,
     /// the generic refusal to anyone else, so a locked account cannot be told from a missing one.

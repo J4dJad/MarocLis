@@ -30,6 +30,15 @@ public sealed partial class SettingsView
     private readonly Label _invoicePrintStatus = new();
     private InvoicePrintSettings _invoicePrintSettings = InvoicePrintSettings.Default;
 
+    // The discount ceiling (« Plafond des remises »): saved by the same button, traced on its own.
+    private readonly Label _capHeading = new();
+    private readonly Label _capIntro = new();
+    private readonly Label _capPercentLabel = new();
+    private readonly TextBox _capPercent = UiTheme.Input(120);
+    private readonly Label _capAmountLabel = new();
+    private readonly TextBox _capAmount = UiTheme.Input(160);
+    private DiscountCapSettings _discountCap = DiscountCapSettings.Default;
+
     private void BuildInvoicePrintTab()
     {
         _invoicePrintTab.BackColor = UiTheme.Surface;
@@ -69,6 +78,19 @@ public sealed partial class SettingsView
         Option(_cotationWords, 0, 320);
         Option(_cotationLetterValue, 0, 346);
 
+        Text(_capHeading, UiTheme.BodyBold, UiTheme.TextPrimary, new Rectangle(0, 386, 760, 22));
+        Text(_capIntro, UiTheme.Small, UiTheme.TextSecondary, new Rectangle(0, 410, 760, 34));
+        Text(_capPercentLabel, UiTheme.SmallBold, UiTheme.TextSecondary, new Rectangle(0, 450, 240, 18));
+        Text(_capAmountLabel, UiTheme.SmallBold, UiTheme.TextSecondary, new Rectangle(260, 450, 380, 18));
+        _capPercent.Location = new Point(0, 470);
+        _capAmount.Location = new Point(260, 470);
+        foreach (var box in new[] { _capPercent, _capAmount })
+        {
+            box.Tag = UiTags.LatinValue;
+            box.TextAlign = HorizontalAlignment.Right;
+            box.MaxLength = EditorValues.AmountMaxLength;
+        }
+
         // The settings in a column of their own width, on the reading side: in Arabic the column
         // goes to the right of the card and each field to the right of the column, under its label,
         // where the fixed positions had left the list of formats on the left, far from its caption.
@@ -77,8 +99,11 @@ public sealed partial class SettingsView
         [
             _invoicePrintIntro, _invoiceFormatLabel, _invoiceFormat,
             _standardOptionsLabel, _standardNationalCode, _standardCoefficient, _standardWords,
-            _cotationOptionsLabel, _cotationLinePrice, _cotationZeroFee, _cotationWords, _cotationLetterValue
+            _cotationOptionsLabel, _cotationLinePrice, _cotationZeroFee, _cotationWords, _cotationLetterValue,
+            _capHeading, _capIntro, _capPercentLabel, _capPercent, _capAmountLabel, _capAmount
         ]);
+        // Taller than the tab at 1366×768: the column scrolls rather than hiding the ceiling.
+        column.AutoScroll = true;
         var leftToRight = column.Controls.Cast<Control>().ToDictionary(c => c, c => c.Left);
         column.RightToLeftChanged += (_, _) =>
         {
@@ -106,7 +131,8 @@ public sealed partial class SettingsView
         // the service refuses the others in any case.
         PermissionGate.Require(Permissions.Administration.ManageSettings, _saveInvoicePrint, _invoiceFormat,
                                _standardNationalCode, _standardCoefficient, _standardWords,
-                               _cotationLinePrice, _cotationZeroFee, _cotationWords, _cotationLetterValue);
+                               _cotationLinePrice, _cotationZeroFee, _cotationWords, _cotationLetterValue,
+                               _capPercent, _capAmount);
     }
 
     private void ApplyInvoicePrintTexts()
@@ -123,6 +149,11 @@ public sealed partial class SettingsView
         _cotationZeroFee.Text = T("InvoicePrint.OptZeroFee");
         _cotationWords.Text = T("InvoicePrint.OptWords");
         _cotationLetterValue.Text = T("InvoicePrint.OptLetterValue");
+        _capHeading.Text = T("InvoicePrint.DiscountCap");
+        _capIntro.Text = T("InvoicePrint.DiscountCapIntro");
+        _capPercentLabel.Text = T("InvoicePrint.DiscountCapPercent");
+        _capAmountLabel.Text = T("InvoicePrint.DiscountCapAmount");
+        _capAmount.PlaceholderText = T("InvoicePrint.DiscountCapNoAmount");
         _saveInvoicePrint.Text = T("Action.Save");
         _reloadInvoicePrint.Text = T("Action.Refresh");
 
@@ -144,7 +175,48 @@ public sealed partial class SettingsView
 
         _invoicePrintSettings = result.Value;
         ShowInvoicePrint(_invoicePrintSettings);
+
+        var cap = await _invoicePrint.GetDiscountCapAsync(ct);
+        if (cap.IsSuccess)
+        {
+            _discountCap = cap.Value;
+            ShowDiscountCap(_discountCap);
+        }
+
         _invoicePrintStatus.Text = string.Empty;
+    }
+
+    private void ShowDiscountCap(DiscountCapSettings cap)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        _capPercent.Text = cap.MaxPercent.ToString("0.##", culture);
+        _capAmount.Text = cap.MaxAmount is { } amount ? EditorValues.FormatForEditing(amount, 2, culture) : string.Empty;
+    }
+
+    /// <summary>The ceiling as typed, or null after telling the operator which box is wrong.</summary>
+    private DiscountCapSettings? ReadDiscountCap()
+    {
+        var percent = EditorValues.ParseDecimal(_capPercent.Text);
+        if (percent is not { } rate || rate < 0m || rate > 100m)
+        {
+            _dialogs.Warn(T("DiscountCap_PercentOutOfRange"), T("InvoicePrint.DiscountCap"));
+            _capPercent.Focus();
+            return null;
+        }
+
+        decimal? amount = null;
+        if (!string.IsNullOrWhiteSpace(_capAmount.Text))
+        {
+            amount = EditorValues.ParseDecimal(_capAmount.Text);
+            if (amount is not { } value || value < 0m || value > DiscountCapSettings.AmountLimit)
+            {
+                _dialogs.Warn(T("DiscountCap_AmountOutOfRange"), T("InvoicePrint.DiscountCap"));
+                _capAmount.Focus();
+                return null;
+            }
+        }
+
+        return new DiscountCapSettings { MaxPercent = rate, MaxAmount = amount };
     }
 
     private void ShowInvoicePrint(InvoicePrintSettings settings)
@@ -162,6 +234,8 @@ public sealed partial class SettingsView
     private async Task SaveInvoicePrintAsync()
     {
         if (_invoicePrint is null) return;
+
+        if (ReadDiscountCap() is not { } cap) return;
 
         var settings = _invoicePrintSettings with
         {
@@ -186,6 +260,17 @@ public sealed partial class SettingsView
         }
 
         _invoicePrintSettings = settings;
+
+        var capSaved = await _invoicePrint.SaveDiscountCapAsync(cap);
+
+        if (capSaved.IsFailure)
+        {
+            _dialogs.ShowFailure(capSaved, T("InvoicePrint.DiscountCap"));
+            return;
+        }
+
+        _discountCap = cap;
+        ShowDiscountCap(cap);
         _invoicePrintStatus.ForeColor = UiTheme.Normal;
         _invoicePrintStatus.Text = T("InvoicePrint.Saved");
     }

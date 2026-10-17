@@ -770,27 +770,59 @@ public sealed class BillingView : LocalizedView
         // The confirmation and the discount are one dialog, not a confirm followed by an optional
         // second step: a discount decided after the operator has already confirmed the total is a
         // discount applied to a document they were told was final.
-        using var issue = new InvoiceIssueDialog(
-            Localizer, _dialogs, selected, total,
-            canDiscount: _currentUser.Has(Permissions.Billing.ApplyDiscount));
+        var canDiscount = _currentUser.Has(Permissions.Billing.ApplyDiscount);
 
-        if (issue.ShowDialog(FindForm()) != DialogResult.OK) return;
+        // The ceiling from Paramètres › Factures, so the dialog says when a discount goes beyond
+        // it; the service applies it in any case.
+        var cap = DiscountCapSettings.Default;
+        if (canDiscount && _printSettings is not null
+            && await _printSettings.GetDiscountCapAsync() is { IsSuccess: true } loadedCap)
+            cap = loadedCap.Value;
+
+        using var issue = new InvoiceIssueDialog(
+            Localizer, _dialogs, selected, total, canDiscount, cap);
 
         _issue.Enabled = false;
-        Cursor = Cursors.WaitCursor;
 
         try
         {
-            var result = await _billing.IssueInvoiceAsync(
-                [.. selected.Select(s => s.LabOrderId)],
-                payerIdOverride: payerOverride,
-                discountAmount: issue.DiscountAmount,
-                discountReason: issue.DiscountReason);
-
-            if (result.IsFailure)
+            while (true)
             {
-                _dialogs.ShowFailure(result);
-                return;
+                if (issue.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+                Cursor = Cursors.WaitCursor;
+                Result<Guid> result;
+
+                try
+                {
+                    result = await _billing.IssueInvoiceAsync(
+                        [.. selected.Select(s => s.LabOrderId)],
+                        payerIdOverride: payerOverride,
+                        discountAmount: issue.DiscountAmount,
+                        discountReason: issue.DiscountReason,
+                        approval: issue.Approval);
+                }
+                finally
+                {
+                    Cursor = Cursors.Default;
+                }
+
+                if (result.IsFailure)
+                {
+                    _dialogs.ShowFailure(result);
+
+                    // A refused approval is corrected in the same dialog, the discount and the
+                    // reason still filled in: only the approver's password is asked again.
+                    if (issue.Approval is not null && IsApprovalRefusal(result.FirstError.ResourceKey))
+                    {
+                        issue.ApprovalRefused();
+                        continue;
+                    }
+
+                    return;
+                }
+
+                break;
             }
 
             _status.ForeColor = UiTheme.Normal;
@@ -804,6 +836,10 @@ public sealed class BillingView : LocalizedView
             _issue.Enabled = true;
         }
     }
+
+    private static bool IsApprovalRefusal(string key) =>
+        key.StartsWith("Approval_", StringComparison.Ordinal)
+        || key is "Invoice_DiscountApprovalRequired" or "Auth_AccountLockedOut";
 
     /// <summary>
     /// Refunds a settled payment.
