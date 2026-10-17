@@ -1,0 +1,158 @@
+@page "/connexion"
+@inherits UiComponent
+@inject ApiClient Api
+@inject SessionState Session
+@inject Browser Browser
+@inject NavigationManager Navigation
+
+<main class="signin @(Notice is null ? "" : "with-notice")">
+    <div class="brand">
+        <div class="brand-mark"><Icon Name="flask" Size="34" Class="on-accent" /></div>
+        <div class="brand-name">MarocLIS</div>
+        @if (Notice is null)
+        {
+            <div class="brand-sub">@T("Validation.Biological")</div>
+        }
+    </div>
+
+    @if (Notice is { } notice)
+    {
+        <div class="notice notice-info" role="status">
+            <div class="notice-title">@notice.Title</div>
+            @if (notice.Text is { Length: > 0 } text)
+            {
+                <div class="notice-text">@text</div>
+            }
+        </div>
+    }
+
+    <form class="form-card" @onsubmit="SignInAsync" @onsubmit:preventDefault>
+        <div class="field">
+            <label for="user">@T("Login.UserName")</label>
+            <input id="user" class="input" @bind="_userName" autocomplete="username" autocapitalize="none"
+                   autocorrect="off" spellcheck="false" dir="ltr" maxlength="100" required />
+        </div>
+        <div class="field">
+            <label for="password">@T("Login.Password")</label>
+            <input id="password" class="input" type="password" @bind="_password" autocomplete="current-password"
+                   dir="ltr" maxlength="200" required />
+        </div>
+        @if (_error is { Length: > 0 })
+        {
+            <div class="error-text" role="alert">@_error</div>
+        }
+        <button type="submit" class="btn btn-primary" disabled="@(_busy || !Browser.IsOnline)">
+            @(Notice is null ? T("Login.SignIn") : T("MobileUi.SignInAgain"))
+        </button>
+    </form>
+
+    @if (Notice is null)
+    {
+        <div class="notice notice-accent">
+            <Icon Name="lock" Size="20" />
+            <div>@T("MobileUi.SignInSecure", IdleMinutes)</div>
+        </div>
+    }
+
+    <div class="languages" role="group" aria-label="@T("App.Language")">
+        @foreach (var language in Enum.GetValues<UiLanguage>())
+        {
+            var current = language;
+            <button type="button" lang="@Texts.Tag(current)" aria-pressed="@(Texts.Language == current ? "true" : "false")"
+                    @onclick="() => Choose(current)">@LanguageName(current)</button>
+        }
+    </div>
+</main>
+
+@code {
+    /// <summary>Why the sign-in screen is shown: inactivite, deconnexion, session; nothing on a first opening.</summary>
+    [SupplyParameterFromQuery(Name = "raison")] public string? Reason { get; set; }
+
+    private string _userName = "";
+    private string _password = "";
+    private string? _error;
+    private bool _busy;
+
+    private int IdleMinutes => Session.Info?.IdleTimeoutMinutes ?? Session.LastIdleMinutes;
+
+    private sealed record NoticeText(string Title, string? Text);
+
+    private NoticeText? Notice => Reason switch
+    {
+        "inactivite" => new(T("MobileUi.SignInIdleTitle", IdleMinutes), T("MobileUi.SignInWhatIsKept")),
+        "deconnexion" => new(T("MobileUi.SignInSignedOutTitle"), T("MobileUi.SignInWhatIsKept")),
+        "session" => new(Session.EndMessage is { Length: > 0 } message ? message : T("Message.SessionExpired"),
+                         T("MobileUi.SignInWhatIsKept")),
+        _ => null
+    };
+
+    /// <summary>The language tapped on this screen, if any: the session is opened in it.</summary>
+    private UiLanguage? _chosen;
+
+    private void Choose(UiLanguage language)
+    {
+        _chosen = language;
+        Texts.Use(language);
+    }
+
+    private string LanguageName(UiLanguage language) => language switch
+    {
+        // Each language in its own name, whatever the screen's language: the one you read is the one you find.
+        UiLanguage.Arabic => "العربية",
+        UiLanguage.English => "English",
+        _ => "Français"
+    };
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        // The identifier of the session that just ended stays in the box; the password never does.
+        _userName = Session.LastUserName ?? "";
+
+        // Already signed in (a reload of this address): straight to the worklist.
+        if (Session.IsSignedIn) Navigation.NavigateTo("", replace: true);
+    }
+
+    private async Task SignInAsync()
+    {
+        if (_busy) return;
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_userName) || string.IsNullOrEmpty(_password))
+        {
+            _error = T("MobileUi.SignInMissing");
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await Api.SignInAsync(_userName.Trim(), _password);
+            _password = "";
+
+            if (result is { IsSuccess: true, Value: { } info })
+            {
+                Session.SignedIn(info);
+
+                // The server opens the session in the account's language. One tapped here wins:
+                // it is what the biologist just read the screen in.
+                if (_chosen is { } chosen && chosen != Texts.Parse(info.Language)
+                    && await Api.ChangeLanguageAsync(chosen) is { IsSuccess: true, Value: { } changed })
+                {
+                    info = changed;
+                    Session.Update(changed);
+                }
+
+                Texts.Use(Texts.Parse(info.Language));
+                Navigation.NavigateTo("", replace: true);
+                return;
+            }
+
+            _error = result.Offline ? T("MobileUi.OfflineDetail") : result.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

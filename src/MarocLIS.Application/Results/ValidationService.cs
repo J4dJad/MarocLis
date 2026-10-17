@@ -37,11 +37,19 @@ public sealed record ValidationWorklistEntry
 }
 
 /// <summary>A biologist's decision on one result.</summary>
+/// <param name="DisplayedEnteredAt">
+/// The entry time of the value the biologist saw when deciding, when the caller can vouch for it.
+/// A value stored since — an analyser re-run, a correction — is then refused with a conflict rather
+/// than released: the biologist approved a figure, not a row. The phone sends it on every decision,
+/// because a file can stay open on it for minutes while the bench keeps working. Null skips the
+/// check, which is what the workstation screen does (it reloads the file after every action).
+/// </param>
 public sealed record ValidationDecision(
     Guid TestResultId,
     bool Validate,
     MultilingualText? BiologistComment = null,
-    string? QcOverrideJustification = null);
+    string? QcOverrideJustification = null,
+    DateTimeOffset? DisplayedEnteredAt = null);
 
 public sealed record ValidationOutcome(
     int Validated,
@@ -156,6 +164,14 @@ public sealed class ValidationService(
             if (!decision.Validate)
             {
                 refused++;
+                continue;
+            }
+
+            // The same rule as a critical call: the decision covers the value that was on screen.
+            // Refusing to release is harmless whatever the value, so only a release is checked.
+            if (decision.DisplayedEnteredAt is { } shown && result.EnteredAt != shown)
+            {
+                blocked.Add(Error.Conflict("Validation_ValueChangedSinceDisplayed"));
                 continue;
             }
 

@@ -1,0 +1,212 @@
+<Project>
+
+  <!--
+    The phone's texts come from the workstation's catalogues — src/MarocLIS.Localization/Resources
+    fr.json, ar.json, en.json — and from nowhere else. One wording per label across the bench and
+    the phone, one file for a translator, and check-resource-keys.ps1 checks both.
+
+    The catalogues are 1.1 MB together, and the phone needs a few hundred keys of them; MarocLIS.
+    Localization itself cannot run in the browser (it reads from disk and pulls in the domain). So
+    at build time this target reads the three catalogues and keeps, for each language:
+
+      - every key the application's sources name literally, as T("Some.Key") or T("Some.Key", …) —
+        the same pattern check-resource-keys.ps1 verifies against the French catalogue;
+      - every key under the prefixes of MobileStringPrefixes, for the ones built from a value
+        (Priority.{priority}, Qualification.{qualification}…), which no scan can see.
+
+    The result is embedded in MarocLIS.Mobile.dll as MarocLIS.Mobile.Strings.<lang>.json, read by
+    Services/Texts.cs. A key missing from a catalogue falls back to French, as on the workstation.
+  -->
+
+  <PropertyGroup>
+    <MobileCatalogueDirectory>$(MSBuildThisFileDirectory)..\..\MarocLIS.Localization\Resources\</MobileCatalogueDirectory>
+    <MobileStringPrefixes>MobileUi.;Priority.;GenderShort.;Qualification.;AppLanguage.</MobileStringPrefixes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <MobileStringSource Include="**\*.razor;**\*.cs" Exclude="bin\**;obj\**" />
+    <MobileCatalogue Include="$(MobileCatalogueDirectory)fr.json;$(MobileCatalogueDirectory)ar.json;$(MobileCatalogueDirectory)en.json" />
+  </ItemGroup>
+
+  <UsingTask TaskName="ExtractMobileStrings" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <CatalogueDirectory ParameterType="System.String" Required="true" />
+      <Sources ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <Prefixes ParameterType="System.String" Required="true" />
+      <OutputDirectory ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.Collections.Generic" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Linq" />
+      <Using Namespace="System.Text" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        // A small reader for the catalogues' shape — objects of strings, nested — rather than a
+        // JSON library, which an inline task cannot rely on finding.
+        Func<string, Dictionary<string, string>> read = path =>
+        {
+            var text = File.ReadAllText(path, Encoding.UTF8);
+            var flat = new Dictionary<string, string>(StringComparer.Ordinal);
+            var stack = new List<string>();
+            int i = 0;
+
+            Action skip = () => { while (i < text.Length && (char.IsWhiteSpace(text[i]) || text[i] == ',' || text[i] == ':' || text[i] == '﻿')) i++; };
+
+            Func<string> str = () =>
+            {
+                var sb = new StringBuilder();
+                i++; // opening quote
+                while (text[i] != '"')
+                {
+                    if (text[i] == '\\')
+                    {
+                        i++;
+                        switch (text[i])
+                        {
+                            case 'n': sb.Append('\n'); break;
+                            case 'r': sb.Append('\r'); break;
+                            case 't': sb.Append('\t'); break;
+                            case 'b': sb.Append('\b'); break;
+                            case 'f': sb.Append('\f'); break;
+                            case 'u': sb.Append((char)Convert.ToInt32(text.Substring(i + 1, 4), 16)); i += 4; break;
+                            default: sb.Append(text[i]); break;
+                        }
+                    }
+                    else sb.Append(text[i]);
+                    i++;
+                }
+                i++; // closing quote
+                return sb.ToString();
+            };
+
+            skip();
+            if (text[i] != '{') throw new InvalidDataException(path + ": a catalogue is a JSON object.");
+            i++;
+
+            while (true)
+            {
+                skip();
+                if (i >= text.Length) break;
+                if (text[i] == '}')
+                {
+                    i++;
+                    if (stack.Count == 0) break;
+                    stack.RemoveAt(stack.Count - 1);
+                    continue;
+                }
+
+                var name = str();
+                skip();
+                if (text[i] == '{')
+                {
+                    i++;
+                    stack.Add(name);
+                    continue;
+                }
+
+                if (text[i] != '"') throw new InvalidDataException(path + ": only strings and objects are expected, at " + name + ".");
+                var value = str();
+                if (name == "$comment") continue;
+                var key = stack.Count == 0 ? name : string.Join(".", stack) + "." + name;
+                flat[key] = value;
+            }
+
+            return flat;
+        };
+
+        Func<string, string> escape = value =>
+        {
+            var sb = new StringBuilder("\"");
+            foreach (var c in value)
+            {
+                switch (c)
+                {
+                    case '"': sb.Append("\\\""); break;
+                    case '\\': sb.Append("\\\\"); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default:
+                        if (c < ' ') sb.Append("\\u").Append(((int)c).ToString("x4"));
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            return sb.Append('"').ToString();
+        };
+
+        // The pattern check-resource-keys.ps1 applies to C#: T("key") or T("key", args).
+        var literal = new Regex("\\bT\\(\"([^\"]+)\"\\s*[,)]");
+        var wanted = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var source in Sources)
+            foreach (Match match in literal.Matches(File.ReadAllText(source.ItemSpec, Encoding.UTF8)))
+                // A real key is dotted (Section.Name) or a flat error key (Some_Error), as the check script assumes.
+                if (match.Groups[1].Value.IndexOfAny(new[] { '.', '_' }) >= 0) wanted.Add(match.Groups[1].Value);
+
+        var prefixes = Prefixes.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+        var french = read(Path.Combine(CatalogueDirectory, "fr.json"));
+
+        var missing = wanted.Where(k => !french.ContainsKey(k)).OrderBy(k => k, StringComparer.Ordinal).ToList();
+        foreach (var key in missing)
+            Log.LogError("MarocLIS.Mobile names the text '" + key + "', absent from the French catalogue (" +
+                         Path.Combine(CatalogueDirectory, "fr.json") + ").");
+        if (missing.Count > 0) return false;
+
+        var keys = french.Keys
+            .Where(k => wanted.Contains(k) || prefixes.Any(p => k.StartsWith(p, StringComparison.Ordinal)))
+            .OrderBy(k => k, StringComparer.Ordinal)
+            .ToList();
+
+        Directory.CreateDirectory(OutputDirectory);
+
+        foreach (var language in new[] { "fr", "ar", "en" })
+        {
+            var catalogue = language == "fr" ? french : read(Path.Combine(CatalogueDirectory, language + ".json"));
+            var json = new StringBuilder("{\n");
+            for (var n = 0; n < keys.Count; n++)
+            {
+                string value;
+                if (!catalogue.TryGetValue(keys[n], out value)) value = french[keys[n]];
+                json.Append("  ").Append(escape(keys[n])).Append(": ").Append(escape(value))
+                    .Append(n < keys.Count - 1 ? ",\n" : "\n");
+            }
+            json.Append("}\n");
+
+            var target = Path.Combine(OutputDirectory, language + ".json");
+            var content = json.ToString();
+            if (!File.Exists(target) || File.ReadAllText(target, Encoding.UTF8) != content)
+                File.WriteAllText(target, content, new UTF8Encoding(false));
+        }
+
+        Log.LogMessage(MessageImportance.Normal, "MarocLIS.Mobile: " + keys.Count + " texts kept from the catalogues.");
+]]></Code>
+    </Task>
+  </UsingTask>
+
+  <!-- In a target: IntermediateOutputPath is not yet set when this file is imported. -->
+  <Target Name="MobileStringsPaths">
+    <PropertyGroup>
+      <MobileStringsDirectory>$(ProjectDir)$(IntermediateOutputPath)mobile-strings/</MobileStringsDirectory>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="ExtractMobileStrings" BeforeTargets="AssignTargetPaths" DependsOnTargets="MobileStringsPaths"
+          Inputs="@(MobileCatalogue);@(MobileStringSource);$(MSBuildThisFileFullPath)"
+          Outputs="$(MobileStringsDirectory)fr.json;$(MobileStringsDirectory)ar.json;$(MobileStringsDirectory)en.json">
+    <ExtractMobileStrings CatalogueDirectory="$(MobileCatalogueDirectory)" Sources="@(MobileStringSource)"
+                          Prefixes="$(MobileStringPrefixes)" OutputDirectory="$(MobileStringsDirectory)" />
+  </Target>
+
+  <!-- Separate from the extraction so the files are embedded on an incremental build too, when it is skipped. -->
+  <Target Name="EmbedMobileStrings" AfterTargets="ExtractMobileStrings" BeforeTargets="AssignTargetPaths" DependsOnTargets="MobileStringsPaths">
+    <ItemGroup>
+      <EmbeddedResource Include="$(MobileStringsDirectory)fr.json" LogicalName="MarocLIS.Mobile.Strings.fr.json" />
+      <EmbeddedResource Include="$(MobileStringsDirectory)ar.json" LogicalName="MarocLIS.Mobile.Strings.ar.json" />
+      <EmbeddedResource Include="$(MobileStringsDirectory)en.json" LogicalName="MarocLIS.Mobile.Strings.en.json" />
+    </ItemGroup>
+  </Target>
+
+</Project>

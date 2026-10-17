@@ -58,6 +58,17 @@ public static class Permissions
         public const string BiologicalValidate = "results.validate_biological";
         public const string Unvalidate = "results.unvalidate";
         public const string EnterCritical = "results.enter_critical";
+
+        /// <summary>
+        /// Biological validation from a smartphone, through the MarocLIS API (« Validation à
+        /// distance »). Required in addition to <see cref="BiologicalValidate"/>, never instead of it:
+        /// the phone performs the same legally binding act, with the same qualification checks, but
+        /// away from the laboratory and over a network the laboratory does not wholly control, so
+        /// it is a separate decision of the administrator for each biologist. Shipped to no clinical
+        /// role (the Administrator holds every permission and cannot validate anyway, lacking the
+        /// qualification).
+        /// </summary>
+        public const string ValidateRemote = "results.validate_remote";
     }
 
     public static class Reports

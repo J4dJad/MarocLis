@@ -51,6 +51,32 @@ public sealed class ValidationScreensTests
     };
 
     [Fact]
+    public void PreTicked_AreTheReleasableRows_AsOnTheWorkstationAndThePhone()
+    {
+        ValidationScreenRules.IsPreTicked(Row(TestResultStatus.TechnicallyValidated)).Should().BeTrue();
+        ValidationScreenRules.IsPreTicked(Row(TestResultStatus.Entered)).Should().BeFalse();
+        ValidationScreenRules.IsPreTicked(Row(TestResultStatus.Validated)).Should().BeFalse();
+        ValidationScreenRules.IsPreTicked(Row(TestResultStatus.TechnicallyValidated, type: ResultValueType.Heading))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void Indicator_ShowsTheFlagsWhenThereAreAny_OtherwiseTheArrowOfTheInterpretation()
+    {
+        ValidationScreenRules.Indicator(Row(TestResultStatus.Entered, ResultInterpretation.CriticalHigh)).Should().Be("↑↑");
+        ValidationScreenRules.Indicator(Row(TestResultStatus.Entered, ResultInterpretation.Low)).Should().Be("↓");
+        ValidationScreenRules.Indicator(Row(TestResultStatus.Entered, ResultInterpretation.Abnormal)).Should().Be("*");
+        ValidationScreenRules.Indicator(Row(TestResultStatus.Entered)).Should().BeEmpty();
+
+        ValidationScreenRules.Indicator(Row(TestResultStatus.Entered, ResultInterpretation.High,
+                                            ResultFlag.QcOutOfControl | ResultFlag.DeltaCheckFailed))
+            .Should().Be("CIQ Δ");
+        ValidationScreenRules.FlagGlyphs(ResultFlag.Diluted | ResultFlag.Corrected | ResultFlag.Subcontracted
+                                         | ResultFlag.OutsideMeasuringRange | ResultFlag.SampleDefect)
+            .Should().Be("! × R ST ≷");
+    }
+
+    [Fact]
     public void Chips_FilterTheLoadedList_UrgentBeingTheFormerServerTest()
     {
         var routine = Entry();

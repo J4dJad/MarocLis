@@ -146,22 +146,11 @@ public static partial class UiTheme
 
     /// <summary>
     /// A short glyph string for the flags carried by a result. Shown in its own narrow column, so
-    /// a technician sees at a glance which values need attention and why.
+    /// a technician sees at a glance which values need attention and why. The glyphs themselves are
+    /// the validation rules' (shared with the phone), so both screens print the same ones.
     /// </summary>
-    public static string FlagGlyphs(ResultFlag flags)
-    {
-        var glyphs = new List<string>(4);
-
-        if (flags.HasFlag(ResultFlag.QcOutOfControl)) glyphs.Add("CIQ");
-        if (flags.HasFlag(ResultFlag.DeltaCheckFailed)) glyphs.Add("Δ");
-        if (flags.HasFlag(ResultFlag.SampleDefect)) glyphs.Add("!");
-        if (flags.HasFlag(ResultFlag.Diluted)) glyphs.Add("×");
-        if (flags.HasFlag(ResultFlag.Corrected)) glyphs.Add("R");
-        if (flags.HasFlag(ResultFlag.Subcontracted)) glyphs.Add("ST");
-        if (flags.HasFlag(ResultFlag.OutsideMeasuringRange)) glyphs.Add("≷");
-
-        return string.Join(" ", glyphs);
-    }
+    public static string FlagGlyphs(ResultFlag flags) =>
+        MarocLIS.Application.Results.ValidationScreenRules.FlagGlyphs(flags);
 
     public static Color ForPriority(OrderPriority priority) => priority switch
     {

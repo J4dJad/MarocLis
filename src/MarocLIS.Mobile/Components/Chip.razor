@@ -1,0 +1,16 @@
+@* A filter chip of the worklist: its label and its count, pressed when it is the one shown. *@
+<button type="button" class="chip" aria-pressed="@(Current == Filter ? "true" : "false")" @onclick="() => OnChoose.InvokeAsync(Filter)">
+    @ChildContent
+    @if (Count is { } count)
+    {
+        <span class="count">@count</span>
+    }
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Filter { get; set; } = "";
+    [Parameter] public string Current { get; set; } = "";
+    [Parameter] public int? Count { get; set; }
+    [Parameter] public EventCallback<string> OnChoose { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,0 +1,65 @@
+@*
+    « Émettre et signer »: the workstation's confirmation, with what the report will hold — partial
+    while values are awaited — then the release itself, signed by the biologist signed in.
+*@
+@inherits UiComponent
+@inject ApiClient Api
+@inject SessionState Session
+@inject Browser Browser
+
+<Sheet TitleId="issue-title">
+    <h2 class="sheet-title" id="issue-title">@T("Report.ConfirmIssue", File.AccessionNumber)</h2>
+
+    <div class="facts">
+        <div class="fact"><span>@T("Patient.Title")</span><span>@File.Patient.Name</span></div>
+        <div class="fact"><span>@T("MobileUi.ReportValidated")</span><span>@File.ValidatedCount</span></div>
+        @if (Pending.Count > 0)
+        {
+            <div class="fact"><span>@T("MobileUi.ReportPending")</span><span class="warn">@Pending.Count (@string.Join(", ", Pending))</span></div>
+        }
+        <div class="fact"><span>@T("MobileUi.ReportVersions")</span><span>@(File.LatestReportVersion is { } v ? T("MobileUi.ReportNextVersion", v, v + 1) : T("MobileUi.ReportFirstVersion"))</span></div>
+        <div class="fact"><span>@T("Validation.Signature")</span><span>@Session.Info?.FullName</span></div>
+    </div>
+
+    @if (Pending.Count > 0)
+    {
+        <div class="message message-warning">@T("MobileUi.ReportPartialWarning", string.Join(", ", Pending))</div>
+    }
+
+    @if (_error is { Length: > 0 })
+    {
+        <div class="error-text" role="alert">@_error</div>
+    }
+
+    <div class="sheet-actions">
+        <button type="button" class="btn btn-primary" disabled="@(_busy || !Browser.IsOnline)" @onclick="IssueAsync">@T("MobileUi.ReportConfirm")</button>
+        <button type="button" class="btn" disabled="@_busy" @onclick="() => OnCancel.InvokeAsync()">@T("Action.Cancel")</button>
+    </div>
+</Sheet>
+
+@code {
+    [Parameter, EditorRequired] public OrderFile File { get; set; } = default!;
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback<ReleasedReportResponse> OnIssued { get; set; }
+
+    private bool _busy;
+    private string? _error;
+
+    private List<string> Pending => [.. File.Rows.Where(r => !r.IsHeading).Select(r => r.ParameterName).Distinct()];
+
+    private async Task IssueAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var released = await Api.ReleaseReportAsync(File.OrderId);
+            if (released is { IsSuccess: true, Value: { } report }) await OnIssued.InvokeAsync(report);
+            else if (!released.Offline) _error = released.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

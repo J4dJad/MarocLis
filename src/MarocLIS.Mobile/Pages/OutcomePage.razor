@@ -1,0 +1,156 @@
+@page "/dossier/{OrderId:guid}/validee"
+@inherits SecurePage
+
+@if (Allowed && _run is { } run)
+{
+    <div class="screen">
+        <header class="topbar">
+            <a class="icon-button" href="" aria-label="@T("MobileUi.OrderBackToList")"><Icon Name="back" /></a>
+            <div class="topbar-text">
+                <span class="topbar-title ltr">@(_file?.AccessionNumber)</span>
+                @if (_file is { } head)
+                {
+                    <span class="topbar-sub">@head.Patient.Name · @Display.SexAndAge(Texts, head.Patient.Gender, head.Patient.AgeYears)</span>
+                }
+            </div>
+        </header>
+
+        <main class="content">
+            @if (run.Outcome.Validated > 0)
+            {
+                <div class="outcome" role="status">
+                    <span class="v-ok"><Icon Name="check-circle" Size="26" Stroke="2" /></span>
+                    <div class="stack">
+                        <div class="outcome-title">@T("Validation.ValidatedCount", run.Outcome.Validated)</div>
+                        <div class="outcome-text">@T("MobileUi.OutcomeBy", Session.Info?.FullName, Texts.ShortDate(run.At), Texts.Time(run.At))</div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="outcome none" role="status">
+                    <span class="v-high"><Icon Name="alert" Size="26" Stroke="2" /></span>
+                    <div class="stack">
+                        <div class="outcome-title">@T("MobileUi.OutcomeNone")</div>
+                    </div>
+                </div>
+            }
+
+            @if (_file is { } file)
+            {
+                var pending = file.Rows.Where(r => !r.IsHeading).ToList();
+                var unplaced = Unplaced();
+
+                @if (pending.Count > 0 || unplaced.Count > 0)
+                {
+                    <section class="box" aria-labelledby="pending-title">
+                        <div class="card-title" id="pending-title">@T("MobileUi.OutcomePending")</div>
+                        @for (var i = 0; i < pending.Count; i++)
+                        {
+                            var row = pending[i];
+                            var (reason, critical) = Reason(row);
+                            if (i > 0)
+                            {
+                                <div class="divider"></div>
+                            }
+                            <div class="stack">
+                                <div class="pending-name">@row.ParameterName</div>
+                                <div class="pending-reason @(critical ? "critical" : "")">@reason</div>
+                            </div>
+                        }
+                        @foreach (var refusal in unplaced)
+                        {
+                            <div class="divider"></div>
+                            <div class="pending-reason critical">@refusal</div>
+                        }
+                    </section>
+                }
+
+                <section class="box" aria-labelledby="report-title">
+                    <div class="card-title" id="report-title">@T("Report.Title")</div>
+                    <div class="text-card">
+                        @ReportLine(file, pending.Count > 0)
+                    </div>
+                    <button type="button" class="btn btn-outline" disabled="@(!file.CanIssueReport || !Online)" @onclick="() => _issue = true">
+                        <Icon Name="doc-check" Size="20" />
+                        @T("MobileUi.ReportIssueAndSign")
+                    </button>
+                </section>
+            }
+        </main>
+
+        <footer class="bottombar row">
+            <a class="btn btn-grow" href="">@T("MobileUi.OutcomeList")</a>
+            @if (Workflow.NextAfter(OrderId) is { } next)
+            {
+                <a class="btn btn-primary btn-grow-2" href="dossier/@next">@T("MobileUi.OutcomeNext")</a>
+            }
+        </footer>
+    </div>
+
+    @if (_issue && _file is not null)
+    {
+        <IssueSheet File="_file" OnCancel="() => _issue = false" OnIssued="Issued" />
+    }
+}
+
+@code {
+    private string ReportLine(OrderFile file, bool partial)
+    {
+        var versions = file.LatestReportVersion is { } version ? T("MobileUi.ReportLastVersion", version) : T("MobileUi.ReportNoVersion");
+        return partial ? versions + " " + T("Report.PartialNote") : versions;
+    }
+
+    [Parameter] public Guid OrderId { get; set; }
+
+    private ValidationRun? _run;
+    private OrderFile? _file;
+    private bool _issue;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Allowed) return;
+
+        // Opened without the validation it reports — a reload: back to the file, read afresh.
+        _run = Workflow.LastValidation is { } run && run.OrderId == OrderId ? run : null;
+        if (_run is null)
+        {
+            Navigation.NavigateTo($"dossier/{OrderId}", replace: true);
+            return;
+        }
+
+        // The file after the validation: what is still waiting, and whether a report can go.
+        var opened = await Api.OrderAsync(OrderId);
+        if (opened is { IsSuccess: true, Value: { } file }) _file = Workflow.File = file;
+    }
+
+    /// <summary>
+    /// Why a line is still waiting. A line sent and refused carries the server's sentence when it is
+    /// the only one refused; otherwise the reason is read from the line itself, in the wording of
+    /// the workstation's own refusals.
+    /// </summary>
+    private (string Text, bool Critical) Reason(ResultRow row)
+    {
+        if (Display.IsUncalledCritical(row)) return (T("Result_CriticalMustBeCommunicated"), true);
+        if (Display.AwaitsTechnicalValidation(row)) return (T("Item_TechnicalValidationRequiredFirst"), false);
+
+        var sent = _run!.Sent.Contains(row.ResultId);
+        if (sent && SentAndRefused().Count == 1 && _run.Outcome.Blocked.Count > 0)
+            return (string.Join("\n", _run.Outcome.Blocked), true);
+        if (Display.HasFlag(row, "QcOutOfControl")) return (T("Result_QcOutOfControlBlocksValidation"), true);
+        return sent ? (T("MobileUi.OutcomeRefused"), true) : (T("MobileUi.OutcomeNotTicked"), false);
+    }
+
+    private List<ResultRow> SentAndRefused() =>
+        _file?.Rows.Where(r => _run!.Sent.Contains(r.ResultId)).ToList() ?? [];
+
+    /// <summary>The server's refusals no line on screen accounts for, said once each.</summary>
+    private List<string> Unplaced() =>
+        SentAndRefused().Count == 1 ? [] : [.. _run!.Outcome.Blocked.Distinct()];
+
+    private void Issued(ReleasedReportResponse report)
+    {
+        Workflow.LastReport = report;
+        Navigation.NavigateTo($"compte-rendu/{report.ReportId}");
+    }
+}

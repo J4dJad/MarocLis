@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MarocLIS.Api.Contracts</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    The shapes the MarocLIS API sends and receives, and nothing else: no package, no project
+    reference. The phone's Blazor WebAssembly client (phase 2) references this assembly and runs in
+    the browser, so whatever it pulls in is downloaded by every biologist's phone; and the server
+    must not be able to hand the client a domain type by accident. Values the domain holds as enums
+    travel as their names, so a client compiled against this file alone can read them.
+  -->
+
+</Project>

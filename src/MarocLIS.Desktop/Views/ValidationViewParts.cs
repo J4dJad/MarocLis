@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using MarocLIS.Application.Results;
 using MarocLIS.Desktop.Infrastructure;
 
 namespace MarocLIS.Desktop.Views;

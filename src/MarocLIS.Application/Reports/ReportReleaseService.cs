@@ -156,9 +156,29 @@ public interface IReportRenderer
 
     /// <summary>Page count of the rendered document, for the "page n of m" footer and the archive.</summary>
     int CountPages(byte[] pdf);
+
+    /// <summary>
+    /// The same document as <see cref="Render"/>, as one PNG image per page — the preview the
+    /// biologist's phone shows after a release. Drawn from the model rather than by rasterising
+    /// the PDF: the layout engine paints images as readily as PDF pages, and no PDF reader has to
+    /// be shipped with the server. Only the release that asks for it pays for it.
+    /// </summary>
+    IReadOnlyList<byte[]> RenderPageImages(ReportModel model) =>
+        throw new NotSupportedException("This report renderer does not produce page images.");
 }
 
-public sealed record ReleasedReport(Guid ReportId, int VersionNumber, byte[] Pdf, string ContentHash);
+/// <param name="Pdf">The document issued, exactly as archived.</param>
+public sealed record ReleasedReport(Guid ReportId, int VersionNumber, byte[] Pdf, string ContentHash)
+{
+    /// <summary>Partial (results still to come) or final, as printed on the report's face.</summary>
+    public ReportCompleteness Completeness { get; init; }
+
+    /// <summary>
+    /// The pages as PNG images, drawn from the same model as <see cref="Pdf"/>; empty unless the
+    /// release asked for them.
+    /// </summary>
+    public IReadOnlyList<byte[]> PageImages { get; init; } = [];
+}
 
 /// <summary>
 /// Assembles and releases a report.
@@ -203,6 +223,7 @@ public sealed class ReportReleaseService(
         MultilingualText? conclusion = null,
         ReportAmendmentKind amendmentKind = ReportAmendmentKind.None,
         MultilingualText? amendmentReason = null,
+        bool renderPageImages = false,
         CancellationToken ct = default)
     {
         var permitted = guard.Require(amendmentKind == ReportAmendmentKind.None
@@ -320,6 +341,10 @@ public sealed class ReportReleaseService(
         var pdf = renderer.Render(model);
         var hash = Convert.ToHexString(SHA256.HashData(pdf));
 
+        // Drawn before anything is saved, from the very model the PDF was: a preview that failed
+        // after the release would leave a report issued that its signatory never saw.
+        var pageImages = renderPageImages ? renderer.RenderPageImages(model) : [];
+
         report.RenderedPdf = pdf;
         report.ContentHash = hash;
         report.PageCount = renderer.CountPages(pdf);
@@ -357,7 +382,11 @@ public sealed class ReportReleaseService(
         await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.ViewReport, order.PatientId,
                                      order.Id, "ReportRelease", releasable.Count, ct: ct);
 
-        return Result.Success(new ReleasedReport(report.Id, versionNumber, pdf, hash));
+        return Result.Success(new ReleasedReport(report.Id, versionNumber, pdf, hash)
+        {
+            Completeness = completeness,
+            PageImages = pageImages
+        });
     }
 
     /// <summary>

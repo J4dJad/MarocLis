@@ -8,6 +8,7 @@ Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? 
 |---|---|---|---|---|
 | Droits livrés par rôle | Utilisateurs › Rôles et droits | arbre des droits | Oui | MarocLIS.Infrastructure/Persistence/ReferenceDataSeeder.cs:493-760 (`RolePermissionSets`) |
 | Droit d'approuver une remise au-delà du plafond | Utilisateurs › Rôles et droits | `billing.discount.approve` (module billing) | Oui | **Nouveau (remise).** Domain/Identity/Permissions.cs:83 ; livré à l'Administrateur (tous les droits), au Biologiste responsable (ReferenceDataSeeder.cs:540) et à la Comptabilité (:688) ; accordé au démarrage aux rôles livrés d'une base existante par `ApplyShippedPermissions` |
+| Droit de validation à distance | Utilisateurs › Rôles et droits | `results.validate_remote` (module results) | Oui | **Nouveau (mobile).** Domain/Identity/Permissions.cs ; livré à aucun rôle clinique, l'Administrateur l'a via tous les droits ; exigé avec `results.validate_biological` à la connexion du téléphone (Api/Endpoints/SessionEndpoints.cs). Pas de libellé traduit : l'arbre affiche l'identifiant, comme pour les autres droits |
 | Réimporter par le Biologiste et le Technicien de laboratoire | Automates | **Réimporter** | Oui | **Corrigé.** `instruments.replay` donné au Biologiste (ReferenceDataSeeder.cs:580) et au Technicien de laboratoire (l.611), en plus de l'Administrateur et du Biologiste responsable (l.529) |
 | Retrait de validation et réédition par le Biologiste ; réédition par le Secrétariat / accueil | — | — | Oui | **Nouveau.** ReferenceDataSeeder.cs:570, 574 (`Results.Unvalidate`, `Reports.ReprintValidated`) ; Secrétariat / accueil l.642 |
 | **Déclarer impayé** réservé à la Comptabilité et à l'Administrateur | Facturation | **Plus d'actions** › **Déclarer impayé** | Oui | **Nouveau (cycle 5, décision 1).** Droit `billing.payment.bounce` (Domain/Identity/Permissions.cs:84), donné à la Comptabilité (ReferenceDataSeeder.cs:688) ; ajouté aux rôles livrés existants au démarrage (`ApplyShippedPermissions`) |
@@ -137,6 +138,15 @@ Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? 
 | Lieux livrés à l'installation | Lieux de stockage | liste | Oui | **Nouveau (feat/seed).** Cinq lieux (MarocLIS.Infrastructure/Persistence/StarterStorageLocations.cs:23-30), créés avec le catalogue de départ et seulement si la liste est vide (l.32-40, appel ReferenceDataSeeder.cs:441) ; nom unique en français, l'entité n'ayant qu'un nom |
 | Imprimantes du poste | Paramètres › Imprimantes | **Enregistrer**, **Imprimer une étiquette de test**, **Actualiser** | Oui | :600-602 |
 | Onglets Site, Imprimantes et Factures en arabe | Paramètres | champs sous leurs libellés, cases inversées | Oui | **Corrigé (cycle 5).** Site et Imprimantes : colonne de lecture V/SettingsView.cs:438-440, 584-588, 701-743 (32340ff) ; Factures : V/SettingsView.InvoicePrint.cs:72-92 (71b58ad). Avant : en arabe, les champs restaient à gauche, loin de leurs libellés alignés à droite. Numérotations, Paramètres et Lieux de stockage (grilles) étaient déjà corrects |
+
+### Service de validation à distance
+
+| Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
+|---|---|---|---|---|
+| Installer le service Windows | PowerShell (administrateur) | `scripts/install-api-service.ps1`, ou `sc.exe create` | Oui | **Nouveau.** Démarrage automatique différé, redémarrage après arrêt anormal, `-Uninstall` ; vérifie le runtime ASP.NET Core 10 |
+| Écoute limitée à la machine | `appsettings.json` du service | `Urls` = `http://127.0.0.1:5080` | Oui | Avertissement dans le journal si l'adresse dépasse la machine (Api/Hosting/ApiApplicationBuilderExtensions.cs) |
+| Publication aux téléphones | Serveur | `tailscale serve --bg 5080` | Oui | Hors MarocLIS : MagicDNS et certificats HTTPS à activer dans la console Tailscale |
+| Voir / fermer les sessions des téléphones | — | — | MANQUANT | Pas d'écran ; désactiver le compte ou redémarrer le service ferme ses sessions. Les connexions et fins de session sont dans le **Journal de sécurité** |
 
 ### Boutons présents mais sans effet utile
 

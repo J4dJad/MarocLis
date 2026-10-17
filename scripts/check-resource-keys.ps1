@@ -253,17 +253,19 @@ $patterns = @(
 
 $referenced = @{}
 
-# The C# sources, plus the UI mock-up. The mock-up calls T("key") against the same three catalogues
+# The C# and Razor sources, plus the UI mock-up. The mock-up calls T("key") against the same three catalogues
 # and had never been checked, so it was free to invent keys that render as "[[Some.Key]]" in a
 # document whose whole purpose is to show the laboratory what the screens will look like. Checking
 # it also makes it fail when a key is renamed, which is the only thing that keeps a 300 KB mock-up
 # from going quietly stale.
 $scanned = @(Get-ChildItem -Path $SourceDirectory -Recurse -Filter *.cs -File) +
+           # The phone's screens (MarocLIS.Mobile) name their texts in Razor markup, as @T("Key").
+           @(Get-ChildItem -Path $SourceDirectory -Recurse -Filter *.razor -File) +
            @(Get-ChildItem -Path (Join-Path $SourceDirectory 'docs') -Filter *.html -File `
                            -ErrorAction SilentlyContinue)
 
 foreach ($file in $scanned) {
-    if ($file.FullName -match '\\(obj|bin)\\') { continue }
+    if ($file.FullName -match '[\\/](obj|bin)[\\/]') { continue }
 
     $text = Get-Content $file.FullName -Raw -Encoding UTF8
 

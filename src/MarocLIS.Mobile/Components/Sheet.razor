@@ -1,0 +1,17 @@
+@*
+    A bottom sheet: the screen behind stays visible, dimmed; the sheet holds one decision. Closed
+    by its own buttons only — a tap on the dimmed screen does not throw away what was typed.
+*@
+<div class="sheet-scrim">
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="@TitleId">
+        <div class="sheet-handle"></div>
+        @ChildContent
+    </section>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The id of the element that names the sheet, for screen readers.</summary>
+    [Parameter] public string TitleId { get; set; } = "sheet-title";
+}

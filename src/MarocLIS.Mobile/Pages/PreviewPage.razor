@@ -1,0 +1,52 @@
+@page "/compte-rendu/{ReportId:guid}"
+@inherits SecurePage
+
+@if (Allowed && Workflow.LastReport is { } report && report.ReportId == ReportId)
+{
+    <div class="screen">
+        <header class="topbar">
+            <a class="icon-button" href="@BackHref" aria-label="@T("MobileUi.ReportBack")"><Icon Name="back" /></a>
+            <div class="topbar-text">
+                <span class="topbar-title">@T("MobileUi.ReportHeading", report.Version)</span>
+                <span class="topbar-sub"><span class="ltr">@Workflow.File?.AccessionNumber</span> · @T("MobileUi.ReportPages", report.PageCount)</span>
+            </div>
+            @if (report.Partial)
+            {
+                <Pill Tone="warning">@T("ReportCompleteness.Partial")</Pill>
+            }
+        </header>
+
+        <div class="issued" role="status">@T("MobileUi.ReportIssuedBy", report.SignedBy, Texts.Time(report.ReleasedAt ?? DateTimeOffset.Now))</div>
+
+        @* The pages are images drawn by the server from the issued document, fetched with no-store:
+           seen, never saved. There is deliberately no download or share button. *@
+        <main class="pages">
+            @for (var number = 1; number <= report.PageCount; number++)
+            {
+                <img class="page-image" src="@ApiClient.PreviewPageUrl(report.ReportId, number)" alt="@T("MobileUi.ReportPageAlt", number, report.PageCount)"
+                     draggable="false" @oncontextmenu:preventDefault />
+                @if (report.PageCount > 1)
+                {
+                    <div class="page-number">@number / @report.PageCount</div>
+                }
+            }
+        </main>
+
+        <footer class="bottombar">
+            <a class="btn btn-primary" href="@BackHref">@T("MobileUi.ReportDone")</a>
+            <div class="hint">@T("MobileUi.ReportPreviewOnly")</div>
+        </footer>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ReportId { get; set; }
+
+    private string BackHref => Workflow.LastValidation is { } run ? $"dossier/{run.OrderId}/validee" : "";
+
+    protected override void OnParametersSet()
+    {
+        // The preview exists for the report just issued, in this opening of the application only.
+        if (Allowed && Workflow.LastReport?.ReportId != ReportId) Navigation.NavigateTo("", replace: true);
+    }
+}

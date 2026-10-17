@@ -18,6 +18,8 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="bunit" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,6 +33,11 @@
     <ProjectReference Include="..\..\src\MarocLIS.Instruments\MarocLIS.Instruments.csproj" />
     <ProjectReference Include="..\..\src\MarocLIS.Localization\MarocLIS.Localization.csproj" />
     <ProjectReference Include="..\..\src\MarocLIS.Reporting\MarocLIS.Reporting.csproj" />
+    <!-- The phone's API, started in memory by WebApplicationFactory against the test SQL Server. -->
+    <ProjectReference Include="..\..\src\MarocLIS.Api\MarocLIS.Api.csproj" />
+    <ProjectReference Include="..\..\src\MarocLIS.Api.Contracts\MarocLIS.Api.Contracts.csproj" />
+    <!-- The phone's application: its components rendered by bUnit, its rules called directly. -->
+    <ProjectReference Include="..\..\src\MarocLIS.Mobile\MarocLIS.Mobile.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -53,8 +60,7 @@
     <!-- The rules of the "Nouvelle demande" screen: Enter's match, the repeat reminder, initials. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\OrderRegistrationRules.cs" Link="Desktop\OrderRegistrationRules.cs" />
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\PatientListRules.cs" Link="Desktop\PatientListRules.cs" />
-    <!-- The rules of the "Validation biologique" and "Comptes rendus" screens: chips, signals, context, tabs. -->
-    <Compile Include="..\..\src\MarocLIS.Desktop\Views\ValidationScreenRules.cs" Link="Desktop\ValidationScreenRules.cs" />
+    <!-- The rules of the "Comptes rendus" screen: tabs (those of "Validation biologique" are in Application). -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\ReportRegisterRules.cs" Link="Desktop\ReportRegisterRules.cs" />
     <!-- The progress line of the "Consultation d'un dossier" screen. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\OrderFileProgress.cs" Link="Desktop\OrderFileProgress.cs" />

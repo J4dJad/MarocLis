@@ -77,6 +77,24 @@ Légende : **OUI** = présent et utilisable ; **PARTIEL** = présent mais incomp
 | Émettre le compte rendu | Validation biologique | **Compte rendu** | PARTIEL | ValidationView.cs:648, 654, 1376, 1794-1816 : ni conclusion du biologiste, ni choix de la langue à la première émission (seulement en rectification). Bouton grisé quand rien n'est à imprimer (corrigé) |
 | Dévalider avant impression | Validation biologique | **Plus d'actions** › **Dévalider…** | OUI | Corrigé : ValidationView.cs:649, 970, 1393, 1572-1616 ; droit donné au Biologiste par défaut |
 
+## Validation à distance (téléphone)
+
+Service `MarocLIS.Api` (`src/MarocLIS.Api/`) et application du téléphone `MarocLIS.Mobile` (`src/MarocLIS.Mobile/`, Blazor WebAssembly servi par le service). Tests dans `tests/MarocLIS.Tests/Api/` et `tests/MarocLIS.Tests/Mobile/`. Jeu de démonstration : `tools/mobile-demo`.
+
+| Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
+|---|---|---|---|---|
+| Se connecter depuis le téléphone (deux droits exigés), choix de la langue | Connexion | **Identifiant**, **Mot de passe**, **Se connecter**, **Français** / **العربية** / **English** | OUI | Pages/SignIn.razor ; Endpoints/SessionEndpoints.cs |
+| Session fermée à l'inactivité, après 12 h, au changement du compte, sur un autre appareil | Connexion (variantes) | **Se reconnecter** | OUI | Services/SessionState.cs (même délai que le serveur) ; Security/SessionCookie.cs, Security/MobileSessionStore.cs ; toute réponse 401 ramène à la connexion |
+| Liste à valider avec filtres et compteurs | À valider | **Tous**, **Urgents**, **Avec anomalies**, **CQ**, **Actualiser** | OUI | Pages/Worklist.razor ; mêmes règles que le poste (Application/Results/ValidationScreenRules.cs) |
+| Ouvrir un dossier, contexte, antériorités | Dossier, Antériorités | **Dossier ›**, **Ant.** | OUI | Pages/OrderPage.razor, Components/ContextSheet.razor, Pages/HistoryPage.razor (courbe SVG, valeurs « reprise ») |
+| Valider avec contrôle de la valeur affichée | Dossier | **Valider la sélection (*n*)** | OUI | Envoi de l'heure de saisie affichée ; 409 : message et relecture du dossier |
+| Dérogation CIQ (15 à 1000 caractères) | Dérogation contrôle interne | **Justification**, **Valider avec dérogation** | OUI | Components/DerogationSheet.razor |
+| Communiquer un critique / injoignable | Communiquer une valeur critique | **Téléphone** / **Sur place**, **Personne prévenue**, **Valeur répétée par la personne**, **Enregistrer la communication**, **Injoignable** | OUI | Components/CriticalSheet.razor ; Endpoints/CriticalEndpoints.cs (moyen Téléphone ou Sur place) |
+| Émettre le compte rendu et le voir en images | Validée, Émettre, Compte rendu | **Émettre et signer le compte rendu**, **Émettre et signer**, **Terminé** | OUI | Pages/OutcomePage.razor, Components/IssueSheet.razor, Pages/PreviewPage.razor ; aperçu seulement pendant la session qui l'a émis, sans téléchargement |
+| Mon compte, langue, déconnexion | Mon compte | **Langue**, **Se déconnecter** | OUI | Components/AccountSheet.razor ; `PUT /api/session/langue` (langue de la session seulement) |
+| Hors connexion | Toutes | bandeau **Hors connexion** | OUI | Layout/MainLayout.razor ; le service worker ne met jamais `/api` en cache (wwwroot/service-worker.published.js) |
+| Installer sur l'écran d'accueil | — | Android : **Ajouter à l'écran d'accueil** ; iPhone : **Sur l'écran d'accueil** | OUI | wwwroot/manifest.webmanifest (« MarocLIS Validation », icônes 192 et 512) |
+
 ## Comptes rendus
 
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |

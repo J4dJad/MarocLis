@@ -1,0 +1,5 @@
+@* An address that is no screen of the application: the worklist (or the sign-in, from there). *@
+@inject NavigationManager Navigation
+@code {
+    protected override void OnInitialized() => Navigation.NavigateTo("", replace: true);
+}

@@ -1,0 +1,133 @@
+@*
+    The antériorité of one parameter, drawn by hand in SVG: the reference band, the validated values
+    joined by a line, values taken over from the previous application (« reprise ») hollow, and the
+    value awaiting validation dashed and hollow at the end. Time runs left to right in every
+    language, as on the printed report.
+*@
+<svg class="chart" viewBox="0 0 @Width @Height" role="img" aria-label="@Label" dir="ltr">
+    @if (Band is { } band)
+    {
+        <rect x="0" y="@F(band.Top)" width="@Width" height="@F(Math.Max(1, band.Bottom - band.Top))" fill="#E7F4EC" />
+        @if (High is { } high)
+        {
+            @Text(Width - 4, Y(high) - 4, "end", 11, "#1E6B3A", Number(high))
+        }
+        @if (Low is { } low)
+        {
+            @Text(Width - 4, Y(low) + 12 < PlotBottom - 8 ? Y(low) + 12 : Y(low) - 4, "end", 11, "#1E6B3A", Number(low))
+        }
+    }
+    <line x1="0" y1="@PlotBottom" x2="@Width" y2="@PlotBottom" stroke="#DCE3E8" />
+
+    @if (Points.Count > 1)
+    {
+        <polyline points="@Polyline" fill="none" stroke="#0B6E79" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+    }
+    @if (Current is { } now && Points.Count > 0)
+    {
+        <line x1="@F(X(Points.Count - 1))" y1="@F(Y(Points[^1].Value))" x2="@F(X(Points.Count))" y2="@F(Y(now))"
+              stroke="#8C3505" stroke-width="2" stroke-dasharray="5 4" />
+    }
+
+    @for (var i = 0; i < Points.Count; i++)
+    {
+        var point = Points[i];
+        if (point.Imported)
+        {
+            <circle cx="@F(X(i))" cy="@F(Y(point.Value))" r="5" fill="#FFFFFF" stroke="#0B6E79" stroke-width="2" />
+        }
+        else
+        {
+            <circle cx="@F(X(i))" cy="@F(Y(point.Value))" r="5" fill="#0B6E79" />
+        }
+    }
+
+    @if (Current is { } value)
+    {
+        <circle cx="@F(X(Points.Count))" cy="@F(Y(value))" r="7" fill="#FFFFFF" stroke="#8C3505" stroke-width="3" />
+        @Text(Math.Min(X(Points.Count), Width - 14), Math.Max(12, Y(value) - 14), "middle", 12, "#8C3505", Number(value), bold: true)
+    }
+
+    @foreach (var (index, label) in AxisLabels)
+    {
+        @Text(X(index), Height - 4, "middle", 11, "#51606B", label)
+    }
+</svg>
+
+@code {
+    private const double Width = 318;
+    private const double Height = 180;
+    private const double PlotTop = 30;
+    private const double PlotBottom = 160;
+    private const double Left = 20;
+    private const double Right = 298;
+
+    /// <summary>Validated values, oldest first.</summary>
+    [Parameter] public IReadOnlyList<HistoryPoint> Points { get; set; } = [];
+
+    /// <summary>The value on screen, not yet validated; drawn last.</summary>
+    [Parameter] public decimal? Current { get; set; }
+
+    [Parameter] public decimal? Low { get; set; }
+    [Parameter] public decimal? High { get; set; }
+    [Parameter] public char Separator { get; set; } = ',';
+    [Parameter] public string? Label { get; set; }
+
+    private int Slots => Points.Count + (Current is null ? 0 : 1);
+
+    private double X(int index) => Slots <= 1 ? (Left + Right) / 2 : Left + index * (Right - Left) / (Slots - 1);
+
+    private (double Min, double Max) Scale
+    {
+        get
+        {
+            var values = Points.Select(p => p.Value).ToList();
+            if (Current is { } c) values.Add(c);
+            if (Low is { } l) values.Add(l);
+            if (High is { } h) values.Add(h);
+            if (values.Count == 0) return (0, 1);
+
+            double min = (double)values.Min(), max = (double)values.Max();
+            if (max - min < 1e-9) { min -= 1; max += 1; }
+            var margin = (max - min) * 0.15;
+            return (Math.Max(0, min - margin), max + margin);
+        }
+    }
+
+    private double Y(decimal value)
+    {
+        var (min, max) = Scale;
+        return PlotBottom - ((double)value - min) / (max - min) * (PlotBottom - PlotTop);
+    }
+
+    private (double Top, double Bottom)? Band =>
+        Low is null && High is null
+            ? null
+            : (High is { } h ? Y(h) : PlotTop - 10, Low is { } l ? Y(l) : PlotBottom);
+
+    private string Polyline => string.Join(' ', Points.Select((p, i) => $"{F(X(i))},{F(Y(p.Value))}"));
+
+    /// <summary>The first, middle and last months of the validated values: enough to place them in time.</summary>
+    private IEnumerable<(int Index, string Label)> AxisLabels
+    {
+        get
+        {
+            if (Points.Count == 0) yield break;
+            var indexes = new SortedSet<int> { 0, Points.Count - 1 };
+            if (Points.Count > 4) indexes.Add(Points.Count / 2);
+            foreach (var i in indexes)
+                yield return (i, Points[i].ValidatedAt.ToLocalTime().ToString("MM/yy", System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
+
+    private string Number(decimal value) => Display.Number(value, Separator);
+
+    /// <summary>
+    /// An SVG &lt;text&gt;, written as markup: Razor reserves the &lt;text&gt; tag for its own use and
+    /// refuses attributes on it. The content is encoded; everything else is the chart's own numbers.
+    /// </summary>
+    private static MarkupString Text(double x, double y, string anchor, int size, string fill, string content, bool bold = false) =>
+        new($"<text x=\"{F(x)}\" y=\"{F(y)}\" text-anchor=\"{anchor}\" font-size=\"{size}\"{(bold ? " font-weight=\"600\"" : "")} fill=\"{fill}\">{System.Net.WebUtility.HtmlEncode(content)}</text>");
+
+    private static string F(double value) => value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+}

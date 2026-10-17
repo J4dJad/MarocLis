@@ -1,0 +1,54 @@
+@*
+    Releasing a value an out-of-control QC run covers: the biologist says why, in 15 to 1000
+    characters, and the justification is written onto the QC point by the server.
+*@
+@inherits UiComponent
+@inject Browser Browser
+
+<Sheet TitleId="qc-title">
+    <div class="sheet-head">
+        <h2 class="sheet-title" id="qc-title">@T("Validation.QcOverride")</h2>
+        <div class="sheet-sub"><span class="ltr">@File.AccessionNumber</span> · @File.Patient.Name</div>
+    </div>
+
+    <div class="notice notice-warning">
+        <div class="notice-title">@T("MobileUi.QcHeading", string.Join(", ", Rows.Select(r => r.ParameterName)))</div>
+        <div class="notice-text text-card">@T("Result_QcOutOfControlBlocksValidation")</div>
+    </div>
+
+    <div class="field">
+        <label for="justification">@T("MobileUi.QcJustification")</label>
+        <textarea id="justification" class="input" rows="5" maxlength="@Maximum" @bind="_text" @bind:event="oninput"></textarea>
+        <div class="field-row">
+            <span>@T("MobileUi.QcLengthRule", Minimum, Maximum)</span>
+            <span class="ltr num @(Length > Maximum ? "over" : "")" aria-live="polite">@Length / @Maximum</span>
+        </div>
+    </div>
+
+    <div class="field-hint">@T("MobileUi.QcTraced")</div>
+
+    <div class="sheet-actions">
+        <button type="button" class="btn btn-primary" disabled="@(!IsValid || !Browser.IsOnline)" @onclick="() => OnConfirm.InvokeAsync(_text.Trim())">
+            @T("MobileUi.QcConfirm")
+        </button>
+        <button type="button" class="btn" @onclick="() => OnCancel.InvokeAsync()">@T("Action.Cancel")</button>
+    </div>
+</Sheet>
+
+@code {
+    /// <summary>The server's minimum (ValidationEndpoints.QcJustificationMinimumLength) and its column.</summary>
+    internal const int Minimum = 15;
+    internal const int Maximum = 1000;
+
+    [Parameter, EditorRequired] public OrderFile File { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<ResultRow> Rows { get; set; } = [];
+    [Parameter] public EventCallback<string> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _text = "";
+
+    /// <summary>Counted as the server counts: without the spaces at either end.</summary>
+    internal int Length => _text.Trim().Length;
+
+    internal bool IsValid => Length is >= Minimum and <= Maximum;
+}

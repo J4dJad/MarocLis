@@ -1,0 +1,49 @@
+@* « Dossier ›»: the patient and the « Contexte » card of the workstation, as the server words them. *@
+@inherits UiComponent
+
+<Sheet TitleId="context-title">
+    <div class="sheet-head">
+        <h2 class="sheet-title" id="context-title">@File.Patient.Name</h2>
+        @if (!string.IsNullOrWhiteSpace(File.Patient.NameArabic))
+        {
+            <div class="sheet-sub" lang="ar" dir="rtl">@File.Patient.NameArabic</div>
+        }
+        <div class="sheet-sub"><span class="ltr">@File.AccessionNumber</span> · @T(Display.PriorityKey(File.Priority))</div>
+    </div>
+
+    <div class="facts">
+        <div class="fact"><span>@T("MobileUi.ContextSexAge")</span><span>@Display.SexAndAge(Texts, File.Patient.Gender, File.Patient.AgeYears)</span></div>
+        @if (File.Patient.DateOfBirth is { } born)
+        {
+            <div class="fact"><span>@T("MobileUi.ContextBorn")</span><span class="ltr">@born.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture)</span></div>
+        }
+        @if (File.Patient.IsPregnant)
+        {
+            <div class="fact"><span>@T("MobileUi.ContextPregnant")</span><span>✓</span></div>
+        }
+        @if (File.DueAt is { } due)
+        {
+            <div class="fact"><span>@T("MobileUi.ContextDue")</span><span class="ltr">@Texts.ShortDate(due) @Texts.Time(due)</span></div>
+        }
+    </div>
+
+    <div class="stack">
+        <div class="card-title">@T("Validation.Context")</div>
+        @foreach (var line in File.Context)
+        {
+            <div class="context-line">
+                <Pill Tone="@Display.Tone(line.Tone)">@line.Badge</Pill>
+                <span>@line.Text</span>
+            </div>
+        }
+    </div>
+
+    <div class="sheet-actions">
+        <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync()">@T("Action.Close")</button>
+    </div>
+</Sheet>
+
+@code {
+    [Parameter, EditorRequired] public OrderFile File { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+}

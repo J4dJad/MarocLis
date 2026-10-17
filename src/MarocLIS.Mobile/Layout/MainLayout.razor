@@ -1,0 +1,100 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject SessionState Session
+@inject ApiClient Api
+@inject Texts Texts
+@inject Browser Browser
+@inject Workflow Workflow
+@inject NavigationManager Navigation
+
+<div class="app" dir="@(Texts.Direction)" lang="@(Texts.LanguageTag)">
+    @if (!Browser.IsOnline)
+    {
+        <div class="offline" role="status">
+            <Icon Name="offline" Size="20" />
+            <span><span class="title">@Texts.T("MobileUi.OfflineTitle")</span> · <span class="detail">@Texts.T("MobileUi.OfflineDetail")</span></span>
+        </div>
+    }
+
+    @if (_ready)
+    {
+        @Body
+    }
+    else
+    {
+        <div class="boot" role="status" aria-label="@Texts.T("App.Loading")">
+            <div class="brand-mark"><Icon Name="flask" Size="34" /></div>
+            <div class="boot-name">MarocLIS</div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _ready;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.Ended += OnSessionEnded;
+        Texts.Changed += OnLanguageChanged;
+        Browser.ConnectivityChanged += OnConnectivityChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+
+        await Browser.StartAsync();
+
+        // A session may already be open — the page reloaded, or reopened from the home screen
+        // within the idle timeout. The cookie is the browser's to send; its answer says who.
+        var current = await Api.CurrentSessionAsync();
+        if (current is { IsSuccess: true, Value: { } info })
+        {
+            Session.SignedIn(info);
+            Texts.Use(Texts.Parse(info.Language));
+        }
+
+        _ready = true;
+        await Browser.SetDocumentLanguageAsync(Texts.LanguageTag, Texts.Direction);
+
+        if (!Session.IsSignedIn && !OnSignInScreen())
+            Navigation.NavigateTo("connexion", replace: true);
+    }
+
+    private bool OnSignInScreen() =>
+        Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("connexion", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The session ended — idle on the phone's clock, signed out, or refused by the server. What
+    /// the screens held goes with it, and the phone returns to the sign-in screen, which says why.
+    /// </summary>
+    private void OnSessionEnded(SessionEndReason reason) => InvokeAsync(() =>
+    {
+        Workflow.Clear();
+        var why = reason switch
+        {
+            SessionEndReason.Idle => "?raison=inactivite",
+            SessionEndReason.SignedOut => "?raison=deconnexion",
+            SessionEndReason.Server => "?raison=session",
+            _ => ""
+        };
+        Navigation.NavigateTo("connexion" + why, replace: true);
+        StateHasChanged();
+    });
+
+    private void OnLanguageChanged() => InvokeAsync(async () =>
+    {
+        StateHasChanged();
+        await Browser.SetDocumentLanguageAsync(Texts.LanguageTag, Texts.Direction);
+    });
+
+    private void OnConnectivityChanged() => InvokeAsync(StateHasChanged);
+
+    // Coming back to the application after the phone slept: a timer suspended with the page may
+    // not have fired, so the idle timeout is checked on every move as well.
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => Session.CheckIdle();
+
+    public void Dispose()
+    {
+        Session.Ended -= OnSessionEnded;
+        Texts.Changed -= OnLanguageChanged;
+        Browser.ConnectivityChanged -= OnConnectivityChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}
