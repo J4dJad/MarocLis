@@ -78,9 +78,11 @@ flowchart TD
 | `instruments.replay` | **Réimporter** une transmission (accepter une transmission retenue) | Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire |
 | `admin.maintenance.run` | Purger le journal des messages automates | Administrateur seul |
 | `admin.sites.manage` | Onglet **Site** des **Paramètres**, **Nouveau site** | Administrateur seul |
-| `admin.settings.manage` | Numérotations, paramètres, format des factures, lieux de stockage | Administrateur seul |
+| `admin.settings.manage` | Numérotations, paramètres, format des factures, plafond des remises, lieux de stockage | Administrateur seul |
+| `billing.discount.approve` | Approuver, sur place, une remise au-delà du plafond accordée par un autre utilisateur (jamais la sienne) | Administrateur, Biologiste responsable, Comptabilité |
 
 Changements récents des rôles livrés :
+- nouveau droit `billing.discount.approve` (approuver une remise au-delà du plafond), donné à l'Administrateur, au Biologiste responsable et à la Comptabilité, y compris sur une base existante au démarrage suivant ; il peut être retiré ou ajouté à un rôle dans **Rôles et droits** ;
 - le Biologiste et le Technicien de laboratoire peuvent maintenant **Réimporter** une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
 - le Biologiste peut retirer une validation et rééditer un compte rendu archivé ; le Secrétariat / accueil peut rééditer un compte rendu archivé (le compte rendu perdu est remis tel qu'il a été diffusé).
 
@@ -728,6 +730,7 @@ Onglet **Paramètres** :
 Onglet **Factures** :
 - Liste **Format par défaut des factures patients**.
 - Cases **Options du format existant** et **Options du format cotation B**.
+- **Plafond des remises** : **Pourcentage maximal du brut (%)** et **Montant maximal (DH)** (`admin.settings.manage`).
 - **Enregistrer** (`admin.settings.manage`) et **Actualiser**.
 
 Onglet **Lieux de stockage** :
@@ -747,6 +750,7 @@ Onglet **Imprimantes** :
   - **Format par défaut des factures patients** : « Format existant (montant, part organisme, part patient) » ou « Format cotation B (code de l'acte, cotation en B, montant en DH) » ;
   - **Options du format existant** : **Afficher la colonne code national de l'acte**, **Afficher la colonne cotation (coefficient)**, **Afficher le montant en lettres** ;
   - **Options du format cotation B** : **Afficher le prix en DH de chaque acte**, **Afficher la ligne « Prise de sang (PC) » même à 0,00 DH**, **Afficher le montant en lettres**, **Afficher la valeur de la lettre B utilisée** ;
+  - **Plafond des remises** : la phrase « Une remise au-delà du plafond n'est accordée qu'avec l'approbation, à l'émission de la facture, d'un autre utilisateur ayant le droit billing.discount.approve. Le plafond appliqué est le plus bas des deux. », puis **Pourcentage maximal du brut (%)** (10 par défaut) et **Montant maximal (DH)** (vide par défaut, indication « vide = sans plafond en DH ») ;
   - au pied : la ligne d'état, **Enregistrer** et **Actualiser**.
 - **Lieux de stockage** : la note « Seuls les lieux actifs sont proposés à la réception et à la sérothèque. Renommer ou désactiver un lieu ne modifie pas les tubes déjà rangés : ils gardent le nom enregistré. », puis la liste **Lieu de stockage**, **Statut** (pastille actif / désactivé), **Tubes rangés**, avec **Ajouter**, **Renommer** et **Désactiver** / **Réactiver**.
 - **Imprimantes** : la phrase « Choix propres à ce poste de travail : chaque PC peut avoir sa propre imprimante A4 et sa propre imprimante d'étiquettes. », l'imprimante **Comptes rendus, factures, fiches de paillasse (A4)**, la case **Imprimer directement sur cette imprimante, sans aperçu à l'écran**, l'imprimante **Étiquettes des tubes (imprimante d'étiquettes)**, puis **Enregistrer**, **Imprimer une étiquette de test**, **Actualiser**.
@@ -786,6 +790,13 @@ Onglet **Imprimantes** :
    4. **Enregistrer**. La ligne d'état confirme « Format d'impression des factures enregistré. ».
    5. Le choix vaut pour les nouvelles impressions comme pour les réimpressions. Il ne change jamais un montant. Les avoirs et les reçus gardent le format existant.
 
+9 bis. **Régler le plafond des remises**
+   1. Onglet **Factures**, partie **Plafond des remises**.
+   2. **Pourcentage maximal du brut (%)** : de 0 à 100 (10 par défaut ; 100 revient à ne pas plafonner en pourcentage).
+   3. **Montant maximal (DH)** : un montant, ou vide pour ne pas plafonner en dirhams.
+   4. **Enregistrer** (le même bouton enregistre le format des factures et le plafond). Le plafond appliqué à une facture est le plus bas des deux : 10 % d'une facture de 747,00 DH = 74,70 DH ; avec un maximum de 50 DH, le plafond est 50,00 DH.
+   5. Au-delà, la fenêtre **Émettre la facture** demande l'identifiant et le mot de passe d'un autre utilisateur ayant `billing.discount.approve` (voir **Facturation › Remise au-delà du plafond**). Le changement de plafond est tracé au journal d'audit (« Plafond des remises modifié : 10 % du brut, montant maximal aucun »).
+
 10. **Gérer les lieux de stockage des tubes**
     1. Onglet **Lieux de stockage**.
     2. **Ajouter** : tapez le nom (réfrigérateur, congélateur, paillasse…) et validez.
@@ -803,7 +814,8 @@ Onglet **Imprimantes** :
 - **Numéros de dossier et numéros de bordereau de sous-traitance** : un seul compteur partagé par tous les sites. Le format ne change pas (par ex. `2610-000123` pour un dossier, `ST/2026/00012` pour un bordereau), mais deux sites ne peuvent plus produire le même numéro ; dans l'onglet **Numérotations**, ces séries apparaissent sans site (« — »). Les factures, avoirs, reçus et bordereaux de tiers payant restent numérotés par site.
 - Le format d'une série est figé dès le premier numéro (série continue exigée par la DGI). Chaque nouvelle année, la série est créée automatiquement au premier document avec le format par défaut : un format personnalisé n'est pas reporté (à vérifier en début d'année).
 - La valeur d'un paramètre sensible n'est jamais affichée ; sa modification est tracée au journal de sécurité.
-- Le format des factures et ses options sont tracés au journal d'audit.
+- Le format des factures et ses options sont tracés au journal d'audit ; le plafond des remises aussi, avec ses valeurs.
+- Une valeur de plafond illisible (saisie à la main dans l'onglet **Paramètres**) laisse le plafond par défaut (10 %), elle ne le lève pas.
 - Un nom de lieu de stockage est unique sur le site (actif ou désactivé).
 - Les imprimantes sont propres à chaque poste ; les autres paramètres sont communs à tous les postes.
 
@@ -1056,6 +1068,8 @@ flowchart TD
 | « Le paramètre … se modifie depuis son propre écran (messages patients ou coûts du pilotage), qui en contrôle le contenu et les droits. » | Paramètre géré ailleurs | Aller sur l'écran indiqué. |
 | « Format d'impression des factures enregistré. » | **Enregistrer** de l'onglet **Factures** | Rien. |
 | « Format d'impression de facture inconnu. » | Format non reconnu | Choisir un format dans la liste. |
+| « Le plafond en pourcentage doit être compris entre 0 et 100. » | **Pourcentage maximal du brut (%)** vide, illisible ou hors limites | Taper un pourcentage de 0 à 100. |
+| « Le plafond en dirhams doit être un montant positif, ou rester vide pour ne pas plafonner en dirhams. » | **Montant maximal (DH)** illisible ou négatif | Corriger ou vider le champ. |
 | « Nom du nouveau lieu de stockage (réfrigérateur, congélateur, paillasse…) : » / « Nouveau nom du lieu « … ». Les tubes déjà rangés gardent l'ancien nom. » | **Ajouter** / **Renommer** | Saisir le nom. |
 | « Le nom du lieu de stockage est obligatoire. » / « Le nom du lieu de stockage ne doit pas dépasser … caractères. » | Nom vide ou trop long | Corriger le nom. |
 | « Un lieu de stockage « … » existe déjà sur ce site (actif ou désactivé). » | Nom déjà pris | Choisir un autre nom, ou réactiver l'ancien lieu. |

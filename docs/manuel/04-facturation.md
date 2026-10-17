@@ -9,9 +9,9 @@
 | Rôle (par défaut) | Ce qu'il fait ici |
 |---|---|
 | Secrétariat / accueil | Émet les factures, encaisse règlements et acomptes, tient et clôture sa caisse. |
-| Comptabilité | Tout ce que fait l'accueil, plus remises, avoirs, remboursements, tiers payant (bordereaux, retours, montants acceptés) et visa des caisses. |
-| Administrateur | Tout, y compris le format d'impression des factures (**Paramètres › Factures**). |
-| Biologiste responsable | Consulte **Facturation** et **Tiers payant**, vise les caisses ; n'encaisse pas. |
+| Comptabilité | Tout ce que fait l'accueil, plus remises, avoirs, remboursements, tiers payant (bordereaux, retours, montants acceptés) et visa des caisses ; approuve la remise d'un collègue au-delà du plafond. |
+| Administrateur | Tout, y compris le format d'impression des factures et le plafond des remises (**Paramètres › Factures**). |
+| Biologiste responsable | Consulte **Facturation** et **Tiers payant**, vise les caisses, approuve une remise au-delà du plafond ; n'encaisse pas. |
 
 **Écrans**, dans le menu :
 
@@ -99,6 +99,7 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 | Voir l'écran, imprimer factures et reçus | Consulter la facturation | Administrateur, Biologiste responsable, Secrétariat / accueil, Comptabilité |
 | **Émettre la facture** | Émettre une facture | Administrateur, Secrétariat / accueil, Comptabilité |
 | Accorder une **Remise** à l'émission | Appliquer une remise | Administrateur, Comptabilité |
+| Approuver une remise **au-delà du plafond** (identifiant et mot de passe saisis dans la fenêtre d'un autre utilisateur) | `billing.discount.approve` (approuver une remise au-delà du plafond) | Administrateur, Biologiste responsable, Comptabilité |
 | **Règlement**, **Encaisser un acompte**, **Déclarer impayé** | Encaisser un règlement | Administrateur, Secrétariat / accueil, Comptabilité |
 | **Facture d'avoir**, **Rembourser**, **Rembourser l'acompte** | Émettre un avoir | Administrateur, Comptabilité |
 | **Transmettre au tiers payant**, **Enregistrer le retour**, **Montant accepté par l'organisme** | Export comptable / tiers payant | Administrateur, Comptabilité |
@@ -148,7 +149,7 @@ L'échéance d'une facture patient est le jour même ; celle d'une facture organ
 - **Plus d'actions › Montant accepté par l'organisme** : saisit ce que l'organisme paie sur **une** facture transmise (droit tiers payant).
 - **Plus d'actions › Imprimer la facture — format existant** : imprime cette fois au format existant, quel que soit le réglage.
 - **Plus d'actions › Imprimer la facture — format cotation B** : imprime cette fois au format cotation B (grisé pour un avoir).
-- Fenêtre **Émettre la facture** : patient, organisme, liste des dossiers, **Montant brut**, **Remise** et **Motif de la remise** (avec le droit remise), **Montant net**, boutons **Émettre la facture** / **Annuler**.
+- Fenêtre **Émettre la facture** : patient, organisme, liste des dossiers, **Montant brut**, **Remise (DH ou %)** et **Motif de la remise** (avec le droit remise), **Montant net** à côté de la remise, boutons **Émettre la facture** / **Annuler**. Au-delà du plafond, la fenêtre s'agrandit d'une partie d'approbation : **Identifiant de l'approbateur** et **Mot de passe** (masqué).
 - Fenêtre **Règlement** : **Reste à payer** (ou **Reste à payer par le patient**), **Mode de règlement**, **Montant**, et selon le mode **Référence**, **Banque**, **Échéance** ; **Enregistrer** / **Annuler**.
 - Fenêtre de choix d'un règlement (pour **Rembourser** et **Déclarer impayé**) : **Date**, **Mode de règlement**, **Montant**, **Référence**, **Banque**, **Créé par** (toutes les colonnes visibles sans défilement).
 - Fenêtre **Enregistrer le retour** : **Retour de l'organisme** (Accepté, Accepté partiellement, Rejeté, Retransmis) et **Motif communiqué par l'organisme**.
@@ -170,10 +171,21 @@ L'échéance d'une facture patient est le jour même ; celle d'une facture organ
 
 *3. Accorder une remise (Comptabilité, Administrateur)*
 1. Cochez le ou les dossiers, cliquez sur **Émettre la facture**.
-2. Dans la fenêtre, saisissez le montant dans **Remise** ; le **Montant net** se recalcule.
+2. Dans la fenêtre, tapez dans **Remise (DH ou %)** soit un montant en dirhams (« 50 », « 74,70 »), soit un pourcentage du montant brut (« 10 % », « 10% » ; en arabe « 10٪ »). Pour un pourcentage, la ligne à côté affiche ce qu'il représente en dirhams et le net : « Remise 74,70 DH · Net 672,30 DH ». La facture enregistre le montant en dirhams, arrondi au centime.
 3. Saisissez le **Motif de la remise** (obligatoire).
 4. Cliquez sur **Émettre la facture**.
 - La remise est répartie sur les lignes au prorata et reste écrite sur la facture avec son motif. Elle ne peut pas dépasser le montant brut. Les champs de remise n'apparaissent pas pour le Secrétariat / accueil.
+
+*3 bis. Remise au-delà du plafond : approbation sur place*
+
+Le plafond est réglé dans **Paramètres › Factures › Plafond des remises** : un pourcentage maximal du montant brut (10 % par défaut) et, si on le souhaite, un montant maximal en DH. Le plafond appliqué est **le plus bas des deux** (par exemple 10 % d'une facture de 747,00 DH = 74,70 DH ; avec un maximum de 50 DH, le plafond est 50,00 DH).
+1. Saisissez la remise comme ci-dessus. Si elle dépasse le plafond, la ligne du net passe en orange : « Au-delà du plafond (10 % = 74,70 DH) : approbation requise » (ou « Au-delà du plafond (50,00 DH) : approbation requise » quand c'est le montant maximal qui s'applique).
+2. La fenêtre s'agrandit : « Remise au-delà du plafond : un autre utilisateur ayant le droit de l'approuver saisit ici son identifiant et son mot de passe. » Faites venir un responsable (par défaut : Administrateur, Biologiste responsable, Comptabilité).
+3. Il tape son **Identifiant de l'approbateur** et son **Mot de passe** (masqué), puis vous cliquez sur **Émettre la facture**.
+4. Si l'approbation est refusée (mot de passe faux, droit manquant, votre propre identifiant), le message s'affiche puis la fenêtre revient avec la remise et le motif conservés ; seul le mot de passe est à retaper.
+- L'approbateur n'est pas connecté : la session reste la vôtre. Un mot de passe faux compte comme un échec de connexion de l'approbateur (verrouillage après le même nombre d'échecs qu'à l'écran de connexion).
+- Le journal d'audit de la facture indique la remise, le plafond en vigueur, qui l'a approuvée et quand (« … remise de 150,00 DH au-delà du plafond de 74,70 DH (10 % du brut) approuvée par … le … »). Le motif imprimé sur la facture reste celui que vous avez saisi.
+- Le contrôle est fait aussi par l'application au moment d'émettre : une remise au-delà du plafond sans approbation valable est refusée, quel que soit le poste.
 
 *4. Encaisser un règlement complet au comptoir*
 1. En bas, cochez **une seule** facture.
@@ -329,7 +341,11 @@ flowchart TD
     H --> I{"Remise saisie ?<br/>(droit remise)"}
     I -->|oui| J{"Motif de la remise saisi ?"}
     J -->|non| H
-    J -->|oui| K
+    J -->|oui| P{"Remise au-delà du plafond<br/>(Paramètres › Factures) ?"}
+    P -->|non| K
+    P -->|oui| Q{"Approbateur : autre utilisateur,<br/>droit billing.discount.approve,<br/>mot de passe exact ?"}
+    Q -->|non| H
+    Q -->|oui| K
     I -->|non| K{"Site complet<br/>(raison sociale, ICE, IF, adresse) ?"}
     K -->|non| X4["Refus, aucun numéro consommé"]
     K -->|oui| L["Numéro FAC/… attribué<br/>facture Émise"]
@@ -726,7 +742,14 @@ Messages propres aux écrans de ce chapitre. Les messages communs (droit manquan
 | « Le dossier … est annulé : il ne se facture pas. L'acompte encore détenu se rembourse. » | Dossier annulé coché. | **Rembourser l'acompte** si besoin. |
 | « Ce dossier est refacturé après un avoir. Il avait été enregistré sans tiers payant. Adresser cette facture au tiers payant … (part de l'organisme réclamée à celui-ci) ? Non : la facture est établie au nom du patient, pour la totalité. » | Refacturation d'un dossier qui a un organisme. | Oui pour l'organisme, Non pour le patient. |
 | « … n'a pas de convention de tiers payant en cours de validité : la facture ne peut pas lui être adressée. Établissez-la au nom du patient. » | Convention expirée. | Facturer au patient. |
-| « Montant de remise invalide » | **Remise** illisible. | Taper un montant. |
+| « Remise invalide (ex. 50 ou 10 %) » | **Remise** illisible, ou pourcentage hors de 0 à 100. | Taper un montant ou un pourcentage. |
+| « Au-delà du plafond (… % = … DH) : approbation requise » / « Au-delà du plafond (… DH) : approbation requise » | La remise dépasse le plafond de **Paramètres › Factures**. | Faire approuver (identifiant et mot de passe d'un autre utilisateur habilité) ou baisser la remise. |
+| « Saisissez l'identifiant et le mot de passe de l'utilisateur qui approuve la remise. » | Remise au-delà du plafond, approbation vide. | Faire saisir l'approbateur. |
+| « La remise dépasse le plafond (… DH) : l'approbation d'un autre utilisateur habilité est nécessaire. » | Émission au-delà du plafond sans approbation (contrôle de l'application). | Faire approuver ou baisser la remise. |
+| « Vous ne pouvez pas approuver votre propre remise : un autre utilisateur doit la valider. » | Votre propre identifiant saisi comme approbateur. | Faire venir un autre utilisateur. |
+| « Approbation refusée : identifiant ou mot de passe de l'approbateur incorrect. » | Identifiant inconnu, compte désactivé ou mot de passe faux (l'échec est compté). | Retaper le mot de passe. |
+| « … n'a pas le droit d'approuver une remise au-delà du plafond. » | L'approbateur n'a pas `billing.discount.approve`. | Faire venir un utilisateur qui a ce droit. |
+| « Compte verrouillé jusqu'à … après plusieurs tentatives infructueuses. » | Compte de l'approbateur verrouillé (trop d'échecs). | Attendre ou faire déverrouiller le compte (**Utilisateurs**). |
 | « La remise ne peut pas être négative. » / « La remise dépasse le montant brut de la facture. » | Remise hors limites. | Corriger la remise. |
 | « Toute remise doit être motivée. » | Remise sans motif. | Remplir **Motif de la remise**. |
 | « La facture ne comporte aucune ligne. » | Toutes les analyses sont annulées ou gratuites. | Rien à facturer. |

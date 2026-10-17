@@ -46,15 +46,15 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td>Comptabilité</td>
-<td>Tout ce que fait l'accueil, plus remises, avoirs, remboursements, tiers payant (bordereaux, retours, montants acceptés) et visa des caisses.</td>
+<td>Tout ce que fait l'accueil, plus remises, avoirs, remboursements, tiers payant (bordereaux, retours, montants acceptés) et visa des caisses ; approuve la remise d'un collègue au-delà du plafond.</td>
 </tr>
 <tr>
 <td>Administrateur</td>
-<td>Tout, y compris le format d'impression des factures (<strong>Paramètres › Factures</strong>).</td>
+<td>Tout, y compris le format d'impression des factures et le plafond des remises (<strong>Paramètres › Factures</strong>).</td>
 </tr>
 <tr>
 <td>Biologiste responsable</td>
-<td>Consulte <strong>Facturation</strong> et <strong>Tiers payant</strong>, vise les caisses ; n'encaisse pas.</td>
+<td>Consulte <strong>Facturation</strong> et <strong>Tiers payant</strong>, vise les caisses, approuve une remise au-delà du plafond ; n'encaisse pas.</td>
 </tr>
 </tbody>
 </table>
@@ -156,6 +156,11 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 <td>Administrateur, Comptabilité</td>
 </tr>
 <tr>
+<td>Approuver une remise <strong>au-delà du plafond</strong> (identifiant et mot de passe saisis dans la fenêtre d'un autre utilisateur)</td>
+<td><code>billing.discount.approve</code> (approuver une remise au-delà du plafond)</td>
+<td>Administrateur, Biologiste responsable, Comptabilité</td>
+</tr>
+<tr>
 <td><strong>Règlement</strong>, <strong>Encaisser un acompte</strong>, <strong>Déclarer impayé</strong></td>
 <td>Encaisser un règlement</td>
 <td>Administrateur, Secrétariat / accueil, Comptabilité</td>
@@ -233,7 +238,7 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 <li><strong>Plus d'actions › Montant accepté par l'organisme</strong> : saisit ce que l'organisme paie sur <strong>une</strong> facture transmise (droit tiers payant).</li>
 <li><strong>Plus d'actions › Imprimer la facture — format existant</strong> : imprime cette fois au format existant, quel que soit le réglage.</li>
 <li><strong>Plus d'actions › Imprimer la facture — format cotation B</strong> : imprime cette fois au format cotation B (grisé pour un avoir).</li>
-<li>Fenêtre <strong>Émettre la facture</strong> : patient, organisme, liste des dossiers, <strong>Montant brut</strong>, <strong>Remise</strong> et <strong>Motif de la remise</strong> (avec le droit remise), <strong>Montant net</strong>, boutons <strong>Émettre la facture</strong> / <strong>Annuler</strong>.</li>
+<li>Fenêtre <strong>Émettre la facture</strong> : patient, organisme, liste des dossiers, <strong>Montant brut</strong>, <strong>Remise (DH ou %)</strong> et <strong>Motif de la remise</strong> (avec le droit remise), <strong>Montant net</strong> à côté de la remise, boutons <strong>Émettre la facture</strong> / <strong>Annuler</strong>. Au-delà du plafond, la fenêtre s'agrandit d'une partie d'approbation : <strong>Identifiant de l'approbateur</strong> et <strong>Mot de passe</strong> (masqué).</li>
 <li>Fenêtre <strong>Règlement</strong> : <strong>Reste à payer</strong> (ou <strong>Reste à payer par le patient</strong>), <strong>Mode de règlement</strong>, <strong>Montant</strong>, et selon le mode <strong>Référence</strong>, <strong>Banque</strong>, <strong>Échéance</strong> ; <strong>Enregistrer</strong> / <strong>Annuler</strong>.</li>
 <li>Fenêtre de choix d'un règlement (pour <strong>Rembourser</strong> et <strong>Déclarer impayé</strong>) : <strong>Date</strong>, <strong>Mode de règlement</strong>, <strong>Montant</strong>, <strong>Référence</strong>, <strong>Banque</strong>, <strong>Créé par</strong> (toutes les colonnes visibles sans défilement).</li>
 <li>Fenêtre <strong>Enregistrer le retour</strong> : <strong>Retour de l'organisme</strong> (Accepté, Accepté partiellement, Rejeté, Retransmis) et <strong>Motif communiqué par l'organisme</strong>.</li>
@@ -252,10 +257,19 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 - Refusé si les dossiers sont de patients différents ou d'organismes / modes de prise en charge différents (voir les messages en fin de chapitre).</p>
 <p><em>3. Accorder une remise (Comptabilité, Administrateur)</em>
 1. Cochez le ou les dossiers, cliquez sur <strong>Émettre la facture</strong>.
-2. Dans la fenêtre, saisissez le montant dans <strong>Remise</strong> ; le <strong>Montant net</strong> se recalcule.
+2. Dans la fenêtre, tapez dans <strong>Remise (DH ou %)</strong> soit un montant en dirhams (« 50 », « 74,70 »), soit un pourcentage du montant brut (« 10 % », « 10% » ; en arabe « 10٪ »). Pour un pourcentage, la ligne à côté affiche ce qu'il représente en dirhams et le net : « Remise 74,70 DH · Net 672,30 DH ». La facture enregistre le montant en dirhams, arrondi au centime.
 3. Saisissez le <strong>Motif de la remise</strong> (obligatoire).
 4. Cliquez sur <strong>Émettre la facture</strong>.
 - La remise est répartie sur les lignes au prorata et reste écrite sur la facture avec son motif. Elle ne peut pas dépasser le montant brut. Les champs de remise n'apparaissent pas pour le Secrétariat / accueil.</p>
+<p><em>3 bis. Remise au-delà du plafond : approbation sur place</em></p>
+<p>Le plafond est réglé dans <strong>Paramètres › Factures › Plafond des remises</strong> : un pourcentage maximal du montant brut (10 % par défaut) et, si on le souhaite, un montant maximal en DH. Le plafond appliqué est <strong>le plus bas des deux</strong> (par exemple 10 % d'une facture de 747,00 DH = 74,70 DH ; avec un maximum de 50 DH, le plafond est 50,00 DH).
+1. Saisissez la remise comme ci-dessus. Si elle dépasse le plafond, la ligne du net passe en orange : « Au-delà du plafond (10 % = 74,70 DH) : approbation requise » (ou « Au-delà du plafond (50,00 DH) : approbation requise » quand c'est le montant maximal qui s'applique).
+2. La fenêtre s'agrandit : « Remise au-delà du plafond : un autre utilisateur ayant le droit de l'approuver saisit ici son identifiant et son mot de passe. » Faites venir un responsable (par défaut : Administrateur, Biologiste responsable, Comptabilité).
+3. Il tape son <strong>Identifiant de l'approbateur</strong> et son <strong>Mot de passe</strong> (masqué), puis vous cliquez sur <strong>Émettre la facture</strong>.
+4. Si l'approbation est refusée (mot de passe faux, droit manquant, votre propre identifiant), le message s'affiche puis la fenêtre revient avec la remise et le motif conservés ; seul le mot de passe est à retaper.
+- L'approbateur n'est pas connecté : la session reste la vôtre. Un mot de passe faux compte comme un échec de connexion de l'approbateur (verrouillage après le même nombre d'échecs qu'à l'écran de connexion).
+- Le journal d'audit de la facture indique la remise, le plafond en vigueur, qui l'a approuvée et quand (« … remise de 150,00 DH au-delà du plafond de 74,70 DH (10 % du brut) approuvée par … le … »). Le motif imprimé sur la facture reste celui que vous avez saisi.
+- Le contrôle est fait aussi par l'application au moment d'émettre : une remise au-delà du plafond sans approbation valable est refusée, quel que soit le poste.</p>
 <p><em>4. Encaisser un règlement complet au comptoir</em>
 1. En bas, cochez <strong>une seule</strong> facture.
 2. Cliquez sur <strong>Règlement</strong>.
@@ -374,7 +388,7 @@ Les actions <strong>Transmettre au tiers payant</strong> et <strong>Enregistrer 
 <p><strong>Flux</strong></p>
 <p>Enregistrement du dossier (prix et répartition figés) → <strong>Facturation</strong> (acompte éventuel, émission, règlement patient) → <strong>Caisse</strong> (clôture en fin de poste) → <strong>Visa des caisses</strong>. Pour la part organisme : <strong>Facturation</strong> → <strong>Tiers payant</strong> (bordereau, retour) → <strong>Facturation</strong> (<strong>Montant accepté par l'organisme</strong>).</p>
 <p>Émission d'une facture :</p>
-<div class="diagram"><img src="img/diagramme-14d3238b3ce3beb3.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-f90b4c139d900cfd.png" alt="Diagramme"></div>
 
 <p>Règlement au comptoir (total, partiel, remboursement, impayé) :</p>
 <div class="diagram"><img src="img/diagramme-ec98bbbd09f198b5.png" alt="Diagramme"></div>
@@ -662,9 +676,44 @@ Cliquez <strong>Toutes</strong>, ajustez <strong>Du</strong> / <strong>Au</stron
 <td>Facturer au patient.</td>
 </tr>
 <tr>
-<td>« Montant de remise invalide »</td>
-<td><strong>Remise</strong> illisible.</td>
-<td>Taper un montant.</td>
+<td>« Remise invalide (ex. 50 ou 10 %) »</td>
+<td><strong>Remise</strong> illisible, ou pourcentage hors de 0 à 100.</td>
+<td>Taper un montant ou un pourcentage.</td>
+</tr>
+<tr>
+<td>« Au-delà du plafond (… % = … DH) : approbation requise » / « Au-delà du plafond (… DH) : approbation requise »</td>
+<td>La remise dépasse le plafond de <strong>Paramètres › Factures</strong>.</td>
+<td>Faire approuver (identifiant et mot de passe d'un autre utilisateur habilité) ou baisser la remise.</td>
+</tr>
+<tr>
+<td>« Saisissez l'identifiant et le mot de passe de l'utilisateur qui approuve la remise. »</td>
+<td>Remise au-delà du plafond, approbation vide.</td>
+<td>Faire saisir l'approbateur.</td>
+</tr>
+<tr>
+<td>« La remise dépasse le plafond (… DH) : l'approbation d'un autre utilisateur habilité est nécessaire. »</td>
+<td>Émission au-delà du plafond sans approbation (contrôle de l'application).</td>
+<td>Faire approuver ou baisser la remise.</td>
+</tr>
+<tr>
+<td>« Vous ne pouvez pas approuver votre propre remise : un autre utilisateur doit la valider. »</td>
+<td>Votre propre identifiant saisi comme approbateur.</td>
+<td>Faire venir un autre utilisateur.</td>
+</tr>
+<tr>
+<td>« Approbation refusée : identifiant ou mot de passe de l'approbateur incorrect. »</td>
+<td>Identifiant inconnu, compte désactivé ou mot de passe faux (l'échec est compté).</td>
+<td>Retaper le mot de passe.</td>
+</tr>
+<tr>
+<td>« … n'a pas le droit d'approuver une remise au-delà du plafond. »</td>
+<td>L'approbateur n'a pas <code>billing.discount.approve</code>.</td>
+<td>Faire venir un utilisateur qui a ce droit.</td>
+</tr>
+<tr>
+<td>« Compte verrouillé jusqu'à … après plusieurs tentatives infructueuses. »</td>
+<td>Compte de l'approbateur verrouillé (trop d'échecs).</td>
+<td>Attendre ou faire déverrouiller le compte (<strong>Utilisateurs</strong>).</td>
 </tr>
 <tr>
 <td>« La remise ne peut pas être négative. » / « La remise dépasse le montant brut de la facture. »</td>
