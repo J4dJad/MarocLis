@@ -503,7 +503,9 @@ public sealed class QuoteRequestView : LocalizedView
         _addSupplier.Enabled = open;
         _recordOffer.Enabled = open && supplier is not null;
         _openFile.Enabled = offer?.FileName is not null;
-        _award.Enabled = open && offer is { IsExpired: false };
+        // Its purchase order cancelled, an awarded request can be awarded again.
+        var reawardable = !IsBusy && _detail is { Status: QuoteRequestStatus.Awarded, OrderCancelled: true };
+        _award.Enabled = (open || reawardable) && offer is { IsExpired: false };
         _cancel.Enabled = open;
     }
 

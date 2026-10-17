@@ -28,7 +28,7 @@ public sealed class DocumentControlQueries(LisDbContext db) : IDocumentControlQu
                 d.ReviewPeriodMonths,
                 d.RequiresAcknowledgement,
                 d.IsActive,
-                Versions = d.Versions.Select(v => new { v.VersionNumber, v.Status, v.EffectiveFrom })
+                Versions = d.Versions.Select(v => new { v.VersionNumber, v.Status, v.EffectiveFrom, v.WithdrawnOn })
                                      .ToList(),
                 Acknowledged = d.Acknowledgements.Where(a => a.UserId == currentUserId)
                                                  .Select(a => a.VersionNumber).ToList()
@@ -37,7 +37,10 @@ public sealed class DocumentControlQueries(LisDbContext db) : IDocumentControlQu
 
         return rows.Select(d =>
         {
-            var effective = d.Versions.Where(v => v.Status == DocumentVersionStatus.Effective)
+            // In force today, not merely marked effective: a version put in force with a future
+            // date is shown as scheduled and the one it replaces stays in force until then.
+            var effective = d.Versions.Where(v => DocumentVersion.IsInForceOn(v.Status, v.EffectiveFrom,
+                                                                               v.WithdrawnOn, today))
                                       .MaxBy(v => v.VersionNumber);
             var latest = d.Versions.MaxBy(v => v.VersionNumber);
             DateOnly? nextReview = effective?.EffectiveFrom.AddMonths(d.ReviewPeriodMonths);
@@ -47,13 +50,15 @@ public sealed class DocumentControlQueries(LisDbContext db) : IDocumentControlQu
                 d.ReviewPeriodMonths, d.RequiresAcknowledgement, d.IsActive,
                 effective?.VersionNumber, effective?.EffectiveFrom, nextReview,
                 nextReview is { } due && due < today,
-                latest?.VersionNumber, latest?.Status,
+                latest?.VersionNumber,
+                latest is null ? null
+                    : DocumentVersion.StatusOn(latest.Status, latest.EffectiveFrom, latest.WithdrawnOn, today),
                 effective is not null && d.Acknowledged.Contains(effective.VersionNumber));
         }).ToList();
     }
 
     public async Task<IReadOnlyList<DocumentVersionRow>> GetVersionsAsync(
-        Guid documentId, CancellationToken ct = default)
+        Guid documentId, DateOnly today, CancellationToken ct = default)
     {
         var rows = await db.DocumentVersions.AsNoTracking()
             .Where(v => v.ControlledDocumentId == documentId)
@@ -81,7 +86,8 @@ public sealed class DocumentControlQueries(LisDbContext db) : IDocumentControlQu
             .ToListAsync(ct);
 
         return rows.Select(v => new DocumentVersionRow(
-            v.Id, v.VersionNumber, v.Status, v.ChangeSummary, v.FileName, v.AuthorName ?? "?",
+            v.Id, v.VersionNumber, DocumentVersion.StatusOn(v.Status, v.EffectiveFrom, v.WithdrawnOn, today),
+            v.ChangeSummary, v.FileName, v.AuthorName ?? "?",
             v.CreatedAt, v.ReviewedByName, v.ReviewedAt, v.ApprovedByName, v.ApprovedAt,
             // EffectiveFrom is only meaningful once a version has been brought into force.
             v.Status is DocumentVersionStatus.Effective or DocumentVersionStatus.Superseded

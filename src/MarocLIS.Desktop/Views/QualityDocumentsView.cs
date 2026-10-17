@@ -162,7 +162,8 @@ public sealed class QualityDocumentsView : LocalizedView
             ? version.Status switch
             {
                 DocumentVersionStatus.Effective => QhTone.Ok,
-                DocumentVersionStatus.Approved or DocumentVersionStatus.Reviewed => QhTone.Info,
+                DocumentVersionStatus.Approved or DocumentVersionStatus.Reviewed
+                    or DocumentVersionStatus.Scheduled => QhTone.Info,
                 DocumentVersionStatus.UnderReview => QhTone.Warn,
                 DocumentVersionStatus.Draft => QhTone.Wait,
                 _ => QhTone.Muted
@@ -730,11 +731,16 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
             Dialogs.Warn($"{Localizer["Documents.FileUnreadable"]}\n{ex.Message}", Text);
             return;
         }
+        catch (UnauthorizedAccessException)
+        {
+            // A file the Windows account may not read (another user's folder, a protected share)
+            // escaped as « Erreur inattendue »; the operator needs to know where to put it instead.
+            Dialogs.Warn(Localizer["Documents.FileAccessDenied"], Text);
+            return;
+        }
 
         FileName = info.Name;
-        ChangeSummary = string.IsNullOrWhiteSpace(_summaryFr.Text)
-            ? null
-            : new MultilingualText(_summaryFr.Text.Trim(), Blank(_summaryAr));
+        ChangeSummary = MultilingualText.FromOptional(_summaryFr.Text, _summaryAr.Text);
 
         DialogResult = DialogResult.OK;
         Close();

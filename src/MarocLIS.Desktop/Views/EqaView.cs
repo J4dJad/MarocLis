@@ -543,7 +543,10 @@ internal sealed class EqaEvaluationDialog : MasterDataEditor
         if (_outcome.SelectedIndex < 0) _outcome.SelectedIndex = 0;
         Controls.Add(_outcome);
 
-        _notesFr = TextField("Eqa.InvestigationFr", 20, 176, 520, row.InvestigationNotes?.Fr);
+        // A note written only in Arabic is stored with itself as the French fallback: the French
+        // box opens empty for it rather than showing the Arabic text twice.
+        var notes = row.InvestigationNotes;
+        _notesFr = TextField("Eqa.InvestigationFr", 20, 176, 520, notes?.Fr == notes?.Ar ? null : notes?.Fr);
         _notesAr = TextField("Eqa.InvestigationAr", 20, 230, 520, row.InvestigationNotes?.Ar, arabic: true);
         _notesFr.MaxLength = _notesAr.MaxLength = 2000;
 
@@ -564,9 +567,7 @@ internal sealed class EqaEvaluationDialog : MasterDataEditor
             PeerGroupSd = DecimalOrNull(_peerSd),
             ZScore = DecimalOrNull(_z),
             OutcomeOverride = choice == FromScore ? null : (EqaOutcome)choice,
-            InvestigationNotes = string.IsNullOrWhiteSpace(_notesFr.Text)
-                ? null
-                : new MultilingualText(_notesFr.Text.Trim(), Blank(_notesAr))
+            InvestigationNotes = MultilingualText.FromOptional(_notesFr.Text, _notesAr.Text)
         };
 
         DialogResult = DialogResult.OK;

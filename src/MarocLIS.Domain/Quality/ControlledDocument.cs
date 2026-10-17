@@ -53,6 +53,13 @@ public sealed class ControlledDocument : AuditableAggregateRoot, ISiteScoped
         _versions.Where(v => v.Status == DocumentVersionStatus.Effective)
                  .OrderByDescending(v => v.VersionNumber).FirstOrDefault();
 
+    /// <summary>
+    /// The version staff work from on that day. A version put in force with a future date is only
+    /// scheduled until then, and the one it replaces stays in force up to the day before.
+    /// </summary>
+    public DocumentVersion? VersionInForce(DateOnly day) =>
+        _versions.Where(v => v.IsInForceOn(day)).MaxBy(v => v.VersionNumber);
+
     public DocumentVersion? LatestVersion =>
         _versions.OrderByDescending(v => v.VersionNumber).FirstOrDefault();
 
@@ -98,6 +105,12 @@ public sealed class ControlledDocument : AuditableAggregateRoot, ISiteScoped
     {
         foreach (var previous in _versions.Where(v => v.Status == DocumentVersionStatus.Effective))
             previous.Withdraw(on, now);
+
+        // A version replaced earlier by a still-scheduled one is in force until that one's date:
+        // a new replacement starting sooner ends it sooner too, so two versions never overlap.
+        foreach (var earlier in _versions.Where(v => v.Status == DocumentVersionStatus.Superseded
+                                                     && v.WithdrawnOn is { } until && until > on))
+            earlier.Withdraw(on, now);
     }
 
     public void RecordAcknowledgement(Guid userId, int versionNumber, DateTimeOffset at) =>
@@ -226,6 +239,28 @@ public sealed class DocumentVersion : Entity, IAuditable
         Status = DocumentVersionStatus.Effective;
     }
 
+    /// <summary>In force on that day: brought into force on or before it and not withdrawn before it.</summary>
+    public bool IsInForceOn(DateOnly day) => IsInForceOn(Status, EffectiveFrom, WithdrawnOn, day);
+
+    /// <summary>The status as staff should read it on that day (see <see cref="DocumentVersionStatus.Scheduled"/>).</summary>
+    public DocumentVersionStatus StatusOn(DateOnly day) => StatusOn(Status, EffectiveFrom, WithdrawnOn, day);
+
+    public static bool IsInForceOn(DocumentVersionStatus status, DateOnly effectiveFrom,
+                                   DateOnly? withdrawnOn, DateOnly day) =>
+        status is DocumentVersionStatus.Effective or DocumentVersionStatus.Superseded
+        && effectiveFrom <= day
+        && (withdrawnOn is null || withdrawnOn >= day);
+
+    public static DocumentVersionStatus StatusOn(DocumentVersionStatus status, DateOnly effectiveFrom,
+                                                 DateOnly? withdrawnOn, DateOnly day) => status switch
+    {
+        DocumentVersionStatus.Effective when effectiveFrom > day => DocumentVersionStatus.Scheduled,
+        // Replaced by a version that is not in force yet: still the one in use until then.
+        DocumentVersionStatus.Superseded when IsInForceOn(status, effectiveFrom, withdrawnOn, day)
+            => DocumentVersionStatus.Effective,
+        _ => status
+    };
+
     internal void Withdraw(DateOnly on, DateTimeOffset at)
     {
         WithdrawnOn = on;
@@ -245,7 +280,12 @@ public enum DocumentVersionStatus
     /// <summary>Replaced by a later version; retained but withdrawn from use.</summary>
     Superseded = 5,
     /// <summary>Withdrawn without a replacement.</summary>
-    Obsolete = 6
+    Obsolete = 6,
+    /// <summary>
+    /// Put in force with a future date and not in force yet. Never stored: the version is saved as
+    /// <see cref="Effective"/> and read as scheduled until its date (see DocumentVersion.StatusOn).
+    /// </summary>
+    Scheduled = 7
 }
 
 public sealed class DocumentAcknowledgement : Entity

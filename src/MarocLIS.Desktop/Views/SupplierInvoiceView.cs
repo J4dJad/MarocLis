@@ -912,9 +912,15 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
                 Dialogs.Warn(Localizer["SupplierInvoice_QuantityMustBePositive"], Text);
                 return;
             }
-            if (price is not >= 0m || vat is not (>= 0m and <= 100m))
+            if (price is not >= 0m)
             {
                 Dialogs.Warn(Localizer["SupplierInvoice_PriceMustNotBeNegative"], Text);
+                return;
+            }
+            // A VAT of 120 % was reported as a negative price: it has its own message.
+            if (vat is not (>= 0m and <= 100m))
+            {
+                Dialogs.Warn(Localizer["SupplierInvoice_VatRateOutOfRange"], Text);
                 return;
             }
 
@@ -1181,15 +1187,24 @@ internal sealed class PurchasingSettingsDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        decimal? Rate(TextBox box) => DecimalOrNull(box) is { } v && v >= 0m ? v : null;
+        // A percentage above 100 was only refused by the service, after the dialog had closed and
+        // lost what was typed: refused here, on the box, as the service would.
+        decimal? Rate(TextBox box, decimal max = 100m) =>
+            DecimalOrNull(box) is { } v && v >= 0m && v <= max ? v : null;
 
-        if (Rate(_tolPercent) is not { } tolPercent || Rate(_tolMad) is not { } tolMad
-            || Rate(_keyRate) is not { } keyRate || Rate(_margin) is not { } margin
-            || Rate(_fineFirst) is not { } fineFirst || Rate(_fineNext) is not { } fineNext)
+        foreach (var (box, max) in new[] { (_tolPercent, 100m), (_tolMad, decimal.MaxValue), (_keyRate, 100m),
+                                           (_margin, 100m), (_fineFirst, 100m), (_fineNext, 100m) })
         {
+            if (Rate(box, max) is not null) continue;
+
             Dialogs.Warn(Localizer["Purchasing_SettingOutOfRange"], Text);
+            box.Focus();
             return;
         }
+
+        var (tolPercent, tolMad, keyRate, margin, fineFirst, fineNext) =
+            (Rate(_tolPercent)!.Value, Rate(_tolMad, decimal.MaxValue)!.Value, Rate(_keyRate)!.Value,
+             Rate(_margin)!.Value, Rate(_fineFirst)!.Value, Rate(_fineNext)!.Value);
 
         string Code(TextBox box, string fallback) => Blank(box) ?? fallback;
 

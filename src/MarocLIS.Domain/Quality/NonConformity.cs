@@ -25,6 +25,9 @@ public sealed class NonConformity : AuditableAggregateRoot, ISiteScoped
         Description = description;
         DetectedAt = detectedAt;
         DetectedByUserId = detectedByUserId;
+        // The person whose action raised the file pilots it until someone reassigns it: files
+        // opened automatically (QC, EQA, temperature) otherwise had no pilot at all.
+        AssignedToUserId = detectedByUserId;
         Status = NonConformityStatus.Open;
     }
 

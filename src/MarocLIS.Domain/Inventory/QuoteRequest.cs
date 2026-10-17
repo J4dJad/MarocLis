@@ -163,9 +163,15 @@ public sealed class QuoteRequest : AuditableAggregateRoot, ISiteScoped
     /// Chooses the winning offer. An expired offer cannot be chosen: its prices are no longer the
     /// supplier's, and the purchase order built from them would be disputed on the invoice.
     /// </summary>
-    public Result<SupplierQuote> Award(Guid supplierQuoteId, DateOnly today, Guid byUserId)
+    /// <param name="orderCancelled">
+    /// The purchase order raised from the previous award was cancelled: the request may then be
+    /// awarded again (to the same or another offer) rather than started over.
+    /// </param>
+    public Result<SupplierQuote> Award(Guid supplierQuoteId, DateOnly today, Guid byUserId,
+                                       bool orderCancelled = false)
     {
-        if (!IsOpen) return Result.Failure<SupplierQuote>(Error.Conflict("Quote_NotOpen"));
+        var reawarding = Status == QuoteRequestStatus.Awarded && orderCancelled;
+        if (!IsOpen && !reawarding) return Result.Failure<SupplierQuote>(Error.Conflict("Quote_NotOpen"));
 
         var offer = _offers.FirstOrDefault(o => o.Id == supplierQuoteId);
         if (offer is null) return Result.Failure<SupplierQuote>(Error.NotFound("Quote_OfferNotFound"));

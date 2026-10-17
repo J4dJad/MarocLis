@@ -100,4 +100,18 @@ public sealed record MultilingualText
     public override string ToString() => Current;
 
     public static MultilingualText FromFrench(string french) => new(french);
+
+    /// <summary>
+    /// An optional text typed in the languages the operator chose, or null when nothing was typed.
+    /// A text written only in Arabic (or English) is kept, and also stands as the French fallback:
+    /// it used to be dropped without a word because the French box was empty.
+    /// </summary>
+    public static MultilingualText? FromOptional(string? french, string? arabic, string? english = null)
+    {
+        static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        var (fr, ar, en) = (Clean(french), Clean(arabic), Clean(english));
+        var fallback = fr ?? ar ?? en;
+        return fallback is null ? null : new MultilingualText(fallback, ar, en);
+    }
 }

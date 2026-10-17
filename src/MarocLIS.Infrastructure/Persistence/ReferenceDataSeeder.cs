@@ -489,6 +489,7 @@ internal static class RolePermissionSets
              Permissions.Reports.Amend, Permissions.Reports.ReprintValidated,
              Permissions.Quality.View, Permissions.Quality.EnterQc, Permissions.Quality.ReviewQc,
              Permissions.Quality.ManageQcRules, Permissions.Quality.ManageNonConformity,
+             Permissions.Quality.ReportNonConformity,
              Permissions.Quality.ApproveDocument, Permissions.Quality.ManageDocuments,
              Permissions.Catalog.View, Permissions.Catalog.Manage, Permissions.Catalog.ManageReferenceRanges,
              Permissions.Equipment.View, Permissions.Equipment.Manage,
@@ -539,7 +540,7 @@ internal static class RolePermissionSets
              // Reprints the archived original: a lost report is handed over again as issued.
              Permissions.Reports.ReprintValidated,
              Permissions.Quality.View, Permissions.Quality.EnterQc, Permissions.Quality.ReviewQc,
-             Permissions.Quality.ManageNonConformity,
+             Permissions.Quality.ManageNonConformity, Permissions.Quality.ReportNonConformity,
              Permissions.Catalog.View,
              Permissions.Equipment.View, Permissions.Instruments.View,
              // Accepts the analyser transmissions held for review (auto-acceptance is off by default).
@@ -566,6 +567,8 @@ internal static class RolePermissionSets
              Permissions.Results.TechnicalValidate,
              Permissions.Reports.View,
              Permissions.Quality.View, Permissions.Quality.EnterQc,
+             // Declares what goes wrong at the bench; the file is then piloted by quality.
+             Permissions.Quality.ReportNonConformity,
              Permissions.Catalog.View,
              Permissions.Equipment.View, Permissions.Equipment.RecordMaintenance,
              Permissions.Instruments.View, Permissions.Instruments.StartStop,
@@ -617,6 +620,7 @@ internal static class RolePermissionSets
              Permissions.Samples.View, Permissions.Results.View, Permissions.Reports.View,
              Permissions.Quality.View, Permissions.Quality.EnterQc, Permissions.Quality.ReviewQc,
              Permissions.Quality.ManageQcRules, Permissions.Quality.ManageNonConformity,
+             Permissions.Quality.ReportNonConformity,
              Permissions.Quality.ApproveDocument, Permissions.Quality.ManageDocuments,
              Permissions.Catalog.View, Permissions.Catalog.ManageReferenceRanges,
              Permissions.Equipment.View, Permissions.Equipment.Manage,

@@ -83,6 +83,12 @@ public static class Permissions
         public const string ReviewQc = "quality.qc.review";
         public const string ManageQcRules = "quality.qc.rules";
         public const string ManageNonConformity = "quality.nc.manage";
+        /// <summary>
+        /// Declaring a non-conformity (ISO 15189 § 7.10: any member of staff reports what they see).
+        /// Only the declaration: analysing, acting on and closing the file stay with
+        /// <see cref="ManageNonConformity"/>.
+        /// </summary>
+        public const string ReportNonConformity = "quality.nc.report";
         public const string ApproveDocument = "quality.document.approve";
         /// <summary>Drafting, submitting and reviewing controlled documents; approval stays separate.</summary>
         public const string ManageDocuments = "quality.document.manage";

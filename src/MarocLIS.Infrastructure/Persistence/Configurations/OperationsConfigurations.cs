@@ -506,6 +506,7 @@ public sealed class PurchaseOrderConfiguration : IEntityTypeConfiguration<Purcha
     public void Configure(EntityTypeBuilder<PurchaseOrder> builder)
     {
         builder.ToTable("PurchaseOrders", "inv");
+        builder.Property(e => e.CancellationReason).HasMaxLength(1000);
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Number).AsCode(40);
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UX_PurchaseOrders_Number");

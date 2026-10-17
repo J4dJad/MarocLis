@@ -123,6 +123,7 @@
   "InventoryCount_CountedBeforeStart": "L'heure du comptage est antérieure au début du comptage de l'inventaire.",
   "InventoryCount_CountedInFuture": "L'heure du comptage ne peut pas être dans le futur.",
   "InventoryCount_LotsInOtherOpenCount": "Des lots de cet inventaire sont aussi sur l'inventaire {0}, toujours en cours de comptage : leurs écarts seraient passés deux fois. Annulez l'un des deux inventaires avant de clôturer.",
+  "InventoryCount_DateInFuture": "La date de l'inventaire ne peut pas être dans le futur.",
   "Gs1_Empty": "Aucun code scanné.",
   "Gs1_Unreadable": "Code GS1 illisible à partir de « {0} ».",
   "Gs1_Truncated": "Code GS1 tronqué : l'élément ({0}) est incomplet.",
@@ -1269,6 +1270,7 @@
   },
 
   "InventoryCount": {
+    "SheetTimeShort": "Feuille papier : cochez « Feuille comptée le » et indiquez l'heure du comptage (détail dans l'info-bulle).",
     "SheetTimeNotice": "Pour saisir une feuille papier, cochez « Feuille comptée le » et indiquez l'heure du comptage : l'écart est calculé sur le stock à cette heure-là. L'heure ne s'applique qu'aux lignes pas encore comptées ; corriger le chiffre d'une ligne déjà comptée garde l'heure de son comptage.",
     "SheetTime": "Feuille comptée le",
     "CountedAt": "Compté le",
@@ -3847,6 +3849,10 @@
   },
 
   "Equipment": {
+    "PostCheckFailedNcDescription": "Contrôle après intervention non conforme — {0} {1}",
+    "PostCheckFailedOfferNc": "Ouvrir une non-conformité pour cet équipement ?",
+    "PostCheckFailedOutOfService": "Le contrôle après intervention n'est pas conforme : l'équipement a été mis hors service.",
+    "DecommissionedFinal": "Équipement réformé : la réforme est définitive, plus aucune intervention ne s'enregistre.",
     "Title": "Équipement",
     "Plural": "Équipements",
     "Manufacturer": "Fabricant",
@@ -5389,6 +5395,8 @@
   "Equipment_DescriptionRequired": "La description de l'intervention est obligatoire.",
   "Equipment_StatusReasonRequired": "Un changement de statut d'équipement doit être motivé.",
   "Equipment_StatusNotSettable": "Le statut « {0} » ne se définit pas depuis cet écran.",
+  "Equipment_DecommissionedIsFinal": "L'équipement {0} est réformé : la réforme est définitive, son statut ne peut plus changer.",
+  "Equipment_DecommissionedNoIntervention": "L'équipement {0} est réformé : aucune maintenance ni aucun étalonnage ne s'enregistre plus sur lui.",
 
   "Calibration_CalibratorLotRequired": "Un étalonnage conforme exige le lot d'étalon utilisé : c'est le raccordement au matériau de référence (ISO 15189 § 5.3.1.4).",
 
@@ -5522,6 +5530,8 @@
   "Notification_ValueChangedSinceDisplayed": "{0} : la valeur a changé depuis l'affichage de l'écran (nouveau passage sur l'automate ou correction). Rechargez le dossier et communiquez la valeur actuelle.",
   "Qc_RunNotFound": "Série de contrôle introuvable ({0}).",
   "Qc_NamedLotOneAnalyser": "Le lot de réactif choisi ne s'applique qu'aux contrôles d'un seul automate : saisissez les autres automates comme contrôles de routine ou dans une autre série.",
+  "Qc_AlreadyReviewed": "Ce résultat de contrôle a déjà été revu : la revue ne se fait qu'une fois.",
+  "Qc_ZeroSdRefused": "Les {0} points de la période ont tous la même valeur : l'écart-type serait nul et toute valeur différente rejetterait la série. Choisissez une autre période.",
   "Sample_NotFound": "Échantillon introuvable ({0}).",
   "Sample_BarcodeUnknown": "Aucun échantillon ne porte le code-barres « {0} ».",
   "Sample_ReprintReasonRequired": "La réimpression d'une étiquette doit être motivée.",
@@ -5567,6 +5577,7 @@
   },
 
   "DocumentVersionStatus": {
+    "Scheduled": "Programmé",
     "Draft": "Brouillon",
     "UnderReview": "En revue",
     "Reviewed": "Revu",
@@ -5586,6 +5597,7 @@
   },
 
   "Documents": {
+    "FileAccessDenied": "Windows refuse l'accès à ce fichier. Copiez-le dans un dossier que vous pouvez ouvrir (par exemple Documents), puis choisissez cette copie.",
     "Title": "Documents qualité",
     "IncludeInactive": "Afficher aussi les documents retirés",
     "NewDocument": "Nouveau document",
@@ -5669,6 +5681,8 @@
   },
 
   "PurchaseOrders": {
+    "CancelledBecause": "Annulée : {0}",
+    "ApproveOwnOrderTip": "Vous avez établi cette commande : elle doit être approuvée par une autre personne.",
     "SendToSupplier": "Envoyer au fournisseur",
     "SavePdf": "Enregistrer le PDF…",
     "PrintPdf": "Imprimer le bon (PDF)",
