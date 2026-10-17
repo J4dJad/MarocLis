@@ -530,6 +530,19 @@ public sealed class RecoRaWorkflowDatabaseTests(RecoRaScratchDatabase database)
             ShippedRole(role).Should().NotContain(Permissions.Samples.Subcontract, role);
         ShippedRole(SystemRoles.Phlebotomist).Should().Contain(Permissions.Samples.Dispatch);
 
+        // An installation already running: at the next start the seeder grants the new right to the
+        // shipped roles that carry it, and to them only (the « migration » of the permission).
+        foreach (var role in new[] { SystemRoles.Technician, SystemRoles.Phlebotomist })
+        {
+            var shipped = ShippedRole(role);
+            var installed = new Role(role, new MultilingualText(role), isBuiltIn: true);
+            installed.SeedShippedPermissions(shipped.Where(p => p != Permissions.Samples.Subcontract));
+
+            installed.ApplyShippedPermissions(shipped);
+            installed.Has(Permissions.Samples.Subcontract).Should().Be(role == SystemRoles.Technician, role);
+            installed.Has(Permissions.Samples.Dispatch).Should().BeTrue(role);
+        }
+
         var lab = await LabAsync();
         using var admin = Services(OperatorOf(lab));
 
