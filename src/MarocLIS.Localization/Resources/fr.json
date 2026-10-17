@@ -2519,7 +2519,7 @@
     "KeyNext": "ligne suivante",
     "RemainingMany": "{0} valeurs restent à saisir",
     "RemainingOne": "1 valeur reste à saisir",
-    "RemainingNone": "Toutes les valeurs sont saisies",
+    "RemainingNone": "Tout est saisi",
     "MoreActions": "Plus d'actions",
     "FlagCritical": "Critique",
     "FlagLow": "Bas",
