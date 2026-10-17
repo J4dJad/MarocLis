@@ -535,9 +535,11 @@ public sealed class ReportRegisterView : LocalizedView
         AddColumn(_register, "released", 11, UiTheme.Monospace);
         // No signatory column: at 1366×768 it pushed « Remise » and « Statut » out of sight, and
         // the signatory of the selected version is in the side panel.
-        AddColumn(_register, "prescriber", 12, UiTheme.Small);
+        // « Remise » and « Statut » before the prescriber: they are what the desk works from, and
+        // at 1366×768 the last columns scroll out of sight.
         AddColumn(_register, "delivery", 12, UiTheme.SmallBold);
         AddColumn(_register, "flags", 14, UiTheme.SmallBold);
+        AddColumn(_register, "prescriber", 12, UiTheme.Small);
     }
 
     private void BuildDeliveryColumns()
@@ -962,9 +964,9 @@ public sealed class ReportRegisterView : LocalizedView
                 $"v{row.VersionNumber}",
                 T($"ReportCompleteness.{row.Completeness}"),
                 row.ReleasedAt.ToLocalTime().ToString("dd/MM/yy HH:mm"),
-                row.PrescriberName ?? string.Empty,
                 DeliveryText(row),
-                string.Join(" · ", Flags(row)));
+                string.Join(" · ", Flags(row)),
+                row.PrescriberName ?? string.Empty);
 
             _register.Rows[index].Tag = row;
         }
