@@ -29,29 +29,94 @@ ul.toc li { margin: 4px 0; }
 <div class="page">
 <div class="crumb"><a href="index.html">Sommaire</a></div>
 <h1>Pilotage, statistiques et relations</h1>
-<p>Ce chapitre couvre les écrans de suivi de l'activité et de la relation avec les prescripteurs, les partenaires et les patients : <strong>Statistiques</strong>, <strong>Pilotage</strong> (en haut du menu), puis le groupe RELATIONS : <strong>Statistiques prescripteurs</strong>, <strong>Visites et conventions</strong>, <strong>Rappels et enquêtes</strong>.</p>
-<p>Les écrans de ce chapitre (sauf <strong>Rappels et enquêtes</strong> pour les envois) ne modifient aucun dossier patient : ils lisent l'activité et la présentent.</p>
+<h3>Présentation du module</h3>
+<p><strong>À quoi sert le module.</strong> Ce chapitre couvre les écrans qui suivent l'activité du laboratoire. Il couvre aussi la relation avec les prescripteurs, les partenaires et les patients :
+- <strong>Statistiques</strong> et <strong>Pilotage</strong>, en haut du menu ;
+- le groupe RELATIONS : <strong>Statistiques prescripteurs</strong>, <strong>Visites et conventions</strong> et <strong>Rappels et enquêtes</strong>.</p>
+<p>Ces écrans ne modifient aucun dossier patient : ils lisent l'activité et la présentent. Font exception les envois de SMS de <strong>Rappels et enquêtes</strong>, ainsi que les visites et conventions qu'on y enregistre.</p>
+<p><strong>Qui l'utilise.</strong> Le biologiste responsable (directeur), le responsable qualité, la comptabilité et l'administrateur. Chaque écran demande son propre droit :</p>
+<table>
+<thead>
+<tr>
+<th>Écran</th>
+<th>Droit demandé</th>
+<th>Rôles livrés qui l'ont</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Statistiques</strong></td>
+<td>« consulter les statistiques »</td>
+<td>Biologiste responsable, Biologiste, Responsable qualité, Comptabilité, Administrateur</td>
+</tr>
+<tr>
+<td><strong>Pilotage</strong></td>
+<td>« pilotage » (et « salaires » pour la masse salariale)</td>
+<td>Biologiste responsable, Administrateur</td>
+</tr>
+<tr>
+<td><strong>Statistiques prescripteurs</strong></td>
+<td>« relations — consultation »</td>
+<td>Biologiste responsable, Comptabilité, Administrateur</td>
+</tr>
+<tr>
+<td><strong>Visites et conventions</strong></td>
+<td>« relations — consultation » ; « relations — gestion » pour saisir</td>
+<td>Biologiste responsable, Comptabilité (consultation), Administrateur</td>
+</tr>
+<tr>
+<td><strong>Rappels et enquêtes</strong></td>
+<td>« campagnes de messages patients »</td>
+<td>Biologiste responsable, Administrateur</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Liens avec les autres modules.</strong> Ces écrans lisent :
+- les dossiers et les résultats validés ;
+- les factures et les règlements (Facturation) ;
+- le contrôle qualité, les non-conformités et l'évaluation externe (Qualité) ;
+- la paie (Ressources humaines) ;
+- le coût des réactifs (Finances, <strong>Coût de revient et marge</strong>) ;
+- le consentement « Messages de suivi » de la fiche patient.</p>
+<p>Ils servent la revue de direction (ISO 15189), les relances de créances et le suivi des prescripteurs.</p>
 <p>Vue d'ensemble :</p>
 <div class="diagram"><img src="img/diagramme-80dfffad49a3bda8.png" alt="Diagramme"></div>
 
 <p><strong>Barre de période</strong> (commune) :</p>
-<div class="diagram"><img src="img/diagramme-61dd4935603518a1.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-adfddcad5512dfcf.png" alt="Diagramme"></div>
 
 <p><strong>Barre de période commune.</strong> Tous ces écrans ont en haut la même barre :</p>
 <ul>
-<li>une liste de période : <strong>Ce mois-ci</strong> (par défaut), <strong>Le mois dernier</strong>, <strong>Cette année</strong>, <strong>L'année dernière</strong>, <strong>Période libre</strong> ;</li>
-<li>deux dates <strong>Du</strong> et <strong>Au</strong> (modifier une date passe automatiquement en <strong>Période libre</strong>) ;</li>
-<li>un bouton <strong>Calculer</strong> (sur <strong>Visites et conventions</strong> il s'appelle <strong>Actualiser</strong>) ;</li>
-<li>un bouton <strong>Exporter (CSV)</strong> qui exporte <strong>l'onglet affiché</strong> dans un fichier CSV (séparateur point-virgule, accents conservés) qui s'ouvre directement dans Excel.</li>
+<li>l'en-tête, avec le titre de l'écran à gauche et, à droite :</li>
+<li>les boutons propres à l'écran ;</li>
+<li><strong>Exporter (CSV)</strong> ;</li>
+<li><strong>Calculer</strong> (<strong>F5</strong>).</li>
 </ul>
-<p>Règles communes : la date de fin ne peut pas précéder la date de début (« La date de fin précède la date de début. ») et la période est limitée à 366 jours (« La période ne peut pas dépasser 366 jours. »). L'écran calcule automatiquement à l'ouverture sur le mois en cours ; après un changement de dates, cliquer <strong>Calculer</strong>. Un export sur un onglet vide affiche « Aucun élément sélectionné. » (sur <strong>Statistiques</strong>, il ne se passe simplement rien).</p>
+<p>Sur <strong>Visites et conventions</strong>, <strong>Calculer</strong> s'appelle <strong>Actualiser</strong>. Sur <strong>Visites et conventions</strong> et <strong>Rappels et enquêtes</strong>, ce bouton est secondaire : le bouton bleu est l'action de l'onglet (« Nouvelle visite », « Envoyer la sélection »…) ;
+- une rangée de pastilles de période : <strong>Ce mois-ci</strong> (par défaut), <strong>Le mois dernier</strong>, <strong>Cette année</strong>, <strong>L'année dernière</strong> et <strong>Période libre</strong> ;
+- deux dates <strong>Du</strong> et <strong>Au</strong>. Modifier une date passe automatiquement sur <strong>Période libre</strong>.</p>
+<p>Le bouton <strong>Exporter (CSV)</strong> exporte <strong>l'onglet affiché</strong> dans un fichier CSV (séparateur point-virgule, accents conservés), qui s'ouvre directement dans Excel.</p>
+<p>Règles communes :
+- La date de fin ne peut pas précéder la date de début (« La date de fin précède la date de début. »).
+- La période est limitée à 366 jours (« La période ne peut pas dépasser 366 jours. »).
+- L'écran calcule automatiquement à l'ouverture, sur le mois en cours. Après un changement de dates, cliquer <strong>Calculer</strong>.
+- Un export sur un onglet vide affiche « Aucune donnée ». Sur <strong>Statistiques</strong>, <strong>Exporter (CSV)</strong> est grisé tant qu'aucun calcul n'a abouti ; sur un onglet vide, il ne se passe rien.
+- Une liste garde la ligne choisie après une actualisation.</p>
 <h3 id="statistics">Statistiques</h3>
-<p>Les chiffres d'activité d'une période pour la revue de direction (ISO 15189) : volumes, délais, montants.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran donne les chiffres d'activité d'une période pour la revue de direction (ISO 15189) : les volumes, les délais et les montants. Il ne porte que sur le site de connexion.</p>
 <p><strong>Qui y a accès</strong> : droit « consulter les statistiques ». Rôles livrés : Biologiste responsable, Biologiste, Responsable qualité, Comptabilité, Administrateur.</p>
+<p><strong>Fonctionnalités</strong>
+- Pastilles <strong>Ce mois-ci</strong>, <strong>Le mois dernier</strong>, <strong>Cette année</strong>, <strong>L'année dernière</strong> et <strong>Période libre</strong> : elles choisissent la période.
+- <strong>Du</strong> / <strong>Au</strong> : la période libre.
+- <strong>Calculer</strong> (bouton principal, <strong>F5</strong>) : calcule les chiffres de la période. Le calcul se fait aussi à l'ouverture.
+- <strong>Exporter (CSV)</strong> : exporte l'onglet affiché. Il est grisé tant qu'aucun calcul n'a abouti.
+- Onglets <strong>Par secteur</strong>, <strong>Par analyse</strong>, <strong>Par payeur</strong> et <strong>Par jour</strong> : le détail des chiffres.
+- <strong>Imprimer</strong> (Ctrl+P, dans le bandeau de la fenêtre) : imprime la liste affichée.</p>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>Titre « Statistiques d'activité — jj/mm/aa → jj/mm/aa », barre de période (<strong>Calculer</strong>, <strong>Exporter (CSV)</strong>).</li>
-<li>Huit chiffres clés :</li>
+<li>En-tête : le titre « Statistiques d'activité — jj/mm/aa → jj/mm/aa », puis <strong>Exporter (CSV)</strong> et <strong>Calculer</strong>. Dessous, la rangée de période.</li>
+<li>Huit tuiles de chiffres clés :</li>
 </ul>
 <table>
 <thead>
@@ -63,7 +128,7 @@ ul.toc li { margin: 4px 0; }
 <tbody>
 <tr>
 <td>Dossiers</td>
-<td>Dossiers enregistrés dans la période ayant au moins une analyse non annulée</td>
+<td>Dossiers enregistrés dans la période qui ont au moins une analyse non annulée</td>
 </tr>
 <tr>
 <td>Patients</td>
@@ -71,7 +136,7 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td>Analyses</td>
-<td>Analyses réalisées (non annulées) ; entre parenthèses le nombre d'analyses <strong>annulées</strong></td>
+<td>Analyses réalisées (non annulées) ; entre parenthèses, le nombre d'analyses <strong>annulées</strong></td>
 </tr>
 <tr>
 <td>Délai réception → validation · dans les délais</td>
@@ -96,44 +161,54 @@ ul.toc li { margin: 4px 0; }
 </tbody>
 </table>
 <ul>
-<li>Quatre onglets :</li>
+<li>Quatre onglets, chacun dans un cadre :</li>
 <li><strong>Par secteur</strong> : Code, Secteur, Analyses, Validées, Délai moyen, Dans les délais, Montant facturable.</li>
 <li><strong>Par analyse</strong> : Code, Désignation, Analyses, Délai moyen, Montant facturable.</li>
 <li><strong>Par payeur</strong> : Payeur (« Patient payant » quand il n'y a pas d'organisme), Dossiers, Analyses, Montant facturable, Part organisme, Part patient.</li>
-<li><strong>Par jour</strong> : Date, Dossiers, Analyses — tous les jours de la période, y compris les jours vides (fermeture, panne).</li>
+<li><strong>Par jour</strong> : Date, Dossiers, Analyses. Tous les jours de la période y figurent, y compris les jours vides (fermeture, panne).</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <ol>
 <li><em>Préparer la revue de direction du mois écoulé</em></li>
 <li>Ouvrir <strong>Statistiques</strong>.</li>
-<li>Choisir <strong>Le mois dernier</strong> dans la liste de période.</li>
+<li>Cliquer la pastille <strong>Le mois dernier</strong>.</li>
 <li>Cliquer <strong>Calculer</strong>.</li>
-<li>Lire les chiffres clés ; ouvrir chaque onglet.</li>
+<li>Lire les chiffres clés, puis ouvrir chaque onglet.</li>
 <li>Pour chaque onglet utile, cliquer <strong>Exporter (CSV)</strong> et enregistrer le fichier depuis Excel.</li>
-<li><em>Analyser une période libre</em> (par exemple un trimestre) : modifier <strong>Du</strong> et <strong>Au</strong> (la liste passe en <strong>Période libre</strong>), cliquer <strong>Calculer</strong>.</li>
-<li><em>Comparer les secteurs</em> : onglet <strong>Par secteur</strong>, trié du plus grand nombre d'analyses au plus petit ; repérer les délais moyens élevés et les faibles % <strong>Dans les délais</strong>.</li>
+<li><em>Analyser une période libre</em> (par exemple un trimestre) : modifier <strong>Du</strong> et <strong>Au</strong> (la pastille <strong>Période libre</strong> se sélectionne), puis cliquer <strong>Calculer</strong>.</li>
+<li><em>Comparer les secteurs</em> : onglet <strong>Par secteur</strong>, trié du plus grand nombre d'analyses au plus petit. Repérer les délais moyens élevés et les faibles % <strong>Dans les délais</strong>.</li>
 <li><em>Connaître la répartition par organisme</em> : onglet <strong>Par payeur</strong>, trié par montant décroissant.</li>
-<li><em>Imprimer un onglet</em> : afficher l'onglet puis <strong>Imprimer</strong> (Ctrl+P) dans le bandeau.</li>
+<li><em>Imprimer un onglet</em> : afficher l'onglet, puis <strong>Imprimer</strong> (Ctrl+P) dans le bandeau.</li>
 </ol>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
-<li>Les chiffres portent sur le <strong>site de connexion</strong> uniquement (pour plusieurs sites, voir <strong>Pilotage</strong>).</li>
+<li>Les chiffres portent sur le <strong>site de connexion</strong> uniquement. Pour plusieurs sites, voir <strong>Pilotage</strong>.</li>
 <li>Une analyse annulée n'est comptée que dans le chiffre « annulées », nulle part ailleurs.</li>
 <li>Un dossier est rattaché au jour de son <strong>enregistrement</strong> (heure locale du laboratoire).</li>
-<li>Le délai moyen ne compte que les analyses qui ont à la fois une heure de réception et une heure de validation ; « — » s'affiche quand il n'y en a aucune.</li>
+<li>Le délai moyen ne compte que les analyses qui ont à la fois une heure de réception et une heure de validation. « — » s'affiche quand il n'y en a aucune.</li>
 <li>« Montant facturable » (prix des analyses) et « Facturé » (factures émises) peuvent différer : factures non encore émises, factures d'une autre période, remises.</li>
 <li>La déclaration épidémiologique (maladies à déclaration obligatoire) n'existe pas dans cet écran, bien qu'un droit porte ce nom (à vérifier avec l'éditeur).</li>
 </ul>
-<p><strong>Flux</strong> : écran de lecture. Les fichiers CSV alimentent le rapport de revue de direction ; les écarts de délais renvoient vers <strong>Non-conformités</strong> si besoin.</p>
+<p><strong>Flux</strong> : cet écran ne fait que lire. Les fichiers CSV alimentent le rapport de revue de direction. Les écarts de délais renvoient vers <strong>Non-conformités</strong> si besoin.</p>
 <div class="diagram"><img src="img/diagramme-0d0c7a1956ffc0cb.png" alt="Diagramme"></div>
 
 <h3 id="steering">Pilotage</h3>
-<p>Le tableau de bord du directeur sur une période : chiffre d'affaires, marge, créances, masse salariale, qualité et délais, tous sites confondus.</p>
-<p><strong>Qui y a accès</strong> : droit « pilotage ». Rôles livrés : Biologiste responsable, Administrateur. La tuile de masse salariale demande <strong>en plus</strong> le droit « salaires » (Biologiste responsable : oui).</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>C'est le tableau de bord du directeur sur une période. Il donne, tous sites confondus :
+- le chiffre d'affaires et la marge ;
+- les créances ;
+- la masse salariale ;
+- la qualité et les délais.</p>
+<p><strong>Qui y a accès</strong> : droit « pilotage ». Rôles livrés : Biologiste responsable, Administrateur. La tuile de masse salariale demande <strong>en plus</strong> le droit « salaires », qu'a le Biologiste responsable.</p>
+<p><strong>Fonctionnalités</strong>
+- Pastilles de période, <strong>Du</strong> / <strong>Au</strong> : comme sur tous les écrans du chapitre.
+- <strong>Calculer</strong> (bouton principal, <strong>F5</strong>) : calcule le tableau de bord. Le calcul se fait aussi à l'ouverture.
+- <strong>Exporter (CSV)</strong> : exporte l'onglet affiché. Sur un onglet vide, le message est « Aucune donnée ».
+- Onglets <strong>Par jour</strong>, <strong>Par site</strong>, <strong>Par payeur</strong>, <strong>Par prescripteur</strong>, <strong>Créances échues</strong> et <strong>Qualité</strong>.</p>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>Titre « Pilotage — jj/mm/aaaa → jj/mm/aaaa · N site(s) » : tous les sites auxquels votre compte a accès sont additionnés.</li>
-<li>Barre de période (<strong>Calculer</strong>, <strong>Exporter (CSV)</strong>).</li>
+<li>En-tête : le titre « Pilotage — jj/mm/aaaa → jj/mm/aaaa · N site(s) ». Tous les sites auxquels votre compte a accès sont additionnés. À droite : <strong>Exporter (CSV)</strong> et <strong>Calculer</strong>.</li>
+<li>Rangée de période.</li>
 <li>Tuiles :</li>
 </ul>
 <table>
@@ -166,7 +241,7 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td>Masse salariale / CA</td>
-<td>Coût employeur des mois de paie <strong>clôturés</strong> entièrement compris dans la période · % du chiffre d'affaires de ces mêmes mois. « Aucun mois de paie clôturé sur la période » sinon. Tuile <strong>absente</strong> sans le droit « salaires ».</td>
+<td>Coût employeur des mois de paie <strong>clôturés</strong> entièrement compris dans la période · % du chiffre d'affaires de ces mêmes mois. Sinon : « Aucun mois de paie clôturé sur la période ». Tuile <strong>absente</strong> sans le droit « salaires ».</td>
 </tr>
 <tr>
 <td>Délai de rendu moyen</td>
@@ -180,82 +255,112 @@ ul.toc li { margin: 4px 0; }
 </table>
 <ul>
 <li>Onglets :</li>
-<li><strong>Par jour</strong>, <strong>Par site</strong>, <strong>Par payeur</strong>, <strong>Par prescripteur</strong> : Libellé, Dossiers, Analyses, CA (MAD), Part (du chiffre d'affaires). « Patient payant » et « (Sans prescripteur) » regroupent les dossiers sans organisme ou sans prescripteur.</li>
+<li><strong>Par jour</strong>, <strong>Par site</strong>, <strong>Par payeur</strong> et <strong>Par prescripteur</strong> : Libellé, Dossiers, Analyses, CA (MAD), Part (du chiffre d'affaires). « Patient payant » regroupe les dossiers sans organisme, « (Sans prescripteur) » les dossiers sans prescripteur.</li>
 <li><strong>Créances échues</strong> : Ancienneté (Non échu, 1 à 30 jours, 31 à 60 jours, 61 à 90 jours, 91 à 180 jours, Plus de 180 jours), Factures, Montant dû (MAD). Les tranches de plus de 60 jours non nulles sont en rouge.</li>
 <li><strong>Qualité</strong> : Résultats de CQ, Rejets CQ, Non-conformités ouvertes, Non-conformités déclarées sur la période, EEQ satisfaisants, EEQ à surveiller, EEQ non satisfaisants, EEQ non rendus, Délai de rendu moyen, Dans les délais.</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <ol>
 <li><em>Revue mensuelle de direction</em></li>
-<li>Ouvrir <strong>Pilotage</strong>, choisir <strong>Le mois dernier</strong>, cliquer <strong>Calculer</strong>.</li>
-<li>Lire les tuiles ; contrôler la tuile <strong>Créances échues / encours</strong>.</li>
+<li>Ouvrir <strong>Pilotage</strong>, cliquer <strong>Le mois dernier</strong>, puis <strong>Calculer</strong>.</li>
+<li>Lire les tuiles, et contrôler la tuile <strong>Créances échues / encours</strong>.</li>
 <li>Onglet <strong>Créances échues</strong> : repérer les tranches en rouge, puis traiter les relances dans <strong>Facturation</strong> / <strong>Tiers payant</strong>.</li>
 <li>Onglet <strong>Qualité</strong> : comparer aux objectifs qualité.</li>
 <li>Exporter chaque onglet utile avec <strong>Exporter (CSV)</strong>.</li>
 <li><em>Suivre le poids de chaque prescripteur ou organisme</em> : onglets <strong>Par prescripteur</strong> / <strong>Par payeur</strong>, triés par CA décroissant.</li>
-<li><em>Comparer les sites</em> : onglet <strong>Par site</strong> (seuls les sites autorisés pour votre compte apparaissent).</li>
-<li><em>Bilan annuel</em> : choisir <strong>L'année dernière</strong> puis <strong>Calculer</strong>.</li>
+<li><em>Comparer les sites</em> : onglet <strong>Par site</strong>. Seuls les sites autorisés pour votre compte apparaissent.</li>
+<li><em>Bilan annuel</em> : cliquer <strong>L'année dernière</strong>, puis <strong>Calculer</strong>.</li>
 </ol>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
-<li>Le chiffre d'affaires est le prix des analyses non annulées des dossiers enregistrés dans la période ; il peut différer du « Facturé net ».</li>
+<li>Le chiffre d'affaires est le prix des analyses non annulées des dossiers enregistrés dans la période. Il peut différer du « Facturé net ».</li>
 <li>Les créances sont calculées <strong>à aujourd'hui</strong>, quelle que soit la période choisie.</li>
-<li>Le coût réactif et la marge suivent la méthode de l'écran <strong>Coût de revient et marge</strong> (groupe FINANCES) : analyses sous-traitées exclues.</li>
+<li>Le coût réactif et la marge suivent la méthode de l'écran <strong>Coût de revient et marge</strong> (groupe FINANCES) : les analyses sous-traitées sont exclues.</li>
 <li>Les salaires ne sont jamais montrés à qui n'a pas le droit « salaires ».</li>
+<li>Une ligne de créance ou de prescripteur ne mène pas à son détail : ouvrir <strong>Facturation</strong> ou <strong>Statistiques prescripteurs</strong> à la main.</li>
 </ul>
-<p><strong>Flux</strong> : Pilotage → actions dans <strong>Facturation</strong> / <strong>Tiers payant</strong> (créances), <strong>Non-conformités</strong> / <strong>Évaluation externe</strong> (qualité), <strong>Coût de revient et marge</strong> (détail par analyse), <strong>Statistiques prescripteurs</strong> (détail par prescripteur).</p>
+<p><strong>Flux</strong> : le Pilotage mène aux actions suivantes :
+- <strong>Facturation</strong> / <strong>Tiers payant</strong>, pour les créances ;
+- <strong>Non-conformités</strong> / <strong>Évaluation externe</strong>, pour la qualité ;
+- <strong>Coût de revient et marge</strong>, pour le détail par analyse ;
+- <strong>Statistiques prescripteurs</strong>, pour le détail par prescripteur.</p>
 <div class="diagram"><img src="img/diagramme-179d64230f9809c1.png" alt="Diagramme"></div>
 
 <h3 id="prescriberstats">Statistiques prescripteurs</h3>
-<p>Ce que chaque médecin et chaque clinique envoie au laboratoire, et comment cela évolue.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran montre ce que chaque médecin et chaque clinique envoie au laboratoire, et comment cela évolue. La comparaison avec la période précédente et avec l'année précédente (N-1) est automatique.</p>
 <p><strong>Qui y a accès</strong> : droit « relations — consultation ». Rôles livrés : Biologiste responsable, Comptabilité, Administrateur.</p>
+<p><strong>Fonctionnalités</strong>
+- Pastilles de période, <strong>Du</strong> / <strong>Au</strong> : comme sur tous les écrans du chapitre.
+- <strong>Calculer</strong> (bouton principal, <strong>F5</strong>) : calcule l'activité et les comparaisons. Le calcul se fait aussi à l'ouverture.
+- <strong>Exporter (CSV)</strong> : exporte l'onglet affiché.
+- Six onglets, décrits ci-dessous.</p>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>Titre « Activité par prescripteur — période (comparé à période précédente) ». La période précédente a la même durée et se termine la veille du début.</li>
-<li>Barre de période (<strong>Calculer</strong>, <strong>Exporter (CSV)</strong>).</li>
-<li>Quatre tuiles : <strong>Dossiers</strong> (avec l'évolution en % vs période précédente), <strong>CA (MAD)</strong> (idem), <strong>Nouveaux prescripteurs</strong>, <strong>Prescripteurs perdus</strong>.</li>
+<li>En-tête : le titre « Activité par prescripteur — période (comparé à période précédente) ». La période précédente a la même durée et se termine la veille du début. À droite : <strong>Exporter (CSV)</strong> et <strong>Calculer</strong>.</li>
+<li>Quatre tuiles :</li>
+<li><strong>Dossiers</strong>, avec l'évolution en % par rapport à la période précédente ;</li>
+<li><strong>CA (MAD)</strong>, avec la même évolution ;</li>
+<li><strong>Nouveaux prescripteurs</strong> ;</li>
+<li><strong>Prescripteurs perdus</strong>.</li>
 <li>Six onglets :</li>
 <li><strong>Par prescripteur</strong> : Prescripteur, Clinique / établissement, Dossiers, Analyses, CA (MAD), Dossiers période préc., CA période préc., Dossiers vs préc., Dossiers vs N-1, CA vs préc., CA vs N-1. Les nouveaux prescripteurs sont sur fond vert.</li>
-<li><strong>Par clinique / établissement</strong> : mêmes colonnes ; « (Cabinet / sans établissement) » regroupe les médecins de ville.</li>
+<li><strong>Par clinique / établissement</strong> : les mêmes colonnes. « (Cabinet / sans établissement) » regroupe les médecins de ville.</li>
 <li><strong>Par mois</strong> : Mois, Dossiers, Analyses, CA (MAD), Dossiers N-1, CA N-1, Évolution vs N-1, Prescripteurs actifs, Nouveaux.</li>
 <li><strong>Nouveaux prescripteurs</strong> : ceux qui ont envoyé des dossiers dans la période et aucun dans les 365 jours précédents.</li>
-<li><strong>Prescripteurs perdus</strong> : ceux qui avaient envoyé des dossiers dans la période précédente et aucun dans la période ; triés par CA perdu.</li>
-<li><strong>Détail mensuel</strong> : Prescripteur, Clinique / établissement, Mois, Dossiers, Analyses, CA (MAD) — pour un export complet.</li>
+<li><strong>Prescripteurs perdus</strong> : ceux qui avaient envoyé des dossiers dans la période précédente et aucun dans la période, triés par CA perdu.</li>
+<li><strong>Détail mensuel</strong> : Prescripteur, Clinique / établissement, Mois, Dossiers, Analyses, CA (MAD). Cet onglet sert à un export complet.</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <ol>
 <li><em>Repérer les prescripteurs perdus ce trimestre</em></li>
-<li>Saisir <strong>Du</strong> / <strong>Au</strong> sur le trimestre, cliquer <strong>Calculer</strong>.</li>
-<li>Onglet <strong>Prescripteurs perdus</strong> : la liste commence par ceux qui pesaient le plus.</li>
-<li>Planifier une visite dans <strong>Visites et conventions</strong> (objet « Point sur le service » ou « Réclamation »).</li>
-<li><em>Accueillir les nouveaux prescripteurs</em> : onglet <strong>Nouveaux prescripteurs</strong>, puis visite de suivi.</li>
+<li>Saisir <strong>Du</strong> / <strong>Au</strong> sur le trimestre, puis cliquer <strong>Calculer</strong>.</li>
+<li>Ouvrir l'onglet <strong>Prescripteurs perdus</strong>. La liste commence par ceux qui pesaient le plus.</li>
+<li>Planifier une visite dans <strong>Visites et conventions</strong> (objet « Point sur le service » ou « Réclamation »). Il n'y a pas de bouton direct : rechoisir le prescripteur dans <strong>Nouvelle visite</strong>.</li>
+<li><em>Accueillir les nouveaux prescripteurs</em> : onglet <strong>Nouveaux prescripteurs</strong>, puis une visite de suivi.</li>
 <li><em>Comparer à l'année dernière</em> : onglet <strong>Par mois</strong>, colonnes N-1 et <strong>Évolution vs N-1</strong>.</li>
-<li><em>Exporter le détail pour un tableur</em> : onglet <strong>Détail mensuel</strong>, <strong>Exporter (CSV)</strong>.</li>
+<li><em>Exporter le détail pour un tableur</em> : onglet <strong>Détail mensuel</strong>, puis <strong>Exporter (CSV)</strong>.</li>
 </ol>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
-<li>Un dossier compte s'il n'est pas annulé ; ses analyses et son CA sont ceux de ses analyses non annulées, au prix appliqué.</li>
+<li>Un dossier compte s'il n'est pas annulé. Ses analyses et son CA sont ceux de ses analyses non annulées, au prix appliqué.</li>
 <li>Tous les sites autorisés pour votre compte sont additionnés.</li>
 <li>« — » dans une évolution signifie qu'il n'y avait rien à comparer (zéro avant).</li>
 <li>« (Sans prescripteur) » regroupe les dossiers sans médecin prescripteur.</li>
 </ul>
-<p><strong>Flux</strong> : Statistiques prescripteurs → <strong>Visites et conventions</strong> (visite de suivi) ; complète l'onglet <strong>Par prescripteur</strong> du <strong>Pilotage</strong>.</p>
+<p><strong>Flux</strong> : cet écran mène à <strong>Visites et conventions</strong> (visite de suivi). Il complète l'onglet <strong>Par prescripteur</strong> du <strong>Pilotage</strong>.</p>
 <div class="diagram"><img src="img/diagramme-46ad8345a790515a.png" alt="Diagramme"></div>
 
 <h3 id="relations">Visites et conventions</h3>
-<p>Le suivi des visites du délégué chez les prescripteurs et le registre des conventions (cliniques, entreprises, laboratoires partenaires, mutuelles), avec le document signé.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran a deux usages :
+- suivre les visites du délégué chez les prescripteurs ;
+- tenir le registre des conventions (cliniques, entreprises, laboratoires partenaires, mutuelles), avec le document signé.</p>
 <p><strong>Qui y a accès</strong></p>
 <ul>
 <li>Consultation : droit « relations — consultation » (Biologiste responsable, Comptabilité, Administrateur).</li>
-<li>Création, modification, suppression, pièce jointe : droit « relations — gestion » (Biologiste responsable, Administrateur). Sans ce droit, les boutons correspondants sont masqués ; <strong>Ouvrir le document</strong> reste disponible.</li>
+<li>Création, modification, suppression et pièce jointe : droit « relations — gestion » (Biologiste responsable, Administrateur). Sans ce droit, les boutons correspondants sont masqués, et le double-clic n'ouvre rien. <strong>Ouvrir le document</strong> reste disponible.</li>
 </ul>
+<p><strong>Fonctionnalités</strong>
+- <strong>Nouvelle visite</strong> (bouton principal, onglets <strong>Visites</strong> et <strong>Visites à prévoir</strong>) : enregistre une visite.
+- <strong>Nouvelle convention</strong> (bouton principal, onglet <strong>Conventions et partenariats</strong>) : enregistre une convention.
+- <strong>Modifier</strong> : ouvre la visite ou la convention choisie. Il est grisé sans ligne choisie. Le double-clic fait de même dans <strong>Visites</strong> et <strong>Conventions et partenariats</strong>, mais pas dans <strong>Visites à prévoir</strong>.
+- <strong>Plus d'actions</strong> contient trois actions :
+  - <strong>Supprimer</strong> (visites) : retire une visite saisie par erreur, avec un motif obligatoire ;
+  - <strong>Joindre le document…</strong> (conventions) : ajoute le document signé (PDF, image, DOCX, XLSX, 15 Mo au plus) ;
+  - <strong>Ouvrir le document</strong> (conventions) : ouvre la dernière version jointe. Il est grisé s'il n'y a pas de document.
+- <strong>Actualiser</strong> (<strong>F5</strong>) : recharge l'onglet.
+- <strong>Exporter (CSV)</strong> : exporte l'onglet affiché.
+- Pastilles de période, <strong>Du</strong> / <strong>Au</strong> : elles ne filtrent que l'onglet <strong>Visites</strong>.
+- <strong>Afficher les conventions inactives</strong> (case au bout de la ligne de rappel, onglet des conventions) : montre aussi les conventions désactivées.</p>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>Titre « Visites et conventions », barre de période (<strong>Actualiser</strong>, <strong>Exporter (CSV)</strong>) et, à droite, les boutons de l'onglet affiché.</li>
-<li>Rappel en haut : « Suivi de la relation uniquement : comptes rendus de visite, délais de résultats, réclamations. Aucun contenu promotionnel ni avantage au prescripteur. »</li>
-<li>Onglets :</li>
-<li><strong>Visites</strong> (visites dont la date est dans la période) et <strong>Visites à prévoir</strong> (visites dont la <strong>Prochaine visite</strong> est arrivée sans qu'une visite plus récente au même prescripteur ait eu lieu) : Date, Prescripteur, Clinique / établissement, Délégué, Objet, Notes, Prochaine visite (en rouge quand elle est due). Boutons : <strong>Nouvelle visite</strong>, <strong>Modifier</strong>, <strong>Supprimer</strong>.</li>
-<li><strong>Conventions et partenariats</strong> : Partenaire, Type de partenaire, Type de convention, Référence, Début, Fin, État, Remise convenue (%), Contact, Document. Boutons : <strong>Nouvelle convention</strong>, <strong>Modifier</strong>, <strong>Joindre le document…</strong>, <strong>Ouvrir le document</strong>, case <strong>Afficher les conventions inactives</strong>. Une convention qui se termine dans les 60 jours est sur fond orange.</li>
+<li>En-tête : le titre « Visites et conventions », avec dessous « N visite(s) · N à prévoir · N convention(s) ». À droite : <strong>Modifier</strong>, <strong>Plus d'actions</strong>, <strong>Exporter (CSV)</strong>, <strong>Actualiser</strong>, puis <strong>Nouvelle visite</strong> ou <strong>Nouvelle convention</strong> selon l'onglet.</li>
+<li>Rangée de période.</li>
+<li>Ligne de rappel : « Suivi de la relation uniquement : comptes rendus de visite, délais de résultats, réclamations. Aucun contenu promotionnel ni avantage au prescripteur. ». La case <strong>Afficher les conventions inactives</strong> est au bout de cette ligne, sur l'onglet des conventions.</li>
+<li>Onglets, chacun dans un cadre :</li>
+<li><strong>Visites</strong> (visites dont la date est dans la période) et <strong>Visites à prévoir</strong> : Date, Prescripteur, Clinique / établissement, Délégué, Objet, Notes, Prochaine visite (en rouge quand elle est due). Une visite est « à prévoir » quand sa <strong>Prochaine visite</strong> est arrivée sans qu'une visite plus récente au même prescripteur ait eu lieu.</li>
+<li><strong>Conventions et partenariats</strong> : Partenaire, Type de partenaire, Type de convention, Référence, Début, Fin, État (pastille), Remise convenue (%), Contact, Document. Une convention qui se termine dans les 60 jours a une pastille orange.</li>
 </ul>
 <table>
 <thead>
@@ -266,19 +371,19 @@ ul.toc li { margin: 4px 0; }
 </thead>
 <tbody>
 <tr>
-<td>En vigueur</td>
-<td>Active, la date du jour est entre Début et Fin (ou pas de Fin)</td>
+<td>En vigueur (pastille verte ✓)</td>
+<td>Active, et la date du jour est entre Début et Fin (ou il n'y a pas de Fin)</td>
 </tr>
 <tr>
-<td>Échéance proche</td>
+<td>Échéance proche (pastille orange !)</td>
 <td>En vigueur et se termine dans 60 jours ou moins : à renouveler</td>
 </tr>
 <tr>
-<td>Hors période</td>
-<td>Active mais pas encore commencée ou déjà terminée</td>
+<td>Hors période (pastille grise ○)</td>
+<td>Active, mais pas encore commencée ou déjà terminée</td>
 </tr>
 <tr>
-<td>Inactive</td>
+<td>Inactive (pastille grise ○)</td>
 <td>Case <strong>Actif</strong> décochée (visible seulement avec <strong>Afficher les conventions inactives</strong>)</td>
 </tr>
 </tbody>
@@ -287,39 +392,77 @@ ul.toc li { margin: 4px 0; }
 <ol>
 <li><em>Enregistrer une visite chez un prescripteur</em></li>
 <li>Onglet <strong>Visites</strong>, cliquer <strong>Nouvelle visite</strong>.</li>
-<li>Renseigner <strong>Date</strong> (aujourd'hui par défaut), <strong>Prescripteur</strong>, <strong>Délégué</strong> (vous par défaut), <strong>Objet</strong> (Suivi, Point sur le service, Réclamation, Remise des résultats, Logistique des prélèvements, Autre), <strong>Notes</strong>.</li>
+<li>Renseigner :<ul>
+<li><strong>Date</strong> (aujourd'hui par défaut) ;</li>
+<li><strong>Prescripteur</strong> ;</li>
+<li><strong>Délégué</strong> (vous par défaut) ;</li>
+<li><strong>Objet</strong> (Suivi, Point sur le service, Réclamation, Remise des résultats, Logistique des prélèvements, Autre) ;</li>
+<li><strong>Notes</strong>.</li>
+</ul>
+</li>
 <li>Cocher et renseigner <strong>Prochaine visite</strong> si une nouvelle visite est prévue.</li>
 <li>Cliquer <strong>Enregistrer</strong>.</li>
-<li><em>Modifier une visite</em> : sélectionner la ligne (onglet <strong>Visites</strong> ou <strong>Visites à prévoir</strong>) puis <strong>Modifier</strong>, ou double-cliquer la ligne dans l'onglet <strong>Visites</strong>. Corriger, <strong>Enregistrer</strong>.</li>
+<li><em>Modifier une visite</em> : sélectionner la ligne (onglet <strong>Visites</strong> ou <strong>Visites à prévoir</strong>), puis cliquer <strong>Modifier</strong>. Dans l'onglet <strong>Visites</strong>, on peut aussi double-cliquer la ligne. Corriger, puis <strong>Enregistrer</strong>.</li>
 <li><em>Supprimer une visite saisie par erreur</em></li>
-<li>Sélectionner la visite, cliquer <strong>Supprimer</strong>.</li>
+<li>Sélectionner la visite, puis cliquer <strong>Plus d'actions</strong> &gt; <strong>Supprimer</strong>.</li>
 <li>Confirmer « Confirmez-vous la suppression de « date — prescripteur » ? » et saisir le motif (obligatoire).</li>
-<li>La visite disparaît des listes ; la suppression et son motif restent au journal d'audit.</li>
-<li><em>Préparer la tournée du délégué</em> : onglet <strong>Visites à prévoir</strong>, <strong>Exporter (CSV)</strong> ou <strong>Imprimer</strong> (Ctrl+P). Après chaque visite, enregistrer une nouvelle visite : la ligne disparaît des visites à prévoir.</li>
+<li>La visite disparaît des listes. La suppression et son motif restent au journal d'audit.</li>
+<li><em>Préparer la tournée du délégué</em> : onglet <strong>Visites à prévoir</strong>, puis <strong>Exporter (CSV)</strong> ou <strong>Imprimer</strong> (Ctrl+P). Après chaque visite, enregistrer une nouvelle visite : la ligne disparaît des visites à prévoir.</li>
 <li><em>Enregistrer une convention</em> (clinique, médecine du travail, laboratoire partenaire, mutuelle…)</li>
 <li>Onglet <strong>Conventions et partenariats</strong>, cliquer <strong>Nouvelle convention</strong>.</li>
-<li>Renseigner <strong>Partenaire</strong> (obligatoire), <strong>Type de partenaire</strong> (Clinique, Hôpital, Entreprise, Laboratoire, Association / mutuelle, Autre), <strong>Prescripteur rattaché</strong> (facultatif, si le partenaire est aussi un prescripteur), <strong>Type de convention</strong> (Convention de soins, Médecine du travail, Prélèvements sur site, Sous-traitance, Tiers payant / facturation directe, Autre), <strong>Référence</strong>, <strong>Début</strong>, <strong>Fin</strong> (laisser décochée pour une convention sans fin / tacite reconduction), <strong>Conditions convenues</strong>, <strong>Remise convenue (%)</strong>, <strong>Délai de paiement (jours)</strong>, <strong>ICE</strong>, <strong>Interlocuteur</strong>, <strong>Téléphone</strong>, <strong>Courriel</strong>, <strong>Observations</strong>, case <strong>Actif</strong>.</li>
+<li>Renseigner :<ul>
+<li><strong>Partenaire</strong> (obligatoire) ;</li>
+<li><strong>Type de partenaire</strong> (Clinique, Hôpital, Entreprise, Laboratoire, Association / mutuelle, Autre) ;</li>
+<li><strong>Prescripteur rattaché</strong> (facultatif, si le partenaire est aussi un prescripteur) ;</li>
+<li><strong>Type de convention</strong> (Convention de soins, Médecine du travail, Prélèvements sur site, Sous-traitance, Tiers payant / facturation directe, Autre) ;</li>
+<li><strong>Référence</strong>, <strong>Début</strong> et <strong>Fin</strong>. Laisser <strong>Fin</strong> décochée pour une convention sans fin ou à tacite reconduction ;</li>
+<li><strong>Conditions convenues</strong>, <strong>Remise convenue (%)</strong> et <strong>Délai de paiement (jours)</strong> ;</li>
+<li><strong>ICE</strong>, <strong>Interlocuteur</strong>, <strong>Téléphone</strong>, <strong>Courriel</strong> et <strong>Observations</strong> ;</li>
+<li>la case <strong>Actif</strong>.</li>
+</ul>
+</li>
 <li>Cliquer <strong>Enregistrer</strong>.</li>
-<li><em>Enregistrer une convention de sous-traitance avec un laboratoire partenaire</em> : comme le scénario 5, avec <strong>Type de partenaire</strong> = Laboratoire et <strong>Type de convention</strong> = Sous-traitance ; préciser dans <strong>Conditions convenues</strong> les analyses, tarifs, délais, transport ; joindre le contrat signé (scénario 7). Remarque : ce registre est documentaire ; l'envoi des échantillons se fait dans <strong>Sous-traitance</strong> (groupe LISTE DE TRAVAIL), qui n'utilise pas cette convention (à vérifier).</li>
-<li><em>Joindre le document signé</em></li>
-<li>Sélectionner la convention, cliquer <strong>Joindre le document…</strong>.</li>
-<li>Choisir un fichier PDF, image (JPG, PNG, TIFF) ou Word / Excel sans macros (DOCX, XLSX), 15 Mo au plus.</li>
-<li>Le nom du fichier apparaît dans la colonne <strong>Document</strong>. Joindre à nouveau ajoute une nouvelle version.</li>
-<li><em>Consulter le document signé</em> : sélectionner la convention, cliquer <strong>Ouvrir le document</strong>.</li>
-<li><em>Renouveler ou modifier une convention</em> : sélectionner la ligne, <strong>Modifier</strong> (ou double-clic), changer <strong>Fin</strong> et les conditions, <strong>Enregistrer</strong>.</li>
-<li><em>Mettre fin à une convention</em> : <strong>Modifier</strong>, décocher <strong>Actif</strong>, <strong>Enregistrer</strong>. Il n'y a pas de suppression de convention. Pour la revoir, cocher <strong>Afficher les conventions inactives</strong>.</li>
+<li><em>Enregistrer une convention de sous-traitance avec un laboratoire partenaire</em></li>
+<li>Procéder comme au scénario 5, avec <strong>Type de partenaire</strong> = Laboratoire et <strong>Type de convention</strong> = Sous-traitance.</li>
+<li>Préciser dans <strong>Conditions convenues</strong> les analyses, les tarifs, les délais et le transport.</li>
+<li>Joindre le contrat signé (scénario 7).</li>
 </ol>
+<p>Remarque : ce registre est documentaire. L'envoi des échantillons se fait dans <strong>Sous-traitance</strong> (groupe LISTE DE TRAVAIL), qui n'utilise pas cette convention (à vérifier).
+7. <em>Joindre le document signé</em>
+   1. Sélectionner la convention, puis cliquer <strong>Plus d'actions</strong> &gt; <strong>Joindre le document…</strong>.
+   2. Choisir un fichier PDF, une image (JPG, PNG, TIFF) ou un fichier Word / Excel sans macros (DOCX, XLSX), de 15 Mo au plus.
+   3. Le nom du fichier apparaît dans la colonne <strong>Document</strong>. Joindre à nouveau ajoute une nouvelle version.
+8. <em>Consulter le document signé</em> : sélectionner la convention, puis cliquer <strong>Plus d'actions</strong> &gt; <strong>Ouvrir le document</strong>.
+9. <em>Renouveler ou modifier une convention</em> : sélectionner la ligne, puis <strong>Modifier</strong> (ou double-cliquer). Changer <strong>Fin</strong> et les conditions, puis <strong>Enregistrer</strong>.
+10. <em>Mettre fin à une convention</em> : <strong>Modifier</strong>, décocher <strong>Actif</strong>, puis <strong>Enregistrer</strong>. Il n'y a pas de suppression de convention. Pour la revoir, cocher <strong>Afficher les conventions inactives</strong>.</p>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
-<li>Visite : « La date de visite ne peut pas être dans le futur. », « La prochaine visite doit être postérieure à la visite. », « Choisissez le prescripteur et le délégué. ». Notes : 2 000 caractères au plus.</li>
-<li>Seuls les prescripteurs actifs et le personnel actif du site sont proposés ; un prescripteur ou délégué désactivé déjà cité dans la fiche reste affiché avec « (inactif) ».</li>
-<li>Convention : « Indiquez le partenaire. », « La date de fin précède la date de début. », « La remise doit être comprise entre 0 et 100 %. », « Le délai de paiement doit être compris entre 0 et 365 jours. », ICE contrôlé (« L'ICE du prescripteur est invalide. »), conditions : 4 000 caractères au plus.</li>
-<li>Pièce jointe : « Le fichier dépasse 15 Mo. », « Joignez un PDF, une image (JPG, PNG, TIFF) ou un document Word ou Excel sans macros (DOCX, XLSX). », « Aucun fichier joint. », « Le fichier n'a pas pu être lu. Fermez-le s'il est ouvert dans un autre programme. »</li>
-<li>La remise et le délai de paiement saisis dans une convention sont <strong>informatifs</strong> : ils ne s'appliquent pas automatiquement aux factures (à vérifier ; les tarifs se règlent dans <strong>Données de référence</strong>).</li>
-<li>La période ne filtre que l'onglet <strong>Visites</strong> ; <strong>Visites à prévoir</strong> et les conventions sont toujours complets. Les données sont celles du site de connexion.</li>
+<li>Visite :</li>
+<li>« La date de visite ne peut pas être dans le futur. » ;</li>
+<li>« La prochaine visite doit être postérieure à la visite. » ;</li>
+<li>« Choisissez le prescripteur et le délégué. » ;</li>
+<li>les notes font 2 000 caractères au plus.</li>
+<li>Seuls les prescripteurs actifs et le personnel actif du site sont proposés. Un prescripteur ou un délégué désactivé déjà cité dans la fiche reste affiché avec « (inactif) ».</li>
+<li>Convention :</li>
+<li>« Indiquez le partenaire. » ;</li>
+<li>« La date de fin précède la date de début. » ;</li>
+<li>« La remise doit être comprise entre 0 et 100 %. » ;</li>
+<li>« Le délai de paiement doit être compris entre 0 et 365 jours. » ;</li>
+<li>l'ICE est contrôlé (« L'ICE du prescripteur est invalide. ») ;</li>
+<li>les conditions font 4 000 caractères au plus.</li>
+<li>Pièce jointe :</li>
+<li>« Le fichier dépasse 15 Mo. » ;</li>
+<li>« Joignez un PDF, une image (JPG, PNG, TIFF) ou un document Word ou Excel sans macros (DOCX, XLSX). » ;</li>
+<li>« Aucun fichier joint. » ;</li>
+<li>« Le fichier n'a pas pu être lu. Fermez-le s'il est ouvert dans un autre programme. ».</li>
+<li>La remise et le délai de paiement saisis dans une convention sont <strong>informatifs</strong> : ils ne s'appliquent pas automatiquement aux factures (à vérifier). Les tarifs se règlent dans le <strong>Catalogue des analyses</strong>.</li>
+<li>La période ne filtre que l'onglet <strong>Visites</strong>. <strong>Visites à prévoir</strong> et les conventions sont toujours complets. Les données sont celles du site de connexion.</li>
 <li>Toute création, modification, suppression et pièce jointe est tracée au journal d'audit.</li>
 </ul>
-<p><strong>Flux</strong> : <strong>Statistiques prescripteurs</strong> (prescripteurs perdus / nouveaux) → <strong>Visites et conventions</strong> (visite, prochaine visite) → <strong>Visites à prévoir</strong> pour la tournée suivante.</p>
+<p><strong>Flux</strong> :
+1. <strong>Statistiques prescripteurs</strong> signale les prescripteurs perdus ou nouveaux.
+2. On enregistre la visite et la prochaine visite dans <strong>Visites et conventions</strong>.
+3. <strong>Visites à prévoir</strong> prépare la tournée suivante.</p>
 <p>Visites :</p>
 <div class="diagram"><img src="img/diagramme-a6ff4919c75164bc.png" alt="Diagramme"></div>
 
@@ -327,71 +470,391 @@ ul.toc li { margin: 4px 0; }
 <div class="diagram"><img src="img/diagramme-16ea29892ed0912f.png" alt="Diagramme"></div>
 
 <h3 id="patientmessaging">Rappels et enquêtes</h3>
-<p>Envoyer par SMS des rappels de bilan (par exemple HbA1c tous les 3 mois) et des enquêtes de satisfaction, puis suivre les réponses.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran envoie par SMS des rappels de bilan (par exemple une HbA1c tous les 3 mois) et des enquêtes de satisfaction. Il sert ensuite à suivre les réponses.</p>
 <p><strong>Qui y a accès</strong> : droit « campagnes de messages patients ». Rôles livrés : Biologiste responsable, Administrateur.</p>
+<p><strong>Fonctionnalités</strong>
+- <strong>Envoyer la sélection</strong> (bouton principal, onglets <strong>Rappels à envoyer</strong> et <strong>Enquêtes à envoyer</strong>) : envoie les SMS des lignes cochées, après confirmation.
+- <strong>Nouvelle règle</strong> (bouton principal, onglet <strong>Règles de rappel</strong>) : crée une règle de rappel.
+- <strong>Modifier</strong> (onglet <strong>Règles de rappel</strong>, ou double-clic sur la règle) : rouvre la règle choisie.
+- <strong>Plus d'actions</strong>, sur les onglets <strong>Enquêtes à envoyer</strong> et <strong>Résultats des enquêtes</strong>, contient trois actions :
+  - <strong>Saisir une réponse</strong> : enregistre une réponse reçue par téléphone ou à l'accueil ;
+  - <strong>Importer des réponses SMS</strong> : enregistre en une fois des réponses copiées depuis la passerelle ;
+  - <strong>Paramètres de l'enquête</strong> : les textes, le lien et l'intervalle entre deux enquêtes.
+- <strong>Calculer</strong> (<strong>F5</strong>, bouton secondaire) : recalcule l'onglet affiché. Changer d'onglet le recalcule aussi.
+- <strong>Exporter (CSV)</strong> : exporte l'onglet affiché. L'export est inscrit au journal d'accès aux données.
+- Pastilles de période, <strong>Du</strong> / <strong>Au</strong> : elles comptent pour <strong>Enquêtes à envoyer</strong>, <strong>Résultats des enquêtes</strong> et <strong>Journal des envois</strong>, pas pour les rappels ni les règles.
+- Case <strong>Envoyer</strong> sur chaque ligne à envoyer : décocher un patient à ne pas relancer.</p>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>Titre « Rappels de bilan et enquêtes de satisfaction », barre de période (<strong>Calculer</strong>, <strong>Exporter (CSV)</strong>), boutons de l'onglet affiché.</li>
-<li>Rappel en haut : seuls les patients ayant donné le consentement « Messages de suivi (rappels de bilan, enquête de satisfaction par SMS) », avec un numéro de mobile, reçoivent ces SMS ; contenu informatif uniquement, sans publicité. Si aucune passerelle SMS n'est configurée : « Aucune passerelle SMS n'est configurée : l'aperçu est possible, l'envoi non. » WhatsApp n'est pas proposé.</li>
-<li>Onglets :</li>
-<li><strong>Rappels à envoyer</strong> (calculés pour <strong>aujourd'hui</strong>, la période n'est pas utilisée) : case <strong>Envoyer</strong> (cochée par défaut), Patient, Téléphone, Analyse / bilan, Date du résultat, Rappel prévu le, Message (texte exact qui partira), SMS (nombre de SMS facturés). Bouton <strong>Envoyer la sélection</strong>.</li>
-<li><strong>Règles de rappel</strong> : Code, Analyse / bilan, Délai (mois), Fenêtre (jours), Modèle, Active. Boutons <strong>Nouvelle règle</strong>, <strong>Modifier</strong>.</li>
-<li><strong>Enquêtes à envoyer</strong> (dossiers dont le compte rendu est sorti dans la période) : case <strong>Envoyer</strong>, Patient, Téléphone, Dossier, Compte rendu le, Message, SMS. Boutons <strong>Envoyer la sélection</strong>, <strong>Saisir une réponse</strong>, <strong>Importer des réponses SMS</strong>, <strong>Paramètres de l'enquête</strong>.</li>
-<li><strong>Résultats des enquêtes</strong> : tuiles <strong>Invités</strong> (dont <strong>Remis</strong>), <strong>Réponses</strong> (taux), <strong>Note moyenne</strong> (sur 5), <strong>Répartition des notes</strong> (1★ à 5★) ; liste des commentaires (Date, Note, Commentaire). Mêmes trois boutons que l'onglet précédent.</li>
-<li><strong>Journal des envois</strong> (période) : Envoyé le, Type (Rappel de bilan / Enquête de satisfaction), Patient, Téléphone, Statut (Envoyé / Échec, en rouge), Message.</li>
+<li>En-tête : le titre « Rappels et enquêtes », avec dessous « Rappels de bilan et enquêtes de satisfaction ». À droite :</li>
+<li><strong>Modifier</strong> et <strong>Plus d'actions</strong>, selon l'onglet ;</li>
+<li><strong>Exporter (CSV)</strong> et <strong>Calculer</strong> ;</li>
+<li>le bouton bleu de l'onglet.</li>
+<li>Rangée de période.</li>
+<li>Rappel : seuls les patients qui ont donné le consentement « Messages de suivi (rappels de bilan, enquête de satisfaction par SMS) » et qui ont un numéro de mobile reçoivent ces SMS. Le contenu est informatif uniquement, sans publicité. WhatsApp n'est pas proposé. Si aucune passerelle SMS n'est configurée, le rappel ajoute « Aucune passerelle SMS n'est configurée : l'aperçu est possible, l'envoi non. ».</li>
+<li>Onglets, chacun dans un cadre :</li>
+<li><strong>Rappels à envoyer</strong> (calculés pour <strong>aujourd'hui</strong> ; la période n'est pas utilisée) : case <strong>Envoyer</strong> (cochée par défaut), Patient, Téléphone, Analyse / bilan, Date du résultat, Rappel prévu le, Message (le texte exact qui partira), SMS (le nombre de SMS facturés).</li>
+<li><strong>Règles de rappel</strong> : Code, Analyse / bilan, Délai (mois), Fenêtre (jours), Modèle, Active.</li>
+<li><strong>Enquêtes à envoyer</strong> (dossiers dont le compte rendu est sorti dans la période) : case <strong>Envoyer</strong>, Patient, Téléphone, Dossier, Compte rendu le, Message, SMS.</li>
+<li><strong>Résultats des enquêtes</strong> :<ul>
+<li>les tuiles <strong>Invités</strong> (dont <strong>Remis</strong>), <strong>Réponses</strong> (taux), <strong>Note moyenne</strong> (sur 5) et <strong>Répartition des notes</strong> (de 1★ à 5★) ;</li>
+<li>la liste des commentaires (Date, Note, Commentaire).</li>
+</ul>
+</li>
+<li><strong>Journal des envois</strong> (période) : Envoyé le, Type (Rappel de bilan / Enquête de satisfaction), Patient, Téléphone, Statut, Message. Le statut est une pastille : verte « Envoyé » ou rouge « Échec ».</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <ol>
 <li><em>Créer une règle de rappel de bilan</em></li>
 <li>Onglet <strong>Règles de rappel</strong>, cliquer <strong>Nouvelle règle</strong>.</li>
-<li>Choisir l'<strong>Analyse / bilan</strong> (un bilan est marqué « (Bilan (panel)) »).</li>
-<li><strong>Délai (mois)</strong> : délai après le résultat (3 par défaut, de 1 à 60).</li>
-<li><strong>Fenêtre (jours)</strong> : nombre de jours après l'échéance pendant lesquels le rappel reste proposé (60 par défaut, de 1 à 365).</li>
-<li><strong>Texte en français</strong> et <strong>Texte en arabe</strong> (un texte par défaut est proposé). Champs utilisables : {patient} {analyse} {date} {labo} {telephone} {code} {lien}.</li>
-<li>Laisser <strong>Actif</strong> coché, cliquer <strong>Enregistrer</strong>.</li>
-<li><em>Modifier ou désactiver une règle</em> : sélectionner la règle, <strong>Modifier</strong> (ou double-clic), changer le texte ou décocher <strong>Actif</strong>, <strong>Enregistrer</strong>. Une règle ne se supprime pas.</li>
+<li>Choisir l'<strong>Analyse / bilan</strong>. Un bilan est marqué « (Bilan (panel)) ».</li>
+<li><strong>Délai (mois)</strong> : le délai après le résultat (3 par défaut, de 1 à 60).</li>
+<li><strong>Fenêtre (jours)</strong> : le nombre de jours après l'échéance pendant lesquels le rappel reste proposé (60 par défaut, de 1 à 365).</li>
+<li><strong>Texte en français</strong> et <strong>Texte en arabe</strong> : un texte par défaut est proposé. Champs utilisables : {patient} {analyse} {date} {labo} {telephone} {code} {lien}.</li>
+<li>Laisser <strong>Actif</strong> coché, puis cliquer <strong>Enregistrer</strong>.</li>
+<li><em>Modifier ou désactiver une règle</em> : sélectionner la règle, puis <strong>Modifier</strong> (ou double-cliquer). Changer le texte ou décocher <strong>Actif</strong>, puis <strong>Enregistrer</strong>. Une règle ne se supprime pas.</li>
 <li><em>Envoyer les rappels du jour</em></li>
-<li>Onglet <strong>Rappels à envoyer</strong> (la liste se calcule à l'ouverture de l'onglet).</li>
-<li>Relire les messages ; décocher <strong>Envoyer</strong> pour les patients à ne pas relancer.</li>
-<li>Cliquer <strong>Envoyer la sélection</strong>, confirmer « Envoyer N SMS maintenant ? ».</li>
-<li>Le bilan s'affiche : « N envoyé(s), N en échec, N ignoré(s). » (ignoré = patient revenu entre-temps ou consentement retiré depuis l'aperçu).</li>
+<li>Ouvrir l'onglet <strong>Rappels à envoyer</strong>. La liste se calcule à l'ouverture de l'onglet.</li>
+<li>Relire les messages, et décocher <strong>Envoyer</strong> pour les patients à ne pas relancer.</li>
+<li>Cliquer <strong>Envoyer la sélection</strong>, puis confirmer « Envoyer N SMS maintenant ? ».</li>
+<li>Le bilan s'affiche : « N envoyé(s), N en échec, N ignoré(s). ». Un rappel est « ignoré » quand le patient est revenu entre-temps, ou quand il a retiré son consentement depuis l'aperçu.</li>
 <li>Vérifier les échecs dans <strong>Journal des envois</strong>. Un rappel en échec réapparaît dans <strong>Rappels à envoyer</strong> tant qu'il est dans la fenêtre.</li>
 <li><em>Régler l'enquête de satisfaction</em></li>
-<li>Onglet <strong>Enquêtes à envoyer</strong> ou <strong>Résultats des enquêtes</strong>, cliquer <strong>Paramètres de l'enquête</strong>.</li>
-<li>Modifier <strong>Texte en français</strong>, <strong>Texte en arabe</strong> ; <strong>Lien de l'enquête (https, facultatif)</strong> ; <strong>Intervalle minimal entre deux enquêtes (jours)</strong> (90 par défaut).</li>
-<li><strong>Enregistrer</strong>.</li>
+<li>Ouvrir l'onglet <strong>Enquêtes à envoyer</strong> ou <strong>Résultats des enquêtes</strong>, puis cliquer <strong>Plus d'actions</strong> &gt; <strong>Paramètres de l'enquête</strong>.</li>
+<li>Modifier <strong>Texte en français</strong> et <strong>Texte en arabe</strong>, le <strong>Lien de l'enquête (https, facultatif)</strong> et l'<strong>Intervalle minimal entre deux enquêtes (jours)</strong> (90 par défaut).</li>
+<li>Cliquer <strong>Enregistrer</strong>.</li>
 <li><em>Envoyer les enquêtes de satisfaction</em></li>
-<li>Choisir la période (dossiers dont le compte rendu est sorti dans la période), cliquer <strong>Calculer</strong>, ouvrir <strong>Enquêtes à envoyer</strong>.</li>
+<li>Choisir la période (les dossiers dont le compte rendu est sorti dans la période), cliquer <strong>Calculer</strong>, puis ouvrir <strong>Enquêtes à envoyer</strong>.</li>
 <li>Le code affiché « XXXXXX » est provisoire : le vrai code est tiré à l'envoi.</li>
-<li>Décocher si besoin, cliquer <strong>Envoyer la sélection</strong>, confirmer.</li>
+<li>Décocher si besoin, cliquer <strong>Envoyer la sélection</strong>, puis confirmer.</li>
 <li><em>Saisir une réponse reçue par téléphone ou à l'accueil</em></li>
-<li>Cliquer <strong>Saisir une réponse</strong>.</li>
+<li>Cliquer <strong>Plus d'actions</strong> &gt; <strong>Saisir une réponse</strong>.</li>
 <li>Saisir le <strong>Code de l'enquête</strong> (6 caractères), la <strong>Note</strong> (1 à 5) et le <strong>Commentaire</strong>.</li>
-<li><strong>Enregistrer</strong> : « Enregistré. »</li>
+<li>Cliquer <strong>Enregistrer</strong>. Le message « Enregistré. » confirme.</li>
 <li><em>Importer les réponses reçues par SMS</em></li>
-<li>Copier les SMS reçus depuis la messagerie de la passerelle ou le téléphone.</li>
-<li>Cliquer <strong>Importer des réponses SMS</strong>, coller dans <strong>Réponses reçues</strong>, un SMS par ligne, sous la forme « CODE note commentaire » (exemple « K7PQ2M 4 accueil rapide »).</li>
-<li><strong>Enregistrer</strong>. Le bilan s'affiche : « N réponse(s) enregistrée(s), N refusée(s), N illisible(s). », suivi des 20 premières lignes refusées ou illisibles.</li>
-<li><em>Lire les résultats de satisfaction</em> : choisir la période, onglet <strong>Résultats des enquêtes</strong>. Exporter les commentaires avec <strong>Exporter (CSV)</strong>.</li>
-<li><em>Contrôler ce qui est parti</em> : onglet <strong>Journal des envois</strong> sur la période ; les échecs sont en rouge avec la raison entre crochets.</li>
+<li>Copier les SMS reçus depuis la messagerie de la passerelle ou depuis le téléphone.</li>
+<li>Cliquer <strong>Plus d'actions</strong> &gt; <strong>Importer des réponses SMS</strong>.</li>
+<li>Coller les SMS dans <strong>Réponses reçues</strong>, un SMS par ligne, sous la forme « CODE note commentaire » (exemple : « K7PQ2M 4 accueil rapide »).</li>
+<li>Cliquer <strong>Enregistrer</strong>. Le bilan s'affiche : « N réponse(s) enregistrée(s), N refusée(s), N illisible(s). ». Il est suivi des 20 premières lignes refusées ou illisibles. Une ligne refusée montre le code technique du refus (par exemple « Survey_AlreadyAnswered » pour une enquête qui a déjà une réponse).</li>
+<li><em>Lire les résultats de satisfaction</em> : choisir la période, puis ouvrir l'onglet <strong>Résultats des enquêtes</strong>. Exporter les commentaires avec <strong>Exporter (CSV)</strong>.</li>
+<li><em>Contrôler ce qui est parti</em> : ouvrir l'onglet <strong>Journal des envois</strong> sur la période. Les échecs ont une pastille rouge, avec la raison entre crochets (un code technique, par exemple « Messaging_SmsFailed »).</li>
 </ol>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
-<li><strong>Consentement</strong> : seuls les patients ayant le consentement « Messages de suivi », un numéro de mobile, et n'ayant pas refusé toute utilisation de leurs données au-delà des soins, apparaissent. Le consentement est saisi dans la fiche patient.</li>
-<li><strong>Pas de publicité</strong> : un texte contenant un mot promotionnel est refusé (« Formulation promotionnelle refusée (« … ») : les messages aux patients sont informatifs uniquement. »). Sont refusés notamment : promo, réduction, remise, offre, offert, gratuit, solde, rabais, prix, tarif, %, et leurs équivalents arabes.</li>
-<li><strong>Analyses sensibles</strong> : une règle sur une analyse (ou un bilan contenant une analyse) sous consentement spécifique (VIH, génétique, dépistage prénatal) est refusée : « Cette analyse, ou une analyse de ce bilan, exige un consentement spécifique… ».</li>
-<li>Texte : obligatoire, 480 caractères au plus, champs inconnus refusés (« Champ inconnu dans le message : {…}. »). Une règle par analyse ou bilan (« Une règle de rappel existe déjà pour cette analyse ou ce bilan. »).</li>
-<li>Quand un rappel est dû : le dernier résultat validé de l'analyse + le délai ; pas de rappel si le patient a déjà un dossier plus récent pour cette analyse (même dans un autre site), ni si la fenêtre est passée, ni si ce résultat a déjà été rappelé. Un seul rappel par patient et par envoi.</li>
-<li>Enquête : le texte doit contenir {code} ou {lien} (« Le message d'enquête doit contenir {code} ou {lien}. ») ; {lien} seul exige un lien https ; un patient n'est pas réinterrogé avant l'intervalle choisi ; une enquête n'a qu'une réponse (« L'enquête … a déjà une réponse. »).</li>
-<li>Envoi : « Le fournisseur SMS n'est pas configuré. », « Aucun destinataire sélectionné. », 500 messages au plus par envoi (« Envoi limité à 500 messages à la fois. »). Pendant un envoi, l'écran est bloqué jusqu'à la fin.</li>
-<li>Les aperçus, exports et envois sont inscrits au journal d'accès aux données (ces listes contiennent des noms et numéros de patients).</li>
+<li><strong>Consentement</strong> : n'apparaissent que les patients qui remplissent trois conditions :</li>
+<li>ils ont le consentement « Messages de suivi » ;</li>
+<li>ils ont un numéro de mobile ;</li>
+<li>ils n'ont pas refusé toute utilisation de leurs données au-delà des soins.</li>
 </ul>
-<p><strong>Flux</strong> : fiche patient (consentement « Messages de suivi ») → compte rendu validé → <strong>Rappels et enquêtes</strong> (rappel à l'échéance, enquête après le compte rendu) → <strong>Journal des envois</strong> → <strong>Résultats des enquêtes</strong> (revue de direction, avec <strong>Pilotage</strong>).</p>
+<p>Le consentement est saisi dans la fiche patient.
+- <strong>Pas de publicité</strong> : un texte qui contient un mot promotionnel est refusé (« Formulation promotionnelle refusée (« … ») : les messages aux patients sont informatifs uniquement. »). Sont refusés notamment : promo, réduction, remise, offre, offert, gratuit, solde, rabais, prix, tarif, %, et leurs équivalents arabes.
+- <strong>Analyses sensibles</strong> : une règle sur une analyse sous consentement spécifique (VIH, génétique, dépistage prénatal), ou sur un bilan qui en contient une, est refusée (« Cette analyse, ou une analyse de ce bilan, exige un consentement spécifique… »).
+- <strong>Texte</strong> :
+  - il est obligatoire et fait 480 caractères au plus ;
+  - les champs inconnus sont refusés (« Champ inconnu dans le message : {…}. ») ;
+  - il y a une règle par analyse ou bilan (« Une règle de rappel existe déjà pour cette analyse ou ce bilan. »).
+- <strong>Quand un rappel est dû</strong> : à la date du dernier résultat validé de l'analyse, plus le délai. Il n'y a pas de rappel dans trois cas :
+  - le patient a déjà un dossier plus récent pour cette analyse, même dans un autre site ;
+  - la fenêtre est passée ;
+  - ce résultat a déjà été rappelé.</p>
+<p>Il n'y a qu'un seul rappel par patient et par envoi.
+- <strong>Enquête</strong> :
+  - le texte doit contenir {code} ou {lien} (« Le message d'enquête doit contenir {code} ou {lien}. ») ;
+  - {lien} seul exige un lien https ;
+  - un patient n'est pas réinterrogé avant l'intervalle choisi ;
+  - une enquête n'a qu'une réponse (« L'enquête … a déjà une réponse. »).
+- <strong>Envoi</strong> :
+  - « Le fournisseur SMS n'est pas configuré. » ;
+  - « Aucun destinataire sélectionné. » ;
+  - 500 messages au plus par envoi (« Envoi limité à 500 messages à la fois. »).</p>
+<p>Pendant un envoi, la barre du haut et les onglets sont bloqués jusqu'à la fin.
+- Les aperçus, les exports et les envois sont inscrits au journal d'accès aux données, car ces listes contiennent des noms et des numéros de patients.</p>
+<p><strong>Flux</strong> :
+1. Le consentement « Messages de suivi » est saisi dans la fiche patient.
+2. Le compte rendu est validé.
+3. <strong>Rappels et enquêtes</strong> propose le rappel à l'échéance et l'enquête après le compte rendu.
+4. Les envois vont au <strong>Journal des envois</strong>.
+5. Les <strong>Résultats des enquêtes</strong> servent à la revue de direction, avec le <strong>Pilotage</strong>.</p>
 <p>Rappels de bilan :</p>
 <div class="diagram"><img src="img/diagramme-65f3fed265c5a666.png" alt="Diagramme"></div>
 
 <p>Enquêtes de satisfaction :</p>
-<div class="diagram"><img src="img/diagramme-5070765f33eeedf1.png" alt="Diagramme"></div><p class="top"><a href="index.html">Retour au sommaire</a></p>
+<div class="diagram"><img src="img/diagramme-5070765f33eeedf1.png" alt="Diagramme"></div>
+
+<h3>Messages d'erreur et d'avertissement</h3>
+<p>« … » remplace une valeur que l'application insère. Les messages communs à toute l'application (connexion perdue, « Erreur inattendue », droit manquant…) sont décrits au chapitre « Prise en main ».</p>
+<h4>Statistiques, Pilotage, Statistiques prescripteurs (barre de période)</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« La date de fin précède la date de début. »</td>
+<td><strong>Au</strong> est avant <strong>Du</strong></td>
+<td>Corriger les dates, puis <strong>Calculer</strong>.</td>
+</tr>
+<tr>
+<td>« La période ne peut pas dépasser … jours. » (366)</td>
+<td>Période trop longue</td>
+<td>Raccourcir la période (un an au plus).</td>
+</tr>
+<tr>
+<td>« Aucune donnée »</td>
+<td><strong>Exporter (CSV)</strong> sur un onglet vide (Pilotage, Statistiques prescripteurs et les écrans des relations)</td>
+<td>Calculer une période qui a des données.</td>
+</tr>
+</tbody>
+</table>
+<h4>Visites et conventions</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Choisissez le prescripteur et le délégué. »</td>
+<td>Visite enregistrée sans l'un des deux</td>
+<td>Choisir le prescripteur et le délégué.</td>
+</tr>
+<tr>
+<td>« Choisissez le prescripteur visité. » / « Choisissez le délégué. »</td>
+<td>Même cause (contrôle de l'application)</td>
+<td>Idem.</td>
+</tr>
+<tr>
+<td>« La date de visite ne peut pas être dans le futur. »</td>
+<td>Date après aujourd'hui</td>
+<td>Corriger la date.</td>
+</tr>
+<tr>
+<td>« La prochaine visite doit être postérieure à la visite. »</td>
+<td>Prochaine visite avant la visite</td>
+<td>Corriger ou décocher <strong>Prochaine visite</strong>.</td>
+</tr>
+<tr>
+<td>« Texte trop long (… caractères au plus). »</td>
+<td>Notes ou conditions trop longues</td>
+<td>Raccourcir le texte.</td>
+</tr>
+<tr>
+<td>« Confirmez-vous la suppression de « … » ? »</td>
+<td><strong>Supprimer</strong> une visite</td>
+<td>Saisir le motif, puis <strong>OK</strong> ; <strong>Annuler</strong> pour renoncer.</td>
+</tr>
+<tr>
+<td>« Indiquez le motif. »</td>
+<td>Suppression sans motif</td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Visite introuvable. » / « Convention introuvable. »</td>
+<td>La fiche a été supprimée ou modifiée ailleurs</td>
+<td>Cliquer <strong>Actualiser</strong>.</td>
+</tr>
+<tr>
+<td>« Indiquez le partenaire. »</td>
+<td>Convention sans partenaire</td>
+<td>Saisir le partenaire.</td>
+</tr>
+<tr>
+<td>« La date de fin précède la date de début. »</td>
+<td><strong>Fin</strong> avant <strong>Début</strong></td>
+<td>Corriger les dates.</td>
+</tr>
+<tr>
+<td>« La remise doit être comprise entre 0 et 100 %. »</td>
+<td>Remise hors limites</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Le délai de paiement doit être compris entre 0 et 365 jours. »</td>
+<td>Délai hors limites</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« L'ICE du prescripteur est invalide. »</td>
+<td>ICE mal tapé (15 chiffres attendus)</td>
+<td>Recopier l'ICE.</td>
+</tr>
+<tr>
+<td>« Le fichier dépasse … Mo. » (15)</td>
+<td>Document trop gros</td>
+<td>Numériser en PDF plus léger.</td>
+</tr>
+<tr>
+<td>« Le fichier est vide. »</td>
+<td>Fichier de 0 octet</td>
+<td>Choisir le bon fichier.</td>
+</tr>
+<tr>
+<td>« Joignez un PDF, une image (JPG, PNG, TIFF) ou un document Word ou Excel sans macros (DOCX, XLSX). »</td>
+<td>Type de fichier refusé</td>
+<td>Convertir le document.</td>
+</tr>
+<tr>
+<td>« Le fichier n'a pas pu être lu. Fermez-le s'il est ouvert dans un autre programme. »</td>
+<td>Fichier verrouillé</td>
+<td>Fermer le fichier, puis réessayer.</td>
+</tr>
+<tr>
+<td>« Aucun fichier joint. »</td>
+<td><strong>Ouvrir le document</strong> sans document</td>
+<td>Joindre d'abord le document.</td>
+</tr>
+</tbody>
+</table>
+<h4>Rappels et enquêtes</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Aucun élément sélectionné. »</td>
+<td><strong>Envoyer la sélection</strong> sans ligne cochée</td>
+<td>Cocher les lignes à envoyer.</td>
+</tr>
+<tr>
+<td>« Envoyer … SMS maintenant ? »</td>
+<td>Confirmation d'envoi</td>
+<td><strong>Oui</strong> pour envoyer.</td>
+</tr>
+<tr>
+<td>« … envoyé(s), … en échec, … ignoré(s). »</td>
+<td>Fin de l'envoi</td>
+<td>Lire les échecs dans <strong>Journal des envois</strong>.</td>
+</tr>
+<tr>
+<td>« Le fournisseur SMS n'est pas configuré. »</td>
+<td>Aucune passerelle SMS</td>
+<td>Demander à l'administrateur de configurer la passerelle.</td>
+</tr>
+<tr>
+<td>« Aucun destinataire sélectionné. »</td>
+<td>Rien à envoyer</td>
+<td>Cocher des lignes.</td>
+</tr>
+<tr>
+<td>« Envoi limité à … messages à la fois. » (500)</td>
+<td>Trop de lignes cochées</td>
+<td>Envoyer en plusieurs fois.</td>
+</tr>
+<tr>
+<td>« Saisissez le texte du message. »</td>
+<td>Texte vide</td>
+<td>Saisir le texte.</td>
+</tr>
+<tr>
+<td>« Message trop long (… caractères au plus). » (480)</td>
+<td>Texte trop long</td>
+<td>Raccourcir.</td>
+</tr>
+<tr>
+<td>« Formulation promotionnelle refusée (« … ») : les messages aux patients sont informatifs uniquement. »</td>
+<td>Mot publicitaire</td>
+<td>Reformuler sans ce mot.</td>
+</tr>
+<tr>
+<td>« Champ inconnu dans le message : … »</td>
+<td>Champ entre accolades mal écrit</td>
+<td>Utiliser {patient} {analyse} {date} {labo} {telephone} {code} {lien}.</td>
+</tr>
+<tr>
+<td>« Choisissez une analyse ou un bilan, pas les deux. »</td>
+<td>Règle mal remplie</td>
+<td>Garder un seul choix.</td>
+</tr>
+<tr>
+<td>« Le délai doit être compris entre … et … mois. » (1 et 60)</td>
+<td>Délai hors limites</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« La fenêtre d'envoi doit être comprise entre 1 et 365 jours. »</td>
+<td>Fenêtre hors limites</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Une règle de rappel existe déjà pour cette analyse ou ce bilan. »</td>
+<td>Règle en double</td>
+<td>Modifier la règle existante.</td>
+</tr>
+<tr>
+<td>« Cette analyse, ou une analyse de ce bilan, exige un consentement spécifique (VIH, génétique, dépistage prénatal) : elle ne peut pas faire l'objet d'un rappel par SMS. »</td>
+<td>Analyse sensible</td>
+<td>Ne pas créer de rappel pour cette analyse.</td>
+</tr>
+<tr>
+<td>« Règle de rappel introuvable. »</td>
+<td>Règle modifiée ailleurs</td>
+<td>Cliquer <strong>Calculer</strong>.</td>
+</tr>
+<tr>
+<td>« Le lien de l'enquête doit être une adresse https valide. »</td>
+<td>Lien mal écrit</td>
+<td>Saisir une adresse qui commence par https://.</td>
+</tr>
+<tr>
+<td>« Le message d'enquête doit contenir {code} ou {lien}. »</td>
+<td>Texte sans code ni lien</td>
+<td>Ajouter {code}.</td>
+</tr>
+<tr>
+<td>« Un message d'enquête sans {code} n'a que {lien}, qui reste vide sans lien d'enquête : renseignez une adresse https ou ajoutez {code}. »</td>
+<td>{lien} sans adresse</td>
+<td>Renseigner le lien ou ajouter {code}.</td>
+</tr>
+<tr>
+<td>« L'intervalle doit être compris entre 0 et 3650 jours. »</td>
+<td>Intervalle hors limites</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Code d'enquête invalide : … »</td>
+<td>Code mal tapé (6 caractères)</td>
+<td>Vérifier le code.</td>
+</tr>
+<tr>
+<td>« Code d'enquête inconnu : … »</td>
+<td>Code qui n'existe pas</td>
+<td>Vérifier le code auprès du patient.</td>
+</tr>
+<tr>
+<td>« L'enquête … a déjà une réponse. »</td>
+<td>Deuxième réponse au même code</td>
+<td>Rien : la première réponse est gardée.</td>
+</tr>
+<tr>
+<td>« La note doit être comprise entre 1 et 5. »</td>
+<td>Note hors limites</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« … réponse(s) enregistrée(s), … refusée(s), … illisible(s). »</td>
+<td>Fin de l'import des SMS</td>
+<td>Relire les lignes refusées (codes techniques) et les saisir à la main si besoin.</td>
+</tr>
+<tr>
+<td>« Enregistré. »</td>
+<td>Réponse ou paramètres enregistrés</td>
+<td>Rien.</td>
+</tr>
+</tbody>
+</table><p class="top"><a href="index.html">Retour au sommaire</a></p>
 </div>
 </body>
 </html>

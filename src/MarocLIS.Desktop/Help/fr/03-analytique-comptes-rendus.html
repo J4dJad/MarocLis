@@ -30,6 +30,85 @@ ul.toc li { margin: 4px 0; }
 <div class="crumb"><a href="index.html">Sommaire</a></div>
 <h1>Phase analytique et comptes rendus</h1>
 <p>Ce chapitre couvre le travail de la paillasse jusqu'à la remise du compte rendu : saisie des résultats (manuelle ou par les automates), validation technique, validation biologique avec la communication des résultats critiques, puis émission, réimpression, remise et rectification des comptes rendus.</p>
+<h3>Présentation du module</h3>
+<p><strong>But du module.</strong> C'est le cœur du laboratoire : produire un résultat juste, le faire contrôler deux fois (validation technique par la paillasse, validation biologique par un biologiste habilité), prévenir le prescripteur d'une valeur critique, puis remettre au bon destinataire un compte rendu signé qui ne pourra plus jamais être modifié en silence. Chaque correction laisse une trace : l'ancienne valeur est gardée, le motif est demandé, et un compte rendu déjà remis ne se corrige que par une rectification numérotée.</p>
+<p><strong>Qui l'utilise.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Rôle par défaut</th>
+<th>Ce qu'il fait dans ce module</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Technicien de laboratoire</td>
+<td>Saisit les valeurs, marque « Non fait », valide techniquement, imprime la fiche de paillasse, réimporte les transmissions des automates retenues ou en échec. Ne modifie pas une valeur déjà validée techniquement.</td>
+</tr>
+<tr>
+<td>Biologiste</td>
+<td>Tout ce que fait le technicien, plus : modifie une valeur validée techniquement, corrige une valeur validée, valide biologiquement, communique les critiques, dévalide, écrit un commentaire biologique, émet et rectifie les comptes rendus, les réimprime et enregistre les remises.</td>
+</tr>
+<tr>
+<td>Biologiste responsable, Administrateur</td>
+<td>Tout le module, plus le réglage des interfaces des automates.</td>
+</tr>
+<tr>
+<td>Secrétariat / accueil</td>
+<td>Émet, réimprime et remet les comptes rendus (guichet, courriel, SMS…).</td>
+</tr>
+<tr>
+<td>Responsable qualité</td>
+<td>Consulte les résultats, les comptes rendus et les automates.</td>
+</tr>
+<tr>
+<td>Prescripteur</td>
+<td>Consulte et réimprime les comptes rendus de ses patients.</td>
+</tr>
+</tbody>
+</table>
+<p>Droits utilisés (identifiants affichés dans <strong>Utilisateurs et rôles</strong>) : saisir (<code>results.enter</code>), modifier un résultat validé techniquement (<code>results.modify</code>), valider techniquement (<code>results.validate_technical</code>), valider biologiquement (<code>results.validate_biological</code>), dévalider (<code>results.unvalidate</code>), saisir la communication d'un critique (<code>results.enter_critical</code>), consulter (<code>results.view</code>), éditer (<code>reports.print</code>), envoyer (<code>reports.send</code>), rectifier (<code>reports.amend</code>), réimprimer l'original (<code>reports.reprint_validated</code>), consulter les comptes rendus (<code>reports.view</code>), consulter les automates (<code>instruments.view</code>), rejouer les messages (<code>instruments.replay</code>), configurer et démarrer les interfaces. La validation biologique exige en plus une qualification de médecin ou pharmacien biologiste, inscrit à l'Ordre, habilité pour le secteur.</p>
+<p><strong>Écrans du module</strong> (groupe <strong>Liste de travail</strong> du menu, sauf <strong>Automates</strong>) :</p>
+<table>
+<thead>
+<tr>
+<th>Menu</th>
+<th>Droit qui ouvre l'écran</th>
+<th>Raccourci par défaut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Saisie des résultats</strong></td>
+<td>Saisir des résultats</td>
+<td>Ctrl+6</td>
+</tr>
+<tr>
+<td><strong>Validation biologique</strong></td>
+<td>Valider biologiquement</td>
+<td>Ctrl+7</td>
+</tr>
+<tr>
+<td><strong>Comptes rendus</strong></td>
+<td>Consulter les comptes rendus</td>
+<td>Ctrl+8</td>
+</tr>
+<tr>
+<td><strong>Automates</strong> (résultats reçus)</td>
+<td>Consulter les automates</td>
+<td>aucun</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Liens avec les autres modules.</strong></p>
+<ul>
+<li><strong>Réception des échantillons</strong> déverrouille les lignes de saisie d'un tube.</li>
+<li><strong>Sous-traitance</strong> : les résultats du partenaire se saisissent ici (repère « ST »).</li>
+<li><strong>Contrôle qualité</strong> (CIQ) bloque la validation d'un résultat couvert par un contrôle hors limites ; <strong>Équipements</strong> bloque un automate dont l'étalonnage est échu.</li>
+<li><strong>Consultation d'un dossier</strong> permet de « Repasser l'analyse » à la paillasse.</li>
+<li><strong>Patients</strong> (Consentements) conditionne l'envoi électronique et la remise à un tiers.</li>
+<li><strong>Tableau de bord</strong> compte les résultats critiques non communiqués.</li>
+</ul>
 <p>Le circuit normal d'un résultat est le suivant :</p>
 <table>
 <thead>
@@ -43,19 +122,19 @@ ul.toc li { margin: 4px 0; }
 <tbody>
 <tr>
 <td>Le tube est réceptionné</td>
-<td>Technicien, secrétariat</td>
+<td>Technicien de laboratoire</td>
 <td>Réception des échantillons</td>
 <td>En attente de saisie</td>
 </tr>
 <tr>
 <td>La valeur est saisie ou arrive de l'automate</td>
-<td>Technicien (ou automate)</td>
+<td>Technicien de laboratoire (ou automate)</td>
 <td>Saisie des résultats / Automates</td>
 <td>Saisi</td>
 </tr>
 <tr>
 <td>Le technicien contrôle la vraisemblance</td>
-<td>Technicien</td>
+<td>Technicien de laboratoire</td>
 <td>Saisie des résultats, bouton <strong>Validation technique</strong></td>
 <td>Validé techniquement</td>
 </tr>
@@ -66,51 +145,62 @@ ul.toc li { margin: 4px 0; }
 <td>Validé</td>
 </tr>
 <tr>
-<td>Le compte rendu est édité</td>
+<td>Le compte rendu est émis</td>
 <td>Biologiste ou secrétariat</td>
 <td>Validation biologique ou Comptes rendus</td>
 <td>Rendu (imprimé)</td>
 </tr>
 <tr>
 <td>Le compte rendu est remis</td>
-<td>Secrétariat</td>
+<td>Secrétariat / accueil</td>
 <td>Comptes rendus, <strong>Enregistrer une remise</strong></td>
 <td>—</td>
 </tr>
 </tbody>
 </table>
 <p>Vue d'ensemble :</p>
-<div class="diagram"><img src="img/diagramme-ee11ab4e24bd84b3.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-44fe8c0981f60530.png" alt="Diagramme"></div>
 
-<p>Raccourcis valables dans tous les écrans de ce chapitre (réglables dans la liste des raccourcis, F1) : <strong>Ctrl+6</strong> ouvre Saisie des résultats, <strong>Ctrl+7</strong> Validation biologique, <strong>Ctrl+8</strong> Comptes rendus ; <strong>F5</strong> actualise l'écran ; <strong>Ctrl+F</strong> place le curseur dans la première zone de recherche de l'écran ; <strong>Ctrl+P</strong> imprime la liste principale de l'écran ; <strong>Ctrl+S</strong> appuie sur le bouton <strong>Enregistrer</strong> de l'écran quand il en a un.</p>
+<p>Raccourcis valables dans tous les écrans de ce chapitre : <strong>Ctrl+6</strong> ouvre Saisie des résultats, <strong>Ctrl+7</strong> Validation biologique, <strong>Ctrl+8</strong> Comptes rendus ; <strong>F5</strong> actualise l'écran ; <strong>Ctrl+F</strong> place le curseur dans la première zone de recherche de l'écran ; <strong>Ctrl+P</strong> imprime la liste principale de l'écran ; <strong>Ctrl+S</strong> appuie sur le bouton <strong>Enregistrer</strong> de l'écran quand il en a un ; <strong>F1</strong> ouvre l'aide de l'écran ; <strong>Maj+F1</strong> affiche la liste des raccourcis (réglables).</p>
 <hr />
 <h3 id="entry">Saisie des résultats</h3>
-<p>Écran de la paillasse : on y ouvre un dossier (par scan du tube ou par la liste), on tape les valeurs, on enregistre, puis on valide techniquement. On y imprime aussi la fiche de paillasse.</p>
+<h4>À quoi sert cet écran</h4>
+<p>C'est l'écran de la paillasse. On y ouvre un dossier (par scan du tube ou depuis la liste), on tape les valeurs, on enregistre, puis on valide techniquement. On y marque une analyse « Non fait », on efface une valeur tapée par erreur, on ajoute un commentaire technique, on consulte les antériorités et on imprime la fiche de paillasse. Un biologiste y corrige aussi une valeur déjà validée.</p>
+<h4>Fonctionnalités</h4>
+<ul>
+<li><strong>Liste « À saisir · n »</strong> (à gauche) : un dossier par ligne avec le NOM (rouge si urgent), une pastille, « n° · <em>n</em> analyses » et l'échéance (rouge si dépassée). Bulle : priorité, « Reçu … », « Échéance … », « Secteurs : … ». La pastille indique « <em>saisis</em> / <em>total</em> », « Retard », ou <strong>« À valider »</strong> quand toutes les valeurs sont saisies : le dossier reste dans la liste jusqu'à sa validation technique, pour qu'on ne l'oublie pas.</li>
+<li><strong>Actualiser</strong> (bouton icône au-dessus de la liste) : recharge la liste.</li>
+<li>Zone <strong>N° de dossier ou code-barres</strong> : la frappe filtre la liste ; <strong>Entrée</strong> ou <strong>Ouvrir</strong> ouvre le dossier (n° exact ou code-barres d'un tube).</li>
+<li>Puces de secteur : <strong>Tous</strong> et une puce par secteur, pour ne voir que les dossiers d'une discipline.</li>
+<li><strong>Fiche de paillasse</strong> (pied de la liste) : imprime la liste des mesures à faire (fenêtre <strong>Secteur</strong>, <strong>Automate</strong>, <strong>Urgences seulement</strong>, <strong>Imprimer</strong>).</li>
+<li><strong>Carte du patient</strong> : nom, sexe · âge · « né(e) le » · « Grossesse en cours », pastilles de priorité, « Échéance · … » ou « Échéance dépassée · … », et « <em>n</em> sur <em>m</em> saisi(s) ».</li>
+<li><strong>Grille des résultats</strong> : <strong>Paramètre</strong> (✎ s'il y a un commentaire ; ƒ pour un paramètre calculé), <strong>Résultat</strong> (case de saisie), <strong>Indic.</strong> (« ▲ Haut », « ▼ Bas », « ▲▲ Critique », « ▼▼ Critique », « ◆ Anormal », suivis des autres signalements), <strong>Unité</strong>, <strong>Valeurs usuelles</strong>, <strong>Antériorité</strong> (dernière valeur validée et sa date), <strong>Origine</strong> (nom de l'automate, ou « Manuel »). Lignes de rubrique « CODE · SECTEUR ». La colonne <strong>Commentaire technique</strong> est masquée à l'écran mais imprimée avec <strong>Ctrl+P</strong>.</li>
+<li>Bulles d'aide : sur <strong>Indic.</strong>, l'« Alarme automate » transmise par l'analyseur ; sur <strong>Paramètre</strong>, les « Non-conformités constatées » du tube et le commentaire technique.</li>
+<li>Bandeau des touches : <strong>Entrée</strong> ligne suivante, <strong>Maj+Entrée</strong> ligne précédente, <strong>F3</strong> commentaire technique, <strong>Double-clic</strong> antériorité : courbe.</li>
+<li><strong>Plus d'actions</strong> :</li>
+<li><strong>Non fait…</strong> : marque la ligne non réalisée avec un motif (3 caractères au moins, 500 au plus) imprimé sur le compte rendu à la place du résultat (droit de saisir ; ligne pas encore validée).</li>
+<li><strong>Effacer la valeur</strong> : retire une valeur (ou un « Non fait ») tapée par erreur ; la ligne redevient à saisir (droit de saisir, après confirmation).</li>
+<li><strong>Corriger une valeur validée…</strong> : corrige une valeur déjà validée biologiquement, imprimée ou non, avec la nouvelle valeur et un motif de 15 caractères au moins. Réservé à qui a à la fois le droit de dévalider et celui de modifier un résultat, avec la qualification de biologiste pour le secteur ; si la valeur a déjà été imprimée, il faut aussi le droit de rectifier les comptes rendus.</li>
+<li><strong>Commentaire technique…</strong> (ou <strong>F3</strong>) : commentaire de la ligne (2000 caractères), enregistré avec les valeurs et imprimé sur le compte rendu ; vide = retiré.</li>
+<li><strong>Antériorités</strong> : courbe et tableau des valeurs validées du paramètre (droit de consulter les résultats).</li>
+<li>Texte « <em>n</em> valeurs restent à saisir » ou « Tout est saisi ». Quand la barre est trop étroite pour lui (fenêtre réduite, libellés arabes), il passe sur sa propre ligne au-dessus des boutons, pour rester lisible.</li>
+<li><strong>Validation technique</strong> : valide techniquement toutes les valeurs saisies du dossier (droit de valider techniquement ; actif dès qu'une valeur est au statut Saisi, grisé de nouveau quand tout est validé). Les valeurs déjà validées techniquement gardent le nom et l'heure du premier contrôle.</li>
+<li><strong>Enregistrer</strong> (Ctrl+S) : enregistre les valeurs tapées (droit de saisir).</li>
+<li>Fenêtres automatiques après enregistrement : « Résultats critiques » (valeur critique) et « Analyses en cascade » (règle de cascade déclenchée).</li>
+</ul>
 <p><strong>Qui y a accès</strong></p>
 <ul>
 <li>Le menu apparaît pour toute personne qui a le droit de saisir des résultats : Technicien de laboratoire, Biologiste, Biologiste responsable, Administrateur.</li>
-<li><strong>Enregistrer</strong> et <strong>Fiche de paillasse</strong> : même droit (saisir des résultats). Grisés sinon.</li>
-<li><strong>Validation technique</strong> : droit de valider techniquement (Technicien, Biologiste, Biologiste responsable, Administrateur).</li>
-<li>Modifier une valeur déjà validée techniquement : droit « modifier un résultat », que seuls le Biologiste, le Biologiste responsable et l'Administrateur possèdent. Le technicien ne l'a pas par défaut.</li>
+<li><strong>Enregistrer</strong>, <strong>Non fait…</strong>, <strong>Effacer la valeur</strong>, <strong>Fiche de paillasse</strong> : même droit (saisir des résultats).</li>
+<li><strong>Validation technique</strong> : droit de valider techniquement (Technicien de laboratoire, Biologiste, Biologiste responsable, Administrateur).</li>
+<li>Modifier une valeur déjà validée techniquement : droit « modifier un résultat » (Biologiste, Biologiste responsable, Administrateur). Le technicien ne l'a pas par défaut.</li>
+<li><strong>Corriger une valeur validée…</strong> : droits « dévalider » et « modifier un résultat » (Biologiste, Biologiste responsable, Administrateur), plus « rectifier » si la valeur est déjà imprimée, plus la qualification de biologiste pour le secteur.</li>
 <li><strong>Antériorités</strong> : droit de consulter les résultats.</li>
-</ul>
-<p><strong>L'écran</strong></p>
-<ul>
-<li>À gauche, la liste <strong>À saisir (n)</strong> : un dossier par ligne avec <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Analyses</strong> (nombre d'analyses en attente), <strong>Reçu</strong> (date et heure de réception), <strong>Secteurs</strong>. Les urgences sont en rouge et en gras et passent en tête. Bouton <strong>Actualiser</strong> au-dessus.</li>
-<li>En haut à droite, la zone de scan <strong>N° de dossier / Code-barres</strong>, le bouton <strong>Ouvrir</strong> et, à l'extrémité, le bouton <strong>Fiche de paillasse</strong>.</li>
-<li>Sous la zone de scan, un bandeau patient : nom, sexe, âge, date de naissance, mention « Grossesse en cours » le cas échéant ; à droite le n° de dossier, la priorité en majuscules (URGENT, URGENCE VITALE) et l'<strong>Échéance</strong>.</li>
-<li>La grille des résultats, colonnes <strong>Paramètre</strong>, <strong>Résultat</strong>, <strong>Signalements</strong>, <strong>Unité</strong>, <strong>Valeurs usuelles</strong>, <strong>Antériorité</strong> (dernière valeur validée du patient et sa date), <strong>Commentaire technique</strong>.</li>
-<li>Les titres de rubrique sont en gras italique sur fond gris.</li>
-<li>Les paramètres calculés portent le signe « ƒ » et ont une case grise : on ne les tape pas.</li>
-<li>Une valeur anormale est colorée avec un symbole : ↓ bas, ↑ élevé, ↓↓ critique bas, ↑↑ critique élevé, * anormal (réponse codée).</li>
-<li>Autres signalements possibles : CIQ (contrôle interne hors limites), Δ (écart au delta-check), ! (échantillon non conforme), × (dilué), R (résultat rectifié), ST (sous-traité), ≷ (hors domaine de mesure). Quand un de ces signalements est présent, il remplace la flèche dans la colonne ; la couleur reste.</li>
-<li>En passant la souris sur la colonne <strong>Signalements</strong>, on lit l'« Alarme automate » transmise par l'analyseur ; sur le <strong>Paramètre</strong>, les « Non-conformités constatées » du tube.</li>
-<li>En bas : <strong>Enregistrer</strong>, <strong>Validation technique</strong>, <strong>Antériorités</strong> et une ligne d'état (messages en couleur).</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <ol>
 <li><strong>Ouvrir un dossier en scannant un tube</strong></li>
-<li>Le curseur est déjà dans la zone <strong>N° de dossier / Code-barres</strong>.</li>
+<li>Le curseur est déjà dans la zone <strong>N° de dossier ou code-barres</strong>.</li>
 <li>Scannez l'étiquette du tube, ou tapez le n° de dossier, puis <strong>Entrée</strong> (ou cliquez <strong>Ouvrir</strong>).</li>
 <li>
 <p>Le dossier s'ouvre et le curseur se place sur la première case <strong>Résultat</strong> vide.
@@ -119,44 +209,65 @@ ul.toc li { margin: 4px 0; }
 <li>
 <p><strong>Ouvrir un dossier depuis la liste À saisir</strong></p>
 </li>
-<li>Cliquez sur la ligne (ou déplacez-vous avec les flèches). Le dossier s'ouvre à droite.</li>
+<li>Cliquez sur la ligne (ou déplacez-vous avec les flèches). Le dossier s'ouvre à droite. Une puce de secteur réduit la liste à une discipline.</li>
 <li>À l'arrivée sur l'écran, le premier dossier de la liste (urgent d'abord) est ouvert automatiquement.</li>
 <li>
-<p>Si des valeurs tapées n'ont pas été enregistrées, l'application demande : « Des modifications n'ont pas été enregistrées. Voulez-vous continuer ? ». Répondez <strong>Non</strong> pour rester sur le dossier en cours.</p>
+<p>Si des valeurs tapées n'ont pas été enregistrées, l'application demande : « Des modifications n'ont pas été enregistrées. Voulez-vous continuer ? ». Répondez <strong>Non</strong> pour rester sur le dossier en cours. La même question est posée en quittant l'écran.</p>
 </li>
 <li>
 <p><strong>Saisir les valeurs d'un dossier</strong></p>
 </li>
-<li>Tapez la valeur dans <strong>Résultat</strong>, puis <strong>Entrée</strong> : le curseur descend à la ligne suivante modifiable (les lignes calculées et les rubriques sont sautées). Après la dernière ligne, le curseur va sur <strong>Enregistrer</strong>.</li>
+<li>Tapez la valeur dans <strong>Résultat</strong>, puis <strong>Entrée</strong> : le curseur descend à la ligne suivante modifiable (les lignes calculées et les rubriques sont sautées). <strong>Maj+Entrée</strong> remonte. Après la dernière ligne, le curseur va sur <strong>Enregistrer</strong>.</li>
 <li>Formats acceptés :<ul>
 <li>nombre : virgule ou point (« 5,2 » ou « 5.2 ») ;</li>
 <li>valeur censurée : « &lt;5 », « &gt;1000 », « &lt;=5 », « ≥ 5 »… ;</li>
 <li>titre : « 1/320 », « 1:320 » ou « 320 » ;</li>
-<li>réponse codée (positif/négatif, croix…) : tapez le <strong>code</strong> de la réponse tel qu'il est défini au catalogue (majuscules indifférentes) ; aucune liste déroulante n'est proposée (à vérifier avec le catalogue) ;</li>
+<li>réponse codée (positif/négatif, croix…) : tapez le <strong>code</strong> de la réponse tel qu'il est défini au catalogue (majuscules indifférentes) ; aucune liste déroulante n'est proposée ;</li>
 <li>texte libre pour les paramètres de type texte.</li>
 </ul>
 </li>
-<li>Tapez si besoin un <strong>Commentaire technique</strong>. Attention : un commentaire technique saisi ici est <strong>imprimé sur le compte rendu</strong>.</li>
+<li>Au besoin, ajoutez un commentaire technique : <strong>F3</strong> ou <strong>Plus d'actions</strong> › <strong>Commentaire technique…</strong>. Attention : il est <strong>imprimé sur le compte rendu</strong>.</li>
 <li>Cliquez <strong>Enregistrer</strong> (ou <strong>Ctrl+S</strong>).</li>
+<li>L'écran se recharge : paramètres calculés recalculés, interprétation, antériorité, delta-check et signalements mis à jour. La ligne d'état indique « <em>n</em> · Enregistré. », ou la liste des valeurs refusées et pourquoi.</li>
 <li>
-<p>L'écran se recharge : paramètres calculés recalculés, interprétation, antériorité, delta-check et signalements mis à jour. La ligne d'état indique « n · Enregistré. », ou la liste des valeurs refusées et pourquoi.</p>
+<p>Quand toutes les valeurs sont saisies, la pastille du dossier passe à « À valider » : il reste dans la liste jusqu'à la validation technique.</p>
 </li>
 <li>
-<p><strong>Corriger une valeur avant validation technique</strong>
-   - Retapez la valeur et <strong>Enregistrer</strong>. Tant que la valeur n'est pas validée techniquement, la correction fait partie de la saisie.</p>
+<p><strong>Marquer une analyse « Non fait »</strong></p>
+</li>
+<li>Placez-vous sur la ligne, <strong>Plus d'actions</strong> › <strong>Non fait…</strong>.</li>
+<li>Répondez à « Pourquoi « … » n'a-t-il pas été réalisé ? Le motif est imprimé sur le compte rendu à la place du résultat. » (3 caractères au moins).</li>
+<li>
+<p>La ligne est enregistrée « Non fait » (les autres valeurs tapées sont enregistrées avec elle) et suit la validation comme une valeur.</p>
 </li>
 <li>
-<p><strong>Corriger une valeur déjà validée techniquement</strong>
+<p><strong>Effacer une valeur tapée par erreur</strong></p>
+</li>
+<li>Placez-vous sur la ligne, <strong>Plus d'actions</strong> › <strong>Effacer la valeur</strong>.</li>
+<li>
+<p>Confirmez « Effacer la valeur « … » de « … » ? La ligne redevient à saisir. ».
+   - Vider la case puis <strong>Enregistrer</strong> ne retire rien : une case vide est ignorée. Utilisez <strong>Effacer la valeur</strong>.</p>
+</li>
+<li>
+<p><strong>Corriger une valeur avant validation technique</strong> : retapez la valeur et <strong>Enregistrer</strong>. Tant que la valeur n'est pas validée techniquement, la correction fait partie de la saisie.</p>
+</li>
+<li>
+<p><strong>Corriger une valeur déjà validée techniquement (pas encore validée biologiquement)</strong>
    - Possible seulement avec le droit « modifier un résultat » (biologistes). Sinon : « … : ce résultat est déjà validé techniquement, le modifier demande le droit « modifier un résultat ». »
    - La valeur corrigée repasse au statut Saisi : il faut refaire la <strong>Validation technique</strong>.</p>
 </li>
 <li>
-<p><strong>Corriger une valeur validée biologiquement mais pas encore imprimée</strong></p>
+<p><strong>Corriger une valeur validée biologiquement, imprimée ou non</strong> (biologiste)</p>
 </li>
-<li>Le biologiste la dévalide dans Validation biologique (bouton <strong>Dévalider</strong>, motif obligatoire).</li>
+<li>Ouvrez le dossier, placez-vous sur la ligne validée (le curseur n'entre pas dans la case : « Ce résultat est validé : toute modification doit passer par une rectification motivée. »).</li>
+<li><strong>Plus d'actions</strong> › <strong>Corriger une valeur validée…</strong>.</li>
+<li>Tapez la nouvelle valeur dans « Valeur corrigée pour « … » (valeur validée : … …) : ».</li>
+<li>Saisissez le motif (« Motif de la correction de « … ». Il est conservé avec l'ancienne valeur dans l'historique du résultat. », 15 caractères au moins).</li>
+<li>Un message confirme : « « … » est corrigé. L'ancienne valeur est conservée dans l'historique du résultat. La nouvelle valeur doit être validée techniquement puis biologiquement ; si l'ancienne avait été imprimée, le compte rendu suivant devra être émis comme rectification (Comptes rendus › Émettre une rectification). » La ligne d'état indique « « … » corrigé — à revalider ».</li>
+<li>Faites la <strong>Validation technique</strong>, puis la validation biologique. Les paramètres calculés qui utilisaient la valeur (par exemple un LDL calculé après correction du cholestérol) sont rouverts et recalculés. Une valeur corrigée critique repasse par l'appel au prescripteur.</li>
 <li>
-<p>La valeur revient validée techniquement ; un biologiste la corrige ici, puis <strong>Validation technique</strong>, puis nouvelle validation biologique.
-   - Dans la grille, une valeur validée refuse le curseur : « Ce résultat est validé : toute modification doit passer par une rectification motivée. »</p>
+<p>Si l'ancienne valeur était imprimée : <strong>Comptes rendus</strong> › <strong>Plus d'actions</strong> › <strong>Émettre une rectification…</strong> (nature « Correction de résultat »). Le compte rendu rectifié nomme les paramètres corrigés.
+   - Pour seulement retirer une validation sans changer la valeur, utilisez <strong>Dévalider</strong> dans <strong>Validation biologique</strong> (avant impression).</p>
 </li>
 <li>
 <p><strong>Faire la validation technique d'un dossier</strong></p>
@@ -164,93 +275,112 @@ ul.toc li { margin: 4px 0; }
 <li>Le dossier ouvert, cliquez <strong>Validation technique</strong> (actif dès qu'au moins une valeur est au statut Saisi).</li>
 <li>Confirmez (<strong>Oui</strong> ; le bouton par défaut est <strong>Non</strong>).</li>
 <li>
-<p>Toutes les valeurs saisies du dossier, tous secteurs confondus, passent validées techniquement. Une analyse dont toutes les lignes sont validées techniquement (ou « Non fait ») passe à l'étape suivante et apparaît dans Validation biologique.
-   - On ne peut pas valider techniquement une seule ligne : c'est tout le dossier.</p>
+<p>« Opération effectuée. » : toutes les valeurs saisies du dossier, tous secteurs confondus, passent validées techniquement. Une analyse dont toutes les lignes sont validées techniquement (ou « Non fait ») passe à l'étape suivante et apparaît dans <strong>Validation biologique</strong>. Le dossier quitte la liste <strong>À saisir</strong> quand plus rien n'attend, et le bouton <strong>Validation technique</strong> redevient gris.
+   - On ne peut pas valider techniquement une seule ligne : c'est tout le dossier.
+   - Une valeur arrivée tard (par exemple d'un second automate) se valide de la même façon : seule la nouvelle valeur reçoit votre nom et l'heure ; celles qu'un collègue avait déjà validées gardent son nom et son heure de contrôle.</p>
 </li>
 <li>
 <p><strong>Consulter les antériorités d'un paramètre</strong></p>
-</li>
+<ol>
 <li>Placez-vous sur la ligne d'un paramètre numérique.</li>
 <li>Cliquez <strong>Antériorités</strong>, ou double-cliquez dans la case <strong>Antériorité</strong>.</li>
-<li>La fenêtre « Antériorités — paramètre (unité) » montre la courbe des 30 dernières valeurs validées du patient avec les valeurs usuelles, et en dessous un tableau <strong>Date</strong>, <strong>Valeur</strong>, <strong>N° de dossier</strong> (le plus récent en premier). Les valeurs hors valeurs usuelles sont en couleur.</li>
+<li>La fenêtre « Antériorités — paramètre (unité) » montre « <em>n</em> valeur(s) validée(s) · valeurs usuelles … », la courbe des 30 dernières valeurs validées du patient avec les valeurs usuelles, et en dessous un tableau <strong>Date</strong>, <strong>Valeur</strong>, <strong>N° de dossier</strong> (le plus récent en premier). Les valeurs hors valeurs usuelles sont en couleur.</li>
 <li>La valeur en cours (tapée, même non enregistrée) apparaît comme « Valeur en cours, non validée ».</li>
-<li>
-<p><strong>Fermer</strong> (ou Échap).
-   - Sans historique : « Aucune antériorité ». Le bouton est grisé sur une réponse codée, un texte ou une rubrique. Les dossiers fusionnés du même patient sont inclus.</p>
+<li><strong>Fermer</strong> (ou Échap).
+- Sans historique : « Aucune antériorité ». Le bouton est grisé sur une réponse codée, un texte ou une rubrique. Les dossiers fusionnés du même patient sont inclus.</li>
+</ol>
 </li>
 <li>
 <p><strong>Imprimer la fiche de paillasse</strong></p>
-</li>
+<ol>
 <li>Cliquez <strong>Fiche de paillasse</strong>.</li>
-<li>Choisissez le <strong>Secteur</strong> (« Tous les secteurs » par défaut ; chaque secteur indique « n en attente »).</li>
+<li>Choisissez le <strong>Secteur</strong> (« Tous les secteurs » par défaut ; chaque secteur indique « <em>n</em> en attente »).</li>
 <li>Choisissez l'<strong>Automate</strong> (« Tous les automates », ou un automate du secteur ou non rattaché à un secteur).</li>
 <li>Cochez <strong>Urgences seulement</strong> si besoin.</li>
-<li>
-<p>Cliquez <strong>Imprimer</strong> : la fiche s'ouvre en PDF dans votre lecteur habituel, d'où vous l'imprimez. La ligne d'état indique « Fiche de paillasse — n ligne(s) ».
-   - La fiche liste les analyses dont le tube est reçu et dont le résultat n'est pas encore saisi, urgences en tête puis par ordre de réception, avec n° de dossier, code-barres du tube, patient, non-conformités du tube et les paramètres à mesurer (jamais les calculés). Elle porte l'heure d'impression et le nom de l'imprimeur ; si la liste est trop longue, la fiche indique qu'elle est tronquée. Le dernier secteur choisi est reproposé la fois suivante.</p>
+<li>Cliquez <strong>Imprimer</strong> : la fiche s'ouvre en PDF dans votre lecteur habituel, d'où vous l'imprimez. La ligne d'état indique « Fiche de paillasse — <em>n</em> ligne(s) ».
+- « La fiche liste les analyses dont le tube est reçu et dont le résultat n'est pas encore saisi, urgences en tête puis par ordre de réception. » Elle donne le n° de dossier, le code-barres du tube, le patient, les non-conformités du tube et les paramètres à mesurer (jamais les calculés). Elle porte l'heure d'impression et le nom de l'imprimeur ; si la liste est trop longue, la fiche indique qu'elle est tronquée. Le dernier secteur choisi est reproposé la fois suivante.</li>
+</ol>
 </li>
 <li>
 <p><strong>Réagir à un résultat critique à l'enregistrement</strong></p>
 <ul>
 <li>Si une valeur enregistrée est critique, une fenêtre « Résultats critiques » s'ouvre : « Résultats critiques non communiqués », la liste des paramètres et valeurs, et le rappel « Un résultat critique doit être communiqué au prescripteur avant sa validation. »</li>
-<li>Prévenez le biologiste : l'appel au prescripteur et sa trace se font dans <strong>Validation biologique</strong>, bouton <strong>Résultats critiques</strong>. Il n'y a pas de bouton d'appel dans cet écran.</li>
+<li>Prévenez le biologiste : l'appel au prescripteur et sa trace se font dans <strong>Validation biologique</strong>, bouton <strong>Résultats critiques…</strong>. Il n'y a pas de bouton d'appel dans cet écran.</li>
 </ul>
 </li>
 <li>
 <p><strong>Réagir à une analyse en cascade proposée</strong></p>
 <ul>
 <li>Si une règle de cascade se déclenche (par exemple une TSH anormale qui appelle une T4), une fenêtre « Analyses en cascade » liste les analyses proposées.</li>
-<li>L'application <strong>n'ajoute pas</strong> l'analyse au dossier, même quand la règle est réglée en « ajout automatique ». Il faut l'ajouter vous-même au dossier, depuis l'écran du dossier (à vérifier selon le chapitre Accueil).</li>
+<li>L'application <strong>n'ajoute pas</strong> l'analyse au dossier, même quand la règle est réglée en « ajout automatique ». Ajoutez-la vous-même au dossier, depuis l'écran du dossier.</li>
 </ul>
 </li>
 </ol>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
 <li>Une ligne dont le tube n'est pas encore réceptionné est verrouillée : « Tube pas encore réceptionné pour : … Ces lignes sont verrouillées jusqu'à la réception. » Réceptionnez d'abord le tube.</li>
-<li>Une analyse annulée n'apparaît plus ; si on tente d'y saisir : « … : cette analyse est annulée, aucun résultat ne peut y être saisi. »</li>
-<li>Un paramètre calculé ne se tape pas : « Le paramètre … est calculé : sa valeur ne se saisit pas. » Il est recalculé à chaque enregistrement. Si la formule ne s'applique pas (ex. LDL de Friedewald avec triglycérides trop élevés), la ligne passe « Non fait » avec le commentaire « Non calculable avec ces valeurs : dosage direct requis ».</li>
-<li>Valeur non numérique : « « … » n'est pas une valeur numérique valide. » Valeur hors limites techniques : « La valeur … est techniquement impossible pour ce paramètre. » Réponse codée inconnue : « « … » ne fait pas partie des réponses autorisées pour ce paramètre. » Titre : « Le titre doit être un entier positif. »</li>
+<li>Une analyse annulée ne reçoit plus de résultat.</li>
+<li>Un paramètre calculé ne se tape pas ; il est recalculé à chaque enregistrement. Si la formule ne s'applique pas (ex. LDL de Friedewald avec triglycérides trop élevés), la ligne passe « Non fait » avec le commentaire « Non calculable avec ces valeurs : dosage direct requis ».</li>
 <li>Une valeur hors du domaine de mesure de la technique est enregistrée automatiquement en valeur censurée (« &lt; limite basse » ou « &gt; limite haute ») avec le signalement ≷.</li>
-<li>Effacer une case et enregistrer ne supprime pas la valeur : les cases vides sont ignorées. Il n'est pas possible de marquer une analyse « Non fait » depuis cet écran.</li>
+<li>Autres signalements possibles dans <strong>Indic.</strong> : CIQ (contrôle interne hors limites), Δ (écart au delta-check), ! (échantillon non conforme), × (dilué), R (résultat rectifié), ST (sous-traité), ≷ (hors domaine de mesure). Ils s'affichent à côté de la flèche d'interprétation, qui reste visible.</li>
 <li>Seules les lignes modifiées sont envoyées ; si rien n'a changé : « Aucun élément sélectionné. »</li>
 <li>Delta-check : si la valeur s'écarte de la précédente au-delà du pourcentage réglé au catalogue (et dans la fenêtre de jours réglée), le signalement Δ est posé.</li>
 <li>Un tube accepté avec une non-conformité (hémolyse…) fait porter le signalement « ! » à tous ses résultats ; il sera signalé au compte rendu.</li>
+<li>Une valeur corrigée après validation garde l'ancienne valeur, son auteur et le motif dans l'historique du résultat ; la nouvelle valeur refait tout le circuit de validation.</li>
 <li>Chaque ouverture de dossier est tracée dans le journal des accès (loi 09-08).</li>
 <li>Le lot de réactif en service est rattaché automatiquement à chaque nouvelle valeur quand le stock l'identifie sans ambiguïté.</li>
 </ul>
 <p><strong>Flux</strong></p>
 <p>Réception des échantillons → <strong>Saisie des résultats</strong> (ou arrivée par l'automate) → <strong>Validation technique</strong> → Validation biologique. Une analyse à refaire se renvoie à la paillasse depuis « Consultation d'un dossier », bouton « Repasser l'analyse ».</p>
 <p>Saisie et enregistrement :</p>
-<div class="diagram"><img src="img/diagramme-4c1549fc31e6e87b.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-6ed1f2c557622bee.png" alt="Diagramme"></div>
 
 <p>Validation technique et corrections :</p>
-<div class="diagram"><img src="img/diagramme-a90aaeb14019beca.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-3ad3c9b1d5683c6c.png" alt="Diagramme"></div>
 
 <p>Fiche de paillasse :</p>
 <div class="diagram"><img src="img/diagramme-bf66e0ff0b62c21e.png" alt="Diagramme"></div>
 
 <hr />
 <h3>Résultats reçus des automates (écran Automates)</h3>
-<p>Les automates connectés envoient leurs valeurs directement dans les dossiers. Ce paragraphe ne décrit que ce qui concerne les résultats ; le réglage des interfaces relève du chapitre Administration.</p>
+<h4>À quoi sert cet écran</h4>
+<p>Les automates connectés envoient leurs valeurs directement dans les dossiers. L'écran <strong>Automates</strong> montre chaque liaison, sa table de correspondance et le <strong>Journal des messages</strong> : on y voit ce qui est arrivé, ce qui a été retenu ou refusé et pourquoi, et on y réimporte une transmission retenue. On peut aussi tester une trame sans rien enregistrer. Ce paragraphe décrit ce qui concerne les résultats ; le réglage complet des interfaces, la fenêtre <strong>Tester une trame</strong> et l'interface COBAS INTEGRA 400 plus sont décrits dans le chapitre Administration (section <strong>Automates</strong>).</p>
+<h4>Fonctionnalités</h4>
+<ul>
+<li>Cartes <strong>Automates</strong>, <strong>Correspondances</strong> et <strong>Journal des messages</strong> de l'interface sélectionnée.</li>
+<li><strong>Nouvelle interface</strong>, <strong>Modifier l'interface</strong>, <strong>Table de correspondance</strong> : réglage de la liaison et des codes (droit de configurer les automates ; voir le chapitre Administration).</li>
+<li><strong>Tester une trame…</strong> : ouvre la fenêtre de test (droits de configurer les automates et de consulter les résultats).</li>
+<li><strong>Activer la liaison</strong> / <strong>Désactiver la liaison</strong> : démarre ou coupe la liaison, avec un motif (droit de démarrer / arrêter).</li>
+<li><strong>Voir la trame brute</strong> : affiche le texte reçu de la ligne du journal (droit de consulter les résultats).</li>
+<li><strong>Réimporter</strong> : rejoue une transmission en échec, partielle ou retenue (droit « rejouer les messages »).</li>
+<li><strong>Purger le journal</strong> : supprime les trames plus anciennes que la durée de conservation, avec un motif (droit de maintenance ; voir le chapitre Administration).</li>
+<li><strong>Actualiser</strong> : recharge l'écran.</li>
+</ul>
 <p><strong>Qui y a accès</strong></p>
 <ul>
-<li>Écran <strong>Automates</strong> : droit de consulter les automates (Technicien, Biologiste, Biologiste responsable, Responsable qualité, Administrateur).</li>
-<li><strong>Réimporter</strong> une transmission : droit « rejouer les messages », détenu par défaut par le Biologiste responsable et l'Administrateur seulement.</li>
+<li>Écran <strong>Automates</strong> : droit de consulter les automates (Technicien de laboratoire, Biologiste, Biologiste responsable, Responsable qualité, Administrateur).</li>
+<li><strong>Réimporter</strong> une transmission : droit « rejouer les messages », détenu par défaut par le Technicien de laboratoire, le Biologiste, le Biologiste responsable et l'Administrateur. La paillasse peut donc accepter elle-même les résultats retenus.</li>
+<li><strong>Tester une trame…</strong> : droit de configurer les automates (Biologiste responsable, Administrateur).</li>
 </ul>
 <p><strong>Ce qui se passe à l'arrivée d'une transmission</strong></p>
 <ul>
-<li>Si l'interface est en <strong>acceptation automatique</strong> : les valeurs sont enregistrées dans le dossier au statut Saisi, avec le même traitement qu'une saisie manuelle (calculs, interprétation, antériorité, delta-check, non-conformité du tube). Les alarmes de l'automate sont conservées si l'interface le prévoit et s'affichent dans « Alarme automate ».</li>
+<li>Si l'interface est en <strong>acceptation automatique</strong> : les valeurs sont enregistrées dans le dossier au statut Saisi, avec le même traitement qu'une saisie manuelle (calculs, interprétation, antériorité, delta-check, non-conformité du tube). Les alarmes de l'automate sont conservées si l'interface le prévoit et s'affichent dans « Alarme automate ». La colonne <strong>Origine</strong> de la saisie montre le nom de l'automate.</li>
 <li>Si l'acceptation automatique est désactivée (réglage par défaut) : rien n'est enregistré ; la transmission reste dans le <strong>Journal des messages</strong> au statut « En attente d'acceptation » avec la mention « Transmission retenue : l'acceptation automatique est désactivée sur cette interface. »</li>
+<li>Si le tube n'est pas encore réceptionné, si l'automate est hors service, en maintenance, en qualification ou si son étalonnage est échu, la transmission est retenue au journal avec la raison ; elle se réimporte une fois le problème réglé.</li>
 <li>Dans tous les cas les valeurs arrivent en statut Saisi : le technicien doit faire la <strong>Validation technique</strong> dans Saisie des résultats.</li>
 </ul>
+<h4>Interface COBAS INTEGRA 400 plus</h4>
+<p>Le Roche COBAS INTEGRA 400 plus a son propre protocole : c'est le LIS qui l'interroge (résultats, tubes sans demande) et lui envoie la liste de travail. Dans sa table de correspondance, le <strong>code automate</strong> est le <strong>numéro de test</strong> de l'application Roche : « 031 », « 31 » ou « 0-031 » désignent le même test, et le résultat qui revient en « 031 » retrouve sa ligne quelle que soit l'écriture choisie. Le préréglage, la table des numéros de test de la base de démonstration, les refus à l'enregistrement de la table et le bouton <strong>Exemple de trame</strong> sont décrits au chapitre Administration, section <strong>Automates</strong>, « Interface COBAS INTEGRA 400 plus ».</p>
+<p><strong>Fenêtre « Tester une trame »</strong> : collez une trame (ou chargez la dernière reçue, ou <strong>Exemple de trame</strong> pour un INTEGRA), puis <strong>Analyser la trame</strong> : la grille dit, pour chaque résultat, le tube, le dossier et le patient, le paramètre trouvé et <strong>Ce que ferait le LIS</strong>. Rien n'est enregistré. Procédure complète : chapitre Administration, section <strong>Automates</strong>, scénario « Tester une trame ».</p>
 <p><strong>Scénarios</strong></p>
 <ol>
 <li><strong>Accepter une transmission retenue ou en échec</strong></li>
 <li>Ouvrez <strong>Automates</strong>, sélectionnez l'interface, puis la ligne dans <strong>Journal des messages</strong>.</li>
 <li>Au besoin, <strong>Voir la trame brute</strong> pour contrôler le contenu.</li>
 <li>Cliquez <strong>Réimporter</strong> et confirmez : « Réimporter cette transmission ? Les valeurs de l'automate seront enregistrées au dossier du patient. »</li>
-<li>Un message indique le nombre de valeurs enregistrées, ou « Réimportation effectuée, aucune valeur enregistrée : lisez les anomalies de la ligne. »
-   - Seules les transmissions en échec, partielles ou retenues peuvent être réimportées.</li>
+<li>Un message indique « Réimportation effectuée : <em>n</em> valeur(s) enregistrée(s). », ou « Réimportation effectuée, aucune valeur enregistrée : lisez les anomalies de la ligne. »
+   - Seules les transmissions reçues en échec, partielles ou retenues peuvent être réimportées.</li>
+<li><strong>Vérifier une nouvelle liaison INTEGRA avant de l'activer</strong> : voir le chapitre Administration, section <strong>Automates</strong>, « Mettre en service un INTEGRA ».</li>
 </ol>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
@@ -260,53 +390,65 @@ ul.toc li { margin: 4px 0; }
 </ul>
 <p><strong>Flux</strong></p>
 <p>Automate → (Réimporter si retenue) → Saisie des résultats, <strong>Validation technique</strong> → Validation biologique.</p>
-<div class="diagram"><img src="img/diagramme-48ebaa7784c2b9a7.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-ce210379e9476ef7.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="validation">Validation biologique</h3>
-<p>Écran du biologiste : il liste les dossiers dont des résultats validés techniquement attendent la validation biologique, permet de libérer les résultats, de tracer l'appel des résultats critiques, de dévalider et d'éditer le compte rendu.</p>
+<h4>À quoi sert cet écran</h4>
+<p>C'est l'écran du biologiste. Il liste les dossiers dont des résultats validés techniquement attendent la validation biologique, montre pour chacun le contexte utile (anomalies, retard, critiques, contrôle qualité, renseignements cliniques), et permet de libérer les résultats, de tracer l'appel des résultats critiques, d'ajouter un commentaire biologique, de dévalider et d'émettre le compte rendu.</p>
+<h4>Fonctionnalités</h4>
+<ul>
+<li>Titre <strong>À valider</strong> ; puces <strong>Tous · n</strong>, <strong>Urgents · n</strong>, <strong>Avec anomalies · n</strong>, <strong>Bloqués par le CQ · n</strong> ; case <strong>Afficher les résultats validés</strong> (fait revenir les dossiers validés mais pas encore imprimés, pour pouvoir les dévalider).</li>
+<li><strong>Liste des dossiers</strong> : <strong>Dossier</strong>, <strong>Patient</strong>, <strong>Priorité</strong>, <strong>À valider</strong> (nombre), <strong>Anormaux</strong>, <strong>Signalements</strong>, <strong>Enregistré le</strong>. Pastilles de signalement : « <em>n</em> critique(s) à communiquer », « <em>n</em> critique(s) », « Bloqué par le CQ », « En retard », « Δ delta-check », « Échantillon non conforme ». Ordre : d'abord les dossiers avec un critique non communiqué, puis les urgences, puis les plus anciens. Un biologiste au périmètre restreint ne voit que ses secteurs. Double-clic sur un dossier : place le curseur dans ses résultats.</li>
+<li><strong>Grille des résultats</strong> du dossier sélectionné : case à cocher, <strong>Paramètre</strong>, <strong>Résultat</strong>, <strong>Indic.</strong>, <strong>Unité</strong>, <strong>Valeurs usuelles</strong>, <strong>Antériorité</strong>, <strong>Alarme automate</strong> ; compteur « <em>n</em> sur <em>m</em> sélectionné(s) ». Les résultats validés techniquement sont pré-cochés ; les résultats seulement saisis sont affichés mais ne se cochent pas ; avec <strong>Afficher les résultats validés</strong>, les résultats déjà validés apparaissent en gris, non cochés.</li>
+<li><strong>Carte « Contexte »</strong> : « <em>n</em> résultat(s) anormal(aux) à examiner » ou « Aucun résultat anormal » ; « Dossier urgent en retard », « Dossier en retard », « Dossier urgent » ou « Dans les délais » ; « <em>n</em> résultat(s) critique(s) à communiquer avant validation », « Résultats critiques communiqués » ou « Aucun résultat critique » ; « Contrôle qualité hors limites : dérogation justifiée exigée » ou « Contrôles qualité conformes » ; « Écart au delta-check » ; « Échantillon non conforme » ; <strong>Renseignements cliniques</strong> (« Non renseigné » si vide) ; lien <strong>Voir le dossier complet ›</strong> (ouvre <strong>Consultation d'un dossier</strong>, droit de consulter les dossiers).</li>
+<li><strong>Commentaire biologique · <em>paramètre</em></strong> (dans la carte) : commentaire du biologiste sur la ligne sélectionnée, « Imprimé sous la valeur sur le compte rendu ». Disponible seulement sur une ligne validée techniquement ; il est enregistré au moment où la ligne est validée.</li>
+<li><strong>Plus d'actions</strong> : <strong>Tout sélectionner</strong> (coche ou décoche toutes les lignes), <strong>Dévalider…</strong> (retire la validation des lignes cochées déjà validées ; droit de dévalider), <strong>Actualiser</strong>.</li>
+<li><strong>Antériorités</strong> : même fenêtre que dans Saisie des résultats (droit de consulter les résultats ; aussi par double-clic dans la case <strong>Antériorité</strong>).</li>
+<li><strong>Résultats critiques…</strong> : trace l'appel d'un critique avec relecture (droit de saisir la communication d'un critique ; en rouge et gras quand un critique attend).</li>
+<li><strong>Compte rendu</strong> : émet et signe le compte rendu du dossier (droit d'éditer ; grisé tant qu'aucune valeur validée n'attend d'être imprimée).</li>
+<li>Compteur « <em>n</em> dossier(s) · <em>m</em> résultat(s) en attente ».</li>
+<li><strong>Valider la sélection (<em>n</em>)</strong> (F9) : valide biologiquement les lignes cochées ; la ligne d'état dit ensuite « <em>n</em> résultat(s) validé(s) ». Grisé quand aucun dossier n'est ouvert.</li>
+<li>Touches : <strong>Espace</strong> coche / décoche, <strong>F9</strong> valide la sélection, <strong>F10</strong> dossier suivant.</li>
+</ul>
 <p><strong>Qui y a accès</strong></p>
 <ul>
 <li>Le menu apparaît avec le droit de validation biologique : Biologiste, Biologiste responsable, Administrateur.</li>
 <li>La validation elle-même exige en plus, au moment du clic, une qualification de biologiste (médecin ou pharmacien biologiste) inscrite à l'Ordre et non expirée, et le secteur dans le périmètre de l'utilisateur. L'Administrateur voit l'écran mais sa validation est refusée s'il n'a pas cette qualification.</li>
-<li><strong>Résultats critiques</strong> : droit de saisir la communication d'un critique (Biologiste, Biologiste responsable, Administrateur).</li>
+<li><strong>Résultats critiques…</strong> : droit de saisir la communication d'un critique (Biologiste, Biologiste responsable, Administrateur).</li>
 <li><strong>Compte rendu</strong> : droit d'éditer les comptes rendus.</li>
-<li><strong>Dévalider</strong> : droit de dévalider, que seuls le Biologiste responsable et l'Administrateur ont par défaut (le Biologiste ne l'a pas).</li>
-</ul>
-<p><strong>L'écran</strong></p>
-<ul>
-<li>En haut, <strong>En attente de validation biologique</strong> avec les cases <strong>Urgent</strong> (seulement les urgences) et <strong>Afficher les résultats validés</strong> (fait revenir les dossiers validés mais pas encore imprimés, pour pouvoir les dévalider), et le bouton <strong>Actualiser</strong>.</li>
-<li>Liste des dossiers : <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Âge</strong>, <strong>Priorité</strong>, <strong>En attente de validation biologique</strong> (nombre), <strong>Anormal</strong>, <strong>Critique élevé</strong> (nombre de critiques), <strong>Signalements</strong>, <strong>Enregistré le</strong>.</li>
-<li>Ordre : d'abord les dossiers avec un critique non communiqué (ligne rouge sur fond rouge), puis les urgences, puis les plus anciens.</li>
-<li><strong>Signalements</strong> : « !n » (n critiques non communiqués), « CIQ », « Δ », « éch. » (échantillon non conforme), « En retard » (échéance dépassée). Un dossier en retard ou avec un CIQ hors limites est en orange.</li>
-<li>Un biologiste au périmètre restreint ne voit que ses secteurs.</li>
-<li>En bas, les <strong>Résultats</strong> du dossier sélectionné (titre : n° de dossier, patient, âge, sexe) : case à cocher, <strong>Paramètre</strong>, <strong>Résultat</strong>, <strong>Signalements</strong>, <strong>Unité</strong>, <strong>Valeurs usuelles</strong>, <strong>Antériorité</strong>, <strong>Alarme automate</strong>.</li>
-<li>Les résultats validés techniquement sont pré-cochés.</li>
-<li>Les résultats seulement saisis sont affichés mais ne peuvent pas être cochés.</li>
-<li>Avec <strong>Afficher les résultats validés</strong>, les résultats déjà validés apparaissent en italique gris, non cochés.</li>
-<li>Boutons : <strong>Tout sélectionner</strong>, <strong>Validation biologique</strong>, <strong>Résultats critiques</strong> (rouge et gras quand un critique attend son appel), <strong>Compte rendu</strong>, <strong>Dévalider</strong>, <strong>Antériorités</strong>, et une ligne d'état.</li>
+<li><strong>Dévalider…</strong> : droit de dévalider (Biologiste, Biologiste responsable, Administrateur).</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <ol>
 <li><strong>Valider un dossier entier</strong></li>
-<li>Sélectionnez le dossier dans la liste.</li>
-<li>Vérifiez les valeurs, les signalements et les alarmes automate. Les lignes à libérer sont déjà cochées.</li>
-<li>Cliquez <strong>Validation biologique</strong>.</li>
+<li>Sélectionnez le dossier dans la liste (ou <strong>F10</strong> pour passer au suivant).</li>
+<li>Lisez la carte <strong>Contexte</strong>, vérifiez les valeurs, les signalements et les alarmes automate. Les lignes à libérer sont déjà cochées.</li>
+<li>Cliquez <strong>Valider la sélection</strong> (ou <strong>F9</strong>).</li>
 <li>
-<p>La ligne d'état indique « n validé par » ; la liste se recharge. Le dossier disparaît quand plus rien n'attend.
+<p>La ligne d'état indique le nombre de résultats validés (« 1 résultat validé », « 3 résultats validés », ou « 0 résultat validé » si tout a été refusé) ; la liste se recharge. Le dossier disparaît quand plus rien n'attend. Quand le dernier dossier est validé, la liste est vide et <strong>Valider la sélection</strong> reste grisé.
    - Les résultats refusés sont listés dans une fenêtre, chacun avec sa raison ; les autres sont validés quand même.</p>
 </li>
 <li>
 <p><strong>Valider une partie d'un dossier</strong></p>
 </li>
-<li>Décochez les lignes à retenir (ou <strong>Tout sélectionner</strong> pour tout cocher / tout décocher).</li>
+<li>Décochez les lignes à retenir (<strong>Espace</strong> sur la ligne, ou <strong>Plus d'actions</strong> › <strong>Tout sélectionner</strong> pour tout cocher / tout décocher).</li>
 <li>
-<p><strong>Validation biologique</strong>. Les lignes décochées restent en attente.</p>
+<p><strong>Valider la sélection</strong>. Les lignes décochées restent en attente.</p>
+</li>
+<li>
+<p><strong>Ajouter un commentaire biologique</strong></p>
+</li>
+<li>Sélectionnez une ligne validée techniquement ; la zone <strong>Commentaire biologique · <em>paramètre</em></strong> s'active dans la carte <strong>Contexte</strong>.</li>
+<li>Tapez le commentaire ; il sera imprimé sous la valeur.</li>
+<li>
+<p>Validez la ligne : le commentaire est enregistré avec la validation.
+   - En quittant l'écran avec des commentaires non enregistrés : « <em>n</em> commentaire(s) biologique(s) saisi(s) ne sont pas encore enregistrés : ils le sont à la validation de leur ligne. Quitter l'écran et les abandonner ? ».</p>
 </li>
 <li>
 <p><strong>Valider un résultat couvert par un contrôle interne hors limites</strong></p>
 </li>
-<li>Cochez la ligne (signalement CIQ) et cliquez <strong>Validation biologique</strong>.</li>
+<li>Cochez la ligne (signalement CIQ, puce <strong>Bloqués par le CQ</strong>) et cliquez <strong>Valider la sélection</strong>.</li>
 <li>Une fenêtre « Dérogation contrôle interne » rappelle le blocage et la liste des paramètres concernés, et demande la <strong>Justification de la dérogation</strong> (15 caractères minimum).</li>
 <li>
 <p>Saisissez la justification et validez. Elle est inscrite sur le point de contrôle concerné.
@@ -315,9 +457,9 @@ ul.toc li { margin: 4px 0; }
 <li>
 <p><strong>Communiquer un résultat critique (appel avec relecture)</strong></p>
 </li>
-<li>Sélectionnez le dossier (ligne rouge). Cliquez <strong>Résultats critiques</strong>.</li>
-<li>Pour chaque valeur critique non encore communiquée, une fenêtre affiche « paramètre : valeur » et demande l'identité de la personne prévenue. Tapez son nom, puis OK.</li>
-<li>Une seconde fenêtre demande : « Faites répéter la valeur par votre interlocuteur et saisissez ce qu'il a répété. » Tapez la valeur répétée, puis OK.</li>
+<li>Sélectionnez le dossier (pastille « critique(s) à communiquer »). Cliquez <strong>Résultats critiques…</strong>.</li>
+<li>Pour chaque valeur critique non encore communiquée, une fenêtre affiche « paramètre : valeur » et « Indiquez l'identité de la personne prévenue. ». Tapez son nom (200 caractères au plus), puis OK.</li>
+<li>Une seconde fenêtre demande : « Faites répéter la valeur par votre interlocuteur et saisissez ce qu'il a répété. » Tapez la valeur répétée (100 caractères au plus), puis OK.</li>
 <li>
 <p>La communication est enregistrée (date, heure, auteur, destinataire, valeur répétée). Le dossier se recharge ; la valeur peut maintenant être validée.
    - Si vous annulez la première fenêtre, l'appel est enregistré comme « interlocuteur injoignable » et la valeur reste bloquée ; recommencez plus tard (chaque tentative est numérotée).
@@ -325,15 +467,14 @@ ul.toc li { margin: 4px 0; }
    - Le mode est toujours « téléphone » ; ni le numéro appelé, ni la fonction de la personne, ni le prescripteur ne sont demandés.</p>
 </li>
 <li>
-<p><strong>Consulter les antériorités</strong>
-   - Ligne sélectionnée, <strong>Antériorités</strong> ou double-clic dans la case <strong>Antériorité</strong> : même fenêtre que dans Saisie des résultats (voir plus haut).</p>
+<p><strong>Consulter les antériorités</strong> : ligne sélectionnée, <strong>Antériorités</strong> ou double-clic dans la case <strong>Antériorité</strong>.</p>
 </li>
 <li>
-<p><strong>Éditer le compte rendu depuis cet écran</strong></p>
+<p><strong>Émettre le compte rendu depuis cet écran</strong></p>
 </li>
-<li>Le dossier sélectionné, cliquez <strong>Compte rendu</strong> ; confirmez « Compte rendu — n° de dossier ».</li>
+<li>Le dossier sélectionné, cliquez <strong>Compte rendu</strong> ; confirmez « Émettre et signer le compte rendu du dossier … ? » (fenêtre « Émettre le compte rendu »).</li>
 <li>
-<p>Le PDF s'ouvre dans votre lecteur ; la ligne d'état indique « Compte rendu vN — Enregistré. ».
+<p>Le PDF s'ouvre dans votre lecteur ; la ligne d'état indique « Compte rendu v<em>N</em> — Enregistré. ».
    - Le compte rendu porte tous les résultats validés du dossier. S'il reste des analyses non validées, il est <strong>partiel</strong> (mention sur le document). Langue : celle choisie à l'enregistrement du dossier. Pas de conclusion possible ici (voir Comptes rendus, rectification).</p>
 </li>
 <li>
@@ -341,88 +482,97 @@ ul.toc li { margin: 4px 0; }
 </li>
 <li>Cochez <strong>Afficher les résultats validés</strong> ; sélectionnez le dossier.</li>
 <li>Cochez la ou les lignes validées à retirer.</li>
-<li>Cliquez <strong>Dévalider</strong>. Saisissez le motif (15 caractères minimum) dans la fenêtre « Motif de la dévalidation de n résultat(s)… ».</li>
-<li>La ligne d'état indique « n × dévalidé(s) ». La valeur est conservée, revient au statut validé techniquement, porte le signalement R (rectifié), et une trace de rectification est inscrite.</li>
+<li><strong>Plus d'actions</strong> › <strong>Dévalider…</strong>. Saisissez le motif (15 caractères minimum) dans la fenêtre « Motif de la dévalidation de <em>n</em> résultat(s). La valeur est conservée : c'est la diffusion qui est retirée, et une rectification est inscrite au dossier. ».</li>
+<li>La ligne d'état indique « <em>n</em> × dévalidé(s) ». La valeur est conservée, revient au statut validé techniquement, porte le signalement R (rectifié), et une trace de rectification est inscrite.
+   - Pour changer la valeur, utilisez plutôt <strong>Corriger une valeur validée…</strong> dans Saisie des résultats ; c'est aussi la seule voie une fois la valeur imprimée.</li>
 </ol>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
-<li>Les trois verrous ne se contournent pas :</li>
-<li>Qualification : « Seul un médecin ou un pharmacien biologiste peut procéder à la validation biologique. », « Le biologiste doit être inscrit à l'Ordre pour valider un résultat. », « L'habilitation du biologiste a expiré le … », « Le secteur … n'entre pas dans le périmètre de validation de cet utilisateur. »</li>
-<li>Contrôle interne : « Le contrôle interne couvrant ce résultat est hors limites : une dérogation motivée est requise. »</li>
-<li>Critique : « Un résultat critique doit être communiqué au prescripteur avant sa validation. » Une communication ne couvre que la valeur affichée au moment de l'appel ; si la valeur a changé depuis (nouveau passage sur l'automate) : « … : la valeur a changé depuis l'affichage de l'écran… Rechargez le dossier et communiquez la valeur actuelle. »</li>
-<li>Validation technique obligatoire d'abord : « La validation technique doit précéder la validation biologique. »</li>
-<li>Automate dont l'étalonnage est échu : la valeur est bloquée (« L'étalonnage de cet automate est échu depuis le … »).</li>
+<li>Les verrous ne se contournent pas :</li>
+<li>Qualification : médecin ou pharmacien biologiste, inscrit à l'Ordre, habilitation non expirée, secteur dans son périmètre.</li>
+<li>Contrôle interne hors limites : dérogation motivée obligatoire.</li>
+<li>Critique : communication au prescripteur avant validation. Une communication ne couvre que la valeur affichée au moment de l'appel ; si la valeur a changé depuis (nouveau passage sur l'automate, correction), il faut recharger et communiquer la valeur actuelle.</li>
+<li>La validation technique doit précéder la validation biologique.</li>
+<li>Automate dont l'étalonnage est échu : la valeur est bloquée.</li>
 <li>Une analyse n'est validée que si tous ses paramètres le sont ; sinon ses lignes sont retenues ensemble.</li>
-<li>Dévalidation impossible une fois le compte rendu imprimé : « Le compte rendu a déjà été diffusé : une rectification est nécessaire. » Motif obligatoire.</li>
+<li>Dévalidation impossible une fois le compte rendu imprimé ; motif obligatoire.</li>
 <li>Le refus d'un résultat (case décochée) ne fait rien d'autre que le laisser en attente : pour le refaire, utilisez « Repasser l'analyse » dans Consultation d'un dossier.</li>
-<li>Il n'y a pas de filtre par secteur sur cet écran, ni de zone de commentaire du biologiste par résultat.</li>
+<li>Il n'y a pas de filtre par secteur sur cet écran (seul le périmètre de l'utilisateur filtre).</li>
 </ul>
 <p><strong>Flux</strong></p>
-<p>Saisie des résultats (validation technique) → <strong>Validation biologique</strong> → <strong>Compte rendu</strong> ici ou dans Comptes rendus → remise. Les dossiers validés en partie dont le reste est encore à la paillasse s'éditent depuis Comptes rendus (liste « À émettre »).</p>
+<p>Saisie des résultats (validation technique) → <strong>Validation biologique</strong> → <strong>Compte rendu</strong> ici ou dans Comptes rendus → remise. Les dossiers validés en partie dont le reste est encore à la paillasse s'émettent depuis Comptes rendus (onglet « À émettre »).</p>
 <p>Validation d'un dossier :</p>
-<div class="diagram"><img src="img/diagramme-24223fc2fe77b110.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-19ae5fd62814d881.png" alt="Diagramme"></div>
 
 <p>Communication d'un résultat critique :</p>
-<div class="diagram"><img src="img/diagramme-f3546025636182b4.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-ead8d852e7a891f3.png" alt="Diagramme"></div>
 
 <p>Dévalidation :</p>
-<div class="diagram"><img src="img/diagramme-42a6c822fe4b917e.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-9db15d11a6248860.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="reports">Comptes rendus</h3>
-<p>Registre des comptes rendus édités : on y émet les comptes rendus en attente, on réimprime l'original, on enregistre chaque remise (guichet, courriel, SMS, fax, coursier…) et on émet les rectifications.</p>
+<h4>À quoi sert cet écran</h4>
+<p>C'est le registre des comptes rendus. On y émet les comptes rendus en attente, on réimprime l'original archivé, on enregistre chaque remise (guichet, courriel, SMS, fax, coursier…) et on émet les rectifications. Trois onglets séparent ce qui reste à émettre, ce qui a été émis et ce qui reste à remettre ; un aperçu de la première page aide à reconnaître le document.</p>
+<h4>Fonctionnalités</h4>
+<ul>
+<li>En-tête <strong>Comptes rendus</strong> et onglets avec compteurs : <strong>À émettre</strong> (dossiers avec des résultats validés sur aucun compte rendu), <strong>Émis</strong> (onglet ouvert par défaut ; toutes les versions), <strong>À remettre</strong> (uniquement les comptes rendus non remis ; pastille rouge s'il y a un critique non remis).</li>
+<li>Zone de recherche « N° de dossier, nom du patient ou n° de dossier patient » (validez par <strong>Entrée</strong>) et période « <em>n</em> derniers jours » (7, 30, 90 ou 365 ; 30 par défaut).</li>
+<li>Compteur « <em>n</em> version(s) émise(s) · <em>m</em> en attente de remise · <em>k</em> critique non remis » (en rouge s'il y a un critique non remis).</li>
+<li>Onglet <strong>À émettre</strong> : <strong>Dossier</strong>, <strong>Patient</strong>, <strong>Priorité</strong>, <strong>Résultats validés</strong>, <strong>En attente</strong>, <strong>Dernière validation</strong>, <strong>Nature</strong> (« Partiel » ou « Définitif », suivi de « · v<em>N</em> » si une version existe déjà). Note : « Un compte rendu partiel peut être émis quand des analyses restent en attente ; il sera complété par une nouvelle version. » Double-clic = <strong>Émettre le compte rendu</strong>.</li>
+<li>Onglets <strong>Émis</strong> / <strong>À remettre</strong> : <strong>Dossier</strong>, <strong>Patient</strong>, <strong>Version</strong>, <strong>Nature</strong>, <strong>Édité le</strong>, <strong>Remise</strong> (date de la dernière remise et leur nombre, sinon le mode souhaité par le prescripteur, sinon « — »), <strong>Statut</strong> (« remplacé », nature de rectification, « Critique », « sous réserve », « Sous-traitée », « hors accréditation »), <strong>Prescripteur</strong>. En tête : les définitifs non remis contenant un critique (fond rouge), puis les définitifs non remis (orange), puis le reste par date. Les versions remplacées sont grisées. Double-clic = <strong>Réimprimer l'original</strong>.</li>
+<li><strong>Remises enregistrées — …</strong> (sous le registre) : remises de la version sélectionnée, <strong>Date et heure</strong>, <strong>Mode de remise</strong>, <strong>Qualité du destinataire</strong>, <strong>Destinataire</strong>, <strong>Porteur</strong> (avec CIN), <strong>Statut</strong> (En attente, Envoyé, Remis, Échec, Annulé), <strong>Remis par</strong>.</li>
+<li><strong>Carte « Aperçu · N° »</strong> : croquis de la première page, lien <strong>Ouvrir en PDF</strong> (même effet que <strong>Réimprimer l'original</strong>), <strong>Signataire</strong> (le biologiste désigné à l'émission), <strong>Prescripteur</strong>, <strong>Versions</strong> (« v<em>N</em> · nature », nature de rectification, « remplacé », nombre de pages ; pour un dossier à émettre « Aucune émise » ou « <em>n</em> émise(s) — celle-ci sera la v<em>N</em> »), <strong>Remise</strong>.</li>
+<li><strong>Plus d'actions</strong> : <strong>Émettre une rectification…</strong> (droit de rectifier ; pas sur une version remplacée), <strong>Actualiser</strong>.</li>
+<li><strong>Réimprimer l'original</strong> : rouvre le PDF archivé de la version (droit de réimprimer l'original ; seulement si le PDF est conservé).</li>
+<li><strong>Enregistrer une remise</strong> : enregistre (et envoie, si la messagerie est configurée) une remise de la version sélectionnée (droit d'éditer ou d'envoyer ; pas sur une version remplacée).</li>
+<li>Indication « Les remises et rectifications s'activent après émission ».</li>
+<li><strong>Émettre le compte rendu</strong> (Ctrl+E) : émet et signe le compte rendu du dossier sélectionné dans <strong>À émettre</strong> (droit d'éditer).</li>
+<li>Fenêtre de remise : <strong>Mode de remise</strong> (Remis au guichet, Courriel, Lien par SMS, Fax, Coursier, Interface d'intégration, Téléchargement depuis le portail), <strong>Qualité du destinataire</strong> (Patient, Prescripteur, Tiers autorisé, Établissement adresseur, Organisme payeur, Archive interne), <strong>Destinataire</strong> (prérempli selon la qualité choisie), <strong>Adresse / numéro</strong>, <strong>Porteur</strong>, <strong>CIN du porteur</strong>, <strong>Référence du consentement</strong>, et une note propre au mode choisi.</li>
+<li>Fenêtre de rectification : <strong>Nature de la rectification</strong> (Correction de résultat, Correction d'identité, Ajout d'analyse, Révision du commentaire, Retrait du compte rendu), <strong>Langue du compte rendu</strong>, <strong>Motif (français)</strong>, <strong>Motif (arabe)</strong>, <strong>Conclusion (français)</strong>, <strong>Conclusion (arabe)</strong>.</li>
+</ul>
 <p><strong>Qui y a accès</strong></p>
 <ul>
-<li>Menu : droit de consulter les comptes rendus (tous les rôles sauf Préleveur et Comptabilité : Secrétariat / accueil, Technicien, Biologiste, Biologiste responsable, Responsable qualité, Prescripteur, Administrateur).</li>
+<li>Menu : droit de consulter les comptes rendus (Secrétariat / accueil, Technicien de laboratoire, Biologiste, Biologiste responsable, Responsable qualité, Prescripteur, Administrateur).</li>
 <li><strong>Émettre le compte rendu</strong> : droit d'éditer (Secrétariat / accueil, Biologiste, Biologiste responsable, Administrateur). Un compte prescripteur ne peut jamais émettre.</li>
-<li><strong>Réimprimer l'original</strong> : droit de réimpression (Biologiste responsable, Prescripteur, Administrateur). Le Biologiste et le Secrétariat ne l'ont pas par défaut.</li>
+<li><strong>Réimprimer l'original</strong> : droit de réimpression (Secrétariat / accueil, Biologiste, Biologiste responsable, Prescripteur, Administrateur).</li>
 <li><strong>Enregistrer une remise</strong> : droit d'éditer ou d'envoyer (Secrétariat / accueil, Biologiste, Biologiste responsable, Administrateur).</li>
-<li><strong>Émettre une rectification</strong> : droit de rectifier (Biologiste, Biologiste responsable, Administrateur).</li>
-</ul>
-<p><strong>L'écran</strong></p>
-<ul>
-<li>En haut : titre « Registre des comptes rendus — total · n en attente de remise · n critique non remis » (en rouge s'il y a un critique non remis), zone de recherche (« N° de dossier, nom du patient ou n° de dossier patient », <strong>Entrée</strong> pour chercher), case <strong>Uniquement les comptes rendus non remis</strong>, période (<strong>7 / 30 / 90 / 365 derniers jours</strong>, 30 par défaut), <strong>Actualiser</strong>.</li>
-<li>Bloc <strong>À émettre — n dossier(s) avec des résultats validés sur aucun compte rendu</strong> (visible seulement s'il y en a) : <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Priorité</strong>, <strong>Résultats validés</strong>, <strong>Analyses en attente</strong>, <strong>Dernière validation</strong>, <strong>Nature</strong> (« Partiel » ou « Définitif », suivi de « · vN » si une version existe déjà).</li>
-<li>Registre : <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Version</strong>, <strong>Nature</strong>, <strong>Édité le</strong>, <strong>Signataire</strong>, <strong>Prescripteur</strong>, <strong>Remise</strong> (date de la dernière remise et leur nombre, sinon le mode souhaité par le prescripteur, sinon « — »), <strong>Statut</strong> (« remplacé », nature de rectification, « Critique », « sous réserve », « Sous-traitée », « hors accréditation »).</li>
-<li>En tête : les définitifs non remis contenant un critique (fond rouge), puis les définitifs non remis (orange), puis le reste par date. Les versions remplacées sont grisées ; les rectifications en couleur d'accent.</li>
-<li>En bas : <strong>Remises enregistrées</strong> de la version sélectionnée : <strong>Date et heure</strong>, <strong>Mode de remise</strong>, <strong>Qualité du destinataire</strong>, <strong>Destinataire</strong>, <strong>Porteur</strong> (avec CIN), <strong>Statut</strong> (En attente, Envoyé, Remis, Échec, Annulé), <strong>Remis par</strong>.</li>
-<li>Boutons : <strong>Émettre le compte rendu</strong>, <strong>Réimprimer l'original</strong>, <strong>Enregistrer une remise</strong>, <strong>Émettre une rectification</strong>, et une ligne d'état.</li>
+<li><strong>Émettre une rectification…</strong> : droit de rectifier (Biologiste, Biologiste responsable, Administrateur).</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <ol>
 <li><strong>Émettre un compte rendu en attente (partiel ou définitif)</strong></li>
-<li>Dans <strong>À émettre</strong>, sélectionnez le dossier.</li>
-<li>Cliquez <strong>Émettre le compte rendu</strong> (ou double-clic sur la ligne) ; confirmez.</li>
+<li>Onglet <strong>À émettre</strong>, sélectionnez le dossier. L'aperçu indique combien de versions existent et le numéro de la prochaine.</li>
+<li>Cliquez <strong>Émettre le compte rendu</strong> (ou <strong>Ctrl+E</strong>, ou double-clic sur la ligne) ; confirmez « Émettre et signer le compte rendu du dossier … ? ».</li>
 <li>
-<p>Le PDF s'ouvre ; « Compte rendu … vN émis ». Le dossier passe dans le registre.
+<p>Le PDF s'ouvre ; « Compte rendu … v<em>N</em> émis ». Le dossier passe dans le registre.
    - Un compte rendu partiel porte la mention correspondante ; il sera remplacé par le définitif quand le reste sera validé, sans qu'il s'agisse d'une rectification.</p>
 </li>
 <li>
 <p><strong>Réimprimer un compte rendu</strong></p>
 </li>
-<li>Sélectionnez la version dans le registre (une version remplacée peut aussi être réimprimée : c'est ce que détient le clinicien).</li>
-<li><strong>Réimprimer l'original</strong> (ou double-clic).</li>
+<li>Onglet <strong>Émis</strong>, sélectionnez la version (une version remplacée peut aussi être réimprimée : c'est ce que détient le clinicien).</li>
+<li><strong>Réimprimer l'original</strong> (ou double-clic, ou <strong>Ouvrir en PDF</strong> dans l'aperçu).</li>
 <li>
-<p>Le document archivé, identique à l'original, s'ouvre ; « Réimpression de … vN — l'accès est journalisé. »
+<p>Le document archivé, identique à l'original, s'ouvre ; « Réimpression de … v<em>N</em> — l'accès est journalisé. »
    - Ne réémettez pas pour réimprimer : réémettre un définitif est refusé (voir Règles).</p>
 </li>
 <li>
 <p><strong>Remettre un compte rendu au guichet au patient</strong></p>
 </li>
-<li>Sélectionnez la version, <strong>Enregistrer une remise</strong>.</li>
+<li>Onglet <strong>À remettre</strong> (ou <strong>Émis</strong>), sélectionnez la version, <strong>Enregistrer une remise</strong>.</li>
 <li><strong>Mode de remise</strong> : proposé selon la préférence du prescripteur (par défaut « Remis au guichet »). <strong>Qualité du destinataire</strong> : « Patient » ; le <strong>Destinataire</strong> est prérempli avec son nom.</li>
 <li>
-<p><strong>Enregistrer</strong>. La remise est « Remis » immédiatement ; « Remise enregistrée — … ».</p>
+<p><strong>Enregistrer</strong>. La remise est « Remis » immédiatement ; « Remise enregistrée — … v<em>N</em> ».</p>
 </li>
 <li>
 <p><strong>Remettre à un porteur ou à un tiers</strong></p>
 </li>
 <li><strong>Qualité du destinataire</strong> : « Tiers autorisé ».</li>
-<li>Saisissez la <strong>Référence du consentement</strong> (consentement écrit du patient enregistré au dossier), le <strong>Porteur</strong> et la <strong>CIN du porteur</strong> (obligatoires au guichet).</li>
+<li>Saisissez la <strong>Référence du consentement</strong> (consentement « communication à un tiers » du patient, en vigueur), le <strong>Porteur</strong> et la <strong>CIN du porteur</strong> (obligatoires au guichet).</li>
 <li>
 <p><strong>Enregistrer</strong>.
-   - Sans référence valide : « La remise à un tiers exige le consentement du patient à la communication. » Sans porteur : « Indiquez le nom et la CIN du porteur… »
-   - La référence attendue est l'identifiant interne du consentement (longue suite de chiffres et lettres) : à vérifier où le trouver.</p>
+   - La référence attendue est l'identifiant interne du consentement (longue suite de chiffres et lettres) : il faut la recopier depuis la fiche du patient (Consentements).</p>
 </li>
 <li>
 <p><strong>Envoyer par courriel ou par SMS</strong></p>
@@ -430,8 +580,8 @@ ul.toc li { margin: 4px 0; }
 <li><strong>Mode de remise</strong> « Courriel » ou « Lien par SMS ». L'<strong>Adresse / numéro</strong> se remplit avec le courriel ou le mobile connu du patient (ou le courriel du prescripteur si le destinataire est « Prescripteur »).</li>
 <li>Lisez la note : si la messagerie est configurée, l'envoi est réel (PDF joint au courriel ; le SMS dit seulement que le compte rendu est prêt, sans résultat). Sinon la remise est seulement enregistrée et vous envoyez par vos propres moyens.</li>
 <li>
-<p><strong>Enregistrer</strong>. Messages : « … : compte rendu envoyé par e-mail à … », « … : SMS envoyé au … », ou en cas d'échec « L'envoi à … a échoué : … La tentative est enregistrée… » (ligne en rouge dans les remises).
-   - Pour le patient, son consentement à l'envoi électronique est exigé : « Le patient n'a pas donné son consentement à l'envoi électronique de ses résultats. Enregistrez-le dans sa fiche (Consentements)… »</p>
+<p><strong>Enregistrer</strong>. Messages : « … : compte rendu envoyé par e-mail à … », « … : SMS envoyé au … », ou en cas d'échec « L'envoi à … a échoué : … » puis « … : échec de l'envoi, voir le détail des remises. » (ligne en rouge dans les remises). Recommencez avec <strong>Enregistrer une remise</strong>.
+   - Pour le patient, son consentement à l'envoi électronique est exigé.</p>
 </li>
 <li>
 <p><strong>Envoyer par fax, coursier ou interface</strong>
@@ -440,35 +590,663 @@ ul.toc li { margin: 4px 0; }
 <li>
 <p><strong>Émettre une rectification</strong></p>
 </li>
-<li>Sélectionnez la version en cours (non remplacée), <strong>Émettre une rectification</strong>.</li>
+<li>Sélectionnez la version en cours (non remplacée), <strong>Plus d'actions</strong> › <strong>Émettre une rectification…</strong>.</li>
 <li>La fenêtre rappelle « rectifie la version N — la nouvelle version portera le n° N+1 » et si la version a déjà été remise (en rouge, avec la date).</li>
-<li>Choisissez la <strong>Nature de la rectification</strong> : « Correction de résultat », « Ajout d'analyse », « Révision du commentaire », « Correction d'identité », « Retrait du compte rendu ».</li>
+<li>Choisissez la <strong>Nature de la rectification</strong> : « Correction de résultat », « Correction d'identité », « Ajout d'analyse », « Révision du commentaire », « Retrait du compte rendu ».</li>
 <li>Choisissez la <strong>Langue du compte rendu</strong>.</li>
 <li>Saisissez le <strong>Motif (français)</strong> (obligatoire, imprimé sur le compte rendu) et éventuellement le <strong>Motif (arabe)</strong>.</li>
 <li>Facultatif : <strong>Conclusion (français)</strong> / <strong>Conclusion (arabe)</strong>, commentaire du biologiste imprimé en fin de compte rendu.</li>
 <li><strong>Enregistrer</strong>. Pour « Correction d'identité » et « Retrait du compte rendu », une confirmation rappelle l'obligation d'informer la CNDP si le précédent est parti à une autre personne.</li>
-<li>Le PDF s'ouvre ; « Compte rendu rectifié vN émis — … ». L'ancienne version reste au registre, marquée « remplacé ».</li>
+<li>Le PDF s'ouvre ; « Compte rendu rectifié v<em>N</em> émis — … ». L'ancienne version reste au registre, marquée « remplacé », et ne peut plus être remise.
+   - Pour une <strong>Correction de résultat</strong>, corrigez d'abord la valeur (<strong>Saisie des résultats</strong> › <strong>Plus d'actions</strong> › <strong>Corriger une valeur validée…</strong>), faites-la revalider, puis émettez la rectification : le compte rendu rectifié porte la nouvelle valeur et nomme les paramètres corrigés.</li>
 </ol>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
-<li>Un compte rendu n'est jamais modifié : chaque émission crée une nouvelle version numérotée ; le PDF est archivé avec une empreinte, et la réimpression vérifie cette empreinte (« Le document archivé ne correspond plus à son empreinte… »).</li>
-<li>Réémettre un compte rendu <strong>définitif</strong>, ou un partiel déjà remis sans nouveau résultat, est refusé : « Un compte rendu a déjà été remis : toute réédition doit être motivée comme rectification. » Passez par <strong>Émettre une rectification</strong>.</li>
-<li>Seuls les résultats validés biologiquement sont imprimés ; « Non fait » n'est imprimé qu'une fois l'analyse validée. Sans résultat : « Aucun résultat à porter sur le compte rendu. »</li>
-<li>Signataire : le biologiste qui a validé en dernier, avec son n° d'inscription à l'Ordre ; sans ce numéro : « Le numéro d'inscription à l'Ordre du biologiste est obligatoire sur le compte rendu. »</li>
-<li>Le site doit être en règle (autorisation, biologiste responsable) pour éditer.</li>
-<li>Compte rendu en arabe sans la police arabe installée sur le poste : édition refusée (« La police arabe … n'est pas installée sur ce poste… »).</li>
-<li>Motif de rectification obligatoire : « Un compte rendu rectifié doit indiquer le motif de la rectification. »</li>
+<li>Un compte rendu n'est jamais modifié : chaque émission crée une nouvelle version numérotée ; le PDF est archivé avec une empreinte, et la réimpression vérifie cette empreinte.</li>
+<li>Réémettre un compte rendu <strong>définitif</strong>, ou un partiel déjà remis sans nouveau résultat, est refusé : passez par <strong>Émettre une rectification…</strong>. Après la correction d'une valeur déjà imprimée, l'émission suivante doit être une rectification.</li>
+<li>Seuls les résultats validés biologiquement sont imprimés ; « Non fait » n'est imprimé qu'une fois l'analyse validée.</li>
+<li>Signataire : le biologiste qui a validé en dernier, avec son n° d'inscription à l'Ordre.</li>
+<li>Le site doit être en règle (autorisation, biologiste responsable) pour émettre.</li>
+<li>Compte rendu en arabe sans la police arabe installée sur le poste : émission refusée.</li>
+<li>Motif de rectification obligatoire.</li>
 <li>Nom du destinataire toujours obligatoire ; adresse ou numéro obligatoire pour courriel, SMS et fax.</li>
-<li>Une valeur déjà imprimée ne peut être modifiée par aucun écran (la dévalidation est refusée après impression, l'automate ne la remplace pas) : une « Correction de résultat » réimprime les valeurs telles qu'elles sont enregistrées (à vérifier avec l'éditeur, voir la fiche de vérification).</li>
+<li>Une version remplacée ne peut plus être remise ni rectifiée ; elle peut être réimprimée.</li>
 <li>Consultation du registre, réimpression et remises sont tracées dans le journal des accès.</li>
 </ul>
 <p><strong>Flux</strong></p>
-<p>Validation biologique → <strong>Comptes rendus</strong> (émission, puis remise) → archivage. Le Tableau de bord signale les résultats critiques non communiqués ; le registre signale les définitifs critiques non remis.</p>
+<p>Validation biologique → <strong>Comptes rendus</strong> (émission, puis remise) → archivage. Le Tableau de bord signale les résultats critiques non communiqués ; l'onglet <strong>À remettre</strong> signale les définitifs critiques non remis.</p>
 <p>Émission et rectification :</p>
-<div class="diagram"><img src="img/diagramme-03857035c426933b.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-2b2eb9bf61826932.png" alt="Diagramme"></div>
 
 <p>Remise :</p>
-<div class="diagram"><img src="img/diagramme-d1fe79ee2ff815fe.png" alt="Diagramme"></div><p class="top"><a href="index.html">Retour au sommaire</a></p>
+<div class="diagram"><img src="img/diagramme-5f5fa00ed5bf346e.png" alt="Diagramme"></div>
+
+<hr />
+<h3>Messages d'erreur et d'avertissement</h3>
+<p>Les textes sont ceux affichés par l'application. « … » remplace une valeur insérée (paramètre, n° de dossier, valeur, date). Un message de refus ne modifie rien : corrigez puis recommencez. Quand plusieurs valeurs sont refusées en même temps, la ligne d'état ou la fenêtre les liste toutes. Les messages communs à tous les écrans (droits, session, connexion) sont décrits dans le chapitre de prise en main.</p>
+<h4>Saisie des résultats</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Aucun dossier ne correspond à « … » sur ce site. »</td>
+<td>N° de dossier ou code-barres inconnu sur votre site.</td>
+<td>Vérifiez la saisie ou le tube ; le dossier est peut-être d'un autre site.</td>
+</tr>
+<tr>
+<td>« Le numéro de dossier est obligatoire. »</td>
+<td><strong>Ouvrir</strong> avec une zone vide.</td>
+<td>Scannez ou tapez le n°.</td>
+</tr>
+<tr>
+<td>« Dossier introuvable. » / « Patient introuvable. »</td>
+<td>Dossier ou patient supprimé ou fusionné entre-temps.</td>
+<td>Actualisez la liste.</td>
+</tr>
+<tr>
+<td>« Des modifications n'ont pas été enregistrées. Voulez-vous continuer ? »</td>
+<td>Changement de dossier ou sortie de l'écran avec des valeurs tapées.</td>
+<td><strong>Non</strong> pour revenir et enregistrer ; <strong>Oui</strong> pour les abandonner.</td>
+</tr>
+<tr>
+<td>« Tube pas encore réceptionné pour : … Ces lignes sont verrouillées jusqu'à la réception. »</td>
+<td>Ouverture d'un dossier dont un tube n'est pas reçu.</td>
+<td>Réceptionnez le tube, puis rouvrez le dossier.</td>
+</tr>
+<tr>
+<td>« … : le tube n'est pas encore réceptionné. Réceptionnez-le avant de saisir le résultat. »</td>
+<td>Clic ou saisie dans une ligne verrouillée.</td>
+<td>Idem.</td>
+</tr>
+<tr>
+<td>« Ce résultat est validé : toute modification doit passer par une rectification motivée. »</td>
+<td>Clic dans la case d'une valeur validée.</td>
+<td>Biologiste : <strong>Plus d'actions</strong> › <strong>Corriger une valeur validée…</strong>.</td>
+</tr>
+<tr>
+<td>« Aucun élément sélectionné. »</td>
+<td><strong>Enregistrer</strong> sans aucune ligne modifiée.</td>
+<td>Rien à enregistrer.</td>
+</tr>
+<tr>
+<td>« « … » n'est pas une valeur numérique valide. »</td>
+<td>Texte dans un paramètre numérique.</td>
+<td>Tapez un nombre (virgule ou point).</td>
+</tr>
+<tr>
+<td>« Opérateur « … » non reconnu ; utilisez &lt;, &gt;, ≤ ou ≥. » / « Opérateur de censure invalide. »</td>
+<td>Valeur censurée mal écrite.</td>
+<td>Écrivez par exemple « &lt;5 » ou « &gt;1000 ».</td>
+</tr>
+<tr>
+<td>« La valeur … est techniquement impossible pour ce paramètre. »</td>
+<td>Valeur hors des limites physiques réglées au catalogue.</td>
+<td>Vérifiez la frappe ou l'unité.</td>
+</tr>
+<tr>
+<td>« « … » ne fait pas partie des réponses autorisées pour ce paramètre. »</td>
+<td>Code de réponse inconnu.</td>
+<td>Tapez un code défini au catalogue.</td>
+</tr>
+<tr>
+<td>« Le titre doit être un entier positif. »</td>
+<td>Titre mal écrit (« 1/0 », « 1/-2 »…).</td>
+<td>Écrivez « 1/320 », « 1:320 » ou « 320 ».</td>
+</tr>
+<tr>
+<td>« Le texte du résultat est obligatoire. » / « Le texte du résultat dépasse … caractères. »</td>
+<td>Paramètre texte vide ou trop long.</td>
+<td>Saisissez ou raccourcissez le texte.</td>
+</tr>
+<tr>
+<td>« Le paramètre … est calculé : sa valeur ne se saisit pas. »</td>
+<td>Tentative de saisie ou de correction d'un paramètre ƒ.</td>
+<td>Corrigez les valeurs qui servent au calcul.</td>
+</tr>
+<tr>
+<td>« … : cette analyse est annulée, aucun résultat ne peut y être saisi. »</td>
+<td>Saisie sur une analyse annulée entre-temps.</td>
+<td>Actualisez le dossier.</td>
+</tr>
+<tr>
+<td>« … : ce résultat est déjà validé techniquement, le modifier demande le droit « modifier un résultat ». »</td>
+<td>Technicien de laboratoire qui retape une valeur validée techniquement.</td>
+<td>Demandez à un biologiste.</td>
+</tr>
+<tr>
+<td>« Ce résultat est déjà validé. »</td>
+<td>Action sur une valeur déjà validée (autre poste).</td>
+<td>Actualisez.</td>
+</tr>
+<tr>
+<td>« Paramètre introuvable (…). » / « Résultat introuvable (…). »</td>
+<td>Paramètre retiré du catalogue ou ligne supprimée.</td>
+<td>Actualisez ; prévenez l'administrateur si cela persiste.</td>
+</tr>
+<tr>
+<td>« Pourquoi « … » n'a-t-il pas été réalisé ? Le motif est imprimé sur le compte rendu à la place du résultat. »</td>
+<td><strong>Non fait…</strong>.</td>
+<td>Saisissez le motif (3 caractères au moins).</td>
+</tr>
+<tr>
+<td>« Indiquez pourquoi l'analyse n'a pas été réalisée. »</td>
+<td>Motif de « Non fait » vide.</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« Effacer la valeur « … » de « … » ? La ligne redevient à saisir. »</td>
+<td><strong>Effacer la valeur</strong>.</td>
+<td><strong>Oui</strong> pour effacer.</td>
+</tr>
+<tr>
+<td>« Valeur corrigée pour « … » (valeur validée : … …) : » puis « Motif de la correction de « … ». Il est conservé avec l'ancienne valeur dans l'historique du résultat. »</td>
+<td><strong>Corriger une valeur validée…</strong>.</td>
+<td>Tapez la nouvelle valeur puis un motif de 15 caractères au moins.</td>
+</tr>
+<tr>
+<td>« Indiquez la valeur corrigée. »</td>
+<td>Nouvelle valeur vide.</td>
+<td>Tapez la valeur.</td>
+</tr>
+<tr>
+<td>« La rectification d'un résultat doit être motivée. »</td>
+<td>Motif de correction vide.</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« … n'est pas encore validé : corrigez la valeur directement dans la saisie. »</td>
+<td>Correction demandée sur une valeur non validée biologiquement.</td>
+<td>Retapez la valeur dans la grille.</td>
+</tr>
+<tr>
+<td>« La valeur indiquée pour … est celle déjà validée : pour seulement retirer la validation, utilisez « Dévalider ». »</td>
+<td>Nouvelle valeur identique à l'ancienne.</td>
+<td>Changez la valeur, ou dévalidez dans <strong>Validation biologique</strong>.</td>
+</tr>
+<tr>
+<td>« Seul un médecin ou un pharmacien biologiste peut procéder à la validation biologique. » (et les autres messages de qualification, voir Validation biologique)</td>
+<td>Correction d'une valeur validée par une personne non habilitée.</td>
+<td>Demandez à un biologiste habilité pour le secteur.</td>
+</tr>
+<tr>
+<td>« Vous n'avez pas le droit d'effectuer cette opération. »</td>
+<td>Correction d'une valeur déjà imprimée sans le droit de rectifier les comptes rendus.</td>
+<td>Demandez à un biologiste qui a ce droit.</td>
+</tr>
+<tr>
+<td>« « … » est corrigé. L'ancienne valeur est conservée … (Comptes rendus › Émettre une rectification). »</td>
+<td>Correction enregistrée.</td>
+<td>Faites la validation technique puis biologique ; émettez une rectification si la valeur était imprimée.</td>
+</tr>
+<tr>
+<td>« Résultats critiques non communiqués … Un résultat critique doit être communiqué au prescripteur avant sa validation. »</td>
+<td>Enregistrement d'une valeur critique.</td>
+<td>Prévenez le biologiste (bouton <strong>Résultats critiques…</strong> de Validation biologique).</td>
+</tr>
+<tr>
+<td>« Analyses en cascade … »</td>
+<td>Règle de cascade déclenchée.</td>
+<td>Ajoutez l'analyse au dossier si elle est justifiée.</td>
+</tr>
+<tr>
+<td>« Validation technique » (confirmation)</td>
+<td>Clic sur <strong>Validation technique</strong>.</td>
+<td><strong>Oui</strong> pour valider tout le dossier (les valeurs déjà validées gardent leur premier contrôle).</td>
+</tr>
+<tr>
+<td>« Aucun résultat à valider. »</td>
+<td>Validation technique sans valeur saisie.</td>
+<td>Saisissez d'abord les valeurs.</td>
+</tr>
+<tr>
+<td>« Aucune analyse en attente de saisie pour cette sélection. »</td>
+<td>Fiche de paillasse sans ligne pour le secteur, l'automate ou les urgences choisis.</td>
+<td>Changez la sélection.</td>
+</tr>
+<tr>
+<td>« Le secteur choisi est introuvable. » / « L'automate choisi est introuvable sur ce site. » / « Site introuvable. »</td>
+<td>Fiche de paillasse avec un secteur ou un automate supprimé.</td>
+<td>Fermez et rouvrez la fenêtre.</td>
+</tr>
+</tbody>
+</table>
+<h4>Automates (résultats reçus)</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Cette ligne ne peut pas être réimportée : seules les transmissions en échec, partielles ou retenues le peuvent. »</td>
+<td><strong>Réimporter</strong> sur une transmission déjà traitée.</td>
+<td>Rien à faire ; choisissez une autre ligne.</td>
+</tr>
+<tr>
+<td>« Réimporter cette transmission ? Les valeurs de l'automate seront enregistrées au dossier du patient. »</td>
+<td>Confirmation de <strong>Réimporter</strong>.</td>
+<td><strong>Oui</strong> après avoir vérifié la trame.</td>
+</tr>
+<tr>
+<td>« Réimportation effectuée : … valeur(s) enregistrée(s). »</td>
+<td>Réimport réussi.</td>
+<td>Faites la validation technique.</td>
+</tr>
+<tr>
+<td>« Réimportation effectuée, aucune valeur enregistrée : lisez les anomalies de la ligne. »</td>
+<td>Réimport sans valeur acceptée.</td>
+<td>Lisez la raison de chaque résultat dans le journal.</td>
+</tr>
+<tr>
+<td>« Seule une trame reçue se réimporte : une trame émise est notre propre liste de travail. »</td>
+<td>Réimport d'une trame envoyée à l'automate.</td>
+<td>Choisissez une trame reçue.</td>
+</tr>
+<tr>
+<td>« Une transmission dans l'état … ne se réimporte pas. »</td>
+<td>État non réimportable.</td>
+<td>Rien à faire.</td>
+</tr>
+<tr>
+<td>« La trame enregistrée est vide : il n'y a rien à réimporter. »</td>
+<td>Trame vide au journal ou dans la fenêtre de test.</td>
+<td>Collez une trame ou chargez la dernière reçue.</td>
+</tr>
+<tr>
+<td>« La trame reste illisible (…) : la réimportation ne corrige pas une transmission corrompue. »</td>
+<td>Trame abîmée.</td>
+<td>Faites renvoyer les résultats par l'automate.</td>
+</tr>
+<tr>
+<td>« Le protocole … n'a pas d'analyseur de trames dans cette version. »</td>
+<td>Protocole non pris en charge.</td>
+<td>Prévenez l'administrateur.</td>
+</tr>
+<tr>
+<td>« Message introuvable au journal. »</td>
+<td>Ligne purgée entre-temps.</td>
+<td>Actualisez.</td>
+</tr>
+<tr>
+<td>« Transmission retenue : l'acceptation automatique est désactivée sur cette interface. »</td>
+<td>Arrivée d'une transmission sans acceptation automatique.</td>
+<td>Vérifiez puis <strong>Réimporter</strong>.</td>
+</tr>
+<tr>
+<td>« Tube … pas encore réceptionné : le résultat attend dans le journal. Rejouez-le après la réception. »</td>
+<td>Résultat d'un tube non reçu.</td>
+<td>Réceptionnez le tube puis <strong>Réimporter</strong>.</td>
+</tr>
+<tr>
+<td>« … a un étalonnage dépassé : résultats retenus. Enregistrez l'étalonnage, puis réimportez. »</td>
+<td>Étalonnage échu.</td>
+<td>Faites enregistrer l'étalonnage (Équipements), puis réimportez.</td>
+</tr>
+<tr>
+<td>« … est hors service : résultats retenus. Remettez l'équipement en service, puis réimportez. » (même message pour « en maintenance »)</td>
+<td>Automate hors service ou en maintenance.</td>
+<td>Remettez l'équipement en service, puis réimportez.</td>
+</tr>
+<tr>
+<td>« … est en qualification : résultats retenus jusqu'à sa mise en service. » / « … est déclaré « secours » : résultats retenus. Passez-le en service pour les accepter. »</td>
+<td>Automate pas encore en service ou de secours.</td>
+<td>Passez-le en service si c'est voulu.</td>
+</tr>
+<tr>
+<td>« … est réformé : ses résultats ne sont pas acceptés. » / « … a une date de réforme dépassée : ses résultats ne sont pas acceptés. »</td>
+<td>Automate réformé.</td>
+<td>Les résultats ne peuvent pas être importés ; saisissez-les si l'analyse est refaite ailleurs.</td>
+</tr>
+<tr>
+<td>« La transmission ne porte aucun identifiant d'échantillon. » / « Code-barres inconnu : aucun tube enregistré ne correspond. » / « Code-barres ambigu : plusieurs tubes correspondent, aucun résultat n'a été attribué. »</td>
+<td>Tube absent ou illisible dans la trame.</td>
+<td>Vérifiez l'étiquette sur l'automate ; saisissez au besoin à la main.</td>
+</tr>
+<tr>
+<td>« Tube refusé ou éliminé : le résultat n'est pas rendable. » / « Aucun dossier rattaché à ce tube. » / « Dossier annulé : les résultats ne sont pas enregistrés. »</td>
+<td>Tube ou dossier non utilisable.</td>
+<td>Rien à importer.</td>
+</tr>
+<tr>
+<td>« Code automate inconnu de la table de correspondance : la valeur n'a pas été enregistrée. »</td>
+<td>Code absent de la table. Pour un INTEGRA, le numéro de test est reconnu quelle que soit son écriture dans la table (« 0-031 », « 31 ») : le message signale donc un numéro vraiment absent.</td>
+<td>Faites compléter la <strong>Table de correspondance</strong>, puis réimportez.</td>
+</tr>
+<tr>
+<td>« L'automate a rendu une analyse non demandée sur ce tube. »</td>
+<td>Résultat sans demande.</td>
+<td>Ajoutez l'analyse au dossier si elle est prescrite.</td>
+</tr>
+<tr>
+<td>« Le paramètre associé à ce code n'existe plus au catalogue. »</td>
+<td>Paramètre retiré.</td>
+<td>Faites corriger la table.</td>
+</tr>
+<tr>
+<td>« Résultat déjà validé biologiquement : la correction passe par un compte rendu rectifié. » / « L'automate transmet une correction d'un résultat déjà validé : elle exige un compte rendu rectifié. »</td>
+<td>Nouvelle valeur pour un résultat validé.</td>
+<td>Biologiste : <strong>Corriger une valeur validée…</strong> si la nouvelle valeur est la bonne.</td>
+</tr>
+<tr>
+<td>« L'automate signale l'analyse comme non réalisée. » / « Valeur vide transmise pour ce paramètre. » / « Valeur non numérique transmise pour un paramètre numérique. » / « Ce type de résultat ne se transmet pas depuis un automate. »</td>
+<td>Valeur inexploitable.</td>
+<td>Refaites la mesure ou saisissez à la main.</td>
+</tr>
+<tr>
+<td>« Résultat de contrôle reçu alors que le routage vers le CIQ est désactivé : il n'a pas été enregistré. » / « Résultat de contrôle sans numéro de lot : … » / « Aucune cible de contrôle définie pour ce paramètre sur cet automate : … »</td>
+<td>Résultat de contrôle qualité non rattachable.</td>
+<td>Voir le chapitre Qualité et équipements (Contrôle interne).</td>
+</tr>
+<tr>
+<td>« L'import de cette transmission n'a pas abouti (erreur ou arrêt du poste pendant le traitement) ; elle peut être rejouée. »</td>
+<td>Arrêt pendant le traitement.</td>
+<td><strong>Réimporter</strong>.</td>
+</tr>
+<tr>
+<td>« Trame COBAS INTEGRA illisible : aucun en-tête de bloc (code automate, identifiant, code de bloc). »</td>
+<td>Trame INTEGRA mal formée.</td>
+<td>Vérifiez le câble et les réglages série ; faites renvoyer.</td>
+</tr>
+<tr>
+<td>« Somme de contrôle du bloc COBAS INTEGRA incorrecte (…) : la trame a pu être altérée. »</td>
+<td>Bloc INTEGRA abîmé en transmission.</td>
+<td>Faites renvoyer les résultats ; vérifiez le câble.</td>
+</tr>
+<tr>
+<td>« L'automate COBAS INTEGRA a signalé une erreur (bloc 99, code …). »</td>
+<td>Erreur renvoyée par l'INTEGRA.</td>
+<td>Lisez le code dans le manuel de l'automate.</td>
+</tr>
+<tr>
+<td>« Bloc COBAS INTEGRA … ignoré : ce type de bloc n'est pas traité. » / « Résultat d'étalonnage COBAS INTEGRA lu mais non importé. »</td>
+<td>Bloc non utilisé par le LIS.</td>
+<td>Rien à faire (information).</td>
+</tr>
+<tr>
+<td>« Bloc de résultats COBAS INTEGRA sans résultat. » / « Ligne de résultat COBAS INTEGRA sans numéro de test : « … ». »</td>
+<td>Bloc ou ligne de résultat incomplet.</td>
+<td>Faites renvoyer ; vérifiez la définition du test sur l'automate.</td>
+</tr>
+<tr>
+<td>« Aucune trame de résultats reçue sur cette liaison. »</td>
+<td><strong>Charger la dernière trame reçue</strong> sans réception antérieure.</td>
+<td>Collez une trame ou utilisez <strong>Exemple de trame</strong> (INTEGRA).</td>
+</tr>
+</tbody>
+</table>
+<h4>Validation biologique</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Aucun élément sélectionné. »</td>
+<td><strong>Valider la sélection</strong> ou <strong>Dévalider…</strong> sans ligne cochée utilisable.</td>
+<td>Cochez les lignes (validées techniquement pour valider, déjà validées pour dévalider).</td>
+</tr>
+<tr>
+<td>« … résultat validé » / « … résultats validés » (ligne d'état ; en rouge si des lignes ont été refusées)</td>
+<td>Après <strong>Valider la sélection</strong> : nombre de lignes réellement validées (« 0 résultat validé » si toutes ont été refusées).</td>
+<td>Si le nombre est inférieur aux lignes cochées, lisez la fenêtre des refus et traitez chaque raison.</td>
+</tr>
+<tr>
+<td>« Seul un médecin ou un pharmacien biologiste peut procéder à la validation biologique. »</td>
+<td>Utilisateur sans qualification de biologiste.</td>
+<td>Faites valider par un biologiste.</td>
+</tr>
+<tr>
+<td>« Le biologiste doit être inscrit à l'Ordre pour valider un résultat. »</td>
+<td>N° d'Ordre absent de la fiche utilisateur.</td>
+<td>Faites compléter la fiche (administrateur).</td>
+</tr>
+<tr>
+<td>« L'habilitation du biologiste a expiré le … »</td>
+<td>Habilitation échue.</td>
+<td>Faites renouveler l'habilitation (administrateur).</td>
+</tr>
+<tr>
+<td>« Le secteur … n'entre pas dans le périmètre de validation de cet utilisateur. »</td>
+<td>Secteur hors périmètre.</td>
+<td>Faites valider par un biologiste du secteur.</td>
+</tr>
+<tr>
+<td>« Cet utilisateur est désactivé. » / « Votre session a expiré. Reconnectez-vous. »</td>
+<td>Compte désactivé ou session close.</td>
+<td>Reconnectez-vous ; appelez l'administrateur.</td>
+</tr>
+<tr>
+<td>« La validation technique doit précéder la validation biologique. »</td>
+<td>Ligne seulement saisie.</td>
+<td>Faites la validation technique dans Saisie des résultats.</td>
+</tr>
+<tr>
+<td>« Un résultat critique doit être communiqué au prescripteur avant sa validation. »</td>
+<td>Critique non communiqué.</td>
+<td><strong>Résultats critiques…</strong>.</td>
+</tr>
+<tr>
+<td>« Le contrôle interne couvrant ce résultat est hors limites : une dérogation motivée est requise. » (fenêtre « Dérogation contrôle interne »)</td>
+<td>Ligne couverte par un CIQ hors limites.</td>
+<td>Saisissez la <strong>Justification de la dérogation</strong> (15 caractères au moins) ou ne validez pas.</td>
+</tr>
+<tr>
+<td>« L'étalonnage de cet automate est échu depuis le … : aucun résultat patient ne peut être produit. »</td>
+<td>Valeur produite sur un automate à l'étalonnage échu.</td>
+<td>Faites enregistrer l'étalonnage, repassez l'analyse.</td>
+</tr>
+<tr>
+<td>« Aucun résultat à valider. » / « Ce résultat est déjà validé. »</td>
+<td>Rien à valider, ou validé sur un autre poste.</td>
+<td>Actualisez.</td>
+</tr>
+<tr>
+<td>« Indiquez l'identité de la personne prévenue. »</td>
+<td>Appel d'un critique.</td>
+<td>Tapez le nom de la personne jointe (ou <strong>Annuler</strong> si injoignable).</td>
+</tr>
+<tr>
+<td>« Faites répéter la valeur par votre interlocuteur et saisissez ce qu'il a répété. »</td>
+<td>Relecture d'un critique.</td>
+<td>Tapez la valeur répétée.</td>
+</tr>
+<tr>
+<td>« La communication n'est complète que si l'interlocuteur a répété la valeur transmise. »</td>
+<td>Relecture vide.</td>
+<td>Rappelez et faites répéter la valeur.</td>
+</tr>
+<tr>
+<td>« … : la valeur a changé depuis l'affichage de l'écran (nouveau passage sur l'automate ou correction). Rechargez le dossier et communiquez la valeur actuelle. »</td>
+<td>Valeur modifiée entre l'affichage et l'appel.</td>
+<td>Actualisez puis recommencez l'appel.</td>
+</tr>
+<tr>
+<td>« Fiche de communication introuvable. »</td>
+<td>Fiche d'appel supprimée ou close ailleurs.</td>
+<td>Actualisez.</td>
+</tr>
+<tr>
+<td>« Motif de la dévalidation de … résultat(s). … »</td>
+<td><strong>Dévalider…</strong>.</td>
+<td>Saisissez un motif de 15 caractères au moins.</td>
+</tr>
+<tr>
+<td>« La dévalidation doit être motivée. »</td>
+<td>Motif vide.</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« Le compte rendu a déjà été diffusé : une rectification est nécessaire. »</td>
+<td>Dévalidation d'un résultat déjà imprimé.</td>
+<td>Saisie des résultats › <strong>Corriger une valeur validée…</strong>, puis rectification.</td>
+</tr>
+<tr>
+<td>« Cette analyse n'est pas validée. »</td>
+<td>Dévalidation d'une ligne non validée.</td>
+<td>Actualisez.</td>
+</tr>
+<tr>
+<td>« Émettre et signer le compte rendu du dossier … ? »</td>
+<td>Bouton <strong>Compte rendu</strong>.</td>
+<td><strong>Oui</strong> pour émettre.</td>
+</tr>
+<tr>
+<td>« … commentaire(s) biologique(s) saisi(s) ne sont pas encore enregistrés : ils le sont à la validation de leur ligne. Quitter l'écran et les abandonner ? »</td>
+<td>Sortie de l'écran avec des commentaires non validés.</td>
+<td><strong>Non</strong> pour rester et valider les lignes.</td>
+</tr>
+<tr>
+<td>Messages de l'émission du compte rendu</td>
+<td>Bouton <strong>Compte rendu</strong>.</td>
+<td>Voir le tableau Comptes rendus.</td>
+</tr>
+</tbody>
+</table>
+<h4>Comptes rendus</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Émettre et signer le compte rendu du dossier … ? »</td>
+<td><strong>Émettre le compte rendu</strong>.</td>
+<td><strong>Oui</strong> pour émettre.</td>
+</tr>
+<tr>
+<td>« Aucun résultat validé : le compte rendu ne peut être édité. » / « Aucun résultat à porter sur le compte rendu. »</td>
+<td>Rien de validé à imprimer.</td>
+<td>Faites valider les résultats.</td>
+</tr>
+<tr>
+<td>« Un compte rendu a déjà été remis : toute réédition doit être motivée comme rectification. »</td>
+<td>Réémission d'un définitif ou d'un partiel remis sans nouveau résultat, ou après correction d'une valeur imprimée.</td>
+<td><strong>Plus d'actions</strong> › <strong>Émettre une rectification…</strong>.</td>
+</tr>
+<tr>
+<td>« Le compte rendu doit identifier le biologiste qui l'a validé. » / « Le numéro d'inscription à l'Ordre du biologiste est obligatoire sur le compte rendu. »</td>
+<td>Signataire absent ou sans n° d'Ordre.</td>
+<td>Faites compléter la fiche du biologiste (administrateur).</td>
+</tr>
+<tr>
+<td>« Site du dossier introuvable. »</td>
+<td>Site du dossier supprimé ou non en règle.</td>
+<td>Prévenez l'administrateur.</td>
+</tr>
+<tr>
+<td>« La police arabe « … » n'est pas installée sur ce poste. … l'édition est refusée. Installez la police, ou éditez le compte rendu en français. »</td>
+<td>Compte rendu arabe sur un poste sans la police.</td>
+<td>Installez la police ou émettez en français.</td>
+</tr>
+<tr>
+<td>« Compte rendu introuvable. » / « Dossier introuvable. » / « Patient introuvable. »</td>
+<td>Élément supprimé entre-temps.</td>
+<td>Actualisez.</td>
+</tr>
+<tr>
+<td>« Le document archivé ne correspond plus à son empreinte : l'intégrité de l'archive est compromise. »</td>
+<td>Réimpression d'un PDF modifié sur le disque.</td>
+<td>Ne remettez pas ce document ; prévenez l'administrateur et le responsable qualité.</td>
+</tr>
+<tr>
+<td>« Le PDF de ce compte rendu n'est pas conservé : réémettez-le avant de l'envoyer. »</td>
+<td>Envoi d'une version sans PDF archivé.</td>
+<td>Émettez une nouvelle version (rectification si nécessaire).</td>
+</tr>
+<tr>
+<td>« Réimpression de … v… — l'accès est journalisé. »</td>
+<td>Réimpression réussie.</td>
+<td>Information.</td>
+</tr>
+<tr>
+<td>« Le nom du destinataire est obligatoire : une remise sans destinataire nommé n'est pas une trace. »</td>
+<td>Remise sans <strong>Destinataire</strong>.</td>
+<td>Tapez le nom.</td>
+</tr>
+<tr>
+<td>« Le mode de remise choisi exige une adresse ou un numéro. »</td>
+<td>Courriel, SMS ou fax sans <strong>Adresse / numéro</strong>.</td>
+<td>Saisissez l'adresse ou le numéro.</td>
+</tr>
+<tr>
+<td>« La remise à un tiers exige le consentement du patient à la communication. »</td>
+<td>« Tiers autorisé » sans <strong>Référence du consentement</strong>.</td>
+<td>Recopiez la référence du consentement depuis la fiche du patient.</td>
+</tr>
+<tr>
+<td>« La référence saisie n'est pas un consentement en vigueur de ce patient à la communication à un tiers : vérifiez-la dans son dossier (Consentements). »</td>
+<td>Référence erronée, expirée ou d'un autre type.</td>
+<td>Vérifiez la référence ; faites enregistrer le consentement.</td>
+</tr>
+<tr>
+<td>« Indiquez le nom et la CIN du porteur : la remise à un tiers doit dire qui a emporté le document. »</td>
+<td>Remise au guichet à un tiers sans porteur.</td>
+<td>Saisissez <strong>Porteur</strong> et <strong>CIN du porteur</strong>.</td>
+</tr>
+<tr>
+<td>« Le patient n'a pas donné son consentement à l'envoi électronique de ses résultats. Enregistrez-le dans sa fiche (Consentements) avant d'envoyer par e-mail ou SMS. »</td>
+<td>Courriel ou SMS au patient sans consentement.</td>
+<td>Faites enregistrer le consentement, ou remettez au guichet.</td>
+</tr>
+<tr>
+<td>« La version v… de ce compte rendu a été remplacée par une version plus récente : elle ne peut plus être remise. Remettez la version en vigueur. »</td>
+<td>Remise d'une version remplacée.</td>
+<td>Sélectionnez la dernière version.</td>
+</tr>
+<tr>
+<td>« L'envoi à … a échoué : … » puis « … : échec de l'envoi, voir le détail des remises. »</td>
+<td>Courriel ou SMS refusé par le serveur.</td>
+<td>Vérifiez l'adresse ou le numéro et recommencez.</td>
+</tr>
+<tr>
+<td>« Remise enregistrée — … v… » / « … : compte rendu envoyé par e-mail à … » / « … : SMS envoyé au … »</td>
+<td>Remise réussie.</td>
+<td>Information.</td>
+</tr>
+<tr>
+<td>« Un compte rendu rectifié doit indiquer le motif de la rectification. »</td>
+<td>Rectification sans <strong>Motif (français)</strong>.</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« Confirmez-vous cette rectification ? Si le compte rendu précédent a été remis à une autre personne que le patient, la CNDP doit en être informée. »</td>
+<td>Rectification « Correction d'identité » ou « Retrait du compte rendu ».</td>
+<td><strong>Oui</strong> ; informez la CNDP si besoin.</td>
+</tr>
+<tr>
+<td>« Une rectification doit référencer la version qu'elle remplace. »</td>
+<td>Rectification sur une version déjà remplacée (autre poste).</td>
+<td>Actualisez et rectifiez la dernière version.</td>
+</tr>
+<tr>
+<td>« Compte rendu rectifié v… émis — … »</td>
+<td>Rectification réussie.</td>
+<td>Remettez la nouvelle version.</td>
+</tr>
+<tr>
+<td>« Vous n'avez pas le droit d'effectuer cette opération. »</td>
+<td>Action sans le droit nécessaire.</td>
+<td>Demandez à une personne habilitée.</td>
+</tr>
+</tbody>
+</table><p class="top"><a href="index.html">Retour au sommaire</a></p>
 </div>
 </body>
 </html>

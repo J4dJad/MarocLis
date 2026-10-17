@@ -29,8 +29,36 @@ ul.toc li { margin: 4px 0; }
 <div class="page">
 <div class="crumb"><a href="index.html">Sommaire</a></div>
 <h1>Facturation, caisse et tiers payant</h1>
-<p>Ce chapitre couvre l'argent du laboratoire : la facture et l'avoir, les acomptes, l'encaissement au comptoir, la caisse de chaque opérateur, les bordereaux envoyés aux organismes (CNSS, CNOPS, mutuelles…) et le visa des caisses par le responsable.</p>
-<p>Écrans concernés, dans le menu :</p>
+<h3>Présentation du module</h3>
+<p><strong>But</strong> : ce chapitre couvre l'argent du laboratoire : la facture et l'avoir, les acomptes, l'encaissement au comptoir, la caisse de chaque opérateur, les bordereaux envoyés aux organismes (CNSS, CNOPS, mutuelles…) et le visa des caisses par le responsable.</p>
+<p><strong>Qui l'utilise</strong> :</p>
+<table>
+<thead>
+<tr>
+<th>Rôle (par défaut)</th>
+<th>Ce qu'il fait ici</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Secrétariat / accueil</td>
+<td>Émet les factures, encaisse règlements et acomptes, tient et clôture sa caisse.</td>
+</tr>
+<tr>
+<td>Comptabilité</td>
+<td>Tout ce que fait l'accueil, plus remises, avoirs, remboursements, tiers payant (bordereaux, retours, montants acceptés) et visa des caisses.</td>
+</tr>
+<tr>
+<td>Administrateur</td>
+<td>Tout, y compris le format d'impression des factures (<strong>Paramètres › Factures</strong>).</td>
+</tr>
+<tr>
+<td>Biologiste responsable</td>
+<td>Consulte <strong>Facturation</strong> et <strong>Tiers payant</strong>, vise les caisses ; n'encaisse pas.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Écrans</strong>, dans le menu :</p>
 <table>
 <thead>
 <tr>
@@ -62,10 +90,12 @@ ul.toc li { margin: 4px 0; }
 </tr>
 </tbody>
 </table>
+<p>et l'onglet <strong>Factures</strong> de <strong>Administration › Paramètres</strong> (format d'impression des factures).</p>
+<p><strong>Liens avec les autres modules</strong> : les prix et la répartition organisme / patient viennent de l'enregistrement du dossier (<strong>Dossiers</strong>) ; un dossier annulé dans <strong>Consultation d'un dossier</strong> se régularise ici par un avoir ; les règlements en espèces alimentent la <strong>Caisse</strong> ; les caisses visées et les virements des organismes servent au <strong>Rapprochement bancaire</strong> et à l'<strong>Export comptable</strong> (groupe <strong>Finances</strong>) ; les créances échues apparaissent sur le <strong>Tableau de bord</strong>.</p>
 <p>Vue d'ensemble du parcours de l'argent :</p>
 <div class="diagram"><img src="img/diagramme-8eb4d03290b50beb.png" alt="Diagramme"></div>
 
-<p>Raccourcis valables sur tous ces écrans : <strong>F5</strong> actualise l'écran, <strong>Ctrl+F</strong> place le curseur dans la zone de recherche, <strong>Ctrl+P</strong> imprime la liste affichée, <strong>F1</strong> affiche la liste des raccourcis. Les raccourcis se modifient dans la fenêtre des raccourcis.</p>
+<p>Raccourcis valables sur tous ces écrans : <strong>F5</strong> actualise l'écran, <strong>Ctrl+F</strong> place le curseur dans la zone de recherche, <strong>Ctrl+P</strong> imprime la liste affichée, <strong>F1</strong> ouvre l'aide de l'écran, <strong>Maj+F1</strong> la liste des raccourcis. Les raccourcis se modifient dans la fenêtre <strong>Raccourcis clavier</strong>.</p>
 <h3>Avant de commencer : trois règles qui expliquent tout le reste</h3>
 <p><strong>1. La numérotation des factures est continue, sans trou.</strong>
 La loi fiscale marocaine exige que les factures portent des numéros qui se suivent, sans saut et sans retour en arrière. Dans l'application :</p>
@@ -92,14 +122,14 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 <li>Pour un organisme qui rembourse sur le tarif national de référence, la base de remboursement d'un acte est : <strong>coefficient B de l'acte × valeur de la lettre B</strong> (à la date de l'acte). L'organisme paie son taux (par exemple 70 %) de cette base, jamais plus que le prix de l'acte. Si le laboratoire facture au-dessus du tarif de référence, l'excédent est entièrement à la charge du patient.</li>
 <li>Pour un organisme qui rembourse sur le prix du laboratoire, sa part est son taux appliqué au prix facturé (remise déduite).</li>
 <li><strong>Part organisme</strong> + <strong>Part patient</strong> = <strong>Total à payer</strong>.</li>
-<li>Si le dossier a été enregistré <strong>sans tiers payant</strong> (case non cochée, ou convention expirée), la facture est adressée au patient pour la totalité : c'est le patient qui se fait rembourser avec sa feuille de soins.</li>
+<li>Si le dossier a été enregistré <strong>sans tiers payant</strong> (case <strong>Paiement direct</strong> cochée, ou convention expirée), la facture est adressée au patient pour la totalité : c'est le patient qui se fait rembourser avec sa feuille de soins.</li>
 <li>Si le dossier a été enregistré <strong>avec tiers payant</strong> et que l'organisme a une convention en cours, la facture est adressée à l'organisme ; le patient ne paie au comptoir que sa part, et la part de l'organisme est réclamée par bordereau (écran <strong>Tiers payant</strong>).</li>
 <li>Les actes de biologie sont exonérés de TVA ; la TVA reste à 0.</li>
-<li>La facture imprimée porte le code de chaque acte, la part organisme et la part patient par ligne, l'ICE du laboratoire et du destinataire, et le montant total en toutes lettres.</li>
+<li>La facture peut s'imprimer sous deux formats (voir <strong>Format d'impression des factures</strong> dans <strong>Facturation</strong>) : le <strong>format existant</strong> (montant, part organisme, part patient par ligne) et le <strong>format cotation B</strong> (code de l'acte, cotation en B, montant en DH). Les deux portent l'ICE du laboratoire et du destinataire et, selon le réglage, le montant total en toutes lettres. Le format ne change jamais un montant.</li>
 </ul>
 <hr />
 <h3 id="billing">Facturation</h3>
-<p>Écran de travail du comptoir et de la comptabilité : il montre en haut ce qui a été fait et pas encore facturé, en bas ce qui a été facturé et pas encore payé.</p>
+<p><strong>À quoi sert cet écran</strong> : c'est l'écran de travail du comptoir et de la comptabilité. En haut, ce qui a été fait et pas encore facturé (avec les acomptes) ; en bas, les factures et avoirs émis, ce qui reste à payer, les règlements, les avoirs, le tiers payant et l'impression.</p>
 <p><strong>Qui y a accès</strong></p>
 <table>
 <thead>
@@ -142,20 +172,19 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 </tr>
 </tbody>
 </table>
-<p>Les boutons pour lesquels vous n'avez pas le droit restent visibles mais grisés. Le Biologiste responsable voit l'écran en lecture seule. Biologiste, Technicien, Préleveur, Responsable qualité et Prescripteur n'ont pas accès.</p>
+<p>Les boutons pour lesquels vous n'avez pas le droit restent visibles mais grisés. Le Biologiste responsable voit l'écran en lecture seule. Biologiste, Technicien de laboratoire, Préleveur, Responsable qualité et Prescripteur n'ont pas accès.</p>
 <p><strong>L'écran</strong></p>
 <ul>
-<li><strong>En haut : « Actes non facturés »</strong> — un dossier par ligne, avec une case à cocher. Colonnes : <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Enregistré le</strong>, <strong>Organisme payeur</strong> (ou « Paiement direct »), <strong>Analyses</strong> (nombre), <strong>Total à payer</strong>, <strong>Part organisme</strong>, <strong>Part patient</strong>, <strong>Acompte</strong> (acomptes encore détenus). Le titre affiche le nombre de dossiers à facturer et leur total. Seuls les 500 dossiers les plus récents sont affichés ; le titre le signale quand la limite est atteinte.</li>
+<li><strong>En-tête</strong> : « Facturation », « N à facturer · M factures » et le bouton <strong>Actualiser</strong>.</li>
+<li><strong>En haut : carte « Actes non facturés »</strong> (« N · total ») — un dossier par ligne, avec une case à cocher. Colonnes : <strong>N° de dossier</strong>, <strong>Patient</strong>, <strong>Enregistré le</strong>, <strong>Organisme payeur</strong> (ou « Paiement direct »), <strong>Analyses</strong> (nombre), <strong>Total</strong>, <strong>Part organisme</strong>, <strong>Part patient</strong>, <strong>Acompte</strong> (acomptes encore détenus). Seuls les 500 dossiers les plus récents sont affichés ; le titre ajoute « — seuls les 500 dossiers les plus récents sont affichés » quand la limite est atteinte. Boutons : <strong>Encaisser un acompte</strong>, <strong>Rembourser l'acompte</strong>, <strong>Émettre la facture</strong>.</li>
 <li>Un dossier <strong>annulé</strong> apparaît barré et grisé : il n'est là que parce qu'il détient encore un acompte à rembourser.</li>
 <li>Un dossier <strong>déjà facturé</strong> qui garde un reste d'acompte apparaît grisé avec la mention « Facturé (FAC/…) — acompte à rembourser ».</li>
-<li>Boutons : <strong>Émettre la facture</strong>, <strong>Encaisser un acompte</strong>, <strong>Rembourser l'acompte</strong>.</li>
-<li><strong>En bas : « Factures »</strong> — factures et avoirs émis, les plus récents d'abord. Zone de recherche (numéro de facture, nom du destinataire ou numéro de dossier, puis touche Entrée), filtre de statut (« Tout sélectionner », « Émise », « Partiellement réglée », « Réglée », « Créance abandonnée ») et bouton <strong>Actualiser</strong>.</li>
-<li>Colonnes : case à cocher, <strong>N°</strong>, <strong>Désignation</strong> (Facture ou Facture d'avoir), <strong>Date de facturation</strong>, <strong>Facturé à</strong>, <strong>Total à payer</strong>, <strong>Réglé</strong>, <strong>Reste à payer</strong>, <strong>En retard</strong> (en jours), <strong>Statut</strong>.</li>
+<li>Les dossiers d'une fiche patient fusionnée apparaissent au nom du patient conservé et se facturent à son nom.</li>
+<li><strong>En bas : « Factures »</strong> — factures et avoirs émis, les plus récents d'abord. Au-dessus : la zone de recherche « N° de facture, nom, n° de dossier (Ctrl+F) » (puis Entrée) et les filtres <strong>Toutes · N</strong>, <strong>Émise · N</strong>, <strong>Partiellement réglée · N</strong>, <strong>Réglée · N</strong>, <strong>Créance abandonnée · N</strong> (le nombre tient compte de la recherche).</li>
+<li>Colonnes : case à cocher, <strong>N°</strong>, <strong>Type</strong> (Facture ou Facture d'avoir), <strong>Date</strong>, <strong>Facturé à</strong>, <strong>Total</strong>, <strong>Réglé</strong>, <strong>Reste à payer</strong>, <strong>En retard</strong> (« N j »), <strong>Statut</strong> (pastille).</li>
 <li>Couleurs : orange = en retard ; rouge = plus de 60 jours de retard ; gris = réglée ; italique = avoir.</li>
 <li>Une facture dont une partie a été passée en perte affiche une bulle d'aide sur la colonne <strong>Réglé</strong> (« Hors montant payé : … passés en perte »).</li>
-<li>Première rangée de boutons : <strong>Règlement</strong>, <strong>Rembourser</strong>, <strong>Déclarer impayé</strong>, <strong>Facture d'avoir</strong>, <strong>Imprimer la facture</strong>, <strong>Imprimer le reçu</strong>.</li>
-<li>Deuxième rangée : <strong>Transmettre au tiers payant</strong>, <strong>Enregistrer le retour</strong>, <strong>Montant accepté par l'organisme</strong>.</li>
-<li>À droite : nombre de factures affichées sur le total et somme du <strong>Reste à payer</strong>.</li>
+<li>Sous la liste : « X / Y » factures affichées et la somme du <strong>Reste à payer</strong> ; la barre d'actions <strong>Plus d'actions</strong>, <strong>Facture d'avoir</strong>, <strong>Imprimer la facture</strong>, <strong>Imprimer le reçu</strong> et, à droite, le bouton principal <strong>Règlement</strong>.</li>
 </ul>
 <p>Statuts d'une facture :</p>
 <table>
@@ -180,11 +209,36 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 </tr>
 <tr>
 <td>Créance abandonnée</td>
-<td>Prévu dans le filtre ; aucune action de l'écran ne met une facture dans ce statut (à vérifier).</td>
+<td>Prévu dans les filtres ; aucune action de l'écran ne met une facture dans ce statut.</td>
 </tr>
 </tbody>
 </table>
 <p>L'échéance d'une facture patient est le jour même ; celle d'une facture organisme est la date d'émission plus le délai de paiement de l'organisme. Le compteur <strong>En retard</strong> part de cette échéance.</p>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Actualiser</strong> (F5) : recharge les deux listes. Le dossier sélectionné dans <strong>Actes non facturés</strong> reste sélectionné après le rechargement (comme après un acompte ou une facture), au lieu de revenir à la première ligne.</li>
+<li><strong>Encaisser un acompte</strong> : encaisse une avance sur <strong>un</strong> dossier coché, avant la facture (droit « encaisser un règlement »).</li>
+<li><strong>Rembourser l'acompte</strong> : rembourse tous les acomptes encore détenus sur <strong>un</strong> dossier coché, avec motif (droit « émettre un avoir »).</li>
+<li><strong>Émettre la facture</strong> : ouvre la fenêtre d'émission pour les dossiers cochés (même patient, même organisme) ; attribue le numéro (droit « émettre une facture »).</li>
+<li>Zone de recherche des factures + Entrée : par n° de facture, nom du destinataire ou n° de dossier.</li>
+<li>Filtres <strong>Toutes</strong>, <strong>Émise</strong>, <strong>Partiellement réglée</strong>, <strong>Réglée</strong>, <strong>Créance abandonnée</strong> : limitent la liste au statut choisi.</li>
+<li><strong>Règlement</strong> : encaisse un règlement (total ou partiel) sur <strong>une</strong> facture cochée (droit « encaisser un règlement »).</li>
+<li><strong>Facture d'avoir</strong> : annule par avoir tout ce qui reste à créditer sur <strong>une</strong> facture, avec motif (droit « émettre un avoir »).</li>
+<li><strong>Imprimer la facture</strong> : PDF de la facture cochée (ou de la ligne sélectionnée si rien n'est coché), dans le format par défaut réglé dans <strong>Paramètres › Factures</strong> ; un avoir s'imprime toujours au format existant.</li>
+<li><strong>Imprimer le reçu</strong> : PDF du reçu de règlement de la facture.</li>
+<li><strong>Plus d'actions › Rembourser</strong> : rembourse un règlement du patient sur la facture cochée, avec motif (droit « émettre un avoir »).</li>
+<li><strong>Plus d'actions › Déclarer impayé</strong> : déclare un chèque ou un effet rejeté par la banque, avec motif (droit « encaisser un règlement »).</li>
+<li><strong>Plus d'actions › Transmettre au tiers payant</strong> : met les factures cochées dans un bordereau, après confirmation (droit tiers payant).</li>
+<li><strong>Plus d'actions › Enregistrer le retour</strong> : enregistre la réponse de l'organisme sur les factures cochées déjà transmises (droit tiers payant).</li>
+<li><strong>Plus d'actions › Montant accepté par l'organisme</strong> : saisit ce que l'organisme paie sur <strong>une</strong> facture transmise (droit tiers payant).</li>
+<li><strong>Plus d'actions › Imprimer la facture — format existant</strong> : imprime cette fois au format existant, quel que soit le réglage.</li>
+<li><strong>Plus d'actions › Imprimer la facture — format cotation B</strong> : imprime cette fois au format cotation B (grisé pour un avoir).</li>
+<li>Fenêtre <strong>Émettre la facture</strong> : patient, organisme, liste des dossiers, <strong>Montant brut</strong>, <strong>Remise</strong> et <strong>Motif de la remise</strong> (avec le droit remise), <strong>Montant net</strong>, boutons <strong>Émettre la facture</strong> / <strong>Annuler</strong>.</li>
+<li>Fenêtre <strong>Règlement</strong> : <strong>Reste à payer</strong> (ou <strong>Reste à payer par le patient</strong>), <strong>Mode de règlement</strong>, <strong>Montant</strong>, et selon le mode <strong>Référence</strong>, <strong>Banque</strong>, <strong>Échéance</strong> ; <strong>Enregistrer</strong> / <strong>Annuler</strong>.</li>
+<li>Fenêtre de choix d'un règlement (pour <strong>Rembourser</strong> et <strong>Déclarer impayé</strong>) : <strong>Date</strong>, <strong>Mode de règlement</strong>, <strong>Montant</strong>, <strong>Référence</strong>, <strong>Banque</strong>, <strong>Créé par</strong> (toutes les colonnes visibles sans défilement).</li>
+<li>Fenêtre <strong>Enregistrer le retour</strong> : <strong>Retour de l'organisme</strong> (Accepté, Accepté partiellement, Rejeté, Retransmis) et <strong>Motif communiqué par l'organisme</strong>.</li>
+<li>Fenêtre <strong>Montant accepté par l'organisme</strong> : <strong>Part organisme</strong> (ou <strong>Reste dû par l'organisme</strong> après un avoir partiel), <strong>Montant accepté</strong>, <strong>Référence du virement ou bordereau</strong>, choix <strong>Laisser à la charge du patient (reste sur la facture)</strong> / <strong>Passer en perte</strong>, <strong>Motif communiqué par l'organisme</strong>.</li>
+</ul>
 <p><strong>Scénarios</strong></p>
 <p><em>1. Facturer un dossier (patient sans tiers payant ou avec tiers payant)</em>
 1. Dans <strong>Actes non facturés</strong>, cochez le dossier.
@@ -195,13 +249,13 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 <p><em>2. Regrouper plusieurs dossiers sur une seule facture</em>
 1. Cochez plusieurs dossiers <strong>du même patient</strong> et <strong>du même organisme</strong> (ou tous sans tiers payant).
 2. <strong>Émettre la facture</strong>, puis confirmez dans la fenêtre.
-- Refusé si les dossiers sont de patients différents (« Une facture ne peut regrouper que les dossiers d'un même patient. ») ou d'organismes / modes de prise en charge différents (« Les dossiers … n'ont pas été enregistrés avec le même organisme payeur… Facturez-les séparément. »).</p>
+- Refusé si les dossiers sont de patients différents ou d'organismes / modes de prise en charge différents (voir les messages en fin de chapitre).</p>
 <p><em>3. Accorder une remise (Comptabilité, Administrateur)</em>
 1. Cochez le ou les dossiers, cliquez sur <strong>Émettre la facture</strong>.
 2. Dans la fenêtre, saisissez le montant dans <strong>Remise</strong> ; le <strong>Montant net</strong> se recalcule.
 3. Saisissez le <strong>Motif de la remise</strong> (obligatoire).
 4. Cliquez sur <strong>Émettre la facture</strong>.
-- La remise est répartie sur les lignes au prorata et reste écrite sur la facture avec son motif. Elle ne peut pas dépasser le montant brut. Les champs de remise n'apparaissent pas pour le Secrétariat.</p>
+- La remise est répartie sur les lignes au prorata et reste écrite sur la facture avec son motif. Elle ne peut pas dépasser le montant brut. Les champs de remise n'apparaissent pas pour le Secrétariat / accueil.</p>
 <p><em>4. Encaisser un règlement complet au comptoir</em>
 1. En bas, cochez <strong>une seule</strong> facture.
 2. Cliquez sur <strong>Règlement</strong>.
@@ -210,47 +264,51 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 5. Remplissez les champs qui apparaissent :
    - Chèque, Effet / traite : <strong>Référence</strong> (obligatoire), <strong>Banque</strong>, <strong>Échéance</strong> ;
    - Virement : <strong>Référence</strong> (obligatoire), <strong>Banque</strong> ;
-   - Carte bancaire : <strong>Référence</strong> (facultative, numéro d'autorisation).
-6. Cliquez sur <strong>Enregistrer</strong>. Le statut passe à « Réglée ».
-- En espèces, une caisse doit être ouverte à votre nom (écran <strong>Caisse</strong>), sinon : « Un règlement en espèces exige une session de caisse ouverte. »
-- Au-delà de 20 000 DH en espèces, un avertissement rouge s'affiche (risque de sanction fiscale). Ce n'est qu'un avertissement : l'enregistrement reste possible.</p>
+   - Carte bancaire : <strong>Référence</strong> (facultative, numéro d'autorisation) ;
+   - Espèces, Paiement mobile : aucun champ de plus.
+6. Cliquez sur <strong>Enregistrer</strong>. Le statut passe à « Réglée ». Le reçu imprimé ensuite est bien celui de cette facture.
+- Le montant accepte les espaces et la virgule (« 1 250,00 »).
+- En espèces, une caisse doit être ouverte à votre nom (écran <strong>Caisse</strong>).
+- Au-delà de 20 000 DH en espèces, un avertissement rouge s'affiche (risque de sanction fiscale). Ce n'est qu'un avertissement : l'enregistrement reste possible.
+- Une facture déjà soldée affiche « FAC/… — Réglée » au lieu d'ouvrir la fenêtre.</p>
 <p><em>5. Encaisser un règlement partiel</em>
 1. Même procédure que ci-dessus, mais remplacez le <strong>Montant</strong> pré-rempli par le montant réellement reçu.
 2. <strong>Enregistrer</strong>. La facture passe à « Partiellement réglée » et le <strong>Reste à payer</strong> diminue.
 3. Recommencez autant de fois que nécessaire, avec le même mode ou un autre (par exemple une partie en espèces, le reste par chèque).</p>
 <p><em>6. Patient dont la part organisme est en tiers payant</em>
-- Le bouton <strong>Règlement</strong> ne propose que la part du patient. Si le patient a déjà tout payé de sa part, un message indique « Le patient ne doit plus que 0,00 … le reste est la part de l'organisme, réglée par le tiers payant. »
-- La part de l'organisme se règle uniquement par <strong>Montant accepté par l'organisme</strong> (scénario 13), après transmission du bordereau.</p>
+- Le bouton <strong>Règlement</strong> ne propose que la part du patient. Si le patient a déjà tout payé de sa part, un message indique que le reste est la part de l'organisme, réglée par le tiers payant.
+- La part de l'organisme se règle uniquement par <strong>Plus d'actions › Montant accepté par l'organisme</strong> (scénario 13), après transmission du bordereau.</p>
 <p><em>7. Imprimer une facture ou un reçu</em>
 1. Sélectionnez une facture : cochez-la, ou cliquez simplement sur sa ligne sans rien cocher.
-2. Cliquez sur <strong>Imprimer la facture</strong> ou <strong>Imprimer le reçu</strong>. Le PDF s'ouvre ; imprimez-le depuis la visionneuse.
+2. Cliquez sur <strong>Imprimer la facture</strong> (format par défaut) ou <strong>Imprimer le reçu</strong>. Pour un autre format cette fois-ci : <strong>Plus d'actions › Imprimer la facture — format existant</strong> ou <strong>Imprimer la facture — format cotation B</strong>. Le PDF s'ouvre ; imprimez-le depuis la visionneuse.
 - Si plusieurs lignes sont cochées, rien n'est imprimé (les boutons sont grisés).
-- Une réimpression donne exactement le même document (destinataire, ICE, prix figés à l'émission).</p>
+- Une réimpression donne les mêmes montants (destinataire, ICE, prix figés à l'émission) ; seule la présentation dépend du format et des options choisis.</p>
 <p><em>8. Encaisser un acompte avant la facture</em>
 Cas typique : le patient paie au prélèvement, la facture sera faite quand le dossier sera complet.
 1. En haut, cochez <strong>un seul</strong> dossier.
 2. Cliquez sur <strong>Encaisser un acompte</strong>.
 3. La fenêtre affiche le <strong>Reste à couvrir</strong>. Choisissez le <strong>Mode de règlement</strong>, saisissez le <strong>Montant</strong> et, selon le mode, la <strong>Référence</strong>, la <strong>Banque</strong>, l'<strong>Échéance</strong>.
-4. <strong>Enregistrer</strong>. Un numéro de reçu <code>REC/…</code> est attribué ; la colonne <strong>Acompte</strong> se met à jour.
+4. <strong>Enregistrer</strong>. Un numéro de reçu <code>REC/…</code> est attribué et affiché dans la barre d'état ; la colonne <strong>Acompte</strong> se met à jour.
 - L'acompte ne peut pas dépasser ce que le patient devra (sa seule part s'il est en tiers payant) moins les acomptes déjà reçus.
 - Refusé sur un dossier annulé ou déjà facturé. En espèces, une caisse ouverte est nécessaire.
-- À l'émission de la facture, l'acompte devient automatiquement un règlement de la facture.</p>
+- À l'émission de la facture, l'acompte devient automatiquement un règlement de la facture.
+- Il n'y a pas de reçu d'acompte imprimable : notez le numéro <code>REC/…</code> pour le patient.</p>
 <p><em>9. Rembourser un acompte (dossier annulé, ou facture plus petite que l'acompte) — Comptabilité, Administrateur</em>
 1. En haut, cochez <strong>un seul</strong> dossier (il peut être barré ou marqué « acompte à rembourser »).
 2. Cliquez sur <strong>Rembourser l'acompte</strong>.
 3. La fenêtre rappelle le montant et les numéros de reçus concernés. Saisissez le motif (5 caractères minimum) et validez par <strong>OK</strong>.
 4. Tous les acomptes encore détenus sur ce dossier sont remboursés.
-- Un acompte en espèces sort de <strong>votre</strong> caisse, qui doit être ouverte. Un acompte par chèque, carte ou virement est retiré de la caisse qui l'avait encaissé, si elle est encore ouverte.</p>
+- Un acompte en espèces sort de <strong>votre</strong> caisse, qui doit être ouverte et contenir assez d'espèces. Un acompte par chèque, carte ou virement est retiré de la caisse qui l'avait encaissé, si elle est encore ouverte.</p>
 <p><em>10. Rembourser un règlement — Comptabilité, Administrateur</em>
 1. En bas, cochez <strong>une seule</strong> facture.
-2. Cliquez sur <strong>Rembourser</strong>.
-3. Choisissez le règlement dans la liste (date, mode, montant, référence, banque, qui l'a encaissé) puis cliquez sur le bouton <strong>Rembourser</strong> de la fenêtre (ou double-clic).
+2. Cliquez sur <strong>Plus d'actions › Rembourser</strong>.
+3. Choisissez le règlement dans la liste (date, mode, montant, référence, banque, qui l'a encaissé) puis cliquez sur le bouton <strong>Rembourser</strong> de la fenêtre (ou double-clic). Seuls les règlements du patient sont proposés (pas ceux de l'organisme ni une perte).
 4. Saisissez le motif (5 caractères minimum), <strong>OK</strong>.
 5. Le règlement passe à « Remboursé » ; le reste à payer de la facture remonte.
-- Un remboursement en espèces exige que <strong>votre</strong> caisse soit ouverte ; il est déduit des espèces attendues.
+- Un remboursement en espèces exige que <strong>votre</strong> caisse soit ouverte, et il ne peut pas dépasser les espèces attendues dans cette caisse ; il en est déduit.
 - Rembourser n'annule pas la facture : si l'acte n'est plus dû, il faut aussi émettre un avoir.</p>
 <p><em>11. Déclarer un chèque ou un effet impayé</em>
-1. Cochez <strong>une seule</strong> facture, cliquez sur <strong>Déclarer impayé</strong>.
+1. Cochez <strong>une seule</strong> facture, cliquez sur <strong>Plus d'actions › Déclarer impayé</strong>.
 2. Seuls les chèques et effets encaissés sont proposés. Choisissez le règlement, cliquez sur <strong>Déclarer impayé</strong>.
 3. Saisissez le motif de rejet communiqué par la banque, <strong>OK</strong>.
 4. Le règlement passe à « Impayé » ; la facture redevient due et réapparaît dans le suivi des retards.
@@ -258,37 +316,60 @@ Cas typique : le patient paie au prélèvement, la facture sera faite quand le d
 <p><em>12. Corriger une facture : émettre un avoir — Comptabilité, Administrateur</em>
 1. Cochez <strong>une seule</strong> facture (pas un avoir).
 2. Cliquez sur <strong>Facture d'avoir</strong>.
-3. Saisissez le motif (10 caractères minimum) : il sera la justification comptable. <strong>OK</strong>.
+3. Saisissez le motif (10 caractères minimum, 500 au plus) : il sera la justification comptable. <strong>OK</strong>.
 4. Un avoir <code>AV/…</code> est émis pour <strong>tout ce qui reste à créditer</strong> sur la facture. Il reprend chaque ligne et la remise de la facture d'origine, et mentionne son numéro.
 5. Si la facture est entièrement annulée, ses dossiers reviennent en haut dans <strong>Actes non facturés</strong>, prêts à être refacturés correctement.
-6. Si le dossier avait un organisme mais avait été facturé au patient, l'application propose, au moment de refacturer, d'adresser la nouvelle facture à l'organisme (« Adresser cette facture au tiers payant … ? »). Répondez <strong>Oui</strong> pour l'organisme, <strong>Non</strong> pour le patient.
-- Avoir refusé si la facture a été transmise à l'organisme ou réglée par lui (« … Enregistrez d'abord le rejet de l'organisme, puis émettez l'avoir. »), si elle est déjà entièrement annulée, ou s'il s'agit d'un avoir.
+6. Si le dossier avait un organisme mais avait été facturé au patient, l'application propose, au moment de refacturer, d'adresser la nouvelle facture à l'organisme. Répondez <strong>Oui</strong> pour l'organisme, <strong>Non</strong> pour le patient.
+- Avoir refusé si la facture a été transmise à l'organisme ou réglée par lui (enregistrez d'abord le rejet de l'organisme), si elle est déjà entièrement annulée, ou s'il s'agit d'un avoir.
 - L'avoir ne rend pas l'argent. Si le patient avait payé, faites ensuite <strong>Rembourser</strong> (scénario 10).
 - L'avoir partiel (pour une partie seulement du montant) n'est pas proposé à l'écran : l'avoir porte toujours sur tout le reste.</p>
 <p><em>13. Saisir le paiement d'un organisme sur une facture (montant accepté) — Comptabilité, Administrateur</em>
 1. Cochez <strong>une seule</strong> facture déjà transmise au tiers payant.
-2. Cliquez sur <strong>Montant accepté par l'organisme</strong>.
-3. La fenêtre affiche la <strong>Part organisme</strong>. Le <strong>Montant accepté</strong> est pré-rempli avec la totalité ; corrigez-le si l'organisme a payé moins.
+2. Cliquez sur <strong>Plus d'actions › Montant accepté par l'organisme</strong>.
+3. La fenêtre affiche la <strong>Part organisme</strong> (ou le <strong>Reste dû par l'organisme</strong> si un avoir a déjà réduit la facture). Le <strong>Montant accepté</strong> est pré-rempli avec la totalité ; corrigez-le si l'organisme a payé moins.
 4. Saisissez la <strong>Référence du virement ou bordereau</strong> (facultative).
 5. S'il y a une différence, la fenêtre affiche « Non accepté : … Que devient la différence ? ». Choisissez :
    - <strong>Laisser à la charge du patient (reste sur la facture)</strong> : le patient pourra la régler au comptoir par <strong>Règlement</strong> ;
    - <strong>Passer en perte</strong> : la différence est soldée comme perte.
 6. Saisissez le <strong>Motif communiqué par l'organisme</strong> (obligatoire s'il y a une différence). <strong>Enregistrer</strong>.
-7. Le statut du tiers payant devient « Réglé », « Accepté partiellement » ou « Rejeté » (si 0 accepté).
-- Une seule saisie par facture : « Le montant accepté a déjà été saisi pour la facture … ».</p>
+7. Le message « FAC/… : … acceptés sur … » s'affiche. Le statut du tiers payant devient « Réglé », « Accepté partiellement » ou « Rejeté » (si 0 accepté).
+- Une seule saisie par facture.</p>
 <p><em>14. Transmettre et suivre le tiers payant depuis cet écran</em>
-Les boutons <strong>Transmettre au tiers payant</strong> et <strong>Enregistrer le retour</strong> existent aussi ici, sur les factures cochées. L'écran <strong>Tiers payant</strong> est plus adapté (il montre ce qui bloque et les lots) ; voir plus bas. Particularité de cet écran : c'est le seul endroit où l'on peut <strong>retransmettre une facture rejetée</strong> (cochez-la, <strong>Transmettre au tiers payant</strong>).</p>
+Les actions <strong>Transmettre au tiers payant</strong> et <strong>Enregistrer le retour</strong> existent aussi ici (<strong>Plus d'actions</strong>), sur les factures cochées ; la transmission demande confirmation (« Transmettre N facture(s) à …, pour un montant de … ? »). L'écran <strong>Tiers payant</strong> est plus adapté (il montre ce qui bloque et les lots) ; voir plus bas. Particularité de cet écran : c'est le seul endroit où l'on peut <strong>retransmettre une facture rejetée</strong> (cochez-la, <strong>Plus d'actions › Transmettre au tiers payant</strong>). Si le patient avait déjà payé la part refusée, il faut d'abord le rembourser.</p>
+<h4>Format d'impression des factures</h4>
+<p>Le laboratoire choisit le format des factures patients dans <strong>Administration › Paramètres</strong>, onglet <strong>Factures</strong> (droit « gérer les paramètres », Administrateur par défaut). Le texte d'en-tête rappelle : « Format d'impression des factures patients. Les options s'appliquent aux nouvelles impressions et aux réimpressions ; elles ne changent jamais un montant. Les avoirs et les reçus gardent le format existant. »</p>
+<p><strong>Fonctionnalités de l'onglet Factures</strong></p>
+<ul>
+<li><strong>Format par défaut des factures patients</strong> : « Format existant (montant, part organisme, part patient) » ou « Format cotation B (code de l'acte, cotation en B, montant en DH) ». C'est le format du bouton <strong>Imprimer la facture</strong>.</li>
+<li><strong>Options du format existant</strong> :</li>
+<li>« Afficher la colonne code national de l'acte » (décoché par défaut) ;</li>
+<li>« Afficher la colonne cotation (coefficient) » (décoché) ; la case reste vide pour un acte facturé seulement en DH (coefficient 0) : pas de « B 0 » ;</li>
+<li>« Afficher le montant en lettres » (coché).</li>
+<li><strong>Options du format cotation B</strong> :</li>
+<li>« Afficher le prix en DH de chaque acte » (décoché) ;</li>
+<li>« Afficher la ligne « Prise de sang (PC) » même à 0,00 DH » (coché) ;</li>
+<li>« Afficher le montant en lettres » (coché) ;</li>
+<li>« Afficher la valeur de la lettre B utilisée » (décoché).</li>
+<li><strong>Enregistrer</strong> : enregistre le réglage (« Format d'impression des factures enregistré. ») ; <strong>Actualiser</strong> : relit le réglage enregistré.</li>
+</ul>
+<p><strong>Le format cotation B</strong> reprend l'en-tête du laboratoire et les parties (laboratoire, destinataire, patient) du format existant, puis un tableau <strong>Code</strong> / <strong>Acte</strong> / <strong>Cotation</strong> (en B), le <strong>Total B</strong>, la ligne « Prise de sang (PC) », la remise, la TVA et les parts organisme / patient s'il y en a, le <strong>Montant en DH</strong> (le total de la facture), le montant en lettres et la mention de TVA. Les cotations viennent des lignes figées à l'émission : un changement ultérieur du catalogue ne modifie pas une facture réimprimée. Un acte facturé seulement en dirhams (analyse hors nomenclature, coefficient 0) n'a pas de cotation : sa case <strong>Cotation</strong> reste vide (et non « 0 »), il ne compte pas dans le <strong>Total B</strong>, et la colonne du prix en DH s'affiche pour que son montant figure sur sa ligne.</p>
+<p><em>Choisir le format d'impression du laboratoire</em>
+1. Ouvrez <strong>Administration › Paramètres</strong>, onglet <strong>Factures</strong>.
+2. Choisissez le <strong>Format par défaut des factures patients</strong>.
+3. Cochez ou décochez les options du format choisi.
+4. Cliquez <strong>Enregistrer</strong>. Les impressions suivantes (y compris les réimpressions) suivent ce réglage.</p>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
 <li>Une facture émise est figée ; seule la <strong>Facture d'avoir</strong> la corrige. Un avoir ne peut pas lui-même faire l'objet d'un avoir. Le total des avoirs ne dépasse jamais le total facturé.</li>
 <li>Pas de facture sans ligne ; les analyses annulées et les analyses gratuites ne sont pas facturées.</li>
-<li>Une facture ne peut être adressée à un organisme que s'il a une convention de tiers payant en cours de validité (« … n'a pas de convention de tiers payant en cours de validité… Établissez-la au nom du patient. »).</li>
+<li>Une facture ne peut être adressée à un organisme que s'il a une convention de tiers payant en cours de validité.</li>
 <li>Un règlement ne peut pas dépasser le reste à payer, ni (au comptoir) la part du patient.</li>
-<li>Chèque et effet : référence obligatoire. Virement : référence obligatoire.</li>
-<li>Espèces : caisse ouverte obligatoire (règlement, acompte, remboursement).</li>
+<li>Chèque et effet : référence obligatoire. Virement : référence obligatoire. Le paiement mobile n'a pas de référence.</li>
+<li>Espèces : caisse ouverte obligatoire (règlement, acompte, remboursement) ; un remboursement en espèces ne peut pas dépasser les espèces attendues en caisse.</li>
+<li>Seul un règlement du patient peut être remboursé.</li>
 <li>Tout remboursement, impayé, avoir, remise ou retour d'organisme exige un motif ; il est conservé dans le journal d'audit.</li>
 <li>Les boutons sont protégés contre le double-clic : un clic = un enregistrement.</li>
-<li>La liste du bas n'affiche que les 50 factures les plus récentes correspondant à la recherche ; utilisez la recherche ou le filtre pour retrouver une facture plus ancienne.</li>
+<li>La liste du bas n'affiche que les 50 factures les plus récentes correspondant à la recherche et au filtre ; utilisez-les pour retrouver une facture plus ancienne.</li>
 </ul>
 <p><strong>Flux</strong></p>
 <p>Enregistrement du dossier (prix et répartition figés) → <strong>Facturation</strong> (acompte éventuel, émission, règlement patient) → <strong>Caisse</strong> (clôture en fin de poste) → <strong>Visa des caisses</strong>. Pour la part organisme : <strong>Facturation</strong> → <strong>Tiers payant</strong> (bordereau, retour) → <strong>Facturation</strong> (<strong>Montant accepté par l'organisme</strong>).</p>
@@ -296,7 +377,7 @@ Les boutons <strong>Transmettre au tiers payant</strong> et <strong>Enregistrer 
 <div class="diagram"><img src="img/diagramme-14d3238b3ce3beb3.png" alt="Diagramme"></div>
 
 <p>Règlement au comptoir (total, partiel, remboursement, impayé) :</p>
-<div class="diagram"><img src="img/diagramme-0968671de892d25e.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-ec98bbbd09f198b5.png" alt="Diagramme"></div>
 
 <p>Acompte avant facture :</p>
 <div class="diagram"><img src="img/diagramme-a817cc025163cffa.png" alt="Diagramme"></div>
@@ -306,7 +387,7 @@ Les boutons <strong>Transmettre au tiers payant</strong> et <strong>Enregistrer 
 
 <hr />
 <h3 id="cash">Caisse</h3>
-<p>Écran de la caisse de <strong>chaque opérateur</strong> : ouverture avec un fond de caisse, suivi des encaissements du poste, prélèvements déposés en banque, et clôture avec comptage.</p>
+<p><strong>À quoi sert cet écran</strong> : la caisse de <strong>chaque opérateur</strong> : ouverture avec un fond de caisse, suivi des encaissements du poste par mode de paiement, prélèvements déposés en banque, et clôture avec comptage du tiroir.</p>
 <p><strong>Qui y a accès</strong></p>
 <ul>
 <li>Ouvrir l'écran et <strong>Ouvrir la caisse</strong> : droit « Encaisser un règlement » — Administrateur, Secrétariat / accueil, Comptabilité.</li>
@@ -315,39 +396,48 @@ Les boutons <strong>Transmettre au tiers payant</strong> et <strong>Enregistrer 
 </ul>
 <p><strong>L'écran</strong></p>
 <ul>
-<li><strong>Sans caisse ouverte</strong> : le champ <strong>Fond de caisse</strong> (pré-rempli 0.00) et le bouton <strong>Ouvrir la caisse</strong>.</li>
+<li>En-tête « Caisse » et, caisse ouverte, « Votre nom · Session de caisse jj/mm/aaaa hh:mm · N règlements ».</li>
+<li><strong>Sans caisse ouverte</strong> : la carte <strong>Ouvrir la caisse</strong> avec le champ <strong>Fond de caisse</strong> (pré-rempli 0.00) et le bouton <strong>Ouvrir la caisse</strong>.</li>
 <li><strong>Caisse ouverte</strong> :</li>
-<li>une ligne avec le nom de l'opérateur, la date et l'heure d'ouverture et le nombre de règlements ;</li>
-<li>un tableau : <strong>Fond de caisse</strong>, puis <strong>Espèces</strong>, <strong>Chèque</strong>, <strong>Carte bancaire</strong>, <strong>Virement</strong> encaissés pendant le poste, puis <strong>Remboursements</strong> et <strong>Prélèvements</strong> s'il y en a, puis <strong>Espèces attendues</strong> ;</li>
-<li>à droite : <strong>Espèces attendues</strong> (en grand), le champ <strong>Espèces comptées</strong>, l'<strong>Écart de caisse</strong> calculé en direct (vert si nul, orange s'il est faible, rouge au-delà de 10 DH) ;</li>
-<li>le champ <strong>Explication de l'écart</strong>, qui n'apparaît que si l'écart dépasse 10 DH ;</li>
+<li>carte <strong>Détail de la session</strong> : <strong>Fond de caisse</strong>, puis <strong>Espèces</strong>, <strong>Chèque</strong>, <strong>Carte bancaire</strong>, <strong>Virement</strong>, <strong>Effet / traite</strong>, <strong>Paiement mobile</strong> encaissés pendant le poste, puis <strong>Remboursements</strong> et <strong>Prélèvements</strong> s'il y en a, puis <strong>Espèces attendues</strong> ;</li>
+<li>carte <strong>Clôturer la caisse</strong> : <strong>Espèces attendues</strong> et <strong>Écart de caisse</strong> en grand (vert si nul, orange s'il est faible, rouge au-delà de 10 DH), le champ <strong>Espèces comptées</strong>, le champ <strong>Explication de l'écart</strong> (seulement si l'écart dépasse 10 DH) et le rappel « Un écart supérieur à 10 DH doit être expliqué avant la clôture. » ;</li>
 <li>les boutons <strong>Clôturer la caisse</strong>, <strong>Actualiser</strong>, <strong>Prélèvement de caisse</strong>.</li>
 </ul>
-<p>Calcul : <strong>Espèces attendues</strong> = Fond de caisse + espèces encaissées − remboursements en espèces − prélèvements. Les chèques, cartes et virements sont affichés pour le rapport du poste mais ne sont pas comptés dans le tiroir.</p>
+<p>Calcul : <strong>Espèces attendues</strong> = Fond de caisse + espèces encaissées − remboursements en espèces − prélèvements. Les chèques, cartes, virements, effets et paiements mobiles sont affichés pour le rapport du poste mais ne sont pas comptés dans le tiroir.</p>
 <p>La caisse est personnelle : les règlements que vous saisissez dans <strong>Facturation</strong> vont dans <strong>votre</strong> caisse ouverte.</p>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Fond de caisse</strong> + <strong>Ouvrir la caisse</strong> : ouvre votre session de caisse (une seule à la fois par opérateur).</li>
+<li><strong>Actualiser</strong> (F5) : relit les totaux de la session.</li>
+<li><strong>Prélèvement de caisse</strong> : enregistre un retrait d'espèces du tiroir (dépôt en banque…) : montant puis motif. Il ne peut pas dépasser les espèces attendues.</li>
+<li><strong>Espèces comptées</strong> : votre comptage du tiroir ; l'<strong>Écart de caisse</strong> se calcule en direct.</li>
+<li><strong>Explication de l'écart</strong> : obligatoire au-delà de 10 DH d'écart (1 000 caractères au plus).</li>
+<li><strong>Clôturer la caisse</strong> : clôt la session après confirmation ; elle part au <strong>Visa des caisses</strong>.</li>
+</ul>
 <p><strong>Scénarios</strong></p>
 <p><em>1. Ouvrir la caisse en début de poste</em>
 1. Ouvrez <strong>Caisse</strong> (Ctrl+0).
 2. Saisissez le <strong>Fond de caisse</strong> (montant présent dans le tiroir).
 3. Cliquez sur <strong>Ouvrir la caisse</strong>.
-- Une seule caisse ouverte à la fois par opérateur (« Une session de caisse est déjà ouverte pour cet opérateur. »).</p>
+- Une seule caisse ouverte à la fois par opérateur.</p>
 <p><em>2. Encaisser pendant le poste</em>
 Les encaissements ne se font pas sur cet écran mais dans <strong>Facturation</strong> (<strong>Règlement</strong>, <strong>Encaisser un acompte</strong>). Revenez sur <strong>Caisse</strong> et cliquez sur <strong>Actualiser</strong> (ou F5) pour voir les totaux à jour.</p>
 <p><em>3. Déposer des espèces en banque en cours de poste (prélèvement)</em>
 1. Cliquez sur <strong>Prélèvement de caisse</strong>.
-2. Saisissez le montant retiré du tiroir, <strong>OK</strong>.
+2. Saisissez le montant retiré du tiroir (« Montant prélevé de la caisse et déposé en banque (DH) : »), <strong>OK</strong>.
 3. Saisissez le motif (« dépôt en banque », numéro de bordereau…), <strong>OK</strong>.
 4. Le montant apparaît dans <strong>Prélèvements</strong> et diminue les <strong>Espèces attendues</strong>.
-- Sans cette saisie, la clôture afficherait un manquant égal à l'argent déjà à la banque.</p>
+- Sans cette saisie, la clôture afficherait un manquant égal à l'argent déjà à la banque.
+- Un prélèvement plus grand que les espèces attendues est refusé.</p>
 <p><em>4. Rembourser en espèces</em>
-Le remboursement se fait dans <strong>Facturation</strong> (<strong>Rembourser</strong> ou <strong>Rembourser l'acompte</strong>). Il est déduit des espèces attendues de la caisse ouverte de la personne qui rembourse.</p>
+Le remboursement se fait dans <strong>Facturation</strong> (<strong>Plus d'actions › Rembourser</strong> ou <strong>Rembourser l'acompte</strong>). Il est déduit des espèces attendues de la caisse ouverte de la personne qui rembourse, et refusé s'il dépasse ces espèces.</p>
 <p><em>5. Clôturer la caisse en fin de poste</em>
 1. Comptez le tiroir.
 2. Saisissez le résultat dans <strong>Espèces comptées</strong> (pré-rempli avec les espèces attendues : remplacez-le par votre comptage réel).
 3. Regardez l'<strong>Écart de caisse</strong>. S'il dépasse 10 DH (en plus ou en moins), le champ <strong>Explication de l'écart</strong> apparaît : remplissez-le.
 4. Cliquez sur <strong>Clôturer la caisse</strong>, puis confirmez (« Clôturer la caisse avec … comptés, soit un écart de … ? »).
 5. Un message rappelle l'écart enregistré. L'écran revient à l'état « sans caisse ouverte ».
-- Sans explication d'un écart de plus de 10 DH, la clôture est refusée (« Un écart de caisse de … DH doit être expliqué avant la clôture. »).
+- Sans explication d'un écart de plus de 10 DH, la clôture est refusée ; le comptage n'est alors pas enregistré, la caisse reste ouverte.
 - La caisse clôturée part ensuite au <strong>Visa des caisses</strong>.</p>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
@@ -355,29 +445,28 @@ Le remboursement se fait dans <strong>Facturation</strong> (<strong>Rembourser</
 <li>Un écart positif (excédent) et un écart négatif (manquant) sont affichés avec leur signe.</li>
 <li>Tout règlement en espèces, tout acompte en espèces et tout remboursement en espèces exige une caisse ouverte au nom de l'opérateur.</li>
 <li>Un chèque déclaré impayé ou un règlement par carte remboursé pendant que la caisse d'origine est ouverte est retiré du total de cette caisse ; après la clôture, la caisse n'est plus modifiée.</li>
-<li>Le paiement mobile n'apparaît dans aucune ligne du tableau de caisse (à vérifier avec l'éditeur ; voir la fiche de vérification).</li>
-<li>Il n'y a pas d'impression du rapport de caisse depuis cet écran.</li>
+<li>Il n'y a pas d'impression du rapport de caisse depuis cet écran, ni de liste des règlements du poste (seulement les totaux par mode).</li>
 </ul>
 <p><strong>Flux</strong></p>
 <p><strong>Ouvrir la caisse</strong> → encaissements dans <strong>Facturation</strong> → <strong>Prélèvement de caisse</strong> si nécessaire → <strong>Clôturer la caisse</strong> → <strong>Visa des caisses</strong> par le responsable.</p>
-<div class="diagram"><img src="img/diagramme-ea0a014a3edf891c.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-8b90686fc565bc28.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="claims">Tiers payant</h3>
-<p>Écran de suivi de la part des organismes (CNSS, CNOPS, mutuelles…) : ce qui reste à envoyer, les bordereaux envoyés et ce que l'organisme a répondu.</p>
+<p><strong>À quoi sert cet écran</strong> : le suivi de la part des organismes (CNSS, CNOPS, mutuelles…) : ce qui reste à envoyer et ce qui le bloque, les bordereaux envoyés et ce que l'organisme a répondu.</p>
 <p><strong>Qui y a accès</strong></p>
 <ul>
 <li>Voir l'écran : droit « Consulter la facturation » — Administrateur, Biologiste responsable, Secrétariat / accueil, Comptabilité.</li>
-<li><strong>Transmettre au tiers payant</strong> et <strong>Enregistrer le retour</strong> : droit « Export comptable / tiers payant » — Administrateur et Comptabilité uniquement. Pour les autres, ces boutons restent grisés.</li>
+<li><strong>Cocher les factures transmissibles de cet organisme</strong>, <strong>Transmettre au tiers payant</strong> et <strong>Enregistrer le retour</strong> : droit « Export comptable / tiers payant » — Administrateur et Comptabilité uniquement. Pour les autres, ces boutons restent grisés.</li>
 </ul>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>En haut à droite : choix de la période (« 30 derniers jours », « 90 derniers jours », « 180 derniers jours » par défaut, « 365 derniers jours ») et <strong>Actualiser</strong>. Le titre indique le reste à recouvrer auprès des organismes (rouge s'il y a des bordereaux à relancer).</li>
-<li><strong>À transmettre</strong> (en haut) : les factures adressées à un organisme, pas encore envoyées. Colonnes : case à cocher, <strong>N°</strong>, <strong>Date de facturation</strong>, <strong>Jours</strong> (depuis l'émission), <strong>Organisme payeur</strong>, <strong>Patient</strong>, <strong>Montant net</strong>, <strong>Part organisme</strong>, <strong>Ce qui bloque</strong>.</li>
+<li>En haut à droite : choix de la période (« 30 derniers jours », « 90 derniers jours », « 180 derniers jours » par défaut, « 365 derniers jours ») et <strong>Actualiser</strong>.</li>
+<li><strong>À transmettre</strong> (en haut) : titre « À transmettre — N facture(s), montant » (« · N bloquée(s) » s'il y en a). Les factures adressées à un organisme, pas encore envoyées. Colonnes : case à cocher, <strong>N°</strong>, <strong>Date de facturation</strong>, <strong>Jours</strong> (depuis l'émission), <strong>Organisme payeur</strong>, <strong>Patient</strong>, <strong>Montant net</strong>, <strong>Part organisme</strong>, <strong>Ce qui bloque</strong>.</li>
 <li>Ligne rouge = facture bloquée ; la colonne <strong>Ce qui bloque</strong> dit pourquoi : « INPE du biologiste manquant » et/ou « INPE du prescripteur manquant ».</li>
 <li>Texte orange = facture de plus de 60 jours, à envoyer vite.</li>
-<li>Boutons : <strong>Cocher tout ce qui est transmissible</strong>, <strong>Transmettre au tiers payant</strong>.</li>
-<li><strong>Lots transmis</strong> (en bas à gauche) : un bordereau par ligne. Colonnes : <strong>Référence du dossier</strong> (TP/…), <strong>Organisme payeur</strong>, <strong>Transmis le</strong>, <strong>Jours</strong>, <strong>Factures</strong>, <strong>Montant réclamé</strong>, <strong>Réglé</strong>, <strong>Retour de l'organisme</strong> (« sans réponse », « à relancer », « accepté », « N refus »). Bouton : <strong>Enregistrer le retour</strong>.</li>
+<li>Boutons : <strong>Cocher les factures transmissibles de cet organisme</strong>, <strong>Transmettre au tiers payant</strong>.</li>
+<li><strong>Lots transmis</strong> (en bas à gauche) : titre « N lot(s) — reste à recouvrer … » (« · N sans réponse à relancer » s'il y en a). Un bordereau par ligne. Colonnes : <strong>Référence du dossier</strong> (TP/…), <strong>Organisme payeur</strong>, <strong>Transmis le</strong>, <strong>Jours</strong>, <strong>Factures</strong>, <strong>Montant réclamé</strong>, <strong>Réglé</strong>, <strong>Retour de l'organisme</strong> (« sans réponse », « à relancer », « accepté », « N refus »). Bouton : <strong>Enregistrer le retour</strong>.</li>
 <li>Ligne rouge = sans réponse depuis plus de 60 jours : à relancer.</li>
 <li><strong>Contenu du lot</strong> (en bas à droite) : les factures du bordereau sélectionné. Colonnes : <strong>N°</strong>, <strong>Patient</strong>, <strong>Part organisme</strong>, <strong>Réglé</strong>, <strong>Statut</strong>, <strong>Motif communiqué par l'organisme</strong>. Une ligne rouge = facture rejetée et pas encore retransmise.</li>
 </ul>
@@ -420,44 +509,54 @@ Le remboursement se fait dans <strong>Facturation</strong> (<strong>Rembourser</
 </tr>
 <tr>
 <td>Réglé</td>
-<td>Paiement de l'organisme enregistré.</td>
+<td>Paiement de l'organisme enregistré (par <strong>Montant accepté par l'organisme</strong>).</td>
 </tr>
 </tbody>
 </table>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li>Période + <strong>Actualiser</strong> : choisit sur combien de jours les factures et lots sont listés. La facture sélectionnée dans <strong>À transmettre</strong> reste sélectionnée après le rechargement.</li>
+<li>Cases à cocher de <strong>À transmettre</strong> : choisir les factures du bordereau ; la barre du bas affiche « N facture(s) sélectionnée(s) — montant », ou en rouge un mélange d'organismes.</li>
+<li><strong>Cocher les factures transmissibles de cet organisme</strong> : coche toutes les factures non bloquées de l'organisme de la ligne sélectionnée (ou du premier organisme qui en a), et décoche les autres.</li>
+<li><strong>Transmettre au tiers payant</strong> : crée le bordereau <code>TP/…</code> après confirmation.</li>
+<li>Clic sur un lot de <strong>Lots transmis</strong> : affiche son <strong>Contenu du lot</strong>.</li>
+<li><strong>Enregistrer le retour</strong> : enregistre la réponse globale de l'organisme sur le lot sélectionné (<strong>Accepté</strong>, <strong>Accepté partiellement</strong>, <strong>Rejeté</strong>, <strong>Retransmis</strong>) avec le motif.</li>
+</ul>
 <p><strong>Scénarios</strong></p>
 <p><em>1. Préparer et envoyer un bordereau à un organisme</em>
-1. Dans <strong>À transmettre</strong>, cochez les factures d'<strong>un seul</strong> organisme, ou cliquez sur <strong>Cocher tout ce qui est transmissible</strong> puis décochez celles des autres organismes.
+1. Dans <strong>À transmettre</strong>, cliquez une facture de l'organisme voulu, puis <strong>Cocher les factures transmissibles de cet organisme</strong> (ou cochez les factures à la main, d'<strong>un seul</strong> organisme).
 2. La barre du bas affiche « N facture(s) sélectionnée(s) — montant ». Si vous avez coché plusieurs organismes, elle l'indique en rouge et le bouton reste grisé.
 3. Cliquez sur <strong>Transmettre au tiers payant</strong>, puis confirmez (« Transmettre N facture(s) à …, pour un montant de … ? »).
 4. Un numéro de bordereau <code>TP/…</code> est attribué ; le message « Lot … transmis — N facture(s), montant » s'affiche et le lot apparaît dans <strong>Lots transmis</strong>.
-5. Envoyez à l'organisme le bordereau et les pièces selon votre procédure habituelle (l'application ne produit pas de fichier ni d'impression du bordereau : à vérifier).
+5. Envoyez à l'organisme le bordereau et les pièces selon votre procédure habituelle (l'application ne produit ni fichier ni impression du bordereau).
 - Si certaines factures sont refusées au moment de l'envoi, le bordereau part quand même avec les autres ; un message donne le numéro du bordereau puis la liste des factures non transmises et la raison.</p>
 <p><em>2. Débloquer une facture (INPE manquant)</em>
-- « INPE du biologiste manquant » : l'INPE est pris sur le biologiste responsable du site au moment de l'émission. Faites renseigner l'INPE du biologiste responsable (administration des utilisateurs / du site). Attention : une facture déjà émise garde ce qui y a été figé ; il faudra alors émettre un avoir et refacturer (à vérifier).
+- « INPE du biologiste manquant » : l'INPE est pris sur le biologiste responsable du site au moment de l'émission. Faites renseigner l'INPE du biologiste responsable (administration des utilisateurs / du site). Une facture déjà émise garde ce qui y a été figé : il faut alors émettre un avoir et refacturer.
 - « INPE du prescripteur manquant » : le prescripteur du dossier n'a pas d'INPE. Même remarque.</p>
 <p><em>3. Enregistrer la réponse globale de l'organisme sur un bordereau</em>
 1. Dans <strong>Lots transmis</strong>, cliquez sur le bordereau.
 2. Vérifiez son contenu à droite.
 3. Cliquez sur <strong>Enregistrer le retour</strong>.
-4. Choisissez le <strong>Retour de l'organisme</strong> : Accepté, Réglé, Accepté partiellement, Rejeté, Retransmis.
+4. Choisissez le <strong>Retour de l'organisme</strong> : Accepté, Accepté partiellement, Rejeté, Retransmis.
 5. Pour « Rejeté » et « Accepté partiellement », saisissez le <strong>Motif communiqué par l'organisme</strong> (obligatoire).
-6. <strong>Enregistrer</strong>. La réponse s'applique à <strong>toutes</strong> les factures du bordereau, sauf celles dont le paiement organisme a déjà été saisi (un message les liste).
-- Important : ce bouton change le statut mais <strong>n'enregistre aucun argent</strong>. Pour que le reste à payer diminue, saisissez le paiement facture par facture dans <strong>Facturation</strong> → <strong>Montant accepté par l'organisme</strong>.</p>
+6. <strong>Enregistrer</strong>. Le message « Retour enregistré sur le lot … — N facture(s) » s'affiche. La réponse s'applique à <strong>toutes</strong> les factures du bordereau, sauf celles dont le paiement organisme a déjà été saisi (un message les liste).
+- Ce bouton change le statut mais <strong>n'enregistre aucun argent</strong> (c'est pourquoi « Réglé » n'est plus proposé). Pour que le reste à payer diminue, saisissez le paiement facture par facture dans <strong>Facturation</strong> → <strong>Plus d'actions › Montant accepté par l'organisme</strong> : le statut passe alors à « Réglé ».</p>
 <p><em>4. Enregistrer le paiement d'un organisme</em>
 Se fait dans <strong>Facturation</strong>, facture par facture, avec <strong>Montant accepté par l'organisme</strong> (voir scénario 13 de <strong>Facturation</strong>). Mettez la référence du virement dans <strong>Référence du virement ou bordereau</strong> pour retrouver le rapprochement bancaire.</p>
 <p><em>5. Traiter un refus</em>
 1. Dans <strong>Contenu du lot</strong>, repérez les lignes rouges et lisez le motif.
 2. Deux décisions possibles :
-   - <strong>Corriger et retransmettre</strong> : dans <strong>Facturation</strong>, cochez la facture rejetée et cliquez sur <strong>Transmettre au tiers payant</strong>. Elle part dans un <strong>nouveau</strong> bordereau ; la perte ou la part laissée au patient enregistrée lors du refus est annulée automatiquement.
+   - <strong>Corriger et retransmettre</strong> : dans <strong>Facturation</strong>, cochez la facture rejetée et cliquez sur <strong>Plus d'actions › Transmettre au tiers payant</strong>. Elle part dans un <strong>nouveau</strong> bordereau ; la perte ou la part laissée au patient enregistrée lors du refus est annulée automatiquement (si le patient a déjà payé cette part, remboursez-le d'abord).
    - <strong>Abandonner la part organisme</strong> : dans <strong>Facturation</strong>, <strong>Montant accepté par l'organisme</strong> avec 0 (ou le montant payé) et <strong>Passer en perte</strong>, ou <strong>Laisser à la charge du patient</strong>.
-3. Si l'acte lui-même était erroné : après avoir enregistré le rejet, émettez une <strong>Facture d'avoir</strong> dans <strong>Facturation</strong>, puis refacturez.</p>
+3. Si l'acte lui-même était erroné : après avoir enregistré le rejet, émettez une <strong>Facture d'avoir</strong> dans <strong>Facturation</strong>, puis refacturez.
+- N'utilisez pas « Retransmis » dans <strong>Enregistrer le retour</strong> pour une vraie retransmission : ce choix ne crée pas de bordereau et empêche ensuite de retransmettre la facture.</p>
 <p><em>6. Relancer un organisme</em>
-Les bordereaux « à relancer » (rouges) n'ont reçu aucune réponse depuis plus de 60 jours. Contactez l'organisme ; l'application ne garde pas trace de la relance (à vérifier).</p>
+Les bordereaux « à relancer » (rouges) n'ont reçu aucune réponse depuis plus de 60 jours. Contactez l'organisme ; l'application ne garde pas trace de la relance.</p>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
 <li>Un bordereau = un seul organisme.</li>
-<li>Une facture ne peut être que dans un seul bordereau à la fois (« … ne peut pas figurer dans un second bordereau. »).</li>
-<li>Seules les factures adressées à un organisme avec convention de tiers payant valide à l'émission, ayant une part organisme et non entièrement annulées par avoir, sont proposées.</li>
+<li>Une facture ne peut être que dans un seul bordereau à la fois.</li>
+<li>Seules les factures adressées à un organisme avec convention de tiers payant valide à l'émission, ayant une part organisme et non entièrement annulées par avoir, sont proposées. Une facture rejetée n'est pas reproposée dans <strong>À transmettre</strong> (elle se retransmet depuis <strong>Facturation</strong>).</li>
 <li>Si l'organisme exige l'INPE du biologiste ou du prescripteur, la facture qui ne l'a pas est bloquée.</li>
 <li>Si aucune facture ne peut partir, aucun numéro de bordereau n'est consommé.</li>
 <li>Un refus ou une acceptation partielle exige le motif donné par l'organisme.</li>
@@ -467,45 +566,643 @@ Les bordereaux « à relancer » (rouges) n'ont reçu aucune réponse depuis plu
 <p><strong>Flux</strong></p>
 <p><strong>Facturation</strong> (facture adressée à l'organisme) → <strong>Tiers payant</strong> (bordereau, retour) → <strong>Facturation</strong> (<strong>Montant accepté par l'organisme</strong>, et éventuellement <strong>Règlement</strong> du reste par le patient) → comptabilité / rapprochement bancaire.</p>
 <p>Envoi d'un bordereau :</p>
-<div class="diagram"><img src="img/diagramme-0a0d8fc9d03ac816.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-54f09d3ecad3e965.png" alt="Diagramme"></div>
 
 <p>Réponse de l'organisme et paiement :</p>
 <div class="diagram"><img src="img/diagramme-2c4b9683ae7b89ad.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="cashreview">Visa des caisses</h3>
-<p>Écran du responsable qui contrôle les caisses clôturées : comptage, écart, explication, prélèvements, puis visa avec commentaire.</p>
+<p><strong>À quoi sert cet écran</strong> : le contrôle, par un responsable, des caisses clôturées : comptage, écart, explication, prélèvements, puis visa avec commentaire.</p>
 <p><strong>Qui y a accès</strong></p>
-<p>Droit « Viser les caisses » — Administrateur, Biologiste responsable, Comptabilité. Le Secrétariat n'y a pas accès. L'écran est dans le groupe <strong>Finances</strong> du menu.</p>
+<p>Droit « Viser les caisses » — Administrateur, Biologiste responsable, Comptabilité. Le Secrétariat / accueil n'y a pas accès. L'écran est dans le groupe <strong>Finances</strong> du menu.</p>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>Filtres <strong>Du</strong> / <strong>Au</strong> (30 derniers jours par défaut), case <strong>À viser seulement</strong> (cochée par défaut), boutons <strong>Actualiser</strong> et <strong>Viser la caisse…</strong>. Le titre indique le nombre de caisses à viser.</li>
-<li>Tableau : <strong>Ouverte le</strong>, <strong>Clôturée le</strong>, <strong>Caissier</strong>, <strong>Poste</strong>, <strong>Espèces attendues</strong>, <strong>Espèces comptées</strong>, <strong>Écart de caisse</strong> (orange, rouge au-delà de 10 DH), <strong>Prélèvements</strong>, <strong>Chèques, cartes, virements</strong>, <strong>Statut</strong> (« À viser » ou « Visée »).</li>
-<li>Sous le tableau : l'<strong>Explication de l'écart</strong> donnée par le caissier et, pour une caisse visée, « Visée par … le … : commentaire ».</li>
+<li>En-tête « Visa des caisses » avec « N à viser », les filtres <strong>À viser · N</strong> (par défaut) et <strong>Toutes</strong>, les dates <strong>Du</strong> / <strong>Au</strong> (30 derniers jours par défaut) et <strong>Actualiser</strong>.</li>
+<li>Tableau : <strong>Ouverte le</strong>, <strong>Clôturée le</strong>, <strong>Caissier</strong>, <strong>Poste</strong>, <strong>Espèces attendues</strong>, <strong>Espèces comptées</strong>, <strong>Écart de caisse</strong> (orange, rouge au-delà de 10 DH), <strong>Prélèvements</strong>, <strong>Chèques, cartes, virements</strong> (y compris effets et paiements mobiles), <strong>Statut</strong> (« À viser » ou « Visée »).</li>
+<li>À droite, la carte de la caisse sélectionnée : caissier, ouverture → clôture et poste, pastille « À viser » / « Visée », les montants, puis l'<strong>Explication de l'écart</strong> donnée par le caissier, pour une caisse visée « Visée par … le … : commentaire », et le bouton <strong>Viser la caisse…</strong>.</li>
+</ul>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>À viser</strong> / <strong>Toutes</strong> : n'affiche que les caisses clôturées non visées, ou toutes celles de la période.</li>
+<li><strong>Du</strong> / <strong>Au</strong> + <strong>Actualiser</strong> : choisit la période.</li>
+<li>Clic sur une caisse : affiche sa carte à droite.</li>
+<li><strong>Viser la caisse…</strong> : vise la caisse sélectionnée, avec commentaire (obligatoire s'il y a un écart). Grisé sur une caisse déjà visée et sur une caisse que vous avez tenue vous-même (la carte affiche alors la raison).</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <p><em>1. Viser une caisse juste (écart nul)</em>
 1. Sélectionnez la caisse « À viser ».
 2. Cliquez sur <strong>Viser la caisse…</strong>.
 3. Saisissez un commentaire si vous le souhaitez (facultatif), <strong>OK</strong>.
-4. Le statut passe à « Visée » (elle disparaît si <strong>À viser seulement</strong> est coché).</p>
+4. Le statut passe à « Visée » (elle disparaît de la liste si <strong>À viser</strong> est choisi).</p>
 <p><em>2. Viser une caisse avec écart</em>
-1. Sélectionnez la caisse, lisez l'explication du caissier en bas.
+1. Sélectionnez la caisse, lisez l'explication du caissier dans la carte de droite.
 2. Vérifiez les prélèvements avec les bordereaux de dépôt bancaire.
 3. <strong>Viser la caisse…</strong> : le commentaire est obligatoire (décision prise, suite donnée), 1 000 caractères maximum. <strong>OK</strong>.</p>
 <p><em>3. Revoir les caisses déjà visées</em>
-Décochez <strong>À viser seulement</strong>, ajustez <strong>Du</strong> / <strong>Au</strong>, <strong>Actualiser</strong>.</p>
+Cliquez <strong>Toutes</strong>, ajustez <strong>Du</strong> / <strong>Au</strong>, <strong>Actualiser</strong>.</p>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
 <li>Seule une caisse clôturée peut être visée ; les caisses encore ouvertes n'apparaissent pas.</li>
-<li>Le caissier ne peut pas viser sa propre caisse (« Le visa est donné par un autre que le caissier : vous avez tenu cette caisse. »). Le bouton reste actif mais l'enregistrement est refusé.</li>
+<li>Le caissier ne peut pas viser sa propre caisse : le bouton est grisé et la carte affiche « Le visa est donné par un autre que le caissier : vous avez tenu cette caisse. ».</li>
 <li>Écart différent de zéro : commentaire obligatoire.</li>
 <li>Un visa est définitif : pas de bouton pour l'annuler.</li>
 <li>La date de fin ne peut pas précéder la date de début.</li>
 </ul>
 <p><strong>Flux</strong></p>
 <p><strong>Caisse</strong> (clôture par le caissier) → <strong>Visa des caisses</strong> (contrôle par un autre) → rapprochement bancaire et comptabilité (écrans du groupe <strong>Finances</strong>).</p>
-<div class="diagram"><img src="img/diagramme-357b0ef7271db5dc.png" alt="Diagramme"></div><p class="top"><a href="index.html">Retour au sommaire</a></p>
+<div class="diagram"><img src="img/diagramme-cddfb4c0c424e5d2.png" alt="Diagramme"></div>
+
+<hr />
+<h3>Messages d'erreur et d'avertissement</h3>
+<p>Messages propres aux écrans de ce chapitre. Les messages communs (droit manquant, nombre illisible, modification simultanée, erreur inattendue, pas de lecteur PDF, numérotation clôturée…) sont expliqués dans <strong>Prise en main › Messages d'erreur communs</strong>.</p>
+<h4>Facturation : émission et avoir</h4>
+<table>
+<thead>
+<tr>
+<th>Message (texte exact)</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Aucun élément sélectionné. »</td>
+<td>Bouton cliqué sans dossier ni facture cochés.</td>
+<td>Cocher la ligne voulue.</td>
+</tr>
+<tr>
+<td>« Une facture ne peut regrouper que les dossiers d'un même patient. »</td>
+<td>Dossiers de plusieurs patients cochés.</td>
+<td>Facturer chaque patient séparément.</td>
+</tr>
+<tr>
+<td>« Les dossiers … n'ont pas été enregistrés avec le même organisme payeur (ou certains sont sans tiers payant) : chaque dossier garde la répartition fixée à l'enregistrement. Facturez-les séparément. »</td>
+<td>Organismes ou modes différents.</td>
+<td>Émettre une facture par groupe.</td>
+</tr>
+<tr>
+<td>« Le dossier … est déjà facturé. »</td>
+<td>Dossier facturé entre-temps (autre poste).</td>
+<td>Actualiser.</td>
+</tr>
+<tr>
+<td>« Le dossier … est annulé : il ne se facture pas. L'acompte encore détenu se rembourse. »</td>
+<td>Dossier annulé coché.</td>
+<td><strong>Rembourser l'acompte</strong> si besoin.</td>
+</tr>
+<tr>
+<td>« Ce dossier est refacturé après un avoir. Il avait été enregistré sans tiers payant. Adresser cette facture au tiers payant … (part de l'organisme réclamée à celui-ci) ? Non : la facture est établie au nom du patient, pour la totalité. »</td>
+<td>Refacturation d'un dossier qui a un organisme.</td>
+<td>Oui pour l'organisme, Non pour le patient.</td>
+</tr>
+<tr>
+<td>« … n'a pas de convention de tiers payant en cours de validité : la facture ne peut pas lui être adressée. Établissez-la au nom du patient. »</td>
+<td>Convention expirée.</td>
+<td>Facturer au patient.</td>
+</tr>
+<tr>
+<td>« Montant de remise invalide »</td>
+<td><strong>Remise</strong> illisible.</td>
+<td>Taper un montant.</td>
+</tr>
+<tr>
+<td>« La remise ne peut pas être négative. » / « La remise dépasse le montant brut de la facture. »</td>
+<td>Remise hors limites.</td>
+<td>Corriger la remise.</td>
+</tr>
+<tr>
+<td>« Toute remise doit être motivée. »</td>
+<td>Remise sans motif.</td>
+<td>Remplir <strong>Motif de la remise</strong>.</td>
+</tr>
+<tr>
+<td>« La facture ne comporte aucune ligne. »</td>
+<td>Toutes les analyses sont annulées ou gratuites.</td>
+<td>Rien à facturer.</td>
+</tr>
+<tr>
+<td>« La raison sociale du site est obligatoire pour facturer. » ; « L'ICE doit comporter 15 chiffres. » ; « L'identifiant fiscal est invalide. » ; « L'adresse et la ville du site sont obligatoires sur une facture. »</td>
+<td>Fiche du site incomplète ; aucun numéro consommé.</td>
+<td>Faire compléter le site par l'administrateur.</td>
+</tr>
+<tr>
+<td>« Le destinataire de la facture est obligatoire. »</td>
+<td>Destinataire vide.</td>
+<td>Prévenir l'administrateur.</td>
+</tr>
+<tr>
+<td>« Site du dossier introuvable. » / « Dossier introuvable. » / « Patient introuvable. » / « Facture introuvable. »</td>
+<td>Donnée disparue entre-temps.</td>
+<td>Actualiser ; prévenir l'administrateur si cela persiste.</td>
+</tr>
+<tr>
+<td>« Motif de l'avoir sur la facture … . Une facture émise ne s'annule pas : l'avoir est la seule correction possible. »</td>
+<td><strong>Facture d'avoir</strong>.</td>
+<td>Saisir le motif (10 caractères au moins).</td>
+</tr>
+<tr>
+<td>« Le motif de l'avoir est obligatoire : il constitue la justification comptable de l'annulation. »</td>
+<td>Motif vide.</td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Un avoir ne peut pas faire l'objet d'un avoir. »</td>
+<td>Avoir sélectionné.</td>
+<td>Sélectionner la facture d'origine.</td>
+</tr>
+<tr>
+<td>« La facture … est déjà entièrement annulée par avoir : il n'y a plus rien à créditer. »</td>
+<td>Facture déjà soldée par avoir.</td>
+<td>Rien à faire.</td>
+</tr>
+<tr>
+<td>« La facture … a déjà été transmise à l'organisme payeur, ou réglée par lui : un avoir ferait réclamer une seconde fois les mêmes actes. Enregistrez d'abord le rejet de l'organisme, puis émettez l'avoir. »</td>
+<td>Avoir sur une facture en tiers payant.</td>
+<td>Enregistrer d'abord le rejet.</td>
+</tr>
+<tr>
+<td>« Le montant de l'avoir dépasse ce qui reste à créditer sur la facture (…) : les avoirs cumulés ne peuvent pas excéder le total facturé. » ; « Le montant de l'avoir doit être compris entre 0 et … . » ; « Seule une facture émise peut faire l'objet d'un avoir. »</td>
+<td>Avoir impossible.</td>
+<td>Vérifier la facture choisie.</td>
+</tr>
+<tr>
+<td>« Une facture émise ne peut plus être modifiée ; émettez une facture d'avoir. » / « Une facture émise ne s'annule pas : émettez une facture d'avoir afin de préserver la continuité de la numérotation. »</td>
+<td>Tentative de modifier ou d'annuler une facture émise.</td>
+<td>Émettre un avoir.</td>
+</tr>
+<tr>
+<td>« Cette facture a déjà été émise. » / « Cette facture est annulée. »</td>
+<td>Double émission ou facture annulée.</td>
+<td>Actualiser.</td>
+</tr>
+<tr>
+<td>« Enregistré. »</td>
+<td>Opération réussie.</td>
+<td>Continuer.</td>
+</tr>
+</tbody>
+</table>
+<h4>Facturation : règlements, acomptes, remboursements, impression</h4>
+<table>
+<thead>
+<tr>
+<th>Message (texte exact)</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Sélectionnez une seule facture. »</td>
+<td>Plusieurs factures cochées pour une action sur une facture.</td>
+<td>N'en cocher qu'une.</td>
+</tr>
+<tr>
+<td>« FAC/… — Réglée »</td>
+<td><strong>Règlement</strong> sur une facture déjà soldée.</td>
+<td>Rien à encaisser.</td>
+</tr>
+<tr>
+<td>« Le patient ne doit plus que … sur cette facture : le reste est la part de l'organisme, réglée par le tiers payant. »</td>
+<td>Le patient a payé sa part.</td>
+<td>Attendre le paiement de l'organisme.</td>
+</tr>
+<tr>
+<td>« Un règlement en espèces supérieur à … DH expose à une sanction fiscale ; privilégiez un moyen de paiement traçable. »</td>
+<td>Espèces au-delà de 20 000 DH (avertissement).</td>
+<td>Proposer chèque, carte ou virement.</td>
+</tr>
+<tr>
+<td>« « … » n'est pas une valeur numérique valide. »</td>
+<td><strong>Montant</strong> illisible.</td>
+<td>Taper un montant (« 1 250,00 »).</td>
+</tr>
+<tr>
+<td>« Le montant du règlement doit être positif. »</td>
+<td>Montant nul ou négatif.</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Le montant dépasse le reste à payer (…). »</td>
+<td>Montant trop grand.</td>
+<td>Réduire au reste à payer.</td>
+</tr>
+<tr>
+<td>« L'acompte dépasse ce qui reste à couvrir sur le dossier (…). »</td>
+<td>Acompte trop grand.</td>
+<td>Réduire au reste à couvrir.</td>
+</tr>
+<tr>
+<td>« La référence du chèque ou de l'effet est obligatoire. »</td>
+<td>Chèque ou effet sans référence.</td>
+<td>Saisir le n° du chèque ou de l'effet.</td>
+</tr>
+<tr>
+<td>« La référence du virement est obligatoire. »</td>
+<td>Virement sans référence.</td>
+<td>Saisir la référence.</td>
+</tr>
+<tr>
+<td>« Un règlement en espèces exige une session de caisse ouverte. »</td>
+<td>Pas de caisse ouverte à votre nom.</td>
+<td>Ouvrir la <strong>Caisse</strong>.</td>
+</tr>
+<tr>
+<td>« Un remboursement en espèces exige une session de caisse ouverte : sans elle, l'écart apparaîtrait à la clôture comme un manquant inexpliqué. »</td>
+<td>Remboursement en espèces sans caisse ouverte.</td>
+<td>Ouvrir la <strong>Caisse</strong>.</td>
+</tr>
+<tr>
+<td>« Le remboursement en espèces dépasse les espèces attendues en caisse (… DH). »</td>
+<td>Pas assez d'espèces dans votre caisse.</td>
+<td>Rembourser par un autre moyen, ou faire rembourser par une caisse approvisionnée.</td>
+</tr>
+<tr>
+<td>« Cette session de caisse n'est pas ouverte. »</td>
+<td>Caisse clôturée entre-temps.</td>
+<td>Rouvrir une caisse.</td>
+</tr>
+<tr>
+<td>« La facture doit être émise avant d'enregistrer un règlement. » ; « Un règlement ne s'enregistre que sur une facture : un avoir ou un devis ne se règle pas. »</td>
+<td>Règlement sur un document qui ne se règle pas.</td>
+<td>Choisir la facture.</td>
+</tr>
+<tr>
+<td>« Cochez un seul dossier. »</td>
+<td>Acompte sur plusieurs dossiers.</td>
+<td>N'en cocher qu'un.</td>
+</tr>
+<tr>
+<td>« Ce dossier est déjà entièrement couvert par les acomptes reçus. »</td>
+<td>Acompte inutile.</td>
+<td>Rien à encaisser.</td>
+</tr>
+<tr>
+<td>« Le dossier … est annulé : on ne peut plus y encaisser d'acompte, seulement rembourser. »</td>
+<td>Acompte sur un dossier annulé.</td>
+<td><strong>Rembourser l'acompte</strong>.</td>
+</tr>
+<tr>
+<td>« Un acompte se règle en espèces, carte, chèque, virement, effet ou paiement mobile. »</td>
+<td>Mode non accepté.</td>
+<td>Choisir un autre mode.</td>
+</tr>
+<tr>
+<td>« Acompte … encaissé sur … . Il sera imputé sur la facture à son émission. »</td>
+<td>Acompte enregistré (n° REC).</td>
+<td>Donner le numéro au patient.</td>
+</tr>
+<tr>
+<td>« Aucun acompte en attente sur ce dossier. »</td>
+<td><strong>Rembourser l'acompte</strong> sans acompte détenu.</td>
+<td>Rien à faire.</td>
+</tr>
+<tr>
+<td>« Rembourser … d'acompte sur le dossier … (…). Motif : »</td>
+<td><strong>Rembourser l'acompte</strong>.</td>
+<td>Saisir le motif (5 caractères au moins).</td>
+</tr>
+<tr>
+<td>« Acompte remboursé sur … . » / « Dossier … : … acompte(s) remboursé(s) sur … . Les autres restent détenus. »</td>
+<td>Remboursement fait (en tout ou en partie).</td>
+<td>Pour le reste, vérifier la caisse d'origine.</td>
+</tr>
+<tr>
+<td>« Cet acompte n'est plus en attente : il a déjà été imputé ou remboursé. » ; « Le montant à imputer dépasse ce qui reste sur l'acompte. » ; « Acompte introuvable. »</td>
+<td>Acompte déjà traité.</td>
+<td>Actualiser.</td>
+</tr>
+<tr>
+<td>« Aucun règlement encaissé sur cette facture ne peut être remboursé. »</td>
+<td><strong>Rembourser</strong> sans règlement remboursable.</td>
+<td>Rien à faire.</td>
+</tr>
+<tr>
+<td>« Seul un règlement du patient peut être remboursé : ni un abandon de créance ni un règlement de l'organisme. »</td>
+<td>Règlement de l'organisme ou perte choisi.</td>
+<td>Choisir un règlement du patient.</td>
+</tr>
+<tr>
+<td>« Motif du remboursement de … (…) : »</td>
+<td><strong>Rembourser</strong>.</td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Un remboursement doit être motivé. »</td>
+<td>Motif vide.</td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Aucun chèque ni effet encaissé sur cette facture ne peut être déclaré impayé. »</td>
+<td><strong>Déclarer impayé</strong> sans chèque ni effet.</td>
+<td>Rien à faire.</td>
+</tr>
+<tr>
+<td>« Motif de l'impayé de … (…) — motif de rejet communiqué par la banque : »</td>
+<td><strong>Déclarer impayé</strong>.</td>
+<td>Saisir le motif de la banque.</td>
+</tr>
+<tr>
+<td>« Un impayé doit être motivé (motif de rejet de la banque). »</td>
+<td>Motif vide.</td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Seuls un chèque ou un effet peuvent être impayés. » ; « Ce règlement n'est pas encaissé. » ; « Règlement introuvable. »</td>
+<td>Règlement choisi non concerné.</td>
+<td>Choisir un autre règlement.</td>
+</tr>
+<tr>
+<td>« Choisissez dans la liste le paiement concerné. »</td>
+<td>Fenêtre de choix sans ligne choisie.</td>
+<td>Cliquer un règlement.</td>
+</tr>
+<tr>
+<td>« Cette facture n'est pas encore émise et ne peut pas être imprimée. »</td>
+<td>Impression d'un document non émis.</td>
+<td>Émettre d'abord la facture.</td>
+</tr>
+<tr>
+<td>« Format d'impression de facture inconnu. »</td>
+<td>Réglage d'impression abîmé.</td>
+<td>Faire réenregistrer l'onglet <strong>Factures</strong> des <strong>Paramètres</strong>.</td>
+</tr>
+</tbody>
+</table>
+<h4>Facturation et Tiers payant : transmission et retours</h4>
+<table>
+<thead>
+<tr>
+<th>Message (texte exact)</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Aucune facture transmissible parmi la sélection. »</td>
+<td>Factures cochées non transmissibles (patient, déjà transmises, réglées).</td>
+<td>Vérifier la sélection.</td>
+</tr>
+<tr>
+<td>« … facture(s) pour … organismes différents : un lot ne concerne qu'un seul organisme. »</td>
+<td>Plusieurs organismes cochés (<strong>Tiers payant</strong>).</td>
+<td>Décocher les autres organismes, ou utiliser <strong>Cocher les factures transmissibles de cet organisme</strong>.</td>
+</tr>
+<tr>
+<td>« Transmettre … facture(s) à …, pour un montant de … ? »</td>
+<td>Confirmation de transmission.</td>
+<td>Oui pour créer le bordereau.</td>
+</tr>
+<tr>
+<td>« Lot … transmis — … facture(s), … »</td>
+<td>Bordereau créé.</td>
+<td>Envoyer le bordereau à l'organisme.</td>
+</tr>
+<tr>
+<td>« Bordereau … transmis avec … facture(s). … facture(s) n'ont pas été transmises : » suivi des raisons</td>
+<td>Une partie seulement est partie.</td>
+<td>Lire chaque raison, corriger, retransmettre.</td>
+</tr>
+<tr>
+<td>« La facture … doit porter l'INPE du biologiste pour être transmise à cet organisme. »</td>
+<td>INPE du biologiste responsable absent.</td>
+<td>Faire renseigner l'INPE ; avoir puis refacturation.</td>
+</tr>
+<tr>
+<td>« La facture … doit porter l'INPE du prescripteur pour être transmise à cet organisme. »</td>
+<td>INPE du prescripteur absent.</td>
+<td>Faire renseigner l'INPE ; avoir puis refacturation.</td>
+</tr>
+<tr>
+<td>« La facture … n'a pas d'organisme payeur : elle ne peut être transmise en tiers payant. »</td>
+<td>Facture adressée au patient.</td>
+<td>Rien à transmettre.</td>
+</tr>
+<tr>
+<td>« La facture … a déjà été transmise à l'organisme : elle ne peut pas figurer dans un second bordereau. »</td>
+<td>Facture déjà dans un lot (ou marquée « Retransmis »).</td>
+<td>Attendre la réponse de l'organisme.</td>
+</tr>
+<tr>
+<td>« La facture … relève d'un autre organisme que le reste du bordereau : un bordereau ne concerne qu'un seul organisme, elle sera transmise séparément. »</td>
+<td>Organisme différent dans la sélection.</td>
+<td>La transmettre dans un autre bordereau.</td>
+</tr>
+<tr>
+<td>« Facture … : le patient a déjà réglé … DH de la part refusée par l'organisme. Remboursez-le avant de renvoyer la facture au tiers payant. »</td>
+<td>Retransmission après que le patient a payé la part refusée.</td>
+<td><strong>Rembourser</strong> le patient, puis retransmettre.</td>
+</tr>
+<tr>
+<td>« Aucune des factures sélectionnées n'a été transmise en tiers payant. »</td>
+<td><strong>Enregistrer le retour</strong> sur des factures non transmises.</td>
+<td>Choisir des factures transmises.</td>
+</tr>
+<tr>
+<td>« Retour à enregistrer sur … facture(s) transmise(s). »</td>
+<td>Fenêtre <strong>Enregistrer le retour</strong>.</td>
+<td>Choisir la réponse.</td>
+</tr>
+<tr>
+<td>« Un rejet ou un règlement partiel doit porter le motif communiqué par l'organisme : c'est lui qui décide si le dossier est corrigé et retransmis ou passé en perte. »</td>
+<td>Rejet / acceptation partielle sans motif.</td>
+<td>Saisir le motif de l'organisme.</td>
+</tr>
+<tr>
+<td>« « Réglé » ne s'enregistre pas comme retour de lot : il n'enregistre aucun montant. Saisissez le montant accepté par l'organisme facture par facture, le statut passe alors à « Réglé ». »</td>
+<td>Tentative d'enregistrer « Réglé » comme retour.</td>
+<td>Utiliser <strong>Montant accepté par l'organisme</strong>.</td>
+</tr>
+<tr>
+<td>« Le statut « … » ne s'enregistre pas comme retour d'organisme. »</td>
+<td>Choix de retour non permis.</td>
+<td>Choisir Accepté, Accepté partiellement, Rejeté ou Retransmis.</td>
+</tr>
+<tr>
+<td>« La facture … a déjà son règlement organisme saisi : le retour global du bordereau ne la modifie pas. »</td>
+<td>Retour de lot sur une facture déjà réglée par l'organisme.</td>
+<td>Information.</td>
+</tr>
+<tr>
+<td>« La facture … n'a pas été transmise en tiers payant. »</td>
+<td><strong>Montant accepté par l'organisme</strong> sur une facture non transmise.</td>
+<td>La transmettre d'abord.</td>
+</tr>
+<tr>
+<td>« Retour enregistré sur le lot … — … facture(s) »</td>
+<td>Retour de lot enregistré.</td>
+<td>Saisir ensuite les montants acceptés.</td>
+</tr>
+<tr>
+<td>« Non accepté : … . Que devient la différence ? »</td>
+<td>Montant accepté inférieur à la part organisme.</td>
+<td>Choisir <strong>Laisser à la charge du patient</strong> ou <strong>Passer en perte</strong>.</td>
+</tr>
+<tr>
+<td>« Le montant accepté doit être compris entre 0 et ce que l'organisme doit encore (…). »</td>
+<td>Montant accepté hors limites.</td>
+<td>Corriger le montant.</td>
+</tr>
+<tr>
+<td>« Le montant accepté a déjà été saisi pour la facture … . »</td>
+<td>Seconde saisie.</td>
+<td>Rien à faire.</td>
+</tr>
+<tr>
+<td>« … : … acceptés sur … . »</td>
+<td>Montant accepté enregistré.</td>
+<td>Continuer.</td>
+</tr>
+</tbody>
+</table>
+<h4>Caisse</h4>
+<table>
+<thead>
+<tr>
+<th>Message (texte exact)</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Une session de caisse est déjà ouverte pour cet opérateur. »</td>
+<td><strong>Ouvrir la caisse</strong> alors qu'elle l'est déjà.</td>
+<td>Actualiser : votre caisse ouverte s'affiche.</td>
+</tr>
+<tr>
+<td>« « … » n'est pas une valeur numérique valide. »</td>
+<td><strong>Fond de caisse</strong>, <strong>Espèces comptées</strong> ou prélèvement illisible.</td>
+<td>Taper un montant.</td>
+</tr>
+<tr>
+<td>« Le montant du règlement doit être positif. »</td>
+<td>Prélèvement nul ou négatif.</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Montant prélevé de la caisse et déposé en banque (DH) : » puis « Motif du prélèvement de … DH (dépôt en banque, remise d'espèces…) : »</td>
+<td><strong>Prélèvement de caisse</strong>.</td>
+<td>Saisir le montant puis le motif.</td>
+</tr>
+<tr>
+<td>« Un prélèvement de caisse doit être motivé. »</td>
+<td>Motif vide.</td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Le prélèvement dépasse les espèces attendues en caisse (… DH). »</td>
+<td>Prélèvement trop grand.</td>
+<td>Vérifier le montant.</td>
+</tr>
+<tr>
+<td>« Un écart supérieur à 10 DH doit être expliqué avant la clôture. »</td>
+<td>Rappel quand l'écart dépasse 10 DH.</td>
+<td>Remplir <strong>Explication de l'écart</strong>.</td>
+</tr>
+<tr>
+<td>« Un écart de caisse de … DH doit être expliqué avant la clôture. »</td>
+<td>Clôture sans explication.</td>
+<td>Expliquer l'écart, puis clôturer.</td>
+</tr>
+<tr>
+<td>« Clôturer la caisse avec … comptés, soit un écart de … ? »</td>
+<td><strong>Clôturer la caisse</strong>.</td>
+<td>Oui si le comptage est juste.</td>
+</tr>
+<tr>
+<td>« Texte trop long (… caractères au plus). »</td>
+<td>Explication ou motif trop long.</td>
+<td>Raccourcir.</td>
+</tr>
+<tr>
+<td>« Cette session de caisse n'est pas ouverte. »</td>
+<td>Caisse déjà clôturée.</td>
+<td>Actualiser.</td>
+</tr>
+</tbody>
+</table>
+<h4>Visa des caisses</h4>
+<table>
+<thead>
+<tr>
+<th>Message (texte exact)</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Aucun élément sélectionné. »</td>
+<td>Aucune caisse choisie.</td>
+<td>Cliquer une caisse.</td>
+</tr>
+<tr>
+<td>« Le visa est donné par un autre que le caissier : vous avez tenu cette caisse. »</td>
+<td>Caisse que vous avez tenue (bouton grisé).</td>
+<td>Faire viser par un autre responsable.</td>
+</tr>
+<tr>
+<td>« Viser la caisse de … . Commentaire (facultatif) : »</td>
+<td>Visa d'une caisse sans écart.</td>
+<td>Commenter si besoin, OK.</td>
+</tr>
+<tr>
+<td>« La caisse de … présente un écart de … . Commentaire du visa (obligatoire) : »</td>
+<td>Visa d'une caisse avec écart.</td>
+<td>Écrire la décision prise.</td>
+</tr>
+<tr>
+<td>« La caisse présente un écart de … DH : un commentaire est obligatoire pour la viser. »</td>
+<td>Commentaire vide sur une caisse avec écart.</td>
+<td>Saisir le commentaire.</td>
+</tr>
+<tr>
+<td>« Seule une caisse clôturée peut recevoir le visa du responsable. »</td>
+<td>Caisse pas encore clôturée.</td>
+<td>Attendre la clôture.</td>
+</tr>
+<tr>
+<td>« Session de caisse introuvable. »</td>
+<td>Caisse disparue entre-temps.</td>
+<td>Actualiser.</td>
+</tr>
+<tr>
+<td>« La date de fin précède la date de début. »</td>
+<td><strong>Au</strong> avant <strong>Du</strong>.</td>
+<td>Corriger les dates.</td>
+</tr>
+<tr>
+<td>« Texte trop long (… caractères au plus). »</td>
+<td>Commentaire de plus de 1 000 caractères.</td>
+<td>Raccourcir.</td>
+</tr>
+</tbody>
+</table>
+<h4>Paramètres › Factures</h4>
+<table>
+<thead>
+<tr>
+<th>Message (texte exact)</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Format d'impression des factures enregistré. »</td>
+<td><strong>Enregistrer</strong> réussi.</td>
+<td>Les impressions suivantes suivent le réglage.</td>
+</tr>
+<tr>
+<td>« Vous n'avez pas le droit d'effectuer cette opération. »</td>
+<td>Enregistrement sans le droit « gérer les paramètres » (boutons grisés).</td>
+<td>Demander à l'administrateur.</td>
+</tr>
+</tbody>
+</table><p class="top"><a href="index.html">Retour au sommaire</a></p>
 </div>
 </body>
 </html>

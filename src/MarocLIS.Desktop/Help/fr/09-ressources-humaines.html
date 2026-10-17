@@ -29,12 +29,70 @@ ul.toc li { margin: 4px 0; }
 <div class="page">
 <div class="crumb"><a href="index.html">Sommaire</a></div>
 <h1>Ressources humaines (menu « Personnel »)</h1>
-<p>Ce chapitre couvre le groupe <strong>Personnel</strong> du menu de gauche : <strong>Dossiers du personnel</strong>, <strong>Habilitations</strong>, <strong>Échéances RH</strong>, <strong>Congés et absences</strong>, <strong>Planning des gardes</strong>, <strong>Paie</strong> et <strong>Accidents du travail</strong>.</p>
+<h3>Présentation du module</h3>
+<p><strong>À quoi sert le module.</strong> Le groupe <strong>Personnel</strong> du menu de gauche tient tout ce qui concerne les salariés du laboratoire :
+- le dossier de chaque personne et ses pièces justificatives ;
+- les habilitations exigées par la norme ISO 15189 ;
+- les échéances à surveiller ;
+- les congés ;
+- le planning des gardes ;
+- la paie (CNSS, AMO, IR, BDS, état 9421) ;
+- les accidents du travail et les accidents d'exposition au sang.</p>
+<p><strong>Qui l'utilise.</strong> La RH et la direction (Administrateur, Biologiste responsable) gèrent tout. Le Responsable qualité consulte les dossiers, les habilitations et les échéances. Le Biologiste déclare les accidents. Chaque membre du personnel demande ses propres congés. Le détail des droits est donné ci-dessous.</p>
+<p><strong>Ses écrans</strong> (menu <strong>Personnel</strong>) :</p>
+<table>
+<thead>
+<tr>
+<th>Écran</th>
+<th>Ce qu'on y fait</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Dossiers du personnel</strong></td>
+<td>Identité, poste, contrat, salaire, pièces, sortie, attestations, solde de tout compte</td>
+</tr>
+<tr>
+<td><strong>Habilitations</strong></td>
+<td>Matrice des habilitations par activité, automate ou discipline</td>
+</tr>
+<tr>
+<td><strong>Échéances RH</strong></td>
+<td>Pièces à renouveler, réévaluations, fins de contrat, pièces manquantes, accidents à déclarer</td>
+</tr>
+<tr>
+<td><strong>Congés et absences</strong></td>
+<td>Demandes, validation, soldes, jours fériés</td>
+</tr>
+<tr>
+<td><strong>Planning des gardes</strong></td>
+<td>Planning mensuel et contrôles (repos, 44 h, biologiste de service)</td>
+</tr>
+<tr>
+<td><strong>Paie</strong></td>
+<td>Bulletins, clôture, virement, BDS DAMANCOM, état 9421</td>
+</tr>
+<tr>
+<td><strong>Accidents du travail</strong></td>
+<td>Déclaration sous 48 h, arrêts, reprise, suivi sérologique</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Liens avec les autres modules.</strong>
+- Le <strong>Compte SIL</strong> relie un dossier au compte de connexion (Administration &gt; Utilisateurs) : sans ce lien, la personne ne peut pas demander ses congés.
+- La qualification de biologiste du compte utilisateur conditionne les habilitations « Habilité » et « Formateur ».
+- La paie clôturée part à l'<strong>Export comptable</strong>. Le virement des salaires se rapproche dans <strong>Rapprochement bancaire</strong> (Finances).
+- La fiche du site (Administration &gt; <strong>Paramètres</strong>) donne le numéro d'affiliation CNSS et l'identifiant fiscal.</p>
 <p>Vue d'ensemble des flux du module :</p>
 <div class="diagram"><img src="img/diagramme-08191150893e98b5.png" alt="Diagramme"></div>
 
+<p><strong>Présentation commune des écrans.</strong> Chaque écran a la même disposition :
+- en haut, le titre et un compteur ; à droite, <strong>Actualiser</strong> et l'action principale (en bleu) ;
+- dessous, une rangée de recherche et de filtres (pastilles) ;
+- la liste dans un cadre. Sous la liste, une barre donne le détail de la ligne choisie et les actions qui s'y appliquent.</p>
+<p>Une liste garde la ligne choisie après une actualisation. Quitter un écran pendant son chargement ne produit plus de message d'erreur.</p>
 <h3>Qui a quel droit (vue d'ensemble)</h3>
-<p>Chaque écran et chaque bouton dépend d'un droit. Un bouton dont vous n'avez pas le droit reste visible mais grisé. Un écran dont vous n'avez aucun droit n'apparaît pas dans le menu.</p>
+<p>Chaque écran et chaque bouton dépend d'un droit. Un bouton dont vous n'avez pas le droit reste visible mais grisé. Un écran pour lequel vous n'avez aucun droit n'apparaît pas dans le menu.</p>
 <table>
 <thead>
 <tr>
@@ -51,7 +109,7 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td>Gérer le personnel (hr.manage)</td>
-<td>Créer et modifier les dossiers, les pièces, les sorties, les attestations, les jours fériés, ajuster les soldes, saisir une absence injustifiée</td>
+<td>Créer et modifier les dossiers, les pièces, les sorties, les attestations et les jours fériés ; ajuster les soldes ; saisir une absence injustifiée</td>
 <td>Administrateur, Biologiste responsable</td>
 </tr>
 <tr>
@@ -61,7 +119,7 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td>Salaires (hr.salary)</td>
-<td>Voir et modifier salaire, RIB, banque ; paie ; attestation de salaire ; solde de tout compte</td>
+<td>Voir et modifier le salaire, le RIB et la banque ; la paie ; l'attestation de salaire ; le solde de tout compte</td>
 <td>Administrateur, Biologiste responsable</td>
 </tr>
 <tr>
@@ -87,96 +145,149 @@ ul.toc li { margin: 4px 0; }
 </tbody>
 </table>
 <p>Remarques importantes :
-- Le rôle <strong>Comptabilité</strong> n'a pas le droit Salaires : il ne voit ni la paie ni les salaires (à vérifier si c'est voulu dans votre laboratoire ; l'administrateur peut l'ajouter au rôle).
+- Le rôle <strong>Comptabilité</strong> n'a pas le droit Salaires : il ne voit ni la paie ni les salaires. Vérifiez si c'est voulu dans votre laboratoire ; l'administrateur peut ajouter ce droit au rôle.
 - Accorder une habilitation au niveau « Habilité » ou « Formateur » exige en plus que <strong>votre compte utilisateur</strong> porte une qualification de biologiste (médecin ou pharmacien biologiste). Un administrateur sans cette qualification ne peut placer quelqu'un qu'« En formation ».</p>
-<p>Raccourcis valables sur tous ces écrans : <strong>F5</strong> actualise l'écran, <strong>Ctrl+P</strong> (ou le bouton <strong>Imprimer</strong> en haut de la fenêtre) imprime en PDF la liste principale affichée, <strong>Ctrl+F</strong> place le curseur dans la zone de recherche, <strong>F1</strong> affiche la liste des raccourcis.</p>
+<p>Raccourcis valables sur tous ces écrans :
+- <strong>F5</strong> actualise l'écran ;
+- <strong>Ctrl+P</strong> (ou le bouton <strong>Imprimer</strong> en haut de la fenêtre) imprime en PDF la liste principale affichée ;
+- <strong>Ctrl+F</strong> place le curseur dans la zone de recherche ;
+- <strong>F1</strong> ouvre l'aide de l'écran, et <strong>Maj+F1</strong> la liste des raccourcis.</p>
 <hr />
 <h3 id="personnel">Dossiers du personnel</h3>
-<p>Cet écran tient le dossier de chaque salarié : identité, poste, contrat, rémunération, pièces justificatives, sortie, attestations et solde de tout compte.</p>
-<p><strong>Qui y a accès.</strong> L'écran apparaît avec le droit Consulter le personnel (Administrateur, Biologiste responsable, Responsable qualité). Créer, modifier, enregistrer une sortie ou délivrer une attestation de travail demande le droit Gérer le personnel. Le salaire, le RIB, l'attestation de salaire et le solde de tout compte demandent le droit Salaires. Le Responsable qualité consulte donc tout, sans rien modifier et sans voir les salaires.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran tient le dossier de chaque salarié :
+- l'identité, le poste et le contrat ;
+- la rémunération ;
+- les pièces justificatives ;
+- la sortie ;
+- les attestations et le solde de tout compte.</p>
+<p><strong>Qui y a accès.</strong> L'écran apparaît avec le droit Consulter le personnel (Administrateur, Biologiste responsable, Responsable qualité).
+- Créer, modifier, enregistrer une sortie ou délivrer une attestation de travail demande le droit Gérer le personnel.
+- Le salaire, le RIB, l'attestation de salaire et le solde de tout compte demandent le droit Salaires.</p>
+<p>Le Responsable qualité consulte donc tout, sans rien modifier et sans voir les salaires.</p>
+<p><strong>Fonctionnalités</strong>
+- <strong>Nouveau dossier</strong> (en-tête, bouton principal ; droit Gérer le personnel) : crée le dossier d'un salarié. Le matricule est attribué automatiquement.
+- <strong>Actualiser</strong> (en-tête) : recharge la liste.
+- Zone de recherche « Nom, matricule ou fonction… » : filtre la liste quand on appuie sur <strong>Entrée</strong>.
+- Pastille <strong>Afficher les salariés sortis</strong> : ajoute les anciens salariés à la liste.
+- <strong>Modifier le dossier</strong> (panneau de droite, ou double-clic sur la ligne ; droit Gérer le personnel) : rouvre la fiche du salarié.
+- <strong>Pièces du dossier</strong> (panneau de droite) : diplômes, vaccinations, visites médicales… La fenêtre a ses boutons <strong>Ajouter une pièce</strong>, <strong>Modifier la pièce</strong>, <strong>Joindre un scan</strong>, <strong>Ouvrir le scan</strong> et <strong>Retirer la pièce</strong>.
+- Bouton de sortie (panneau de droite ; droit Gérer le personnel). Son libellé change selon la situation :
+  - <strong>Enregistrer la sortie</strong> pour un salarié en poste ;
+  - <strong>Modifier la sortie</strong> pour une sortie à venir, avec un menu <strong>Corriger la sortie</strong> / <strong>Annuler la sortie</strong> ;
+  - <strong>Réintégrer</strong> pour un salarié sorti.
+- <strong>Attestations</strong> (panneau de droite) : un menu avec trois documents :
+  - <strong>Attestation de travail</strong> (salarié en poste, droit Gérer le personnel) ;
+  - <strong>Attestation de salaire</strong> (droit Salaires) ;
+  - <strong>Certificat de travail (sortie)</strong> (sortie enregistrée).</p>
+<p>Une entrée qui ne s'applique pas est grisée.
+- <strong>Solde de tout compte</strong> (panneau de droite ; droit Salaires) : un menu avec <strong>Calculer le solde de tout compte…</strong>, <strong>Imprimer le reçu pour solde de tout compte</strong> et <strong>Reçu signé par le salarié…</strong>.
+- Ligne d'état, sous le panneau : confirme un enregistrement (« Dossier enregistré. », report du solde sur la paie…).</p>
 <p><strong>L'écran.</strong>
-- En haut : le titre « Personnel — N actifs », une zone de recherche (« Nom, matricule ou fonction… »), le bouton <strong>Actualiser</strong> et la case <strong>Afficher les salariés sortis</strong>.
-- La liste : <strong>Matricule</strong>, <strong>Désignation</strong> (nom du salarié), <strong>Métier</strong>, <strong>Intitulé du poste</strong>, <strong>Secteur</strong>, <strong>Type de contrat</strong>, <strong>Date d'embauche</strong>, <strong>Fin de contrat</strong>, <strong>Compte SIL</strong>.
-- Un salarié dont la sortie est enregistrée porte après son nom « (sortie prévue le …) » ou « (sorti le …) ». Un salarié sorti est grisé. Un contrat dont la date de fin est dépassée apparaît en rouge.
-- En bas : <strong>Nouveau dossier</strong>, <strong>Modifier le dossier</strong>, <strong>Pièces du dossier</strong>, le bouton de sortie (son libellé change : <strong>Enregistrer la sortie</strong>, <strong>Modifier la sortie</strong> ou <strong>Réintégrer</strong>), <strong>Attestations</strong>, <strong>Solde de tout compte</strong>.</p>
+- En-tête : le titre « Dossiers du personnel », avec dessous « N en poste · N affichés ». À droite : <strong>Actualiser</strong> et <strong>Nouveau dossier</strong>.
+- Rangée de recherche : la zone « Nom, matricule ou fonction… » et la pastille <strong>Afficher les salariés sortis</strong>.
+- La liste : <strong>Matricule</strong>, <strong>Désignation</strong> (nom du salarié), <strong>Métier</strong>, <strong>Intitulé du poste</strong>, <strong>Secteur</strong>, <strong>Type de contrat</strong>, <strong>Date d'embauche</strong>, <strong>Fin de contrat</strong> et <strong>Compte SIL</strong>.
+  - Un salarié dont la sortie est enregistrée porte après son nom « (sortie prévue le …) » ou « (sorti le …) ».
+  - Un salarié sorti est grisé.
+  - Un contrat dont la date de fin est dépassée apparaît en rouge.
+- Panneau de droite, pour le salarié choisi :
+  - le nom et une pastille d'état (« sortie prévue le … », « sorti le … » ou « Fin de contrat … ») ;
+  - les éléments du dossier (<strong>Matricule</strong>, <strong>Métier</strong>, <strong>Type de contrat</strong>, <strong>Date d'embauche</strong>, <strong>Fin de contrat</strong>, <strong>Compte SIL</strong>) ;
+  - les boutons <strong>Modifier le dossier</strong>, <strong>Pièces du dossier</strong>, le bouton de sortie, <strong>Attestations</strong> et <strong>Solde de tout compte</strong> ;
+  - la ligne d'état.</p>
 <p><strong>Scénarios.</strong></p>
 <ol>
 <li><strong>Rechercher un salarié</strong></li>
 <li>Tapez un nom, un matricule ou un intitulé de poste dans la zone de recherche.</li>
 <li>Appuyez sur <strong>Entrée</strong>. La liste se filtre.</li>
 <li>
-<p>Pour voir aussi les anciens salariés, cochez <strong>Afficher les salariés sortis</strong>.</p>
+<p>Pour voir aussi les anciens salariés, cliquez la pastille <strong>Afficher les salariés sortis</strong>.</p>
 </li>
 <li>
 <p><strong>Créer le dossier d'un nouveau salarié</strong></p>
 </li>
 <li>Cliquez <strong>Nouveau dossier</strong>.</li>
-<li>Section <strong>Identité</strong> : <strong>Nom</strong> et <strong>Prénom</strong> (obligatoires), <strong>Nom en arabe</strong>, <strong>Sexe</strong>, <strong>Date de naissance</strong> (case à cocher puis date), <strong>CIN</strong>, <strong>N° CNSS</strong>, <strong>Situation familiale</strong>, <strong>Enfants à charge</strong>, <strong>Téléphone</strong>, <strong>Courriel</strong>, <strong>Ville</strong>, <strong>Adresse</strong>.</li>
-<li>Section <strong>Poste</strong> : <strong>Métier</strong> (Biologiste, Technicien, Infirmier / préleveur, Secrétariat / accueil, Coursier / chauffeur, Agent d'entretien, Fonctions support), <strong>Intitulé du poste</strong>, <strong>Secteur</strong>, <strong>Compte SIL</strong> (le compte de connexion de la personne), <strong>Exposé au risque biologique</strong>, <strong>Clause de secret signée le</strong>.<ul>
-<li>Pour un nouveau dossier, la case <strong>Exposé au risque biologique</strong> se coche toute seule pour les métiers exposés (biologiste, technicien, infirmier/préleveur, coursier, agent d'entretien). Vous pouvez la changer.</li>
+<li>Section <strong>Identité</strong> : <strong>Nom</strong> et <strong>Prénom</strong> (obligatoires), <strong>Nom en arabe</strong>, <strong>Sexe</strong>, <strong>Date de naissance</strong> (case à cocher, puis la date), <strong>CIN</strong>, <strong>N° CNSS</strong>, <strong>Situation familiale</strong>, <strong>Enfants à charge</strong>, <strong>Téléphone</strong>, <strong>Courriel</strong>, <strong>Ville</strong> et <strong>Adresse</strong>.</li>
+<li>
+<p>Section <strong>Poste</strong> :</p>
+<ul>
+<li><strong>Métier</strong> (Biologiste, Technicien, Infirmier / préleveur, Secrétariat / accueil, Coursier / chauffeur, Agent d'entretien, Fonctions support) ;</li>
+<li><strong>Intitulé du poste</strong> et <strong>Secteur</strong> ;</li>
+<li><strong>Compte SIL</strong> (le compte de connexion de la personne) ;</li>
+<li><strong>Exposé au risque biologique</strong> ;</li>
+<li><strong>Clause de secret signée le</strong>.</li>
 </ul>
+<p>Pour un nouveau dossier, la case <strong>Exposé au risque biologique</strong> se coche toute seule pour les métiers exposés (biologiste, technicien, infirmier/préleveur, coursier, agent d'entretien). Vous pouvez la changer.
+   4. Section <strong>Contrat</strong> : <strong>Type de contrat</strong> (CDI, CDD, ANAPEC (Idmaj), Tahfiz, Stage, Temps partiel, Intérim, Associé (non salarié)), <strong>Date d'embauche</strong>, <strong>Fin de contrat</strong>, <strong>Fin de période d'essai</strong> et <strong>Heures / semaine</strong> (44 par défaut).
+   5. Section <strong>Rémunération</strong> (visible seulement avec le droit Salaires) : <strong>Salaire de base brut (DH)</strong>, <strong>RIB (24 chiffres)</strong> et <strong>Banque</strong>. Sans ce droit, une ligne indique que ces champs sont réservés.
+   6. Cliquez <strong>Enregistrer</strong>. Le matricule est attribué automatiquement. Si un contrôle échoue, un message s'affiche et la fenêtre reste ouverte avec ce que vous avez tapé : corrigez et cliquez de nouveau <strong>Enregistrer</strong>.</p>
 </li>
-<li>Section <strong>Contrat</strong> : <strong>Type de contrat</strong> (CDI, CDD, ANAPEC (Idmaj), Tahfiz, Stage, Temps partiel, Intérim, Associé (non salarié)), <strong>Date d'embauche</strong>, <strong>Fin de contrat</strong>, <strong>Fin de période d'essai</strong>, <strong>Heures / semaine</strong> (44 par défaut).</li>
-<li>Section <strong>Rémunération</strong> (visible seulement avec le droit Salaires) : <strong>Salaire de base brut (DH)</strong>, <strong>RIB (24 chiffres)</strong>, <strong>Banque</strong>. Sans ce droit, une ligne indique que ces champs sont réservés.</li>
-<li>Cliquez <strong>Enregistrer</strong>. Le matricule est attribué automatiquement. Si un contrôle échoue, un message s'affiche et la fenêtre reste ouverte avec ce que vous avez tapé : corrigez et cliquez de nouveau <strong>Enregistrer</strong>.</li>
 </ol>
 <p>Reliez toujours le dossier au <strong>Compte SIL</strong> de la personne : sans ce lien, elle ne pourra pas demander ses congés.</p>
 <ol start="3">
 <li><strong>Modifier un dossier</strong></li>
-<li>Sélectionnez le salarié, cliquez <strong>Modifier le dossier</strong> (ou double-cliquez sur la ligne).</li>
+<li>Sélectionnez le salarié, puis cliquez <strong>Modifier le dossier</strong> (ou double-cliquez la ligne).</li>
 <li>
-<p>Corrigez les champs, cliquez <strong>Enregistrer</strong>. Le message « Dossier enregistré. » s'affiche en bas.</p>
+<p>Corrigez les champs, puis cliquez <strong>Enregistrer</strong>. Le message « Dossier enregistré. » s'affiche dans le panneau.</p>
 </li>
 <li>
 <p><strong>Ajouter une pièce au dossier (diplôme, vaccination, visite médicale…)</strong></p>
 </li>
-<li>Sélectionnez le salarié, cliquez <strong>Pièces du dossier</strong>.</li>
+<li>Sélectionnez le salarié, puis cliquez <strong>Pièces du dossier</strong>.</li>
 <li>Cliquez <strong>Ajouter une pièce</strong>.</li>
 <li>Choisissez le <strong>Type</strong> : Diplôme, Inscription à l'Ordre, Permis de conduire, Vaccination hépatite B, Autre vaccination, Visite médicale, Formation sécurité, Visa du contrat (étranger), Titre de séjour, Formation continue, Autre. L'<strong>Intitulé</strong> est proposé selon le type.</li>
-<li>Remplissez <strong>Numéro</strong>, <strong>Délivré par</strong>, <strong>Obtenu le</strong>, <strong>À renouveler le</strong>, <strong>Observations</strong>.</li>
-<li>Pour une <strong>Visite médicale</strong>, choisissez l'<strong>Aptitude (visite médicale)</strong> : Apte, Apte avec réserves, Inapte. Seule l'aptitude est enregistrée, jamais le diagnostic.</li>
+<li>Remplissez <strong>Numéro</strong>, <strong>Délivré par</strong>, <strong>Obtenu le</strong>, <strong>À renouveler le</strong> et <strong>Observations</strong>.</li>
+<li>Pour une <strong>Visite médicale</strong>, choisissez l'<strong>Aptitude (visite médicale)</strong> : Apte, Apte avec réserves ou Inapte. Seule l'aptitude est enregistrée, jamais le diagnostic.</li>
 <li>
 <p>Cliquez <strong>Enregistrer</strong>.</p>
 </li>
 <li>
 <p><strong>Joindre le scan d'une pièce</strong></p>
 </li>
-<li>Dans <strong>Pièces du dossier</strong>, sélectionnez la pièce, cliquez <strong>Joindre un scan</strong>.</li>
+<li>Dans <strong>Pièces du dossier</strong>, sélectionnez la pièce, puis cliquez <strong>Joindre un scan</strong>.</li>
 <li>Choisissez un fichier PDF, JPG, PNG ou TIFF. Si la pièce a déjà un scan, l'application demande si vous voulez le remplacer.</li>
 <li>
 <p>La colonne <strong>Scan</strong> affiche « Joint ».</p>
 </li>
 <li>
-<p><strong>Consulter le scan d'une pièce</strong> : sélectionnez la pièce, cliquez <strong>Ouvrir le scan</strong>. Sans droit de modification, un double-clic sur la pièce ouvre aussi le scan.</p>
+<p><strong>Consulter le scan d'une pièce</strong> : sélectionnez la pièce, puis cliquez <strong>Ouvrir le scan</strong>. Sans droit de modification, un double-clic sur la pièce ouvre aussi le scan.</p>
 </li>
 <li>
-<p><strong>Corriger une pièce</strong> : sélectionnez-la, cliquez <strong>Modifier la pièce</strong> (ou double-clic), corrigez, <strong>Enregistrer</strong>. Pour un renouvellement (nouvelle carte, nouvelle visite), préférez <strong>Ajouter une pièce</strong> : l'ancienne reste comme historique et les échéances prennent la plus récente.</p>
+<p><strong>Corriger une pièce</strong> : sélectionnez-la, cliquez <strong>Modifier la pièce</strong> (ou double-cliquez), corrigez, puis <strong>Enregistrer</strong>. Pour un renouvellement (nouvelle carte, nouvelle visite), préférez <strong>Ajouter une pièce</strong> : l'ancienne reste comme historique, et les échéances prennent la plus récente.</p>
 </li>
 <li>
-<p><strong>Retirer une pièce saisie par erreur</strong> : sélectionnez-la, cliquez <strong>Retirer la pièce</strong>, indiquez le motif (5 caractères au moins), <strong>OK</strong>. Le motif est gardé dans le journal d'audit.</p>
+<p><strong>Retirer une pièce saisie par erreur</strong> : sélectionnez-la, cliquez <strong>Retirer la pièce</strong>, indiquez le motif (5 caractères au moins), puis <strong>OK</strong>. Le motif est gardé dans le journal d'audit.</p>
 </li>
 <li>
 <p><strong>Enregistrer le départ d'un salarié</strong></p>
 </li>
-<li>Sélectionnez le salarié, cliquez <strong>Enregistrer la sortie</strong>.</li>
-<li>Saisissez la <strong>Date de sortie</strong> (le dernier jour travaillé), le <strong>Motif</strong> (Démission, Fin de CDD, Licenciement, Licenciement pour faute grave, Rupture d'un commun accord, Retraite, Décès, Rupture en période d'essai) et un <strong>Commentaire</strong> si besoin.</li>
-<li>
-<p>Cliquez <strong>Enregistrer</strong>.
-   - Vous pouvez enregistrer la sortie à l'avance (préavis en cours). Jusqu'à la date de sortie, la personne reste dans l'effectif : elle peut prendre des congés et garde ses habilitations. Toutes ses habilitations prennent fin le lendemain de la date de sortie.</p>
+<li>Sélectionnez le salarié, puis cliquez <strong>Enregistrer la sortie</strong>.</li>
+<li>Saisissez :<ul>
+<li>la <strong>Date de sortie</strong> (le dernier jour travaillé) ;</li>
+<li>le <strong>Motif</strong> (Démission, Fin de CDD, Licenciement, Licenciement pour faute grave, Rupture d'un commun accord, Retraite, Décès, Rupture en période d'essai) ;</li>
+<li>un <strong>Commentaire</strong> si besoin.</li>
+</ul>
 </li>
+<li>Cliquez <strong>Enregistrer</strong>.</li>
+</ol>
+<p>Vous pouvez enregistrer la sortie à l'avance (préavis en cours). Jusqu'à la date de sortie, la personne reste dans l'effectif : elle peut prendre des congés et garde ses habilitations. Toutes ses habilitations prennent fin le lendemain de la date de sortie.</p>
+<p>La sortie est refusée si un congé demandé ou validé, pas encore commencé, tombe après la date de sortie. Annulez d'abord ce congé dans <strong>Congés et absences</strong>, ou datez la sortie après lui.</p>
+<ol start="10">
 <li>
 <p><strong>Corriger ou annuler une sortie qui n'a pas encore eu lieu</strong></p>
 <ol>
 <li>Sélectionnez le salarié : le bouton s'appelle alors <strong>Modifier la sortie</strong>. Cliquez-le.</li>
-<li>Un menu propose <strong>Corriger la sortie</strong> (autre date, autre motif) ou <strong>Annuler la sortie</strong> (démission retirée, erreur de saisie ; motif obligatoire).</li>
-<li>Les habilitations suivent la nouvelle date ou sont rétablies. Un solde de tout compte déjà calculé est vidé et sera à recalculer.</li>
+<li>Un menu propose deux choix :
+   - <strong>Corriger la sortie</strong> : autre date, autre motif ;
+   - <strong>Annuler la sortie</strong> : démission retirée, erreur de saisie. Le motif est obligatoire.</li>
+<li>Les habilitations suivent la nouvelle date, ou sont rétablies. Un solde de tout compte déjà calculé est vidé et sera à recalculer.</li>
 </ol>
 </li>
 <li>
 <p><strong>Réintégrer un ancien salarié</strong></p>
 <ol>
-<li>Cochez <strong>Afficher les salariés sortis</strong>, sélectionnez la personne. Le bouton s'appelle <strong>Réintégrer</strong>.</li>
-<li>Choisissez la <strong>Date de réintégration</strong> (au plus tôt le lendemain de la sortie), cliquez <strong>Enregistrer</strong>.</li>
+<li>Cliquez la pastille <strong>Afficher les salariés sortis</strong>, puis sélectionnez la personne. Le bouton s'appelle <strong>Réintégrer</strong>.</li>
+<li>Choisissez la <strong>Date de réintégration</strong> (au plus tôt le lendemain de la sortie), puis cliquez <strong>Enregistrer</strong>.</li>
 <li>Ouvrez ensuite <strong>Modifier le dossier</strong> pour saisir les dates du nouveau contrat (fin de contrat, période d'essai) : elles sont remises à vide.</li>
 <li>Les habilitations ne reviennent pas : accordez-les de nouveau dans <strong>Habilitations</strong>.</li>
 </ol>
@@ -184,9 +295,12 @@ ul.toc li { margin: 4px 0; }
 <li>
 <p><strong>Délivrer une attestation</strong></p>
 <ol>
-<li>Sélectionnez le salarié, cliquez <strong>Attestations</strong>.</li>
-<li>Choisissez <strong>Attestation de travail</strong> (salarié en poste, droit Gérer le personnel), <strong>Attestation de salaire</strong> (droit Salaires ; le salaire de base doit être renseigné) ou <strong>Certificat de travail (sortie)</strong> (la sortie doit être enregistrée).</li>
-<li>Le document s'ouvre en PDF, prêt à imprimer et signer.</li>
+<li>Sélectionnez le salarié, puis cliquez <strong>Attestations</strong>.</li>
+<li>Choisissez le document :
+   - <strong>Attestation de travail</strong> : salarié en poste, droit Gérer le personnel ;
+   - <strong>Attestation de salaire</strong> : droit Salaires ; le salaire de base doit être renseigné ;
+   - <strong>Certificat de travail (sortie)</strong> : la sortie doit être enregistrée.</li>
+<li>Le document s'ouvre en PDF, prêt à imprimer et à signer.</li>
 </ol>
 </li>
 <li>
@@ -194,46 +308,69 @@ ul.toc li { margin: 4px 0; }
 <ol>
 <li>Sélectionnez le salarié, cliquez <strong>Solde de tout compte</strong>, puis <strong>Calculer le solde de tout compte…</strong>.</li>
 <li>La fenêtre rappelle l'entrée, la sortie, le motif, l'ancienneté et la catégorie. Elle propose les montants légaux :
-   - <strong>Salaire mensuel de référence</strong> (moyenne du brut des derniers mois complets, ou salaire de base et prime d'ancienneté s'il n'y en a pas) ;
+   - <strong>Salaire mensuel de référence</strong> : la moyenne du brut des derniers mois complets ; à défaut, le salaire de base et la prime d'ancienneté ;
    - <strong>Jours de congé restants</strong> et <strong>Indemnité de congés payés</strong> ;
    - <strong>Préavis non effectué (dispense de l'employeur)</strong> et <strong>Indemnité de préavis</strong> ;
    - <strong>Indemnité de licenciement</strong> (quand elle est due) ;
    - <strong>Observations</strong>, et le total des indemnités.</li>
-<li>Chaque montant peut être corrigé. Changer le salaire de référence ou les jours recalcule les montants qui en dépendent.</li>
-<li>Cliquez <strong>Enregistrer</strong>. Un message en bas indique si le solde a été reporté sur le bulletin du mois de sortie, s'il le sera à l'ouverture de cette paie, ou si cette paie est déjà clôturée (il faut alors la rouvrir).</li>
+<li>Chaque montant peut être corrigé. Changer le salaire de référence ou les jours recalcule les montants qui en dépendent. Les jours se tapent en chiffres.</li>
+<li>Cliquez <strong>Enregistrer</strong>. La ligne d'état indique l'une des trois situations :
+   - le solde a été reporté sur le bulletin du mois de sortie ;
+   - il le sera à l'ouverture de cette paie ;
+   - cette paie est déjà clôturée, et il faut alors la rouvrir.</li>
 </ol>
 </li>
 <li>
 <p><strong>Imprimer le reçu pour solde de tout compte</strong> : <strong>Solde de tout compte</strong> &gt; <strong>Imprimer le reçu pour solde de tout compte</strong>. Le solde doit avoir été enregistré.</p>
 </li>
 <li>
-<p><strong>Enregistrer la signature du reçu</strong> : <strong>Solde de tout compte</strong> &gt; <strong>Reçu signé par le salarié…</strong>, saisissez la <strong>Date de signature</strong>, <strong>Enregistrer</strong>. Le solde devient définitif : il ne peut plus être modifié.</p>
+<p><strong>Enregistrer la signature du reçu</strong></p>
+<ol>
+<li>Cliquez <strong>Solde de tout compte</strong> &gt; <strong>Reçu signé par le salarié…</strong>.</li>
+<li>Saisissez la <strong>Date de signature</strong>, puis cliquez <strong>Enregistrer</strong>.</li>
+<li>Le solde devient définitif : il ne peut plus être modifié.</li>
+</ol>
 </li>
 </ol>
 <p><strong>Règles et contrôles.</strong>
-- Nom et prénom obligatoires. Le nom est mis en majuscules.
-- Un CDD, un contrat ANAPEC, Tahfiz ou un stage doit avoir une <strong>Fin de contrat</strong> (« Ce type de contrat (CDD, ANAPEC, Tahfiz, stage) doit avoir une date de fin. »). La fin de contrat et la fin d'essai ne peuvent pas précéder l'embauche.
-- Heures hebdomadaires entre 0 et 60.
+- Le nom et le prénom sont obligatoires. Le nom est mis en majuscules.
+- Un CDD, un contrat ANAPEC, un contrat Tahfiz ou un stage doit avoir une <strong>Fin de contrat</strong> (« Ce type de contrat (CDD, ANAPEC, Tahfiz, stage) doit avoir une date de fin. »). La fin de contrat et la fin d'essai ne peuvent pas précéder l'embauche.
+- Les heures hebdomadaires sont comprises entre 0 et 60.
 - Le RIB doit compter 24 chiffres et sa clé doit être juste (contrôle à la saisie).
+- Les montants se tapent en chiffres. La notation « 1e5 » et les nombres démesurés sont refusés.
 - Une CIN ne peut figurer que dans un seul dossier. Un compte SIL ne peut être relié qu'à un seul dossier.
 - Les matricules se suivent sans trou : un dossier refusé ne consomme pas de numéro.
 - Une sortie déjà passée ne se corrige plus et ne s'annule plus : on réintègre. Une sortie dont le solde est signé, ou dont la paie du mois est clôturée, ne se corrige plus non plus.
+- La sortie ne peut pas laisser un congé demandé ou validé après elle (« Un congé demandé ou validé (… – …) tombe après la date de sortie du … »).
 - L'attestation de travail est refusée pour un salarié sorti (« délivrez un certificat de travail »). Le certificat de travail est refusé tant que la sortie n'est pas enregistrée.
-- Une fois le reçu signé, le solde ne change plus. Le salarié peut le dénoncer dans les 60 jours (rappel affiché).
+- Une fois le reçu signé, le solde ne change plus. Le salarié peut le dénoncer dans les 60 jours (le rappel est affiché).
 - Toute création, modification, sortie ou retrait de pièce est tracée dans le journal d'audit.
-- La sortie d'un salarié ne désactive pas son compte de connexion : faites-le dans l'administration des utilisateurs (à vérifier dans le chapitre Administration).</p>
-<p><strong>Flux.</strong> Nouveau dossier → pièces (visite d'embauche, vaccination, clause de secret) → <strong>Habilitations</strong> → <strong>Planning des gardes</strong> et <strong>Congés et absences</strong> → <strong>Paie</strong>. Au départ : <strong>Enregistrer la sortie</strong> → <strong>Calculer le solde de tout compte</strong> → paie du mois de sortie clôturée → <strong>Reçu signé par le salarié…</strong> → <strong>Certificat de travail (sortie)</strong>.</p>
+- La sortie d'un salarié ne désactive pas son compte de connexion. Faites-le dans <strong>Utilisateurs</strong> (chapitre Administration).</p>
+<p><strong>Flux.</strong>
+1. On crée le dossier, puis on ajoute les pièces (visite d'embauche, vaccination, clause de secret).
+2. On accorde les <strong>Habilitations</strong>.
+3. Le salarié entre dans le <strong>Planning des gardes</strong> et dans <strong>Congés et absences</strong>, puis dans la <strong>Paie</strong>.
+4. Au départ : <strong>Enregistrer la sortie</strong>, puis <strong>Calculer le solde de tout compte</strong>. La paie du mois de sortie est clôturée, puis on enregistre <strong>Reçu signé par le salarié…</strong> et on délivre le <strong>Certificat de travail (sortie)</strong>.</p>
 <div class="diagram"><img src="img/diagramme-73e52c0f7955a0b4.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="habilitations">Habilitations</h3>
-<p>Cet écran est la matrice des habilitations exigée par la norme ISO 15189 : un salarié par ligne, une activité par colonne, le niveau et la date de réévaluation dans chaque case.</p>
-<p><strong>Qui y a accès.</strong> Consultation et export : droit Consulter le personnel (Administrateur, Biologiste responsable, Responsable qualité). <strong>Accorder une habilitation</strong> et <strong>Retirer l'habilitation</strong> : droit Gérer les habilitations (Administrateur, Biologiste responsable). Les niveaux « Habilité » et « Formateur » exigent en plus d'être biologiste.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran est la matrice des habilitations exigée par la norme ISO 15189. Il a un salarié par ligne et une activité par colonne. Chaque case donne le niveau et la date de réévaluation.</p>
+<p><strong>Qui y a accès.</strong>
+- Consultation et export : droit Consulter le personnel (Administrateur, Biologiste responsable, Responsable qualité).
+- <strong>Accorder une habilitation</strong> et <strong>Retirer l'habilitation</strong> : droit Gérer les habilitations (Administrateur, Biologiste responsable). Les niveaux « Habilité » et « Formateur » exigent en plus d'être biologiste.</p>
+<p><strong>Fonctionnalités</strong>
+- <strong>Actualiser</strong> (en-tête) : recharge la matrice.
+- <strong>Exporter (CSV)</strong> (en-tête) : la matrice pour l'auditeur, avec une ligne par habilitation.
+- <strong>Accorder une habilitation</strong> (barre sous la matrice, bouton principal ; ou double-clic sur une case) : enregistre une décision pour le salarié de la ligne choisie.
+- <strong>Retirer l'habilitation</strong> (barre sous la matrice) : met fin à l'habilitation de la case choisie, avec un motif obligatoire.
+- Détail de la case (à gauche de la barre) : le niveau, la date, le signataire, la réévaluation et les preuves.</p>
 <p><strong>L'écran.</strong>
-- En haut : « Habilitations — N salariés, N habilitations, N réévaluations en retard », <strong>Actualiser</strong>, <strong>Exporter (CSV)</strong>.
-- La matrice : <strong>Matricule</strong>, <strong>Désignation</strong>, <strong>Métier</strong>, puis une colonne par activité (et par automate ou discipline). Les colonnes « Prélèvement adulte » et « Prélèvement pédiatrique » sont toujours présentes.
-- Dans une case : <strong>F</strong> = En formation (orange), <strong>H</strong> = Habilité, <strong>H+</strong> = Formateur, suivi du mois de réévaluation (mm/aa). Une case rouge : réévaluation dépassée.
-- Sous la matrice : le détail de la case sélectionnée (niveau, date, signataire, réévaluation, preuves), puis <strong>Accorder une habilitation</strong> et <strong>Retirer l'habilitation</strong>.
+- En-tête : le titre « Habilitations », avec dessous « N salariés · N habilitations · N réévaluations en retard ». À droite : <strong>Actualiser</strong> et <strong>Exporter (CSV)</strong>.
+- La matrice, dans un cadre : <strong>Matricule</strong>, <strong>Désignation</strong> et <strong>Métier</strong>, puis une colonne par activité (et par automate ou discipline). Les colonnes « Prélèvement adulte » et « Prélèvement pédiatrique » sont toujours présentes.
+- Dans une case : <strong>F</strong> = En formation (orange), <strong>H</strong> = Habilité, <strong>H+</strong> = Formateur, suivi du mois de réévaluation (mm/aa). Une case rouge signale une réévaluation dépassée.
+- Sous la matrice, une barre : le détail de la case sélectionnée, puis <strong>Retirer l'habilitation</strong> et <strong>Accorder une habilitation</strong>. Sans aucune habilitation, le détail affiche « Aucune habilitation enregistrée. Sélectionnez un salarié puis « Accorder une habilitation ». »
 - Seuls les salariés en poste et les habilitations en cours sont affichés.</p>
 <p><strong>Scénarios.</strong></p>
 <ol>
@@ -241,9 +378,14 @@ ul.toc li { margin: 4px 0; }
 <li>Cliquez la case du salarié dans la colonne de l'activité voulue (ou n'importe quelle case de sa ligne).</li>
 <li>Cliquez <strong>Accorder une habilitation</strong> (ou double-cliquez la case).</li>
 <li>Choisissez l'<strong>Activité</strong> : Prélèvement adulte, Prélèvement pédiatrique, Prélèvement à domicile, Utilisation d'automate, Techniques manuelles, Validation technique, Validation biologique, Transport d'échantillons, Réception des échantillons.</li>
-<li>Pour Utilisation d'automate, choisissez l'automate dans <strong>Automate ou discipline</strong> ; pour Techniques manuelles, Validation technique et Validation biologique, choisissez la discipline.</li>
-<li>Choisissez le <strong>Niveau</strong> : En formation, Habilité, Formateur.</li>
-<li>Indiquez <strong>Décidée le</strong> (pas dans le futur), <strong>Réévaluation le</strong> (proposée à un an), <strong>Preuves (formation, évaluation…)</strong>.</li>
+<li>Pour Utilisation d'automate, choisissez l'automate dans <strong>Automate ou discipline</strong>. Pour Techniques manuelles, Validation technique et Validation biologique, choisissez la discipline.</li>
+<li>Choisissez le <strong>Niveau</strong> : En formation, Habilité ou Formateur.</li>
+<li>Indiquez :<ul>
+<li><strong>Décidée le</strong> : ni dans le futur, ni avant la date d'embauche ;</li>
+<li><strong>Réévaluation le</strong> : proposée à un an ;</li>
+<li><strong>Preuves (formation, évaluation…)</strong>.</li>
+</ul>
+</li>
 <li>
 <p>Cliquez <strong>Enregistrer</strong>.</p>
 </li>
@@ -255,31 +397,47 @@ ul.toc li { margin: 4px 0; }
 </li>
 <li>Cliquez la case concernée.</li>
 <li>
-<p>Cliquez <strong>Retirer l'habilitation</strong>, indiquez le motif, <strong>OK</strong>.</p>
+<p>Cliquez <strong>Retirer l'habilitation</strong>, indiquez le motif, puis <strong>OK</strong>.</p>
 </li>
 <li>
-<p><strong>Exporter la matrice pour l'auditeur</strong> : cliquez <strong>Exporter (CSV)</strong>. Le fichier (une ligne par habilitation : matricule, nom, métier, activité, automate ou discipline, niveau, décidée le, signée par, réévaluation, preuves) s'ouvre dans votre tableur.</p>
+<p><strong>Exporter la matrice pour l'auditeur</strong> : cliquez <strong>Exporter (CSV)</strong>. Le fichier a une ligne par habilitation (matricule, nom, métier, activité, automate ou discipline, niveau, décidée le, signée par, réévaluation, preuves). Il s'ouvre dans votre tableur.</p>
 </li>
 </ol>
 <p><strong>Règles et contrôles.</strong>
 - Seul un biologiste peut accorder « Habilité » ou « Formateur » (« Seul un biologiste peut habiliter un salarié à travailler seul ou à former. Vous pouvez le placer « En formation ». »).
 - La <strong>Validation biologique</strong> ne s'accorde qu'à un salarié dont le métier est Biologiste (loi 12-01).
-- Automate ou discipline obligatoire pour les activités qui en ont besoin.
+- L'automate ou la discipline est obligatoire pour les activités qui en ont besoin.
+- La date de décision ne peut ni être dans le futur, ni précéder l'embauche (« La date de décision ne peut pas précéder l'embauche (…). »).
 - La réévaluation doit être postérieure à la décision.
-- Aucune habilitation après la date de sortie d'un salarié ; une habilitation accordée pendant le préavis prend fin avec la sortie.
+- Aucune habilitation après la date de sortie d'un salarié. Une habilitation accordée pendant le préavis prend fin avec la sortie.
 - Le retrait demande toujours un motif.
-- L'historique des habilitations retirées ou remplacées n'est pas affiché à l'écran ; il est conservé (journal d'audit).</p>
-<p><strong>Flux.</strong> Dossier créé → habilitation « En formation » → « Habilité » signé par le biologiste → les réévaluations dues apparaissent dans <strong>Échéances RH</strong> → le <strong>Planning des gardes</strong> signale un salarié seul au poste alors qu'il n'est qu'en formation.</p>
+- L'historique des habilitations retirées ou remplacées n'est pas affiché à l'écran. Il est conservé (journal d'audit).</p>
+<p><strong>Flux.</strong>
+1. Une fois le dossier créé, le salarié reçoit une habilitation « En formation ».
+2. Le biologiste signe ensuite le niveau « Habilité ».
+3. Les réévaluations dues apparaissent dans <strong>Échéances RH</strong>.
+4. Le <strong>Planning des gardes</strong> signale un salarié seul au poste alors qu'il n'est qu'en formation.</p>
 <div class="diagram"><img src="img/diagramme-316a523935b8ad17.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="hrdeadlines">Échéances RH</h3>
-<p>Cet écran liste ce que la RH doit traiter : pièces à renouveler, réévaluations, fins de contrat et d'essai, pièces manquantes, déclarations d'accident et contrôles sérologiques.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran liste ce que la RH doit traiter :
+- les pièces à renouveler et les pièces manquantes ;
+- les réévaluations d'habilitation ;
+- les fins de contrat et de période d'essai ;
+- les déclarations d'accident et les contrôles sérologiques.</p>
 <p><strong>Qui y a accès.</strong> Droit Consulter le personnel. <strong>Modifier le dossier</strong> demande le droit Gérer le personnel.</p>
+<p><strong>Fonctionnalités</strong>
+- <strong>Actualiser</strong> (en-tête) : recharge la liste.
+- Liste d'horizon (rangée de filtres) : <strong>Dans les 30 jours</strong>, <strong>Dans les 60 jours</strong> (par défaut), <strong>Dans les 90 jours</strong> et <strong>Dans les 180 jours</strong>. Changer d'horizon recharge la liste.
+- <strong>Pièces du dossier</strong> (barre sous la liste, bouton principal) : ouvre les pièces du salarié de la ligne choisie.
+- <strong>Modifier le dossier</strong> (barre sous la liste ; droit Gérer le personnel) : ouvre son dossier.</p>
 <p><strong>L'écran.</strong>
-- En haut : « Échéances — N points à traiter, dont N en retard ou manquants », une liste d'horizon (<strong>Dans les 30 jours</strong>, <strong>Dans les 60 jours</strong> par défaut, <strong>Dans les 90 jours</strong>, <strong>Dans les 180 jours</strong>), <strong>Actualiser</strong>.
-- La liste : <strong>Statut</strong> (« Manquant », « En retard » ou « Dans N j »), <strong>Échéance</strong>, <strong>Matricule</strong>, <strong>Désignation</strong>, <strong>Métier</strong>, <strong>À traiter</strong>, <strong>Détail</strong>. Rouge : en retard ou manquant. Orange : dans les 30 jours.
-- En bas : <strong>Pièces du dossier</strong>, <strong>Modifier le dossier</strong>.</p>
+- En-tête : le titre « Échéances RH », avec dessous « N points à traiter · N en retard ou manquants ». À droite : <strong>Actualiser</strong>.
+- Rangée de filtres : la liste d'horizon.
+- La liste : <strong>Statut</strong> (« Manquant », « En retard » ou « Dans N j »), <strong>Échéance</strong>, <strong>Matricule</strong>, <strong>Désignation</strong>, <strong>Métier</strong>, <strong>À traiter</strong> et <strong>Détail</strong>. En rouge : en retard ou manquant. En orange : dans les 30 jours.
+- Sous la liste, une barre : <strong>Modifier le dossier</strong> et <strong>Pièces du dossier</strong>.</p>
 <p>Ce qui peut apparaître dans <strong>À traiter</strong> :</p>
 <table>
 <thead>
@@ -337,36 +495,61 @@ ul.toc li { margin: 4px 0; }
 </table>
 <p><strong>Scénarios.</strong></p>
 <ol>
-<li><strong>Faire le point de la semaine</strong> : choisissez l'horizon, cliquez <strong>Actualiser</strong>, traitez d'abord les lignes rouges.</li>
+<li><strong>Faire le point de la semaine</strong> : choisissez l'horizon (la liste se recharge), puis traitez d'abord les lignes rouges.</li>
 <li><strong>Compléter une pièce manquante ou renouvelée</strong> : sélectionnez la ligne, cliquez <strong>Pièces du dossier</strong>, puis <strong>Ajouter une pièce</strong> (voir « Dossiers du personnel »). À la fermeture, la liste se met à jour.</li>
-<li><strong>Corriger une date du dossier (fin de contrat, clause de secret)</strong> : sélectionnez la ligne, cliquez <strong>Modifier le dossier</strong>, corrigez, <strong>Enregistrer</strong>.</li>
-<li><strong>Traiter une réévaluation d'habilitation</strong> : allez dans <strong>Habilitations</strong> et accordez de nouveau l'habilitation avec une nouvelle date de réévaluation (il n'y a pas de bouton direct depuis cet écran).</li>
-<li><strong>Traiter une ligne d'accident</strong> : allez dans <strong>Accidents du travail</strong> (les boutons de cet écran ouvrent le dossier du personnel, pas le dossier d'accident).</li>
+<li><strong>Corriger une date du dossier (fin de contrat, clause de secret)</strong> : sélectionnez la ligne, cliquez <strong>Modifier le dossier</strong>, corrigez, puis <strong>Enregistrer</strong>.</li>
+<li><strong>Traiter une réévaluation d'habilitation</strong> : allez dans <strong>Habilitations</strong> et accordez de nouveau l'habilitation avec une nouvelle date de réévaluation. Il n'y a pas de bouton direct depuis cet écran.</li>
+<li><strong>Traiter une ligne d'accident</strong> : allez dans <strong>Accidents du travail</strong>. Les boutons de cet écran ouvrent le dossier du personnel, pas le dossier d'accident.</li>
 </ol>
-<p><strong>Règles et contrôles.</strong> Une pièce sans date de renouvellement n'apparaît jamais. Pour une pièce renouvelée, seule la date la plus récente compte. Les points « manquants » sont toujours en tête.</p>
-<p><strong>Flux.</strong> Échéances RH → <strong>Dossiers du personnel</strong> (pièces), <strong>Habilitations</strong> (réévaluation) ou <strong>Accidents du travail</strong> (déclaration, sérologie).</p>
+<p><strong>Règles et contrôles.</strong>
+- Une pièce sans date de renouvellement n'apparaît jamais.
+- Pour une pièce renouvelée, seule la date la plus récente compte.
+- Les points « manquants » sont toujours en tête.</p>
+<p><strong>Flux.</strong> Depuis cet écran, on traite chaque point dans le bon écran :
+- <strong>Dossiers du personnel</strong>, pour les pièces ;
+- <strong>Habilitations</strong>, pour les réévaluations ;
+- <strong>Accidents du travail</strong>, pour les déclarations et la sérologie.</p>
 <div class="diagram"><img src="img/diagramme-8ec17194508a1f43.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="leave">Congés et absences</h3>
-<p>Cet écran gère les demandes de congé de l'année, leur validation, les soldes de congés payés et le calendrier des jours fériés.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran gère les demandes de congé de l'année et leur validation. Il tient aussi les soldes de congés payés et le calendrier des jours fériés.</p>
 <p><strong>Qui y a accès.</strong>
-- Tout membre du personnel ayant le droit Demander un congé voit l'écran, mais seulement <strong>ses propres demandes</strong> et <strong>son propre solde</strong>.
-- Les personnes ayant Valider les congés, Gérer le personnel ou Consulter le personnel voient les demandes de tous.
+- Tout membre du personnel qui a le droit Demander un congé voit l'écran, mais seulement <strong>ses propres demandes</strong> et <strong>son propre solde</strong>.
+- Les personnes qui ont Valider les congés, Gérer le personnel ou Consulter le personnel voient les demandes de tous.
 - <strong>Valider</strong> et <strong>Refuser</strong> : droit Valider les congés (Administrateur, Biologiste responsable).
 - <strong>Ajuster le solde</strong>, ajouter ou retirer un jour férié, saisir une « Absence injustifiée » : droit Gérer le personnel.</p>
+<p><strong>Fonctionnalités</strong>
+- <strong>Demander un congé</strong> (en-tête, bouton principal ; droit Demander un congé ou Gérer le personnel) : ouvre la fenêtre de demande, avec le calcul des jours et du solde.
+- <strong>Actualiser</strong> (en-tête) : recharge la liste.
+- <strong>Année</strong> (rangée de filtres) : l'année affichée. Changer l'année recharge la liste.
+- Pastille <strong>En attente seulement (toutes années)</strong> : ne montre que les demandes à traiter, toutes années confondues.
+- <strong>Soldes de congés</strong> (rangée de filtres) : le tableau des soldes. La fenêtre a son bouton <strong>Ajuster le solde</strong> (droit Gérer le personnel).
+- <strong>Jours fériés</strong> (rangée de filtres) : le calendrier de l'année. La fenêtre a ses boutons <strong>Ajouter un jour férié</strong> et <strong>Retirer</strong> (droit Gérer le personnel).
+- <strong>Valider</strong> (barre sous la liste, bouton principal ; droit Valider les congés) : valide la demande en attente, après confirmation.
+- <strong>Refuser</strong> (barre sous la liste ; droit Valider les congés) : refuse avec un motif, que le salarié verra.
+- <strong>Annuler la demande</strong> (barre sous la liste) : annule une demande en attente, ou validée et pas encore commencée.</p>
 <p><strong>L'écran.</strong>
-- En haut : « Congés — N en attente, N validés », l'<strong>année</strong>, <strong>Actualiser</strong>, <strong>En attente seulement (toutes années)</strong>.
-- La liste : <strong>Statut</strong> (En attente, Validé, Refusé, Annulé), <strong>Désignation</strong>, <strong>Secteur</strong>, <strong>Type</strong>, <strong>Du</strong>, <strong>Au</strong> (avec « (ap.-midi) » ou « (matin) » pour une demi-journée), <strong>Jours</strong>, <strong>Justificatif</strong> (Fourni / Manquant), <strong>Collègues absents</strong>, <strong>Décision</strong>. Les demandes en attente sont en orange ; un justificatif manquant est en rouge.
-- Sous la liste : le détail de la demande (type, jours décomptés, motif, alerte s'il y a des collègues du même secteur absents).
-- En bas : <strong>Demander un congé</strong>, <strong>Valider</strong>, <strong>Refuser</strong>, <strong>Annuler la demande</strong>, <strong>Soldes de congés</strong>, <strong>Jours fériés</strong>.</p>
+- En-tête : le titre « Congés et absences », avec dessous « N en attente · N validés ». À droite : <strong>Actualiser</strong> et <strong>Demander un congé</strong>.
+- Rangée de filtres : <strong>Année</strong>, la pastille <strong>En attente seulement (toutes années)</strong>, <strong>Soldes de congés</strong> et <strong>Jours fériés</strong>.
+- La liste :
+  - <strong>Statut</strong> (En attente, Validé, Refusé ou Annulé), en pastille ;
+  - <strong>Désignation</strong>, <strong>Secteur</strong> et <strong>Type</strong> ;
+  - <strong>Du</strong> et <strong>Au</strong>, avec « (ap.-midi) » ou « (matin) » pour une demi-journée ;
+  - <strong>Jours</strong> ;
+  - <strong>Justificatif</strong> (Fourni / Manquant). Un justificatif manquant est en rouge ;
+  - <strong>Collègues absents</strong> et <strong>Décision</strong>.
+- Sous la liste, une barre :
+  - le détail de la demande : type, jours décomptés, motif, et une alerte s'il y a des collègues du même secteur absents ;
+  - <strong>Annuler la demande</strong>, <strong>Refuser</strong> et <strong>Valider</strong>.</p>
 <p><strong>Scénarios.</strong></p>
 <ol>
 <li><strong>Demander un congé (pour soi)</strong></li>
 <li>Cliquez <strong>Demander un congé</strong>.</li>
 <li>Votre nom est déjà choisi dans <strong>Salarié</strong>.</li>
 <li>Choisissez le <strong>Type</strong> : Congé annuel payé, Congé sans solde, Maladie, Maternité (14 semaines), Naissance (3 j), Mariage du salarié (4 j), Mariage d'un enfant (2 j), Décès conjoint, enfant, ascendant (3 j), Décès frère ou sœur (2 j), Circoncision, opération d'un proche (2 j), Accident du travail.</li>
-<li>Saisissez <strong>Du</strong> et <strong>Au</strong>. Cochez <strong>À partir de l'après-midi</strong> ou <strong>Jusqu'au matin seulement</strong> pour une demi-journée.</li>
+<li>Saisissez <strong>Du</strong> et <strong>Au</strong>. Pour une demi-journée, cochez <strong>À partir de l'après-midi</strong> ou <strong>Jusqu'au matin seulement</strong>.</li>
 <li>Lisez le nombre de jours décomptés et votre solde disponible (en rouge s'il est insuffisant).</li>
 <li>Ajoutez un <strong>Motif</strong> si besoin. Cochez <strong>Justificatif remis à la RH (certificat, acte d'état civil…)</strong> si vous l'avez remis.</li>
 <li>
@@ -379,97 +562,128 @@ ul.toc li { margin: 4px 0; }
 <p><strong>Valider une demande</strong></p>
 </li>
 <li>Sélectionnez une demande « En attente ».</li>
-<li>Cliquez <strong>Valider</strong>. La confirmation rappelle le type, les dates, les jours et, le cas échéant, le nombre de collègues du secteur absents.</li>
+<li>Cliquez <strong>Valider</strong>. La confirmation rappelle le type, les dates et les jours. Le cas échéant, elle ajoute « N collègue(s) du service … absent(s) sur une partie de ces jours ».</li>
 <li>
 <p>Répondez <strong>Oui</strong>. Pour un congé annuel, les jours sont débités du solde.</p>
 </li>
 <li>
-<p><strong>Refuser une demande</strong> : sélectionnez-la, cliquez <strong>Refuser</strong>, saisissez le motif (le salarié le verra), <strong>OK</strong>.</p>
+<p><strong>Refuser une demande</strong> : sélectionnez-la, cliquez <strong>Refuser</strong>, saisissez le motif (le salarié le verra), puis <strong>OK</strong>.</p>
 </li>
 <li>
 <p><strong>Annuler une demande</strong></p>
 </li>
 <li>Sélectionnez une demande en attente, ou validée et pas encore commencée.</li>
-<li>Cliquez <strong>Annuler la demande</strong>, ajoutez un commentaire si besoin, <strong>OK</strong>.</li>
+<li>Cliquez <strong>Annuler la demande</strong>, ajoutez un commentaire si besoin, puis <strong>OK</strong>.</li>
 <li>
 <p>Un congé annuel validé puis annulé rend ses jours au solde.</p>
 </li>
 <li>
-<p><strong>Consulter les soldes</strong> : cliquez <strong>Soldes de congés</strong>. Colonnes : <strong>Matricule</strong>, <strong>Désignation</strong>, <strong>Droit annuel</strong>, <strong>Acquis</strong>, <strong>Pris</strong>, <strong>En attente</strong>, <strong>Solde</strong>, <strong>Disponible</strong> (en rouge si négatif). Un salarié ne voit que sa propre ligne.</p>
+<p><strong>Consulter les soldes</strong> : cliquez <strong>Soldes de congés</strong>. Les colonnes sont <strong>Matricule</strong>, <strong>Désignation</strong>, <strong>Droit annuel</strong>, <strong>Acquis</strong>, <strong>Pris</strong>, <strong>En attente</strong>, <strong>Solde</strong> et <strong>Disponible</strong> (en rouge si négatif). Un salarié ne voit que sa propre ligne.</p>
 </li>
 <li>
 <p><strong>Saisir un reliquat ou corriger un solde (RH)</strong></p>
 </li>
-<li>Dans <strong>Soldes de congés</strong>, sélectionnez le salarié, cliquez <strong>Ajuster le solde</strong>.</li>
-<li>Saisissez <strong>Jours (+ ou −)</strong> et le <strong>Motif</strong>, <strong>Enregistrer</strong>.</li>
+<li>Dans <strong>Soldes de congés</strong>, sélectionnez le salarié, puis cliquez <strong>Ajuster le solde</strong>.</li>
+<li>Saisissez <strong>Jours (+ ou −)</strong> et le <strong>Motif</strong>, puis <strong>Enregistrer</strong>.</li>
 <li>
-<p>À faire une fois à l'installation pour reprendre les reliquats de l'année précédente.</p>
+<p>Faites-le une fois à l'installation, pour reprendre les reliquats de l'année précédente.</p>
 </li>
 <li>
 <p><strong>Tenir le calendrier des jours fériés (RH)</strong></p>
 </li>
-<li>Choisissez l'année en haut de l'écran, cliquez <strong>Jours fériés</strong>.</li>
-<li>Les fêtes civiles sont déjà présentes. Pour une fête religieuse (Aïd al-Fitr, Aïd al-Adha, 1er Moharram, Aïd al-Mawlid), cliquez <strong>Ajouter un jour férié</strong>, choisissez la <strong>Date</strong>, saisissez la <strong>Désignation</strong>, laissez <strong>Fête religieuse</strong> cochée, <strong>Enregistrer</strong>.</li>
-<li>Pour retirer un jour, sélectionnez-le, <strong>Retirer</strong>, confirmez.</li>
+<li>Choisissez l'année en haut de l'écran, puis cliquez <strong>Jours fériés</strong>.</li>
+<li>Les fêtes civiles sont déjà présentes. Pour une fête religieuse (Aïd al-Fitr, Aïd al-Adha, 1er Moharram, Aïd al-Mawlid) :<ol>
+<li>cliquez <strong>Ajouter un jour férié</strong> ;</li>
+<li>choisissez la <strong>Date</strong> et saisissez la <strong>Désignation</strong> ;</li>
+<li>laissez <strong>Fête religieuse</strong> cochée, puis <strong>Enregistrer</strong>.</li>
+</ol>
+</li>
+<li>Si ce jour tombe dans des congés déjà saisis, un message l'indique : « Ce jour férié tombe dans des congés déjà saisis : leurs jours ont été recomptés, et la différence rendue au solde pour les congés validés. ». Il est suivi d'une ligne par congé recompté (ancien et nouveau nombre de jours).</li>
+<li>Pour retirer un jour, sélectionnez-le, cliquez <strong>Retirer</strong>, puis confirmez.</li>
 </ol>
 <p><strong>Règles et contrôles.</strong>
-- Congé annuel : 1,5 jour ouvrable par mois de service (2 avant 18 ans), +1,5 jour par tranche de 5 ans d'ancienneté, 30 jours au plus. Les mois sont crédités automatiquement.
-- Jours ouvrables : du lundi au samedi, hors jours fériés. Maladie, maternité et accident du travail se comptent en jours calendaires.
-- Seul le congé annuel payé est débité du solde. Il est refusé si le solde est insuffisant (« Solde insuffisant : … j demandés, … j disponibles. »).
+- Congé annuel : 1,5 jour ouvrable par mois de service (2 avant 18 ans), plus 1,5 jour par tranche de 5 ans d'ancienneté, 30 jours au plus. Les mois sont crédités automatiquement.
+- Jours ouvrables : du lundi au samedi, hors jours fériés. La maladie, la maternité et l'accident du travail se comptent en jours calendaires.
+- Un jour férié ajouté après coup recompte les congés déjà saisis qui le couvrent. Les jours rendus reviennent au solde pour les congés validés.
+- Seul le congé annuel payé est débité du solde. Il est refusé si le solde est insuffisant (« Solde insuffisant : … jours demandés, … disponibles. »).
 - Les congés familiaux ont une durée maximale légale (« Ce congé est de N jours au plus. »).
 - Deux demandes ne peuvent pas se chevaucher.
 - On ne valide ni ne refuse sa propre demande.
-- Maladie, maternité, naissance, mariages, décès, événement familial et accident du travail ne peuvent être validés que si le justificatif est marqué « Fourni » (« Le justificatif doit être remis avant la validation. »). Attention : cette case ne se coche qu'au moment de la demande (voir le document de vérification).
+- Maladie, maternité, naissance, mariages, décès, événement familial et accident du travail ne peuvent être validés que si le justificatif est marqué « Fourni » (« Le justificatif doit être remis avant la validation. »). Attention : cette case ne se coche qu'au moment de la demande, elle ne se modifie pas ensuite (voir le document de vérification).
 - Un refus doit être motivé.
 - Un congé validé déjà commencé ne s'annule plus : la RH corrige par <strong>Ajuster le solde</strong>.
 - Une absence injustifiée, ou une demande saisie par la RH, ne peut être annulée que par la RH ou un valideur.
-- Un compte non relié à un dossier du personnel ne peut pas demander de congé (« Votre compte n'est relié à aucun dossier du personnel : demandez à la RH de le relier. »).</p>
-<p><strong>Flux.</strong> Demande → validation → le congé apparaît dans le <strong>Planning des gardes</strong> (aucun poste ne peut y être placé) → les congés sans solde et absences injustifiées sont repris dans la <strong>Paie</strong> (« Reprendre les dossiers »).</p>
+- Un compte non relié à un dossier du personnel ne peut pas demander de congé (« Votre compte n'est relié à aucun dossier du personnel : demandez à la RH de le relier. »).
+- Une sortie ne peut pas laisser un congé demandé ou validé après elle : annulez le congé avant d'avancer la sortie.</p>
+<p><strong>Flux.</strong>
+1. Le salarié fait sa demande, puis le valideur la valide.
+2. Le congé validé apparaît dans le <strong>Planning des gardes</strong>, où aucun poste ne peut y être placé.
+3. Les congés sans solde et les absences injustifiées sont repris dans la <strong>Paie</strong> (« Reprendre les dossiers »).</p>
 <div class="diagram"><img src="img/diagramme-0be3e85292b6e1f4.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="planning">Planning des gardes</h3>
-<p>Cet écran construit le planning mensuel : une ligne par personne, une colonne par jour, avec les congés et les jours fériés, et la liste des points qui posent problème.</p>
-<p><strong>Qui y a accès.</strong> Consultation : droit Consulter le personnel ou Planning. <strong>Affecter un poste</strong>, <strong>Retirer le poste</strong>, <strong>Recopier la semaine précédente</strong> : droit Planning (Administrateur, Biologiste responsable). Les autres membres du personnel n'ont pas accès à cet écran.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran construit le planning mensuel. Il a une ligne par personne et une colonne par jour, avec les congés et les jours fériés. Il donne aussi la liste des points qui posent problème.</p>
+<p><strong>Qui y a accès.</strong>
+- Consultation : droit Consulter le personnel ou Planning.
+- <strong>Affecter un poste</strong>, <strong>Retirer le poste</strong> et <strong>Recopier la semaine précédente</strong> : droit Planning (Administrateur, Biologiste responsable).</p>
+<p>Les autres membres du personnel n'ont pas accès à cet écran.</p>
+<p><strong>Fonctionnalités</strong>
+- <strong>Recopier la semaine précédente</strong> (en-tête) : recopie les postes de la semaine précédente sur la semaine de la case choisie, après confirmation.
+- <strong>Actualiser</strong> (en-tête) : recharge le mois.
+- <strong>Mois précédent</strong> / <strong>Mois suivant</strong> (rangée de navigation) : change de mois. Le mois affiché est entre les deux boutons.
+- <strong>Affecter un poste</strong> (barre sous la grille, bouton principal ; ou double-clic sur une case) : place un poste sur la ou les cases choisies.
+- <strong>Retirer le poste</strong> (barre sous la grille, ou touche <strong>Suppr</strong>) : retire les postes des cases choisies, après confirmation.
+- Cadre des points à vérifier : cliquer une ligne amène la grille sur la case concernée.
+- <strong>Imprimer</strong> (Ctrl+P) : la grille du mois en PDF.</p>
 <p><strong>L'écran.</strong>
-- En haut : « Planning — N personnes, N postes, N point(s) à vérifier », <strong>Mois précédent</strong>, le mois affiché, <strong>Mois suivant</strong>, <strong>Actualiser</strong>.
-- La grille : <strong>Désignation</strong> (nom et métier abrégé), <strong>Heures</strong> du mois, puis un jour par colonne. Codes : M matin · AM après-midi · J journée · S samedi · N nuit · D dimanche/férié · A astreinte · CA, MA… congés. Dimanches et fériés sont grisés ; un congé validé est surligné ; une case en rouge a un problème.
-- En dessous : <strong>Affecter un poste</strong>, <strong>Retirer le poste</strong>, <strong>Recopier la semaine précédente</strong>, et une ligne d'aide.
-- En bas : la liste des points à vérifier (<strong>Date</strong>, <strong>Désignation</strong>, <strong>À vérifier</strong>). Cliquer une ligne amène la grille sur la case concernée.</p>
+- En-tête : le titre « Planning des gardes », avec dessous « N personne(s) · N poste(s) · N point(s) à vérifier ». À droite : <strong>Actualiser</strong> et <strong>Recopier la semaine précédente</strong>.
+- Rangée de navigation : <strong>Mois précédent</strong>, le mois affiché et <strong>Mois suivant</strong>.
+- La grille : <strong>Désignation</strong> (le nom et le métier abrégé), les <strong>Heures</strong> du mois, puis un jour par colonne.
+  - Codes : M matin · AM après-midi · J journée · S samedi · N nuit · D dimanche/férié · A astreinte · CA, MA… congés.
+  - Les dimanches et les fériés sont grisés. Un congé validé est surligné. Une case en rouge a un problème.
+- Sous la grille, une barre : la légende et la case choisie, puis <strong>Retirer le poste</strong> et <strong>Affecter un poste</strong>.
+- Dessous, le cadre des points à vérifier : <strong>Date</strong>, <strong>Désignation</strong> et <strong>À vérifier</strong>.</p>
 <p><strong>Scénarios.</strong></p>
 <ol>
 <li><strong>Affecter un poste à une ou plusieurs cases</strong></li>
-<li>Cliquez une case (ou plusieurs avec <strong>Ctrl</strong> ou <strong>Maj</strong>). Le double-clic sur une case ouvre directement la fenêtre.</li>
+<li>Cliquez une case (ou plusieurs, avec <strong>Ctrl</strong> ou <strong>Maj</strong>). Le double-clic sur une case ouvre directement la fenêtre.</li>
 <li>Cliquez <strong>Affecter un poste</strong>.</li>
 <li>Choisissez le <strong>Poste</strong> : Matin (7 h–14 h), Après-midi (14 h–20 h), Journée (8 h–17 h), Samedi (7 h 30–13 h), Garde de nuit (20 h–8 h le lendemain), Garde dimanche/férié (8 h–14 h), Astreinte (journée à domicile, sans heures).</li>
 <li>Corrigez <strong>Début</strong> et <strong>Fin</strong> si besoin ; le nombre d'heures de travail s'affiche. Ajoutez des <strong>Observations</strong>.</li>
 <li>
-<p>Cliquez <strong>Enregistrer</strong>. Les cases refusées sont listées dans un message.</p>
+<p>Cliquez <strong>Enregistrer</strong>. Les cases refusées sont listées dans un message (« N affectation(s) refusée(s) : … »).</p>
 </li>
 <li>
 <p><strong>Modifier un poste</strong> : il n'y a pas de modification directe. Retirez le poste (scénario 3), puis affectez le bon.</p>
 </li>
 <li>
-<p><strong>Retirer un poste</strong> : sélectionnez la ou les cases, cliquez <strong>Retirer le poste</strong> (ou touche <strong>Suppr</strong>), confirmez.</p>
+<p><strong>Retirer un poste</strong> : sélectionnez la ou les cases, cliquez <strong>Retirer le poste</strong> (ou appuyez sur <strong>Suppr</strong>), puis confirmez.</p>
 </li>
 <li>
 <p><strong>Recopier la semaine précédente</strong></p>
 </li>
 <li>Cliquez un jour de la semaine à remplir.</li>
-<li>Cliquez <strong>Recopier la semaine précédente</strong>, confirmez.</li>
+<li>Cliquez <strong>Recopier la semaine précédente</strong>, puis confirmez.</li>
 <li>
-<p>Un message indique combien de postes ont été recopiés et combien ignorés (congé, poste déjà présent, salarié pas en poste).</p>
+<p>Un message indique combien de postes ont été recopiés et combien ont été ignorés (congé, poste déjà présent, salarié pas en poste).</p>
 </li>
 <li>
-<p><strong>Contrôler le planning</strong> : lisez la liste du bas. Cliquez chaque ligne pour aller sur la case et corriger.</p>
+<p><strong>Contrôler le planning</strong> : lisez la liste des points à vérifier. Cliquez chaque ligne pour aller sur la case et corriger.</p>
 </li>
 <li>
-<p><strong>Imprimer le planning</strong> : bouton <strong>Imprimer</strong> en haut de la fenêtre (Ctrl+P). La grille du mois sort en PDF (lisibilité d'un mois complet à vérifier).</p>
+<p><strong>Imprimer le planning</strong> : bouton <strong>Imprimer</strong> en haut de la fenêtre (Ctrl+P). La grille du mois sort en PDF (la lisibilité d'un mois complet est à vérifier).</p>
 </li>
 </ol>
 <p><strong>Règles et contrôles.</strong>
-- Refusé (bloquant) : un poste pendant un congé validé (« Le salarié est en congé validé ce jour-là. »), deux postes qui se chevauchent (« Le salarié a déjà un poste sur ces heures. »), un salarié pas encore embauché ou déjà sorti, une heure de fin égale à l'heure de début. Une astreinte peut s'ajouter à un poste travaillé, une seule par jour.
-- Signalé (non bloquant) dans la liste « À vérifier » :
+- Refusé (bloquant) :
+  - un poste pendant un congé validé (« Le salarié est en congé validé ce jour-là. ») ;
+  - deux postes qui se chevauchent (« Le salarié a déjà un poste sur ces heures. ») ;
+  - un salarié pas encore embauché ou déjà sorti ;
+  - une heure de fin égale à l'heure de début.</p>
+<p>Une astreinte peut s'ajouter à un poste travaillé, une seule par jour.
+- Signalé (non bloquant) dans la liste des points à vérifier :
   - repos de moins de 11 h entre deux postes ;
   - plus de 44 h dans la semaine ;
   - aucun jour de repos dans la semaine ;
@@ -482,14 +696,43 @@ ul.toc li { margin: 4px 0; }
 
 <hr />
 <h3 id="payroll">Paie</h3>
-<p>Cet écran prépare la paie mensuelle : bulletins, cotisations CNSS et AMO, IR, clôture, virements, déclarations CNSS (BDS) et état 9421.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran prépare la paie mensuelle :
+- les bulletins ;
+- les cotisations CNSS et AMO, et l'IR ;
+- la clôture du mois ;
+- les virements ;
+- la déclaration CNSS (BDS) et l'état 9421.</p>
 <p><strong>Qui y a accès.</strong> Droit Salaires uniquement (Administrateur, Biologiste responsable). Personne d'autre ne voit cet écran.</p>
-<p><strong>Avant le premier mois.</strong> Vérifiez dans Paramètres, fiche du site, le <strong>numéro d'affiliation CNSS</strong> et l'<strong>identifiant fiscal (IF)</strong> : sans eux, le fichier BDS et l'état 9421 sont refusés. Vérifiez dans chaque dossier le salaire de base, le N° CNSS, la situation familiale, les enfants et le RIB.</p>
+<p><strong>Fonctionnalités</strong>
+- <strong>Actualiser</strong> (en-tête) : recharge le mois affiché.
+- <strong>Plus d'actions</strong> (en-tête) contient trois actions :
+  - <strong>Taux et barème</strong> : les taux CNSS, AMO, frais professionnels, SMIG, barème IR…
+  - <strong>État 9421 (Simpl-IR)…</strong> : la déclaration annuelle des salaires, en XML ;
+  - <strong>Fichier BDS (DAMANCOM)…</strong> : la déclaration CNSS du mois clôturé.
+- <strong>Mois de paie</strong> (rangée de filtres) : choisit le mois affiché ; chaque mois porte son statut (Brouillon ou Clôturée).
+- <strong>Ouvrir un mois</strong> (rangée de filtres) : prépare les bulletins d'un nouveau mois.
+- Barre sous la liste, de gauche à droite :
+  - les totaux du mois ;
+  - <strong>Bulletin</strong> : le bulletin sélectionné, en PDF ;
+  - <strong>Tous les bulletins</strong> : un PDF, une page par salarié ;
+  - <strong>Journal de paie</strong> et <strong>Récapitulatif CNSS</strong> : des fichiers CSV ;
+  - <strong>Virement</strong> : ordre de virement en PDF ou fichier pour la banque, sur un mois clôturé ;
+  - <strong>Reprendre les dossiers</strong> : reprend les salaires, les absences et les embauches ;
+  - <strong>Clôturer le mois</strong> (devient <strong>Rouvrir le mois</strong> sur un mois clôturé) ;
+  - <strong>Variables du mois</strong> (bouton principal, ou double-clic sur un bulletin) : les heures supplémentaires, primes, retenues…</p>
+<p><strong>Avant le premier mois.</strong>
+- Vérifiez dans <strong>Paramètres</strong>, fiche du site, le <strong>numéro d'affiliation CNSS</strong> et l'<strong>identifiant fiscal (IF)</strong>. Sans eux, le fichier BDS et l'état 9421 sont refusés.
+- Vérifiez dans chaque dossier le salaire de base, le N° CNSS, la situation familiale, les enfants et le RIB.</p>
 <p><strong>L'écran.</strong>
-- En haut : « Paie de [mois] — [statut], N bulletin(s) », la liste des mois (chaque mois avec son statut Brouillon ou Clôturée), <strong>Ouvrir un mois</strong>, <strong>Actualiser</strong>, <strong>Taux et barème</strong>, <strong>État 9421 (Simpl-IR)…</strong>.
-- La liste des bulletins : <strong>Matricule</strong>, <strong>Désignation</strong>, <strong>Jours</strong>, <strong>Salaire de base</strong>, <strong>Brut</strong>, <strong>CNSS + AMO</strong>, <strong>IR</strong>, <strong>Net à payer</strong>, <strong>Coût employeur</strong>, <strong>À vérifier</strong> (Net négatif, RIB manquant, N° CNSS manquant, Sous le SMIG, exonérations Stage / Tahfiz / Contrat d'insertion).
-- La ligne des totaux du mois.
-- En bas : <strong>Variables du mois</strong>, <strong>Bulletin</strong>, <strong>Tous les bulletins</strong>, <strong>Journal de paie</strong>, <strong>Récapitulatif CNSS</strong>, <strong>Reprendre les dossiers</strong>, <strong>Clôturer le mois</strong> (devient <strong>Rouvrir le mois</strong>), <strong>Virement</strong>, et dessous <strong>Fichier BDS (DAMANCOM)…</strong>.</p>
+- En-tête : le titre « Paie », avec dessous « [mois] · [statut] · N bulletin(s) ». À droite : <strong>Actualiser</strong> et <strong>Plus d'actions</strong>.
+- Rangée de filtres : <strong>Mois de paie</strong> et <strong>Ouvrir un mois</strong>.
+- La liste des bulletins : <strong>Matricule</strong>, <strong>Désignation</strong>, <strong>Jours</strong>, <strong>Salaire de base</strong>, <strong>Brut</strong>, <strong>CNSS + AMO</strong>, <strong>IR</strong>, <strong>Net à payer</strong>, <strong>Coût employeur</strong> et <strong>À vérifier</strong>. La colonne <strong>À vérifier</strong> signale :
+  - un net négatif ;
+  - un RIB manquant ou un N° CNSS manquant ;
+  - un salaire sous le SMIG ;
+  - les exonérations Stage / Tahfiz / Contrat d'insertion.
+- Sous la liste, la barre des totaux et des actions décrite plus haut.</p>
 <table>
 <thead>
 <tr>
@@ -511,157 +754,1053 @@ ul.toc li { margin: 4px 0; }
 <p><strong>Scénarios.</strong></p>
 <ol>
 <li><strong>Vérifier les taux de l'année</strong></li>
-<li>Cliquez <strong>Taux et barème</strong>.</li>
-<li>Contrôlez : <strong>Plafond CNSS mensuel (DH)</strong>, <strong>CNSS salarié (%)</strong>, <strong>CNSS patronale (%)</strong>, <strong>Allocations familiales (%)</strong>, <strong>Formation professionnelle (%)</strong>, <strong>AMO salarié (%)</strong>, <strong>AMO patronale (%)</strong>, <strong>Frais pro. taux bas (%)</strong>, <strong>Frais pro. taux haut (%)</strong>, <strong>Seuil annuel taux bas (DH)</strong>, <strong>Plafond annuel frais pro. (DH)</strong>, <strong>Charge de famille / an (DH)</strong>, <strong>SMIG mensuel (DH)</strong>, <strong>Heures par mois</strong>, <strong>Transport exonéré / mois (DH)</strong>, <strong>Barème IR annuel (plafond:taux|…|:taux)</strong>.</li>
+<li>Cliquez <strong>Plus d'actions</strong> &gt; <strong>Taux et barème</strong>.</li>
+<li>Contrôlez les valeurs :<ul>
+<li><strong>Plafond CNSS mensuel (DH)</strong>, <strong>CNSS salarié (%)</strong>, <strong>CNSS patronale (%)</strong>, <strong>Allocations familiales (%)</strong> et <strong>Formation professionnelle (%)</strong> ;</li>
+<li><strong>AMO salarié (%)</strong> et <strong>AMO patronale (%)</strong> ;</li>
+<li><strong>Frais pro. taux bas (%)</strong>, <strong>Frais pro. taux haut (%)</strong>, <strong>Seuil annuel taux bas (DH)</strong> et <strong>Plafond annuel frais pro. (DH)</strong> ;</li>
+<li><strong>Charge de famille / an (DH)</strong>, <strong>SMIG mensuel (DH)</strong>, <strong>Heures par mois</strong> et <strong>Transport exonéré / mois (DH)</strong> ;</li>
+<li><strong>Barème IR annuel (plafond:taux|…|:taux)</strong>.</li>
+</ul>
+</li>
 <li>
-<p><strong>Enregistrer</strong>. Les mois en brouillon de l'année sont recalculés ; les mois clôturés ne changent pas. À refaire à chaque loi de finances.</p>
+<p>Cliquez <strong>Enregistrer</strong>. Les mois en brouillon de l'année sont recalculés ; les mois clôturés ne changent pas. À refaire à chaque loi de finances.</p>
 </li>
 <li>
 <p><strong>Ouvrir le mois</strong></p>
 </li>
-<li>Cliquez <strong>Ouvrir un mois</strong>. Le mois suivant le dernier ouvert est proposé dans <strong>Mois de paie</strong>.</li>
+<li>Cliquez <strong>Ouvrir un mois</strong>. Le mois qui suit le dernier mois ouvert est proposé dans <strong>Mois de paie</strong>.</li>
 <li>
-<p>Cliquez <strong>Ouvrir un mois</strong>. Un bulletin est préparé pour chaque salarié en poste ce mois-là dont le salaire de base est renseigné. Les congés sans solde, absences injustifiées validées et arrêts d'accident du travail sont repris.</p>
+<p>Cliquez <strong>Ouvrir un mois</strong>. Un bulletin est préparé pour chaque salarié en poste ce mois-là dont le salaire de base est renseigné. Les congés sans solde, les absences injustifiées validées et les arrêts d'accident du travail sont repris.</p>
 </li>
 <li>
 <p><strong>Saisir les variables d'un salarié</strong></p>
 </li>
-<li>Sélectionnez le bulletin, cliquez <strong>Variables du mois</strong> (ou double-clic).</li>
-<li>Remplissez : <strong>Autres jours non payés</strong>, <strong>Heures supp. à 25 %</strong>, <strong>Heures supp. à 50 %</strong>, <strong>Heures supp. à 100 %</strong>, <strong>Primes imposables (DH)</strong>, <strong>Indemnité de transport (DH)</strong>, <strong>Autres indemnités exonérées</strong>, <strong>Remboursement d'avance</strong>, <strong>Autres retenues</strong>, <strong>Observations</strong>.</li>
-<li>Le résultat actuel est rappelé (brut, CNSS, AMO, IR, net, ancienneté), ainsi que les jours repris des congés, le prorata d'entrée ou de sortie, les indemnités de départ et l'arrêt d'accident.</li>
+<li>Sélectionnez le bulletin, puis cliquez <strong>Variables du mois</strong> (ou double-cliquez).</li>
+<li>Remplissez <strong>Autres jours non payés</strong>, <strong>Heures supp. à 25 %</strong>, <strong>Heures supp. à 50 %</strong>, <strong>Heures supp. à 100 %</strong>, <strong>Primes imposables (DH)</strong>, <strong>Indemnité de transport (DH)</strong>, <strong>Autres indemnités exonérées</strong>, <strong>Remboursement d'avance</strong>, <strong>Autres retenues</strong> et <strong>Observations</strong>.</li>
+<li>La fenêtre rappelle le résultat actuel (brut, CNSS, AMO, IR, net, ancienneté). Elle rappelle aussi les jours repris des congés, le prorata d'entrée ou de sortie, les indemnités de départ et l'arrêt d'accident.</li>
 <li>
-<p><strong>Enregistrer</strong> : le bulletin est recalculé.</p>
+<p>Cliquez <strong>Enregistrer</strong> : le bulletin est recalculé.</p>
 </li>
 <li>
-<p><strong>Reprendre les dossiers</strong> (après une embauche, une sortie, un congé validé ou un changement de salaire) : cliquez <strong>Reprendre les dossiers</strong>. Les nouveaux salariés sont ajoutés, les salaires, situations familiales et absences mis à jour ; les variables déjà tapées sont gardées.</p>
+<p><strong>Reprendre les dossiers</strong> (après une embauche, une sortie, un congé validé ou un changement de salaire) : cliquez <strong>Reprendre les dossiers</strong>. Les nouveaux salariés sont ajoutés. Les salaires, les situations familiales et les absences sont mis à jour. Les variables déjà tapées sont gardées. Le message « N nouveau(x) bulletin(s) ; salaires, situations familiales et absences repris des dossiers. » confirme.</p>
 </li>
 <li>
 <p><strong>Imprimer les bulletins</strong> : <strong>Bulletin</strong> (le bulletin sélectionné) ou <strong>Tous les bulletins</strong> (un PDF, une page par salarié).</p>
 </li>
 <li>
-<p><strong>Exporter le journal et le récapitulatif CNSS</strong> : <strong>Journal de paie</strong> ou <strong>Récapitulatif CNSS</strong> (fichiers CSV pour le tableur et le comptable).</p>
+<p><strong>Exporter le journal et le récapitulatif CNSS</strong> : <strong>Journal de paie</strong> ou <strong>Récapitulatif CNSS</strong> (des fichiers CSV pour le tableur et pour le comptable).</p>
 </li>
 <li>
 <p><strong>Clôturer le mois</strong></p>
 </li>
 <li>Contrôlez la colonne <strong>À vérifier</strong> et les totaux.</li>
 <li>
-<p>Cliquez <strong>Clôturer le mois</strong>, confirmez. Les bulletins ne seront plus recalculés. Les jours de congé payés par un solde de tout compte du mois quittent le compte du salarié.</p>
+<p>Cliquez <strong>Clôturer le mois</strong>, puis confirmez. Les bulletins ne seront plus recalculés. Les jours de congé payés par un solde de tout compte du mois quittent le compte du salarié.</p>
 </li>
 <li>
 <p><strong>Payer les salaires (virement)</strong></p>
 </li>
 <li>Sur un mois clôturé, cliquez <strong>Virement</strong>.</li>
-<li>Choisissez <strong>Ordre de virement (PDF)</strong> à signer pour la banque, ou <strong>Fichier pour la banque (CSV)</strong>.</li>
-<li>Les salariés sans RIB ne sont pas dans le virement : ils sont à payer autrement (à vérifier sur l'ordre imprimé).</li>
+<li>Choisissez <strong>Ordre de virement (PDF)</strong>, à signer pour la banque, ou <strong>Fichier pour la banque (CSV)</strong>.</li>
+<li>Les salariés sans RIB ne sont pas dans le virement : il faut les payer autrement (à vérifier sur l'ordre imprimé).</li>
 <li>
-<p>L'application n'enregistre pas que la paie a été payée ; le débit bancaire se rapproche dans le module Trésorerie.</p>
+<p>L'application n'enregistre pas que la paie a été payée. Le débit bancaire se rapproche dans <strong>Rapprochement bancaire</strong>.</p>
 </li>
 <li>
 <p><strong>Produire le fichier BDS pour la CNSS (DAMANCOM)</strong></p>
 </li>
 <li>Téléchargez sur DAMANCOM le préétabli du mois (fichier AFFEBDS_…).</li>
-<li>Sur le mois clôturé, cliquez <strong>Fichier BDS (DAMANCOM)…</strong>, choisissez le préétabli.</li>
+<li>Sur le mois clôturé, cliquez <strong>Plus d'actions</strong> &gt; <strong>Fichier BDS (DAMANCOM)…</strong>, puis choisissez le préétabli.</li>
 <li>
-<p>Enregistrez le fichier proposé. Un message indique le nombre de salariés déclarés et d'entrants. Déposez-le sur DAMANCOM.</p>
+<p>Enregistrez le fichier proposé. Un message indique le nombre de salariés déclarés et d'entrants. Déposez le fichier sur DAMANCOM.</p>
 </li>
 <li>
 <p><strong>Produire l'état 9421 (Simpl-IR)</strong></p>
 <ol>
-<li>Cliquez <strong>État 9421 (Simpl-IR)…</strong>.</li>
-<li>Saisissez l'<strong>Année</strong> (l'année précédente est proposée), le <strong>Code de la commune</strong>, le <strong>Code du taux de frais professionnels jusqu'au seuil annuel (35 %)</strong> et <strong>…au-delà du seuil annuel (25 %)</strong>. Ces codes sont mémorisés sur ce poste.</li>
-<li>Cliquez <strong>Exporter</strong>, enregistrez le fichier XML, déposez-le sur Simpl-IR. Les versements de l'IR se complètent sur Simpl-IR.</li>
+<li>Cliquez <strong>Plus d'actions</strong> &gt; <strong>État 9421 (Simpl-IR)…</strong>.</li>
+<li>Saisissez :
+   - l'<strong>Année</strong> (l'année précédente est proposée) ;
+   - le <strong>Code de la commune</strong> ;
+   - le <strong>Code du taux de frais professionnels jusqu'au seuil annuel (35 %)</strong> et <strong>…au-delà du seuil annuel (25 %)</strong>.</li>
 </ol>
+<p>Ces codes sont mémorisés sur ce poste.
+3. Cliquez <strong>Exporter</strong>, enregistrez le fichier XML, puis déposez-le sur Simpl-IR. Les versements de l'IR se complètent sur Simpl-IR.</p>
 </li>
 <li>
 <p><strong>Rouvrir un mois clôturé</strong></p>
 <ol>
-<li>Sélectionnez le mois, cliquez <strong>Rouvrir le mois</strong>, saisissez le motif, <strong>OK</strong>.</li>
-<li>Une deuxième question demande s'il faut recalculer avec les taux actuels : répondez <strong>Non</strong> dans le cas normal ; <strong>Oui</strong> seulement pour corriger un taux mal saisi (tracé dans l'audit).</li>
-<li>Corrigez, <strong>Reprendre les dossiers</strong> si besoin, puis clôturez de nouveau.</li>
+<li>Sélectionnez le mois, cliquez <strong>Rouvrir le mois</strong>, saisissez le motif, puis <strong>OK</strong>.</li>
+<li>Une deuxième question demande s'il faut recalculer avec les taux actuels. Répondez <strong>Non</strong> dans le cas normal. Répondez <strong>Oui</strong> seulement pour corriger un taux mal saisi (c'est tracé dans l'audit).</li>
+<li>Corrigez, cliquez <strong>Reprendre les dossiers</strong> si besoin, puis clôturez de nouveau.</li>
 </ol>
 </li>
 </ol>
 <p><strong>Règles et contrôles.</strong>
-- Un mois ne s'ouvre qu'une fois par site. Il faut au moins un salarié avec salaire de base (« Aucun salarié en poste ce mois-là n'a de salaire de base renseigné. »).
-- Variables : nombres positifs ; pas plus de jours non payés que de jours ouvrables du mois ; pas plus de 100 heures supplémentaires.
-- Clôture refusée si un bulletin a un net négatif, ou si une sortie a été corrigée ou annulée depuis la préparation (il faut d'abord <strong>Reprendre les dossiers</strong>).
-- Virement et fichier BDS : seulement sur un mois clôturé.
-- Fichier BDS refusé si : le préétabli n'est pas un fichier DAMANCOM, n'est pas celui du bon mois ou du bon affilié, un salarié n'a pas de N° CNSS, un N° CNSS est en double ou trop long, ou la paie d'un autre site du même affilié n'est pas ouverte ou pas clôturée. Après correction d'un dossier : rouvrir le mois, reprendre les dossiers, clôturer de nouveau.
-- État 9421 refusé si des mois de l'année ne sont pas clôturés ou pas ouverts alors qu'il y avait du personnel, ou si l'IF du site manque.
-- Un mois garde, pour toujours, les taux avec lesquels il a été clôturé.
-- Heures supplémentaires : +25 % de 6 h à 21 h, +50 % de 21 h à 6 h ou le jour de repos, +100 % la nuit du jour de repos.</p>
-<p><strong>Flux.</strong> <strong>Dossiers du personnel</strong> et <strong>Congés et absences</strong> (et arrêts d'<strong>Accidents du travail</strong>) → ouverture → variables → clôture → virement (rapproché en Trésorerie) → BDS DAMANCOM chaque mois → état 9421 en début d'année. Le solde de tout compte d'un départ est reporté sur le bulletin du mois de sortie.</p>
+- Un mois ne s'ouvre qu'une fois par site. Il faut au moins un salarié avec un salaire de base (« Aucun salarié en poste ce mois-là n'a de salaire de base renseigné. »).
+- Variables :
+  - des nombres positifs ;
+  - pas plus de jours non payés que de jours ouvrables dans le mois ;
+  - pas plus de 100 heures supplémentaires.
+- La clôture est refusée dans deux cas :
+  - un bulletin a un net négatif ;
+  - une sortie a été corrigée ou annulée depuis la préparation. Il faut d'abord <strong>Reprendre les dossiers</strong>.
+- Le virement et le fichier BDS ne se font que sur un mois clôturé.
+- Le fichier BDS est refusé dans les cas suivants :
+  - le préétabli n'est pas un fichier DAMANCOM, ou ce n'est pas celui du bon mois ou du bon affilié ;
+  - un salarié n'a pas de N° CNSS ;
+  - un N° CNSS est en double ou trop long ;
+  - la paie d'un autre site du même affilié n'est pas ouverte ou pas clôturée.</p>
+<p>Après la correction d'un dossier, rouvrez le mois, reprenez les dossiers, puis clôturez de nouveau.
+- L'état 9421 est refusé dans trois cas :
+  - des mois de l'année ne sont pas clôturés ;
+  - des mois ne sont pas ouverts alors qu'il y avait du personnel ;
+  - l'IF du site manque.
+- Un mois garde pour toujours les taux avec lesquels il a été clôturé.
+- Heures supplémentaires : +25 % de 6 h à 21 h ; +50 % de 21 h à 6 h ou le jour de repos ; +100 % la nuit du jour de repos.</p>
+<p><strong>Flux.</strong>
+1. <strong>Dossiers du personnel</strong> et <strong>Congés et absences</strong> (et les arrêts d'<strong>Accidents du travail</strong>) alimentent l'ouverture du mois.
+2. On saisit les variables, puis on clôture.
+3. Le virement est rapproché en Trésorerie.
+4. Le BDS est déposé sur DAMANCOM chaque mois, et l'état 9421 en début d'année.</p>
+<p>Le solde de tout compte d'un départ est reporté sur le bulletin du mois de sortie.</p>
 <div class="diagram"><img src="img/diagramme-ca19394b5dcc32f4.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="accidents">Accidents du travail</h3>
-<p>Cet écran déclare et suit les accidents du travail, les accidents de trajet et les accidents d'exposition au sang (AES) : déclaration à l'assureur sous 48 h, arrêts, reprise, suivi de l'assureur et contrôles sérologiques.</p>
-<p><strong>Qui y a accès.</strong> Consultation, impression de la déclaration et du registre : droit Accidents ou Consulter le personnel. Déclarer et suivre : droit Accidents (Administrateur, Biologiste responsable, Biologiste). Ainsi le biologiste de garde peut déclarer un AES à tout moment.</p>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>Cet écran déclare et suit les accidents du travail, les accidents de trajet et les accidents d'exposition au sang (AES). Il couvre :
+- la déclaration à l'assureur sous 48 h ;
+- les arrêts et la reprise ;
+- le suivi de l'assureur ;
+- les contrôles sérologiques.</p>
+<p><strong>Qui y a accès.</strong>
+- Consultation et impression de la déclaration et du registre : droit Accidents ou Consulter le personnel.
+- Déclarer et suivre : droit Accidents (Administrateur, Biologiste responsable, Biologiste). Le biologiste de garde peut ainsi déclarer un AES à tout moment.</p>
+<p><strong>Fonctionnalités</strong>
+- <strong>Déclarer un accident</strong> (en-tête, bouton principal ; droit Accidents) : ouvre la fiche de déclaration.
+- <strong>Actualiser</strong> (en-tête) : recharge la liste.
+- <strong>Année</strong> (rangée de filtres) : l'année affichée. Changer l'année recharge la liste.
+- <strong>Registre de l'année</strong> (rangée de filtres) : le registre en PDF, avec un récapitulatif par secteur et par nature.
+- Barre au pied du dossier sélectionné (droit Accidents, sauf <strong>Déclaration (PDF)</strong>) :
+  - <strong>Compléter</strong> : modifie le dossier (date d'envoi à l'assureur, n° de sinistre, IPP). Le double-clic sur la ligne fait de même ;
+  - <strong>Déclaration (PDF)</strong> : la déclaration à envoyer à l'assureur ;
+  - <strong>Arrêt / prolongation</strong> : un arrêt d'après le certificat médical, ou une rechute ;
+  - <strong>Reprise du travail</strong> ;
+  - <strong>Suivi assureur</strong> : une relance, une réponse ou une note ;
+  - <strong>Contrôle fait</strong> : la date d'un contrôle sérologique ;
+  - <strong>Clore le dossier</strong>.</p>
 <p><strong>L'écran.</strong>
-- En haut : « N accident(s) cette année · N dossier(s) en cours · N déclaration(s) en retard », l'<strong>année</strong>, <strong>Actualiser</strong>, <strong>Déclarer un accident</strong>, <strong>Registre de l'année</strong>.
-- La liste : <strong>N° de dossier</strong>, <strong>Date et heure</strong>, <strong>Salarié</strong>, <strong>Secteur</strong>, <strong>Nature</strong>, <strong>Déclaré à l'assureur le</strong> (ou « À déclarer avant le … », ou en rouge « NON DÉCLARÉ — délai de 48 h dépassé »), <strong>Arrêt (j)</strong>, <strong>Reprise le</strong>, <strong>Prochain contrôle</strong> (rouge si dépassé), <strong>Statut</strong> (En cours / Clos).
-- Sous la liste : le résumé du dossier sélectionné, l'historique (<strong>Date</strong>, <strong>Étape</strong>, <strong>Détail</strong>, <strong>Saisi par</strong>) et le <strong>Suivi sérologique</strong> (<strong>Échéance</strong>, <strong>Fait le</strong>).
-- En bas : <strong>Compléter</strong>, <strong>Arrêt / prolongation</strong>, <strong>Reprise du travail</strong>, <strong>Suivi assureur</strong>, <strong>Contrôle fait</strong>, <strong>Déclaration (PDF)</strong>, <strong>Clore le dossier</strong>.</p>
+- En-tête : le titre « Accidents du travail », avec dessous « N accident(s) cette année · N dossier(s) en cours · N déclaration(s) en retard ». À droite : <strong>Actualiser</strong> et <strong>Déclarer un accident</strong>.
+- Rangée de filtres : <strong>Année</strong> et <strong>Registre de l'année</strong>.
+- La liste :
+  - <strong>N° de dossier</strong>, <strong>Date et heure</strong>, <strong>Salarié</strong>, <strong>Secteur</strong> et <strong>Nature</strong> ;
+  - <strong>Déclaré à l'assureur le</strong>. Elle affiche aussi « À déclarer avant le … », ou en rouge « NON DÉCLARÉ — délai de 48 h dépassé » ;
+  - <strong>Arrêt (j)</strong> et <strong>Reprise le</strong> ;
+  - <strong>Prochain contrôle</strong> (rouge s'il est dépassé) ;
+  - <strong>Statut</strong> (En cours / Clos).
+- Le cadre du dossier sélectionné :
+  - le résumé ;
+  - l'historique (<strong>Date</strong>, <strong>Étape</strong>, <strong>Détail</strong>, <strong>Saisi par</strong>) ;
+  - le <strong>Suivi sérologique</strong> (<strong>Échéance</strong>, <strong>Fait le</strong>) ;
+  - à son pied, la barre des actions.</p>
 <p><strong>Scénarios.</strong></p>
 <ol>
 <li><strong>Déclarer un accident</strong></li>
 <li>Cliquez <strong>Déclarer un accident</strong>.</li>
-<li>Choisissez le <strong>Salarié</strong> et la <strong>Nature</strong> : Accident du travail, Accident de trajet, Exposition au sang (AES).</li>
-<li>Saisissez <strong>Date et heure</strong>, <strong>Lieu</strong>, <strong>Circonstances détaillées</strong> (obligatoire), <strong>Nature et siège des lésions</strong>, <strong>Témoins</strong>, <strong>Premiers soins donnés sur place</strong>.</li>
-<li>Pour un AES : <strong>Type d'exposition (AES)</strong> (Piqûre par aiguille, Coupure par objet tranchant, Projection sur muqueuse, Projection sur peau lésée) et <strong>Source identifiée</strong>.</li>
-<li><strong>Vu par le médecin le</strong>, <strong>Assureur accidents du travail</strong> (le dernier utilisé est proposé), <strong>N° de sinistre</strong>, <strong>Déclaré à l'assureur le</strong>, <strong>L'employeur avance les indemnités journalières (subrogation)</strong>, <strong>Taux d'IPP fixé (%)</strong>, <strong>Observations</strong>.</li>
+<li>Choisissez le <strong>Salarié</strong> et la <strong>Nature</strong> : Accident du travail, Accident de trajet ou Exposition au sang (AES).</li>
+<li>Saisissez <strong>Date et heure</strong>, <strong>Lieu</strong>, <strong>Circonstances détaillées</strong> (obligatoire), <strong>Nature et siège des lésions</strong>, <strong>Témoins</strong> et <strong>Premiers soins donnés sur place</strong>.</li>
+<li>Pour un AES : le <strong>Type d'exposition (AES)</strong> (Piqûre par aiguille, Coupure par objet tranchant, Projection sur muqueuse, Projection sur peau lésée) et <strong>Source identifiée</strong>.</li>
+<li>Remplissez ensuite :<ul>
+<li><strong>Vu par le médecin le</strong> ;</li>
+<li><strong>Assureur accidents du travail</strong> (le dernier utilisé est proposé) ;</li>
+<li><strong>N° de sinistre</strong> et <strong>Déclaré à l'assureur le</strong> ;</li>
+<li><strong>L'employeur avance les indemnités journalières (subrogation)</strong> ;</li>
+<li><strong>Taux d'IPP fixé (%)</strong> et <strong>Observations</strong>.</li>
+</ul>
+</li>
 <li>
 <p>Cliquez <strong>Enregistrer</strong>. Un numéro de dossier est attribué. Pour un AES, le bilan initial (J0) et les contrôles à 1, 3 et 6 mois sont programmés.</p>
 </li>
 <li>
-<p><strong>Imprimer la déclaration pour l'assureur</strong> : sélectionnez le dossier, cliquez <strong>Déclaration (PDF)</strong>.</p>
+<p><strong>Imprimer la déclaration pour l'assureur</strong> : sélectionnez le dossier, puis cliquez <strong>Déclaration (PDF)</strong>.</p>
 </li>
 <li>
-<p><strong>Noter l'envoi de la déclaration</strong> : cliquez <strong>Compléter</strong>, remplissez <strong>Déclaré à l'assureur le</strong> (et le <strong>N° de sinistre</strong>), <strong>Enregistrer</strong>. L'étape « Déclaré à l'assureur » s'ajoute à l'historique et l'alerte rouge disparaît.</p>
+<p><strong>Noter l'envoi de la déclaration</strong> : cliquez <strong>Compléter</strong>, remplissez <strong>Déclaré à l'assureur le</strong> (et le <strong>N° de sinistre</strong>), puis <strong>Enregistrer</strong>. L'étape « Déclaré à l'assureur » s'ajoute à l'historique, et l'alerte rouge disparaît.</p>
 </li>
 <li>
 <p><strong>Enregistrer un arrêt de travail ou une prolongation</strong></p>
 </li>
 <li>Cliquez <strong>Arrêt / prolongation</strong>.</li>
-<li>Saisissez <strong>Du</strong> et <strong>Au</strong> d'après le certificat médical, <strong>Enregistrer</strong>.</li>
+<li>Saisissez <strong>Du</strong> et <strong>Au</strong> d'après le certificat médical, puis <strong>Enregistrer</strong>.</li>
 <li>
-<p>L'arrêt devient un congé « Accident du travail » validé : il apparaît dans les congés et le planning, et la paie retient ces jours.</p>
+<p>L'arrêt devient un congé « Accident du travail » validé. Il apparaît dans les congés et dans le planning, et la paie retient ces jours.</p>
 </li>
 <li>
-<p><strong>Enregistrer la reprise du travail</strong> : cliquez <strong>Reprise du travail</strong>, saisissez <strong>Reprise le</strong> (au plus tôt le lendemain du dernier arrêt, pas dans le futur), <strong>Enregistrer</strong>.</p>
+<p><strong>Enregistrer la reprise du travail</strong> : cliquez <strong>Reprise du travail</strong>, saisissez <strong>Reprise le</strong> (au plus tôt le lendemain du dernier arrêt, et pas dans le futur), puis <strong>Enregistrer</strong>.</p>
 </li>
 <li>
-<p><strong>Noter un échange avec l'assureur</strong> : cliquez <strong>Suivi assureur</strong>, choisissez l'<strong>Étape</strong> (Relance de l'assureur, Réponse de l'assureur, Note), saisissez le <strong>Détail</strong> (obligatoire sauf pour une relance), <strong>Enregistrer</strong>.</p>
+<p><strong>Noter un échange avec l'assureur</strong> : cliquez <strong>Suivi assureur</strong>, choisissez l'<strong>Étape</strong> (Relance de l'assureur, Réponse de l'assureur, Note), saisissez le <strong>Détail</strong> (obligatoire, sauf pour une relance), puis <strong>Enregistrer</strong>.</p>
 </li>
 <li>
-<p><strong>Noter un contrôle sérologique fait</strong> : sélectionnez le contrôle dans <strong>Suivi sérologique</strong> (sinon le prochain à faire est pris), cliquez <strong>Contrôle fait</strong>, saisissez la date, <strong>Enregistrer</strong>. Seule la date est enregistrée, jamais le résultat.</p>
+<p><strong>Noter un contrôle sérologique fait</strong></p>
+</li>
+<li>Sélectionnez le contrôle dans <strong>Suivi sérologique</strong>. Sinon, c'est le prochain contrôle à faire qui est pris.</li>
+<li>Cliquez <strong>Contrôle fait</strong>, saisissez la date, puis <strong>Enregistrer</strong>.</li>
+<li>
+<p>Seule la date est enregistrée, jamais le résultat.</p>
 </li>
 <li>
-<p><strong>Compléter le dossier</strong> (réponse de l'assureur, taux d'IPP) : <strong>Compléter</strong>, modifiez, <strong>Enregistrer</strong>. Le salarié ne peut pas être changé.</p>
+<p><strong>Compléter le dossier</strong> (réponse de l'assureur, taux d'IPP) : cliquez <strong>Compléter</strong>, modifiez, puis <strong>Enregistrer</strong>. Le salarié ne peut pas être changé.</p>
 </li>
 <li>
-<p><strong>Clore le dossier</strong> : cliquez <strong>Clore le dossier</strong>, saisissez une conclusion si vous voulez (règlement, consolidation), <strong>OK</strong>.</p>
+<p><strong>Clore le dossier</strong> : cliquez <strong>Clore le dossier</strong>, saisissez une conclusion si vous le souhaitez (règlement, consolidation), puis <strong>OK</strong>.</p>
 </li>
 <li>
-<p><strong>Déclarer une rechute</strong> : sélectionnez le dossier clos, cliquez <strong>Arrêt / prolongation</strong> ; la case <strong>Rechute (rouvre un dossier clos)</strong> est cochée ; saisissez les dates, <strong>Enregistrer</strong>. Le dossier est rouvert.</p>
+<p><strong>Déclarer une rechute</strong></p>
+<ol>
+<li>Sélectionnez le dossier clos, puis cliquez <strong>Arrêt / prolongation</strong>. La case <strong>Rechute (rouvre un dossier clos)</strong> est cochée.</li>
+<li>Saisissez les dates, puis <strong>Enregistrer</strong>.</li>
+<li>Le dossier est rouvert.</li>
+</ol>
 </li>
 <li>
-<p><strong>Imprimer le registre de l'année</strong> : choisissez l'année, cliquez <strong>Registre de l'année</strong> (PDF avec récapitulatif par secteur et nature).</p>
+<p><strong>Imprimer le registre de l'année</strong> : choisissez l'année, puis cliquez <strong>Registre de l'année</strong> (un PDF avec un récapitulatif par secteur et par nature).</p>
 </li>
 </ol>
 <p><strong>Règles et contrôles.</strong>
 - La déclaration doit parvenir à l'assureur dans les 48 heures (loi 18-12). Passé ce délai, le dossier est en rouge et apparaît dans <strong>Échéances RH</strong>.
 - La date de l'accident ne peut pas être dans le futur, ni hors de la période d'emploi. Un salarié sorti depuis moins de 30 jours peut encore être choisi.
 - Pour un AES, le type d'exposition est obligatoire.
-- La déclaration et la consultation ne peuvent pas précéder l'accident. IPP entre 0 et 100 %.
-- L'arrêt commence au plus tôt le lendemain de l'accident (le jour même est payé par l'employeur). Il ne peut pas chevaucher un autre congé, ni dépasser la date de sortie.
+- La déclaration et la consultation ne peuvent pas précéder l'accident. L'IPP est comprise entre 0 et 100 %.
+- L'arrêt commence au plus tôt le lendemain de l'accident (le jour même est payé par l'employeur). Il ne peut ni chevaucher un autre congé, ni dépasser la date de sortie.
 - La reprise ne peut pas tomber pendant un arrêt (« Un arrêt court jusqu'au … : la reprise ne peut être qu'après. »).
 - Un dossier ne se clôt pas tant qu'un contrôle sérologique reste à faire.
 - Un dossier clos refuse un arrêt, sauf en rechute.
 - Aucun résultat ni diagnostic n'est enregistré.</p>
-<p><strong>Flux.</strong> Déclaration → PDF à l'assureur → <strong>Compléter</strong> (date d'envoi) → arrêts (vers <strong>Congés et absences</strong>, <strong>Planning des gardes</strong>, <strong>Paie</strong>) → reprise → contrôles sérologiques (suivis aussi dans <strong>Échéances RH</strong>) → clôture.</p>
-<div class="diagram"><img src="img/diagramme-1519696de26e58f8.png" alt="Diagramme"></div><p class="top"><a href="index.html">Retour au sommaire</a></p>
+<p><strong>Flux.</strong>
+1. On déclare l'accident et on envoie le PDF à l'assureur.
+2. <strong>Compléter</strong> note la date d'envoi.
+3. Les arrêts vont vers <strong>Congés et absences</strong>, <strong>Planning des gardes</strong> et <strong>Paie</strong>.
+4. Après la reprise viennent les contrôles sérologiques, suivis aussi dans <strong>Échéances RH</strong>.
+5. On clôt le dossier.</p>
+<div class="diagram"><img src="img/diagramme-1519696de26e58f8.png" alt="Diagramme"></div>
+
+<hr />
+<h3>Messages d'erreur et d'avertissement</h3>
+<p>« … » remplace une valeur que l'application insère (une date, un nom, un nombre). Les messages communs à toute l'application (connexion perdue, « Erreur inattendue », droit manquant, modification faite en même temps ailleurs, nombre illisible) sont décrits au chapitre « Prise en main ».</p>
+<h4>Dossiers du personnel</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Le nom et le prénom sont obligatoires. »</td>
+<td>Nom ou prénom vide</td>
+<td>Compléter.</td>
+</tr>
+<tr>
+<td>« Ce type de contrat (CDD, ANAPEC, Tahfiz, stage) doit avoir une date de fin. »</td>
+<td>Contrat à durée limitée sans fin</td>
+<td>Cocher et saisir <strong>Fin de contrat</strong>.</td>
+</tr>
+<tr>
+<td>« La fin du contrat précède la date d'embauche. » / « La fin de la période d'essai précède la date d'embauche. »</td>
+<td>Dates inversées</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Les heures hebdomadaires doivent être comprises entre 0 et 60. »</td>
+<td>Heures hors limites</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Le salaire saisi n'est pas un montant valide. »</td>
+<td>Salaire illisible ou négatif</td>
+<td>Taper un montant en chiffres.</td>
+</tr>
+<tr>
+<td>« Le RIB doit compter 24 chiffres et sa clé doit être juste. »</td>
+<td>RIB mal tapé</td>
+<td>Recopier le RIB du relevé d'identité bancaire.</td>
+</tr>
+<tr>
+<td>« Le nombre d'enfants à charge n'est pas valide. »</td>
+<td>Valeur impossible</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« La CIN … figure déjà dans un autre dossier du personnel. »</td>
+<td>CIN en double</td>
+<td>Ouvrir le dossier existant (cocher <strong>Afficher les salariés sortis</strong>).</td>
+</tr>
+<tr>
+<td>« Ce compte SIL est déjà rattaché à un autre dossier du personnel. »</td>
+<td>Compte déjà relié</td>
+<td>Choisir le bon compte, ou délier l'autre dossier.</td>
+</tr>
+<tr>
+<td>« Dossier du personnel introuvable. »</td>
+<td>Dossier modifié ailleurs</td>
+<td>Cliquer <strong>Actualiser</strong>.</td>
+</tr>
+<tr>
+<td>« Dossier enregistré. »</td>
+<td>Enregistrement réussi</td>
+<td>Rien.</td>
+</tr>
+<tr>
+<td>« Ce salarié est déjà sorti le … »</td>
+<td>Deuxième sortie</td>
+<td>Utiliser <strong>Modifier la sortie</strong> ou <strong>Réintégrer</strong>.</td>
+</tr>
+<tr>
+<td>« La date de sortie précède la date d'embauche. »</td>
+<td>Date impossible</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Un congé demandé ou validé (… – …) tombe après la date de sortie du … : annulez-le dans « Congés et absences » ou datez la sortie après lui. »</td>
+<td>Congé à venir après la sortie</td>
+<td>Annuler le congé, ou reculer la date de sortie.</td>
+</tr>
+<tr>
+<td>« Aucune sortie n'est enregistrée pour ce salarié. »</td>
+<td>Correction sans sortie</td>
+<td>Rien à corriger.</td>
+</tr>
+<tr>
+<td>« La sortie du … a déjà pris effet : elle ne peut plus être corrigée ni annulée. Utilisez la réintégration. »</td>
+<td>Sortie passée</td>
+<td>Cliquer <strong>Réintégrer</strong>.</td>
+</tr>
+<tr>
+<td>« Le solde de tout compte de la sortie du … est signé ou déjà payé (paie du mois clôturée) : la sortie ne peut plus être corrigée ni annulée. »</td>
+<td>Sortie verrouillée</td>
+<td>Rien ; réintégrer si la personne revient.</td>
+</tr>
+<tr>
+<td>« Annuler la sortie de … prévue le … ? Le salarié reste dans l'effectif et retrouve ses habilitations. Indiquez le motif (démission retirée, erreur de saisie…). »</td>
+<td><strong>Annuler la sortie</strong></td>
+<td>Saisir le motif, puis <strong>OK</strong>.</td>
+</tr>
+<tr>
+<td>« Le motif de l'annulation de la sortie est obligatoire. »</td>
+<td>Motif vide</td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Ce salarié est déjà actif. » / « La réembauche doit suivre la date de sortie (…). »</td>
+<td>Réintégration impossible</td>
+<td>Choisir une date après la sortie.</td>
+</tr>
+<tr>
+<td>« L'intitulé de la pièce est obligatoire. »</td>
+<td>Pièce sans intitulé</td>
+<td>Compléter.</td>
+</tr>
+<tr>
+<td>« La date de renouvellement précède la date d'obtention. »</td>
+<td>Dates inversées</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Indiquez l'aptitude décidée par le médecin du travail. »</td>
+<td>Visite médicale sans aptitude</td>
+<td>Choisir l'aptitude.</td>
+</tr>
+<tr>
+<td>« Cette pièce a déjà un scan (…). Le remplacer ? »</td>
+<td>Nouveau scan sur une pièce</td>
+<td><strong>Oui</strong> pour remplacer.</td>
+</tr>
+<tr>
+<td>« Le fichier choisi est vide. » / « Le fichier dépasse … Mo. Numérisez-le en résolution plus basse ou en PDF. » / « Joignez un PDF ou une image (JPG, PNG, TIFF). »</td>
+<td>Scan refusé</td>
+<td>Choisir un autre fichier.</td>
+</tr>
+<tr>
+<td>« Le fichier n'a pas pu être lu. Fermez-le s'il est ouvert dans un autre programme. »</td>
+<td>Fichier verrouillé</td>
+<td>Fermer le fichier, puis réessayer.</td>
+</tr>
+<tr>
+<td>« Aucun scan n'est joint à cette pièce. »</td>
+<td><strong>Ouvrir le scan</strong> sans scan</td>
+<td>Joindre le scan d'abord.</td>
+</tr>
+<tr>
+<td>« Retirer « … » du dossier ? Indiquez pourquoi (erreur de saisie…). » / « Indiquez pourquoi la pièce est retirée. »</td>
+<td><strong>Retirer la pièce</strong></td>
+<td>Saisir le motif (5 caractères au moins).</td>
+</tr>
+<tr>
+<td>« Pièce introuvable. »</td>
+<td>Pièce retirée ailleurs</td>
+<td>Fermer et rouvrir la fenêtre.</td>
+</tr>
+<tr>
+<td>« Le reçu s'imprime depuis le solde de tout compte. »</td>
+<td>Mauvais menu</td>
+<td>Utiliser <strong>Solde de tout compte</strong> &gt; <strong>Imprimer le reçu…</strong>.</td>
+</tr>
+<tr>
+<td>« Ce salarié a quitté le laboratoire : délivrez un certificat de travail. »</td>
+<td>Attestation de travail pour un salarié sorti</td>
+<td>Choisir <strong>Certificat de travail (sortie)</strong>.</td>
+</tr>
+<tr>
+<td>« Ce salarié est toujours en poste : enregistrez d'abord sa sortie. »</td>
+<td>Certificat de travail pour un salarié en poste</td>
+<td>Enregistrer la sortie.</td>
+</tr>
+<tr>
+<td>« Aucun salaire n'est renseigné dans le dossier de ce salarié. »</td>
+<td>Attestation de salaire sans salaire</td>
+<td>Saisir le salaire de base.</td>
+</tr>
+<tr>
+<td>« Les montants du solde doivent être positifs ou nuls. »</td>
+<td>Montant négatif</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Pas d'indemnité de préavis si le préavis a été effectué. »</td>
+<td>Indemnité de préavis avec préavis fait</td>
+<td>Mettre l'indemnité à 0, ou cocher la dispense.</td>
+</tr>
+<tr>
+<td>« Le reçu est signé : le solde de tout compte ne peut plus être modifié. »</td>
+<td>Solde déjà signé</td>
+<td>Rien.</td>
+</tr>
+<tr>
+<td>« Le solde de tout compte n'a pas encore été calculé et enregistré. »</td>
+<td>Reçu demandé sans solde</td>
+<td>Calculer et enregistrer le solde.</td>
+</tr>
+<tr>
+<td>« La date de signature ne peut pas être dans le futur. » / « Le reçu ne peut pas être signé avant la date de sortie. »</td>
+<td>Date de signature impossible</td>
+<td>Corriger la date.</td>
+</tr>
+<tr>
+<td>« Solde enregistré et reporté sur le bulletin du mois de sortie. »</td>
+<td>Ligne d'état</td>
+<td>Rien.</td>
+</tr>
+<tr>
+<td>« Solde enregistré : il sera repris à l'ouverture ou l'actualisation de la paie du mois de sortie. »</td>
+<td>Ligne d'état</td>
+<td>Ouvrir la paie du mois de sortie le moment venu.</td>
+</tr>
+<tr>
+<td>« Solde enregistré, mais la paie du mois de sortie est clôturée : rouvrez-la pour mettre le bulletin à jour. »</td>
+<td>Ligne d'état</td>
+<td>Rouvrir la paie de ce mois, reprendre les dossiers, clôturer.</td>
+</tr>
+<tr>
+<td>« Signature du reçu enregistrée : le solde ne peut plus être modifié. »</td>
+<td>Ligne d'état</td>
+<td>Rien.</td>
+</tr>
+</tbody>
+</table>
+<h4>Habilitations</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Seul un biologiste peut habiliter un salarié à travailler seul ou à former. Vous pouvez le placer « En formation ». »</td>
+<td>Niveau Habilité / Formateur sans qualification de biologiste</td>
+<td>Placer « En formation », ou faire signer par un biologiste.</td>
+</tr>
+<tr>
+<td>« La validation biologique ne peut être accordée qu'à un biologiste (loi 12-01). »</td>
+<td>Salarié non biologiste</td>
+<td>Choisir une autre activité.</td>
+</tr>
+<tr>
+<td>« Choisissez l'automate ou la discipline concernés. »</td>
+<td>Activité qui en a besoin</td>
+<td>Choisir l'automate ou la discipline.</td>
+</tr>
+<tr>
+<td>« La date de décision ne peut pas être dans le futur. »</td>
+<td>Date après aujourd'hui</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« La date de décision ne peut pas précéder l'embauche (…). »</td>
+<td>Date avant l'embauche</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« La réévaluation doit être postérieure à la décision. »</td>
+<td>Dates inversées</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Ce salarié est sorti : aucune habilitation ne peut lui être accordée. »</td>
+<td>Salarié sorti</td>
+<td>Rien, ou le réintégrer.</td>
+</tr>
+<tr>
+<td>« Retirer l'habilitation « … » de … ? Indiquez le motif. » / « Indiquez le motif du retrait. »</td>
+<td><strong>Retirer l'habilitation</strong></td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Cette habilitation est déjà retirée. » / « Habilitation introuvable. »</td>
+<td>Déjà fait ailleurs</td>
+<td>Cliquer <strong>Actualiser</strong>.</td>
+</tr>
+</tbody>
+</table>
+<h4>Congés et absences</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Votre compte n'est relié à aucun dossier du personnel : demandez à la RH de le relier. »</td>
+<td>Demande par un compte sans dossier</td>
+<td>La RH renseigne le <strong>Compte SIL</strong> du dossier.</td>
+</tr>
+<tr>
+<td>« Aucun salarié actif : créez d'abord les dossiers dans « Dossiers du personnel ». »</td>
+<td>Aucun dossier</td>
+<td>Créer les dossiers.</td>
+</tr>
+<tr>
+<td>« Vous ne pouvez agir que sur vos propres demandes. »</td>
+<td>Action sur la demande d'un autre sans droit</td>
+<td>Demander à la RH ou au valideur.</td>
+</tr>
+<tr>
+<td>« Une absence injustifiée est saisie par la RH. »</td>
+<td>Type réservé</td>
+<td>Demander à la RH.</td>
+</tr>
+<tr>
+<td>« La date de fin précède la date de début. »</td>
+<td>Dates inversées</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Le salarié n'est pas en poste à ces dates. »</td>
+<td>Avant l'embauche ou après la sortie</td>
+<td>Corriger les dates.</td>
+</tr>
+<tr>
+<td>« Aucun jour ouvrable dans cette période (dimanches et jours fériés). »</td>
+<td>Période sans jour travaillé</td>
+<td>Corriger les dates.</td>
+</tr>
+<tr>
+<td>« Ce congé est de … jours au plus. »</td>
+<td>Durée légale dépassée</td>
+<td>Raccourcir, ou saisir le reste en congé annuel.</td>
+</tr>
+<tr>
+<td>« Une demande couvre déjà une partie de ces jours (… – …). »</td>
+<td>Chevauchement</td>
+<td>Modifier ou annuler l'autre demande.</td>
+</tr>
+<tr>
+<td>« Solde insuffisant : … jours demandés, … disponibles. »</td>
+<td>Congé annuel au-delà du solde</td>
+<td>Réduire la demande, ou choisir un congé sans solde.</td>
+</tr>
+<tr>
+<td>« Valider … de … du … au … (… j) ? » (avec « … collègue(s) du service … absent(s) sur une partie de ces jours » le cas échéant)</td>
+<td>Confirmation de <strong>Valider</strong></td>
+<td><strong>Oui</strong> pour valider.</td>
+</tr>
+<tr>
+<td>« On ne décide pas de sa propre demande de congé. »</td>
+<td>Validation de sa propre demande</td>
+<td>Un autre valideur doit décider.</td>
+</tr>
+<tr>
+<td>« Le justificatif doit être remis avant la validation. »</td>
+<td>Type qui exige un justificatif non fourni</td>
+<td>Faire refaire la demande avec la case cochée (la case ne se modifie pas).</td>
+</tr>
+<tr>
+<td>« Motif du refus pour … (le salarié le verra) : » / « Un refus doit être motivé. »</td>
+<td><strong>Refuser</strong></td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Cette demande a déjà été traitée. »</td>
+<td>Demande déjà validée ou refusée</td>
+<td>Cliquer <strong>Actualiser</strong>.</td>
+</tr>
+<tr>
+<td>« Annuler … du … ? Commentaire (facultatif) : »</td>
+<td><strong>Annuler la demande</strong></td>
+<td><strong>OK</strong> pour annuler.</td>
+</tr>
+<tr>
+<td>« Cette demande n'est plus en cours. »</td>
+<td>Annulation d'une demande déjà annulée ou refusée</td>
+<td>Rien.</td>
+</tr>
+<tr>
+<td>« Le congé a commencé : la RH corrige par un ajustement du solde. »</td>
+<td>Annulation d'un congé commencé</td>
+<td>La RH utilise <strong>Ajuster le solde</strong>.</td>
+</tr>
+<tr>
+<td>« Cette demande a été saisie par la RH : seule la RH ou un valideur des congés peut l'annuler. »</td>
+<td>Annulation par le salarié</td>
+<td>Demander à la RH.</td>
+</tr>
+<tr>
+<td>« Demande de congé introuvable. »</td>
+<td>Demande modifiée ailleurs</td>
+<td>Cliquer <strong>Actualiser</strong>.</td>
+</tr>
+<tr>
+<td>« Saisissez un nombre de jours non nul, 60 au plus. »</td>
+<td>Ajustement hors limites</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Le motif de l'ajustement est obligatoire. »</td>
+<td>Ajustement sans motif</td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Le nom du jour férié est obligatoire. »</td>
+<td>Désignation vide</td>
+<td>Saisir le nom.</td>
+</tr>
+<tr>
+<td>« Le … est déjà férié. »</td>
+<td>Jour en double</td>
+<td>Rien.</td>
+</tr>
+<tr>
+<td>« Ce jour férié tombe dans des congés déjà saisis : leurs jours ont été recomptés, et la différence rendue au solde pour les congés validés. »</td>
+<td>Ajout d'un férié dans une période de congé</td>
+<td>Information : vérifier les lignes listées.</td>
+</tr>
+<tr>
+<td>« Retirer « … » (…) du calendrier ? »</td>
+<td><strong>Retirer</strong> un jour férié</td>
+<td><strong>Oui</strong> pour retirer.</td>
+</tr>
+<tr>
+<td>« Jour férié introuvable. »</td>
+<td>Jour retiré ailleurs</td>
+<td>Fermer et rouvrir la fenêtre.</td>
+</tr>
+</tbody>
+</table>
+<h4>Planning des gardes</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« … affectation(s) refusée(s) : » suivi des raisons</td>
+<td>Une partie des cases n'a pas pu recevoir le poste</td>
+<td>Lire les raisons et corriger.</td>
+</tr>
+<tr>
+<td>« Le salarié est en congé validé ce jour-là. »</td>
+<td>Poste pendant un congé</td>
+<td>Choisir un autre salarié.</td>
+</tr>
+<tr>
+<td>« Le salarié a déjà un poste sur ces heures. »</td>
+<td>Chevauchement</td>
+<td>Retirer l'autre poste ou changer les heures.</td>
+</tr>
+<tr>
+<td>« Le salarié n'est pas en poste ce jour-là. »</td>
+<td>Avant l'embauche ou après la sortie</td>
+<td>Choisir un autre jour ou un autre salarié.</td>
+</tr>
+<tr>
+<td>« L'heure de fin doit différer de l'heure de début. »</td>
+<td>Heures égales</td>
+<td>Corriger <strong>Début</strong> ou <strong>Fin</strong>.</td>
+</tr>
+<tr>
+<td>« Retirer … poste(s) du planning ? »</td>
+<td><strong>Retirer le poste</strong></td>
+<td><strong>Oui</strong> pour retirer.</td>
+</tr>
+<tr>
+<td>« Recopier les postes de la semaine du … sur celle du … ? Les postes impossibles (congé, poste déjà là) seront ignorés. »</td>
+<td><strong>Recopier la semaine précédente</strong></td>
+<td><strong>Oui</strong> pour recopier.</td>
+</tr>
+<tr>
+<td>« … poste(s) recopié(s), … ignoré(s). »</td>
+<td>Fin de la recopie</td>
+<td>Vérifier les points à vérifier.</td>
+</tr>
+<tr>
+<td>« La semaine source et la semaine cible sont identiques. »</td>
+<td>Recopie sur la même semaine</td>
+<td>Choisir un jour de la semaine suivante.</td>
+</tr>
+<tr>
+<td>« Le mois demandé n'est pas valide. » / « Poste introuvable. »</td>
+<td>Mois ou poste modifié ailleurs</td>
+<td>Cliquer <strong>Actualiser</strong>.</td>
+</tr>
+</tbody>
+</table>
+<h4>Paie</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Mois de paie invalide. »</td>
+<td>Mois impossible</td>
+<td>Choisir un autre mois.</td>
+</tr>
+<tr>
+<td>« La paie de … est déjà ouverte. »</td>
+<td>Mois déjà ouvert</td>
+<td>Choisir ce mois dans <strong>Mois de paie</strong>.</td>
+</tr>
+<tr>
+<td>« Aucun salarié en poste ce mois-là n'a de salaire de base renseigné. »</td>
+<td>Ouverture sans salaire</td>
+<td>Saisir les salaires de base dans les dossiers.</td>
+</tr>
+<tr>
+<td>« Mois de paie introuvable. » / « Bulletin introuvable. »</td>
+<td>Donnée modifiée ailleurs</td>
+<td>Cliquer <strong>Actualiser</strong>.</td>
+</tr>
+<tr>
+<td>« Ce mois est clôturé. »</td>
+<td>Modification d'un mois clôturé</td>
+<td>Rouvrir le mois d'abord.</td>
+</tr>
+<tr>
+<td>« Ce mois n'est pas clôturé. »</td>
+<td>Action réservée à un mois clôturé</td>
+<td>Clôturer d'abord.</td>
+</tr>
+<tr>
+<td>« Ce salarié a déjà un bulletin ce mois-ci. »</td>
+<td>Bulletin en double</td>
+<td>Rien.</td>
+</tr>
+<tr>
+<td>« Saisissez des nombres positifs. »</td>
+<td>Variable négative</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Au plus … jours non payés. »</td>
+<td>Jours non payés au-delà du mois</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Plus de 100 heures supplémentaires dans le mois : vérifiez la saisie. »</td>
+<td>Heures excessives</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« … nouveau(x) bulletin(s) ; salaires, situations familiales et absences repris des dossiers. »</td>
+<td>Fin de <strong>Reprendre les dossiers</strong></td>
+<td>Rien.</td>
+</tr>
+<tr>
+<td>« Clôturer la paie de … ? Les bulletins ne seront plus recalculés. »</td>
+<td><strong>Clôturer le mois</strong></td>
+<td><strong>Oui</strong> pour clôturer.</td>
+</tr>
+<tr>
+<td>« Un bulletin a un net négatif : réduisez ses retenues avant de clôturer. »</td>
+<td>Net négatif</td>
+<td>Corriger les variables.</td>
+</tr>
+<tr>
+<td>« La sortie de … a été corrigée ou annulée depuis la préparation de ce mois : « Reprendre les dossiers » avant de clôturer, pour que le prorata et les indemnités suivent la sortie actuelle. »</td>
+<td>Sortie modifiée</td>
+<td>Cliquer <strong>Reprendre les dossiers</strong>, puis clôturer.</td>
+</tr>
+<tr>
+<td>« Aucun bulletin à clôturer. »</td>
+<td>Mois vide</td>
+<td>Reprendre les dossiers.</td>
+</tr>
+<tr>
+<td>« Motif de réouverture de la paie de … : » / « Le motif de réouverture est obligatoire. »</td>
+<td><strong>Rouvrir le mois</strong></td>
+<td>Saisir le motif.</td>
+</tr>
+<tr>
+<td>« Recalculer ce mois avec les paramètres de paie … tels qu'ils sont maintenant ? … »</td>
+<td>Deuxième question à la réouverture</td>
+<td><strong>Non</strong> dans le cas normal ; <strong>Oui</strong> seulement pour corriger un taux.</td>
+</tr>
+<tr>
+<td>« Clôturez d'abord le mois : seule une paie clôturée est envoyée à la banque. »</td>
+<td><strong>Virement</strong> sur un brouillon</td>
+<td>Clôturer.</td>
+</tr>
+<tr>
+<td>« Clôturez d'abord le mois : seule une paie clôturée est déclarée à la CNSS. »</td>
+<td><strong>Fichier BDS</strong> sur un brouillon</td>
+<td>Clôturer.</td>
+</tr>
+<tr>
+<td>« Un taux ou montant est invalide. »</td>
+<td><strong>Taux et barème</strong></td>
+<td>Corriger la valeur.</td>
+</tr>
+<tr>
+<td>« Le barème IR est mal écrit : des plafonds croissants « 40000:0</td>
+<td>60000:10</td>
+<td>…</td>
+</tr>
+<tr>
+<td>« Ce fichier n'est pas un préétabli e-BDS de DAMANCOM : les enregistrements A00 et A01 manquent. » / « … la ligne … n'est pas lisible. »</td>
+<td>Mauvais fichier choisi</td>
+<td>Télécharger le préétabli sur DAMANCOM.</td>
+</tr>
+<tr>
+<td>« Le numéro d'affiliation CNSS du site n'est pas renseigné : saisissez-le dans Paramètres, fiche du site. »</td>
+<td>Fiche du site incomplète</td>
+<td>Compléter <strong>Paramètres</strong> &gt; <strong>Site</strong>.</td>
+</tr>
+<tr>
+<td>« Ce préétabli est celui de l'affilié …, alors que le numéro d'affiliation CNSS du site est … »</td>
+<td>Mauvais affilié</td>
+<td>Prendre le préétabli du bon affilié.</td>
+</tr>
+<tr>
+<td>« Ce préétabli concerne la période …, pas la paie de … : téléchargez celui du bon mois sur DAMANCOM. »</td>
+<td>Mauvais mois</td>
+<td>Prendre le bon préétabli.</td>
+</tr>
+<tr>
+<td>« La paie de … n'est pas clôturée sur : … Le BDS est celui de l'affilié pour tous ses sites : clôturez-la avant de le produire. »</td>
+<td>Autre site en brouillon</td>
+<td>Clôturer la paie de l'autre site.</td>
+</tr>
+<tr>
+<td>« La paie de … n'a pas été ouverte sur : …, qui a pourtant du personnel salarié ce mois-là. … »</td>
+<td>Autre site sans paie</td>
+<td>Ouvrir et clôturer la paie de ce site.</td>
+</tr>
+<tr>
+<td>« Ces salariés ne peuvent pas être déclarés sans numéro CNSS : … »</td>
+<td>N° CNSS manquant</td>
+<td>Compléter les dossiers, rouvrir, reprendre, clôturer.</td>
+</tr>
+<tr>
+<td>« Numéro CNSS trop long pour le fichier BDS (9 chiffres au plus) : … »</td>
+<td>N° CNSS mal tapé</td>
+<td>Corriger le dossier.</td>
+</tr>
+<tr>
+<td>« Le même numéro CNSS figure sur plusieurs bulletins du mois, le fichier BDS n'en déclarerait qu'un : … »</td>
+<td>N° CNSS en double</td>
+<td>Corriger le dossier concerné.</td>
+</tr>
+<tr>
+<td>« Fichier BDS enregistré : … salarié(s) déclaré(s), dont … entrant(s) absent(s) du préétabli. Déposez-le sur DAMANCOM, qui le contrôle au dépôt. »</td>
+<td>Fin du BDS</td>
+<td>Déposer le fichier.</td>
+</tr>
+<tr>
+<td>« Saisissez le code de la commune et les deux codes de taux du référentiel Simpl-IR. »</td>
+<td>Fenêtre de l'état 9421 incomplète</td>
+<td>Compléter les codes.</td>
+</tr>
+<tr>
+<td>« Des mois de … ne sont pas clôturés : … Clôturez-les avant de produire l'état 9421. »</td>
+<td>Mois non clôturés</td>
+<td>Clôturer ces mois.</td>
+</tr>
+<tr>
+<td>« Aucune paie n'a été établie en … pour ce site. »</td>
+<td>Année sans paie</td>
+<td>Choisir la bonne année.</td>
+</tr>
+<tr>
+<td>« Des mois de … n'ont pas de paie ouverte alors que le site avait du personnel salarié : … »</td>
+<td>Mois manquants</td>
+<td>Ouvrir et clôturer ces mois.</td>
+</tr>
+<tr>
+<td>« L'identifiant fiscal (IF) du site n'est pas renseigné : saisissez-le dans Paramètres, fiche du site. »</td>
+<td>IF manquant</td>
+<td>Compléter <strong>Paramètres</strong> &gt; <strong>Site</strong>.</td>
+</tr>
+<tr>
+<td>« État 9421 enregistré : … salarié(s) déclaré(s). Déposez-le sur Simpl-IR et complétez-y les versements de l'IR. »</td>
+<td>Fin de l'état 9421</td>
+<td>Déposer le fichier.</td>
+</tr>
+<tr>
+<td>« Impossible d'écrire le document sur ce poste. »</td>
+<td>Dossier d'enregistrement interdit en écriture</td>
+<td>Choisir un autre dossier.</td>
+</tr>
+</tbody>
+</table>
+<h4>Accidents du travail</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Aucun salarié actif : créez d'abord les dossiers dans « Dossiers du personnel ». »</td>
+<td>Aucun salarié à choisir</td>
+<td>Créer les dossiers.</td>
+</tr>
+<tr>
+<td>« Décrivez les circonstances de l'accident. »</td>
+<td>Circonstances vides</td>
+<td>Compléter.</td>
+</tr>
+<tr>
+<td>« Indiquez le type d'exposition au sang. »</td>
+<td>AES sans type</td>
+<td>Choisir le type.</td>
+</tr>
+<tr>
+<td>« La date de l'accident ne peut pas être dans le futur. »</td>
+<td>Date après maintenant</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« À cette date, la personne ne faisait pas partie du personnel. »</td>
+<td>Hors période d'emploi</td>
+<td>Vérifier le salarié et la date.</td>
+</tr>
+<tr>
+<td>« La déclaration ne peut pas précéder l'accident. » / « La consultation ne peut pas précéder l'accident. »</td>
+<td>Dates inversées</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Le taux d'incapacité doit être compris entre 0 et 100 %. »</td>
+<td>IPP hors limites</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Le salarié d'un dossier ne se change pas : déclarez un nouvel accident. »</td>
+<td>Changement de salarié</td>
+<td>Déclarer un nouvel accident.</td>
+</tr>
+<tr>
+<td>« Ce dossier d'accident n'existe pas. »</td>
+<td>Dossier modifié ailleurs</td>
+<td>Cliquer <strong>Actualiser</strong>.</td>
+</tr>
+<tr>
+<td>« Ce dossier est clos. Une rechute le rouvre. »</td>
+<td>Arrêt sur un dossier clos</td>
+<td>Cocher <strong>Rechute (rouvre un dossier clos)</strong>.</td>
+</tr>
+<tr>
+<td>« La date de fin précède la date de début. »</td>
+<td>Arrêt mal daté</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« L'arrêt commence au plus tôt le lendemain de l'accident : le jour même est payé par l'employeur. »</td>
+<td>Arrêt le jour même</td>
+<td>Commencer le lendemain.</td>
+</tr>
+<tr>
+<td>« Le salarié n'est pas en poste à ces dates. »</td>
+<td>Arrêt après la sortie</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Une demande couvre déjà une partie de ces jours (… – …). »</td>
+<td>Chevauchement avec un congé</td>
+<td>Annuler ou corriger l'autre congé.</td>
+</tr>
+<tr>
+<td>« La reprise s'enregistre le jour où elle a lieu, pas à l'avance. »</td>
+<td>Reprise future</td>
+<td>Attendre le jour de la reprise.</td>
+</tr>
+<tr>
+<td>« La reprise ne peut pas précéder l'accident. » / « Un arrêt court jusqu'au … : la reprise ne peut être qu'après. »</td>
+<td>Reprise mal datée</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Cette étape s'enregistre par son propre bouton. »</td>
+<td>Étape réservée</td>
+<td>Utiliser le bon bouton.</td>
+</tr>
+<tr>
+<td>« Précisez le contenu de la réponse ou de la note. »</td>
+<td><strong>Suivi assureur</strong> sans détail</td>
+<td>Saisir le détail.</td>
+</tr>
+<tr>
+<td>« La date du contrôle ne peut pas être dans le futur. » / « Le contrôle ne peut pas être antérieur à l'accident. »</td>
+<td>Date de contrôle impossible</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Ce contrôle n'existe pas dans le dossier. »</td>
+<td>Contrôle retiré ailleurs</td>
+<td>Cliquer <strong>Actualiser</strong>.</td>
+</tr>
+<tr>
+<td>« Des contrôles sérologiques restent à faire : le dossier ne peut pas être clos. »</td>
+<td>Clôture prématurée</td>
+<td>Noter les contrôles faits d'abord.</td>
+</tr>
+<tr>
+<td>« Motif ou conclusion de la clôture (règlement de l'assureur, consolidation…). Peut rester vide. »</td>
+<td><strong>Clore le dossier</strong></td>
+<td><strong>OK</strong> pour clore.</td>
+</tr>
+</tbody>
+</table><p class="top"><a href="index.html">Retour au sommaire</a></p>
 </div>
 </body>
 </html>

@@ -29,8 +29,64 @@ ul.toc li { margin: 4px 0; }
 <div class="page">
 <div class="crumb"><a href="index.html">Sommaire</a></div>
 <h1>Stocks et achats</h1>
-<p>Ce chapitre couvre tout le circuit des réactifs et consommables : la fiche article, la réception des lots, la quarantaine et la libération, les sorties vers la paillasse, les commandes, les demandes de devis, les factures fournisseurs et leur paiement, l'évaluation des fournisseurs, la consommation et les inventaires.</p>
-<p>Le menu <strong>Stocks</strong> regroupe les écrans suivants : <strong>Stocks</strong>, <strong>Bons de commande</strong>, <strong>Demandes de devis</strong>, <strong>Factures fournisseurs</strong>, <strong>Évaluation fournisseurs</strong>, <strong>Consommation</strong>, <strong>Inventaires</strong> (et <strong>Températures</strong>, traité dans un autre chapitre).</p>
+<h3>Présentation du module</h3>
+<p><strong>À quoi sert ce module.</strong> Il couvre tout le circuit des réactifs et consommables : la fiche article, la réception des lots, la quarantaine et la libération, les sorties vers la paillasse, les commandes, les demandes de devis, les factures fournisseurs et leur paiement, l'évaluation des fournisseurs, la consommation et les inventaires. Il garantit la traçabilité exigée par ISO 15189 : chaque lot est identifié, contrôlé à réception, libéré sur preuve, et l'on retrouve les patients analysés avec un lot rappelé.</p>
+<p><strong>Ses écrans.</strong> Le groupe <strong>Stocks</strong> du menu de gauche contient : <strong>Stocks</strong>, <strong>Bons de commande</strong>, <strong>Demandes de devis</strong>, <strong>Factures fournisseurs</strong>, <strong>Évaluation fournisseurs</strong>, <strong>Consommation</strong>, <strong>Inventaires</strong>. Le même groupe contient aussi <strong>Températures</strong>, <strong>Équipements</strong> et <strong>Contrats automates</strong>, décrits dans le chapitre Qualité et équipements. La fiche article et la fiche fournisseur se trouvent dans <strong>Administration &gt; Données de référence</strong>.</p>
+<p><strong>Qui l'utilise.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Rôle par défaut</th>
+<th>Ce qu'il fait dans ce module</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Technicien de laboratoire</td>
+<td>Réceptionne les lots (directement ou sur commande), refuse une livraison, fait les sorties, joint les certificats, compte les inventaires.</td>
+</tr>
+<tr>
+<td>Biologiste</td>
+<td>Voit le stock et libère les lots (y compris par dérogation au contrôle qualité).</td>
+</tr>
+<tr>
+<td>Biologiste responsable</td>
+<td>Réceptionne, libère, sort ; approuve les commandes ; saisit les factures, les débloque et les paie ; ouvre et clôture les inventaires.</td>
+</tr>
+<tr>
+<td>Responsable qualité</td>
+<td>Réceptionne, libère, refuse ; enregistre les rappels, les mises au rebut et les annulations de refus ; approuve les commandes ; ouvre et clôture les inventaires.</td>
+</tr>
+<tr>
+<td>Comptabilité</td>
+<td>Fiches article et fournisseur, commandes, demandes de devis, évaluation fournisseurs, saisie des factures, export comptable.</td>
+</tr>
+<tr>
+<td>Administrateur</td>
+<td>Tout, y compris <strong>Paramètres d'achat</strong> et <strong>Paramètres de stock…</strong>.</td>
+</tr>
+</tbody>
+</table>
+<p>Le secrétariat, les préleveurs et les prescripteurs n'ont pas ces écrans.</p>
+<p><strong>Liens avec les autres modules.</strong></p>
+<ul>
+<li><strong>Données de référence</strong> : fiche article (tests par coffret, analyses consommatrices, seuils) et fiche fournisseur (approbation, enregistrement AMMPS/DMP, délai de paiement).</li>
+<li><strong>Contrôle interne</strong> : l'évaluation d'un nouveau lot de réactif se fait là ; la libération ici exige un CQ conforme passé avec ce lot.</li>
+<li><strong>Non-conformités</strong> : une réception non conforme ou une livraison refusée ouvre une non-conformité fournisseur.</li>
+<li><strong>Saisie des résultats</strong> : chaque résultat est rattaché au lot utilisé, ce qui permet la liste des patients d'un lot rappelé et la consommation théorique.</li>
+<li><strong>Contrats automates</strong> : les réactifs captifs s'achètent au prix du contrat et ne passent pas en demande de devis.</li>
+<li><strong>Coût de revient et marge</strong> (Pilotage) : utilise le prix des lots et les tests par coffret.</li>
+<li><strong>Trésorerie et comptabilité</strong> : règlements fournisseurs et export comptable.</li>
+</ul>
+<p>Quelques règles communes à tous les écrans :</p>
+<ul>
+<li>Un bouton auquel vous n'avez pas droit reste visible mais <strong>grisé</strong>. Un écran auquel vous n'avez pas droit n'apparaît pas dans le menu.</li>
+<li>Les boutons principaux sont en haut à droite, à côté du titre et du nombre de lignes. Les actions moins fréquentes sont rangées derrière <strong>Plus d'actions</strong> : cliquez-le pour dérouler le menu.</li>
+<li>Les filtres sont sous le titre : une zone de recherche (<strong>Ctrl+F</strong> y place le curseur) et des pastilles à cocher.</li>
+<li><strong>Ctrl+N</strong> déclenche le bouton principal de l'écran : <strong>Réceptionner un lot</strong> (Stocks), <strong>Nouvelle commande</strong>, <strong>Nouvelle demande de devis</strong>, <strong>Saisir une facture</strong>, <strong>Nouvel inventaire…</strong>.</li>
+<li>Après une action ou une actualisation, la ligne sur laquelle vous travailliez reste sélectionnée.</li>
+<li>Tous les motifs demandés (libération, refus, rappel, rebut, annulation, déblocage) sont conservés dans le journal d'audit avec leur auteur et leur date.</li>
+</ul>
 <h3>Vue d'ensemble du circuit</h3>
 <ol>
 <li>L'article est créé une fois pour toutes dans <strong>Données de référence › Articles</strong> (voir plus bas « Avant de commencer »).</li>
@@ -79,7 +135,7 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td><strong>Volume mort par ouverture (%)</strong></td>
-<td>Part perdue à chaque ouverture ; corrige le coût (prix ÷ (1 − volume mort)).</td>
+<td>Part perdue à chaque ouverture ; corrige le coût (prix ÷ (1 − volume mort)). Entre 0 et 99.</td>
 </tr>
 <tr>
 <td><strong>Tests perdus par ouverture</strong></td>
@@ -87,11 +143,11 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td><strong>Tests par calibration</strong></td>
-<td>Tests consommés par une calibration (consommation théorique).</td>
+<td>Tests consommés par une calibration (consommation théorique), de 0 à 1000.</td>
 </tr>
 </tbody>
 </table>
-<p>Autres champs de la fiche : <strong>Code</strong>, <strong>Désignation (FR)</strong>/(AR), <strong>Lieu de conservation</strong> (condition de stockage : il décide si la température à réception est obligatoire), <strong>Fabricant</strong>, <strong>Fournisseur</strong> préféré, <strong>Référence catalogue</strong>, <strong>Emplacement par défaut</strong>, <strong>Stock de sécurité</strong>, <strong>Seuil de réapprovisionnement</strong>, <strong>Quantité à commander</strong>, <strong>Stock maximal</strong>, <strong>Article critique</strong>, <strong>Produit dangereux</strong> et <strong>Classe de danger</strong>, <strong>Actif</strong>, <strong>GTIN (GS1)</strong>, <strong>Marquage CE (DM-DIV)</strong>, <strong>Stock de sécurité (jours)</strong>, <strong>Péremption à réception (jours)</strong>, <strong>Seuil calculé automatiquement</strong>, et le bouton <strong>Appliquer</strong> qui reprend le seuil proposé d'après la consommation.</p>
+<p>Autres champs de la fiche : <strong>Code</strong>, <strong>Désignation (FR)</strong>/(AR), <strong>Lieu de conservation</strong> (condition de stockage : il décide si la température à réception est obligatoire), <strong>Fabricant</strong>, <strong>Fournisseur</strong> préféré, <strong>Référence catalogue</strong>, <strong>Emplacement par défaut</strong>, <strong>Stock de sécurité</strong>, <strong>Seuil de réapprovisionnement</strong>, <strong>Quantité à commander</strong>, <strong>Stock maximal</strong>, <strong>Article critique</strong>, <strong>Produit dangereux</strong> et <strong>Classe de danger</strong>, <strong>Actif</strong>, <strong>GTIN (GS1)</strong>, <strong>Marquage CE (DM-DIV)</strong>, <strong>Stock de sécurité (jours)</strong> (0 à 365), <strong>Péremption à réception (jours)</strong> (1 à 3650), <strong>Seuil calculé automatiquement</strong>, et le bouton <strong>Appliquer</strong> qui reprend le seuil proposé d'après la consommation (« Seuil calculé : … = …/jour × … j de délai + … de sécurité »).</p>
 <p><strong>Le prix des lots</strong></p>
 <p>Le prix d'un lot est fixé à la réception, et nulle part ailleurs :</p>
 <ul>
@@ -100,43 +156,59 @@ ul.toc li { margin: 4px 0; }
 <li>Une nouvelle livraison d'un lot déjà en stock fait la moyenne des prix.</li>
 <li>Aucun écran ne permet de corriger le prix d'un lot après coup.</li>
 </ul>
-<p>Quand une analyse n'a pas de lot identifié, le coût prend le prix du dernier lot reçu, puis le dernier prix d'achat de l'article, puis le prix du contrat automate. Un contrat de mise à disposition qui fixe un « coût par test » passe avant tout le reste (voir le chapitre Équipements / contrats).</p>
+<p>Quand une analyse n'a pas de lot identifié, le coût prend le prix du dernier lot reçu, puis le dernier prix d'achat de l'article, puis le prix du contrat automate. Un contrat de mise à disposition qui fixe un « coût par test » passe avant tout le reste (voir le chapitre Qualité et équipements, Contrats automates).</p>
 <hr />
 <h3 id="inventory">Stocks</h3>
-<p>Suivre le stock utilisable de chaque article et de chaque lot, réceptionner, libérer, refuser, rappeler, sortir et mettre au rebut.</p>
+<p><strong>À quoi sert cet écran.</strong> Suivre le stock utilisable de chaque article et de chaque lot, et faire toutes les opérations sur les lots : réceptionner, libérer, refuser, rappeler, sortir vers la paillasse, mettre au rebut. C'est aussi ici qu'on retrouve les patients analysés avec un lot, qu'on compare un nouveau lot au précédent et qu'on garde les certificats d'analyse.</p>
 <p><strong>Qui y a accès</strong></p>
 <ul>
 <li>Voir l'écran : Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité, Comptabilité.</li>
-<li><strong>Réceptionner un lot</strong>, joindre un certificat : Administrateur, Biologiste responsable, Technicien, Responsable qualité.</li>
-<li><strong>Sortie</strong> : Administrateur, Biologiste responsable, Technicien.</li>
-<li><strong>Libérer</strong> : ceux qui revoient le contrôle qualité (Administrateur, Biologiste responsable, Biologiste, Responsable qualité). La libération par dérogation est réservée à ceux qui valident biologiquement (biologistes).</li>
+<li><strong>Réceptionner un lot</strong>, joindre un certificat : Administrateur, Biologiste responsable, Technicien de laboratoire, Responsable qualité.</li>
+<li><strong>Sortie</strong> : Administrateur, Biologiste responsable, Technicien de laboratoire.</li>
+<li><strong>Libérer</strong> : ceux qui revoient le contrôle qualité (Administrateur, Biologiste responsable, Biologiste, Responsable qualité). La libération par dérogation est réservée aux biologistes.</li>
 <li><strong>Refuser</strong> : un lot encore en quarantaine peut être refusé par celui qui réceptionne ; un lot déjà libéré, seulement par ceux qui peuvent libérer.</li>
 <li><strong>Annuler le refus</strong>, <strong>Rappel de lot</strong>, <strong>Mise au rebut</strong> : droit « ajuster le stock » (Administrateur, Responsable qualité uniquement).</li>
 <li><strong>Résultats produits avec ce lot…</strong> : il faut en plus le droit de voir les résultats.</li>
 </ul>
-<p>Les boutons sans droit restent visibles mais grisés.</p>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Réceptionner un lot</strong> (bouton principal, Ctrl+N) : enregistre une livraison hors bon de commande pour l'article sélectionné ; le lot entre en quarantaine.</li>
+<li><strong>Sortie</strong> : sort une quantité de l'article sélectionné vers la paillasse ; les lots sont pris par péremption la plus proche. Refusée d'emblée si le stock utilisable ne suffit pas.</li>
+<li><strong>Alertes de stock</strong> : ouvre la fenêtre des ruptures prévues et des lots arrivant à péremption.</li>
+<li><strong>Actualiser</strong> (F5) : relit le stock ; prépare aussi les commandes prioritaires des articles arrivés au seuil.</li>
+<li>Zone <strong>Rechercher un article, un code…</strong> (Ctrl+F) : filtre le tableau des articles.</li>
+<li>Pastille <strong>N'afficher que les articles en alerte</strong> : ne garde que les articles sous le seuil, en quarantaine, à péremption proche ou critiques.</li>
+<li>Carte <strong>Lots reçus</strong>, pastille <strong>En quarantaine</strong> : affiche tous les lots en quarantaine, tous articles confondus (au lieu des lots de l'article sélectionné).</li>
+<li><strong>Libérer</strong> (bouton principal des lots) : passe un lot en quarantaine à « Utilisable », sur preuve écrite (au moins 10 caractères) et CQ conforme ; actif seulement pour un lot en quarantaine, ni refusé, ni rappelé.</li>
+<li><strong>Refuser</strong> : bloque définitivement le lot, avec motif.</li>
+<li><strong>Plus d'actions</strong> des lots :</li>
+<li><strong>Annuler le refus</strong> : remet un lot refusé (non rappelé) en quarantaine, motif d'au moins 10 caractères ;</li>
+<li><strong>Rappel de lot</strong> : enregistre un rappel fabricant (référence obligatoire) et liste les résultats patients concernés ;</li>
+<li><strong>Mise au rebut</strong> : sort tout le reste du lot, avec motif ;</li>
+<li><strong>Résultats produits avec ce lot…</strong> : liste des patients et résultats rendus avec ce lot, <strong>Exporter en CSV</strong> ;</li>
+<li><strong>Comparer avec le lot précédent…</strong> : moyenne et écart-type du CQ des deux lots ;</li>
+<li><strong>Certificats d'analyse…</strong> : joindre (<strong>Joindre un fichier…</strong>, PDF ou image) ou <strong>Ouvrir</strong> les certificats des lots de l'article.</li>
+<li>Clic droit sur un lot : les trois mêmes entrées <strong>Résultats produits avec ce lot…</strong>, <strong>Comparer avec le lot précédent…</strong>, <strong>Certificats d'analyse…</strong>.</li>
+<li>Fenêtre <strong>Réceptionner un lot</strong> : <strong>Scanner le DataMatrix GS1</strong>, <strong>N° de lot</strong>, <strong>Péremption</strong>, <strong>Quantité</strong>, <strong>Fournisseur</strong>, <strong>Bon de livraison</strong>, <strong>Prix</strong>, <strong>Lieu de conservation</strong>, <strong>Stabilité après ouverture (jours)</strong>, <strong>Température à l'arrivée (°C)</strong>, cases <strong>Conforme à la commande</strong>, <strong>Emballage intact</strong>, <strong>Étiquetage en français</strong>, <strong>Certificat d'analyse reçu</strong>, boutons <strong>Enregistrer</strong>, <strong>Refuser la livraison</strong>, <strong>Annuler</strong>.</li>
+</ul>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>En haut, le tableau <strong>Stocks</strong> : <strong>Code</strong>, <strong>Article</strong>, type d'article, <strong>Quantité en stock</strong> (seulement les lots utilisables : libérés, non périmés, non rappelés), <strong>Seuil de réapprovisionnement</strong>, <strong>Lot</strong> (nombre de lots, « Q » pour ceux en quarantaine), <strong>Péremption</strong> la plus proche (avec le nombre de jours), <strong>Fournisseur</strong>, et une colonne d'alertes :</li>
+<li>En haut : titre <strong>Stocks</strong> et compteur « … articles · … sous le stock de sécurité », boutons <strong>Actualiser</strong>, <strong>Alertes de stock</strong>, <strong>Sortie</strong>, <strong>Réceptionner un lot</strong>. Dessous, la recherche et la pastille <strong>N'afficher que les articles en alerte</strong>.</li>
+<li>Tableau des articles : <strong>Code</strong>, <strong>Article</strong>, <strong>Type</strong>, <strong>Quantité en stock</strong> (seulement les lots utilisables : libérés, non périmés, non rappelés), <strong>Seuil de réapprovisionnement</strong>, <strong>Lot</strong> (nombre de lots, « Q » pour ceux en quarantaine), <strong>Péremption</strong> la plus proche (avec le nombre de jours), <strong>Fournisseur</strong>, et une colonne d'alertes :</li>
 <li>« !! » sous le stock de sécurité, « ! » à commander, « Q » lot en quarantaine, « ⏳ » péremption à 30 jours ou moins, « ★ » article critique.</li>
 <li>Couleurs : rouge gras pour un article critique sous le stock de sécurité ; rouge pour un article sous le stock de sécurité ou périmé ; orange à commander, péremption proche ou lot en quarantaine.</li>
-<li>Case <strong>N'afficher que les articles en alerte</strong>.</li>
-<li>Boutons : <strong>Réceptionner un lot</strong>, <strong>Sortie</strong>, <strong>Actualiser</strong> (F5), <strong>Alertes de stock</strong>.</li>
-<li>En bas, <strong>Lots reçus</strong> de l'article sélectionné : article, <strong>N° de lot</strong>, <strong>Péremption</strong>, jours avant péremption, quantité restante, date de <strong>Réception</strong>, date d'ouverture, <strong>Statut</strong> (Utilisable, En quarantaine, Stabilité dépassée, Périmé, Rappelé, refusé), <strong>Lieu de conservation</strong>.</li>
-<li>Case <strong>En quarantaine</strong> : affiche tous les lots en quarantaine, tous articles confondus.</li>
-<li>Boutons des lots : <strong>Libérer</strong>, <strong>Refuser</strong>, <strong>Annuler le refus</strong>, <strong>Rappel de lot</strong>, <strong>Mise au rebut</strong>.</li>
-<li>Clic droit sur un lot : <strong>Résultats produits avec ce lot…</strong>, <strong>Comparer avec le lot précédent…</strong>, <strong>Certificats d'analyse…</strong>.</li>
-<li>À chaque ouverture de l'écran, le logiciel prépare les bons de commande prioritaires des articles arrivés au seuil, et l'indique en rouge en bas : « Seuil atteint : bon de commande prioritaire … préparé (…) ».</li>
+<li>Carte <strong>Lots reçus</strong> de l'article sélectionné, avec la pastille <strong>En quarantaine</strong> et les boutons <strong>Refuser</strong>, <strong>Plus d'actions</strong>, <strong>Libérer</strong> : <strong>Article</strong>, <strong>N° de lot</strong>, <strong>Péremption</strong>, <strong>Jours restants</strong>, <strong>Quantité</strong> restante, <strong>Réception</strong>, <strong>Ouvert le</strong>, <strong>Statut</strong> (pastille : Utilisable, En quarantaine, Stabilité dépassée, Périmé, Rappelé, ou « Ce lot a été refusé. » pour un lot refusé), <strong>Lieu de conservation</strong>.</li>
+<li>À chaque ouverture de l'écran, le logiciel prépare les bons de commande prioritaires des articles arrivés au seuil, et l'indique en bas : « Seuil atteint : bon de commande prioritaire … préparé (…) ».</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <p><em>1. Réceptionner une livraison hors bon de commande</em></p>
 <ol>
 <li>Sélectionnez l'article dans le tableau du haut.</li>
-<li>Cliquez <strong>Réceptionner un lot</strong>.</li>
+<li>Cliquez <strong>Réceptionner un lot</strong> (ou <strong>Ctrl+N</strong>).</li>
 <li>Si vous avez un lecteur, cliquez dans <strong>Scanner le DataMatrix GS1</strong> et scannez la boîte : le <strong>N° de lot</strong> et la <strong>Péremption</strong> se remplissent. Si le code correspond à un autre article, le logiciel propose de passer à cet article.</li>
 <li>Sinon, saisissez <strong>N° de lot</strong> (obligatoire) et <strong>Péremption</strong>.</li>
 <li>Saisissez <strong>Quantité</strong> (en unité de stock), <strong>Fournisseur</strong>, <strong>Bon de livraison</strong>, <strong>Prix</strong>, <strong>Lieu de conservation</strong>, <strong>Stabilité après ouverture (jours)</strong>.</li>
-<li>Saisissez la <strong>Température à l'arrivée (°C)</strong> : obligatoire pour un article réfrigéré ou congelé (la plage attendue s'affiche).</li>
+<li>Saisissez la <strong>Température à l'arrivée (°C)</strong> : obligatoire pour un article réfrigéré ou congelé (« Obligatoire : attendu … » s'affiche à côté).</li>
 <li>Vérifiez les quatre cases, cochées par défaut : <strong>Conforme à la commande</strong>, <strong>Emballage intact</strong>, <strong>Étiquetage en français</strong>, <strong>Certificat d'analyse reçu</strong>. Décochez celles qui ne sont pas conformes.</li>
 <li>Cliquez <strong>Enregistrer</strong> (ou Entrée). Si une case est décochée ou la température hors plage, le logiciel demande confirmation : une non-conformité fournisseur sera ouverte.</li>
 <li>Le message rappelle que le lot est en quarantaine.</li>
@@ -152,70 +224,70 @@ ul.toc li { margin: 4px 0; }
 <li>Sélectionnez le lot (statut « En quarantaine »).</li>
 <li>Cliquez <strong>Libérer</strong>.</li>
 <li>Décrivez la preuve de vérification (au moins 10 caractères) : quel contrôle a montré que le lot se comporte correctement.</li>
-<li>Pour un réactif rattaché à des analyses, le logiciel vérifie qu'un CQ conforme a été passé avec ce lot (écran Contrôle interne). Sinon, il refuse (« aucun contrôle qualité n'a été passé sur ce lot », « aucune série de CQ conforme », ou « niveaux de CQ manquants »).</li>
-<li>Si vous êtes biologiste, le logiciel propose alors une <strong>Libération par dérogation</strong> : écrivez la justification (au moins 15 caractères, bien que le message indique 10). Elle est conservée sur le lot et dans le journal d'audit.</li>
+<li>Pour un réactif rattaché à des analyses, le logiciel vérifie qu'un CQ conforme a été passé avec ce lot (écran Contrôle interne). Sinon, il refuse (aucun CQ passé sur ce lot, aucune série conforme, ou niveaux de CQ manquants).</li>
+<li>Si vous êtes biologiste, le logiciel propose alors une <strong>Libération par dérogation</strong> : écrivez la justification (au moins 15 caractères, comme l'indique la question). Elle est conservée sur le lot et dans le journal d'audit.</li>
 <li>Le lot passe « Utilisable ».</li>
 </ol>
 <p><em>4. Refuser un lot</em></p>
 <ol>
 <li>Sélectionnez le lot, cliquez <strong>Refuser</strong>, indiquez le motif.</li>
-<li>Le lot reste bloqué en quarantaine, définitivement, sauf annulation du refus.</li>
+<li>Le lot reste bloqué, définitivement, sauf annulation du refus.</li>
 </ol>
 <p><em>5. Annuler un refus fait par erreur</em></p>
 <ol>
-<li>Sélectionnez le lot refusé, cliquez <strong>Annuler le refus</strong>.</li>
+<li>Sélectionnez le lot refusé, cliquez <strong>Plus d'actions › Annuler le refus</strong>.</li>
 <li>Motif d'au moins 10 caractères.</li>
 <li>Le lot revient <strong>en quarantaine</strong>, pas en service : il faut encore le libérer.</li>
 </ol>
 <p><em>6. Enregistrer un rappel fabricant</em></p>
 <ol>
-<li>Sélectionnez le lot, cliquez <strong>Rappel de lot</strong>.</li>
+<li>Sélectionnez le lot, cliquez <strong>Plus d'actions › Rappel de lot</strong>.</li>
 <li>Saisissez la référence du rappel fabricant (obligatoire).</li>
 <li>Le logiciel indique combien de résultats patients ont été produits avec ce lot, et ouvre leur liste (si vous avez le droit de voir les résultats). Cliquez <strong>Exporter en CSV</strong> pour la garder.</li>
 <li>Le lot n'est plus utilisable ; si le stock tombe au seuil, une commande prioritaire est préparée.</li>
 </ol>
 <p><em>7. Retrouver les patients d'un lot (sans rappel)</em></p>
 <ol>
-<li>Clic droit sur le lot › <strong>Résultats produits avec ce lot…</strong>.</li>
-<li>La liste donne patient, N° dossier, demande, analyse, paramètre, date, validé ou non. <strong>Exporter en CSV</strong>.</li>
+<li>Clic droit sur le lot (ou <strong>Plus d'actions</strong>) › <strong>Résultats produits avec ce lot…</strong>.</li>
+<li>La liste donne <strong>Patient</strong>, N° dossier, <strong>Demande</strong>, <strong>Analyse</strong>, <strong>Paramètre</strong>, <strong>Date du résultat</strong>, <strong>Validé</strong>. <strong>Exporter en CSV</strong>.</li>
 </ol>
 <p><em>8. Comparer un nouveau lot au précédent</em></p>
 <ol>
-<li>Clic droit › <strong>Comparer avec le lot précédent…</strong>.</li>
-<li>Le tableau donne, par niveau de contrôle, n, moyenne et écart-type des deux lots et l'<strong>Écart (%)</strong>. À comparer à l'écart acceptable fixé par le laboratoire.</li>
+<li>Clic droit (ou <strong>Plus d'actions</strong>) › <strong>Comparer avec le lot précédent…</strong>.</li>
+<li>Le tableau donne, par <strong>Contrôle</strong>, <strong>n nouveau</strong>, <strong>Moyenne nouveau</strong>, <strong>ET nouveau</strong>, <strong>n ancien</strong>, <strong>Moyenne ancien</strong>, <strong>ET ancien</strong> et l'<strong>Écart (%)</strong>. À comparer à l'écart acceptable fixé par le laboratoire.</li>
 </ol>
 <p><em>9. Joindre ou consulter un certificat d'analyse</em></p>
 <ol>
-<li>Clic droit › <strong>Certificats d'analyse…</strong>.</li>
-<li><strong>Joindre un fichier…</strong> (PDF ou image) ; <strong>Ouvrir</strong> (ou double-clic) pour consulter.</li>
+<li>Clic droit (ou <strong>Plus d'actions</strong>) › <strong>Certificats d'analyse…</strong>.</li>
+<li><strong>Joindre un fichier…</strong> (PDF ou image ; droit de réception) ; <strong>Ouvrir</strong> (ou double-clic) pour consulter.</li>
 </ol>
 <p><em>10. Sortir du stock vers la paillasse</em></p>
 <ol>
 <li>Sélectionnez l'article, cliquez <strong>Sortie</strong>.</li>
-<li>Saisissez la quantité en unité de stock. Le message rappelle le stock utilisable.</li>
+<li>Saisissez la quantité en unité de stock. La question rappelle le stock utilisable.</li>
 <li>Le logiciel choisit lui-même les lots, péremption la plus proche d'abord ; une sortie peut prendre sur deux lots.</li>
 <li>Les lots utilisés s'affichent en bas de l'écran.</li>
 </ol>
 <p><em>11. Mettre un lot au rebut</em></p>
 <ol>
-<li>Sélectionnez le lot, cliquez <strong>Mise au rebut</strong>, indiquez le motif.</li>
+<li>Sélectionnez le lot, cliquez <strong>Plus d'actions › Mise au rebut</strong>, indiquez le motif.</li>
 <li>Tout le reste du lot est sorti (motif « péremption » si le lot est périmé, sinon « casse/perte »). On ne peut pas mettre au rebut une partie seulement.</li>
 </ol>
 <p><em>12. Consulter les alertes de stock</em></p>
 <ol>
 <li>Cliquez <strong>Alertes de stock</strong>.</li>
-<li>Deux tableaux : <strong>Ruptures prévues avant livraison</strong> (stock utilisable, consommation par jour, date de rupture prévue, délai fournisseur) et <strong>Lots arrivant à péremption</strong> (avec le niveau : Péremption proche, Péremption imminente, Périmé).</li>
+<li>Deux tableaux : <strong>Ruptures prévues avant livraison</strong> (<strong>Stock utilisable</strong>, <strong>Consommation / jour</strong>, <strong>Rupture prévue le</strong>, <strong>Délai fournisseur</strong>) et <strong>Lots arrivant à péremption</strong> (<strong>Péremption</strong>, <strong>Quantité</strong>, <strong>Niveau</strong> : péremption proche, imminente, périmé).</li>
 </ol>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
 <li>Un lot reçu est toujours en quarantaine ; il ne compte pas dans la quantité en stock tant qu'il n'est pas libéré.</li>
 <li>Une péremption déjà passée est refusée à la réception.</li>
 <li>Le même N° de lot livré une deuxième fois s'ajoute au lot existant : la péremption doit être la même (« Vérifiez la date ou le numéro de lot »). Un lot refusé ou rappelé ne peut plus recevoir de livraison. Une livraison non conforme ne peut pas s'ajouter à un lot déjà libéré : refusez-la.</li>
-<li>Un article réfrigéré ou congelé exige la température d'arrivée.</li>
-<li>La sortie refuse si le stock utilisable est insuffisant (« Un lot en quarantaine, périmé ou rappelé ne peut pas être sorti »).</li>
+<li>Un article réfrigéré ou congelé exige la température d'arrivée ; pour un article à température ambiante, une température hors plage donne seulement un avertissement.</li>
+<li>La sortie est refusée avant de toucher aux lots si le stock utilisable est insuffisant (« Un lot en quarantaine, périmé ou rappelé ne peut pas être sorti »).</li>
 <li>Un lot dont la stabilité après ouverture est dépassée apparaît « Stabilité dépassée » ; une nouvelle unité scellée peut encore être sortie.</li>
 <li>Un lot rappelé ne peut jamais être remis en quarantaine.</li>
-<li>Tous les motifs (libération, refus, rappel, rebut) sont conservés dans le journal d'audit.</li>
+<li>La justification d'une libération par dérogation compte au moins 15 caractères ; les autres motifs (preuve, refus de livraison, annulation du refus) au moins 10.</li>
 </ul>
 <p><strong>Flux</strong></p>
 <p>Réception (ici ou sur bon de commande) → quarantaine → CQ du lot dans Contrôle interne → <strong>Libérer</strong> → sorties → alerte de seuil → bon de commande prioritaire dans <strong>Bons de commande</strong>.</p>
@@ -227,21 +299,34 @@ ul.toc li { margin: 4px 0; }
 
 <hr />
 <h3 id="purchaseorders">Bons de commande</h3>
-<p>Préparer, faire approuver, envoyer et réceptionner les commandes fournisseurs.</p>
+<p><strong>À quoi sert cet écran.</strong> Préparer les commandes fournisseurs, les faire approuver par une autre personne, les envoyer (par e-mail ou à la main), puis réceptionner les livraisons ligne par ligne. Les commandes prioritaires préparées automatiquement au seuil arrivent ici.</p>
 <p><strong>Qui y a accès</strong></p>
 <ul>
-<li>Voir l'écran : tous ceux qui voient le stock (Administrateur, Biologiste responsable, Biologiste, Technicien, Responsable qualité, Comptabilité).</li>
+<li>Voir l'écran : tous ceux qui voient le stock (Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité, Comptabilité).</li>
 <li><strong>Nouvelle commande</strong>, <strong>Ajouter une ligne</strong>, <strong>Envoyer au fournisseur</strong>, <strong>Annuler la commande</strong> : Administrateur, Comptabilité.</li>
 <li><strong>Approuver</strong> : Administrateur, Biologiste responsable, Responsable qualité. Jamais le demandeur de la commande.</li>
-<li><strong>Réceptionner la ligne</strong> : Administrateur, Biologiste responsable, Technicien, Responsable qualité.</li>
+<li><strong>Réceptionner la ligne</strong> : Administrateur, Biologiste responsable, Technicien de laboratoire, Responsable qualité.</li>
+</ul>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Nouvelle commande</strong> (bouton principal, Ctrl+N) : crée un brouillon pour un fournisseur approuvé, puis ouvre directement <strong>Ajouter une ligne</strong>.</li>
+<li><strong>Imprimer le bon (PDF)</strong> : ouvre le PDF du bon ; possible à partir du statut Approuvé.</li>
+<li><strong>Plus d'actions</strong> (en haut) › <strong>Enregistrer le PDF…</strong> : enregistre le PDF dans un fichier.</li>
+<li><strong>Actualiser</strong> (F5).</li>
+<li>Zone <strong>Rechercher une commande, un fournisseur…</strong> (Ctrl+F) et pastille <strong>Commandes en cours seulement</strong> (cochée par défaut).</li>
+<li>Carte <strong>Lignes</strong> :</li>
+<li><strong>Ajouter une ligne</strong> : ajoute un article au brouillon (un article une seule fois) ;</li>
+<li><strong>Approuver</strong> : approuve un brouillon qui a au moins une ligne ; grisé pour l'auteur de la commande, avec l'info-bulle « Vous avez établi cette commande : elle doit être approuvée par une autre personne. » ;</li>
+<li><strong>Envoyer au fournisseur</strong> : envoi par e-mail avec le PDF, ou confirmation d'un envoi manuel ; commande Approuvée seulement ;</li>
+<li><strong>Plus d'actions</strong> › <strong>Annuler la commande</strong> : commande Brouillon, Approuvée ou Envoyée, motif obligatoire ;</li>
+<li><strong>Réceptionner la ligne</strong> (bouton principal de la carte) : réception d'un lot sur la ligne sélectionnée, tant qu'il reste à livrer.</li>
+<li>Fenêtre <strong>Réceptionner la ligne</strong> : <strong>Scanner le DataMatrix GS1</strong>, <strong>Quantité</strong>, <strong>N° de lot</strong>, <strong>Péremption</strong>, <strong>Bon de livraison</strong>, <strong>Emplacement par défaut</strong>, température et cases de contrôle, <strong>Enregistrer</strong>, <strong>Refuser la livraison</strong>, <strong>Annuler</strong>.</li>
 </ul>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>Case <strong>Commandes en cours seulement</strong> (cochée par défaut), boutons <strong>Actualiser</strong>, <strong>Nouvelle commande</strong>, <strong>Imprimer le bon (PDF)</strong>, <strong>Enregistrer le PDF…</strong>.</li>
-<li>Tableau des commandes : <strong>N° de commande</strong>, <strong>Priorité</strong> (« Prioritaire » ou « Prioritaire (auto) »), <strong>Fournisseur</strong>, <strong>Date</strong>, <strong>Livraison prévue</strong> (« ! » si en retard), <strong>Statut</strong>, <strong>Lignes</strong>, <strong>Total HT</strong>, <strong>Total TTC</strong>, <strong>Demandeur</strong>, <strong>Approuvé par</strong>. Les commandes prioritaires non soldées sont en tête, sur fond orange.</li>
-<li>Le titre compte les commandes « à approuver » et « en retard ».</li>
-<li>Tableau des <strong>Lignes</strong> : #, <strong>Code</strong>, <strong>Article</strong>, <strong>Commandé</strong>, <strong>Reçu</strong>, <strong>Reste à livrer</strong>, <strong>Unité</strong>, <strong>Prix unitaire HT</strong>, <strong>Remise</strong>, <strong>TVA</strong>, <strong>Total HT</strong>. Sous le tableau : Total HT, TVA, Total TTC.</li>
-<li>Boutons du bas : <strong>Ajouter une ligne</strong>, <strong>Approuver</strong>, <strong>Envoyer au fournisseur</strong>, <strong>Réceptionner la ligne</strong>, <strong>Annuler la commande</strong>.</li>
+<li>En haut : titre <strong>Bons de commande</strong> et compteur (« … commandes », « … à approuver », « … en retard »), boutons <strong>Actualiser</strong>, <strong>Imprimer le bon (PDF)</strong>, <strong>Plus d'actions</strong>, <strong>Nouvelle commande</strong>. Dessous, la recherche et la pastille <strong>Commandes en cours seulement</strong>.</li>
+<li>Tableau des commandes : <strong>N° de commande</strong>, <strong>Priorité</strong> (« Prioritaire » ou « Prioritaire (auto) »), <strong>Fournisseur</strong>, <strong>Date</strong>, <strong>Livraison prévue</strong> (« ! » si en retard), <strong>Statut</strong> (pastille ; une commande annulée affiche « Annulée : » suivi du motif), <strong>Lignes</strong>, <strong>Total HT</strong>, <strong>Total TTC</strong>, <strong>Demandeur</strong>, <strong>Approuvé par</strong>. Les commandes prioritaires non soldées sont en tête, sur fond orange.</li>
+<li>Carte <strong>Lignes</strong> : #, <strong>Code</strong>, <strong>Article</strong>, <strong>Commandé</strong>, <strong>Reçu</strong>, <strong>Reste à livrer</strong>, <strong>Unité</strong>, <strong>Prix unitaire HT</strong>, <strong>Remise</strong>, <strong>TVA</strong>, <strong>Total HT</strong>. Sous le tableau : « Total HT … MAD · TVA … MAD · Total TTC … MAD ».</li>
 </ul>
 <p>Statuts :</p>
 <table>
@@ -281,7 +366,7 @@ ul.toc li { margin: 4px 0; }
 <p><strong>Scénarios</strong></p>
 <p><em>1. Créer une commande</em></p>
 <ol>
-<li>Cliquez <strong>Nouvelle commande</strong>.</li>
+<li>Cliquez <strong>Nouvelle commande</strong> (ou <strong>Ctrl+N</strong>).</li>
 <li>Choisissez le <strong>Fournisseur</strong> (seuls les fournisseurs approuvés sont proposés), la <strong>Livraison prévue</strong> (facultative), la <strong>Réf. devis / proforma</strong>, les <strong>Observations</strong>.</li>
 <li><strong>Enregistrer</strong>. Si l'enregistrement AMMPS/DMP du fournisseur a expiré, le logiciel demande « Continuer malgré tout ? ».</li>
 <li>La fenêtre <strong>Ajouter une ligne</strong> s'ouvre directement.</li>
@@ -295,17 +380,17 @@ ul.toc li { margin: 4px 0; }
 </ol>
 <p><em>3. Approuver une commande</em></p>
 <ol>
-<li>Sélectionnez la commande (Brouillon, au moins une ligne), cliquez <strong>Approuver</strong>.</li>
+<li>Sélectionnez la commande (Brouillon, au moins une ligne), cliquez <strong>Approuver</strong>. Si c'est vous qui l'avez établie, le bouton est grisé : faites-la approuver par un collègue.</li>
 <li>Si l'enregistrement du fournisseur a expiré, confirmez ou abandonnez.</li>
 </ol>
 <p><em>4. Envoyer au fournisseur</em></p>
 <ol>
 <li>Sélectionnez une commande Approuvée, cliquez <strong>Envoyer au fournisseur</strong>.</li>
 <li>Si la messagerie est configurée et que le fournisseur a une adresse e-mail : confirmez, le PDF part en pièce jointe et la commande passe « Envoyé ».</li>
-<li>Sinon (ou si l'envoi échoue) : enregistrez le PDF avec <strong>Enregistrer le PDF…</strong>, transmettez-le vous-même (e-mail, fax, en main propre), puis confirmez la question pour marquer la commande envoyée.</li>
+<li>Sinon (ou si l'envoi échoue) : enregistrez le PDF avec <strong>Plus d'actions › Enregistrer le PDF…</strong>, transmettez-le vous-même (e-mail, fax, en main propre), puis confirmez la question pour marquer la commande envoyée.</li>
 </ol>
 <p><em>5. Imprimer ou enregistrer le bon</em></p>
-<p><strong>Imprimer le bon (PDF)</strong> ouvre le PDF ; <strong>Enregistrer le PDF…</strong> le sauvegarde. Possible seulement à partir du statut Approuvé.</p>
+<p><strong>Imprimer le bon (PDF)</strong> ouvre le PDF ; <strong>Plus d'actions › Enregistrer le PDF…</strong> le sauvegarde. Possible seulement à partir du statut Approuvé.</p>
 <p><em>6. Réceptionner une livraison sur commande</em></p>
 <ol>
 <li>Sélectionnez la commande puis la ligne (la première ligne non soldée est présélectionnée).</li>
@@ -319,12 +404,12 @@ ul.toc li { margin: 4px 0; }
 <ol>
 <li>Repérez les commandes « Prioritaire (auto) » en tête de liste.</li>
 <li>Vérifiez quantités et prix (la quantité est plafonnée à ce qui sera consommé avant péremption, si la fiche le prévoit).</li>
-<li>Faites approuver puis envoyez.</li>
+<li>Faites approuver (par une autre personne que celle qui l'a déclenchée) puis envoyez.</li>
 </ol>
 <p><em>8. Annuler une commande</em></p>
 <ol>
-<li>Sélectionnez une commande Brouillon, Approuvée ou Envoyée, cliquez <strong>Annuler la commande</strong>.</li>
-<li>Indiquez le motif.</li>
+<li>Sélectionnez une commande Brouillon, Approuvée ou Envoyée, cliquez <strong>Plus d'actions › Annuler la commande</strong> dans la carte <strong>Lignes</strong>.</li>
+<li>Indiquez le motif. Il s'affiche dans la colonne <strong>Statut</strong> (« Annulée : … ») ; les <strong>Observations</strong> de la commande ne sont pas modifiées.</li>
 </ol>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
@@ -333,7 +418,7 @@ ul.toc li { margin: 4px 0; }
 <li>Un même article ne peut figurer qu'une fois sur une commande.</li>
 <li>L'approbateur ne peut pas être le demandeur. Attention : une commande automatique a pour demandeur la personne qui a ouvert l'écran <strong>Stocks</strong> ou fait la sortie qui l'a déclenchée ; cette personne ne pourra pas l'approuver.</li>
 <li>Une ligne ne peut être ni modifiée ni supprimée : en cas d'erreur, annulez la commande et refaites-la.</li>
-<li>La réception ne peut pas dépasser le reste à livrer.</li>
+<li>La réception ne peut pas dépasser le reste à livrer. Une réception refusée (par exemple pour une péremption différente d'un lot déjà en stock) ne compte pas dans la quantité reçue.</li>
 <li>Une commande livrée partiellement ou soldée ne peut plus être annulée.</li>
 <li>Les articles sans fournisseur préféré approuvé ne sont pas commandés automatiquement ; ils restent seulement dans les alertes.</li>
 </ul>
@@ -343,40 +428,52 @@ ul.toc li { margin: 4px 0; }
 
 <hr />
 <h3 id="quotes">Demandes de devis</h3>
-<p>Consulter plusieurs fournisseurs, comparer leurs offres et transformer la meilleure en bon de commande.</p>
+<p><strong>À quoi sert cet écran.</strong> Consulter plusieurs fournisseurs sur une liste d'articles, saisir leurs offres, les comparer au prix net et au délai, et transformer la meilleure en bon de commande brouillon.</p>
 <p><strong>Qui y a accès</strong></p>
 <ul>
 <li>L'écran et toutes ses actions : Administrateur, Comptabilité.</li>
 <li><strong>Retenir cette offre</strong> demande en plus le droit de gérer les commandes (Administrateur, Comptabilité).</li>
 </ul>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Nouvelle demande de devis</strong> (bouton principal, Ctrl+N) : objet, date de réponse souhaitée, articles à chiffrer, fournisseurs à consulter.</li>
+<li><strong>Actualiser</strong> (F5).</li>
+<li>Zone <strong>Rechercher une demande de devis…</strong> (Ctrl+F) et pastille <strong>Demandes en cours seulement</strong>.</li>
+<li>Barre d'actions sous la demande :</li>
+<li><strong>Envoyer par e-mail</strong> : envoie la demande aux fournisseurs qui ne l'ont pas encore reçue ; actif si la demande est en cours et qu'un fournisseur reste à contacter ;</li>
+<li><strong>Ajouter un fournisseur</strong> : consulte un fournisseur de plus ;</li>
+<li><strong>Saisir la réponse</strong> : saisit l'offre du fournisseur sélectionné ;</li>
+<li><strong>Plus d'actions</strong> › <strong>Marquer envoyée</strong> (demande transmise autrement, pour le fournisseur sélectionné), <strong>Ouvrir le devis joint</strong>, <strong>Annuler la demande</strong> (motif obligatoire) ;</li>
+<li><strong>Retenir cette offre</strong> (bouton principal) : crée un bon de commande brouillon aux prix de l'offre sélectionnée ; jamais pour une offre expirée.</li>
+<li>Fenêtre <strong>Saisir la réponse</strong> : <strong>Reçue le</strong>, <strong>Valable jusqu'au</strong>, <strong>Délai (j)</strong>, <strong>Réf. du devis fournisseur</strong>, <strong>Prix proposés (laissez le prix vide pour un article non chiffré)</strong> avec <strong>Prix unitaire HT</strong>, <strong>Remise (%)</strong>, <strong>TVA (%)</strong>, <strong>Conditions (paiement, port, minimum de commande…)</strong>, <strong>Joindre le devis reçu…</strong>.</li>
+</ul>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>Case <strong>Demandes en cours seulement</strong>, boutons <strong>Actualiser</strong>, <strong>Nouvelle demande de devis</strong>.</li>
+<li>En haut : titre <strong>Demandes de devis</strong> et compteur (« … demandes », « … en cours »), boutons <strong>Actualiser</strong>, <strong>Nouvelle demande de devis</strong>. Dessous, la recherche et la pastille.</li>
 <li>Tableau des demandes : <strong>N° de demande</strong>, <strong>Date</strong>, <strong>Objet</strong>, <strong>Statut</strong> (En cours, Attribuée, Annulée), <strong>Réponse souhaitée avant le</strong>, <strong>Articles</strong>, <strong>Réponses</strong> (reçues / consultés), <strong>Demandeur</strong>, <strong>Offre retenue</strong>, <strong>N° de commande</strong>.</li>
-<li><strong>Comparaison des offres</strong> : une ligne par article, une colonne par fournisseur ayant répondu (prix net et délai). Vert : prix net le plus bas ; gras : délai le plus court ; offres expirées en gris.</li>
-<li><strong>Fournisseurs consultés</strong> : <strong>Fournisseur</strong>, <strong>Envoyée le</strong>, <strong>Total HT</strong> (ou « en attente »), <strong>Délai (j)</strong>, <strong>Valable jusqu'au</strong>, <strong>Articles non chiffrés</strong>, <strong>Devis joint</strong>.</li>
-<li>Boutons : <strong>Envoyer par e-mail</strong>, <strong>Marquer envoyée</strong>, <strong>Ajouter un fournisseur</strong>, <strong>Saisir la réponse</strong>, <strong>Ouvrir le devis joint</strong>, <strong>Retenir cette offre</strong>, <strong>Annuler la demande</strong>.</li>
+<li><strong>Comparaison des offres</strong> : une ligne par article, une colonne par fournisseur ayant répondu (prix net et délai). Légende : « Vert : prix net le plus bas de la ligne · Gras : délai le plus court · Offres expirées en gris, jamais retenues. »</li>
+<li><strong>Fournisseurs consultés</strong> : <strong>Fournisseur</strong>, <strong>Envoyée le</strong> (« non envoyée »), <strong>Total HT</strong> (ou « en attente »), <strong>Délai (j)</strong>, <strong>Valable jusqu'au</strong> (« expirée »), <strong>Articles non chiffrés</strong>, <strong>Devis joint</strong>. Mention « non approuvé » pour un fournisseur non approuvé.</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <p><em>1. Créer une demande</em></p>
 <ol>
-<li><strong>Nouvelle demande de devis</strong>.</li>
+<li><strong>Nouvelle demande de devis</strong> (ou <strong>Ctrl+N</strong>).</li>
 <li><strong>Objet</strong>, <strong>Réponse souhaitée avant le</strong>.</li>
-<li>Dans <strong>Articles à chiffrer</strong>, cochez les articles et indiquez la <strong>Quantité</strong>. Les réactifs sous contrat automate (grisés, colonne <strong>Sous contrat</strong>) ne peuvent pas être mis en concurrence.</li>
+<li>Dans <strong>Articles à chiffrer (cochez et indiquez la quantité)</strong>, cochez les articles et indiquez la <strong>Quantité</strong>. Les réactifs sous contrat automate (grisés, colonne <strong>Sous contrat</strong>) ne peuvent pas être mis en concurrence.</li>
 <li>Cochez les <strong>Fournisseurs à consulter</strong> (mention « sans e-mail » ou « non approuvé » le cas échéant).</li>
 <li><strong>Observations</strong>, puis <strong>Enregistrer</strong>.</li>
 </ol>
 <p><em>2. Envoyer la demande</em></p>
 <ul>
 <li>Par e-mail : <strong>Envoyer par e-mail</strong>, confirmez. Le logiciel indique à combien de fournisseurs elle est partie, ceux sans adresse et les échecs.</li>
-<li>Autrement (téléphone, fax) : sélectionnez le fournisseur, <strong>Marquer envoyée</strong>, confirmez.</li>
+<li>Autrement (téléphone, fax) : sélectionnez le fournisseur, <strong>Plus d'actions › Marquer envoyée</strong>, confirmez.</li>
 </ul>
 <p><em>3. Ajouter un fournisseur</em></p>
 <p><strong>Ajouter un fournisseur</strong>, choisissez-le, <strong>Enregistrer</strong>.</p>
 <p><em>4. Saisir une réponse</em></p>
 <ol>
 <li>Sélectionnez le fournisseur, <strong>Saisir la réponse</strong>.</li>
-<li><strong>Reçue le</strong>, <strong>Valable jusqu'au</strong>, <strong>Délai (j)</strong>, <strong>Réf. du devis fournisseur</strong>.</li>
+<li><strong>Reçue le</strong>, <strong>Valable jusqu'au</strong>, <strong>Délai (j)</strong> (0 à 3650 jours), <strong>Réf. du devis fournisseur</strong>.</li>
 <li>Dans <strong>Prix proposés</strong>, saisissez <strong>Prix unitaire HT</strong>, <strong>Remise (%)</strong>, <strong>TVA (%)</strong> ; laissez le prix vide pour un article non chiffré.</li>
 <li><strong>Conditions</strong>, <strong>Joindre le devis reçu…</strong> (PDF, image, Word, Excel).</li>
 <li><strong>Enregistrer</strong>. Une nouvelle réponse du même fournisseur remplace l'ancienne (confirmation demandée).</li>
@@ -386,24 +483,25 @@ ul.toc li { margin: 4px 0; }
 <li>Sélectionnez le fournisseur dont l'offre est retenue, <strong>Retenir cette offre</strong>.</li>
 <li>Le logiciel avertit si des articles ne sont pas chiffrés (ils ne seront pas commandés).</li>
 <li>Confirmez : un bon de commande brouillon est créé aux prix de l'offre. Il reste à l'approuver dans <strong>Bons de commande</strong>.</li>
+<li>Si ce bon de commande est ensuite annulé, la demande attribuée peut être attribuée à nouveau : <strong>Retenir cette offre</strong> redevient actif.</li>
 </ol>
 <p><em>6. Annuler une demande</em></p>
-<p><strong>Annuler la demande</strong>, motif obligatoire.</p>
+<p><strong>Plus d'actions › Annuler la demande</strong>, motif obligatoire.</p>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
 <li>Au moins un article et un fournisseur ; date de réponse non passée ; quantité positive.</li>
-<li>Une demande Attribuée ou Annulée n'est plus modifiable.</li>
+<li>Une demande Attribuée ou Annulée n'est plus modifiable (seule exception : une nouvelle attribution quand la commande créée a été annulée).</li>
 <li>Une offre expirée ne peut pas être retenue (« demandez au fournisseur de la renouveler »).</li>
-<li>Une offre d'un fournisseur non approuvé peut être saisie mais pas retenue.</li>
+<li>Une offre d'un fournisseur non approuvé peut être saisie mais pas retenue (le bouton reste actif ; le refus vient au clic).</li>
 <li>La comparaison se fait sur le prix net de remise, dans l'unité de stock.</li>
 </ul>
 <p><strong>Flux</strong></p>
 <p>Demande → envoi → réponses → <strong>Retenir cette offre</strong> → brouillon dans <strong>Bons de commande</strong>.</p>
-<div class="diagram"><img src="img/diagramme-97f4a0e3288b8281.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-1ff6e2994d848d0e.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="supplierinvoices">Factures fournisseurs</h3>
-<p>Saisir les factures contre les commandes reçues, laisser le logiciel les rapprocher, débloquer les écarts, payer, et produire la déclaration des retards (loi 69-21) et l'export comptable.</p>
+<p><strong>À quoi sert cet écran.</strong> Saisir les factures des fournisseurs contre les lignes de commande reçues, laisser le logiciel les rapprocher (prix, TVA, quantités), débloquer les écarts acceptés, enregistrer les règlements, et produire la déclaration des retards de paiement (loi 69-21) et l'export comptable.</p>
 <p><strong>Qui y a accès</strong></p>
 <ul>
 <li>Voir l'écran : Administrateur, Biologiste responsable, Comptabilité.</li>
@@ -412,13 +510,28 @@ ul.toc li { margin: 4px 0; }
 <li><strong>Export comptable</strong> : Administrateur, Comptabilité.</li>
 <li><strong>Paramètres d'achat</strong> : Administrateur.</li>
 </ul>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Saisir une facture</strong> (bouton principal, Ctrl+N) : facture contre les lignes de commande d'un fournisseur ; rapprochement immédiat.</li>
+<li><strong>Actualiser</strong> (F5).</li>
+<li><strong>Plus d'actions</strong> (en haut) :</li>
+<li><strong>Retards de paiement (loi 69-21)</strong> : fichier CSV des paiements en retard et des factures échues impayées sur une période ;</li>
+<li><strong>Export comptable</strong> : écritures d'achat et de règlement de la période, au format Sage ou CSV générique ;</li>
+<li><strong>Paramètres d'achat</strong> : tolérances, taux, journaux et comptes.</li>
+<li>Zone <strong>Rechercher un fournisseur, une facture…</strong> (Ctrl+F).</li>
+<li>Pastilles de filtre, une seule active à la fois, avec leur nombre : <strong>Factures en cours</strong>, <strong>En retard</strong>, <strong>À payer sous 7 jours</strong>, <strong>À payer sous 15 jours</strong>, <strong>Bloquées</strong>, <strong>Toutes</strong>.</li>
+<li>Carte <strong>Facture</strong> (détail de la facture sélectionnée) :</li>
+<li><strong>Refaire le rapprochement</strong> : facture bloquée seulement ;</li>
+<li><strong>Débloquer pour paiement</strong> : facture bloquée seulement ; refusé d'emblée à la personne qui l'a saisie ; justification d'au moins 10 caractères ;</li>
+<li><strong>Voir le scan</strong> : si un scan est joint ;</li>
+<li><strong>Plus d'actions</strong> › <strong>Joindre le scan</strong> (facture non annulée), <strong>Annuler la facture</strong> (facture en cours sans aucun règlement, motif obligatoire) ;</li>
+<li><strong>Enregistrer un règlement</strong> (bouton principal de la carte) : facture « Bonne à payer » ou « Réglée en partie ».</li>
+</ul>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>Titre et résumé : « En retard : … · À payer sous 7 jours : … · Sous 15 jours : … · Bloquées : … ».</li>
-<li>Filtre : <strong>Factures en cours</strong>, <strong>En retard</strong>, <strong>À payer sous 7 jours</strong>, <strong>À payer sous 15 jours</strong>, <strong>Bloquées</strong>, <strong>Toutes</strong>. Boutons <strong>Actualiser</strong>, <strong>Saisir une facture</strong>.</li>
+<li>En haut : titre <strong>Factures fournisseurs</strong> et compteur, résumé « En retard : … · À payer sous 7 jours : … · Sous 15 jours : … · Bloquées : … », boutons <strong>Actualiser</strong>, <strong>Plus d'actions</strong>, <strong>Saisir une facture</strong>. Dessous, la recherche et les pastilles.</li>
 <li>Tableau : <strong>Fournisseur</strong>, <strong>N° de facture</strong>, <strong>Date de facture</strong>, <strong>Livraison</strong>, <strong>Échéance</strong>, <strong>Jours</strong> (J-n avant, +n de retard), <strong>Statut</strong>, <strong>Total TTC</strong>, <strong>Réglé</strong>, <strong>Reste à payer</strong>, <strong>Scan</strong>. Rouge : en retard ; orange : bloquée.</li>
-<li>Détail : onglets <strong>Lignes</strong>, <strong>Écarts</strong>, <strong>Règlements</strong>, et une ligne de totaux, délai, échéance, auteur de la saisie, déblocage ou annulation.</li>
-<li>Boutons : <strong>Refaire le rapprochement</strong>, <strong>Débloquer pour paiement</strong>, <strong>Enregistrer un règlement</strong>, <strong>Joindre le scan</strong>, <strong>Voir le scan</strong>, <strong>Annuler la facture</strong>, puis <strong>Retards de paiement (loi 69-21)</strong>, <strong>Export comptable</strong>, <strong>Paramètres d'achat</strong>.</li>
+<li>Carte <strong>Facture</strong> : onglets <strong>Lignes</strong>, <strong>Écarts</strong> (<strong>Écart constaté</strong>), <strong>Règlements</strong> (<strong>Date</strong>, <strong>Montant (MAD)</strong>, <strong>Mode de paiement</strong>, <strong>Référence (virement, chèque, effet)</strong>, <strong>Créé par</strong>), et une ligne « Total HT … · TVA … · Total TTC … · Délai … jours, échéance le … · Saisie par … », complétée par le déblocage (« Débloquée par … le … : … ») ou l'annulation (« Annulée : … »).</li>
 </ul>
 <table>
 <thead>
@@ -453,9 +566,9 @@ ul.toc li { margin: 4px 0; }
 <p><strong>Scénarios</strong></p>
 <p><em>1. Saisir une facture</em></p>
 <ol>
-<li><strong>Saisir une facture</strong>.</li>
+<li><strong>Saisir une facture</strong> (ou <strong>Ctrl+N</strong>).</li>
 <li><strong>Fournisseur</strong> (seuls ceux qui ont une commande approuvée), <strong>N° de facture</strong>, <strong>Date de facture</strong>, <strong>Facture reçue le</strong>, <strong>Observations</strong>.</li>
-<li>Les lignes de commande du fournisseur s'affichent. Cochez celles facturées ; corrigez <strong>Qté facturée</strong>, <strong>Prix unitaire HT facturé</strong>, <strong>TVA (%)</strong> selon le papier.</li>
+<li>Les lignes de commande du fournisseur s'affichent (<strong>Commandé</strong>, <strong>Reçu</strong>, <strong>Déjà facturé</strong>). Cochez celles facturées ; corrigez <strong>Qté facturée</strong>, <strong>Prix unitaire HT facturé</strong>, <strong>TVA (%)</strong> selon le papier.</li>
 <li>Cochez <strong>Joindre le scan</strong> si vous voulez joindre le fichier tout de suite.</li>
 <li><strong>Enregistrer</strong>. Le logiciel annonce soit « bonne à payer » avec l'échéance légale, soit « BLOQUÉE » avec le nombre d'écarts.</li>
 </ol>
@@ -464,31 +577,32 @@ ul.toc li { margin: 4px 0; }
 <li>Ouvrez l'onglet <strong>Écarts</strong> : prix différent, TVA différente, ou quantité facturée supérieure à la quantité reçue.</li>
 <li>Si la marchandise manquante a été reçue depuis, cliquez <strong>Refaire le rapprochement</strong>.</li>
 <li>Si l'écart est accepté, un responsable (autre que la personne qui a saisi) clique <strong>Débloquer pour paiement</strong> et justifie (au moins 10 caractères).</li>
-<li>Si la facture est fausse, <strong>Annuler la facture</strong> et la ressaisir.</li>
+<li>Si la facture est fausse, <strong>Plus d'actions › Annuler la facture</strong> et ressaisissez-la.</li>
 </ol>
 <p><em>3. Enregistrer un règlement</em></p>
 <ol>
 <li>Facture « Bonne à payer » ou « Réglée en partie », <strong>Enregistrer un règlement</strong>.</li>
-<li><strong>Date</strong>, <strong>Montant (MAD)</strong> (le reste dû est proposé), <strong>Mode de paiement</strong> (Virement, Chèque, Espèces, Effet de commerce), <strong>Référence</strong>, <strong>Échéance (LCN, chèque)</strong>.</li>
+<li><strong>Date</strong>, <strong>Montant (MAD)</strong> (le reste dû est proposé), <strong>Mode de paiement</strong> (Virement, Chèque, Espèces, Effet de commerce), <strong>Référence (virement, chèque, effet)</strong>, <strong>Échéance (LCN, chèque)</strong> (active pour un chèque ou un effet).</li>
 <li><strong>Enregistrer</strong>. Paiement partiel possible.</li>
 </ol>
 <p><em>4. Joindre ou voir le scan</em></p>
-<p><strong>Joindre le scan</strong> (PDF, JPEG, PNG, TIFF ; remplace l'ancien après confirmation) ; <strong>Voir le scan</strong>.</p>
+<p><strong>Plus d'actions › Joindre le scan</strong> (PDF, JPEG, PNG, TIFF ; remplace l'ancien après confirmation) ; <strong>Voir le scan</strong>.</p>
 <p><em>5. Annuler une facture</em></p>
-<p>Facture en cours sans aucun règlement, <strong>Annuler la facture</strong>, motif.</p>
+<p>Facture en cours sans aucun règlement, <strong>Plus d'actions › Annuler la facture</strong>, motif.</p>
 <p><em>6. Liste des retards de paiement</em></p>
 <ol>
-<li><strong>Retards de paiement (loi 69-21)</strong>, choisissez <strong>Du</strong> / <strong>Au</strong> (trimestre précédent proposé), <strong>Exporter</strong>.</li>
+<li><strong>Plus d'actions › Retards de paiement (loi 69-21)</strong>, choisissez <strong>Du</strong> / <strong>Au</strong> (trimestre précédent proposé), <strong>Exporter</strong>.</li>
 <li>Un fichier CSV s'ouvre : paiements faits en retard et factures échues impayées, avec pénalité et amende.</li>
 </ol>
 <p><em>7. Export comptable</em></p>
-<p><strong>Export comptable</strong>, période, <strong>Format du fichier</strong> (Sage ou CSV générique), <strong>Exporter</strong>.</p>
+<p><strong>Plus d'actions › Export comptable</strong>, période (<strong>Du</strong> / <strong>Au</strong>), <strong>Format du fichier</strong> (Sage ou CSV générique), <strong>Exporter</strong>.</p>
 <p><em>8. Paramètres d'achat (administrateur)</em></p>
-<p>Tolérances de prix (% et MAD), taux directeur BAM, majoration, amendes, journaux et comptes.</p>
+<p><strong>Plus d'actions › Paramètres d'achat</strong> : <strong>Tolérance de prix (%)</strong>, <strong>Tolérance de prix (MAD)</strong>, <strong>Taux directeur BAM (%)</strong>, <strong>Majoration (points)</strong>, <strong>Amende 1er mois (%)</strong>, <strong>Amende mois suivants (%)</strong>, <strong>Journal des achats</strong>, <strong>Journal de banque</strong>, <strong>Journal de caisse</strong>, <strong>Compte fournisseurs</strong>, <strong>TVA récupérable</strong>, <strong>Compte banque</strong>, <strong>Compte caisse</strong>, <strong>Comptes de charge par catégorie d'article</strong>. Les pourcentages ne peuvent pas dépasser 100.</p>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
 <li>Une même facture d'un fournisseur ne peut être saisie deux fois.</li>
 <li>Date de facture non future ; date de réception entre la date de facture et aujourd'hui.</li>
+<li>TVA entre 0 et 100 % ; quantité facturée supérieure à zéro.</li>
 <li>Toute différence au-delà des tolérances bloque le paiement.</li>
 <li>Celui qui a saisi la facture ne peut pas la débloquer.</li>
 <li>L'échéance suit la loi 69-21 : 60 jours à partir de la livraison sans accord, 120 jours au plus par accord.</li>
@@ -496,19 +610,27 @@ ul.toc li { margin: 4px 0; }
 <li>Une facture déjà réglée, même en partie, ne peut pas être annulée.</li>
 </ul>
 <p><strong>Flux</strong></p>
-<p><strong>Bons de commande</strong> (réception) → saisie de la facture → rapprochement → déblocage éventuel → règlement → export comptable et rapprochement bancaire (chapitre Trésorerie).</p>
+<p><strong>Bons de commande</strong> (réception) → saisie de la facture → rapprochement → déblocage éventuel → règlement → export comptable et rapprochement bancaire (chapitre Finances).</p>
 <div class="diagram"><img src="img/diagramme-141ba7f738c32833.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="supplierevaluation">Évaluation fournisseurs</h3>
-<p>Évaluer chaque année les fournisseurs (exigence ISO 15189) à partir des livraisons réelles, et reporter la note sur leur fiche.</p>
+<p><strong>À quoi sert cet écran.</strong> Évaluer chaque année les fournisseurs (exigence ISO 15189) à partir des livraisons réelles : ponctualité, livraisons refusées, non-conformités. La note retenue est reportée sur la fiche fournisseur ; un fournisseur non approuvé ne peut plus recevoir de commande.</p>
 <p><strong>Qui y a accès</strong></p>
-<p>Administrateur, Comptabilité (droit « gérer les commandes »). Le responsable qualité n'y a pas accès par défaut.</p>
+<p>Administrateur, Comptabilité (droit « gérer les commandes »), pour l'écran et tous ses boutons. Le responsable qualité n'y a pas accès par défaut.</p>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Appliquer la note proposée</strong> (bouton principal) : reporte sur la fiche du fournisseur sélectionné la note proposée, ou une note saisie (0 à 100) ; grisé s'il n'y a pas de note proposée.</li>
+<li><strong>Rapport annuel PDF</strong> : « Évaluation annuelle des fournisseurs … » avec la formule.</li>
+<li><strong>Exporter en CSV</strong>.</li>
+<li><strong>Actualiser</strong> (F5).</li>
+<li>Zone <strong>Rechercher un fournisseur…</strong> (Ctrl+F) et liste <strong>Année</strong>.</li>
+</ul>
 <p><strong>L'écran</strong></p>
 <ul>
-<li><strong>Année</strong>, boutons <strong>Actualiser</strong>, <strong>Appliquer la note proposée</strong>, <strong>Rapport annuel PDF</strong>, <strong>Exporter en CSV</strong>.</li>
+<li>En haut : titre <strong>Évaluation fournisseurs</strong> et compteur, boutons <strong>Actualiser</strong>, <strong>Rapport annuel PDF</strong>, <strong>Exporter en CSV</strong>, <strong>Appliquer la note proposée</strong>. Dessous, la recherche et l'<strong>Année</strong>.</li>
 <li>Tableau : <strong>Code</strong>, <strong>Fournisseur</strong>, <strong>Livraisons</strong>, <strong>À l'heure (%)</strong>, <strong>Retard moyen (j)</strong>, <strong>Refusées</strong>, <strong>NC</strong>, <strong>Note proposée</strong>, <strong>Note actuelle</strong>, <strong>N° d'enregistrement AMMPS/DMP</strong>, <strong>Enregistrement valable jusqu'au</strong>. En rouge : enregistrement expiré ou note proposée sous 50.</li>
-<li>En bas, la formule : 50 × taux à l'heure + 30 × (1 − part refusée) + max(0 ; 20 − 5 × non-conformités).</li>
+<li>En bas, la formule : « Note proposée /100 = 50 × taux de livraisons à l'heure + 30 × (1 − part des livraisons refusées) + max(0 ; 20 − 5 × non-conformités). »</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <p><em>1. Faire l'évaluation annuelle</em></p>
@@ -531,29 +653,37 @@ ul.toc li { margin: 4px 0; }
 
 <hr />
 <h3 id="consumption">Consommation</h3>
-<p>Comparer, article par article, la consommation théorique (calculée d'après les résultats, CQ, calibrations et reprises) et la consommation réelle (sorties, rebuts, inventaires).</p>
+<p><strong>À quoi sert cet écran.</strong> Comparer, article par article et sur une période, la consommation théorique (calculée d'après les résultats, les CQ, les calibrations, les reprises et le volume mort) et la consommation réelle (sorties, rebuts, inventaires). Un écart important signale des sorties non enregistrées, des pertes ou des reprises non tracées.</p>
 <p><strong>Qui y a accès</strong></p>
 <p>Tous ceux qui voient le stock. <strong>Paramètres de stock…</strong> : Administrateur.</p>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Détail…</strong> (bouton principal, Entrée ou double-clic sur la ligne) : origine de la consommation théorique de l'article (<strong>Résultats patients</strong>, <strong>Contrôles qualité</strong>, <strong>Calibrations</strong>, <strong>Reprises</strong>, <strong>Volume mort (… ouverture(s))</strong>) et répartition par <strong>Analyse</strong>.</li>
+<li><strong>Imprimer (PDF)</strong> et <strong>Exporter (CSV)</strong> : le tableau de la période.</li>
+<li><strong>Plus d'actions</strong> › <strong>Paramètres de stock…</strong> : seuil d'écart, période de calcul, paliers d'alerte de péremption.</li>
+<li><strong>Actualiser</strong> (F5).</li>
+<li>Zone <strong>Rechercher un article, un code…</strong> (Ctrl+F), dates <strong>Du</strong> / <strong>au</strong> (le mois précédent par défaut).</li>
+</ul>
 <p><strong>L'écran</strong></p>
 <ul>
-<li><strong>Du</strong> / <strong>au</strong> (le mois précédent par défaut), boutons <strong>Actualiser</strong>, <strong>Détail…</strong>, <strong>Imprimer (PDF)</strong>, <strong>Exporter (CSV)</strong>, <strong>Paramètres de stock…</strong>.</li>
-<li>Tableau : <strong>Code</strong>, <strong>Article</strong>, <strong>Unité</strong>, <strong>Stock initial</strong>, <strong>Entrées</strong>, <strong>Tests</strong>, <strong>Consommation théorique</strong>, <strong>Consommation réelle</strong>, <strong>Stock final théorique</strong>, <strong>Stock final réel</strong>, <strong>Écart</strong>, <strong>Écart %</strong>, <strong>Inventaire</strong>.</li>
-<li>Message : nombre d'articles au-delà du seuil d'écart.</li>
+<li>En haut : titre <strong>Consommation</strong> et compteur, boutons <strong>Actualiser</strong>, <strong>Imprimer (PDF)</strong>, <strong>Exporter (CSV)</strong>, <strong>Plus d'actions</strong>, <strong>Détail…</strong>. Dessous, la recherche et la période.</li>
+<li>Tableau : <strong>Code</strong>, <strong>Article</strong>, <strong>Unité</strong>, <strong>Stock initial</strong>, <strong>Entrées</strong>, <strong>Tests</strong>, <strong>Consommation théorique</strong>, <strong>Consommation réelle</strong>, <strong>Stock final théorique</strong>, <strong>Stock final réel</strong>, <strong>Écart</strong>, <strong>Écart %</strong>, <strong>Inventaire</strong>. Les articles au-delà du seuil d'écart sont signalés.</li>
+<li>Message en bas : la formule de calcul, ou « … article(s) dépassent le seuil d'écart : vérifiez les sorties non enregistrées, les pertes et les reprises. ».</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <p><em>1. Analyser l'écart d'un article</em></p>
 <ol>
 <li>Choisissez la période, <strong>Actualiser</strong>.</li>
-<li>Double-cliquez la ligne ou <strong>Détail…</strong> : tests patients, contrôles qualité, calibrations, reprises, volume mort (par ouverture), et la répartition par analyse.</li>
-<li>Un écart important : cherchez les sorties non enregistrées, les pertes, les reprises.</li>
+<li>Double-cliquez la ligne, appuyez sur Entrée ou cliquez <strong>Détail…</strong> : tests patients, contrôles qualité, calibrations, reprises, volume mort (par ouverture), et la répartition par analyse.</li>
+<li>Un écart important : cherchez les sorties non enregistrées, les pertes, les reprises, puis faites un inventaire.</li>
 </ol>
 <p><em>2. Imprimer ou exporter</em></p>
 <p><strong>Imprimer (PDF)</strong> ou <strong>Exporter (CSV)</strong>.</p>
 <p><em>3. Régler les paramètres (administrateur)</em></p>
-<p><strong>Paramètres de stock…</strong> : <strong>Seuil d'écart (%)</strong>, <strong>Période de calcul de la consommation (jours)</strong>, <strong>Alerte de péremption, 1er palier (jours)</strong>, <strong>Alerte de péremption, 2e palier (jours)</strong>.</p>
+<p><strong>Plus d'actions › Paramètres de stock…</strong> : <strong>Seuil d'écart (%)</strong> (0 à 100), <strong>Période de calcul de la consommation (jours)</strong> (7 à 730), <strong>Alerte de péremption, 1er palier (jours)</strong> (au plus 365), <strong>Alerte de péremption, 2e palier (jours)</strong> (inférieur au 1er).</p>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
-<li>Sans <strong>Analyses consommatrices</strong> sur la fiche, la consommation théorique ne peut pas être calculée.</li>
+<li>Sans <strong>Analyses consommatrices</strong> sur la fiche, la consommation théorique ne peut pas être calculée (le détail l'indique).</li>
 <li>Le calcul utilise <strong>Tests par coffret</strong>, <strong>Tests par résultat</strong>, <strong>Tests par calibration</strong> et le volume mort de la fiche.</li>
 </ul>
 <p><strong>Flux</strong></p>
@@ -562,23 +692,37 @@ ul.toc li { margin: 4px 0; }
 
 <hr />
 <h3 id="inventorycounts">Inventaires</h3>
-<p>Compter physiquement les lots, et passer les écarts en ajustements de stock à la clôture.</p>
+<p><strong>À quoi sert cet écran.</strong> Compter physiquement les lots (tout le stock, un emplacement ou une catégorie d'article), et passer les écarts en ajustements de stock à la clôture. Les feuilles de comptage et le rapport des écarts servent d'archive.</p>
 <p><strong>Qui y a accès</strong></p>
 <ul>
-<li>Voir l'écran et saisir les quantités comptées : Administrateur, Biologiste responsable, Technicien, Responsable qualité.</li>
+<li>Voir l'écran et saisir les quantités comptées : Administrateur, Biologiste responsable, Technicien de laboratoire, Responsable qualité.</li>
 <li><strong>Nouvel inventaire…</strong>, <strong>Commencer le comptage</strong>, <strong>Clôturer…</strong>, <strong>Annuler</strong> : Administrateur, Biologiste responsable, Responsable qualité.</li>
+</ul>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Nouvel inventaire…</strong> (bouton principal, Ctrl+N) : <strong>Date</strong> (au plus aujourd'hui), <strong>Périmètre</strong> (<strong>Tout le stock</strong>, <strong>Emplacement</strong> ou <strong>Catégorie</strong>), <strong>Commentaire</strong>.</li>
+<li><strong>Commencer le comptage</strong> : fige les quantités attendues ; inventaire en Brouillon seulement.</li>
+<li><strong>Plus d'actions</strong> › <strong>Annuler</strong> : inventaire en Brouillon ou en comptage, motif obligatoire.</li>
+<li>Zone <strong>Rechercher un inventaire…</strong> (Ctrl+F) et pastille <strong>Afficher les inventaires clôturés</strong>.</li>
+<li>Carte <strong>Lots</strong> :</li>
+<li><strong>Feuille de comptage (PDF)</strong> et <strong>Feuille (CSV)</strong> : feuille à compter, sans les quantités attendues ;</li>
+<li><strong>Rapport des écarts (PDF)</strong> ;</li>
+<li>case et heure <strong>Feuille comptée le</strong> : pour reporter une feuille papier à l'heure où elle a été comptée (explication dans l'info-bulle) ;</li>
+<li><strong>Clôturer…</strong> : inventaire en comptage, tous les lots comptés.</li>
+<li>Colonnes modifiables <strong>Quantité comptée</strong> et <strong>Commentaire</strong> : chaque ligne est enregistrée dès que vous quittez la cellule.</li>
 </ul>
 <p><strong>L'écran</strong></p>
 <ul>
-<li>Case <strong>Afficher les inventaires clôturés</strong>, boutons <strong>Nouvel inventaire…</strong>, <strong>Commencer le comptage</strong>, <strong>Clôturer…</strong>, <strong>Annuler</strong>, <strong>Feuille de comptage (PDF)</strong>, <strong>Feuille (CSV)</strong>, <strong>Rapport des écarts (PDF)</strong>.</li>
-<li>Tableau des inventaires : <strong>N° d'inventaire</strong>, <strong>Date</strong>, <strong>Périmètre</strong>, <strong>Statut</strong> (Brouillon, Comptage en cours, Clôturé, Annulé), <strong>Lots</strong>, <strong>Quantité comptée</strong>, <strong>Écart</strong>, <strong>Clôturé le</strong>.</li>
-<li>Tableau des <strong>Lots</strong> : #, <strong>Lieu de conservation</strong>, <strong>Code</strong>, <strong>Article</strong>, <strong>N° de lot</strong>, <strong>Péremption</strong>, <strong>Attendu au démarrage</strong>, <strong>Stock au comptage</strong>, <strong>Quantité comptée</strong> (modifiable), <strong>Compté le</strong>, <strong>Écart</strong>, <strong>Commentaire</strong> (modifiable).</li>
-<li>Case et heure <strong>Feuille comptée le</strong>, pour saisir une feuille papier.</li>
+<li>En haut : titre <strong>Inventaires</strong> et compteur, boutons <strong>Commencer le comptage</strong>, <strong>Plus d'actions</strong>, <strong>Nouvel inventaire…</strong>. Dessous, la recherche et la pastille.</li>
+<li>Tableau des inventaires : <strong>N° d'inventaire</strong>, <strong>Date</strong>, <strong>Périmètre</strong>, <strong>Statut</strong> (pastille : Brouillon, Comptage en cours, Clôturé, Annulé), <strong>Lots</strong>, <strong>Quantité comptée</strong>, <strong>Écart</strong>, <strong>Clôturé le</strong>.</li>
+<li>Carte <strong>Lots</strong>, avec ses boutons : #, <strong>Lieu de conservation</strong>, <strong>Code</strong>, <strong>Article</strong>, <strong>N° de lot</strong>, <strong>Péremption</strong>, <strong>Attendu au démarrage</strong>, <strong>Stock au comptage</strong>, <strong>Quantité comptée</strong>, <strong>Compté le</strong>, <strong>Écart</strong>, <strong>Commentaire</strong>.</li>
+<li>Pendant le comptage, une consigne courte rappelle de saisir chaque lot et comment reporter une feuille papier.</li>
 </ul>
 <p><strong>Scénarios</strong></p>
 <p><em>1. Ouvrir un inventaire</em></p>
 <ol>
-<li><strong>Nouvel inventaire…</strong>.</li>
+<li><strong>Nouvel inventaire…</strong> (ou <strong>Ctrl+N</strong>).</li>
+<li><strong>Date</strong> (aujourd'hui par défaut, pas dans le futur).</li>
 <li><strong>Périmètre</strong> : <strong>Tout le stock</strong>, <strong>Emplacement</strong> (choisir l'emplacement) ou <strong>Catégorie</strong> (choisir le type d'article). <strong>Commentaire</strong>.</li>
 <li><strong>Enregistrer</strong> : « Inventaire … ouvert. ».</li>
 </ol>
@@ -587,7 +731,7 @@ ul.toc li { margin: 4px 0; }
 <p><em>3. Compter sur papier</em></p>
 <ol>
 <li><strong>Feuille de comptage (PDF)</strong> (ou <strong>Feuille (CSV)</strong>) : la feuille ne montre pas les quantités attendues.</li>
-<li>Pour reporter la feuille : cochez <strong>Feuille comptée le</strong> et indiquez l'heure du comptage ; l'écart est calculé sur le stock à cette heure-là.</li>
+<li>Pour reporter la feuille : cochez <strong>Feuille comptée le</strong> et indiquez l'heure du comptage ; l'écart est calculé sur le stock à cette heure-là. L'heure ne s'applique qu'aux lignes pas encore comptées.</li>
 </ol>
 <p><em>4. Saisir les quantités</em></p>
 <ol>
@@ -601,11 +745,11 @@ ul.toc li { margin: 4px 0; }
 <li><strong>Rapport des écarts (PDF)</strong> pour l'archive.</li>
 </ol>
 <p><em>6. Annuler un inventaire</em></p>
-<p><strong>Annuler</strong>, motif obligatoire (inventaire en Brouillon ou en comptage).</p>
+<p><strong>Plus d'actions › Annuler</strong>, motif obligatoire (inventaire en Brouillon ou en comptage).</p>
 <p><strong>Règles et contrôles</strong></p>
 <ul>
 <li>Tous les lots doivent être comptés avant la clôture (« … lot(s) ne sont pas encore comptés »).</li>
-<li>Quantité négative refusée ; heure de comptage ni future, ni antérieure au début du comptage.</li>
+<li>Quantité négative refusée ; heure de comptage ni future, ni antérieure au début du comptage ; date de l'inventaire pas dans le futur.</li>
 <li>Un lot ne peut être sur deux inventaires en cours en même temps.</li>
 <li>Un périmètre sans lot en stock est refusé.</li>
 </ul>
@@ -616,12 +760,849 @@ ul.toc li { margin: 4px 0; }
 <hr />
 <h3>Raccourcis utiles</h3>
 <ul>
+<li><strong>F1</strong> : aide de l'écran affiché ; <strong>Maj+F1</strong> : liste des raccourcis.</li>
 <li><strong>F5</strong> : actualiser l'écran.</li>
 <li><strong>Ctrl+P</strong> : imprimer la liste affichée.</li>
-<li><strong>F1</strong> : liste des raccourcis.</li>
+<li><strong>Ctrl+F</strong> : aller dans la zone de recherche de l'écran.</li>
+<li><strong>Ctrl+N</strong> : bouton principal de l'écran (<strong>Réceptionner un lot</strong>, <strong>Nouvelle commande</strong>, <strong>Nouvelle demande de devis</strong>, <strong>Saisir une facture</strong>, <strong>Nouvel inventaire…</strong>).</li>
+<li>Dans <strong>Consommation</strong> : <strong>Entrée</strong> sur une ligne = <strong>Détail…</strong>.</li>
 <li>Dans les fenêtres de saisie : <strong>Entrée</strong> = <strong>Enregistrer</strong>, <strong>Échap</strong> = <strong>Annuler</strong>.</li>
 <li>Le lecteur de DataMatrix envoie Entrée à la fin du scan : il remplit le lot et la péremption sans valider la fenêtre.</li>
-</ul><p class="top"><a href="index.html">Retour au sommaire</a></p>
+</ul>
+<hr />
+<h3>Messages d'erreur et d'avertissement</h3>
+<p>Les messages ci-dessous sont ceux que les écrans de ce module peuvent afficher. « … » remplace une valeur insérée par le logiciel (numéro, date, quantité). Les messages communs à toute l'application (connexion perdue, « Erreur inattendue », droits insuffisants, « Aucun élément sélectionné. »…) sont décrits dans le chapitre Prise en main.</p>
+<h4>Stocks (réception, libération, lots)</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Le lot est enregistré en quarantaine : il doit être libéré, preuve de vérification à l'appui, avant toute utilisation sur un échantillon patient. »</td>
+<td>Après chaque réception enregistrée.</td>
+<td>Faites le CQ du lot, puis <strong>Libérer</strong>.</td>
+</tr>
+<tr>
+<td>« Livraison refusée ; non-conformité … ouverte. »</td>
+<td>Après <strong>Refuser la livraison</strong>.</td>
+<td>Suivez la non-conformité dans <strong>Non-conformités</strong>.</td>
+</tr>
+<tr>
+<td>« Motif du refus de la livraison (au moins 10 caractères) : »</td>
+<td><strong>Refuser la livraison</strong>.</td>
+<td>Décrivez le problème (colis abîmé, température…).</td>
+</tr>
+<tr>
+<td>« Indiquez le motif du refus de la livraison. »</td>
+<td>Refus de livraison sans motif.</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« La réception présente un écart : une non-conformité fournisseur sera ouverte. Enregistrer la réception ? »</td>
+<td>Une case de contrôle décochée ou une température hors plage.</td>
+<td>Oui pour réceptionner avec non-conformité ; Non pour corriger, ou refusez la livraison.</td>
+</tr>
+<tr>
+<td>« Température hors de la plage ambiante (…) : vérifiez l'état du produit. »</td>
+<td>Article à température ambiante reçu hors plage.</td>
+<td>Vérifiez le produit ; refusez si besoin.</td>
+</tr>
+<tr>
+<td>« Article à conserver entre … : relevez la température à l'arrivée avant d'enregistrer la réception. »</td>
+<td>Article réfrigéré ou congelé sans température saisie.</td>
+<td>Mesurez et saisissez la <strong>Température à l'arrivée (°C)</strong>.</td>
+</tr>
+<tr>
+<td>« Le numéro de lot est obligatoire : c'est lui qui rend la traçabilité possible. »</td>
+<td><strong>N° de lot</strong> vide.</td>
+<td>Saisissez ou scannez le lot.</td>
+</tr>
+<tr>
+<td>« La quantité doit être positive. »</td>
+<td>Quantité nulle ou négative.</td>
+<td>Corrigez la quantité.</td>
+</tr>
+<tr>
+<td>« « … » n'est pas une valeur numérique valide. »</td>
+<td><strong>Prix</strong>, quantité de sortie ou autre nombre mal saisi.</td>
+<td>Saisissez un nombre.</td>
+</tr>
+<tr>
+<td>« La date de péremption saisie (…) est déjà passée. »</td>
+<td>Péremption passée (saisie ou scannée).</td>
+<td>Vérifiez la boîte ; refusez un produit périmé.</td>
+</tr>
+<tr>
+<td>« Le lot … est déjà en stock avec la péremption … : une nouvelle livraison du même lot a la même péremption. Vérifiez la date ou le numéro de lot. »</td>
+<td>Même lot, autre péremption.</td>
+<td>Corrigez la date ou le numéro de lot.</td>
+</tr>
+<tr>
+<td>« Le lot … de cet article est refusé ou rappelé : une nouvelle livraison de ce lot ne peut pas entrer en stock. Refusez la livraison. »</td>
+<td>Livraison d'un lot refusé ou rappelé.</td>
+<td><strong>Refuser la livraison</strong>.</td>
+</tr>
+<tr>
+<td>« Le lot … est déjà libéré : une livraison non conforme de ce lot ne peut pas être ajoutée au stock libéré. Refusez la livraison. »</td>
+<td>Réception non conforme d'un lot déjà libéré.</td>
+<td><strong>Refuser la livraison</strong>.</td>
+</tr>
+<tr>
+<td>« Le GTIN … n'est associé à aucun article. »</td>
+<td>Code scanné inconnu.</td>
+<td>Saisissez le lot à la main, ou renseignez le <strong>GTIN (GS1)</strong> sur la fiche article.</td>
+</tr>
+<tr>
+<td>« Le code scanné correspond à l'article …, pas à …. Passer à l'article … ? »</td>
+<td>Scan d'un autre article en réception directe.</td>
+<td>Oui pour changer d'article, Non pour rester.</td>
+</tr>
+<tr>
+<td>« Aucun code scanné. » / « Code GS1 illisible à partir de « … ». » / « Code GS1 tronqué : l'élément (…) est incomplet. » / « GTIN « … » invalide (8, 12, 13 ou 14 chiffres avec clé de contrôle correcte). » / « Date GS1 « … » invalide (format AAMMJJ attendu). »</td>
+<td>Scan GS1 incomplet ou illisible.</td>
+<td>Rescannez, ou saisissez le lot et la péremption à la main.</td>
+</tr>
+<tr>
+<td>« Preuve de vérification du lot … : quel contrôle a montré que ce lot se comporte correctement ? »</td>
+<td><strong>Libérer</strong>.</td>
+<td>Décrivez le contrôle (au moins 10 caractères).</td>
+</tr>
+<tr>
+<td>« La libération d'un lot exige la preuve de sa vérification. »</td>
+<td>Preuve vide.</td>
+<td>Saisissez la preuve.</td>
+</tr>
+<tr>
+<td>« Le lot … ne peut pas être libéré : aucun contrôle qualité n'a été passé sur ce lot. » / « Le lot … ne peut pas être libéré : aucune série de CQ conforme sur ce lot. » / « Le lot … ne peut pas être libéré : niveaux de CQ manquants ou non conformes (…). »</td>
+<td><strong>Libérer</strong> un réactif sans CQ conforme passé avec ce lot.</td>
+<td>Passez le CQ du lot dans <strong>Contrôle interne</strong>, ou (biologiste) libérez par dérogation.</td>
+</tr>
+<tr>
+<td>« Libérer le lot … par dérogation ? Justification de la décision du biologiste (au moins … caractères) : »</td>
+<td>Biologiste, CQ absent ou non conforme.</td>
+<td>Justifiez la décision (au moins 15 caractères) ou annulez.</td>
+</tr>
+<tr>
+<td>« La libération d'un lot sans CQ conforme exige une justification écrite. » / « La justification de la dérogation doit compter au moins … caractères. »</td>
+<td>Justification vide ou trop courte.</td>
+<td>Complétez la justification.</td>
+</tr>
+<tr>
+<td>« Seul un biologiste peut libérer un lot par dérogation au contrôle qualité. »</td>
+<td>Non-biologiste qui tente une dérogation.</td>
+<td>Faites libérer par un biologiste.</td>
+</tr>
+<tr>
+<td>« Le lot … n'est pas utilisable (quarantaine, péremption ou rappel). »</td>
+<td>Opération sur un lot non utilisable.</td>
+<td>Choisissez un lot utilisable.</td>
+</tr>
+<tr>
+<td>« Motif du refus du lot … : » / « Le refus d'un lot doit être motivé. »</td>
+<td><strong>Refuser</strong> (sans motif).</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« Ce lot a été refusé. »</td>
+<td>Libération ou réception sur un lot refusé.</td>
+<td>Annulez d'abord le refus si c'était une erreur.</td>
+</tr>
+<tr>
+<td>« Motif de l'annulation du refus du lot …. Le lot retourne en quarantaine : la vérification d'acceptation reste due. » / « L'annulation d'un refus de lot doit être motivée. »</td>
+<td><strong>Annuler le refus</strong>.</td>
+<td>Saisissez le motif (au moins 10 caractères).</td>
+</tr>
+<tr>
+<td>« Ce lot n'est pas refusé. »</td>
+<td><strong>Annuler le refus</strong> sur un lot non refusé.</td>
+<td>Actualisez.</td>
+</tr>
+<tr>
+<td>« Un lot rappelé par le fabricant ne peut pas être remis en quarantaine : le rappel n'est pas une erreur de saisie. »</td>
+<td>Annulation du refus d'un lot rappelé.</td>
+<td>Aucune : le lot reste rappelé.</td>
+</tr>
+<tr>
+<td>« Référence du rappel fabricant pour le lot … : » / « La référence du rappel fabricant est obligatoire. »</td>
+<td><strong>Rappel de lot</strong>.</td>
+<td>Saisissez la référence de l'avis fabricant.</td>
+</tr>
+<tr>
+<td>« … résultat(s) patient ont été produits avec le lot …. Ces comptes rendus doivent être revus. »</td>
+<td>Après un rappel.</td>
+<td>Exportez la liste et faites revoir les comptes rendus.</td>
+</tr>
+<tr>
+<td>« Aucun résultat patient n'a été produit avec ce lot. »</td>
+<td>Rappel ou liste d'un lot jamais utilisé.</td>
+<td>Aucune.</td>
+</tr>
+<tr>
+<td>« Motif de la mise au rebut du lot … (… restant) : » / « Tout ajustement de stock doit être motivé : sans motif, il est indiscernable d'une perte. »</td>
+<td><strong>Mise au rebut</strong> (sans motif).</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« Quantité à sortir pour … (en …). Stock utilisable : …. Les lots sont consommés par péremption la plus proche. »</td>
+<td><strong>Sortie</strong>.</td>
+<td>Saisissez la quantité.</td>
+</tr>
+<tr>
+<td>« Stock utilisable insuffisant pour … : … disponible. Un lot en quarantaine, périmé ou rappelé ne peut pas être sorti. »</td>
+<td>Sortie supérieure au stock utilisable.</td>
+<td>Réduisez la quantité ou libérez un lot.</td>
+</tr>
+<tr>
+<td>« Quantité insuffisante : … disponible. »</td>
+<td>Quantité demandée supérieure à ce qui reste sur le lot.</td>
+<td>Réduisez la quantité.</td>
+</tr>
+<tr>
+<td>« La reprise dépasse la quantité initialement reçue. »</td>
+<td>Retour en stock supérieur à la réception.</td>
+<td>Corrigez la quantité.</td>
+</tr>
+<tr>
+<td>« Seuil atteint : bon de commande prioritaire … préparé (…) »</td>
+<td>Ouverture de l'écran ou sortie qui fait passer un article sous le seuil.</td>
+<td>Faites approuver et envoyer la commande dans <strong>Bons de commande</strong>.</td>
+</tr>
+<tr>
+<td>« Aucun point de CQ enregistré sur ces deux lots pour les mêmes contrôles. »</td>
+<td><strong>Comparer avec le lot précédent…</strong> sans données communes.</td>
+<td>Passez le CQ sur le nouveau lot.</td>
+</tr>
+<tr>
+<td>« Le fichier choisi est vide. » / « Le fichier dépasse … Mo. Numérisez-le en résolution plus basse ou en PDF. » / « Joignez un PDF ou une image (JPG, PNG, TIFF). » / « Le fichier n'a pas pu être lu. Fermez-le s'il est ouvert dans un autre programme. »</td>
+<td><strong>Joindre un fichier…</strong> (certificat) refusé.</td>
+<td>Choisissez un autre fichier, réduisez-le ou fermez-le.</td>
+</tr>
+<tr>
+<td>« Certificat de lot introuvable. » / « Lot introuvable. » / « Article de stock introuvable. »</td>
+<td>Donnée modifiée ailleurs.</td>
+<td>Actualisez (F5).</td>
+</tr>
+</tbody>
+</table>
+<h4>Bons de commande</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Aucun fournisseur approuvé. Ouvrez Données de référence › Fournisseurs, modifiez le fournisseur et cochez « Approuvé », puis revenez ici. »</td>
+<td><strong>Nouvelle commande</strong> sans fournisseur approuvé.</td>
+<td>Faites approuver un fournisseur.</td>
+</tr>
+<tr>
+<td>« Ce fournisseur n'est pas approuvé : aucune commande ne peut lui être passée. »</td>
+<td>Commande à un fournisseur non approuvé.</td>
+<td>Choisissez un autre fournisseur ou faites-le évaluer et approuver.</td>
+</tr>
+<tr>
+<td>« L'enregistrement AMMPS/DMP du fournisseur … a expiré le …. » puis « Continuer malgré tout ? »</td>
+<td>Création ou approbation avec un enregistrement expiré.</td>
+<td>Non pour attendre le renouvellement ; Oui pour passer outre (tracé).</td>
+</tr>
+<tr>
+<td>« La date de livraison prévue ne peut pas être passée. »</td>
+<td><strong>Livraison prévue</strong> passée.</td>
+<td>Choisissez une date à venir.</td>
+</tr>
+<tr>
+<td>« L'article … figure déjà sur cette commande. »</td>
+<td>Même article ajouté deux fois.</td>
+<td>Annulez la commande et refaites-la avec la bonne quantité.</td>
+</tr>
+<tr>
+<td>« La quantité reçue doit être positive. » / « Le prix unitaire ne peut pas être négatif. » / « La remise et la TVA doivent être comprises entre 0 et 100 %. »</td>
+<td>Ligne ou réception mal saisie.</td>
+<td>Corrigez la valeur.</td>
+</tr>
+<tr>
+<td>« Ce bon de commande n'est pas un brouillon. » / « Ce bon de commande n'est plus modifiable (statut : …). »</td>
+<td>Ajout de ligne ou approbation hors brouillon.</td>
+<td>Actualisez ; une commande approuvée ne se modifie plus.</td>
+</tr>
+<tr>
+<td>« Le bon de commande ne comporte aucune ligne. »</td>
+<td>Approbation d'une commande vide.</td>
+<td>Ajoutez une ligne.</td>
+</tr>
+<tr>
+<td>« L'approbateur d'une commande ne peut pas en être le demandeur. »</td>
+<td>Approbation par le demandeur (le bouton est normalement grisé).</td>
+<td>Faites approuver par un collègue.</td>
+</tr>
+<tr>
+<td>« Vous avez établi cette commande : elle doit être approuvée par une autre personne. »</td>
+<td>Info-bulle sur <strong>Approuver</strong> grisé.</td>
+<td>Faites approuver par un collègue.</td>
+</tr>
+<tr>
+<td>« Le bon de commande doit être approuvé avant envoi. » / « Le bon de commande ne peut être imprimé ou envoyé qu'une fois approuvé. »</td>
+<td>Envoi ou impression d'un brouillon.</td>
+<td>Faites approuver d'abord.</td>
+</tr>
+<tr>
+<td>« Envoyer le bon de commande … à … par e-mail (…), avec le PDF en pièce jointe ? »</td>
+<td><strong>Envoyer au fournisseur</strong>, messagerie configurée.</td>
+<td>Oui pour envoyer.</td>
+</tr>
+<tr>
+<td>« Le bon de commande … a été envoyé à … ; il est marqué « envoyé ». »</td>
+<td>Envoi réussi.</td>
+<td>Aucune.</td>
+</tr>
+<tr>
+<td>« La messagerie (SMTP) n'est pas configurée : aucun e-mail ne peut être envoyé depuis le logiciel. » / « Le fournisseur … n'a pas d'adresse e-mail dans sa fiche. »</td>
+<td>Envoi par e-mail impossible.</td>
+<td>Envoyez le PDF vous-même, ou faites configurer la messagerie / compléter la fiche.</td>
+</tr>
+<tr>
+<td>« Enregistrez le PDF et transmettez-le vous-même au fournisseur (e-mail, fax ou remise en main propre). Confirmez-vous que la commande … a bien été transmise à … ? Elle sera alors marquée « envoyée ». »</td>
+<td>Envoi manuel.</td>
+<td>Oui seulement après avoir transmis le bon.</td>
+</tr>
+<tr>
+<td>« Bon de commande enregistré : … »</td>
+<td>Après <strong>Enregistrer le PDF…</strong>.</td>
+<td>Aucune.</td>
+</tr>
+<tr>
+<td>« Motif de l'annulation de la commande … : » / « Le motif d'annulation est obligatoire. »</td>
+<td><strong>Annuler la commande</strong>.</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« Une commande partiellement livrée ne peut être annulée. »</td>
+<td>Annulation après une réception.</td>
+<td>Aucune : réceptionnez ou laissez la commande ouverte.</td>
+</tr>
+<tr>
+<td>« Réception impossible dans le statut « … ». » / « Ce bon de commande est déjà soldé. »</td>
+<td>Réception sur un brouillon, une commande annulée ou soldée.</td>
+<td>Vérifiez la commande.</td>
+</tr>
+<tr>
+<td>« La réception dépasse la quantité commandée (reste : …). »</td>
+<td>Quantité reçue supérieure au reste à livrer.</td>
+<td>Réceptionnez au plus le reste ; le surplus fait l'objet d'une autre commande.</td>
+</tr>
+<tr>
+<td>« Le code scanné correspond à l'article …, pas à l'article … de cette ligne. »</td>
+<td>Scan d'un autre article à la réception sur commande.</td>
+<td>Choisissez la bonne ligne.</td>
+</tr>
+<tr>
+<td>Messages de réception (température, lot, péremption, GS1, refus de livraison)</td>
+<td>Fenêtre <strong>Réceptionner la ligne</strong>.</td>
+<td>Voir le tableau <strong>Stocks</strong> ci-dessus.</td>
+</tr>
+<tr>
+<td>« Bon de commande introuvable. » / « Ligne de commande introuvable. »</td>
+<td>Donnée modifiée ailleurs.</td>
+<td>Actualisez.</td>
+</tr>
+</tbody>
+</table>
+<h4>Demandes de devis</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Choisissez au moins un article. » / « Choisissez au moins un fournisseur à consulter. »</td>
+<td>Demande sans article ou sans fournisseur.</td>
+<td>Cochez au moins un article et un fournisseur.</td>
+</tr>
+<tr>
+<td>« La quantité demandée doit être positive. »</td>
+<td>Quantité nulle.</td>
+<td>Corrigez la quantité.</td>
+</tr>
+<tr>
+<td>« La date de réponse souhaitée ne peut pas être passée. »</td>
+<td><strong>Réponse souhaitée avant le</strong> passée.</td>
+<td>Choisissez une date à venir.</td>
+</tr>
+<tr>
+<td>« L'article … est un réactif captif du contrat … : il s'achète au prix du contrat, sans demande de devis. »</td>
+<td>Réactif sous contrat automate.</td>
+<td>Retirez l'article ; commandez-le au prix du contrat.</td>
+</tr>
+<tr>
+<td>« Cet article figure déjà sur la demande de devis. »</td>
+<td>Article en double.</td>
+<td>Retirez le doublon.</td>
+</tr>
+<tr>
+<td>« Envoyer la demande … par e-mail aux fournisseurs qui ne l'ont pas encore reçue ? »</td>
+<td><strong>Envoyer par e-mail</strong>.</td>
+<td>Oui pour envoyer.</td>
+</tr>
+<tr>
+<td>« Demande envoyée par e-mail à … fournisseur(s). » / « Sans adresse e-mail, à contacter autrement puis à marquer envoyée : … » / « Envoi refusé par le serveur de messagerie pour : … »</td>
+<td>Compte rendu de l'envoi.</td>
+<td>Contactez les autres fournisseurs, puis <strong>Marquer envoyée</strong>.</td>
+</tr>
+<tr>
+<td>« La messagerie (SMTP) n'est pas configurée… » suivi de « Transmettez la demande par téléphone ou par fax, puis utilisez « Marquer envoyée » pour chaque fournisseur. »</td>
+<td>Messagerie non configurée.</td>
+<td>Transmettez autrement, puis <strong>Marquer envoyée</strong>.</td>
+</tr>
+<tr>
+<td>« Confirmez-vous que la demande … a été transmise à … ? »</td>
+<td><strong>Marquer envoyée</strong>.</td>
+<td>Oui si la demande est partie.</td>
+</tr>
+<tr>
+<td>« Tous les fournisseurs actifs sont déjà consultés. »</td>
+<td><strong>Ajouter un fournisseur</strong> sans fournisseur restant.</td>
+<td>Aucune.</td>
+</tr>
+<tr>
+<td>« Ce fournisseur est déjà consulté sur cette demande. » / « Ce fournisseur n'a pas été consulté sur cette demande : ajoutez-le d'abord. »</td>
+<td>Ajout en double, ou réponse d'un fournisseur non consulté.</td>
+<td>Ajoutez d'abord le fournisseur.</td>
+</tr>
+<tr>
+<td>« … a déjà répondu. La nouvelle réponse remplacera la précédente. Continuer ? »</td>
+<td><strong>Saisir la réponse</strong> une deuxième fois.</td>
+<td>Oui pour remplacer.</td>
+</tr>
+<tr>
+<td>« L'offre ne chiffre aucun article. »</td>
+<td>Réponse sans aucun prix.</td>
+<td>Saisissez au moins un prix.</td>
+</tr>
+<tr>
+<td>« Le prix unitaire ne peut pas être négatif. » / « La remise et la TVA doivent être comprises entre 0 et 100 %. » / « Un même article ne peut être chiffré deux fois dans une offre. »</td>
+<td>Prix mal saisis.</td>
+<td>Corrigez.</td>
+</tr>
+<tr>
+<td>« Le délai de livraison doit être un nombre de jours positif. » / « Le délai de livraison doit être compris entre 0 et … jours. »</td>
+<td><strong>Délai (j)</strong> négatif ou trop grand.</td>
+<td>Saisissez entre 0 et 3650.</td>
+</tr>
+<tr>
+<td>« La date de réception de l'offre ne peut pas être future. » / « La date de validité ne peut pas précéder la date de réception de l'offre. »</td>
+<td>Dates de l'offre incohérentes.</td>
+<td>Corrigez <strong>Reçue le</strong> ou <strong>Valable jusqu'au</strong>.</td>
+</tr>
+<tr>
+<td>« Le fichier dépasse … Mo. » / « Joignez un PDF, une image (JPG, PNG, TIFF) ou un document Word ou Excel sans macros (DOCX, XLSX). » / « Le fichier n'a pas pu être lu… » / « Aucun fichier joint. »</td>
+<td>Devis joint refusé ou absent.</td>
+<td>Choisissez un autre fichier.</td>
+</tr>
+<tr>
+<td>« Retenir l'offre de … (… MAD HT) ? Un bon de commande brouillon sera créé à ses prix ; il devra être approuvé par une autre personne. »</td>
+<td><strong>Retenir cette offre</strong>.</td>
+<td>Oui pour créer la commande.</td>
+</tr>
+<tr>
+<td>« Attention : cette offre ne chiffre pas … article(s) ; ils ne figureront pas sur la commande. »</td>
+<td>Offre incomplète.</td>
+<td>Commandez ces articles à part.</td>
+</tr>
+<tr>
+<td>« Offre retenue. Bon de commande brouillon … créé : il est à approuver dans « Bons de commande ». »</td>
+<td>Après attribution.</td>
+<td>Faites approuver la commande.</td>
+</tr>
+<tr>
+<td>« Cette offre a expiré le … : demandez au fournisseur de la renouveler. »</td>
+<td>Offre expirée.</td>
+<td>Demandez une nouvelle offre et saisissez-la.</td>
+</tr>
+<tr>
+<td>« Ce fournisseur n'est pas approuvé : aucune commande ne peut lui être passée. »</td>
+<td><strong>Retenir cette offre</strong> pour un fournisseur non approuvé.</td>
+<td>Retenez une autre offre ou faites approuver le fournisseur.</td>
+</tr>
+<tr>
+<td>« Cette demande de devis est close : elle n'est plus modifiable. »</td>
+<td>Action sur une demande attribuée ou annulée.</td>
+<td>Aucune (sauf nouvelle attribution si la commande a été annulée).</td>
+</tr>
+<tr>
+<td>« Motif de l'annulation de la demande … : » / « Le motif d'annulation est obligatoire. »</td>
+<td><strong>Annuler la demande</strong>.</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« Demande de devis introuvable. » / « Offre introuvable. » / « Article de la demande introuvable. »</td>
+<td>Donnée modifiée ailleurs.</td>
+<td>Actualisez.</td>
+</tr>
+</tbody>
+</table>
+<h4>Factures fournisseurs</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Aucun fournisseur n'a de commande approuvée : une facture se saisit contre les lignes d'un bon de commande. »</td>
+<td><strong>Saisir une facture</strong> sans commande approuvée.</td>
+<td>Saisissez et approuvez d'abord la commande.</td>
+</tr>
+<tr>
+<td>« Le numéro de la facture du fournisseur est obligatoire. »</td>
+<td><strong>N° de facture</strong> vide.</td>
+<td>Saisissez-le.</td>
+</tr>
+<tr>
+<td>« La facture … de … est déjà saisie. »</td>
+<td>Doublon.</td>
+<td>Retrouvez la facture existante.</td>
+</tr>
+<tr>
+<td>« La date de la facture ne peut pas être dans le futur. » / « La date de réception de la facture doit être comprise entre la date de la facture et aujourd'hui. »</td>
+<td>Dates incohérentes.</td>
+<td>Corrigez les dates.</td>
+</tr>
+<tr>
+<td>« Cochez au moins une ligne de commande à facturer. »</td>
+<td>Aucune ligne cochée.</td>
+<td>Cochez les lignes facturées.</td>
+</tr>
+<tr>
+<td>« La quantité facturée doit être supérieure à zéro. » / « Le prix unitaire HT et le taux de TVA doivent être positifs (TVA entre 0 et 100 %). » / « Le taux de TVA doit être compris entre 0 et 100 %. »</td>
+<td>Ligne mal saisie.</td>
+<td>Corrigez la ligne.</td>
+</tr>
+<tr>
+<td>« La ligne de commande « … » figure deux fois sur la facture. » / « Une ligne de commande n'existe pas ou n'appartient pas à ce fournisseur. »</td>
+<td>Lignes incohérentes.</td>
+<td>Actualisez et ressaisissez.</td>
+</tr>
+<tr>
+<td>« Rapprochement sans écart : la facture est bonne à payer. Échéance légale : …. »</td>
+<td>Facture conforme.</td>
+<td>Payez avant l'échéance.</td>
+</tr>
+<tr>
+<td>« La facture est BLOQUÉE : … écart(s) avec la commande ou la réception. Elle ne pourra être payée qu'après déblocage par un responsable. Échéance légale : …. »</td>
+<td>Écarts détectés.</td>
+<td>Lisez l'onglet <strong>Écarts</strong>, puis rapprochez, débloquez ou annulez.</td>
+</tr>
+<tr>
+<td>« La facture reste bloquée : … écart(s). »</td>
+<td><strong>Refaire le rapprochement</strong> sans changement.</td>
+<td>Attendez la réception manquante ou faites débloquer.</td>
+</tr>
+<tr>
+<td>« La facture est déjà bonne à payer, réglée ou annulée : le rapprochement ne peut plus être refait. » / « La facture a déjà été rapprochée : ses lignes ne peuvent plus être modifiées. »</td>
+<td>Rapprochement d'une facture non bloquée.</td>
+<td>Actualisez.</td>
+</tr>
+<tr>
+<td>« La personne qui a saisi la facture ne peut pas la débloquer : une autre personne habilitée doit le faire. »</td>
+<td><strong>Débloquer pour paiement</strong> par l'auteur de la saisie (refusé avant toute question).</td>
+<td>Faites débloquer par un collègue.</td>
+</tr>
+<tr>
+<td>« La facture … présente … écart(s). Justifiez son paiement (ce motif est conservé dans le journal d'audit) : » / « Indiquez pourquoi la facture peut être payée malgré les écarts. »</td>
+<td><strong>Débloquer pour paiement</strong>.</td>
+<td>Justifiez (au moins 10 caractères).</td>
+</tr>
+<tr>
+<td>« Seule une facture bloquée peut être débloquée. »</td>
+<td>Déblocage d'une facture non bloquée.</td>
+<td>Actualisez.</td>
+</tr>
+<tr>
+<td>« La facture n'est pas bonne à payer : elle doit être rapprochée sans écart, ou débloquée par un responsable. »</td>
+<td>Règlement d'une facture bloquée.</td>
+<td>Faites débloquer d'abord.</td>
+</tr>
+<tr>
+<td>« Le montant du règlement doit être supérieur à zéro. » / « Le règlement dépasse le reste à payer (… MAD). »</td>
+<td>Montant incorrect.</td>
+<td>Corrigez le montant.</td>
+</tr>
+<tr>
+<td>« Le règlement ne peut pas être antérieur à la date de la facture. » / « La date du règlement ne peut pas être dans le futur. »</td>
+<td>Date incorrecte.</td>
+<td>Corrigez la date.</td>
+</tr>
+<tr>
+<td>« Indiquez la référence du virement, du chèque ou de l'effet. »</td>
+<td>Référence vide (hors espèces).</td>
+<td>Saisissez la référence.</td>
+</tr>
+<tr>
+<td>« Saisissez la date d'échéance de la LCN : elle est postérieure à la date de règlement. » / « L'échéance ne peut pas précéder la date du règlement. »</td>
+<td>Effet sans échéance, ou échéance incohérente.</td>
+<td>Corrigez l'<strong>Échéance (LCN, chèque)</strong>.</td>
+</tr>
+<tr>
+<td>« Un scan est déjà joint à cette facture. Le remplacer ? »</td>
+<td><strong>Joindre le scan</strong> une deuxième fois.</td>
+<td>Oui pour remplacer.</td>
+</tr>
+<tr>
+<td>« Le fichier est vide ou dépasse … Mo. » / « Seuls les fichiers PDF, JPEG, PNG et TIFF sont acceptés. » / « Le fichier n'a pas pu être lu… »</td>
+<td>Scan refusé.</td>
+<td>Choisissez un autre fichier.</td>
+</tr>
+<tr>
+<td>« Aucun scan n'est joint à cette facture. »</td>
+<td><strong>Voir le scan</strong> sans scan.</td>
+<td>Joignez le scan.</td>
+</tr>
+<tr>
+<td>« Motif de l'annulation de la facture … : » / « Le motif de l'annulation est obligatoire. »</td>
+<td><strong>Annuler la facture</strong>.</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« Une facture déjà réglée, même en partie, ne peut pas être annulée. » / « La facture est déjà annulée. »</td>
+<td>Annulation impossible.</td>
+<td>Aucune.</td>
+</tr>
+<tr>
+<td>« Aucun retard de paiement sur cette période. »</td>
+<td><strong>Retards de paiement (loi 69-21)</strong> sans retard.</td>
+<td>Aucune.</td>
+</tr>
+<tr>
+<td>« Aucune facture ni aucun règlement fournisseur sur cette période. »</td>
+<td><strong>Export comptable</strong> sur une période vide.</td>
+<td>Choisissez une autre période.</td>
+</tr>
+<tr>
+<td>« La date de début doit précéder la date de fin. »</td>
+<td>Période inversée.</td>
+<td>Corrigez <strong>Du</strong> / <strong>Au</strong>.</td>
+</tr>
+<tr>
+<td>« Les tolérances et les taux doivent être des nombres positifs, les pourcentages au plus égaux à 100. » / « Chaque journal et chaque compte doit être renseigné (20 caractères au plus). »</td>
+<td><strong>Paramètres d'achat</strong> hors limites.</td>
+<td>Corrigez la valeur.</td>
+</tr>
+<tr>
+<td>« Facture fournisseur introuvable. » / « Fournisseur introuvable. »</td>
+<td>Donnée modifiée ailleurs.</td>
+<td>Actualisez.</td>
+</tr>
+</tbody>
+</table>
+<h4>Évaluation fournisseurs</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Note d'évaluation de … (proposée : …/100) : »</td>
+<td><strong>Appliquer la note proposée</strong>.</td>
+<td>Validez la note proposée ou saisissez la vôtre.</td>
+</tr>
+<tr>
+<td>« « … » n'est pas une valeur numérique valide. »</td>
+<td>Note non numérique.</td>
+<td>Saisissez un nombre.</td>
+</tr>
+<tr>
+<td>« La note d'évaluation doit être comprise entre 0 et 100. »</td>
+<td>Note hors limites.</td>
+<td>Saisissez entre 0 et 100.</td>
+</tr>
+<tr>
+<td>« Fournisseur introuvable. »</td>
+<td>Fournisseur supprimé entre-temps.</td>
+<td>Actualisez.</td>
+</tr>
+</tbody>
+</table>
+<h4>Consommation</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« … article(s) dépassent le seuil d'écart : vérifiez les sorties non enregistrées, les pertes et les reprises. »</td>
+<td>Après le calcul de la période.</td>
+<td>Ouvrez <strong>Détail…</strong> des articles signalés, puis faites un inventaire.</td>
+</tr>
+<tr>
+<td>« Aucune analyse consommatrice n'est renseignée sur cet article : la consommation théorique ne peut pas être calculée. »</td>
+<td><strong>Détail…</strong> d'un article sans analyses consommatrices.</td>
+<td>Renseignez <strong>Analyses consommatrices</strong> sur la fiche article.</td>
+</tr>
+<tr>
+<td>« Période invalide : la date de fin précède la date de début. »</td>
+<td>Période inversée.</td>
+<td>Corrigez <strong>Du</strong> / <strong>au</strong>.</td>
+</tr>
+<tr>
+<td>« Paramètre hors limites : seuil d'écart 0 à 100 %, période de 7 à 730 jours, 2e palier de péremption inférieur au 1er (au plus 365 jours). »</td>
+<td><strong>Paramètres de stock…</strong> hors limites.</td>
+<td>Corrigez la valeur.</td>
+</tr>
+</tbody>
+</table>
+<h4>Inventaires</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Choisissez l'emplacement à inventorier. » / « Choisissez la catégorie à inventorier. »</td>
+<td>Périmètre <strong>Emplacement</strong> ou <strong>Catégorie</strong> sans choix.</td>
+<td>Choisissez l'emplacement ou la catégorie.</td>
+</tr>
+<tr>
+<td>« La date de l'inventaire ne peut pas être dans le futur. »</td>
+<td><strong>Date</strong> future.</td>
+<td>Choisissez aujourd'hui ou une date passée.</td>
+</tr>
+<tr>
+<td>« Aucun lot en stock dans ce périmètre. »</td>
+<td>Périmètre vide.</td>
+<td>Choisissez un autre périmètre.</td>
+</tr>
+<tr>
+<td>« Des lots de ce périmètre sont déjà sur l'inventaire …, toujours en cours de comptage. Clôturez-le ou annulez-le avant de commencer celui-ci. »</td>
+<td><strong>Commencer le comptage</strong> en chevauchement.</td>
+<td>Clôturez ou annulez l'autre inventaire.</td>
+</tr>
+<tr>
+<td>« Des lots de cet inventaire sont aussi sur l'inventaire …, toujours en cours de comptage : leurs écarts seraient passés deux fois. Annulez l'un des deux inventaires avant de clôturer. »</td>
+<td><strong>Clôturer…</strong> en chevauchement.</td>
+<td>Annulez l'un des deux.</td>
+</tr>
+<tr>
+<td>« Inventaire … ouvert. » / « … lot(s) à compter. »</td>
+<td>Création, démarrage du comptage.</td>
+<td>Imprimez la feuille et comptez.</td>
+</tr>
+<tr>
+<td>« « … » n'est pas une valeur numérique valide. »</td>
+<td><strong>Quantité comptée</strong> non numérique.</td>
+<td>Saisissez un nombre (0 si absent).</td>
+</tr>
+<tr>
+<td>« La quantité comptée ne peut pas être négative. »</td>
+<td>Quantité négative.</td>
+<td>Corrigez.</td>
+</tr>
+<tr>
+<td>« L'heure du comptage ne peut pas être dans le futur. » / « L'heure du comptage est antérieure au début du comptage de l'inventaire. »</td>
+<td><strong>Feuille comptée le</strong> incohérente.</td>
+<td>Corrigez l'heure.</td>
+</tr>
+<tr>
+<td>« L'inventaire n'est plus en brouillon : son périmètre est figé. » / « L'inventaire n'est pas en cours de comptage. » / « L'inventaire est clôturé. »</td>
+<td>Action qui ne correspond pas au statut.</td>
+<td>Actualisez.</td>
+</tr>
+<tr>
+<td>« … lot(s) ne sont pas encore comptés : comptez-les (0 s'ils sont absents) avant de clôturer. »</td>
+<td><strong>Clôturer…</strong> avec des lots non comptés.</td>
+<td>Complétez la colonne <strong>Quantité comptée</strong>.</td>
+</tr>
+<tr>
+<td>« Clôturer l'inventaire … ? Les écarts seront passés en ajustements de stock, sans retour possible. »</td>
+<td><strong>Clôturer…</strong>.</td>
+<td>Oui seulement après vérification des écarts.</td>
+</tr>
+<tr>
+<td>« Inventaire … clôturé : … ajustement(s) passé(s). »</td>
+<td>Après la clôture.</td>
+<td>Imprimez le <strong>Rapport des écarts (PDF)</strong>.</td>
+</tr>
+<tr>
+<td>« Motif de l'annulation de l'inventaire … : » / « Indiquez le motif de l'annulation. »</td>
+<td><strong>Annuler</strong>.</td>
+<td>Saisissez le motif.</td>
+</tr>
+<tr>
+<td>« Inventaire introuvable. » / « Lot introuvable sur la feuille de comptage. »</td>
+<td>Donnée modifiée ailleurs.</td>
+<td>Actualisez.</td>
+</tr>
+</tbody>
+</table>
+<h4>Fiche article et fiche fournisseur (Données de référence)</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« « … » : écrivez CODE=nombre (ex. HBA1C=2), séparés par des points-virgules, avec un point décimal. »</td>
+<td><strong>Tests par résultat</strong> mal écrit.</td>
+<td>Corrigez le format.</td>
+</tr>
+<tr>
+<td>« Le volume mort doit être un pourcentage entre 0 et 99, ou un nombre de tests positif. »</td>
+<td><strong>Volume mort par ouverture (%)</strong> ou <strong>Tests perdus par ouverture</strong> hors limites.</td>
+<td>Corrigez la valeur.</td>
+</tr>
+<tr>
+<td>« Valeur hors limites : tests par calibration (0 à 1000), stock de sécurité (0 à 365 jours), péremption à réception (1 à 3650 jours). »</td>
+<td>Valeurs de la fiche hors limites.</td>
+<td>Corrigez la valeur.</td>
+</tr>
+<tr>
+<td>« La dénomination du fournisseur est obligatoire. » / « L'ICE du fournisseur est invalide. »</td>
+<td>Fiche fournisseur incomplète.</td>
+<td>Saisissez la dénomination ou corrigez l'ICE.</td>
+</tr>
+<tr>
+<td>« Le délai de paiement convenu ne peut pas dépasser … jours (loi n° 69-21). Sans accord, il est de 60 jours à compter de la livraison. »</td>
+<td>Délai de paiement trop long.</td>
+<td>Saisissez au plus 120 jours.</td>
+</tr>
+<tr>
+<td>« La note d'évaluation doit être comprise entre 0 et 100. »</td>
+<td>Note hors limites sur la fiche.</td>
+<td>Corrigez la note.</td>
+</tr>
+</tbody>
+</table><p class="top"><a href="index.html">Retour au sommaire</a></p>
 </div>
 </body>
 </html>
