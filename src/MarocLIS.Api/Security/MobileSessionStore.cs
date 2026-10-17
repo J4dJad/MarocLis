@@ -85,6 +85,19 @@ public sealed class MobileSessionStore(PasswordPolicy policy, MobileApiOptions o
         return (touched, SessionEnd.None);
     }
 
+    /// <summary>
+    /// Switches the language of a live session, for « Mon compte » on the phone. Only the session:
+    /// the account's preferred language is the workstation's, and a biologist who reads the phone
+    /// in Arabic may well want the bench in French.
+    /// </summary>
+    public MobileSession? ChangeLanguage(string? id, AppLanguage language)
+    {
+        if (string.IsNullOrEmpty(id) || !_sessions.TryGetValue(id, out var session)) return null;
+
+        var changed = session with { Session = session.Session with { Language = language } };
+        return _sessions.TryUpdate(id, changed, session) ? changed : null;
+    }
+
     public void Remove(string? id)
     {
         if (!string.IsNullOrEmpty(id)) _sessions.TryRemove(id, out _);

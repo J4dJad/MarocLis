@@ -1,0 +1,112 @@
+@* « Mon compte »: who is signed in, on which device, until when — the language, and signing out. *@
+@inherits UiComponent
+@inject SessionState Session
+@inject ApiClient Api
+@inject Browser Browser
+
+<Sheet TitleId="account-title">
+    <div class="account-head">
+        <div class="avatar avatar-lg" aria-hidden="true">@Display.Initials(Info?.FullName)</div>
+        <div class="stack">
+            <h2 class="account-name" id="account-title">@Info?.FullName</h2>
+            <div class="account-role">@RoleLine</div>
+        </div>
+    </div>
+
+    <div class="facts">
+        <div class="fact"><span>@T("MobileUi.AccountSignedInSince")</span><span class="ltr">@Texts.Time(Session.SignedInAt)</span></div>
+        <div class="fact"><span>@T("MobileUi.AccountDevice")</span><span>@Texts.Isolate(Info?.Workstation)</span></div>
+        <div class="fact"><span>@T("MobileUi.AccountIdleClose")</span><span>@T("MobileUi.AccountMinutes", Info?.IdleTimeoutMinutes ?? 15)</span></div>
+    </div>
+
+    <fieldset class="fieldset-plain">
+        <legend>@T("App.Language")</legend>
+        <div class="segmented">
+            @foreach (var language in Enum.GetValues<UiLanguage>())
+            {
+                var current = language;
+                <label class="segment @(Texts.Language == current ? "on" : "")" lang="@Texts.Tag(current)">
+                    <input type="radio" name="language" checked="@(Texts.Language == current)" disabled="@(_busy || !Browser.IsOnline)"
+                           @onchange="() => ChangeLanguageAsync(current)" />
+                    @Name(current)
+                </label>
+            }
+        </div>
+    </fieldset>
+
+    @if (_error is { Length: > 0 })
+    {
+        <div class="error-text" role="alert">@_error</div>
+    }
+
+    <div class="sheet-actions">
+        <button type="button" class="btn btn-danger" @onclick="SignOutAsync" disabled="@_busy">
+            <Icon Name="logout" Size="20" Stroke="2" />
+            @T("MobileUi.AccountSignOut")
+        </button>
+        <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync()">@T("Action.Close")</button>
+    </div>
+</Sheet>
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>The screen behind reloads: what the server writes (alerts, names) follows the new language.</summary>
+    [Parameter] public EventCallback OnLanguageChanged { get; set; }
+
+    private bool _busy;
+    private string? _error;
+
+    private SessionInfo? Info => Session.Info;
+
+    private string RoleLine
+    {
+        get
+        {
+            var qualification = Info is null ? "" : T(QualificationKey(Info.Qualification));
+            var site = Info?.SiteName ?? Info?.SiteCode;
+            return string.Join(" · ", new[] { qualification, site }.Where(s => !string.IsNullOrEmpty(s)));
+        }
+    }
+
+    private static string QualificationKey(string qualification) => "Qualification." + qualification;
+
+    private static string Name(UiLanguage language) => language switch
+    {
+        UiLanguage.Arabic => "العربية",
+        UiLanguage.English => "English",
+        _ => "Français"
+    };
+
+    private async Task ChangeLanguageAsync(UiLanguage language)
+    {
+        if (language == Texts.Language || _busy) return;
+        _busy = true;
+        _error = null;
+
+        var result = await Api.ChangeLanguageAsync(language);
+        _busy = false;
+
+        if (result is { IsSuccess: true, Value: { } info })
+        {
+            Session.Update(info);
+            Texts.Use(language);
+            await OnLanguageChanged.InvokeAsync();
+        }
+        else if (!result.Offline)
+        {
+            _error = result.Message;
+        }
+    }
+
+    /// <summary>
+    /// Ends the session on the server first — the cookie is then worth nothing — and on the phone
+    /// whatever the server answered: a biologist who taps « Se déconnecter » is signed out.
+    /// </summary>
+    private async Task SignOutAsync()
+    {
+        _busy = true;
+        await Api.SignOutAsync();
+        Session.End(SessionEndReason.SignedOut);
+    }
+}

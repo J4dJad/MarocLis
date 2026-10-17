@@ -35,12 +35,13 @@ public static class ApiApplicationBuilderExtensions
         // An /api route that matched nothing is a 404, not the application's page.
         app.Map("/api/{**rest}", () => Results.NotFound());
 
-        // The phone's application (wwwroot). Phase 2 serves the Blazor WebAssembly client from
-        // here: reference MarocLIS.Mobile, add Microsoft.AspNetCore.Components.WebAssembly.Server
-        // and call app.UseBlazorFrameworkFiles() before UseStaticFiles below.
-        app.UseDefaultFiles();
-        app.UseStaticFiles();
-        app.MapFallbackToFile("index.html");
+        // The phone's application: the MarocLIS.Mobile Blazor WebAssembly client, its framework
+        // files (_framework/) and its own files (index.html, CSS, fonts, icons, service worker).
+        // Any other path that is not a file is one of its screens (/dossier/…), answered with
+        // index.html so a reload or a home-screen shortcut lands on the application.
+        app.UseBlazorFrameworkFiles();
+        app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = RequestPipeline.CacheShell });
+        app.MapFallbackToFile("index.html", new StaticFileOptions { OnPrepareResponse = RequestPipeline.CacheShell });
 
         return app;
     }

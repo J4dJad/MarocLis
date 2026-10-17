@@ -1,0 +1,128 @@
+@page "/dossier/{OrderId:guid}/historique/{ParameterId:guid}"
+@inherits SecurePage
+
+@if (Allowed)
+{
+    <div class="screen">
+        <header class="topbar">
+            <a class="icon-button" href="dossier/@OrderId" aria-label="@T("MobileUi.HistoryBack")"><Icon Name="back" /></a>
+            <div class="topbar-text">
+                <span class="topbar-title">@T("Result.History") · @(_row?.ParameterName)</span>
+                @if (_file is { } file)
+                {
+                    <span class="topbar-sub">@file.Patient.Name · @Display.SexAndAge(Texts, file.Patient.Gender, file.Patient.AgeYears)</span>
+                }
+            </div>
+        </header>
+
+        <main class="content">
+            @if (_error is { Length: > 0 })
+            {
+                <div class="message message-critical" role="alert">@_error</div>
+            }
+
+            @if (_points is { } points)
+            {
+                var row = _row;
+                var (low, high) = Display.ParseRange(row?.ReferenceRange);
+                var current = row is null || row.IsHeading ? null : Display.Numeric(row.Value);
+                var separator = Display.SeparatorOf(row?.Value);
+
+                <section class="card chart-card">
+                    <div class="chart-top">
+                        <span>@(string.IsNullOrEmpty(row?.ReferenceRange) ? "" : T("Result.HistoryInterval", $"{row.ReferenceRange} {row.Unit}".Trim()))</span>
+                        <span>@T("MobileUi.HistoryCount", points.Count)</span>
+                    </div>
+                    @if (points.Count > 0 || current is not null)
+                    {
+                        <HistoryChart Points="points" Current="current" Low="low" High="high" Separator="separator"
+                                      Label="@T("MobileUi.HistoryChartLabel", row?.ParameterName)" />
+                        <div class="legend">
+                            <span><span class="dot dot-validated"></span>@T("MobileUi.HistoryLegendValidated")</span>
+                            @if (current is not null)
+                            {
+                                <span><span class="dot dot-current"></span>@T("MobileUi.HistoryLegendCurrent")</span>
+                            }
+                            @if (points.Any(p => p.Imported))
+                            {
+                                <span><span class="dot dot-imported"></span>@T("MobileUi.HistoryLegendImported")</span>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <section class="card">
+                    @if (current is not null && row is not null)
+                    {
+                        <div class="history-row current">
+                            <div class="history-when">
+                                <span class="history-date ltr">@(row.EnteredAt is { } entered ? Texts.Date(entered) : "")</span>
+                                <span class="history-acc ltr">@_file?.AccessionNumber</span>
+                            </div>
+                            <Pill Tone="warning">@T("MobileUi.HistoryCurrent")</Pill>
+                            <span class="history-value ltr @Display.ValueClass(row)">@(row.Value ?? "—")<span class="arrows" aria-hidden="true">@Display.Arrows(row.Indicator)</span></span>
+                        </div>
+                    }
+                    @foreach (var point in points.AsEnumerable().Reverse())
+                    {
+                        var arrows = Arrow(point.Value, low, high);
+                        <div class="history-row">
+                            <div class="history-when">
+                                <span class="history-date ltr">@Texts.Date(point.ValidatedAt)</span>
+                                <span class="history-acc ltr">@point.AccessionNumber</span>
+                            </div>
+                            @if (point.Imported)
+                            {
+                                <Pill Tone="waiting">@T("MobileUi.HistoryImported")</Pill>
+                            }
+                            <span class="history-value ltr @(arrows.Length > 0 ? (arrows[0] == '▲' ? "v-high" : "v-low") : "v-normal")">
+                                @($"{point.ValueOperator}{Display.Number(point.Value, separator)} {arrows}".Trim())
+                            </span>
+                        </div>
+                    }
+                    @if (points.Count == 0)
+                    {
+                        <div class="empty">@T("Result.HistoryEmpty")</div>
+                    }
+                </section>
+            }
+            else if (_error is null)
+            {
+                <div class="empty" role="status">@T("App.Loading")</div>
+            }
+        </main>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+    [Parameter] public Guid ParameterId { get; set; }
+
+    private OrderFile? _file;
+    private ResultRow? _row;
+    private List<HistoryPoint>? _points;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Allowed) return;
+
+        // The file the biologist came from; read again if this screen was opened on its own.
+        _file = Workflow.File is { } file && file.OrderId == OrderId ? file : null;
+        if (_file is null)
+        {
+            var opened = await Api.OrderAsync(OrderId);
+            if (opened is { IsSuccess: true, Value: { } fresh }) _file = Workflow.File = fresh;
+            else if (!opened.Offline) { _error = opened.Message; return; }
+        }
+
+        _row = _file?.Rows.FirstOrDefault(r => r.ParameterId == ParameterId);
+
+        var history = await Api.HistoryAsync(OrderId, ParameterId);
+        if (history is { IsSuccess: true, Value: { } points }) _points = points;
+        else if (!history.Offline) _error = history.Message;
+    }
+
+    private static string Arrow(decimal value, decimal? low, decimal? high) =>
+        high is { } h && value > h ? "▲" : low is { } l && value < l ? "▼" : "";
+}

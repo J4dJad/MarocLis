@@ -35,6 +35,17 @@ public static class CriticalEndpoints
         if (ApiProblems.TooLong((request.ContactUsed, 100)) is { } tooLong)
             return ApiProblems.From(http, tooLong);
 
+        // Told by telephone or in person: the two channels that end with the recipient reading the
+        // value back, which is what closes the call.
+        NotificationChannel? channel = request.Channel switch
+        {
+            null or "" or ApiProtocol.Channels.Telephone => NotificationChannel.Telephone,
+            ApiProtocol.Channels.InPerson => NotificationChannel.InPerson,
+            _ => null
+        };
+        if (channel is null)
+            return ApiProblems.From(http, Error.Validation("Mobile_UnknownChannel", request.Channel));
+
         var opened = await entry.OpenAsync(request.OrderId, ct: ct);
         if (opened.IsFailure) return ApiProblems.From(http, opened);
 
@@ -49,7 +60,7 @@ public static class CriticalEndpoints
         var value = $"{row.CurrentValue} {row.UnitSymbol}".Trim();
 
         var raised = await validation.RaiseCriticalNotificationAsync(
-            resultId, parameter, value, NotificationChannel.Telephone,
+            resultId, parameter, value, channel.Value,
             string.IsNullOrWhiteSpace(request.ContactUsed) ? null : request.ContactUsed.Trim(),
             prescriberId: null, request.DisplayedEnteredAt, ct);
 

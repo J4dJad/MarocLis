@@ -1,0 +1,135 @@
+@*
+    The call about a critical value: opened on the server (which records the value the file holds,
+    not one typed here), then closed with who was told and what they read back — or recorded as
+    unreachable. Either way the file is read again afterwards.
+*@
+@inherits UiComponent
+@inject ApiClient Api
+@inject Browser Browser
+
+<Sheet TitleId="critical-title">
+    <div class="sheet-head">
+        <h2 class="sheet-title" id="critical-title">@T("MobileUi.CriticalTitle")</h2>
+        <div class="sheet-sub"><span class="ltr">@File.AccessionNumber</span> · @File.Patient.Name</div>
+    </div>
+
+    <div class="value-box">
+        <span class="name">@Row.ParameterName</span>
+        <span class="value ltr">@(Row.Value ?? "—")<span class="arrows" aria-hidden="true">@Display.Arrows(Row.Indicator)</span></span>
+        @if (!string.IsNullOrEmpty(Row.Unit))
+        {
+            <span class="unit ltr">@Row.Unit</span>
+        }
+    </div>
+
+    <fieldset class="fieldset-plain">
+        <legend>@T("MobileUi.CriticalChannel")</legend>
+        <div class="segmented">
+            <label class="segment @(_channel == ApiProtocol.Channels.Telephone ? "on" : "")">
+                <input type="radio" name="channel" checked="@(_channel == ApiProtocol.Channels.Telephone)"
+                       @onchange="() => _channel = ApiProtocol.Channels.Telephone" />
+                @T("MobileUi.CriticalByPhone")
+            </label>
+            <label class="segment @(_channel == ApiProtocol.Channels.InPerson ? "on" : "")">
+                <input type="radio" name="channel" checked="@(_channel == ApiProtocol.Channels.InPerson)"
+                       @onchange="() => _channel = ApiProtocol.Channels.InPerson" />
+                @T("MobileUi.CriticalInPerson")
+            </label>
+        </div>
+    </fieldset>
+
+    <div class="field">
+        <label for="recipient">@T("MobileUi.CriticalRecipient")</label>
+        <input id="recipient" class="input" @bind="_recipient" @bind:event="oninput" maxlength="200" autocomplete="off" />
+    </div>
+    <div class="field">
+        <label for="readback">@T("MobileUi.CriticalReadBack")</label>
+        <input id="readback" class="input" dir="ltr" @bind="_readBack" @bind:event="oninput" maxlength="100" autocomplete="off" inputmode="decimal" />
+        <div class="field-hint">@T("Validation.ReadBackPrompt")</div>
+    </div>
+
+    @if (_error is { Length: > 0 })
+    {
+        <div class="error-text" role="alert">@_error</div>
+    }
+
+    <div class="sheet-actions">
+        <button type="button" class="btn btn-primary" disabled="@(_busy || !Browser.IsOnline)" @onclick="RecordAsync">@T("MobileUi.CriticalRecord")</button>
+        <div class="row">
+            <button type="button" class="btn btn-grow" disabled="@(_busy || !Browser.IsOnline)" @onclick="UnreachableAsync">@T("MobileUi.CriticalUnreachable")</button>
+            <button type="button" class="btn btn-grow" disabled="@_busy" @onclick="() => OnCancel.InvokeAsync()">@T("Action.Cancel")</button>
+        </div>
+    </div>
+</Sheet>
+
+@code {
+    [Parameter, EditorRequired] public OrderFile File { get; set; } = default!;
+    [Parameter, EditorRequired] public ResultRow Row { get; set; } = default!;
+
+    /// <summary>The call is recorded (or refused); the argument is the sentence to show over the file, if any.</summary>
+    [Parameter] public EventCallback<string?> OnDone { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _channel = ApiProtocol.Channels.Telephone;
+    private string _recipient = "";
+    private string _readBack = "";
+    private string? _error;
+    private bool _busy;
+
+    private async Task RecordAsync()
+    {
+        _error = string.IsNullOrWhiteSpace(_recipient) ? T("Notification_RecipientNameRequired")
+               : string.IsNullOrWhiteSpace(_readBack) ? T("Notification_ReadBackRequired")
+               : null;
+        if (_error is not null) return;
+
+        await CallAsync(async notification =>
+        {
+            var closed = await Api.AcknowledgeCriticalAsync(notification,
+                new AcknowledgeCriticalRequest(_recipient.Trim(), null, _readBack.Trim()));
+            return closed.IsSuccess ? (true, T("MobileUi.CriticalRecorded", Row.ParameterName)) : (false, closed.Message);
+        });
+    }
+
+    private Task UnreachableAsync() => CallAsync(async notification =>
+    {
+        var marked = await Api.UnreachableAsync(notification, new UnreachableRequest(null));
+        return marked.IsSuccess ? (true, T("MobileUi.CriticalUnreachableRecorded", Row.ParameterName)) : (false, marked.Message);
+    });
+
+    /// <summary>Opens the call on the server, then closes it as <paramref name="close"/> says.</summary>
+    private async Task CallAsync(Func<Guid, Task<(bool Done, string Note)>> close)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var raised = await Api.RaiseCriticalAsync(Row.ResultId,
+                new RaiseCriticalRequest(File.OrderId, Row.EnteredAt, null, _channel));
+
+            if (raised.Offline) return;
+
+            // The value changed since it was shown, or the call was already made: the file is
+            // read again, with the server's sentence over it.
+            if (raised.IsConflict)
+            {
+                await OnDone.InvokeAsync(raised.Message);
+                return;
+            }
+
+            if (raised is not { IsSuccess: true, Value: { } call })
+            {
+                _error = raised.Message;
+                return;
+            }
+
+            var (done, note) = await close(call.NotificationId);
+            if (done) await OnDone.InvokeAsync(note);
+            else _error = note;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

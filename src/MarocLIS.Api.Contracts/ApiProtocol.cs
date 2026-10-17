@@ -23,6 +23,7 @@ public static class ApiProtocol
     public const string PageCountHeader = "X-MarocLIS-Pages";
 
     public const string SessionRoute = "/api/session";
+    public const string LanguageRoute = "/api/session/langue";
     public const string WorklistRoute = "/api/validation/worklist";
 
     /// <summary>Values of the <c>filtre</c> query parameter of the worklist: the chips of the screen.</summary>
@@ -32,6 +33,13 @@ public static class ApiProtocol
         public const string Urgent = "urgents";
         public const string Abnormal = "anomalies";
         public const string QcBlocked = "cq";
+    }
+
+    /// <summary>The ways of telling a critical value the phone offers: both end with a read-back.</summary>
+    public static class Channels
+    {
+        public const string Telephone = "Telephone";
+        public const string InPerson = "InPerson";
     }
 
     /// <summary>The tone of a pill or a context line, from the design system: drives its colour.</summary>

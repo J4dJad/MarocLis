@@ -33,7 +33,7 @@ public static class ReportEndpoints
     /// </summary>
     private static async Task<IResult> ReleaseAsync(
         Guid orderId, HttpContext http, ReportReleaseService reports, ICurrentUser user,
-        ReportPreviews previews, CancellationToken ct)
+        ReportPreviews previews, IReportQueries queries, CancellationToken ct)
     {
         var released = await reports.ReleaseAsync(orderId, renderPageImages: true, ct: ct);
         if (released.IsFailure) return ApiProblems.From(http, released);
@@ -41,9 +41,12 @@ public static class ReportEndpoints
         var report = released.Value;
         previews.Keep(user.UserId, orderId, report);
 
+        // The time and the signatory as the report states them, for « Émis et signé par … à … ».
+        var issued = await queries.GetLatestVersionAsync(orderId, ct);
+
         return Results.Ok(new ReleasedReportResponse(
             report.ReportId, report.VersionNumber, report.Completeness == ReportCompleteness.Partial,
-            report.PageImages.Count));
+            report.PageImages.Count, issued?.ReleasedAt, issued?.SignatoryName ?? user.FullName));
     }
 
     /// <summary>

@@ -1,0 +1,19 @@
+{
+  "name": "MarocLIS Validation",
+  "short_name": "MarocLIS",
+  "description": "Validation biologique à distance — MarocLIS",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "fr",
+  "background_color": "#F6F8F9",
+  "theme_color": "#0B6E79",
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "icons/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icons/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icons/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

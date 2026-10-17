@@ -1,0 +1,8 @@
+@* A pill of the design system: the tone gives the colour, the word gives the meaning. *@
+<span class="pill pill-@Tone">@ChildContent</span>
+
+@code {
+    /// <summary>critical, warning, info, ok or waiting (ApiProtocol.Tones).</summary>
+    [Parameter] public string Tone { get; set; } = "info";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,0 +1,339 @@
+@page "/dossier/{OrderId:guid}"
+@inherits SecurePage
+
+@if (Allowed)
+{
+    <div class="screen">
+        <header class="topbar">
+            <a class="icon-button" href="" aria-label="@T("MobileUi.OrderBackToList")"><Icon Name="back" /></a>
+            @if (_file is { } head)
+            {
+                <div class="topbar-text">
+                    <div class="topbar-line">
+                        <span class="topbar-title ltr">@head.AccessionNumber</span>
+                        @if (Display.IsUrgent(head.Priority))
+                        {
+                            <Pill Tone="critical">@T(Display.PriorityKey(head.Priority))</Pill>
+                        }
+                    </div>
+                    <div class="topbar-sub">@PatientLine(head)</div>
+                </div>
+                <button type="button" class="topbar-link" @onclick="() => _sheet = OrderSheet.Context">@T("MobileUi.OrderContextLink")</button>
+            }
+            else
+            {
+                <div class="topbar-text"><span class="topbar-title">@T("App.Loading")</span></div>
+            }
+        </header>
+
+        <main class="content">
+            @if (_message is { } message)
+            {
+                <div class="message message-@message.Tone" role="alert">@message.Text</div>
+            }
+
+            @if (_file is { } file)
+            {
+                var uncalled = file.Rows.Where(Display.IsUncalledCritical).ToList();
+                if (uncalled.Count > 0)
+                {
+                    <div class="critical-banner">
+                        <div class="notice-row"><Icon Name="alert" Size="18" Stroke="2" />@T("Validation.ContextCriticalToCall", uncalled.Count)</div>
+                        <button type="button" class="btn-critical" disabled="@(!Online || _busy)" @onclick="() => OpenCritical(uncalled[0])">
+                            @T("MobileUi.CriticalCommunicate")
+                        </button>
+                    </div>
+                }
+
+                if (!string.IsNullOrWhiteSpace(file.ClinicalInformation))
+                {
+                    <div class="card card-pad text-card"><strong>@T("MobileUi.OrderClinicalLabel")</strong> @file.ClinicalInformation</div>
+                }
+
+                <section class="card results" aria-labelledby="results-title">
+                    <div class="card-head">
+                        <span id="results-title">@T("Result.Plural")</span>
+                        <span>@T("Validation.SelectedCount", _ticked.Count, Tickable.Count())</span>
+                    </div>
+                    @foreach (var row in file.Rows)
+                    {
+                        if (row.IsHeading)
+                        {
+                            <div class="result-heading">@row.ParameterName</div>
+                            continue;
+                        }
+
+                        var current = row;
+                        <div class="result-row @RowClass(current)">
+                            <label class="tick">
+                                <input type="checkbox" checked="@_ticked.Contains(current.ResultId)" disabled="@(!Display.CanTick(current) || _busy)"
+                                       aria-label="@(current.ParameterName)" @onchange="e => Tick(current, (bool)e.Value!)" />
+                            </label>
+                            <div class="result-body">
+                                <button type="button" class="result-main" @onclick="() => _commentRow = current.ResultId"
+                                        aria-label="@T("MobileUi.OrderCommentFor", current.ParameterName)">
+                                    <span class="result-name">@current.ParameterName</span>
+                                    <span class="result-value ltr @Display.ValueClass(current)">@(current.Value ?? "—")<span class="arrows" aria-hidden="true">@Display.Arrows(current.Indicator)</span></span>
+                                    @if (!string.IsNullOrEmpty(current.Unit))
+                                    {
+                                        <span class="result-unit ltr">@current.Unit</span>
+                                    }
+                                </button>
+                                <div class="result-meta">
+                                    @if (!string.IsNullOrEmpty(current.ReferenceRange))
+                                    {
+                                        <span>@T("MobileUi.OrderRange", current.ReferenceRange)</span>
+                                    }
+                                    <a href="dossier/@OrderId/historique/@current.ParameterId">@T("MobileUi.OrderPrevious", Previous(current))</a>
+                                    @if (Display.IsUncalledCritical(current))
+                                    {
+                                        <Pill Tone="critical">@T("Flag.Critical")</Pill>
+                                    }
+                                    else if (current.IsCritical)
+                                    {
+                                        <Pill Tone="ok">@T("MobileUi.OrderCriticalCalled")</Pill>
+                                    }
+                                    @if (Display.HasFlag(current, "DeltaCheckFailed"))
+                                    {
+                                        <Pill Tone="info">@T("MobileUi.OrderDeltaCheck")</Pill>
+                                    }
+                                    @if (Display.HasFlag(current, "QcOutOfControl"))
+                                    {
+                                        <Pill Tone="warning">@T("MobileUi.OrderQcOut")</Pill>
+                                    }
+                                    @if (Display.AwaitsTechnicalValidation(current))
+                                    {
+                                        <Pill Tone="waiting">@T("Validation.PendingTechnical")</Pill>
+                                    }
+                                    @if (_comments.TryGetValue(current.ResultId, out var note) && !string.IsNullOrWhiteSpace(note))
+                                    {
+                                        <span class="comment-mark" title="@T("Validation.BiologistComment")"><Icon Name="comment" Size="16" /></span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                if (CommentRow is { } commented)
+                {
+                    <div class="card card-pad comment-card">
+                        <label for="comment">@T("Validation.BiologistComment") · @commented.ParameterName</label>
+                        <textarea id="comment" class="input" rows="2" maxlength="2000" placeholder="@T("Validation.BiologistCommentHint")"
+                                  value="@_comments.GetValueOrDefault(commented.ResultId)"
+                                  @oninput="e => _comments[commented.ResultId] = e.Value?.ToString() ?? string.Empty"></textarea>
+                    </div>
+                }
+            }
+            else if (_loading)
+            {
+                <div class="empty" role="status">@T("App.Loading")</div>
+            }
+        </main>
+
+        @if (_file is { } bottom)
+        {
+            <footer class="bottombar">
+                <button type="button" class="btn btn-primary" disabled="@(_ticked.Count == 0 || _busy || !Online)" @onclick="ValidateAsync">
+                    @T("Validation.ValidateSelection", _ticked.Count)
+                </button>
+                @if (!Online)
+                {
+                    <div class="hint">@T("MobileUi.OfflineDetail")</div>
+                }
+                else if (bottom.Rows.Where(Display.IsUncalledCritical).Select(r => r.ParameterName).ToList() is { Count: > 0 } held)
+                {
+                    <div class="hint">@T("MobileUi.OrderCriticalHint", string.Join(", ", held))</div>
+                }
+            </footer>
+        }
+    </div>
+
+    @switch (_sheet)
+    {
+        case OrderSheet.Critical when _file is not null && _criticalRow is not null:
+            <CriticalSheet File="_file" Row="_criticalRow" OnDone="CriticalDoneAsync" OnCancel="CloseSheet" />
+            break;
+        case OrderSheet.Derogation when _file is not null:
+            <DerogationSheet File="_file" Rows="QcRows" OnConfirm="SendAsync" OnCancel="CloseSheet" />
+            break;
+        case OrderSheet.Context when _file is not null:
+            <ContextSheet File="_file" OnClose="CloseSheet" />
+            break;
+    }
+}
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+
+    private enum OrderSheet { None, Critical, Derogation, Context }
+
+    private sealed record Message(string Tone, string Text);
+
+    private OrderFile? _file;
+    private readonly HashSet<Guid> _ticked = [];
+    private readonly Dictionary<Guid, string> _comments = [];
+    private Guid? _commentRow;
+    private ResultRow? _criticalRow;
+    private OrderSheet _sheet;
+    private bool _loading;
+    private bool _busy;
+    private Message? _message;
+    private Guid _loadedFor;
+
+    private IEnumerable<ResultRow> Tickable => _file?.Rows.Where(Display.CanTick) ?? [];
+
+    private IReadOnlyList<ResultRow> QcRows =>
+        _file?.Rows.Where(r => _ticked.Contains(r.ResultId) && Display.HasFlag(r, "QcOutOfControl")).ToList() ?? [];
+
+    private ResultRow? CommentRow => _file?.Rows.FirstOrDefault(r => r.ResultId == _commentRow);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Allowed || _loadedFor == OrderId) return;
+        _loadedFor = OrderId;
+        _message = null;
+        _comments.Clear();
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// The file as the server has it now. The ticks are the server's (pre-ticked rows); comments
+    /// typed before a reload are kept for the rows still there.
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await Api.OrderAsync(OrderId);
+        _loading = false;
+
+        if (result is not { IsSuccess: true, Value: { } file })
+        {
+            if (!result.Offline && result.Status != System.Net.HttpStatusCode.Unauthorized)
+                _message = new("critical", result.Message);
+            return;
+        }
+
+        _file = file;
+        Workflow.File = file;
+
+        _ticked.Clear();
+        foreach (var row in file.Rows.Where(r => Display.CanTick(r) && r.PreTicked)) _ticked.Add(row.ResultId);
+
+        foreach (var gone in _comments.Keys.Where(id => file.Rows.All(r => r.ResultId != id)).ToList())
+            _comments.Remove(gone);
+
+        // The comment box opens on the row most likely to need one: the first abnormal value that
+        // can be released, else the first that can.
+        if (_commentRow is null || file.Rows.All(r => r.ResultId != _commentRow))
+            _commentRow = (file.Rows.FirstOrDefault(r => Display.CanTick(r) && r.IsAbnormal) ?? file.Rows.FirstOrDefault(Display.CanTick)
+                           ?? file.Rows.FirstOrDefault(r => !r.IsHeading))?.ResultId;
+    }
+
+    private string PatientLine(OrderFile file)
+    {
+        var sexAge = Display.SexAndAge(Texts, file.Patient.Gender, file.Patient.AgeYears);
+        return sexAge.Length > 0 ? $"{file.Patient.Name} · {sexAge}" : file.Patient.Name;
+    }
+
+    private string RowClass(ResultRow row) =>
+        string.Join(' ', new[]
+        {
+            Display.IsUncalledCritical(row) ? "critical" : null,
+            Display.AwaitsTechnicalValidation(row) ? "pending" : null,
+            row.ResultId == _commentRow ? "current" : null
+        }.Where(c => c is not null));
+
+    private string Previous(ResultRow row) =>
+        row.PreviousValue is { } value
+            ? row.PreviousDate is { } date
+                ? $"{Display.Number(value, Display.SeparatorOf(row.Value))} ({Texts.ShortDate(date)})"
+                : Display.Number(value, Display.SeparatorOf(row.Value))
+            : "—";
+
+    private void Tick(ResultRow row, bool ticked)
+    {
+        if (!Display.CanTick(row)) return;
+        if (ticked) _ticked.Add(row.ResultId);
+        else _ticked.Remove(row.ResultId);
+        _commentRow = row.ResultId;
+    }
+
+    private void OpenCritical(ResultRow row)
+    {
+        _criticalRow = row;
+        _sheet = OrderSheet.Critical;
+    }
+
+    private void CloseSheet() => _sheet = OrderSheet.None;
+
+    private async Task CriticalDoneAsync(string? note)
+    {
+        _sheet = OrderSheet.None;
+        _message = note is { Length: > 0 } ? new("ok", note) : null;
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// « Valider la sélection »: a value an out-of-control QC run covers needs the biologist's
+    /// justification first (Dérogation); the others go as they are.
+    /// </summary>
+    private async Task ValidateAsync()
+    {
+        if (_ticked.Count == 0 || _busy) return;
+        if (QcRows.Count > 0)
+        {
+            _sheet = OrderSheet.Derogation;
+            return;
+        }
+
+        await SendAsync(null);
+    }
+
+    private async Task SendAsync(string? justification)
+    {
+        if (_file is null) return;
+        _sheet = OrderSheet.None;
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            // Each release names the value it was decided on: one stored since is refused by the server.
+            var decisions = _file.Rows
+                .Where(r => _ticked.Contains(r.ResultId) && Display.CanTick(r))
+                .Select(r => new ValidationDecisionRequest(
+                    r.ResultId, true,
+                    _comments.GetValueOrDefault(r.ResultId) is { } c && !string.IsNullOrWhiteSpace(c) ? c.Trim() : null,
+                    Display.HasFlag(r, "QcOutOfControl") ? justification?.Trim() : null,
+                    r.EnteredAt))
+                .ToList();
+
+            var sentAt = DateTimeOffset.Now;
+            var result = await Api.ValidateAsync(_file.OrderId, new ValidationRequest(decisions));
+
+            if (result.Offline || result.Status == System.Net.HttpStatusCode.Unauthorized) return;
+
+            // A value changed under the biologist's eyes, or the file moved: say so, read it again.
+            if (result.IsConflict || result is { IsSuccess: true, Value: { ValueChanged: true, Validated: 0 } })
+            {
+                _message = new("warning", result.Value is { } changed ? string.Join("\n", changed.Blocked) : result.Message);
+                await LoadAsync();
+                return;
+            }
+
+            if (result is not { IsSuccess: true, Value: { } outcome })
+            {
+                _message = new("critical", result.Message);
+                return;
+            }
+
+            Workflow.LastValidation = new ValidationRun(_file.OrderId, outcome, decisions.Select(d => d.ResultId).ToHashSet(), sentAt);
+            Navigation.NavigateTo($"dossier/{_file.OrderId}/validee");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

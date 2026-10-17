@@ -42,6 +42,8 @@ public sealed record ContextLine(string Tone, string Badge, string Text);
 
 /// <summary>An open file: its patient, its context and the rows the biologist decides on.</summary>
 /// <param name="CanIssueReport">« Compte rendu » is offered: a value of the file is validated and not yet reported.</param>
+/// <param name="ValidatedCount">Values of the file already released, for the issue confirmation.</param>
+/// <param name="LatestReportVersion">The last report version issued for the file; null when none was.</param>
 public sealed record OrderFile(
     Guid OrderId,
     string AccessionNumber,
@@ -51,7 +53,9 @@ public sealed record OrderFile(
     DateTimeOffset? DueAt,
     bool CanIssueReport,
     IReadOnlyList<ContextLine> Context,
-    IReadOnlyList<ResultRow> Rows);
+    IReadOnlyList<ResultRow> Rows,
+    int ValidatedCount = 0,
+    int? LatestReportVersion = null);
 
 /// <summary>One row of an open file.</summary>
 /// <param name="Interpretation">Normal, Low, High, CriticalLow, CriticalHigh, Abnormal or NotInterpretable.</param>

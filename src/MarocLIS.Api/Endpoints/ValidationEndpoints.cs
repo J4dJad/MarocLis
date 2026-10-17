@@ -1,5 +1,6 @@
 using MarocLIS.Api.Contracts;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Results;
@@ -75,7 +76,7 @@ public static class ValidationEndpoints
     /// </summary>
     private static async Task<IResult> OpenAsync(
         Guid orderId, HttpContext http, ResultEntryService entry, ICurrentUser user, ILocalizer localizer,
-        IClock clock, CancellationToken ct)
+        IClock clock, IReportQueries reports, CancellationToken ct)
     {
         var opened = await entry.OpenAsync(orderId, ct: ct);
         if (opened.IsFailure) return ApiProblems.From(http, opened);
@@ -98,7 +99,9 @@ public static class ValidationEndpoints
             sheet.DueAt,
             ValidationScreenRules.CanIssueReport(sheet.Rows),
             context,
-            [.. listed.Select(r => Row(r, language))]);
+            [.. listed.Select(r => Row(r, language))],
+            sheet.Rows.Count(r => !r.IsHeading && r.Status is TestResultStatus.Validated or TestResultStatus.Reported),
+            (await reports.GetLatestVersionAsync(orderId, ct))?.VersionNumber);
 
         return Results.Ok(file);
     }

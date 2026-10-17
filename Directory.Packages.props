@@ -23,6 +23,14 @@
     -->
     <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
     <!--
+      « Validation à distance », phase 2: the phone's application is Blazor WebAssembly — the same
+      C# and the same contracts as the API, running in the phone's browser, with no JavaScript
+      framework to keep up to date beside the .NET one. The server package lets MarocLIS.Api serve
+      its framework files from the API's own origin.
+    -->
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
+    <!--
       EF Core 10's SqlServer provider requires at least 6.1.1, so 6.0.2 was a downgrade NuGet
       refuses outright (NU1109). Pinned at the newest 6.1.x rather than the 7.x line: 7.0 is a major
       version of the driver that carries this application's every read and write, and taking that
@@ -85,6 +93,12 @@
       custom header, endpoints — in memory against the test SQL Server, with no port opened.
     -->
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
+    <!--
+      bUnit renders the phone's Blazor components in memory — no browser — so the rules a screen
+      applies (which rows can be ticked, the justification's counter, the right-to-left layout) are
+      tested where they are written.
+    -->
+    <PackageVersion Include="bunit" Version="2.7.2" />
   </ItemGroup>
 
 </Project>

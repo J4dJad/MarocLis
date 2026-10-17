@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
+    <!-- Serves the phone's Blazor WebAssembly application (UseBlazorFrameworkFiles). -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
     <PackageReference Include="Serilog.Settings.Configuration" />
     <PackageReference Include="Serilog.Sinks.Console" />
@@ -25,6 +27,12 @@
     <ProjectReference Include="..\MarocLIS.Domain\MarocLIS.Domain.csproj" />
     <ProjectReference Include="..\MarocLIS.Infrastructure\MarocLIS.Infrastructure.csproj" />
     <ProjectReference Include="..\MarocLIS.Localization\MarocLIS.Localization.csproj" />
+    <!--
+      The phone's application. Referenced so its files are published with the service and served
+      from the same origin as the API: one address for the phone, one certificate (tailscale serve),
+      and the session cookie, SameSite=Strict, sent by the browser without any cross-origin set-up.
+    -->
+    <ProjectReference Include="..\MarocLIS.Mobile\MarocLIS.Mobile.csproj" />
     <ProjectReference Include="..\MarocLIS.Reporting\MarocLIS.Reporting.csproj" />
   </ItemGroup>
 

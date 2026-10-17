@@ -77,6 +77,22 @@ public static class RequestPipeline
     }
 
     /// <summary>
+    /// What the phone's page may load and run: its own files and nothing else.
+    /// <para>
+    /// <c>'wasm-unsafe-eval'</c> is the one allowance, and it is what Blazor WebAssembly needs to
+    /// compile the .NET runtime; it permits WebAssembly compilation, not JavaScript <c>eval</c>. No
+    /// inline script or style is allowed — the page has none (no import map: the framework files are
+    /// not fingerprinted, see MarocLIS.Mobile.csproj) — so an injected script tag runs nowhere. No
+    /// other origin is named: the fonts are served from here, and the application must work inside
+    /// the laboratory's private network with nothing fetched from the Internet.
+    /// </para>
+    /// </summary>
+    public const string ContentSecurityPolicy =
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self'; " +
+        "font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; " +
+        "base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+
+    /// <summary>
     /// Nothing the API answers may be kept: by the phone's browser cache, by a proxy, or in the
     /// back-forward cache once the biologist has signed out. Every API answer carries patient data
     /// or is about to, so the rule is set once for all of them rather than endpoint by endpoint.
@@ -89,6 +105,8 @@ public static class RequestPipeline
             headers.XContentTypeOptions = "nosniff";
             headers.XFrameOptions = "DENY";
             headers["Referrer-Policy"] = "no-referrer";
+            headers.ContentSecurityPolicy = ContentSecurityPolicy;
+            headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()";
 
             if (IsApi(context))
             {
@@ -100,6 +118,20 @@ public static class RequestPipeline
         });
 
         return next();
+    }
+
+    /// <summary>
+    /// The application's entry points — the page, the service worker and its list of files, the
+    /// manifest — are checked with the server on every load (<c>no-cache</c>), so a new version of
+    /// the application reaches the phones at their next opening rather than whenever a cache
+    /// expires. The other files are named in that list with their hash and are re-fetched when it
+    /// changes. None of them holds patient data.
+    /// </summary>
+    public static void CacheShell(Microsoft.AspNetCore.StaticFiles.StaticFileResponseContext context)
+    {
+        var name = context.File.Name;
+        if (name is "index.html" or "service-worker.js" or "service-worker-assets.js" or "manifest.webmanifest")
+            context.Context.Response.Headers.CacheControl = "no-cache";
     }
 
     public static bool IsApi(HttpContext context) =>

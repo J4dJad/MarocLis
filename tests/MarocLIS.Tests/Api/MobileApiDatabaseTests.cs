@@ -775,6 +775,73 @@ public sealed class MobileApiDatabaseTests(MobileApiDatabase database) : IClassF
             .Should().Be(1);
     }
 
+    // ---- 5b. What the phone's screens show ------------------------------------------------------------
+
+    [SqlServerFact]
+    public async Task L_ThePhonesScreens_GetTheSiteTheLanguageTheChannelAndTheReportsSignatory()
+    {
+        var lab = await LabAsync();
+        var file = await FileAsync(lab, OrderPriority.Urgent, (lab.Glucose, "450", true), (lab.Sodium, "40", true));
+
+        // « Mon compte »: the site by its name, and since when.
+        var phone = Phone();
+        var signIn = await phone.PostAsJsonAsync(ApiProtocol.SessionRoute, new SignInRequest(lab.Biologist.UserName, Password));
+        var session = await ReadAsync<SessionInfo>(signIn);
+        session.SiteName.Should().Be("Laboratoire mobile");
+        session.SignedInAt.Should().BeCloseTo(DateTimeOffset.Now, TimeSpan.FromMinutes(1));
+        session.Language.Should().Be(nameof(AppLanguage.French));
+        (await ReadAsync<SessionInfo>(await phone.GetAsync(ApiProtocol.SessionRoute))).SignedInAt.Should().Be(session.SignedInAt);
+
+        // The language: the session's, from the next request on — what the server writes follows.
+        var unknown = await phone.PutAsJsonAsync(ApiProtocol.LanguageRoute, new LanguageRequest("Klingon"));
+        unknown.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ProblemKeyAsync(unknown)).Should().Be("Mobile_UnknownLanguage");
+
+        var arabic = await ReadAsync<SessionInfo>(await phone.PutAsJsonAsync(ApiProtocol.LanguageRoute, new LanguageRequest("Arabic")));
+        arabic.Language.Should().Be(nameof(AppLanguage.Arabic));
+        arabic.SignedInAt.Should().Be(session.SignedInAt);
+        var list = await ReadAsync<WorklistResponse>(await phone.GetAsync(ApiProtocol.WorklistRoute));
+        list.Entries.Single(e => e.OrderId == file.OrderId).Alerts.Should()
+            .Contain(a => a.Text.Any(c => c >= '\u0600' && c <= '\u06FF'), "the alerts are written in Arabic now");
+
+        await using (var context = database.Context())
+            (await context.Users.AsNoTracking().SingleAsync(u => u.Id == lab.Biologist.Id)).PreferredLanguage
+                .Should().Be(AppLanguage.French, "the account's own language is the workstation's to change");
+
+        // The critical call « sur place », and a channel the phone does not offer.
+        var opened = await ReadAsync<OrderFile>(await phone.GetAsync($"/api/dossiers/{file.OrderId}"));
+        var critical = opened.Rows.Single(r => r.ResultId == file.ByAnalysis[lab.Glucose.Id].Id);
+
+        var fax = await phone.PostAsJsonAsync($"/api/critiques/{critical.ResultId}",
+            new RaiseCriticalRequest(file.OrderId, critical.EnteredAt, null, "Fax"));
+        fax.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ProblemKeyAsync(fax)).Should().Be("Mobile_UnknownChannel");
+
+        var call = await ReadAsync<RaisedCritical>(await phone.PostAsJsonAsync($"/api/critiques/{critical.ResultId}",
+            new RaiseCriticalRequest(file.OrderId, critical.EnteredAt, null, ApiProtocol.Channels.InPerson)));
+        (await phone.PostAsJsonAsync($"/api/critiques/notifications/{call.NotificationId}/acquittement",
+            new AcknowledgeCriticalRequest("Dr BENNANI", null, "450"))).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        await using (var context = database.Context())
+            (await context.CriticalResultNotifications.AsNoTracking().SingleAsync(n => n.Id == call.NotificationId))
+                .Channel.Should().Be(NotificationChannel.InPerson);
+
+        // « Validée »: what was released, and the last report — none yet, then the one just issued.
+        opened = await ReadAsync<OrderFile>(await phone.GetAsync($"/api/dossiers/{file.OrderId}"));
+        opened.ValidatedCount.Should().Be(0);
+        opened.LatestReportVersion.Should().BeNull();
+        (await ReadAsync<ValidationOutcomeResponse>(await ValidateAsync(phone, file.OrderId,
+            [.. opened.Rows.Where(r => r.CanTick).Select(Release)]))).Validated.Should().Be(2);
+
+        var report = await ReadAsync<ReleasedReportResponse>(await phone.PostAsync($"/api/dossiers/{file.OrderId}/compte-rendu", null));
+        report.SignedBy.Should().Be("Dr Karim ALAMI");
+        report.ReleasedAt.Should().BeCloseTo(DateTimeOffset.Now, TimeSpan.FromMinutes(1));
+
+        var after = await ReadAsync<OrderFile>(await phone.GetAsync($"/api/dossiers/{file.OrderId}"));
+        after.ValidatedCount.Should().Be(2);
+        after.LatestReportVersion.Should().Be(1);
+    }
+
     // ---- 6. The device on every trace ---------------------------------------------------------------------
 
     [SqlServerFact]

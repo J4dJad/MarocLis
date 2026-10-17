@@ -19,6 +19,7 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="bunit" />
   </ItemGroup>
 
   <ItemGroup>
@@ -35,6 +36,8 @@
     <!-- The phone's API, started in memory by WebApplicationFactory against the test SQL Server. -->
     <ProjectReference Include="..\..\src\MarocLIS.Api\MarocLIS.Api.csproj" />
     <ProjectReference Include="..\..\src\MarocLIS.Api.Contracts\MarocLIS.Api.Contracts.csproj" />
+    <!-- The phone's application: its components rendered by bUnit, its rules called directly. -->
+    <ProjectReference Include="..\..\src\MarocLIS.Mobile\MarocLIS.Mobile.csproj" />
   </ItemGroup>
 
   <ItemGroup>

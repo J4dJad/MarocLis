@@ -961,7 +961,7 @@ Le service **MarocLIS.Api** permet aux biologistes de valider depuis leur télé
 **Installation (une fois)**
 
 1. Sur le serveur, installer le **ASP.NET Core Runtime 10** (programme « Hosting Bundle » ou « ASP.NET Core Runtime x64 » sur https://dotnet.microsoft.com/download/dotnet/10.0). Inutile si le service est publié en mode autonome (« self-contained »).
-2. Copier le dossier publié du service (par exemple `C:\MarocLIS\Api`) : il contient `MarocLIS.Api.exe` et `appsettings.json`.
+2. Copier le dossier publié du service (par exemple `C:\MarocLIS\Api`) : il contient `MarocLIS.Api.exe`, `appsettings.json` et le dossier `wwwroot`, qui est l'application du téléphone (servie par le service lui-même ; rien à installer d'autre).
 3. Dans `appsettings.json` : recopier dans `Database:ConnectionString` la chaîne de connexion des postes, et la section `PasswordPolicy` des postes (le délai d'inactivité et le blocage après échecs sont ceux du poste). Ne pas changer `Urls` (`http://127.0.0.1:5080`) : au démarrage, le service écrit un avertissement dans son journal s'il écoute au-delà de la machine.
 4. Compte du service : avec `Integrated Security=true`, le compte Windows qui fait tourner le service doit pouvoir se connecter à SQL Server et lire / écrire la base MarocLIS (même rôle de base que les postes). Un compte dédié (par exemple `LAB\svc-maroclis`) est préférable à LocalSystem.
 5. Créer le service, dans PowerShell lancé en administrateur, depuis le dossier du service :
@@ -969,10 +969,10 @@ Le service **MarocLIS.Api** permet aux biologistes de valider depuis leur télé
    - ou à la main : `sc.exe create MarocLIS.Api binPath= "C:\MarocLIS\Api\MarocLIS.Api.exe" start= delayed-auto obj= LAB\svc-maroclis password= ...`, puis `sc.exe failure MarocLIS.Api reset= 86400 actions= restart/60000/restart/60000/restart/300000` et `sc.exe start MarocLIS.Api`.
 6. Installer **Tailscale** sur le serveur et le connecter au réseau (tailnet) du laboratoire. Dans la console d'administration Tailscale (DNS), activer **MagicDNS** et **HTTPS Certificates**.
 7. Sur le serveur : `tailscale serve --bg 5080`. La commande affiche l'adresse publiée, `https://<machine>.<tailnet>.ts.net` ; la configuration est conservée aux redémarrages. `tailscale serve status` la montre, `tailscale serve --https=443 off` la retire.
-8. Sur chaque téléphone : installer l'application Tailscale, se connecter au tailnet du laboratoire, puis ouvrir l'adresse publiée dans le navigateur.
+8. Sur chaque téléphone : installer l'application Tailscale, se connecter au tailnet du laboratoire, puis ouvrir l'adresse publiée dans le navigateur et ajouter l'application « MarocLIS Validation » à l'écran d'accueil (Android : Chrome, menu **⋮** › **Ajouter à l'écran d'accueil** ; iPhone : Safari, **Partager** › **Sur l'écran d'accueil**).
 9. Dans MarocLIS, **Rôles et droits** : ajouter le droit `results.validate_remote` au rôle des biologistes concernés (ils doivent aussi avoir `results.validate_biological` et une qualification de biologiste valide).
 
-**Mise à jour du service** : arrêter le service (`sc.exe stop MarocLIS.Api`), copier les nouveaux fichiers en gardant `appsettings.json`, redémarrer. Les téléphones doivent se reconnecter. Le service ne met pas la base à jour : mettez d'abord à jour un poste (qui applique les migrations au démarrage), puis le service. Pour le retirer : `.\install-api-service.ps1 -Uninstall`.
+**Mise à jour du service** : arrêter le service (`sc.exe stop MarocLIS.Api`), copier les nouveaux fichiers en gardant `appsettings.json`, redémarrer. Les téléphones doivent se reconnecter ; ils prennent la nouvelle version de l'application à l'ouverture suivante. Le service ne met pas la base à jour : mettez d'abord à jour un poste (qui applique les migrations au démarrage), puis le service. Pour le retirer : `.\install-api-service.ps1 -Uninstall`.
 
 **Sécurité, à savoir**
 

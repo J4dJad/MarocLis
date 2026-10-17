@@ -79,17 +79,21 @@ Légende : **OUI** = présent et utilisable ; **PARTIEL** = présent mais incomp
 
 ## Validation à distance (téléphone)
 
-Phase 1 : service `MarocLIS.Api` seulement (aucun écran sur le téléphone avant la phase 2). Références dans `src/MarocLIS.Api/`, tests dans `tests/MarocLIS.Tests/Api/`.
+Service `MarocLIS.Api` (`src/MarocLIS.Api/`) et application du téléphone `MarocLIS.Mobile` (`src/MarocLIS.Mobile/`, Blazor WebAssembly servi par le service). Tests dans `tests/MarocLIS.Tests/Api/` et `tests/MarocLIS.Tests/Mobile/`. Jeu de démonstration : `tools/mobile-demo`.
 
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
 |---|---|---|---|---|
-| Se connecter depuis le téléphone (deux droits exigés) | Téléphone | `POST /api/session` | PARTIEL | Endpoints/SessionEndpoints.cs ; service prêt, écran en phase 2 |
-| Session fermée à l'inactivité, après 12 h, au changement du compte, sur un autre appareil | Téléphone | — | OUI | Security/SessionCookie.cs, Security/MobileSessionStore.cs |
-| Liste à valider avec filtres et compteurs | Téléphone | `GET /api/validation/worklist?filtre=tous\|urgents\|anomalies\|cq` | PARTIEL | Endpoints/ValidationEndpoints.cs ; mêmes règles que le poste (Application/Results/ValidationScreenRules.cs) ; écran en phase 2 |
-| Ouvrir un dossier, antériorités | Téléphone | `GET /api/dossiers/{id}`, `.../parametres/{id}/historique` | PARTIEL | Idem |
-| Valider avec contrôle de la valeur affichée | Téléphone | `POST /api/dossiers/{id}/validation` | PARTIEL | Refus « valeur changée » : Application/Results/ValidationService.cs |
-| Communiquer un critique / injoignable | Téléphone | `POST /api/critiques/...` | PARTIEL | Endpoints/CriticalEndpoints.cs ; mode téléphone seulement |
-| Émettre le compte rendu et le voir en images | Téléphone | `POST /api/dossiers/{id}/compte-rendu`, `GET /api/comptes-rendus/{id}/apercu?page=n` | PARTIEL | Endpoints/ReportEndpoints.cs ; aperçu seulement pendant la session qui l'a émis |
+| Se connecter depuis le téléphone (deux droits exigés), choix de la langue | Connexion | **Identifiant**, **Mot de passe**, **Se connecter**, **Français** / **العربية** / **English** | OUI | Pages/SignIn.razor ; Endpoints/SessionEndpoints.cs |
+| Session fermée à l'inactivité, après 12 h, au changement du compte, sur un autre appareil | Connexion (variantes) | **Se reconnecter** | OUI | Services/SessionState.cs (même délai que le serveur) ; Security/SessionCookie.cs, Security/MobileSessionStore.cs ; toute réponse 401 ramène à la connexion |
+| Liste à valider avec filtres et compteurs | À valider | **Tous**, **Urgents**, **Avec anomalies**, **CQ**, **Actualiser** | OUI | Pages/Worklist.razor ; mêmes règles que le poste (Application/Results/ValidationScreenRules.cs) |
+| Ouvrir un dossier, contexte, antériorités | Dossier, Antériorités | **Dossier ›**, **Ant.** | OUI | Pages/OrderPage.razor, Components/ContextSheet.razor, Pages/HistoryPage.razor (courbe SVG, valeurs « reprise ») |
+| Valider avec contrôle de la valeur affichée | Dossier | **Valider la sélection (*n*)** | OUI | Envoi de l'heure de saisie affichée ; 409 : message et relecture du dossier |
+| Dérogation CIQ (15 à 1000 caractères) | Dérogation contrôle interne | **Justification**, **Valider avec dérogation** | OUI | Components/DerogationSheet.razor |
+| Communiquer un critique / injoignable | Communiquer une valeur critique | **Téléphone** / **Sur place**, **Personne prévenue**, **Valeur répétée par la personne**, **Enregistrer la communication**, **Injoignable** | OUI | Components/CriticalSheet.razor ; Endpoints/CriticalEndpoints.cs (moyen Téléphone ou Sur place) |
+| Émettre le compte rendu et le voir en images | Validée, Émettre, Compte rendu | **Émettre et signer le compte rendu**, **Émettre et signer**, **Terminé** | OUI | Pages/OutcomePage.razor, Components/IssueSheet.razor, Pages/PreviewPage.razor ; aperçu seulement pendant la session qui l'a émis, sans téléchargement |
+| Mon compte, langue, déconnexion | Mon compte | **Langue**, **Se déconnecter** | OUI | Components/AccountSheet.razor ; `PUT /api/session/langue` (langue de la session seulement) |
+| Hors connexion | Toutes | bandeau **Hors connexion** | OUI | Layout/MainLayout.razor ; le service worker ne met jamais `/api` en cache (wwwroot/service-worker.published.js) |
+| Installer sur l'écran d'accueil | — | Android : **Ajouter à l'écran d'accueil** ; iPhone : **Sur l'écran d'accueil** | OUI | wwwroot/manifest.webmanifest (« MarocLIS Validation », icônes 192 et 512) |
 
 ## Comptes rendus
 

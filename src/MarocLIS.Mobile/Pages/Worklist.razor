@@ -1,0 +1,133 @@
+@page "/"
+@inherits SecurePage
+
+@if (Allowed)
+{
+    <div class="screen">
+        <header class="listhead">
+            <div class="listhead-top">
+                <div class="stack">
+                    <h1 class="listhead-title" id="title">@T("Validation.ToValidateColumn")</h1>
+                    @if (_list is { } list)
+                    {
+                        <div class="listhead-sub">@T("Validation.PendingSummary", list.Entries.Count, list.Entries.Sum(e => e.AwaitingCount))</div>
+                    }
+                </div>
+                <div class="listhead-actions">
+                    <button type="button" class="icon-button" aria-label="@T("Action.Refresh")" @onclick="LoadAsync"
+                            disabled="@(_loading || !Online)">
+                        <Icon Name="refresh" Class="@(_loading ? "spin" : null)" />
+                    </button>
+                    <button type="button" class="avatar" aria-label="@T("MobileUi.AccountOpen")" @onclick="() => _account = true">
+                        @Display.Initials(Session.Info?.FullName)
+                    </button>
+                </div>
+            </div>
+            <div class="chips" role="group" aria-labelledby="title">
+                <Chip Filter="@(ApiProtocol.Filters.All)" Count="@_list?.Counts.All" Current="@(Workflow.Filter)" OnChoose="ChooseAsync">@T("Sample.FilterAll")</Chip>
+                <Chip Filter="@(ApiProtocol.Filters.Urgent)" Count="@_list?.Counts.Urgent" Current="@(Workflow.Filter)" OnChoose="ChooseAsync">@T("Validation.FilterUrgent")</Chip>
+                <Chip Filter="@(ApiProtocol.Filters.Abnormal)" Count="@_list?.Counts.Abnormal" Current="@(Workflow.Filter)" OnChoose="ChooseAsync">@T("Validation.FilterAbnormal")</Chip>
+                <Chip Filter="@(ApiProtocol.Filters.QcBlocked)" Count="@_list?.Counts.QcBlocked" Current="@(Workflow.Filter)" OnChoose="ChooseAsync">@T("MobileUi.WorklistChipQc")</Chip>
+            </div>
+        </header>
+
+        <main class="content">
+            @if (_error is { Length: > 0 })
+            {
+                <div class="message message-critical" role="alert">@_error</div>
+            }
+
+            @if (_list is null)
+            {
+                @if (_loading)
+                {
+                    <div class="empty" role="status">@T("App.Loading")</div>
+                }
+            }
+            else if (_list.Entries.Count == 0)
+            {
+                <div class="empty">@T("MobileUi.WorklistEmpty")</div>
+            }
+            else
+            {
+                @foreach (var entry in _list.Entries)
+                {
+                    <a class="order-card" href="dossier/@entry.OrderId">
+                        <div class="order-line">
+                            <span class="order-acc ltr">@entry.AccessionNumber</span>
+                            @if (Display.IsUrgent(entry.Priority))
+                            {
+                                <Pill Tone="critical">@T(Display.PriorityKey(entry.Priority))</Pill>
+                            }
+                            <span class="order-time ltr">@Texts.WhenShort(entry.RegisteredAt)</span>
+                        </div>
+                        <div class="order-patient">
+                            @entry.PatientName
+                            @if (Display.SexAndAge(Texts, entry.Gender, entry.AgeYears) is { Length: > 0 } sexAge)
+                            {
+                                <span class="muted"> · @sexAge</span>
+                            }
+                        </div>
+                        <div class="order-facts">
+                            <span>@T("MobileUi.WorklistAwaiting", entry.AwaitingCount)</span>
+                            @if (entry.AbnormalCount > 0)
+                            {
+                                <span class="abnormal">· @T("MobileUi.WorklistAbnormal", entry.AbnormalCount)</span>
+                            }
+                            @foreach (var alert in entry.Alerts)
+                            {
+                                <Pill Tone="@Display.Tone(alert.Tone)">@alert.Text</Pill>
+                            }
+                        </div>
+                    </a>
+                }
+            }
+        </main>
+    </div>
+
+    @if (_account)
+    {
+        <AccountSheet OnClose="() => _account = false" OnLanguageChanged="LoadAsync" />
+    }
+}
+
+@code {
+    private WorklistResponse? _list;
+    private bool _loading;
+    private bool _account;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Allowed) return;
+        await LoadAsync();
+    }
+
+    private async Task ChooseAsync(string filter)
+    {
+        if (filter == Workflow.Filter) return;
+        Workflow.Filter = filter;
+        await LoadAsync();
+    }
+
+    /// <summary>The list as it is now: on opening, on « Actualiser », on a chip. Never kept beyond the screen.</summary>
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        var result = await Api.WorklistAsync(Workflow.Filter);
+        _loading = false;
+
+        if (result is { IsSuccess: true, Value: { } list })
+        {
+            _list = list;
+            Workflow.WorklistOrder = [.. list.Entries.Select(e => e.OrderId)];
+        }
+        else if (!result.Offline && result.Status != System.Net.HttpStatusCode.Unauthorized)
+        {
+            _error = result.Message;
+        }
+    }
+}

@@ -11,6 +11,8 @@ public sealed record SignInRequest(string UserName, string Password);
 /// phone can lock its screen at the same moment instead of failing on the next tap.
 /// </param>
 /// <param name="Workstation">What the audit trail records as the device: « Mobile · … ».</param>
+/// <param name="SiteName">The site's name in the session's language, for « Mon compte ».</param>
+/// <param name="SignedInAt">When the session opened: « Connecté depuis » on the phone.</param>
 public sealed record SessionInfo(
     string UserName,
     string FullName,
@@ -18,4 +20,13 @@ public sealed record SessionInfo(
     string SiteCode,
     string Language,
     int IdleTimeoutMinutes,
-    string Workstation);
+    string Workstation,
+    string? SiteName = null,
+    DateTimeOffset? SignedInAt = null);
+
+/// <summary>
+/// The language the phone's session speaks from now on: French, Arabic or English. It changes the
+/// session only — what the server writes (alerts, analysis names, refusals) — and not the account's
+/// preferred language, which is the workstation's to set.
+/// </summary>
+public sealed record LanguageRequest(string Language);

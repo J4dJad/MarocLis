@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MarocLIS.Mobile</RootNamespace>
+    <AssemblyName>MarocLIS.Mobile</AssemblyName>
+    <!--
+      « Validation à distance », phase 2: the biologist's phone application, a Blazor WebAssembly
+      PWA served by MarocLIS.Api from its own origin. It holds no patient data of its own: every
+      screen is read from the API when it opens, and the service worker keeps the application's
+      files only (see wwwroot/service-worker.published.js).
+    -->
+
+    <!--
+      No culture data is downloaded (about 1 MB per shard). The phone shows values exactly as the
+      server wrote them, and the few dates and times it formats itself use fixed patterns with Latin
+      digits, as the workstation and the printed report do in all three languages.
+    -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!--
+      Framework files keep their plain names (dotnet.js, not dotnet.4kx2….js). Fingerprinted names
+      need an inline import map in index.html, and the page's Content-Security-Policy allows no
+      inline script (RequestPipeline.ContentSecurityPolicy). Staleness is handled by the service
+      worker, which re-fetches every file whose hash changed in service-worker-assets.js.
+    -->
+    <WasmFingerprintAssets>false</WasmFingerprintAssets>
+    <OverrideHtmlAssetPlaceholders>false</OverrideHtmlAssetPlaceholders>
+
+    <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MarocLIS.Api.Contracts\MarocLIS.Api.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MarocLIS.Tests" />
+  </ItemGroup>
+
+  <!-- The texts: the workstation's catalogues, the part this application uses. See Build/MobileStrings.targets. -->
+  <Import Project="Build\MobileStrings.targets" />
+
+</Project>
