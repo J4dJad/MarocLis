@@ -206,6 +206,21 @@ public sealed class DataMigrationView : LocalizedView
         sourceCard.Dock = DockStyle.Top;
         sourceCard.Height = 196;
 
+        // The first row wraps on a narrow window (and the labels are longer in some languages): the
+        // card takes the height its rows need instead of clipping the file or database row.
+        void FitSourceCard()
+        {
+            if (!sourceCard.IsHandleCreated || !body.IsHandleCreated) return;
+            var top = sourceCard.PointToClient(body.PointToScreen(Point.Empty)).Y;
+            var below = sourceCard.Height - top - body.Height;
+            var needed = top + second.Bottom + second.Margin.Bottom + body.Padding.Bottom + below;
+            if (needed > 0 && needed != sourceCard.Height) sourceCard.Height = needed;
+        }
+        first.SizeChanged += (_, _) => FitSourceCard();
+        second.SizeChanged += (_, _) => FitSourceCard();
+        second.LocationChanged += (_, _) => FitSourceCard();
+        sourceCard.HandleCreated += (_, _) => BeginInvoke(FitSourceCard);
+
         BuildGrids();
 
         _tabs.TabPages.AddRange([_previewPage, _mappingPage, _correspondencePage, _reportPage, _journalPage,
@@ -268,9 +283,10 @@ public sealed class DataMigrationView : LocalizedView
 
     private static void AddTo(FlowLayoutPanel row, params Control[] controls)
     {
+        // No trailing gap after the last control: mirrored (Arabic), that empty strip is left unpainted.
         foreach (var control in controls)
         {
-            control.Margin = new Padding(0, 0, 10, 0);
+            control.Margin = new Padding(0, 0, control == controls[^1] ? 0 : 10, 0);
             row.Controls.Add(control);
         }
     }

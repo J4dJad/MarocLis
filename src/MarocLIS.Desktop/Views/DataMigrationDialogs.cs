@@ -208,6 +208,7 @@ internal sealed class SourceConnectionDialog : LocalizedForm
         _user.Enabled = _password.Enabled = login;
         _remember.Enabled = login;
 
+        _serverLabel.Text = T(sql ? "Migration.Server" : "Migration.ServerHost");
         _server.PlaceholderText = sql ? @".\SQLEXPRESS" : "localhost";
         _connectionString.PlaceholderText = @"Driver={…};Dbq=C:\…";
     }

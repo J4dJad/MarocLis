@@ -862,7 +862,7 @@ Les données viennent d'un fichier Excel (.xlsx) ou CSV, ou directement de la ba
 - **Importer** : écrit les lignes par lots de 200, chaque lot dans sa propre transaction ; **Arrêter** interrompt entre deux lots (les lots écrits restent).
 - **Plus d'actions** › **Annuler la dernière reprise…** : retire ce que la dernière reprise a créé et que rien n'a utilisé depuis.
 
-**L'écran** : en haut le titre « Reprise de données » et la phrase « Patients, prescripteurs, catalogue, antériorités et créances de l'ancienne application, contrôlés avant import » ; **Plus d'actions** à droite. Dessous la carte **Source** (données à reprendre, ancienne application, profil, fichier ou base, case de rapprochement par nom), puis les onglets, et en bas la barre d'action avec la progression, **Arrêter**, **Simulation** et **Importer**. En arabe, l'écran est inversé.
+**L'écran** : en haut le titre « Reprise de données » et la phrase « Données de l'ancienne application, contrôlées avant import » ; **Plus d'actions** à droite. Dessous la carte **Source** (données à reprendre, ancienne application, profil, fichier ou base, case de rapprochement par nom), puis les onglets, et en bas la barre d'action avec la progression, **Arrêter**, **Simulation** et **Importer**. En arabe, l'écran est inversé.
 
 **Correspondance des colonnes.** À la lecture, chaque colonne de la source est associée au champ MarocLIS qui porte le même nom ou un nom voisin (« NOM_PAT », « DATE_NAISS », « GSM », « MUTUELLE »…). L'onglet **Colonnes** montre, pour chaque champ, la colonne retenue et des exemples de valeurs ; changez-la dans la liste, ou choisissez « (non reprise) ». **Associer automatiquement** refait la proposition. Un champ obligatoire sans colonne est en rouge et bloque l'import.
 

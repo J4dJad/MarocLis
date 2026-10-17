@@ -471,7 +471,7 @@
   },
 
   "Migration": {
-    "Caption": "Patients, prescripteurs, catalogue, antériorités et créances de l'ancienne application, contrôlés avant import",
+    "Caption": "Données de l'ancienne application, contrôlées avant import",
     "SourceTitle": "Source",
     "Kind": "Données à reprendre",
     "SourceSystem": "Ancienne application",
@@ -614,6 +614,7 @@
     "TypeMySql": "MySQL / MariaDB",
     "TypeOdbc": "Autre (ODBC)",
     "Server": "Serveur (et instance)",
+    "ServerHost": "Serveur",
     "Port": "Port",
     "OdbcDsn": "Source de données ODBC (DSN)",
     "OdbcConnectionString": "ou chaîne de connexion ODBC",
@@ -754,7 +755,7 @@
     "NationalActPickerDialog": "Recherchez l'acte par code ou libellé. Le code interne de l'analyse ne change pas.",
     "ShortcutsDialog": "Vos raccourcis sur ce poste : sélectionnez une ligne et tapez les touches.",
     "ChangePasswordForm": "Choisissez un mot de passe que vous seul connaissez.",
-    "SourceConnectionDialog": "Choisissez le type de base de l'ancienne application. Elle n'est lue qu'en lecture seule.",
+    "SourceConnectionDialog": "Type de base de l'ancienne application, ouverte en lecture seule.",
     "SourceQueryDialog": "Une seule requête SELECT : rien n'est jamais écrit dans l'ancienne base.",
     "SiteAccessDialog": "Les sites où ce compte peut travailler, et celui ouvert par défaut.",
     "RoleAssignmentDialog": "Cochez les rôles que ce compte détient.",

@@ -471,7 +471,7 @@
   },
 
   "Migration": {
-    "Caption": "Patients, prescribers, catalogue, history and balances of the old application, checked before import",
+    "Caption": "Data from the old application, checked before import",
     "SourceTitle": "Source",
     "Kind": "Data to take over",
     "SourceSystem": "Old application",
@@ -614,6 +614,7 @@
     "TypeMySql": "MySQL / MariaDB",
     "TypeOdbc": "Other (ODBC)",
     "Server": "Server (and instance)",
+    "ServerHost": "Server",
     "Port": "Port",
     "OdbcDsn": "ODBC data source (DSN)",
     "OdbcConnectionString": "or ODBC connection string",
@@ -754,7 +755,7 @@
     "NationalActPickerDialog": "Search the act by code or label. The analysis's internal code does not change.",
     "ShortcutsDialog": "Your shortcuts on this workstation: select a line and press the keys.",
     "ChangePasswordForm": "Choose a password only you know.",
-    "SourceConnectionDialog": "Choose the old application's kind of database. It is only ever read.",
+    "SourceConnectionDialog": "The old application's kind of database, opened read-only.",
     "SourceQueryDialog": "A single SELECT query: nothing is ever written to the old database.",
     "SiteAccessDialog": "The sites this account may work at, and the one opened by default.",
     "RoleAssignmentDialog": "Tick the roles this account holds.",
