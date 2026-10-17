@@ -51,6 +51,8 @@ public static class IconCatalog
         ["Billing.CreditNote"] = Glyph.FileMinus,
         ["Billing.IssueInvoice"] = Glyph.FileCheck,
         ["Billing.PrintInvoice"] = Glyph.Printer,
+        ["Billing.PrintInvoiceCotation"] = Glyph.Printer,
+        ["Billing.PrintInvoiceStandard"] = Glyph.Printer,
         ["Billing.PrintReceipt"] = Glyph.Receipt,
         ["Billing.RecordClaimOutcome"] = Glyph.Inbox,
         ["Billing.SubmitClaim"] = Glyph.Send,

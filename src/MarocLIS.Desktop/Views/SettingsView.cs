@@ -1,5 +1,6 @@
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Billing;
 using MarocLIS.Application.Orders;
 using MarocLIS.Application.Samples;
 using MarocLIS.Desktop.Infrastructure;
@@ -23,7 +24,7 @@ namespace MarocLIS.Desktop.Views;
 /// who cannot invoice deserves to be told which field is responsible rather than left to guess.
 /// </para>
 /// </summary>
-public sealed class SettingsView : LocalizedView
+public sealed partial class SettingsView : LocalizedView
 {
     private readonly ConfigurationService _configuration;
     private readonly UserAdministrationService _administration;
@@ -136,9 +137,11 @@ public sealed class SettingsView : LocalizedView
                         ICultureManager cultureManager,
                         ILogger<SettingsView>? logger = null,
                         WorkstationPrinters? printers = null,
-                        ILabelPrinter? labelPrinter = null)
+                        ILabelPrinter? labelPrinter = null,
+                        InvoicePrintSettingsService? invoicePrint = null)
         : base(localizer, cultureManager)
     {
+        _invoicePrint = invoicePrint;
         _printers = printers;
         _labelPrinter = labelPrinter;
         _configuration = configuration;
@@ -164,8 +167,9 @@ public sealed class SettingsView : LocalizedView
         BuildSettingsTab();
         BuildPrintersTab();
         BuildStorageTab();
+        BuildInvoicePrintTab();
 
-        _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _storageTab, _printersTab]);
+        _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _invoicePrintTab, _storageTab, _printersTab]);
 
         // The storage list is settings work: without the right the tab is not offered at all.
         if (!PermissionGate.Allows(Permissions.Administration.ManageSettings))
@@ -820,6 +824,7 @@ public sealed class SettingsView : LocalizedView
         _testLabel.Text = T("Printers.TestLabel");
         _reloadPrinters.Text = T("Action.Refresh");
         PopulatePrinters();
+        ApplyInvoicePrintTexts();
 
         SetText(_siteTab, "legalHeading", T("Site.LegalIdentity"));
         SetText(_siteTab, "authHeading", T("Site.Authorization"));
@@ -943,6 +948,7 @@ public sealed class SettingsView : LocalizedView
             await LoadSequencesAsync(ct);
             await LoadSettingsAsync(ct);
             await LoadPlacesAsync(ct);
+            await LoadInvoicePrintAsync(ct);
         }
         catch (OperationCanceledException) { }
         // Left before the load finished: the screen is gone, there is nothing to report on it.

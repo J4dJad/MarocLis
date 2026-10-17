@@ -28,6 +28,7 @@ public sealed class BillingView : LocalizedView
 
     private readonly BillingService _billing;
     private readonly IInvoiceRenderer _invoiceRenderer;
+    private readonly InvoicePrintSettingsService? _printSettings;
     private readonly IDocumentOutput _documents;
     private readonly IUserDialogs _dialogs;
     private readonly ICurrentUser _currentUser;
@@ -63,6 +64,11 @@ public sealed class BillingView : LocalizedView
     private readonly MenuAction _submitClaim = new();
     private readonly MenuAction _claimOutcome = new();
     private readonly MenuAction _payerSettlement = new();
+
+    // The print button uses the format chosen in Paramètres; these print one invoice in either
+    // format, for this print only.
+    private readonly MenuAction _printStandard = new();
+    private readonly MenuAction _printCotation = new();
     private readonly Button _printInvoice = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _printReceipt = UiTheme.SecondaryButton(string.Empty);
     private readonly Label _status = new();
@@ -74,11 +80,13 @@ public sealed class BillingView : LocalizedView
     public BillingView(BillingService billing, IInvoiceRenderer invoiceRenderer,
                        IDocumentOutput documents, IUserDialogs dialogs, ICurrentUser currentUser,
                        ILocalizer localizer, ICultureManager cultureManager,
-                       ILogger<BillingView>? logger = null)
+                       ILogger<BillingView>? logger = null,
+                       InvoicePrintSettingsService? printSettings = null)
         : base(localizer, cultureManager)
     {
         _billing = billing;
         _invoiceRenderer = invoiceRenderer;
+        _printSettings = printSettings;
         _documents = documents;
         _dialogs = dialogs;
         _currentUser = currentUser;
@@ -141,7 +149,7 @@ public sealed class BillingView : LocalizedView
         // Settlement at the far end; a refund and a bounced cheque one click further, away from the
         // button that takes money.
         var more = FinanceUi.MoreButton(_moreMenu, Localizer, _refund, _bounced, _submitClaim, _claimOutcome,
-                                        _payerSettlement);
+                                        _payerSettlement, _printStandard, _printCotation);
         var ledgerBar = FinanceUi.ActionBar(_status, [more, _creditNote, _printInvoice, _printReceipt], _pay);
         var ledgerCard = new FinanceCard(_ledger, footer: ledgerBar);
 
@@ -348,6 +356,10 @@ public sealed class BillingView : LocalizedView
         PermissionGate.Require(Permissions.Billing.CreditNote, _creditNote);
         _printInvoice.Click += async (_, _) => await RunBusyAsync(() => PrintAsync(receipt: false));
         _printReceipt.Click += async (_, _) => await RunBusyAsync(() => PrintAsync(receipt: true));
+        _printStandard.Click += async (_, _) =>
+            await RunBusyAsync(() => PrintAsync(receipt: false, InvoicePrintFormat.Standard));
+        _printCotation.Click += async (_, _) =>
+            await RunBusyAsync(() => PrintAsync(receipt: false, InvoicePrintFormat.CotationB));
 
         _ledger.CellFormatting += OnLedgerFormatting;
 
@@ -449,6 +461,8 @@ public sealed class BillingView : LocalizedView
         _submitClaim.Text = T("Billing.SubmitClaim");
         _printInvoice.Text = T("Billing.PrintInvoice");
         _printReceipt.Text = T("Billing.PrintReceipt");
+        _printStandard.Text = T("Billing.PrintInvoiceStandard");
+        _printCotation.Text = T("Billing.PrintInvoiceCotation");
         _refresh.Text = T("Action.Refresh");
 
         var selected = _statusFilter.SelectedIndex;
@@ -1302,13 +1316,18 @@ public sealed class BillingView : LocalizedView
         var enabled = PrintTarget() is not null;
         _printInvoice.Enabled = enabled;
         _printReceipt.Enabled = enabled;
+
+        // The coded format is that of an invoice: a credit note prints as it always has.
+        _printStandard.Enabled = enabled;
+        _printCotation.Enabled = enabled && PrintTarget() is { Kind: InvoiceKind.Invoice };
     }
 
     /// <summary>
     /// Renders the selected invoice, or its payment receipt, and opens it in the PDF viewer where
-    /// the operator prints it.
+    /// the operator prints it. The invoice is printed in the format given, or else in the default
+    /// format of Paramètres, with that format's display options.
     /// </summary>
-    private async Task PrintAsync(bool receipt)
+    private async Task PrintAsync(bool receipt, InvoicePrintFormat? requested = null)
     {
         _ledger.EndEdit();
 
@@ -1336,11 +1355,28 @@ public sealed class BillingView : LocalizedView
 
             var language = Localizer.CurrentLanguage;
 
+            var settings = InvoicePrintSettings.Default;
+
+            if (!receipt && _printSettings is not null)
+            {
+                var read = await _printSettings.GetAsync();
+
+                if (read.IsFailure)
+                {
+                    _dialogs.ShowFailure(read, title);
+                    return;
+                }
+
+                settings = read.Value;
+            }
+
+            var format = requested ?? settings.DefaultFormat;
+
             // QuestPDF lays out synchronously; off the UI thread so a long invoice does not freeze
             // the screen while it renders.
             var bytes = await Task.Run(() => receipt
                 ? _invoiceRenderer.RenderReceipt(document.Value, language)
-                : _invoiceRenderer.RenderInvoice(document.Value, language));
+                : _invoiceRenderer.RenderInvoice(document.Value, language, format, settings));
 
             var opened = await _documents.OpenAsync(bytes, "pdf");
 

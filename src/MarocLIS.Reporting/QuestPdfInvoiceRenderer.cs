@@ -2,6 +2,7 @@ using System.Globalization;
 using MarocLIS.Application.Billing;
 using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
+using MarocLIS.Localization;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -20,24 +21,42 @@ namespace MarocLIS.Reporting;
 /// Everything printed comes from the invoice as frozen at issue. The renderer computes nothing but
 /// the layout: the totals are the stored ones, so a reprint is the document the customer was given.
 /// </para>
+/// <para>
+/// Two formats share the letterhead, the parties and the footer: the standard one, above, and the
+/// coded one (« cotation B », in <c>QuestPdfInvoiceRenderer.Cotation.cs</c>), which lists each act
+/// with its national code and coefficient. The coded one is written in the session's language, and
+/// laid out right to left in Arabic; the standard one stays the French document it always was.
+/// </para>
 /// </summary>
-public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
+public sealed partial class QuestPdfInvoiceRenderer : IInvoiceRenderer
 {
     private readonly ReportingOptions _options;
+    private readonly ILocalizer? _localizer;
 
-    public QuestPdfInvoiceRenderer(ReportingOptions options)
+    public QuestPdfInvoiceRenderer(ReportingOptions options, ILocalizer? localizer = null)
     {
         _options = options;
+        _localizer = localizer;
         QuestPdfReportRenderer.Initialise(options);
     }
 
-    public byte[] RenderInvoice(InvoiceDocument doc, AppLanguage language)
+    public byte[] RenderInvoice(InvoiceDocument doc, AppLanguage language) =>
+        RenderInvoice(doc, language, InvoicePrintFormat.Standard, InvoicePrintSettings.Default);
+
+    public byte[] RenderInvoice(InvoiceDocument doc, AppLanguage language, InvoicePrintFormat format,
+                                InvoicePrintSettings settings)
     {
         ArgumentNullException.ThrowIfNull(doc);
-        var format = new Formatter(language);
+        ArgumentNullException.ThrowIfNull(settings);
 
-        return Create(doc, format, c => ComposeInvoiceBody(c, doc, format),
-                      DocumentTitle(doc.Kind), receipt: false).GeneratePdf();
+        if (InvoicePrintSettings.EffectiveFormat(doc.Kind, format) == InvoicePrintFormat.CotationB)
+            return RenderCotation(doc, language, settings);
+
+        var formatter = new Formatter(language);
+        var wording = Wording.French;
+
+        return Create(doc, formatter, wording, c => ComposeInvoiceBody(c, doc, formatter, settings),
+                      DocumentTitle(doc.Kind, wording), receipt: false).GeneratePdf();
     }
 
     public byte[] RenderReceipt(InvoiceDocument doc, AppLanguage language)
@@ -45,11 +64,11 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
         ArgumentNullException.ThrowIfNull(doc);
         var format = new Formatter(language);
 
-        return Create(doc, format, c => ComposeReceiptBody(c, doc, format),
+        return Create(doc, format, Wording.French, c => ComposeReceiptBody(c, doc, format),
                       "Reçu de paiement", receipt: true).GeneratePdf();
     }
 
-    private Document Create(InvoiceDocument doc, Formatter format, Action<IContainer> body,
+    private Document Create(InvoiceDocument doc, Formatter format, Wording wording, Action<IContainer> body,
                             string title, bool receipt) =>
         Document.Create(container =>
         {
@@ -57,27 +76,38 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
             {
                 page.Size(PageSizes.A4);
                 page.Margin(14, Unit.Millimetre);
-                page.DefaultTextStyle(x => x.FontSize(9).FontFamily(_options.LatinFontFamily)
-                                            .FontColor(Colors.Black));
 
-                page.Header().Element(c => ComposeHeader(c, doc, format, title, receipt));
+                if (wording.RightToLeft)
+                {
+                    page.DefaultTextStyle(x => x.FontSize(9)
+                                                .FontFamily(_options.ArabicFontFamily, _options.LatinFontFamily)
+                                                .FontColor(Colors.Black));
+                    page.ContentFromRightToLeft();
+                }
+                else
+                {
+                    page.DefaultTextStyle(x => x.FontSize(9).FontFamily(_options.LatinFontFamily)
+                                                .FontColor(Colors.Black));
+                }
+
+                page.Header().Element(c => ComposeHeader(c, doc, format, wording, title, receipt));
                 page.Content().PaddingTop(6).Element(body);
-                page.Footer().Element(c => ComposeFooter(c, doc));
+                page.Footer().Element(c => ComposeFooter(c, doc, wording));
             });
         });
 
-    private static string DocumentTitle(InvoiceKind kind) => kind switch
+    private static string DocumentTitle(InvoiceKind kind, Wording wording) => kind switch
     {
-        InvoiceKind.CreditNote => "Facture d'avoir",
-        InvoiceKind.Quotation => "Devis",
-        InvoiceKind.Receipt => "Reçu",
-        _ => "Facture"
+        InvoiceKind.CreditNote => wording["InvoicePrint.CreditNote"],
+        InvoiceKind.Quotation => wording["InvoicePrint.Quotation"],
+        InvoiceKind.Receipt => wording["InvoicePrint.Receipt"],
+        _ => wording["InvoicePrint.Invoice"]
     };
 
     // ---- Header ---------------------------------------------------------------------------------
 
     private static void ComposeHeader(IContainer container, InvoiceDocument doc, Formatter format,
-                                      string title, bool receipt)
+                                      Wording wording, string title, bool receipt)
     {
         var issuer = doc.Issuer;
 
@@ -104,43 +134,47 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
                     var address = string.Join(" — ", new[] { issuer.Address, city }
                         .Where(s => !string.IsNullOrWhiteSpace(s)));
 
-                    if (address.Length > 0) identity.Item().Text(address).FontSize(8);
+                    if (address.Length > 0) identity.Item().Text(wording.Isolate(address)).FontSize(8);
 
                     var contact = string.Join("   ", new[]
                     {
-                        issuer.Phone is { Length: > 0 } ? $"Tél. {issuer.Phone}" : null,
-                        issuer.Email
+                        issuer.Phone is { Length: > 0 } ? wording.Format("InvoicePrint.Phone", wording.Digits(issuer.Phone)) : null,
+                        wording.Isolate(issuer.Email)
                     }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
                     if (contact.Length > 0) identity.Item().Text(contact).FontSize(8);
                 });
 
-                row.ConstantItem(62, Unit.Millimetre).AlignRight().Column(reference =>
+                row.ConstantItem(62, Unit.Millimetre).Element(wording.Trailing).Column(reference =>
                 {
-                    reference.Item().AlignRight().Text(title.ToUpperInvariant())
+                    reference.Item().Element(wording.Trailing).Text(title.ToUpper(wording.Culture))
                              .FontSize(13).Bold().LetterSpacing(0.05f);
 
                     // A receipt has no number of its own: it is identified by the invoice it settles,
                     // and saying so in the header stops the invoice number being read as the
                     // receipt's.
-                    reference.Item().AlignRight()
-                             .Text(receipt ? $"{DocumentTitle(doc.Kind)} N° {doc.Number}" : $"N° {doc.Number}")
+                    reference.Item().Element(wording.Trailing)
+                             .Text(receipt
+                                 ? $"{DocumentTitle(doc.Kind, wording)} N° {doc.Number}"
+                                 : wording.Format("InvoicePrint.Number", wording.Isolate(doc.Number)))
                              .FontSize(10).Bold();
 
-                    reference.Item().AlignRight()
+                    reference.Item().Element(wording.Trailing)
                              .Text(receipt
                                  ? $"du {format.Date(doc.IssueDate)}"
-                                 : $"Date : {format.Date(doc.IssueDate)}").FontSize(8);
+                                 : wording.Format("InvoicePrint.Date", wording.Isolate(format.Date(doc.IssueDate))))
+                             .FontSize(8);
 
                     if (!receipt && doc.DueDate is { } due && doc.Kind == InvoiceKind.Invoice)
-                        reference.Item().AlignRight()
-                                 .Text($"Échéance : {format.Date(due)}").FontSize(8);
+                        reference.Item().Element(wording.Trailing)
+                                 .Text(wording.Format("InvoicePrint.DueDate", wording.Isolate(format.Date(due))))
+                                 .FontSize(8);
                 });
             });
 
             // The DGI identifiers, on one line under the letterhead. ICE and IF are mandatory on
             // every Moroccan invoice; the rest are printed when the site has them.
-            var legal = LegalIdentifiers(issuer);
+            var legal = LegalIdentifiers(issuer, wording);
 
             if (legal.Length > 0)
                 column.Item().PaddingTop(3).Text(legal).FontSize(7.5f).FontColor(Colors.Grey.Darken3);
@@ -149,7 +183,7 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
         });
     }
 
-    private static string LegalIdentifiers(InvoiceIssuer issuer)
+    private static string LegalIdentifiers(InvoiceIssuer issuer, Wording wording)
     {
         var rc = issuer.CommercialRegisterNumber is { Length: > 0 } number
             ? issuer.CommercialRegisterCourt is { Length: > 0 } court ? $"{number} ({court})" : number
@@ -160,65 +194,69 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
             ("ICE", issuer.Ice),
             ("IF", issuer.FiscalId),
             ("RC", rc),
-            ("Patente", issuer.ProfessionalTaxNumber),
+            (wording["InvoicePrint.ProfessionalTax"], issuer.ProfessionalTaxNumber),
             ("CNSS", issuer.CnssAffiliationNumber),
             ("INPE", issuer.Inpe)
         };
 
         return string.Join("   ·   ", parts.Where(p => !string.IsNullOrWhiteSpace(p.Value))
-                                          .Select(p => $"{p.Label} : {p.Value}"));
+                                          .Select(p => wording.IsolateAuto($"{p.Label} : {wording.Isolate(p.Value)}")));
     }
 
-    private static void ComposeParties(IContainer container, InvoiceDocument doc)
+    private static void ComposeParties(IContainer container, InvoiceDocument doc, Wording wording)
     {
         container.Border(0.5f).BorderColor(Colors.Grey.Darken1).Padding(5).Row(row =>
         {
             row.RelativeItem().Column(patient =>
             {
-                patient.Item().Text("Patient").FontSize(8).Bold();
+                patient.Item().Text(wording["InvoicePrint.Patient"]).FontSize(8).Bold();
                 patient.Item().Text(doc.PatientName ?? doc.BilledToName).FontSize(11).Bold();
 
                 if (!string.IsNullOrWhiteSpace(doc.PatientRecordNumber))
-                    patient.Item().Text($"N° de dossier : {doc.PatientRecordNumber}").FontSize(8);
+                    patient.Item().Text(wording.Format("InvoicePrint.RecordNumber",
+                                                       wording.Isolate(doc.PatientRecordNumber))).FontSize(8);
 
                 if (!string.IsNullOrWhiteSpace(doc.CoveredOrders))
-                    patient.Item().Text($"Demande(s) : {doc.CoveredOrders}").FontSize(8);
+                    patient.Item().Text(wording.Format("InvoicePrint.Orders", wording.Isolate(doc.CoveredOrders)))
+                           .FontSize(8);
 
                 if (!string.IsNullOrWhiteSpace(doc.PrescriberName))
-                    patient.Item().Text($"Prescripteur : {doc.PrescriberName}").FontSize(8);
+                    patient.Item().Text(wording.Format("InvoicePrint.Prescriber", doc.PrescriberName)).FontSize(8);
             });
 
             row.ConstantItem(6);
 
             row.RelativeItem().Column(billed =>
             {
-                billed.Item().Text("Facturé à").FontSize(8).Bold();
+                billed.Item().Text(wording["InvoicePrint.BilledTo"]).FontSize(8).Bold();
                 billed.Item().Text(doc.BilledToName).FontSize(10).Bold();
 
                 var place = string.Join(" — ", new[] { doc.BilledToAddress, doc.BilledToCity }
                     .Where(s => !string.IsNullOrWhiteSpace(s)));
 
-                if (place.Length > 0) billed.Item().Text(place).FontSize(8);
+                if (place.Length > 0) billed.Item().Text(wording.Isolate(place)).FontSize(8);
 
                 if (!string.IsNullOrWhiteSpace(doc.BilledToIce))
-                    billed.Item().Text($"ICE : {doc.BilledToIce}").FontSize(8);
+                    billed.Item().Text(wording.Format("InvoicePrint.Ice", wording.Isolate(doc.BilledToIce))).FontSize(8);
 
                 if (!string.IsNullOrWhiteSpace(doc.BilledToFiscalId))
-                    billed.Item().Text($"IF : {doc.BilledToFiscalId}").FontSize(8);
+                    billed.Item().Text(wording.Format("InvoicePrint.FiscalId", wording.Isolate(doc.BilledToFiscalId)))
+                          .FontSize(8);
 
                 if (!string.IsNullOrWhiteSpace(doc.PayerName))
-                    billed.Item().PaddingTop(2).Text($"Organisme : {doc.PayerName}").FontSize(8);
+                    billed.Item().PaddingTop(2).Text(wording.Format("InvoicePrint.Payer", doc.PayerName)).FontSize(8);
             });
         });
     }
 
     // ---- Invoice --------------------------------------------------------------------------------
 
-    private static void ComposeInvoiceBody(IContainer container, InvoiceDocument doc, Formatter format)
+    private static void ComposeInvoiceBody(IContainer container, InvoiceDocument doc, Formatter format,
+                                           InvoicePrintSettings settings)
     {
         container.Column(column =>
         {
-            column.Item().Element(c => ComposeParties(c, doc));
+            column.Item().Element(c => ComposeParties(c, doc, Wording.French));
 
             if (doc.Kind == InvoiceKind.CreditNote && doc.CorrectsInvoiceNumber is { Length: > 0 })
             {
@@ -232,10 +270,10 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
                 });
             }
 
-            column.Item().PaddingTop(8).Element(c => ComposeLines(c, doc, format));
+            column.Item().PaddingTop(8).Element(c => ComposeLines(c, doc, format, settings));
             column.Item().PaddingTop(8).Element(c => ComposeTotals(c, doc, format));
 
-            if (!string.IsNullOrWhiteSpace(doc.AmountInWords))
+            if (settings.StandardShowAmountInWords && !string.IsNullOrWhiteSpace(doc.AmountInWords))
                 column.Item().PaddingTop(8).Text(text =>
                 {
                     text.Span("Arrêtée la présente facture à la somme de : ").FontSize(8.5f);
@@ -255,16 +293,24 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
         });
     }
 
-    private static void ComposeLines(IContainer container, InvoiceDocument doc, Formatter format)
+    private static void ComposeLines(IContainer container, InvoiceDocument doc, Formatter format,
+                                     InvoicePrintSettings settings)
     {
         var showVat = doc.HasVat;
+
+        // Optional columns, off by default: the national act code beside the laboratory's own code,
+        // and the act's coefficient with its letter-key, both as frozen on the line.
+        var showNational = settings.StandardShowNationalActCode;
+        var showCoefficient = settings.StandardShowCoefficient;
 
         container.Table(table =>
         {
             table.ColumnsDefinition(columns =>
             {
                 columns.ConstantColumn(52);                 // code
+                if (showNational) columns.ConstantColumn(52);       // national act code
                 columns.RelativeColumn(5);                  // designation
+                if (showCoefficient) columns.ConstantColumn(48);    // coefficient
                 columns.ConstantColumn(66);                 // amount
                 if (showVat) columns.ConstantColumn(52);    // VAT
                 columns.ConstantColumn(66);                 // payer share
@@ -274,7 +320,9 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
             table.Header(header =>
             {
                 HeaderCell(header.Cell(), "Code");
+                if (showNational) HeaderCell(header.Cell(), "Code national");
                 HeaderCell(header.Cell(), "Désignation");
+                if (showCoefficient) HeaderCell(header.Cell(), "Cotation", alignRight: true);
                 HeaderCell(header.Cell(), "Montant", alignRight: true);
                 if (showVat) HeaderCell(header.Cell(), "TVA", alignRight: true);
                 HeaderCell(header.Cell(), "Part organisme", alignRight: true);
@@ -285,9 +333,18 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
             {
                 table.Cell().Element(Cell).Text(line.Code ?? string.Empty).FontSize(8);
 
+                if (showNational)
+                    table.Cell().Element(Cell).Text(line.NationalActCode ?? string.Empty).FontSize(8);
+
                 table.Cell().Element(Cell).Text(line.Quantity > 1
                     ? $"{line.Description} (× {line.Quantity})"
                     : line.Description).FontSize(8.5f);
+
+                if (showCoefficient)
+                    table.Cell().Element(Cell).AlignRight().Text(
+                        line.LetterKey is { Length: > 0 } letter && line.Coefficient is { } coefficient
+                            ? $"{letter} {format.Coefficient(coefficient * line.Quantity)}"
+                            : string.Empty).FontSize(8);
 
                 table.Cell().Element(Cell).AlignRight().Text(format.Amount(line.NetAmount)).FontSize(8.5f);
 
@@ -356,7 +413,7 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
     {
         container.Column(column =>
         {
-            column.Item().Element(c => ComposeParties(c, doc));
+            column.Item().Element(c => ComposeParties(c, doc, Wording.French));
 
             column.Item().PaddingTop(8).Text("Règlements").FontSize(9.5f).Bold();
 
@@ -495,7 +552,7 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
         });
     }
 
-    private static void ComposeFooter(IContainer container, InvoiceDocument doc)
+    private static void ComposeFooter(IContainer container, InvoiceDocument doc, Wording wording)
     {
         container.PaddingTop(4).BorderTop(0.5f).BorderColor(Colors.Grey.Darken1)
                  .PaddingTop(2).Row(row =>
@@ -504,7 +561,7 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
             var identity = string.Join(" — ", new[]
             {
                 string.IsNullOrWhiteSpace(issuer.LegalName) ? issuer.Name : issuer.LegalName,
-                issuer.Ice is { Length: > 0 } ? $"ICE {issuer.Ice}" : null
+                issuer.Ice is { Length: > 0 } ? wording.Format("InvoicePrint.FooterIce", wording.Isolate(issuer.Ice)) : null
             }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
             row.RelativeItem().Text(identity).FontSize(6.5f).FontColor(Colors.Grey.Darken2);
@@ -512,7 +569,7 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
             row.AutoItem().Text(text =>
             {
                 text.DefaultTextStyle(x => x.FontSize(7).FontColor(Colors.Grey.Darken2));
-                text.Span("Page ");
+                text.Span(wording["InvoicePrint.Page"] + " ");
                 text.CurrentPageNumber();
                 text.Span(" / ");
                 text.TotalPages();
@@ -537,7 +594,7 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
     /// <summary>
     /// Numbers and dates formatted for the requested language's culture, never the thread's.
     /// </summary>
-    private sealed class Formatter(AppLanguage language)
+    private sealed class Formatter(AppLanguage language, string? symbol = null)
     {
         private readonly CultureInfo _culture = language.ToCulture();
 
@@ -548,7 +605,10 @@ public sealed class QuestPdfInvoiceRenderer : IInvoiceRenderer
 
         public string Date(DateOnly value) => value.ToString("dd'/'MM'/'yyyy", _culture);
 
-        private string Symbol => language switch
+        /// <summary>A coefficient as billed: 90, 2,5 — no trailing zeros.</summary>
+        public string Coefficient(decimal value) => CotationLetterTotal.Coefficient(value, _culture);
+
+        private string Symbol => symbol ?? language switch
         {
             AppLanguage.English => Domain.Common.Money.CurrencyCode,
             // The French symbol in every other case: the text of this document is French, and an

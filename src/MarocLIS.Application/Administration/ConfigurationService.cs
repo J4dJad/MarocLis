@@ -475,7 +475,8 @@ public sealed class ConfigurationService(
     /// (the patient messages, the cost allocation): neither listed nor written here.
     /// </summary>
     public static readonly IReadOnlyList<string> DedicatedPrefixes =
-        [MarocLIS.Application.Relations.MessagingSettings.Prefix, MarocLIS.Application.Steering.CostSettings.Prefix];
+        [MarocLIS.Application.Relations.MessagingSettings.Prefix, MarocLIS.Application.Steering.CostSettings.Prefix,
+         MarocLIS.Application.Billing.InvoicePrintSettings.Prefix];
 
     public static bool IsDedicated(string key) =>
         DedicatedPrefixes.Any(p => key.Trim().StartsWith(p, StringComparison.OrdinalIgnoreCase));

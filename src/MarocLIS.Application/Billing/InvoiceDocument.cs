@@ -97,7 +97,23 @@ public sealed record InvoiceDocumentLine(
     decimal PayerShare,
     decimal PatientShare,
     bool IsVatExempt,
-    decimal VatRate);
+    decimal VatRate)
+{
+    /// <summary>The act's Arabic label, frozen with the line when the analysis had one.</summary>
+    public string? DescriptionArabic { get; init; }
+
+    /// <summary>Act code in the national nomenclature, as frozen on the line at issue.</summary>
+    public string? NationalActCode { get; init; }
+
+    /// <summary>Letter-key of the act as billed ("B" for biology), frozen on the line.</summary>
+    public string? LetterKey { get; init; }
+
+    /// <summary>Coefficient of the act as billed, frozen on the line.</summary>
+    public decimal? Coefficient { get; init; }
+
+    /// <summary>Value of the letter-key the act was based on, when it is known.</summary>
+    public decimal? LetterKeyValue { get; init; }
+}
 
 /// <summary>One settlement, as the receipt lists it.</summary>
 public sealed record InvoiceDocumentPayment(
@@ -118,8 +134,15 @@ public sealed record InvoiceDocumentPayment(
 /// <summary>Turns an <see cref="InvoiceDocument"/> into a printable PDF.</summary>
 public interface IInvoiceRenderer
 {
-    /// <summary>The invoice (or credit note) itself.</summary>
+    /// <summary>The invoice (or credit note) itself, in the standard format.</summary>
     byte[] RenderInvoice(InvoiceDocument doc, AppLanguage language);
+
+    /// <summary>
+    /// The invoice in the chosen format, with that format's display options. A credit note always
+    /// prints in the standard format.
+    /// </summary>
+    byte[] RenderInvoice(InvoiceDocument doc, AppLanguage language, InvoicePrintFormat format,
+                         InvoicePrintSettings settings);
 
     /// <summary>A payment receipt: what was paid, when, how, and what is left.</summary>
     byte[] RenderReceipt(InvoiceDocument doc, AppLanguage language);

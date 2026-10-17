@@ -398,7 +398,14 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                     l.PayerShare,
                     l.PatientShare,
                     l.IsVatExempt,
-                    l.VatRate))
+                    l.VatRate)
+                {
+                    DescriptionArabic = l.DescriptionArabic,
+                    NationalActCode = l.NationalActCode,
+                    LetterKey = l.LetterKey,
+                    Coefficient = l.Coefficient,
+                    LetterKeyValue = LetterKeyValueOf(l)
+                })
             ],
             [
                 .. payments.Select(p => new InvoiceDocumentPayment(
@@ -408,6 +415,18 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
             CreditedAmount = invoice.CreditedAmount
         };
     }
+
+    /// <summary>
+    /// The value of the letter-key an invoice line was billed on. Stored on the line when it was;
+    /// otherwise read back from the reference base frozen with it, which is coefficient × value ×
+    /// quantity — the value the act was priced on, not the catalogue's current one.
+    /// </summary>
+    private static decimal? LetterKeyValueOf(Domain.Billing.InvoiceLine line) =>
+        line.LetterKeyValue is > 0m
+            ? line.LetterKeyValue
+            : line.Coefficient is > 0m && line.ReferenceTariffBase > 0m && line.Quantity > 0
+                ? Math.Round(line.ReferenceTariffBase / (line.Coefficient.Value * line.Quantity), 4)
+                : null;
 
     /// <summary>
     /// The operator's open shift, tracked so the service can add to its counters.
