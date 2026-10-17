@@ -297,7 +297,7 @@ flowchart TD
 | Rôles | Les 9 rôles livrés et leurs droits (voir **Rôles et droits (vue d'ensemble)**) | **Utilisateurs** › **Rôles et droits** |
 | Site | Un site « PRINCIPAL » dont l'identité est « À COMPLÉTER » | **Paramètres** › **Site** |
 | Numérotations | Dossiers, étiquettes, factures, avoirs, reçus, non-conformités, bons de commande, documents qualité | **Paramètres** › **Numérotations** |
-| Listes de base | 14 secteurs, 16 natures de prélèvement, 12 tubes et contenants, 32 unités | **Catalogue des analyses** › **Listes de référence** |
+| Listes de base | 14 secteurs, 16 natures de prélèvement, 12 tubes et contenants, 33 unités | **Catalogue des analyses** › **Listes de référence** |
 | Nomenclature | Les 492 actes officiels de biologie (B100 à B591) | **Catalogue des analyses** › **Nomenclature des actes** |
 | Catalogue | 92 analyses courantes : biochimie, hématologie, hémostase, immunologie et marqueurs tumoraux, hormonologie, sérologie, bactériologie, parasitologie, urines. Chacune a son secteur, sa nature de prélèvement, son tube, ses paramètres et unités, des valeurs usuelles par sexe et par âge quand elles sont admises, et son code d'acte NABM quand un acte lui correspond clairement. 11 bilans : standard, préopératoire, prénatal, surveillance du diabète, cardiovasculaire, hépatique, rénal, thyroïdien, martial, hémostase, phosphocalcique | **Catalogue des analyses** › **Analyses** et **Profils** |
 | Organismes payeurs | Paiement direct, AMO CNSS, AMO CNOPS, AMO Tadamon, AMO Achamil, FAR, une mutuelle et une assurance « à préciser », employeur conventionné, laboratoire adresseur | **Données de référence** › **Organismes payeurs** |

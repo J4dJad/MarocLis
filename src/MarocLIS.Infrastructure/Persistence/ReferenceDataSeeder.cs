@@ -107,6 +107,8 @@ public static class ReferenceDataSeeder
             ("UI_L",      "UI/L",       "U/L"),
             ("MUI_L",     "mUI/L",      "m[IU]/L"),
             ("UI_ML",     "UI/mL",      "[IU]/mL"),
+            // Arbitrary units, not international ones: tumour markers (CA 125, CA 15-3, CA 19-9).
+            ("U_ML",      "U/mL",       "U/mL"),
             ("PERCENT",   "%",          "%"),
             ("G_24H",     "g/24 h",     "g/(24.h)"),
             ("MG_24H",    "mg/24 h",    "mg/(24.h)"),

@@ -452,14 +452,14 @@ internal static partial class StarterCatalogue
                immuno, serum, "TUBE_GEL", immunoassay, 24, "B360", "AFP", "NG_ML", 1, NotPregnant(Adult(null, 7.0m)));
 
         Single("CA125", "CA 125", "CA 125", "CA 125",
-               immuno, serum, "TUBE_GEL", immunoassay, 48, "B362", "CA125", "UI_ML", 1,
+               immuno, serum, "TUBE_GEL", immunoassay, 48, "B362", "CA125", "U_ML", 1,
                Adult(null, 35m, Gender.Female));
 
         Single("CA153", "CA 15-3", "CA 15-3", "CA 15-3",
-               immuno, serum, "TUBE_GEL", immunoassay, 48, "B363", "CA153", "UI_ML", 1, Adult(null, 30m));
+               immuno, serum, "TUBE_GEL", immunoassay, 48, "B363", "CA153", "U_ML", 1, Adult(null, 30m));
 
         Single("CA199", "CA 19-9", "CA 19-9", "CA 19-9",
-               immuno, serum, "TUBE_GEL", immunoassay, 48, "B364", "CA199", "UI_ML", 1, Adult(null, 37m));
+               immuno, serum, "TUBE_GEL", immunoassay, 48, "B364", "CA199", "U_ML", 1, Adult(null, 37m));
 
         // ---- Hormonology ----------------------------------------------------------------------
         // Roche Elecsys inserts (FT4 III, FT3 III, FSH, LH, Prolactin II, Testosterone II,

@@ -283,6 +283,12 @@ public sealed class StarterDataDatabaseTests
                     .Where(r => r.Source != PendingMarker).Should().BeEmpty(analysis.Code);
         }
 
+        // Tumour markers are reported in arbitrary units (U/mL), not international units.
+        var unitCodes = await db.Units.ToDictionaryAsync(u => u.Id, u => u.Code);
+        foreach (var marker in (string[])["CA125", "CA153", "CA199"])
+            unitCodes[analyses.Single(a => a.Code == marker).Parameters.Single().UnitId!.Value]
+                .Should().Be("U_ML", marker);
+
         // The calculated parameters compute what the bench expects.
         FormulaEvaluator.Evaluate("round([TCA_P]/[TCA_T];2)",
                                   new Dictionary<string, decimal> { ["TCA_P"] = 36m, ["TCA_T"] = 30m })
