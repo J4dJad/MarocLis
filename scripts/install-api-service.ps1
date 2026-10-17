@@ -75,6 +75,19 @@ $parameters = @{
 }
 if ($Account) {
     if (-not $Password) { throw 'A -Password is required with -Account (use Read-Host -AsSecureString).' }
+
+    # '.\svc-maroclis' is how the service manager writes a local account, but Windows cannot resolve
+    # '.' when it grants the folder rights below: the computer's name stands in for it.
+    if ($Account.StartsWith('.\')) { $Account = "$env:COMPUTERNAME\" + $Account.Substring(2) }
+
+    # Checked before anything is created, so a mistyped or missing account leaves no half-installed service.
+    try {
+        (New-Object Security.Principal.NTAccount($Account)).Translate([Security.Principal.SecurityIdentifier]) | Out-Null
+    }
+    catch {
+        throw "Windows account $Account not found. Create it first (New-LocalUser), or check the domain\name spelling."
+    }
+
     $parameters.Credential = New-Object System.Management.Automation.PSCredential($Account, $Password)
 }
 
