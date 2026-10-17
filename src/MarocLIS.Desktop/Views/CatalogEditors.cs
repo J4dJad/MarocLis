@@ -120,14 +120,15 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _loinc = TextField("Catalog.Loinc", 152, 236, 160, _stored?.LoincCode, latin: true, mono: true);
         // The national act is a second code beside the laboratory's own: picked from the
         // nomenclature (the button, or F4), or typed. It never replaces the internal code above.
-        _actCode = TextField("Catalog.NationalActCode", 324, 236, 128, existing?.NationalActCode,
+        _actCode = TextField("Catalog.NationalActCode", 324, 236, 120, existing?.NationalActCode,
                         latin: true, mono: true);
         _loinc.MaxLength = 20;
         _actCode.MaxLength = 30;
         _actCode.CharacterCasing = CharacterCasing.Upper;
 
         _pickAct = UiTheme.SecondaryButton("…");
-        _pickAct.Bounds = new Rectangle(456, 254, 28, UiTheme.InputHeight);
+        // 36 px: the ellipsis needs 33 px in the button font, and 28 px cut it.
+        _pickAct.Bounds = new Rectangle(448, 254, 36, UiTheme.InputHeight);
         _pickAct.Padding = Padding.Empty;
         _pickAct.Tag = UiTags.NoMnemonic;
         _pickAct.AccessibleName = localizer["Nabm.PickAct"];

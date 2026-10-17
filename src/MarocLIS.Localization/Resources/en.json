@@ -442,9 +442,9 @@
   },
 
   "Nabm": {
-    "SkippedScheduled": "{0} tariff(s) already have a revision scheduled after today: to be handled on the Tariffs tab.",
-    "Applied": "{0}: official coefficient of act {1} applied to {2} tariff(s) from {3}.",
-    "ConfirmApply": "Apply the official coefficient of act {0} (B {1}) to analysis {2}?\n\n{3} tariff(s) in force will get a new version from {4}; a price that followed the reimbursement base follows it. Requests already priced and invoices already issued keep their price.",
+    "SkippedScheduled": "{0} {0:plural:tariff already has|tariffs already have} a revision scheduled after today: to be handled on the Tariffs tab.",
+    "Applied": "{0}: official coefficient of act {1} applied to {2} {2:plural:tariff|tariffs} from {3}.",
+    "ConfirmApply": "Apply the official coefficient of act {0} (B {1}) to analysis {2}?\n\n{3} {3:plural:tariff|tariffs} in force will get a new version from {4}; a price that followed the reimbursement base follows it. Requests already priced and invoices already issued keep their price.",
     "CodeNotInListConfirm": "Act code {0} is not in the official nomenclature of medical biology acts.\n\nSave the analysis with this code anyway?",
     "CodeNotInList": "Code {0} is not in the act nomenclature.",
     "ActInfo": "Nomenclature: {0} — {1} — official coefficient B {2}",
