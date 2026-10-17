@@ -435,6 +435,10 @@ public sealed partial class SettingsView : LocalizedView
         _postalCode.MaxLength = 10;
         _phone.MaxLength = _fax.MaxLength = _email.MaxLength = _website.MaxLength = 400;
 
+        var fields = body.Controls.Cast<Control>().ToArray();
+        body.Controls.Clear();
+        body.Controls.Add(ReadingColumn(fields));
+
         // The form in a white card, its fields where they were; Save and Reload in the bar at
         // the card's foot rather than at the end of a page that has to be scrolled to reach them.
         var card = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised,
@@ -577,11 +581,11 @@ public sealed partial class SettingsView : LocalizedView
         Picker(_labelPrinterPicker, 206);
 
         var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised, AutoScroll = true };
-        body.Controls.AddRange(
+        body.Controls.Add(ReadingColumn(
         [
             _printersIntro, _documentPrinterLabel, _documentPrinter, _printDirectly, _printDirectlyHint,
             _labelPrinterLabel, _labelPrinterPicker
-        ]);
+        ]));
 
         var card = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised,
                                Padding = new Padding(20, 16, 2, 1) };
@@ -692,6 +696,50 @@ public sealed partial class SettingsView : LocalizedView
     private sealed record PrinterChoice(string Name, string Display)
     {
         public override string ToString() => Display;
+    }
+
+    /// <summary>
+    /// A form laid out at fixed positions, in a column of its own width on the reading side. In
+    /// Arabic the column goes to the right of the card and each control to the mirror of its place,
+    /// so a field ends under the end of its caption and a tick box sits before the field it opens:
+    /// the fixed positions had left the fields on the left, far from their right-aligned captions.
+    /// </summary>
+    private static Panel ReadingColumn(Control[] controls)
+    {
+        var width = controls.Max(c => c.Right);
+        var column = new Panel
+        {
+            Bounds = new Rectangle(0, 0, width, controls.Max(c => c.Bottom)),
+            BackColor = UiTheme.SurfaceRaised
+        };
+        column.Controls.AddRange(controls);
+
+        var lefts = controls.ToDictionary(c => c, c => c.Left);
+        bool Rtl() => column.RightToLeft == RightToLeft.Yes;
+
+        // A caption sized to its text changes width with the language: placed again each time, so
+        // its end stays over its field.
+        void Place(Control control) => control.Left = Rtl() ? width - lefts[control] - control.Width
+                                                            : lefts[control];
+
+        void PlaceColumn()
+        {
+            if (column.Parent is not ScrollableControl parent) return;
+            column.Left = (Rtl() ? Math.Max(0, parent.ClientSize.Width - width) : 0)
+                          + parent.AutoScrollPosition.X;
+        }
+
+        foreach (var control in controls) control.SizeChanged += (_, _) => Place(control);
+        column.RightToLeftChanged += (_, _) =>
+        {
+            foreach (var control in controls) Place(control);
+            PlaceColumn();
+        };
+        column.ParentChanged += (_, _) =>
+        {
+            if (column.Parent is not null) column.Parent.Resize += (_, _) => PlaceColumn();
+        };
+        return column;
     }
 
     private void Field(Control parent, string key, int top, int left)
