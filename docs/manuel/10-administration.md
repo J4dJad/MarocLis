@@ -1,21 +1,44 @@
 ## Administration
 
-Ce chapitre s'adresse à l'administrateur, au biologiste responsable, au responsable qualité et, pour les tarifs, au service comptable. Il couvre les comptes et leurs droits, le journal d'audit, le catalogue des analyses, les liaisons avec les automates, les données de référence (équipements, contrôles, articles, fournisseurs, prescripteurs, organismes payeurs) et les paramètres du laboratoire (identité du site, numérotations, imprimantes).
+### Présentation du module
 
-Écrans concernés, dans le groupe **ADMINISTRATION** du menu :
+**À quoi sert le module.** Le groupe **ADMINISTRATION** du menu règle tout ce dont les autres écrans ont besoin pour fonctionner :
+- les comptes du personnel, leurs rôles, leurs droits et leurs sites ;
+- le journal d'audit (qui a fait quoi, qui a consulté quel dossier) ;
+- le catalogue des analyses : analyses, paramètres, valeurs usuelles, tarifs, profils, analyses en cascade, listes de référence, et la nomenclature officielle des actes de biologie médicale (NABM) ;
+- les liaisons avec les automates ;
+- les données de référence : équipements, contrôle interne, articles, fournisseurs, prescripteurs, organismes payeurs ;
+- les paramètres du laboratoire : identité du site, numérotations, paramètres généraux, format des factures, lieux de stockage des tubes, imprimantes du poste.
+
+**Qui l'utilise.** L'administrateur règle presque tout. Le biologiste responsable tient le catalogue et les automates. Le responsable qualité tient les valeurs usuelles, les équipements et le contrôle interne, et lit le journal d'audit. Le service comptable tient les tarifs, les organismes payeurs, les articles et les fournisseurs. Le détail des droits est donné plus bas.
+
+**Ses écrans** (groupe **ADMINISTRATION** du menu) :
 
 | Menu | Ce qu'on y fait | Raccourci par défaut |
 |---|---|---|
 | **Utilisateurs** | Comptes, rôles et droits, sites accessibles, journal de sécurité | aucun (on peut en définir un) |
 | **Journal d'audit** | Qui a modifié quoi, qui a consulté quel dossier, connexions | aucun |
-| **Catalogue des analyses** | Analyses, paramètres, valeurs usuelles, tarifs, profils, analyses en cascade, listes de référence | aucun |
+| **Catalogue des analyses** | Analyses, paramètres, valeurs usuelles, tarifs, profils, analyses en cascade, listes de référence, nomenclature des actes et écarts | aucun |
 | **Automates** | Liaisons avec les automates, table de correspondance, journal des messages | aucun |
 | **Données de référence** | Équipements, contrôle interne, articles, fournisseurs, prescripteurs, organismes payeurs | aucun |
-| **Paramètres** | Identité légale du site, numérotations, paramètres, imprimantes du poste | aucun |
+| **Paramètres** | Identité légale du site, numérotations, paramètres, format des factures, lieux de stockage, imprimantes du poste | aucun |
 
 Le groupe n'apparaît que si vous avez le droit d'ouvrir au moins un de ces écrans. Une entrée pour laquelle vous n'avez pas le droit n'est pas affichée du tout.
 
-Raccourcis valables sur tous ces écrans : **F5** actualise l'écran, **Ctrl+F** place le curseur dans la zone de recherche, **Ctrl+P** (ou le bouton **Imprimer** en haut de la fenêtre) imprime la liste principale affichée, **Ctrl+S** déclenche le bouton **Enregistrer** visible, **F1** affiche la liste des raccourcis. Dans toutes les fenêtres de saisie de ce chapitre, **Entrée** vaut **Enregistrer** et **Échap** vaut **Annuler**.
+**Présentation commune des écrans.**
+- En haut, le titre de l'écran et une phrase qui le résume (par exemple « Comptes, rôles et journal de sécurité — un compte se désactive, il ne se supprime jamais. »).
+- Dessous, des onglets plats, puis, dans chaque onglet, une rangée de recherche et de filtres et une ou plusieurs listes présentées en cartes. Les boutons d'une liste sont dans l'en-tête ou le pied de sa carte.
+- Une ligne d'état confirme ce qui vient d'être fait ou dit ce qui manque.
+- Un bouton que votre rôle ne permet pas d'utiliser est grisé.
+
+**Raccourcis valables sur tous ces écrans** : **F5** actualise l'écran, **Ctrl+F** place le curseur dans la zone de recherche, **Ctrl+P** (ou le bouton **Imprimer** en haut de la fenêtre) imprime la liste principale affichée, **Ctrl+S** déclenche le bouton **Enregistrer** visible, **F1** ouvre l'aide de l'écran et **Maj+F1** la liste des raccourcis. Dans toutes les fenêtres de saisie de ce chapitre, **Entrée** vaut **Enregistrer** et **Échap** vaut **Annuler**.
+
+**Liens avec les autres modules.**
+- Le compte utilisateur (qualification, n° d'Ordre) conditionne la validation biologique dans **Validation biologique** et le choix du biologiste responsable du site.
+- Le catalogue alimente l'enregistrement des dossiers (analyses, profils, prix), la saisie des résultats (paramètres, limites, formules, cascades), le compte rendu (valeurs usuelles) et la facturation (tarifs, codes d'actes, coefficients).
+- Le site complet débloque la **Facturation** et la diffusion des **Comptes rendus**. Le format choisi dans l'onglet **Factures** est celui du bouton d'impression des factures.
+- Les lieux de stockage sont proposés à la **Réception** et à la **Sérothèque**.
+- Les automates déclarés dans **Données de référence** reçoivent leur liaison dans **Automates** ; leurs résultats arrivent dans **Saisie des résultats** ou au **Contrôle interne**.
 
 ### Vue d'ensemble : mettre en service une installation
 
@@ -46,16 +69,20 @@ flowchart TD
 | `admin.roles.manage` | Attribuer des rôles, créer un rôle, modifier ses droits | Administrateur seul |
 | `admin.audit.view` | Ouvrir **Journal d'audit** et l'onglet **Journal de sécurité** | Administrateur, Biologiste responsable, Responsable qualité |
 | `catalog.view` | Ouvrir **Catalogue des analyses** | tous les rôles sauf Comptabilité et Prescripteur |
-| `catalog.manage` | Analyses, paramètres, profils, cascades, listes de référence, prescripteurs | Administrateur, Biologiste responsable |
+| `catalog.manage` | Analyses (dont leur code d'acte), paramètres, profils, cascades, listes de référence, prescripteurs | Administrateur, Biologiste responsable |
 | `catalog.ranges.manage` | Valeurs usuelles (intervalles) et leur revue | Administrateur, Biologiste responsable, Responsable qualité |
-| `billing.tariffs.manage` | Tarifs, organismes payeurs | Administrateur, Comptabilité |
+| `billing.tariffs.manage` | Tarifs, prix du laboratoire, coefficient officiel, organismes payeurs | Administrateur, Comptabilité |
 | `instruments.view` | Ouvrir **Automates** | Administrateur, Biologiste responsable, Biologiste, Technicien, Responsable qualité |
 | `instruments.configure` | Créer / modifier une interface et sa table de correspondance, tester une trame | Administrateur, Biologiste responsable |
 | `instruments.control` | Activer / désactiver une liaison | Administrateur, Biologiste responsable, Technicien |
-| `instruments.replay` | Réimporter une transmission | Administrateur, Biologiste responsable |
+| `instruments.replay` | **Réimporter** une transmission (accepter une transmission retenue) | Administrateur, Biologiste responsable, Biologiste, Technicien |
 | `admin.maintenance.run` | Purger le journal des messages automates | Administrateur seul |
-| `admin.sites.manage` | Onglet **Site** des **Paramètres** | Administrateur seul |
-| `admin.settings.manage` | Numérotations et paramètres | Administrateur seul |
+| `admin.sites.manage` | Onglet **Site** des **Paramètres**, **Nouveau site** | Administrateur seul |
+| `admin.settings.manage` | Numérotations, paramètres, format des factures, lieux de stockage | Administrateur seul |
+
+Changements récents des rôles livrés :
+- le Biologiste et le Technicien peuvent maintenant **Réimporter** une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
+- le Biologiste peut retirer une validation et rééditer un compte rendu archivé ; le Secrétariat / accueil peut rééditer un compte rendu archivé (le compte rendu perdu est remis tel qu'il a été diffusé).
 
 Attention (à vérifier avec votre organisation) : le rôle Comptabilité a le droit de gérer les tarifs mais pas celui d'ouvrir le Catalogue ; en pratique, seul l'administrateur peut saisir un tarif d'analyse avec les rôles livrés (voir la fiche de vérification).
 
@@ -63,15 +90,51 @@ Attention (à vérifier avec votre organisation) : le rôle Comptabilité a le d
 
 ### Utilisateurs
 
-Gérer les comptes du personnel, leurs rôles, leurs sites, et surveiller les connexions.
+**À quoi sert cet écran**
+
+Gérer les comptes du personnel :
+- créer et modifier les comptes ;
+- leur donner des rôles et des sites ;
+- réinitialiser un mot de passe, déverrouiller, désactiver ou réactiver un compte ;
+- créer des rôles et choisir leurs droits ;
+- surveiller les connexions dans le journal de sécurité.
+
+Un compte ne se supprime jamais : il signe le journal d'audit et les comptes rendus. On le désactive.
 
 **Qui y a accès** : ouverture avec `admin.users.view` (administrateur, biologiste responsable, responsable qualité). Les boutons de modification des comptes demandent `admin.users.manage`, ceux des rôles `admin.roles.manage` : les deux ne sont livrés qu'à l'administrateur. Pour les autres, les boutons sont grisés et l'arbre des droits est en lecture seule. L'onglet **Journal de sécurité** n'apparaît que si vous avez `admin.audit.view`.
 
-**L'écran** : trois onglets.
+**Fonctionnalités**
 
-- **Utilisateurs** : zone **Rechercher…** (valider par Entrée), case **Inclure les comptes désactivés**, compteur « N · M actif(s) ». Colonnes : **Identifiant**, **Nom complet**, **Qualification**, **N° Ordre des médecins / pharmaciens**, **Rôles et droits**, **Secteurs autorisés**, **Statut** (Actif, Actif (nombre d'échecs), Compte verrouillé, Désactivé), **Dernière connexion**, et une colonne de signes : ⚿ mot de passe à changer, ! mot de passe trop ancien, ⌛ habilitation expirée, ✓ biologiste habilité à valider. Une ligne rouge signale un compte verrouillé ou un biologiste qui ne remplit pas les conditions de la loi 12-01 ; une ligne orange un mot de passe ou une habilitation à revoir. Sous la liste, un message explique le défaut du compte sélectionné, puis les boutons **Nouvel utilisateur**, **Modifier**, **Rôles et droits**, **Sites accessibles**, **Réinitialiser le mot de passe**, **Déverrouiller**, **Désactiver** / **Réactiver**, et la phrase rappelant qu'un compte ne se supprime pas.
-- **Rôles et droits** : à gauche la liste des rôles (**Code**, **Désignation**, **Utilisateurs** actifs, nombre de **Droits**, **Rôle livré**) avec **Nouveau rôle** et **Désactiver le rôle** / **Activer le rôle** ; à droite l'arbre des droits, groupés par module (Patients, Dossiers, Résultats…), avec des cases à cocher, et **Enregistrer les droits**.
-- **Journal de sécurité** : les 300 derniers événements (**Date**, **Événement**, **Statut** Réussi/Échec, **Identifiant**, **Poste**, **Motif**). Case **N'afficher que l'utilisateur sélectionné** (celui sélectionné dans l'onglet Utilisateurs) et bouton **Actualiser**. Les échecs sont en rouge, les changements de privilèges en orange.
+Onglet **Utilisateurs** :
+- Zone **Rechercher…** : filtre la liste quand on appuie sur **Entrée**.
+- Case **Inclure les comptes désactivés** : ajoute les comptes désactivés à la liste.
+- **Nouvel utilisateur** (au bout de la rangée de recherche ; `admin.users.manage`) : crée un compte.
+- **Modifier** (au bout de la rangée ; `admin.users.manage`) : rouvre la fiche du compte sélectionné. Le double-clic sur la liste n'ouvre rien.
+- Panneau de droite, pour le compte sélectionné :
+  - **Rôles et droits** (`admin.roles.manage`) : coche les rôles du compte ;
+  - **Sites accessibles** (`admin.users.manage`) : choisit les sites et le site par défaut ;
+  - **Réinitialiser le mot de passe** (`admin.users.manage`) : donne un mot de passe provisoire ;
+  - **Déverrouiller** (`admin.users.manage`) : actif seulement pour un compte actif verrouillé ou ayant des échecs de connexion ;
+  - **Désactiver** / **Réactiver** (`admin.users.manage`) : demande un motif ; grisé sur votre propre compte.
+
+Onglet **Rôles et droits** :
+- **Nouveau rôle** (pied de la liste des rôles ; `admin.roles.manage`) : demande un code puis une désignation française.
+- **Désactiver le rôle** / **Activer le rôle** (pied de la liste ; `admin.roles.manage`) : grisé pour un rôle livré.
+- Arbre des droits, groupés par module, avec des cases à cocher (lecture seule sans `admin.roles.manage`).
+- **Enregistrer les droits** (`admin.roles.manage`) : enregistre les cases cochées, après confirmation.
+
+Onglet **Journal de sécurité** :
+- Case **N'afficher que l'utilisateur sélectionné** : limite la liste au compte sélectionné dans l'onglet **Utilisateurs**.
+- **Actualiser** : relit les événements.
+
+**L'écran** : en haut le titre « Utilisateurs » et la phrase « Comptes, rôles et journal de sécurité — un compte se désactive, il ne se supprime jamais. », puis trois onglets.
+
+- **Utilisateurs** :
+  - Rangée du haut : **Rechercher…**, **Inclure les comptes désactivés**, le compteur « N comptes · M actifs », puis **Nouvel utilisateur** et **Modifier** à droite.
+  - La liste : **Identifiant**, **Nom complet**, **Qualification**, **N° Ordre des médecins / pharmaciens**, **Rôles et droits**, **Secteurs autorisés**, **Statut** (Actif, Actif (nombre d'échecs), Compte verrouillé, Désactivé), **Dernière connexion**, et une colonne de signes : ⚿ mot de passe à changer, ! mot de passe trop ancien, ⌛ habilitation expirée, ✓ biologiste habilité à valider. Une ligne rouge signale un compte verrouillé ou un biologiste qui ne remplit pas les conditions de la loi 12-01 ; une ligne orange un mot de passe ou une habilitation à revoir.
+  - Le panneau de droite : le nom et l'identifiant du compte, son statut en pastille, puis **Qualification**, **N° Ordre des médecins / pharmaciens**, **Rôles et droits**, **Secteurs autorisés** et **Dernière connexion**. Dessous, un message explique le défaut du compte (habilitation expirée, n° d'Ordre absent, compte verrouillé, mot de passe trop ancien ou jamais changé). Puis les cinq boutons, et la phrase « Un compte ne se supprime pas : … ». Sans compte sélectionné, le panneau affiche « Aucun compte sélectionné ».
+- **Rôles et droits** : à gauche la liste des rôles (**Code**, **Désignation**, **Utilisateurs** actifs, nombre de **Droits**, **Rôle livré**) avec **Désactiver le rôle** et **Nouveau rôle** au pied ; à droite l'arbre des droits, groupés par module (Patients, Dossiers, Résultats…), et **Enregistrer les droits**. Pour un rôle livré, une note dit : « Rôle livré avec le produit : ses droits sont modifiables, mais il ne peut être ni renommé ni désactivé. »
+- **Journal de sécurité** : les 300 derniers événements (**Date**, **Événement**, **Statut** Réussi/Échec, **Identifiant**, **Poste**, **Motif**), avec la case **N'afficher que l'utilisateur sélectionné**, le nombre de lignes et **Actualiser**. Les échecs sont en rouge, les changements de privilèges en orange.
 
 **Scénarios**
 
@@ -88,13 +151,13 @@ Gérer les comptes du personnel, leurs rôles, leurs sites, et surveiller les co
 2. **Modifier une fiche** : sélectionnez le compte, **Modifier** (le double-clic n'ouvre rien sur cette liste), corrigez, **Enregistrer**. L'identifiant et le mot de passe ne sont pas modifiables ici.
 
 3. **Attribuer ou retirer des rôles**
-   1. Sélectionnez le compte, cliquez **Rôles et droits**.
-   2. Cochez / décochez les rôles. Sous la liste, pour le rôle sélectionné, l'application indique le nombre de droits et avertit s'il accorde la validation biologique ou la gestion des utilisateurs.
+   1. Sélectionnez le compte, cliquez **Rôles et droits** dans le panneau de droite.
+   2. Cochez / décochez les rôles. Sous la liste, pour le rôle sélectionné, l'application indique le nombre de droits (« N droit(s) accordé(s) par ce rôle. ») et avertit s'il accorde la validation biologique ou la gestion des utilisateurs.
    3. **Enregistrer**. Seuls les rôles actifs sont proposés.
 
 4. **Définir les sites accessibles**
    1. Sélectionnez le compte, **Sites accessibles**.
-   2. Cochez au moins un site, choisissez le **Site par défaut** (celui ouvert à la connexion) parmi les sites cochés.
+   2. Cochez au moins un site, choisissez le **Site par défaut** (celui ouvert à la connexion) parmi les sites cochés. Un laboratoire partenaire (sous-traitance) ne peut pas être un site de travail.
    3. **Enregistrer**.
 
 5. **Réinitialiser un mot de passe oublié**
@@ -102,9 +165,9 @@ Gérer les comptes du personnel, leurs rôles, leurs sites, et surveiller les co
    2. Tapez un mot de passe provisoire et communiquez-le de vive voix (il n'est jamais affiché ni généré).
    3. Le titulaire devra le changer à la prochaine connexion ; sa session ouverte est fermée.
 
-6. **Déverrouiller un compte** (après plusieurs mots de passe erronés) : sélectionnez-le, **Déverrouiller**. Le mot de passe n'est pas changé. Le bouton n'est actif que pour un compte actif verrouillé ou ayant des échecs.
+6. **Déverrouiller un compte** (après plusieurs mots de passe erronés) : sélectionnez-le, **Déverrouiller**. Le mot de passe n'est pas changé.
 
-7. **Désactiver un départ / réactiver un retour** : sélectionnez le compte, **Désactiver** (ou **Réactiver**), saisissez le motif obligatoire, validez.
+7. **Désactiver un départ / réactiver un retour** : sélectionnez le compte, **Désactiver** (ou **Réactiver**), saisissez le motif obligatoire, validez. La sortie d'un salarié dans **Dossiers du personnel** ne désactive pas son compte : faites-le ici.
 
 8. **Créer un rôle** : onglet **Rôles et droits**, **Nouveau rôle**, tapez le code (majuscules, sans espace) puis la désignation française. Le rôle est créé **sans aucun droit** : cochez ses droits dans l'arbre puis **Enregistrer les droits**.
 
@@ -114,7 +177,7 @@ Gérer les comptes du personnel, leurs rôles, leurs sites, et surveiller les co
 
 11. **Surveiller les connexions** : onglet **Journal de sécurité**, éventuellement **N'afficher que l'utilisateur sélectionné**, **Actualiser**.
 
-12. **Créer le compte de service des automates** : l'hôte des automates fonctionne sous un compte nommé `interface`. S'il manque, l'écran **Automates** l'indique ; créez-le ici par **Nouvel utilisateur** avec l'identifiant `interface` (droits nécessaires : à vérifier).
+12. **Créer le compte de service des automates** : l'hôte des automates fonctionne sous un compte nommé `interface`. S'il manque, l'écran **Automates** l'indique (« Compte de service des automates introuvable. ») ; créez-le ici par **Nouvel utilisateur** avec l'identifiant `interface` (droits nécessaires : à vérifier).
 
 **Règles et contrôles**
 
@@ -127,7 +190,8 @@ Gérer les comptes du personnel, leurs rôles, leurs sites, et surveiller les co
 - On ne déverrouille pas un compte désactivé : il faut le réactiver, avec un motif.
 - On ne peut réinitialiser le mot de passe que d'un compte qui n'a pas plus de droits que soi.
 - Un rôle livré ne peut être ni renommé ni désactivé.
-- Création, rôles, droits, réinitialisations, désactivations, déverrouillages sont tracés dans le journal de sécurité.
+- Création, rôles, droits, désactivations, déverrouillages sont tracés dans le journal de sécurité.
+- Un compte modifié (désactivé, mot de passe réinitialisé, droits changés) voit sa session fermée : son titulaire doit se reconnecter.
 
 **Flux** : création du compte → rôles → sites accessibles → première connexion du titulaire avec changement obligatoire du mot de passe. Pour un biologiste, la fiche (qualification, n° d'Ordre, date) conditionne la validation biologique et le choix comme biologiste responsable du site dans **Paramètres**.
 
@@ -156,13 +220,30 @@ flowchart TD
 
 ### Journal d'audit
 
-Retrouver après coup qui a créé, modifié ou supprimé un enregistrement, qui a consulté quel dossier patient, et les événements de sécurité.
+**À quoi sert cet écran**
 
-**Qui y a accès** : `admin.audit.view` (administrateur, biologiste responsable, responsable qualité). L'écran est en lecture seule : rien ne peut y être modifié ni effacé.
+Retrouver après coup :
+- qui a créé, modifié ou supprimé un enregistrement ;
+- qui a consulté quel dossier patient (et répondre à une demande d'accès d'un patient, loi 09-08) ;
+- les événements de sécurité (connexions, refus, changements de droits).
 
-**L'écran** : une barre de filtres **Du** / **Au** (ouvert par défaut sur les 30 derniers jours), **Identifiant**, **Rechercher…**, **N° de dossier**, bouton **Appliquer** et compteur de lignes ; trois onglets ; en bas, un cadre de détail de la ligne sélectionnée.
+L'écran est en lecture seule : rien ne peut y être modifié ni effacé.
 
-- **Modifications** : **Date**, **Identifiant**, **Enregistrement**, **Opération** (Création, Modification, Suppression logique, Suppression définitive), **N° de dossier**, **Champs modifiés**, **Motif**, **Poste**. Le détail montre les valeurs avant/après et le motif. Suppressions en rouge, modifications motivées en orange.
+**Qui y a accès** : `admin.audit.view` (administrateur, biologiste responsable, responsable qualité).
+
+**Fonctionnalités**
+- **Du** / **Au** : la période (ouverte par défaut sur les 30 derniers jours).
+- **Identifiant** : limite aux actions d'un compte.
+- **Rechercher…** : un mot à retrouver dans les lignes.
+- **N° de dossier** : limite l'onglet **Consultations** à un dossier patient.
+- **Appliquer** (ou **Entrée** dans une des zones) : relit les trois onglets avec ces filtres.
+- Onglets **Modifications**, **Consultations**, **Événements de sécurité**.
+- Cadre **Détail de la ligne sélectionnée** en bas : valeurs avant / après, motif, justification d'un accès dérogatoire.
+- **Imprimer** (Ctrl+P) : imprime la liste affichée.
+
+**L'écran** : en haut le titre et le compteur de lignes (ou l'avertissement orange de liste tronquée) ; la rangée de filtres **Du**, **Au**, **Identifiant**, **Rechercher…**, **N° de dossier** et **Appliquer** ; les trois onglets ; en bas, le cadre de détail.
+
+- **Modifications** : **Date**, **Identifiant**, **Enregistrement**, **Opération** (Création, Modification, Suppression logique, Suppression définitive), **N° de dossier**, **Champs modifiés**, **Motif**, **Poste**. Suppressions en rouge, modifications motivées en orange.
 - **Consultations** : **Date**, **Identifiant**, **Nature de l'accès** (Consultation du dossier patient, de la demande, du compte rendu, Impression, Export, Transmission hors du laboratoire, Recherche de patients, Réponse à une demande d'accès (CNDP)), **N° de dossier**, **Enregistrements**, **Recherche effectuée**, **Écran**, **Accès dérogatoire**, **Poste**. Accès dérogatoires en rouge ; exports et transmissions en orange.
 - **Événements de sécurité** : **Date**, **Identifiant**, **Événement**, **Statut** (Oui / refusé), **Motif**, **Observations**, **Poste**.
 
@@ -197,41 +278,115 @@ flowchart LR
 
 ### Catalogue des analyses
 
-Décrire ce que le laboratoire sait faire : analyses, paramètres, valeurs usuelles, prix, profils, analyses en cascade et listes de base.
+**À quoi sert cet écran**
 
-**Qui y a accès** : ouverture avec `catalog.view` (tous les rôles du personnel sauf Comptabilité). Création et modification des analyses, paramètres, profils, cascades et listes : `catalog.manage` (administrateur, biologiste responsable). Valeurs usuelles : `catalog.ranges.manage` (administrateur, biologiste responsable, responsable qualité). Tarifs et prix laboratoire : `billing.tariffs.manage` (administrateur ; la Comptabilité a ce droit mais n'ouvre pas cet écran). Les boutons non autorisés sont grisés.
+Décrire ce que le laboratoire sait faire :
+- les analyses, leurs paramètres et leurs valeurs usuelles ;
+- les prix (tarifs par organisme et prix du laboratoire) ;
+- les profils (bilans) et les analyses en cascade ;
+- les listes de base (secteurs, natures de prélèvement, tubes, unités) ;
+- le lien de chaque analyse avec la nomenclature officielle des actes de biologie médicale (NABM), et le contrôle des écarts avec cette nomenclature.
 
-**L'écran** : sept onglets et une ligne d'état en bas.
+**Code interne et code NABM.** Chaque analyse a deux codes :
+- le **Code** : le code interne du laboratoire (ex. `GLY`, `NFS`). Il est saisi une seule fois à la création, mis en majuscules, et ne change plus jamais : les automates, les listes de travail et les résultats s'y réfèrent ;
+- le **Code de l'acte** : le code de l'acte dans la nomenclature officielle (ex. `B118`). Il sert au remboursement (tiers payant, facture « cotation B »). Il se choisit dans la nomenclature, se corrige, et peut être vide pour une analyse hors nomenclature (non remboursée).
 
-- **Analyses** : barre avec **Code, nom ou synonyme de l'analyse** (Entrée), filtre de secteur (**Tous les secteurs**), case **Inclure les entrées désactivées** (cochée par défaut). Trois zones : à gauche les analyses (**Code**, **Désignation**, **Secteur**, **Nature du prélèvement**, **Paramètres**, **Prix**, **Délai de rendu**, **Statut** avec mentions « non prescriptible », « Sous-traitée », « Consentement requis avant enregistrement »…), boutons **Nouvelle analyse**, **Modifier l'analyse** ; en haut à droite les paramètres de l'analyse sélectionnée (**Type de résultat**, **Unité**, **Domaine de mesure**, **Seuils critiques**, **Delta-check (%)**, mentions « interne », « inexploitable »), boutons **Nouveau paramètre**, **Modifier le paramètre** ; en bas à droite les intervalles du paramètre sélectionné (**Population concernée**, **Valeurs usuelles**, **Validité**, **Dernière revue**, **Source de l'intervalle**, mentions « remplacé », « revue à faire », « Seuil décisionnel », « unité d'âge à confirmer »), boutons **Nouvel intervalle**, **Modifier l'intervalle**, **Enregistrer la revue**.
-- **Tarifs** : les tarifs de l'analyse sélectionnée dans l'onglet Analyses (**Organisme payeur**, **Validité**, **Lettre-clé**, **Coefficient**, **Tarif national de référence**, **Prix**, **Dépassement du tarif de référence**, **TVA**), boutons **Nouveau tarif**, **Modifier le tarif**.
-- **Profils** : les profils (bilans) avec **Somme du détail** et **Prix forfaitaire**, à droite leur composition ; boutons **Nouveau profil**, **Modifier le profil**.
-- **Analyses en cascade** : **Déclencheur**, **Condition**, **Analyse ajoutée**, **Description**, **Ajout** (Automatique / À confirmer), mentions « règle inopérante », « non facturée » ; boutons **Nouvelle règle en cascade**, **Modifier la règle**.
-- **Listes de référence** : choix de la liste (**Secteurs techniques**, **Natures de prélèvement**, **Types de tube**, **Unités de mesure**), colonne **Utilisé par** ; boutons **Ajouter**, **Modifier**.
-- **Nomenclature des actes** : la nomenclature officielle des actes de biologie médicale (NABM, arrêtés de 2005, 2012 et 2016), en lecture seule : **Code NABM**, **Libellé de l'acte**, **Coefficient**, **Chapitre**, **Arrêté**, **Utilisé par** (nombre d'analyses du catalogue qui citent l'acte). Recherche par code (« B118 » ou « 118 ») ou par libellé, sans tenir compte des accents ; pastilles **Tous**, **2005**, **2012**, **2016**.
-- **Écarts avec la nomenclature** : les analyses actives **sans code d'acte**, avec un **code inconnu** de la nomenclature, ou dont un tarif en vigueur n'a pas le **coefficient officiel** (**Code interne**, **Désignation**, **Code NABM**, **Libellé de l'acte**, **Coef. officiel**, **Coef. actuel**, **Écart**) ; pastilles par type d'écart ; boutons **Modifier l'analyse** et **Appliquer le coefficient officiel** (droit des tarifs).
+Plusieurs analyses peuvent citer le même acte. Le catalogue livré à l'installation porte déjà le code d'acte de ses analyses de départ.
 
-Un double-clic sur une ligne fait la même chose que le bouton **Modifier** correspondant, quand il est actif.
+**Qui y a accès** : ouverture avec `catalog.view` (tous les rôles du personnel sauf Comptabilité). Création et modification des analyses (et de leur code d'acte), paramètres, profils, cascades et listes : `catalog.manage` (administrateur, biologiste responsable). Valeurs usuelles : `catalog.ranges.manage` (administrateur, biologiste responsable, responsable qualité). Tarifs, prix laboratoire et **Appliquer le coefficient officiel** : `billing.tariffs.manage` (administrateur ; la Comptabilité a ce droit mais n'ouvre pas cet écran). Les boutons non autorisés sont grisés.
+
+**Fonctionnalités**
+
+Onglet **Analyses** :
+- Zone **Code, nom ou synonyme de l'analyse** : filtre la liste quand on appuie sur **Entrée**.
+- Liste **Tous les secteurs** : limite à un secteur.
+- Pastilles **Toutes · N** et **À compléter · N** : « À compléter » ne garde que les analyses non prescriptibles (sans tarif ou sans paramètre actif) ou dont une tranche d'âge a une unité à confirmer.
+- Case **Inclure les entrées désactivées** (cochée par défaut).
+- **Nouvelle analyse** (en-tête de la liste ; `catalog.manage`) et **Modifier l'analyse** (ou double-clic).
+- **Nouveau paramètre** et **Modifier le paramètre** (ou double-clic) pour l'analyse sélectionnée (`catalog.manage`).
+- **Nouvel intervalle**, **Modifier l'intervalle** (ou double-clic) et **Enregistrer la revue** pour le paramètre sélectionné (`catalog.ranges.manage`).
+
+Onglet **Tarifs** (tarifs de l'analyse sélectionnée dans l'onglet **Analyses**) :
+- **Nouveau tarif** et **Modifier le tarif** (ou double-clic) (`billing.tariffs.manage`).
+
+Onglet **Profils** :
+- **Nouveau profil** et **Modifier le profil** (ou double-clic) (`catalog.manage`).
+
+Onglet **Analyses en cascade** :
+- **Nouvelle règle en cascade** et **Modifier la règle** (ou double-clic) (`catalog.manage`).
+
+Onglet **Listes de référence** :
+- Choix de la liste : **Secteurs techniques**, **Natures de prélèvement**, **Types de tube**, **Unités de mesure**.
+- **Ajouter** et **Modifier** (ou double-clic) (`catalog.manage`).
+
+Onglet **Nomenclature des actes** (lecture seule) :
+- Zone « Code (B118, 118) ou libellé de l'acte… » : filtre en direct, sans tenir compte des accents.
+- Pastilles **Tous**, **2005**, **2012**, **2016**, chacune avec son nombre d'actes : limite aux actes d'un arrêté.
+
+Onglet **Écarts avec la nomenclature** :
+- Pastilles **Tous**, **Code manquant**, **Code inconnu**, **Coefficient différent**, chacune avec son nombre.
+- **Modifier l'analyse** (ou double-clic ; `catalog.manage`) : ouvre la fiche de l'analyse de la ligne pour choisir ou corriger son code d'acte.
+- **Appliquer le coefficient officiel** (bouton principal ; `billing.tariffs.manage`) : actif seulement sur une ligne « Coefficient différent ».
+
+Fenêtre de l'analyse :
+- Bouton **…** à côté de **Code de l'acte**, ou **F4** dans la case : ouvre la fenêtre « Nomenclature des actes de biologie médicale » pour choisir l'acte.
+
+Après la correction d'une ligne d'écart, la ligne voisine devient la ligne courante : on corrige les analyses l'une après l'autre.
+
+**L'écran** : en haut le titre « Catalogue des analyses » et la phrase « Analyses, tarifs, profils, règles réflexes et listes de référence. », puis sept onglets et une ligne d'état en bas.
+
+- **Analyses** : la rangée de filtres, puis trois zones :
+  - à gauche les analyses (**Code**, **Désignation**, **Secteur**, **Nature du prélèvement**, **Paramètres**, **Prix**, **Délai de rendu**, **Statut** avec mentions « non prescriptible », « Sous-traitée », « Consentement requis avant enregistrement »…), avec **Modifier l'analyse** et **Nouvelle analyse** ;
+  - en haut à droite les paramètres de l'analyse sélectionnée (**Type de résultat**, **Unité**, **Domaine de mesure**, **Seuils critiques**, **Delta-check (%)**, mentions « interne », « inexploitable »), avec **Modifier le paramètre** et **Nouveau paramètre** ;
+  - en bas à droite les intervalles du paramètre sélectionné (**Population concernée**, **Valeurs usuelles**, **Validité**, **Dernière revue**, **Source de l'intervalle**, mentions « remplacé », « revue à faire », « Seuil décisionnel », « unité d'âge à confirmer »), avec **Enregistrer la revue** dans l'en-tête de la carte et **Modifier l'intervalle**, **Nouvel intervalle** au pied.
+- **Tarifs** : les tarifs de l'analyse sélectionnée (**Organisme payeur**, **Validité**, **Lettre-clé**, **Coefficient**, **Tarif national de référence**, **Prix**, **Dépassement du tarif de référence**, **TVA**). Sans analyse choisie, la note dit : « Sélectionnez une analyse dans l'onglet « Analyses » pour voir et réviser ses tarifs. »
+- **Profils** : les profils (bilans) avec **Somme du détail** et **Prix forfaitaire**, à droite leur composition.
+- **Analyses en cascade** : **Déclencheur**, **Condition**, **Analyse ajoutée**, **Description**, **Ajout** (Automatique / À confirmer), mentions « règle inopérante », « non facturée ».
+- **Listes de référence** : la liste choisie, avec sa colonne **Utilisé par**.
+- **Nomenclature des actes** : la note « Liste officielle en lecture seule : arrêtés 1796-03 (2005), 827-12 (2012) et 1968-16 (2016). La valeur en dirhams de la lettre-clé B reste celle saisie dans les tarifs. », puis la liste « Actes de biologie médicale — N » : **Code NABM**, **Libellé de l'acte**, **Coefficient** (ex. « B 30 »), **Chapitre**, **Arrêté** (la référence complète de l'arrêté s'affiche au survol), **Utilisé par** (nombre d'analyses du catalogue qui citent l'acte). La liste livrée compte 492 actes, de B100 à B591. Un acte retiré de la nomenclature est grisé.
+- **Écarts avec la nomenclature** : une note qui explique les trois écarts, puis la liste « Écarts avec la nomenclature — N » des analyses actives à revoir : **Code interne**, **Désignation**, **Code NABM**, **Libellé de l'acte**, **Coef. officiel**, **Coef. actuel**, **Écart** (pastille : Code manquant, Code inconnu, Coefficient différent avec, entre parenthèses, le nombre de tarifs concernés quand il y en a plusieurs).
 
 **Scénarios**
 
 1. **Créer une analyse**
    1. Onglet **Analyses**, **Nouvelle analyse**.
-   2. **Code** (saisi une seule fois, mis en majuscules, jamais modifiable), **Désignation (français)** obligatoire, arabe et anglais facultatifs, **Libellé court**, **Synonymes de recherche**.
-   3. **Secteur** et **Nature du prélèvement** (obligatoires), **Type de tube**, **Volume requis (mL)**, **Code LOINC**, **Code de l'acte** (code NABM : bouton **…** à côté de la case, ou F4, pour le choisir dans la nomenclature), **Consentement spécifique requis** (général, génétique écrit, VIH et conseil, dépistage prénatal).
+   2. **Code** (le code interne : saisi une seule fois, mis en majuscules, jamais modifiable), **Désignation (français)** obligatoire, arabe et anglais facultatifs, **Libellé court**, **Synonymes de recherche**.
+   3. **Secteur** et **Nature du prélèvement** (obligatoires), **Type de tube**, **Volume requis (mL)**, **Code LOINC**, **Code de l'acte** (voir le scénario 4), **Consentement spécifique requis** (général, génétique écrit, VIH et conseil, dépistage prénatal).
    4. **Technique analytique**, **Réactif / coffret**, cases **Sous accréditation**, **Sous-traitée**, **Maladie à déclaration obligatoire**.
    5. **Délai routine (h)**, **Délai urgent (min)**, **Réalisable en urgence** ; **Jeûne (h, dérogation)**, **Stabilité 20 °C (h)**, **Stabilité 4 °C (h)**, **Ordre d'affichage**, **Renseignement clinique exigé**.
    6. Bloc **Prix du laboratoire** (si vous avez le droit des tarifs) : **Lettre-clé** (B par défaut), **Coefficient**, **Valeur de la lettre-clé** (préremplie avec la dernière valeur connue), **Prix laboratoire**. La base de remboursement et le dépassement à la charge du patient se calculent en direct.
    7. **Actif**, puis **Enregistrer**. La ligne d'état confirme « … enregistrée ; prix du laboratoire appliqué à partir du … ».
    8. Ajoutez au moins un paramètre et un tarif : sans eux l'analyse reste « non prescriptible ».
 
-2. **Marquer une analyse comme sous-traitée** : dans la fiche, cochez **Sous-traitée** puis choisissez le **Laboratoire partenaire**. La liste ne propose que les sites de type « Laboratoire partenaire (sous-traitance) » ; s'il n'y en a aucun, l'enregistrement est refusé (« Aucun laboratoire partenaire n'est configuré… »). Créez-le d'abord dans **Paramètres** › **Nouveau site**.
+2. **Marquer une analyse comme sous-traitée** : dans la fiche, cochez **Sous-traitée** puis choisissez le **Laboratoire partenaire**. La liste ne propose que les sites de type « Laboratoire correspondant » ; s'il n'y en a aucun, l'enregistrement est refusé (« Aucun laboratoire partenaire n'est configuré… »). Créez-le d'abord dans **Paramètres** › **Nouveau site**.
 
-3. **Modifier une analyse** : sélectionnez-la, **Modifier l'analyse**. La fenêtre s'ouvre sur toute la fiche enregistrée ; le **Code** reste celui créé par le laboratoire (il ne change jamais).
-4. **Lier une analyse à un acte de la nomenclature** : dans la fiche, bouton **…** à côté de **Code NABM** (ou F4 dans la case) ; cherchez l'acte par code ou par libellé, flèches haut / bas, **Sélectionner** (ou double-clic). Le code de l'acte est rempli et, si vous avez le droit des tarifs, la lettre-clé B et le coefficient officiel sont proposés ; un prix qui suivait la base de remboursement la suit. Un code tapé qui ne figure pas dans la nomenclature est signalé en rouge et demande une confirmation à l'enregistrement. Plusieurs analyses peuvent citer le même acte ; une analyse hors nomenclature n'en cite aucun.
-5. **Aligner un tarif sur le coefficient officiel** : onglet **Écarts avec la nomenclature**, sélectionnez une ligne « Coefficient différent », **Appliquer le coefficient officiel**, confirmez. Chaque tarif en vigueur concerné reçoit une nouvelle version à compter du jour ; les demandes déjà tarifées et les factures émises gardent leur prix. Un tarif dont une révision est déjà programmée après aujourd'hui est laissé à l'onglet **Tarifs**. La ligne suivante devient la ligne courante.
+3. **Modifier une analyse** : sélectionnez-la, **Modifier l'analyse** (ou double-clic). La fenêtre s'ouvre sur toute la fiche enregistrée ; le **Code** interne reste celui créé par le laboratoire (il ne change jamais). Un champ que la fenêtre ne montre pas (les jours d'exécution) est gardé tel quel.
 
-4. **Ajouter un paramètre**
+4. **Lier une analyse à un acte de la nomenclature**
+   1. Dans la fiche de l'analyse, cliquez le bouton **…** à côté de **Code de l'acte**, ou appuyez sur **F4** dans la case.
+   2. La fenêtre « Nomenclature des actes de biologie médicale » s'ouvre, placée sur l'acte déjà saisi s'il existe. Tapez un code (« B118 » ou « 118 ») ou un mot du libellé dans **Rechercher** ; les flèches haut / bas déplacent la sélection sans quitter la zone.
+   3. **Sélectionner** (ou double-clic sur l'acte). Le code de l'acte est rempli. Si vous avez le droit des tarifs, la lettre-clé B et le coefficient officiel sont proposés pour le prix du laboratoire ; un prix qui suivait la base de remboursement la suit.
+   4. Sous la case, une ligne dit quel acte est cité : « Nomenclature : B118 — … — coefficient officiel B … ». Une case vide affiche « Sans code d'acte : analyse hors nomenclature (non remboursée). Bouton « … » ou F4 pour choisir l'acte. »
+   5. **Enregistrer**. L'onglet **Nomenclature des actes** met à jour sa colonne **Utilisé par**.
+
+   Vous pouvez aussi taper le code à la main (il est mis en majuscules, les espaces sont retirés). Un code qui ne figure pas dans la nomenclature est signalé en rouge (« Le code … ne figure pas dans la nomenclature des actes. ») et demande une confirmation à l'enregistrement.
+
+5. **Créer un code interne pour une analyse hors nomenclature** : créez l'analyse comme au scénario 1 avec votre propre **Code** et laissez **Code de l'acte** vide. L'analyse est facturée au prix du laboratoire, sans remboursement. Elle apparaît dans l'onglet **Écarts avec la nomenclature** comme « Code manquant » : c'est normal pour une analyse hors nomenclature.
+
+6. **Contrôler le catalogue contre la nomenclature**
+   1. Onglet **Écarts avec la nomenclature**. Choisissez une pastille pour ne voir qu'un type d'écart.
+   2. « Code manquant » : l'analyse n'a pas de code d'acte. Si elle est remboursable, **Modifier l'analyse** et choisissez l'acte (scénario 4).
+   3. « Code inconnu » : le code saisi n'existe pas dans la nomenclature (faute de frappe, ancien code, code interne tapé dans la mauvaise case). **Modifier l'analyse** et corrigez.
+   4. « Coefficient différent » : un tarif en vigueur n'a pas le coefficient officiel de l'acte. Voir le scénario 7.
+
+7. **Aligner un tarif sur le coefficient officiel**
+   1. Onglet **Écarts avec la nomenclature**, sélectionnez une ligne « Coefficient différent ».
+   2. Cliquez **Appliquer le coefficient officiel**. La confirmation dit combien de tarifs en vigueur recevront une nouvelle version et à partir de quelle date.
+   3. Confirmez. Chaque tarif en vigueur concerné reçoit une nouvelle version à compter du jour ; un prix qui suivait la base de remboursement la suit. Les demandes déjà tarifées et les factures émises gardent leur prix. La ligne d'état confirme (« … : coefficient officiel de l'acte … appliqué à N tarifs à compter du … »).
+   4. Un tarif dont une révision est déjà programmée après aujourd'hui n'est pas touché : la ligne d'état le signale ; reprenez-le dans l'onglet **Tarifs**.
+   5. L'opération est tracée au journal d'audit avec les coefficients remplacés. La ligne voisine devient la ligne courante.
+
+8. **Ajouter un paramètre**
    1. Sélectionnez l'analyse, **Nouveau paramètre**.
    2. **Code**, **Type de résultat** (Numérique, Numérique avec opérateur, Texte libre, Liste de choix, Semi-quantitatif, Titre, Intitulé de section), **Unité**, **Décimales**, désignations, **Libellé court**, **Code LOINC**, **CV analytique (%)**, **Ordre d'affichage**, **Retrait sur le compte rendu**.
    3. Limites : **Domaine de mesure**, **Limites techniques**, **Seuils critiques** (bas / haut). Les limites techniques doivent englober le domaine de mesure.
@@ -239,50 +394,52 @@ Un double-clic sur une ligne fait la même chose que le bouton **Modifier** corr
    5. Pour une liste de choix ou un semi-quantitatif : remplissez **Réponses autorisées** (code, libellé, Normale, Anormal, Critique) ou cliquez **Ajouter Négatif / Positif** ; **Retirer** enlève la ligne sélectionnée.
    6. Cases **interne** (non imprimé), **Toujours porter au compte rendu**, **Actif** ; **Enregistrer**.
 
-5. **Créer un paramètre calculé** : dans le paramètre (type numérique), remplissez **Formule de calcul** en citant les autres paramètres de la même analyse entre crochets, par ex. `[CHOL] - [HDL] - [TG]/5`. Un code inconnu est signalé avant l'enregistrement.
+9. **Créer un paramètre calculé** : dans le paramètre (type numérique), remplissez **Formule de calcul** en citant les autres paramètres de la même analyse entre crochets, par ex. `[CHOL] - [HDL] - [TG]/5`. Un code inconnu est signalé avant l'enregistrement.
 
-6. **Modifier un paramètre** : **Modifier le paramètre**. Le type est figé dès qu'un résultat existe (le nombre de résultats est affiché). La fenêtre s'ouvre sur tout le paramètre enregistré, réponses autorisées comprises.
+10. **Modifier un paramètre** : **Modifier le paramètre** (ou double-clic). La fenêtre s'ouvre sur tout le paramètre enregistré, réponses autorisées comprises. Le type est figé dès qu'un résultat existe (le nombre de résultats est affiché).
 
-7. **Saisir des valeurs usuelles**
-   1. Sélectionnez le paramètre, **Nouvel intervalle**.
-   2. Population : **Sexe**, **Tranche d'âge (de / à)** avec l'unité (j, mois, ans), **Grossesse** (Sans distinction, Grossesse en cours, Hors grossesse) et **Trimestre**, éventuellement **Automate** (intervalle propre à une technique).
-   3. **Valeurs usuelles** (bornes), ou **Réponse attendue** pour un paramètre codé ; **Seuil décisionnel** ; **Intervalle imprimé** si les bornes ne suffisent pas ; **Source de l'intervalle**, **Dernière revue**, **À compter du**, **Jusqu'au**.
-   4. **Enregistrer**. En cas d'intervalles concurrents, le plus spécifique l'emporte (indice affiché).
+11. **Saisir des valeurs usuelles**
+    1. Sélectionnez le paramètre, **Nouvel intervalle**.
+    2. Population : **Sexe**, **Tranche d'âge (de / à)** avec l'unité (j, mois, ans), **Grossesse** (Sans distinction, Grossesse en cours, Hors grossesse) et **Trimestre**, éventuellement **Automate** (intervalle propre à une technique).
+    3. **Valeurs usuelles** (bornes), ou **Réponse attendue** pour un paramètre codé ; **Seuil décisionnel** ; **Intervalle imprimé** si les bornes ne suffisent pas ; **Source de l'intervalle**, **Dernière revue**, **À compter du**, **Jusqu'au**.
+    4. **Enregistrer**. En cas d'intervalles concurrents, le plus spécifique l'emporte (indice affiché).
 
-8. **Réviser un intervalle** : **Modifier l'intervalle**, changez les bornes, **Enregistrer**. Si l'intervalle est en vigueur, l'ancien est clos la veille et un nouveau est créé (« Intervalle révisé : le précédent a été clos et reste consultable. »).
+12. **Réviser un intervalle** : **Modifier l'intervalle**, changez les bornes, **Enregistrer**. Si l'intervalle est en vigueur, l'ancien est clos la veille et un nouveau est créé (« Intervalle révisé : le précédent a été clos et reste consultable. »).
 
-9. **Enregistrer une revue périodique sans changement (ISO 15189)** : sélectionnez l'intervalle, **Enregistrer la revue**, complétez la source si besoin, confirmez avec **Enregistrer la revue**. La revue est datée du jour. Les intervalles jamais revus ou revus il y a plus de 3 ans sont marqués « revue à faire ».
+13. **Enregistrer une revue périodique sans changement (ISO 15189)** : sélectionnez l'intervalle, **Enregistrer la revue**, complétez la source si besoin, confirmez avec **Enregistrer la revue**. La revue est datée du jour. Les intervalles jamais revus ou revus il y a plus de 3 ans sont marqués « revue à faire ».
 
-10. **Réviser un prix (nouvelle valeur du B, nouveau tarif d'organisme)**
+14. **Réviser un prix (nouvelle valeur du B, nouveau tarif d'organisme)**
     1. Sélectionnez l'analyse dans l'onglet **Analyses**, puis onglet **Tarifs**, **Nouveau tarif**.
     2. **Organisme payeur** (« Tarif du laboratoire » pour les patients payants), **À compter du** (date postérieure au tarif en vigueur, proposée automatiquement), **Lettre-clé**, **Coefficient**, **Valeur de la lettre-clé**, **Prix**, **Exonéré de TVA** (coché par défaut) ou taux de **TVA**.
     3. **Enregistrer**. Le tarif précédent est clos la veille ; les factures déjà émises gardent leur prix.
-    4. La valeur de la lettre-clé B est nationale mais se saisit **analyse par analyse** : il n'existe pas de bouton de révision globale du B.
+    4. La valeur de la lettre-clé B est nationale mais se saisit **analyse par analyse** : il n'existe pas de bouton de révision globale du B. (Le coefficient, lui, s'aligne sur la nomenclature par le scénario 7.)
 
-11. **Corriger une faute de frappe sur un tarif** : onglet **Tarifs**, sélectionnez le tarif, **Modifier le tarif**. Seuls prix, coefficient, lettre-clé, valeur et TVA changent ; organisme et dates restent. Les dossiers déjà facturés gardent leur prix.
+15. **Corriger une faute de frappe sur un tarif** : onglet **Tarifs**, sélectionnez le tarif, **Modifier le tarif** (ou double-clic). Seuls prix, coefficient, lettre-clé, valeur et TVA changent ; organisme et dates restent. Les dossiers déjà facturés gardent leur prix.
 
-12. **Créer ou modifier un profil (bilan)** : onglet **Profils**, **Nouveau profil** / **Modifier le profil** ; **Code**, désignations, **Synonymes de recherche**, **Prix forfaitaire** (facultatif), cases **Détailler sur la facture** (à garder pour le tiers payant), **Regrouper sur le compte rendu**, **Actif** ; cochez les analyses et, si besoin, **facultative** ; **Enregistrer**. Le total du détail et le forfait s'affichent. (Les synonymes s'ouvrent vides en modification : à ressaisir.)
+16. **Créer ou modifier un profil (bilan)** : onglet **Profils**, **Nouveau profil** / **Modifier le profil** ; **Code**, désignations, **Synonymes de recherche**, **Prix forfaitaire** (facultatif), cases **Détailler sur la facture** (à garder pour le tiers payant), **Regrouper sur le compte rendu**, **Actif** ; cochez les analyses et, si besoin, **facultative** ; **Enregistrer**. Le total du détail et le forfait s'affichent. Attention : en modification, les **Synonymes de recherche** s'ouvrent vides et sont effacés si on ne les ressaisit pas.
 
-13. **Créer une analyse en cascade (réflexe)** : onglet **Analyses en cascade**, **Nouvelle règle en cascade** ; **Analyse du déclencheur**, **Paramètre déclencheur**, **Condition** (Supérieur à, Inférieur à, Dans l'intervalle, Hors intervalle, Réponse codée égale à) avec **Seuil** / **Seuil supérieur** / **Réponse déclenchante** ; **Analyse ajoutée** ; **Description (français)** obligatoire ; **Ajouter sans confirmation** (sinon le biologiste valide la proposition), **Acte facturable**, **Actif** ; **Enregistrer**.
+17. **Créer une analyse en cascade (réflexe)** : onglet **Analyses en cascade**, **Nouvelle règle en cascade** ; **Analyse du déclencheur**, **Paramètre déclencheur**, **Condition** (Supérieur à, Inférieur à, Dans l'intervalle, Hors intervalle, Réponse codée égale à) avec **Seuil** / **Seuil supérieur** / **Réponse déclenchante** ; **Analyse ajoutée** ; **Description (français)** obligatoire ; **Ajouter sans confirmation** (sinon le biologiste valide la proposition), **Acte facturable**, **Actif** ; **Enregistrer**.
 
-14. **Gérer les listes de référence** : onglet **Listes de référence**, choisissez la liste, **Ajouter** ou **Modifier**. Secteur : ordre, **Dans le périmètre d'accréditation**. Nature de prélèvement : **Jeûne requis (h)**, **Consignes de prélèvement**, **Consignes remises au patient**. Type de tube : **Couleur du bouchon** (#RRGGBB), **Additif / anticoagulant**, **Ordre de prélèvement** (obligatoire), volumes, « à l'abri de la lumière », « transport sous glace ». Unité : **Symbole**, **Symbole (arabe)**, **Code UCUM**, **Facteur vers l'unité SI** et **Unité SI** (l'un ne va pas sans l'autre).
+18. **Gérer les listes de référence** : onglet **Listes de référence**, choisissez la liste, **Ajouter** ou **Modifier**. Secteur : ordre, **Dans le périmètre d'accréditation**. Nature de prélèvement : **Jeûne requis (h)**, **Consignes de prélèvement**, **Consignes remises au patient**. Type de tube : **Couleur du bouchon** (#RRGGBB), **Additif / anticoagulant**, **Ordre de prélèvement** (obligatoire), volumes, « à l'abri de la lumière », « transport sous glace ». Unité : **Symbole**, **Symbole (arabe)**, **Code UCUM**, **Facteur vers l'unité SI** et **Unité SI** (l'un ne va pas sans l'autre).
 
-15. **Désactiver une analyse, un paramètre, une entrée de liste** : décochez **Actif** et enregistrez (rien ne se supprime).
+19. **Désactiver une analyse, un paramètre, une entrée de liste** : décochez **Actif** et enregistrez (rien ne se supprime).
 
 **Règles et contrôles**
 
-- Les codes (analyse, paramètre, profil, entrées de liste) ne se modifient jamais après création.
+- Les codes internes (analyse, paramètre, profil, entrées de liste) ne se modifient jamais après création. Le code de l'acte, lui, se corrige.
 - Le type de résultat d'un paramètre est figé dès qu'un résultat existe.
 - Une analyse qui a des analyses en cours sans résultat ne peut pas être désactivée (« N analyse(s) en cours attendent encore un résultat… ») ; une entrée de liste utilisée non plus.
 - Le délai urgent ne peut dépasser le délai de routine ; la stabilité à 20 °C ne peut dépasser celle à 4 °C.
 - Un tarif ne s'écrase pas : chaque nouveau prix est une nouvelle version, sans chevauchement (« Une révision doit prendre effet après le … »). Un acte qui porte un code de nomenclature exige coefficient et valeur de lettre-clé.
+- **Appliquer le coefficient officiel** ne change que les tarifs en vigueur, à partir du jour ; il laisse les révisions déjà programmées, les demandes déjà tarifées et les factures émises.
+- La nomenclature des actes est en lecture seule : on ne peut ni ajouter ni modifier un acte officiel.
 - Les actes de biologie médicale sont exonérés de TVA ; un taux n'est exigé que si la case est décochée.
 - Un intervalle en vigueur n'est pas réécrit : il est remplacé. Un intervalle hors du domaine de mesure est refusé.
 - Un profil doit contenir au moins une analyse non facultative, sans analyse désactivée.
 - Une règle en cascade doit pouvoir se déclencher (seuils cohérents, réponse codée existante) et ne peut ajouter l'analyse du déclencheur lui-même.
 - Une analyse est « non prescriptible » tant qu'elle n'a pas de paramètre actif ou de tarif.
 
-**Flux** : catalogue → enregistrement des dossiers (choix des analyses et des profils, prix) → saisie des résultats (paramètres, limites, formules, cascades) → validation et compte rendu (valeurs usuelles, mention d'accréditation) → facturation (tarifs). Une analyse sous-traitée part vers l'écran **Sous-traitance**.
+**Flux** : catalogue → enregistrement des dossiers (choix des analyses et des profils, prix) → saisie des résultats (paramètres, limites, formules, cascades) → validation et compte rendu (valeurs usuelles, mention d'accréditation) → facturation (tarifs, code de l'acte et coefficient sur la facture « cotation B » et au tiers payant). Une analyse sous-traitée part vers l'écran **Sous-traitance**.
 
 ```mermaid
 flowchart TD
@@ -292,6 +449,8 @@ flowchart TD
     D -- non --> E[Refus : créer d'abord le partenaire<br/>Paramètres › Nouveau site]
     D -- oui --> F[Analyse enregistrée]
     C -- non --> F
+    B --> NA[Code de l'acte :<br/>bouton … ou F4, nomenclature des actes]
+    NA --> F
     F --> G[Nouveau paramètre]
     G --> H{Formule de calcul ?}
     H -- oui --> I{Codes connus ?}
@@ -309,51 +468,81 @@ flowchart TD
     O --> S{Nouveau prix ?}
     S -- erreur de saisie --> T[Modifier le tarif] --> O
     S -- nouvelle date --> U[Nouveau tarif : précédent clos la veille] --> O
+    O --> V{Écarts avec la nomenclature ?}
+    V -- code manquant ou inconnu --> W[Modifier l'analyse :<br/>choisir l'acte] --> O
+    V -- coefficient différent --> X[Appliquer le coefficient officiel :<br/>nouvelle version du tarif au jour] --> O
 ```
 
 ---
 
 ### Automates
 
-Relier les automates au LIS : configurer la liaison, traduire les codes de l'automate en paramètres, surveiller les messages reçus et réimporter ceux qui ont échoué.
+**À quoi sert cet écran**
 
-**Qui y a accès** : ouverture avec `instruments.view` (administrateur, biologistes, technicien, responsable qualité). Création / modification / table de correspondance / test de trame : `instruments.configure` (administrateur, biologiste responsable ; le test demande aussi le droit de voir les résultats). Activer / désactiver une liaison : `instruments.control` (administrateur, biologiste responsable, technicien). **Réimporter** : `instruments.replay` (administrateur, biologiste responsable). **Voir la trame brute** : droit de voir les résultats. **Purger le journal** : `admin.maintenance.run` (administrateur).
+Relier les automates au LIS :
+- configurer la liaison (protocole, liaison série, réseau ou dossier de fichiers) ;
+- traduire les codes de l'automate en paramètres du catalogue ;
+- tester une trame sans rien enregistrer ;
+- surveiller les messages reçus, réimporter ceux qui ont échoué ou qui sont retenus, et purger le journal.
 
-**L'écran** : en haut l'état de l'hôte des automates (actif avec le nombre de liaisons en service et en défaut, en défaut, ou « Ce poste ne pilote pas les automates… ») et **Actualiser** ; l'état se met à jour seul. Trois zones :
+**Qui y a accès** : ouverture avec `instruments.view` (administrateur, biologistes, technicien, responsable qualité). Création / modification / table de correspondance / test de trame : `instruments.configure` (administrateur, biologiste responsable ; le test demande aussi le droit de voir les résultats). Activer / désactiver une liaison : `instruments.control` (administrateur, biologiste responsable, technicien). **Réimporter** : `instruments.replay` (administrateur, biologiste responsable, biologiste, technicien). **Voir la trame brute** : droit de voir les résultats. **Purger le journal** : `admin.maintenance.run` (administrateur).
 
-- **Liaisons** : **Automate**, **Protocole**, **Point de connexion**, **Sens**, **État en direct**, nombre de correspondances, **Messages (jour)**, **Dernier message**, **Statut** (désactivée, aucune correspondance active, acceptation automatique, erreur de liaison, non piloté ici…). Boutons **Nouvelle interface**, **Modifier l'interface**, **Désactiver la liaison** / **Activer la liaison**.
-- **Correspondances** de la liaison sélectionnée : **Code automate**, **Paramètre**, **Désignation**, **Unité**, **Conversion**, alertes (« unités différentes sans conversion », « aucune traduction des réponses »). Boutons **Table de correspondance**, **Tester une trame…**.
-- **Journal des messages** (200 derniers) : **Date et heure**, **Sens**, **Échantillons**, **Résultats** (reçus/importés), **Statut** (Reçu, Importé, Partiellement importé, Échec, Ignoré, En attente d'acceptation), **Anomalies**. Boutons **Voir la trame brute** (ou double-clic), **Réimporter**, **Purger le journal**.
+**Fonctionnalités**
+- **Actualiser** (en-tête) : relit les liaisons et le journal. L'état de l'hôte se met aussi à jour seul toutes les quelques secondes.
+- Carte **Liaisons** :
+  - **Nouvelle interface** (`instruments.configure`) : crée la liaison d'un automate qui n'en a pas encore ;
+  - **Désactiver la liaison** / **Activer la liaison** (`instruments.control`) : demande un motif ;
+  - **Modifier l'interface** (ou double-clic ; `instruments.configure`).
+- Carte **Correspondances** (de la liaison sélectionnée) :
+  - **Table de correspondance** (`instruments.configure`) : fenêtre avec **Ajouter des paramètres…**, **Tout cocher**, **Ajouter à la correspondance**, **Retirer la ligne** et **Enregistrer** ;
+  - **Tester une trame…** (`instruments.configure` et lecture des résultats) : fenêtre avec **Charger la dernière trame reçue**, **Analyser la trame** et, pour une liaison COBAS INTEGRA, **Exemple de trame**.
+- Carte **Journal des messages** :
+  - **Voir la trame brute** (ou double-clic ; lecture des résultats) ;
+  - **Purger le journal** (`admin.maintenance.run`) ;
+  - **Réimporter** (`instruments.replay`) : actif seulement sur une ligne Échec, Partiellement importé ou En attente d'acceptation.
+
+**L'écran** : en haut le titre « Automates », l'état de l'hôte des automates (actif avec le nombre de liaisons en service et en défaut, en défaut, ou « Ce poste ne pilote pas les automates… ») et **Actualiser**. Trois cartes :
+
+- **Liaisons** : **Automate**, **Protocole**, **Point de connexion**, **Sens**, **État en direct** (pastille), nombre de correspondances, **Messages (jour)**, **Dernier message**, **Statut** (désactivée, aucune correspondance active, acceptation automatique, erreur de liaison, non piloté ici…).
+- **Correspondances** de la liaison sélectionnée : **Code automate**, **Paramètre**, **Désignation**, **Unité**, **Conversion**, alertes (« unités différentes sans conversion », « aucune traduction des réponses »).
+- **Journal des messages** (200 derniers) : **Date et heure**, **Sens**, **Échantillons**, **Résultats** (reçus/importés), **Statut** en pastille (Reçu, Importé, Partiellement importé, Échec, Ignoré, En attente d'acceptation), **Anomalies**.
 
 **Scénarios**
 
 1. **Déclarer une nouvelle liaison**
    1. Prérequis : l'automate existe dans **Données de référence › Automates** avec le type « Automate ».
    2. **Nouvelle interface**, choisissez l'automate (seuls ceux sans liaison sont proposés).
-   3. **Protocole** (ASTM E1394, HL7 v2, POCT1-A, CSV, texte délimité, fichier à largeur fixe), **Liaison physique** (Série RS-232, TCP/IP, Dépôt de fichiers), **Sens** (Unidirectionnel, Bidirectionnel, Envoi de la liste de travail).
+   3. **Protocole** (ASTM E1394, HL7 v2, POCT1-A, CSV, Texte délimité (propriétaire), Fichier à largeur fixe, Roche COBAS INTEGRA), **Liaison physique** (Série (RS-232), TCP/IP, Dépôt de fichiers), **Sens** (Unidirectionnel, Bidirectionnel, Envoi de la liste de travail).
    4. Selon la liaison : **Port série**, **Débit**, **Bits de données**, **Parité**, **Bits d'arrêt**, **Contrôle de flux** ; ou **Hôte**, **Port TCP**, **Le LIS écoute (l'automate se connecte)** ; ou **Dossier entrant**, **Motif de fichier**, **Dossier des fichiers traités**, **Dossier sortant**.
    5. **Encodage** (ISO-8859-1 par défaut), **Délai d'acquittement (s)**, **Tentatives**, **Signaler les codes inconnus**, **Router les contrôles vers le CIQ**.
-   6. **Format des messages** : **Profil fabricant** (Standard, Roche cobas, Abbott Architect / Alinity, Personnalisé) et réglages fins seulement si le manuel de l'automate le demande.
+   6. **Format des messages** : **Profil fabricant** (Standard (norme ASTM / HL7), Roche cobas (code suivi de « / »), Abbott Architect / Alinity, Roche cobas INTEGRA 400 plus, Personnalisé) et réglages fins seulement si le manuel de l'automate le demande.
    7. Laissez **acceptation automatique** décochée au départ ; cochez **Liaison activée** si vous voulez qu'elle tourne ; **Enregistrer**. La prise en compte par l'hôte se fait en quelques secondes.
 
-2. **Remplir la table de correspondance** : sélectionnez la liaison, **Table de correspondance**, **Ajouter des paramètres…**, tapez un code d'analyse (ex. NFS) ou de paramètre, cochez (ou **Tout cocher**), **Ajouter à la correspondance** ; pour chaque ligne saisissez le **Code automate**, éventuellement **Unité automate**, **Facteur** et **Décalage** de conversion, **Réponses codées** ; **Retirer la ligne** si besoin ; **Enregistrer**. Une ligne retirée qui a déjà servi est conservée, désactivée.
+2. **Déclarer un Roche cobas INTEGRA 400 plus**
+   1. **Nouvelle interface**, choisissez l'automate.
+   2. Dans **Profil fabricant**, choisissez « Roche cobas INTEGRA 400 plus » (ou choisissez le protocole « Roche COBAS INTEGRA »). L'application remplit d'un coup : protocole Roche COBAS INTEGRA, liaison Série (RS-232), sens « Envoi de la liste de travail », 9600 bauds, 8 bits de données, sans parité, 1 bit d'arrêt, contrôle de flux XOnXOff, encodage ASCII, délai d'acquittement 180 s, 3 tentatives.
+   3. Saisissez le **Port série**. Le débit de 9600 est un point de départ : alignez-le sur l'écran de configuration de l'automate.
+   4. La note du format rappelle : le LIS interroge l'automate (résultats, tubes sans demande) ; les codes de la table de correspondance sont les numéros de test de l'automate (« 031 ») ; la fin de ligne, le contrôle de bloc et l'intervalle d'interrogation se règlent dans la section `Instruments:RocheIntegra` du fichier de configuration.
+   5. **Enregistrer**, puis remplissez la table de correspondance et testez avec **Exemple de trame**.
 
-3. **Tester une trame** : **Tester une trame…**, collez une trame ou **Charger la dernière trame reçue**, **Analyser la trame**. L'écran montre, pour chaque résultat, le tube, le dossier et patient, le code lu, le paramètre, la valeur reçue et la valeur LIS, et **Ce que ferait le LIS**. Rien n'est enregistré. Aussi accessible depuis la fenêtre de modification de l'interface (après le premier enregistrement).
+3. **Remplir la table de correspondance** : sélectionnez la liaison, **Table de correspondance**, **Ajouter des paramètres…**, tapez un code d'analyse (ex. NFS) ou de paramètre, cochez (ou **Tout cocher**), **Ajouter à la correspondance** ; pour chaque ligne saisissez le **Code automate**, éventuellement **Unité automate**, **Facteur** et **Décalage** de conversion, **Réponses codées** ; **Retirer la ligne** si besoin ; **Enregistrer**. Une ligne retirée qui a déjà servi est conservée, désactivée.
 
-4. **Activer l'acceptation automatique** : **Modifier l'interface**, cochez **acceptation automatique**, confirmez. Refusé tant que la table de correspondance est vide.
+4. **Tester une trame** : **Tester une trame…**, collez une trame, ou **Charger la dernière trame reçue**, ou (liaison COBAS INTEGRA) **Exemple de trame**, qui fabrique une trame d'exemple avec les tests de la table et l'analyse aussitôt. **Analyser la trame**. L'écran montre, pour chaque résultat, le tube, le dossier et patient, le code lu, le paramètre, la valeur reçue et la valeur LIS, et **Ce que ferait le LIS**. Rien n'est enregistré. Aussi accessible depuis la fenêtre de modification de l'interface (après le premier enregistrement).
 
-5. **Couper une liaison (automate en maintenance)** : sélectionnez-la, **Désactiver la liaison**, motif obligatoire. **Activer la liaison** pour la remettre, avec motif.
+5. **Activer l'acceptation automatique** : **Modifier l'interface**, cochez **acceptation automatique**, confirmez. Refusé tant que la table de correspondance est vide.
 
-6. **Traiter une transmission retenue ou en échec** : dans le **Journal des messages**, lisez **Anomalies** ; **Voir la trame brute** pour le texte exact ; corrigez la cause (tube pas encore réceptionné, code inconnu à ajouter, automate remis en service, étalonnage enregistré…) ; puis **Réimporter**, confirmez. Le nombre de valeurs enregistrées est affiché. Seules les lignes Échec, Partiellement importé ou En attente d'acceptation se réimportent.
+6. **Couper une liaison (automate en maintenance)** : sélectionnez-la, **Désactiver la liaison**, motif obligatoire. **Activer la liaison** pour la remettre, avec motif.
 
-7. **Purger le journal des messages** : **Purger le journal** ; l'application annonce combien de trames seront supprimées et combien sont gardées parce que encore réimportables ; confirmez, saisissez le motif.
+7. **Traiter une transmission retenue ou en échec** : dans le **Journal des messages**, lisez **Anomalies** ; **Voir la trame brute** pour le texte exact ; corrigez la cause (tube pas encore réceptionné, code inconnu à ajouter, automate remis en service, étalonnage enregistré…) ; puis **Réimporter**, confirmez. Le nombre de valeurs enregistrées est affiché. Sans acceptation automatique, c'est aussi ainsi que le technicien ou le biologiste accepte une transmission « En attente d'acceptation ».
+
+8. **Purger le journal des messages** : **Purger le journal** ; l'application annonce combien de trames seront supprimées et combien sont gardées parce que encore réimportables ; confirmez, saisissez le motif.
 
 **Règles et contrôles**
 
 - Une seule liaison par automate. L'automate doit être de type « Automate ».
 - Une liaison bidirectionnelle exige au moins une correspondance ; l'acceptation automatique exige une table renseignée.
 - Deux codes ne peuvent viser le même paramètre ; un code ne peut servir deux fois ; un facteur nul est refusé.
-- Sans acceptation automatique, chaque transmission reste « En attente d'acceptation » jusqu'à **Réimporter** (droit livré au seul biologiste responsable et à l'administrateur).
+- Sans acceptation automatique, chaque transmission reste « En attente d'acceptation » jusqu'à **Réimporter** (droit livré à l'administrateur, au biologiste responsable, au biologiste et au technicien). Les valeurs passent ensuite par la validation technique et biologique comme des valeurs saisies.
 - Les résultats d'un automate hors service, en maintenance, réformé ou à l'étalonnage échu sont retenus.
 - Un résultat déjà validé biologiquement n'est pas écrasé par l'automate (compte rendu rectifié nécessaire).
 - La purge ne supprime jamais une trame encore réimportable ; elle est tracée avec votre nom et le motif.
@@ -388,20 +577,32 @@ flowchart TD
 
 ### Données de référence
 
-Tenir à jour les fichiers de base des autres modules : équipements, contrôle interne, articles de stock, fournisseurs, prescripteurs, organismes payeurs.
+**À quoi sert cet écran**
+
+Tenir à jour les fichiers de base des autres modules :
+- les équipements et automates ;
+- les matériaux et cibles du contrôle interne ;
+- les articles de stock et les fournisseurs ;
+- les prescripteurs ;
+- les organismes payeurs.
 
 **Qui y a accès** : l'entrée apparaît si vous avez au moins un de ces droits : gestion des équipements (administrateur, biologiste responsable, responsable qualité), règles de contrôle qualité (mêmes rôles), gestion des commandes (administrateur, comptabilité), `catalog.manage` (administrateur, biologiste responsable), gestion des tarifs (administrateur, comptabilité). Chaque onglet n'est modifiable qu'avec son droit ; les boutons sont grisés sinon.
 
-**L'écran** : case **Inclure les comptes désactivés** (inclut les entrées désactivées), ligne d'état « Données de référence complètes… » ou « Écrans encore inexploitables faute de données de référence — … ». Six onglets :
+**Fonctionnalités**
+- Case **Inclure les comptes désactivés** (en-tête) : ajoute les entrées désactivées à toutes les listes.
+- Ligne d'état (en-tête) : « Données de référence complètes : tous les écrans sont exploitables. » ou « Écrans encore inexploitables faute de données de référence — … » suivi des écrans concernés.
+- Un bouton de création et un bouton **Modifier** par onglet :
 
 | Onglet | Boutons | Droit pour modifier |
 |---|---|---|
 | **Automates** (tous les équipements) | **Nouvel équipement**, **Modifier** | gestion des équipements |
-| **Contrôle interne** (matériaux, puis cibles du matériau sélectionné) | **Nouveau matériau de contrôle**, **Nouvelle cible de contrôle**, **Modifier** | règles de contrôle qualité |
+| **Contrôle interne** (matériaux, puis cibles du matériau sélectionné) | **Nouveau matériau de contrôle**, **Modifier** ; **Nouvelle cible de contrôle**, **Modifier** | règles de contrôle qualité |
 | **Articles** | **Nouvel article**, **Modifier** | gestion des commandes |
 | **Fournisseurs** | **Nouveau fournisseur**, **Modifier** | gestion des commandes |
-| **Prescripteurs** (zone **Rechercher…**) | **Nouveau prescripteur**, **Modifier** | `catalog.manage` |
+| **Prescripteurs** (zone **Rechercher…**, Entrée) | **Nouveau prescripteur**, **Modifier** | `catalog.manage` |
 | **Organismes payeurs** | **Nouvel organisme payeur**, **Modifier** (ou double-clic) | gestion des tarifs |
+
+**L'écran** : en haut le titre « Données de référence », la ligne d'état et la case **Inclure les comptes désactivés** ; puis six onglets. Chaque onglet a une liste en carte avec ses boutons dans l'en-tête ; certains ont une note (périodicités des équipements, cible du contrôle interne, évaluation des fournisseurs, taux des organismes payeurs). L'onglet **Contrôle interne** montre les matériaux en haut et, en bas, les cibles du matériau sélectionné.
 
 **Scénarios**
 
@@ -444,16 +645,58 @@ flowchart LR
 
 ### Paramètres
 
-Renseigner l'identité légale du laboratoire, régler les numérotations, les paramètres généraux et les imprimantes du poste.
+**À quoi sert cet écran**
 
-**Qui y a accès** : l'entrée apparaît avec `admin.sites.manage` ou `admin.settings.manage` (livrés à l'administrateur seul). Onglet **Site** modifiable avec `admin.sites.manage` ; onglets **Numérotations** et **Paramètres** modifiables avec `admin.settings.manage`. L'onglet **Imprimantes** concerne le poste sur lequel vous êtes.
+Régler ce qui est propre au laboratoire :
+- l'identité légale de chaque site, son autorisation, son biologiste responsable et son logo ; créer un nouveau site ;
+- les numérotations (dossiers, factures, reçus, bordereaux…) ;
+- les paramètres généraux ;
+- le format d'impression des factures patients ;
+- les lieux de stockage des tubes ;
+- les imprimantes du poste.
 
-**L'écran** : quatre onglets.
+**Qui y a accès** : l'entrée apparaît avec `admin.sites.manage` ou `admin.settings.manage` (livrés à l'administrateur seul). Onglet **Site** et **Nouveau site** modifiables avec `admin.sites.manage` ; onglets **Numérotations**, **Paramètres** et **Factures** modifiables avec `admin.settings.manage`. L'onglet **Lieux de stockage** n'apparaît qu'avec `admin.settings.manage`. L'onglet **Imprimantes** concerne le poste sur lequel vous êtes.
 
-- **Site** : liste déroulante du site à afficher (code — raison sociale), deux bandeaux : « Facturation possible… » ou « Facturation bloquée — » suivi de ce qui manque, et « Diffusion des comptes rendus possible. » ou « Diffusion des comptes rendus bloquée — … ». Puis les champs : **Code**, **Désignation (français)**, **Désignation (arabe)**, **Type de site** (Laboratoire principal, Laboratoire satellite, Centre de prélèvement, Laboratoire correspondant) ; **Identité légale (mentions obligatoires sur facture)** : **Raison sociale**, **ICE**, **Identifiant fiscal (IF)**, **Taxe professionnelle**, **Registre de commerce**, **Tribunal**, **N° d'affiliation CNSS**, **INPE** ; **Autorisation et accréditation** : **N° d'autorisation du ministère de la Santé**, **Date de l'autorisation**, **Biologiste responsable**, **Site accrédité (ISO 15189)**, **N° d'accréditation**, **Accréditation valable jusqu'au** ; **Coordonnées** : **Adresse** (français et arabe), **Ville**, **Région**, **Code postal**, **Téléphone**, **Fax**, **Courriel**, **Site web** ; **Logo du laboratoire** avec **Choisir le logo…** et **Retirer le logo** ; boutons **Enregistrer** et **Actualiser**.
-- **Numérotations** : **Série**, **Site**, année (colonne **Date**), **Format**, **Prochain numéro**, **Valeur suivante**, **Dernier attribué**, **Statut** (Modifiable, En service, Clôturée). Boutons **Modifier le format**, **Clôturer la série** / **Réouvrir la série**.
-- **Paramètres** : **Clé**, **Valeur** (masquée si sensible), **Site**, **Description**, **Sensible**. Boutons **Modifier**, **Nouveau**.
-- **Imprimantes** : imprimante **Comptes rendus, factures, fiches de paillasse (A4)**, case **Imprimer directement sur cette imprimante, sans aperçu à l'écran**, imprimante **Étiquettes des tubes**, boutons **Enregistrer**, **Imprimer une étiquette de test**, **Actualiser**.
+**Fonctionnalités**
+
+Onglet **Site** :
+- Liste du site à afficher (code — raison sociale).
+- **Nouveau site** (à côté de la liste ; `admin.sites.manage`) : crée un site ou un laboratoire partenaire.
+- **Choisir le logo…** et **Retirer le logo** (`admin.sites.manage`).
+- **Enregistrer** (`admin.sites.manage`) et **Actualiser**, au pied de la fiche.
+
+Onglet **Numérotations** :
+- **Modifier le format** (`admin.settings.manage`) : seulement pour une série au statut « Modifiable ».
+- **Clôturer la série** / **Réouvrir la série** (`admin.settings.manage`) : demande un motif.
+
+Onglet **Paramètres** :
+- **Modifier** et **Nouveau** (`admin.settings.manage`).
+
+Onglet **Factures** :
+- Liste **Format par défaut des factures patients**.
+- Cases **Options du format existant** et **Options du format cotation B**.
+- **Enregistrer** (`admin.settings.manage`) et **Actualiser**.
+
+Onglet **Lieux de stockage** :
+- **Ajouter** : demande le nom du nouveau lieu.
+- **Renommer** (ou double-clic) : demande le nouveau nom.
+- **Désactiver** / **Réactiver** : retire le lieu des listes (ou l'y remet).
+
+Onglet **Imprimantes** :
+- Listes des deux imprimantes, case d'impression directe, **Enregistrer**, **Imprimer une étiquette de test**, **Actualiser**.
+
+**L'écran** : en haut le titre « Paramètres » et la phrase « Identité du laboratoire, numérotations, paramètres, lieux de stockage et imprimantes de ce poste. », puis six onglets.
+
+- **Site** : en haut la liste des sites, **Nouveau site** et le bandeau « Facturation possible… » ou « Facturation bloquée — » suivi de ce qui manque ; dessous le bandeau « Diffusion des comptes rendus possible. » ou « Diffusion des comptes rendus bloquée — … ». Pour un laboratoire partenaire, une note dit : « Laboratoire partenaire : aucune facturation ni validation de compte rendu sur ce site ; son identité et ses coordonnées figurent sur les bordereaux d'envoi. » Puis les champs : **Code**, **Désignation (français)**, **Désignation (arabe)**, **Type de site** (Laboratoire principal, Laboratoire satellite, Centre de prélèvement, Laboratoire correspondant) ; **Identité légale (mentions obligatoires sur facture)** : **Raison sociale**, **ICE**, **Identifiant fiscal (IF)**, **Taxe professionnelle**, **Registre de commerce**, **Tribunal**, **N° d'affiliation CNSS**, **INPE** ; **Autorisation et accréditation** : **N° d'autorisation du ministère de la Santé**, **Date de l'autorisation**, **Biologiste responsable**, **Site accrédité (ISO 15189)**, **N° d'accréditation**, **Accréditation valable jusqu'au** ; **Coordonnées** : **Adresse** (français et arabe), **Ville**, **Région**, **Code postal**, **Téléphone**, **Fax**, **Courriel**, **Site web** ; **Logo du laboratoire** avec **Choisir le logo…** et **Retirer le logo**. Au pied : la ligne d'état, **Enregistrer** et **Actualiser**.
+- **Numérotations** : **Série**, **Site**, année (colonne **Date**), **Format**, **Prochain numéro**, **Valeur suivante**, **Dernier attribué**, **Statut** (Modifiable, En service, Clôturée). Une série clôturée est en rouge, une série en service est grisée, une série encore modifiable ressort en couleur. Une note rappelle que le format est figé dès le premier numéro.
+- **Paramètres** : **Clé**, **Valeur** (masquée si sensible), **Site**, **Description**, **Sensible**. Une note rappelle que ces paramètres sont communs à tous les postes.
+- **Factures** : la phrase « Format d'impression des factures patients. Les options s'appliquent aux nouvelles impressions et aux réimpressions ; elles ne changent jamais un montant. Les avoirs et les reçus gardent le format existant. », puis :
+  - **Format par défaut des factures patients** : « Format existant (montant, part organisme, part patient) » ou « Format cotation B (code de l'acte, cotation en B, montant en DH) » ;
+  - **Options du format existant** : **Afficher la colonne code national de l'acte**, **Afficher la colonne cotation (coefficient)**, **Afficher le montant en lettres** ;
+  - **Options du format cotation B** : **Afficher le prix en DH de chaque acte**, **Afficher la ligne « Prise de sang (PC) » même à 0,00 DH**, **Afficher le montant en lettres**, **Afficher la valeur de la lettre B utilisée** ;
+  - au pied : la ligne d'état, **Enregistrer** et **Actualiser**.
+- **Lieux de stockage** : la note « Seuls les lieux actifs sont proposés à la réception et à la sérothèque. Renommer ou désactiver un lieu ne modifie pas les tubes déjà rangés : ils gardent le nom enregistré. », puis la liste **Lieu de stockage**, **Statut** (pastille actif / désactivé), **Tubes rangés**, avec **Ajouter**, **Renommer** et **Désactiver** / **Réactiver**.
+- **Imprimantes** : la phrase « Choix propres à ce poste de travail : chaque PC peut avoir sa propre imprimante A4 et sa propre imprimante d'étiquettes. », l'imprimante **Comptes rendus, factures, fiches de paillasse (A4)**, la case **Imprimer directement sur cette imprimante, sans aperçu à l'écran**, l'imprimante **Étiquettes des tubes (imprimante d'étiquettes)**, puis **Enregistrer**, **Imprimer une étiquette de test**, **Actualiser**.
 
 **Scénarios**
 
@@ -468,7 +711,12 @@ Renseigner l'identité légale du laboratoire, régler les numérotations, les p
 
 4. **Mettre le logo** : **Choisir le logo…** (PNG, JPG, BMP), puis **Enregistrer** ; **Retirer le logo** puis **Enregistrer** pour l'enlever. Le logo est imprimé en tête des comptes rendus et des factures.
 
-5. **Créer un nouveau site** : cliquez **Nouveau site** à côté de la liste des sites, saisissez le **Code** (majuscules, chiffres, - et _ ; il ne pourra plus changer une fois des documents numérotés), le nom en français et en arabe, et le type : laboratoire principal, laboratoire satellite, centre de prélèvement ou « Laboratoire partenaire (sous-traitance) ». Le site créé est sélectionné : complétez sa fiche puis **Enregistrer**. Pour un site de travail, donnez ensuite l'accès aux utilisateurs dans **Utilisateurs**. Un partenaire n'est jamais proposé à la connexion ni dans les accès des utilisateurs.
+5. **Créer un nouveau site ou un laboratoire partenaire**
+   1. Cliquez **Nouveau site** à côté de la liste des sites.
+   2. Dans la fenêtre, saisissez le **Code** (lettres majuscules sans accent, chiffres, « - » et « _ » ; mis en majuscules), la **Désignation (français)**, la **Désignation (arabe)** si besoin, et le **Type de site** : « Laboratoire correspondant » (proposé par défaut, pour un laboratoire partenaire de sous-traitance), Laboratoire principal, Laboratoire satellite ou Centre de prélèvement.
+   3. Validez. En cas de refus (code déjà pris, code invalide…), la fenêtre se rouvre avec vos saisies : corrigez seulement ce qui est refusé.
+   4. Le site créé est sélectionné ; la ligne d'état dit « Site … créé : complétez sa fiche ci-dessous puis enregistrez. ». Complétez la fiche puis **Enregistrer**.
+   5. Pour un site de travail, donnez ensuite l'accès aux utilisateurs dans **Utilisateurs** › **Sites accessibles**. Un partenaire n'est jamais proposé à la connexion ni dans les accès des utilisateurs ; il devient choisissable comme **Laboratoire partenaire** dans la fiche d'une analyse sous-traitée.
 
 6. **Ajuster le format d'une numérotation avant le premier numéro** : onglet **Numérotations**, sélectionnez une série au statut « Modifiable », **Modifier le format**, saisissez le format avec les jetons `{SITE}`, `{YEAR}`, `{YY}`, `{MM}`, `{SEQ:n}` (n = nombre de chiffres ; `{SEQ}` obligatoire), validez. Le **Prochain numéro** affiche le résultat.
 
@@ -476,19 +724,37 @@ Renseigner l'identité légale du laboratoire, régler les numérotations, les p
 
 8. **Modifier un paramètre** : onglet **Paramètres**, sélectionnez la ligne, **Modifier**, saisissez la valeur. **Nouveau** crée un paramètre (clé puis valeur), valable pour toute l'installation. Les messages aux patients et les coûts du pilotage se règlent sur leurs propres écrans.
 
-9. **Choisir les imprimantes de ce poste** : onglet **Imprimantes**, choisissez l'imprimante A4 et l'imprimante d'étiquettes (ou « Aucune : étiquettes en PDF »), cochez au besoin l'impression directe, **Enregistrer** ; **Imprimer une étiquette de test** pour vérifier. **Actualiser** relit les imprimantes installées.
+9. **Choisir le format des factures patients**
+   1. Onglet **Factures**.
+   2. Dans **Format par défaut des factures patients**, choisissez :
+      - « Format existant (montant, part organisme, part patient) » : la facture habituelle ;
+      - « Format cotation B (code de l'acte, cotation en B, montant en DH) » : la facture codée que beaucoup de laboratoires remettent (code de l'acte, libellé, coefficient de chaque acte, total en B, prise de sang, montant en dirhams).
+   3. Cochez les options du format choisi. Par défaut : format existant ; montant en lettres affiché dans les deux formats ; ligne « Prise de sang (PC) » affichée même à 0,00 DH ; pas de prix par acte, pas de colonne code ni cotation dans le format existant, pas de valeur de la lettre B.
+   4. **Enregistrer**. La ligne d'état confirme « Format d'impression des factures enregistré. ».
+   5. Le choix vaut pour les nouvelles impressions comme pour les réimpressions. Il ne change jamais un montant. Les avoirs et les reçus gardent le format existant.
+
+10. **Gérer les lieux de stockage des tubes**
+    1. Onglet **Lieux de stockage**.
+    2. **Ajouter** : tapez le nom (réfrigérateur, congélateur, paillasse…) et validez.
+    3. **Renommer** (ou double-clic) : tapez le nouveau nom. Les tubes déjà rangés gardent l'ancien nom.
+    4. **Désactiver** : confirmez. Le lieu n'est plus proposé à la réception ni à la sérothèque ; les tubes qui y sont rangés gardent ce lieu. **Réactiver** le remet dans les listes.
+
+11. **Choisir les imprimantes de ce poste** : onglet **Imprimantes**, choisissez l'imprimante A4 et l'imprimante d'étiquettes (ou « Aucune : étiquettes en PDF »), cochez au besoin l'impression directe, **Enregistrer** ; **Imprimer une étiquette de test** pour vérifier. **Actualiser** relit les imprimantes installées.
 
 **Règles et contrôles**
 
 - Facturation bloquée tant que raison sociale, ICE, IF, adresse et ville manquent ; diffusion des comptes rendus bloquée sans autorisation du ministère, sans biologiste responsable, ou avec une accréditation expirée.
 - Le biologiste responsable doit être médecin ou pharmacien biologiste inscrit à l'Ordre (loi 12-01).
 - Le code du site ne peut plus changer dès qu'un numéro de dossier ou de facture a été émis avec lui ; il doit être unique.
+- Un site déjà utilisé (utilisateurs, dossiers ou factures numérotés) ne peut pas devenir un laboratoire partenaire : créez le partenaire avec **Nouveau site**.
 - **Numéros de dossier et numéros de bordereau de sous-traitance** : un seul compteur partagé par tous les sites. Le format ne change pas (par ex. `2610-000123` pour un dossier, `ST/2026/00012` pour un bordereau), mais deux sites ne peuvent plus produire le même numéro ; dans l'onglet **Numérotations**, ces séries apparaissent sans site (« — »). Les factures, avoirs, reçus et bordereaux de tiers payant restent numérotés par site.
 - Le format d'une série est figé dès le premier numéro (série continue exigée par la DGI). Chaque nouvelle année, la série est créée automatiquement au premier document avec le format par défaut : un format personnalisé n'est pas reporté (à vérifier en début d'année).
 - La valeur d'un paramètre sensible n'est jamais affichée ; sa modification est tracée au journal de sécurité.
+- Le format des factures et ses options sont tracés au journal d'audit.
+- Un nom de lieu de stockage est unique sur le site (actif ou désactivé).
 - Les imprimantes sont propres à chaque poste ; les autres paramètres sont communs à tous les postes.
 
-**Flux** : Paramètres (site complet) → débloque **Facturation** et la diffusion dans **Comptes rendus** ; numérotations → numéros de dossier à l'enregistrement, factures, bordereaux ; imprimantes → étiquettes au **Prélèvement** et documents A4.
+**Flux** : Paramètres (site complet) → débloque **Facturation** et la diffusion dans **Comptes rendus** ; numérotations → numéros de dossier à l'enregistrement, factures, bordereaux ; format des factures → impression des factures patients ; lieux de stockage → **Réception** et **Sérothèque** ; imprimantes → étiquettes au **Prélèvement** et documents A4.
 
 ```mermaid
 flowchart TD
@@ -509,3 +775,238 @@ flowchart TD
     P -- oui --> Q[Réouvrir la série + motif]
     R[Nouveau site] --> A
 ```
+
+### Messages d'erreur et d'avertissement
+
+« … » remplace une valeur que l'application insère (un nom, un code, une date, un nombre). Les messages communs à toute l'application (connexion perdue, « Erreur inattendue », droit manquant, modification faite en même temps ailleurs, nombre illisible) sont décrits au chapitre « Prise en main ».
+
+#### Utilisateurs
+
+| Message | Quand il apparaît | Que faire |
+|---|---|---|
+| « Le nom complet de l'utilisateur est obligatoire. » | Fiche sans nom | Saisir le nom complet. |
+| « L'identifiant doit comporter au moins … caractères. » | Identifiant trop court | Allonger l'identifiant. |
+| « L'identifiant ne peut pas contenir d'espace. » | Espace dans l'identifiant | Retirer l'espace. |
+| « L'identifiant « … » est déjà attribué. Un identifiant n'est jamais réattribué, afin que deux personnes ne soient pas confondues dans le journal d'audit. » | Identifiant déjà pris, même par un compte désactivé | Choisir un autre identifiant (ou réactiver l'ancien compte s'il s'agit de la même personne). |
+| « Un mot de passe initial est obligatoire. » | Création sans mot de passe | Saisir le mot de passe initial. |
+| « Le mot de passe doit comporter au moins … caractères et mêler lettres, chiffres et caractères spéciaux. » | Mot de passe trop faible (création ou réinitialisation) | Choisir un mot de passe plus long et varié. |
+| « Cette qualification exige le numéro d'inscription à l'Ordre. » | Biologiste ou médecin prescripteur sans n° d'Ordre | Saisir le **N° Ordre des médecins / pharmaciens**. |
+| « L'habilitation saisie a expiré le … : vérifiez l'année. » | Date d'habilitation déjà passée | Corriger la date. |
+| « Loi n° 12-01 : la validation biologique exige un numéro d'inscription à l'Ordre en cours de validité. » / « Le numéro d'inscription à l'Ordre est obligatoire pour un médecin prescripteur. » | Note dans la fiche, selon la qualification | Information. |
+| « Le prescripteur sélectionné est introuvable. » | Prescripteur associé supprimé ou désactivé entre-temps | Rouvrir la fiche et choisir un autre prescripteur. |
+| « Vous ne pouvez pas modifier votre propre qualification, votre numéro d'inscription à l'Ordre, sa validité, vos secteurs autorisés ni votre prescripteur associé. Demandez-le à un autre administrateur. » | Modification de sa propre fiche | Faire faire la modification par un autre administrateur. |
+| « Le compte … est créé. Son titulaire devra changer le mot de passe à la première connexion. » | Création réussie | Attribuer les rôles et les sites. |
+| « Ce rôle accorde la validation biologique, réservée par la loi n° 12-01 à un biologiste inscrit à l'Ordre. » / « Ce rôle accorde la gestion des utilisateurs, donc la maîtrise de tous les droits. » | Avertissement dans la fenêtre **Rôles et droits** | Vérifier que le compte doit vraiment avoir ce rôle. |
+| « Seul un médecin ou un pharmacien biologiste peut procéder à la validation biologique. » / « Le biologiste doit être inscrit à l'Ordre pour valider un résultat. » | Rôle de validation donné à un compte non habilité | Corriger la qualification et le n° d'Ordre du compte, ou choisir un autre rôle. |
+| « Au moins un site doit être accessible à cet utilisateur. » | Aucun site coché | Cocher au moins un site. |
+| « Un laboratoire partenaire (sous-traitance) ne peut pas être attribué comme site de travail à un utilisateur. » | Partenaire coché dans **Sites accessibles** | Décocher le partenaire. |
+| « Nouveau mot de passe provisoire pour … . Communiquez-le de vive voix : son titulaire devra le changer à la prochaine connexion. » | **Réinitialiser le mot de passe** | Taper le mot de passe provisoire. |
+| « Le mot de passe de … est réinitialisé. Il devra être changé à la prochaine connexion. » | Réinitialisation réussie | Communiquer le mot de passe de vive voix. |
+| « Opération refusée : le compte … détient des permissions que vous n'avez pas. Seul un utilisateur disposant au moins des mêmes droits peut réinitialiser son mot de passe. » | Réinitialisation d'un compte plus puissant | Demander à un administrateur qui a ces droits. |
+| « Ce compte n'est pas verrouillé. » | **Déverrouiller** sur un compte non verrouillé | Rien à faire. |
+| « Le compte … est désactivé : il ne peut pas être déverrouillé. Réactivez-le d'abord, en indiquant le motif. » | **Déverrouiller** sur un compte désactivé | Cliquer **Réactiver**. |
+| « Motif de la désactivation du compte … : » / « Motif de la réactivation du compte … : » | **Désactiver** / **Réactiver** | Saisir le motif. |
+| « La désactivation d'un compte doit être motivée. » | Motif vide | Saisir un motif. |
+| « Vous ne pouvez pas désactiver votre propre compte. » | Désactivation de soi-même | Demander à un autre administrateur. |
+| « Opération refusée : … est le dernier compte actif habilité à gérer les utilisateurs. … » | Désactivation ou retrait de droits qui laisserait l'installation sans administrateur | Donner d'abord ce droit à un autre compte actif. |
+| « Utilisateur introuvable. » / « Cet utilisateur est désactivé. » | Compte modifié ailleurs entre-temps | Cliquer **Actualiser** (F5). |
+| « Code du nouveau rôle (majuscules, sans espace) : » puis « Désignation française du nouveau rôle : » | **Nouveau rôle** | Saisir le code puis la désignation. |
+| « Le code du rôle est obligatoire. » / « La désignation française du rôle est obligatoire. » | Saisie vide | Compléter. |
+| « Le code de rôle « … » existe déjà. » | Code déjà pris | Choisir un autre code. |
+| « Le rôle est créé sans aucun droit. Attribuez-lui ses droits dans l'arborescence, puis enregistrez. » | Rôle créé | Cocher ses droits puis **Enregistrer les droits**. |
+| « Rôle … : … droit(s) ajouté(s), … droit(s) retiré(s). La modification s'applique immédiatement à … utilisateur(s) actif(s). Confirmer ? » | **Enregistrer les droits** | Confirmer ou annuler. |
+| « Aucune modification à enregistrer. » | **Enregistrer les droits** sans changement | Rien. |
+| « Ce rôle accorderait la validation biologique à des utilisateurs qui n'y sont pas habilités : … . Corrigez leur fiche de personnel d'abord. » | Droit de validation ajouté à un rôle tenu par des non-biologistes | Corriger les fiches citées ou retirer ce droit. |
+| « Opération refusée : retirer la gestion des utilisateurs à ce rôle ne laisserait aucun compte actif habilité à administrer le système. » | Retrait du dernier droit d'administration | Donner d'abord ce droit à un autre rôle tenu par un compte actif. |
+| « Désactiver le rôle … ? Il cesse immédiatement d'accorder ses droits à … utilisateur(s) actif(s). » | **Désactiver le rôle** | Confirmer ou annuler. |
+| « Le rôle livré « … » ne peut pas être désactivé ; ses droits restent modifiables. » | Désactivation d'un rôle livré | Modifier ses droits à la place. |
+| « Rôle introuvable. » / « Droit inconnu : … » | Rôle modifié ailleurs, ou droit inconnu de cette version | Cliquer **Actualiser**. |
+| « Enregistré. » | Enregistrement réussi | Rien. |
+| « Votre compte a été modifié (désactivation, mot de passe réinitialisé ou droits changés). La session est fermée ; reconnectez-vous. » | Sur le poste du titulaire, après une modification de son compte | Se reconnecter. |
+
+#### Journal d'audit
+
+| Message | Quand il apparaît | Que faire |
+|---|---|---|
+| « La date de fin précède la date de début. » | **Au** avant **Du** | Corriger les dates. |
+| « La période ne peut excéder treize mois : affinez la recherche. » | Période trop longue | Raccourcir la période. |
+| « Plus de … lignes : la liste est tronquée. Affinez la période ou les filtres avant de conclure. » | Plus de 500 lignes dans l'onglet | Réduire la période ou ajouter un filtre. |
+| « Le numéro de dossier est obligatoire pour répondre à une demande d'accès. » | Demande d'accès sans n° de dossier | Saisir le **N° de dossier**. |
+
+#### Catalogue des analyses
+
+| Message | Quand il apparaît | Que faire |
+|---|---|---|
+| « Le code de l'analyse est obligatoire. » / « La désignation française est obligatoire. » | Fiche incomplète | Compléter. |
+| « Le secteur technique et la nature du prélèvement sont obligatoires. » | Secteur ou nature vide | Choisir les deux. |
+| « Le code … est déjà porté par une autre analyse. » | Code interne déjà pris | Choisir un autre code. |
+| « Le code d'une analyse ne se modifie pas (…) : automates, listes de travail et résultats enregistrés s'y réfèrent. » | Tentative de changer le code interne | Garder le code ; créer une autre analyse si besoin. |
+| « Le délai urgent annoncé dépasse le délai de routine : c'est une promesse que le laboratoire ne tiendra pas. » | Délai urgent trop long | Corriger les délais. |
+| « Le délai de rendu doit être supérieur à zéro. » | Délai nul | Saisir un délai. |
+| « La stabilité à température ambiante ne peut pas dépasser la stabilité réfrigérée. » | Stabilités inversées | Corriger. |
+| « Désignez le laboratoire sous-traitant. » | **Sous-traitée** coché sans partenaire | Choisir le **Laboratoire partenaire**. |
+| « Aucun laboratoire partenaire n'est configuré : déclarez-le dans les paramètres avant de sous-traiter une analyse. » | Aucun site « Laboratoire correspondant » | Le créer dans **Paramètres** › **Nouveau site**. |
+| « … analyse(s) en cours attendent encore un résultat : la désactivation les laisserait sans suite. » | Désactivation d'une analyse en cours | Attendre la fin des analyses en cours. |
+| « L'analyse doit comporter au moins un paramètre. » | Analyse sans paramètre | Ajouter un paramètre. |
+| « Le code … ne figure pas dans la nomenclature des actes. » | Note rouge sous **Code de l'acte** | Vérifier le code, ou le choisir avec **…** / F4. |
+| « Le code d'acte … ne figure pas dans la nomenclature officielle des actes de biologie médicale. Enregistrer l'analyse avec ce code quand même ? » | Enregistrement avec un code hors nomenclature | Annuler et corriger, ou confirmer si le code est voulu. |
+| « Sélectionnez un acte dans la liste. » | **Sélectionner** sans acte choisi | Choisir un acte. |
+| « Indiquez un code d'acte. » / « Le code d'acte … ne figure pas dans la nomenclature des actes de biologie médicale. » | Recherche d'un acte vide ou inconnu | Saisir un code existant. |
+| « Appliquer le coefficient officiel de l'acte … (B …) à l'analyse … ? … » | **Appliquer le coefficient officiel** | Lire le nombre de tarifs concernés et la date, puis confirmer. |
+| « … : coefficient officiel de l'acte … appliqué à … tarif(s) à compter du … » | Application réussie (ligne d'état) | Rien. |
+| « … tarif(s) ont déjà une révision programmée après aujourd'hui : à reprendre dans l'onglet Tarifs. » | Une partie des tarifs non touchée | Reprendre ces tarifs dans l'onglet **Tarifs**. |
+| « L'analyse … n'a pas de code d'acte : choisissez-le d'abord dans la fiche de l'analyse. » | Application sur une analyse sans code | **Modifier l'analyse** et choisir l'acte. |
+| « Les tarifs en vigueur de l'analyse … ont déjà le coefficient officiel de l'acte … . » | Rien à aligner | Rien ; cliquer **Actualiser**. |
+| « Les tarifs de l'analyse … ont déjà une révision programmée après aujourd'hui : modifiez-les dans l'onglet Tarifs. » | Tous les tarifs ont une révision programmée | Corriger dans l'onglet **Tarifs**. |
+| « Le code du paramètre est obligatoire. » / « La désignation française du paramètre est obligatoire. » | Fiche incomplète | Compléter. |
+| « Le code … est déjà porté par un paramètre de cette analyse. » / « Le code d'un paramètre ne se modifie pas (…). » | Code en double ou modifié | Choisir un autre code / garder le code. |
+| « Un paramètre à réponse codée exige au moins une réponse autorisée, faute de quoi aucun résultat ne peut être saisi. » | Liste de choix sans réponse | Remplir **Réponses autorisées**. |
+| « Chaque réponse autorisée exige un code et un libellé français. » / « Deux réponses autorisées portent le même code. » | Réponses incomplètes ou en double | Corriger les réponses. |
+| « Le type de résultat est figé : … résultat(s) sont déjà enregistrés et deviendraient illisibles. » | Changement de type après des résultats | Créer un nouveau paramètre. |
+| « La borne basse du domaine de mesure dépasse la borne haute. » / « La limite technique basse dépasse la limite technique haute. » / « Le seuil critique bas dépasse le seuil critique haut. » | Bornes inversées | Corriger. |
+| « Les limites techniques doivent englober le domaine de mesure, sinon la saisie est refusée pour des valeurs que la méthode est censée rendre. » | Limites techniques trop étroites | Élargir les limites techniques. |
+| « Un delta-check exige une fenêtre en jours : … » / « Le delta-check doit être un pourcentage positif. » / « Le delta-check ne s'applique qu'à un paramètre numérique. » | Delta-check incomplet ou impossible | Saisir la **Fenêtre delta (j)**, un pourcentage positif, ou retirer le delta. |
+| « La formule référence des codes inconnus de cette analyse : … . Le calcul resterait vide sans aucune alerte. » | Code inconnu dans la formule | Corriger les codes entre crochets. |
+| « La formule ne référence aucun paramètre : … » / « La formule se référence elle-même : le calcul ne peut pas aboutir. » / « Une formule de calcul ne s'applique qu'à un paramètre numérique. » / « Un intitulé de section ne porte pas de résultat et ne peut donc pas être calculé. » | Formule impossible | Corriger la formule ou le type. |
+| « L'intervalle de référence est vide. » / « La borne inférieure dépasse la borne supérieure. » | Bornes manquantes ou inversées | Corriger. |
+| « La tranche d'âge est incohérente. » | Âge « de » après « à » | Corriger. |
+| « Le trimestre de grossesse doit être 1, 2 ou 3. » / « Un intervalle de grossesse ne peut s'appliquer au sexe masculin. » / « Un trimestre ne peut être précisé pour un intervalle hors grossesse. » | Population incohérente | Corriger sexe, grossesse ou trimestre. |
+| « L'intervalle est entièrement au-dessus du domaine de mesure : … » / « … entièrement sous le domaine de mesure : … » | Intervalle hors domaine | Vérifier les bornes ou le domaine du paramètre. |
+| « La date de fin de validité précède la date de début. » / « La révision doit prendre effet après le … , date d'entrée en vigueur de l'intervalle qu'elle remplace. » | Dates incohérentes | Corriger les dates. |
+| « Intervalle révisé : le précédent a été clos et reste consultable. » / « Revue enregistrée au … . » | Révision ou revue réussie | Rien. |
+| « Le prix ne peut pas être négatif. » / « Le coefficient ne peut pas être négatif. » / « La valeur de la lettre-clé ne peut pas être négative. » | Valeur négative | Corriger. |
+| « La lettre-clé est obligatoire. » | Lettre-clé vide | Saisir la lettre-clé (B). |
+| « Un acte non exonéré exige un taux de TVA. » | Case **Exonéré de TVA** décochée sans taux | Saisir le taux, ou recocher la case. |
+| « L'acte … porte un code de la nomenclature : sans coefficient ni valeur de lettre-clé, la base de remboursement serait nulle … » | Tarif d'un acte codé sans coefficient | Saisir coefficient et valeur de la lettre-clé. |
+| « Un tarif prend déjà effet au … pour ce payeur. » / « Une révision doit prendre effet après le … , date du tarif en vigueur. » | Date de tarif en conflit | Choisir une date postérieure. |
+| « Ce tarif n'existe plus. Actualisez la liste. » | Tarif modifié ailleurs | Cliquer **Actualiser**. |
+| « Tarif enregistré, applicable au … . » / « Tarif corrigé. » / « … enregistrée ; prix du laboratoire appliqué à partir du … . » | Enregistrement réussi | Rien. |
+| « Le code du profil est obligatoire. » / « La désignation française du profil est obligatoire. » | Fiche incomplète | Compléter. |
+| « Le profil doit contenir au moins une analyse. » / « Toutes les analyses sont facultatives : sélectionner le profil n'ajouterait rien au dossier. » | Profil vide ou tout facultatif | Cocher au moins une analyse non facultative. |
+| « Le profil comporte des analyses désactivées : … . … » / « La même analyse figure deux fois dans le profil. » | Composition invalide | Retirer les analyses citées. |
+| « Le code … est déjà porté par un autre profil. » / « Le prix forfaitaire ne peut pas être négatif. » | Code en double, prix négatif | Corriger. |
+| « Choisissez le paramètre qui déclenche la règle. » / « Choisissez l'analyse à ajouter. » / « La description française de la règle est obligatoire. » | Règle en cascade incomplète | Compléter. |
+| « Cette condition exige un seuil, … » / « Cette condition exige deux seuils. » / « Cette condition exige une réponse codée déclenchante. » / « Le seuil inférieur doit être strictement inférieur au seuil supérieur. » | Condition incomplète | Saisir les seuils ou la réponse. |
+| « La réponse « … » ne figure pas parmi les réponses autorisées du paramètre : … » / « Une condition sur réponse codée ne s'applique pas au paramètre numérique … . » / « Une condition numérique sur le paramètre … , qui n'est pas numérique, ne peut jamais se déclencher. » | Condition inadaptée au paramètre | Changer la condition ou le paramètre. |
+| « L'analyse à ajouter est celle à laquelle appartient le déclencheur : … » / « L'analyse … est désactivée et ne peut pas être ajoutée en cascade. » | Analyse ajoutée impossible | Choisir une autre analyse. |
+| « Le code est obligatoire. » / « La désignation française est obligatoire. » / « Le symbole de l'unité est obligatoire. » | Entrée de liste incomplète | Compléter. |
+| « Le code … est déjà utilisé dans cette liste. » / « Le code ne se modifie pas (…) : les enregistrements existants s'y réfèrent. » | Code en double ou modifié | Corriger. |
+| « … enregistrement(s) s'y réfèrent encore : la désactivation les laisserait pointer vers une entrée que les écrans n'offrent plus. » | Désactivation d'une entrée utilisée | Laisser l'entrée active. |
+| « L'ordre de prélèvement est obligatoire : … » / « La couleur du bouchon doit être au format #RRGGBB. » / « Le volume minimal dépasse le volume nominal du tube. » | Type de tube incomplet ou incohérent | Corriger. |
+| « Le facteur de conversion doit être strictement positif. » / « Un facteur de conversion exige l'unité SI cible. » / « Une unité SI cible exige un facteur de conversion. » | Conversion d'unité incomplète | Saisir les deux, ou aucun. |
+| « La durée de jeûne ne peut pas être négative. » | Jeûne négatif | Corriger. |
+
+#### Automates
+
+| Message | Quand il apparaît | Que faire |
+|---|---|---|
+| « Compte de service des automates introuvable. » | Pas de compte `interface` | Le créer dans **Utilisateurs**. |
+| « Hôte des automates en défaut : … » | L'hôte ne tourne pas | Lire la cause ; prévenir le support informatique. |
+| « Ce poste ne pilote pas les automates : les liaisons sont configurables ici, l'exécution se fait sur le poste hôte. » | Poste qui n'est pas l'hôte | Information. |
+| « Aucun automate sans liaison : créez d'abord l'automate dans Données de référence › Automates (type « Automate »). » | **Nouvelle interface** sans automate libre | Déclarer l'automate dans **Données de référence**. |
+| « L'automate … possède déjà une interface : … » | Deuxième liaison pour un automate | Modifier la liaison existante. |
+| « Une interface se rattache à un automate : créez-la depuis l'écran des équipements. » | Automate non choisi | Choisir l'automate. |
+| « Le port série est obligatoire pour une connexion série. » / « Le port TCP doit être compris entre 1 et 65535. » / « L'adresse de l'hôte est obligatoire en mode client TCP. » / « Le dossier de dépôt est obligatoire pour une interface par fichiers. » | Liaison incomplète | Compléter le champ cité. |
+| « Un composant doit être compris entre 1 et 9. » / « Le champ « … » n'existe pas pour ce protocole. » / « Le suffixe à ignorer ne doit pas dépasser 10 caractères. » / « La liste des types de résultat ne doit pas dépasser 60 caractères. » | Réglage fin du format invalide | Remettre le profil fabricant, ou corriger le réglage. |
+| « Activer l'acceptation automatique ? Les résultats de l'automate seront enregistrés au dossier du patient sans relecture préalable. » | Case **acceptation automatique** cochée | Confirmer seulement après un test de trame réussi. |
+| « L'acceptation automatique exige une table de correspondance renseignée : … » | Table vide | Remplir la table de correspondance. |
+| « Enregistré. La modification est prise en compte par l'hôte dans les … secondes. » | Liaison enregistrée | Attendre quelques secondes. |
+| « Le code transmis par l'automate est obligatoire. » | Ligne de correspondance sans code | Saisir le **Code automate**. |
+| « Deux correspondances portent le même code automate. » / « Le code automate « … » est déjà relié à un autre paramètre de cet automate (même désactivé). … » | Code en double | Choisir un autre code. |
+| « Deux codes pointent vers le même paramètre : … » | Paramètre en double | Retirer une des deux lignes. |
+| « Le facteur et le décalage doivent être numériques. » / « Un facteur de conversion nul annulerait toutes les valeurs. » / « Le facteur et le décalage de conversion doivent rester inférieurs à 10 000 000 000 en valeur absolue. » | Conversion invalide | Corriger le **Facteur** ou le **Décalage**. |
+| « Aucune trame de résultats reçue sur cette liaison. » | **Charger la dernière trame reçue** sans message | Coller une trame, ou utiliser **Exemple de trame** (INTEGRA). |
+| « La trame enregistrée est vide : il n'y a rien à réimporter. » | Trame vide au journal | Rien à réimporter. |
+| Messages « COBAS INTEGRA » dans **Anomalies** (« Trame COBAS INTEGRA illisible : … », « Somme de contrôle du bloc COBAS INTEGRA incorrecte (…) … », « L'automate COBAS INTEGRA a signalé une erreur (bloc 99, code …). », « Résultat d'étalonnage COBAS INTEGRA lu mais non importé. »…) | Trame INTEGRA incomplète, altérée ou non traitée | Vérifier la liaison série (débit, contrôle de flux) et l'écran de l'automate. |
+| « Motif de la désactivation de la liaison de … (par exemple : automate en maintenance) : » / « Motif de la réactivation de la liaison de … : » | **Désactiver** / **Activer la liaison** | Saisir le motif. |
+| « Indiquez le motif : couper une liaison arrête l'arrivée des résultats, … » | Motif vide | Saisir un motif. |
+| « Cette ligne ne peut pas être réimportée : seules les transmissions en échec, partielles ou retenues le peuvent. » | **Réimporter** sur une ligne importée | Rien à faire. |
+| « Réimporter cette transmission ? Les valeurs de l'automate seront enregistrées au dossier du patient. » | **Réimporter** | Confirmer après avoir corrigé la cause. |
+| « Réimportation effectuée : … valeur(s) enregistrée(s). » | Réimportation réussie | Valider les résultats. |
+| « Réimportation effectuée, aucune valeur enregistrée : lisez les anomalies de la ligne. » | Toutes les valeurs refusées à nouveau | Lire **Anomalies** et corriger la cause. |
+| « Message introuvable au journal. » | Ligne purgée entre-temps | Cliquer **Actualiser**. |
+| « Aucune trame n'a dépassé la durée de conservation de … jours. » | **Purger le journal** sans trame ancienne | Rien. |
+| « … trame(s) antérieure(s) au … seront supprimées. … trame(s) sont conservées parce qu'elles restent réimportables. » | Confirmation de purge | Confirmer ou annuler. |
+| « … trame(s) conservée(s) malgré leur âge : elles sont encore réimportables. Traitez-les depuis le journal. » | Trames anciennes non traitées | Les réimporter ou les traiter. |
+| « Motif de la purge. … » / « Indiquez le motif de la purge : … » | Purge | Saisir le motif. |
+| « La durée de conservation du journal est à … jour(s) : corrigez-la avant de purger. » | Durée de conservation mal réglée | Faire corriger le paramètre. |
+| « … trame(s) supprimée(s). » | Purge réussie | Rien. |
+
+#### Données de référence
+
+| Message | Quand il apparaît | Que faire |
+|---|---|---|
+| « Écrans encore inexploitables faute de données de référence — … » | Ligne d'état : une liste est vide ou un organisme a un taux à confirmer | Compléter les onglets cités. |
+| « Le code de l'équipement est obligatoire. » / « La désignation française de l'équipement est obligatoire. » | Fiche incomplète | Compléter. |
+| « Le code d'équipement « … » est déjà utilisé. » | Code en double | Choisir un autre code. |
+| « Un automate exige une périodicité d'étalonnage : … » | Automate sans périodicité d'étalonnage | Saisir la périodicité. |
+| « La périodicité de maintenance doit être comprise entre 1 et 3650 jours. » / « La périodicité d'étalonnage doit être comprise entre 1 et 3650 jours. » / « La périodicité de vérification doit être comprise entre 1 et 3650 jours. » | Périodicité hors limites | Corriger. |
+| « Le numéro de lot du matériau de contrôle est obligatoire. » / « La désignation française du matériau est obligatoire. » | Fiche incomplète | Compléter. |
+| « Le lot … au niveau … existe déjà : … » | Lot et niveau déjà déclarés | Modifier le matériau existant. |
+| « La date de péremption saisie (…) est déjà passée. » / « La date d'ouverture ne peut pas être postérieure à aujourd'hui. » | Dates impossibles | Corriger. |
+| « Créez d'abord un matériau de contrôle. » / « Créez d'abord un équipement. » / « Aucun paramètre d'analyse n'est disponible dans le catalogue. » | **Nouvelle cible de contrôle** trop tôt | Créer ce qui manque. |
+| « Au moins une règle de Westgard doit être active : … » | Cible sans règle | Cocher au moins une règle. |
+| « Une cible existe déjà pour ce matériau, ce paramètre et cet automate. » | Cible en double | Modifier la cible existante. |
+| « Le CV maximal doit être compris entre 0 et 100 %. » / « L'écart-type doit être strictement positif. » / « Un écart-type sans moyenne ne permet aucun calcul : renseignez les deux. » | Valeurs de cible invalides | Corriger. |
+| « Le code de l'article est obligatoire. » / « La désignation française de l'article est obligatoire. » / « L'unité de mesure est obligatoire. » | Fiche incomplète | Compléter. |
+| « Le code d'article « … » est déjà utilisé sur ce site. » | Code en double | Choisir un autre code. |
+| « Le seuil de réapprovisionnement ne peut pas être inférieur au stock de sécurité : … » / « Le stock maximal ne peut pas être inférieur au seuil de réapprovisionnement. » / « Les seuils de stock ne peuvent pas être négatifs. » | Seuils incohérents | Corriger les seuils. |
+| « Le volume mort doit être un pourcentage entre 0 et 99, ou un nombre de tests positif. » | Volume mort invalide | Corriger. |
+| « Un produit déclaré dangereux doit porter sa classe de danger. » | **Produit dangereux** sans classe | Choisir la **Classe de danger**. |
+| « GTIN « … » invalide (8, 12, 13 ou 14 chiffres avec clé de contrôle correcte). » | GTIN mal tapé | Scanner ou recopier le GTIN. |
+| « Le code du fournisseur est obligatoire. » / « La dénomination du fournisseur est obligatoire. » / « Le code de fournisseur « … » est déjà utilisé. » | Fiche incomplète ou code en double | Compléter / corriger. |
+| « L'ICE du fournisseur est invalide. » | ICE mal tapé | Recopier les 15 chiffres. |
+| « Un fournisseur ne peut être approuvé sans évaluation : … » / « La note d'évaluation doit être comprise entre 0 et 100. » | **Approuvé** sans évaluation valide | Saisir **Dernière évaluation** et **Note (0-100)**. |
+| « Le délai de paiement convenu ne peut pas dépasser … jours (loi n° 69-21). … » | Délai trop long | Corriger le délai. |
+| « Le nom du prescripteur est obligatoire. » / « La dénomination de l'établissement est obligatoire. » | Fiche incomplète | Compléter. |
+| « Une adresse de courriel est nécessaire pour ce mode de transmission. » / « Un numéro de mobile est nécessaire pour ce mode de transmission. » | Mode de transmission sans coordonnée | Saisir le courriel ou le mobile, ou changer de mode. |
+| « L'INPE du prescripteur est invalide. » / « L'ICE du prescripteur est invalide. » / « La remise doit être comprise entre 0 et 100 %. » | Valeur invalide | Corriger. |
+| « Le code de l'organisme payeur est obligatoire. » / « La désignation française de l'organisme payeur est obligatoire. » / « Le code « … » est déjà attribué à un autre organisme payeur. » | Fiche incomplète ou code en double | Compléter / corriger. |
+| « Le taux de remboursement doit être compris entre 0 et 100 %. » / « Le délai de règlement doit être compris entre 0 et 365 jours. » / « L'ICE de l'organisme payeur est invalide. » | Valeur invalide | Corriger. |
+| « Un régime AMO se règle obligatoirement sur le tarif national de référence. » | AMO sans **Tarification sur la TNR** | Cocher la case. |
+| « Le paiement direct ne donne lieu à aucun remboursement : le taux doit être nul. » / « Le paiement direct ne peut pas faire l'objet d'une convention de tiers payant. » | Paiement direct mal réglé | Mettre le taux à 0 et décocher la convention. |
+| « « … » n'est pas une valeur numérique valide. » | Nombre illisible | Taper un nombre. |
+| « … introuvable. » (équipement, matériau, article, fournisseur, prescripteur, organisme payeur) | Fiche modifiée ailleurs | Cliquer **Actualiser**. |
+
+#### Paramètres
+
+| Message | Quand il apparaît | Que faire |
+|---|---|---|
+| « La raison sociale du site est obligatoire pour facturer. » / « L'adresse et la ville du site sont obligatoires sur une facture. » | Bandeau « Facturation bloquée » | Compléter les champs cités. |
+| « L'ICE doit comporter 15 chiffres. » / « L'identifiant fiscal est invalide. » / « L'INPE du site est invalide. » / « Le numéro d'affiliation CNSS est invalide. » | Identifiant mal tapé | Recopier depuis les documents officiels. |
+| « Le numéro d'autorisation du ministère de la Santé est obligatoire pour un laboratoire d'analyses de biologie médicale. » / « Un biologiste responsable doit être désigné pour ce site. » / « L'accréditation du site a expiré le … . » | Bandeau « Diffusion des comptes rendus bloquée » | Compléter ou renouveler. |
+| « Un site déclaré accrédité doit porter son numéro d'accréditation. » | Case cochée sans numéro | Saisir le **N° d'accréditation**. |
+| « Le biologiste responsable doit être un médecin ou un pharmacien biologiste inscrit à l'Ordre (loi n° 12-01). » | Compte non habilité choisi | Compléter la fiche dans **Utilisateurs**. |
+| « Configuration complète : la facturation et la diffusion des comptes rendus sont débloquées. » / « Enregistré. » | Enregistrement du site | Rien. |
+| « Ce fichier n'est pas une image lisible. Choisissez un fichier PNG, JPG ou BMP. » | Logo illisible | Choisir une autre image. |
+| « Le code du site est obligatoire. » / « La désignation française du site est obligatoire. » | **Nouveau site** incomplet | Compléter (la fenêtre se rouvre avec vos saisies). |
+| « Le code du site ne peut contenir que des lettres majuscules sans accent, des chiffres, « - » et « _ », sur … caractères au plus. » | Code invalide | Corriger le code. |
+| « Le code de site « … » est déjà utilisé. » | Code déjà pris | Choisir un autre code. |
+| « Le type de site est invalide. » | Type non reconnu | Choisir un type dans la liste. |
+| « Site … créé : complétez sa fiche ci-dessous puis enregistrez. » | Site créé | Compléter la fiche puis **Enregistrer**. |
+| « Le code du site ne peut plus être modifié : … » | Code déjà utilisé dans des numéros | Garder le code. |
+| « Ce site ne peut pas devenir un laboratoire partenaire : … Créez le partenaire avec « Nouveau site ». » | Type changé en « Laboratoire correspondant » sur un site utilisé | Créer le partenaire avec **Nouveau site**. |
+| « Site introuvable. » | Site modifié ailleurs | Cliquer **Actualiser**. |
+| « Format de la série « … ». Jetons disponibles : … » | **Modifier le format** | Saisir le format. |
+| « Le format de la numérotation est obligatoire. » / « Le format doit comporter le jeton {SEQ} ou {SEQ:n}, … » | Format vide ou sans compteur | Ajouter `{SEQ}` ou `{SEQ:n}`. |
+| « Ce format donnerait des numéros trop longs (« … ») : le registre en garde au plus … caractères. Raccourcissez-le. » | Format trop long | Raccourcir. |
+| « Le format ne peut plus être modifié : … numéro(s) ont déjà été attribués et la série doit rester homogène. » | Série déjà utilisée | Garder le format. |
+| « Motif de la clôture de la série « … » (clôture d'exercice…) : » / « Motif de la réouverture de la série « … » : … » | **Clôturer** / **Réouvrir la série** | Saisir le motif. |
+| « La clôture ou la réouverture d'une série doit être motivée. » | Motif vide | Saisir un motif. |
+| « La série est déjà dans cet état. » | Clic en double | Cliquer **Actualiser**. |
+| « La numérotation « … » est clôturée : aucun document ne peut plus y être rattaché. » | Sur les autres écrans, document dans une série clôturée | Réouvrir la série si c'est une erreur. |
+| « Aucune numérotation n'est configurée pour « … ». » | Série manquante | Prévenir le support. |
+| « Numérotation introuvable. » | Série modifiée ailleurs | Cliquer **Actualiser**. |
+| « Valeur du paramètre « … » : » / « Clé du nouveau paramètre : » | **Modifier** / **Nouveau** | Saisir la valeur / la clé. |
+| « La clé du paramètre est obligatoire. » | Clé vide | Saisir une clé. |
+| « Le paramètre … se modifie depuis son propre écran (messages patients ou coûts du pilotage), qui en contrôle le contenu et les droits. » | Paramètre géré ailleurs | Aller sur l'écran indiqué. |
+| « Format d'impression des factures enregistré. » | **Enregistrer** de l'onglet **Factures** | Rien. |
+| « Format d'impression de facture inconnu. » | Format non reconnu | Choisir un format dans la liste. |
+| « Nom du nouveau lieu de stockage (réfrigérateur, congélateur, paillasse…) : » / « Nouveau nom du lieu « … ». Les tubes déjà rangés gardent l'ancien nom. » | **Ajouter** / **Renommer** | Saisir le nom. |
+| « Le nom du lieu de stockage est obligatoire. » / « Le nom du lieu de stockage ne doit pas dépasser … caractères. » | Nom vide ou trop long | Corriger le nom. |
+| « Un lieu de stockage « … » existe déjà sur ce site (actif ou désactivé). » | Nom déjà pris | Choisir un autre nom, ou réactiver l'ancien lieu. |
+| « Désactiver « … » ? Il ne sera plus proposé à la réception ni à la sérothèque. Les … tube(s) qui y sont rangés gardent ce lieu. » | **Désactiver** | Confirmer ou annuler. |
+| « Le lieu de stockage « … » est déjà désactivé. » / « Le lieu de stockage « … » est déjà actif. » / « Lieu de stockage introuvable. » | Lieu modifié ailleurs | Cliquer **Actualiser**. |
+| « Aucune imprimante n'est installée sur ce poste. » | Onglet **Imprimantes** sans imprimante | Installer une imprimante dans Windows, puis **Actualiser**. |
+| « Imprimantes enregistrées pour ce poste. » / « Étiquette de test envoyée à « … ». » | Enregistrement ou test réussi | Vérifier l'étiquette imprimée. |
+| « Impossible d'enregistrer le choix des imprimantes sur ce poste. » | Écriture du réglage local impossible | Réessayer ; prévenir le support informatique. |
