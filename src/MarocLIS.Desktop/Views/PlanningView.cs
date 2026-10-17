@@ -385,7 +385,9 @@ public sealed class PlanningView : LocalizedView
 
         var first = days[0];
         var subtitle = days.Count == 1
-            ? $"{first.Employee.FullName} — {first.Date:dd/MM/yyyy}"
+            // The date first: a long name cut the date off the heading, and the operator could not
+            // see which day the shift was for.
+            ? $"{first.Date:dd/MM/yyyy} — {first.Employee.FullName}"
             : T("Planning.CellsSelected", days.Count);
 
         using var dialog = new ShiftDialog(Localizer, _dialogs, subtitle, first.Shifts.Count > 0 ? first.Shifts[0] : null);

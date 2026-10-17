@@ -4435,7 +4435,7 @@
 
   "Admin": {
     "SiteAccessButton": "Accessible sites",
-    "RolesButton": "Roles and permissions",
+    "RolesButton": "Roles and rights",
     "PrescriberHint": "Only for the Prescriber role: the account sees only this prescriber's orders. With no linked prescriber it sees nothing.",
     "NoPrescriber": "(none)",
     "Prescriber": "Linked prescriber",
