@@ -117,7 +117,7 @@ C'est la liste de travail du préleveur. On choisit un patient à gauche ; à dr
 | **Expédier au plateau** | Expédier les échantillons | Administrateur, Biologiste responsable, Technicien de laboratoire, Préleveur |
 | **Imprimer les étiquettes** | Réimprimer une étiquette | Administrateur, Biologiste responsable, Technicien de laboratoire, Préleveur, Secrétariat / accueil |
 
-Le rôle **Biologiste** n'a pas le droit de prélever : l'écran n'apparaît pas dans son menu. Le Secrétariat peut réimprimer des étiquettes, mais depuis l'écran **Consultation d'un dossier** (bouton **Imprimer les étiquettes**), car il n'a pas accès à cet écran.
+Le rôle **Biologiste** n'a pas le droit de prélever : l'écran n'apparaît pas dans son menu. Le Secrétariat / accueil peut réimprimer des étiquettes, mais depuis l'écran **Consultation d'un dossier** (bouton **Imprimer les étiquettes**), car il n'a pas accès à cet écran.
 
 **Scénarios**
 
@@ -291,7 +291,7 @@ L'écran apparaît pour qui a le droit de modifier un dossier **ou** de refuser 
 | **Noter un appel**, **Envoyer un SMS** | Modifier un dossier | Administrateur, Biologiste responsable, Biologiste, Secrétariat / accueil |
 | **Abandonner** | Annuler un dossier | Administrateur, Biologiste responsable, Secrétariat / accueil |
 
-Le Technicien voit la liste mais ses boutons sont grisés ; le Biologiste ne peut pas abandonner.
+Le Technicien de laboratoire voit la liste mais ses boutons sont grisés ; le Biologiste ne peut pas abandonner.
 
 **Scénarios**
 

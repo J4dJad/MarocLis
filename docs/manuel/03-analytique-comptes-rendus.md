@@ -41,12 +41,12 @@ Le circuit normal d'un résultat est le suivant :
 
 | Étape | Qui | Écran | Statut du résultat |
 |---|---|---|---|
-| Le tube est réceptionné | Technicien | Réception des échantillons | En attente de saisie |
-| La valeur est saisie ou arrive de l'automate | Technicien (ou automate) | Saisie des résultats / Automates | Saisi |
-| Le technicien contrôle la vraisemblance | Technicien | Saisie des résultats, bouton **Validation technique** | Validé techniquement |
+| Le tube est réceptionné | Technicien de laboratoire | Réception des échantillons | En attente de saisie |
+| La valeur est saisie ou arrive de l'automate | Technicien de laboratoire (ou automate) | Saisie des résultats / Automates | Saisi |
+| Le technicien contrôle la vraisemblance | Technicien de laboratoire | Saisie des résultats, bouton **Validation technique** | Validé techniquement |
 | Le biologiste libère le résultat | Biologiste | Validation biologique | Validé |
 | Le compte rendu est émis | Biologiste ou secrétariat | Validation biologique ou Comptes rendus | Rendu (imprimé) |
-| Le compte rendu est remis | Secrétariat | Comptes rendus, **Enregistrer une remise** | — |
+| Le compte rendu est remis | Secrétariat / accueil | Comptes rendus, **Enregistrer une remise** | — |
 
 Vue d'ensemble :
 
@@ -104,8 +104,8 @@ C'est l'écran de la paillasse. On y ouvre un dossier (par scan du tube ou depui
   - **Corriger une valeur validée…** : corrige une valeur déjà validée biologiquement, imprimée ou non, avec la nouvelle valeur et un motif de 15 caractères au moins. Réservé à qui a à la fois le droit de dévalider et celui de modifier un résultat, avec la qualification de biologiste pour le secteur ; si la valeur a déjà été imprimée, il faut aussi le droit de rectifier les comptes rendus.
   - **Commentaire technique…** (ou **F3**) : commentaire de la ligne (2000 caractères), enregistré avec les valeurs et imprimé sur le compte rendu ; vide = retiré.
 - **Antériorités** : courbe et tableau des valeurs validées du paramètre (droit de consulter les résultats).
-- Texte « *n* valeurs restent à saisir » ou « Tout est saisi ».
-- **Validation technique** : valide techniquement toutes les valeurs saisies du dossier (droit de valider techniquement ; actif dès qu'une valeur est au statut Saisi).
+- Texte « *n* valeurs restent à saisir » ou « Tout est saisi ». Quand la barre est trop étroite pour lui (fenêtre réduite, libellés arabes), il passe sur sa propre ligne au-dessus des boutons, pour rester lisible.
+- **Validation technique** : valide techniquement toutes les valeurs saisies du dossier (droit de valider techniquement ; actif dès qu'une valeur est au statut Saisi, grisé de nouveau quand tout est validé). Les valeurs déjà validées techniquement gardent le nom et l'heure du premier contrôle.
 - **Enregistrer** (Ctrl+S) : enregistre les valeurs tapées (droit de saisir).
 - Fenêtres automatiques après enregistrement : « Résultats critiques » (valeur critique) et « Analyses en cascade » (règle de cascade déclenchée).
 
@@ -113,7 +113,7 @@ C'est l'écran de la paillasse. On y ouvre un dossier (par scan du tube ou depui
 
 - Le menu apparaît pour toute personne qui a le droit de saisir des résultats : Technicien de laboratoire, Biologiste, Biologiste responsable, Administrateur.
 - **Enregistrer**, **Non fait…**, **Effacer la valeur**, **Fiche de paillasse** : même droit (saisir des résultats).
-- **Validation technique** : droit de valider techniquement (Technicien, Biologiste, Biologiste responsable, Administrateur).
+- **Validation technique** : droit de valider techniquement (Technicien de laboratoire, Biologiste, Biologiste responsable, Administrateur).
 - Modifier une valeur déjà validée techniquement : droit « modifier un résultat » (Biologiste, Biologiste responsable, Administrateur). Le technicien ne l'a pas par défaut.
 - **Corriger une valeur validée…** : droits « dévalider » et « modifier un résultat » (Biologiste, Biologiste responsable, Administrateur), plus « rectifier » si la valeur est déjà imprimée, plus la qualification de biologiste pour le secteur.
 - **Antériorités** : droit de consulter les résultats.
@@ -173,8 +173,9 @@ C'est l'écran de la paillasse. On y ouvre un dossier (par scan du tube ou depui
 9. **Faire la validation technique d'un dossier**
    1. Le dossier ouvert, cliquez **Validation technique** (actif dès qu'au moins une valeur est au statut Saisi).
    2. Confirmez (**Oui** ; le bouton par défaut est **Non**).
-   3. « Opération effectuée. » : toutes les valeurs saisies du dossier, tous secteurs confondus, passent validées techniquement. Une analyse dont toutes les lignes sont validées techniquement (ou « Non fait ») passe à l'étape suivante et apparaît dans **Validation biologique**. Le dossier quitte la liste **À saisir** quand plus rien n'attend.
+   3. « Opération effectuée. » : toutes les valeurs saisies du dossier, tous secteurs confondus, passent validées techniquement. Une analyse dont toutes les lignes sont validées techniquement (ou « Non fait ») passe à l'étape suivante et apparaît dans **Validation biologique**. Le dossier quitte la liste **À saisir** quand plus rien n'attend, et le bouton **Validation technique** redevient gris.
    - On ne peut pas valider techniquement une seule ligne : c'est tout le dossier.
+   - Une valeur arrivée tard (par exemple d'un second automate) se valide de la même façon : seule la nouvelle valeur reçoit votre nom et l'heure ; celles qu'un collègue avait déjà validées gardent son nom et son heure de contrôle.
 
 10. **Consulter les antériorités d'un paramètre**
     1. Placez-vous sur la ligne d'un paramètre numérique.
@@ -279,7 +280,7 @@ flowchart LR
 
 #### À quoi sert cet écran
 
-Les automates connectés envoient leurs valeurs directement dans les dossiers. L'écran **Automates** montre chaque liaison, sa table de correspondance et le **Journal des messages** : on y voit ce qui est arrivé, ce qui a été retenu ou refusé et pourquoi, et on y réimporte une transmission retenue. On peut aussi tester une trame sans rien enregistrer. Ce paragraphe décrit ce qui concerne les résultats ; le réglage complet des interfaces relève du chapitre Administration (section **Automates**).
+Les automates connectés envoient leurs valeurs directement dans les dossiers. L'écran **Automates** montre chaque liaison, sa table de correspondance et le **Journal des messages** : on y voit ce qui est arrivé, ce qui a été retenu ou refusé et pourquoi, et on y réimporte une transmission retenue. On peut aussi tester une trame sans rien enregistrer. Ce paragraphe décrit ce qui concerne les résultats ; le réglage complet des interfaces, la fenêtre **Tester une trame** et l'interface COBAS INTEGRA 400 plus sont décrits dans le chapitre Administration (section **Automates**).
 
 #### Fonctionnalités
 
@@ -294,7 +295,7 @@ Les automates connectés envoient leurs valeurs directement dans les dossiers. L
 
 **Qui y a accès**
 
-- Écran **Automates** : droit de consulter les automates (Technicien, Biologiste, Biologiste responsable, Responsable qualité, Administrateur).
+- Écran **Automates** : droit de consulter les automates (Technicien de laboratoire, Biologiste, Biologiste responsable, Responsable qualité, Administrateur).
 - **Réimporter** une transmission : droit « rejouer les messages », détenu par défaut par le Technicien de laboratoire, le Biologiste, le Biologiste responsable et l'Administrateur. La paillasse peut donc accepter elle-même les résultats retenus.
 - **Tester une trame…** : droit de configurer les automates (Biologiste responsable, Administrateur).
 
@@ -307,49 +308,9 @@ Les automates connectés envoient leurs valeurs directement dans les dossiers. L
 
 #### Interface COBAS INTEGRA 400 plus
 
-L'automate Roche COBAS INTEGRA 400 plus a son propre protocole (pas ASTM). L'application l'interroge : c'est le LIS qui demande les résultats et les tubes sans demande, puis envoie la liste de travail.
+Le Roche COBAS INTEGRA 400 plus a son propre protocole : c'est le LIS qui l'interroge (résultats, tubes sans demande) et lui envoie la liste de travail. Dans sa table de correspondance, le **code automate** est le **numéro de test** de l'application Roche : « 031 », « 31 » ou « 0-031 » désignent le même test, et le résultat qui revient en « 031 » retrouve sa ligne quelle que soit l'écriture choisie. Le préréglage, la table des numéros de test de la base de démonstration, les refus à l'enregistrement de la table et le bouton **Exemple de trame** sont décrits au chapitre Administration, section **Automates**, « Interface COBAS INTEGRA 400 plus ».
 
-**Préréglage.** Dans la fenêtre de l'interface (**Nouvelle interface** ou **Modifier l'interface**), cadre **Format des messages**, choisissez le **Profil fabricant** « Roche cobas INTEGRA 400 plus ». Il règle d'un coup :
-
-| Réglage | Valeur |
-|---|---|
-| Protocole | Roche COBAS INTEGRA |
-| Liaison | Série (RS-232) |
-| Sens | Envoi de la liste de travail |
-| Vitesse, bits de données, parité, bits d'arrêt | 9600, 8, aucune, 1 |
-| Contrôle de flux | XOnXOff |
-| Encodage | ASCII |
-| Délai d'acquittement / tentatives | 180 s / 3 |
-
-- Le port série (par exemple COM1) reste à choisir : il dépend du poste.
-- Les champs **Composant du code test** et **Composant du tube** sont grisés pour ce protocole : les lignes de l'INTEGRA ont des champs fixes (numéro de test, code-barres, valeur).
-- La note de la fenêtre rappelle : « COBAS INTEGRA : le LIS interroge l'automate (résultats, tubes sans demande). Codes = numéros de test (« 031 »). Fin de ligne, contrôle de bloc et intervalle d'interrogation : section Instruments:RocheIntegra du fichier de configuration. »
-- Les autres profils proposés sont « Personnalisé », « Standard (norme ASTM / HL7) », « Roche cobas (code suivi de « / ») » et « Abbott Architect / Alinity ». Choisir un autre profil sur une liaison INTEGRA la repasse en ASTM.
-
-**Table de correspondance.** Pour l'INTEGRA, le **code automate** est le **numéro de test** de l'application Roche (« 031 », « 31 » ou « 0-031 » sont lus de la même façon). Exemple de la base de démonstration (interface DEMO-INTEGRA, applications sérum/plasma) :
-
-| N° de test | Paramètre | N° de test | Paramètre | N° de test | Paramètre |
-|---|---|---|---|---|---|
-| 031 | GLY (glucose) | 297 | BILT (bilirubine totale) | 596 | FER |
-| 003 | UREE | 735 | BILD (bilirubine directe) | 609 | AMY (amylase) |
-| 445 | CREAT (Jaffé compensé) | 615 | AU (acide urique) | 052 | LIP (lipase) |
-| 586 | CHOL | 042 | CA (calcium) | 323 | CK |
-| 010 | TG | 614 | PHOS | 607 | LDH |
-| 494 | ASAT | 059 | MG | 501 | NA (ISE indirecte) |
-| 495 | ALAT | 592 | ALB | 502 | K |
-| 551 | PAL | 027 | PROT (protéines totales) | 503 | CL |
-| 498 | GGT | | | | |
-
-- Vérifiez chaque numéro dans les définitions de tests de **votre** automate avant d'activer la liaison : le laboratoire peut utiliser une autre application du même test (avec ou sans phosphate de pyridoxal, urines, STAT ; par exemple ASAT 594 au lieu de 494, Na direct 401 au lieu de 501).
-- HDL, LDL direct, CRP et HbA1c n'ont pas de numéro dans la table livrée : ajoutez-les depuis les définitions de l'automate.
-- Les résultats d'étalonnage envoyés par l'INTEGRA sont lus mais pas importés.
-
-**Fenêtre « Tester une trame »**
-
-1. Ouvrez **Tester une trame…** (depuis l'écran ou depuis la fenêtre de l'interface).
-2. Collez une trame, ou cliquez **Charger la dernière trame reçue**, ou, pour une liaison INTEGRA, **Exemple de trame** : l'application fabrique une trame INTEGRA pour le tube de la dernière transmission (sinon un tube fictif « TUBE-0001 ») avec jusqu'à trois numéros de test actifs de la table, et l'analyse aussitôt.
-3. Cliquez **Analyser la trame**. La grille montre, ligne par ligne : **Tube**, **Dossier · patient**, **Champ test brut**, **Code lu**, **Paramètre**, **Valeur reçue**, **Valeur LIS**, **Alarme automate**, **Type**, **Ce que ferait le LIS**.
-4. **Fermer**. « Rien n'est enregistré : l'écran montre ce que le LIS ferait de chaque résultat. »
+**Fenêtre « Tester une trame »** : collez une trame (ou chargez la dernière reçue, ou **Exemple de trame** pour un INTEGRA), puis **Analyser la trame** : la grille dit, pour chaque résultat, le tube, le dossier et le patient, le paramètre trouvé et **Ce que ferait le LIS**. Rien n'est enregistré. Procédure complète : chapitre Administration, section **Automates**, scénario « Tester une trame ».
 
 **Scénarios**
 
@@ -359,7 +320,7 @@ L'automate Roche COBAS INTEGRA 400 plus a son propre protocole (pas ASTM). L'app
    3. Cliquez **Réimporter** et confirmez : « Réimporter cette transmission ? Les valeurs de l'automate seront enregistrées au dossier du patient. »
    4. Un message indique « Réimportation effectuée : *n* valeur(s) enregistrée(s). », ou « Réimportation effectuée, aucune valeur enregistrée : lisez les anomalies de la ligne. »
    - Seules les transmissions reçues en échec, partielles ou retenues peuvent être réimportées.
-2. **Vérifier une nouvelle liaison INTEGRA avant de l'activer** : réglez le profil, remplissez la table, puis **Tester une trame…** › **Exemple de trame**. Chaque ligne doit trouver son paramètre ; une ligne « code inconnu » signale un numéro absent de la table.
+2. **Vérifier une nouvelle liaison INTEGRA avant de l'activer** : voir le chapitre Administration, section **Automates**, « Mettre en service un INTEGRA ».
 
 **Règles et contrôles**
 
@@ -407,7 +368,7 @@ C'est l'écran du biologiste. Il liste les dossiers dont des résultats validés
 - **Résultats critiques…** : trace l'appel d'un critique avec relecture (droit de saisir la communication d'un critique ; en rouge et gras quand un critique attend).
 - **Compte rendu** : émet et signe le compte rendu du dossier (droit d'éditer ; grisé tant qu'aucune valeur validée n'attend d'être imprimée).
 - Compteur « *n* dossier(s) · *m* résultat(s) en attente ».
-- **Valider la sélection (*n*)** (F9) : valide biologiquement les lignes cochées.
+- **Valider la sélection (*n*)** (F9) : valide biologiquement les lignes cochées ; la ligne d'état dit ensuite « *n* résultat(s) validé(s) ». Grisé quand aucun dossier n'est ouvert.
 - Touches : **Espace** coche / décoche, **F9** valide la sélection, **F10** dossier suivant.
 
 **Qui y a accès**
@@ -424,7 +385,7 @@ C'est l'écran du biologiste. Il liste les dossiers dont des résultats validés
    1. Sélectionnez le dossier dans la liste (ou **F10** pour passer au suivant).
    2. Lisez la carte **Contexte**, vérifiez les valeurs, les signalements et les alarmes automate. Les lignes à libérer sont déjà cochées.
    3. Cliquez **Valider la sélection** (ou **F9**).
-   4. La ligne d'état indique « *n* validé par » ; la liste se recharge. Le dossier disparaît quand plus rien n'attend.
+   4. La ligne d'état indique le nombre de résultats validés (« 1 résultat validé », « 3 résultats validés », ou « 0 résultat validé » si tout a été refusé) ; la liste se recharge. Le dossier disparaît quand plus rien n'attend. Quand le dernier dossier est validé, la liste est vide et **Valider la sélection** reste grisé.
    - Les résultats refusés sont listés dans une fenêtre, chacun avec sa raison ; les autres sont validés quand même.
 
 2. **Valider une partie d'un dossier**
@@ -564,7 +525,7 @@ C'est le registre des comptes rendus. On y émet les comptes rendus en attente, 
 
 **Qui y a accès**
 
-- Menu : droit de consulter les comptes rendus (Secrétariat / accueil, Technicien, Biologiste, Biologiste responsable, Responsable qualité, Prescripteur, Administrateur).
+- Menu : droit de consulter les comptes rendus (Secrétariat / accueil, Technicien de laboratoire, Biologiste, Biologiste responsable, Responsable qualité, Prescripteur, Administrateur).
 - **Émettre le compte rendu** : droit d'éditer (Secrétariat / accueil, Biologiste, Biologiste responsable, Administrateur). Un compte prescripteur ne peut jamais émettre.
 - **Réimprimer l'original** : droit de réimpression (Secrétariat / accueil, Biologiste, Biologiste responsable, Prescripteur, Administrateur).
 - **Enregistrer une remise** : droit d'éditer ou d'envoyer (Secrétariat / accueil, Biologiste, Biologiste responsable, Administrateur).
@@ -710,7 +671,7 @@ Les textes sont ceux affichés par l'application. « … » remplace une valeur 
 | « Le texte du résultat est obligatoire. » / « Le texte du résultat dépasse … caractères. » | Paramètre texte vide ou trop long. | Saisissez ou raccourcissez le texte. |
 | « Le paramètre … est calculé : sa valeur ne se saisit pas. » | Tentative de saisie ou de correction d'un paramètre ƒ. | Corrigez les valeurs qui servent au calcul. |
 | « … : cette analyse est annulée, aucun résultat ne peut y être saisi. » | Saisie sur une analyse annulée entre-temps. | Actualisez le dossier. |
-| « … : ce résultat est déjà validé techniquement, le modifier demande le droit « modifier un résultat ». » | Technicien qui retape une valeur validée techniquement. | Demandez à un biologiste. |
+| « … : ce résultat est déjà validé techniquement, le modifier demande le droit « modifier un résultat ». » | Technicien de laboratoire qui retape une valeur validée techniquement. | Demandez à un biologiste. |
 | « Ce résultat est déjà validé. » | Action sur une valeur déjà validée (autre poste). | Actualisez. |
 | « Paramètre introuvable (…). » / « Résultat introuvable (…). » | Paramètre retiré du catalogue ou ligne supprimée. | Actualisez ; prévenez l'administrateur si cela persiste. |
 | « Pourquoi « … » n'a-t-il pas été réalisé ? Le motif est imprimé sur le compte rendu à la place du résultat. » | **Non fait…**. | Saisissez le motif (3 caractères au moins). |
@@ -726,7 +687,7 @@ Les textes sont ceux affichés par l'application. « … » remplace une valeur 
 | « « … » est corrigé. L'ancienne valeur est conservée … (Comptes rendus › Émettre une rectification). » | Correction enregistrée. | Faites la validation technique puis biologique ; émettez une rectification si la valeur était imprimée. |
 | « Résultats critiques non communiqués … Un résultat critique doit être communiqué au prescripteur avant sa validation. » | Enregistrement d'une valeur critique. | Prévenez le biologiste (bouton **Résultats critiques…** de Validation biologique). |
 | « Analyses en cascade … » | Règle de cascade déclenchée. | Ajoutez l'analyse au dossier si elle est justifiée. |
-| « Validation technique » (confirmation) | Clic sur **Validation technique**. | **Oui** pour valider tout le dossier. |
+| « Validation technique » (confirmation) | Clic sur **Validation technique**. | **Oui** pour valider tout le dossier (les valeurs déjà validées gardent leur premier contrôle). |
 | « Aucun résultat à valider. » | Validation technique sans valeur saisie. | Saisissez d'abord les valeurs. |
 | « Aucune analyse en attente de saisie pour cette sélection. » | Fiche de paillasse sans ligne pour le secteur, l'automate ou les urgences choisis. | Changez la sélection. |
 | « Le secteur choisi est introuvable. » / « L'automate choisi est introuvable sur ce site. » / « Site introuvable. » | Fiche de paillasse avec un secteur ou un automate supprimé. | Fermez et rouvrez la fenêtre. |
@@ -753,12 +714,12 @@ Les textes sont ceux affichés par l'application. « … » remplace une valeur 
 | « … est réformé : ses résultats ne sont pas acceptés. » / « … a une date de réforme dépassée : ses résultats ne sont pas acceptés. » | Automate réformé. | Les résultats ne peuvent pas être importés ; saisissez-les si l'analyse est refaite ailleurs. |
 | « La transmission ne porte aucun identifiant d'échantillon. » / « Code-barres inconnu : aucun tube enregistré ne correspond. » / « Code-barres ambigu : plusieurs tubes correspondent, aucun résultat n'a été attribué. » | Tube absent ou illisible dans la trame. | Vérifiez l'étiquette sur l'automate ; saisissez au besoin à la main. |
 | « Tube refusé ou éliminé : le résultat n'est pas rendable. » / « Aucun dossier rattaché à ce tube. » / « Dossier annulé : les résultats ne sont pas enregistrés. » | Tube ou dossier non utilisable. | Rien à importer. |
-| « Code automate inconnu de la table de correspondance : la valeur n'a pas été enregistrée. » | Code (numéro de test INTEGRA) absent de la table. | Faites compléter la **Table de correspondance**, puis réimportez. |
+| « Code automate inconnu de la table de correspondance : la valeur n'a pas été enregistrée. » | Code absent de la table. Pour un INTEGRA, le numéro de test est reconnu quelle que soit son écriture dans la table (« 0-031 », « 31 ») : le message signale donc un numéro vraiment absent. | Faites compléter la **Table de correspondance**, puis réimportez. |
 | « L'automate a rendu une analyse non demandée sur ce tube. » | Résultat sans demande. | Ajoutez l'analyse au dossier si elle est prescrite. |
 | « Le paramètre associé à ce code n'existe plus au catalogue. » | Paramètre retiré. | Faites corriger la table. |
 | « Résultat déjà validé biologiquement : la correction passe par un compte rendu rectifié. » / « L'automate transmet une correction d'un résultat déjà validé : elle exige un compte rendu rectifié. » | Nouvelle valeur pour un résultat validé. | Biologiste : **Corriger une valeur validée…** si la nouvelle valeur est la bonne. |
 | « L'automate signale l'analyse comme non réalisée. » / « Valeur vide transmise pour ce paramètre. » / « Valeur non numérique transmise pour un paramètre numérique. » / « Ce type de résultat ne se transmet pas depuis un automate. » | Valeur inexploitable. | Refaites la mesure ou saisissez à la main. |
-| « Résultat de contrôle reçu alors que le routage vers le CIQ est désactivé : il n'a pas été enregistré. » / « Résultat de contrôle sans numéro de lot : … » / « Aucune cible de contrôle définie pour ce paramètre sur cet automate : … » | Résultat de contrôle qualité non rattachable. | Voir le chapitre Contrôle qualité. |
+| « Résultat de contrôle reçu alors que le routage vers le CIQ est désactivé : il n'a pas été enregistré. » / « Résultat de contrôle sans numéro de lot : … » / « Aucune cible de contrôle définie pour ce paramètre sur cet automate : … » | Résultat de contrôle qualité non rattachable. | Voir le chapitre Qualité et équipements (Contrôle interne). |
 | « L'import de cette transmission n'a pas abouti (erreur ou arrêt du poste pendant le traitement) ; elle peut être rejouée. » | Arrêt pendant le traitement. | **Réimporter**. |
 | « Trame COBAS INTEGRA illisible : aucun en-tête de bloc (code automate, identifiant, code de bloc). » | Trame INTEGRA mal formée. | Vérifiez le câble et les réglages série ; faites renvoyer. |
 | « Somme de contrôle du bloc COBAS INTEGRA incorrecte (…) : la trame a pu être altérée. » | Bloc INTEGRA abîmé en transmission. | Faites renvoyer les résultats ; vérifiez le câble. |
@@ -772,6 +733,7 @@ Les textes sont ceux affichés par l'application. « … » remplace une valeur 
 | Message | Quand il apparaît | Que faire |
 |---|---|---|
 | « Aucun élément sélectionné. » | **Valider la sélection** ou **Dévalider…** sans ligne cochée utilisable. | Cochez les lignes (validées techniquement pour valider, déjà validées pour dévalider). |
+| « … résultat validé » / « … résultats validés » (ligne d'état ; en rouge si des lignes ont été refusées) | Après **Valider la sélection** : nombre de lignes réellement validées (« 0 résultat validé » si toutes ont été refusées). | Si le nombre est inférieur aux lignes cochées, lisez la fenêtre des refus et traitez chaque raison. |
 | « Seul un médecin ou un pharmacien biologiste peut procéder à la validation biologique. » | Utilisateur sans qualification de biologiste. | Faites valider par un biologiste. |
 | « Le biologiste doit être inscrit à l'Ordre pour valider un résultat. » | N° d'Ordre absent de la fiche utilisateur. | Faites compléter la fiche (administrateur). |
 | « L'habilitation du biologiste a expiré le … » | Habilitation échue. | Faites renouveler l'habilitation (administrateur). |

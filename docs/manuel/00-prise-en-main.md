@@ -10,17 +10,17 @@
 
 | Module (groupe du menu) | À quoi il sert | Chapitre |
 |---|---|---|
-| Tableau de bord, Statistiques, Pilotage | Le point du jour (flux des dossiers, alertes à traiter) ; les statistiques d'activité ; les indicateurs de pilotage du directeur. | 00 Prise en main (Tableau de bord) ; chapitre Statistiques et pilotage |
+| Tableau de bord, Statistiques, Pilotage | Le point du jour (flux des dossiers, alertes à traiter) ; les statistiques d'activité ; les indicateurs de pilotage du directeur. | 00 Prise en main (Tableau de bord) ; 08 Pilotage, statistiques et relations |
 | ACCUEIL / ENREGISTREMENT | Fiche patient (identité, couvertures, consentements, alertes), enregistrement d'une demande d'analyses avec ses étiquettes, consultation et correction d'un dossier. | 01 Accueil / Enregistrement |
-| LISTE DE TRAVAIL (pré-analytique) | Prélèvements, réception des échantillons, re-prélèvements, sérothèque, sous-traitance vers un autre laboratoire. | chapitre pré-analytique |
-| LISTE DE TRAVAIL (analytique) | Saisie des résultats (à la main ou reçus des automates), validation technique puis biologique, comptes rendus et leur remise. | chapitre analytique et comptes rendus |
+| LISTE DE TRAVAIL (pré-analytique) | Prélèvements, réception des échantillons, re-prélèvements, sérothèque, sous-traitance vers un autre laboratoire. | 02 Pré-analytique |
+| LISTE DE TRAVAIL (analytique) | Saisie des résultats (à la main ou reçus des automates), validation technique puis biologique, comptes rendus et leur remise. | 03 Phase analytique et comptes rendus |
 | FACTURATION | Factures et avoirs, acomptes, règlements, caisse de chaque opérateur, bordereaux de tiers payant. | 04 Facturation, caisse et tiers payant |
-| QUALITÉ | Contrôle interne, non-conformités, évaluation externe, documents qualité. | chapitre Qualité |
-| STOCKS | Stocks et lots de réactifs, commandes, devis et factures fournisseurs, consommation, inventaires, températures des enceintes, équipements et contrats des automates. | chapitre Stocks et équipements |
-| PERSONNEL | Dossiers du personnel, habilitations, échéances, congés, gardes, paie, accidents du travail. | chapitre Personnel |
-| RELATIONS | Statistiques par prescripteur, visites et conventions, rappels et enquêtes auprès des patients. | chapitre Relations |
-| FINANCES | Export comptable, comptes et journaux, immobilisations, rapprochement bancaire, prévision de trésorerie, visa des caisses, coût de revient et marge. | chapitre Finances (et 04 pour le **Visa des caisses**) |
-| ADMINISTRATION | Utilisateurs et rôles, journal d'audit, catalogue des analyses, automates, données de référence, paramètres (sites, imprimantes, format des factures…). | chapitre Administration |
+| QUALITÉ | Contrôle interne, non-conformités, évaluation externe, documents qualité. | 05 Qualité et équipements |
+| STOCKS | Stocks et lots de réactifs, bons de commande, demandes de devis, factures et évaluation des fournisseurs, consommation, inventaires ; dans le même groupe du menu : températures des enceintes, équipements et contrats des automates. | 06 Stocks et achats ; 05 Qualité et équipements pour **Températures**, **Équipements** et **Contrats automates** |
+| PERSONNEL | Dossiers du personnel, habilitations, échéances, congés, gardes, paie, accidents du travail. | 09 Ressources humaines |
+| RELATIONS | Statistiques par prescripteur, visites et conventions, rappels et enquêtes auprès des patients. | 08 Pilotage, statistiques et relations |
+| FINANCES | Export comptable, comptes et journaux, immobilisations, rapprochement bancaire, prévision de trésorerie, visa des caisses, coût de revient et marge. | 07 Finances (et 04 pour le **Visa des caisses**) |
+| ADMINISTRATION | Utilisateurs et rôles, journal d'audit, catalogue des analyses (et nomenclature des actes), automates, données de référence, paramètres (sites, numérotations, format des factures, lieux de stockage, imprimantes). | 10 Administration |
 
 **Le parcours d'un dossier patient**, d'un bout à l'autre :
 
@@ -281,7 +281,7 @@ flowchart TD
 
 - Une personne peut cumuler plusieurs rôles (par exemple secrétaire + comptabilité) : elle voit l'union des écrans.
 - À l'intérieur d'un écran, certains boutons ne sont actifs qu'avec un droit précis (par exemple **Compte rendu (PDF)** sur **Consultation d'un dossier**). Chaque chapitre le précise.
-- Le droit de **déclarer une non-conformité** est donné au Biologiste responsable, au Biologiste, au Technicien et au Responsable qualité.
+- Le droit de **déclarer une non-conformité** est donné au Biologiste responsable, au Biologiste, au Technicien de laboratoire et au Responsable qualité.
 - La validation biologique exige à la fois le droit et une qualification de biologiste (médecin ou pharmacien biologiste) en cours de validité sur la fiche utilisateur.
 - Les comptes « admin » (premier administrateur) et « interface » (compte de service des automates, qui ne peut pas se connecter) sont créés automatiquement à la première installation.
 

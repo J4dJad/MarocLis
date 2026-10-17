@@ -30,6 +30,7 @@ Les références « fichier:ligne » renvoient au code de l'écran (pour l'équi
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
 |---|---|---|---|---|
 | Ouvrir un écran autorisé | Menu de gauche | nom de l'écran | Oui | Entrées du menu MainShellForm.cs:366-541 ; écrans non autorisés non affichés ; écrans par défaut DefaultScreenKeys :68 |
+| Tableau des modules de la « Présentation de l'application » | manuel | groupes du menu | Oui | Contrôlé le 2026-10-17 (commit 1bbef5b) contre les groupes MainShellForm.cs:366-569 et les titres des chapitres 00 à 10 : **Températures**, **Équipements** et **Contrats automates** sont dans le groupe Stocks du menu mais décrits au chapitre 05 ; **Visa des caisses** est dans le groupe Finances mais décrit au chapitre 04 |
 | Replier / déplier un groupe | Menu de gauche | titre du groupe (info-bulle « Replier ce groupe » / « Déplier ce groupe ») | Oui | MainShellForm.cs:634 ; mémorisé par utilisateur et par poste |
 | Fil d'Ariane de l'écran | Bandeau | « Groupe › Écran » | Oui | Nouveau. ShowBreadcrumb MainShellForm.cs:316 |
 | Ouvrir l'aide de l'écran | Bandeau / clavier | **Aide (F1)**, touche F1 | Oui | Nouveau bouton MainShellForm.cs:228-231 ; F1 défini :908 ; HelpService.ShowCurrent HelpService.cs:36, filtre F1 :84 ; page absente → « Help.NotFound » :49 ; repli navigateur :74 |
@@ -50,7 +51,7 @@ Les références « fichier:ligne » renvoient au code de l'écran (pour l'équi
 |---|---|---|---|---|
 | Consulter / modifier les droits d'un rôle | Utilisateurs › onglet **Rôles et droits** | (voir chapitre Administration) | Oui | UserAdministrationView.cs:110, BuildRolesTab :319 |
 | Sous-traitance soumise à son propre droit | Menu de gauche | **Sous-traitance** | Oui | Nouveau. Entrée de menu avec le droit Samples.Subcontract (MainShellForm.cs:404) ; donné au Biologiste, retiré au Préleveur (ReferenceDataSeeder.cs:515, :564, :596, :621-630) |
-| Réimprimer un compte rendu validé (Secrétariat, Biologiste) | rôles par défaut | droit « réimprimer un compte rendu validé » | Oui | Corrigé. ReferenceDataSeeder.cs:520, :574, :642 |
+| Réimprimer un compte rendu validé (Secrétariat / accueil, Biologiste) | rôles par défaut | droit « réimprimer un compte rendu validé » | Oui | Corrigé. ReferenceDataSeeder.cs:520, :574, :642 |
 | Déclarer une non-conformité | rôles par défaut | droit de déclaration de NC | Oui | Nouveau. ReferenceDataSeeder.cs:523, :576, :604, :656 |
 | Activer le mode démonstration | — | réglage d'installation « SeedDemoDataOnFirstRun » | Normal | Pas d'écran : réglage réservé à l'informatique, volontairement. |
 | Désactiver les comptes demo.* sur base réelle | — | automatique | Oui | Au démarrage (DatabaseInitializer.cs:88) et à la connexion (AuthenticationService.cs:84) |
@@ -80,4 +81,4 @@ Les références « fichier:ligne » renvoient au code de l'écran (pour l'équi
 6. Confirmation de déconnexion peu explicite (« Déconnexion » seul comme question).
 7. Message « connexion perdue » prévu mais jamais affiché (une coupure réseau donne le message d'erreur générique).
 
-Corrigés depuis la vérification précédente : tuiles du Tableau de bord cliquables, bouton **Actualiser**, bandeau de configuration traduit, libellé « Étalonnages dépassés », droit de réimpression des comptes rendus pour Secrétariat et Biologiste.
+Corrigés depuis la vérification précédente : tuiles du Tableau de bord cliquables, bouton **Actualiser**, bandeau de configuration traduit, libellé « Étalonnages dépassés », droit de réimpression des comptes rendus pour Secrétariat / accueil et Biologiste.

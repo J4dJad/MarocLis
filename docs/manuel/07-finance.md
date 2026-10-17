@@ -10,7 +10,7 @@
 - la prévision de trésorerie ;
 - le coût de revient des analyses.
 
-L'écran **Visa des caisses**, rangé dans le même groupe, est décrit avec la caisse (chapitre facturation).
+L'écran **Visa des caisses**, rangé dans le même groupe, est décrit avec la caisse (chapitre Facturation, caisse et tiers payant).
 
 Principe général : MarocLIS ne tient pas la comptabilité générale. Il produit des écritures propres (plan comptable marocain, CGNC) que le cabinet comptable importe dans son logiciel (Sage ou autre). Aucun écran de ce groupe ne passe d'écriture lui-même.
 

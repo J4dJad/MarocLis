@@ -1,6 +1,6 @@
 # Vérification de l'interface — Accueil / Enregistrement
 
-Re-vérifié le 2026-10-17 au commit 4e20d0d : chaque ligne a été recontrôlée dans le code des écrans et des fonctions ci-dessous, et les libellés comparés à `fr.json`. Les lignes corrigées passent à **Oui** avec la nouvelle référence ; des lignes ont été ajoutées pour les nouveautés (nouvelle présentation de **Patients**, devis en direct, avertissement de répétition, **Enregistrer sans étiquettes**, analyses fréquentes, copie du n° de dossier, onglet **Historique**, **Plus d'actions**).
+Re-vérifié le 2026-10-17 au commit 4e20d0d, puis complété le même jour pour les changements du cycle 5 (état du code au commit 1bbef5b) : chaque ligne a été recontrôlée dans le code des écrans et des fonctions ci-dessous, et les libellés comparés à `fr.json`. Les lignes corrigées passent à **Oui** avec la nouvelle référence ; des lignes ont été ajoutées pour les nouveautés (nouvelle présentation de **Patients**, devis en direct, avertissement de répétition, **Enregistrer sans étiquettes**, analyses fréquentes, copie du n° de dossier, onglet **Historique**, **Plus d'actions**).
 
 Fichiers d'écran contrôlés : `Views/PatientSearchView.cs`, `Forms/PatientEditorForm.cs`, `Forms/PatientEditorDialogs.cs`, `Forms/PatientMergeDialog.cs`, `Forms/ProvisionalPatientDialog.cs`, `Composition/PatientEditorFactory.cs`, `Views/OrderRegistrationView.cs`, `Views/MasterDataEditors.cs` (fenêtre prescripteur), `Views/OrderDetailView.cs`, `Views/OrderDetailDialogs.cs`.
 Fonctions de l'application contrôlées : recherche patient (`PatientQueries`), enregistrement patient (`PatientRegistrationService`), enregistrement de dossier (`OrderRegistrationService` / `RegisterOrderRequest`, `OrderRegistrationRules`), devis (`IOrderQuotes`), modification de dossier (`OrderAmendmentService`), réimpression d'étiquettes (`SampleWorkflowService.ReprintLabelsAsync`), compte rendu archivé (`ReportReleaseService`), création de prescripteur (`MasterDataService.SavePrescriberAsync`), droits par défaut (`ReferenceDataSeeder`).
@@ -32,6 +32,7 @@ Fonctions de l'application contrôlées : recherche patient (`PatientQueries`), 
 | Fusionner deux fiches | Patients | **Plus d'actions** › **Fusionner les dossiers** | Oui | PatientSearchView.cs MergeAsync :779 (au moins deux fiches dans la liste, MergeNeedsTwoFiles :788 ; interdit sur une fiche anonymisée :721-737) ; PatientMergeDialog.cs:141. Les demandes du doublon sont facturées au nom de la fiche gardée. |
 | Anonymiser (loi 08-09) | Patients | **Plus d'actions** › **Anonymiser** | Oui | PatientSearchView.cs AnonymizeAsync :818, dérogation conservation :844. Droit réservé à l'Administrateur par défaut : à confirmer avec le laboratoire. |
 | Exporter les données d'un patient (droit d'accès loi 08-09) | — | — | MANQUANT | Toujours : le droit « patients.export » existe et est donné au Biologiste responsable, mais aucune fonction ni bouton ne l'utilise. |
+| Garder le patient sélectionné après F5 | Patients | **F5** | Oui | Corrigé (cycle 5, ff979b4) : PatientSearchView.cs:904-909 ; avant, la liste revenait à la première ligne |
 
 ## Dossiers (enregistrement)
 
@@ -68,14 +69,17 @@ Fonctions de l'application contrôlées : recherche patient (`PatientQueries`), 
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
 |---|---|---|---|---|
 | Liste et recherche (n°, code-barres, nom, CIN) | Consultation | zone de recherche, filtres | Oui | Filtres OrderDetailView.cs:1040 ; en-têtes :1070-1091 ; aucun résultat :1358. 200 dossiers récents (OrderAmendmentService.cs:705) ; au-delà, chercher. |
-| Copier le n° de dossier | Consultation | double-clic sur le n° | Oui | Nouveau. OrderDetailView.cs:461, :976 |
+| Copier le n° de dossier | Consultation | double-clic sur le n° | Oui | Nouveau. OrderDetailView.cs:987 (CopyAccessionNumber) |
+| Ligne d'état sans rétrécir la grille des analyses | Consultation | ligne d'état sous les cartes | Oui | Corrigé (cycle 5, 71b58ad) : OrderDetailView.cs:383-402, ligne toujours présente ; avant, la grille perdait une ligne à chaque message (par exemple après la copie du n° de dossier) |
+| Légende des tubes d'un dossier à nombreux tubes | Consultation › Analyses | légende sous la grille | Oui | Corrigé (cycle 5, 71b58ad, 5901856) : OrderDetailView.cs:720-731, 2323-2332 ; défile seulement si elle déborde, au moins une ligne et demie d'analyses reste visible |
+| Ordre des boutons de la fenêtre d'ajout d'analyses | Consultation › **Ajouter des analyses** | **Annuler** à gauche, **Ajouter des analyses** à droite | Oui | Corrigé (cycle 5, ff979b4) : OrderDetailDialogs.cs:117-124, comme les autres fenêtres |
 | Ajouter des analyses | Consultation | **Ajouter des analyses** | Oui | :983 ; grisé sur un dossier facturé ou rendu (RefreshActions :2039) |
 | Annuler une analyse | Consultation | **Plus d'actions** › **Annuler l'analyse**, clic droit | Oui | :996, :1001, menu clic droit :1003-1010 |
 | Repasser une analyse | Consultation | **Plus d'actions** › **Repasser l'analyse**, clic droit | PARTIEL | :997, :1002. Corrigé en partie : grisé tant qu'aucune valeur n'est saisie (OrderAmendmentService.cs:118). Reste : actif sans le droit « modifier un résultat » sur une analyse validée techniquement ; refus après saisie du motif. |
 | Corriger l'en-tête | Consultation | **Modifier l'en-tête** | PARTIEL | :986 ; OrderDetailDialogs.cs:339-341. Toujours : **un prescripteur de l'annuaire ne peut pas être remplacé** (lecture seule, OrderDetailDialogs.cs:406). |
 | Annuler le dossier | Consultation | **Plus d'actions** › **Annuler le dossier** | Oui | :998 |
 | Réimprimer les étiquettes | Consultation | **Imprimer les étiquettes** (F8) | PARTIEL | :984, F8 :1027. Toujours : toutes les étiquettes du dossier, impossible d'en choisir une. |
-| Ouvrir le compte rendu PDF | Consultation | **Compte rendu (PDF)** | Oui | Corrigé : droit donné au Secrétariat et au Biologiste (ReferenceDataSeeder.cs:574, :642) ; :985, :2052 |
+| Ouvrir le compte rendu PDF | Consultation | **Compte rendu (PDF)** | Oui | Corrigé : droit donné au Secrétariat / accueil et au Biologiste (ReferenceDataSeeder.cs:574, :642) ; :985, :2052 |
 | Historique des modifications du dossier | Consultation | onglet **Historique** | Oui | Corrigé. OrderDetailView.cs:1687, :1865 |
 | Encaisser / voir le règlement depuis le dossier | Consultation | onglet **Facturation**, **Ouvrir la facturation** | PARTIEL | Corrigé en partie : le bouton ouvre l'écran **Facturation** (:1014), mais sans sélectionner la facture du dossier. |
 | Modifier la couverture d'un dossier | Consultation | — | Volontairement absent | Rappel affiché dans **Modifier l'en-tête** (avoir puis nouvelle facture). |
@@ -87,7 +91,7 @@ Fonctions de l'application contrôlées : recherche patient (`PatientQueries`), 
 - État « Pièce absente » des consentements écrits : impossible à corriger depuis l'interface.
 - Champ type de prescripteur étiqueté « Désignation ».
 
-Corrigés depuis la vérification précédente : message de date de **Clore la couverture**, bouton visible pour retirer une analyse, devis en direct, **Compte rendu (PDF)** pour Secrétariat et Biologiste, onglet **Historique**, lien vers la facturation, filtre des fiches provisoires.
+Corrigés depuis la vérification précédente : message de date de **Clore la couverture**, bouton visible pour retirer une analyse, devis en direct, **Compte rendu (PDF)** pour Secrétariat / accueil et Biologiste, onglet **Historique**, lien vers la facturation, filtre des fiches provisoires.
 
 ## Manques à corriger (par impact sur le travail quotidien)
 

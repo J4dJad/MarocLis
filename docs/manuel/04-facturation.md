@@ -103,7 +103,7 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 | **Facture d'avoir**, **Rembourser**, **Rembourser l'acompte** | Émettre un avoir | Administrateur, Comptabilité |
 | **Transmettre au tiers payant**, **Enregistrer le retour**, **Montant accepté par l'organisme** | Export comptable / tiers payant | Administrateur, Comptabilité |
 
-Les boutons pour lesquels vous n'avez pas le droit restent visibles mais grisés. Le Biologiste responsable voit l'écran en lecture seule. Biologiste, Technicien, Préleveur, Responsable qualité et Prescripteur n'ont pas accès.
+Les boutons pour lesquels vous n'avez pas le droit restent visibles mais grisés. Le Biologiste responsable voit l'écran en lecture seule. Biologiste, Technicien de laboratoire, Préleveur, Responsable qualité et Prescripteur n'ont pas accès.
 
 **L'écran**
 
@@ -131,7 +131,7 @@ L'échéance d'une facture patient est le jour même ; celle d'une facture organ
 
 **Fonctionnalités**
 
-- **Actualiser** (F5) : recharge les deux listes.
+- **Actualiser** (F5) : recharge les deux listes. Le dossier sélectionné dans **Actes non facturés** reste sélectionné après le rechargement (comme après un acompte ou une facture), au lieu de revenir à la première ligne.
 - **Encaisser un acompte** : encaisse une avance sur **un** dossier coché, avant la facture (droit « encaisser un règlement »).
 - **Rembourser l'acompte** : rembourse tous les acomptes encore détenus sur **un** dossier coché, avec motif (droit « émettre un avoir »).
 - **Émettre la facture** : ouvre la fenêtre d'émission pour les dossiers cochés (même patient, même organisme) ; attribue le numéro (droit « émettre une facture »).
@@ -150,7 +150,7 @@ L'échéance d'une facture patient est le jour même ; celle d'une facture organ
 - **Plus d'actions › Imprimer la facture — format cotation B** : imprime cette fois au format cotation B (grisé pour un avoir).
 - Fenêtre **Émettre la facture** : patient, organisme, liste des dossiers, **Montant brut**, **Remise** et **Motif de la remise** (avec le droit remise), **Montant net**, boutons **Émettre la facture** / **Annuler**.
 - Fenêtre **Règlement** : **Reste à payer** (ou **Reste à payer par le patient**), **Mode de règlement**, **Montant**, et selon le mode **Référence**, **Banque**, **Échéance** ; **Enregistrer** / **Annuler**.
-- Fenêtre de choix d'un règlement (pour **Rembourser** et **Déclarer impayé**) : **Date**, **Mode de règlement**, **Montant**, **Référence**, **Banque**, **Créé par**.
+- Fenêtre de choix d'un règlement (pour **Rembourser** et **Déclarer impayé**) : **Date**, **Mode de règlement**, **Montant**, **Référence**, **Banque**, **Créé par** (toutes les colonnes visibles sans défilement).
 - Fenêtre **Enregistrer le retour** : **Retour de l'organisme** (Accepté, Accepté partiellement, Rejeté, Retransmis) et **Motif communiqué par l'organisme**.
 - Fenêtre **Montant accepté par l'organisme** : **Part organisme** (ou **Reste dû par l'organisme** après un avoir partiel), **Montant accepté**, **Référence du virement ou bordereau**, choix **Laisser à la charge du patient (reste sur la facture)** / **Passer en perte**, **Motif communiqué par l'organisme**.
 
@@ -173,7 +173,7 @@ L'échéance d'une facture patient est le jour même ; celle d'une facture organ
 2. Dans la fenêtre, saisissez le montant dans **Remise** ; le **Montant net** se recalcule.
 3. Saisissez le **Motif de la remise** (obligatoire).
 4. Cliquez sur **Émettre la facture**.
-- La remise est répartie sur les lignes au prorata et reste écrite sur la facture avec son motif. Elle ne peut pas dépasser le montant brut. Les champs de remise n'apparaissent pas pour le Secrétariat.
+- La remise est répartie sur les lignes au prorata et reste écrite sur la facture avec son motif. Elle ne peut pas dépasser le montant brut. Les champs de remise n'apparaissent pas pour le Secrétariat / accueil.
 
 *4. Encaisser un règlement complet au comptoir*
 1. En bas, cochez **une seule** facture.
@@ -275,7 +275,7 @@ Le laboratoire choisit le format des factures patients dans **Administration ›
 - **Format par défaut des factures patients** : « Format existant (montant, part organisme, part patient) » ou « Format cotation B (code de l'acte, cotation en B, montant en DH) ». C'est le format du bouton **Imprimer la facture**.
 - **Options du format existant** :
   - « Afficher la colonne code national de l'acte » (décoché par défaut) ;
-  - « Afficher la colonne cotation (coefficient) » (décoché) ;
+  - « Afficher la colonne cotation (coefficient) » (décoché) ; la case reste vide pour un acte facturé seulement en DH (coefficient 0) : pas de « B 0 » ;
   - « Afficher le montant en lettres » (coché).
 - **Options du format cotation B** :
   - « Afficher le prix en DH de chaque acte » (décoché) ;
@@ -284,7 +284,7 @@ Le laboratoire choisit le format des factures patients dans **Administration ›
   - « Afficher la valeur de la lettre B utilisée » (décoché).
 - **Enregistrer** : enregistre le réglage (« Format d'impression des factures enregistré. ») ; **Actualiser** : relit le réglage enregistré.
 
-**Le format cotation B** reprend l'en-tête du laboratoire et les parties (laboratoire, destinataire, patient) du format existant, puis un tableau **Code** / **Acte** / **Cotation** (en B), le **Total B**, la ligne « Prise de sang (PC) », la remise, la TVA et les parts organisme / patient s'il y en a, le **Montant en DH** (le total de la facture), le montant en lettres et la mention de TVA. Les cotations viennent des lignes figées à l'émission : un changement ultérieur du catalogue ne modifie pas une facture réimprimée.
+**Le format cotation B** reprend l'en-tête du laboratoire et les parties (laboratoire, destinataire, patient) du format existant, puis un tableau **Code** / **Acte** / **Cotation** (en B), le **Total B**, la ligne « Prise de sang (PC) », la remise, la TVA et les parts organisme / patient s'il y en a, le **Montant en DH** (le total de la facture), le montant en lettres et la mention de TVA. Les cotations viennent des lignes figées à l'émission : un changement ultérieur du catalogue ne modifie pas une facture réimprimée. Un acte facturé seulement en dirhams (analyse hors nomenclature, coefficient 0) n'a pas de cotation : sa case **Cotation** reste vide (et non « 0 »), il ne compte pas dans le **Total B**, et la colonne du prix en DH s'affiche pour que son montant figure sur sa ligne.
 
 *Choisir le format d'impression du laboratoire*
 1. Ouvrez **Administration › Paramètres**, onglet **Factures**.
@@ -540,7 +540,7 @@ Statuts du tiers payant d'une facture :
 
 **Fonctionnalités**
 
-- Période + **Actualiser** : choisit sur combien de jours les factures et lots sont listés.
+- Période + **Actualiser** : choisit sur combien de jours les factures et lots sont listés. La facture sélectionnée dans **À transmettre** reste sélectionnée après le rechargement.
 - Cases à cocher de **À transmettre** : choisir les factures du bordereau ; la barre du bas affiche « N facture(s) sélectionnée(s) — montant », ou en rouge un mélange d'organismes.
 - **Cocher les factures transmissibles de cet organisme** : coche toutes les factures non bloquées de l'organisme de la ligne sélectionnée (ou du premier organisme qui en a), et décoche les autres.
 - **Transmettre au tiers payant** : crée le bordereau `TP/…` après confirmation.
@@ -650,7 +650,7 @@ flowchart TD
 
 **Qui y a accès**
 
-Droit « Viser les caisses » — Administrateur, Biologiste responsable, Comptabilité. Le Secrétariat n'y a pas accès. L'écran est dans le groupe **Finances** du menu.
+Droit « Viser les caisses » — Administrateur, Biologiste responsable, Comptabilité. Le Secrétariat / accueil n'y a pas accès. L'écran est dans le groupe **Finances** du menu.
 
 **L'écran**
 

@@ -121,8 +121,8 @@ Quand une analyse n'a pas de lot identifié, le coût prend le prix du dernier l
 **Qui y a accès**
 
 - Voir l'écran : Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité, Comptabilité.
-- **Réceptionner un lot**, joindre un certificat : Administrateur, Biologiste responsable, Technicien, Responsable qualité.
-- **Sortie** : Administrateur, Biologiste responsable, Technicien.
+- **Réceptionner un lot**, joindre un certificat : Administrateur, Biologiste responsable, Technicien de laboratoire, Responsable qualité.
+- **Sortie** : Administrateur, Biologiste responsable, Technicien de laboratoire.
 - **Libérer** : ceux qui revoient le contrôle qualité (Administrateur, Biologiste responsable, Biologiste, Responsable qualité). La libération par dérogation est réservée aux biologistes.
 - **Refuser** : un lot encore en quarantaine peut être refusé par celui qui réceptionne ; un lot déjà libéré, seulement par ceux qui peuvent libérer.
 - **Annuler le refus**, **Rappel de lot**, **Mise au rebut** : droit « ajuster le stock » (Administrateur, Responsable qualité uniquement).
@@ -308,10 +308,10 @@ flowchart LR
 
 **Qui y a accès**
 
-- Voir l'écran : tous ceux qui voient le stock (Administrateur, Biologiste responsable, Biologiste, Technicien, Responsable qualité, Comptabilité).
+- Voir l'écran : tous ceux qui voient le stock (Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité, Comptabilité).
 - **Nouvelle commande**, **Ajouter une ligne**, **Envoyer au fournisseur**, **Annuler la commande** : Administrateur, Comptabilité.
 - **Approuver** : Administrateur, Biologiste responsable, Responsable qualité. Jamais le demandeur de la commande.
-- **Réceptionner la ligne** : Administrateur, Biologiste responsable, Technicien, Responsable qualité.
+- **Réceptionner la ligne** : Administrateur, Biologiste responsable, Technicien de laboratoire, Responsable qualité.
 
 **Fonctionnalités**
 
@@ -648,7 +648,7 @@ Facture en cours sans aucun règlement, **Plus d'actions › Annuler la facture*
 
 **Flux**
 
-**Bons de commande** (réception) → saisie de la facture → rapprochement → déblocage éventuel → règlement → export comptable et rapprochement bancaire (chapitre Trésorerie).
+**Bons de commande** (réception) → saisie de la facture → rapprochement → déblocage éventuel → règlement → export comptable et rapprochement bancaire (chapitre Finances).
 
 ```mermaid
 flowchart TD
@@ -799,7 +799,7 @@ flowchart LR
 
 **Qui y a accès**
 
-- Voir l'écran et saisir les quantités comptées : Administrateur, Biologiste responsable, Technicien, Responsable qualité.
+- Voir l'écran et saisir les quantités comptées : Administrateur, Biologiste responsable, Technicien de laboratoire, Responsable qualité.
 - **Nouvel inventaire…**, **Commencer le comptage**, **Clôturer…**, **Annuler** : Administrateur, Biologiste responsable, Responsable qualité.
 
 **Fonctionnalités**

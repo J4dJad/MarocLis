@@ -1,6 +1,6 @@
 ## Pré-analytique — vérification des boutons et fonctionnalités
 
-Revérifié le 2026-10-17 au commit 4e20d0d (première vérification au commit 4b2639d). Chaque capacité offerte par l'application pour ce module est rapprochée du bouton qui la déclenche ; chaque ligne a été recontrôlée dans le code actuel. Références « fichier:ligne » : écrans dans `src/MarocLIS.Desktop/Views/`, règles dans `src/MarocLIS.Application/`. Libellés vérifiés dans `src/MarocLIS.Localization/Resources/fr.json`.
+Revérifié le 2026-10-17 au commit 4e20d0d (première vérification au commit 4b2639d), puis complété le même jour pour le cycle 5 (état du code au commit 1bbef5b). Chaque capacité offerte par l'application pour ce module est rapprochée du bouton qui la déclenche ; chaque ligne a été recontrôlée dans le code actuel. Références « fichier:ligne » : écrans dans `src/MarocLIS.Desktop/Views/`, règles dans `src/MarocLIS.Application/`. Libellés vérifiés dans `src/MarocLIS.Localization/Resources/fr.json`.
 
 Légende : **OUI** = présent et utilisable ; **PARTIEL** = présent mais incomplet ou mal réglé ; **MANQUANT** = prévu par l'application mais sans bouton.
 
@@ -35,7 +35,7 @@ Légende : **OUI** = présent et utilisable ; **PARTIEL** = présent mais incomp
 | Noter une venue sur place | Re-prélèvements | — | **PARTIEL** | Le canal « Sur place » existe dans l'application mais l'écran n'envoie que « Appel » (RecollectionView.cs:339) |
 | SMS de rappel | Re-prélèvements | **Envoyer un SMS** | OUI | RecollectionView.cs:179, 343-353 ; grisé sans fournisseur SMS |
 | Abandonner un re-prélèvement | Re-prélèvements | **Abandonner** | OUI | RecollectionView.cs:180, 356-367 ; droit Annuler un dossier (138) |
-| Accès de l'écran Re-prélèvements | menu | **Re-prélèvements** | PARTIEL | Le Technicien voit l'écran (droit Refuser) mais ses boutons sont grisés (RecollectionView.cs:137-138) : liste en lecture seule pour lui |
+| Accès de l'écran Re-prélèvements | menu | **Re-prélèvements** | PARTIEL | Le Technicien de laboratoire voit l'écran (droit Refuser) mais ses boutons sont grisés (RecollectionView.cs:137-138) : liste en lecture seule pour lui |
 | Liste de la sérothèque, filtres | Sérothèque | recherche « Code-barres, dossier, patient ou emplacement », puces **Tous**, **Conservation dépassée**, **Non rangé** | OUI | SampleStorageView.cs:69-71, 210, 313-316 ; corrigé : la recherche trouve le nom du patient (Infrastructure/Queries/SampleQueries.cs:424-436) |
 | Ranger / déplacer, date de fin de conservation | Sérothèque | **Ranger dans la sérothèque** (Lieu de conservation, Position, Conserver jusqu'au) | OUI | SampleStorageView.cs:215, 397, 544-635 ; lieu dans la liste fermée ; date passée refusée (SampleWorkflowService.cs:797) |
 | Créer une aliquote | Sérothèque | **Créer une aliquote** | **PARTIEL** | SampleStorageView.cs:216, 416-420, 672-743 ; le code-barres de l'aliquote est seulement affiché, aucune étiquette n'est imprimée |
@@ -44,13 +44,14 @@ Légende : **OUI** = présent et utilisable ; **PARTIEL** = présent mais incomp
 | Déclarer un laboratoire partenaire | Paramètres, onglet Site | **Nouveau site**, **Type de site** = « Laboratoire correspondant » | **PARTIEL** | Corrigé : bouton **Nouveau site** (SettingsView.cs:837, 1202-1237). Toujours pas de case pour désactiver un partenaire |
 | Marquer une analyse sous-traitée + partenaire | Catalogue des analyses | **Sous-traitée**, **Laboratoire partenaire** | OUI | CatalogEditors.cs:157-167 |
 | Liste à envoyer / en attente / en retard | Sous-traitance | puces **Tout afficher**, **À envoyer**, **En attente de retour**, **En retard** | OUI | SubcontractingView.cs:70, 339-347 (la liste déroulante est remplacée par des puces) |
+| Pastille de la colonne **Statut** lisible | Sous-traitance | « → À envoyer », « ◐ En attente de retour », « ! En retard » | OUI | Corrigé (cycle 5, fd6beeb) : SubcontractingView.cs:247-248, colonne à la largeur de la plus longue pastille ; avant, « → À envo… » à 1366 px |
 | Envoyer + bordereau numéroté par partenaire | Sous-traitance | **Envoyer en sous-traitance**, fenêtre **Envoyer et imprimer** | OUI | SubcontractingView.cs:224, 375-406, 578 |
 | Changer de partenaire pour un envoi | Sous-traitance | **Laboratoire partenaire** dans la fenêtre d'envoi | OUI | Un seul partenaire pour tout le lot |
 | Réimprimer un bordereau | Sous-traitance | **Réimprimer le bordereau** | OUI | SubcontractingView.cs:225, 426-441 |
 | Référence du partenaire | Sous-traitance | **Plus d'actions** › **Référence du partenaire** | OUI | SubcontractingView.cs:46, 226, 496-515 |
 | Activation des boutons selon les lignes cochées | Sous-traitance | **Envoyer…**, **Réimprimer…**, **Référence…** | OUI | SubcontractingView.cs:190-194 (nouveau) |
 | Retour des résultats | Saisie des résultats | saisie ordinaire | OUI | Repère « ST » ; l'analyse quitte la liste dès qu'un résultat est saisi |
-| Accès du Biologiste à la sous-traitance | menu | **Sous-traitance** | OUI | Corrigé : nouveau droit Sous-traiter (Domain/Identity/Permissions.cs:47 ; MainShellForm.cs:404), donné au Biologiste, au Technicien et au Biologiste responsable ; le Préleveur ne voit plus l'écran |
+| Accès du Biologiste à la sous-traitance | menu | **Sous-traitance** | OUI | Corrigé : nouveau droit Sous-traiter (Domain/Identity/Permissions.cs:47 ; MainShellForm.cs:404), donné au Biologiste, au Technicien de laboratoire et au Biologiste responsable ; le Préleveur ne voit plus l'écran |
 | Date de retour attendue propre au partenaire | Sous-traitance | **Retour attendu** | PARTIEL | Toujours calculée sur le délai de routine de l'analyse à partir de la réception, pas à partir de l'envoi |
 | Consentement « Sous-traitance de l'analyse » | — | — | **MANQUANT** | Le motif de consentement existe dans les listes mais rien ne le demande ni ne le contrôle à l'envoi (SubcontractingService.cs) |
 | Origine « Sous-traitance reçue » | Dossiers | **Origine** | OUI | OrderRegistrationView.cs:1149 ; libellé seulement, aucun effet |
@@ -60,7 +61,7 @@ Légende : **OUI** = présent et utilisable ; **PARTIEL** = présent mais incomp
 
 **Boutons qui existent mais ne mènent nulle part ou trompent**
 
-- **Re-prélèvements** pour le Technicien : écran visible, tous les boutons grisés.
+- **Re-prélèvements** pour le Technicien de laboratoire : écran visible, tous les boutons grisés.
 - Le message « Les tubes cochés sont déjà prélevés : … » cite maintenant le bon libellé **Expédier au plateau** (corrigé le 2026-10-17).
 
 (Corrigés depuis la première vérification : la recherche de la sérothèque trouve le nom du patient ; le motif de refus n'est plus présélectionné.)

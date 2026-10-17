@@ -1,6 +1,6 @@
 # Vérification de l'interface — Stocks et achats
 
-Méthode : pour chaque opération offerte par l'application pour ces écrans, recherche du bouton ou du champ qui la déclenche. Contrôle refait le 2026-10-17 sur le code au commit 4e20d0d : chaque ligne a été revue, les numéros de ligne mis à jour, et des lignes ajoutées pour les fonctions apparues depuis 4b2639d.
+Méthode : pour chaque opération offerte par l'application pour ces écrans, recherche du bouton ou du champ qui la déclenche. Contrôle refait le 2026-10-17 sur le code au commit 4e20d0d, puis complété le même jour pour le cycle 5 (état du code au commit 1bbef5b ; seuls changements visibles : pastilles de filtre StockChip à la largeur de leur texte, StocksLayout.cs:119-120, et libellés arabes des fenêtres **Paramètres achats**, **Paramètres stock**, **Ligne de commande**, **Saisie de facture** et **Réception de lot** qui ne se chevauchent plus, un libellé trop long se terminant par « … » avec le texte complet en info-bulle, StocksLayout.cs:789, 965-1003 ; aucune procédure ni aucun message ne change) : chaque ligne a été revue, les numéros de ligne mis à jour, et des lignes ajoutées pour les fonctions apparues depuis 4b2639d.
 
 Légende : **Oui** = bouton présent et relié ; **PARTIEL** = présent mais incomplet ou mal ouvert ; **MANQUANT** = possible dans le logiciel mais aucun bouton ne le déclenche. Les références « fichier:ligne » renvoient au code de l'écran (src/MarocLIS.Desktop/Views) sauf mention contraire.
 

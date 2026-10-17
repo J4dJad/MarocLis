@@ -72,16 +72,16 @@ flowchart TD
 | `catalog.manage` | Analyses (dont leur code d'acte), paramètres, profils, cascades, listes de référence, prescripteurs | Administrateur, Biologiste responsable |
 | `catalog.ranges.manage` | Valeurs usuelles (intervalles) et leur revue | Administrateur, Biologiste responsable, Responsable qualité |
 | `billing.tariffs.manage` | Tarifs, prix du laboratoire, coefficient officiel, organismes payeurs | Administrateur, Comptabilité |
-| `instruments.view` | Ouvrir **Automates** | Administrateur, Biologiste responsable, Biologiste, Technicien, Responsable qualité |
+| `instruments.view` | Ouvrir **Automates** | Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité |
 | `instruments.configure` | Créer / modifier une interface et sa table de correspondance, tester une trame | Administrateur, Biologiste responsable |
-| `instruments.control` | Activer / désactiver une liaison | Administrateur, Biologiste responsable, Technicien |
-| `instruments.replay` | **Réimporter** une transmission (accepter une transmission retenue) | Administrateur, Biologiste responsable, Biologiste, Technicien |
+| `instruments.control` | Activer / désactiver une liaison | Administrateur, Biologiste responsable, Technicien de laboratoire |
+| `instruments.replay` | **Réimporter** une transmission (accepter une transmission retenue) | Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire |
 | `admin.maintenance.run` | Purger le journal des messages automates | Administrateur seul |
 | `admin.sites.manage` | Onglet **Site** des **Paramètres**, **Nouveau site** | Administrateur seul |
 | `admin.settings.manage` | Numérotations, paramètres, format des factures, lieux de stockage | Administrateur seul |
 
 Changements récents des rôles livrés :
-- le Biologiste et le Technicien peuvent maintenant **Réimporter** une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
+- le Biologiste et le Technicien de laboratoire peuvent maintenant **Réimporter** une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
 - le Biologiste peut retirer une validation et rééditer un compte rendu archivé ; le Secrétariat / accueil peut rééditer un compte rendu archivé (le compte rendu perdu est remis tel qu'il a été diffusé).
 
 Attention (à vérifier avec votre organisation) : le rôle Comptabilité a le droit de gérer les tarifs mais pas celui d'ouvrir le Catalogue ; en pratique, seul l'administrateur peut saisir un tarif d'analyse avec les rôles livrés (voir la fiche de vérification).
@@ -513,21 +513,20 @@ Relier les automates au LIS :
    1. Prérequis : l'automate existe dans **Données de référence › Automates** avec le type « Automate ».
    2. **Nouvelle interface**, choisissez l'automate (seuls ceux sans liaison sont proposés).
    3. **Protocole** (ASTM E1394, HL7 v2, POCT1-A, CSV, Texte délimité (propriétaire), Fichier à largeur fixe, Roche COBAS INTEGRA), **Liaison physique** (Série (RS-232), TCP/IP, Dépôt de fichiers), **Sens** (Unidirectionnel, Bidirectionnel, Envoi de la liste de travail).
-   4. Selon la liaison : **Port série**, **Débit**, **Bits de données**, **Parité**, **Bits d'arrêt**, **Contrôle de flux** ; ou **Hôte**, **Port TCP**, **Le LIS écoute (l'automate se connecte)** ; ou **Dossier entrant**, **Motif de fichier**, **Dossier des fichiers traités**, **Dossier sortant**.
+   4. Selon la liaison : **Port série**, **Débit**, **Bits de données**, **Parité** (Aucune, Paire, Impaire, Marque, Espace), **Bits d'arrêt** (1, 1,5, 2), **Contrôle de flux** (Aucun, Xon/Xoff, RTS/CTS, RTS/CTS + Xon/Xoff) ; ou **Hôte**, **Port TCP**, **Le LIS écoute (l'automate se connecte)** ; ou **Dossier entrant**, **Motif de fichier**, **Dossier des fichiers traités**, **Dossier sortant**.
    5. **Encodage** (ISO-8859-1 par défaut), **Délai d'acquittement (s)**, **Tentatives**, **Signaler les codes inconnus**, **Router les contrôles vers le CIQ**.
    6. **Format des messages** : **Profil fabricant** (Standard (norme ASTM / HL7), Roche cobas (code suivi de « / »), Abbott Architect / Alinity, Roche cobas INTEGRA 400 plus, Personnalisé) et réglages fins seulement si le manuel de l'automate le demande.
    7. Laissez **acceptation automatique** décochée au départ ; cochez **Liaison activée** si vous voulez qu'elle tourne ; **Enregistrer**. La prise en compte par l'hôte se fait en quelques secondes.
 
-2. **Déclarer un Roche cobas INTEGRA 400 plus**
-   1. **Nouvelle interface**, choisissez l'automate.
-   2. Dans **Profil fabricant**, choisissez « Roche cobas INTEGRA 400 plus » (ou choisissez le protocole « Roche COBAS INTEGRA »). L'application remplit d'un coup : protocole Roche COBAS INTEGRA, liaison Série (RS-232), sens « Envoi de la liste de travail », 9600 bauds, 8 bits de données, sans parité, 1 bit d'arrêt, contrôle de flux XOnXOff, encodage ASCII, délai d'acquittement 180 s, 3 tentatives.
-   3. Saisissez le **Port série**. Le débit de 9600 est un point de départ : alignez-le sur l'écran de configuration de l'automate.
-   4. La note du format rappelle : le LIS interroge l'automate (résultats, tubes sans demande) ; les codes de la table de correspondance sont les numéros de test de l'automate (« 031 ») ; la fin de ligne, le contrôle de bloc et l'intervalle d'interrogation se règlent dans la section `Instruments:RocheIntegra` du fichier de configuration.
-   5. **Enregistrer**, puis remplissez la table de correspondance et testez avec **Exemple de trame**.
+2. **Déclarer un Roche cobas INTEGRA 400 plus** : voir plus bas **Interface COBAS INTEGRA 400 plus** (préréglage, numéros de test de la table, essai avec **Exemple de trame**).
 
 3. **Remplir la table de correspondance** : sélectionnez la liaison, **Table de correspondance**, **Ajouter des paramètres…**, tapez un code d'analyse (ex. NFS) ou de paramètre, cochez (ou **Tout cocher**), **Ajouter à la correspondance** ; pour chaque ligne saisissez le **Code automate**, éventuellement **Unité automate**, **Facteur** et **Décalage** de conversion, **Réponses codées** ; **Retirer la ligne** si besoin ; **Enregistrer**. Une ligne retirée qui a déjà servi est conservée, désactivée.
 
-4. **Tester une trame** : **Tester une trame…**, collez une trame, ou **Charger la dernière trame reçue**, ou (liaison COBAS INTEGRA) **Exemple de trame**, qui fabrique une trame d'exemple avec les tests de la table et l'analyse aussitôt. **Analyser la trame**. L'écran montre, pour chaque résultat, le tube, le dossier et patient, le code lu, le paramètre, la valeur reçue et la valeur LIS, et **Ce que ferait le LIS**. Rien n'est enregistré. Aussi accessible depuis la fenêtre de modification de l'interface (après le premier enregistrement).
+4. **Tester une trame**
+   1. **Tester une trame…** (depuis l'écran, ou depuis la fenêtre de modification de l'interface après son premier enregistrement ; avant, une note de cette fenêtre dit « Le test de trame sera disponible après le premier enregistrement. »).
+   2. Collez une trame (« Collez une trame (lignes, <CR>, <STX>… acceptés) ou chargez la dernière reçue. »), ou cliquez **Charger la dernière trame reçue**, ou, pour une liaison COBAS INTEGRA, **Exemple de trame** (voir plus bas).
+   3. **Analyser la trame**. La grille montre, ligne par ligne : **Tube**, **Dossier · patient**, **Champ test brut**, **Code lu**, **Paramètre**, **Valeur reçue**, **Valeur LIS**, **Alarme automate**, **Type**, **Ce que ferait le LIS** ; le résumé dit « … résultat(s) seraient enregistrés sur … ».
+   4. **Fermer**. Rien n'est enregistré : l'écran montre ce que le LIS ferait de chaque résultat.
 
 5. **Activer l'acceptation automatique** : **Modifier l'interface**, cochez **acceptation automatique**, confirmez. Refusé tant que la table de correspondance est vide.
 
@@ -542,6 +541,7 @@ Relier les automates au LIS :
 - Une seule liaison par automate. L'automate doit être de type « Automate ».
 - Une liaison bidirectionnelle exige au moins une correspondance ; l'acceptation automatique exige une table renseignée.
 - Deux codes ne peuvent viser le même paramètre ; un code ne peut servir deux fois ; un facteur nul est refusé.
+- Sur une liaison COBAS INTEGRA, chaque code actif de la table doit être un numéro de test de 1 à 999 (« 031 », « 31 » ou « 0-031 ») ; un même numéro écrit de deux façons (« 31 » et « 031 ») compte comme un doublon. Une table enregistrée avant cette règle avec un code comme « GLUC3 » ne s'enregistre plus tant que ce code n'est pas corrigé.
 - Sans acceptation automatique, chaque transmission reste « En attente d'acceptation » jusqu'à **Réimporter** (droit livré à l'administrateur, au biologiste responsable, au biologiste et au technicien). Les valeurs passent ensuite par la validation technique et biologique comme des valeurs saisies.
 - Les résultats d'un automate hors service, en maintenance, réformé ou à l'étalonnage échu sont retenus.
 - Un résultat déjà validé biologiquement n'est pas écrasé par l'automate (compte rendu rectifié nécessaire).
@@ -572,6 +572,59 @@ flowchart TD
     F --> P{Maintenance ?}
     P -- oui --> Q[Désactiver la liaison + motif] --> R[Activer la liaison + motif] --> F
 ```
+
+#### Interface COBAS INTEGRA 400 plus
+
+L'automate Roche COBAS INTEGRA 400 plus a son propre protocole (pas ASTM). C'est le LIS qui l'interroge : il demande les résultats et les tubes sans demande, puis envoie la liste de travail. Ce qui suit est la description complète ; le chapitre Phase analytique et comptes rendus (**Résultats reçus des automates**) y renvoie.
+
+**Préréglage.** Dans la fenêtre de l'interface (**Nouvelle interface** ou **Modifier l'interface**), cadre **Format des messages**, choisissez le **Profil fabricant** « Roche cobas INTEGRA 400 plus » (choisir le protocole « Roche COBAS INTEGRA » fait de même). Il règle d'un coup :
+
+| Réglage | Valeur |
+|---|---|
+| Protocole | Roche COBAS INTEGRA |
+| Liaison physique | Série (RS-232) |
+| Sens | Envoi de la liste de travail |
+| Débit, bits de données, parité, bits d'arrêt | 9600, 8, Aucune, 1 |
+| Contrôle de flux | Xon/Xoff |
+| Encodage | ASCII |
+| Délai d'acquittement / tentatives | 180 s / 3 |
+
+- Le **Port série** (par exemple COM1) reste à choisir : il dépend du poste. Le débit de 9600 est un point de départ : alignez-le sur l'écran de configuration de l'automate.
+- Les listes **Parité**, **Bits d'arrêt** et **Contrôle de flux** s'affichent en français ; la valeur enregistrée reste celle du port série, si bien qu'un profil enregistré avant reste valable.
+- Les champs **Composant du code test** et **Composant du tube** sont grisés pour ce protocole : les lignes de l'INTEGRA ont des champs fixes (numéro de test, code-barres, valeur).
+- La note de la fenêtre rappelle : « COBAS INTEGRA : le LIS interroge l'automate (résultats, tubes sans demande). Codes = numéros de test (« 031 »). Fin de ligne, contrôle de bloc et intervalle d'interrogation : section Instruments:RocheIntegra du fichier de configuration. »
+- Les autres profils proposés sont « Personnalisé », « Standard (norme ASTM / HL7) », « Roche cobas (code suivi de « / ») » et « Abbott Architect / Alinity ». Choisir un autre profil sur une liaison INTEGRA la repasse en ASTM.
+
+**Table de correspondance.** Pour l'INTEGRA, le **Code automate** est le **numéro de test** de l'application Roche, de 1 à 999. « 031 », « 31 » et « 0-031 » (l'écriture des documents Roche) désignent le même test : il est demandé à l'automate sous cette forme et le résultat qui revient en « 031 » retrouve sa ligne, quelle que soit l'écriture choisie dans la table. À l'enregistrement de la table :
+- un code actif qui n'est pas un numéro de test (« GLUC3 », « 0-0?? ») est refusé : « « … » n'est pas un numéro de test COBAS INTEGRA : saisissez le numéro du test (1 à 999), par exemple « 031 » ou « 0-031 ». » ;
+- un même numéro écrit deux fois (« 31 » et « 031 ») est refusé : « Deux correspondances portent le même code automate. »
+
+Exemple de la base de démonstration (interface DEMO-INTEGRA, applications sérum/plasma) :
+
+| N° de test | Paramètre | N° de test | Paramètre | N° de test | Paramètre |
+|---|---|---|---|---|---|
+| 031 | GLY (glucose) | 297 | BILT (bilirubine totale) | 596 | FER |
+| 003 | UREE | 735 | BILD (bilirubine directe) | 609 | AMY (amylase) |
+| 445 | CREAT (Jaffé compensé) | 615 | AU (acide urique) | 052 | LIP (lipase) |
+| 586 | CHOL | 042 | CA (calcium) | 323 | CK |
+| 010 | TG | 614 | PHOS | 607 | LDH |
+| 494 | ASAT | 059 | MG | 501 | NA (ISE indirecte) |
+| 495 | ALAT | 592 | ALB | 502 | K |
+| 551 | PAL | 027 | PROT (protéines totales) | 503 | CL |
+| 498 | GGT | | | | |
+
+- Vérifiez chaque numéro dans les définitions de tests de **votre** automate avant d'activer la liaison : le laboratoire peut utiliser une autre application du même test (avec ou sans phosphate de pyridoxal, urines, STAT ; par exemple ASAT 594 au lieu de 494, Na direct 401 au lieu de 501).
+- HDL, LDL direct, CRP et HbA1c n'ont pas de numéro dans la table livrée : ajoutez-les depuis les définitions de l'automate.
+- Les résultats d'étalonnage envoyés par l'INTEGRA sont lus mais pas importés.
+
+**Exemple de trame.** Dans **Tester une trame…**, le bouton **Exemple de trame** (seulement pour une liaison INTEGRA) fabrique une trame INTEGRA pour le tube de la dernière transmission (sinon un tube fictif « TUBE-0001 », que le test montre comme tube inconnu) avec jusqu'à trois numéros de test actifs de la table, et l'analyse aussitôt.
+
+**Mettre en service un INTEGRA**
+1. **Nouvelle interface**, choisissez l'automate.
+2. **Profil fabricant** « Roche cobas INTEGRA 400 plus » ; saisissez le **Port série** ; vérifiez le débit sur l'automate.
+3. **Enregistrer**, puis **Table de correspondance** : un numéro de test par paramètre ; **Enregistrer**.
+4. **Tester une trame…** › **Exemple de trame** : chaque ligne doit trouver son paramètre ; une ligne « code inconnu » signale un numéro absent de la table.
+5. Laissez l'acceptation automatique décochée tant que les premiers résultats réels n'ont pas été contrôlés au **Journal des messages**.
 
 ---
 
@@ -685,7 +738,7 @@ Onglet **Lieux de stockage** :
 Onglet **Imprimantes** :
 - Listes des deux imprimantes, case d'impression directe, **Enregistrer**, **Imprimer une étiquette de test**, **Actualiser**.
 
-**L'écran** : en haut le titre « Paramètres » et la phrase « Identité du laboratoire, numérotations, paramètres, lieux de stockage et imprimantes de ce poste. », puis six onglets.
+**L'écran** : en haut le titre « Paramètres » et la phrase « Identité du laboratoire, numérotations, paramètres, lieux de stockage et imprimantes de ce poste. », puis six onglets. En arabe, les fiches des onglets **Site**, **Factures** et **Imprimantes** sont inversées : chaque champ est à droite, sous son libellé, et les cases à cocher précèdent le champ qu'elles commandent.
 
 - **Site** : en haut la liste des sites, **Nouveau site** et le bandeau « Facturation possible… » ou « Facturation bloquée — » suivi de ce qui manque ; dessous le bandeau « Diffusion des comptes rendus possible. » ou « Diffusion des comptes rendus bloquée — … ». Pour un laboratoire partenaire, une note dit : « Laboratoire partenaire : aucune facturation ni validation de compte rendu sur ce site ; son identité et ses coordonnées figurent sur les bordereaux d'envoi. » Puis les champs : **Code**, **Désignation (français)**, **Désignation (arabe)**, **Type de site** (Laboratoire principal, Laboratoire satellite, Centre de prélèvement, Laboratoire correspondant) ; **Identité légale (mentions obligatoires sur facture)** : **Raison sociale**, **ICE**, **Identifiant fiscal (IF)**, **Taxe professionnelle**, **Registre de commerce**, **Tribunal**, **N° d'affiliation CNSS**, **INPE** ; **Autorisation et accréditation** : **N° d'autorisation du ministère de la Santé**, **Date de l'autorisation**, **Biologiste responsable**, **Site accrédité (ISO 15189)**, **N° d'accréditation**, **Accréditation valable jusqu'au** ; **Coordonnées** : **Adresse** (français et arabe), **Ville**, **Région**, **Code postal**, **Téléphone**, **Fax**, **Courriel**, **Site web** ; **Logo du laboratoire** avec **Choisir le logo…** et **Retirer le logo**. Au pied : la ligne d'état, **Enregistrer** et **Actualiser**.
 - **Numérotations** : **Série**, **Site**, année (colonne **Date**), **Format**, **Prochain numéro**, **Valeur suivante**, **Dernier attribué**, **Statut** (Modifiable, En service, Clôturée). Une série clôturée est en rouge, une série en service est grisée, une série encore modifiable ressort en couleur. Une note rappelle que le format est figé dès le premier numéro.
@@ -912,7 +965,8 @@ flowchart TD
 | « L'acceptation automatique exige une table de correspondance renseignée : … » | Table vide | Remplir la table de correspondance. |
 | « Enregistré. La modification est prise en compte par l'hôte dans les … secondes. » | Liaison enregistrée | Attendre quelques secondes. |
 | « Le code transmis par l'automate est obligatoire. » | Ligne de correspondance sans code | Saisir le **Code automate**. |
-| « Deux correspondances portent le même code automate. » / « Le code automate « … » est déjà relié à un autre paramètre de cet automate (même désactivé). … » | Code en double | Choisir un autre code. |
+| « Deux correspondances portent le même code automate. » / « Le code automate « … » est déjà relié à un autre paramètre de cet automate (même désactivé). … » | Code en double ; sur une liaison COBAS INTEGRA, aussi un même numéro de test écrit de deux façons (« 31 » et « 031 ») | Choisir un autre code, ou garder une seule ligne pour ce numéro. |
+| « « … » n'est pas un numéro de test COBAS INTEGRA : saisissez le numéro du test (1 à 999), par exemple « 031 » ou « 0-031 ». » | Table d'une liaison COBAS INTEGRA avec un code actif qui n'est pas un numéro de test | Remplacer le code par le numéro du test de l'automate, ou **Retirer la ligne**. |
 | « Deux codes pointent vers le même paramètre : … » | Paramètre en double | Retirer une des deux lignes. |
 | « Le facteur et le décalage doivent être numériques. » / « Un facteur de conversion nul annulerait toutes les valeurs. » / « Le facteur et le décalage de conversion doivent rester inférieurs à 10 000 000 000 en valeur absolue. » | Conversion invalide | Corriger le **Facteur** ou le **Décalage**. |
 | « Aucune trame de résultats reçue sur cette liaison. » | **Charger la dernière trame reçue** sans message | Coller une trame, ou utiliser **Exemple de trame** (INTEGRA). |

@@ -84,8 +84,8 @@ Le secrétariat, les préleveurs, la comptabilité et les prescripteurs n'ont pa
 - **Arrêter l'évaluation** : les contrôles transmis reviennent au lot en cours ; il faut un lot choisi.
 - Grille **Saisie du contrôle interne** : colonne **Résultat** saisissable, **Entrée** passe à la ligne suivante ; info-bulle de la colonne **Règles de Westgard actives** (règles, CV, nombre de points, matériau périmé).
 - **Carte de Levey-Jennings** : affiche le contrôle de la ligne sélectionnée, en haut ou dans la liste des rejets ; survol d'un point = détail ; clic sur un point = détail dans la ligne d'état. Sous la carte, la ligne « Règles actives : … ».
-- **Plus d'actions** (dans l'en-tête de la carte) : menu contenant **Établir les limites du laboratoire** et **Règles de Westgard** ; ces deux actions portent toujours sur le contrôle affiché sur la carte. Droit Règles du contrôle interne.
-- Fenêtre **Règles de Westgard** : cases des règles, boutons **Multirègle classique (1₂ₛ 1₃ₛ 2₂ₛ R₄ₛ 4₁ₛ 10ₓ)** et **1₃ₛ seule**, **Enregistrer** (grisé si aucune règle n'est cochée), **Annuler**.
+- **Plus d'actions** (dans l'en-tête de la carte) : menu contenant **Établir les limites du laboratoire** et **Règles de Westgard** ; ces deux actions portent toujours sur le contrôle affiché sur la carte. Droit Règles du contrôle interne ; le bouton est grisé quand aucune des deux actions n'est possible (aucun contrôle affiché, ou pas ce droit, par exemple pour un technicien).
+- Fenêtre **Règles de Westgard** : cases des règles, boutons **Multirègle classique (1₂ₛ 1₃ₛ 2₂ₛ R₄ₛ 4₁ₛ 10ₓ)** et **1₃ₛ seule**, **Enregistrer** (grisé si aucune règle n'est cochée), **Annuler**. En arabe, le bouton de la multirègle classique prend toute la largeur et **1₃ₛ seule** passe en dessous.
 - **Contrôles rejetés à revoir** (carte du bas) : liste des rejets non encore revus, pastille rouge « n résultats patients bloqués » quand des résultats patients sont retenus.
 - **Revue du contrôle** : demande l'action corrective (15 caractères au moins) et propose d'ouvrir une non-conformité ; droit de revue ; grisé s'il n'y a aucun rejet.
 - Question en quittant l'écran avec des valeurs non enregistrées : « Des modifications n'ont pas été enregistrées. Voulez-vous continuer ? ».
@@ -818,7 +818,7 @@ Menu : groupe **Stocks > Contrats automates**.
 *4. Mesurer le délai d'intervention du fournisseur*
 1. L'intervention est d'abord enregistrée dans **Équipements** (**Enregistrer une intervention**).
 2. Ici, sélectionnez le contrat puis l'intervention, cliquez **Heures d'appel et d'arrivée…**.
-3. Cochez et renseignez **Appel au fournisseur** et **Arrivée du technicien** (date et heure, pas dans le futur). Cliquez **Enregistrer**.
+3. Cochez et renseignez **Appel au fournisseur** et **Arrivée du technicien** (date et heure, pas dans le futur). La fenêtre propose 08:00 pour l'appel et 10:00 pour l'arrivée le jour de l'intervention, ramenées à l'heure actuelle si elles ne sont pas encore passées : une intervention du jour se note donc dès le matin. Cliquez **Enregistrer**.
 4. Le **Délai (h)** est calculé et comparé au délai maximal du contrat ; un dépassement s'affiche en orange et dans **Alertes**.
 
 *5. Résilier un contrat*

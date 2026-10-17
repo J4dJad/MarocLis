@@ -1,14 +1,14 @@
 ## Vérification de l'interface — Administration
 
-Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? » : **Oui**, **PARTIEL**, **MANQUANT**. Revérifié le 2026-10-17 sur le commit 4e20d0d (plus 9f25a6a et 5ad4d11 fusionnés : bouton « … » du code d'acte, compteurs et sélection de la nomenclature). Les libellés sont ceux de `MarocLIS.Localization/Resources/fr.json`.
+Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? » : **Oui**, **PARTIEL**, **MANQUANT**. Revérifié le 2026-10-17 sur le commit 4e20d0d (plus 9f25a6a et 5ad4d11 fusionnés : bouton « … » du code d'acte, compteurs et sélection de la nomenclature), puis complété le même jour pour le cycle 5 (état du code au commit 1bbef5b : table COBAS INTEGRA, port série en français, onglets de Paramètres en arabe ; numéros de ligne de SettingsView.cs et SettingsView.InvoicePrint.cs mis à jour). Les libellés sont ceux de `MarocLIS.Localization/Resources/fr.json`.
 
 ### Rôles livrés
 
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
 |---|---|---|---|---|
 | Droits livrés par rôle | Utilisateurs › Rôles et droits | arbre des droits | Oui | MarocLIS.Infrastructure/Persistence/ReferenceDataSeeder.cs:493-760 (`RolePermissionSets`) |
-| Réimporter par le Biologiste et le Technicien | Automates | **Réimporter** | Oui | **Corrigé.** `instruments.replay` donné au Biologiste (ReferenceDataSeeder.cs:580) et au Technicien (l.611), en plus de l'Administrateur et du Biologiste responsable (l.529) |
-| Retrait de validation et réédition par le Biologiste ; réédition par le Secrétariat | — | — | Oui | **Nouveau.** ReferenceDataSeeder.cs:570, 574 (`Results.Unvalidate`, `Reports.ReprintValidated`) ; Secrétariat l.642 |
+| Réimporter par le Biologiste et le Technicien de laboratoire | Automates | **Réimporter** | Oui | **Corrigé.** `instruments.replay` donné au Biologiste (ReferenceDataSeeder.cs:580) et au Technicien de laboratoire (l.611), en plus de l'Administrateur et du Biologiste responsable (l.529) |
+| Retrait de validation et réédition par le Biologiste ; réédition par le Secrétariat / accueil | — | — | Oui | **Nouveau.** ReferenceDataSeeder.cs:570, 574 (`Results.Unvalidate`, `Reports.ReprintValidated`) ; Secrétariat / accueil l.642 |
 | Libellés des modules dans l'arbre | Rôles et droits | en-têtes de l'arbre | PARTIEL | `PermissionModule.accounting` et `PermissionModule.assets` toujours absents de fr.json (seuls steering, messaging, relations, treasury, hr… existent) : en-têtes bruts pour l'export comptable et les immobilisations |
 
 ### Utilisateurs (service de gestion des utilisateurs)
@@ -80,11 +80,15 @@ Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? 
 | Modifier une liaison | Automates | **Modifier l'interface** / double-clic | Oui | :232, 200 |
 | Activer / désactiver | Automates | **Activer la liaison** / **Désactiver la liaison** | Oui | :233 → :829 ; `instruments.control` (l.657-658) |
 | Table de correspondance | Automates | **Table de correspondance**, **Ajouter des paramètres…**, **Retirer la ligne** | Oui | :234 → :727 |
+| Table COBAS INTEGRA : seulement des numéros de test | Table de correspondance | **Enregistrer** | Oui | **Nouveau (cycle 5, fd6beeb).** Application/Instruments/InstrumentInterfaceService.cs:492-503 (numéro 1 à 999, « 031 », « 31 », « 0-031 »), 539-552 : code non numérique refusé (`Interface_IntegraTestNumberInvalid`), même numéro écrit deux fois refusé (`Interface_DuplicateMappingCode`). Une table existante avec un code comme « GLUC3 » doit être corrigée avant de s'enregistrer |
+| Résultat INTEGRA « 003 » pour une ligne « 0-003 » ou « 3 » | Journal des messages | — | Oui | **Corrigé (cycle 5, 1a1c0e3).** MarocLIS.Instruments/Hosting/InstrumentMessageSink.cs:842-850 ; avant : « code non correspondant » alors que la demande avait été envoyée |
 | Tester une trame | Automates | **Tester une trame…**, **Analyser la trame**, **Charger la dernière trame reçue** | Oui | :235-239 → :756 |
 | Exemple de trame COBAS INTEGRA | Tester une trame | **Exemple de trame** | Oui | **Nouveau.** V/InstrumentFrameTestDialog.cs:100-109 ; proposé seulement pour une liaison Roche COBAS INTEGRA (V/InstrumentInterfaceView.cs:791-816) |
+| Parité, bits d'arrêt, contrôle de flux en français | fiche interface | **Parité** (Aucune, Paire, Impaire, Marque, Espace), **Bits d'arrêt** (1, 1,5, 2), **Contrôle de flux** (Aucun, Xon/Xoff, RTS/CTS, RTS/CTS + Xon/Xoff) | Oui | **Corrigé (cycle 5, c0b6581).** V/InstrumentInterfaceDialogs.cs:99-110, 440-449, 594-596 ; la valeur enregistrée reste le nom du port série (None, One, XOnXOff…) ; avant : mots anglais à l'écran français |
+| Rangée d'actions de « Tester une trame » en arabe | Tester une trame | **Analyser la trame**, **Charger la dernière trame reçue**, **Exemple de trame** | Oui | **Corrigé (cycle 5, 1a1c0e3).** V/InstrumentFrameTestDialog.cs:128-147 |
 | Protocole et profil COBAS INTEGRA | fiche interface | **Protocole** « Roche COBAS INTEGRA », **Profil fabricant** « Roche cobas INTEGRA 400 plus » | Oui | **Nouveau.** V/InstrumentInterfaceDialogs.cs:73, 278-289 ; préréglage l.393-411 (Série, Envoi de la liste de travail, 9600 8N1, XOnXOff, ASCII, 180 s, 3 tentatives) ; note `Interface.IntegraNotice` l.425-426 |
 | Voir la trame brute | Automates | **Voir la trame brute** / double-clic | Oui | :240, 229 → :859 ; droit de voir les résultats (l.243) |
-| Réimporter / accepter une transmission retenue | Automates | **Réimporter** | Oui | **Corrigé.** :244 → :881 ; `instruments.replay` (l.667-668) maintenant livré au Technicien et au Biologiste : les transmissions retenues sans acceptation automatique peuvent être libérées à la paillasse |
+| Réimporter / accepter une transmission retenue | Automates | **Réimporter** | Oui | **Corrigé.** :244 → :881 ; `instruments.replay` (l.667-668) maintenant livré au Technicien de laboratoire et au Biologiste : les transmissions retenues sans acceptation automatique peuvent être libérées à la paillasse |
 | Purger le journal | Automates | **Purger le journal** | Oui | :245 → :920 ; `admin.maintenance.run` (l.672) |
 
 ### Données de référence
@@ -109,22 +113,23 @@ Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? 
 | Scénario | Écran | Bouton / champ | Présent ? | Remarque |
 |---|---|---|---|---|
 | Six onglets | Paramètres | Site, Numérotations, Paramètres, Factures, Lieux de stockage, Imprimantes | Oui | V/SettingsView.cs:172 ; **Lieux de stockage** retiré sans `admin.settings.manage` (l.175-176) |
-| Compléter l'identité du site | Paramètres › Site | **Enregistrer** | Oui | :719 → SaveSiteAsync :1124 ; `Site.ConfigurationComplete` l.1182 |
-| Logo | Paramètres › Site | **Choisir le logo…**, **Retirer le logo** | Oui | :721-726 ; `Site.LogoInvalid` l.1056 |
-| **Créer un site** (centre de prélèvement, laboratoire partenaire) | Paramètres › Site | **Nouveau site** | Oui | **Corrigé (était MANQUANT).** :720 → CreateSiteAsync :1195-1241 : fenêtre Code / Désignation (français) / Désignation (arabe) / **Type de site** (« Laboratoire correspondant » par défaut), rouverte avec les saisies après un refus, `Site.Created` ; `admin.sites.manage` (l.747) |
+| Compléter l'identité du site | Paramètres › Site | **Enregistrer** | Oui | :767 → SaveSiteAsync :1172 ; `Site.ConfigurationComplete` l.1230 |
+| Logo | Paramètres › Site | **Choisir le logo…**, **Retirer le logo** | Oui | :769-774 ; `Site.LogoInvalid` l.1104 |
+| **Créer un site** (centre de prélèvement, laboratoire partenaire) | Paramètres › Site | **Nouveau site** | Oui | **Corrigé (était MANQUANT).** :768 → CreateSiteAsync :1243-1289 : fenêtre Code / Désignation (français) / Désignation (arabe) / **Type de site** (« Laboratoire correspondant » par défaut), rouverte avec les saisies après un refus, `Site.Created` ; `admin.sites.manage` (l.795) |
 | Passer un site utilisé en partenaire | Paramètres › Site | **Type de site** | Oui | Refusé (`Site_CannotBecomePartner`) : le partenaire se crée par **Nouveau site** |
 | Numéro de dossier et bordereau de sous-traitance | Numérotations | — | Oui (info) | Compteur unique partagé (MarocLIS.Infrastructure/Sequencing/SequenceAllocator.cs) ; colonne **Site** = « — » |
-| Modifier un format | Numérotations | **Modifier le format** | Oui | :731 → :1297 |
-| Clôturer / réouvrir une série | Numérotations | **Clôturer la série** / **Réouvrir la série** | Oui | :732 → :1318 |
+| Modifier un format | Numérotations | **Modifier le format** | Oui | :779 → :1345 |
+| Clôturer / réouvrir une série | Numérotations | **Clôturer la série** / **Réouvrir la série** | Oui | :780 → :1366 |
 | Préparer la série de l'année suivante | Numérotations | — | MANQUANT | La série d'une nouvelle année est créée au premier document avec le format par défaut (SequenceAllocator.cs:43) ; colonne année intitulée « Date » |
-| Modifier / créer un paramètre | Paramètres › Paramètres | **Modifier**, **Nouveau** | PARTIEL | :744-745 → :1388, :1409. **Nouveau** demande seulement la clé et la valeur (l.1411-1416) : pas de choix du site, de la description ni du caractère sensible |
-| Choisir le format des factures patients | Paramètres › Factures | **Format par défaut des factures patients** : « Format existant (montant, part organisme, part patient) » / « Format cotation B (code de l'acte, cotation en B, montant en DH) » | Oui | **Nouveau.** V/SettingsView.InvoicePrint.cs:33-95, 116-118 ; `admin.settings.manage` (l.93) |
-| Options des deux formats | Paramètres › Factures | **Afficher la colonne code national de l'acte**, **Afficher la colonne cotation (coefficient)**, **Afficher le montant en lettres** ; **Afficher le prix en DH de chaque acte**, **Afficher la ligne « Prise de sang (PC) » même à 0,00 DH**, **Afficher le montant en lettres**, **Afficher la valeur de la lettre B utilisée** | Oui | **Nouveau.** l.104-111 ; valeurs par défaut Application/Billing/InvoicePrintFormat.cs:46-57 ; avoirs au format existant (l.60) |
-| Enregistrer le format | Paramètres › Factures | **Enregistrer**, **Actualiser** | Oui | **Nouveau.** l.88-89 → :148-178 ; `InvoicePrint.Saved` ; service InvoicePrintFormat.cs:126-159 (`InvoicePrint_UnknownFormat`, tracé au journal d'audit l.157) |
-| Ajouter un lieu de stockage | Paramètres › Lieux de stockage | **Ajouter** | Oui | **Nouveau.** V/SettingsView.cs:739 → :1475 (`StorageLocations.NewPrompt`) |
-| Renommer un lieu | Lieux de stockage | **Renommer** / double-clic | Oui | **Nouveau.** :735-740 → :1499 (`StorageLocations.RenamePrompt`) |
-| Désactiver / réactiver un lieu | Lieux de stockage | **Désactiver** / **Réactiver** | Oui | **Nouveau.** :741 → :1525, libellé l.1472 ; confirmation `StorageLocations.DeactivateConfirm` l.1532 ; colonnes **Lieu de stockage**, **Statut**, **Tubes rangés** (l.529-536, 889-891) |
-| Imprimantes du poste | Paramètres › Imprimantes | **Enregistrer**, **Imprimer une étiquette de test**, **Actualiser** | Oui | :596-598 |
+| Modifier / créer un paramètre | Paramètres › Paramètres | **Modifier**, **Nouveau** | PARTIEL | :792-793 → :1436, :1457. **Nouveau** demande seulement la clé et la valeur (l.1459-1464) : pas de choix du site, de la description ni du caractère sensible |
+| Choisir le format des factures patients | Paramètres › Factures | **Format par défaut des factures patients** : « Format existant (montant, part organisme, part patient) » / « Format cotation B (code de l'acte, cotation en B, montant en DH) » | Oui | **Nouveau.** V/SettingsView.InvoicePrint.cs:33-109, 130-132 ; `admin.settings.manage` (l.107) |
+| Options des deux formats | Paramètres › Factures | **Afficher la colonne code national de l'acte**, **Afficher la colonne cotation (coefficient)**, **Afficher le montant en lettres** ; **Afficher le prix en DH de chaque acte**, **Afficher la ligne « Prise de sang (PC) » même à 0,00 DH**, **Afficher le montant en lettres**, **Afficher la valeur de la lettre B utilisée** | Oui | **Nouveau.** l.118-125 ; valeurs par défaut Application/Billing/InvoicePrintFormat.cs:46-57 ; avoirs au format existant (l.60) |
+| Enregistrer le format | Paramètres › Factures | **Enregistrer**, **Actualiser** | Oui | **Nouveau.** l.102-103 → :162-192 ; `InvoicePrint.Saved` ; service InvoicePrintFormat.cs:126-159 (`InvoicePrint_UnknownFormat`, tracé au journal d'audit l.157) |
+| Ajouter un lieu de stockage | Paramètres › Lieux de stockage | **Ajouter** | Oui | **Nouveau.** V/SettingsView.cs:787 → :1523 (`StorageLocations.NewPrompt`) |
+| Renommer un lieu | Lieux de stockage | **Renommer** / double-clic | Oui | **Nouveau.** :783-788 → :1547 (`StorageLocations.RenamePrompt`) |
+| Désactiver / réactiver un lieu | Lieux de stockage | **Désactiver** / **Réactiver** | Oui | **Nouveau.** :789 → :1573, libellé l.1520 ; confirmation `StorageLocations.DeactivateConfirm` l.1580 ; colonnes **Lieu de stockage**, **Statut**, **Tubes rangés** (l.533-540, 937-939) |
+| Imprimantes du poste | Paramètres › Imprimantes | **Enregistrer**, **Imprimer une étiquette de test**, **Actualiser** | Oui | :600-602 |
+| Onglets Site, Imprimantes et Factures en arabe | Paramètres | champs sous leurs libellés, cases inversées | Oui | **Corrigé (cycle 5).** Site et Imprimantes : colonne de lecture V/SettingsView.cs:438-440, 584-588, 701-743 (32340ff) ; Factures : V/SettingsView.InvoicePrint.cs:72-92 (71b58ad). Avant : en arabe, les champs restaient à gauche, loin de leurs libellés alignés à droite. Numérotations, Paramètres et Lieux de stockage (grilles) étaient déjà corrects |
 
 ### Boutons présents mais sans effet utile
 
@@ -140,4 +145,4 @@ Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? 
 5. Réactivation d'un compte non tracée au journal de sécurité.
 6. Mineurs : message d'erreur à l'ouverture de Données de référence pour la Comptabilité ; libellés « Désignation » sur le type de prescripteur/article, « Inclure les comptes désactivés » sur les données de référence, bouton « Rôles et droits » ambigu ; **Nouveau** paramètre sans site ni description ; **Nouveau rôle** sans description ni traductions ; modules `accounting`/`assets` sans libellé dans l'arbre des droits.
 
-Corrigés depuis la vérification précédente : modification d'une analyse, d'un paramètre, d'un équipement et d'un prescripteur (les fenêtres s'ouvrent sur la fiche complète) ; **Nouveau site** livré (deuxième site, centre de prélèvement, laboratoire partenaire, donc case **Sous-traitée** utilisable) ; **Réimporter** donné au Technicien et au Biologiste.
+Corrigés depuis la vérification précédente : modification d'une analyse, d'un paramètre, d'un équipement et d'un prescripteur (les fenêtres s'ouvrent sur la fiche complète) ; **Nouveau site** livré (deuxième site, centre de prélèvement, laboratoire partenaire, donc case **Sous-traitée** utilisable) ; **Réimporter** donné au Technicien de laboratoire et au Biologiste.

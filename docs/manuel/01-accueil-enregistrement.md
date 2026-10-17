@@ -11,7 +11,7 @@
 | Secrétariat / accueil | Tout le travail du comptoir : rechercher et créer les patients, enregistrer les demandes, corriger un dossier, annuler, réimprimer les étiquettes, ouvrir le compte rendu archivé. |
 | Biologiste responsable, Administrateur | Comme l'accueil, plus la fusion de fiches en double (et l'anonymisation pour l'Administrateur). |
 | Biologiste | Enregistre et corrige des dossiers, repasse une analyse ; ne crée pas de patient et ne saisit pas de dossier urgent. |
-| Technicien | Consulte les patients et les dossiers, repasse une analyse, réimprime les étiquettes. |
+| Technicien de laboratoire | Consulte les patients et les dossiers, repasse une analyse, réimprime les étiquettes. |
 | Préleveur | Consulte et crée des patients, consulte les dossiers, réimprime les étiquettes. |
 | Responsable qualité, Comptabilité, Prescripteur | Consultation (le Prescripteur ne voit que ses patients). |
 
@@ -85,6 +85,7 @@ Raccourcis clavier valables dans tout le groupe (réglables dans **Raccourcis cl
 - **Identité à compléter · N** : fiches provisoires (« X-URG »), ou sans sexe, ou sans date de naissance ; la pastille dit ce qui manque (« identité provisoire (urgence) », « sexe inconnu », « date de naissance inconnue », « sexe et date de naissance inconnus »).
 - **Vus aujourd'hui · N** : patients qui ont eu une demande aujourd'hui.
 - **Tous les payeurs** : limite la liste aux patients d'un organisme payeur.
+- **F5** (ou retour sur l'écran) : relance la recherche ; le patient sélectionné reste sélectionné.
 - **Modifier** (Entrée, ou double-clic sur la ligne) : ouvre la fiche du patient sélectionné.
 - **Nouveau patient** (Ctrl+N) : ouvre une fiche vide (droit « créer un patient »).
 - **Plus d'actions › Fusionner les dossiers** : rattache une fiche en double à la fiche conservée (au moins deux résultats affichés ; droit fusion).
@@ -412,8 +413,8 @@ flowchart TD
 - L'écran : droit « consulter les dossiers » — tous les rôles par défaut. Un compte Prescripteur ne voit que les dossiers de ce prescripteur.
 - **Ajouter des analyses**, **Modifier l'en-tête** : droit « modifier un dossier » — Administrateur, Biologiste responsable, Biologiste, Secrétariat / accueil.
 - **Annuler l'analyse**, **Annuler le dossier** : droit « annuler un dossier » — Administrateur, Biologiste responsable, Secrétariat / accueil (pas le Biologiste).
-- **Repasser l'analyse** : droit « saisir des résultats » — Administrateur, Biologiste responsable, Biologiste, Technicien. Si l'analyse est déjà validée techniquement, il faut aussi le droit « modifier un résultat » (Biologistes, Administrateur).
-- **Imprimer les étiquettes** : droit « réimprimer une étiquette » — Administrateur, Biologiste responsable, Technicien, Préleveur, Secrétariat / accueil.
+- **Repasser l'analyse** : droit « saisir des résultats » — Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire. Si l'analyse est déjà validée techniquement, il faut aussi le droit « modifier un résultat » (Biologistes, Administrateur).
+- **Imprimer les étiquettes** : droit « réimprimer une étiquette » — Administrateur, Biologiste responsable, Technicien de laboratoire, Préleveur, Secrétariat / accueil.
 - **Compte rendu (PDF)** : droit « réimprimer un compte rendu validé » — Administrateur, Biologiste responsable, Biologiste, Secrétariat / accueil, Prescripteur.
 - Onglet **Facturation** : les règlements ne s'affichent qu'avec le droit « consulter la facturation ».
 
@@ -422,10 +423,11 @@ flowchart TD
 - À gauche : la zone de recherche « N° de dossier, code-barres, nom du patient, CIN ou n° de fiche », les filtres **7 derniers jours**, **En cours**, **Urgents**, le bouton **Actualiser**, puis la liste des dossiers du site (n°, patient, date d'enregistrement, statut, priorité, nombre d'analyses). Au-dessus de la liste : « N dossier(s) » ou « Les 200 dossiers les plus récents — affinez la recherche pour les autres ». Les dossiers annulés restent visibles, en gris.
 - À droite, l'en-tête du dossier : le **numéro de dossier** en grand (double-clic pour le copier), le statut, « Enregistré le … à … par … » (ou en rouge « Dossier annulé le … — motif »), le patient (âge, sexe, n° de dossier patient, téléphone), **Prescripteur** (« non renseigné » s'il manque), **Ordonnance du**, **Payeur** et taux (ou « Sans prise en charge — à la charge du patient »), n° d'accord préalable, **Renseignements cliniques**, « patient non à jeun », le n° de **Facture**, « Compte rendu diffusé — version N ». Une frise de progression indique « x sur y tubes », « x sur y paramètres », « x sur y analyses ».
 - Onglets :
-  - **Analyses · N** : **Analyse**, **Statut**, **Résultats** (saisis / attendus), **Tube** (code-barres), **Montant**, **Part patient**, et le commentaire (motif d'annulation, « Passage n° … — motif », « Validé par … », « Sous-traitée »). Une analyse annulée est barrée ; repassée, en orange ; en retard, dans la couleur du retard ; validée, en vert.
+  - **Analyses · N** : **Analyse**, **Statut**, **Résultats** (saisis / attendus), **Tube** (code-barres), **Montant**, **Part patient**, et le commentaire (motif d'annulation, « Passage n° … — motif », « Validé par … », « Sous-traitée »). Une analyse annulée est barrée ; repassée, en orange ; en retard, dans la couleur du retard ; validée, en vert. Sous la grille, la légende des tubes et la ligne « … analyse(s) · total … · patient … · organisme … » ; quand un dossier a beaucoup de tubes, la légende défile (sa barre de défilement n'apparaît que si elle déborde) pour laisser voir au moins une ligne et demie d'analyses.
   - **Tubes · N** : **Tube n°**, **Code-barres**, **Nature du prélèvement**, **Type de tube**, **Statut**, **Prélevé le**, **Réceptionné le**, **Lieu de conservation**. Tube refusé ou éliminé en rouge ; tube à prélever en orange.
   - **Facturation** : le résumé « N analyse(s) · total … · patient … · organisme … », le n° de facture (ou « Non facturé »), la liste des **Règlements** (**Date**, **Mode de règlement**, **Montant**, statut, **Reçu par**, **Référence**) et le bouton **Ouvrir la facturation**.
   - **Historique** : les opérations motivées sur ce dossier (**Date**, **Utilisateur**, **Opération** avec le motif) : ajouts, annulations, reprises, corrections d'en-tête, réimpressions.
+- Sous les cartes, la ligne d'état : elle reprend le dernier message (analyses ajoutées, annulation, refus, « Numéro de dossier … copié. ») et reste vide le reste du temps ; elle a toujours sa place, si bien que la grille des analyses ne change pas de taille quand un message s'affiche.
 - En bas, la barre d'actions : **Ajouter des analyses**, **Imprimer les étiquettes** (F8), **Compte rendu (PDF)**, **Modifier l'en-tête**, **Plus d'actions**.
 
 Statuts d'un dossier :
@@ -474,7 +476,7 @@ Statuts d'une analyse : En attente de prélèvement, Prélevé, Réceptionné, E
 3. **Ajouter des analyses à un dossier** (le médecin téléphone pour ajouter une TSH)
    1. Ouvrez le dossier, cliquez **Ajouter des analyses**.
    2. Dans la fenêtre, cherchez par code, nom ou synonyme, **Entrée** ; double-cliquez pour mettre l'analyse dans **Analyses à ajouter** (**Retirer** pour l'enlever). Les analyses déjà au dossier sont signalées « déjà au dossier ».
-   3. Saisissez le **Motif de la modification** (obligatoire), cliquez **Ajouter des analyses**.
+   3. Saisissez le **Motif de la modification** (obligatoire), cliquez **Ajouter des analyses** (à droite ; **Annuler**, à gauche, ferme la fenêtre sans rien ajouter).
    4. Les étiquettes des nouveaux tubes s'impriment. Si l'analyse a été ajoutée sur un tube déjà réceptionné, un avertissement demande de vérifier qu'il reste du volume.
    5. Le message indique le nombre d'analyses ajoutées et leur montant.
 
