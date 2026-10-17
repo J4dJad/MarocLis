@@ -170,6 +170,12 @@ public sealed class Cycle5aWorkflowDatabaseTests(Cycle5aScratchDatabase database
         services.AddIsolatedQueries<ISubcontractQueries, SubcontractQueries>();
         services.AddIsolatedQueries<IRecollectionQueries, RecollectionQueries>();
         services.AddIsolatedQueries<IBenchWorksheetQueries, BenchWorksheetQueries>();
+        // The analyser side (replay, preview) lives in MarocLIS.Instruments; saving a
+        // mapping table never reaches it.
+        services.AddSingleton(ReviewFixesBilling2Tests.Stub<IInstrumentResultReplayer>.Create());
+        services.AddSingleton(ReviewFixesBilling2Tests.Stub<IInstrumentMessagePreviewer>.Create());
+        services.AddSingleton(new InstrumentHostOptions());
+        services.AddSingleton(ReviewFixesBilling2Tests.Stub<IInstrumentInterfaceQueries>.Create());
         return services.BuildServiceProvider();
     }
 
@@ -468,5 +474,51 @@ public sealed class Cycle5aWorkflowDatabaseTests(Cycle5aScratchDatabase database
 
         (await On<ReportReleaseService, Result<byte[]>>(biologist, s => s.GetStoredPdfAsync(released.Value.ReportId)))
             .FirstError.ResourceKey.Should().Be("Report_ArchiveIntegrityFailure");
+    }
+
+    // ---- 4. A COBAS INTEGRA table holds test numbers -----------------------------------------------
+
+    [SqlServerFact]
+    public async Task D_AnIntegraTable_TakesTestNumbersOnly_InEitherWriting_AndOneNumberOnce()
+    {
+        var lab = await LabAsync();
+        using var admin = Services(OperatorOf(lab));
+
+        var instrument = new Instrument(Unique("I400"), new MultilingualText("cobas INTEGRA 400 plus"),
+                                        EquipmentKind.Analyser, lab.Site.Id);
+        var link = new InstrumentInterface(instrument.Id, lab.Site.Id, InstrumentProtocol.RocheIntegra,
+                                           InstrumentTransportKind.Serial) { SerialPortName = "COM3" };
+
+        await using (var context = database.Context())
+        {
+            context.Instruments.Add(instrument);
+            context.InstrumentInterfaces.Add(link);
+            await context.SaveChangesAsync();
+        }
+
+        var glucose = lab.Glucose.Parameters.Single().Id;
+        var vitamin = lab.Vitamin.Parameters.Single().Id;
+
+        Task<Result> SaveAsync(params MappingRequest[] rows) =>
+            On<InstrumentInterfaceService, Result>(admin, s => s.SaveMappingsAsync(link.Id, rows));
+
+        // Roche's test abbreviation is not what the analyser sends: refused, with the code named.
+        var refused = await SaveAsync(new MappingRequest("GLUC3", glucose, null, null, null, null, true));
+        refused.FirstError.ResourceKey.Should().Be("Interface_IntegraTestNumberInvalid");
+        refused.FirstError.Args.Should().Contain("GLUC3");
+
+        // « 031 » and « 0-031 » are one test: the second would overwrite the first.
+        (await SaveAsync(new MappingRequest("031", glucose, null, null, null, null, true),
+                         new MappingRequest("0-031", vitamin, null, null, null, null, true)))
+            .FirstError.ResourceKey.Should().Be("Interface_DuplicateMappingCode");
+
+        (await SaveAsync(new MappingRequest("0-031", glucose, null, null, null, null, true))).IsSuccess.Should().BeTrue();
+
+        await using (var context = database.Context())
+        {
+            (await context.InstrumentTestMappings.AsNoTracking().Where(m => m.InstrumentInterfaceId == link.Id)
+                          .Select(m => m.InstrumentTestCode).ToListAsync())
+                .Should().Equal("0-031");
+        }
     }
 }

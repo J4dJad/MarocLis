@@ -5647,6 +5647,7 @@
   "Interface_ImportInterrupted": "The import of this transmission did not complete (an error, or the workstation stopped during processing); it can be replayed.",
   "Interface_QcTargetAmbiguous": "Control received: several targets of this parameter on this analyser may match the lot or level sent; the point was not stored. Put the control material's lot number in the control sample identifier.",
   "Interface_ConversionOutOfRange": "The conversion factor and offset must stay below 10,000,000,000 in absolute value.",
+  "Interface_IntegraTestNumberInvalid": "\"{0}\" is not a COBAS INTEGRA test number: enter the test number (1 to 999), for example \"031\" or \"0-031\".",
   "Order_NotFoundForScan": "No order matches \"{0}\" on this site.",
   "Order_AnalysisWithoutTariff": "Analysis {0} has no tariff in force today, neither for this payer nor on the laboratory's price list. Add one in the analysis catalogue, Tariffs tab.",
   "Order_ItemPartlyReportedCannotCancel": "Some results of this analysis are already on an issued report: it can no longer be cancelled; issue an amended report.",

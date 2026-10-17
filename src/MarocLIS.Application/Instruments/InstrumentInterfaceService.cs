@@ -485,6 +485,22 @@ public sealed class InstrumentInterfaceService(
     /// unmapped issue, so a removal disables the row and keeps it visible.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// A COBAS INTEGRA test number from a mapping code — « 031 », « 31 » or « 0-031 » — as the
+    /// analyser's driver reads it; null when the code is not one (1 to 999).
+    /// </summary>
+    public static int? IntegraTestNumber(string code)
+    {
+        var text = code.Trim();
+        if (text.StartsWith("0-", StringComparison.Ordinal)) text = text[2..];
+
+        return int.TryParse(text, System.Globalization.NumberStyles.None,
+                            System.Globalization.CultureInfo.InvariantCulture, out var number)
+               && number is >= 1 and <= 999
+            ? number
+            : null;
+    }
+
     public async Task<Result> SaveMappingsAsync(Guid interfaceId,
                                                  IReadOnlyList<MappingRequest> mappings,
                                                  CancellationToken ct = default)
@@ -516,6 +532,24 @@ public sealed class InstrumentInterfaceService(
 
         if (mappings.Any(m => m.ConversionFactor is 0m))
             errors.Add(Error.Validation("Interface_ConversionFactorZero"));
+
+        // A COBAS INTEGRA knows its tests by number only (« 031 », or « 0-031 » as Roche prints it):
+        // any other code was saved, never sent down, and never matched a result. Two writings of
+        // one number are the same test twice.
+        if (link.Protocol == InstrumentProtocol.RocheIntegra)
+        {
+            var numbers = new List<int>();
+
+            foreach (var wanted in mappings.Where(m => m.IsEnabled))
+            {
+                if (IntegraTestNumber(wanted.InstrumentTestCode) is { } number) numbers.Add(number);
+                else if (!string.IsNullOrWhiteSpace(wanted.InstrumentTestCode))
+                    errors.Add(Error.Validation("Interface_IntegraTestNumberInvalid", wanted.InstrumentTestCode.Trim()));
+            }
+
+            if (numbers.Distinct().Count() != numbers.Count)
+                errors.Add(Error.Validation("Interface_DuplicateMappingCode"));
+        }
 
         // Within the columns (ten digits before the point): a longer figure was refused by the
         // database and the whole table's save ended in « Erreur inattendue ».

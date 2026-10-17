@@ -5648,6 +5648,7 @@
   "Interface_ImportInterrupted": "L'import de cette transmission n'a pas abouti (erreur ou arrêt du poste pendant le traitement) ; elle peut être rejouée.",
   "Interface_QcTargetAmbiguous": "Contrôle reçu : plusieurs cibles de ce paramètre sur cet automate peuvent correspondre au lot ou au niveau envoyé ; le point n'a pas été enregistré. Indiquez le numéro de lot du matériau de contrôle dans l'identifiant de l'échantillon de contrôle.",
   "Interface_ConversionOutOfRange": "Le facteur et le décalage de conversion doivent rester inférieurs à 10 000 000 000 en valeur absolue.",
+  "Interface_IntegraTestNumberInvalid": "« {0} » n'est pas un numéro de test COBAS INTEGRA : saisissez le numéro du test (1 à 999), par exemple « 031 » ou « 0-031 ».",
   "Order_NotFoundForScan": "Aucun dossier ne correspond à « {0} » sur ce site.",
   "Order_AnalysisWithoutTariff": "L'analyse {0} n'a pas de tarif en vigueur aujourd'hui, ni pour ce tiers payant ni dans la liste de prix du laboratoire. Ajoutez-lui un tarif dans le Catalogue des analyses, onglet Tarifs.",
   "Order_ItemPartlyReportedCannotCancel": "Une partie des résultats de cette analyse figure déjà sur un compte rendu émis : elle ne peut plus être annulée ; émettez un compte rendu rectifié.",

@@ -241,6 +241,11 @@ public sealed class SubcontractingView : LocalizedView
             _grid.Column("sent").HeaderText = T("Subcontract.Slip");
             _grid.Column("reference").HeaderText = T("Subcontract.PartnerReferenceShort");
             _grid.Column("due").HeaderText = T("Subcontract.DueAt");
+
+            // The status is drawn as a pill, wider than its words: sized for the widest one, or
+            // « À envoyer » came out as « → À envo… » at 1366.
+            _grid.Column("stage").MinimumWidth = new[] { "Subcontract.StageToSend", "Subcontract.StageAwaitingReturn", "Subcontract.Late" }
+                .Max(key => EntryPaint.MeasurePill($"→ {T(key)}", UiTheme.SmallBold, 8).Width) + 16;
         }
 
         Render();
