@@ -257,7 +257,10 @@ public sealed class AccidentView : LocalizedView
 
     private int Year => _year.SelectedItem is int y ? y : DateTime.Today.Year;
 
-    public override async Task ActivateAsync(CancellationToken ct = default) => await ReloadAsync(_current?.Request.AccidentId, ct);
+    // Kept on the row the operator is on, even while its detail is still loading: the list went
+    // back to its first accident when it was refreshed before the detail arrived.
+    public override async Task ActivateAsync(CancellationToken ct = default) =>
+        await ReloadAsync(Selected()?.AccidentId ?? _current?.Request.AccidentId, ct);
 
     private async Task ReloadAsync(Guid? select, CancellationToken ct = default)
     {
