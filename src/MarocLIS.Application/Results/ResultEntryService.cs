@@ -850,9 +850,11 @@ public sealed class ResultEntryService(
         var stored = await queries.GetResultsForOrderAsync(orderId, null, ct);
         // The whole file means what is still to check: its released values, printed or not, are
         // not refused one by one as "already validated" — a file with one corrected value among
-        // printed ones could otherwise never be checked without an error.
+        // printed ones could otherwise never be checked without an error. Values already checked
+        // keep their check: validating the file again after a late value used to stamp the second
+        // technician's name and time on the values the first one had checked.
         List<TestResult> selected = resultIds.Count == 0
-            ? [.. stored.Where(r => !r.IsValidated)]
+            ? [.. stored.Where(r => !r.IsValidated && r.Status != TestResultStatus.TechnicallyValidated)]
             : [.. stored.Where(r => resultIds.Contains(r.Id))];
 
         var errors = new List<Error>();

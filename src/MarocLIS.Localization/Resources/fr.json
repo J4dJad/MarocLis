@@ -4135,6 +4135,18 @@
   },
 
   "Interface": {
+    "HandshakeRequestToSendXOnXOff": "RTS/CTS + Xon/Xoff",
+    "HandshakeRequestToSend": "RTS/CTS",
+    "HandshakeXOnXOff": "Xon/Xoff",
+    "HandshakeNone": "Aucun",
+    "StopBitsTwo": "2",
+    "StopBitsOnePointFive": "1,5",
+    "StopBitsOne": "1",
+    "ParitySpace": "Espace",
+    "ParityMark": "Marque",
+    "ParityOdd": "Impaire",
+    "ParityEven": "Paire",
+    "ParityNone": "Aucune",
     "TestFrameSample": "Exemple de trame",
     "IntegraNotice": "COBAS INTEGRA : le LIS interroge l'automate (résultats, tubes sans demande). Codes = numéros de test (« 031 »). Fin de ligne, contrôle de bloc et intervalle d'interrogation : section Instruments:RocheIntegra du fichier de configuration.",
     "FormatProfile.RocheIntegra": "Roche cobas INTEGRA 400 plus",

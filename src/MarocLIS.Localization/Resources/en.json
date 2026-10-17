@@ -4134,6 +4134,18 @@
   },
 
   "Interface": {
+    "HandshakeRequestToSendXOnXOff": "RTS/CTS + Xon/Xoff",
+    "HandshakeRequestToSend": "RTS/CTS",
+    "HandshakeXOnXOff": "Xon/Xoff",
+    "HandshakeNone": "None",
+    "StopBitsTwo": "2",
+    "StopBitsOnePointFive": "1.5",
+    "StopBitsOne": "1",
+    "ParitySpace": "Space",
+    "ParityMark": "Mark",
+    "ParityOdd": "Odd",
+    "ParityEven": "Even",
+    "ParityNone": "None",
     "TestFrameSample": "Sample frame",
     "IntegraNotice": "COBAS INTEGRA: the LIS polls the analyser (results, tubes without orders). Codes = test numbers (\"031\"). Line end, block check and polling interval: Instruments:RocheIntegra section of the configuration file.",
     "FormatProfile.RocheIntegra": "Roche cobas INTEGRA 400 plus",

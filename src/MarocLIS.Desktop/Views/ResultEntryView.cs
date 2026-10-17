@@ -2198,7 +2198,9 @@ public sealed class ResultEntryView : LocalizedView
         finally
         {
             Cursor = Cursors.Default;
-            _validate.Enabled = true;
+            // As the reload left it: once every entered value is checked there is nothing more to
+            // validate, and the button stays grey.
+            _validate.Enabled = _sheet?.Rows.Any(r => r.Status == TestResultStatus.Entered) == true;
         }
     }
 }

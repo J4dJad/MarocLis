@@ -96,15 +96,18 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _dataBits = Picker("Interface.DataBits", 274, 96, 90, ["7", "8"],
                            (existing?.DataBits ?? 8).ToString());
 
+        // Stored under the serial port's own names (« None », « XOnXOff »), shown in the
+        // operator's language: the French screen showed the English words.
         _parity = Picker("Interface.Parity", 376, 96, 110,
-                         ["None", "Even", "Odd", "Mark", "Space"], existing?.Parity ?? "None");
+                         SerialValues("Parity", "None", "Even", "Odd", "Mark", "Space"), existing?.Parity ?? "None");
 
-        _stopBits = Picker("Interface.StopBits", 498, 96, 80, ["One", "OnePointFive", "Two"],
-                           existing?.StopBits ?? "One");
+        _stopBits = Picker("Interface.StopBits", 498, 96, 80,
+                           SerialValues("StopBits", "One", "OnePointFive", "Two"), existing?.StopBits ?? "One");
 
         _handshake = Picker("Interface.Handshake", 590, 96, 86,
-                            ["None", "XOnXOff", "RequestToSend", "RequestToSendXOnXOff"],
+                            SerialValues("Handshake", "None", "XOnXOff", "RequestToSend", "RequestToSendXOnXOff"),
                             existing?.Handshake ?? "None");
+        _handshake.DropDownWidth = 170;
 
         // --- TCP -------------------------------------------------------------------------------
 
@@ -429,8 +432,21 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
     private static void Select(ComboBox combo, string value)
     {
         var index = combo.Items.IndexOf(value);
+        for (var i = 0; index < 0 && i < combo.Items.Count; i++)
+            if (combo.Items[i] is SerialChoice choice && choice.Value == value) index = i;
         combo.SelectedIndex = index >= 0 ? index : 0;
     }
+
+    /// <summary>A serial setting under its port name, with the label the operator reads.</summary>
+    private sealed record SerialChoice(string Value, string Text)
+    {
+        public override string ToString() => Text;
+    }
+
+    private SerialChoice[] SerialValues(string setting, params string[] values) =>
+        [.. values.Select(v => new SerialChoice(v, Localizer[$"Interface.{setting}{v}"]))];
+
+    private static string? SerialValue(ComboBox combo) => (combo.SelectedItem as SerialChoice)?.Value;
 
     private MessageFormatSettings CurrentFormat()
     {
@@ -447,7 +463,10 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
     }
 
     /// <summary>A fixed list of values, where free text would only be a way to mistype one.</summary>
-    private ComboBox Picker(string key, int x, int y, int width, string[] values, string current)
+    private ComboBox Picker(string key, int x, int y, int width, string[] values, string current) =>
+        Picker(key, x, y, width, values.Cast<object>().ToArray(), current);
+
+    private ComboBox Picker(string key, int x, int y, int width, object[] values, string current)
     {
         Label(key, x, y);
 
@@ -462,7 +481,7 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         foreach (var value in values)
         {
             var index = combo.Items.Add(value);
-            if (string.Equals(value, current, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals((value as SerialChoice)?.Value ?? value.ToString(), current, StringComparison.OrdinalIgnoreCase))
                 combo.SelectedIndex = index;
         }
 
@@ -572,9 +591,9 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
             SerialPortName = Blank(_serialPort),
             BaudRate = int.TryParse(_baud.SelectedItem?.ToString(), out var baud) ? baud : 9600,
             DataBits = int.TryParse(_dataBits.SelectedItem?.ToString(), out var bits) ? bits : 8,
-            Parity = _parity.SelectedItem?.ToString() ?? "None",
-            StopBits = _stopBits.SelectedItem?.ToString() ?? "One",
-            Handshake = _handshake.SelectedItem?.ToString() ?? "None",
+            Parity = SerialValue(_parity) ?? "None",
+            StopBits = SerialValue(_stopBits) ?? "One",
+            Handshake = SerialValue(_handshake) ?? "None",
 
             Host = Blank(_host),
             TcpPort = tcpPort,
