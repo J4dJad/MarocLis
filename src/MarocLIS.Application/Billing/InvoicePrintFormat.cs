@@ -203,7 +203,12 @@ public sealed record CotationInvoiceLayout(
             l.Quantity,
             Letter(l),
             // The coefficient of the act times the number billed: what « 90 » stands for on the line.
-            l.Coefficient is { } coefficient && Letter(l) is not null ? coefficient * l.Quantity : null,
+            // A coefficient of 0 is an act priced in dirhams only (outside the nomenclature, the
+            // letter « B » being the tariff's default): shown « 0 » in B, its price hidden, it was
+            // charged without a figure on its line.
+            l.Coefficient is { } coefficient && coefficient > 0m && Letter(l) is not null
+                ? coefficient * l.Quantity
+                : null,
             l.NetAmount)).ToList();
 
         // A line that is not a coded biology act has no coefficient in B to show: its amount in

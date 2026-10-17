@@ -547,6 +547,10 @@ public sealed class BillingView : LocalizedView
 
     private void RenderPending()
     {
+        // The request highlighted stays current once the list is rebuilt (after a deposit, a
+        // refresh), rather than the list going back to its first row.
+        var kept = (_pending.CurrentRow?.Tag as BillableOrderRow)?.LabOrderId;
+
         _pending.SuspendLayout();
         _pending.Rows.Clear();
 
@@ -576,6 +580,11 @@ public sealed class BillingView : LocalizedView
         }
 
         _pending.ResumeLayout(performLayout: true);
+
+        if (kept is { } keptId
+            && _pending.Rows.Cast<DataGridViewRow>()
+                   .FirstOrDefault(r => (r.Tag as BillableOrderRow)?.LabOrderId == keptId) is { } keptRow)
+            _pending.MakeCurrent(keptRow);
 
         // Counted only what is still to invoice: a cancelled or invoiced request listed for its
         // deposit is not.
@@ -1429,9 +1438,11 @@ internal sealed class PaymentDialog : Form
     private readonly TextBox _reference = UiTheme.Input(200);
     private readonly TextBox _bank = UiTheme.Input(200);
     private readonly DateTimePicker _maturity = new();
-    private readonly Label _referenceLabel = new();
-    private readonly Label _bankLabel = new();
-    private readonly Label _maturityLabel = new();
+    // Captions like « Mode de règlement » and « Montant »: plain labels drew them larger, in black,
+    // and 23 pixels high over the top of their boxes.
+    private readonly Label _referenceLabel = UiTheme.FieldLabel(string.Empty);
+    private readonly Label _bankLabel = UiTheme.FieldLabel(string.Empty);
+    private readonly Label _maturityLabel = UiTheme.FieldLabel(string.Empty);
     private readonly Label _warning = new();
 
     internal RecordPaymentRequest? Request { get; private set; }

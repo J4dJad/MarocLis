@@ -69,13 +69,27 @@ public sealed partial class SettingsView
         Option(_cotationWords, 0, 320);
         Option(_cotationLetterValue, 0, 346);
 
-        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised, AutoScroll = true };
-        body.Controls.AddRange(
+        // The settings in a column of their own width, on the reading side: in Arabic the column
+        // goes to the right of the card and each field to the right of the column, under its label,
+        // where the fixed positions had left the list of formats on the left, far from its caption.
+        var column = new Panel { Dock = DockStyle.Left, Width = 760, BackColor = UiTheme.SurfaceRaised };
+        column.Controls.AddRange(
         [
             _invoicePrintIntro, _invoiceFormatLabel, _invoiceFormat,
             _standardOptionsLabel, _standardNationalCode, _standardCoefficient, _standardWords,
             _cotationOptionsLabel, _cotationLinePrice, _cotationZeroFee, _cotationWords, _cotationLetterValue
         ]);
+        var leftToRight = column.Controls.Cast<Control>().ToDictionary(c => c, c => c.Left);
+        column.RightToLeftChanged += (_, _) =>
+        {
+            var rtl = column.RightToLeft == RightToLeft.Yes;
+            column.Dock = rtl ? DockStyle.Right : DockStyle.Left;
+            foreach (var (control, left) in leftToRight)
+                control.Left = rtl ? column.Width - left - control.Width : left;
+        };
+
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised, AutoScroll = true };
+        body.Controls.Add(column);
 
         var card = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised,
                                Padding = new Padding(20, 16, 2, 1) };

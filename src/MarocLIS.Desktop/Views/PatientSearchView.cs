@@ -901,7 +901,12 @@ public sealed class PatientSearchView : LocalizedView
             }
         }
 
+        // Refreshed (F5, or back from another screen), the list stays on the patient it was on.
+        var kept = Selected?.Id;
+
         await SearchAsync();
+
+        if (kept is { } id) SelectRow(id);
     }
 
     private async Task SearchAsync()

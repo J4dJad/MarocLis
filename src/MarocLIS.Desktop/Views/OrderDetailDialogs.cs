@@ -114,12 +114,13 @@ internal sealed class AnalysisPickerDialog : Form
             Bounds = new Rectangle(16, 466, 860, 30)
         };
 
+        // Cancel first, the action at the far end, as in « Modifier l'en-tête » and the other dialogs.
         var ok = UiTheme.PrimaryButton(localizer["Order.AddAnalyses"]);
-        ok.Bounds = new Rectangle(16, 506, 420, UiTheme.ButtonHeight);
+        ok.Bounds = new Rectangle(456, 506, 420, UiTheme.ButtonHeight);
         ok.Click += (_, _) => Accept();
 
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
-        cancel.Bounds = new Rectangle(456, 506, 420, UiTheme.ButtonHeight);
+        cancel.Bounds = new Rectangle(16, 506, 420, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
         Controls.AddRange([identity, _search, _catalog, basketLabel, _basket, _total, remove,

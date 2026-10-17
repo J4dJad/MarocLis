@@ -366,6 +366,9 @@ public sealed class ClaimBatchView : LocalizedView
     {
         var language = Localizer.CurrentLanguage;
 
+        // The invoice highlighted stays current once the list is rebuilt, rather than the first row.
+        var kept = (_candidates.CurrentRow?.Tag as ClaimCandidateRow)?.InvoiceId;
+
         _candidates.SuspendLayout();
         _candidates.Rows.Clear();
 
@@ -390,6 +393,11 @@ public sealed class ClaimBatchView : LocalizedView
         }
 
         _candidates.ResumeLayout(performLayout: true);
+
+        if (kept is { } keptId
+            && _candidates.Rows.Cast<DataGridViewRow>()
+                   .FirstOrDefault(r => (r.Tag as ClaimCandidateRow)?.InvoiceId == keptId) is { } keptRow)
+            _candidates.MakeCurrent(keptRow);
 
         var claimable = _candidateRows.Count(c => c.IsClaimable);
         var blocked = _candidateRows.Count - claimable;
