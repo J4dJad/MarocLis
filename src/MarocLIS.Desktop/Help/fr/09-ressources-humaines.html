@@ -268,10 +268,10 @@ ul.toc li { margin: 4px 0; }
 <li>un <strong>Commentaire</strong> si besoin.</li>
 </ul>
 </li>
-<li>Si le dossier est relié à un <strong>Compte SIL</strong>, la fenêtre l'annonce : « Le compte LIS « … » lié à ce dossier sera désactivé à la date de sortie (dès l'enregistrement si cette date est aujourd'hui ou passée). »</li>
+<li>Si le dossier est relié à un <strong>Compte SIL</strong>, la fenêtre l'annonce : « Le compte LIS « … » lié à ce dossier sera désactivé le lendemain de la date de sortie, dernier jour travaillé (dès l'enregistrement si la date de sortie est déjà passée). »</li>
 <li>Cliquez <strong>Enregistrer</strong>. Sous le panneau de droite, une ligne dit ce qu'il advient du compte :<ul>
-<li>« Sortie enregistrée. Le compte LIS « … » est désactivé. » : la date de sortie est aujourd'hui ou passée ;</li>
-<li>« Sortie enregistrée. Le compte LIS « … » sera désactivé le jj/mm/aaaa. » : sortie à venir ;</li>
+<li>« Sortie enregistrée. Le compte LIS « … » est désactivé. » : la date de sortie est déjà passée (saisie tardive) ;</li>
+<li>« Sortie enregistrée. Le compte LIS « … » sera désactivé le jj/mm/aaaa. » : sortie aujourd'hui ou à venir ; la date affichée est le lendemain de la date de sortie ;</li>
 <li>« Le compte LIS « … » reste actif : c'est le dernier administrateur. … » : nommez d'abord un autre administrateur, puis désactivez ce compte dans <strong>Utilisateurs</strong>.</li>
 </ul>
 </li>
@@ -287,7 +287,7 @@ ul.toc li { margin: 4px 0; }
    - <strong>Corriger la sortie</strong> : autre date, autre motif ;
    - <strong>Annuler la sortie</strong> : démission retirée, erreur de saisie. Le motif est obligatoire.</li>
 <li>Les habilitations suivent la nouvelle date, ou sont rétablies. Un solde de tout compte déjà calculé est vidé et sera à recalculer.</li>
-<li>Une sortie avancée à aujourd'hui désactive aussitôt le compte SIL relié. Un compte déjà désactivé par la sortie n'est pas réactivé par une correction ou une annulation : la ligne d'état le rappelle (« Le compte LIS « … » est désactivé. Un administrateur peut le réactiver dans Administration › Utilisateurs. »).</li>
+<li>Une sortie avancée à aujourd'hui garde le compte SIL relié actif jusqu'au lendemain ; avancée à une date passée, elle le désactive aussitôt (elle ne peut alors plus être annulée). Une sortie annulée tant qu'elle est à venir laisse le compte actif. Un compte déjà désactivé (par exemple à la main dans <strong>Utilisateurs</strong>) n'est pas réactivé par une correction ou une annulation : la ligne d'état le rappelle (« Le compte LIS « … » est désactivé. Un administrateur peut le réactiver dans Administration › Utilisateurs. »).</li>
 </ol>
 </li>
 <li>
@@ -352,7 +352,7 @@ ul.toc li { margin: 4px 0; }
 - L'attestation de travail est refusée pour un salarié sorti (« délivrez un certificat de travail »). Le certificat de travail est refusé tant que la sortie n'est pas enregistrée.
 - Une fois le reçu signé, le solde ne change plus. Le salarié peut le dénoncer dans les 60 jours (le rappel est affiché).
 - Toute création, modification, sortie ou retrait de pièce est tracée dans le journal d'audit.
-- Le compte SIL relié au dossier est désactivé à la date de sortie (le dernier jour travaillé compris) : tout de suite si la date est atteinte quand la sortie est enregistrée, sinon automatiquement ce jour-là, à la première connexion d'un utilisateur sur un poste ou au contrôle de session d'un poste resté connecté (toutes les minutes). La personne ne peut plus se connecter, et un poste resté ouvert à son nom se ferme. Chaque désactivation est écrite au journal d'audit (« Désactivation du compte … : sortie de … le … ») et au journal de sécurité. Exception : le dernier compte actif qui gère les utilisateurs n'est jamais désactivé ainsi. Réactiver un compte (réintégration) se fait dans <strong>Utilisateurs</strong> (chapitre Administration).</p>
+- Le compte SIL relié au dossier est désactivé le lendemain de la date de sortie (la date de sortie est le dernier jour travaillé : la personne se connecte encore ce jour-là) : tout de suite si la date de sortie est déjà passée quand la sortie est enregistrée, sinon automatiquement le lendemain, à la première connexion d'un utilisateur sur un poste ou au contrôle de session d'un poste resté connecté (toutes les minutes). La personne ne peut plus se connecter, et un poste resté ouvert à son nom se ferme. Chaque désactivation est écrite au journal d'audit (« Désactivation du compte … : sortie de … le … ») et au journal de sécurité. Exception : le dernier compte actif qui gère les utilisateurs n'est jamais désactivé ainsi. Réactiver un compte (réintégration) se fait dans <strong>Utilisateurs</strong> (chapitre Administration).</p>
 <p><strong>Flux.</strong>
 1. On crée le dossier, puis on ajoute les pièces (visite d'embauche, vaccination, clause de secret).
 2. On accorde les <strong>Habilitations</strong>.
@@ -1083,18 +1083,18 @@ ul.toc li { margin: 4px 0; }
 <td>Annuler le congé, ou reculer la date de sortie.</td>
 </tr>
 <tr>
-<td>« Le compte LIS « … » lié à ce dossier sera désactivé à la date de sortie (dès l'enregistrement si cette date est aujourd'hui ou passée). »</td>
+<td>« Le compte LIS « … » lié à ce dossier sera désactivé le lendemain de la date de sortie, dernier jour travaillé (dès l'enregistrement si la date de sortie est déjà passée). »</td>
 <td>Fenêtre de sortie d'un dossier relié à un compte</td>
 <td>Vérifier la date, puis <strong>Enregistrer</strong>.</td>
 </tr>
 <tr>
 <td>« Sortie enregistrée. Le compte LIS « … » est désactivé. »</td>
-<td>Ligne d'état, sortie à aujourd'hui ou passée</td>
+<td>Ligne d'état, sortie déjà passée (saisie tardive)</td>
 <td>Rien.</td>
 </tr>
 <tr>
 <td>« Sortie enregistrée. Le compte LIS « … » sera désactivé le … »</td>
-<td>Ligne d'état, sortie à venir</td>
+<td>Ligne d'état, sortie aujourd'hui ou à venir (date affichée : lendemain de la sortie)</td>
 <td>Rien : la désactivation se fait d'elle-même ce jour-là.</td>
 </tr>
 <tr>
@@ -1104,7 +1104,7 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td>« Le compte LIS « … » est désactivé. Un administrateur peut le réactiver dans Administration › Utilisateurs. »</td>
-<td>Ligne d'état après une sortie annulée ou corrigée, compte déjà désactivé</td>
+<td>Ligne d'état après une sortie corrigée ou annulée, compte déjà désactivé (par exemple à la main)</td>
 <td>Demander à l'administrateur de réactiver le compte si la personne reste.</td>
 </tr>
 <tr>

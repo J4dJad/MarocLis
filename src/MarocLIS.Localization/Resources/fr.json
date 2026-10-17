@@ -2345,7 +2345,7 @@
     "AccountKeptLastAdministrator": "Le compte LIS « {0} » reste actif : c'est le dernier administrateur. Nommez un autre administrateur, puis désactivez-le dans Administration › Utilisateurs.",
     "AccountDeactivationScheduled": "Sortie enregistrée. Le compte LIS « {0} » sera désactivé le {1}.",
     "AccountDeactivated": "Sortie enregistrée. Le compte LIS « {0} » est désactivé.",
-    "ExitDeactivatesAccount": "Le compte LIS « {0} » lié à ce dossier sera désactivé à la date de sortie (dès l'enregistrement si cette date est aujourd'hui ou passée).",
+    "ExitDeactivatesAccount": "Le compte LIS « {0} » lié à ce dossier sera désactivé le lendemain de la date de sortie, dernier jour travaillé (dès l'enregistrement si la date de sortie est déjà passée).",
     "ExitNoticeAfterLastDay": "La date de sortie est le dernier jour travaillé : les habilitations prennent fin le lendemain. Le dossier reste consultable.",
     "RehireNotice": "Les dates du contrat précédent sont conservées pour la paie de son dernier mois. Les congés payés par le solde de tout compte sont débités du compte.",
     "RehireDate": "Date de réintégration",

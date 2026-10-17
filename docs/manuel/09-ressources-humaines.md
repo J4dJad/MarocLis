@@ -187,10 +187,10 @@ Le Responsable qualité consulte donc tout, sans rien modifier et sans voir les 
       - la **Date de sortie** (le dernier jour travaillé) ;
       - le **Motif** (Démission, Fin de CDD, Licenciement, Licenciement pour faute grave, Rupture d'un commun accord, Retraite, Décès, Rupture en période d'essai) ;
       - un **Commentaire** si besoin.
-   3. Si le dossier est relié à un **Compte SIL**, la fenêtre l'annonce : « Le compte LIS « … » lié à ce dossier sera désactivé à la date de sortie (dès l'enregistrement si cette date est aujourd'hui ou passée). »
+   3. Si le dossier est relié à un **Compte SIL**, la fenêtre l'annonce : « Le compte LIS « … » lié à ce dossier sera désactivé le lendemain de la date de sortie, dernier jour travaillé (dès l'enregistrement si la date de sortie est déjà passée). »
    4. Cliquez **Enregistrer**. Sous le panneau de droite, une ligne dit ce qu'il advient du compte :
-      - « Sortie enregistrée. Le compte LIS « … » est désactivé. » : la date de sortie est aujourd'hui ou passée ;
-      - « Sortie enregistrée. Le compte LIS « … » sera désactivé le jj/mm/aaaa. » : sortie à venir ;
+      - « Sortie enregistrée. Le compte LIS « … » est désactivé. » : la date de sortie est déjà passée (saisie tardive) ;
+      - « Sortie enregistrée. Le compte LIS « … » sera désactivé le jj/mm/aaaa. » : sortie aujourd'hui ou à venir ; la date affichée est le lendemain de la date de sortie ;
       - « Le compte LIS « … » reste actif : c'est le dernier administrateur. … » : nommez d'abord un autre administrateur, puis désactivez ce compte dans **Utilisateurs**.
 
    Vous pouvez enregistrer la sortie à l'avance (préavis en cours). Jusqu'à la date de sortie, la personne reste dans l'effectif : elle peut prendre des congés et garde ses habilitations. Toutes ses habilitations prennent fin le lendemain de la date de sortie.
@@ -203,7 +203,7 @@ Le Responsable qualité consulte donc tout, sans rien modifier et sans voir les 
        - **Corriger la sortie** : autre date, autre motif ;
        - **Annuler la sortie** : démission retirée, erreur de saisie. Le motif est obligatoire.
     3. Les habilitations suivent la nouvelle date, ou sont rétablies. Un solde de tout compte déjà calculé est vidé et sera à recalculer.
-    4. Une sortie avancée à aujourd'hui désactive aussitôt le compte SIL relié. Un compte déjà désactivé par la sortie n'est pas réactivé par une correction ou une annulation : la ligne d'état le rappelle (« Le compte LIS « … » est désactivé. Un administrateur peut le réactiver dans Administration › Utilisateurs. »).
+    4. Une sortie avancée à aujourd'hui garde le compte SIL relié actif jusqu'au lendemain ; avancée à une date passée, elle le désactive aussitôt (elle ne peut alors plus être annulée). Une sortie annulée tant qu'elle est à venir laisse le compte actif. Un compte déjà désactivé (par exemple à la main dans **Utilisateurs**) n'est pas réactivé par une correction ou une annulation : la ligne d'état le rappelle (« Le compte LIS « … » est désactivé. Un administrateur peut le réactiver dans Administration › Utilisateurs. »).
 
 11. **Réintégrer un ancien salarié**
     1. Cliquez la pastille **Afficher les salariés sortis**, puis sélectionnez la personne. Le bouton s'appelle **Réintégrer**.
@@ -253,7 +253,7 @@ Le Responsable qualité consulte donc tout, sans rien modifier et sans voir les 
 - L'attestation de travail est refusée pour un salarié sorti (« délivrez un certificat de travail »). Le certificat de travail est refusé tant que la sortie n'est pas enregistrée.
 - Une fois le reçu signé, le solde ne change plus. Le salarié peut le dénoncer dans les 60 jours (le rappel est affiché).
 - Toute création, modification, sortie ou retrait de pièce est tracée dans le journal d'audit.
-- Le compte SIL relié au dossier est désactivé à la date de sortie (le dernier jour travaillé compris) : tout de suite si la date est atteinte quand la sortie est enregistrée, sinon automatiquement ce jour-là, à la première connexion d'un utilisateur sur un poste ou au contrôle de session d'un poste resté connecté (toutes les minutes). La personne ne peut plus se connecter, et un poste resté ouvert à son nom se ferme. Chaque désactivation est écrite au journal d'audit (« Désactivation du compte … : sortie de … le … ») et au journal de sécurité. Exception : le dernier compte actif qui gère les utilisateurs n'est jamais désactivé ainsi. Réactiver un compte (réintégration) se fait dans **Utilisateurs** (chapitre Administration).
+- Le compte SIL relié au dossier est désactivé le lendemain de la date de sortie (la date de sortie est le dernier jour travaillé : la personne se connecte encore ce jour-là) : tout de suite si la date de sortie est déjà passée quand la sortie est enregistrée, sinon automatiquement le lendemain, à la première connexion d'un utilisateur sur un poste ou au contrôle de session d'un poste resté connecté (toutes les minutes). La personne ne peut plus se connecter, et un poste resté ouvert à son nom se ferme. Chaque désactivation est écrite au journal d'audit (« Désactivation du compte … : sortie de … le … ») et au journal de sécurité. Exception : le dernier compte actif qui gère les utilisateurs n'est jamais désactivé ainsi. Réactiver un compte (réintégration) se fait dans **Utilisateurs** (chapitre Administration).
 
 **Flux.**
 1. On crée le dossier, puis on ajoute les pièces (visite d'embauche, vaccination, clause de secret).
@@ -959,11 +959,11 @@ flowchart TD
 | « Ce salarié est déjà sorti le … » | Deuxième sortie | Utiliser **Modifier la sortie** ou **Réintégrer**. |
 | « La date de sortie précède la date d'embauche. » | Date impossible | Corriger. |
 | « Un congé demandé ou validé (… – …) tombe après la date de sortie du … : annulez-le dans « Congés et absences » ou datez la sortie après lui. » | Congé à venir après la sortie | Annuler le congé, ou reculer la date de sortie. |
-| « Le compte LIS « … » lié à ce dossier sera désactivé à la date de sortie (dès l'enregistrement si cette date est aujourd'hui ou passée). » | Fenêtre de sortie d'un dossier relié à un compte | Vérifier la date, puis **Enregistrer**. |
-| « Sortie enregistrée. Le compte LIS « … » est désactivé. » | Ligne d'état, sortie à aujourd'hui ou passée | Rien. |
-| « Sortie enregistrée. Le compte LIS « … » sera désactivé le … » | Ligne d'état, sortie à venir | Rien : la désactivation se fait d'elle-même ce jour-là. |
+| « Le compte LIS « … » lié à ce dossier sera désactivé le lendemain de la date de sortie, dernier jour travaillé (dès l'enregistrement si la date de sortie est déjà passée). » | Fenêtre de sortie d'un dossier relié à un compte | Vérifier la date, puis **Enregistrer**. |
+| « Sortie enregistrée. Le compte LIS « … » est désactivé. » | Ligne d'état, sortie déjà passée (saisie tardive) | Rien. |
+| « Sortie enregistrée. Le compte LIS « … » sera désactivé le … » | Ligne d'état, sortie aujourd'hui ou à venir (date affichée : lendemain de la sortie) | Rien : la désactivation se fait d'elle-même ce jour-là. |
 | « Le compte LIS « … » reste actif : c'est le dernier administrateur. Nommez un autre administrateur, puis désactivez-le dans Administration › Utilisateurs. » | Sortie du seul compte qui gère les utilisateurs | Donner le rôle Administrateur à un autre compte, puis désactiver celui-ci. |
-| « Le compte LIS « … » est désactivé. Un administrateur peut le réactiver dans Administration › Utilisateurs. » | Ligne d'état après une sortie annulée ou corrigée, compte déjà désactivé | Demander à l'administrateur de réactiver le compte si la personne reste. |
+| « Le compte LIS « … » est désactivé. Un administrateur peut le réactiver dans Administration › Utilisateurs. » | Ligne d'état après une sortie corrigée ou annulée, compte déjà désactivé (par exemple à la main) | Demander à l'administrateur de réactiver le compte si la personne reste. |
 | « Aucune sortie n'est enregistrée pour ce salarié. » | Correction sans sortie | Rien à corriger. |
 | « La sortie du … a déjà pris effet : elle ne peut plus être corrigée ni annulée. Utilisez la réintégration. » | Sortie passée | Cliquer **Réintégrer**. |
 | « Le solde de tout compte de la sortie du … est signé ou déjà payé (paie du mois clôturée) : la sortie ne peut plus être corrigée ni annulée. » | Sortie verrouillée | Rien ; réintégrer si la personne revient. |

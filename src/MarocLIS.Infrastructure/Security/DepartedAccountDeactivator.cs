@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace MarocLIS.Infrastructure.Security;
 
 /// <summary>
-/// Deactivates the account of an employee whose exit date is reached (<see cref="IDepartedAccounts"/>).
+/// Deactivates the account of an employee whose exit date is past, from the day after it (<see cref="IDepartedAccounts"/>).
 /// <para>
 /// Runs on the context it is given: the personnel screen's, right after the departure was saved, or
 /// the sign-in's. The last active account able to manage the users is never deactivated this way:
@@ -33,7 +33,7 @@ public sealed class DepartedAccountDeactivator(LisDbContext db, ISecurityAuditor
 
         if (!user.IsActive) return new DepartedAccountOutcome(user.UserName, DepartedAccountState.Inactive, employee.ExitDate);
         if (employee.ExitDate is not { } exit) return null;
-        if (exit > clock.Today) return new DepartedAccountOutcome(user.UserName, DepartedAccountState.Scheduled, exit);
+        if (exit >= clock.Today) return new DepartedAccountOutcome(user.UserName, DepartedAccountState.Scheduled, exit);
 
         if ((await DeactivateDueAsync(userId, ct)).Count > 0)
             return new DepartedAccountOutcome(user.UserName, DepartedAccountState.Deactivated, exit);
@@ -53,7 +53,7 @@ public sealed class DepartedAccountDeactivator(LisDbContext db, ISecurityAuditor
 
         var due = await (from e in db.Employees.IgnoreQueryFilters()
                          join u in db.Users.IgnoreQueryFilters() on e.UserId equals (Guid?)u.Id
-                         where u.IsActive && e.ExitDate != null && e.ExitDate <= today
+                         where u.IsActive && e.ExitDate != null && e.ExitDate < today
                                && (userId == null || u.Id == userId)
                          select new { UserId = u.Id, e.Number, e.LastName, e.FirstName, e.ExitDate })
             .AsNoTracking()

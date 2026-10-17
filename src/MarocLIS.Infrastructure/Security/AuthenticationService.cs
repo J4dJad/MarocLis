@@ -38,7 +38,7 @@ public sealed class AuthenticationService(
 
         var normalised = userName.Trim().ToLowerInvariant();
 
-        // Accounts of employees whose exit date is reached are switched off before anyone signs
+        // Accounts of employees whose exit date is past are switched off before anyone signs
         // in, the one being typed included: a departure recorded ahead takes effect on its day
         // without anybody having to remember it. Never in the way of signing in.
         try

@@ -476,7 +476,7 @@ public sealed class PersonnelView : LocalizedView
     {
         if (outcome is null) return;
 
-        var date = outcome.ExitDate?.ToString("dd/MM/yyyy") ?? string.Empty;
+        var date = outcome.DeactivationDate?.ToString("dd/MM/yyyy") ?? string.Empty;
         (_status.ForeColor, _status.Text) = outcome.State switch
         {
             DepartedAccountState.Deactivated => (UiTheme.Normal, T("Personnel.AccountDeactivated", outcome.UserName)),

@@ -2345,7 +2345,7 @@
     "AccountKeptLastAdministrator": "The LIS account \"{0}\" stays active: it is the last administrator. Appoint another administrator, then deactivate it in Administration › Users.",
     "AccountDeactivationScheduled": "Exit recorded. The LIS account \"{0}\" will be deactivated on {1}.",
     "AccountDeactivated": "Exit recorded. The LIS account \"{0}\" is deactivated.",
-    "ExitDeactivatesAccount": "The LIS account \"{0}\" linked to this file will be deactivated on the exit date (as soon as it is saved if that date is today or past).",
+    "ExitDeactivatesAccount": "The LIS account \"{0}\" linked to this file will be deactivated the day after the exit date, the last day worked (as soon as it is saved if the exit date is already past).",
     "ExitNoticeAfterLastDay": "The exit date is the last day worked: habilitations end the day after. The file remains available.",
     "RehireNotice": "The dates of the previous contract are kept for the payroll of its last month. The leave paid by the final settlement is debited from the account.",
     "RehireDate": "Rehire date",

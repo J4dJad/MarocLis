@@ -161,28 +161,40 @@ public sealed class Cycle5r5HrDatabaseTests(Cycle1HrScratchDatabase database) : 
     }
 
     [SqlServerFact]
-    public async Task AnExitDatedTodayOrBefore_DeactivatesTheLinkedAccountAtOnce_WithItsReason()
+    public async Task AnExitDatedBeforeToday_DeactivatesTheLinkedAccountAtOnce_WithItsReason_ButNotOnTheExitDayItself()
     {
         var lab = await LabAsync();
         using var services = Services(lab);
         var account = await AccountAsync(lab);
         var employeeId = await HireAsync(services, account.Id);
+        var yesterday = lab.Clock.Today.AddDays(-1);
 
         var outcome = Ok(await On<PersonnelService, Result<DepartedAccountOutcome?>>(services,
-            s => s.RecordExitAsync(employeeId, lab.Clock.Today, ExitReason.Resignation, "Démission")));
+            s => s.RecordExitAsync(employeeId, yesterday, ExitReason.Resignation, "Démission")));
 
-        outcome.Should().Be(new DepartedAccountOutcome(account.UserName, DepartedAccountState.Deactivated, lab.Clock.Today));
+        outcome.Should().Be(new DepartedAccountOutcome(account.UserName, DepartedAccountState.Deactivated, yesterday));
         (await ReadUserAsync(account.Id)).IsActive.Should().BeFalse();
 
         var logged = (await DeactivationEventsAsync(account.Id)).Should().ContainSingle().Subject;
         logged.Succeeded.Should().BeTrue();
-        logged.Details.Should().Contain("sortie de").And.Contain(lab.Clock.Today.ToString("dd/MM/yyyy"));
+        logged.Details.Should().Contain("sortie de").And.Contain(yesterday.ToString("dd/MM/yyyy"));
 
         await using (var context = database.Context())
             (await context.AuditEntries.AsNoTracking()
                     .Where(a => a.EntityId == account.Id && a.EntityName == nameof(AppUser))
                     .Select(a => a.Reason).ToListAsync())
                 .Should().Contain(r => r != null && r.StartsWith($"Désactivation du compte {account.UserName} : sortie de"));
+
+        // The exit date is the last day worked: an exit dated today leaves the account on until tomorrow.
+        var leavingToday = await AccountAsync(lab);
+        var lastDay = await HireAsync(services, leavingToday.Id, "Alami");
+        var scheduled = Ok(await On<PersonnelService, Result<DepartedAccountOutcome?>>(services,
+            s => s.RecordExitAsync(lastDay, lab.Clock.Today, ExitReason.Resignation, null)));
+        scheduled.Should().Be(new DepartedAccountOutcome(leavingToday.UserName, DepartedAccountState.Scheduled, lab.Clock.Today));
+        scheduled!.DeactivationDate.Should().Be(lab.Clock.Today.AddDays(1));
+        (await ReadUserAsync(leavingToday.Id)).IsActive.Should().BeTrue();
+        (await SignInAsync(services, lab, leavingToday.UserName)).IsSuccess.Should().BeTrue();
+        (await DeactivationEventsAsync(leavingToday.Id)).Should().BeEmpty();
 
         // A file with no account, and a past exit: nothing to say about an account.
         var unlinked = await HireAsync(services, null, "Bennani");
@@ -214,11 +226,14 @@ public sealed class Cycle5r5HrDatabaseTests(Cycle1HrScratchDatabase database) : 
         var validator = new SessionValidator(services.GetRequiredService<IServiceScopeFactory>(), session);
         (await validator.IsStillValidAsync()).Should().BeTrue();
         lab.Clock.Today = exit;
+        (await validator.IsStillValidAsync()).Should().BeTrue("the exit date is the last day worked");
+        (await ReadUserAsync(account.Id)).IsActive.Should().BeTrue();
+        lab.Clock.Today = exit.AddDays(1);
         (await validator.IsStillValidAsync()).Should().BeFalse();
         (await ReadUserAsync(account.Id)).IsActive.Should().BeFalse();
         (await DeactivationEventsAsync(account.Id)).Should().ContainSingle(e => e.Succeeded && e.Details!.Contains("sortie de"));
 
-        // Signing in again on the exit date is refused.
+        // Signing in again the day after the exit date is refused.
         (await SignInAsync(services, lab, account.UserName)).IsFailure.Should().BeTrue();
 
         // Done once: the next sweep finds nothing left to switch off.
@@ -227,7 +242,7 @@ public sealed class Cycle5r5HrDatabaseTests(Cycle1HrScratchDatabase database) : 
     }
 
     [SqlServerFact]
-    public async Task AnExitMovedToToday_DeactivatesNow_AndAWithdrawnExitLeavesTheAccountForTheAdministrator()
+    public async Task AnExitMovedToToday_StaysScheduled_AWithdrawnExitKeepsTheAccount_AndAPastOneDeactivatesNow()
     {
         var lab = await LabAsync();
         using var services = Services(lab);
@@ -238,14 +253,22 @@ public sealed class Cycle5r5HrDatabaseTests(Cycle1HrScratchDatabase database) : 
             s => s.RecordExitAsync(employeeId, lab.Clock.Today.AddDays(20), ExitReason.Resignation, null)));
         Ok(await On<PersonnelService, Result<DepartedAccountOutcome?>>(services,
                 s => s.CorrectExitAsync(employeeId, lab.Clock.Today, ExitReason.Resignation, "Départ avancé")))
-            .Should().Be(new DepartedAccountOutcome(account.UserName, DepartedAccountState.Deactivated, lab.Clock.Today));
-        (await ReadUserAsync(account.Id)).IsActive.Should().BeFalse();
+            .Should().Be(new DepartedAccountOutcome(account.UserName, DepartedAccountState.Scheduled, lab.Clock.Today));
+        (await ReadUserAsync(account.Id)).IsActive.Should().BeTrue();
 
-        // The exit day itself can still be withdrawn; the account is not switched back on by itself.
+        // Still pending on its last day: withdrawn, the account simply stays on.
         Ok(await On<PersonnelService, Result<DepartedAccountOutcome?>>(services,
                 s => s.CancelExitAsync(employeeId, "Démission retirée")))
-            .Should().Be(new DepartedAccountOutcome(account.UserName, DepartedAccountState.Inactive, null));
+            .Should().BeNull();
+        (await ReadUserAsync(account.Id)).IsActive.Should().BeTrue();
+
+        // An exit saved late, dated yesterday: deactivated at once, and no longer withdrawable.
+        Ok(await On<PersonnelService, Result<DepartedAccountOutcome?>>(services,
+                s => s.RecordExitAsync(employeeId, lab.Clock.Today.AddDays(-1), ExitReason.Resignation, "Saisie tardive")))
+            .Should().Be(new DepartedAccountOutcome(account.UserName, DepartedAccountState.Deactivated, lab.Clock.Today.AddDays(-1)));
         (await ReadUserAsync(account.Id)).IsActive.Should().BeFalse();
+        (await On<PersonnelService, Result<DepartedAccountOutcome?>>(services,
+                s => s.CancelExitAsync(employeeId, "Trop tard"))).IsFailure.Should().BeTrue();
     }
 
     [SqlServerFact]
@@ -267,9 +290,9 @@ public sealed class Cycle5r5HrDatabaseTests(Cycle1HrScratchDatabase database) : 
         var employeeId = await HireAsync(services, administrator.Id);
 
         Ok(await On<PersonnelService, Result<DepartedAccountOutcome?>>(services,
-                s => s.RecordExitAsync(employeeId, lab.Clock.Today, ExitReason.Resignation, null)))
+                s => s.RecordExitAsync(employeeId, lab.Clock.Today.AddDays(-1), ExitReason.Resignation, null)))
             .Should().Be(new DepartedAccountOutcome(administrator.UserName, DepartedAccountState.KeptLastAdministrator,
-                                                    lab.Clock.Today));
+                                                    lab.Clock.Today.AddDays(-1)));
         (await ReadUserAsync(administrator.Id)).IsActive.Should().BeTrue();
         (await DeactivationEventsAsync(administrator.Id)).Should()
             .ContainSingle(e => !e.Succeeded && e.FailureReasonKey == "User_WouldRemoveLastAdministrator");
