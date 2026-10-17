@@ -497,7 +497,7 @@ public sealed class RecoRaWorkflowDatabaseTests(RecoRaScratchDatabase database)
             .IsSuccess.Should().BeTrue();
 
         async Task<bool> OfferedAsync() =>
-            MarocLIS.Desktop.Views.ValidationScreenRules.CanIssueReport(
+            ValidationScreenRules.CanIssueReport(
                 (await On<ResultEntryService, Result<ResultEntrySheet>>(provider, s => s.OpenAsync(order.OrderId))).Value.Rows);
 
         // Entered and checked, nothing validated: greyed, and the service would refuse it.

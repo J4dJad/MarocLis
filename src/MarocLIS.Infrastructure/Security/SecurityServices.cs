@@ -75,7 +75,13 @@ public sealed class CurrentUserAccessor : ICurrentUser
     public IReadOnlySet<string> Permissions { get; private set; } = NoPermissions;
     public IReadOnlySet<string> AuthorizedDepartmentCodes { get; private set; } = NoPermissions;
 
-    public string Workstation { get; } = Environment.MachineName;
+    /// <summary>
+    /// The machine name for the desktop. A request to the API names the biologist's phone instead
+    /// (« Mobile · … »), set through <see cref="RequestSession"/> before anything reads it.
+    /// </summary>
+    public string Workstation { get; private set; } = Environment.MachineName;
+
+    internal void SetWorkstation(string workstation) => Workstation = workstation;
 
     public Guid? PrescriberId { get; private set; }
     public bool IsPrescriberScoped { get; private set; }

@@ -1270,7 +1270,9 @@ public sealed class ValidationView : LocalizedView
             var index = _details.Rows.Add(
                 // Pre-ticked: the common case is releasing the whole file, and the biologist
                 // unticks what they want to hold back.
-                ticks is not null && ticks.TryGetValue(row.TestResultId, out var ticked) ? ticked : releasable,
+                ticks is not null && ticks.TryGetValue(row.TestResultId, out var ticked)
+                    ? ticked
+                    : ValidationScreenRules.IsPreTicked(row),
                 new string(' ', row.IndentLevel * 4) + row.ParameterName.For(Localizer.CurrentLanguage),
                 row.IsHeading ? string.Empty : row.CurrentValue ?? string.Empty,
                 // The text behind the painted pill, for a print of the grid and a screen reader.

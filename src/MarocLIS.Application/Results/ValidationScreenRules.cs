@@ -1,9 +1,9 @@
-using MarocLIS.Application.Results;
+using System.Globalization;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Results;
 
-namespace MarocLIS.Desktop.Views;
+namespace MarocLIS.Application.Results;
 
 /// <summary>The filter chips above the validation worklist.</summary>
 public enum ValidationFilter
@@ -31,8 +31,14 @@ public sealed record ValidationAlert(ValidationTone Tone, string Key, params obj
 public sealed record ValidationContextLine(ValidationTone Tone, string Badge, string Key, params object[] Args);
 
 /// <summary>
-/// The rules of the « Validation biologique » screen that need no window, kept free of WinForms so
-/// the test project can compile them in.
+/// The rules of the « Validation biologique » screen that need no window: which chip a file falls
+/// under, the order of its alerts, which rows can be ticked and which come pre-ticked.
+/// <para>
+/// They live in the application layer rather than beside the desktop view because two screens apply
+/// them: the workstation and the biologist's phone (MarocLIS.Api). A file the phone lists under
+/// « Urgents », or a row it offers to tick, must be exactly the one the workstation would — two
+/// copies of these rules would drift the first time either screen was corrected.
+/// </para>
 /// </summary>
 public static class ValidationScreenRules
 {
@@ -94,6 +100,53 @@ public static class ValidationScreenRules
         !row.IsHeading && row.Status == TestResultStatus.TechnicallyValidated;
 
     /// <summary>
+    /// Whether a listed row comes ticked when the file opens: the releasable ones. The common case is
+    /// releasing the whole file, and the biologist unticks what they want to hold back.
+    /// </summary>
+    public static bool IsPreTicked(ResultEntryRow row) => IsReleasable(row);
+
+    /// <summary>
+    /// The arrow beside a value, read from its interpretation: ↓↓ ↑↑ for a critical value, ↓ ↑ for one
+    /// outside its interval, * for an abnormal coded answer, nothing for a normal one.
+    /// </summary>
+    public static string InterpretationGlyph(ResultInterpretation interpretation) => interpretation switch
+    {
+        ResultInterpretation.CriticalLow => "↓↓",
+        ResultInterpretation.CriticalHigh => "↑↑",
+        ResultInterpretation.Low => "↓",
+        ResultInterpretation.High => "↑",
+        ResultInterpretation.Abnormal => "*",
+        _ => string.Empty
+    };
+
+    /// <summary>
+    /// A short glyph string for the flags carried by a result, so a biologist sees at a glance which
+    /// values need attention and why: CIQ (quality control out), Δ (delta check), ! (sample defect),
+    /// × (diluted), R (corrected), ST (subcontracted), ≷ (outside the measuring range).
+    /// </summary>
+    public static string FlagGlyphs(ResultFlag flags)
+    {
+        var glyphs = new List<string>(4);
+
+        if (flags.HasFlag(ResultFlag.QcOutOfControl)) glyphs.Add("CIQ");
+        if (flags.HasFlag(ResultFlag.DeltaCheckFailed)) glyphs.Add("Δ");
+        if (flags.HasFlag(ResultFlag.SampleDefect)) glyphs.Add("!");
+        if (flags.HasFlag(ResultFlag.Diluted)) glyphs.Add("×");
+        if (flags.HasFlag(ResultFlag.Corrected)) glyphs.Add("R");
+        if (flags.HasFlag(ResultFlag.Subcontracted)) glyphs.Add("ST");
+        if (flags.HasFlag(ResultFlag.OutsideMeasuringRange)) glyphs.Add("≷");
+
+        return string.Join(" ", glyphs);
+    }
+
+    /// <summary>
+    /// The indicator column of a row: the flags' glyphs when it has any, otherwise the arrow of its
+    /// interpretation — what the workstation grid shows in its narrow column.
+    /// </summary>
+    public static string Indicator(ResultEntryRow row) =>
+        FlagGlyphs(row.Flags) is { Length: > 0 } glyphs ? glyphs : InterpretationGlyph(row.Interpretation);
+
+    /// <summary>
     /// A validated result is listed on request, to be ticked for un-validation, but never pre-ticked:
     /// withdrawing a release is a deliberate act.
     /// </summary>
@@ -129,7 +182,7 @@ public static class ValidationScreenRules
 
         var abnormal = values.Count(IsAbnormal);
         lines.Add(abnormal > 0
-            ? new(ValidationTone.Warning, abnormal.ToString(), "Validation.ContextAbnormal", abnormal)
+            ? new(ValidationTone.Warning, abnormal.ToString(CultureInfo.InvariantCulture), "Validation.ContextAbnormal", abnormal)
             : new(ValidationTone.Ok, "✓", "Validation.ContextNoAbnormal"));
 
         var late = dueAt is { } due && now > due;
@@ -146,7 +199,7 @@ public static class ValidationScreenRules
         var critical = values.Count(r => r.IsCritical);
 
         lines.Add(toCall > 0
-            ? new(ValidationTone.Critical, toCall.ToString(), "Validation.ContextCriticalToCall", toCall)
+            ? new(ValidationTone.Critical, toCall.ToString(CultureInfo.InvariantCulture), "Validation.ContextCriticalToCall", toCall)
             : critical > 0
                 ? new(ValidationTone.Ok, "✓", "Validation.ContextCriticalCalled")
                 : new(ValidationTone.Ok, "✓", "Validation.ContextNoCritical"));

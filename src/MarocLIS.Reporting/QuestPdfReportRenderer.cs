@@ -106,6 +106,22 @@ public sealed class QuestPdfReportRenderer : IReportRenderer
 
     public byte[] Render(ReportModel model) => BuildDocument(model).GeneratePdf();
 
+    /// <summary>
+    /// The resolution of the preview pages. 110 dpi draws an A4 page about 910 pixels wide: legible
+    /// on a phone once zoomed to the width of the screen, and a page stays near 150 KB, which matters
+    /// on a mobile connection. It is a preview; the document of record is the PDF.
+    /// </summary>
+    public const int PreviewDpi = 110;
+
+    public IReadOnlyList<byte[]> RenderPageImages(ReportModel model) =>
+    [
+        .. BuildDocument(model).GenerateImages(new ImageGenerationSettings
+        {
+            ImageFormat = ImageFormat.Png,
+            RasterDpi = PreviewDpi
+        })
+    ];
+
     public int CountPages(byte[] pdf)
     {
         // QuestPDF does not read back a generated document. Counting "/Type /Page" occurrences in
