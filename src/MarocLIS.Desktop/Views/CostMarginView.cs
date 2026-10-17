@@ -160,7 +160,7 @@ public sealed class CostMarginView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Computing cost and margin failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _bar.Compute.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _bar.Compute.Text);
         }
         finally
         {

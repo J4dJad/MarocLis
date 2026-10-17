@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using MarocLIS.Desktop.Controls;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Localization;
 
@@ -57,6 +58,7 @@ internal static class FinanceUi
             count.Height = 30;
             count.TextAlign = ContentAlignment.MiddleLeft;
             count.Margin = new Padding(0, 4, 12, 0);
+            EllipsisTip.Attach(count);
             header.Controls.Add(count, 1, 0);
         }
 
@@ -316,7 +318,9 @@ internal static class FinanceUi
     /// </summary>
     public static Button MoreButton(ContextMenuStrip menu, ILocalizer localizer, params MenuAction[] actions)
     {
-        var more = UiTheme.SecondaryButton(localizer["ResultEntry.MoreActions"]);
+        var more = UiTheme.SecondaryButton(string.Empty);
+        // Translated by itself on a language change: not every screen re-captions it.
+        LocalizedCaptions.Bind(more, localizer, "ResultEntry.MoreActions");
         more.Tag = UiTags.NoMnemonic;
         more.UseMnemonic = false;
         Fit(more);

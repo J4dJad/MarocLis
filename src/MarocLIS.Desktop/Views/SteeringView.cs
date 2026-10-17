@@ -112,7 +112,7 @@ public sealed class SteeringView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Computing the steering dashboard failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _bar.Compute.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _bar.Compute.Text);
         }
         finally
         {

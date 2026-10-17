@@ -1356,7 +1356,7 @@ public sealed class BillingView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Printing invoice {Number} failed.", invoice.Number);
-            _dialogs.Warn(T("Message.UnexpectedError"), title);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), title);
         }
         finally
         {

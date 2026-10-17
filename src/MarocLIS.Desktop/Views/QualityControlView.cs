@@ -514,7 +514,7 @@ public sealed class QualityControlView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the quality control screen failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 

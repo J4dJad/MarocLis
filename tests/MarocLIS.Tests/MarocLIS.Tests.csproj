@@ -40,6 +40,8 @@
     -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\EditorValues.cs" Link="Desktop\EditorValues.cs" />
     <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\TypedEdits.cs" Link="Desktop\TypedEdits.cs" />
+    <!-- The message a screen shows for an exception it caught (conflict or unexpected). -->
+    <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\FailureMessages.cs" Link="Desktop\FailureMessages.cs" />
     <!-- The per-call query scopes the screens and the analyser host read through. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Composition\IsolatedQueries.cs" Link="Desktop\IsolatedQueries.cs" />
     <!-- The value-axis arithmetic of the hand-drawn charts. -->

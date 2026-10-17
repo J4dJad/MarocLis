@@ -1187,7 +1187,7 @@ public sealed class OrderDetailView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the order list for {Term} failed.", term);
             _status.ForeColor = UiTheme.Critical;
-            _status.Text = T("Message.UnexpectedError");
+            _status.Text = T(FailureMessages.KeyFor(ex));
             return false;
         }
     }
@@ -1229,7 +1229,7 @@ public sealed class OrderDetailView : LocalizedView
         {
             _logger?.LogError(ex, "Loading order {OrderId} failed.", orderId);
             _status.ForeColor = UiTheme.Critical;
-            _status.Text = T("Message.UnexpectedError");
+            _status.Text = T(FailureMessages.KeyFor(ex));
         }
     }
 
@@ -1352,7 +1352,7 @@ public sealed class OrderDetailView : LocalizedView
         {
             _logger?.LogError(ex, "Searching orders for {Term} failed.", term);
             _status.ForeColor = UiTheme.Critical;
-            _status.Text = T("Message.UnexpectedError");
+            _status.Text = T(FailureMessages.KeyFor(ex));
         }
     }
 
@@ -1398,7 +1398,7 @@ public sealed class OrderDetailView : LocalizedView
                 _list.Rows[index].Tag = row;
                 _list.Rows[index].Cells[0].ToolTipText =
                     $"{row.PatientName} · {row.AccessionNumber} · {T($"OrderStatus.{row.Status}")} · "
-                    + $"{T($"Priority.{row.Priority}")} · {row.AnalysisCount} {T("Catalog.Analyses").ToLowerInvariant()}";
+                    + $"{T($"Priority.{row.Priority}")} · {T("ResultEntry.AnalysisMany", row.AnalysisCount)}";
             }
 
             _list.ResumeLayout(performLayout: true);
@@ -1789,7 +1789,7 @@ public sealed class OrderDetailView : LocalizedView
         var payerShare = detail.ChargedTotal - detail.PatientShareTotal;
 
         _billingValues[0].Text = Money.Of(detail.ChargedTotal).Format(language);
-        _billingNotes[0].Text = $"{detail.LiveItemCount} {T("Catalog.Analyses").ToLowerInvariant()}";
+        _billingNotes[0].Text = T("ResultEntry.AnalysisMany", detail.LiveItemCount);
         _billingValues[1].Text = Money.Of(payerShare).Format(language);
         _billingNotes[1].Text = detail.PayerName is { Length: > 0 } payer
             ? payer + (detail.ReimbursementRate is { } rate ? $" · {rate:P0}" : string.Empty)
@@ -2195,7 +2195,7 @@ public sealed class OrderDetailView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Reprinting the labels of {Accession} failed.", detail.AccessionNumber);
-            _dialogs.Warn(T("Action.PrintLabels") + " — " + T("Message.UnexpectedError"));
+            _dialogs.Warn(T("Action.PrintLabels") + " — " + T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -2237,7 +2237,7 @@ public sealed class OrderDetailView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Opening the report of {Accession} failed.", detail.AccessionNumber);
-            _dialogs.Warn(caption + " — " + T("Message.UnexpectedError"));
+            _dialogs.Warn(caption + " — " + T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -2258,7 +2258,7 @@ public sealed class OrderDetailView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Rendering the labels of {Accession} failed.", accessionNumber);
-            _dialogs.Warn(T("Action.PrintLabels") + " — " + T("Message.UnexpectedError"));
+            _dialogs.Warn(T("Action.PrintLabels") + " — " + T(FailureMessages.KeyFor(ex)));
         }
     }
 

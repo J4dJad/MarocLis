@@ -294,7 +294,8 @@ public sealed class PurchaseOrderView : LocalizedView
     private PurchaseOrderLineRow? SelectedLine => _lines.CurrentRow?.Tag as PurchaseOrderLineRow;
 
     private static string Amount(decimal value) => value.ToString("N2", CultureInfo.CurrentCulture);
-    private static string Quantity(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+    // Shown, never read back: written with the decimal comma of the language, not « 2.5 ».
+    private static string Quantity(decimal value) => value.ToString("0.##", CultureInfo.CurrentCulture);
 
     private async Task LoadAsync(Guid? keep = null, CancellationToken ct = default)
     {
@@ -318,7 +319,7 @@ public sealed class PurchaseOrderView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading purchase orders failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"));
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -529,7 +530,7 @@ public sealed class PurchaseOrderView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Creating a purchase order failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _newOrder.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _newOrder.Text);
         }
     }
 
@@ -628,7 +629,7 @@ public sealed class PurchaseOrderView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Sending purchase order {Number} failed.", order.Number);
-            _dialogs.Warn(T("Message.UnexpectedError"), _send.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _send.Text);
         }
     }
 
@@ -647,7 +648,7 @@ public sealed class PurchaseOrderView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Rendering purchase order {Number} failed.", order.Number);
-            _dialogs.Warn(T("Message.UnexpectedError"), _printPdf.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _printPdf.Text);
         }
     }
 
@@ -677,12 +678,12 @@ public sealed class PurchaseOrderView : LocalizedView
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _dialogs.Warn($"{T("Message.UnexpectedError")}\n{ex.Message}", _savePdf.Text);
+            _dialogs.Warn($"{T(FailureMessages.KeyFor(ex))}\n{ex.Message}", _savePdf.Text);
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Saving purchase order {Number} failed.", order.Number);
-            _dialogs.Warn(T("Message.UnexpectedError"), _savePdf.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _savePdf.Text);
         }
     }
 

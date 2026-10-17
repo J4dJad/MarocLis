@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using MarocLIS.Desktop.Controls;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Localization;
@@ -113,6 +114,7 @@ internal static class QhPage
             count.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             count.TextAlign = ContentAlignment.MiddleLeft;
             count.Margin = new Padding(0, 6, 12, 0);
+            EllipsisTip.Attach(count);
             header.Controls.Add(count, 1, 0);
         }
 

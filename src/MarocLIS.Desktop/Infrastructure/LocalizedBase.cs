@@ -192,6 +192,7 @@ public abstract class LocalizedForm : Form
         try
         {
             ApplyTexts();
+            LocalizedCaptions.Apply(this, Localizer);
             RtlLayout.Apply(this, e.Language);
             ButtonIcons.Apply(this, Localizer);
             GridColumns.Apply(this);
@@ -330,6 +331,7 @@ public abstract class LocalizedView : UserControl
         try
         {
             ApplyTexts();
+            LocalizedCaptions.Apply(this, Localizer);
             RtlLayout.Apply(this, e.Language);
             ButtonIcons.Apply(this, Localizer);
             GridColumns.Apply(this);

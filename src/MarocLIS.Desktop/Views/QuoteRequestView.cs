@@ -262,7 +262,7 @@ public sealed class QuoteRequestView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading quotation requests failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"));
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -532,7 +532,7 @@ public sealed class QuoteRequestView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Creating a quotation request failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _new.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _new.Text);
         }
     }
 
@@ -650,7 +650,7 @@ public sealed class QuoteRequestView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "A quotation step failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), title);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), title);
         }
     }
 }

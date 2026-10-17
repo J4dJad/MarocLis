@@ -942,7 +942,7 @@ public sealed class ReportRegisterView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the report register failed.");
             _status.ForeColor = UiTheme.Critical;
-            _status.Text = T("Message.UnexpectedError");
+            _status.Text = T(FailureMessages.KeyFor(ex));
         }
     }
 
@@ -1253,7 +1253,7 @@ public sealed class ReportRegisterView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Opening the stored report failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), T("Report.Reprint"));
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), T("Report.Reprint"));
         }
     }
 
@@ -1297,7 +1297,7 @@ public sealed class ReportRegisterView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Releasing the report failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
         finally
         {

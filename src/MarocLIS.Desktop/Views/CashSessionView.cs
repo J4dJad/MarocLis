@@ -290,7 +290,7 @@ public sealed class CashSessionView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the cash session failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 

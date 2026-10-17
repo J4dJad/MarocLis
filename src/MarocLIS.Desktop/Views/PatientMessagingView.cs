@@ -333,7 +333,7 @@ public sealed class PatientMessagingView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading patient messaging failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), Title);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), Title);
         }
         finally
         {

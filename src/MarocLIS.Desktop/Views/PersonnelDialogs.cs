@@ -912,12 +912,8 @@ internal sealed class SettlementDialog : MasterDataEditor
         Bounds = new Rectangle(x, y, width, 20), Text = text
     });
 
-    private static bool Read(TextBox box, out decimal value)
-    {
-        value = 0m;
-        var text = box.Text.Trim().Replace(',', '.').Replace(" ", string.Empty);
-        return text.Length == 0 || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out value);
-    }
+    // The shared reader, as in the other editors: "1.250,50" was refused here as a negative amount.
+    private static bool Read(TextBox box, out decimal value) => EditorValues.TryParseOrZero(box.Text, out value);
 
     private static void Put(TextBox box, decimal value) => box.Text = value.ToString("0.##", CultureInfo.InvariantCulture);
 

@@ -249,7 +249,7 @@ public sealed class InstrumentContractView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading instrument contracts failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"));
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -478,7 +478,7 @@ public sealed class InstrumentContractView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Editing an instrument contract failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"));
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)));
         }
     }
 

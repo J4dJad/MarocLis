@@ -380,7 +380,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the analyser interfaces failed.");
             _status.ForeColor = UiTheme.Critical;
-            _status.Text = T("Message.UnexpectedError");
+            _status.Text = T(FailureMessages.KeyFor(ex));
         }
     }
 

@@ -181,7 +181,7 @@ public sealed class StatisticsView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Computing activity statistics failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _bar.Compute.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _bar.Compute.Text);
         }
         finally
         {
@@ -278,7 +278,7 @@ public sealed class StatisticsView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Exporting statistics failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _bar.Export.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _bar.Export.Text);
         }
     }
 }

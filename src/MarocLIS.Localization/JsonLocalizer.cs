@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using MarocLIS.Domain.Common;
 using Microsoft.Extensions.Logging;
@@ -98,7 +99,7 @@ public sealed class JsonLocalizer : ILocalizer
 
         try
         {
-            return string.Format(culture, template, Isolate(args, language));
+            return string.Format(culture, Plurals(template, args, language), Isolate(Translated(args, language), language));
         }
         catch (FormatException)
         {
@@ -107,6 +108,88 @@ public sealed class JsonLocalizer : ILocalizer
                                 key, language);
             return template;
         }
+    }
+
+    private static readonly Regex PluralToken = new(@"\{(\d+):plural:([^{}]*)\}", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Resolves the plural tokens of a template: <c>{0:plural:commande|commandes}</c> becomes
+    /// <c>commande</c> or <c>commandes</c> by the count in argument 0 and the language's rule — in
+    /// French 0 and 1 take the singular (« 1 commande », « 0 rejet »), in English only 1. The count
+    /// itself is written by its own placeholder: <c>{0} {0:plural:commande|commandes}</c>, and an
+    /// adjective further on agrees the same way (« {1} en retard ou {1:plural:manquant|manquants} »).
+    /// <para>
+    /// The counts in the page headers and messages were written in the plural only, and read
+    /// « 1 rejets », « 1 commandes » whenever there was one. A template without a token is left as
+    /// it is; an argument that is not a number takes the last form.
+    /// </para>
+    /// </summary>
+    private static string Plurals(string template, object?[] args, AppLanguage language)
+    {
+        if (!template.Contains(":plural:", StringComparison.Ordinal)) return template;
+
+        return PluralToken.Replace(template, match =>
+        {
+            var index = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+            var forms = match.Groups[2].Value.Split('|');
+            var singular = index < args.Length && args[index] is { } arg && IsSingular(arg, language);
+            return (singular ? forms[0] : forms[^1]).Replace("{", "{{", StringComparison.Ordinal)
+                                                     .Replace("}", "}}", StringComparison.Ordinal);
+        });
+    }
+
+    private static bool IsSingular(object value, AppLanguage language)
+    {
+        decimal count;
+        try
+        {
+            if (value is string or bool or Enum or not IConvertible) return false;
+            count = Math.Abs(Convert.ToDecimal(value, CultureInfo.InvariantCulture));
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
+        {
+            return false;
+        }
+
+        return language == AppLanguage.French ? count < 2m : count == 1m;
+    }
+
+    /// <summary>
+    /// Replaces each enumeration argument by its label, read from the section named after its type
+    /// ("SampleStatus.Received"; the order line's <c>LabOrderItemStatus</c> lives under
+    /// "OrderItemStatus", as on the screens).
+    /// <para>
+    /// The domain's refusals carry the status itself ("Validation impossible depuis le statut
+    /// « {0} »"), and substituted as is it showed the code's English name — « Validated » in a
+    /// French or Arabic sentence. Done here, once, so every such message is translated, those of
+    /// the domain and of the services alike. A value with no label keeps its name.
+    /// </para>
+    /// </summary>
+    private object?[] Translated(object?[] args, AppLanguage language)
+    {
+        object?[]? translated = null;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] is not Enum value || EnumLabel(value, language) is not { } label) continue;
+            translated ??= (object?[])args.Clone();
+            translated[i] = label;
+        }
+
+        return translated ?? args;
+    }
+
+    private string? EnumLabel(Enum value, AppLanguage language)
+    {
+        var type = value.GetType().Name;
+        string[] sections = type.StartsWith("Lab", StringComparison.Ordinal) ? [type, type[3..]] : [type];
+        foreach (var section in sections)
+        {
+            var key = $"{section}.{value}";
+            if (Has(key, language) || Has(key, _options.FallbackLanguage)) return Get(key, language);
+        }
+
+        return null;
     }
 
     /// <summary>

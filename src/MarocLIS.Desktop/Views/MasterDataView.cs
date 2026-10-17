@@ -650,7 +650,7 @@ public sealed class MasterDataView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the reference data failed.");
             _status.ForeColor = UiTheme.Critical;
-            _status.Text = T("Message.UnexpectedError");
+            _status.Text = T(FailureMessages.KeyFor(ex));
         }
     }
 

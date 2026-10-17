@@ -946,7 +946,7 @@ public sealed class PatientSearchView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Patient search failed for '{Term}'.", term);
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 

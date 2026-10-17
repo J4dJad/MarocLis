@@ -240,7 +240,7 @@ public sealed class RelationsView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the relations failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), Title);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), Title);
         }
         finally
         {

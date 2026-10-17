@@ -58,6 +58,10 @@ public sealed record LeaveSubmission
 
 public sealed record HolidayRow(Guid HolidayId, DateOnly Date, string Name, bool IsReligious);
 
+/// <summary>A leave a new public holiday falls in, recounted: it now counts <see cref="DaysBefore"/> - <see cref="DaysAfter"/> days fewer.</summary>
+public sealed record HolidayRecount(Guid LeaveRequestId, string EmployeeNumber, string EmployeeName, DateOnly StartDate,
+                                    DateOnly EndDate, LeaveStatus Status, decimal DaysBefore, decimal DaysAfter);
+
 /// <summary>What the accrual needs to know about one active employee.</summary>
 public sealed record AccrualFacts(Guid EmployeeId, DateOnly HireDate, DateOnly? BirthDate, DateOnly? ExitDate,
                                   DateOnly TrackedFrom, IReadOnlySet<string> CreditedReferences);
@@ -372,19 +376,63 @@ public sealed class LeaveService(
         return Result.Success(existing);
     }
 
-    public async Task<Result> AddHolidayAsync(DateOnly date, string name, bool religious, CancellationToken ct = default)
+    /// <summary>
+    /// Adds a holiday and recounts the leaves it falls in.
+    /// <para>
+    /// A religious holiday is entered once announced, often after leaves around it were asked and
+    /// approved: the day stayed counted as leave taken. When it is not past yet, every pending or
+    /// approved leave covering it is counted again, an approved annual leave gets the difference
+    /// back on its balance, and the leaves recounted are returned so the screen names them. A day
+    /// already past is a fact: HR corrects it with an adjustment.
+    /// </para>
+    /// </summary>
+    public async Task<Result<IReadOnlyList<HolidayRecount>>> AddHolidayAsync(DateOnly date, string name, bool religious,
+                                                                             CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.HumanResources.Manage);
-        if (permitted.IsFailure) return permitted;
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<HolidayRecount>>(permitted.FirstError);
 
-        if (string.IsNullOrWhiteSpace(name)) return Result.Failure(Error.Validation("Holiday_NameRequired"));
+        if (string.IsNullOrWhiteSpace(name))
+            return Result.Failure<IReadOnlyList<HolidayRecount>>(Error.Validation("Holiday_NameRequired"));
         if ((await queries.GetHolidaysAsync(date.Year, ct)).Any(h => h.Date == date))
-            return Result.Failure(Error.Conflict("Holiday_AlreadyExists", date));
+            return Result.Failure<IReadOnlyList<HolidayRecount>>(Error.Conflict("Holiday_AlreadyExists", date));
 
         await holidays.AddAsync(new PublicHoliday(date, name, religious), ct);
-        unitOfWork.AuditReason = $"Jour férié ajouté : {date:dd/MM/yyyy} {name.Trim()}";
+
+        var recounted = new List<HolidayRecount>();
+        if (date >= clock.Today)
+        {
+            var covering = await requests.ListAsync(r => (r.Status == LeaveStatus.Pending || r.Status == LeaveStatus.Approved)
+                                                         && r.StartDate <= date && r.EndDate >= date, ct);
+            var employeeIds = covering.Select(r => r.EmployeeId).Distinct().ToList();
+            var staff = employeeIds.Count == 0
+                ? new Dictionary<Guid, Employee>()
+                : (await employees.ListAsync(e => employeeIds.Contains(e.Id), ct)).ToDictionary(e => e.Id);
+
+            foreach (var request in covering.OrderBy(r => r.StartDate))
+            {
+                var calendar = new HashSet<DateOnly>(await queries.GetHolidayDatesAsync(request.StartDate, request.EndDate, ct)) { date };
+                var before = request.Days;
+                var fewer = request.RecountDays(calendar);
+                if (fewer == 0m) continue;
+
+                requests.Update(request);
+                if (request.Status == LeaveStatus.Approved && LeaveRules.DebitsBalance(request.Type))
+                    await ledger.AddAsync(new LeaveLedgerEntry(request.EmployeeId, clock.Today, LeaveLedgerKind.Returned, fewer,
+                                                               $"FERIE-{date:yyyyMMdd}", $"Jour férié {date:dd/MM/yyyy} : {name.Trim()}",
+                                                               request.Id), ct);
+
+                var employee = staff.GetValueOrDefault(request.EmployeeId);
+                recounted.Add(new HolidayRecount(request.Id, employee?.Number ?? string.Empty, employee?.FullName ?? string.Empty,
+                                                 request.StartDate, request.EndDate, request.Status, before, request.Days));
+            }
+        }
+
+        unitOfWork.AuditReason = recounted.Count == 0
+            ? $"Jour férié ajouté : {date:dd/MM/yyyy} {name.Trim()}"
+            : $"Jour férié ajouté : {date:dd/MM/yyyy} {name.Trim()} ({recounted.Count} congé(s) recompté(s))";
         await unitOfWork.SaveChangesAsync(ct);
-        return Result.Success();
+        return Result.Success<IReadOnlyList<HolidayRecount>>(recounted);
     }
 
     public async Task<Result> RemoveHolidayAsync(Guid holidayId, CancellationToken ct = default)

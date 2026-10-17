@@ -279,7 +279,7 @@ public sealed class AccidentView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the work accidents failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
         finally
         {
@@ -344,7 +344,7 @@ public sealed class AccidentView : LocalizedView
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Loading a work accident failed.");
-                _dialogs.Error(T("Message.UnexpectedError"));
+                _dialogs.Error(T(FailureMessages.KeyFor(ex)));
             }
         }
 
@@ -417,7 +417,7 @@ public sealed class AccidentView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Saving a work accident failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -432,7 +432,7 @@ public sealed class AccidentView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "A work-accident step failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -498,7 +498,7 @@ public sealed class AccidentView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Printing an accident declaration failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -514,7 +514,7 @@ public sealed class AccidentView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Printing the accident register failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 }

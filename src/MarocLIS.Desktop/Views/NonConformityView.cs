@@ -327,7 +327,7 @@ public sealed class NonConformityView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the non-conformity register failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 

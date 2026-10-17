@@ -951,7 +951,7 @@ public sealed class SettingsView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the configuration failed.");
             _siteStatus.ForeColor = UiTheme.Critical;
-            _siteStatus.Text = T("Message.UnexpectedError");
+            _siteStatus.Text = T(FailureMessages.KeyFor(ex));
         }
     }
 

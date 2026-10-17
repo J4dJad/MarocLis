@@ -36,6 +36,11 @@ internal static class EditorValues
     /// thousands; a separator that repeats ("1.500.000") can only be grouping.
     /// </para>
     /// <para>A number of <see cref="Limit"/> or more reads as null, like any text that is no number.</para>
+    /// <para>
+    /// So does the exponent notation ("1e5", "2E-3"): nobody at the lab writes an amount or a
+    /// result that way, and read as a number it turned a slip in a box ("1e5" for "105") into a
+    /// hundred thousand without a word.
+    /// </para>
     /// </summary>
     public static decimal? ParseDecimal(string? text)
     {
@@ -63,11 +68,24 @@ internal static class EditorValues
                 compact = compact.Replace(separator, string.Empty, StringComparison.Ordinal);
         }
 
-        return decimal.TryParse(compact.Replace(',', '.'), NumberStyles.Float,
+        return decimal.TryParse(compact.Replace(',', '.'), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
                                 CultureInfo.InvariantCulture, out var value)
                && Math.Abs(value) < Limit
             ? value
             : null;
+    }
+
+    /// <summary>
+    /// <see cref="ParseDecimal"/> for the boxes where an empty box means zero (the payroll
+    /// variables, the settlement amounts): false only for text that is no number.
+    /// </summary>
+    public static bool TryParseOrZero(string? text, out decimal value)
+    {
+        value = 0m;
+        if (string.IsNullOrWhiteSpace(text)) return true;
+        if (ParseDecimal(text) is not { } read) return false;
+        value = read;
+        return true;
     }
 
     /// <summary>

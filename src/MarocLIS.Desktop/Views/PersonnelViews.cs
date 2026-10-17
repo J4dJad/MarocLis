@@ -233,7 +233,7 @@ public sealed class PersonnelView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the personnel list failed.");
             _status.ForeColor = UiTheme.Critical;
-            _status.Text = T("Message.UnexpectedError");
+            _status.Text = T(FailureMessages.KeyFor(ex));
         }
         finally
         {
@@ -350,7 +350,7 @@ public sealed class PersonnelView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Printing an HR document failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -380,7 +380,7 @@ public sealed class PersonnelView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Computing a final settlement failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -418,7 +418,7 @@ public sealed class PersonnelView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Editing a personnel file failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -479,7 +479,7 @@ public sealed class PersonnelView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Correcting a departure failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -499,7 +499,7 @@ public sealed class PersonnelView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Withdrawing a departure failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 }
@@ -630,7 +630,7 @@ public sealed class HabilitationView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the habilitation matrix failed.");
             _detail.ForeColor = UiTheme.Critical;
-            _detail.Text = T("Message.UnexpectedError");
+            _detail.Text = T(FailureMessages.KeyFor(ex));
         }
     }
 
@@ -835,7 +835,7 @@ public sealed class HabilitationView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Exporting the habilitation matrix failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 }
@@ -986,7 +986,7 @@ public sealed class PersonnelDeadlinesView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the personnel deadlines failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -1039,7 +1039,7 @@ public sealed class PersonnelDeadlinesView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Opening a personnel file from the deadlines failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 }

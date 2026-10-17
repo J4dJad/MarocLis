@@ -213,7 +213,7 @@ public sealed class RecollectionView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the recollection list failed.");
             _status.ForeColor = UiTheme.Critical;
-            _status.Text = T("Message.UnexpectedError");
+            _status.Text = T(FailureMessages.KeyFor(ex));
         }
     }
 
@@ -388,7 +388,7 @@ public sealed class RecollectionView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Recollection action failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
         finally
         {

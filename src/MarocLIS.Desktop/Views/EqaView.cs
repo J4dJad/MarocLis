@@ -216,7 +216,7 @@ public sealed class EqaView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading EQA participations failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"));
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -328,7 +328,7 @@ public sealed class EqaView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Registering an EQA round failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _register.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _register.Text);
         }
     }
 

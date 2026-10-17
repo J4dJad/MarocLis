@@ -259,7 +259,7 @@ public sealed class SampleStorageView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the serum bank failed.");
             _status.ForeColor = UiTheme.Critical;
-            _status.Text = T("Message.UnexpectedError");
+            _status.Text = T(FailureMessages.KeyFor(ex));
         }
     }
 

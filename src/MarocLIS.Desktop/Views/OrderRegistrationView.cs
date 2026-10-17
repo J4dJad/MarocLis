@@ -1559,7 +1559,7 @@ public sealed class OrderRegistrationView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Opening the patient's latest file failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -1749,7 +1749,7 @@ public sealed class OrderRegistrationView : LocalizedView
     private string Notes(CatalogPickerItem item)
     {
         var notes = new List<string>();
-        if (item.IsPanel) notes.Add($"{item.ComponentCount} {T("Catalog.Analyses").ToLowerInvariant()}");
+        if (item.IsPanel) notes.Add(T("ResultEntry.AnalysisMany", item.ComponentCount));
         if (item.FastingHours is { } fasting) notes.Add($"{T("Order.Fasted")} {fasting} h");
         if (item.ConsentRequirement != Domain.Catalog.ConsentRequirement.None) notes.Add(T("Consent.Required"));
         if (item.IsSubcontracted) notes.Add(T("Catalog.Subcontracted"));
@@ -2533,7 +2533,7 @@ public sealed class OrderRegistrationView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Order registration failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
         finally
         {
@@ -2603,7 +2603,7 @@ public sealed class OrderRegistrationView : LocalizedView
             // A label failure must not lose the registration: the order exists, and the labels can
             // be reprinted from the order screen.
             _logger?.LogError(ex, "Rendering the sample labels failed.");
-            _dialogs.Warn(T("Action.PrintLabels") + " — " + T("Message.UnexpectedError"));
+            _dialogs.Warn(T("Action.PrintLabels") + " — " + T(FailureMessages.KeyFor(ex)));
         }
     }
 

@@ -177,7 +177,7 @@ public sealed class AccountingSettingsView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Saving the accounting settings failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _save.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _save.Text);
         }
     }
 }

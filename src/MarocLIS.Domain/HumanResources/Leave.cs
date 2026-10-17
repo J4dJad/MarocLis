@@ -5,10 +5,11 @@ namespace MarocLIS.Domain.HumanResources;
 /// <summary>
 /// A leave or absence request, from submission to decision.
 /// <para>
-/// The working days are computed once, at submission, from the calendar in force: Sundays and
-/// public holidays are not counted (Code du travail: congé en jours ouvrables). They are stored
-/// with the request so that a holiday entered later does not silently change a balance that was
-/// already debited.
+/// The working days are computed at submission, from the calendar in force: Sundays and public
+/// holidays are not counted (Code du travail: congé en jours ouvrables). They are stored with the
+/// request, and recounted only when a holiday is entered on a day of it that is not past yet
+/// (<see cref="RecountDays"/>): the service gives the difference back to the balance and names
+/// every leave it recounted.
 /// </para>
 /// </summary>
 public sealed class LeaveRequest : AuditableAggregateRoot
@@ -66,6 +67,20 @@ public sealed class LeaveRequest : AuditableAggregateRoot
     public bool Overlaps(DateOnly from, DateOnly to) => StartDate <= to && EndDate >= from;
 
     public bool IsLive => Status is LeaveStatus.Pending or LeaveStatus.Approved;
+
+    /// <summary>
+    /// Counts the days again with <paramref name="holidays"/>, a public holiday having been entered
+    /// on a day of the leave, and returns how many fewer days it now counts (0 when none).
+    /// </summary>
+    public decimal RecountDays(IReadOnlySet<DateOnly> holidays)
+    {
+        var days = LeaveRules.CountDays(Type, StartDate, EndDate, StartsAfternoon, EndsMorning, holidays);
+        var fewer = Days - days;
+        if (fewer <= 0m) return 0m;
+
+        Days = days;
+        return fewer;
+    }
 
     public Result Approve(DateTimeOffset now, Guid byUserId, string? comment)
     {

@@ -188,7 +188,7 @@ public sealed class LeaveView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the leave requests failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -286,7 +286,7 @@ public sealed class LeaveView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Submitting a leave request failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -719,6 +719,14 @@ internal sealed class HolidaysDialog : Form
             {
                 Changed = true;
                 await LoadAsync();
+                // The leaves the new holiday falls in were recounted: named, so HR knows whose
+                // balance moved.
+                if (done.Value.Count > 0)
+                    _dialogs.Info(_localizer["Holiday.Recounted"] + Environment.NewLine + string.Join(Environment.NewLine,
+                        done.Value.Select(r => _localizer.Format("Holiday.RecountedLine", r.EmployeeNumber, r.EmployeeName,
+                                                                 r.StartDate.ToString("dd/MM/yyyy"), r.EndDate.ToString("dd/MM/yyyy"),
+                                                                 r.Status, r.DaysBefore.ToString("0.#"), r.DaysAfter.ToString("0.#")))),
+                        editor.Text);
                 return;
             }
 

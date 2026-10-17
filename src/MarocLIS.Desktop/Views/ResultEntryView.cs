@@ -1498,7 +1498,7 @@ public sealed class ResultEntryView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading order {OrderId} for entry failed.", orderId);
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -1839,7 +1839,7 @@ public sealed class ResultEntryView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the history of parameter {ParameterId} failed.", row.TestParameterId);
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
             return;
         }
         finally
@@ -1916,7 +1916,7 @@ public sealed class ResultEntryView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Printing the bench worksheet failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), title);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), title);
         }
         finally
         {

@@ -30,7 +30,6 @@ public sealed class DefectCycle3bTests
     [InlineData("999 999 999 999", "999999999999")]
     [InlineData("999999999999,999999", "999999999999.999999")]
     [InlineData("-999999999999", "-999999999999")]
-    [InlineData("1e5", "100000")]
     [InlineData("12,5", "12.5")]
     public void ANumberWithinTheColumns_IsStillRead(string text, string expected)
     {

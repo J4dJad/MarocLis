@@ -267,7 +267,7 @@ public sealed class SubcontractingView : LocalizedView
         {
             _logger?.LogError(ex, "Loading the subcontracting list failed.");
             _status.ForeColor = UiTheme.Critical;
-            _status.Text = T("Message.UnexpectedError");
+            _status.Text = T(FailureMessages.KeyFor(ex));
         }
     }
 
@@ -445,7 +445,7 @@ public sealed class SubcontractingView : LocalizedView
             // Logged with its detail; the operator gets the message in their language, not the
             // runtime's English text.
             _logger?.LogError(ex, "Printing dispatch slip {Number} failed.", number);
-            _dialogs.Error(T("Message.UnexpectedError"), T("Action.Print"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)), T("Action.Print"));
         }
     }
 

@@ -1,3 +1,4 @@
+using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Audit;
@@ -28,6 +29,7 @@ namespace MarocLIS.Desktop.Views;
 public sealed class UserAdministrationView : LocalizedView
 {
     private readonly UserAdministrationService _administration;
+    private readonly ICurrentUser _currentUser;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<UserAdministrationView>? _logger;
 
@@ -48,6 +50,7 @@ public sealed class UserAdministrationView : LocalizedView
     private readonly Button _resetPassword = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _unlock = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _toggleActive = UiTheme.SecondaryButton(string.Empty);
+    private readonly ToolTip _tips = new();
     private readonly Label _userNotice = new();
 
     // Page and selected account
@@ -82,12 +85,13 @@ public sealed class UserAdministrationView : LocalizedView
     private IReadOnlyList<SecurityEventRow> _eventRows = [];
 
     public UserAdministrationView(UserAdministrationService administration, IUserDialogs dialogs,
-                                  ILocalizer localizer, ICultureManager cultureManager,
+                                  ILocalizer localizer, ICultureManager cultureManager, ICurrentUser currentUser,
                                   ILogger<UserAdministrationView>? logger = null)
         : base(localizer, cultureManager)
     {
         _administration = administration;
         _dialogs = dialogs;
+        _currentUser = currentUser;
         _logger = logger;
 
         BuildLayout();
@@ -678,7 +682,8 @@ public sealed class UserAdministrationView : LocalizedView
 
         _users.ResumeLayout(performLayout: true);
 
-        _userCount.Text = $"{_userRows.Count} · {_userRows.Count(u => u.IsActive)} {T("Admin.Active").ToLowerInvariant()}";
+        // « 7 · 7 actif »: the word did not agree with its count.
+        _userCount.Text = T("Admin.UserCount", _userRows.Count, _userRows.Count(u => u.IsActive));
 
         // Keeps the administrator on the record they were working with across a reload, which they
         // will do repeatedly while fixing up a personnel file.
@@ -865,8 +870,12 @@ public sealed class UserAdministrationView : LocalizedView
         // An inactive account is reactivated, not unlocked: the service refuses it.
         _unlock.Enabled = row is { IsActive: true } and ({ IsLockedOut: true } or { FailedLoginAttempts: > 0 });
 
-        _toggleActive.Enabled = row is not null;
+        // Your own account cannot be deactivated (the service refuses it): greyed out on it,
+        // rather than refused once the reason has been typed.
+        var ownAccount = row is { IsActive: true } && row.UserId == _currentUser.UserId;
+        _toggleActive.Enabled = row is not null && !ownAccount;
         _toggleActive.Text = row is { IsActive: false } ? T("Admin.Reactivate") : T("Admin.Deactivate");
+        _tips.SetToolTip(_toggleActive, ownAccount ? T("User_CannotDeactivateSelf") : null);
 
         ShowSelectedUser(row);
 

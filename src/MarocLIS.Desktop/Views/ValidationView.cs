@@ -1090,7 +1090,7 @@ public sealed class ValidationView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the validation worklist failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -1523,7 +1523,7 @@ public sealed class ValidationView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the history of parameter {ParameterId} failed.", row.TestParameterId);
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
             return;
         }
 
@@ -1820,7 +1820,7 @@ public sealed class ValidationView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Releasing the report failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
         finally
         {

@@ -206,7 +206,7 @@ public sealed class PlanningView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the planning failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 

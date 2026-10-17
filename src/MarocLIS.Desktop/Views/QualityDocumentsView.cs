@@ -297,7 +297,7 @@ public sealed class QualityDocumentsView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the document register failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"));
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -555,7 +555,7 @@ public sealed class QualityDocumentsView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Opening a controlled document failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _open.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _open.Text);
         }
     }
 

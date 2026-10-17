@@ -1463,7 +1463,7 @@ public sealed class SampleReceptionView : LocalizedView
             // The rejection and the replacement tube are already recorded; a label failure must
             // not undo them. The label can be reprinted from the collection screen.
             _logger?.LogError(ex, "Printing the replacement label failed.");
-            _dialogs.Warn(T("Action.PrintLabels") + " — " + T("Message.UnexpectedError"));
+            _dialogs.Warn(T("Action.PrintLabels") + " — " + T(FailureMessages.KeyFor(ex)));
         }
     }
 

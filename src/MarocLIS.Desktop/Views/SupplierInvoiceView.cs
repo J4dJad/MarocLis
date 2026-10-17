@@ -320,7 +320,8 @@ public sealed class SupplierInvoiceView : LocalizedView
     private SupplierInvoiceRow? Selected => _grid.CurrentRow?.Tag as SupplierInvoiceRow;
 
     private static string Amount(decimal value) => value.ToString("N2", CultureInfo.CurrentCulture);
-    private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+    // Shown, never read back: written with the decimal comma of the language, not « 2.5 ».
+    private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.CurrentCulture);
     private static string Date(DateOnly? date) => date?.ToString("dd/MM/yy") ?? string.Empty;
 
     private SupplierInvoiceFilter Filter =>
@@ -347,7 +348,7 @@ public sealed class SupplierInvoiceView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading supplier invoices failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"));
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -534,7 +535,7 @@ public sealed class SupplierInvoiceView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Entering a supplier invoice failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _newInvoice.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _newInvoice.Text);
         }
     }
 
@@ -680,7 +681,7 @@ public sealed class SupplierInvoiceView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Listing late supplier payments failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _late.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _late.Text);
         }
     }
 
@@ -701,7 +702,7 @@ public sealed class SupplierInvoiceView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Exporting supplier accounting entries failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _export.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _export.Text);
         }
     }
 
@@ -721,7 +722,7 @@ public sealed class SupplierInvoiceView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Saving the purchasing settings failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _settings.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _settings.Text);
         }
     }
 }

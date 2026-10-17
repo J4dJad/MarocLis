@@ -290,7 +290,7 @@ public sealed class FixedAssetView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the fixed-assets register failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"));
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -499,7 +499,7 @@ public sealed class FixedAssetView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Editing a fixed asset failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"));
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)));
         }
     }
 

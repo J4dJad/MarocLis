@@ -2,6 +2,7 @@ using MarocLIS.Application;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Desktop.Composition;
 using MarocLIS.Desktop.Forms;
+using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Infrastructure;
 using MarocLIS.Infrastructure.Persistence;
@@ -194,9 +195,7 @@ internal static class Program
 
         // A concurrency conflict is an ordinary event on a shared reception counter, not a crash;
         // it gets its own explanatory message rather than the generic one.
-        var key = exception is ConcurrencyConflictException conflict
-            ? conflict.ResourceKey
-            : "Message.UnexpectedError";
+        var key = FailureMessages.KeyFor(exception);
 
         MessageBox.Show(localizer[key], localizer["App.Title"],
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);

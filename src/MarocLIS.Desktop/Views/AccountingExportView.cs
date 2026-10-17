@@ -268,7 +268,7 @@ public sealed class AccountingExportView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Checking the accounting entries failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _check.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _check.Text);
         }
     }
 
@@ -335,7 +335,7 @@ public sealed class AccountingExportView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Exporting the accounting entries failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), _export.Text);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), _export.Text);
         }
     }
 
@@ -369,7 +369,7 @@ public sealed class AccountingExportView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Producing the VAT statement failed.");
-            _dialogs.Warn(T("Message.UnexpectedError"), title);
+            _dialogs.Warn(T(FailureMessages.KeyFor(ex)), title);
         }
     }
 }

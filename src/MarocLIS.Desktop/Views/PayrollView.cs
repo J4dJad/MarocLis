@@ -243,7 +243,7 @@ public sealed class PayrollView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the payroll failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -338,7 +338,7 @@ public sealed class PayrollView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Preparing the salary transfer failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -425,7 +425,7 @@ public sealed class PayrollView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Printing payslips failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -443,7 +443,7 @@ public sealed class PayrollView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Exporting the payroll failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -456,7 +456,7 @@ public sealed class PayrollView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "{Failure}", failure);
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -646,12 +646,9 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
         QhDialog.Dress(this, localizer, null);
     }
 
-    private static bool Read(TextBox box, out decimal value)
-    {
-        value = 0m;
-        var text = box.Text.Trim().Replace(',', '.').Replace(" ", string.Empty);
-        return text.Length == 0 || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out value);
-    }
+    // The shared reader: "1 250,50" with the no-break space of the French culture, or "1.250,50",
+    // was refused here as a negative variable.
+    private static bool Read(TextBox box, out decimal value) => EditorValues.TryParseOrZero(box.Text, out value);
 
     protected override void Accept()
     {
@@ -727,13 +724,13 @@ internal sealed class PayrollParametersDialog : MasterDataEditor
         _values = new decimal[_fields.Length];
         for (var i = 0; i < _fields.Length; i++)
         {
-            var text = _fields[i].Box.Text.Trim().Replace(',', '.');
-            if (!decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out _values[i]) || _values[i] < 0)
+            if (EditorValues.ParseDecimal(_fields[i].Box.Text) is not { } value || value < 0)
             {
                 Dialogs.Warn(Localizer["Payroll_RateInvalid"], Text);
                 _fields[i].Box.Focus();
                 return;
             }
+            _values[i] = value;
         }
 
         if (PayrollParameters.ParseScale(_scale.Text).Count == 0)

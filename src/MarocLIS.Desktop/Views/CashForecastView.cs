@@ -158,7 +158,7 @@ public sealed class CashForecastView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Computing the cash forecast failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 

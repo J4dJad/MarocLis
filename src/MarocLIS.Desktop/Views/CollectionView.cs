@@ -866,7 +866,7 @@ public sealed class CollectionView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the collection worklist failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
@@ -1615,7 +1615,7 @@ public sealed class CollectionView : LocalizedView
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Reprinting labels failed.");
-            _dialogs.Error(T("Message.UnexpectedError"));
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
         }
     }
 
