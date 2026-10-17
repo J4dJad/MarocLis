@@ -446,6 +446,7 @@ internal sealed class MenuAction : Button
     /// Why the entry is greyed when it is for good (no right to it): shown on hover over the menu
     /// entry. Null when the entry is only off for the current selection.
     /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public string? DisabledHint { get; set; }
 
     /// <summary>Runs what a click on the button would, when the action is enabled.</summary>

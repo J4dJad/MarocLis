@@ -280,7 +280,7 @@ public sealed class SessionValidator(IServiceScopeFactory scopes, CurrentUserAcc
         // signed in: the account is deactivated now and the session ends with it.
         if (account is { IsActive: true })
         {
-            var today = scope.ServiceProvider.GetRequiredService<IClock>().Today;
+            var today = (scope.ServiceProvider.GetService<IClock>() ?? new SystemClock()).Today;
             var departed = await db.Employees.IgnoreQueryFilters().AsNoTracking()
                 .AnyAsync(e => e.UserId == currentUser.UserId && e.ExitDate != null && e.ExitDate <= today, ct);
 

@@ -23,7 +23,7 @@ namespace MarocLIS.Tests.Persistence;
 /// <summary>
 /// The owner's decisions on HR (cycle 5, lot r5), against SQL Server and the services as the
 /// desktop composes them: the LIS account of an employee who leaves is deactivated as of the exit
-/// date (at once when the date is reached, at the sign-in on the day otherwise, never the last
+/// date (at once when the date is reached, at the sign-in or the session check on the day otherwise, never the last
 /// administrator), with the audit trail and the security log; and « Justificatif reçu » ticks the
 /// certificate of a waiting sick leave so it can be approved.
 /// </summary>
@@ -207,11 +207,19 @@ public sealed class Cycle5r5HrDatabaseTests(Cycle1HrScratchDatabase database) : 
         // Before the day the employee still signs in: the notice is worked.
         (await SignInAsync(services, lab, account.UserName)).IsSuccess.Should().BeTrue();
 
-        // On the exit date the sign-in deactivates the account and refuses it.
+        // A workstation still signed in when the day comes: the session check deactivates the
+        // account and ends the session.
+        var session = new CurrentUserAccessor();
+        (await SignInAsync(services, lab, account.UserName, session)).IsSuccess.Should().BeTrue();
+        var validator = new SessionValidator(services.GetRequiredService<IServiceScopeFactory>(), session);
+        (await validator.IsStillValidAsync()).Should().BeTrue();
         lab.Clock.Today = exit;
-        (await SignInAsync(services, lab, account.UserName)).IsFailure.Should().BeTrue();
+        (await validator.IsStillValidAsync()).Should().BeFalse();
         (await ReadUserAsync(account.Id)).IsActive.Should().BeFalse();
         (await DeactivationEventsAsync(account.Id)).Should().ContainSingle(e => e.Succeeded && e.Details!.Contains("sortie de"));
+
+        // Signing in again on the exit date is refused.
+        (await SignInAsync(services, lab, account.UserName)).IsFailure.Should().BeTrue();
 
         // Done once: the next sweep finds nothing left to switch off.
         (await On<IDepartedAccounts, IReadOnlyList<string>>(services, s => s.DeactivateDueAsync()))
@@ -271,11 +279,12 @@ public sealed class Cycle5r5HrDatabaseTests(Cycle1HrScratchDatabase database) : 
         (await DeactivationEventsAsync(administrator.Id)).Should().ContainSingle();
     }
 
-    private static async Task<Result<AuthenticatedSession>> SignInAsync(ServiceProvider services, Lab lab, string userName)
+    private static async Task<Result<AuthenticatedSession>> SignInAsync(ServiceProvider services, Lab lab, string userName,
+                                                                        CurrentUserAccessor? session = null)
     {
         using var scope = services.CreateScope();
         var auth = new AuthenticationService(scope.ServiceProvider.GetRequiredService<LisDbContext>(),
-                                             new BCryptPasswordHasher(), new PasswordPolicy(), new CurrentUserAccessor(),
+                                             new BCryptPasswordHasher(), new PasswordPolicy(), session ?? new CurrentUserAccessor(),
                                              scope.ServiceProvider.GetRequiredService<ISecurityAuditor>(), lab.Clock);
         return await auth.SignInAsync(userName, Password, lab.SiteId);
     }
