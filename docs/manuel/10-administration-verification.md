@@ -66,6 +66,7 @@ Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? 
 | Paramètre calculé | fiche paramètre | **Formule de calcul** | Oui | contrôle des codes avant enregistrement (V/CatalogEditors.cs:822) |
 | Valeurs usuelles | Catalogue › Analyses | **Nouvel intervalle**, **Modifier l'intervalle** / double-clic | Oui | V/CatalogView.cs:435-436, 426 |
 | Revue périodique | Catalogue › Analyses | **Enregistrer la revue** | Oui | :437 → :1399 |
+| Catalogue livré à l'installation (92 analyses, 11 bilans) | Catalogue › Analyses, Profils | — | Oui | **Nouveau (feat/seed).** MarocLIS.Infrastructure/Persistence/StarterCatalogue.cs:571 et StarterCatalogue.Routine.cs:39-680 (76 analyses de routine), bilans l.682-702. Créé seulement sans aucune analyse en base (ReferenceDataSeeder.cs:430). Codes d'acte hors de `ActCodes` (StarterCatalogue.cs:51) pour que la mise à niveau des codes ne touche jamais une analyse du laboratoire. Coefficient = celui de l'acte (nomenclature-biologie.csv) ; intervalles source « À vérifier par le laboratoire », listés par le bandeau du Tableau de bord |
 | Nouveau tarif / révision du B | Catalogue › Tarifs | **Nouveau tarif** | PARTIEL | :438 → :1418. Une seule analyse à la fois : pas de révision globale de la valeur de la lettre B. Le coefficient, lui, s'aligne en série depuis l'onglet Écarts |
 | Corriger un tarif | Catalogue › Tarifs | **Modifier le tarif** / double-clic | Oui | :439, 441 |
 | Tarifs par le service comptable | — | — | PARTIEL | Le rôle Comptabilité a le droit des tarifs mais pas `catalog.view` (ReferenceDataSeeder.cs, rôle Accountant) : pas de Catalogue, donc ni tarifs ni **Appliquer le coefficient officiel**. Seul l'administrateur le peut avec les rôles livrés |
@@ -100,6 +101,7 @@ Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? 
 | Équipement : créer | Données de référence › Automates | **Nouvel équipement** | Oui | V/MasterDataView.cs:323 → :943 |
 | Équipement : modifier | idem | **Modifier** | Oui | **Corrigé.** :324 ; la fenêtre s'ouvre sur la fiche enregistrée (V/MasterDataEditors.cs:435-522) et la requête part de la fiche stockée (l.564-573) |
 | Matériau / cible de contrôle | › Contrôle interne | **Nouveau matériau de contrôle**, **Nouvelle cible de contrôle**, **Modifier** | Oui | :327-333 → :968, :981 ; prérequis V/MasterDataView.cs:985-997 |
+| Règles de Westgard d'une nouvelle cible | fiche cible | **Règles de Westgard actives** | Oui | Multirègle classique cochée d'office : V/MasterDataEditors.cs:730-732 et valeur par défaut du domaine MarocLIS.Domain/Quality/QualityControl.cs:124-126. Pas de réglage global à livrer : les règles vivent sur chaque cible |
 | Articles | › Articles | **Nouvel article**, **Modifier** | Oui | :335-337 → :1013 |
 | Fournisseurs | › Fournisseurs | **Nouveau fournisseur**, **Modifier** | Oui | :339-341 → :1032 |
 | Prescripteur : créer | › Prescripteurs | **Nouveau prescripteur** | Oui | :343 → :1045 |
@@ -130,6 +132,7 @@ Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? 
 | Ajouter un lieu de stockage | Paramètres › Lieux de stockage | **Ajouter** | Oui | **Nouveau.** V/SettingsView.cs:787 → :1523 (`StorageLocations.NewPrompt`) |
 | Renommer un lieu | Lieux de stockage | **Renommer** / double-clic | Oui | **Nouveau.** :783-788 → :1547 (`StorageLocations.RenamePrompt`) |
 | Désactiver / réactiver un lieu | Lieux de stockage | **Désactiver** / **Réactiver** | Oui | **Nouveau.** :789 → :1573, libellé l.1520 ; confirmation `StorageLocations.DeactivateConfirm` l.1580 ; colonnes **Lieu de stockage**, **Statut**, **Tubes rangés** (l.533-540, 937-939) |
+| Lieux livrés à l'installation | Lieux de stockage | liste | Oui | **Nouveau (feat/seed).** Cinq lieux (MarocLIS.Infrastructure/Persistence/StarterStorageLocations.cs:23-30), créés avec le catalogue de départ et seulement si la liste est vide (l.32-40, appel ReferenceDataSeeder.cs:441) ; nom unique en français, l'entité n'ayant qu'un nom |
 | Imprimantes du poste | Paramètres › Imprimantes | **Enregistrer**, **Imprimer une étiquette de test**, **Actualiser** | Oui | :600-602 |
 | Onglets Site, Imprimantes et Factures en arabe | Paramètres | champs sous leurs libellés, cases inversées | Oui | **Corrigé (cycle 5).** Site et Imprimantes : colonne de lecture V/SettingsView.cs:438-440, 584-588, 701-743 (32340ff) ; Factures : V/SettingsView.InvoicePrint.cs:72-92 (71b58ad). Avant : en arabe, les champs restaient à gauche, loin de leurs libellés alignés à droite. Numérotations, Paramètres et Lieux de stockage (grilles) étaient déjà corrects |
 
