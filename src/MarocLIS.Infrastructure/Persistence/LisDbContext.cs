@@ -110,6 +110,7 @@ public class LisDbContext : DbContext
     public DbSet<TestPanel> TestPanels => Set<TestPanel>();
     public DbSet<TestPanelItem> TestPanelItems => Set<TestPanelItem>();
     public DbSet<ReflexRule> ReflexRules => Set<ReflexRule>();
+    public DbSet<NationalBiologyAct> NationalBiologyActs => Set<NationalBiologyAct>();
 
     // ---- Patients -----------------------------------------------------------------------------
 

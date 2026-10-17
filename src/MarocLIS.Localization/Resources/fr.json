@@ -1,6 +1,12 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
   "InvoicePrint_UnknownFormat": "Format d'impression de facture inconnu.",
+  "Nabm_CodeRequired": "Indiquez un code d'acte.",
+  "Nabm_UnknownCode": "Le code d'acte {0} ne figure pas dans la nomenclature des actes de biologie médicale.",
+  "Nabm_AnalysisHasNoCode": "L'analyse {0} n'a pas de code d'acte : choisissez-le d'abord dans la fiche de l'analyse.",
+  "Nabm_AlreadyOfficial": "Les tarifs en vigueur de l'analyse {0} ont déjà le coefficient officiel de l'acte {1}.",
+  "Nabm_RevisionScheduled": "Les tarifs de l'analyse {0} ont déjà une révision programmée après aujourd'hui : modifiez-les dans l'onglet Tarifs.",
+  "Nabm_PickAnAct": "Sélectionnez un acte dans la liste.",
   "SampleStorageLocation_NameRequired": "Le nom du lieu de stockage est obligatoire.",
   "SampleStorageLocation_NameTooLong": "Le nom du lieu de stockage ne doit pas dépasser {0} caractères.",
   "SampleStorageLocation_NameTaken": "Un lieu de stockage « {0} » existe déjà sur ce site (actif ou désactivé).",
@@ -422,6 +428,40 @@
     "CreditNote": "Facture d'avoir",
     "Invoice": "Facture"
   },
+  "NabmGap": {
+    "CoefficientDiffers": "Coefficient différent",
+    "UnknownCode": "Code inconnu",
+    "MissingCode": "Code manquant"
+  },
+
+  "Nabm": {
+    "SkippedScheduled": "{0} tarif(s) ont déjà une révision programmée après aujourd'hui : à reprendre dans l'onglet Tarifs.",
+    "Applied": "{0} : coefficient officiel de l'acte {1} appliqué à {2} tarif(s) à compter du {3}.",
+    "ConfirmApply": "Appliquer le coefficient officiel de l'acte {0} (B {1}) à l'analyse {2} ?\n\n{3} tarif(s) en vigueur recevront une nouvelle version à compter du {4} ; un prix qui suivait la base de remboursement la suit. Les demandes déjà tarifées et les factures émises gardent leur prix.",
+    "CodeNotInListConfirm": "Le code d'acte {0} ne figure pas dans la nomenclature officielle des actes de biologie médicale.\n\nEnregistrer l'analyse avec ce code quand même ?",
+    "CodeNotInList": "Le code {0} ne figure pas dans la nomenclature des actes.",
+    "ActInfo": "Nomenclature : {0} — {1} — coefficient officiel B {2}",
+    "NoActHint": "Sans code d'acte : analyse hors nomenclature (non remboursée). Bouton « … » ou F4 pour choisir l'acte.",
+    "PickerTitle": "Nomenclature des actes de biologie médicale",
+    "PickAct": "Choisir l'acte dans la nomenclature (F4)",
+    "Gap": "Écart",
+    "CurrentCoefficient": "Coef. actuel",
+    "OfficialCoefficient": "Coef. officiel",
+    "InternalCode": "Code interne",
+    "Decree": "Arrêté",
+    "Chapter": "Chapitre",
+    "ActLabel": "Libellé de l'acte",
+    "ActCode": "Code NABM",
+    "ApplyOfficial": "Appliquer le coefficient officiel",
+    "GapsNote": "Analyses actives sans code d'acte, avec un code inconnu de la nomenclature, ou dont un tarif en vigueur n'a pas le coefficient officiel. Appliquer le coefficient crée une nouvelle version du tarif à la date du jour : les demandes déjà tarifées et les factures émises ne changent pas.",
+    "ActsNote": "Liste officielle en lecture seule : arrêtés 1796-03 (2005), 827-12 (2012) et 1968-16 (2016). La valeur en dirhams de la lettre-clé B reste celle saisie dans les tarifs.",
+    "SearchPlaceholder": "Code (B118, 118) ou libellé de l'acte…",
+    "ChipAll": "Tous",
+    "GapsHeading": "Écarts avec la nomenclature",
+    "ActsHeading": "Actes de biologie médicale",
+    "GapsTab": "Écarts avec la nomenclature",
+    "ActsTab": "Nomenclature des actes"
+  },
 
   "StorageLocations": {
     "DeactivateConfirm": "Désactiver « {0} » ? Il ne sera plus proposé à la réception ni à la sérothèque. Les {1} tube(s) qui y sont rangés gardent ce lieu.",
@@ -465,6 +505,7 @@
   },
 
   "AdminDialog": {
+    "NationalActPickerDialog": "Recherchez l'acte par code ou libellé. Le code interne de l'analyse ne change pas.",
     "ShortcutsDialog": "Vos raccourcis sur ce poste : sélectionnez une ligne et tapez les touches.",
     "ChangePasswordForm": "Choisissez un mot de passe que vous seul connaissez.",
     "SiteAccessDialog": "Les sites où ce compte peut travailler, et celui ouvert par défaut.",

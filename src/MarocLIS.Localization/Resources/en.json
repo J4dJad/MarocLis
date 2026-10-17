@@ -1,6 +1,12 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
   "InvoicePrint_UnknownFormat": "Unknown invoice print format.",
+  "Nabm_CodeRequired": "Enter an act code.",
+  "Nabm_UnknownCode": "Act code {0} is not in the nomenclature of medical biology acts.",
+  "Nabm_AnalysisHasNoCode": "Analysis {0} has no act code: pick it first in the analysis form.",
+  "Nabm_AlreadyOfficial": "The tariffs in force of analysis {0} already carry the official coefficient of act {1}.",
+  "Nabm_RevisionScheduled": "The tariffs of analysis {0} already have a revision scheduled after today: change them on the Tariffs tab.",
+  "Nabm_PickAnAct": "Select an act in the list.",
   "SampleStorageLocation_NameRequired": "The storage location's name is required.",
   "SampleStorageLocation_NameTooLong": "The storage location's name must not exceed {0} characters.",
   "SampleStorageLocation_NameTaken": "A storage location « {0} » already exists on this site (active or deactivated).",
@@ -422,6 +428,40 @@
     "CreditNote": "Credit note",
     "Invoice": "Invoice"
   },
+  "NabmGap": {
+    "CoefficientDiffers": "Different coefficient",
+    "UnknownCode": "Unknown code",
+    "MissingCode": "Missing code"
+  },
+
+  "Nabm": {
+    "SkippedScheduled": "{0} tariff(s) already have a revision scheduled after today: to be handled on the Tariffs tab.",
+    "Applied": "{0}: official coefficient of act {1} applied to {2} tariff(s) from {3}.",
+    "ConfirmApply": "Apply the official coefficient of act {0} (B {1}) to analysis {2}?\n\n{3} tariff(s) in force will get a new version from {4}; a price that followed the reimbursement base follows it. Requests already priced and invoices already issued keep their price.",
+    "CodeNotInListConfirm": "Act code {0} is not in the official nomenclature of medical biology acts.\n\nSave the analysis with this code anyway?",
+    "CodeNotInList": "Code {0} is not in the act nomenclature.",
+    "ActInfo": "Nomenclature: {0} — {1} — official coefficient B {2}",
+    "NoActHint": "No act code: analysis outside the nomenclature (not reimbursed). « … » button or F4 to pick the act.",
+    "PickerTitle": "Nomenclature of medical biology acts",
+    "PickAct": "Pick the act from the nomenclature (F4)",
+    "Gap": "Gap",
+    "CurrentCoefficient": "Current coef.",
+    "OfficialCoefficient": "Official coef.",
+    "InternalCode": "Internal code",
+    "Decree": "Decree",
+    "Chapter": "Chapter",
+    "ActLabel": "Act label",
+    "ActCode": "NABM code",
+    "ApplyOfficial": "Apply the official coefficient",
+    "GapsNote": "Active analyses with no act code, with a code the nomenclature does not know, or with a tariff in force that does not carry the official coefficient. Applying the coefficient creates a new tariff version from today: requests already priced and invoices already issued do not change.",
+    "ActsNote": "Official list, read-only: decrees 1796-03 (2005), 827-12 (2012) and 1968-16 (2016). The dirham value of the letter key B stays the one entered in the tariffs.",
+    "SearchPlaceholder": "Act code (B118, 118) or label…",
+    "ChipAll": "All",
+    "GapsHeading": "Gaps with the nomenclature",
+    "ActsHeading": "Medical biology acts",
+    "GapsTab": "Gaps with the nomenclature",
+    "ActsTab": "Act nomenclature"
+  },
 
   "StorageLocations": {
     "DeactivateConfirm": "Deactivate « {0} »? It will no longer be offered at reception or in the serum bank. The {1} tube(s) stored there keep this location.",
@@ -465,6 +505,7 @@
   },
 
   "AdminDialog": {
+    "NationalActPickerDialog": "Search the act by code or label. The analysis's internal code does not change.",
     "ShortcutsDialog": "Your shortcuts on this workstation: select a line and press the keys.",
     "ChangePasswordForm": "Choose a password only you know.",
     "SiteAccessDialog": "The sites this account may work at, and the one opened by default.",

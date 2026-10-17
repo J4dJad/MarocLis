@@ -44,6 +44,7 @@ public static class ReferenceDataSeeder
         await SeedSequencesAsync(context, site.Id, clock, ct);
         await SeedAdministratorAsync(context, passwordHasher, clock, site.Id, ct);
         await SeedInterfaceAccountAsync(context, passwordHasher, site.Id, ct);
+        await NationalBiologyActSeed.SynchroniseAsync(context, ct);
         await SeedStarterCatalogueAsync(context, clock, ct);
     }
 
@@ -429,6 +430,7 @@ public static class ReferenceDataSeeder
         if (await context.AnalysisTests.IgnoreQueryFilters().AnyAsync(ct))
         {
             await UpgradeSeededFormulasAsync(context, ct);
+            await UpgradeSeededActCodesAsync(context, ct);
             return;
         }
 
@@ -452,6 +454,34 @@ public static class ReferenceDataSeeder
 
         foreach (var parameter in stale)
             parameter.CalculationFormula = StarterCatalogue.FriedewaldLdlFormula;
+
+        await context.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Replaces the national act code earlier releases seeded on the starter analyses — the
+    /// analysis's own internal code (« GLY »), which was then sent as the act of a claim — by the
+    /// act of the nomenclature it maps to, or by none where the mapping is not unambiguous. Only a
+    /// code still equal to the internal one is touched: an act the laboratory chose is its own.
+    /// The coefficients are left alone: a price changes through a tariff version, which the
+    /// « Écarts avec la nomenclature » check offers with confirmation.
+    /// </summary>
+    private static async Task UpgradeSeededActCodesAsync(LisDbContext context, CancellationToken ct)
+    {
+        var codes = StarterCatalogue.ActCodes.Keys.Concat(StarterCatalogue.UnmappedCodes).ToList();
+
+        // Compared in memory: the two columns have different collations, which SQL Server refuses
+        // to compare with each other.
+        var stale = (await context.AnalysisTests
+                .Where(a => codes.Contains(a.Code) && a.NationalActCode != null)
+                .ToListAsync(ct))
+            .Where(a => string.Equals(a.NationalActCode, a.Code, StringComparison.Ordinal))
+            .ToList();
+
+        if (stale.Count == 0) return;
+
+        foreach (var analysis in stale)
+            analysis.NationalActCode = StarterCatalogue.ActCodes.GetValueOrDefault(analysis.Code);
 
         await context.SaveChangesAsync(ct);
     }

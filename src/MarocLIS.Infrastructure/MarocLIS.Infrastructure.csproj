@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The official nomenclature of medical biology acts, read by the seeder (and by a migration). -->
+    <EmbeddedResource Include="Persistence\Seed\nomenclature-biologie.csv" LogicalName="MarocLIS.NationalBiologyActs.csv" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MarocLIS.Application\MarocLIS.Application.csproj" />
     <ProjectReference Include="..\MarocLIS.Domain\MarocLIS.Domain.csproj" />
   </ItemGroup>
