@@ -1366,10 +1366,14 @@ public sealed class ValidationView : LocalizedView
         ShowValidateCaption(0);
     }
 
+    /// <summary>Whether the open file has a validated value for a report to carry (see the rule).</summary>
+    private bool CanIssueReport() =>
+        _sheet is { } sheet && ValidationScreenRules.CanIssueReport(sheet.Rows);
+
     private void SetDetailActionsEnabled(bool enabled)
     {
         _validate.Enabled = enabled;
-        _release.Enabled = enabled;
+        _release.Enabled = enabled && CanIssueReport();
         if (!enabled) _communicate.Enabled = false;
         _history.Enabled = enabled && ResultHistory.IsCharted(SelectedDetail());
         UpdateMenu();
@@ -1821,7 +1825,7 @@ public sealed class ValidationView : LocalizedView
         finally
         {
             Cursor = Cursors.Default;
-            _release.Enabled = true;
+            _release.Enabled = CanIssueReport();
         }
     }
 }

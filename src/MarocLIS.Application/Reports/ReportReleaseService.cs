@@ -446,6 +446,12 @@ public sealed class ReportReleaseService(
         var report = await reports.GetByIdWithDetailsAsync(reportId, ct);
         if (report is null) return Result.Failure<DeliveryOutcome>(Error.NotFound("Report_NotFound"));
 
+        // A version replaced by a newer one is no longer the laboratory's report: handed over, it
+        // put back in circulation the values the newer version corrected or completed. It stays in
+        // the register, and can be reprinted for whoever already holds it.
+        if (report.IsSuperseded)
+            return Result.Failure<DeliveryOutcome>(Error.Conflict("Report_DeliverySuperseded", report.VersionNumber));
+
         // Release to anyone other than the patient or the prescriber needs the patient's explicit
         // third-party disclosure consent on file (loi 08-09).
         if (recipientKind == ReportRecipientKind.AuthorizedThirdParty && authorizingConsentId is null)

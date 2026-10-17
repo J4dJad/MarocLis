@@ -515,8 +515,15 @@ public sealed class Cycle1bPreAnalyticalDatabaseTests(Cycle1bScratchDatabase dat
             .Value.Should().NotContain(r => r.SampleId == tube.SampleId);
 
         (await On<SampleWorkflowService, Result>(provider, s => s.MoveToStorageAsync(
-            tube.SampleId, "Réfrigérateur R1", "B2", DateOnly.FromDateTime(DateTime.Today).AddDays(-1))))
-            .IsSuccess.Should().BeTrue();
+            tube.SampleId, "Réfrigérateur R1", "B2", null))).IsSuccess.Should().BeTrue();
+
+        // A past retention is refused when chosen (owner's decision): the tube's retention runs out
+        // with time instead, written here as a tube kept from before would carry it.
+        await using (var context = database.Context())
+        {
+            await context.Samples.Where(s => s.Id == tube.SampleId)
+                .ExecuteUpdateAsync(u => u.SetProperty(s => s.KeepUntil, DateOnly.FromDateTime(DateTime.Today).AddDays(-1)));
+        }
 
         var expired = await On<SampleWorkflowService, Result<IReadOnlyList<StoredSampleRow>>>(provider,
             s => s.GetStoredSamplesAsync(onlyExpired: true));

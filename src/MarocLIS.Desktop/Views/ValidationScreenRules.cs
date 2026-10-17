@@ -78,6 +78,14 @@ public static class ValidationScreenRules
         row.Status is TestResultStatus.Validated or TestResultStatus.Reported;
 
     /// <summary>
+    /// Whether « Compte rendu » is offered for the open file: only once a value of it is validated
+    /// and not yet on a report, which is what the report service needs to issue a version. It was
+    /// offered on a file with nothing validated, and the refusal came only after the confirmation.
+    /// </summary>
+    public static bool CanIssueReport(IEnumerable<ResultEntryRow> rows) =>
+        rows.Any(r => !r.IsHeading && r.Status == TestResultStatus.Validated);
+
+    /// <summary>
     /// Only a technically validated value can be released. An entered one is listed so the biologist
     /// sees the whole file, but it is neither pre-ticked nor tickable: the service refuses it until
     /// the technician has checked it.

@@ -36,7 +36,15 @@ public static class Permissions
         public const string Receive = "samples.receive";
         public const string Reject = "samples.reject";
         public const string Reprint = "samples.reprint_label";
+        /// <summary>Sends the tubes of a collection point on to the laboratory (« Expédier au plateau »).</summary>
         public const string Dispatch = "samples.dispatch";
+        /// <summary>
+        /// Sends analyses out to a partner laboratory and keeps its reference (« Sous-traitance »).
+        /// Apart from <see cref="Dispatch"/>, which the phlebotomist needs to send tubes to the
+        /// bench but which also let them choose a partner laboratory and send a patient's samples
+        /// outside the laboratory.
+        /// </summary>
+        public const string Subcontract = "samples.subcontract";
     }
 
     public static class Results

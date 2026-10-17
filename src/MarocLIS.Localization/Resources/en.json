@@ -5516,6 +5516,7 @@
   "Report_ElectronicDeliveryRequiresConsent": "The patient has not consented to electronic delivery of their results. Record it on their file (Consents) before sending by e-mail or SMS.",
   "Report_NoStoredPdf": "This report's PDF is not stored: reissue it before sending.",
   "Report_ThirdPartyConsentInvalid": "The reference entered is not a current third-party disclosure consent of this patient: check it in the patient's file (Consents).",
+  "Report_DeliverySuperseded": "Version v{0} of this report has been replaced by a newer version: it can no longer be handed over. Hand over the current version.",
 
   "Notification_NotFound": "Communication record not found.",
   "Notification_ValueChangedSinceDisplayed": "{0}: the value has changed since the screen was loaded (analyser re-run or correction). Reload the file and communicate the current value.",
@@ -5532,6 +5533,8 @@
   "Sample_DiscardAnalysesPending": "Tube {0} still carries analyses awaiting their result: it cannot be discarded. If it is unusable, reject it at reception to request a new draw.",
   "Sample_AliquotVolumeExceedsTube": "The aliquot volume exceeds what the tube still holds ({0} mL).",
   "Sample_CollectedVolumeInvalid": "Invalid drawn volume for tube {0}: enter a positive number, in mL (below 1,000,000), or leave the cell empty.",
+  "Sample_StorageLocationNotInList": "\"{0}\" is not an active storage location of the site's list: choose a location from the list, or have it created in Settings › Storage locations.",
+  "Sample_KeepUntilInPast": "The \"Keep until\" date has already passed: choose today or a later date.",
   "Formula_Empty": "The calculation formula is empty.",
   "Formula_DivisionByZero": "Division by zero in the calculation formula.",
   "Formula_Overflow": "Arithmetic overflow in the calculation formula.",

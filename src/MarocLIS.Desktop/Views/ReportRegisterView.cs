@@ -533,7 +533,8 @@ public sealed class ReportRegisterView : LocalizedView
         AddColumn(_register, "version", 6, UiTheme.MonospaceBold, right: true);
         AddColumn(_register, "completeness", 10);
         AddColumn(_register, "released", 11, UiTheme.Monospace);
-        AddColumn(_register, "signatory", 12, UiTheme.Small);
+        // No signatory column: at 1366×768 it pushed « Remise » and « Statut » out of sight, and
+        // the signatory of the selected version is in the side panel.
         AddColumn(_register, "prescriber", 12, UiTheme.Small);
         AddColumn(_register, "delivery", 12, UiTheme.SmallBold);
         AddColumn(_register, "flags", 14, UiTheme.SmallBold);
@@ -852,7 +853,6 @@ public sealed class ReportRegisterView : LocalizedView
             _register.Column("version").HeaderText = T("Report.Version");
             _register.Column("completeness").HeaderText = T("Report.Completeness");
             _register.Column("released").HeaderText = T("Report.ReleasedAt");
-            _register.Column("signatory").HeaderText = T("Report.Signatory");
             _register.Column("prescriber").HeaderText = T("Order.Prescriber");
             _register.Column("delivery").HeaderText = T("Report.Delivery");
             _register.Column("flags").HeaderText = T("Field.Status");
@@ -962,7 +962,6 @@ public sealed class ReportRegisterView : LocalizedView
                 $"v{row.VersionNumber}",
                 T($"ReportCompleteness.{row.Completeness}"),
                 row.ReleasedAt.ToLocalTime().ToString("dd/MM/yy HH:mm"),
-                row.SignatoryName,
                 row.PrescriberName ?? string.Empty,
                 DeliveryText(row),
                 string.Join(" · ", Flags(row)));
@@ -1212,7 +1211,8 @@ public sealed class ReportRegisterView : LocalizedView
                            && _currentUser.Has(Permissions.Reports.ReprintValidated);
         _openPdf.Enabled = _reprint.Enabled;
 
-        _recordDelivery.Enabled = idle && row is not null
+        // A version replaced by a newer one is not handed over any more: the service refuses it.
+        _recordDelivery.Enabled = idle && row is { IsSuperseded: false }
                                   && (_currentUser.Has(Permissions.Reports.Print)
                                       || _currentUser.Has(Permissions.Reports.Send));
 

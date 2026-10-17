@@ -104,7 +104,7 @@ public sealed class SubcontractingService(
     public async Task<Result<IReadOnlyList<SubcontractDispatch>>> DispatchAsync(
         IReadOnlyList<Guid> itemIds, Guid? partnerOverride, CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Samples.Dispatch);
+        var permitted = guard.Require(Permissions.Samples.Subcontract);
         if (permitted.IsFailure) return Result.Failure<IReadOnlyList<SubcontractDispatch>>(permitted.FirstError);
 
         if (itemIds.Count == 0)
@@ -213,7 +213,7 @@ public sealed class SubcontractingService(
     /// <summary>Keeps the partner laboratory's own number for the request, for chasing the result.</summary>
     public async Task<Result> SetPartnerReferenceAsync(Guid itemId, string? reference, CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Samples.Dispatch);
+        var permitted = guard.Require(Permissions.Samples.Subcontract);
         if (permitted.IsFailure) return permitted;
 
         var orderIds = await queries.GetOrderIdsForItemsAsync([itemId], ct);

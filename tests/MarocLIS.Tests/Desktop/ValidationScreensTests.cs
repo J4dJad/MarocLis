@@ -114,6 +114,21 @@ public sealed class ValidationScreensTests
     }
 
     [Fact]
+    public void CompteRendu_IsOfferedOnlyOnceAValueIsValidatedAndNotYetReported()
+    {
+        // As the report service needs: a validated value not on a report yet (owner's decision).
+        ValidationScreenRules.CanIssueReport([]).Should().BeFalse();
+        ValidationScreenRules.CanIssueReport([Row(TestResultStatus.Entered), Row(TestResultStatus.TechnicallyValidated)])
+            .Should().BeFalse();
+        ValidationScreenRules.CanIssueReport([Row(TestResultStatus.Reported), Row(TestResultStatus.TechnicallyValidated)])
+            .Should().BeFalse();
+        ValidationScreenRules.CanIssueReport([Row(TestResultStatus.Validated, type: ResultValueType.Heading)])
+            .Should().BeFalse();
+        ValidationScreenRules.CanIssueReport([Row(TestResultStatus.TechnicallyValidated), Row(TestResultStatus.Validated)])
+            .Should().BeTrue();
+    }
+
+    [Fact]
     public void Context_NamesAbnormalLateCriticalAndQc()
     {
         IReadOnlyCollection<ResultEntryRow> rows =

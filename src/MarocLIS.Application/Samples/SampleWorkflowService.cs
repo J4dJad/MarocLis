@@ -437,6 +437,22 @@ public sealed class SampleWorkflowService(
                 continue;
             }
 
+            // Checked before the tube is received, so a refused place leaves it as it was.
+            string? place = null;
+
+            if (!string.IsNullOrWhiteSpace(request.StorageLocation))
+            {
+                var allowed = await StoragePlaceAsync(sample, request.StorageLocation, ct);
+
+                if (allowed.IsFailure)
+                {
+                    problems.Add(allowed.FirstError);
+                    continue;
+                }
+
+                place = allowed.Value;
+            }
+
             var accepted = sample.Receive(now, currentUser.UserId, request.ObservedDefects,
                                            request.AcceptWithReservation,
                                            request.TemperatureCelsius, request.Note);
@@ -449,9 +465,9 @@ public sealed class SampleWorkflowService(
 
             sample.ColdChainRespected = request.ColdChainRespected;
 
-            if (!string.IsNullOrWhiteSpace(request.StorageLocation))
+            if (place is not null)
             {
-                sample.MoveToStorage(now, currentUser.UserId, request.StorageLocation,
+                sample.MoveToStorage(now, currentUser.UserId, place,
                                       request.StoragePosition,
                                       clock.Today.AddDays(options.SampleRetentionDays));
             }
@@ -772,13 +788,21 @@ public sealed class SampleWorkflowService(
         var sample = await samples.GetByIdWithDetailsAsync(sampleId, ct);
         if (sample is null) return Result.Failure(Error.NotFound("Sample_NotFound", sampleId));
 
-        var moved = sample.MoveToStorage(clock.Now, currentUser.UserId, location.Trim(),
+        var place = await StoragePlaceAsync(sample, location, ct);
+        if (place.IsFailure) return place;
+
+        // A retention already over would put the tube straight into the purge list. The date the
+        // tube already carries is kept as it is: re-shelving an expired tube is not choosing it.
+        if (keepUntil is { } until && until < clock.Today && until != sample.KeepUntil)
+            return Result.Failure(Error.Validation("Sample_KeepUntilInPast"));
+
+        var moved = sample.MoveToStorage(clock.Now, currentUser.UserId, place.Value,
                                           string.IsNullOrWhiteSpace(position) ? null : position.Trim(),
                                           keepUntil);
         if (moved.IsFailure) return moved;
 
         unitOfWork.AuditReason =
-            $"Échantillon {sample.Barcode} rangé en {location.Trim()}"
+            $"Échantillon {sample.Barcode} rangé en {place.Value}"
             + (position is null ? string.Empty : $" / {position.Trim()}");
 
         await unitOfWork.SaveChangesAsync(ct);
@@ -854,6 +878,16 @@ public sealed class SampleWorkflowService(
         if (sample.CollectedAt is null)
             return Result.Failure<string>(Error.Validation("Sample_NotCollected"));
 
+        // No place keeps the parent tube's, whatever it is; a place named must be one of the list.
+        string? place = null;
+
+        if (!string.IsNullOrWhiteSpace(storageLocation))
+        {
+            var allowed = await StoragePlaceAsync(sample, storageLocation, ct);
+            if (allowed.IsFailure) return Result.Failure<string>(allowed.FirstError);
+            place = allowed.Value;
+        }
+
         // Within the column (8 digits, 2 decimals): a mistyped volume was refused by the database.
         if (volumeMl is <= 0m or >= 1_000_000m)
             return Result.Failure<string>(Error.Validation("Sample_AliquotVolumeInvalid"));
@@ -882,9 +916,7 @@ public sealed class SampleWorkflowService(
         var aliquot = sample.CreateAliquot(barcode.Value, volumeMl, clock.Now, currentUser.UserId);
 
         aliquot.Purpose = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim();
-        aliquot.StorageLocation = string.IsNullOrWhiteSpace(storageLocation)
-            ? sample.StorageLocation
-            : storageLocation.Trim();
+        aliquot.StorageLocation = place ?? sample.StorageLocation;
 
         unitOfWork.AuditReason =
             $"Aliquot {aliquot.Barcode} créé depuis l'échantillon {sample.Barcode}";
@@ -893,6 +925,32 @@ public sealed class SampleWorkflowService(
         await unitOfWork.CommitAsync(ct);
 
         return Result.Success(aliquot.Barcode);
+    }
+
+    /// <summary>
+    /// The place a tube may be put in, written as the list writes it: one of the active places of
+    /// the tube's site (« Paramètres › Lieux de stockage »), or the place the tube already carries.
+    /// <para>
+    /// The closed list was only enforced by the screens, so any other client could still write a
+    /// free-text fridge that nobody would find again. A place recorded before the list existed, or
+    /// since taken out of use, stays on the tube and may be confirmed when it is re-shelved; it is
+    /// never offered for another tube.
+    /// </para>
+    /// </summary>
+    private async Task<Result<string>> StoragePlaceAsync(Sample sample, string location, CancellationToken ct)
+    {
+        var wanted = SampleStorageLocation.Normalize(location);
+
+        if (sample.StorageLocation is { } kept
+            && string.Equals(SampleStorageLocation.Normalize(kept), wanted, StringComparison.OrdinalIgnoreCase))
+            return Result.Success(kept);
+
+        var places = await queries.GetStorageLocationsAsync(sample.SiteId, ct);
+        var listed = places.FirstOrDefault(p => string.Equals(p, wanted, StringComparison.OrdinalIgnoreCase));
+
+        return listed is null
+            ? Result.Failure<string>(Error.Validation("Sample_StorageLocationNotInList", wanted))
+            : Result.Success(listed);
     }
 }
 

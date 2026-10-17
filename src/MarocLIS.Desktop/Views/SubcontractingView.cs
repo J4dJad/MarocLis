@@ -155,9 +155,9 @@ public sealed class SubcontractingView : LocalizedView
         _reference.Click += async (_, _) => await RunBusyAsync(SetReferenceAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
-        PermissionGate.Require(Permissions.Samples.Dispatch, _send);
+        PermissionGate.Require(Permissions.Samples.Subcontract, _send);
         // A menu entry is not a control the gate can hold: the right is checked here instead.
-        _reference.Enabled = PermissionGate.Allows(Permissions.Samples.Dispatch);
+        _reference.Enabled = PermissionGate.Allows(Permissions.Samples.Subcontract);
 
         _grid.CellFormatting += OnCellFormatting;
 
@@ -190,7 +190,7 @@ public sealed class SubcontractingView : LocalizedView
         _send.Enabled = ticked.Any(r => r.Stage == SubcontractStage.ToSend);
         _reprint.Enabled = ticked.Any(r => r.DispatchNumber is not null);
         // A menu entry is not a control the gate can hold: the right is checked here instead.
-        _reference.Enabled = PermissionGate.Allows(Permissions.Samples.Dispatch)
+        _reference.Enabled = PermissionGate.Allows(Permissions.Samples.Subcontract)
                              && ticked.Any(r => r.Stage == SubcontractStage.AwaitingReturn);
     }
 

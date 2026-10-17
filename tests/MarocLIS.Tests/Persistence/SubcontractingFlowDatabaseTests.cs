@@ -846,7 +846,7 @@ public sealed class SubcontractingFlowDatabaseTests(SubcontractingScratchDatabas
             .FirstError.ResourceKey.Should().Be("Message.PermissionDenied");
 
         var dispatcher = OperatorOf(lab);
-        dispatcher.Granted = [Permissions.Samples.View, Permissions.Samples.Dispatch];
+        dispatcher.Granted = [Permissions.Samples.View, Permissions.Samples.Subcontract];
         using var asDispatcher = Services(dispatcher);
 
         var sent = await DispatchAsync(asDispatcher, null, vitD.Id);

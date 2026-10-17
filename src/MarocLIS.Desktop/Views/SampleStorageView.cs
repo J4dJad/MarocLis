@@ -519,6 +519,7 @@ internal sealed class SampleStorageDialog : Form
     private readonly TextBox _position = UiTheme.Input(180);
     private readonly DateTimePicker _keepUntil = new();
     private readonly CheckBox _hasKeepUntil = new();
+    private readonly DateOnly? _keptUntil;
 
     /// <summary>
     /// Where the tube went. <c>StorageLocation</c>, not <c>Location</c>: that name belongs to
@@ -538,6 +539,7 @@ internal sealed class SampleStorageDialog : Form
         _localizer = localizer;
         _dialogs = dialogs;
         _places = places;
+        _keptUntil = row.KeepUntil;
 
         Text = $"{localizer["Sample.Shelve"]} — {row.Barcode}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -623,6 +625,15 @@ internal sealed class SampleStorageDialog : Form
                 ? _localizer["Sample.StorageListEmpty"]
                 : _localizer["Sample_StorageLocationRequired"]);
             _location.Focus();
+            return;
+        }
+
+        // A date already over would put the tube straight into the purge list; the service refuses
+        // it too. The date the tube already carries may stay as it is.
+        if (KeepUntil is { } until && until < DateOnly.FromDateTime(DateTime.Today) && until != _keptUntil)
+        {
+            _dialogs.Warn(_localizer["Sample_KeepUntilInPast"]);
+            _keepUntil.Focus();
             return;
         }
 

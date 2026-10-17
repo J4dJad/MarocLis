@@ -482,6 +482,7 @@ internal static class RolePermissionSets
              Permissions.Orders.Cancel, Permissions.Orders.AddUrgent,
              Permissions.Samples.View, Permissions.Samples.Receive, Permissions.Samples.Reject,
              Permissions.Samples.Collect, Permissions.Samples.Reprint, Permissions.Samples.Dispatch,
+             Permissions.Samples.Subcontract,
              Permissions.Results.View, Permissions.Results.Enter, Permissions.Results.Modify,
              Permissions.Results.TechnicalValidate, Permissions.Results.BiologicalValidate,
              Permissions.Results.Unvalidate, Permissions.Results.EnterCritical,
@@ -528,6 +529,8 @@ internal static class RolePermissionSets
              Permissions.Patients.View, Permissions.Patients.Edit,
              Permissions.Orders.View, Permissions.Orders.Create, Permissions.Orders.Edit,
              Permissions.Samples.View, Permissions.Samples.Receive, Permissions.Samples.Reject,
+             // Chooses the partner laboratory and sends the analyses out.
+             Permissions.Samples.Subcontract,
              Permissions.Results.View, Permissions.Results.Enter, Permissions.Results.Modify,
              Permissions.Results.TechnicalValidate, Permissions.Results.BiologicalValidate,
              Permissions.Results.EnterCritical,
@@ -558,8 +561,8 @@ internal static class RolePermissionSets
              Permissions.Orders.View,
              Permissions.Samples.View, Permissions.Samples.Collect, Permissions.Samples.Receive,
              Permissions.Samples.Reject, Permissions.Samples.Reprint,
-             // Prepares the send-outs to partner laboratories.
-             Permissions.Samples.Dispatch,
+             // Sends the tubes on, and prepares the send-outs to partner laboratories.
+             Permissions.Samples.Dispatch, Permissions.Samples.Subcontract,
              // Enter and technically validate, but never release: biological validation is
              // reserved to a biologist by loi n° 12-01, and the role does not carry the grant.
              Permissions.Results.View, Permissions.Results.Enter,

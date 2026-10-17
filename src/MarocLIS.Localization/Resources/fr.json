@@ -5517,6 +5517,7 @@
   "Report_ElectronicDeliveryRequiresConsent": "Le patient n'a pas donné son consentement à l'envoi électronique de ses résultats. Enregistrez-le dans sa fiche (Consentements) avant d'envoyer par e-mail ou SMS.",
   "Report_NoStoredPdf": "Le PDF de ce compte rendu n'est pas conservé : réémettez-le avant de l'envoyer.",
   "Report_ThirdPartyConsentInvalid": "La référence saisie n'est pas un consentement en vigueur de ce patient à la communication à un tiers : vérifiez-la dans son dossier (Consentements).",
+  "Report_DeliverySuperseded": "La version v{0} de ce compte rendu a été remplacée par une version plus récente : elle ne peut plus être remise. Remettez la version en vigueur.",
 
   "Notification_NotFound": "Fiche de communication introuvable.",
   "Notification_ValueChangedSinceDisplayed": "{0} : la valeur a changé depuis l'affichage de l'écran (nouveau passage sur l'automate ou correction). Rechargez le dossier et communiquez la valeur actuelle.",
@@ -5533,6 +5534,8 @@
   "Sample_DiscardAnalysesPending": "Le tube {0} porte encore des analyses en attente de résultat : il ne peut pas être éliminé. S'il est inutilisable, refusez-le à la réception pour demander un nouveau prélèvement.",
   "Sample_AliquotVolumeExceedsTube": "Le volume de l'aliquote dépasse ce que contient encore le tube ({0} mL).",
   "Sample_CollectedVolumeInvalid": "Volume prélevé invalide pour le tube {0} : saisissez un nombre positif, en mL (moins de 1 000 000), ou laissez la case vide.",
+  "Sample_StorageLocationNotInList": "« {0} » n'est pas un lieu de stockage actif de la liste du site : choisissez un lieu de la liste, ou faites-le créer dans Paramètres › Lieux de stockage.",
+  "Sample_KeepUntilInPast": "La date « Conserver jusqu'au » est déjà passée : choisissez aujourd'hui ou une date à venir.",
   "Formula_Empty": "La formule de calcul est vide.",
   "Formula_DivisionByZero": "Division par zéro dans la formule de calcul.",
   "Formula_Overflow": "Dépassement de capacité dans la formule de calcul.",

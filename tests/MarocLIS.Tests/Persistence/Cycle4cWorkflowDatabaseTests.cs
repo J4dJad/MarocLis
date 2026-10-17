@@ -259,6 +259,9 @@ public sealed class Cycle4cWorkflowDatabaseTests(Cycle4cScratchDatabase database
         context.SpecimenTypes.Add(specimen);
         context.AnalysisTests.AddRange(glucose, vitamin, comment);
         context.Patients.Add(patient);
+        // The site's storage list: since the closed list is enforced by the service too, a tube
+        // can only be shelved in one of its places.
+        context.SampleStorageLocations.Add(SampleStorageLocation.Create(site.Id, "Réfrigérateur R1").Value);
         await context.SaveChangesAsync();
 
         return new Lab(site, partner, biologist, glucose, vitamin, comment, patient);
