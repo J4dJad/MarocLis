@@ -629,6 +629,8 @@ public sealed class UserAdministrationView : LocalizedView
             RenderUsers();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the user list failed.");
@@ -816,6 +818,8 @@ public sealed class UserAdministrationView : LocalizedView
             RenderEvents();
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the security log failed.");

@@ -232,6 +232,8 @@ public sealed class AccountingExportView : LocalizedView
             foreach (var site in _siteOptions) _sites.Items.Add($"{site.Code} — {site.Name}", true);
         }
         catch (OperationCanceledException) { }
+        // Left before the load finished: the screen is gone, there is nothing to report on it.
+        catch (Exception) when (IsDisposed || Disposing) { }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Loading the sites of the accounting export failed.");
