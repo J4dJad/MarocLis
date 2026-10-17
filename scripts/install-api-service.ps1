@@ -89,6 +89,24 @@ if ($Account) {
     }
 
     $parameters.Credential = New-Object System.Management.Automation.PSCredential($Account, $Password)
+
+    # New-Service, unlike services.msc, does not give the account the "Log on as a service" right
+    # (SeServiceLogonRight), and without it Windows refuses to start the service. Granted through
+    # secedit, which every edition of Windows has, keeping the accounts that already hold it.
+    $sid = (New-Object Security.Principal.NTAccount($Account)).Translate([Security.Principal.SecurityIdentifier]).Value
+    $policy = Join-Path ([IO.Path]::GetTempPath()) 'maroclis-logon-right.inf'
+    $database = Join-Path ([IO.Path]::GetTempPath()) 'maroclis-logon-right.sdb'
+    & secedit.exe /export /cfg $policy /areas USER_RIGHTS | Out-Null
+    $current = Get-Content $policy | Where-Object { $_ -like 'SeServiceLogonRight*' }
+    if (-not ($current -and $current -match [regex]::Escape("*$sid"))) {
+        $right = if ($current) { "$current,*$sid" } else { "SeServiceLogonRight = *$sid" }
+        @('[Unicode]', 'Unicode=yes', '[Version]', 'signature="$CHICAGO$"', 'Revision=1', '[Privilege Rights]', $right) |
+            Set-Content -Path $policy -Encoding Unicode
+        & secedit.exe /configure /db $database /cfg $policy /areas USER_RIGHTS | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not grant $Account the 'Log on as a service' right (secedit exit code $LASTEXITCODE)." }
+        Write-Host "$Account may now log on as a service."
+    }
+    Remove-Item $policy, $database -ErrorAction SilentlyContinue
 }
 
 New-Service @parameters | Out-Null
