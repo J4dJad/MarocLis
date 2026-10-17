@@ -1,93 +1,103 @@
 # Vérification de l'interface — Accueil / Enregistrement
 
+Re-vérifié le 2026-10-17 au commit 4e20d0d : chaque ligne a été recontrôlée dans le code des écrans et des fonctions ci-dessous, et les libellés comparés à `fr.json`. Les lignes corrigées passent à **Oui** avec la nouvelle référence ; des lignes ont été ajoutées pour les nouveautés (nouvelle présentation de **Patients**, devis en direct, avertissement de répétition, **Enregistrer sans étiquettes**, analyses fréquentes, copie du n° de dossier, onglet **Historique**, **Plus d'actions**).
+
 Fichiers d'écran contrôlés : `Views/PatientSearchView.cs`, `Forms/PatientEditorForm.cs`, `Forms/PatientEditorDialogs.cs`, `Forms/PatientMergeDialog.cs`, `Forms/ProvisionalPatientDialog.cs`, `Composition/PatientEditorFactory.cs`, `Views/OrderRegistrationView.cs`, `Views/MasterDataEditors.cs` (fenêtre prescripteur), `Views/OrderDetailView.cs`, `Views/OrderDetailDialogs.cs`.
-Fonctions de l'application contrôlées : enregistrement patient (`PatientRegistrationService`), enregistrement de dossier (`OrderRegistrationService` / `RegisterOrderRequest`), modification de dossier (`OrderAmendmentService`), réimpression d'étiquettes (`SampleWorkflowService.ReprintLabelsAsync`), compte rendu archivé (`ReportReleaseService`), création de prescripteur (`MasterDataService.SavePrescriberAsync`).
+Fonctions de l'application contrôlées : recherche patient (`PatientQueries`), enregistrement patient (`PatientRegistrationService`), enregistrement de dossier (`OrderRegistrationService` / `RegisterOrderRequest`, `OrderRegistrationRules`), devis (`IOrderQuotes`), modification de dossier (`OrderAmendmentService`), réimpression d'étiquettes (`SampleWorkflowService.ReprintLabelsAsync`), compte rendu archivé (`ReportReleaseService`), création de prescripteur (`MasterDataService.SavePrescriberAsync`), droits par défaut (`ReferenceDataSeeder`).
 
 ## Patients
 
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
 |---|---|---|---|---|
-| Rechercher un patient (nom, CIN, n° fiche, mobile) | Patients | **Rechercher…** | Oui | PatientSearchView.cs:89 (recherche différée 300 ms), :413. Limité aux 50 premiers résultats, pas de pagination. |
-| Voir les antécédents et ouvrir un dossier | Patients | **Antécédents d'analyses** (double-clic) | Oui | PatientSearchView.cs:100 |
-| Créer une fiche | Patients / Dossiers | **Nouveau patient** → **Enregistrer** | Oui | PatientSearchView.cs:71 ; OrderRegistrationView.cs:366 ; PatientEditorForm.cs:646 → :1377 (RegisterAsync) |
-| Détection de doublon avant enregistrement | Fiche patient | message sous la fiche | Oui | PatientEditorForm.cs:633-634 → :891 (FindDuplicatesAsync) |
-| Décision sur doublon | Doublon possible | **Utiliser ce dossier** / **Créer un nouveau dossier** + **Motif : pourquoi…** | Oui | PatientEditorDialogs.cs:656, :665 |
-| Modifier l'identité | Patients | **Modifier** → **Enregistrer** | Oui | PatientSearchView.cs:72 ; PatientEditorForm.cs:1330 (UpdateAsync). Bouton **Modifier** non soumis à droit (ouvre en lecture seule, Enregistrer grisé sans « modifier un patient ») : correct. |
-| Patient non identifié | Dossiers | **Patient X urgence** → **Ouvrir le dossier provisoire** | Oui | OrderRegistrationView.cs:367 → :608 ; PatientEditorFactory.cs:43. Absent de l'écran Patients (un Préleveur, qui a « créer un patient » mais pas l'écran Dossiers, ne peut pas ouvrir de fiche X-URG). |
-| Compléter une identité provisoire | Patients | **Modifier** | Oui | Géré par UpdateAsync (renommer X-URG). Aucun filtre « fiches provisoires » : on les retrouve en tapant « X-URG ». |
-| Ajouter une couverture | Fiche patient, onglet **Couvertures** | **Ajouter une couverture** | Oui | PatientEditorForm.cs:636 → :1040 |
-| Clore une couverture | onglet **Couvertures** | **Clore la couverture** | Partiel | PatientEditorForm.cs:637 → :1066. La date est tapée en texte libre ; une date illisible affiche « … n'est pas une valeur numérique valide » (message inadapté). Pas de sélecteur de date. |
-| Corriger une couverture (n° d'immatriculation erroné, taux) | onglet **Couvertures** | — | MANQUANT | Aucune fonction de modification d'une couverture : il faut la clore et en créer une autre. |
-| Recueillir un consentement | onglet **Consentements** | **Recueillir un consentement** | Partiel | PatientEditorForm.cs:638 → :1157. La fonction accepte la pièce justificative (formulaire signé scanné) mais **aucun champ ne permet de la joindre** : tout consentement écrit (génétique, VIH, prénatal…) reste affiché « Pièce absente ». |
-| Retirer un consentement | onglet **Consentements** | **Retirer le consentement** | Oui | PatientEditorForm.cs:639 → :1178 |
-| Ajouter une alerte | onglet **Alertes** | **Ajouter une alerte** | Oui | PatientEditorForm.cs:641 → :1240 |
-| Lever / clore une alerte avant son expiration | onglet **Alertes** | — | MANQUANT | Aucune fonction ni bouton : une alerte permanente ne peut plus être retirée. |
-| Acquitter une alerte critique (blocage annoncé) | Dossiers | — | MANQUANT | Le texte d'aide dit « Une alerte critique bloque l'enregistrement jusqu'à ce qu'elle soit acquittée ». Le code ne bloque rien : OrderRegistrationView.cs:675-679 affiche seulement une boîte « Alertes » sans le texte de l'alerte. Les alertes Information / Avertissement ne sont affichées nulle part hors de la fiche. |
-| Fusionner deux fiches | Patients | **Fusionner les dossiers** | Oui | PatientSearchView.cs:73 → :311 ; PatientMergeDialog.cs:124. Les deux fiches doivent figurer dans la même recherche (max. 50 résultats). |
-| Anonymiser (loi 08-09) | Patients | **Anonymiser** | Oui | PatientSearchView.cs:74 → :346, dérogation conservation :369-377. Droit réservé à l'Administrateur par défaut (pas au Biologiste responsable) : à confirmer avec le laboratoire. |
-| Exporter les données d'un patient (droit d'accès loi 08-09) | — | — | MANQUANT | Le droit « patients.export » existe et est donné au Biologiste responsable, mais aucune fonction ni bouton ne l'utilise. |
+| Rechercher un patient (nom, CIN, n° fiche, mobile) | Patients | zone de recherche | Oui | PatientSearchView.cs:89 (recherche différée), SearchAsync :907 ; recherche dès 3 caractères :935. Toujours limité aux 50 premiers résultats (PatientQueries.cs:190-191), sans page suivante. |
+| Filtrer la liste | Patients | filtres **Tous**, **Identité à compléter**, **Vus aujourd'hui** ; liste **Tous les payeurs** | Oui | Nouveau. PatientSearchView.cs:672-673 ; payeurs :655 |
+| Voir la fiche et les demandes du patient sélectionné | Patients | carte latérale, cartes de demandes | Oui | Nouveau. Un clic sur une demande ouvre **Consultation d'un dossier** (PatientSearchView.cs:1136) ; remplace la liste « Antécédents d'analyses » |
+| Nouvelle demande pour le patient choisi | Patients | **Nouvelle demande pour ce patient** | Oui | Nouveau. NewOrderAsync PatientSearchView.cs:766-769 ; grisé pour une fiche anonymisée (:721-737) |
+| Créer une fiche | Patients / Dossiers | **Nouveau patient** (Ctrl+N) → **Enregistrer** | Oui | PatientSearchView.cs:118-123, Ctrl+N :706-709 ; OrderRegistrationView.cs:956 ; PatientEditorForm.cs RegisterAsync :1440 |
+| Détection de doublon avant enregistrement | Fiche patient | message sous la fiche | Oui | PatientEditorForm.cs:669-670 → FindDuplicatesAsync :938 |
+| Décision sur doublon | Doublon possible | **Utiliser ce dossier** / **Créer un nouveau dossier** + **Motif : pourquoi…** | Oui | PatientEditorDialogs.cs:663-669 |
+| Contrôle du taux de couverture fractionnaire | Fiche patient | question de confirmation | Oui | Nouveau. PatientEditorDialogs.cs:289 (ConfirmFractionRate) |
+| Contrôle poids / taille | Fiche patient | message | Oui | PatientEditorForm.cs:1375-1376 |
+| Modifier l'identité | Patients | **Modifier** (Entrée, double-clic) → **Enregistrer** | Oui | PatientSearchView.cs:118-123, double-clic :136, Entrée :706-709 ; PatientEditorForm.cs UpdateAsync :1391. Ouvre en lecture seule sans « modifier un patient » : correct. |
+| Patient non identifié | Dossiers | **Patient non identifié (urgence)** → **Ouvrir le dossier provisoire** | Oui | OrderRegistrationView.cs:957 → RegisterEmergencyPatientAsync :1586 ; PatientEditorFactory.cs:43. Toujours absent de l'écran **Patients** (un Préleveur, qui a « créer un patient » mais pas l'écran Dossiers, ne peut pas ouvrir de fiche X-URG). |
+| Compléter une identité provisoire | Patients | filtre **Identité à compléter**, **Modifier** | Oui | Corrigé : le filtre retrouve les fiches provisoires (PatientSearchView.cs:672-673) ; UpdateAsync renomme la fiche X-URG. |
+| Ajouter une couverture | Fiche patient, onglet **Couvertures** | **Ajouter une couverture** | Oui | PatientEditorForm.cs:672 → AddCoverageAsync :1082 |
+| Clore une couverture | onglet **Couvertures** | **Clore la couverture** | Oui | Corrigé : PatientEditorForm.cs:673 → EndCoverageAsync :1108 ; une date illisible affiche maintenant un message propre (Coverage_EndDateUnreadable :1122). Date toujours tapée en texte. |
+| Corriger une couverture (n° d'immatriculation erroné, taux) | onglet **Couvertures** | — | MANQUANT | Toujours : aucune fonction de modification d'une couverture : il faut la clore et en créer une autre. |
+| Recueillir un consentement | onglet **Consentements** | **Recueillir un consentement** | PARTIEL | PatientEditorForm.cs:674 → AddConsentAsync :1200 ; consentement écrit PatientEditorDialogs.cs:504, :516. Toujours **aucun champ pour joindre la pièce** (formulaire signé) : tout consentement écrit reste « Pièce absente » (EvidenceMissing PatientEditorForm.cs:1154). |
+| Retirer un consentement | onglet **Consentements** | **Retirer le consentement** | Oui | PatientEditorForm.cs:675 → WithdrawConsentAsync :1221 |
+| Ajouter une alerte | onglet **Alertes** | **Ajouter une alerte** | Oui | PatientEditorForm.cs:677 → AddAlertAsync :1283 ; confirmation d'une alerte critique PatientEditorDialogs.cs:926 |
+| Lever / clore une alerte avant son expiration | onglet **Alertes** | — | MANQUANT | Toujours : aucune fonction ni bouton. |
+| Acquitter une alerte critique (blocage annoncé) | Dossiers | — | MANQUANT | Toujours : le texte d'aide « Une alerte critique bloque l'enregistrement jusqu'à ce qu'elle soit acquittée » (AlertCriticalNotice, PatientEditorDialogs.cs:907) est faux ; OrderRegistrationView.cs:1464 affiche seulement une boîte « Alertes » sans le texte de l'alerte. |
+| Fusionner deux fiches | Patients | **Plus d'actions** › **Fusionner les dossiers** | Oui | PatientSearchView.cs MergeAsync :779 (au moins deux fiches dans la liste, MergeNeedsTwoFiles :788 ; interdit sur une fiche anonymisée :721-737) ; PatientMergeDialog.cs:141. Les demandes du doublon sont facturées au nom de la fiche gardée. |
+| Anonymiser (loi 08-09) | Patients | **Plus d'actions** › **Anonymiser** | Oui | PatientSearchView.cs AnonymizeAsync :818, dérogation conservation :844. Droit réservé à l'Administrateur par défaut : à confirmer avec le laboratoire. |
+| Exporter les données d'un patient (droit d'accès loi 08-09) | — | — | MANQUANT | Toujours : le droit « patients.export » existe et est donné au Biologiste responsable, mais aucune fonction ni bouton ne l'utilise. |
 
 ## Dossiers (enregistrement)
 
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
 |---|---|---|---|---|
-| Choisir le patient | Dossiers | zone de recherche + liste déroulante | Oui | OrderRegistrationView.cs:364-365, :549 |
-| Priorité | Dossiers | **Priorité** | Partiel | :963. Le rôle Biologiste a « créer un dossier » mais pas « dossier urgent » : sa saisie Urgent est refusée après coup ; la liste n'est pas filtrée selon le droit. |
-| Origine (dont **Sous-traitance reçue**) | Dossiers | **Origine** | Partiel | :945. Simple étiquette : aucun champ pour le laboratoire adresseur ni sa référence ; le payeur reste la couverture principale de la fiche patient (il faut une couverture « Laboratoire adresseur » sur la fiche pour le facturer). |
-| Prescripteur de l'annuaire ou texte libre | Dossiers | **Prescripteur** | Oui | :538, :966-967 ; contrôle prescripteur obligatoire :951 |
-| Créer un prescripteur | Dossiers | **+** → **Nouveau prescripteur** → **Enregistrer** | Partiel | :374 → :505 ; MasterDataEditors.cs:1094. La liste du type de prescripteur porte l'étiquette « Désignation » (clé Field.Name) au lieu d'un libellé « Type ». Le champ **Remise** du prescripteur est enregistré mais n'est appliqué nulle part au prix d'un dossier (à vérifier avec le module Relations). |
-| Ajouter analyses / profils (clavier) | Dossiers | **Analyses / Profils** + Entrée, flèche bas, double-clic | Oui | :380-403, :690, :787 |
-| Retirer une analyse demandée | Dossiers | double-clic ou **Suppr** dans **Analyses demandées** | Oui | :405-410. Aucun bouton visible « Retirer » (geste non signalé à l'écran). |
-| Renseignements cliniques | Dossiers | **Renseignements cliniques** | Oui | :968 |
-| Jeûne | Dossiers | **Patient à jeun** | Partiel | :970. Oui/non seulement ; le nombre d'heures de jeûne (prévu par la fonction) n'est pas saisissable ici (il l'est au Prélèvement, CollectionView.cs:733). |
-| Paiement direct (sans couverture) | Dossiers | **Paiement direct** | Oui | :971 |
-| Choisir la couverture à utiliser (si plusieurs) | Dossiers | — | MANQUANT | La fonction accepte une couverture précise ; l'écran utilise toujours la couverture principale. Impossible de choisir la mutuelle plutôt que l'AMO pour ce dossier. |
-| Part AMO + mutuelle complémentaire | Dossiers | — | MANQUANT | Un seul organisme par dossier dans le calcul ; aucune répartition AMO puis mutuelle à l'enregistrement (à vérifier en Facturation). |
-| Remise sur le dossier | Dossiers | — | MANQUANT (ici) | La fonction accepte remise + motif ; pas de champ. La remise existe à la facturation (BillingView.cs:634), ce qui peut suffire. |
-| Date de l'ordonnance | Dossiers | — | MANQUANT (ici) | Prévue par la fonction ; saisissable seulement après coup via **Modifier l'en-tête**. Utile pour les demandes AMO. |
-| Ordonnance scannée | Dossiers | — | MANQUANT | La fonction accepte le scan de l'ordonnance ; aucun bouton pour le joindre, nulle part. |
-| Code diagnostic, Service / unité, Chambre / lit, Note interne, Langue du compte rendu | Dossiers | — | MANQUANT (ici) | Prévus par la fonction ; seulement via **Modifier l'en-tête** après enregistrement. Gênant pour l'origine **Clinique / hôpital**. |
-| Enregistrer | Dossiers | **Enregistrer** (Ctrl+S) | Oui | :413 → :941 |
-| Récapitulatif part organisme / part patient | Dossiers | fenêtre **Facture** | Oui | :1019. Le prix montré dans le catalogue est celui du laboratoire, sans tenir compte du payeur : l'écart avec la fenêtre finale peut surprendre. |
-| Étiquettes à l'enregistrement | Dossiers | (automatique) | Oui | :1059 |
-| Devis / estimation avant enregistrement | Dossiers | — | MANQUANT | Aucun devis patient. Le total du bas est indicatif (montant brut seulement, sans part patient). Les « Demandes de devis » de l'application concernent les fournisseurs. |
-| Effacer la saisie | Dossiers | **Effacer** | Oui | :414 |
+| Choisir le patient | Nouvelle demande | zone de recherche + suggestions, lien **Voir**, **Changer de patient** | Oui | SearchPatientsAsync OrderRegistrationView.cs:1412, PickPatient :1452, :958-959 ; dernière demande :1546 |
+| Rappel des demandes récentes / répétition sous 30 jours | Nouvelle demande | avertissement sur la ligne, **Conserver** / **Retirer** | Oui | Nouveau. LoadRecentAnalysesAsync :1527-1532 (fenêtre de 30 jours, OrderRegistrationRules.cs:16) ; avertissements :2273-2274 |
+| Priorité | Nouvelle demande | **Priorité** | PARTIEL | Toujours : la liste n'est pas filtrée selon le droit « dossier urgent » (OrderRegistrationView.cs:1593) : un Biologiste sans ce droit voit son Urgent refusé à l'enregistrement. |
+| Origine (dont **Sous-traitance reçue**) | Nouvelle demande | **Origine** | PARTIEL | Toujours : simple étiquette, aucun champ pour le laboratoire adresseur ni sa référence. |
+| Prescripteur de l'annuaire ou texte libre | Nouvelle demande | **Prescripteur** | Oui | Contrôle prescripteur obligatoire :2481 |
+| Créer un prescripteur | Nouvelle demande | **+** → **Nouveau prescripteur** → **Enregistrer** | PARTIEL | :966-967 → CreatePrescriberAsync :1334. Toujours : la liste du type porte l'étiquette « Désignation » (MasterDataEditors.cs:1291) ; la **Remise** du prescripteur n'est appliquée nulle part (à vérifier avec le module Relations). |
+| Ajouter analyses / profils | Nouvelle demande | zone de recherche du catalogue, filtres du catalogue, **Profils fréquents** | Oui | AddFromSearchAsync :1625, filtres :1273-1298, profils fréquents :1133, :1236, :1254 |
+| Retirer une analyse demandée | Nouvelle demande | **✕** sur la ligne, **Tout retirer** | Oui | Corrigé : bouton visible (OnBasketMouseClick :2325, RemoveBasketRow :1845) ; **Tout retirer** :1060, RemoveAll :1867 |
+| Voir les tubes à prélever | Nouvelle demande | **Tubes à prélever** | Oui | Nouveau. LayoutTubes :861 |
+| Renseignements cliniques | Nouvelle demande | **Renseignements cliniques** | Oui | |
+| Jeûne | Nouvelle demande | **Patient à jeun** : **Oui** / **Non** / **Non renseigné** | PARTIEL | Nouveau choix à trois valeurs (:1126, SetFasting :1382, défaut :145). Toujours : le nombre d'heures n'est saisissable qu'au Prélèvement. |
+| Paiement direct (sans couverture) | Nouvelle demande | **Paiement direct** | Oui | |
+| Devis / estimation avant enregistrement | Nouvelle demande | devis en direct (part organisme / part patient) | Oui | Corrigé : le devis se recalcule à chaque changement (RequestQuote :1945, RefreshQuoteAsync :1957, ShowQuote :2002). Pas de devis imprimable à remettre au patient. |
+| Savoir ce qui manque avant d'enregistrer | Nouvelle demande | barre d'état de la saisie | Oui | Nouveau. RefreshReadiness :2049-2088 (boutons actifs :2053-2054) |
+| Choisir la couverture à utiliser (si plusieurs) | Nouvelle demande | — | MANQUANT | Toujours : l'écran utilise la couverture principale. |
+| Part AMO + mutuelle complémentaire | Nouvelle demande | — | MANQUANT | Toujours : un seul organisme par dossier. |
+| Remise sur le dossier | Nouvelle demande | — | MANQUANT (ici) | Toujours ; la remise existe à la facturation. |
+| Date de l'ordonnance | Nouvelle demande | — | MANQUANT (ici) | Toujours : seulement après coup via **Modifier l'en-tête**. |
+| Ordonnance scannée | Nouvelle demande | — | MANQUANT | Toujours : aucun bouton pour joindre le scan. |
+| Code diagnostic, Service / unité, Chambre / lit, Note interne, Langue du compte rendu | Nouvelle demande | — | MANQUANT (ici) | Toujours : seulement via **Modifier l'en-tête**. |
+| Enregistrer | Nouvelle demande | **Enregistrer** (F12, F4) | Oui | :1063-1064, touches :1081-1091 → RegisterAsync :2469 ; avertissements :2519 |
+| Enregistrer sans imprimer les étiquettes | Nouvelle demande | **Enregistrer sans étiquettes** (F8) | Oui | Nouveau. :1064, RegisterAsync(printLabels: false) :2530 |
+| Récapitulatif part organisme / part patient | Nouvelle demande | fenêtre de récapitulatif | Oui | ShowPricing :2549, encadré :2582. Le devis en direct annonce désormais les mêmes montants. |
+| Étiquettes à l'enregistrement | Nouvelle demande | (automatique avec **Enregistrer**) | Oui | :2524 |
+| Abandonner la saisie | Nouvelle demande | **Annuler la saisie** (Échap) | Oui | Remplace **Effacer**. CancelEntry :2618, confirmation ConfirmEntryLoss :2615 |
 
 ## Consultation d'un dossier
 
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
 |---|---|---|---|---|
-| Liste et recherche (n°, code-barres, nom, CIN) | Consultation | zone de recherche, **Actualiser** | Oui | OrderDetailView.cs:393-426, :667. 200 dossiers récents ; au-delà, chercher. |
-| Ajouter des analyses | Consultation | **Ajouter des analyses** | Oui | :428 → :950 ; OrderDetailDialogs.cs:266 |
-| Annuler une analyse | Consultation | **Annuler l'analyse** | Oui | :429 → :984 |
-| Repasser une analyse | Consultation | **Repasser l'analyse** | Oui | :430 → :1008. Bouton actif pour qui a « saisir des résultats » même si l'analyse est validée techniquement et que l'utilisateur n'a pas « modifier un résultat » : refus après saisie du motif. |
-| Corriger l'en-tête | Consultation | **Modifier l'en-tête** | Partiel | :431 → :1028 ; OrderDetailDialogs.cs:300. **Un prescripteur choisi dans l'annuaire ne peut pas être remplacé** (champ en lecture seule, l'identifiant est renvoyé tel quel, OrderDetailDialogs.cs:326). Or le cas le plus fréquent est justement « mauvais médecin sélectionné ». Un prescripteur libre ne peut pas non plus être rattaché à l'annuaire. |
-| Annuler le dossier | Consultation | **Annuler le dossier** | Oui | :432 → :1046 |
-| Réimprimer les étiquettes | Consultation | **Imprimer les étiquettes** | Partiel | :433 → :1085. Réimprime toutes les étiquettes du dossier ; impossible de n'en choisir qu'une. |
-| Ouvrir le compte rendu PDF | Consultation | **Compte rendu (PDF)** | Partiel | :434 → :1111. Droit « réimprimer un compte rendu validé » absent des rôles Secrétariat / accueil et Biologiste par défaut : le bouton est grisé pour la personne qui remet les résultats. |
-| Historique des modifications du dossier | Consultation | — | MANQUANT | Les motifs sont au journal d'audit, mais l'écran n'a pas de bouton « Historique » ; seule la dernière annulation / reprise apparaît dans les colonnes. Il faut passer par **Journal d'audit** (administration). |
-| Encaisser / voir le règlement depuis le dossier | Consultation | — | MANQUANT (ici) | Le n° de facture est affiché, sans lien vers la caisse ou la facture. |
+| Liste et recherche (n°, code-barres, nom, CIN) | Consultation | zone de recherche, filtres | Oui | Filtres OrderDetailView.cs:1040 ; en-têtes :1070-1091 ; aucun résultat :1358. 200 dossiers récents (OrderAmendmentService.cs:705) ; au-delà, chercher. |
+| Copier le n° de dossier | Consultation | double-clic sur le n° | Oui | Nouveau. OrderDetailView.cs:461, :976 |
+| Ajouter des analyses | Consultation | **Ajouter des analyses** | Oui | :983 ; grisé sur un dossier facturé ou rendu (RefreshActions :2039) |
+| Annuler une analyse | Consultation | **Plus d'actions** › **Annuler l'analyse**, clic droit | Oui | :996, :1001, menu clic droit :1003-1010 |
+| Repasser une analyse | Consultation | **Plus d'actions** › **Repasser l'analyse**, clic droit | PARTIEL | :997, :1002. Corrigé en partie : grisé tant qu'aucune valeur n'est saisie (OrderAmendmentService.cs:118). Reste : actif sans le droit « modifier un résultat » sur une analyse validée techniquement ; refus après saisie du motif. |
+| Corriger l'en-tête | Consultation | **Modifier l'en-tête** | PARTIEL | :986 ; OrderDetailDialogs.cs:339-341. Toujours : **un prescripteur de l'annuaire ne peut pas être remplacé** (lecture seule, OrderDetailDialogs.cs:406). |
+| Annuler le dossier | Consultation | **Plus d'actions** › **Annuler le dossier** | Oui | :998 |
+| Réimprimer les étiquettes | Consultation | **Imprimer les étiquettes** (F8) | PARTIEL | :984, F8 :1027. Toujours : toutes les étiquettes du dossier, impossible d'en choisir une. |
+| Ouvrir le compte rendu PDF | Consultation | **Compte rendu (PDF)** | Oui | Corrigé : droit donné au Secrétariat et au Biologiste (ReferenceDataSeeder.cs:574, :642) ; :985, :2052 |
+| Historique des modifications du dossier | Consultation | onglet **Historique** | Oui | Corrigé. OrderDetailView.cs:1687, :1865 |
+| Encaisser / voir le règlement depuis le dossier | Consultation | onglet **Facturation**, **Ouvrir la facturation** | PARTIEL | Corrigé en partie : le bouton ouvre l'écran **Facturation** (:1014), mais sans sélectionner la facture du dossier. |
 | Modifier la couverture d'un dossier | Consultation | — | Volontairement absent | Rappel affiché dans **Modifier l'en-tête** (avoir puis nouvelle facture). |
 
 ## Boutons qui existent mais n'aboutissent pas ou induisent en erreur
 
-- Message d'alerte critique à l'enregistrement : boîte titrée « Patient » contenant seulement le mot « Alertes » (OrderRegistrationView.cs:678) — ne dit pas quelle alerte.
+- Message d'alerte critique à l'enregistrement : boîte titrée « Patient » contenant seulement le mot « Alertes » (OrderRegistrationView.cs:1464) — ne dit pas quelle alerte.
 - Texte d'aide « Une alerte critique bloque l'enregistrement jusqu'à ce qu'elle soit acquittée » (fenêtre **Ajouter une alerte**) : faux, rien ne bloque.
 - État « Pièce absente » des consentements écrits : impossible à corriger depuis l'interface.
-- **Clore la couverture** : message d'erreur de date inadapté.
 - Champ type de prescripteur étiqueté « Désignation ».
+
+Corrigés depuis la vérification précédente : message de date de **Clore la couverture**, bouton visible pour retirer une analyse, devis en direct, **Compte rendu (PDF)** pour Secrétariat et Biologiste, onglet **Historique**, lien vers la facturation, filtre des fiches provisoires.
 
 ## Manques à corriger (par impact sur le travail quotidien)
 
 1. **Modifier l'en-tête** ne permet pas de changer un prescripteur de l'annuaire (erreur de saisie fréquente, rejets AMO).
-2. **Compte rendu (PDF)** grisé pour Secrétariat / accueil et Biologiste (droit « réimprimer un compte rendu validé » manquant dans les rôles par défaut).
-3. Alertes patient : pas de blocage ni d'affichage du texte à l'enregistrement, pas de moyen de clore une alerte.
-4. Consentement écrit : pas de pièce jointe possible → « Pièce absente » permanent sur génétique / VIH / prénatal.
-5. Choix de la couverture du dossier impossible (toujours la principale) ; pas de part complémentaire mutuelle à l'enregistrement.
-6. Champs absents à l'enregistrement : date de l'ordonnance, ordonnance scannée, service / chambre, code diagnostic, langue du compte rendu, heures de jeûne (seulement après coup ou au prélèvement).
-7. **Sous-traitance reçue** : pas de laboratoire adresseur ni de référence externe sur le dossier.
-8. Rôle Biologiste : « créer un dossier » sans « dossier urgent » ni « créer un patient » — refus en fin de saisie.
-9. Pas d'historique des modifications sur l'écran **Consultation d'un dossier**.
-10. Couvertures non modifiables (clore puis recréer) ; date de fin en texte libre.
-11. Pas de devis patient ; total du bas en montant brut seulement.
-12. Points secondaires : remise prescripteur non appliquée (à vérifier), libellé « Désignation » du type de prescripteur, recherche patient limitée à 50 résultats sans pagination, export patient (droit sans fonction).
+2. Alertes patient : pas de blocage ni d'affichage du texte à l'enregistrement, pas de moyen de clore une alerte ; texte d'aide faux.
+3. Consentement écrit : pas de pièce jointe possible → « Pièce absente » permanent sur génétique / VIH / prénatal.
+4. Choix de la couverture du dossier impossible (toujours la principale) ; pas de part complémentaire mutuelle à l'enregistrement.
+5. Champs absents à l'enregistrement : date de l'ordonnance, ordonnance scannée, service / chambre, code diagnostic, langue du compte rendu, heures de jeûne.
+6. **Sous-traitance reçue** : pas de laboratoire adresseur ni de référence externe sur le dossier.
+7. **Priorité** non filtrée selon le droit « dossier urgent » (refus en fin de saisie).
+8. Couvertures non modifiables (clore puis recréer).
+9. **Ouvrir la facturation** n'ouvre pas la facture du dossier ; réimpression d'étiquettes tout ou rien ; **Repasser l'analyse** actif sans le droit de modification.
+10. Points secondaires : remise prescripteur non appliquée (à vérifier), libellé « Désignation » du type de prescripteur, recherche patient limitée à 50 résultats, export patient (droit sans fonction), fiche X-URG impossible depuis **Patients**.
