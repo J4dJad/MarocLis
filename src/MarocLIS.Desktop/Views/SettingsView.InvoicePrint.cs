@@ -36,7 +36,7 @@ public sealed partial class SettingsView
     private readonly Label _capPercentLabel = new();
     private readonly TextBox _capPercent = UiTheme.Input(120);
     private readonly Label _capAmountLabel = new();
-    private readonly TextBox _capAmount = UiTheme.Input(160);
+    private readonly TextBox _capAmount = UiTheme.Input(200);
     private DiscountCapSettings _discountCap = DiscountCapSettings.Default;
 
     private void BuildInvoicePrintTab()
@@ -56,7 +56,7 @@ public sealed partial class SettingsView
         {
             box.Font = UiTheme.Body;
             box.AutoSize = false;
-            box.Bounds = new Rectangle(x, y, 740, 24);
+            box.Bounds = new Rectangle(x, y, 490, 24);
             return box;
         }
 
@@ -67,23 +67,26 @@ public sealed partial class SettingsView
         _invoiceFormat.FlatStyle = FlatStyle.Flat;
         _invoiceFormat.Bounds = new Rectangle(0, 74, 520, UiTheme.InputHeight);
 
-        Text(_standardOptionsLabel, UiTheme.BodyBold, UiTheme.TextPrimary, new Rectangle(0, 124, 760, 22));
+        Text(_standardOptionsLabel, UiTheme.BodyBold, UiTheme.TextPrimary, new Rectangle(0, 124, 490, 22));
         Option(_standardNationalCode, 0, 150);
         Option(_standardCoefficient, 0, 176);
         Option(_standardWords, 0, 202);
 
-        Text(_cotationOptionsLabel, UiTheme.BodyBold, UiTheme.TextPrimary, new Rectangle(0, 242, 760, 22));
+        Text(_cotationOptionsLabel, UiTheme.BodyBold, UiTheme.TextPrimary, new Rectangle(0, 242, 490, 22));
         Option(_cotationLinePrice, 0, 268);
         Option(_cotationZeroFee, 0, 294);
         Option(_cotationWords, 0, 320);
         Option(_cotationLetterValue, 0, 346);
 
-        Text(_capHeading, UiTheme.BodyBold, UiTheme.TextPrimary, new Rectangle(0, 386, 760, 22));
-        Text(_capIntro, UiTheme.Small, UiTheme.TextSecondary, new Rectangle(0, 410, 760, 34));
-        Text(_capPercentLabel, UiTheme.SmallBold, UiTheme.TextSecondary, new Rectangle(0, 450, 240, 18));
-        Text(_capAmountLabel, UiTheme.SmallBold, UiTheme.TextSecondary, new Rectangle(260, 450, 380, 18));
-        _capPercent.Location = new Point(0, 470);
-        _capAmount.Location = new Point(260, 470);
+        // The discount ceiling beside the format options, in the second half of the column: below
+        // them it fell under the fold at 1366×768.
+        Text(_capHeading, UiTheme.BodyBold, UiTheme.TextPrimary, new Rectangle(510, 124, 250, 22));
+        Text(_capIntro, UiTheme.Small, UiTheme.TextSecondary, new Rectangle(510, 148, 250, 92));
+        // Captions 24 px high: the Arabic font needs it.
+        Text(_capPercentLabel, UiTheme.SmallBold, UiTheme.TextSecondary, new Rectangle(510, 246, 250, 24));
+        _capPercent.Location = new Point(510, 272);
+        Text(_capAmountLabel, UiTheme.SmallBold, UiTheme.TextSecondary, new Rectangle(510, 308, 250, 24));
+        _capAmount.Location = new Point(510, 334);
         foreach (var box in new[] { _capPercent, _capAmount })
         {
             box.Tag = UiTags.LatinValue;
@@ -102,8 +105,6 @@ public sealed partial class SettingsView
             _cotationOptionsLabel, _cotationLinePrice, _cotationZeroFee, _cotationWords, _cotationLetterValue,
             _capHeading, _capIntro, _capPercentLabel, _capPercent, _capAmountLabel, _capAmount
         ]);
-        // Taller than the tab at 1366×768: the column scrolls rather than hiding the ceiling.
-        column.AutoScroll = true;
         var leftToRight = column.Controls.Cast<Control>().ToDictionary(c => c, c => c.Left);
         column.RightToLeftChanged += (_, _) =>
         {
