@@ -93,9 +93,19 @@ public sealed class InstrumentHostedService(
                 monitor.ReportHostError(ex.Message);
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(options.ConfigurationPollSeconds,
-                                                              5, 600)),
-                              stoppingToken);
+            // Outside the try above, so closing the application during this wait threw out of
+            // the loop: Visual Studio stopped on it as unhandled and the links were not stopped
+            // here. Closing is the normal way out of the wait, not a failure.
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(options.ConfigurationPollSeconds,
+                                                                  5, 600)),
+                                  stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
 
         await StopAllAsync();
