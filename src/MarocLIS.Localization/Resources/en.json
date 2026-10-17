@@ -1,5 +1,12 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Interface_IntegraNoResult": "COBAS INTEGRA result block with no result.",
+  "Interface_IntegraResultWithoutTest": "COBAS INTEGRA result line without a test number: \"{0}\".",
+  "Interface_IntegraBlockIgnored": "COBAS INTEGRA block {0} ignored: this block type is not handled.",
+  "Interface_IntegraErrorBlock": "The COBAS INTEGRA analyser reported an error (block 99, code {0}).",
+  "Interface_IntegraCalibrationIgnored": "COBAS INTEGRA calibration result read but not imported.",
+  "Interface_IntegraChecksum": "Wrong COBAS INTEGRA block check sum ({0}): the frame may have been corrupted.",
+  "Interface_IntegraNoHeader": "Unreadable COBAS INTEGRA frame: no block header (instrument code, identifier, block code).",
   "InvoicePrint_UnknownFormat": "Unknown invoice print format.",
   "Nabm_CodeRequired": "Enter an act code.",
   "Nabm_UnknownCode": "Act code {0} is not in the nomenclature of medical biology acts.",
@@ -4127,6 +4134,9 @@
   },
 
   "Interface": {
+    "TestFrameSample": "Sample frame (simulator)",
+    "IntegraNotice": "COBAS INTEGRA: the LIS polls the analyser (results, tubes without orders). Codes = test numbers (\"031\"). Line end, block check and polling interval: Instruments:RocheIntegra section of the configuration file.",
+    "FormatProfile.RocheIntegra": "Roche cobas INTEGRA 400 plus",
     "DisablePrompt": "Reason for disabling the link of {0} (for example: analyser in maintenance):",
     "EnablePrompt": "Reason for re-enabling the link of {0}:",
     "TestFrameSummary": "{0} of {1} result(s) would be stored",
@@ -4252,6 +4262,7 @@
   },
 
   "InstrumentProtocol": {
+    "RocheIntegra": "Roche COBAS INTEGRA",
     "AstmE1394": "ASTM E1394",
     "Hl7V2": "HL7 v2",
     "ProprietaryDelimited": "Delimited text (proprietary)",

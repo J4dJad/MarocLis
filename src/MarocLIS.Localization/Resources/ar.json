@@ -1,5 +1,12 @@
 {
   "$comment": "الفهرس العربي — يُعرض من اليمين إلى اليسار. الأرقام تبقى بالصيغة اللاتينية (0-9) تفاديًا لأخطاء النقل في النتائج الطبية.",
+  "Interface_IntegraNoResult": "كتلة نتائج COBAS INTEGRA بدون نتيجة.",
+  "Interface_IntegraResultWithoutTest": "سطر نتيجة COBAS INTEGRA بدون رقم اختبار: «{0}».",
+  "Interface_IntegraBlockIgnored": "تم تجاهل كتلة COBAS INTEGRA رقم {0}: هذا النوع من الكتل غير معالج.",
+  "Interface_IntegraErrorBlock": "أبلغ جهاز COBAS INTEGRA عن خطأ (الكتلة 99، الرمز {0}).",
+  "Interface_IntegraCalibrationIgnored": "تمت قراءة نتيجة معايرة COBAS INTEGRA دون استيرادها.",
+  "Interface_IntegraChecksum": "مجموع التحقق لكتلة COBAS INTEGRA غير صحيح ({0}): ربما تعرضت الرسالة للتلف.",
+  "Interface_IntegraNoHeader": "رسالة COBAS INTEGRA غير مقروءة: لا يوجد رأس كتلة (رمز الجهاز، المعرّف، رمز الكتلة).",
   "InvoicePrint_UnknownFormat": "شكل طباعة الفاتورة غير معروف.",
   "Nabm_CodeRequired": "أدخل رمز العمل.",
   "Nabm_UnknownCode": "رمز العمل {0} غير موجود في مدونة أعمال البيولوجيا الطبية.",
@@ -4127,6 +4134,9 @@
   },
 
   "Interface": {
+    "TestFrameSample": "مثال رسالة (المحاكي)",
+    "IntegraNotice": "COBAS INTEGRA: يستعلم النظام من الجهاز (النتائج، الأنابيب بدون طلب). الرموز = أرقام الاختبارات («031»). نهاية السطر وفحص الكتلة وفترة الاستعلام: قسم Instruments:RocheIntegra في ملف الإعدادات.",
+    "FormatProfile.RocheIntegra": "Roche cobas INTEGRA 400 plus",
     "DisablePrompt": "سبب تعطيل ربط {0} (مثلا: الجهاز في الصيانة):",
     "EnablePrompt": "سبب إعادة تفعيل ربط {0}:",
     "TestFrameSummary": "سيتم حفظ {0} من {1} نتيجة",
@@ -4252,6 +4262,7 @@
   },
 
   "InstrumentProtocol": {
+    "RocheIntegra": "Roche COBAS INTEGRA",
     "AstmE1394": "ASTM E1394",
     "Hl7V2": "HL7 v2",
     "ProprietaryDelimited": "نص مفصول (خاص بالمصنِّع)",

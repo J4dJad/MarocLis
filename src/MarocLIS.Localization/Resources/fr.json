@@ -1,5 +1,12 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Interface_IntegraNoResult": "Bloc de résultats COBAS INTEGRA sans résultat.",
+  "Interface_IntegraResultWithoutTest": "Ligne de résultat COBAS INTEGRA sans numéro de test : « {0} ».",
+  "Interface_IntegraBlockIgnored": "Bloc COBAS INTEGRA {0} ignoré : ce type de bloc n'est pas traité.",
+  "Interface_IntegraErrorBlock": "L'automate COBAS INTEGRA a signalé une erreur (bloc 99, code {0}).",
+  "Interface_IntegraCalibrationIgnored": "Résultat d'étalonnage COBAS INTEGRA lu mais non importé.",
+  "Interface_IntegraChecksum": "Somme de contrôle du bloc COBAS INTEGRA incorrecte ({0}) : la trame a pu être altérée.",
+  "Interface_IntegraNoHeader": "Trame COBAS INTEGRA illisible : aucun en-tête de bloc (code automate, identifiant, code de bloc).",
   "InvoicePrint_UnknownFormat": "Format d'impression de facture inconnu.",
   "Nabm_CodeRequired": "Indiquez un code d'acte.",
   "Nabm_UnknownCode": "Le code d'acte {0} ne figure pas dans la nomenclature des actes de biologie médicale.",
@@ -4128,6 +4135,9 @@
   },
 
   "Interface": {
+    "TestFrameSample": "Exemple de trame (simulateur)",
+    "IntegraNotice": "COBAS INTEGRA : le LIS interroge l'automate (résultats, tubes sans demande). Codes = numéros de test (« 031 »). Fin de ligne, contrôle de bloc et intervalle d'interrogation : section Instruments:RocheIntegra du fichier de configuration.",
+    "FormatProfile.RocheIntegra": "Roche cobas INTEGRA 400 plus",
     "DisablePrompt": "Motif de la désactivation de la liaison de {0} (par exemple : automate en maintenance) :",
     "EnablePrompt": "Motif de la réactivation de la liaison de {0} :",
     "TestFrameSummary": "{0} résultat(s) seraient enregistrés sur {1}",
@@ -4253,6 +4263,7 @@
   },
 
   "InstrumentProtocol": {
+    "RocheIntegra": "Roche COBAS INTEGRA",
     "AstmE1394": "ASTM E1394",
     "Hl7V2": "HL7 v2",
     "ProprietaryDelimited": "Texte délimité (propriétaire)",
