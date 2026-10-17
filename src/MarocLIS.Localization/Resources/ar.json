@@ -4134,7 +4134,7 @@
   },
 
   "Interface": {
-    "TestFrameSample": "مثال رسالة (المحاكي)",
+    "TestFrameSample": "مثال رسالة",
     "IntegraNotice": "COBAS INTEGRA: يستعلم النظام من الجهاز (النتائج، الأنابيب بدون طلب). الرموز = أرقام الاختبارات («031»). نهاية السطر وفحص الكتلة وفترة الاستعلام: قسم Instruments:RocheIntegra في ملف الإعدادات.",
     "FormatProfile.RocheIntegra": "Roche cobas INTEGRA 400 plus",
     "DisablePrompt": "سبب تعطيل ربط {0} (مثلا: الجهاز في الصيانة):",

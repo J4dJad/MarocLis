@@ -4135,7 +4135,7 @@
   },
 
   "Interface": {
-    "TestFrameSample": "Exemple de trame (simulateur)",
+    "TestFrameSample": "Exemple de trame",
     "IntegraNotice": "COBAS INTEGRA : le LIS interroge l'automate (résultats, tubes sans demande). Codes = numéros de test (« 031 »). Fin de ligne, contrôle de bloc et intervalle d'interrogation : section Instruments:RocheIntegra du fichier de configuration.",
     "FormatProfile.RocheIntegra": "Roche cobas INTEGRA 400 plus",
     "DisablePrompt": "Motif de la désactivation de la liaison de {0} (par exemple : automate en maintenance) :",
