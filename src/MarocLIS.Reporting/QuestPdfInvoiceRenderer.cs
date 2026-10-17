@@ -342,7 +342,9 @@ public sealed partial class QuestPdfInvoiceRenderer : IInvoiceRenderer
 
                 if (showCoefficient)
                     table.Cell().Element(Cell).AlignRight().Text(
+                        // No « B 0 » for an act priced in dirhams only.
                         line.LetterKey is { Length: > 0 } letter && line.Coefficient is { } coefficient
+                                                                  && coefficient > 0m
                             ? $"{letter} {format.Coefficient(coefficient * line.Quantity)}"
                             : string.Empty).FontSize(8);
 

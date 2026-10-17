@@ -547,6 +547,10 @@ public sealed class BillingView : LocalizedView
 
     private void RenderPending()
     {
+        // The request highlighted stays current once the list is rebuilt (after a deposit, a
+        // refresh), rather than the list going back to its first row.
+        var kept = (_pending.CurrentRow?.Tag as BillableOrderRow)?.LabOrderId;
+
         _pending.SuspendLayout();
         _pending.Rows.Clear();
 
@@ -576,6 +580,11 @@ public sealed class BillingView : LocalizedView
         }
 
         _pending.ResumeLayout(performLayout: true);
+
+        if (kept is { } keptId
+            && _pending.Rows.Cast<DataGridViewRow>()
+                   .FirstOrDefault(r => (r.Tag as BillableOrderRow)?.LabOrderId == keptId) is { } keptRow)
+            _pending.MakeCurrent(keptRow);
 
         // Counted only what is still to invoice: a cancelled or invoiced request listed for its
         // deposit is not.
