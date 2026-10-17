@@ -139,21 +139,21 @@ public sealed class SampleReceptionView : LocalizedView
 
         var statusStrip = BuildStatusStrip();
 
-        var content = new TableLayoutPanel
+        // Docked rather than laid out in a table: a table row given its height from inside a layout
+        // pass kept the old height on some screens, and the list of tubes awaiting reception
+        // opened pushed to the bottom of the window. A top-docked card of a set height cannot.
+        var content = new Panel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
             Padding = new Padding(24, 16, 24, 12),
             Margin = new Padding(0),
             BackColor = UiTheme.Surface
         };
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        content.Controls.Add(BuildScanCard(), 0, 0);
-        content.Controls.Add(BuildAwaitingCard(), 0, 1);
+        // The last added is docked first: the scan card on top, the gap, then the list.
+        content.Controls.Add(BuildAwaitingCard());
+        content.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 14, BackColor = UiTheme.Surface });
+        content.Controls.Add(BuildScanCard());
 
         Controls.Add(content);
         Controls.Add(statusStrip);
@@ -188,10 +188,10 @@ public sealed class SampleReceptionView : LocalizedView
         // FitScanCard): auto-sized, it kept the height of the flows wrapped at their narrowest.
         var stack = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             ColumnCount = 1,
             RowCount = 6,
-            Margin = new Padding(0, 0, 0, 14),
+            Margin = new Padding(0),
             Padding = new Padding(16, 14, 16, 14),
             BackColor = UiTheme.SurfaceRaised
         };
@@ -539,27 +539,12 @@ public sealed class SampleReceptionView : LocalizedView
                      + decision
                      + 4;
 
-        // The row is checked as well as the card: measured while the screen was still narrow, the
-        // row kept the height of the wrapped flows after the card had shrunk back, and pushed the
-        // list of tubes awaiting reception off the bottom of the screen.
-        var content = _scanCard.Parent as TableLayoutPanel;
-        var row = needed + _scanCard.Margin.Vertical;
-        if (_scanCard.Height == needed
-            && (content is null || content.RowStyles[0] is { SizeType: SizeType.Absolute } style && (int)style.Height == row))
-            return;
+        if (_scanCard.Height == needed) return;
 
         _fitting = true;
         try
         {
             _scanCard.Height = needed;
-            if (content is not null)
-            {
-                content.RowStyles[0] = new RowStyle(SizeType.Absolute, row);
-                // Changed from inside a layout pass, the new row height is not laid out until
-                // something else moves: the list kept the place the old row gave it.
-                if (content.IsHandleCreated) content.BeginInvoke(() => content.PerformLayout());
-                else content.PerformLayout();
-            }
         }
         finally
         {
