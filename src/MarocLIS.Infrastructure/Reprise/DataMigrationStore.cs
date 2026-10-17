@@ -655,7 +655,7 @@ public sealed class DataMigrationStore(
 
             var batch = await db.MigrationBatches
                 .Where(b => !b.IsUndone && b.CompletedAt != null)
-                .OrderByDescending(b => b.StartedAt)
+                .OrderByDescending(b => b.StartedAt).ThenByDescending(b => b.CompletedAt)
                 .FirstOrDefaultAsync(ct);
             if (batch is null) return null;
 
