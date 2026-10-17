@@ -1,0 +1,493 @@
+﻿code;libelle;coefficient;chapitre;sous_chapitre;arrete
+B100;Acide urique sanguin;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B101;Albuminémie (Méthode immunologique);60;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B102;Ammoniémie;100;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B103;Bilirubine (Totale Directe et Indirecte);70;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B104;Calcium;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B105;Chlore;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B106;Cholestérol total;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B107;Cholestérol estérifié;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B108;Cholestérol HDL;50;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B109;Cholesterol LDL;50;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B110;Cholestérol HDL+LDL;80;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B111;Créatinine;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B112;Electrophorèse de l'Hémoglobine;100;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B113;Electrophorèse des lipides;100;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B114;Electrophorèse des protides;100;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B115;Fer sérique;60;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B116;Fer sérique + CTF;100;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B117;Fructosamine;80;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B118;Glycémie;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B119;Hémoglobine glycosylée;100;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B120;Ionogramme complet (Na, K, CI, Prot, RA);100;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B121;Lipides;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B122;Lipoprotéine A;150;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B123;Lipoprotéine B;150;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B124;Lipoprotéines A+B;250;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B125;Lithium;50;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B126;Magnésium Plasmatique;60;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B127;Magnésium Erythrocytaire;80;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B128;Oxalates;180;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B129;Phosphore minéral;40;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B130;Protéines;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B131;Potassium;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B132;Réserve Alcaline;40;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B133;Sodium;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B134;Triglycérides;50;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B135;Urée;30;I - Analyses biochimiques;1 - Examens sanguins / a - Chimie courante;2005
+B136;Aldolase;100;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B137;Amylase;100;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B138;Creatinine phosphokinase CPK;100;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B139;Creatinine phosphokinase CPK (MB);200;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B140;G6 PDH;100;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B141;Gamma glutamyl transférase (G G T);50;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B142;Lacticodeshydrogenase LDH;50;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B143;Phosphatases Alcalines;50;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B144;Phosphatases acides;50;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B145;Phosphatases prostatiques;50;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B146;Transaminases 0 (TGO);50;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B147;Transaminases P (TGP);50;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B148;Lipase;100;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B149;Troponine;250;I - Analyses biochimiques;1 - Examens sanguins / b - Enzymologie;2005
+B150;B H CG quantitatif;250;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B151;B H CG qualitatif;100;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B152;17 B Oestradiol;250;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B153;Cortisol;250;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B154;Ferritine;250;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B155;Insuline;300;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B156;L H;250;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B157;Progestérone;250;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B158;Prolactine;250;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B159;Triodothyronine :T3 ou FT3;200;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B160;Thyroxine :T4 ou FT4;200;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B161;Thyroxine libre: T4 libre;200;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B162;Testostérone;300;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B163;TSH;250;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B164;T S H ulta sensible;250;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B165;Triodothyronine libre :T3L;300;I - Analyses biochimiques;1 - Examens sanguins / c - Hormonologie;2005
+B166;Acétone (recherche);10;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B167;Acide Urique;30;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B168;Calcium;30;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B169;Chlore;30;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B170;Créatinine;30;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B171;Electrophorèse des Protéines urinaires;180;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B172;Identification d'un calcul urinaire;80;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B173;PH;10;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B174;Phosphore minéral;40;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B175;Potassium;30;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B176;Protéine (recherche);20;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B177;Protéine (dosage);30;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B178;Sédiment minéral;30;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B179;Sodium;30;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B180;Sucre (recherche);10;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B181;Sucre (Recherche+dosage);30;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B182;Urée;30;I - Analyses biochimiques;2 - Examens urinaires / a - Chimie courante;2005
+B183;Acide 5 Hydroxyindol acétique (5HIA);250;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B184;Acide Vanil Mandélique (VMA);250;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B185;Acide Homovanilique;250;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B186;Catécholamines;250;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B187;17 Cétostéroides;250;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B188;Dérivés méthoxylés: (Métanéphrines Normétanéphrines);250;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B189;Phenolsteroides;250;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B190;Porphyrines (recherche);100;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B191;Porphyrines (dosage);150;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B192;Prégnandiol;250;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B193;Prolans B;200;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B194;Test de grossesse;80;I - Analyses biochimiques;2 - Examens urinaires / b - Hormonologie;2005
+B195;Chlore;30;I - Analyses biochimiques;3 - Examens des autres liquides biologiques (LCR, ascites, liquides pleuraux…);2005
+B196;Electrophorèse des protéines du LCR;180;I - Analyses biochimiques;3 - Examens des autres liquides biologiques (LCR, ascites, liquides pleuraux…);2005
+B197;Fructose spermatique;200;I - Analyses biochimiques;3 - Examens des autres liquides biologiques (LCR, ascites, liquides pleuraux…);2005
+B198;Glucose;20;I - Analyses biochimiques;3 - Examens des autres liquides biologiques (LCR, ascites, liquides pleuraux…);2005
+B199;Identification d'un calcul vésical;80;I - Analyses biochimiques;3 - Examens des autres liquides biologiques (LCR, ascites, liquides pleuraux…);2005
+B200;Protéines;30;I - Analyses biochimiques;3 - Examens des autres liquides biologiques (LCR, ascites, liquides pleuraux…);2005
+B201;Recherche et identification d'Antigènes bactériens Solubles dans le LCR;250;I - Analyses biochimiques;3 - Examens des autres liquides biologiques (LCR, ascites, liquides pleuraux…);2005
+B202;Rivalta;20;I - Analyses biochimiques;3 - Examens des autres liquides biologiques (LCR, ascites, liquides pleuraux…);2005
+B203;Clearance: de l'Acide urique;50;I - Analyses biochimiques;4 - Épreuves fonctionnelles;2005
+B204;Clearance: de l'Urée;50;I - Analyses biochimiques;4 - Épreuves fonctionnelles;2005
+B205;Clearance: de la créatinine;50;I - Analyses biochimiques;4 - Épreuves fonctionnelles;2005
+B206;Epreuve d'hyperglycémie provoquée par voie orale (HGPO);150;I - Analyses biochimiques;4 - Épreuves fonctionnelles;2005
+B207;HLM(hématies-leucocytes-minute)Test d'Addis;30;I - Analyses biochimiques;4 - Épreuves fonctionnelles;2005
+B208;Test au D - xylose;180;I - Analyses biochimiques;4 - Épreuves fonctionnelles;2005
+B209;Test LH-RH sur FSH ou LH;700;I - Analyses biochimiques;4 - Épreuves fonctionnelles;2005
+B210;Test LH-RH sur FSH et LH;1200;I - Analyses biochimiques;4 - Épreuves fonctionnelles;2005
+B211;Test au TRH (4 temps);700;I - Analyses biochimiques;4 - Épreuves fonctionnelles;2005
+B212;Adénogramme;75;II - Analyses hématologiques;1 - Cytologie;2005
+B213;Goutte épaisse;50;II - Analyses hématologiques;1 - Cytologie;2005
+B214;Hématocrite;20;II - Analyses hématologiques;1 - Cytologie;2005
+B215;Hémoglobine;30;II - Analyses hématologiques;1 - Cytologie;2005
+B216;Numération Formule (Globules rouges/Blancs/plaquettes);80;II - Analyses hématologiques;1 - Cytologie;2005
+B217;Numération des Plaquettes;30;II - Analyses hématologiques;1 - Cytologie;2005
+B218;Myélogramme: Etude cytologique;120;II - Analyses hématologiques;1 - Cytologie;2005
+B219;Myélogramme: Etude cytochimique;120;II - Analyses hématologiques;1 - Cytologie;2005
+B220;Recherche d'hématies ponctuées;20;II - Analyses hématologiques;1 - Cytologie;2005
+B221;Résistance globulaire;50;II - Analyses hématologiques;1 - Cytologie;2005
+B222;Réticulocytes;30;II - Analyses hématologiques;1 - Cytologie;2005
+B223;Vitesse de sédimentation;30;II - Analyses hématologiques;1 - Cytologie;2005
+B224;Coombs Direct/Coombs indirect;60;II - Analyses hématologiques;2 - Immunohématologie;2005
+B225;Recherche d'agglutinines irrégulières:RAI;40;II - Analyses hématologiques;2 - Immunohématologie;2005
+B226;Recherche et dosage d'agglutinines irrégulières;100;II - Analyses hématologiques;2 - Immunohématologie;2005
+B227;Cross match :Une poche;110;II - Analyses hématologiques;2 - Immunohématologie;2005
+B228;Cross match: chaque poche supplémentaire;60;II - Analyses hématologiques;2 - Immunohématologie;2005
+B229;Cross match :Groupe ABO et Rhésus;60;II - Analyses hématologiques;2 - Immunohématologie;2005
+B230;Phénotype;100;II - Analyses hématologiques;2 - Immunohématologie;2005
+B231;Dosage des Facteurs de la coagulation autre que : VIII- IX - XIII;75;II - Analyses hématologiques;3 - Hémostase;2005
+B232;Dosage des facteurs VIII-IX ou XIII;200;II - Analyses hématologiques;3 - Hémostase;2005
+B233;Fibrinogène;40;II - Analyses hématologiques;3 - Hémostase;2005
+B234;Héparinémie;120;II - Analyses hématologiques;3 - Hémostase;2005
+B235;PDF;200;II - Analyses hématologiques;3 - Hémostase;2005
+B236;Taux de prothrombine;40;II - Analyses hématologiques;3 - Hémostase;2005
+B237;Temps de saignements (TS);30;II - Analyses hématologiques;3 - Hémostase;2005
+B238;TS + Temps de coagulation;50;II - Analyses hématologiques;3 - Hémostase;2005
+B239;Temps de céphaline kaolin (TCK);40;II - Analyses hématologiques;3 - Hémostase;2005
+B240;Temps de Howell;40;II - Analyses hématologiques;3 - Hémostase;2005
+B241;Cytologie. Culture. Identification;90;III - Bactériologie, parasitologie, mycologie;Tout examen cytobactériologique (urinaire, vaginal, uréthral, nasal, pleural, ascitique, auriculaire, crachats, LCR, etc.);2005
+B242;Antibiogramme;60;III - Bactériologie, parasitologie, mycologie;Tout examen cytobactériologique (urinaire, vaginal, uréthral, nasal, pleural, ascitique, auriculaire, crachats, LCR, etc.);2005
+B243;Sulfamidogramme en cas de prescription isolée;60;III - Bactériologie, parasitologie, mycologie;Tout examen cytobactériologique (urinaire, vaginal, uréthral, nasal, pleural, ascitique, auriculaire, crachats, LCR, etc.);2005
+B244;Cytologie;20;III - Bactériologie, parasitologie, mycologie;Tout examen cytobactériologique (urinaire, vaginal, uréthral, nasal, pleural, ascitique, auriculaire, crachats, LCR, etc.);2005
+B245;Examen parasitologique urinaire ou vaginal;20;III - Bactériologie, parasitologie, mycologie;Tout examen cytobactériologique (urinaire, vaginal, uréthral, nasal, pleural, ascitique, auriculaire, crachats, LCR, etc.);2005
+B246;Examen mycologique: Recherche;30;III - Bactériologie, parasitologie, mycologie;Tout examen cytobactériologique (urinaire, vaginal, uréthral, nasal, pleural, ascitique, auriculaire, crachats, LCR, etc.);2005
+B247;Examen mycologique: (culture, identification);60;III - Bactériologie, parasitologie, mycologie;Tout examen cytobactériologique (urinaire, vaginal, uréthral, nasal, pleural, ascitique, auriculaire, crachats, LCR, etc.);2005
+B248;Recherche de BK + Concentration;35;III - Bactériologie, parasitologie, mycologie;Tout examen cytobactériologique (urinaire, vaginal, uréthral, nasal, pleural, ascitique, auriculaire, crachats, LCR, etc.);2005
+B249;Culture sur milieu de Lowenstein;30;III - Bactériologie, parasitologie, mycologie;Tout examen cytobactériologique (urinaire, vaginal, uréthral, nasal, pleural, ascitique, auriculaire, crachats, LCR, etc.);2005
+B250;Culture (Aéorobie-Anaérobie);80;III - Bactériologie, parasitologie, mycologie;Hémoculture;2005
+B251;Hémoculture :Identification;30;III - Bactériologie, parasitologie, mycologie;Hémoculture;2005
+B252;Recherche Chlamydiae direct par lA ou IF;200;III - Bactériologie, parasitologie, mycologie;Hémoculture;2005
+B253;Recherche Mycoplasmes par culture;200;III - Bactériologie, parasitologie, mycologie;Hémoculture;2005
+B254;Parasitologie des selles (Examen direct + enrichisement);40;III - Bactériologie, parasitologie, mycologie;Examen des selles;2005
+B255;Coproculture + identification:;100;III - Bactériologie, parasitologie, mycologie;Examen des selles;2005
+B256;Recherche de sang dans les selles par méthode calorimétrique;60;III - Bactériologie, parasitologie, mycologie;Examen des selles;2005
+B257;Recherche de sang dans les selles par méthode Immunologique;150;III - Bactériologie, parasitologie, mycologie;Examen des selles;2005
+B258;Coprologie fonctionnelle;150;III - Bactériologie, parasitologie, mycologie;Examen des selles;2005
+B259;Rotavirus (recherche);200;III - Bactériologie, parasitologie, mycologie;Examen des selles;2005
+B260;Adénovirus;200;III - Bactériologie, parasitologie, mycologie;Examen des selles;2005
+B261;Scotch test;20;III - Bactériologie, parasitologie, mycologie;Examen des selles;2005
+B262;Ectoparasites (gale) recherche;50;III - Bactériologie, parasitologie, mycologie;Examen des selles;2005
+B263;Antistaphylolysine;50;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B264;Antistreptodornase;100;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B265;Antistreptokinase;100;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B266;Antistreptolysine (recherche , titrage);80;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B267;Antistreptohyaluronidase;100;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B268;Brucellose (Wright);60;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B269;Chlamydiae trachomatis;180;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B270;Hélicobacter pylori;180;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B271;Diphtérie;190;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B272;Gonococcie;150;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B273;Léptospirose;150;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B274;Listériose;250;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B275;Maladie de Lyme;250;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B276;Mycoplasmes génitaux (hominis et uréalyticum);180;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B277;Mycoplasma pneumoniae;100;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B278;Ricketlsiose;180;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B279;Salmonellose (Widal et Félix);80;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B280;ShigeIlose : l'espèce;75;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B281;Streptozyme;100;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B282;Sérologie du BK;200;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B283;Sérologie de la Syphilis: VDRL qualitatif;20;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B284;Sérologie de la Syphilis: VDRL quantitatif;60;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B285;Sérologie de la Syphilis: TPHA qualitatif;50;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B286;Sérologie de la Syphilis: TPHA quantitatif;100;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B287;Sérologie de la Syphilis: Nelson;500;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B288;Sérologie de la Syphilis: FT A Absorbens IgG;120;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B289;Sérologie de la Syphilis: IgM;280;IV - Sérodiagnostic;1 - Sérologie bactérienne;2005
+B290;Ankylostomiase;300;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B291;Amibiase;150;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B292;Aspergillose;150;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B293;Bilharziose;150;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B294;Hydatidose (par hémaglutination);150;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B295;Blastomycose;75;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B296;Candidose;200;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B297;Coccidiomycose;110;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B298;Cryptococcose;110;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B299;Criptosporidiose;150;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B300;Cysticércose;315;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B301;Distomatose;150;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B302;Filariose;225;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B303;Histoplasmose;110;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B304;Leichmaniose;110;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B305;Paludisme;110;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B306;Toxocarose;315;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B307;Toxoplasmose IgG;100;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B308;Toxoplasmose IgM;150;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B309;Taenia;90;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B310;Trichinose;225;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B311;Trichomonas;110;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B312;Trypanosome;110;IV - Sérodiagnostic;2 - Sérologie parasitaire;2005
+B313;Adénovirus;110;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B314;Grippe antigène-B;200;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B315;Hépatite A : IgG;250;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B316;Hépatite A : IgM;250;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B317;Hépatite B: AgHbs;120;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B318;Hépatite B : Ac anti Hbs;250;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B319;Hépatite B : Ag Hbe;250;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B320;Hépatite B : Ac anti Hbe;250;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B321;Hépatite B: Ac anti Hbc;250;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B322;Hépatite B: Ac anti Hbc IgM;300;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B323;Hépatite B : ADN par PCR;600;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B324;Hépatite C : Dépistage;300;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B325;Hépatite C : test de confirmation;600;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B326;Hépatite C : ARN par PCR;900;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B327;Herpes virus simplex type I (lgG ou IgM);200;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B328;Herpes virus simplex type Il (lgG ou IgM);200;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B329;HIV 1 + HIV (1 +2) Dépistage;200;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B330;Westernblot de confirmation;600;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B331;Charge virale HIV;900;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B332;Mononucleose infectieuse : *MNI Test;50;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B333;*Paul et Bunnelle Davidson;80;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B334;*Ac EBNA;180;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B335;*Ac VCA (lgG+lgM);180;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B336;*AcEA;180;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B337;Oreillons (lgG+lgM);180;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B338;Para influenzae (paramyxovirus);110;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B339;Coxackie;100;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B340;Poliomyélite;110;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B341;Rotavirus;200;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B342;Rougeole IgG ou IgM;330;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B343;Rubéole IgG;150;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B344;Rubéole IgM;400;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B345;Varicelle et Zona;200;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B346;Virus Syncitial respiratoire (VRS);200;IV - Sérodiagnostic;3 - Sérologie virale;2005
+B347;Auto anticorps anti nucléaires;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B348;Anticorps anti thyroidiens : AC anti Microsomaux;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B349;Anticorps anti thyroidiens : AC anti Thyroglobulines;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B350;Complément total CH50;100;IV - Sérodiagnostic;4 - Immunologie;2005
+B351;Dosage C3;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B352;Dosage C4;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B353;Dosage C1 Inhibiteur estérase;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B354;IgE totales;200;IV - Sérodiagnostic;4 - Immunologie;2005
+B355;IgE spécifiques ou Rast : Allergène unique;180;IV - Sérodiagnostic;4 - Immunologie;2005
+B356;IgE spécifiques ou Rast : A partir du 3ème allergène (chacun);140;IV - Sérodiagnostic;4 - Immunologie;2005
+B357;Test multi allergènes;300;IV - Sérodiagnostic;4 - Immunologie;2005
+B358;Immunofixation des Protides (ou Immunoéléctrophorèse);600;IV - Sérodiagnostic;4 - Immunologie;2005
+B359;Marqueur Tumoral :antigene carcino embryonnaire : ACE;250;IV - Sérodiagnostic;4 - Immunologie;2005
+B360;Marqueur Tumoral :Alpha foeto proteine : AFP;250;IV - Sérodiagnostic;4 - Immunologie;2005
+B361;Marqueur Tumoral :Antigene prostatique spécifique : PSA;300;IV - Sérodiagnostic;4 - Immunologie;2005
+B362;Marqueur Tumoral : Ca 125;400;IV - Sérodiagnostic;4 - Immunologie;2005
+B363;MarqueurTumoral : Ca 15-3;400;IV - Sérodiagnostic;4 - Immunologie;2005
+B364;Marqueur Tumoral : Ca 19-9;400;IV - Sérodiagnostic;4 - Immunologie;2005
+B365;Marqueur Tumoral : Ca 50;400;IV - Sérodiagnostic;4 - Immunologie;2005
+B366;Marqueur Tumoral : Ca 724;400;IV - Sérodiagnostic;4 - Immunologie;2005
+B367;Marqueur Tumoral : NSE;400;IV - Sérodiagnostic;4 - Immunologie;2005
+B368;Test au latex;50;IV - Sérodiagnostic;4 - Immunologie;2005
+B369;Réaction de waaler rose;50;IV - Sérodiagnostic;4 - Immunologie;2005
+B370;C R P (Protéine C réactive);100;IV - Sérodiagnostic;4 - Immunologie;2005
+B371;Haptoglobine;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B372;Orosomucoides;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B373;Transferrine;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B374;Alpha 1 Antitrypsine;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B375;IgG totales;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B376;IgA totales;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B377;IgM totales;150;IV - Sérodiagnostic;4 - Immunologie;2005
+B378;Crèatorrhée;100;IV - Sérodiagnostic;5 - Divers;2005
+B379;Spermogramme;100;IV - Sérodiagnostic;5 - Divers;2005
+B380;Spermocytogramme;150;IV - Sérodiagnostic;5 - Divers;2005
+B381;Stéatorrhée;300;IV - Sérodiagnostic;5 - Divers;2005
+B382;Test de HUHNER;120;IV - Sérodiagnostic;5 - Divers;2005
+B383;17 Hydroxyprogestérone;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B384;25 Hydroxy cholecalciférol;450;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B385;ACTH;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B386;ADH;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B387;ADN Viral HBV;600;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B388;Aldostérone;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B389;Aluminium;180;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B390;Androstenédiol;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B391;Anticorps Anti cannaux biliaires;200;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B392;Anticorps Anti Cartilage;200;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B393;Anticorps Anti cellules nerveuses;200;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B394;Anticorps Anti E C T;500;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B395;Anticorps Anti Facteur intrisèque;450;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B396;Anticorps Anti organes (autres);200;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B397;Anticorps Anti Plaquettes fixées;450;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B398;Anticorps Anti T3;450;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B399;Anticorps Anti T4;450;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B400;ARN Viral HCV;900;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B401;Ca 50;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B402;Calcitonine;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B403;Carnitine libre;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B404;Charge Virale H IV;900;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B405;Citrate dans le sperme;200;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B406;Complément C2;240;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B407;Complément C5;150;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B408;Delta 4 Androsténe diane;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B409;DHA;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B410;DHA Sulfate;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B411;DHT;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B412;EBV:EARL y OU VCA (lgG+lgM) ou EBNA chacun;450;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B413;ECA;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B414;Elastase;600;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B415;Erytropïoetine;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B416;Fibronectine;150;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B417;Gastrine;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B418;G H ou STH;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B419;Glucagon;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B420;Hépatite E;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B421;Hépatite Delta;300;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B422;Hydroxyproline;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B423;IgG 4 (sous classe);200;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B424;Il Deoxycortisol;300;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B425;Médicaments (digoxine théophylline)chacun;300;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B426;Nelson;500;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B427;Ostéocalcine;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B428;Parathormone (PTH);400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B429;Peptide C;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B430;Rénine;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B431;Sérotonine;300;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B432;Somatomédine C;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B433;TBG;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B434;Te BG;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B435;Test à la STH;1200;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B436;Thyrocalcitonine;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B437;Virus (culture);300;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B438;Vitamine B 12;400;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B439;Vitamine D;450;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B440;Autres vitamines (K-A-E) chacune;800;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B441;Zinc dans le sperme;200;Prescriptions pouvant faire l'objet de transmission à l'étranger;;2005
+B442;Osmolarité sang (Si Prescription isolée);100;I - Biochimie;1 - Examens sanguins / a - Biochimie courante;2012
+B443;"Osmolarité ""urine "" (Si Prescription isolée)";100;I - Biochimie;1 - Examens sanguins / a - Biochimie courante;2012
+B444;Alpha 2 macroglobuline-par immunomarquage;200;I - Biochimie;1 - Examens sanguins / a - Biochimie courante;2012
+B445;Acide lactique;100;I - Biochimie;1 - Examens sanguins / a - Biochimie courante;2012
+B446;Débit de Filtration Glomérulaire-DFG;50;I - Biochimie;1 - Examens sanguins / a - Biochimie courante;2012
+B447;Cryoglobulines recherche;70;I - Biochimie;1 - Examens sanguins / a - Biochimie courante;2012
+B448;Cryoglobulines recherche+Typage;600;I - Biochimie;1 - Examens sanguins / a - Biochimie courante;2012
+B449;Gazométrie (PH,pCO2,pO2,SatO2);200;I - Biochimie;1 - Examens sanguins / a - Biochimie courante;2012
+B450;Myoglobine-Technique Immunoenzymatique;200;I - Biochimie;1 - Examens sanguins / b - Cardiologie;2012
+B451;Enzyme de conversion de l'angiotensine;200;I - Biochimie;1 - Examens sanguins / b - Cardiologie;2012
+B452;Beta2microglobuline-par immunomarquage;200;I - Biochimie;1 - Examens sanguins / b - Cardiologie;2012
+B453;Homocystéine- par immunomarquage ou HPLC;400;I - Biochimie;1 - Examens sanguins / b - Cardiologie;2012
+B454;BNP-par immunomarquage;500;I - Biochimie;1 - Examens sanguins / b - Cardiologie;2012
+B455;NT ProBNP-par immunomarquage;500;I - Biochimie;1 - Examens sanguins / b - Cardiologie;2012
+B456;Procalcitonine-par immunomarquage;400;I - Biochimie;1 - Examens sanguins / b - Cardiologie;2012
+B457;CRP ultrasensible-par immunomarquage;200;I - Biochimie;1 - Examens sanguins / b - Cardiologie;2012
+B458;F S H-Technique Immunoenzymatique;250;I - Biochimie;1 - Examens sanguins / c - Hormonologie;2012
+B459;InhibineB-Technique Immunoenzymatique;500;I - Biochimie;1 - Examens sanguins / c - Hormonologie;2012
+B460;AMH: hormone anti-mullérienne-Technique Immunoenzymatique;500;I - Biochimie;1 - Examens sanguins / c - Hormonologie;2012
+B461;Triple Test(DépistageTrisomie21)-3marqueurs: AFP, bHCG, Oestriol;600;I - Biochimie;1 - Examens sanguins / c - Hormonologie;2012
+B462;Testostérone LIBRE-Technique Immunoenzymatique;300;I - Biochimie;1 - Examens sanguins / c - Hormonologie;2012
+B463;Insuline LIBRE-Technique Immunoenzymatique;450;I - Biochimie;1 - Examens sanguins / c - Hormonologie;2012
+B464;PTH Intacte-Technique Immunoenzymatique;300;I - Biochimie;1 - Examens sanguins / c - Hormonologie;2012
+B465;Testostérone urinaire- parImmunomarquage;300;I - Biochimie;1 - Examens sanguins / c - Hormonologie;2012
+B466;Cortisol libre urinaire-par Immunomarquage;300;I - Biochimie;1 - Examens sanguins / c - Hormonologie;2012
+B467;Chromatographie qualitative des acides aminés (Sang, urine, LCR);600;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B468;Dosage et identification des MPS (GAG) urinaires;600;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B469;CCM sucres ou oligosaccharides urinaires;400;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B470;Dosage fluorimétrique de la Phénylalanine (suivi PCU);400;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B471;Dosage d'un métabolite:Galactose-1 Phosphate, Carnitine,Acide pipécolique;400;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B472;Diagnostic de la Galactosémie congénitale;400;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B473;Recherche d'un déficit enzymatique sur leucocytes (1 activité) Cotation limitée à 5 activités;600;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B474;Chromatographie quantitative des acides aminés;1200;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B475;Diagnostic enzymatique de la maladie de Hurler;1200;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B476;Etude des acyl carnitines;1200;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B477;Recherche d'une mutation responsable de la maladie;1200;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B478;Acides gras à très longue chaine (CPG);600;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B479;Identification d'une hémoglobinose (Isofocalisation + HPLC des chaines);600;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B480;Diagnostic anténatal d'une hémoglobinopathie;1200;I - Biochimie;1 - Examens sanguins / d - Maladies héréditaires du métabolisme;2012
+B481;Ionogramme urinaire (Na-K-Cl-Ca);100;I - Biochimie;2 - Examens urinaires;2012
+B482;Microalbuminurie de 24H-par immunoNéphélémetrie;120;I - Biochimie;2 - Examens urinaires;2012
+B483;Microalbuminurie exprimée en gramme/gramme de créatinine;150;I - Biochimie;2 - Examens urinaires;2012
+B484;Etude des Hémoglobines-HPLC;400;II - Hématologie;;2012
+B485;Folates plasmatiques (vitamineB9)- par Immunomarquage;400;II - Hématologie;;2012
+B486;Folates érythrocytaires- par Immunomarquage;400;II - Hématologie;;2012
+B487;Antithrombine III-Technique chromogénique ou Néphélémétrie;200;II - Hématologie;;2012
+B488;Protéine C- Technique chromogénique ou EIA;200;II - Hématologie;;2012
+B489;Protéine S-Technique chromogénique ou Turbdimétrie;200;II - Hématologie;;2012
+B490;Activité Anti-Xa-T chronométrique ou chromogénique;120;II - Hématologie;;2012
+B491;Identification des agglutinines irrègulières;200;II - Hématologie;;2012
+B492;Phénotype Rhésus CcEe+Kell;100;II - Hématologie;;2012
+B493;Temps de saignement IVY(Méthode du Brassard);50;II - Hématologie;;2012
+B494;D Dimères-turbidimétrie ou Immunomarquage;200;II - Hématologie;;2012
+B495;Etude de la Moelle Osseuse:Examen cytologique et cytochimique;300;II - Hématologie;;2012
+B496;Hélicobacter pylori-Antigènes;300;III - Bactériologie, virologie, parasitologie;;2012
+B497;Charge virale de l'Hépatite C;1200;III - Bactériologie, virologie, parasitologie;;2012
+B498;Génotypage du virus de L'Hépatite C;1200;III - Bactériologie, virologie, parasitologie;;2012
+B499;Fibrotest-Actitest;800;III - Bactériologie, virologie, parasitologie;;2012
+B500;Anti Fongigramme;200;III - Bactériologie, virologie, parasitologie;;2012
+B501;BK Antibiogramme;500;III - Bactériologie, virologie, parasitologie;;2012
+B502;Chlamydiae trachomatis PCR;400;III - Bactériologie, virologie, parasitologie;;2012
+B503;Hémoculture Aerobie+Anaerobie-(T.fluorométrique sur Automates);250;III - Bactériologie, virologie, parasitologie;;2012
+B504;BK -Mycobactéries PCR;900;III - Bactériologie, virologie, parasitologie;;2012
+B505;Hydatidose Confirmation par Western Blot;600;III - Bactériologie, virologie, parasitologie;;2012
+B506;Toxoplasmose-IgA;200;III - Bactériologie, virologie, parasitologie;;2012
+B507;Toxoplasmose Avidité;200;III - Bactériologie, virologie, parasitologie;;2012
+B508;Recherche d'ADN par PCR;900;III - Bactériologie, virologie, parasitologie;;2012
+B509;Leishmaniose-Confirmation par western-blot;600;III - Bactériologie, virologie, parasitologie;;2012
+B510;Recherche d'antigènes aspergillaires circulants;200;III - Bactériologie, virologie, parasitologie;;2012
+B511;Recherche d'antigènes candidosiques circulants;600;III - Bactériologie, virologie, parasitologie;;2012
+B512;Recherche et titrage de l'antigène cryptococcique dans le sang ou le LCR;200;III - Bactériologie, virologie, parasitologie;;2012
+B513;HLA B27-Technique Microlymphocytotoxicité (LCT);600;IV - Immunologie;1 - Histocompatibilité;2012
+B514;HLA B5-Technique Microlymphocytotoxicité (LCT);800;IV - Immunologie;1 - Histocompatibilité;2012
+B515;Typage HLA classe I- Technique Microlymphocytotoxicité (LCT);1200;IV - Immunologie;1 - Histocompatibilité;2012
+B516;Typage HLA classe II par biologie moléculaire;900;IV - Immunologie;1 - Histocompatibilité;2012
+B517;Cross match HLA- Technique microlymphocytotoxicité;700;IV - Immunologie;1 - Histocompatibilité;2012
+B518;Typage HLA locus Apar technique luminex;1200;IV - Immunologie;1 - Histocompatibilité;2012
+B519;Typage HLA locus B par technique luminex;1200;IV - Immunologie;1 - Histocompatibilité;2012
+B520;Typage HLA locus DR par technique luminex;1200;IV - Immunologie;1 - Histocompatibilité;2012
+B521;Typage HLA locus DQ par technique luminex;1200;IV - Immunologie;1 - Histocompatibilité;2012
+B522;Recherche d'anticorps anti HLA par technique ELISA;250;IV - Immunologie;1 - Histocompatibilité;2012
+B523;Identification d'anticorps anti HLA classe I par ELISA;1200;IV - Immunologie;1 - Histocompatibilité;2012
+B524;Identification d'anticorps anti HLA classe II par ELISA;1200;IV - Immunologie;1 - Histocompatibilité;2012
+B525;Identification des anticorps antigliadine (IgG et IgA),Antitransglutaminase tissulaire (tTg) par technique luminex ou équivalent;400;IV - Immunologie;2 - Auto-immunité;2012
+B526;Identification des anticorps anti Phospholipides: Cardiolipine, B2 GP1, Prothrombine, Phosphatidylsérine par technique Luminex ou équivalent;400;IV - Immunologie;2 - Auto-immunité;2012
+B527;Identification des anticorps Anti-nucléaires (ANA) : SSA, SSB, Sm, RNP, Scl-70, Jo-1, dsDNA, Cent-B, Histone par technique Luminex ou équivalent;400;IV - Immunologie;2 - Auto-immunité;2012
+B528;Identification des anticorps anti Thyroglobuline et thyropéroxydase par technique luminex;400;IV - Immunologie;2 - Auto-immunité;2012
+B529;Anticorps anti-neutrophiles cytoplasmiques(ANCA): Myelopéroxidase, Proteinase 3, GBM par technique Luminex ou équivalent;400;IV - Immunologie;2 - Auto-immunité;2012
+B530;Anticorps anti-DNA natif-T.Immunomarquage;150;IV - Immunologie;2 - Auto-immunité;2012
+B531;Anticorps anti SSA- Si Prescription isolée;150;IV - Immunologie;2 - Auto-immunité;2012
+B532;Anticorps anti SSB- Si Prescription isolée;150;IV - Immunologie;2 - Auto-immunité;2012
+B533;Anticorps anti Sm- Si Prescription isolée;150;IV - Immunologie;2 - Auto-immunité;2012
+B534;Anticorps anti Scl 70- Si Prescription isolée;150;IV - Immunologie;2 - Auto-immunité;2012
+B535;Anticorps anti RNP- Si Prescription isolée;150;IV - Immunologie;2 - Auto-immunité;2012
+B536;Anticorps anti Jo1-Si Prescription isolée;150;IV - Immunologie;2 - Auto-immunité;2012
+B537;Anticorps anti muscle lisse-Si Prescription isolée;150;IV - Immunologie;2 - Auto-immunité;2012
+B538;Anticorps anti-cardiolipine IgG- Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B539;Anticorps anti-cardiolipine IgM- Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B540;Anticorps anti-Bêta 2 glycoprotéine 1 -B2GP-IgG;200;IV - Immunologie;2 - Auto-immunité;2012
+B541;Anticorps anti-Bêta 2 glycoprotéine 1 -B2GP-IgM;200;IV - Immunologie;2 - Auto-immunité;2012
+B542;Anticorps anti R.endoplasmique LKM;200;IV - Immunologie;2 - Auto-immunité;2012
+B543;Anticorps anti endomysium IgA- Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B544;Anticorps anti endomysium IgG- Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B545;Anticorps anti GAD- Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B546;Anticorps anti gliadine IgG-Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B547;Anticorps anti gliadine IgM-Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B548;Anticorps anti gliadine IgA-Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B549;Anticorps anti transglutaminase tissulaire -IgA- Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B550;Anticorps anti transglutaminase tissulaire-IgG- Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B551;Anticorps anti phospholipides- Si Prescription isolée;200;IV - Immunologie;2 - Auto-immunité;2012
+B552;Anticorps-Saccharomyces cerevisiae(ASCA)-EIA;450;IV - Immunologie;2 - Auto-immunité;2012
+B553;Anticorps anti-peptides cycliques citrullinés;200;IV - Immunologie;2 - Auto-immunité;2012
+B554;Anticorps anti ilots de Langerhans;200;IV - Immunologie;2 - Auto-immunité;2012
+B555;Anticorps anti recepteur de la TSH (TRAK);450;IV - Immunologie;2 - Auto-immunité;2012
+B556;CTX-Telopeptide C;400;IV - Immunologie;2 - Auto-immunité;2012
+B557;Test polyallergènes: pneumallergènes;500;IV - Immunologie;3 - Allergie;2012
+B558;Test polyallergènes: trophallergènes;500;IV - Immunologie;3 - Allergie;2012
+B559;Test polyallergènes: mixtes;500;IV - Immunologie;3 - Allergie;2012
+B560;IGF-1(Somatomedine);400;IV - Immunologie;4 - Autres;2012
+B561;IGF-2;600;IV - Immunologie;4 - Autres;2012
+B562;Protéine BENCE-JONES;600;IV - Immunologie;4 - Autres;2012
+B563;PSA libre;300;V - Marqueurs tumoraux;;2012
+B564;Bhcg chaine libre marqueur tumoral;300;V - Marqueurs tumoraux;;2012
+B565;Cyfra 21;300;V - Marqueurs tumoraux;;2012
+B566;CA 549;400;V - Marqueurs tumoraux;;2012
+B567;MAR TEST(Ac Anti-spermatozoides);500;VI - Actes de biologie de la reproduction;;2012
+B568;TMS(Test de Migration-Survie);600;VI - Actes de biologie de la reproduction;;2012
+B569;IAC;800;VI - Actes de biologie de la reproduction;;2012
+B570;Fragmentation de l'ADN spermatique (T.TUNEL);800;VI - Actes de biologie de la reproduction;;2012
+B571;Décondensation de la chromatine ou test de dénaturation(T. bleu d'aniline);200;VI - Actes de biologie de la reproduction;;2012
+B572;Ciclosporine;300;VII - Médicaments;;2012
+B573;Cannabinoides;300;VII - Médicaments;;2012
+B574;Carbamazépine (Tegretol);300;VII - Médicaments;;2012
+B575;Dépakine(valproate de sodium);300;VII - Médicaments;;2012
+B576;Immunophénotypage par cytométrie en flux d'une leucémie aigue;1200;Actes de cytométrie et d'immunologie cellulaire;;2016
+B577;Immunophénotypage par cytométrie en flux d'un syndrome lymphoprolifératif;1200;Actes de cytométrie et d'immunologie cellulaire;;2016
+B578;Cytométrie en flux de l'hémoglobine paroxystique nocturne (HPN);450;Actes de cytométrie et d'immunologie cellulaire;;2016
+B579;Mesure de la cytotoxicité des cellules NK;1200;Actes de cytométrie et d'immunologie cellulaire;;2016
+B580;test d'activation des basophiles (allergène unitaire);600;Actes de cytométrie et d'immunologie cellulaire;;2016
+B581;Caryotype constitutionnel postnatal;1200;Actes de génétique médicale;;2016
+B582;Recherche d'une mutation par simple PCR;1200;Actes de génétique médicale;;2016
+B583;Recherche d'une mutation par séquençage d'un amplion;1200;Actes de génétique médicale;;2016
+B584;Recherche d'un variant de l'ADN par RT-PCR et sonde Taqman;1200;Actes de génétique médicale;;2016
+B585;Recherche de métaux lourds dans le sang (par élément);250;Actes d'analyses de toxicologie médicale;;2016
+B586;Recherche de solvants dans le sang (par élément);250;Actes d'analyses de toxicologie médicale;;2016
+B587;Recherche de métaux lourds dans les urines (par élément);250;Actes d'analyses de toxicologie médicale;;2016
+B588;Recherche de solvants dans les urines (par élément);250;Actes d'analyses de toxicologie médicale;;2016
+B589;Recherche de métaux lourds dans les cheveux (par élément);300;Actes d'analyses de toxicologie médicale;;2016
+B590;Recherche de monoxyde de carbone (CO) dans le sang;250;Actes d'analyses de toxicologie médicale;;2016
+B591;Recherche des stupéfiants dans les urines;300;Actes d'analyses de toxicologie médicale;;2016

@@ -13,7 +13,8 @@ namespace MarocLIS.Infrastructure.Persistence;
 /// review its own reference intervals for its own methods and population, and the reimbursement
 /// base of each act comes from the Tarif National de Référence. Every seeded range carries
 /// <c>Source = "À vérifier par le laboratoire"</c> so the catalogue screen can list what still
-/// needs confirming, and the tariffs use a placeholder letter-key value.
+/// needs confirming, and the tariffs use a placeholder letter-key value (the coefficients are the official ones where
+/// the analysis maps to one national act, see <c>ActCodes</c>).
 /// </para>
 /// <para>
 /// What the seed does demonstrate structurally is worth keeping: multi-parameter panels, a
@@ -35,6 +36,36 @@ internal static class StarterCatalogue
     /// </summary>
     internal const string FormerFriedewaldLdlFormula = "if([TG]<4;round([CHOL]-[HDL]-[TG]/5;2);0)";
 
+    /// <summary>
+    /// The act of the national nomenclature (NABM) each starter analysis is billed under, by
+    /// internal code. Only analyses whose act is unambiguous are listed: a profile billed as several
+    /// acts (lipid profile, transaminases, urine culture with antibiogram), the dipstick (no single
+    /// act) and the ionogram (the act B120 includes proteins and the alkaline reserve) are left
+    /// without a code for the laboratory to decide. Their coefficients in <see cref="SeedAsync"/>
+    /// are the official ones of these acts.
+    /// <para>
+    /// Earlier releases wrote the internal code into <see cref="AnalysisTest.NationalActCode"/>,
+    /// so « GLY » was sent as the act code of a claim; the seeder replaces that on upgrade.
+    /// </para>
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string> ActCodes = new Dictionary<string, string>
+    {
+        ["GLY"] = "B118",       // Glycémie, B 30
+        ["CREAT"] = "B111",     // Créatinine, B 30
+        ["UREE"] = "B135",      // Urée, B 30
+        ["HBA1C"] = "B119",     // Hémoglobine glycosylée, B 100
+        ["CRP"] = "B370",       // C R P (Protéine C réactive), B 100
+        ["NFS"] = "B216",       // Numération Formule (Globules rouges/Blancs/plaquettes), B 80
+        ["VS"] = "B223",        // Vitesse de sédimentation, B 30
+        ["TP_INR"] = "B236",    // Taux de prothrombine, B 40
+        ["TSH"] = "B164",       // T S H ulta sensible, B 250
+        ["HBS_AG"] = "B317"     // Hépatite B: AgHbs, B 120
+    };
+
+    /// <summary>The starter analyses left without a national act (see <see cref="ActCodes"/>).</summary>
+    internal static readonly IReadOnlyList<string> UnmappedCodes =
+        ["BILAN_LIP", "TRANSAM", "IONO", "CHIM_URIN", "ECBU", "GROUPAGE"];
+
     internal static async Task SeedAsync(LisDbContext context, IClock clock, CancellationToken ct)
     {
         var departments = await context.Departments.ToDictionaryAsync(d => d.Code, d => d.Id, ct);
@@ -54,7 +85,7 @@ internal static class StarterCatalogue
                           departments[Department.Codes.Biochemistry],
                           specimens[SpecimenType.Codes.PlasmaFluoride],
                           containers["TUBE_FLUORURE"],
-                          method: "Hexokinase", routineHours: 4, coefficient: 5m, tariffValidFrom: validFrom);
+                          method: "Hexokinase", routineHours: 4, coefficient: 30m, tariffValidFrom: validFrom);
         glucose.FastingHoursOverride = 8;
         glucose.StabilityAtRoomTemperatureHours = 8;
         glucose.LoincCode = "1558-6";
@@ -73,7 +104,7 @@ internal static class StarterCatalogue
                              departments[Department.Codes.Biochemistry],
                              specimens[SpecimenType.Codes.SerumDryTube],
                              containers["TUBE_GEL"],
-                             method: "Jaffé compensé / enzymatique", routineHours: 6, coefficient: 7m, tariffValidFrom: validFrom);
+                             method: "Jaffé compensé / enzymatique", routineHours: 6, coefficient: 30m, tariffValidFrom: validFrom);
         creatinine.LoincCode = "2160-0";
         {
             var p = Param("CREAT", "Créatinine", "الكرياتينين", "Creatinine", Unit("MG_L"), decimals: 1);
@@ -112,7 +143,7 @@ internal static class StarterCatalogue
         var urea = New("UREE", "Urée sanguine", "اليوريا في الدم", "Blood urea",
                        departments[Department.Codes.Biochemistry],
                        specimens[SpecimenType.Codes.SerumDryTube], containers["TUBE_GEL"],
-                       method: "Uréase / GLDH", routineHours: 6, coefficient: 6m, tariffValidFrom: validFrom);
+                       method: "Uréase / GLDH", routineHours: 6, coefficient: 30m, tariffValidFrom: validFrom);
         {
             var p = Param("UREE", "Urée", "اليوريا", "Urea", Unit("G_L"), decimals: 2);
             p.CriticalHigh = 2.00m;
@@ -210,7 +241,7 @@ internal static class StarterCatalogue
                         "Glycated haemoglobin (HbA1c)",
                         departments[Department.Codes.Biochemistry],
                         specimens[SpecimenType.Codes.WholeBloodEdta], containers["TUBE_EDTA"],
-                        method: "HPLC — certifiée IFCC/NGSP", routineHours: 24, coefficient: 40m, tariffValidFrom: validFrom);
+                        method: "HPLC — certifiée IFCC/NGSP", routineHours: 24, coefficient: 100m, tariffValidFrom: validFrom);
         hba1c.IsAccredited = true;
         {
             var p = Param("HBA1C", "HbA1c", "الهيموغلوبين السكري", "HbA1c", Unit("PERCENT"), decimals: 1);
@@ -230,7 +261,7 @@ internal static class StarterCatalogue
         var crp = New("CRP", "Protéine C réactive", "البروتين التفاعلي C", "C-reactive protein",
                       departments[Department.Codes.Biochemistry],
                       specimens[SpecimenType.Codes.SerumDryTube], containers["TUBE_GEL"],
-                      method: "Immunoturbidimétrie", routineHours: 4, coefficient: 20m, tariffValidFrom: validFrom);
+                      method: "Immunoturbidimétrie", routineHours: 4, coefficient: 100m, tariffValidFrom: validFrom);
         {
             var p = Param("CRP", "CRP", "CRP", "CRP", Unit("MG_L"), decimals: 1);
             p.MeasuringRangeLow = 1.0m; p.MeasuringRangeHigh = 300.0m;
@@ -245,7 +276,7 @@ internal static class StarterCatalogue
                       "Full blood count",
                       departments[Department.Codes.Haematology],
                       specimens[SpecimenType.Codes.WholeBloodEdta], containers["TUBE_EDTA"],
-                      method: "Cytométrie de flux / impédance", routineHours: 4, coefficient: 40m, tariffValidFrom: validFrom);
+                      method: "Cytométrie de flux / impédance", routineHours: 4, coefficient: 80m, tariffValidFrom: validFrom);
         cbc.LoincCode = "58410-2";
         cbc.StabilityAtRoomTemperatureHours = 8;
         cbc.StabilityRefrigeratedHours = 24;
@@ -336,7 +367,7 @@ internal static class StarterCatalogue
                       "Erythrocyte sedimentation rate",
                       departments[Department.Codes.Haematology],
                       specimens[SpecimenType.Codes.PlasmaCitrate], containers["TUBE_VS"],
-                      method: "Westergren", routineHours: 4, coefficient: 10m, tariffValidFrom: validFrom);
+                      method: "Westergren", routineHours: 4, coefficient: 30m, tariffValidFrom: validFrom);
         {
             var p = Param("VS1H", "VS à 1 heure", "سرعة الترسب في ساعة", "ESR at 1 hour",
                           Unit("MM_H"), decimals: 0);
@@ -356,7 +387,7 @@ internal static class StarterCatalogue
                      departments[Department.Codes.Haemostasis],
                      specimens[SpecimenType.Codes.PlasmaCitrate], containers["TUBE_CITRATE"],
                      method: "Chronométrique — thromboplastine calcique", routineHours: 4,
-                     coefficient: 25m, tariffValidFrom: validFrom);
+                     coefficient: 40m, tariffValidFrom: validFrom);
         tp.StabilityAtRoomTemperatureHours = 4;
         {
             var p = Param("TP", "Taux de prothrombine", "نسبة البروثرومبين", "Prothrombin activity",
@@ -383,7 +414,7 @@ internal static class StarterCatalogue
         var tsh = New("TSH", "TSH ultrasensible", "الهرمون المنبه للدرقية", "TSH (ultrasensitive)",
                       departments[Department.Codes.Hormonology],
                       specimens[SpecimenType.Codes.SerumDryTube], containers["TUBE_GEL"],
-                      method: "Immunoessai par chimiluminescence", routineHours: 24, coefficient: 60m, tariffValidFrom: validFrom);
+                      method: "Immunoessai par chimiluminescence", routineHours: 24, coefficient: 250m, tariffValidFrom: validFrom);
         tsh.IsAccredited = true;
         {
             var p = Param("TSH", "TSH", "TSH", "TSH", Unit("MUI_L"), decimals: 3);
@@ -415,7 +446,7 @@ internal static class StarterCatalogue
                       "Hepatitis B surface antigen",
                       departments[Department.Codes.Serology],
                       specimens[SpecimenType.Codes.SerumDryTube], containers["TUBE_GEL"],
-                      method: "Immunoessai par chimiluminescence", routineHours: 24, coefficient: 45m, tariffValidFrom: validFrom);
+                      method: "Immunoessai par chimiluminescence", routineHours: 24, coefficient: 120m, tariffValidFrom: validFrom);
         // Hepatitis B is notifiable to the health authorities in Morocco; a positive result raises
         // a declaration task rather than quietly closing the file.
         hbs.IsNotifiableDisease = true;
@@ -564,7 +595,8 @@ internal static class StarterCatalogue
             RoutineTurnaroundHours = routineHours,
             UrgentTurnaroundMinutes = Math.Max(30, routineHours * 15),
             IsAvailableUrgently = routineHours <= 24,
-            NationalActCode = code
+            // The national act, never the internal code: the two are different keys (see ActCodes).
+            NationalActCode = ActCodes.GetValueOrDefault(code)
         };
 
         // No payer: this is the laboratory's own price list, which AnalysisTest.TariffFor falls

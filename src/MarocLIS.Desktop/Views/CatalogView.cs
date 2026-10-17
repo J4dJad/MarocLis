@@ -33,7 +33,7 @@ namespace MarocLIS.Desktop.Views;
 /// on them.
 /// </para>
 /// </summary>
-public sealed class CatalogView : LocalizedView
+public sealed partial class CatalogView : LocalizedView
 {
     private readonly SelectionLoads _selectionLoads = new();
 
@@ -41,6 +41,7 @@ public sealed class CatalogView : LocalizedView
     // itself, so the SelectionChanged raised by making the row current must not load it again.
     private bool _restoringSelection;
     private readonly CatalogMaintenanceService _catalog;
+    private readonly NationalActService _nationalActs;
     private readonly IUserDialogs _dialogs;
     private readonly ICurrentUser _currentUser;
     private readonly IClock _clock;
@@ -109,13 +110,14 @@ public sealed class CatalogView : LocalizedView
     private IReadOnlyList<PanelRow> _panelRows = [];
     private CatalogLookups _lookups = CatalogLookups.Empty;
 
-    public CatalogView(CatalogMaintenanceService catalog, IUserDialogs dialogs,
-                       ICurrentUser currentUser, IClock clock,
+    public CatalogView(CatalogMaintenanceService catalog, NationalActService nationalActs,
+                       IUserDialogs dialogs, ICurrentUser currentUser, IClock clock,
                        ILocalizer localizer, ICultureManager cultureManager,
                        ILogger<CatalogView>? logger = null)
         : base(localizer, cultureManager)
     {
         _catalog = catalog;
+        _nationalActs = nationalActs;
         _dialogs = dialogs;
         _currentUser = currentUser;
         _clock = clock;
@@ -138,6 +140,8 @@ public sealed class CatalogView : LocalizedView
         _tabs.TabPages.Add(BuildPanelsTab());
         _tabs.TabPages.Add(BuildReflexTab());
         _tabs.TabPages.Add(BuildNomenclatureTab());
+        _tabs.TabPages.Add(BuildActsTab());
+        _tabs.TabPages.Add(BuildGapsTab());
 
         _status.TextAlign = ContentAlignment.MiddleLeft;
 
@@ -315,6 +319,8 @@ public sealed class CatalogView : LocalizedView
 
     private void BuildAnalysisColumns() => AddColumns(_analyses,
         ("code", 12, UiTheme.MonospaceBold, false),
+        // The national act beside the laboratory's own code: two keys, never one for the other.
+        ("actcode", 8, UiTheme.Monospace, false),
         ("name", 30, null, false),
         ("department", 10, UiTheme.Small, false),
         ("specimen", 14, UiTheme.Small, false),
@@ -450,7 +456,7 @@ public sealed class CatalogView : LocalizedView
 
     protected override void ApplyTexts()
     {
-        if (_tabs.TabPages.Count == 5)
+        if (_tabs.TabPages.Count >= 5)
         {
             _tabs.TabPages[0].Text = T("Catalog.Analyses");
             _tabs.TabPages[1].Text = T("Catalog.Tariffs");
@@ -487,6 +493,7 @@ public sealed class CatalogView : LocalizedView
         _editNomenclature.Text = T("Action.Edit");
 
         ApplyHeaders();
+        ApplyNationalActTexts();
         RefreshDepartmentFilter();
         RefreshNomenclatureKinds();
         _nomenclatureHeading.Text = _nomenclatureKind.SelectedItem?.ToString() ?? T("Catalog.Nomenclature");
@@ -514,6 +521,7 @@ public sealed class CatalogView : LocalizedView
         }
 
         Header(_analyses, "code", "Field.Code");
+        Header(_analyses, "actcode", "Nabm.ActCode");
         Header(_analyses, "name", "Field.Name");
         Header(_analyses, "department", "Field.Department");
         Header(_analyses, "specimen", "Sample.SpecimenType");
@@ -620,6 +628,7 @@ public sealed class CatalogView : LocalizedView
 
             RefreshDepartmentFilter();
 
+            await LoadNationalActsAsync(ct);
             await LoadAnalysesAsync(ct);
             await LoadSelectedTabAsync(ct);
         }
@@ -642,6 +651,8 @@ public sealed class CatalogView : LocalizedView
             case 2: await LoadPanelsAsync(ct); break;
             case 3: await LoadReflexAsync(ct); break;
             case 4: await LoadNomenclatureAsync(ct); break;
+            case ActsTab: RenderActs(); break;
+            case GapsTab: await LoadGapsAsync(ct); break;
         }
     }
 
@@ -710,6 +721,7 @@ public sealed class CatalogView : LocalizedView
 
             var index = _analyses.Rows.Add(
                 row.Code,
+                row.NationalActCode ?? string.Empty,
                 row.Name.For(language),
                 row.DepartmentCode,
                 row.SpecimenTypeName.For(language),
@@ -1233,6 +1245,8 @@ public sealed class CatalogView : LocalizedView
 
         _newNomenclature.Enabled = manage;
         _editNomenclature.Enabled = manage && SelectedNomenclature is not null;
+
+        RefreshNationalActActions();
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -1276,7 +1290,7 @@ public sealed class CatalogView : LocalizedView
 
         using var dialog = new AnalysisEditorDialog(Localizer, _dialogs, _lookups, existing,
                                                     labTariff, knownLetterKeyValue, canPrice,
-                                                    stored);
+                                                    stored, _acts);
 
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK || dialog.Request is null) return;
 

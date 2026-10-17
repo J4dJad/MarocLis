@@ -33,6 +33,11 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
     private readonly TariffRow? _labTariff;
     private readonly bool _canPrice;
 
+    // The national nomenclature (NABM): the act is picked from it or typed, and said back here.
+    private readonly IReadOnlyList<NationalActRow> _acts;
+    private readonly Button _pickAct;
+    private readonly Label _actInfo;
+
     internal AnalysisRequest? Request { get; private set; }
 
     /// <summary>
@@ -48,15 +53,21 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
     /// The whole stored analysis when editing. The fields are filled from it, and the request saved
     /// is built on it, so whatever the dialog does not show is carried through as stored.
     /// </param>
+    /// <param name="acts">
+    /// The acts of the national nomenclature, to pick the act code from; empty when they could not
+    /// be read, and the code is then typed as before, without the check.
+    /// </param>
     internal AnalysisEditorDialog(ILocalizer localizer, IUserDialogs dialogs,
                                   CatalogLookups lookups, AnalysisRow? existing,
                                   TariffRow? labTariff = null, decimal? knownLetterKeyValue = null,
-                                  bool canPrice = false, AnalysisRequest? stored = null)
+                                  bool canPrice = false, AnalysisRequest? stored = null,
+                                  IReadOnlyList<NationalActRow>? acts = null)
         : base(localizer, dialogs, existing is null ? "Catalog.NewAnalysis" : "Catalog.EditAnalysis",
                existing?.Code, 760, 764)
     {
         _labTariff = labTariff;
         _canPrice = canPrice;
+        _acts = acts ?? [];
         _id = existing?.Id;
         _isNew = existing is null;
         _stored = existing is null ? null : stored;
@@ -107,10 +118,30 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
                             latin: true, right: true);
         Numeric(EditorValues.MeasureMaxLength, _volume);
         _loinc = TextField("Catalog.Loinc", 152, 236, 160, _stored?.LoincCode, latin: true, mono: true);
-        _actCode = TextField("Catalog.NationalActCode", 324, 236, 160, existing?.NationalActCode,
+        // The national act is a second code beside the laboratory's own: picked from the
+        // nomenclature (the button, or F4), or typed. It never replaces the internal code above.
+        _actCode = TextField("Catalog.NationalActCode", 324, 236, 128, existing?.NationalActCode,
                         latin: true, mono: true);
         _loinc.MaxLength = 20;
         _actCode.MaxLength = 30;
+        _actCode.CharacterCasing = CharacterCasing.Upper;
+
+        _pickAct = UiTheme.SecondaryButton("…");
+        _pickAct.Bounds = new Rectangle(456, 254, 28, UiTheme.InputHeight);
+        _pickAct.Padding = Padding.Empty;
+        _pickAct.Tag = UiTags.NoMnemonic;
+        _pickAct.AccessibleName = localizer["Nabm.PickAct"];
+        _pickActTip.SetToolTip(_pickAct, localizer["Nabm.PickAct"]);
+        _pickAct.Enabled = _acts.Count > 0;
+        _pickAct.Click += (_, _) => PickAct();
+        Controls.Add(_pickAct);
+
+        _actCode.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.F4 || _acts.Count == 0) return;
+            e.SuppressKeyPress = true;
+            PickAct();
+        };
 
         _consent = Choice("Catalog.ConsentRequired", 496, 236, 216,
                           existing?.ConsentRequirement ?? ConsentRequirement.None,
@@ -206,6 +237,10 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         _active = Check("Field.Active", 20, 670, existing?.IsActive ?? true, bold: true);
 
+        _actInfo = Notice(140, 672, 572, 20, "Catalog.NationalActCode");
+        _actCode.TextChanged += (_, _) => RefreshActInfo();
+        RefreshActInfo();
+
         // Editing opens on the whole stored analysis (see CatalogMaintenanceService
         // .GetAnalysisForEditAsync), not on the grid row: the row is a summary, and an editor
         // filled from it saved blanks over the LOINC code, the stabilities and the partner site.
@@ -214,6 +249,68 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         Buttons(710, 760);
         UseAdminFrame();
+    }
+
+    private readonly ToolTip _pickActTip = new();
+
+    /// <summary>The act the code box names, or null for an empty box or a code outside the list.</summary>
+    private NationalActRow? CurrentAct()
+    {
+        var code = NationalBiologyAct.Normalize(_actCode.Text);
+        return code is null ? null : _acts.FirstOrDefault(a => a.Code == code);
+    }
+
+    /// <summary>Says which act the code is, with its official coefficient, or that the list does not know it.</summary>
+    private void RefreshActInfo()
+    {
+        var code = NationalBiologyAct.Normalize(_actCode.Text);
+
+        if (code is null || _acts.Count == 0)
+        {
+            _actInfo.Text = code is null && _acts.Count > 0 ? Localizer["Nabm.NoActHint"] : string.Empty;
+            _actInfo.ForeColor = UiTheme.TextSecondary;
+            return;
+        }
+
+        if (CurrentAct() is { } act)
+        {
+            _actInfo.Text = Localizer.Format("Nabm.ActInfo", act.Code, act.Label, act.Coefficient.ToString("0.##"));
+            _actInfo.ForeColor = UiTheme.Accent;
+        }
+        else
+        {
+            _actInfo.Text = Localizer.Format("Nabm.CodeNotInList", code);
+            _actInfo.ForeColor = UiTheme.Abnormal;
+        }
+    }
+
+    /// <summary>
+    /// Picks the act from the nomenclature: fills the act code and proposes the official coefficient
+    /// for the laboratory price. A price that followed the old base follows the new one; a price the
+    /// laboratory set apart from the base is left for the operator to decide.
+    /// </summary>
+    private void PickAct()
+    {
+        using var picker = new NationalActPickerDialog(Localizer, Dialogs, _acts, _actCode.Text);
+        if (picker.ShowDialog(this) != DialogResult.OK || picker.Chosen is not { } act) return;
+
+        _actCode.Text = act.Code;
+
+        if (!_canPrice) return;
+
+        var keyValue = DecimalOrNull(_letterKeyValue);
+        var oldCoefficient = DecimalOrNull(_coefficient);
+        var oldPrice = DecimalOrNull(_price);
+
+        _letterKey.Text = act.LetterKey;
+        _coefficient.Text = EditorValues.FormatForEditing(act.Coefficient, 0);
+
+        if (keyValue is > 0m
+            && (oldPrice is null
+                || (oldCoefficient is { } coefficient && oldPrice == Money.Round(coefficient * keyValue.Value))))
+            _price.Text = EditorValues.FormatForEditing(Money.Round(act.Coefficient * keyValue.Value), 2);
+
+        RefreshComputed();
     }
 
     private void RefreshComputed()
@@ -328,6 +425,16 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
             return;
         }
 
+        // A code typed by hand that the nomenclature does not know: a slip, an old code, or the
+        // internal code typed in the wrong box. Said before saving; the operator may still keep it.
+        var actCode = NationalBiologyAct.Normalize(_actCode.Text);
+        if (actCode is not null && _acts.Count > 0 && CurrentAct() is null
+            && !Dialogs.Confirm(Localizer.Format("Nabm.CodeNotInListConfirm", actCode), Text))
+        {
+            _actCode.Focus();
+            return;
+        }
+
         if (!TryReadPrice(out var priceRequest)) return;
 
         PriceRequest = priceRequest;
@@ -354,7 +461,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
             ContainerTypeId = SelectedId(_container),
             RequiredVolumeMl = DecimalOrNull(_volume),
             LoincCode = Blank(_loinc),
-            NationalActCode = Blank(_actCode),
+            NationalActCode = actCode,
             Method = FrenchEdited(_stored?.Method, Blank(_methodFr)),
             ReagentReference = Blank(_reagent),
             IsAccredited = _accredited.Checked,
