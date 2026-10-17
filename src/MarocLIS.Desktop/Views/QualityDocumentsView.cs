@@ -134,6 +134,11 @@ public sealed class QualityDocumentsView : LocalizedView
         AddColumn(_grid, "latest", 12, UiTheme.Small);
         AddColumn(_grid, "owner", 11, UiTheme.Small);
         AddColumn(_grid, "read", 6, UiTheme.SmallBold, DataGridViewContentAlignment.MiddleCenter);
+
+        // The title, the newest version and the owner wrap rather than claim their longest value as
+        // a minimum width: together they pushed « Lu » behind a horizontal scroll at 1366×768.
+        foreach (var name in new[] { "title", "latest", "owner" })
+            _grid.Columns[name]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
     }
 
     private void BuildVersionColumns()

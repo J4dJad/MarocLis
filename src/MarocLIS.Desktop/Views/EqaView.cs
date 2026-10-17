@@ -83,13 +83,19 @@ public sealed class EqaView : LocalizedView
     {
         _grid.Columns.Clear();
 
+        // The scheme and the parameter wrap rather than claim their longest value as a minimum
+        // width: together they pushed « Verdict » behind a horizontal scroll at 1366×768.
         void Add(string name, int weight, Font? font = null,
                  DataGridViewContentAlignment align = DataGridViewContentAlignment.MiddleLeft)
             => _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = name, FillWeight = weight, ReadOnly = true,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
-                DefaultCellStyle = new DataGridViewCellStyle { Font = font ?? UiTheme.Body, Alignment = align }
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Font = font ?? UiTheme.Body, Alignment = align,
+                    WrapMode = name is "scheme" or "parameter" ? DataGridViewTriState.True : DataGridViewTriState.NotSet
+                }
             });
 
         const DataGridViewContentAlignment right = DataGridViewContentAlignment.MiddleRight;
