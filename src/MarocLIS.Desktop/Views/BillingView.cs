@@ -1429,9 +1429,11 @@ internal sealed class PaymentDialog : Form
     private readonly TextBox _reference = UiTheme.Input(200);
     private readonly TextBox _bank = UiTheme.Input(200);
     private readonly DateTimePicker _maturity = new();
-    private readonly Label _referenceLabel = new();
-    private readonly Label _bankLabel = new();
-    private readonly Label _maturityLabel = new();
+    // Captions like « Mode de règlement » and « Montant »: plain labels drew them larger, in black,
+    // and 23 pixels high over the top of their boxes.
+    private readonly Label _referenceLabel = UiTheme.FieldLabel(string.Empty);
+    private readonly Label _bankLabel = UiTheme.FieldLabel(string.Empty);
+    private readonly Label _maturityLabel = UiTheme.FieldLabel(string.Empty);
     private readonly Label _warning = new();
 
     internal RecordPaymentRequest? Request { get; private set; }

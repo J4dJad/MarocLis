@@ -31,8 +31,9 @@ internal sealed class PaymentPickerDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        // Wide enough for the date, the cheque number and the bank in full.
-        ClientSize = new Size(760, 320);
+        // Wide enough for the date, the cheque number, the bank and who took the payment in full:
+        // at 760 the last column was cut and the list scrolled sideways.
+        ClientSize = new Size(880, 320);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
@@ -64,7 +65,7 @@ internal sealed class PaymentPickerDialog : Form
         _grid.Column("by").HeaderText = localizer["Field.CreatedBy"];
 
         _grid.Dock = DockStyle.None;
-        _grid.Bounds = new Rectangle(20, 20, 720, 210);
+        _grid.Bounds = new Rectangle(20, 20, 840, 210);
 
         foreach (var payment in payments)
         {
