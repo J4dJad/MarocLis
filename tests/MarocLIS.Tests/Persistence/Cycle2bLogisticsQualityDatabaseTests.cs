@@ -499,9 +499,9 @@ public sealed class Cycle2bLogisticsQualityDatabaseTests(Cycle2bDatabase databas
             (await c.NonConformities.AsNoTracking().SingleAsync(n => n.Id == fileId)).Status
                 .Should().Be(NonConformityStatus.Closed);
 
-            // A second review of the same control opens no second file.
+            // A second review of the same control is refused (owner's decision) and opens no second file.
             (await Qc(c, manager).ReviewAsync(resultId, "Revue complémentaire du biologiste", openNonConformity: true))
-                .IsSuccess.Should().BeTrue();
+                .FirstError.ResourceKey.Should().Be("Qc_AlreadyReviewed");
             (await c.NonConformities.AsNoTracking().CountAsync(n => n.QcResultId == resultId)).Should().Be(1);
         }
     }

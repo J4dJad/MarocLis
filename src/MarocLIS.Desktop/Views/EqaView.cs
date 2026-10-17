@@ -83,13 +83,19 @@ public sealed class EqaView : LocalizedView
     {
         _grid.Columns.Clear();
 
+        // The scheme and the parameter wrap rather than claim their longest value as a minimum
+        // width: together they pushed « Verdict » behind a horizontal scroll at 1366×768.
         void Add(string name, int weight, Font? font = null,
                  DataGridViewContentAlignment align = DataGridViewContentAlignment.MiddleLeft)
             => _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = name, FillWeight = weight, ReadOnly = true,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
-                DefaultCellStyle = new DataGridViewCellStyle { Font = font ?? UiTheme.Body, Alignment = align }
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Font = font ?? UiTheme.Body, Alignment = align,
+                    WrapMode = name is "scheme" or "parameter" ? DataGridViewTriState.True : DataGridViewTriState.NotSet
+                }
             });
 
         const DataGridViewContentAlignment right = DataGridViewContentAlignment.MiddleRight;
@@ -543,7 +549,10 @@ internal sealed class EqaEvaluationDialog : MasterDataEditor
         if (_outcome.SelectedIndex < 0) _outcome.SelectedIndex = 0;
         Controls.Add(_outcome);
 
-        _notesFr = TextField("Eqa.InvestigationFr", 20, 176, 520, row.InvestigationNotes?.Fr);
+        // A note written only in Arabic is stored with itself as the French fallback: the French
+        // box opens empty for it rather than showing the Arabic text twice.
+        var notes = row.InvestigationNotes;
+        _notesFr = TextField("Eqa.InvestigationFr", 20, 176, 520, notes?.Fr == notes?.Ar ? null : notes?.Fr);
         _notesAr = TextField("Eqa.InvestigationAr", 20, 230, 520, row.InvestigationNotes?.Ar, arabic: true);
         _notesFr.MaxLength = _notesAr.MaxLength = 2000;
 
@@ -564,9 +573,7 @@ internal sealed class EqaEvaluationDialog : MasterDataEditor
             PeerGroupSd = DecimalOrNull(_peerSd),
             ZScore = DecimalOrNull(_z),
             OutcomeOverride = choice == FromScore ? null : (EqaOutcome)choice,
-            InvestigationNotes = string.IsNullOrWhiteSpace(_notesFr.Text)
-                ? null
-                : new MultilingualText(_notesFr.Text.Trim(), Blank(_notesAr))
+            InvestigationNotes = MultilingualText.FromOptional(_notesFr.Text, _notesAr.Text)
         };
 
         DialogResult = DialogResult.OK;

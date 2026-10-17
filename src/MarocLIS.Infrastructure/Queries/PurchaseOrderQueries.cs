@@ -34,7 +34,9 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
                 o.SupplierReference,
                 o.IsPriority,
                 o.RaisedAutomatically,
-                o.SupplierId
+                o.SupplierId,
+                o.RaisedByUserId,
+                o.CancellationReason
             })
             .ToListAsync(ct);
 
@@ -52,7 +54,7 @@ public sealed class PurchaseOrderQueries(LisDbContext db) : IPurchaseOrderQuerie
                 o.RaisedByName ?? "?", o.ApprovedByName, o.SupplierReference,
                 o.Status is PurchaseOrderStatus.Sent or PurchaseOrderStatus.PartiallyReceived
                     && o.ExpectedDeliveryDate is { } expected && expected < today,
-                o.IsPriority, o.RaisedAutomatically, o.SupplierId);
+                o.IsPriority, o.RaisedAutomatically, o.SupplierId, o.RaisedByUserId, o.CancellationReason);
         }).ToList();
     }
 

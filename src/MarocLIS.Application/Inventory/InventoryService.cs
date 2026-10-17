@@ -583,6 +583,9 @@ public sealed class EquipmentService(
         var instrument = await instruments.GetByIdWithDetailsAsync(instrumentId, ct);
         if (instrument is null) return Result.Failure(Error.NotFound("Equipment_NotFound"));
 
+        if (instrument.Status == EquipmentStatus.Decommissioned)
+            return Result.Failure(Error.Conflict("Equipment_DecommissionedNoIntervention", instrument.Code));
+
         if (string.IsNullOrWhiteSpace(description.Fr))
             return Result.Failure(Error.Validation("Equipment_DescriptionRequired"));
 
@@ -595,7 +598,15 @@ public sealed class EquipmentService(
             PostInterventionCheckPassed = postCheckPassed
         });
 
-        unitOfWork.AuditReason = $"Maintenance {kind} sur {instrument.Code}";
+        // An instrument that fails its check after the intervention cannot go on producing
+        // results as if nothing happened: it leaves service until someone puts it back.
+        var takenOut = !postCheckPassed && instrument.Status == EquipmentStatus.Operational;
+        if (takenOut)
+            instrument.PlaceOutOfService("Contrôle après intervention non conforme");
+
+        unitOfWork.AuditReason = takenOut
+            ? $"Maintenance {kind} sur {instrument.Code} : contrôle non conforme, mis hors service"
+            : $"Maintenance {kind} sur {instrument.Code}";
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success();
@@ -621,7 +632,13 @@ public sealed class EquipmentService(
         var instrument = await instruments.GetByIdWithDetailsAsync(instrumentId, ct);
         if (instrument is null) return Result.Failure(Error.NotFound("Equipment_NotFound"));
 
-        if (outcome == CalibrationOutcome.Passed && string.IsNullOrWhiteSpace(calibratorLotNumber))
+        if (instrument.Status == EquipmentStatus.Decommissioned)
+            return Result.Failure(Error.Conflict("Equipment_DecommissionedNoIntervention", instrument.Code));
+
+        // « Conforme avec réserve » is still a calibration the instrument runs on: it needs the
+        // same traceability as a plain pass.
+        if (outcome is CalibrationOutcome.Passed or CalibrationOutcome.PassedWithReservation
+            && string.IsNullOrWhiteSpace(calibratorLotNumber))
             return Result.Failure(Error.Regulatory("Calibration_CalibratorLotRequired"));
 
         instrument.AddCalibration(new CalibrationRecord(clock.Today, clock.Now, currentUser.UserId)
@@ -652,6 +669,10 @@ public sealed class EquipmentService(
 
         var instrument = await instruments.GetByIdWithDetailsAsync(instrumentId, ct);
         if (instrument is null) return Result.Failure(Error.NotFound("Equipment_NotFound"));
+
+        // Decommissioning is final: no status, in service or otherwise, brings it back.
+        if (instrument.Status == EquipmentStatus.Decommissioned)
+            return Result.Failure(Error.Conflict("Equipment_DecommissionedIsFinal", instrument.Code));
 
         switch (status)
         {

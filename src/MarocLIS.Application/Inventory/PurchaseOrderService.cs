@@ -23,7 +23,9 @@ public sealed record PurchaseOrderRow(
     bool IsOverdue,
     bool IsPriority = false,
     bool RaisedAutomatically = false,
-    Guid SupplierId = default);
+    Guid SupplierId = default,
+    Guid RaisedByUserId = default,
+    string? CancellationReason = null);
 
 /// <summary>One line of a purchase order, with what is still to be delivered.</summary>
 public sealed record PurchaseOrderLineRow(

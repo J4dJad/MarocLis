@@ -147,9 +147,14 @@ public sealed class QuoteQueries(LisDbContext db) : IQuoteQueries
                                      files.GetValueOrDefault(o.Id));
         }).OrderBy(o => o.MissingItems).ThenBy(o => o.TotalExcludingVat).ToList();
 
+        var orderCancelled = quote.PurchaseOrderId is { } orderId
+                             && await db.PurchaseOrders.IgnoreQueryFilters().AnyAsync(
+                                 o => o.Id == orderId && o.Status == PurchaseOrderStatus.Cancelled, ct);
+
         return new QuoteRequestDetail(quote.Id, quote.Number, quote.Status, quote.RequestedOn, quote.Subject,
                                       quote.ResponseDueDate, quote.Notes, quote.AwardedQuoteId, itemRows,
-                                      supplierRows, offerRows, QuoteComparison.Build(quote, today));
+                                      supplierRows, offerRows, QuoteComparison.Build(quote, today),
+                                      orderCancelled);
     }
 
     public async Task<IReadOnlyList<QuotableItem>> GetQuotableItemsAsync(Guid siteId, DateOnly today,

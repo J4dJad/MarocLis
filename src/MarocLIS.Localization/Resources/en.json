@@ -123,6 +123,7 @@
   "InventoryCount_CountedBeforeStart": "The count time is before the stock count was started.",
   "InventoryCount_CountedInFuture": "The count time cannot be in the future.",
   "InventoryCount_LotsInOtherOpenCount": "Some lots of this stock count are also on stock count {0}, which is still being counted: their differences would be posted twice. Cancel one of the two counts before closing.",
+  "InventoryCount_DateInFuture": "The count date cannot be in the future.",
   "Gs1_Empty": "Nothing was scanned.",
   "Gs1_Unreadable": "Unreadable GS1 code from \"{0}\".",
   "Gs1_Truncated": "Truncated GS1 code: element ({0}) is incomplete.",
@@ -1269,6 +1270,7 @@
   },
 
   "InventoryCount": {
+    "SheetTimeShort": "Paper sheet: tick \"Sheet counted at\" and enter the time of the count (details in the tooltip).",
     "SheetTimeNotice": "To key in a paper sheet, tick \"Sheet counted at\" and enter the time of the count: the difference is measured against the stock at that time. The time applies only to lines not yet counted; correcting the figure of a line already counted keeps the time of its count.",
     "SheetTime": "Sheet counted at",
     "CountedAt": "Counted at",
@@ -3853,6 +3855,10 @@
   },
 
   "Equipment": {
+    "PostCheckFailedNcDescription": "Post-intervention check failed — {0} {1}",
+    "PostCheckFailedOfferNc": "Open a non-conformity for this equipment?",
+    "PostCheckFailedOutOfService": "The post-intervention check failed: the equipment has been taken out of service.",
+    "DecommissionedFinal": "Decommissioned equipment: decommissioning is final, no further intervention is recorded.",
     "Title": "Equipment",
     "Plural": "Equipment",
     "Manufacturer": "Manufacturer",
@@ -5398,6 +5404,8 @@
   "Equipment_DescriptionRequired": "A description of the intervention is mandatory.",
   "Equipment_StatusReasonRequired": "A change of equipment status must be justified.",
   "Equipment_StatusNotSettable": "Status \"{0}\" cannot be set from this screen.",
+  "Equipment_DecommissionedIsFinal": "Equipment {0} is decommissioned: decommissioning is final, its status can no longer change.",
+  "Equipment_DecommissionedNoIntervention": "Equipment {0} is decommissioned: no maintenance or calibration can be recorded on it any more.",
 
   "Calibration_CalibratorLotRequired": "A passing calibration requires the calibrator lot used: it is the link to the reference material (ISO 15189 §5.3.1.4).",
 
@@ -5532,6 +5540,8 @@
   "Notification_ValueChangedSinceDisplayed": "{0}: the value has changed since the screen was loaded (analyser re-run or correction). Reload the file and communicate the current value.",
   "Qc_RunNotFound": "Control run not found ({0}).",
   "Qc_NamedLotOneAnalyser": "The reagent lot chosen applies to the controls of one analyser only: enter the other analysers as routine controls or in another run.",
+  "Qc_AlreadyReviewed": "This control result has already been reviewed: a review is given once.",
+  "Qc_ZeroSdRefused": "The {0} points of the period all have the same value: the SD would be zero and any different value would reject the run. Choose another period.",
   "Sample_NotFound": "Sample not found ({0}).",
   "Sample_BarcodeUnknown": "No sample carries the barcode \"{0}\".",
   "Sample_ReprintReasonRequired": "Reprinting a label must be justified.",
@@ -5579,6 +5589,7 @@
   },
 
   "DocumentVersionStatus": {
+    "Scheduled": "Scheduled",
     "Draft": "Draft",
     "UnderReview": "Under review",
     "Reviewed": "Reviewed",
@@ -5598,6 +5609,7 @@
   },
 
   "Documents": {
+    "FileAccessDenied": "Windows denies access to this file. Copy it to a folder you can open (for example Documents), then choose that copy.",
     "Title": "Quality documents",
     "IncludeInactive": "Also show withdrawn documents",
     "NewDocument": "New document",
@@ -5681,6 +5693,8 @@
   },
 
   "PurchaseOrders": {
+    "CancelledBecause": "Cancelled: {0}",
+    "ApproveOwnOrderTip": "You raised this order: it must be approved by someone else.",
     "SendToSupplier": "Send to supplier",
     "SavePdf": "Save PDF…",
     "PrintPdf": "Print order (PDF)",

@@ -1,8 +1,10 @@
 using MarocLIS.Application.Inventory;
+using MarocLIS.Application.Quality;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Quality;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
 
@@ -26,6 +28,7 @@ namespace MarocLIS.Desktop.Views;
 public sealed class EquipmentView : LocalizedView
 {
     private readonly EquipmentService _equipment;
+    private readonly NonConformityService _nonConformities;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<EquipmentView>? _logger;
 
@@ -50,12 +53,13 @@ public sealed class EquipmentView : LocalizedView
 
     private IReadOnlyList<EquipmentRow> _rows = [];
 
-    public EquipmentView(EquipmentService equipment, IUserDialogs dialogs,
-                         ILocalizer localizer, ICultureManager cultureManager,
+    public EquipmentView(EquipmentService equipment, NonConformityService nonConformities,
+                         IUserDialogs dialogs, ILocalizer localizer, ICultureManager cultureManager,
                          ILogger<EquipmentView>? logger = null)
         : base(localizer, cultureManager)
     {
         _equipment = equipment;
+        _nonConformities = nonConformities;
         _dialogs = dialogs;
         _logger = logger;
 
@@ -319,9 +323,12 @@ public sealed class EquipmentView : LocalizedView
     {
         var row = _grid.CurrentRow?.Tag as EquipmentRow;
 
-        _maintenance.Enabled = row is not null;
-        _calibration.Enabled = row is not null;
-        _status.Enabled = row is not null;
+        // Decommissioning is final: nothing more is recorded on the instrument, and its status
+        // no longer changes (the service refuses it too).
+        var active = row is { Status: not EquipmentStatus.Decommissioned };
+        _maintenance.Enabled = active;
+        _calibration.Enabled = active;
+        _status.Enabled = active;
 
         if (row is null)
         {
@@ -361,7 +368,12 @@ public sealed class EquipmentView : LocalizedView
         _detail.Text = string.Join("  ·  ", parts);
 
         // Says what is wrong, rather than leaving the operator to compare two dates in a row.
-        if (row.CalibrationOverdue)
+        if (row.Status == EquipmentStatus.Decommissioned)
+        {
+            _message.ForeColor = UiTheme.TextMuted;
+            _message.Text = T("Equipment.DecommissionedFinal");
+        }
+        else if (row.CalibrationOverdue)
         {
             _message.ForeColor = UiTheme.Critical;
             _message.Text = T("Equipment.CalibrationOverdueWarning");
@@ -403,6 +415,43 @@ public sealed class EquipmentView : LocalizedView
         }
 
         await LoadAsync();
+
+        if (!dialog.PostCheckPassed) await OfferNonConformityAsync(row);
+    }
+
+    /// <summary>
+    /// A failed check after an intervention: the service has taken an operational instrument out
+    /// of service; the operator is told so and offered the non-conformity, opened on the instrument.
+    /// </summary>
+    private async Task OfferNonConformityAsync(EquipmentRow row)
+    {
+        var question = row.Status == EquipmentStatus.Operational
+            ? $"{T("Equipment.PostCheckFailedOutOfService")}\n\n{T("Equipment.PostCheckFailedOfferNc")}"
+            : T("Equipment.PostCheckFailedOfferNc");
+
+        if (!PermissionGate.Allows(Permissions.Quality.ReportNonConformity, Permissions.Quality.ManageNonConformity))
+        {
+            if (row.Status == EquipmentStatus.Operational) _dialogs.Info(T("Equipment.PostCheckFailedOutOfService"));
+            return;
+        }
+
+        if (!_dialogs.Confirm(question, T("Equipment.RecordMaintenance"))) return;
+
+        using var dialog = new NonConformityDialog(Localizer, _dialogs);
+        dialog.Prefill(NonConformityCategory.Equipment, NonConformitySeverity.Major, DetectionSource.StaffObservation,
+                       Localizer.Format("Equipment.PostCheckFailedNcDescription", row.Code,
+                                        row.Name.For(Localizer.CurrentLanguage)),
+                       row.InstrumentId);
+        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Request is null) return;
+
+        var opened = await _nonConformities.OpenAsync(dialog.Request);
+        if (opened.IsFailure)
+        {
+            _dialogs.ShowFailure(opened);
+            return;
+        }
+
+        _dialogs.Info($"{T("NonConformity.Reference")} {opened.Value}");
     }
 
     private async Task RecordCalibrationAsync()
@@ -745,7 +794,8 @@ internal sealed class CalibrationDialog : Form
 
     private void Accept()
     {
-        if (Outcome == CalibrationOutcome.Passed && string.IsNullOrWhiteSpace(_calibratorLot.Text))
+        if (Outcome is CalibrationOutcome.Passed or CalibrationOutcome.PassedWithReservation
+            && string.IsNullOrWhiteSpace(_calibratorLot.Text))
         {
             _dialogs.Warn(_localizer["Calibration_CalibratorLotRequired"]);
             _calibratorLot.Focus();

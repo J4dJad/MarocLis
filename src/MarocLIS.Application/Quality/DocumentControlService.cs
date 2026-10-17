@@ -95,7 +95,7 @@ public sealed class DocumentControlService(
         if (permitted.IsFailure)
             return Result.Failure<IReadOnlyList<DocumentVersionRow>>(permitted.FirstError);
 
-        return Result.Success(await queries.GetVersionsAsync(documentId, ct));
+        return Result.Success(await queries.GetVersionsAsync(documentId, clock.Today, ct));
     }
 
     public async Task<Result<Guid>> CreateAsync(CreateControlledDocumentRequest request,
@@ -259,7 +259,8 @@ public sealed class DocumentControlService(
         if (document is null) return Result.Failure(Error.NotFound("Document_NotFound"));
         if (!document.IsActive) return Result.Failure(Error.Conflict("Document_Retired", document.Reference));
 
-        if (document.EffectiveVersion is not { } effective)
+        // A version scheduled for a later date is not read yet: the one in force today is.
+        if (document.VersionInForce(clock.Today) is not { } effective)
             return Result.Failure(Error.Conflict("Document_NoEffectiveVersion"));
 
         if (document.Acknowledgements.Any(a => a.UserId == currentUser.UserId
@@ -348,7 +349,8 @@ public interface IDocumentControlQueries
         Guid siteId, Guid currentUserId, bool includeInactive, DateOnly today,
         CancellationToken ct = default);
 
-    Task<IReadOnlyList<DocumentVersionRow>> GetVersionsAsync(Guid documentId,
+    /// <summary>Versions with their status as read on <paramref name="today"/> (a future one is scheduled).</summary>
+    Task<IReadOnlyList<DocumentVersionRow>> GetVersionsAsync(Guid documentId, DateOnly today,
                                                              CancellationToken ct = default);
 
     Task<DocumentContent?> GetContentAsync(Guid documentId, int versionNumber,

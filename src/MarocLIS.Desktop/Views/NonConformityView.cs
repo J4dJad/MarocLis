@@ -191,7 +191,8 @@ public sealed class NonConformityView : LocalizedView
         _cancelAction.Click += async (_, _) => await RunBusyAsync(CancelActionAsync);
 
         // Greyed out for a user without the right; the service refuses them in any case.
-        PermissionGate.Require(Permissions.Quality.ManageNonConformity, _open, _addAction, _completeAction, _analysis, _close, _reopen, _dismiss, _startAction, _cancelAction);
+        PermissionGate.Require([Permissions.Quality.ReportNonConformity, Permissions.Quality.ManageNonConformity], _open);
+        PermissionGate.Require(Permissions.Quality.ManageNonConformity, _addAction, _completeAction, _analysis, _close, _reopen, _dismiss, _startAction, _cancelAction);
 
         _actions.SelectionChanged += (_, _) => RefreshActionButtons();
 
@@ -822,6 +823,9 @@ internal sealed class NonConformityDialog : Form
 
     internal CreateNonConformityRequest? Request { get; private set; }
 
+    /// <summary>The instrument the file is about, when another screen opens it (a failed maintenance check).</summary>
+    private Guid? _instrumentId;
+
     internal NonConformityDialog(ILocalizer localizer, IUserDialogs dialogs)
     {
         _localizer = localizer;
@@ -937,6 +941,27 @@ internal sealed class NonConformityDialog : Form
         QhDialog.Dress(this, _localizer, "QualityHr.Hint.NonConformity");
     }
 
+    /// <summary>Opens on what the calling screen already knows; every field stays editable.</summary>
+    internal void Prefill(NonConformityCategory category, NonConformitySeverity severity,
+                          DetectionSource source, string description, Guid? instrumentId)
+    {
+        static void Select<T>(ComboBox box, T value)
+        {
+            foreach (var item in box.Items)
+            {
+                if (item is not Choice<T> choice || !EqualityComparer<T>.Default.Equals(choice.Value, value)) continue;
+                box.SelectedItem = item;
+                return;
+            }
+        }
+
+        Select(_category, category);
+        Select(_severity, severity);
+        Select(_source, source);
+        _description.Text = description;
+        _instrumentId = instrumentId;
+    }
+
     private void Accept()
     {
         if (string.IsNullOrWhiteSpace(_description.Text))
@@ -957,7 +982,8 @@ internal sealed class NonConformityDialog : Form
                 : new MultilingualText(_immediateAction.Text.Trim()),
             AffectedReleasedResults = _affectedResults.Checked,
             AffectedPatientCount = _affectedResults.Checked ? (int)_patientCount.Value : null,
-            DueDate = DateOnly.FromDateTime(_dueDate.Value.Date)
+            DueDate = DateOnly.FromDateTime(_dueDate.Value.Date),
+            InstrumentId = _instrumentId
         };
 
         DialogResult = DialogResult.OK;

@@ -134,6 +134,11 @@ public sealed class QualityDocumentsView : LocalizedView
         AddColumn(_grid, "latest", 12, UiTheme.Small);
         AddColumn(_grid, "owner", 11, UiTheme.Small);
         AddColumn(_grid, "read", 6, UiTheme.SmallBold, DataGridViewContentAlignment.MiddleCenter);
+
+        // The title, the newest version and the owner wrap rather than claim their longest value as
+        // a minimum width: together they pushed « Lu » behind a horizontal scroll at 1366×768.
+        foreach (var name in new[] { "title", "latest", "owner" })
+            _grid.Columns[name]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
     }
 
     private void BuildVersionColumns()
@@ -162,7 +167,8 @@ public sealed class QualityDocumentsView : LocalizedView
             ? version.Status switch
             {
                 DocumentVersionStatus.Effective => QhTone.Ok,
-                DocumentVersionStatus.Approved or DocumentVersionStatus.Reviewed => QhTone.Info,
+                DocumentVersionStatus.Approved or DocumentVersionStatus.Reviewed
+                    or DocumentVersionStatus.Scheduled => QhTone.Info,
                 DocumentVersionStatus.UnderReview => QhTone.Warn,
                 DocumentVersionStatus.Draft => QhTone.Wait,
                 _ => QhTone.Muted
@@ -730,11 +736,16 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
             Dialogs.Warn($"{Localizer["Documents.FileUnreadable"]}\n{ex.Message}", Text);
             return;
         }
+        catch (UnauthorizedAccessException)
+        {
+            // A file the Windows account may not read (another user's folder, a protected share)
+            // escaped as « Erreur inattendue »; the operator needs to know where to put it instead.
+            Dialogs.Warn(Localizer["Documents.FileAccessDenied"], Text);
+            return;
+        }
 
         FileName = info.Name;
-        ChangeSummary = string.IsNullOrWhiteSpace(_summaryFr.Text)
-            ? null
-            : new MultilingualText(_summaryFr.Text.Trim(), Blank(_summaryAr));
+        ChangeSummary = MultilingualText.FromOptional(_summaryFr.Text, _summaryAr.Text);
 
         DialogResult = DialogResult.OK;
         Close();

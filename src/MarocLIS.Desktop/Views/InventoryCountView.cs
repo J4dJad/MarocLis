@@ -50,6 +50,7 @@ public sealed class InventoryCountView : LocalizedView
     private readonly Button _variances = UiTheme.SecondaryButton(string.Empty);
     private readonly StockFooter _status = new();
     private readonly Label _sheetTimeLabel = StockPage.Caption(new Label());
+    private readonly ToolTip _tips = new() { AutoPopDelay = 20000 };
     private readonly DateTimePicker _sheetTime = new()
     {
         Format = DateTimePickerFormat.Custom, CustomFormat = "dd/MM/yyyy HH:mm", ShowCheckBox = true, Checked = false
@@ -243,6 +244,8 @@ public sealed class InventoryCountView : LocalizedView
         _variances.Text = T("InventoryCount.VarianceReport");
         _linesCard.Title.Text = T("InventoryCount.Lines");
         _sheetTimeLabel.Text = T("InventoryCount.SheetTime");
+        _tips.SetToolTip(_sheetTimeLabel, T("InventoryCount.SheetTimeNotice"));
+        _tips.SetToolTip(_sheetTime, T("InventoryCount.SheetTimeNotice"));
 
         var listHeaders = new[]
         {
@@ -355,7 +358,9 @@ public sealed class InventoryCountView : LocalizedView
             }
 
             _linesCard.Note.Text = $"{_detail.Count.Number} · {_detail.Count.Counted}/{_detail.Count.Lines}";
-            _status.Text = counting ? $"{T("InventoryCount.CountingNotice")} {T("InventoryCount.SheetTimeNotice")}" : string.Empty;
+            // Short enough for one or two lines at 1366×768: three lines pushed the sheet off the
+            // screen. The full paper-sheet explanation is on the « Feuille comptée le » tooltip.
+            _status.Text = counting ? $"{T("InventoryCount.CountingNotice")} {T("InventoryCount.SheetTimeShort")}" : string.Empty;
 
             if (row >= 0 && row < _lines.Rows.Count && column >= 0 && column < _lines.Columns.Count)
                 _lines.CurrentCell = _lines.Rows[row].Cells[column];
@@ -618,7 +623,9 @@ internal sealed class InventoryCountDialog : MasterDataEditor
         {
             Format = DateTimePickerFormat.Short,
             Bounds = new Rectangle(20, 32, 160, UiTheme.InputHeight),
-            Value = DateTime.Today
+            Value = DateTime.Today,
+            // Today or earlier: the service refuses a count dated in the future.
+            MaxDate = DateTime.Today
         };
         Controls.Add(_date);
 

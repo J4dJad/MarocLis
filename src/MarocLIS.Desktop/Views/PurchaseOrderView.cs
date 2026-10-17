@@ -46,6 +46,7 @@ public sealed class PurchaseOrderView : LocalizedView
     private readonly StockMenuButton _savePdf = new();
     private readonly Button _addLine = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _approve = UiTheme.SecondaryButton(string.Empty);
+    private readonly ToolTip _tips = new();
     private readonly Button _send = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _receive = UiTheme.PrimaryButton(string.Empty);
     private readonly StockMenuButton _cancel = new();
@@ -437,7 +438,10 @@ public sealed class PurchaseOrderView : LocalizedView
 
         var order = SelectedOrder;
         _linesCard.Title.Text = T("PurchaseOrders.Lines");
-        _linesCard.Note.Text = order is null ? string.Empty : $"{order.Number} · {order.SupplierName}";
+        _linesCard.Note.Text = order is null ? string.Empty
+            : order is { Status: PurchaseOrderStatus.Cancelled, CancellationReason: { } why }
+                ? $"{order.Number} · {order.SupplierName} · {T("PurchaseOrders.CancelledBecause", why)}"
+                : $"{order.Number} · {order.SupplierName}";
 
         _totals.Text = order is null
             ? string.Empty
@@ -472,7 +476,12 @@ public sealed class PurchaseOrderView : LocalizedView
 
         _newOrder.Enabled = !IsBusy;
         _addLine.Enabled = order?.Status == PurchaseOrderStatus.Draft;
-        _approve.Enabled = order is { Status: PurchaseOrderStatus.Draft, LineCount: > 0 };
+        // The author of an order cannot approve it (the service refuses it): greyed out for them,
+        // with the reason on the button rather than a refusal after the click.
+        var ownOrder = order is not null && PermissionGate.User?.UserId == order.RaisedByUserId;
+        _approve.Enabled = order is { Status: PurchaseOrderStatus.Draft, LineCount: > 0 } && !ownOrder;
+        _tips.SetToolTip(_approve, ownOrder && order is { Status: PurchaseOrderStatus.Draft }
+                                       ? T("PurchaseOrders.ApproveOwnOrderTip") : null);
         _send.Enabled = order?.Status == PurchaseOrderStatus.Approved;
         _receive.Enabled = order?.Status is PurchaseOrderStatus.Approved or PurchaseOrderStatus.Sent
                                           or PurchaseOrderStatus.PartiallyReceived

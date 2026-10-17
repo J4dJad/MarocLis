@@ -157,6 +157,9 @@ public sealed class Instrument : AuditableAggregateRoot, ISoftDeletable, ISiteSc
     /// </summary>
     public Result ReturnToService(DateOnly today)
     {
+        // Decommissioning is final: the instrument left the laboratory's park for good.
+        if (Status == EquipmentStatus.Decommissioned)
+            return Result.Failure(Error.Conflict("Equipment_DecommissionedIsFinal", Code));
         if (IsCalibrationOverdue(today))
             return Result.Failure(Error.Regulatory("Instrument_CalibrationRequiredBeforeReturn"));
 

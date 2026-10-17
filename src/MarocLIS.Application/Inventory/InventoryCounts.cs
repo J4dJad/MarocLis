@@ -128,6 +128,10 @@ public sealed class InventoryCountService(
         var permitted = guard.Require(Permissions.Inventory.CloseCounts);
         if (permitted.IsFailure) return Result.Failure<string>(permitted.FirstError);
 
+        // A count records what is on the shelf; a future date counted stock that does not exist yet.
+        if (request.CountDate > clock.Today)
+            return Result.Failure<string>(Error.Validation("InventoryCount_DateInFuture"));
+
         await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
 
         var number = await sequences.NextAsync(SequencePurpose.InventoryCount, null, request.CountDate.Year, ct);

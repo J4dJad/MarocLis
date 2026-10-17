@@ -54,7 +54,8 @@ public sealed record QuoteRequestDetail(
     IReadOnlyList<QuoteItemRow> Items,
     IReadOnlyList<QuoteSupplierRow> Suppliers,
     IReadOnlyList<QuoteOfferRow> Offers,
-    IReadOnlyList<QuoteComparisonLine> Comparison);
+    IReadOnlyList<QuoteComparisonLine> Comparison,
+    bool OrderCancelled = false);
 
 /// <summary>An article that can be put out to quotation; captive reagents name their contract.</summary>
 public sealed record QuotableItem(Guid Id, string Code, MultilingualText Name, string UnitOfMeasure,
@@ -360,7 +361,11 @@ public sealed class QuoteService(
             .ToList();
         if (priced.Count == 0) return Result.Failure<string>(Error.Validation("Quote_OfferHasNoPrice"));
 
-        var awarded = quote.Award(supplierQuoteId, clock.Today, currentUser.UserId);
+        // An award whose order was cancelled can be made again; any other awarded request is closed.
+        var orderCancelled = quote is { Status: QuoteRequestStatus.Awarded, PurchaseOrderId: { } previousOrderId }
+                             && await orders.GetByIdAsync(previousOrderId, ct) is { Status: PurchaseOrderStatus.Cancelled };
+
+        var awarded = quote.Award(supplierQuoteId, clock.Today, currentUser.UserId, orderCancelled);
         if (awarded.IsFailure) return Result.Failure<string>(awarded.FirstError);
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(ct);

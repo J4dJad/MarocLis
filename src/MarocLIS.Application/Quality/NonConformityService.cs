@@ -148,7 +148,10 @@ public sealed class NonConformityService(
     public async Task<Result<string>> OpenAsync(CreateNonConformityRequest request,
                                                  CancellationToken ct = default)
     {
-        var permitted = guard.Require(Permissions.Quality.ManageNonConformity);
+        // Declaring is open to whoever reports (a technician at the bench); everything after the
+        // declaration keeps requiring the management right.
+        var permitted = guard.RequireAny(Permissions.Quality.ReportNonConformity,
+                                         Permissions.Quality.ManageNonConformity);
         if (permitted.IsFailure) return Result.Failure<string>(permitted.FirstError);
 
         if (string.IsNullOrWhiteSpace(request.Description.Fr))

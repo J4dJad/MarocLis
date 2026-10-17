@@ -251,6 +251,11 @@ public sealed class QcResult : AuditableAggregateRoot, ISiteScoped
 
     public Result Review(DateTimeOffset at, Guid byUserId, string? correctiveAction)
     {
+        // A second review replaced the first reviewer and the corrective action on record: the
+        // review is a signature, given once.
+        if (ReviewedAt is not null)
+            return Result.Failure(Error.Conflict("Qc_AlreadyReviewed"));
+
         if (Outcome == QcOutcome.Rejected && string.IsNullOrWhiteSpace(correctiveAction))
             return Result.Failure(Error.Regulatory("Qc_RejectionRequiresCorrectiveAction"));
 

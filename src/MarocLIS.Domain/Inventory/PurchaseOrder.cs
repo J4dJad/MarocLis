@@ -46,6 +46,9 @@ public sealed class PurchaseOrder : AuditableAggregateRoot, ISiteScoped
 
     public string? Notes { get; set; }
 
+    /// <summary>Why the order was cancelled. Kept apart from <see cref="Notes"/>, which it used to overwrite.</summary>
+    public string? CancellationReason { get; private set; }
+
     /// <summary>To be dealt with first: raised because an item fell to its reorder point.</summary>
     public bool IsPriority { get; set; }
 
@@ -130,7 +133,7 @@ public sealed class PurchaseOrder : AuditableAggregateRoot, ISiteScoped
             return Result.Failure(Error.Conflict("Po_PartiallyReceivedCannotCancel"));
 
         Status = PurchaseOrderStatus.Cancelled;
-        Notes = reason;
+        CancellationReason = reason;
         return Result.Success();
     }
 

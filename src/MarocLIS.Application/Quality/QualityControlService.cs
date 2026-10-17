@@ -548,6 +548,11 @@ public sealed class QualityControlService(
         var variance = values.Sum(v => (v - mean) * (v - mean)) / (values.Count - 1);
         var sd = (decimal)Math.Sqrt((double)variance);
 
+        // Identical values give an SD of zero: every later point off the mean by the smallest
+        // amount would be infinitely many SDs away and reject the run. Refused, not saved.
+        if (Math.Round(sd, 6) == 0m)
+            return Result.Failure<(decimal, decimal, int)>(Error.Validation("Qc_ZeroSdRefused", values.Count));
+
         target.LaboratoryMean = Math.Round(mean, 6);
         target.LaboratorySd = Math.Round(sd, 6);
         target.LaboratoryPointCount = values.Count;
