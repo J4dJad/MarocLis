@@ -3338,6 +3338,7 @@
   },
 
   "Validation": {
+    "ValidatedCount": "{0} {0:plural:résultat validé|résultats validés}",
     "KeyNextOrder": "dossier suivant",
     "KeyValidate": "valider la sélection",
     "KeyTick": "cocher / décocher",

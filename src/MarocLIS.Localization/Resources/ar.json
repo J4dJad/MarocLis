@@ -3338,6 +3338,7 @@
   },
 
   "Validation": {
+    "ValidatedCount": "نتائج مصادق عليها: {0}",
     "KeyNextOrder": "الملف التالي",
     "KeyValidate": "المصادقة على التحديد",
     "KeyTick": "تحديد / إلغاء التحديد",

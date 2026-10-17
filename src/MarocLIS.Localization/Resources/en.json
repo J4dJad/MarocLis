@@ -3338,6 +3338,7 @@
   },
 
   "Validation": {
+    "ValidatedCount": "{0} result(s) validated",
     "KeyNextOrder": "next file",
     "KeyValidate": "validate selection",
     "KeyTick": "tick / untick",

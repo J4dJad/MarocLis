@@ -1700,7 +1700,9 @@ public sealed class ValidationView : LocalizedView
             }
 
             _status.ForeColor = result.Blocked.Count > 0 ? UiTheme.Abnormal : UiTheme.Normal;
-            _status.Text = $"{result.Validated} {T("Validation.ValidatedBy").ToLowerInvariant()}";
+            // « N validé par » ended on nothing (and read « 0 validé par » after a refusal): the count
+            // gets its own sentence.
+            _status.Text = T("Validation.ValidatedCount", result.Validated);
 
             // The comments of the lines now validated are on their results; the others stay.
             foreach (var decision in decisions.Where(d => d.Validate && d.BiologistComment is not null))
