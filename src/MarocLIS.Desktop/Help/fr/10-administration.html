@@ -203,9 +203,15 @@ ul.toc li { margin: 4px 0; }
 <td>Ouvrir <strong>Reprise de données</strong> : lire l'ancienne application, simuler, importer, annuler la dernière reprise</td>
 <td>Administrateur seul (accordé aussi aux installations existantes au démarrage)</td>
 </tr>
+<tr>
+<td><code>results.validate_remote</code></td>
+<td><strong>Validation à distance</strong> : se connecter au service de validation depuis un téléphone (exige aussi <code>results.validate_biological</code>)</td>
+<td>Aucun rôle livré (l'Administrateur a tous les droits mais ne peut pas valider sans qualification de biologiste) : à ajouter dans <strong>Rôles et droits</strong> au rôle des biologistes de garde</td>
+</tr>
 </tbody>
 </table>
 <p>Changements récents des rôles livrés :
+- nouveau droit <code>results.validate_remote</code> (validation à distance depuis un téléphone), donné à aucun rôle clinique : l'administrateur l'ajoute au rôle des biologistes concernés, ou crée un rôle « Biologiste de garde » (voir « Service de validation à distance ») ;
 - nouveau droit <code>billing.discount.approve</code> (approuver une remise au-delà du plafond), donné à l'Administrateur, au Biologiste responsable et à la Comptabilité, y compris sur une base existante au démarrage suivant ; il peut être retiré ou ajouté à un rôle dans <strong>Rôles et droits</strong> ;
 - le Biologiste et le Technicien de laboratoire peuvent maintenant <strong>Réimporter</strong> une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
 - le Biologiste peut retirer une validation et rééditer un compte rendu archivé ; le Secrétariat / accueil peut rééditer un compte rendu archivé (le compte rendu perdu est remis tel qu'il a été diffusé) ;
@@ -1077,6 +1083,39 @@ ul.toc li { margin: 4px 0; }
 <p><strong>Flux</strong></p>
 <div class="diagram"><img src="img/diagramme-b9695aee51e8b938.png" alt="Diagramme"></div>
 
+<h3>Service de validation à distance</h3>
+<p>Le service <strong>MarocLIS.Api</strong> permet aux biologistes de valider depuis leur téléphone (voir chapitre « Phase analytique et comptes rendus », « Validation à distance »). Il tourne sur le serveur du laboratoire, à côté de SQL Server, et n'est joignable que par le réseau privé <strong>Tailscale</strong> : aucun port n'est ouvert sur Internet ni sur le réseau du laboratoire.</p>
+<p><strong>Principe</strong></p>
+<ul>
+<li>Le service écoute uniquement sur <code>127.0.0.1:5080</code> (la machine elle-même), en HTTP.</li>
+<li><code>tailscale serve</code> le publie sur le réseau Tailscale en HTTPS, à l'adresse <code>https://&lt;machine&gt;.&lt;tailnet&gt;.ts.net</code>, avec un certificat valide, et indique au service quel appareil appelle.</li>
+<li>Seuls les appareils inscrits au réseau Tailscale du laboratoire atteignent cette adresse ; il faut ensuite un compte MarocLIS avec les droits de validation à distance.</li>
+</ul>
+<p><strong>Installation (une fois)</strong></p>
+<ol>
+<li>Sur le serveur, installer le <strong>ASP.NET Core Runtime 10</strong> (programme « Hosting Bundle » ou « ASP.NET Core Runtime x64 » sur https://dotnet.microsoft.com/download/dotnet/10.0). Inutile si le service est publié en mode autonome (« self-contained »).</li>
+<li>Copier le dossier publié du service (par exemple <code>C:\MarocLIS\Api</code>) : il contient <code>MarocLIS.Api.exe</code> et <code>appsettings.json</code>.</li>
+<li>Dans <code>appsettings.json</code> : recopier dans <code>Database:ConnectionString</code> la chaîne de connexion des postes, et la section <code>PasswordPolicy</code> des postes (le délai d'inactivité et le blocage après échecs sont ceux du poste). Ne pas changer <code>Urls</code> (<code>http://127.0.0.1:5080</code>) : au démarrage, le service écrit un avertissement dans son journal s'il écoute au-delà de la machine.</li>
+<li>Compte du service : avec <code>Integrated Security=true</code>, le compte Windows qui fait tourner le service doit pouvoir se connecter à SQL Server et lire / écrire la base MarocLIS (même rôle de base que les postes). Un compte dédié (par exemple <code>LAB\svc-maroclis</code>) est préférable à LocalSystem.</li>
+<li>Créer le service, dans PowerShell lancé en administrateur, depuis le dossier du service :
+   - avec le script livré : <code>.\install-api-service.ps1 -Account 'LAB\svc-maroclis' -Password (Read-Host -AsSecureString)</code> (sans <code>-Account</code>, le service tourne en LocalSystem). Le script vérifie le runtime, crée le service en démarrage automatique différé, le fait redémarrer après un arrêt anormal, crée le dossier <code>logs</code> et vérifie que <code>http://127.0.0.1:5080/</code> répond ;
+   - ou à la main : <code>sc.exe create MarocLIS.Api binPath= "C:\MarocLIS\Api\MarocLIS.Api.exe" start= delayed-auto obj= LAB\svc-maroclis password= ...</code>, puis <code>sc.exe failure MarocLIS.Api reset= 86400 actions= restart/60000/restart/60000/restart/300000</code> et <code>sc.exe start MarocLIS.Api</code>.</li>
+<li>Installer <strong>Tailscale</strong> sur le serveur et le connecter au réseau (tailnet) du laboratoire. Dans la console d'administration Tailscale (DNS), activer <strong>MagicDNS</strong> et <strong>HTTPS Certificates</strong>.</li>
+<li>Sur le serveur : <code>tailscale serve --bg 5080</code>. La commande affiche l'adresse publiée, <code>https://&lt;machine&gt;.&lt;tailnet&gt;.ts.net</code> ; la configuration est conservée aux redémarrages. <code>tailscale serve status</code> la montre, <code>tailscale serve --https=443 off</code> la retire.</li>
+<li>Sur chaque téléphone : installer l'application Tailscale, se connecter au tailnet du laboratoire, puis ouvrir l'adresse publiée dans le navigateur.</li>
+<li>Dans MarocLIS, <strong>Rôles et droits</strong> : ajouter le droit <code>results.validate_remote</code> au rôle des biologistes concernés (ils doivent aussi avoir <code>results.validate_biological</code> et une qualification de biologiste valide).</li>
+</ol>
+<p><strong>Mise à jour du service</strong> : arrêter le service (<code>sc.exe stop MarocLIS.Api</code>), copier les nouveaux fichiers en gardant <code>appsettings.json</code>, redémarrer. Les téléphones doivent se reconnecter. Le service ne met pas la base à jour : mettez d'abord à jour un poste (qui applique les migrations au démarrage), puis le service. Pour le retirer : <code>.\install-api-service.ps1 -Uninstall</code>.</p>
+<p><strong>Sécurité, à savoir</strong></p>
+<ul>
+<li>Ne jamais utiliser <code>tailscale funnel</code> : il publierait le service sur Internet.</li>
+<li>Le nom de l'appareil (en-têtes Tailscale) n'est cru que si la requête vient de la machine elle-même, c'est-à-dire de <code>tailscale serve</code>. Une requête venue d'ailleurs est enregistrée sous son adresse IP.</li>
+<li>Les sessions sont gardées en mémoire : redémarrer le service déconnecte tous les téléphones. Désactiver un compte, réinitialiser son mot de passe ou lui retirer un droit ferme sa session à la requête suivante.</li>
+<li>Le journal de sécurité enregistre les connexions, refus, expirations et déconnexions du téléphone, avec le poste « Mobile · <em>appareil</em> » ; les validations et appels de critiques portent ce même poste.</li>
+<li>Retirer un téléphone perdu : le supprimer du tailnet dans la console Tailscale, et changer le mot de passe du biologiste.</li>
+<li>Journaux du service : dossier <code>logs</code> du service (<code>maroclis-api-*.log</code>), et journal d'événements Windows en cas d'échec au démarrage.</li>
+</ul>
+<hr />
 <h3>Messages d'erreur et d'avertissement</h3>
 <p>« … » remplace une valeur que l'application insère (un nom, un code, une date, un nombre). Les messages communs à toute l'application (connexion perdue, « Erreur inattendue », droit manquant, modification faite en même temps ailleurs, nombre illisible) sont décrits au chapitre « Prise en main ».</p>
 <h4>Utilisateurs</h4>

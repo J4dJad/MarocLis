@@ -77,6 +77,20 @@ Légende : **OUI** = présent et utilisable ; **PARTIEL** = présent mais incomp
 | Émettre le compte rendu | Validation biologique | **Compte rendu** | PARTIEL | ValidationView.cs:648, 654, 1376, 1794-1816 : ni conclusion du biologiste, ni choix de la langue à la première émission (seulement en rectification). Bouton grisé quand rien n'est à imprimer (corrigé) |
 | Dévalider avant impression | Validation biologique | **Plus d'actions** › **Dévalider…** | OUI | Corrigé : ValidationView.cs:649, 970, 1393, 1572-1616 ; droit donné au Biologiste par défaut |
 
+## Validation à distance (téléphone)
+
+Phase 1 : service `MarocLIS.Api` seulement (aucun écran sur le téléphone avant la phase 2). Références dans `src/MarocLIS.Api/`, tests dans `tests/MarocLIS.Tests/Api/`.
+
+| Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
+|---|---|---|---|---|
+| Se connecter depuis le téléphone (deux droits exigés) | Téléphone | `POST /api/session` | PARTIEL | Endpoints/SessionEndpoints.cs ; service prêt, écran en phase 2 |
+| Session fermée à l'inactivité, après 12 h, au changement du compte, sur un autre appareil | Téléphone | — | OUI | Security/SessionCookie.cs, Security/MobileSessionStore.cs |
+| Liste à valider avec filtres et compteurs | Téléphone | `GET /api/validation/worklist?filtre=tous\|urgents\|anomalies\|cq` | PARTIEL | Endpoints/ValidationEndpoints.cs ; mêmes règles que le poste (Application/Results/ValidationScreenRules.cs) ; écran en phase 2 |
+| Ouvrir un dossier, antériorités | Téléphone | `GET /api/dossiers/{id}`, `.../parametres/{id}/historique` | PARTIEL | Idem |
+| Valider avec contrôle de la valeur affichée | Téléphone | `POST /api/dossiers/{id}/validation` | PARTIEL | Refus « valeur changée » : Application/Results/ValidationService.cs |
+| Communiquer un critique / injoignable | Téléphone | `POST /api/critiques/...` | PARTIEL | Endpoints/CriticalEndpoints.cs ; mode téléphone seulement |
+| Émettre le compte rendu et le voir en images | Téléphone | `POST /api/dossiers/{id}/compte-rendu`, `GET /api/comptes-rendus/{id}/apercu?page=n` | PARTIEL | Endpoints/ReportEndpoints.cs ; aperçu seulement pendant la session qui l'a émis |
+
 ## Comptes rendus
 
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |

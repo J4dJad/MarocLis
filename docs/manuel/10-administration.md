@@ -84,8 +84,10 @@ flowchart TD
 | `admin.settings.manage` | Numérotations, paramètres, format des factures, plafond des remises, lieux de stockage | Administrateur seul |
 | `billing.discount.approve` | Approuver, sur place, une remise au-delà du plafond accordée par un autre utilisateur (jamais la sienne) | Administrateur, Biologiste responsable, Comptabilité |
 | `admin.migration` | Ouvrir **Reprise de données** : lire l'ancienne application, simuler, importer, annuler la dernière reprise | Administrateur seul (accordé aussi aux installations existantes au démarrage) |
+| `results.validate_remote` | **Validation à distance** : se connecter au service de validation depuis un téléphone (exige aussi `results.validate_biological`) | Aucun rôle livré (l'Administrateur a tous les droits mais ne peut pas valider sans qualification de biologiste) : à ajouter dans **Rôles et droits** au rôle des biologistes de garde |
 
 Changements récents des rôles livrés :
+- nouveau droit `results.validate_remote` (validation à distance depuis un téléphone), donné à aucun rôle clinique : l'administrateur l'ajoute au rôle des biologistes concernés, ou crée un rôle « Biologiste de garde » (voir « Service de validation à distance ») ;
 - nouveau droit `billing.discount.approve` (approuver une remise au-delà du plafond), donné à l'Administrateur, au Biologiste responsable et à la Comptabilité, y compris sur une base existante au démarrage suivant ; il peut être retiré ou ajouté à un rôle dans **Rôles et droits** ;
 - le Biologiste et le Technicien de laboratoire peuvent maintenant **Réimporter** une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
 - le Biologiste peut retirer une validation et rééditer un compte rendu archivé ; le Secrétariat / accueil peut rééditer un compte rendu archivé (le compte rendu perdu est remis tel qu'il a été diffusé) ;
@@ -945,6 +947,43 @@ flowchart TD
     K -- oui --> L[Annuler la dernière reprise]
     K -- non --> M[Données suivantes]
 ```
+
+### Service de validation à distance
+
+Le service **MarocLIS.Api** permet aux biologistes de valider depuis leur téléphone (voir chapitre « Phase analytique et comptes rendus », « Validation à distance »). Il tourne sur le serveur du laboratoire, à côté de SQL Server, et n'est joignable que par le réseau privé **Tailscale** : aucun port n'est ouvert sur Internet ni sur le réseau du laboratoire.
+
+**Principe**
+
+- Le service écoute uniquement sur `127.0.0.1:5080` (la machine elle-même), en HTTP.
+- `tailscale serve` le publie sur le réseau Tailscale en HTTPS, à l'adresse `https://<machine>.<tailnet>.ts.net`, avec un certificat valide, et indique au service quel appareil appelle.
+- Seuls les appareils inscrits au réseau Tailscale du laboratoire atteignent cette adresse ; il faut ensuite un compte MarocLIS avec les droits de validation à distance.
+
+**Installation (une fois)**
+
+1. Sur le serveur, installer le **ASP.NET Core Runtime 10** (programme « Hosting Bundle » ou « ASP.NET Core Runtime x64 » sur https://dotnet.microsoft.com/download/dotnet/10.0). Inutile si le service est publié en mode autonome (« self-contained »).
+2. Copier le dossier publié du service (par exemple `C:\MarocLIS\Api`) : il contient `MarocLIS.Api.exe` et `appsettings.json`.
+3. Dans `appsettings.json` : recopier dans `Database:ConnectionString` la chaîne de connexion des postes, et la section `PasswordPolicy` des postes (le délai d'inactivité et le blocage après échecs sont ceux du poste). Ne pas changer `Urls` (`http://127.0.0.1:5080`) : au démarrage, le service écrit un avertissement dans son journal s'il écoute au-delà de la machine.
+4. Compte du service : avec `Integrated Security=true`, le compte Windows qui fait tourner le service doit pouvoir se connecter à SQL Server et lire / écrire la base MarocLIS (même rôle de base que les postes). Un compte dédié (par exemple `LAB\svc-maroclis`) est préférable à LocalSystem.
+5. Créer le service, dans PowerShell lancé en administrateur, depuis le dossier du service :
+   - avec le script livré : `.\install-api-service.ps1 -Account 'LAB\svc-maroclis' -Password (Read-Host -AsSecureString)` (sans `-Account`, le service tourne en LocalSystem). Le script vérifie le runtime, crée le service en démarrage automatique différé, le fait redémarrer après un arrêt anormal, crée le dossier `logs` et vérifie que `http://127.0.0.1:5080/` répond ;
+   - ou à la main : `sc.exe create MarocLIS.Api binPath= "C:\MarocLIS\Api\MarocLIS.Api.exe" start= delayed-auto obj= LAB\svc-maroclis password= ...`, puis `sc.exe failure MarocLIS.Api reset= 86400 actions= restart/60000/restart/60000/restart/300000` et `sc.exe start MarocLIS.Api`.
+6. Installer **Tailscale** sur le serveur et le connecter au réseau (tailnet) du laboratoire. Dans la console d'administration Tailscale (DNS), activer **MagicDNS** et **HTTPS Certificates**.
+7. Sur le serveur : `tailscale serve --bg 5080`. La commande affiche l'adresse publiée, `https://<machine>.<tailnet>.ts.net` ; la configuration est conservée aux redémarrages. `tailscale serve status` la montre, `tailscale serve --https=443 off` la retire.
+8. Sur chaque téléphone : installer l'application Tailscale, se connecter au tailnet du laboratoire, puis ouvrir l'adresse publiée dans le navigateur.
+9. Dans MarocLIS, **Rôles et droits** : ajouter le droit `results.validate_remote` au rôle des biologistes concernés (ils doivent aussi avoir `results.validate_biological` et une qualification de biologiste valide).
+
+**Mise à jour du service** : arrêter le service (`sc.exe stop MarocLIS.Api`), copier les nouveaux fichiers en gardant `appsettings.json`, redémarrer. Les téléphones doivent se reconnecter. Le service ne met pas la base à jour : mettez d'abord à jour un poste (qui applique les migrations au démarrage), puis le service. Pour le retirer : `.\install-api-service.ps1 -Uninstall`.
+
+**Sécurité, à savoir**
+
+- Ne jamais utiliser `tailscale funnel` : il publierait le service sur Internet.
+- Le nom de l'appareil (en-têtes Tailscale) n'est cru que si la requête vient de la machine elle-même, c'est-à-dire de `tailscale serve`. Une requête venue d'ailleurs est enregistrée sous son adresse IP.
+- Les sessions sont gardées en mémoire : redémarrer le service déconnecte tous les téléphones. Désactiver un compte, réinitialiser son mot de passe ou lui retirer un droit ferme sa session à la requête suivante.
+- Le journal de sécurité enregistre les connexions, refus, expirations et déconnexions du téléphone, avec le poste « Mobile · *appareil* » ; les validations et appels de critiques portent ce même poste.
+- Retirer un téléphone perdu : le supprimer du tailnet dans la console Tailscale, et changer le mot de passe du biologiste.
+- Journaux du service : dossier `logs` du service (`maroclis-api-*.log`), et journal d'événements Windows en cas d'échec au démarrage.
+
+---
 
 ### Messages d'erreur et d'avertissement
 

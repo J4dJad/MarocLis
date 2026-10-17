@@ -500,6 +500,38 @@ flowchart LR
 
 ---
 
+### Validation à distance (téléphone)
+
+#### À quoi sert cette fonction
+
+Elle permet au biologiste de garde de valider un dossier, de tracer l'appel d'un résultat critique et d'émettre le compte rendu depuis son téléphone, hors du laboratoire, avec les mêmes règles que l'écran **Validation biologique**. Le téléphone ne se connecte pas directement au serveur : il passe par le réseau privé Tailscale du laboratoire (installation décrite dans le chapitre Administration, « Service de validation à distance »).
+
+État actuel (phase 1) : le service **MarocLIS.Api** et ses contrôles de sécurité sont en place ; les écrans du téléphone arrivent en phase 2. L'adresse du service affiche pour l'instant une page d'attente.
+
+#### Fonctionnalités
+
+- **Connexion** avec l'identifiant et le mot de passe du poste. Refusée si le compte n'a pas à la fois le droit `results.validate_remote` (validation à distance) et le droit `results.validate_biological` (validation biologique), si son périmètre est limité à un prescripteur, ou s'il doit changer son mot de passe (à faire sur un poste du laboratoire). Le blocage après plusieurs échecs est celui du poste.
+- **Liste à valider** : mêmes filtres que l'écran du poste (**Tous**, **Urgents**, **Avec anomalies**, **Bloqués par le CQ**) avec leurs compteurs, mêmes pastilles de signalement et même ordre (critiques non communiqués, puis urgences, puis les plus anciens). Le périmètre de secteurs du biologiste s'applique.
+- **Dossier** : patient, carte Contexte (anomalies, délai, critiques, contrôle qualité, renseignements cliniques) et résultats avec indicateurs ; les résultats validés techniquement sont pré-cochés, exactement comme sur le poste.
+- **Antériorités** d'un paramètre.
+- **Validation** des lignes cochées, avec commentaire biologique par ligne et, si un contrôle interne est hors limites, une justification de dérogation (15 caractères au moins). Chaque ligne envoyée porte la valeur affichée sur le téléphone : si la valeur a changé entre-temps (nouveau passage sur l'automate, correction), la ligne est refusée et le dossier doit être rechargé.
+- **Résultat critique** : ouverture de l'appel (mode téléphone, numéro utilisé), puis soit la communication complète (personne prévenue, fonction, valeur répétée obligatoire), soit « injoignable » avec une note. La valeur communiquée est toujours celle de la base, jamais celle envoyée par le téléphone.
+- **Compte rendu** : émission et signature, puis aperçu des pages en images (pas de PDF téléchargé sur le téléphone). L'aperçu n'existe que pour un compte rendu émis depuis le téléphone pendant la session ; ensuite, il se consulte au laboratoire dans **Comptes rendus**.
+- **Déconnexion**. La session se ferme aussi seule après le délai d'inactivité de la politique de mots de passe (15 minutes par défaut), après 12 heures au plus, au redémarrage du service, et dès la requête suivante si le compte est désactivé, si son mot de passe est changé ou réinitialisé, ou si un rôle ou un droit lui est retiré.
+
+**Qui y a accès**
+
+Les biologistes à qui l'administrateur a donné le droit « Validation à distance » (`results.validate_remote`) en plus de la validation biologique. Ce droit n'est donné à aucun rôle par défaut. La qualification (biologiste inscrit à l'Ordre, habilitation en cours, secteur dans le périmètre) est vérifiée comme sur le poste.
+
+**Règles et contrôles**
+
+- Toutes les opérations passent par les mêmes règles que le poste : qualification, validation technique préalable, critique communiqué avant validation, dérogation CIQ, étalonnage.
+- Le journal de sécurité et l'historique des résultats indiquent le poste « Mobile · *appareil* » (nom de l'appareil Tailscale), ce qui distingue une validation faite à distance.
+- Une session ouverte sur un téléphone ne peut pas servir sur un autre appareil : présentée ailleurs, elle est refusée et fermée.
+- Le service n'est joignable que par Tailscale : aucun port n'est ouvert sur Internet.
+
+---
+
 ### Comptes rendus
 
 #### À quoi sert cet écran
@@ -756,6 +788,26 @@ Les textes sont ceux affichés par l'application. « … » remplace une valeur 
 | « Émettre et signer le compte rendu du dossier … ? » | Bouton **Compte rendu**. | **Oui** pour émettre. |
 | « … commentaire(s) biologique(s) saisi(s) ne sont pas encore enregistrés : ils le sont à la validation de leur ligne. Quitter l'écran et les abandonner ? » | Sortie de l'écran avec des commentaires non validés. | **Non** pour rester et valider les lignes. |
 | Messages de l'émission du compte rendu | Bouton **Compte rendu**. | Voir le tableau Comptes rendus. |
+
+#### Validation à distance (téléphone)
+
+| Message | Quand il apparaît | Que faire |
+|---|---|---|
+| « Ce compte n'est pas autorisé à valider à distance. L'administrateur doit lui accorder les droits « results.validate_remote » et « results.validate_biological ». » | Connexion depuis le téléphone d'un compte sans l'un de ces droits, ou limité à un prescripteur. | Demandez les droits à l'administrateur. |
+| « Votre mot de passe doit être changé. Changez-le sur un poste du laboratoire, puis reconnectez-vous. » | Connexion avec un mot de passe provisoire ou expiré. | Changez le mot de passe sur un poste. |
+| « Votre session a expiré. Reconnectez-vous. » | Inactivité au-delà du délai, 12 heures atteintes, ou service redémarré. | Reconnectez-vous. |
+| « Votre compte a été modifié (désactivation, mot de passe réinitialisé ou droits changés). La session est fermée ; reconnectez-vous. » | Compte modifié pendant la session. | Reconnectez-vous ; appelez l'administrateur si la connexion est refusée. |
+| « Cette session a été ouverte sur un autre appareil. Elle est fermée ; reconnectez-vous. » | Cookie de session présenté par un autre appareil. | Reconnectez-vous ; si ce n'est pas vous, prévenez l'administrateur. |
+| « Requête refusée : elle ne vient pas de l'application MarocLIS. » | Requête envoyée sans passer par l'application. | Utilisez l'application. |
+| « Une valeur a changé depuis son affichage (nouveau passage sur l'automate ou correction) : elle n'a pas été validée. Rechargez le dossier et vérifiez la valeur actuelle. » | Validation d'une ligne dont la valeur a changé. | Rechargez le dossier, vérifiez, validez de nouveau. |
+| « Chaque résultat validé doit indiquer la valeur affichée. Rechargez le dossier. » | Validation sans la valeur affichée. | Rechargez le dossier. |
+| « La justification du contrôle qualité doit compter au moins 15 caractères. » | Dérogation CIQ trop courte. | Complétez la justification. |
+| « Texte trop long : … caractères au plus. » | Commentaire, justification, nom ou note trop long. | Raccourcissez. |
+| « Ce résultat n'a pas de valeur critique à communiquer (déjà communiquée, ou valeur non critique). Rechargez le dossier. » | Appel d'un critique déjà communiqué. | Rechargez le dossier. |
+| « L'aperçu de ce compte rendu n'est plus disponible. Il se consulte au laboratoire, dans le registre des comptes rendus. » | Aperçu demandé après le délai d'inactivité, ou d'un compte rendu non émis depuis le téléphone. | Consultez-le dans **Comptes rendus** sur un poste. |
+| « Page … introuvable : le compte rendu compte … page(s). » | Page d'aperçu hors limites. | Choisissez une autre page. |
+| « Filtre inconnu : … » | Filtre de liste non reconnu. | Utilisez tous, urgents, anomalies ou cq. |
+| Les messages de Validation biologique (qualification, CIQ, critique, étalonnage…) | Validation refusée pour une raison métier. | Voir le tableau Validation biologique. |
 
 #### Comptes rendus
 
