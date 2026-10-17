@@ -169,6 +169,10 @@ public sealed class QualityControlView : LocalizedView
         _chartMenu.Items.Add(QhMenu.For(_establishLimits, async (_, _) => await RunBusyAsync(EstablishLimitsAsync)));
         _chartMenu.Items.Add(QhMenu.For(_editRules, async (_, _) => await RunBusyAsync(EditRulesAsync)));
         _chartMenu.Opening += (_, e) => e.Cancel = !_establishLimits.Enabled && !_editRules.Enabled;
+        // Greyed when neither entry can be used (no chart, or a user without the QC rules right):
+        // enabled, it opened nothing and said nothing.
+        _establishLimits.EnabledChanged += (_, _) => SyncChartMore();
+        _editRules.EnabledChanged += (_, _) => SyncChartMore();
         _chartMore.Margin = new Padding(8, 6, 0, 0);
 
         var chartCard = QhPage.TitledCard(_chartHeading, null, chartBody, QhPage.MoreButton(_chartMore, _chartMenu));
@@ -269,6 +273,7 @@ public sealed class QualityControlView : LocalizedView
         PermissionGate.Require(Permissions.Quality.EnterQc, _submit, _startEvaluation, _stopEvaluation);
         PermissionGate.Require(Permissions.Quality.ReviewQc, _reviewAction);
         PermissionGate.Require(Permissions.Quality.ManageQcRules, _establishLimits, _editRules);
+        SyncChartMore();
 
         _entry.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadChartAsync());
         _review.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadChartForReviewAsync());
@@ -351,6 +356,8 @@ public sealed class QualityControlView : LocalizedView
             e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
     }
 
+    private void SyncChartMore() => _chartMore.Enabled = _establishLimits.Enabled || _editRules.Enabled;
+
     protected override void ApplyTexts()
     {
         _title.Text = T("Nav.QualityControl");
@@ -369,6 +376,12 @@ public sealed class QualityControlView : LocalizedView
         _stopEvaluation.Text = T("Qc.StopEvaluation");
         if (_lotAnalyser.Items.Count > 0 && _lotAnalyser.Items[0] is AnalyserChoice { Id: null })
             _lotAnalyser.Items[0] = new AnalyserChoice(null, T("Qc.LotAnalyser"));
+        // The reagent lot choices (the first one, the quarantine mark) stayed in the language the
+        // screen was opened in.
+        var lotIndex = _reagentLot.SelectedIndex;
+        for (var i = 0; i < _reagentLot.Items.Count; i++)
+            if (_reagentLot.Items[i] is LotChoice choice) _reagentLot.Items[i] = LotLabel(choice);
+        if (lotIndex >= 0 && lotIndex < _reagentLot.Items.Count) _reagentLot.SelectedIndex = lotIndex;
 
         if (_entry.Columns.Count > 0)
         {
@@ -409,7 +422,7 @@ public sealed class QualityControlView : LocalizedView
     {
         var keep = (_reagentLot.SelectedItem as LotChoice)?.Id;
         _reagentLot.Items.Clear();
-        _reagentLot.Items.Add(new LotChoice(null, T("Qc.ReagentLotInUse")));
+        _reagentLot.Items.Add(LotLabel(new LotChoice(null, string.Empty)));
 
         if (_lotQuality is not null && PermissionGate.Allows(Permissions.Quality.EnterQc))
         {
@@ -419,9 +432,8 @@ public sealed class QualityControlView : LocalizedView
             {
                 foreach (var lot in lots.Value)
                 {
-                    var label = $"{lot.ItemCode} · {lot.LotNumber}" +
-                                (lot.IsQuarantined ? $" ({T("Inventory.Quarantined").ToLowerInvariant()})" : string.Empty);
-                    var index = _reagentLot.Items.Add(new LotChoice(lot.ReagentLotId, label));
+                    var index = _reagentLot.Items.Add(LotLabel(new LotChoice(lot.ReagentLotId, string.Empty,
+                                                                             $"{lot.ItemCode} · {lot.LotNumber}", lot.IsQuarantined)));
                     if (lot.ReagentLotId == keep) _reagentLot.SelectedIndex = index;
                 }
             }
@@ -430,7 +442,13 @@ public sealed class QualityControlView : LocalizedView
         if (_reagentLot.SelectedIndex < 0) _reagentLot.SelectedIndex = 0;
     }
 
-    private sealed record LotChoice(Guid? Id, string Display)
+    private LotChoice LotLabel(LotChoice choice) => choice with
+    {
+        Display = choice.Id is null ? T("Qc.ReagentLotInUse")
+                : choice.Lot + (choice.Quarantined ? $" ({T("Inventory.Quarantined").ToLowerInvariant()})" : string.Empty)
+    };
+
+    private sealed record LotChoice(Guid? Id, string Display, string Lot = "", bool Quarantined = false)
     {
         public override string ToString() => Display;
     }

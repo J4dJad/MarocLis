@@ -799,13 +799,18 @@ internal sealed class InterventionTimesDialog : MasterDataEditor
     private (CheckBox, DateTimePicker) Moment(string key, int x, DateTimeOffset? value, DateTime fallback)
     {
         var toggle = Check(key, x, 14, value is not null);
+        // One reading of the clock: read twice, the second was later than the limit set from the
+        // first, and an intervention entered the same morning (before 08:00 or 10:00) opened on an
+        // exception instead of the dialog.
+        var now = DateTime.Now;
+        var shown = value?.LocalDateTime ?? fallback;
         var picker = new DateTimePicker
         {
             Bounds = new Rectangle(x, 36, 210, UiTheme.InputHeight),
             Format = DateTimePickerFormat.Custom,
             CustomFormat = "dd/MM/yyyy HH:mm",
-            MaxDate = DateTime.Now,
-            Value = value?.LocalDateTime ?? (fallback > DateTime.Now ? DateTime.Now : fallback),
+            MaxDate = now,
+            Value = shown > now ? now : shown,
             Enabled = value is not null
         };
         toggle.CheckedChanged += (_, _) => picker.Enabled = toggle.Checked;
