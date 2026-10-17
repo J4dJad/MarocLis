@@ -42,6 +42,31 @@ internal static class EditorValues
     /// hundred thousand without a word.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Reads the discount box of an invoice: an amount in dirhams ("50", "74,70") or a percentage of
+    /// the gross ("10%", "10 %", or with the Arabic sign "10٪"). A percentage becomes the amount it
+    /// stands for, rounded to the centime, since the invoice records the reduction itself. Empty
+    /// means no discount (zero); null is text that is neither, or a percentage outside 0–100.
+    /// </summary>
+    public static decimal? ParseDiscount(string? text, decimal gross)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return 0m;
+
+        var trimmed = text.Trim();
+        var last = trimmed[^1];
+
+        if (last is not ('%' or '\u066A')) return ParseDecimal(trimmed);
+
+        var percent = ParseDecimal(trimmed[..^1]);
+        if (percent is not { } rate || rate < 0m || rate > 100m) return null;
+
+        return Math.Round(gross * rate / 100m, 2, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>True when the discount box holds a percentage rather than an amount.</summary>
+    public static bool IsPercentDiscount(string? text) =>
+        !string.IsNullOrWhiteSpace(text) && text.Trim()[^1] is '%' or '\u066A';
+
     public static decimal? ParseDecimal(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;

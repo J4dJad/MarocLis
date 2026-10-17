@@ -274,10 +274,23 @@ internal sealed class InvoiceIssueDialog : Form
 
     private readonly decimal _gross;
     private readonly bool _canDiscount;
+    private readonly DiscountCapSettings _cap;
 
     private readonly TextBox _discount = UiTheme.Input(140);
     private readonly TextBox _reason = UiTheme.Input(440);
     private readonly Label _net = new();
+    private readonly Label _notice = new();
+
+    // The approval of a discount above the ceiling, shown only when the discount goes beyond it:
+    // another user's name and password, typed at the counter.
+    private readonly Label _approvalHeading = new();
+    private readonly Label _approverLabel = UiTheme.FieldLabel(string.Empty);
+    private readonly TextBox _approver = UiTheme.Input(230);
+    private readonly Label _approverPasswordLabel = UiTheme.FieldLabel(string.Empty);
+    private readonly TextBox _approverPassword = UiTheme.Input(230);
+    private readonly List<Button> _footer = [];
+    private bool _approvalShown = true;
+    private bool _framed;
 
     /// <summary>Null rather than zero when no discount is granted, so the service skips the check.</summary>
     internal decimal? DiscountAmount => ParsedDiscount is { } value and > 0m ? value : null;
@@ -285,27 +298,46 @@ internal sealed class InvoiceIssueDialog : Form
     internal string? DiscountReason =>
         string.IsNullOrWhiteSpace(_reason.Text) ? null : _reason.Text.Trim();
 
+    /// <summary>The approver typed in, when the discount is above the ceiling; null otherwise.</summary>
+    internal DiscountApproval? Approval =>
+        _canDiscount && AboveCap
+            ? new DiscountApproval(_approver.Text.Trim(), _approverPassword.Text)
+            : null;
+
+    private bool AboveCap => ParsedDiscount is { } value && value > 0m && value <= _gross
+                             && _cap.Exceeds(value, _gross);
+
+    /// <summary>
+    /// The service refused the approval (wrong password, no right, the operator's own name): the
+    /// dialog is shown again with what was typed, the password emptied.
+    /// </summary>
+    internal void ApprovalRefused()
+    {
+        _approverPassword.Clear();
+        ActiveControl = string.IsNullOrWhiteSpace(_approver.Text) ? _approver : _approverPassword;
+    }
+
     private decimal? ParsedDiscount
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(_discount.Text)) return 0m;
-
-            // Both separators accepted: the keypad on a counter terminal produces a full stop and
-            // the French keyboard a comma, and the operator should not have to know which. The
-            // shared reader also takes the space French writes between thousands (« 1 200 »).
-            return EditorValues.ParseDecimal(_discount.Text);
+            // An amount ("50") or a percentage of the gross ("10 %"): the lab grants both. Both
+            // separators accepted: the keypad on a counter terminal produces a full stop and the
+            // French keyboard a comma, and the operator should not have to know which. The shared
+            // reader also takes the space French writes between thousands (« 1 200 »).
+            return EditorValues.ParseDiscount(_discount.Text, _gross);
         }
     }
 
     internal InvoiceIssueDialog(ILocalizer localizer, IUserDialogs dialogs,
                                 IReadOnlyList<BillableOrderRow> orders, Money gross,
-                                bool canDiscount)
+                                bool canDiscount, DiscountCapSettings? cap = null)
     {
         _localizer = localizer;
         _dialogs = dialogs;
         _gross = gross.Amount;
         _canDiscount = canDiscount;
+        _cap = cap ?? DiscountCapSettings.Default;
         _reason.MaxLength = 300;
 
         Text = localizer["Billing.IssueInvoice"];
@@ -368,37 +400,59 @@ internal sealed class InvoiceIssueDialog : Form
 
         if (canDiscount)
         {
-            var discountLabel = UiTheme.FieldLabel(localizer["Billing.Discount"]);
+            var discountLabel = UiTheme.FieldLabel(localizer["Billing.DiscountAmountOrPercent"]);
             discountLabel.Location = new Point(20, 200);
 
             _discount.Location = new Point(20, 218);
             _discount.Tag = UiTags.LatinValue;
             _discount.MaxLength = EditorValues.AmountMaxLength;
             _discount.TextAlign = HorizontalAlignment.Right;
+            _discount.PlaceholderText = localizer["Billing.DiscountPlaceholder"];
             _discount.TextChanged += (_, _) => RefreshNet();
 
             _net.Font = UiTheme.BodyBold;
             _net.ForeColor = UiTheme.Accent;
             _net.AutoSize = false;
-            _net.Bounds = new Rectangle(180, 222, 320, 22);
+            // Two lines high: the warning beyond the ceiling wraps rather than being cut.
+            _net.Bounds = new Rectangle(172, 212, 328, 40);
+            _net.TextAlign = ContentAlignment.MiddleLeft;
 
             var reasonLabel = UiTheme.FieldLabel(localizer["Billing.DiscountReason"]);
             reasonLabel.Location = new Point(20, 256);
 
             _reason.Location = new Point(20, 274);
 
-            var notice = new Label
-            {
-                Text = localizer["Billing.DiscountNotice"],
-                Font = UiTheme.Small,
-                ForeColor = UiTheme.TextSecondary,
-                AutoSize = false,
-                Bounds = new Rectangle(20, 306, 480, 34)
-            };
+            _notice.Text = localizer["Billing.DiscountNotice"];
+            _notice.Font = UiTheme.Small;
+            _notice.ForeColor = UiTheme.TextSecondary;
+            _notice.AutoSize = false;
+            _notice.Bounds = new Rectangle(20, 306, 480, 34);
 
-            Controls.AddRange([discountLabel, _discount, _net, reasonLabel, _reason, notice]);
+            _approvalHeading.Text = localizer["Billing.DiscountApprovalHeading"];
+            _approvalHeading.Font = UiTheme.Small;
+            _approvalHeading.ForeColor = UiTheme.Abnormal;
+            _approvalHeading.AutoSize = false;
+            _approvalHeading.Bounds = new Rectangle(20, 348, 480, 34);
 
-            buttonTop = 350;
+            _approverLabel.Text = localizer["Billing.DiscountApprover"];
+            _approverLabel.Location = new Point(20, 386);
+            _approver.Location = new Point(20, 404);
+            _approver.MaxLength = 100;
+            // A user name is a Latin identifier, as at the sign-in screen.
+            _approver.Tag = UiTags.LatinValue;
+
+            _approverPasswordLabel.Text = localizer["Billing.DiscountApproverPassword"];
+            _approverPasswordLabel.Location = new Point(270, 386);
+            _approverPassword.Location = new Point(270, 404);
+            _approverPassword.MaxLength = 128;
+            _approverPassword.UseSystemPasswordChar = true;
+            _approverPassword.Tag = UiTags.LatinValue;
+
+            Controls.AddRange([discountLabel, _discount, _net, reasonLabel, _reason, _notice,
+                               _approvalHeading, _approverLabel, _approver,
+                               _approverPasswordLabel, _approverPassword]);
+
+            buttonTop = 444;
             RefreshNet();
         }
 
@@ -411,6 +465,7 @@ internal sealed class InvoiceIssueDialog : Form
         cancel.DialogResult = DialogResult.Cancel;
 
         Controls.AddRange([ok, cancel]);
+        _footer.AddRange([ok, cancel]);
 
         // No AcceptButton: issuing burns a number from a series that tax law requires to be
         // unbroken, so it is a deliberate click rather than a reflexive Enter on a scanned barcode.
@@ -421,6 +476,32 @@ internal sealed class InvoiceIssueDialog : Form
         // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons
         // on the wrong side.
         RtlLayout.Apply(this, localizer.CurrentLanguage);
+
+        // Laid out with the approval section, then folded until a discount goes beyond the ceiling.
+        _framed = true;
+        if (canDiscount) RefreshNet();
+        else _approvalShown = false;
+    }
+
+    /// <summary>
+    /// Shows or folds the approval section: the footer moves by the section's height and the
+    /// dialog grows or shrinks with it, so a discount within the ceiling keeps the short dialog.
+    /// </summary>
+    private void ShowApproval(bool visible)
+    {
+        if (!_framed || visible == _approvalShown) return;
+
+        var height = _approverPassword.Bottom - _notice.Bottom;
+        var shift = visible ? height : -height;
+
+        foreach (var control in new Control[] { _approvalHeading, _approverLabel, _approver,
+                                                _approverPasswordLabel, _approverPassword })
+            control.Visible = visible;
+
+        foreach (var button in _footer) button.Top += shift;
+        ClientSize = new Size(ClientSize.Width, ClientSize.Height + shift);
+        _approvalShown = visible;
+        Invalidate();
     }
 
     private void RefreshNet()
@@ -429,12 +510,35 @@ internal sealed class InvoiceIssueDialog : Form
         {
             _net.ForeColor = UiTheme.Critical;
             _net.Text = _localizer["Billing.DiscountInvalid"];
+            ShowApproval(false);
             return;
         }
 
+        var language = _localizer.CurrentLanguage;
+
+        if (discount > 0m && _cap.Exceeds(discount, _gross))
+        {
+            // Said where the net would be, in the warning colour: what the ceiling is, in dirhams
+            // on this invoice, and that the discount needs an approval.
+            var ceiling = Money.Of(_cap.CapFor(_gross)).Format(language);
+            _net.ForeColor = UiTheme.Abnormal;
+            _net.Text = _cap.AmountCapApplies(_gross)
+                ? _localizer.Format("Billing.DiscountAboveCapAmount", ceiling)
+                : _localizer.Format("Billing.DiscountAboveCapPercent",
+                                    _cap.MaxPercent.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture),
+                                    ceiling);
+            ShowApproval(true);
+            return;
+        }
+
+        ShowApproval(false);
         _net.ForeColor = UiTheme.Accent;
-        _net.Text = $"{_localizer["Billing.Net"]}   "
-                    + Money.Of(_gross - discount).Format(_localizer.CurrentLanguage);
+
+        // A percentage shows the dirhams it comes to, which is what the invoice will print.
+        _net.Text = EditorValues.IsPercentDiscount(_discount.Text)
+            ? _localizer.Format("Billing.DiscountAndNet", Money.Of(discount).Format(language),
+                         Money.Of(_gross - discount).Format(language))
+            : $"{_localizer["Billing.Net"]}   " + Money.Of(_gross - discount).Format(language);
     }
 
     private void Accept()
@@ -468,6 +572,15 @@ internal sealed class InvoiceIssueDialog : Form
             {
                 _dialogs.Warn(_localizer["Invoice_DiscountReasonRequired"], Text);
                 _reason.Focus();
+                return;
+            }
+
+            // Beyond the ceiling the approver's name and password are asked here; the service
+            // checks them, and refuses the discount without them in any case.
+            if (AboveCap && (string.IsNullOrWhiteSpace(_approver.Text) || string.IsNullOrEmpty(_approverPassword.Text)))
+            {
+                _dialogs.Warn(_localizer["Billing.DiscountApproverRequired"], Text);
+                (string.IsNullOrWhiteSpace(_approver.Text) ? _approver : _approverPassword).Focus();
                 return;
             }
         }

@@ -184,12 +184,18 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td><code>admin.settings.manage</code></td>
-<td>Numérotations, paramètres, format des factures, lieux de stockage</td>
+<td>Numérotations, paramètres, format des factures, plafond des remises, lieux de stockage</td>
 <td>Administrateur seul</td>
+</tr>
+<tr>
+<td><code>billing.discount.approve</code></td>
+<td>Approuver, sur place, une remise au-delà du plafond accordée par un autre utilisateur (jamais la sienne)</td>
+<td>Administrateur, Biologiste responsable, Comptabilité</td>
 </tr>
 </tbody>
 </table>
 <p>Changements récents des rôles livrés :
+- nouveau droit <code>billing.discount.approve</code> (approuver une remise au-delà du plafond), donné à l'Administrateur, au Biologiste responsable et à la Comptabilité, y compris sur une base existante au démarrage suivant ; il peut être retiré ou ajouté à un rôle dans <strong>Rôles et droits</strong> ;
 - le Biologiste et le Technicien de laboratoire peuvent maintenant <strong>Réimporter</strong> une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
 - le Biologiste peut retirer une validation et rééditer un compte rendu archivé ; le Secrétariat / accueil peut rééditer un compte rendu archivé (le compte rendu perdu est remis tel qu'il a été diffusé) ;
 - <strong>Déclarer impayé</strong> a son propre droit, <code>billing.payment.bounce</code>, livré à la Comptabilité (ajouté à la mise à jour) et à l'Administrateur ; le Secrétariat / accueil garde l'encaissement et la clôture de sa propre caisse, mais voit <strong>Déclarer impayé</strong> grisé. Un rôle créé par le laboratoire qui doit déclarer des impayés doit recevoir ce droit dans <strong>Rôles et droits</strong>.</p>
@@ -873,6 +879,7 @@ ul.toc li { margin: 4px 0; }
 <p>Onglet <strong>Factures</strong> :
 - Liste <strong>Format par défaut des factures patients</strong>.
 - Cases <strong>Options du format existant</strong> et <strong>Options du format cotation B</strong>.
+- <strong>Plafond des remises</strong> : <strong>Pourcentage maximal du brut (%)</strong> et <strong>Montant maximal (DH)</strong> (<code>admin.settings.manage</code>).
 - <strong>Enregistrer</strong> (<code>admin.settings.manage</code>) et <strong>Actualiser</strong>.</p>
 <p>Onglet <strong>Lieux de stockage</strong> :
 - <strong>Ajouter</strong> : demande le nom du nouveau lieu.
@@ -889,6 +896,7 @@ ul.toc li { margin: 4px 0; }
 <li><strong>Format par défaut des factures patients</strong> : « Format existant (montant, part organisme, part patient) » ou « Format cotation B (code de l'acte, cotation en B, montant en DH) » ;</li>
 <li><strong>Options du format existant</strong> : <strong>Afficher la colonne code national de l'acte</strong>, <strong>Afficher la colonne cotation (coefficient)</strong>, <strong>Afficher le montant en lettres</strong> ;</li>
 <li><strong>Options du format cotation B</strong> : <strong>Afficher le prix en DH de chaque acte</strong>, <strong>Afficher la ligne « Prise de sang (PC) » même à 0,00 DH</strong>, <strong>Afficher le montant en lettres</strong>, <strong>Afficher la valeur de la lettre B utilisée</strong> ;</li>
+<li><strong>Plafond des remises</strong> : la phrase « Une remise au-delà du plafond n'est accordée qu'avec l'approbation, à l'émission de la facture, d'un autre utilisateur ayant le droit billing.discount.approve. Le plafond appliqué est le plus bas des deux. », puis <strong>Pourcentage maximal du brut (%)</strong> (10 par défaut) et <strong>Montant maximal (DH)</strong> (vide par défaut, indication « vide = sans plafond en DH ») ;</li>
 <li>au pied : la ligne d'état, <strong>Enregistrer</strong> et <strong>Actualiser</strong>.</li>
 <li><strong>Lieux de stockage</strong> : la note « Seuls les lieux actifs sont proposés à la réception et à la sérothèque. Renommer ou désactiver un lieu ne modifie pas les tubes déjà rangés : ils gardent le nom enregistré. », puis la liste <strong>Lieu de stockage</strong>, <strong>Statut</strong> (pastille actif / désactivé), <strong>Tubes rangés</strong>, avec <strong>Ajouter</strong>, <strong>Renommer</strong> et <strong>Désactiver</strong> / <strong>Réactiver</strong>.</li>
 <li><strong>Imprimantes</strong> : la phrase « Choix propres à ce poste de travail : chaque PC peut avoir sa propre imprimante A4 et sa propre imprimante d'étiquettes. », l'imprimante <strong>Comptes rendus, factures, fiches de paillasse (A4)</strong>, la case <strong>Imprimer directement sur cette imprimante, sans aperçu à l'écran</strong>, l'imprimante <strong>Étiquettes des tubes (imprimante d'étiquettes)</strong>, puis <strong>Enregistrer</strong>, <strong>Imprimer une étiquette de test</strong>, <strong>Actualiser</strong>.</li>
@@ -940,9 +948,15 @@ ul.toc li { margin: 4px 0; }
 </li>
 <li>Cochez les options du format choisi. Par défaut : format existant ; montant en lettres affiché dans les deux formats ; ligne « Prise de sang (PC) » affichée même à 0,00 DH ; pas de prix par acte, pas de colonne code ni cotation dans le format existant, pas de valeur de la lettre B.</li>
 <li><strong>Enregistrer</strong>. La ligne d'état confirme « Format d'impression des factures enregistré. ».</li>
-<li>
-<p>Le choix vaut pour les nouvelles impressions comme pour les réimpressions. Il ne change jamais un montant. Les avoirs et les reçus gardent le format existant.</p>
-</li>
+<li>Le choix vaut pour les nouvelles impressions comme pour les réimpressions. Il ne change jamais un montant. Les avoirs et les reçus gardent le format existant.</li>
+</ol>
+<p>9 bis. <strong>Régler le plafond des remises</strong>
+   1. Onglet <strong>Factures</strong>, partie <strong>Plafond des remises</strong>.
+   2. <strong>Pourcentage maximal du brut (%)</strong> : de 0 à 100 (10 par défaut ; 100 revient à ne pas plafonner en pourcentage).
+   3. <strong>Montant maximal (DH)</strong> : un montant, ou vide pour ne pas plafonner en dirhams.
+   4. <strong>Enregistrer</strong> (le même bouton enregistre le format des factures et le plafond). Le plafond appliqué à une facture est le plus bas des deux : 10 % d'une facture de 747,00 DH = 74,70 DH ; avec un maximum de 50 DH, le plafond est 50,00 DH.
+   5. Au-delà, la fenêtre <strong>Émettre la facture</strong> demande l'identifiant et le mot de passe d'un autre utilisateur ayant <code>billing.discount.approve</code> (voir <strong>Facturation › Remise au-delà du plafond</strong>). Le changement de plafond est tracé au journal d'audit (« Plafond des remises modifié : 10 % du brut, montant maximal aucun »).</p>
+<ol start="10">
 <li>
 <p><strong>Gérer les lieux de stockage des tubes</strong></p>
 <ol>
@@ -966,7 +980,8 @@ ul.toc li { margin: 4px 0; }
 <li><strong>Numéros de dossier et numéros de bordereau de sous-traitance</strong> : un seul compteur partagé par tous les sites. Le format ne change pas (par ex. <code>2610-000123</code> pour un dossier, <code>ST/2026/00012</code> pour un bordereau), mais deux sites ne peuvent plus produire le même numéro ; dans l'onglet <strong>Numérotations</strong>, ces séries apparaissent sans site (« — »). Les factures, avoirs, reçus et bordereaux de tiers payant restent numérotés par site.</li>
 <li>Le format d'une série est figé dès le premier numéro (série continue exigée par la DGI). Chaque nouvelle année, la série est créée automatiquement au premier document avec le format par défaut : un format personnalisé n'est pas reporté (à vérifier en début d'année).</li>
 <li>La valeur d'un paramètre sensible n'est jamais affichée ; sa modification est tracée au journal de sécurité.</li>
-<li>Le format des factures et ses options sont tracés au journal d'audit.</li>
+<li>Le format des factures et ses options sont tracés au journal d'audit ; le plafond des remises aussi, avec ses valeurs.</li>
+<li>Une valeur de plafond illisible (saisie à la main dans l'onglet <strong>Paramètres</strong>) laisse le plafond par défaut (10 %), elle ne le lève pas.</li>
 <li>Un nom de lieu de stockage est unique sur le site (actif ou désactivé).</li>
 <li>Les imprimantes sont propres à chaque poste ; les autres paramètres sont communs à tous les postes.</li>
 </ul>
@@ -2014,6 +2029,16 @@ ul.toc li { margin: 4px 0; }
 <td>« Format d'impression de facture inconnu. »</td>
 <td>Format non reconnu</td>
 <td>Choisir un format dans la liste.</td>
+</tr>
+<tr>
+<td>« Le plafond en pourcentage doit être compris entre 0 et 100. »</td>
+<td><strong>Pourcentage maximal du brut (%)</strong> vide, illisible ou hors limites</td>
+<td>Taper un pourcentage de 0 à 100.</td>
+</tr>
+<tr>
+<td>« Le plafond en dirhams doit être un montant positif, ou rester vide pour ne pas plafonner en dirhams. »</td>
+<td><strong>Montant maximal (DH)</strong> illisible ou négatif</td>
+<td>Corriger ou vider le champ.</td>
 </tr>
 <tr>
 <td>« Nom du nouveau lieu de stockage (réfrigérateur, congélateur, paillasse…) : » / « Nouveau nom du lieu « … ». Les tubes déjà rangés gardent l'ancien nom. »</td>

@@ -83,6 +83,11 @@ public static class Permissions
         /// </summary>
         public const string DeclareUnpaid = "billing.payment.bounce";
         public const string ApplyDiscount = "billing.discount";
+        /// <summary>
+        /// Approving, on the spot, a discount above the ceiling set in Paramètres › Factures:
+        /// never one's own (another user types their name and password at the counter).
+        /// </summary>
+        public const string ApproveDiscount = "billing.discount.approve";
         public const string ManageTariffs = "billing.tariffs.manage";
         public const string CloseCashSession = "billing.cash.close";
         public const string ExportAccounting = "billing.export";

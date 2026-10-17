@@ -142,6 +142,16 @@ public sealed class AppUser : AuditableAggregateRoot
             LockedOutUntil = now.Add(lockoutDuration);
     }
 
+    /// <summary>
+    /// The right password typed to approve an operation on someone else's session: the failed
+    /// attempts count again from zero, as after a sign-in, but nothing says the user signed in.
+    /// </summary>
+    public void RegisterSuccessfulApproval()
+    {
+        FailedLoginAttempts = 0;
+        LockedOutUntil = null;
+    }
+
     public void RegisterSuccessfulLogin(DateTimeOffset now, string? workstation)
     {
         FailedLoginAttempts = 0;
