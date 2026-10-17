@@ -445,7 +445,7 @@
   },
 
   "AdminDialog": {
-    "NationalActPickerDialog": "Recherchez l'acte par son code ou son libellé : seul le code d'acte est repris, le code interne de l'analyse ne change pas.",
+    "NationalActPickerDialog": "Recherchez l'acte par code ou libellé. Le code interne de l'analyse ne change pas.",
     "ShortcutsDialog": "Vos raccourcis sur ce poste : sélectionnez une ligne et tapez les touches.",
     "ChangePasswordForm": "Choisissez un mot de passe que vous seul connaissez.",
     "SiteAccessDialog": "Les sites où ce compte peut travailler, et celui ouvert par défaut.",

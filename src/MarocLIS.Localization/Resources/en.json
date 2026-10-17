@@ -445,7 +445,7 @@
   },
 
   "AdminDialog": {
-    "NationalActPickerDialog": "Search the act by its code or label: only the act code is taken, the analysis's internal code does not change.",
+    "NationalActPickerDialog": "Search the act by code or label. The analysis's internal code does not change.",
     "ShortcutsDialog": "Your shortcuts on this workstation: select a line and press the keys.",
     "ChangePasswordForm": "Choose a password only you know.",
     "SiteAccessDialog": "The sites this account may work at, and the one opened by default.",

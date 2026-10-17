@@ -123,6 +123,9 @@ public sealed partial class CatalogView
         page.Controls.Add(bar);
 
         _gapGrid.SelectionChanged += (_, _) => RefreshNationalActActions();
+        // The selection can change before the current row does (keyboard, programmatic moves): the
+        // buttons follow the current row, so they are refreshed when it settles too.
+        _gapGrid.CurrentCellChanged += (_, _) => RefreshNationalActActions();
         _gapGrid.CellDoubleClick += async (_, e) =>
         {
             if (e.RowIndex >= 0 && _editGapAnalysis.Enabled) await EditGapAnalysisAsync();
