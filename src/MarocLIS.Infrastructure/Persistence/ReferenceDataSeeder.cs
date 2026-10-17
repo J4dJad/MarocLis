@@ -45,7 +45,7 @@ public static class ReferenceDataSeeder
         await SeedAdministratorAsync(context, passwordHasher, clock, site.Id, ct);
         await SeedInterfaceAccountAsync(context, passwordHasher, site.Id, ct);
         await NationalBiologyActSeed.SynchroniseAsync(context, ct);
-        await SeedStarterCatalogueAsync(context, clock, ct);
+        await SeedStarterCatalogueAsync(context, site.Id, clock, ct);
     }
 
     // ---- Disciplines ---------------------------------------------------------------------------
@@ -424,7 +424,7 @@ public static class ReferenceDataSeeder
 
     // ---- Starter analysis catalogue -------------------------------------------------------------
 
-    private static async Task SeedStarterCatalogueAsync(LisDbContext context, IClock clock,
+    private static async Task SeedStarterCatalogueAsync(LisDbContext context, Guid siteId, IClock clock,
                                                         CancellationToken ct)
     {
         if (await context.AnalysisTests.IgnoreQueryFilters().AnyAsync(ct))
@@ -435,6 +435,10 @@ public static class ReferenceDataSeeder
         }
 
         await StarterCatalogue.SeedAsync(context, clock, ct);
+
+        // Same rule as the catalogue: a new installation's starting point, never added to a
+        // database already in use.
+        await StarterStorageLocations.SeedAsync(context, siteId, ct);
     }
 
     /// <summary>

@@ -285,6 +285,42 @@ flowchart TD
 - La validation biologique exige à la fois le droit et une qualification de biologiste (médecin ou pharmacien biologiste) en cours de validité sur la fiche utilisateur.
 - Les comptes « admin » (premier administrateur) et « interface » (compte de service des automates, qui ne peut pas se connecter) sont créés automatiquement à la première installation.
 
+### Données livrées à l'installation
+
+**À quoi sert cette section** : dire ce que contient une installation neuve dès son premier démarrage, et ce que le laboratoire doit saisir lui-même avant de travailler.
+
+**Ce qui est livré.** Au premier démarrage sur une base vide, l'application crée :
+
+| Donnée | Ce qui est livré | Où le retrouver |
+|---|---|---|
+| Comptes | « admin » (mot de passe provisoire, à changer à la première connexion) et « interface » (compte de service des automates, qui ne peut pas se connecter) | **Utilisateurs** |
+| Rôles | Les 9 rôles livrés et leurs droits (voir **Rôles et droits (vue d'ensemble)**) | **Utilisateurs** › **Rôles et droits** |
+| Site | Un site « PRINCIPAL » dont l'identité est « À COMPLÉTER » | **Paramètres** › **Site** |
+| Numérotations | Dossiers, étiquettes, factures, avoirs, reçus, non-conformités, bons de commande, documents qualité | **Paramètres** › **Numérotations** |
+| Listes de base | 14 secteurs, 16 natures de prélèvement, 12 tubes et contenants, 32 unités | **Catalogue des analyses** › **Listes de référence** |
+| Nomenclature | Les 492 actes officiels de biologie (B100 à B591) | **Catalogue des analyses** › **Nomenclature des actes** |
+| Catalogue | 92 analyses courantes : biochimie, hématologie, hémostase, immunologie et marqueurs tumoraux, hormonologie, sérologie, bactériologie, parasitologie, urines. Chacune a son secteur, sa nature de prélèvement, son tube, ses paramètres et unités, des valeurs usuelles par sexe et par âge quand elles sont admises, et son code d'acte NABM quand un acte lui correspond clairement. 11 bilans : standard, préopératoire, prénatal, surveillance du diabète, cardiovasculaire, hépatique, rénal, thyroïdien, martial, hémostase, phosphocalcique | **Catalogue des analyses** › **Analyses** et **Profils** |
+| Organismes payeurs | Paiement direct, AMO CNSS, AMO CNOPS, AMO Tadamon, AMO Achamil, FAR, une mutuelle et une assurance « à préciser », employeur conventionné, laboratoire adresseur | **Données de référence** › **Organismes payeurs** |
+| Lieux de stockage | Réfrigérateur 2–8 °C, Congélateur −20 °C, Congélateur −80 °C, Sérothèque, Température ambiante | **Paramètres** › **Lieux de stockage** |
+| Jours fériés civils | Ajoutés d'office pour chaque année (Nouvel an, 11 janvier, Nouvel an amazigh, 1er mai, fête du Trône, 14, 20 et 21 août, 31 octobre, Marche verte, fête de l'Indépendance) | **Congés et absences** › **Jours fériés** |
+| Contrôle interne | Rien à saisir pour les règles : chaque nouvelle cible de contrôle reçoit la multirègle de Westgard classique (1₂ₛ en alerte, 1₃ₛ, 2₂ₛ, R₄ₛ, 4₁ₛ, 10ₓ). Les règles se règlent par cible, il n'y a pas de réglage global | **Données de référence** › **Contrôle interne** |
+| Immobilisations | Durée proposée par catégorie : 5 ans (matériel de laboratoire, matériel informatique, véhicules, autres), 10 ans (mobilier, agencements). Les logiciels ne sont pas une catégorie du registre | **Immobilisations** |
+
+Les valeurs usuelles livrées sont des **valeurs indicatives de départ, à valider par le biologiste** : des valeurs adultes de référence classiques (ouvrages de biochimie clinique, notices des réactifs courants, seuils OMS, ADA, KDIGO). Chacune porte la source « À vérifier par le laboratoire » ; le **Tableau de bord** les signale par son bandeau orange tant que le biologiste ne les a pas confirmées pour ses méthodes (voir **Catalogue des analyses**, scénario « Enregistrer une revue périodique »). Les valeurs qui dépendent de la phase du cycle, de l'heure ou de la trousse (FSH, LH, œstradiol, progestérone, cortisol, troponine…) sont livrées en texte imprimé, sans signalement d'anomalie.
+
+Une base **déjà utilisée** n'est jamais modifiée par ces données : les analyses, bilans et lieux de stockage livrés ne sont créés que sur une base neuve, sans aucune analyse. Une mise à jour de l'application n'ajoute donc rien au catalogue ni aux lieux de stockage d'un laboratoire en service.
+
+**Ce que le laboratoire doit saisir lui-même**, de préférence dans cet ordre :
+
+1. **L'identité du site** (**Paramètres** › **Site**) : raison sociale, **ICE**, **identifiant fiscal (IF)**, taxe professionnelle, registre de commerce, CNSS, INPE, adresse et ville, n° d'autorisation du ministère de la Santé, biologiste responsable, et le **logo**. Sans eux, la facturation et la diffusion des comptes rendus restent bloquées.
+2. **Les utilisateurs** (**Utilisateurs**) : un compte nominatif par personne, avec sa qualification, son n° d'Ordre pour les biologistes, ses rôles et ses sites.
+3. **La valeur de la lettre B et les prix** (**Catalogue des analyses** › **Tarifs**) : les tarifs livrés utilisent une valeur provisoire de 1,00 DH (bandeau « tarif provisoire ») ; saisissez la valeur en vigueur et vos prix, ainsi que les tarifs propres à chaque organisme. Les taux de remboursement des organismes livrés sont à confirmer contre les conventions.
+4. **Les valeurs usuelles** : à faire valider par le biologiste (voir plus haut). Le catalogue les montre analyse par analyse ; le tableau de revue « catalogue-de-depart.csv » remis avec l'installation les reprend toutes sur une ligne par paramètre (code, secteur, échantillon, unité, acte NABM, valeurs).
+5. **Les prescripteurs** (**Données de référence** › **Prescripteurs**).
+6. **Le personnel** (**Dossiers du personnel**), puis les soldes de congés de départ.
+7. **Les fêtes religieuses de chaque année** (Aïd al-Fitr, Aïd al-Adha, 1er Moharram, Aïd al-Mawlid) : à ajouter chaque année dans **Congés et absences** › **Jours fériés**, car leur date suit le calendrier lunaire.
+8. Ensuite, selon l'activité : les équipements et automates, les matériaux et cibles de contrôle, les articles de stock et fournisseurs, les comptes comptables. Les lieux de stockage livrés se renomment d'après vos propres enceintes (« Réfrigérateur R1 »…).
+
 ### Mode démonstration
 
 **À quoi sert cette section** : une base remplie d'une journée de laboratoire fictive, pour la formation ou la présentation.

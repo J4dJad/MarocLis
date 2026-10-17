@@ -22,7 +22,7 @@ namespace MarocLIS.Infrastructure.Persistence;
 /// thresholds and delta checks.
 /// </para>
 /// </summary>
-internal static class StarterCatalogue
+internal static partial class StarterCatalogue
 {
     private const string PendingVerification = "À vérifier par le laboratoire";
 
@@ -567,6 +567,9 @@ internal static class StarterCatalogue
         }
         tests.Add(grouping);
 
+        // The routine analyses beyond this core (StarterCatalogue.Routine.cs).
+        tests.AddRange(RoutineAnalyses(departments, specimens, containers, units, validFrom));
+
         context.AnalysisTests.AddRange(tests);
         await context.SaveChangesAsync(ct);
 
@@ -586,7 +589,7 @@ internal static class StarterCatalogue
     private static AnalysisTest New(string code, string fr, string ar, string en,
                                     Guid departmentId, Guid specimenTypeId, Guid containerTypeId,
                                     string method, int routineHours, decimal coefficient,
-                                    DateOnly tariffValidFrom)
+                                    DateOnly tariffValidFrom, string? nationalActCode = null)
     {
         var test = new AnalysisTest(code, new MultilingualText(fr, ar, en), departmentId, specimenTypeId)
         {
@@ -596,7 +599,7 @@ internal static class StarterCatalogue
             UrgentTurnaroundMinutes = Math.Max(30, routineHours * 15),
             IsAvailableUrgently = routineHours <= 24,
             // The national act, never the internal code: the two are different keys (see ActCodes).
-            NationalActCode = ActCodes.GetValueOrDefault(code)
+            NationalActCode = nationalActCode ?? ActCodes.GetValueOrDefault(code)
         };
 
         // No payer: this is the laboratory's own price list, which AnalysisTest.TariffFor falls
@@ -673,7 +676,9 @@ internal static class StarterCatalogue
 
             ("BILAN_LIP_CV", "Bilan cardiovasculaire", "الحصيلة القلبية الوعائية",
              "Cardiovascular profile",
-             ["BILAN_LIP", "GLY", "CRP", "CREAT"])
+             ["BILAN_LIP", "GLY", "CRP", "CREAT"]),
+
+            .. RoutinePanels
         ];
 
         foreach (var p in panels)

@@ -45,7 +45,7 @@ Les références « fichier:ligne » renvoient au code de l'écran (pour l'équi
 | Fermeture si le compte a été modifié | — | automatique | Oui | MainShellForm.cs:53 (contrôle chaque minute), Auth_SessionRevoked :1105 |
 | Erreur inattendue | Toute la fenêtre | message traduit | Oui | Program.cs:183-202 (FailureMessages.KeyFor). Le message « connexion perdue » (Message.ConnectionLost) existe mais n'est pas utilisé. |
 
-## Rôles, mode démonstration
+## Rôles, mode démonstration, données livrées
 
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
 |---|---|---|---|---|
@@ -55,6 +55,8 @@ Les références « fichier:ligne » renvoient au code de l'écran (pour l'équi
 | Déclarer une non-conformité | rôles par défaut | droit de déclaration de NC | Oui | Nouveau. ReferenceDataSeeder.cs:523, :576, :604, :656 |
 | Activer le mode démonstration | — | réglage d'installation « SeedDemoDataOnFirstRun » | Normal | Pas d'écran : réglage réservé à l'informatique, volontairement. |
 | Désactiver les comptes demo.* sur base réelle | — | automatique | Oui | Au démarrage (DatabaseInitializer.cs:88) et à la connexion (AuthenticationService.cs:84) |
+| Données livrées à une installation neuve | — | automatique au premier démarrage | Oui | **Nouveau (feat/seed).** Catalogue de 92 analyses et 11 bilans (MarocLIS.Infrastructure/Persistence/StarterCatalogue.cs:571, StarterCatalogue.Routine.cs), 5 lieux de stockage (StarterStorageLocations.cs), créés par ReferenceDataSeeder.cs:427-442 seulement si la base n'a aucune analyse. Listes de base, organismes, rôles, comptes : ReferenceDataSeeder.cs:35-49. Fériés civils : HolidayCalendar.cs (Infrastructure/Queries). Durées d'amortissement : FixedAssetCategories.DefaultUsefulLifeYears (Domain/Assets/FixedAsset.cs:300) |
+| Base déjà en service inchangée au démarrage | — | automatique | Oui | **Nouveau.** Test tests/MarocLIS.Tests/Persistence/StarterDataDatabaseTests.cs : empreinte (nombre de lignes et somme de contrôle) de chaque table identique avant et après un second démarrage ; base au catalogue propre (analyse « FER » à acte maison) laissée telle quelle, sans lieu ni bilan ajouté |
 | Déclaration épidémiologique (droit « statistics.declaration » donné au Biologiste responsable) | — | — | **MANQUANT** | Toujours : le droit existe et est attribué, mais aucun écran ni fonction ne l'utilise. |
 
 ## Tableau de bord
