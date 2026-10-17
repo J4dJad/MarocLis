@@ -330,6 +330,22 @@ public sealed class RocheIntegraProtocolTests
     }
 
     [Fact]
+    public void ATranscriptWhoseLineEndsATextBoxTurnedIntoCrLf_StillChecks()
+    {
+        // The sample as the tester's text box holds it: every line break a CR LF.
+        var boxed = IntegraInstrumentEmulator.SampleTranscript("TUBE-0001", [31])
+                                             .Replace("<LF>", "").Replace("\r\n", "\n").Replace("\n", "\r\n");
+
+        IntegraMessageParser.Parse(InstrumentMessagePreviewer.Normalise(InstrumentProtocol.RocheIntegra, boxed))
+                            .Issues.Should().BeEmpty();
+
+        // A damaged value is still caught either way.
+        var damaged = boxed.Replace("E-01", "E-02").Replace("E+00 g", "E+01 g");
+        IntegraMessageParser.Parse(InstrumentMessagePreviewer.Normalise(InstrumentProtocol.RocheIntegra, damaged))
+                            .Issues.Should().Contain(i => i.ResourceKey == "Interface_IntegraChecksum");
+    }
+
+    [Fact]
     public void TextThatIsNotABlock_IsRefused()
     {
         IntegraMessageParser.Parse("H|\\^&|||ASTM").HasBlockingIssues.Should().BeTrue();

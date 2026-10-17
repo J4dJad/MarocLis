@@ -187,7 +187,8 @@ public sealed class IntegraInstrumentEmulator
             text.Append(block.Replace(RocheIntegra.Soh.ToString(), "<SOH>")
                              .Replace(RocheIntegra.Stx.ToString(), "<STX>")
                              .Replace(RocheIntegra.Etx.ToString(), "<ETX>")
-                             .Replace(RocheIntegra.Eot.ToString(), "<EOT>"));
+                             .Replace(RocheIntegra.Eot.ToString(), "<EOT>")
+                             .Replace("\n", "<LF>\r\n"));
         }
 
         return text.ToString();

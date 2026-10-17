@@ -247,7 +247,17 @@ public static partial class RocheIntegra
             for (var at = real.IndexOf(Soh); at >= 0; at = real.IndexOf(Soh, at + 1))
             {
                 var next = real.IndexOf(Soh, at + 1);
-                var block = ParseFramed(next < 0 ? real[at..] : real[at..next]);
+                var piece = next < 0 ? real[at..] : real[at..next];
+                var block = ParseFramed(piece);
+
+                // A trace pasted in a Windows text box gains a CR before every LF it held: when the
+                // sum only matches with the line ends as LF, the analyser sent LF.
+                if (block is { ChecksumValid: false } && piece.Contains("\r\n"))
+                {
+                    var asLf = ParseFramed(piece.Replace("\r\n", "\n"));
+                    if (asLf is { ChecksumValid: true, HasBlockCheck: true }) block = asLf;
+                }
+
                 if (block is not null) blocks.Add(block);
             }
             return blocks;
