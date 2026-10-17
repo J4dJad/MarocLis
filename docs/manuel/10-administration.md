@@ -72,6 +72,7 @@ flowchart TD
 | `catalog.manage` | Analyses (dont leur code d'acte), paramètres, profils, cascades, listes de référence, prescripteurs | Administrateur, Biologiste responsable |
 | `catalog.ranges.manage` | Valeurs usuelles (intervalles) et leur revue | Administrateur, Biologiste responsable, Responsable qualité |
 | `billing.tariffs.manage` | Tarifs, prix du laboratoire, coefficient officiel, organismes payeurs | Administrateur, Comptabilité |
+| `billing.payment.bounce` | **Déclarer impayé** un chèque ou un effet (Facturation › **Plus d'actions**) | Administrateur, Comptabilité |
 | `instruments.view` | Ouvrir **Automates** | Administrateur, Biologiste responsable, Biologiste, Technicien de laboratoire, Responsable qualité |
 | `instruments.configure` | Créer / modifier une interface et sa table de correspondance, tester une trame | Administrateur, Biologiste responsable |
 | `instruments.control` | Activer / désactiver une liaison | Administrateur, Biologiste responsable, Technicien de laboratoire |
@@ -82,7 +83,8 @@ flowchart TD
 
 Changements récents des rôles livrés :
 - le Biologiste et le Technicien de laboratoire peuvent maintenant **Réimporter** une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
-- le Biologiste peut retirer une validation et rééditer un compte rendu archivé ; le Secrétariat / accueil peut rééditer un compte rendu archivé (le compte rendu perdu est remis tel qu'il a été diffusé).
+- le Biologiste peut retirer une validation et rééditer un compte rendu archivé ; le Secrétariat / accueil peut rééditer un compte rendu archivé (le compte rendu perdu est remis tel qu'il a été diffusé) ;
+- **Déclarer impayé** a son propre droit, `billing.payment.bounce`, livré à la Comptabilité (ajouté à la mise à jour) et à l'Administrateur ; le Secrétariat / accueil garde l'encaissement et la clôture de sa propre caisse, mais voit **Déclarer impayé** grisé. Un rôle créé par le laboratoire qui doit déclarer des impayés doit recevoir ce droit dans **Rôles et droits**.
 
 Attention (à vérifier avec votre organisation) : le rôle Comptabilité a le droit de gérer les tarifs mais pas celui d'ouvrir le Catalogue ; en pratique, seul l'administrateur peut saisir un tarif d'analyse avec les rôles livrés (voir la fiche de vérification).
 
@@ -167,7 +169,7 @@ Onglet **Journal de sécurité** :
 
 6. **Déverrouiller un compte** (après plusieurs mots de passe erronés) : sélectionnez-le, **Déverrouiller**. Le mot de passe n'est pas changé.
 
-7. **Désactiver un départ / réactiver un retour** : sélectionnez le compte, **Désactiver** (ou **Réactiver**), saisissez le motif obligatoire, validez. La sortie d'un salarié dans **Dossiers du personnel** ne désactive pas son compte : faites-le ici.
+7. **Désactiver un départ / réactiver un retour** : sélectionnez le compte, **Désactiver** (ou **Réactiver**), saisissez le motif obligatoire, validez. La sortie d'un salarié dans **Dossiers du personnel** désactive le compte lié à sa date de sortie (aussitôt si elle est passée, à la première connexion ou au contrôle de session suivant si elle est future), avec le motif au journal d'audit et une ligne « Compte désactivé » au **Journal de sécurité**. Le dernier administrateur n'est jamais désactivé ainsi. Annuler ou reporter une sortie ne réactive pas le compte : **Réactiver** ici. Un compte sans dossier du personnel se désactive toujours ici.
 
 8. **Créer un rôle** : onglet **Rôles et droits**, **Nouveau rôle**, tapez le code (majuscules, sans espace) puis la désignation française. Le rôle est créé **sans aucun droit** : cochez ses droits dans l'arbre puis **Enregistrer les droits**.
 

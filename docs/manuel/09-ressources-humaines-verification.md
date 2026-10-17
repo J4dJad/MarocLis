@@ -1,6 +1,6 @@
 # Vérification de l'interface — Ressources humaines (chapitre 09)
 
-Méthode : chaque opération offerte par l'application pour ce module (gestion du personnel, documents RH, solde de tout compte, congés, planning, paie, accidents) a été rapprochée du bouton qui la déclenche. Fichiers d'écran dans `src/MarocLIS.Desktop/Views/`, règles dans `src/MarocLIS.Application` et `src/MarocLIS.Domain`. « Présent ? » : **OUI**, **PARTIEL**, **MANQUANT**. Revérifié le 2026-10-17 sur le commit 4e20d0d (nouvelle présentation : en-tête, barre de filtres, carte, barre d'actions sous la liste).
+Méthode : chaque opération offerte par l'application pour ce module (gestion du personnel, documents RH, solde de tout compte, congés, planning, paie, accidents) a été rapprochée du bouton qui la déclenche. Fichiers d'écran dans `src/MarocLIS.Desktop/Views/`, règles dans `src/MarocLIS.Application` et `src/MarocLIS.Domain`. « Présent ? » : **OUI**, **PARTIEL**, **MANQUANT**. Revérifié le 2026-10-17 sur le commit 4e20d0d (nouvelle présentation : en-tête, barre de filtres, carte, barre d'actions sous la liste), puis sur la branche reco/r5 pour les décisions du cycle 5 (compte désactivé à la sortie, « Justificatif reçu »).
 
 ## Dossiers du personnel
 
@@ -21,7 +21,9 @@ Méthode : chaque opération offerte par l'application pour ce module (gestion d
 | Attestation de travail / de salaire, certificat de travail | Dossiers du personnel | Attestations → Attestation de travail, Attestation de salaire, Certificat de travail (sortie) | OUI | PersonnelViews.cs:146-158 ; chaque ligne grisée selon le droit et l'état du salarié (l.151-153) ; menu réservé à Gérer le personnel ou Salaires (l.167) |
 | Calculer / enregistrer le solde de tout compte | Dossiers du personnel | Solde de tout compte → Calculer le solde de tout compte… | OUI | PersonnelViews.cs:159-160, 363 ; PersonnelDialogs.cs:825 ; droit Salaires (l.168) ; grisé si pas de sortie (l.337) |
 | Imprimer le reçu / enregistrer la signature | Dossiers du personnel | Imprimer le reçu pour solde de tout compte, Reçu signé par le salarié… | OUI | PersonnelViews.cs:161-162 ; PersonnelDialogs.cs:978 |
-| Désactiver le compte de connexion d'un sorti | Dossiers du personnel | — | PARTIEL | Toujours aucun lien : la sortie ne touche pas au compte (PersonnelService.cs ne désactive rien) ; à faire dans Utilisateurs |
+| Annoncer la désactivation du compte à la sortie | Fenêtre de sortie | « Le compte LIS « … » lié à ce dossier sera désactivé à la date de sortie… » | OUI | **Décision cycle 5.** PersonnelViews.cs:442 (compte relié passé à la fenêtre) ; PersonnelDialogs.cs:708-709 (ligne affichée seulement si un compte est relié) |
+| Désactiver le compte de connexion d'un sorti | Dossiers du personnel | Enregistrer la sortie / Corriger la sortie | OUI | **Décision cycle 5.** PersonnelService.cs:484, 498 → DepartedAccountDeactivator.ApplyExitAsync : date atteinte → désactivé aussitôt (journal d'audit « Désactivation du compte … : sortie de … », journal de sécurité « Utilisateur désactivé ») ; date à venir → désactivé ce jour-là, à la connexion (AuthenticationService.cs:46) ou au contrôle de session du poste (SecurityServices.cs:289). Le dernier administrateur n'est jamais désactivé ainsi. Ligne d'état : PersonnelViews.cs:471 (ShowAccountOutcome) |
+| Compte réactivé après une sortie annulée | Dossiers du personnel | Modifier la sortie → Annuler la sortie | PARTIEL | Volontaire : la réactivation reste une décision de l'administrateur (Utilisateurs) ; la ligne d'état le rappelle (PersonnelService.cs:551) |
 
 ## Habilitations
 
@@ -57,8 +59,8 @@ Méthode : chaque opération offerte par l'application pour ce module (gestion d
 | Refuser | Congés et absences | Refuser (motif) | OUI | LeaveViews.cs:97, 120 |
 | Annuler | Congés et absences | Annuler la demande | OUI | LeaveViews.cs:97, 118 |
 | Justificatif manquant signalé | Congés et absences | colonne Justificatif | OUI | LeaveViews.cs:135-137, 207-208 : en rouge pour une demande en attente |
-| **Noter le justificatif remis après la demande** | Congés et absences | — | **MANQUANT** | La case n'existe qu'à l'envoi (LeaveViews.cs:398, 471) ; rien ne la change ensuite, et la validation l'exige (Leave.cs:89-90) |
-| Justificatif coché par le salarié lui-même | Fenêtre de demande | Justificatif remis à la RH (certificat, acte d'état civil…) | PARTIEL | Le salarié coche lui-même ; la RH ne confirme rien |
+| Noter le justificatif remis après la demande | Congés et absences | Justificatif reçu (barre sous la liste) | OUI | **Décision cycle 5.** LeaveViews.cs:98, 115, 124, 247, 314 ; actif pour une demande en attente dont le justificatif exigé est « Manquant » ; droit Gérer le personnel ; confirmation ; LeaveService.cs:272 (journal d'audit « Justificatif reçu pour le congé … ») ; Leave.cs:104 (refus : demande déjà traitée, type sans justificatif, déjà reçu) ; pas sur sa propre demande |
+| Justificatif coché par le salarié lui-même | Fenêtre de demande | Justificatif remis à la RH (certificat, acte d'état civil…) | PARTIEL | Le salarié coche lui-même ; la RH ne confirme rien (« Justificatif reçu » ne sert qu'à cocher une case restée vide) |
 | Voir les soldes | Congés et absences | Soldes de congés (barre de filtres) | OUI | LeaveViews.cs:73, 114 ; acquisition mensuelle (LeaveService.cs:146-153) |
 | Ajuster un solde | Soldes de congés | Ajuster le solde | OUI | LeaveViews.cs:534, 543 |
 | Corriger un congé validé déjà commencé (retour anticipé) | Congés et absences | — | PARTIEL | Annulation refusée une fois le congé commencé ; seul le solde se corrige |
@@ -120,13 +122,13 @@ Méthode : chaque opération offerte par l'application pour ce module (gestion d
 
 ## Manques à corriger (par impact sur le travail quotidien)
 
-1. **Justificatif de congé non modifiable après la demande** : ajouter un bouton RH « Justificatif reçu ».
-2. **Pas de raccourcissement ni d'annulation d'un arrêt d'accident.**
-3. **Congé validé déjà commencé non modifiable** (retour anticipé).
-4. **Pas de modification directe d'un poste au planning**, recopie limitée à la semaine précédente.
-5. **Le personnel ne voit pas son planning.**
-6. **Échéances RH sans lien vers l'action** pour les accidents et les réévaluations d'habilitation.
-7. **Validation de congé sans commentaire possible.**
-8. **Historique des habilitations non consultable** (preuve d'audit ISO 15189).
-9. **Paie** : pas de marque « payée » ; heures du planning non reprises ; rôle Comptabilité sans accès (à confirmer).
-10. **Sortie d'un salarié sans désactivation de son compte de connexion.**
+1. **Pas de raccourcissement ni d'annulation d'un arrêt d'accident.**
+2. **Congé validé déjà commencé non modifiable** (retour anticipé).
+3. **Pas de modification directe d'un poste au planning**, recopie limitée à la semaine précédente.
+4. **Le personnel ne voit pas son planning.**
+5. **Échéances RH sans lien vers l'action** pour les accidents et les réévaluations d'habilitation.
+6. **Validation de congé sans commentaire possible.**
+7. **Historique des habilitations non consultable** (preuve d'audit ISO 15189).
+8. **Paie** : pas de marque « payée » ; heures du planning non reprises ; rôle Comptabilité sans accès (à confirmer).
+
+Corrigés par les décisions du cycle 5 : le justificatif de congé se coche après la demande (« Justificatif reçu ») ; la sortie d'un salarié désactive son compte de connexion à la date de sortie.

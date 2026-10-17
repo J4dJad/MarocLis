@@ -8,8 +8,8 @@
 
 | Rôle (par défaut) | Ce qu'il fait ici |
 |---|---|
-| Secrétariat / accueil | Émet les factures, encaisse règlements et acomptes, tient et clôture sa caisse. |
-| Comptabilité | Tout ce que fait l'accueil, plus remises, avoirs, remboursements, tiers payant (bordereaux, retours, montants acceptés) et visa des caisses. |
+| Secrétariat / accueil | Émet les factures, encaisse règlements et acomptes, tient et clôture **sa propre** caisse avec son comptage. Ne déclare pas d'impayé. |
+| Comptabilité | Tout ce que fait l'accueil, plus remises, avoirs, remboursements, déclaration des chèques et effets impayés, tiers payant (bordereaux, retours, montants acceptés) et visa des caisses. |
 | Administrateur | Tout, y compris le format d'impression des factures (**Paramètres › Factures**). |
 | Biologiste responsable | Consulte **Facturation** et **Tiers payant**, vise les caisses ; n'encaisse pas. |
 
@@ -99,11 +99,12 @@ Avant d'attribuer un numéro, l'application vérifie la raison sociale, l'ICE (1
 | Voir l'écran, imprimer factures et reçus | Consulter la facturation | Administrateur, Biologiste responsable, Secrétariat / accueil, Comptabilité |
 | **Émettre la facture** | Émettre une facture | Administrateur, Secrétariat / accueil, Comptabilité |
 | Accorder une **Remise** à l'émission | Appliquer une remise | Administrateur, Comptabilité |
-| **Règlement**, **Encaisser un acompte**, **Déclarer impayé** | Encaisser un règlement | Administrateur, Secrétariat / accueil, Comptabilité |
+| **Règlement**, **Encaisser un acompte** | Encaisser un règlement | Administrateur, Secrétariat / accueil, Comptabilité |
+| **Déclarer impayé** | Déclarer un impayé (billing.payment.bounce) | Administrateur, Comptabilité |
 | **Facture d'avoir**, **Rembourser**, **Rembourser l'acompte** | Émettre un avoir | Administrateur, Comptabilité |
 | **Transmettre au tiers payant**, **Enregistrer le retour**, **Montant accepté par l'organisme** | Export comptable / tiers payant | Administrateur, Comptabilité |
 
-Les boutons pour lesquels vous n'avez pas le droit restent visibles mais grisés. Le Biologiste responsable voit l'écran en lecture seule. Biologiste, Technicien de laboratoire, Préleveur, Responsable qualité et Prescripteur n'ont pas accès.
+Les boutons pour lesquels vous n'avez pas le droit restent visibles mais grisés. Pour le Secrétariat / accueil, **Plus d'actions › Déclarer impayé** est grisé ; au survol, une bulle l'explique : « Réservé à la comptabilité : déclarer un chèque ou un effet impayé demande le droit billing.payment.bounce (Comptabilité, Administrateur). » Le Biologiste responsable voit l'écran en lecture seule. Biologiste, Technicien de laboratoire, Préleveur, Responsable qualité et Prescripteur n'ont pas accès.
 
 **L'écran**
 
@@ -142,7 +143,7 @@ L'échéance d'une facture patient est le jour même ; celle d'une facture organ
 - **Imprimer la facture** : PDF de la facture cochée (ou de la ligne sélectionnée si rien n'est coché), dans le format par défaut réglé dans **Paramètres › Factures** ; un avoir s'imprime toujours au format existant.
 - **Imprimer le reçu** : PDF du reçu de règlement de la facture.
 - **Plus d'actions › Rembourser** : rembourse un règlement du patient sur la facture cochée, avec motif (droit « émettre un avoir »).
-- **Plus d'actions › Déclarer impayé** : déclare un chèque ou un effet rejeté par la banque, avec motif (droit « encaisser un règlement »).
+- **Plus d'actions › Déclarer impayé** : déclare un chèque ou un effet rejeté par la banque, avec motif (droit « déclarer un impayé » : Comptabilité, Administrateur).
 - **Plus d'actions › Transmettre au tiers payant** : met les factures cochées dans un bordereau, après confirmation (droit tiers payant).
 - **Plus d'actions › Enregistrer le retour** : enregistre la réponse de l'organisme sur les factures cochées déjà transmises (droit tiers payant).
 - **Plus d'actions › Montant accepté par l'organisme** : saisit ce que l'organisme paie sur **une** facture transmise (droit tiers payant).
@@ -233,12 +234,13 @@ Cas typique : le patient paie au prélèvement, la facture sera faite quand le d
 - Un remboursement en espèces exige que **votre** caisse soit ouverte, et il ne peut pas dépasser les espèces attendues dans cette caisse ; il en est déduit.
 - Rembourser n'annule pas la facture : si l'acte n'est plus dû, il faut aussi émettre un avoir.
 
-*11. Déclarer un chèque ou un effet impayé*
+*11. Déclarer un chèque ou un effet impayé — Comptabilité, Administrateur*
 1. Cochez **une seule** facture, cliquez sur **Plus d'actions › Déclarer impayé**.
 2. Seuls les chèques et effets encaissés sont proposés. Choisissez le règlement, cliquez sur **Déclarer impayé**.
 3. Saisissez le motif de rejet communiqué par la banque, **OK**.
 4. Le règlement passe à « Impayé » ; la facture redevient due et réapparaît dans le suivi des retards.
 - Si la caisse qui avait encaissé le chèque est encore ouverte, le chèque est retiré de son total chèques.
+- L'accueil qui reçoit le rejet de la banque transmet le chèque à la comptabilité : l'entrée est grisée pour lui, et l'opération est refusée (« Vous n'avez pas le droit d'effectuer cette opération. ») si elle est atteinte autrement.
 
 *12. Corriger une facture : émettre un avoir — Comptabilité, Administrateur*
 1. Cochez **une seule** facture (pas un avoir).
@@ -414,7 +416,7 @@ flowchart TD
 **Qui y a accès**
 
 - Ouvrir l'écran et **Ouvrir la caisse** : droit « Encaisser un règlement » — Administrateur, Secrétariat / accueil, Comptabilité.
-- **Clôturer la caisse** et **Prélèvement de caisse** : droit « Clôturer la caisse » — Administrateur, Secrétariat / accueil, Comptabilité.
+- **Clôturer la caisse** et **Prélèvement de caisse** : droit « Clôturer la caisse » — Administrateur, Secrétariat / accueil, Comptabilité. Chacun ne clôture que **sa propre** caisse, avec son comptage : l'écran ne montre que la caisse ouverte à votre nom, et la caisse d'un autre opérateur ne peut pas être clôturée à sa place (« Seul le caissier qui a ouvert cette caisse peut la clôturer avec son comptage. »). Le visa reste à la comptabilité (**Visa des caisses**).
 - Le Biologiste responsable n'a pas cet écran.
 
 **L'écran**
@@ -468,11 +470,12 @@ Le remboursement se fait dans **Facturation** (**Plus d'actions › Rembourser**
 4. Cliquez sur **Clôturer la caisse**, puis confirmez (« Clôturer la caisse avec … comptés, soit un écart de … ? »).
 5. Un message rappelle l'écart enregistré. L'écran revient à l'état « sans caisse ouverte ».
 - Sans explication d'un écart de plus de 10 DH, la clôture est refusée ; le comptage n'est alors pas enregistré, la caisse reste ouverte.
-- La caisse clôturée part ensuite au **Visa des caisses**.
+- La caisse clôturée part ensuite au **Visa des caisses**, où la comptabilité (ou un autre responsable) la vise ; le caissier ne vise jamais sa propre caisse.
 
 **Règles et contrôles**
 
 - Tolérance d'écart sans explication : 10 DH.
+- Une caisse est clôturée par l'opérateur qui l'a ouverte, et par lui seul.
 - Un écart positif (excédent) et un écart négatif (manquant) sont affichés avec leur signe.
 - Tout règlement en espèces, tout acompte en espèces et tout remboursement en espèces exige une caisse ouverte au nom de l'opérateur.
 - Un chèque déclaré impayé ou un règlement par carte remboursé pendant que la caisse d'origine est ouverte est retiré du total de cette caisse ; après la clôture, la caisse n'est plus modifiée.
@@ -777,6 +780,7 @@ Messages propres aux écrans de ce chapitre. Les messages communs (droit manquan
 | « Un remboursement doit être motivé. » | Motif vide. | Saisir le motif. |
 | « Aucun chèque ni effet encaissé sur cette facture ne peut être déclaré impayé. » | **Déclarer impayé** sans chèque ni effet. | Rien à faire. |
 | « Motif de l'impayé de … (…) — motif de rejet communiqué par la banque : » | **Déclarer impayé**. | Saisir le motif de la banque. |
+| « Réservé à la comptabilité : déclarer un chèque ou un effet impayé demande le droit billing.payment.bounce (Comptabilité, Administrateur). » | Bulle au survol de **Déclarer impayé** grisé (Secrétariat / accueil). | Transmettre le chèque rejeté à la comptabilité. |
 | « Un impayé doit être motivé (motif de rejet de la banque). » | Motif vide. | Saisir le motif. |
 | « Seuls un chèque ou un effet peuvent être impayés. » ; « Ce règlement n'est pas encaissé. » ; « Règlement introuvable. » | Règlement choisi non concerné. | Choisir un autre règlement. |
 | « Choisissez dans la liste le paiement concerné. » | Fenêtre de choix sans ligne choisie. | Cliquer un règlement. |
@@ -825,7 +829,8 @@ Messages propres aux écrans de ce chapitre. Les messages communs (droit manquan
 | « Un écart de caisse de … DH doit être expliqué avant la clôture. » | Clôture sans explication. | Expliquer l'écart, puis clôturer. |
 | « Clôturer la caisse avec … comptés, soit un écart de … ? » | **Clôturer la caisse**. | Oui si le comptage est juste. |
 | « Texte trop long (… caractères au plus). » | Explication ou motif trop long. | Raccourcir. |
-| « Cette session de caisse n'est pas ouverte. » | Caisse déjà clôturée. | Actualiser. |
+| « Cette session de caisse n'est pas ouverte. » | Caisse déjà clôturée, ou aucune caisse ouverte à votre nom. | Actualiser. |
+| « Seul le caissier qui a ouvert cette caisse peut la clôturer avec son comptage. » | Tentative de clôturer la caisse d'un autre opérateur. | Laisser le caissier compter et clôturer sa caisse. |
 
 #### Visa des caisses
 

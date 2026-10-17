@@ -116,6 +116,10 @@ public sealed class PersonnelView : LocalizedView
 
         _aside.SetActions(_edit, _documents, _exit, _letters, _settlement);
         _aside.AddBelow(QhPage.StatusLine(_status));
+        // The width of the panel and room for two lines: the account message names the account.
+        _status.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _status.Height = 48;
+        _status.TextAlign = ContentAlignment.TopLeft;
 
         Controls.Add(QhPage.Frame(2, header, toolbar, QhPage.WithAside(QhPage.Card(_grid), _aside)));
     }

@@ -268,7 +268,13 @@ ul.toc li { margin: 4px 0; }
 <li>un <strong>Commentaire</strong> si besoin.</li>
 </ul>
 </li>
-<li>Cliquez <strong>Enregistrer</strong>.</li>
+<li>Si le dossier est relié à un <strong>Compte SIL</strong>, la fenêtre l'annonce : « Le compte LIS « … » lié à ce dossier sera désactivé à la date de sortie (dès l'enregistrement si cette date est aujourd'hui ou passée). »</li>
+<li>Cliquez <strong>Enregistrer</strong>. Sous le panneau de droite, une ligne dit ce qu'il advient du compte :<ul>
+<li>« Sortie enregistrée. Le compte LIS « … » est désactivé. » : la date de sortie est aujourd'hui ou passée ;</li>
+<li>« Sortie enregistrée. Le compte LIS « … » sera désactivé le jj/mm/aaaa. » : sortie à venir ;</li>
+<li>« Le compte LIS « … » reste actif : c'est le dernier administrateur. … » : nommez d'abord un autre administrateur, puis désactivez ce compte dans <strong>Utilisateurs</strong>.</li>
+</ul>
+</li>
 </ol>
 <p>Vous pouvez enregistrer la sortie à l'avance (préavis en cours). Jusqu'à la date de sortie, la personne reste dans l'effectif : elle peut prendre des congés et garde ses habilitations. Toutes ses habilitations prennent fin le lendemain de la date de sortie.</p>
 <p>La sortie est refusée si un congé demandé ou validé, pas encore commencé, tombe après la date de sortie. Annulez d'abord ce congé dans <strong>Congés et absences</strong>, ou datez la sortie après lui.</p>
@@ -281,6 +287,7 @@ ul.toc li { margin: 4px 0; }
    - <strong>Corriger la sortie</strong> : autre date, autre motif ;
    - <strong>Annuler la sortie</strong> : démission retirée, erreur de saisie. Le motif est obligatoire.</li>
 <li>Les habilitations suivent la nouvelle date, ou sont rétablies. Un solde de tout compte déjà calculé est vidé et sera à recalculer.</li>
+<li>Une sortie avancée à aujourd'hui désactive aussitôt le compte SIL relié. Un compte déjà désactivé par la sortie n'est pas réactivé par une correction ou une annulation : la ligne d'état le rappelle (« Le compte LIS « … » est désactivé. Un administrateur peut le réactiver dans Administration › Utilisateurs. »).</li>
 </ol>
 </li>
 <li>
@@ -345,7 +352,7 @@ ul.toc li { margin: 4px 0; }
 - L'attestation de travail est refusée pour un salarié sorti (« délivrez un certificat de travail »). Le certificat de travail est refusé tant que la sortie n'est pas enregistrée.
 - Une fois le reçu signé, le solde ne change plus. Le salarié peut le dénoncer dans les 60 jours (le rappel est affiché).
 - Toute création, modification, sortie ou retrait de pièce est tracée dans le journal d'audit.
-- La sortie d'un salarié ne désactive pas son compte de connexion. Faites-le dans <strong>Utilisateurs</strong> (chapitre Administration).</p>
+- Le compte SIL relié au dossier est désactivé à la date de sortie (le dernier jour travaillé compris) : tout de suite si la date est atteinte quand la sortie est enregistrée, sinon automatiquement ce jour-là, à la première connexion d'un utilisateur sur un poste ou au contrôle de session d'un poste resté connecté (toutes les minutes). La personne ne peut plus se connecter, et un poste resté ouvert à son nom se ferme. Chaque désactivation est écrite au journal d'audit (« Désactivation du compte … : sortie de … le … ») et au journal de sécurité. Exception : le dernier compte actif qui gère les utilisateurs n'est jamais désactivé ainsi. Réactiver un compte (réintégration) se fait dans <strong>Utilisateurs</strong> (chapitre Administration).</p>
 <p><strong>Flux.</strong>
 1. On crée le dossier, puis on ajoute les pièces (visite d'embauche, vaccination, clause de secret).
 2. On accorde les <strong>Habilitations</strong>.
@@ -519,7 +526,7 @@ ul.toc li { margin: 4px 0; }
 - Tout membre du personnel qui a le droit Demander un congé voit l'écran, mais seulement <strong>ses propres demandes</strong> et <strong>son propre solde</strong>.
 - Les personnes qui ont Valider les congés, Gérer le personnel ou Consulter le personnel voient les demandes de tous.
 - <strong>Valider</strong> et <strong>Refuser</strong> : droit Valider les congés (Administrateur, Biologiste responsable).
-- <strong>Ajuster le solde</strong>, ajouter ou retirer un jour férié, saisir une « Absence injustifiée » : droit Gérer le personnel.</p>
+- <strong>Ajuster le solde</strong>, ajouter ou retirer un jour férié, saisir une « Absence injustifiée », <strong>Justificatif reçu</strong> : droit Gérer le personnel.</p>
 <p><strong>Fonctionnalités</strong>
 - <strong>Demander un congé</strong> (en-tête, bouton principal ; droit Demander un congé ou Gérer le personnel) : ouvre la fenêtre de demande, avec le calcul des jours et du solde.
 - <strong>Actualiser</strong> (en-tête) : recharge la liste.
@@ -529,6 +536,7 @@ ul.toc li { margin: 4px 0; }
 - <strong>Jours fériés</strong> (rangée de filtres) : le calendrier de l'année. La fenêtre a ses boutons <strong>Ajouter un jour férié</strong> et <strong>Retirer</strong> (droit Gérer le personnel).
 - <strong>Valider</strong> (barre sous la liste, bouton principal ; droit Valider les congés) : valide la demande en attente, après confirmation.
 - <strong>Refuser</strong> (barre sous la liste ; droit Valider les congés) : refuse avec un motif, que le salarié verra.
+- <strong>Justificatif reçu</strong> (barre sous la liste ; droit Gérer le personnel) : marque « Fourni » le justificatif d'une demande en attente qui en exige un, après confirmation. Actif seulement pour une demande en attente dont le justificatif est « Manquant ».
 - <strong>Annuler la demande</strong> (barre sous la liste) : annule une demande en attente, ou validée et pas encore commencée.</p>
 <p><strong>L'écran.</strong>
 - En-tête : le titre « Congés et absences », avec dessous « N en attente · N validés ». À droite : <strong>Actualiser</strong> et <strong>Demander un congé</strong>.
@@ -542,7 +550,7 @@ ul.toc li { margin: 4px 0; }
   - <strong>Collègues absents</strong> et <strong>Décision</strong>.
 - Sous la liste, une barre :
   - le détail de la demande : type, jours décomptés, motif, et une alerte s'il y a des collègues du même secteur absents ;
-  - <strong>Annuler la demande</strong>, <strong>Refuser</strong> et <strong>Valider</strong>.</p>
+  - <strong>Annuler la demande</strong>, <strong>Justificatif reçu</strong>, <strong>Refuser</strong> et <strong>Valider</strong>.</p>
 <p><strong>Scénarios.</strong></p>
 <ol>
 <li><strong>Demander un congé (pour soi)</strong></li>
@@ -569,9 +577,14 @@ ul.toc li { margin: 4px 0; }
 <li>
 <p><strong>Refuser une demande</strong> : sélectionnez-la, cliquez <strong>Refuser</strong>, saisissez le motif (le salarié le verra), puis <strong>OK</strong>.</p>
 </li>
-<li>
-<p><strong>Annuler une demande</strong></p>
-</li>
+</ol>
+<p>4 bis. <strong>Enregistrer un justificatif remis après la demande (RH)</strong> — par exemple un arrêt maladie saisi avant l'arrivée du certificat.
+   1. Sélectionnez la demande « En attente » dont le <strong>Justificatif</strong> est « Manquant ».
+   2. Cliquez <strong>Justificatif reçu</strong>. La confirmation rappelle le type, le salarié et les dates (« Confirmer la réception du justificatif de … de … du … au … ? La demande pourra ensuite être validée. »). Répondez <strong>Oui</strong>.
+   3. La colonne <strong>Justificatif</strong> passe à « Fourni » ; la demande peut être validée. L'action est écrite au journal d'audit (« Justificatif reçu pour le congé … »).
+   - On ne marque pas le justificatif de sa propre demande. Une demande validée, refusée ou annulée ne se modifie plus (« Cette demande a déjà été traitée. »).</p>
+<ol start="5">
+<li><strong>Annuler une demande</strong></li>
 <li>Sélectionnez une demande en attente, ou validée et pas encore commencée.</li>
 <li>Cliquez <strong>Annuler la demande</strong>, ajoutez un commentaire si besoin, puis <strong>OK</strong>.</li>
 <li>
@@ -609,7 +622,7 @@ ul.toc li { margin: 4px 0; }
 - Les congés familiaux ont une durée maximale légale (« Ce congé est de N jours au plus. »).
 - Deux demandes ne peuvent pas se chevaucher.
 - On ne valide ni ne refuse sa propre demande.
-- Maladie, maternité, naissance, mariages, décès, événement familial et accident du travail ne peuvent être validés que si le justificatif est marqué « Fourni » (« Le justificatif doit être remis avant la validation. »). Attention : cette case ne se coche qu'au moment de la demande, elle ne se modifie pas ensuite (voir le document de vérification).
+- Maladie, maternité, naissance, mariages, décès, événement familial et accident du travail ne peuvent être validés que si le justificatif est marqué « Fourni » (« Le justificatif doit être remis avant la validation. »). Il se coche dans la demande ou, remis plus tard, par la RH avec <strong>Justificatif reçu</strong> sur la demande en attente.
 - Un refus doit être motivé.
 - Un congé validé déjà commencé ne s'annule plus : la RH corrige par <strong>Ajuster le solde</strong>.
 - Une absence injustifiée, ou une demande saisie par la RH, ne peut être annulée que par la RH ou un valideur.
@@ -619,7 +632,7 @@ ul.toc li { margin: 4px 0; }
 1. Le salarié fait sa demande, puis le valideur la valide.
 2. Le congé validé apparaît dans le <strong>Planning des gardes</strong>, où aucun poste ne peut y être placé.
 3. Les congés sans solde et les absences injustifiées sont repris dans la <strong>Paie</strong> (« Reprendre les dossiers »).</p>
-<div class="diagram"><img src="img/diagramme-0be3e85292b6e1f4.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-5395b1132fe69297.png" alt="Diagramme"></div>
 
 <hr />
 <h3 id="planning">Planning des gardes</h3>
@@ -1070,6 +1083,31 @@ ul.toc li { margin: 4px 0; }
 <td>Annuler le congé, ou reculer la date de sortie.</td>
 </tr>
 <tr>
+<td>« Le compte LIS « … » lié à ce dossier sera désactivé à la date de sortie (dès l'enregistrement si cette date est aujourd'hui ou passée). »</td>
+<td>Fenêtre de sortie d'un dossier relié à un compte</td>
+<td>Vérifier la date, puis <strong>Enregistrer</strong>.</td>
+</tr>
+<tr>
+<td>« Sortie enregistrée. Le compte LIS « … » est désactivé. »</td>
+<td>Ligne d'état, sortie à aujourd'hui ou passée</td>
+<td>Rien.</td>
+</tr>
+<tr>
+<td>« Sortie enregistrée. Le compte LIS « … » sera désactivé le … »</td>
+<td>Ligne d'état, sortie à venir</td>
+<td>Rien : la désactivation se fait d'elle-même ce jour-là.</td>
+</tr>
+<tr>
+<td>« Le compte LIS « … » reste actif : c'est le dernier administrateur. Nommez un autre administrateur, puis désactivez-le dans Administration › Utilisateurs. »</td>
+<td>Sortie du seul compte qui gère les utilisateurs</td>
+<td>Donner le rôle Administrateur à un autre compte, puis désactiver celui-ci.</td>
+</tr>
+<tr>
+<td>« Le compte LIS « … » est désactivé. Un administrateur peut le réactiver dans Administration › Utilisateurs. »</td>
+<td>Ligne d'état après une sortie annulée ou corrigée, compte déjà désactivé</td>
+<td>Demander à l'administrateur de réactiver le compte si la personne reste.</td>
+</tr>
+<tr>
 <td>« Aucune sortie n'est enregistrée pour ce salarié. »</td>
 <td>Correction sans sortie</td>
 <td>Rien à corriger.</td>
@@ -1335,13 +1373,28 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td>« On ne décide pas de sa propre demande de congé. »</td>
-<td>Validation de sa propre demande</td>
-<td>Un autre valideur doit décider.</td>
+<td>Validation, refus ou <strong>Justificatif reçu</strong> sur sa propre demande</td>
+<td>Un autre valideur ou une autre personne de la RH doit le faire.</td>
 </tr>
 <tr>
 <td>« Le justificatif doit être remis avant la validation. »</td>
 <td>Type qui exige un justificatif non fourni</td>
-<td>Faire refaire la demande avec la case cochée (la case ne se modifie pas).</td>
+<td>Quand le justificatif est remis, la RH clique <strong>Justificatif reçu</strong>, puis la demande est validée.</td>
+</tr>
+<tr>
+<td>« Confirmer la réception du justificatif de … de … du … au … ? La demande pourra ensuite être validée. »</td>
+<td><strong>Justificatif reçu</strong></td>
+<td><strong>Oui</strong> si le justificatif a bien été remis.</td>
+</tr>
+<tr>
+<td>« Le justificatif de cette demande est déjà enregistré. »</td>
+<td><strong>Justificatif reçu</strong> sur une demande déjà « Fourni »</td>
+<td>Rien : la demande peut être validée.</td>
+</tr>
+<tr>
+<td>« Ce type de congé ne demande pas de justificatif. »</td>
+<td><strong>Justificatif reçu</strong> sur un congé annuel ou sans solde</td>
+<td>Rien.</td>
 </tr>
 <tr>
 <td>« Motif du refus pour … (le salarié le verra) : » / « Un refus doit être motivé. »</td>
@@ -1350,7 +1403,7 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td>« Cette demande a déjà été traitée. »</td>
-<td>Demande déjà validée ou refusée</td>
+<td>Demande déjà validée ou refusée (validation, refus, <strong>Justificatif reçu</strong>)</td>
 <td>Cliquer <strong>Actualiser</strong>.</td>
 </tr>
 <tr>
