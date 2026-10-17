@@ -169,7 +169,8 @@ public sealed class ReviewFixesBilling2Tests
         };
         invoice.RecordPayment(payment).IsSuccess.Should().BeTrue();
 
-        var session = new CashSession(invoice.SiteId, Guid.NewGuid(), Now, 100m);
+        // A drawer that holds the 200: one that does not refuses the refund (owner's decision, cycle 3).
+        var session = new CashSession(invoice.SiteId, Guid.NewGuid(), Now, 300m);
         var harness = new Harness(invoice) { OpenSession = session };
 
         var result = await harness.Service.RefundPaymentAsync(invoice.Id, payment.Id, "Erreur de saisie");

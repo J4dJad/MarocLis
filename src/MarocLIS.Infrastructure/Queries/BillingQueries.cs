@@ -23,7 +23,7 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
 
-        return await db.LabOrders.AsNoTracking()
+        var rows = await db.LabOrders.AsNoTracking()
             .Where(o => o.SiteId == siteId
                         && ((o.InvoiceId == null
                              && o.Status != LabOrderStatus.Cancelled
@@ -80,6 +80,56 @@ public sealed class BillingQueries(LisDbContext db) : IBillingQueries
                                       && y.ThirdPartyPaymentAgreement
                                       && (y.AgreementValidUntil == null || y.AgreementValidUntil >= today))))
             .ToListAsync(ct);
+
+        return await ShownUnderSurvivorAsync(rows, ct);
+    }
+
+    /// <summary>
+    /// A request registered on a file later merged as a duplicate is listed under the file it was
+    /// merged into: it is that patient's, and selected with the survivor's other requests it was
+    /// refused as « several patients ».
+    /// </summary>
+    private async Task<IReadOnlyList<BillableOrderRow>> ShownUnderSurvivorAsync(
+        List<BillableOrderRow> rows, CancellationToken ct)
+    {
+        // One query for the whole list: only the merged files among them need following.
+        var ids = rows.Select(r => r.PatientId).Distinct().ToList();
+        var merged = await db.Patients.AsNoTracking()
+            .Where(p => ids.Contains(p.Id) && p.MergedIntoPatientId != null)
+            .Select(p => new { p.Id, Into = p.MergedIntoPatientId!.Value })
+            .ToListAsync(ct);
+
+        var survivors = new Dictionary<Guid, (Guid Id, string Name)>();
+
+        foreach (var file in merged)
+        {
+            var current = file.Into;
+            var seen = new HashSet<Guid> { file.Id, current };
+
+            // A merged file can itself be merged later on: followed until the pointers stop.
+            while (await db.Patients.AsNoTracking()
+                       .Where(p => p.Id == current)
+                       .Select(p => p.MergedIntoPatientId)
+                       .FirstOrDefaultAsync(ct) is { } next
+                   && seen.Add(next))
+                current = next;
+
+            var name = await db.Patients.AsNoTracking()
+                .Where(p => p.Id == current)
+                .Select(p => p.LastName + " " + p.FirstName)
+                .FirstOrDefaultAsync(ct);
+
+            if (name is not null) survivors[file.Id] = (current, name);
+        }
+
+        if (survivors.Count == 0) return rows;
+
+        return
+        [
+            .. rows.Select(r => survivors.TryGetValue(r.PatientId, out var s)
+                ? r with { PatientId = s.Id, PatientName = s.Name }
+                : r)
+        ];
     }
 
     /// <summary>The site's ledger — every invoice but the drafts — narrowed by the search box.</summary>

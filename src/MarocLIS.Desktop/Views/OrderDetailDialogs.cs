@@ -488,20 +488,23 @@ internal sealed class OrderHeaderDialog : Form
             Bounds = new Rectangle(20, 390, 580, 30)
         };
 
-        var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
-        ok.Bounds = new Rectangle(20, 426, 280, UiTheme.ButtonHeight);
-        ok.Click += (_, _) => Accept();
-
+        // « Annuler » then the primary at the far end, as in every other dialog.
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
-        cancel.Bounds = new Rectangle(320, 426, 280, UiTheme.ButtonHeight);
+        cancel.Bounds = new Rectangle(20, 426, 280, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
+
+        var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
+        ok.Bounds = new Rectangle(320, 426, 280, UiTheme.ButtonHeight);
+        ok.Click += (_, _) => Accept();
 
         Controls.AddRange([identity, coverage, prescriberLabel, _prescriber, _hasPrescriptionDate,
                            _prescriptionDate, priorityLabel, _priority, languageLabel, _language,
                            clinicalLabel, _clinical, diagnosisLabel, _diagnosis, wardLabel, _ward,
                            roomLabel, _room, noteLabel, _note, reasonLabel, _reason, notice,
-                           ok, cancel]);
+                           cancel, ok]);
 
+        // Enter saves (every field is a single line); the reason is still required by Accept.
+        AcceptButton = ok;
         CancelButton = cancel;
 
         // Mirrored in Arabic like the other dialogs: it opened left to right, labels and buttons

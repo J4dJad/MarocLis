@@ -753,9 +753,10 @@ public sealed class PatientEditorForm : LocalizedForm
         {
             _coverages.Column("payer").HeaderText = T("Coverage.Payer");
             _coverages.Column("membership").HeaderText = T("Coverage.MembershipNumber");
-            _coverages.Column("relationship").HeaderText = T("Coverage.Relationship");
+            // Short headers: with the long ones the validity column was behind a sideways scroll.
+            _coverages.Column("relationship").HeaderText = T("Coverage.RelationshipShort");
             _coverages.Column("insured").HeaderText = T("Coverage.InsuredPerson");
-            _coverages.Column("rate").HeaderText = T("Coverage.ReimbursementRate");
+            _coverages.Column("rate").HeaderText = T("Coverage.RateShort");
             _coverages.Column("ald").HeaderText = T("Coverage.ChronicScheme");
             _coverages.Column("validity").HeaderText = T("Coverage.Validity");
         }

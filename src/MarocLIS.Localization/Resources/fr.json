@@ -2730,6 +2730,9 @@
   },
 
   "Coverage": {
+    "RateShort": "Taux",
+    "RelationshipShort": "Qualité",
+    "ConfirmFractionRate": "« {0} » sera enregistré comme un taux de remboursement de {1} %. Confirmer ce taux ?",
     "AccountingAccount": "Compte comptable",
     "Title": "Couverture",
     "Payer": "Organisme payeur",
@@ -3425,6 +3428,9 @@
   },
 
   "Billing": {
+    "TotalShort": "Total",
+    "IssueDateShort": "Date",
+    "KindShort": "Type",
     "UninvoicedTruncated": "seuls les {0} dossiers les plus récents sont affichés",
     "ReinvoiceToPayer": "Ce dossier est refacturé après un avoir. Il avait été enregistré sans tiers payant.\n\nAdresser cette facture au tiers payant {0} (part de l'organisme réclamée à celui-ci) ?\n\nNon : la facture est établie au nom du patient, pour la totalité.",
     "InvoicedDepositToRefund": "Facturé ({0}) — acompte à rembourser",
@@ -3485,6 +3491,7 @@
   },
 
   "Claim": {
+    "PayerDue": "Reste dû par l'organisme",
     "PartiallySubmitted": "Bordereau {0} transmis avec {1} facture(s). {2} facture(s) n'ont pas été transmises :",
     "SettlementRecorded": "{0} : {1} acceptés sur {2}.",
     "ShortfallWriteOff": "Passer en perte",
@@ -3498,7 +3505,7 @@
     "ClaimableSummaryBlocked": "À transmettre — {0} facture(s), {1} · {2} bloquée(s)",
     "Blockers": "Ce qui bloque",
     "AgeDays": "Jours",
-    "SelectClaimable": "Cocher tout ce qui est transmissible",
+    "SelectClaimable": "Cocher les factures transmissibles de cet organisme",
     "SelectionSummary": "{0} facture(s) sélectionnée(s) — {1}",
     "MixedPayerSelection": "{0} facture(s) pour {1} organismes différents : un lot ne concerne qu'un seul organisme.",
     "ConfirmSubmit": "Transmettre {0} facture(s) à {1}, pour un montant de {2} ?",
@@ -4982,7 +4989,7 @@
   "Claim_RejectionReasonRequired": "Un rejet ou un règlement partiel doit porter le motif communiqué par l'organisme : c'est lui qui décide si le dossier est corrigé et retransmis ou passé en perte.",
   "Claim_NotSubmitted": "La facture {0} n'a pas été transmise en tiers payant.",
   "Claim_SettlementAlreadyRecorded": "Le montant accepté a déjà été saisi pour la facture {0}.",
-  "Claim_AcceptedAmountInvalid": "Le montant accepté doit être compris entre 0 et la part de l'organisme ({0}).",
+  "Claim_AcceptedAmountInvalid": "Le montant accepté doit être compris entre 0 et ce que l'organisme doit encore ({0}).",
   "Claim_AlreadySubmitted": "La facture {0} a déjà été transmise à l'organisme : elle ne peut pas figurer dans un second bordereau.",
   "Claim_OutcomeSkippedSettled": "La facture {0} a déjà son règlement organisme saisi : le retour global du bordereau ne la modifie pas.",
   "Claim_MixedPayers": "La facture {0} relève d'un autre organisme que le reste du bordereau : un bordereau ne concerne qu'un seul organisme, elle sera transmise séparément.",
@@ -5076,6 +5083,7 @@
   "Item_RepeatReasonRequired": "Indiquez le motif de la reprise.",
   "Item_RepeatRequiresUnvalidation": "Cette analyse comporte des résultats déjà validés biologiquement : la validation doit d'abord être retirée (droit « dévalider ») avant de reprendre l'analyse.",
   "Item_CannotCorrectFromStatus": "L'analyse ne peut pas être rouverte pour correction depuis le statut « {0} ».",
+  "Item_RepeatRequiresValue": "{0} n'a encore aucune valeur saisie : l'analyse ne peut être repassée qu'après un premier passage.",
 
   "Instrument_NotFound": "Automate introuvable.",
   "Interface_NotFound": "Interface automate introuvable.",
@@ -5285,6 +5293,7 @@
   "Payment_CashThresholdWarning": "Un règlement en espèces supérieur à {0} DH expose à une sanction fiscale ; privilégiez un moyen de paiement traçable.",
   "Payment_KindNotPayable": "Un règlement ne s'enregistre que sur une facture : un avoir ou un devis ne se règle pas.",
   "Payment_ExceedsPatientShare": "Le patient ne doit plus que {0} sur cette facture : le reste est la part de l'organisme, réglée par le tiers payant.",
+  "Payment_OnlyPatientPaymentsRefundable": "Seul un règlement du patient peut être remboursé : ni un abandon de créance ni un règlement de l'organisme.",
 
   "CashSession_NotOpen": "Cette session de caisse n'est pas ouverte.",
   "CashSession_VarianceExplanationRequired": "Un écart de caisse de {0} DH doit être expliqué avant la clôture.",
@@ -5294,6 +5303,7 @@
   "CashSession_ReconcilerIsOperator": "Le visa est donné par un autre que le caissier : vous avez tenu cette caisse.",
   "CashSession_ReconciliationCommentRequired": "La caisse présente un écart de {0} DH : un commentaire est obligatoire pour la viser.",
   "CashSession_WithdrawalExceedsCash": "Le prélèvement dépasse les espèces attendues en caisse ({0} DH).",
+  "CashSession_RefundExceedsCash": "Le remboursement en espèces dépasse les espèces attendues en caisse ({0} DH).",
 
   "Qc_RejectionRequiresCorrectiveAction": "Un contrôle rejeté exige la description de l'action corrective entreprise.",
   "Qc_NotRejected": "Ce contrôle n'est pas rejeté.",

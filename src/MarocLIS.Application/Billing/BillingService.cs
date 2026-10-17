@@ -91,6 +91,12 @@ public sealed record InvoiceRow(
     /// </summary>
     public decimal PatientPayable =>
         Invoice.ComputePatientPayable(Outstanding, ClaimStatus, PayerShare, PayerAcceptedAmount);
+
+    /// <summary>
+    /// What the payer still owes on its share: the share less what credit notes took off it. The
+    /// payer's settlement is entered and checked against this, not against the original share.
+    /// </summary>
+    public decimal PayerDue => Invoice.ComputePayerDue(Total, PayerShare, Credited);
 }
 
 public sealed record CashSessionSummary(
@@ -103,6 +109,8 @@ public sealed record CashSessionSummary(
     decimal ChequeReceipts,
     decimal CardReceipts,
     decimal TransferReceipts,
+    decimal BillOfExchangeReceipts,
+    decimal MobileReceipts,
     decimal CashRefunds,
     decimal CashWithdrawals,
     decimal ExpectedClosingCash,
@@ -123,6 +131,8 @@ public sealed record CashSessionSummary(
             session.ChequeReceipts,
             session.CardReceipts,
             session.TransferReceipts,
+            session.BillOfExchangeReceipts,
+            session.MobileReceipts,
             session.CashRefunds,
             session.CashWithdrawals,
             session.ExpectedClosingCash,
@@ -301,8 +311,15 @@ public sealed class BillingService(
             loaded.Add(order);
         }
 
-        // Grouping several orders onto one invoice only makes sense for a single customer.
-        var patientIds = loaded.Select(o => o.PatientId).Distinct().ToList();
+        // Grouping several orders onto one invoice only makes sense for a single customer. A request
+        // registered on a file since merged as a duplicate is the surviving file's: refused as
+        // « several patients » next to the survivor's own, it could never be invoiced with them.
+        var patientIds = new List<Guid>();
+        foreach (var patientId in loaded.Select(o => o.PatientId).Distinct())
+        {
+            var survivorId = await SurvivorOfAsync(patientId, ct);
+            if (!patientIds.Contains(survivorId)) patientIds.Add(survivorId);
+        }
 
         if (patientIds.Count > 1)
             return Result.Failure<Guid>(Error.Validation("Invoice_MultiplePatients"));
@@ -736,6 +753,11 @@ public sealed class BillingService(
         if (session is null && deposit.Method == PaymentMethod.Cash)
             return Result.Failure(Error.Validation("Payment_CashRequiresOpenSession"));
 
+        if (deposit.Method == PaymentMethod.Cash && session is not null
+            && Money.Round(amount) > session.ExpectedClosingCash)
+            return Result.Failure(Error.Validation("CashSession_RefundExceedsCash",
+                                                   session.ExpectedClosingCash));
+
         var refunded = deposit.Refund(clock.Now, reason);
         if (refunded.IsFailure) return refunded;
 
@@ -960,6 +982,9 @@ public sealed class BillingService(
         var payment = invoice.Payments.FirstOrDefault(p => p.Id == paymentId);
         if (payment is null) return Result.Failure(Error.NotFound("Payment_NotFound"));
 
+        if (!PaymentRow.IsPatientPayment(payment.Method))
+            return Result.Failure(Error.Validation("Payment_OnlyPatientPaymentsRefundable"));
+
         // The till is checked before the payment is touched. The refund used to be applied first,
         // so a refusal here left the tracked payment Refunded in a long-lived context, and the next
         // unrelated save wrote the refund to the database without any money leaving the drawer.
@@ -967,6 +992,13 @@ public sealed class BillingService(
 
         if (session is null && payment.Method == PaymentMethod.Cash)
             return Result.Failure(Error.Validation("Payment_CashRefundRequiresOpenSession"));
+
+        // Never more than the drawer holds, as for a withdrawal: the money cannot leave a till that
+        // does not have it, and the expected cash went negative and closed on a false surplus.
+        if (payment.Method == PaymentMethod.Cash && session is not null
+            && Money.Round(payment.Amount) > session.ExpectedClosingCash)
+            return Result.Failure(Error.Validation("CashSession_RefundExceedsCash",
+                                                   session.ExpectedClosingCash));
 
         var refunded = payment.Refund(clock.Now, reason);
         if (refunded.IsFailure) return refunded;
@@ -1157,9 +1189,10 @@ public sealed class BillingService(
 
         var accepted = Money.Round(acceptedAmount);
 
-        if (accepted < 0m || accepted > invoice.PayerShareAmount)
+        // Against what the payer still owes: a credit note already took its part off the share.
+        if (accepted < 0m || accepted > invoice.PayerDueAmount)
             return Result.Failure(Error.Validation("Claim_AcceptedAmountInvalid",
-                                                   invoice.PayerShareAmount));
+                                                   invoice.PayerDueAmount));
 
         // What the payer refused: its share less what it accepted and what a credit note already took off it.
         var missing = Math.Max(0m, Money.Round(invoice.PayerDueAmount - accepted));
@@ -1293,6 +1326,22 @@ public sealed class BillingService(
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(session.Variance ?? 0m);
+    }
+
+    /// <summary>
+    /// The file a patient ends up in: itself, or the surviving file it was merged into, followed
+    /// when the survivor was merged in turn. Bounded by the visited set against a corrupt cycle.
+    /// </summary>
+    private async Task<Guid> SurvivorOfAsync(Guid patientId, CancellationToken ct)
+    {
+        var current = patientId;
+        var visited = new HashSet<Guid>();
+
+        while (visited.Add(current)
+               && await patients.GetByIdAsync(current, ct) is { MergedIntoPatientId: { } survivorId })
+            current = survivorId;
+
+        return current;
     }
 
     /// <summary>
@@ -1675,6 +1724,15 @@ public sealed record PaymentRow(
 {
     /// <summary>Only a settled payment can be refunded or returned unpaid.</summary>
     public bool IsCorrectable => Status == PaymentStatus.Settled;
+
+    /// <summary>
+    /// A refund gives money back to the patient, so only what the patient paid can be refunded: a
+    /// write-off brought no money in, and the payer's settlement is the payer's.
+    /// </summary>
+    public bool CanRefund => IsCorrectable && IsPatientPayment(Method);
+
+    public static bool IsPatientPayment(PaymentMethod method) =>
+        method is not (PaymentMethod.ThirdPartyPayer or PaymentMethod.WriteOff);
 
     /// <summary>A bounce only applies to an instrument that can be returned by a bank.</summary>
     public bool CanBounce =>
