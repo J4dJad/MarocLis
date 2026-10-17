@@ -720,10 +720,15 @@ public sealed class OrderDetailView : LocalizedView
         // Many tubes wrap the legend onto line after line, each taken from the analyses: once only
         // a row and a half of analyses is left, the legend scrolls instead. A legend that moves, mirrored in
         // Arabic, is redrawn whole rather than from the copy of its old place.
-        _tubeLegend.AutoScroll = true;
-        page.Resize += (_, _) => _tubeLegend.MaximumSize =
-            new Size(0, Math.Max(40, page.Height - _items.ColumnHeadersHeight - ItemRowHeight * 3 / 2));
+        // The scroll bar only appears when the legend really overflows: always on, it showed beside two short lines.
+        page.Resize += (_, _) =>
+        {
+            _tubeLegend.MaximumSize =
+                new Size(0, Math.Max(40, page.Height - _items.ColumnHeadersHeight - ItemRowHeight * 3 / 2));
+            FitTubeLegend();
+        };
         _tubeLegend.LocationChanged += (_, _) => page.Invalidate(true);
+        _tubeLegend.SizeChanged += (_, _) => FitTubeLegend();
 
         var footer = _tubeLegend;
         page.Controls.Add(_items);
@@ -1776,6 +1781,7 @@ public sealed class OrderDetailView : LocalizedView
 
         _tubeLegend.Controls.Add(_totals);
         _tubeLegend.ResumeLayout(performLayout: true);
+        FitTubeLegend();
 
         _totals.Text = T("OrderFile.Totals", detail.LiveItemCount,
                          Money.Of(detail.ChargedTotal).Format(language),
@@ -2312,5 +2318,16 @@ public sealed class OrderDetailView : LocalizedView
         var age = today.Year - dateOfBirth.Year;
         if (dateOfBirth > today.AddYears(-age)) age--;
         return age;
+    }
+
+    private void FitTubeLegend()
+    {
+        // The preferred size is already capped by the maximum: what the lines need is read from the chips laid out.
+        var max = _tubeLegend.MaximumSize.Height;
+        if (max <= 0 || _tubeLegend.Controls.Count == 0) return;
+        var needed = _tubeLegend.Controls.Cast<Control>().Max(c => c.Bottom + c.Margin.Bottom)
+                     - _tubeLegend.AutoScrollPosition.Y + _tubeLegend.Padding.Bottom;
+        var overflows = needed > max;
+        if (_tubeLegend.AutoScroll != overflows) _tubeLegend.AutoScroll = overflows;
     }
 }
