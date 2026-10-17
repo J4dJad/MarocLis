@@ -122,9 +122,29 @@ internal sealed class InstrumentFrameTestDialog : Form
         if (sample is not null) actions.Controls.Add(sample);
 
         // Sized from the bar itself: anchored to the right while the bar still had its default
-        // width, the summary came out wider than the dialog.
-        actions.Resize += (_, _) =>
-            _summary.Width = Math.Max(80, actions.ClientSize.Width - _summary.Left - 8);
+        // width, the summary came out wider than the dialog. Placed from the right in Arabic: a
+        // panel does not mirror what it holds, and the buttons stayed on the left under a mirrored
+        // dialog, the summary at the far end.
+        Control[] row = sample is null ? [run, last] : [run, last, sample];
+        void LayoutActions()
+        {
+            var rtl = actions.RightToLeft == RightToLeft.Yes;
+            var width = actions.ClientSize.Width;
+            void Place(Control control, int left) => control.Left = rtl ? width - left - control.Width : left;
+
+            var x = 8;
+            foreach (var control in row)
+            {
+                Place(control, x);
+                x += control.Width + 8;
+            }
+
+            _summary.Width = Math.Max(80, width - x - 8);
+            Place(_summary, x);
+        }
+
+        actions.Resize += (_, _) => LayoutActions();
+        actions.RightToLeftChanged += (_, _) => LayoutActions();
 
         BuildColumns();
         _grid.Dock = DockStyle.Fill;

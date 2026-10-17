@@ -839,6 +839,16 @@ public sealed class InstrumentMessageSink(
 
         if (exact is not null) return exact;
 
+        // A COBAS INTEGRA reports its test number on three digits (« 031 »); the table may hold it
+        // as Roche's documents print it (« 0-031 ») or without the zeros (« 31 »), which the order
+        // download already reads as the same test. Matched on the number, results came back
+        // « code non correspondant » for tests the analyser had been asked to run.
+        if (code.Length == 3 && code.All(char.IsAsciiDigit) && RocheIntegra.TestNumber(code) is { } number)
+        {
+            var sameTest = enabled.FirstOrDefault(m => RocheIntegra.TestNumber(m.InstrumentTestCode) == number);
+            if (sameTest is not null) return sameTest;
+        }
+
         var slash = code.IndexOf('/');
         if (slash <= 0) return null;
 

@@ -331,13 +331,40 @@ public sealed class ResultEntryView : LocalizedView
 
         // On a 1366-pixel screen the count does not fit on one line beside the four buttons: it
         // takes what is left and wraps onto two, rather than pushing a button out of the bar.
+        // When even that is not left — the Arabic captions, a narrower window — the count goes on a
+        // line of its own above the buttons: squeezed into the bar it slid under « Antériorités »
+        // and « Tout est saisi » was not seen at all.
+        var placing = false;
+
         void FitRemaining()
         {
-            var used = bar.Padding.Horizontal + _remaining.Margin.Horizontal
+            var width = strip.ClientSize.Width;
+            if (width <= 0) return;
+
+            var used = bar.Padding.Horizontal + 8 + 12
                        + new[] { _more, _history, _validate, _save }
                            .Where(b => b.Visible)
                            .Sum(b => b.PreferredSize.Width + b.Margin.Horizontal);
-            var left = Math.Max(90, bar.ClientSize.Width - used);
+            var room = width - used;
+
+            // A little slack before it comes back into the bar, so that a width on the edge does
+            // not move it to and fro.
+            var onOwnLine = _remaining.Parent == strip;
+            var ownLine = onOwnLine ? room < 100 : room < 80;
+
+            if (ownLine != onOwnLine)
+            {
+                // Moved once the layout pass that asked for it is over.
+                if (placing) return;
+                placing = true;
+                if (strip.IsHandleCreated) strip.BeginInvoke(() => PlaceRemaining(ownLine));
+                else PlaceRemaining(ownLine);
+                return;
+            }
+
+            if (ownLine) return;
+
+            var left = Math.Max(90, room);
 
             // In the body size when it fits on one line, else smaller, on two lines at most.
             var font = TextRenderer.MeasureText(_remaining.Text, UiTheme.Body).Width <= left ? UiTheme.Body : UiTheme.Small;
@@ -345,7 +372,41 @@ public sealed class ResultEntryView : LocalizedView
             if (_remaining.MaximumSize.Width != left) _remaining.MaximumSize = new Size(left, 0);
         }
 
-        bar.Resize += (_, _) => FitRemaining();
+        void PlaceRemaining(bool ownLine)
+        {
+            placing = false;
+            if (ownLine == (_remaining.Parent == strip)) return;
+
+            strip.SuspendLayout();
+            if (ownLine)
+            {
+                bar.Controls.Remove(_remaining);
+                _remaining.AutoSize = false;
+                _remaining.MaximumSize = Size.Empty;
+                _remaining.Dock = DockStyle.Top;
+                _remaining.Height = 20;
+                _remaining.Margin = new Padding(0);
+                _remaining.Padding = new Padding(24, 4, 24, 0);
+                _remaining.Font = UiTheme.Small;
+                strip.Controls.Add(_remaining);
+                strip.Height = 56 + _remaining.Height;
+            }
+            else
+            {
+                strip.Controls.Remove(_remaining);
+                _remaining.Dock = DockStyle.None;
+                _remaining.Padding = new Padding(0);
+                _remaining.Margin = new Padding(8, 0, 12, 0);
+                _remaining.AutoSize = true;
+                _remaining.Anchor = AnchorStyles.Right;
+                bar.Controls.Add(_remaining, 3, 0);
+                strip.Height = 56;
+            }
+            strip.ResumeLayout(true);
+            if (!ownLine) FitRemaining();
+        }
+
+        strip.Resize += (_, _) => FitRemaining();
         _remaining.TextChanged += (_, _) => FitRemaining();
 
         foreach (var button in new[] { _more, _history, _validate, _save })

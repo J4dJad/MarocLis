@@ -1711,7 +1711,9 @@ public sealed class ValidationView : LocalizedView
         finally
         {
             Cursor = Cursors.Default;
-            _validate.Enabled = true;
+            // As the reload left it: once the last file is validated the list is empty, no file
+            // is open, and « Valider » stays grey.
+            _validate.Enabled = _sheet is not null && _details.Rows.Count > 0;
         }
     }
 
