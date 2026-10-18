@@ -224,6 +224,39 @@ public sealed class MobileComponentTests : BunitContext
         defaulted.RootElement.GetProperty("contactUsed").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
+    [Fact]
+    public void OrderPage_HandsTheCriticalSheetTheNumberTappedOnTheCard_AndTheCriticalLineOtherwise()
+    {
+        var potassium = Row("Potassium", "6,9", critical: true, interpretation: "CriticalHigh");
+        _api.Answer($"/api/dossiers/{OrderId}", File(potassium) with { Prescriber = Alaoui });
+        var route = $"/api/critiques/{potassium.ResultId}";
+        SignIn();
+
+        var page = Render<OrderPage>(p => p.Add(x => x.OrderId, OrderId));
+        page.WaitForElement(".prescriber");
+
+        // Nothing tapped: the critical line. A string parameter written without « @ » passed the
+        // field's name, so the sheet showed no number and sent « _dialled » as the contact used.
+        page.Find(".btn-critical").Click();
+        page.WaitForElement(".call-to a");
+        page.Find(".call-to a").GetAttribute("href").Should().Be("tel:0522112233");
+        page.Find(".sheet-actions .btn-grow:last-child").Click();
+        page.WaitForAssertion(() => page.FindAll(".call-to").Should().BeEmpty());
+
+        // The telephone tapped on the card: shown, and sent with the call.
+        page.FindAll(".contact-row")[1].QuerySelector("a")!.Click();
+        page.Find(".btn-critical").Click();
+        page.WaitForElement(".call-to a");
+        page.Find(".call-to").TextContent.Should().Contain("0522 00 00 00");
+        page.Find("#recipient").Input("Dr Alaoui");
+        page.Find("#readback").Input("6,9");
+        page.Find(".sheet-actions .btn-primary").Click();
+
+        page.WaitForAssertion(() => _api.LastBody(route).Should().NotBeNull());
+        using var sent = JsonDocument.Parse(_api.LastBody(route)!);
+        sent.RootElement.GetProperty("contactUsed").GetString().Should().Be("0522 00 00 00");
+    }
+
     // ---- Languages ------------------------------------------------------------------------------------
 
     [Fact]

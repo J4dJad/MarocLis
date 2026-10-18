@@ -160,7 +160,7 @@
     @switch (_sheet)
     {
         case OrderSheet.Critical when _file is not null && _criticalRow is not null:
-            <CriticalSheet File="_file" Row="_criticalRow" Dialled="_dialled" OnDone="CriticalDoneAsync" OnCancel="CloseSheet" />
+            <CriticalSheet File="_file" Row="_criticalRow" Dialled="@_dialled" OnDone="CriticalDoneAsync" OnCancel="CloseSheet" />
             break;
         case OrderSheet.Derogation when _file is not null:
             <DerogationSheet File="_file" Rows="QcRows" OnConfirm="SendAsync" OnCancel="CloseSheet" />
