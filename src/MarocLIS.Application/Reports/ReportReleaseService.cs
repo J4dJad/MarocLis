@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Administration;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
@@ -207,7 +208,8 @@ public sealed class ReportReleaseService(
     ICurrentUser currentUser,
     IDataAccessAuditor accessAuditor,
     IClock clock,
-    IMessageSender messages)
+    IMessageSender messages,
+    IActiveLanguages? activeLanguages = null)
 {
     /// <summary>
     /// Releases a report for the analyses validated so far.
@@ -254,8 +256,12 @@ public sealed class ReportReleaseService(
         // report in a substituted font is merely ugly, so only Arabic is blocked here; the missing
         // Latin font is reported at start-up instead.
         // The same resolution the render uses below, read early so the refusal happens before any
-        // of the assembly work rather than after it.
-        if ((language ?? order.ReportLanguage) == AppLanguage.Arabic
+        // of the assembly work rather than after it. A language the laboratory has switched off
+        // since the file was registered is not printed: the report goes out in French.
+        var reportLanguage = language ?? order.ReportLanguage;
+        if (activeLanguages is not null) reportLanguage = await activeLanguages.CoerceAsync(reportLanguage, ct);
+
+        if (reportLanguage == AppLanguage.Arabic
             && !fonts.IsAvailable(fonts.ArabicFamily))
             return Result.Failure<ReleasedReport>(
                 Error.Regulatory("Report_ArabicFontMissing", fonts.ArabicFamily));
@@ -309,8 +315,6 @@ public sealed class ReportReleaseService(
                 || corrected.Count > 0))
             return Result.Failure<ReleasedReport>(
                 Error.Regulatory("Report_ReissueRequiresAmendmentReason"));
-
-        var reportLanguage = language ?? order.ReportLanguage;
 
         var model = await BuildModelAsync(order, patient, site, biologist.Value, releasable,
                                            reportLanguage, versionNumber, completeness,

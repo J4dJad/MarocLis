@@ -54,14 +54,18 @@
         </div>
     }
 
-    <div class="languages" role="group" aria-label="@T("App.Language")">
-        @foreach (var language in Enum.GetValues<UiLanguage>())
-        {
-            var current = language;
-            <button type="button" lang="@Texts.Tag(current)" aria-pressed="@(Texts.Language == current ? "true" : "false")"
-                    @onclick="() => Choose(current)">@LanguageName(current)</button>
-        }
-    </div>
+    @* Only the languages the laboratory works in; none to choose when it works in French alone. *@
+    @if (Session.Languages.Count > 1)
+    {
+        <div class="languages" role="group" aria-label="@T("App.Language")">
+            @foreach (var language in Session.Languages)
+            {
+                var current = language;
+                <button type="button" lang="@Texts.Tag(current)" aria-pressed="@(Texts.Language == current ? "true" : "false")"
+                        @onclick="() => Choose(current)">@LanguageName(current)</button>
+            }
+        </div>
+    }
 </main>
 
 @code {
@@ -111,6 +115,16 @@
 
         // Already signed in (a reload of this address): straight to the worklist.
         if (Session.IsSignedIn) Navigation.NavigateTo("", replace: true);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsSignedIn) return;
+
+        // The languages the laboratory works in, before anyone signs in. The phone's language, if
+        // the laboratory has since switched it off, gives way to French.
+        if (await Api.LanguagesAsync() is { IsSuccess: true, Value: { } info }) Session.UseLanguages(info.Languages);
+        if (!Session.Languages.Contains(Texts.Language)) Texts.Use(UiLanguage.French);
     }
 
     private async Task SignInAsync()

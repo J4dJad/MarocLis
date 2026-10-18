@@ -22,6 +22,13 @@ public static class ApplicationServiceCollectionExtensions
 
         services.AddSingleton(registrationOptions);
 
+        // The last reading of the active languages, for the whole process; the service that reads
+        // and saves them is scoped like the others.
+        services.AddSingleton<Administration.ActiveLanguagesCache>();
+        services.AddScoped<Administration.ActiveLanguagesService>();
+        services.AddScoped<Administration.IActiveLanguages>(
+            sp => sp.GetRequiredService<Administration.ActiveLanguagesService>());
+
         services.AddScoped<Patients.PatientRegistrationService>();
         services.AddScoped<OrderComposer>();
         services.AddScoped<OrderRegistrationService>();

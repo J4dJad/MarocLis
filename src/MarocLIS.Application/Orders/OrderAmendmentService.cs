@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Administration;
 using MarocLIS.Application.Pricing;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
@@ -207,7 +208,8 @@ public sealed class OrderAmendmentService(
     ICurrentUser currentUser,
     IDataAccessAuditor accessAuditor,
     IClock clock,
-    IRepository<TestResult> results)
+    IRepository<TestResult> results,
+    IActiveLanguages? activeLanguages = null)
 {
     // ---- Reading -------------------------------------------------------------------------------
 
@@ -658,7 +660,10 @@ public sealed class OrderAmendmentService(
         order.WardOrUnit = Trimmed(request.WardOrUnit);
         order.RoomOrBed = Trimmed(request.RoomOrBed);
         order.InternalNote = Trimmed(request.InternalNote);
-        order.ReportLanguage = request.ReportLanguage;
+        // A language the laboratory has switched off is never assigned: the report goes out in French.
+        order.ReportLanguage = activeLanguages is null
+            ? request.ReportLanguage
+            : await activeLanguages.CoerceAsync(request.ReportLanguage, ct);
 
         if (request.Priority != order.Priority)
         {

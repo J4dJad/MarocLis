@@ -58,6 +58,11 @@ public sealed class ApiClient(HttpClient http, SessionState session, Texts texts
     public Task<ApiResult<object>> SignOutAsync() =>
         SendAsync<object, object>(HttpMethod.Delete, ApiProtocol.SessionRoute, null, null, null);
 
+    /// <summary>The languages the laboratory works in, asked before anyone signs in.</summary>
+    public Task<ApiResult<LanguagesInfo>> LanguagesAsync() =>
+        SendAsync<object, LanguagesInfo>(HttpMethod.Get, ApiProtocol.LanguagesRoute, null, null, Json.LanguagesInfo,
+                                         quiet: true);
+
     public Task<ApiResult<SessionInfo>> ChangeLanguageAsync(UiLanguage language) =>
         SendAsync(HttpMethod.Put, ApiProtocol.LanguageRoute, new LanguageRequest(language.ToString()),
                   Json.LanguageRequest, Json.SessionInfo);

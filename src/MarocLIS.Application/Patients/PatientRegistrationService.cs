@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Administration;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
@@ -148,8 +149,13 @@ public sealed class PatientRegistrationService(
     IDataAccessAuditor dataAccessAuditor,
     IClock clock,
     IRepository<LabOrder> orders,
-    ResultEntryService resultEntry)
+    ResultEntryService resultEntry,
+    IActiveLanguages? activeLanguages = null)
 {
+    /// <summary>A language the laboratory has switched off is never recorded: French in its place.</summary>
+    private async Task<AppLanguage> ActiveLanguageAsync(AppLanguage language, CancellationToken ct) =>
+        activeLanguages is null ? language : await activeLanguages.CoerceAsync(language, ct);
+
     /// <summary>
     /// Candidate duplicates for an identity the operator has typed but not yet saved.
     /// <para>
@@ -231,7 +237,7 @@ public sealed class PatientRegistrationService(
             MobilePhone = MoroccanIdentifiers.TryNormalizePhone(identity.MobilePhone),
             AlternatePhone = MoroccanIdentifiers.TryNormalizePhone(identity.AlternatePhone),
             Email = Blank(identity.Email),
-            PreferredLanguage = identity.PreferredLanguage,
+            PreferredLanguage = await ActiveLanguageAsync(identity.PreferredLanguage, ct),
             IsPregnant = identity.IsPregnant,
             LastMenstrualPeriod = identity.LastMenstrualPeriod,
             WeightKg = identity.WeightKg,
@@ -366,7 +372,7 @@ public sealed class PatientRegistrationService(
         patient.MobilePhone = MoroccanIdentifiers.TryNormalizePhone(identity.MobilePhone);
         patient.AlternatePhone = MoroccanIdentifiers.TryNormalizePhone(identity.AlternatePhone);
         patient.Email = Blank(identity.Email);
-        patient.PreferredLanguage = identity.PreferredLanguage;
+        patient.PreferredLanguage = await ActiveLanguageAsync(identity.PreferredLanguage, ct);
         patient.IsPregnant = identity.IsPregnant;
         patient.LastMenstrualPeriod = identity.LastMenstrualPeriod;
         patient.WeightKg = identity.WeightKg;

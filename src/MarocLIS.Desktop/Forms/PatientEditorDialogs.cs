@@ -424,10 +424,8 @@ internal sealed class ConsentDialog : Form
         _language.FlatStyle = FlatStyle.Flat;
         _language.Bounds = new Rectangle(240, 120, 220, UiTheme.InputHeight);
 
-        foreach (var l in Enum.GetValues<AppLanguage>())
-            _language.Items.Add(new EnumChoice((int)l, localizer[$"AppLanguage.{l}"]));
-
-        _language.SelectedIndex = 0;
+        // Only the languages the laboratory works in: no consent form is presented in another.
+        LanguageChoices.Fill(_language, l => localizer[$"AppLanguage.{l}"], AppLanguage.French);
 
         Field("Consent.SignedBy", 158);
         _signedBy.Location = new Point(20, 176);

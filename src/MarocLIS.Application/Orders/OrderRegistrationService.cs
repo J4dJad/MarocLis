@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Administration;
 using MarocLIS.Application.Pricing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -42,7 +43,10 @@ public sealed record RegisterOrderRequest
     public decimal? DiscountPercent { get; init; }
     public string? DiscountReason { get; init; }
 
-    /// <summary>Null takes the patient's preferred language.</summary>
+    /// <summary>
+    /// Null takes the patient's preferred language. Either way a language the laboratory has
+    /// switched off becomes French.
+    /// </summary>
     public AppLanguage? ReportLanguage { get; init; }
 
     public byte[]? PrescriptionScan { get; init; }
@@ -91,8 +95,17 @@ public sealed class OrderRegistrationService(
     ICurrentUser currentUser,
     IDataAccessAuditor accessAuditor,
     IClock clock,
-    OrderRegistrationOptions options)
+    OrderRegistrationOptions options,
+    IActiveLanguages? activeLanguages = null)
 {
+    /// <summary>
+    /// The language the file's report is written in: the one asked for, else the patient's, and
+    /// French when the laboratory no longer works in it.
+    /// </summary>
+    public static AppLanguage ReportLanguageFor(AppLanguage? requested, AppLanguage preferred,
+                                                LanguageSettings languages) =>
+        languages.Coerce(requested ?? preferred);
+
     public async Task<Result<RegisteredOrder>> RegisterAsync(RegisterOrderRequest request,
                                                               CancellationToken ct = default)
     {
@@ -154,6 +167,8 @@ public sealed class OrderRegistrationService(
         if (accessionNumber.IsFailure)
             return Result.Failure<RegisteredOrder>(accessionNumber.FirstError);
 
+        var languages = activeLanguages is null ? LanguageSettings.Default : await activeLanguages.GetAsync(ct);
+
         var order = new LabOrder(accessionNumber.Value, patient.Id, currentUser.SiteId,
                                  clock.Now, currentUser.UserId)
         {
@@ -172,7 +187,7 @@ public sealed class OrderRegistrationService(
             PatientFasted = request.PatientFasted,
             DeclaredFastingHours = request.DeclaredFastingHours,
             InternalNote = request.InternalNote,
-            ReportLanguage = request.ReportLanguage ?? patient.PreferredLanguage,
+            ReportLanguage = ReportLanguageFor(request.ReportLanguage, patient.PreferredLanguage, languages),
             PayerId = coverage.PayerId,
             PatientCoverageId = coverage.CoverageId,
             ReimbursementRateAtRegistration = coverage.Context.IsCovered

@@ -172,8 +172,13 @@ public sealed class UserAdministrationService(
     ISecurityAuditor securityAuditor,
     IPasswordHasher passwordHasher,
     PasswordPolicy passwordPolicy,
-    IClock clock)
+    IClock clock,
+    IActiveLanguages? activeLanguages = null)
 {
+    /// <summary>A language the laboratory has switched off is never recorded: French in its place.</summary>
+    private async Task<AppLanguage> ActiveLanguageAsync(AppLanguage language, CancellationToken ct) =>
+        activeLanguages is null ? language : await activeLanguages.CoerceAsync(language, ct);
+
     // ---- Reads -------------------------------------------------------------------------------------
 
     public async Task<Result<IReadOnlyList<UserRow>>> GetUsersAsync(
@@ -306,7 +311,7 @@ public sealed class UserAdministrationService(
             ProfessionalOrderNumber = Blank(request.ProfessionalOrderNumber),
             Inpe = Blank(request.Inpe),
             QualificationValidUntil = request.QualificationValidUntil,
-            PreferredLanguage = request.PreferredLanguage,
+            PreferredLanguage = await ActiveLanguageAsync(request.PreferredLanguage, ct),
             AuthorizedDepartmentCodesCsv = JoinDepartments(request.AuthorizedDepartmentCodes),
 
             // The administrator typed this password and therefore knows it. Forcing a change at
@@ -388,7 +393,7 @@ public sealed class UserAdministrationService(
         user.ProfessionalOrderNumber = Blank(request.ProfessionalOrderNumber);
         user.Inpe = Blank(request.Inpe);
         user.QualificationValidUntil = request.QualificationValidUntil;
-        user.PreferredLanguage = request.PreferredLanguage;
+        user.PreferredLanguage = await ActiveLanguageAsync(request.PreferredLanguage, ct);
         user.AuthorizedDepartmentCodesCsv = JoinDepartments(request.AuthorizedDepartmentCodes);
         user.LinkPrescriber(request.PrescriberId);
 

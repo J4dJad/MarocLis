@@ -5060,6 +5060,15 @@
     "statistics": "Statistics"
   },
 
+  "Languages": {
+    "SettingsTab": "Languages",
+    "Heading": "Working languages of the laboratory",
+    "Intro": "The languages offered in the selection lists: patient, report, user, interface and mobile application language. A disabled language is no longer offered or assigned; a file that had it is shown and printed in French.",
+    "FrenchAlways": "French is always enabled: it is the working language and the fallback language.",
+    "Notice": "Screens opened after saving offer the new list. The language selector in the header and the other workstations take it into account at their next start; the mobile application, within a minute.",
+    "Saved": "Languages saved."
+  },
+
   "AppLanguage": {
     "French": "Français",
     "Arabic": "العربية",
@@ -6052,6 +6061,7 @@
   "Mobile_PreviewUnavailable": "The preview of this report is no longer available. It can be read at the laboratory, in the report register.",
   "Mobile_PreviewPageNotFound": "Page {0} not found: the report has {1} page(s).",
   "Mobile_UnknownLanguage": "Unknown language: {0}. Use French, Arabic or English.",
+  "Mobile_LanguageNotActive": "This language is not enabled in this laboratory. Choose one of the languages offered.",
   "Mobile_UnknownChannel": "Unknown channel: {0}. Use Telephone or InPerson.",
   "Qc_RunNotFound": "Control run not found ({0}).",
   "Qc_NamedLotOneAnalyser": "The reagent lot chosen applies to the controls of one analyser only: enter the other analysers as routine controls or in another run.",

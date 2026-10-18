@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Administration;
 using MarocLIS.Domain.Common;
 using MarocLIS.Localization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,8 +17,18 @@ namespace MarocLIS.Api;
 /// </summary>
 public static class ApiProblems
 {
-    /// <summary>The language of the request: the signed-in account's, else what the phone asks for.</summary>
+    /// <summary>
+    /// The language of the request: the signed-in account's, else what the phone asks for — French
+    /// when that is a language the laboratory has switched off.
+    /// </summary>
     public static AppLanguage LanguageOf(HttpContext context)
+    {
+        // The last reading: refreshed by the session's endpoints, which every phone calls first.
+        var active = context.RequestServices.GetService<IActiveLanguages>()?.Current ?? LanguageSettings.Default;
+        return active.Coerce(RequestedLanguageOf(context));
+    }
+
+    private static AppLanguage RequestedLanguageOf(HttpContext context)
     {
         var user = context.RequestServices.GetService<ICurrentUser>();
         if (user is { IsAuthenticated: true }) return user.Language;

@@ -354,8 +354,9 @@ internal sealed class OrderHeaderDialog : Form
         RoomOrBed = _room.Text,
         InternalNote = _note.Text,
 
-        ReportLanguage = (AppLanguage)((_language.SelectedItem as EnumChoice)?.Value
-                                       ?? (int)_detail.ReportLanguage)
+        ReportLanguage = _language.SelectedItem is EnumChoice
+            ? LanguageChoices.Selected(_language)
+            : LanguageChoices.Coerce(_detail.ReportLanguage)
     };
 
     internal OrderHeaderDialog(ILocalizer localizer, IUserDialogs dialogs, OrderDetail detail)
@@ -445,10 +446,9 @@ internal sealed class OrderHeaderDialog : Form
         _language.FlatStyle = FlatStyle.Flat;
         _language.Bounds = new Rectangle(260, 144, 220, UiTheme.InputHeight);
 
-        foreach (AppLanguage language in Enum.GetValues<AppLanguage>())
-            _language.Items.Add(new EnumChoice((int)language, localizer[$"AppLanguage.{language}"]));
-
-        _language.SelectedIndex = Array.IndexOf(Enum.GetValues<AppLanguage>(), detail.ReportLanguage);
+        // Only the languages the laboratory works in, selected by value: a file registered in one
+        // switched off since shows French, the language its report now goes out in.
+        LanguageChoices.Fill(_language, l => localizer[$"AppLanguage.{l}"], detail.ReportLanguage);
 
         var clinicalLabel = UiTheme.FieldLabel(localizer["Order.ClinicalInformation"]);
         clinicalLabel.Location = new Point(20, 180);

@@ -820,14 +820,8 @@ public sealed class MainShellForm : LocalizedForm
         ShowStatusBar();
         ShowBreadcrumb();
 
-        var selected = _languagePicker.SelectedIndex;
-        _languagePicker.BeginUpdate();
-        _languagePicker.Items.Clear();
-        _languagePicker.Items.AddRange(["Français", "العربية", "English"]);
-        _languagePicker.SelectedIndex = selected >= 0
-            ? selected
-            : (int)_cultureManager.CurrentLanguage;
-        _languagePicker.EndUpdate();
+        // Each language in its own name, only those the laboratory works in, chosen by value.
+        LanguageChoices.Fill(_languagePicker, LanguageChoices.OwnName, _cultureManager.CurrentLanguage);
 
         UpdateClock();
 
@@ -872,13 +866,10 @@ public sealed class MainShellForm : LocalizedForm
 
     private void OnLanguagePicked(object? sender, EventArgs e)
     {
-        var language = _languagePicker.SelectedIndex switch
-        {
-            1 => AppLanguage.Arabic,
-            2 => AppLanguage.English,
-            _ => AppLanguage.French
-        };
+        // Nothing selected while the list is refilled: that is not a choice.
+        if (_languagePicker.SelectedIndex < 0) return;
 
+        var language = LanguageChoices.Selected(_languagePicker);
         if (language != _cultureManager.CurrentLanguage) _cultureManager.SetLanguage(language);
     }
 

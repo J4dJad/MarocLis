@@ -184,6 +184,11 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddScoped<Application.Administration.IConfigurationWriter, ConfigurationWriter>();
 
+        // Here rather than with the screens' queries: every service that assigns a language reads
+        // the active ones, the API's and the tests' compositions included. The workstation
+        // re-registers it on a context of its own, like its other queries.
+        services.AddScoped<Application.Administration.ILanguageSettingsQueries, Queries.LanguageSettingsQueries>();
+
         // « Reprise de données »: the take-over store, and the readers of the old application's
         // database and files. The readers hold nothing between calls.
         services.AddScoped<Application.Migration.IDataMigrationStore>(

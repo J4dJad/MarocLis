@@ -357,9 +357,8 @@ public sealed class PatientEditorForm : LocalizedForm
         _language.DropDownStyle = ComboBoxStyle.DropDownList;
         _language.FlatStyle = FlatStyle.Flat;
         _language.Bounds = new Rectangle(20, 224, 200, UiTheme.InputHeight);
-        foreach (var l in Enum.GetValues<AppLanguage>())
-            _language.Items.Add(new EnumChoice((int)l, T($"AppLanguage.{l}")));
-        _language.SelectedIndex = 0;
+        // Only the languages the laboratory works in.
+        LanguageChoices.Fill(_language, l => T($"AppLanguage.{l}"), AppLanguage.French);
 
         _optOut.AutoSize = true;
         _optOut.Location = new Point(20, 274);
@@ -844,7 +843,8 @@ public sealed class PatientEditorForm : LocalizedForm
         _mobile.Text = detail.MobilePhone ?? string.Empty;
         _altPhone.Text = detail.AlternatePhone ?? string.Empty;
         _email.Text = detail.Email ?? string.Empty;
-        Select(_language, (int)detail.PreferredLanguage);
+        // French when the patient's language has since been switched off.
+        LanguageChoices.Select(_language, detail.PreferredLanguage);
         _optOut.Checked = detail.OptedOutOfSecondaryUse;
 
         _pregnant.Checked = detail.IsPregnant;

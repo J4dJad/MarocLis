@@ -13,6 +13,7 @@ namespace MarocLIS.Mobile.Services;
 [JsonSerializable(typeof(SignInRequest))]
 [JsonSerializable(typeof(SessionInfo))]
 [JsonSerializable(typeof(LanguageRequest))]
+[JsonSerializable(typeof(LanguagesInfo))]
 [JsonSerializable(typeof(WorklistResponse))]
 [JsonSerializable(typeof(OrderFile))]
 [JsonSerializable(typeof(List<HistoryPoint>))]

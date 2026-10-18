@@ -24,6 +24,7 @@ public static class ApiProtocol
 
     public const string SessionRoute = "/api/session";
     public const string LanguageRoute = "/api/session/langue";
+    public const string LanguagesRoute = "/api/langues";
     public const string WorklistRoute = "/api/validation/worklist";
 
     /// <summary>Values of the <c>filtre</c> query parameter of the worklist: the chips of the screen.</summary>

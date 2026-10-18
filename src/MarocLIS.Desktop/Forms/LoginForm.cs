@@ -300,13 +300,8 @@ public sealed class LoginForm : LocalizedForm
         _signIn.Text = T("Login.SignIn");
 
         // The language list shows each language in its own language — an Arabic speaker looks for
-        // "العربية", not for "Arabe".
-        var selected = _language.SelectedIndex;
-        _language.BeginUpdate();
-        _language.Items.Clear();
-        _language.Items.AddRange(["Français", "العربية", "English"]);
-        _language.SelectedIndex = selected >= 0 ? selected : (int)_cultureManager.CurrentLanguage;
-        _language.EndUpdate();
+        // "العربية", not for "Arabe" — and only those the laboratory works in, chosen by value.
+        LanguageChoices.Fill(_language, LanguageChoices.OwnName, _cultureManager.CurrentLanguage);
 
         RefreshSiteList();
     }
@@ -426,13 +421,10 @@ public sealed class LoginForm : LocalizedForm
 
     private void OnLanguageSelected(object? sender, EventArgs e)
     {
-        var language = _language.SelectedIndex switch
-        {
-            1 => AppLanguage.Arabic,
-            2 => AppLanguage.English,
-            _ => AppLanguage.French
-        };
+        // Nothing selected while the list is refilled: that is not a choice.
+        if (_language.SelectedIndex < 0) return;
 
+        var language = LanguageChoices.Selected(_language);
         if (language != _cultureManager.CurrentLanguage) _cultureManager.SetLanguage(language);
     }
 
@@ -465,9 +457,11 @@ public sealed class LoginForm : LocalizedForm
 
             Properties.LoginSettings.LastUserName = _rememberUser.Checked ? _userName.Text.Trim() : null;
 
-            // The signed-in user's own language preference now takes over from the login screen's.
-            if (result.Value.Language != _cultureManager.CurrentLanguage)
-                _cultureManager.SetLanguage(result.Value.Language);
+            // The signed-in user's own language preference now takes over from the login screen's —
+            // unless the laboratory has switched it off since, when the interface stays in French.
+            var language = LanguageChoices.Coerce(result.Value.Language);
+            if (language != _cultureManager.CurrentLanguage)
+                _cultureManager.SetLanguage(language);
 
             if (result.Value.MustChangePassword && !await ForcePasswordChangeAsync(result.Value.UserId))
             {

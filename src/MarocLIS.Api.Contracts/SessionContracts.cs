@@ -13,6 +13,9 @@ public sealed record SignInRequest(string UserName, string Password);
 /// <param name="Workstation">What the audit trail records as the device: « Mobile · … ».</param>
 /// <param name="SiteName">The site's name in the session's language, for « Mon compte ».</param>
 /// <param name="SignedInAt">When the session opened: « Connecté depuis » on the phone.</param>
+/// <param name="ActiveLanguages">
+/// The languages the laboratory works in, French first: the only ones « Mon compte » offers.
+/// </param>
 public sealed record SessionInfo(
     string UserName,
     string FullName,
@@ -22,7 +25,8 @@ public sealed record SessionInfo(
     int IdleTimeoutMinutes,
     string Workstation,
     string? SiteName = null,
-    DateTimeOffset? SignedInAt = null);
+    DateTimeOffset? SignedInAt = null,
+    IReadOnlyList<string>? ActiveLanguages = null);
 
 /// <summary>
 /// The language the phone's session speaks from now on: French, Arabic or English. It changes the
@@ -30,3 +34,9 @@ public sealed record SessionInfo(
 /// preferred language, which is the workstation's to set.
 /// </summary>
 public sealed record LanguageRequest(string Language);
+
+/// <summary>
+/// The languages the laboratory works in (French, and Arabic or English when switched on), French
+/// first. Read by the sign-in screen before anyone is signed in, so it offers only those.
+/// </summary>
+public sealed record LanguagesInfo(IReadOnlyList<string> Languages);

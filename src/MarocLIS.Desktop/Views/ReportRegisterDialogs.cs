@@ -324,7 +324,9 @@ internal sealed class ReportAmendmentDialog : MasterDataEditor
                         ReportAmendmentKind.CommentRevision, ReportAmendmentKind.IdentityCorrection,
                         ReportAmendmentKind.Retraction]);
 
-        _language = Choice("Order.ReportLanguage", 300, 70, 300, row.Language, "AppLanguage");
+        // Only the languages the laboratory works in; French for a report issued in one switched off since.
+        _language = Choice("Order.ReportLanguage", 300, 70, 300, LanguageChoices.Coerce(row.Language), "AppLanguage",
+                           LanguageChoices.Active);
 
         _kindNotice = Notice(20, 116, 580, 44, "Report.AmendmentKindNotice");
 

@@ -1,6 +1,7 @@
 using MarocLIS.Api.Contracts;
 using MarocLIS.Api.Security;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Administration;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -23,7 +24,15 @@ public static class SessionEndpoints
         session.MapGet("", Current).RequireAuthorization();
         session.MapDelete("", SignOutAsync).RequireAuthorization();
         app.MapPut(ApiProtocol.LanguageRoute, ChangeLanguageAsync).RequireAuthorization();
+        app.MapGet(ApiProtocol.LanguagesRoute, LanguagesAsync).AllowAnonymous();
     }
+
+    /// <summary>
+    /// The languages the laboratory works in, for the sign-in screen's buttons. Anonymous: it is
+    /// shown before anyone signs in, and says nothing about a patient or an account.
+    /// </summary>
+    private static async Task<IResult> LanguagesAsync(IActiveLanguages languages, CancellationToken ct) =>
+        Results.Ok(new LanguagesInfo([.. (await languages.GetAsync(ct)).Active.Select(l => l.ToString())]));
 
     /// <summary>
     /// Signs a biologist in through the same service as the workstation's login screen: the same
@@ -34,8 +43,12 @@ public static class SessionEndpoints
     /// </summary>
     private static async Task<IResult> SignInAsync(
         SignInRequest request, HttpContext http, IAuthenticationService authentication,
-        ISecurityAuditor securityAuditor, MobileSessionStore store, LisDbContext db, CancellationToken ct)
+        ISecurityAuditor securityAuditor, MobileSessionStore store, LisDbContext db, IActiveLanguages languages,
+        CancellationToken ct)
     {
+        // Read first: a refusal below is written in a language the laboratory works in.
+        var active = await languages.GetAsync(ct);
+
         var signedIn = await authentication.SignInAsync(request.UserName ?? string.Empty,
                                                         request.Password ?? string.Empty, null, ct);
 
@@ -64,40 +77,68 @@ public static class SessionEndpoints
             return ApiProblems.From(http, refusal, StatusCodes.Status403Forbidden);
         }
 
+        // An account whose language the laboratory has switched off works in French on the phone,
+        // as it does at the bench.
+        if (!active.IsActive(session.Language)) session = session with { Language = AppLanguage.French };
+
         var opened = store.Open(session, RequestPipeline.WorkstationOf(http));
 
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                                SessionCookie.PrincipalFor(opened),
                                new AuthenticationProperties { IsPersistent = false, AllowRefresh = true });
 
-        return Results.Ok(await DescribeAsync(opened, store, db, ct));
+        return Results.Ok(await DescribeAsync(opened, store, db, active, ct));
     }
 
     private static async Task<IResult> Current(HttpContext http, MobileSessionStore store, LisDbContext db,
-                                               CancellationToken ct)
+                                               IActiveLanguages languages, CancellationToken ct)
     {
         var (session, _) = store.Find(SessionCookie.SessionIdOf(http.User));
-        return session is null
-            ? ApiProblems.From(http, Error.Forbidden("Message.SessionExpired"), StatusCodes.Status401Unauthorized)
-            : Results.Ok(await DescribeAsync(session, store, db, ct));
+        if (session is null)
+            return ApiProblems.From(http, Error.Forbidden("Message.SessionExpired"), StatusCodes.Status401Unauthorized);
+
+        // A language switched off since the sign-in: the phone, reopened, carries on in French.
+        var active = await languages.GetAsync(ct);
+        if (!active.IsActive(session.Session.Language))
+            session = store.ChangeLanguage(session.Id, AppLanguage.French) ?? session;
+
+        return Results.Ok(await DescribeAsync(session, store, db, active, ct));
     }
 
     /// <summary>
     /// Switches the session's language (« Mon compte »): what the server writes from the next
-    /// request on — alert pills, analysis names, refusals — follows the phone's screen.
+    /// request on — alert pills, analysis names, refusals — follows the phone's screen. Only to a
+    /// language the laboratory works in.
     /// </summary>
     private static async Task<IResult> ChangeLanguageAsync(LanguageRequest request, HttpContext http,
                                                            MobileSessionStore store, LisDbContext db,
-                                                           CancellationToken ct)
+                                                           IActiveLanguages languages, CancellationToken ct)
     {
-        if (!Enum.TryParse<AppLanguage>(request.Language, ignoreCase: true, out var language)
-            || !Enum.IsDefined(language))
-            return ApiProblems.From(http, Error.Validation("Mobile_UnknownLanguage", request.Language));
+        var active = await languages.GetAsync(ct);
 
-        var changed = store.ChangeLanguage(SessionCookie.SessionIdOf(http.User), language);
+        var parsed = ParseLanguage(request.Language, active);
+        if (parsed.IsFailure) return ApiProblems.From(http, parsed.Errors);
+
+        var changed = store.ChangeLanguage(SessionCookie.SessionIdOf(http.User), parsed.Value);
         return changed is null
             ? ApiProblems.From(http, Error.Forbidden("Message.SessionExpired"), StatusCodes.Status401Unauthorized)
-            : Results.Ok(await DescribeAsync(changed, store, db, ct));
+            : Results.Ok(await DescribeAsync(changed, store, db, active, ct));
+    }
+
+    /// <summary>
+    /// The language a phone asks for: one of the three by its name, and one the laboratory works
+    /// in — a language switched off is refused rather than quietly replaced, so the phone says so.
+    /// </summary>
+    public static Result<AppLanguage> ParseLanguage(string? name, LanguageSettings active)
+    {
+        ArgumentNullException.ThrowIfNull(active);
+
+        if (!Enum.TryParse<AppLanguage>(name, ignoreCase: true, out var language) || !Enum.IsDefined(language))
+            return Result.Failure<AppLanguage>(Error.Validation("Mobile_UnknownLanguage", name));
+
+        return active.IsActive(language)
+            ? Result.Success(language)
+            : Result.Failure<AppLanguage>(Error.Validation("Mobile_LanguageNotActive"));
     }
 
     private static async Task<IResult> SignOutAsync(HttpContext http, IAuthenticationService authentication,
@@ -110,7 +151,7 @@ public static class SessionEndpoints
     }
 
     private static async Task<SessionInfo> DescribeAsync(MobileSession opened, MobileSessionStore store, LisDbContext db,
-                                                         CancellationToken ct)
+                                                         LanguageSettings languages, CancellationToken ct)
     {
         var session = opened.Session;
 
@@ -123,6 +164,7 @@ public static class SessionEndpoints
 
         return new SessionInfo(session.UserName, session.FullName, session.Qualification.ToString(), session.SiteCode,
                                session.Language.ToString(), (int)store.IdleTimeout.TotalMinutes, opened.Workstation,
-                               site?.For(session.Language), opened.OpenedAt);
+                               site?.For(session.Language), opened.OpenedAt,
+                               [.. languages.Active.Select(l => l.ToString())]);
     }
 }

@@ -139,10 +139,13 @@ public sealed partial class SettingsView : LocalizedView
                         ILogger<SettingsView>? logger = null,
                         WorkstationPrinters? printers = null,
                         ILabelPrinter? labelPrinter = null,
-                        InvoicePrintSettingsService? invoicePrint = null)
+                        InvoicePrintSettingsService? invoicePrint = null,
+                        ActiveLanguagesService? languages = null)
         : base(localizer, cultureManager)
     {
         _invoicePrint = invoicePrint;
+        _languages = languages;
+        _cultureManager = cultureManager;
         _printers = printers;
         _labelPrinter = labelPrinter;
         _configuration = configuration;
@@ -169,8 +172,10 @@ public sealed partial class SettingsView : LocalizedView
         BuildPrintersTab();
         BuildStorageTab();
         BuildInvoicePrintTab();
+        BuildLanguagesTab();
 
-        _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _invoicePrintTab, _storageTab, _printersTab]);
+        _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _invoicePrintTab, _languagesTab, _storageTab,
+                                 _printersTab]);
 
         // The storage list is settings work: without the right the tab is not offered at all.
         if (!PermissionGate.Allows(Permissions.Administration.ManageSettings))
@@ -875,6 +880,7 @@ public sealed partial class SettingsView : LocalizedView
         _reloadPrinters.Text = T("Action.Refresh");
         PopulatePrinters();
         ApplyInvoicePrintTexts();
+        ApplyLanguagesTexts();
 
         SetText(_siteTab, "legalHeading", T("Site.LegalIdentity"));
         SetText(_siteTab, "authHeading", T("Site.Authorization"));
@@ -1000,6 +1006,7 @@ public sealed partial class SettingsView : LocalizedView
             await LoadSettingsAsync(ct);
             await LoadPlacesAsync(ct);
             await LoadInvoicePrintAsync(ct);
+            await LoadLanguagesAsync(ct);
         }
         catch (OperationCanceledException) { }
         // Left before the load finished: the screen is gone, there is nothing to report on it.

@@ -56,6 +56,10 @@ internal static class Program
 
             if (!InitialiseDatabase(configuration)) return;
 
+            // Before the login screen fills its language list: only the languages the laboratory
+            // works in are offered, and a configured default switched off gives way to French.
+            ReadActiveLanguages(cultureManager);
+
             // After the language is set, so the warning itself is readable, and before sign-in, so
             // whoever opens the laboratory sees it rather than whoever first prints a report.
             WarnAboutMissingFonts();
@@ -143,6 +147,29 @@ internal static class Program
         MessageBox.Show(localizer.Describe(result.Errors),
                         localizer["App.Title"], MessageBoxButtons.OK, MessageBoxIcon.Error);
         return false;
+    }
+
+    /// <summary>
+    /// Reads the languages the laboratory works in, once, for every language list of the session.
+    /// A failure leaves the three languages offered: the services still assign only active ones.
+    /// </summary>
+    private static void ReadActiveLanguages(ICultureManager cultureManager)
+    {
+        LanguageChoices.Languages = Services.GetRequiredService<Application.Administration.ActiveLanguagesCache>();
+
+        try
+        {
+            using var scope = Services.CreateScope();
+            scope.ServiceProvider.GetRequiredService<Application.Administration.IActiveLanguages>()
+                 .GetAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Reading the active languages failed.");
+        }
+
+        var language = LanguageChoices.Coerce(cultureManager.CurrentLanguage);
+        if (language != cultureManager.CurrentLanguage) cultureManager.SetLanguage(language);
     }
 
     /// <summary>

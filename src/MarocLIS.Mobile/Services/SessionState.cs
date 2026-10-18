@@ -58,6 +58,20 @@ public sealed class SessionState : IDisposable
 
     public int LastIdleMinutes { get; private set; } = 15;
 
+    /// <summary>
+    /// The languages the laboratory works in, French first: the only ones the language buttons
+    /// offer. The three until the server has said otherwise; kept after the session ends, for the
+    /// sign-in screen.
+    /// </summary>
+    public IReadOnlyList<UiLanguage> Languages { get; private set; } = Enum.GetValues<UiLanguage>();
+
+    /// <summary>The languages as the server names them; French is always among them.</summary>
+    public void UseLanguages(IEnumerable<string>? names)
+    {
+        if (names is null) return;
+        Languages = [.. names.Select(Texts.Parse).Append(UiLanguage.French).Distinct().Order()];
+    }
+
     public TimeSpan IdleTimeout => TimeSpan.FromMinutes(Math.Max(1, Info?.IdleTimeoutMinutes ?? 15));
 
     /// <summary>Raised when the session ends, whatever the reason; the layout returns to the sign-in screen.</summary>
@@ -74,6 +88,7 @@ public sealed class SessionState : IDisposable
         SignedInAt = info.SignedInAt ?? _time.GetUtcNow();
         EndReason = SessionEndReason.NotSignedIn;
         EndMessage = null;
+        UseLanguages(info.ActiveLanguages);
         Touch();
         Changed?.Invoke();
     }
@@ -83,6 +98,7 @@ public sealed class SessionState : IDisposable
     {
         if (!IsSignedIn) return;
         Info = info;
+        UseLanguages(info.ActiveLanguages);
         Changed?.Invoke();
     }
 

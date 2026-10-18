@@ -1334,8 +1334,8 @@ internal sealed class UserDialog : Form
         _language.FlatStyle = FlatStyle.Flat;
         _language.Bounds = new Rectangle(250, y + 18, 200, UiTheme.InputHeight);
 
-        foreach (var value in Enum.GetValues<AppLanguage>())
-            _language.Items.Add(new EnumChoice((int)value, localizer[$"AppLanguage.{value}"]));
+        // Only the languages the laboratory works in.
+        LanguageChoices.Fill(_language, l => localizer[$"AppLanguage.{l}"], AppLanguage.French);
 
         y += 54;
         Field("Admin.OrderNumber", y);
@@ -1476,7 +1476,8 @@ internal sealed class UserDialog : Form
         _departments.Text = string.Join(", ", existing.AuthorizedDepartmentCodes);
 
         Select(_qualification, (int)existing.Qualification);
-        Select(_language, (int)existing.PreferredLanguage);
+        // French when the account's language has since been switched off.
+        LanguageChoices.Select(_language, existing.PreferredLanguage);
 
         if (existing.QualificationValidUntil is { } until)
         {

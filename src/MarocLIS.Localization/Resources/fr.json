@@ -5061,6 +5061,15 @@
     "statistics": "Statistiques"
   },
 
+  "Languages": {
+    "SettingsTab": "Langues",
+    "Heading": "Langues de travail du laboratoire",
+    "Intro": "Les langues proposées dans les listes de choix : langue du patient, du compte rendu, de l'utilisateur, de l'interface et de l'application mobile. Une langue désactivée n'est plus proposée ni attribuée ; un dossier qui l'avait s'affiche et s'imprime en français.",
+    "FrenchAlways": "Le français reste toujours actif : c'est la langue de travail et la langue de repli.",
+    "Notice": "Les écrans ouverts après l'enregistrement proposent la nouvelle liste. Le sélecteur de langue de l'en-tête et les autres postes la prennent en compte à leur prochain démarrage ; l'application mobile, sous une minute.",
+    "Saved": "Langues enregistrées."
+  },
+
   "AppLanguage": {
     "French": "Français",
     "Arabic": "العربية",
@@ -6053,6 +6062,7 @@
   "Mobile_PreviewUnavailable": "L'aperçu de ce compte rendu n'est plus disponible. Il se consulte au laboratoire, dans le registre des comptes rendus.",
   "Mobile_PreviewPageNotFound": "Page {0} introuvable : le compte rendu compte {1} page(s).",
   "Mobile_UnknownLanguage": "Langue inconnue : {0}. Utilisez French, Arabic ou English.",
+  "Mobile_LanguageNotActive": "Cette langue n'est pas activée dans ce laboratoire. Choisissez l'une des langues proposées.",
   "Mobile_UnknownChannel": "Moyen de communication inconnu : {0}. Utilisez Telephone ou InPerson.",
   "Qc_RunNotFound": "Série de contrôle introuvable ({0}).",
   "Qc_NamedLotOneAnalyser": "Le lot de réactif choisi ne s'applique qu'aux contrôles d'un seul automate : saisissez les autres automates comme contrôles de routine ou dans une autre série.",

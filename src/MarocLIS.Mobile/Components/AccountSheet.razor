@@ -19,20 +19,24 @@
         <div class="fact"><span>@T("MobileUi.AccountIdleClose")</span><span>@T("MobileUi.AccountMinutes", Info?.IdleTimeoutMinutes ?? 15)</span></div>
     </div>
 
-    <fieldset class="fieldset-plain">
-        <legend>@T("App.Language")</legend>
-        <div class="segmented">
-            @foreach (var language in Enum.GetValues<UiLanguage>())
-            {
-                var current = language;
-                <label class="segment @(Texts.Language == current ? "on" : "")" lang="@Texts.Tag(current)">
-                    <input type="radio" name="language" checked="@(Texts.Language == current)" disabled="@(_busy || !Browser.IsOnline)"
-                           @onchange="() => ChangeLanguageAsync(current)" />
-                    @Name(current)
-                </label>
-            }
-        </div>
-    </fieldset>
+    @* Only the languages the laboratory works in; none to choose when it works in French alone. *@
+    @if (Session.Languages.Count > 1)
+    {
+        <fieldset class="fieldset-plain">
+            <legend>@T("App.Language")</legend>
+            <div class="segmented">
+                @foreach (var language in Session.Languages)
+                {
+                    var current = language;
+                    <label class="segment @(Texts.Language == current ? "on" : "")" lang="@Texts.Tag(current)">
+                        <input type="radio" name="language" checked="@(Texts.Language == current)" disabled="@(_busy || !Browser.IsOnline)"
+                               @onchange="() => ChangeLanguageAsync(current)" />
+                        @Name(current)
+                    </label>
+                }
+            </div>
+        </fieldset>
+    }
 
     @if (_error is { Length: > 0 })
     {

@@ -507,11 +507,11 @@ public sealed class ConfigurationService(
 
     /// <summary>
     /// Settings owned by a screen of their own, which checks their wording, format and permission
-    /// (the patient messages, the cost allocation): neither listed nor written here.
+    /// (the patient messages, the cost allocation, the active languages): neither listed nor written here.
     /// </summary>
     public static readonly IReadOnlyList<string> DedicatedPrefixes =
         [MarocLIS.Application.Relations.MessagingSettings.Prefix, MarocLIS.Application.Steering.CostSettings.Prefix,
-         MarocLIS.Application.Billing.InvoicePrintSettings.Prefix];
+         MarocLIS.Application.Billing.InvoicePrintSettings.Prefix, LanguageSettings.Prefix];
 
     public static bool IsDedicated(string key) =>
         DedicatedPrefixes.Any(p => key.Trim().StartsWith(p, StringComparison.OrdinalIgnoreCase));

@@ -166,6 +166,37 @@ public sealed class MobileComponentTests : BunitContext
         page.Find(".bottombar .btn-primary").TextContent.Should().NotContain("Valider", "the screen is in Arabic");
     }
 
+    [Fact]
+    public void SignIn_OffersOnlyTheLaboratorysLanguages_AndLeavesOneSwitchedOffForFrench()
+    {
+        _api.Answer(ApiProtocol.LanguagesRoute, new LanguagesInfo(["French", "English"]));
+        var texts = Services.GetRequiredService<Texts>();
+        texts.Use(UiLanguage.Arabic);
+
+        var page = Render<SignIn>();
+
+        page.WaitForAssertion(() =>
+            page.FindAll(".languages button").Select(b => b.GetAttribute("lang")).Should().Equal("fr", "en"));
+        texts.Language.Should().Be(UiLanguage.French, "Arabic is no longer one of the laboratory's languages");
+
+        // French alone: nothing to choose, so no buttons at all.
+        _api.Answer(ApiProtocol.LanguagesRoute, new LanguagesInfo(["French"]));
+        var frenchOnly = Render<SignIn>();
+        frenchOnly.WaitForAssertion(() => frenchOnly.FindAll(".languages").Should().BeEmpty());
+    }
+
+    [Fact]
+    public void AccountSheet_OffersOnlyTheLanguagesTheSessionSays()
+    {
+        Services.GetRequiredService<SessionState>().SignedIn(
+            new SessionInfo("dr.exemple", "Dr Exemple", "MedicalBiologist", "A", "French", 15, "Mobile · test",
+                            ActiveLanguages: ["French", "Arabic"]));
+
+        var sheet = Render<AccountSheet>();
+
+        sheet.FindAll(".segment").Select(s => s.GetAttribute("lang")).Should().Equal("fr", "ar");
+    }
+
     /// <summary>The API as a dictionary of answers, recording what the phone sent.</summary>
     private sealed class StubApi : HttpMessageHandler
     {
