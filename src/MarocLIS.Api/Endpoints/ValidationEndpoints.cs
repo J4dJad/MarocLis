@@ -101,9 +101,32 @@ public static class ValidationEndpoints
             context,
             [.. listed.Select(r => Row(r, language))],
             sheet.Rows.Count(r => !r.IsHeading && r.Status is TestResultStatus.Validated or TestResultStatus.Reported),
-            (await reports.GetLatestVersionAsync(orderId, ct))?.VersionNumber);
+            (await reports.GetLatestVersionAsync(orderId, ct))?.VersionNumber,
+            Prescriber(sheet.Prescriber, language));
 
         return Results.Ok(file);
+    }
+
+    /// <summary>The prescriber block of the dossier header, by the workstation's rules (<see cref="PrescriberContactRules"/>).</summary>
+    public static PrescriberSummary? Prescriber(OrderPrescriber? prescriber, AppLanguage language)
+    {
+        if (PrescriberContactRules.DisplayName(prescriber, language) is not { } name) return null;
+
+        var contacts = PrescriberContactRules.Contacts(prescriber);
+        string? Of(PrescriberContactKind kind) => contacts.FirstOrDefault(c => c.Kind == kind)?.Value;
+
+        var speciality = prescriber!.Speciality?.For(language);
+
+        return new PrescriberSummary(
+            name,
+            string.IsNullOrWhiteSpace(speciality) ? null : speciality.Trim(),
+            string.IsNullOrWhiteSpace(prescriber.City) ? null : prescriber.City.Trim(),
+            Of(PrescriberContactKind.CriticalLine),
+            Of(PrescriberContactKind.Phone),
+            Of(PrescriberContactKind.Mobile),
+            Of(PrescriberContactKind.Email),
+            Of(PrescriberContactKind.Fax),
+            PrescriberContactRules.CriticalContact(prescriber));
     }
 
     private static async Task<IResult> HistoryAsync(

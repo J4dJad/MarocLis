@@ -135,6 +135,95 @@ public sealed class MobileComponentTests : BunitContext
         confirm().HasAttribute("disabled").Should().BeTrue();
     }
 
+    // ---- Prescripteur -----------------------------------------------------------------------------------
+
+    private static readonly PrescriberSummary Alaoui = new(
+        "ALAOUI Karim", "Néphrologie", "Casablanca", CriticalLine: "0522 11 22 33", Phone: "0522 00 00 00",
+        Mobile: null, Email: "k.alaoui@example.ma", Fax: "0522 00 00 01", CriticalContact: "0522 11 22 33");
+
+    [Fact]
+    public void OrderPage_FoldsThePrescriberToItsName_AndUnfoldsItWhenACriticalValueIsWaitingForTheCall()
+    {
+        var sodium = Row("Sodium", "134", interpretation: "Low");
+        _api.Answer($"/api/dossiers/{OrderId}", File(sodium) with { Prescriber = Alaoui });
+        SignIn();
+
+        var page = Render<OrderPage>(p => p.Add(x => x.OrderId, OrderId));
+        page.WaitForElement(".prescriber");
+
+        page.Find(".prescriber-name").TextContent.Should().Be("ALAOUI Karim");
+        page.Find(".prescriber-toggle").GetAttribute("aria-expanded").Should().Be("false");
+        page.FindAll(".contact-row").Should().BeEmpty();
+
+        page.Find(".prescriber-toggle").Click();
+        var rows = page.FindAll(".contact-row");
+        rows.Select(r => r.QuerySelector(".contact-label")!.TextContent)
+            .Should().Equal("Ligne valeurs critiques", "Tél.", "E-mail", "Fax");
+        rows[0].ClassList.Should().Contain("critical");
+        rows[0].QuerySelector("a")!.GetAttribute("href").Should().Be("tel:0522112233");
+        rows[2].QuerySelector("a")!.GetAttribute("href").Should().Be("mailto:k.alaoui@example.ma");
+        rows[3].QuerySelector("a").Should().BeNull("a fax is copied, not dialled");
+        page.Find(".prescriber-speciality").TextContent.Should().Be("Néphrologie · Casablanca");
+
+        // An uncalled critical value: the card opens by itself on the numbers.
+        var potassium = Row("Potassium", "6,9", critical: true, interpretation: "CriticalHigh");
+        _api.Answer($"/api/dossiers/{OrderId}", File(potassium) with { Prescriber = Alaoui });
+        var critical = Render<OrderPage>(p => p.Add(x => x.OrderId, OrderId));
+        critical.WaitForElement(".prescriber");
+        critical.Find(".prescriber-toggle").GetAttribute("aria-expanded").Should().Be("true");
+        critical.FindAll(".contact-row").Should().HaveCount(4);
+
+        // Without a prescriber, no card.
+        _api.Answer($"/api/dossiers/{OrderId}", File(sodium));
+        var none = Render<OrderPage>(p => p.Add(x => x.OrderId, OrderId));
+        none.WaitForElement(".result-row");
+        none.FindAll(".prescriber").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void PrescriberCard_CopiesAValueThroughTheBrowser_AndSaysSo()
+    {
+        var copy = JSInterop.Setup<bool>("marocLis.copyText", _ => true);
+        copy.SetResult(true);
+
+        var card = Render<PrescriberCard>(p => p.Add(x => x.Prescriber, Alaoui).Add(x => x.Expanded, true));
+        card.FindAll(".contact-copy")[1].Click();
+
+        copy.Invocations.Should().ContainSingle().Which.Arguments.Should().Equal("0522 00 00 00");
+        card.WaitForAssertion(() => card.Find(".contact-copied").TextContent.Should().Be("Copié"));
+        card.FindAll(".contact-copied").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void CriticalSheet_NamesWhomToCall_AndSendsTheNumberTappedOnTheFile_ElseLeavesTheServersDefault()
+    {
+        var potassium = Row("Potassium", "6,9", critical: true, interpretation: "CriticalHigh");
+        var file = File(potassium) with { Prescriber = Alaoui };
+        var route = $"/api/critiques/{potassium.ResultId}";
+
+        var tapped = Render<CriticalSheet>(p => p.Add(x => x.File, file).Add(x => x.Row, potassium)
+                                                 .Add(x => x.Dialled, "0522 00 00 00"));
+        tapped.Find(".call-to").TextContent.Should().Contain("ALAOUI Karim").And.Contain("0522 00 00 00");
+        tapped.Find(".call-to a").GetAttribute("href").Should().Be("tel:0522000000");
+        tapped.Find("#recipient").Input("Dr Alaoui");
+        tapped.Find("#readback").Input("6,9");
+        tapped.Find(".sheet-actions .btn-primary").Click();
+
+        tapped.WaitForAssertion(() => _api.LastBody(route).Should().NotBeNull());
+        using (var sent = JsonDocument.Parse(_api.LastBody(route)!))
+            sent.RootElement.GetProperty("contactUsed").GetString().Should().Be("0522 00 00 00");
+
+        var offered = Render<CriticalSheet>(p => p.Add(x => x.File, file).Add(x => x.Row, potassium));
+        offered.Find(".call-to").TextContent.Should().Contain("0522 11 22 33", "the critical line, which the server records");
+        offered.Find("#recipient").Input("Dr Alaoui");
+        offered.Find("#readback").Input("6,9");
+        offered.Find(".sheet-actions .btn-primary").Click();
+
+        offered.WaitForAssertion(() => _api.Count(route).Should().Be(2));
+        using var defaulted = JsonDocument.Parse(_api.LastBody(route)!);
+        defaulted.RootElement.GetProperty("contactUsed").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
     // ---- Languages ------------------------------------------------------------------------------------
 
     [Fact]

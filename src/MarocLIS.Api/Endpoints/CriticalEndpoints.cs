@@ -59,10 +59,14 @@ public static class CriticalEndpoints
         var parameter = row.ParameterName.For(user.Language);
         var value = $"{row.CurrentValue} {row.UnitSymbol}".Trim();
 
+        // The number the phone dialled when it says so, else the one the dossier header offers for
+        // a critical call; the call is recorded against the order's prescriber either way.
+        var prescriber = opened.Value.Prescriber;
+        var contactUsed = PrescriberContactRules.ContactUsed(request.ContactUsed, prescriber, channel.Value);
+
         var raised = await validation.RaiseCriticalNotificationAsync(
-            resultId, parameter, value, channel.Value,
-            string.IsNullOrWhiteSpace(request.ContactUsed) ? null : request.ContactUsed.Trim(),
-            prescriberId: null, request.DisplayedEnteredAt, ct);
+            resultId, parameter, value, channel.Value, contactUsed,
+            prescriber?.PrescriberId, request.DisplayedEnteredAt, ct);
 
         if (raised.IsFailure) return ApiProblems.From(http, raised);
 

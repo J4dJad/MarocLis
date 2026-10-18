@@ -44,6 +44,7 @@ public sealed record ContextLine(string Tone, string Badge, string Text);
 /// <param name="CanIssueReport">« Compte rendu » is offered: a value of the file is validated and not yet reported.</param>
 /// <param name="ValidatedCount">Values of the file already released, for the issue confirmation.</param>
 /// <param name="LatestReportVersion">The last report version issued for the file; null when none was.</param>
+/// <param name="Prescriber">Who prescribed the file and how to reach them; null when it names nobody.</param>
 public sealed record OrderFile(
     Guid OrderId,
     string AccessionNumber,
@@ -55,7 +56,29 @@ public sealed record OrderFile(
     IReadOnlyList<ContextLine> Context,
     IReadOnlyList<ResultRow> Rows,
     int ValidatedCount = 0,
-    int? LatestReportVersion = null);
+    int? LatestReportVersion = null,
+    PrescriberSummary? Prescriber = null);
+
+/// <summary>
+/// The file's prescriber as the dossier header shows it, every value optional: a prescriber typed
+/// on the order rather than chosen from the directory has a name and nothing else.
+/// </summary>
+/// <param name="Name">The establishment's name for a clinic or a referring laboratory, else the doctor's.</param>
+/// <param name="Speciality">In the biologist's language.</param>
+/// <param name="CriticalContact">
+/// The number a critical call goes to — the critical line, else the mobile, else the main number —
+/// and the one recorded when the phone does not say which it dialled.
+/// </param>
+public sealed record PrescriberSummary(
+    string Name,
+    string? Speciality = null,
+    string? City = null,
+    string? CriticalLine = null,
+    string? Phone = null,
+    string? Mobile = null,
+    string? Email = null,
+    string? Fax = null,
+    string? CriticalContact = null);
 
 /// <summary>One row of an open file.</summary>
 /// <param name="Interpretation">Normal, Low, High, CriticalLow, CriticalHigh, Abnormal or NotInterpretable.</param>

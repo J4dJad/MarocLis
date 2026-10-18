@@ -13,6 +13,19 @@
         <div class="sheet-sub"><span class="ltr">@File.AccessionNumber</span> · @File.Patient.Name</div>
     </div>
 
+    @if (File.Prescriber is { } prescriber)
+    {
+        // Whom to call: the number tapped on the file, else the one the server records by default.
+        var number = Number;
+        <div class="call-to">
+            <span>@T("Validation.CriticalCallWhom", prescriber.Name)</span>
+            @if (number is not null && Display.TelephoneLink(number) is { } link)
+            {
+                <a class="ltr" href="@link" @onclick="() => _dialled = number">@number</a>
+            }
+        </div>
+    }
+
     <div class="value-box">
         <span class="name">@Row.ParameterName</span>
         <span class="value ltr">@(Row.Value ?? "—")<span class="arrows" aria-hidden="true">@Display.Arrows(Row.Indicator)</span></span>
@@ -66,6 +79,9 @@
     [Parameter, EditorRequired] public OrderFile File { get; set; } = default!;
     [Parameter, EditorRequired] public ResultRow Row { get; set; } = default!;
 
+    /// <summary>The prescriber's number tapped on the file before the sheet opened, if any.</summary>
+    [Parameter] public string? Dialled { get; set; }
+
     /// <summary>The call is recorded (or refused); the argument is the sentence to show over the file, if any.</summary>
     [Parameter] public EventCallback<string?> OnDone { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
@@ -75,6 +91,10 @@
     private string _readBack = "";
     private string? _error;
     private bool _busy;
+    private string? _dialled;
+
+    /// <summary>The number shown, and sent as the contact used: tapped here, else on the file, else the server's default.</summary>
+    private string? Number => _dialled ?? Dialled ?? File.Prescriber?.CriticalContact;
 
     private async Task RecordAsync()
     {
@@ -105,7 +125,8 @@
         try
         {
             var raised = await Api.RaiseCriticalAsync(Row.ResultId,
-                new RaiseCriticalRequest(File.OrderId, Row.EnteredAt, null, _channel));
+                new RaiseCriticalRequest(File.OrderId, Row.EnteredAt,
+                    _channel == ApiProtocol.Channels.Telephone ? _dialled ?? Dialled : null, _channel));
 
             if (raised.Offline) return;
 

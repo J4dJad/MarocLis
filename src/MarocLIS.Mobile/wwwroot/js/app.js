@@ -14,6 +14,27 @@ window.marocLis = {
     window.addEventListener('online', report);
     window.addEventListener('offline', report);
     return navigator.onLine;
+  },
+
+  // The Clipboard API needs a secure page, which the application is; the hidden field is for a
+  // browser that still refuses it. True when the text was copied.
+  async copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const field = document.createElement('textarea');
+      field.value = text;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.opacity = '0';
+      document.body.appendChild(field);
+      field.select();
+      let copied = false;
+      try { copied = document.execCommand('copy'); } catch { copied = false; }
+      field.remove();
+      return copied;
+    }
   }
 };
 

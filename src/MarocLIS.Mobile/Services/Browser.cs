@@ -4,7 +4,8 @@ namespace MarocLIS.Mobile.Services;
 
 /// <summary>
 /// The little the application needs from the browser that .NET cannot reach by itself: the page's
-/// language and direction on the <c>html</c> element, and whether the phone has a network. All of it
+/// language and direction on the <c>html</c> element, whether the phone has a network, and the
+/// clipboard. All of it
 /// is in wwwroot/js/app.js, a file the Content-Security-Policy allows like any other of the site's.
 /// </summary>
 public sealed class Browser(IJSRuntime js) : IDisposable, IAsyncDisposable
@@ -48,6 +49,19 @@ public sealed class Browser(IJSRuntime js) : IDisposable, IAsyncDisposable
         catch (JSException)
         {
             // The layout's own dir attribute still lays the screen out; nothing to report.
+        }
+    }
+
+    /// <summary>Puts <paramref name="text"/> on the phone's clipboard; false when the browser refused.</summary>
+    public async Task<bool> CopyAsync(string text)
+    {
+        try
+        {
+            return await js.InvokeAsync<bool>("marocLis.copyText", text);
+        }
+        catch (JSException)
+        {
+            return false;
         }
     }
 

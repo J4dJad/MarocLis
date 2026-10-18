@@ -139,4 +139,19 @@ public static partial class Display
             ? d
             : null;
     }
+
+    /// <summary>
+    /// The tel: link of a number as recorded ("05 22 12 34 56", "+212 6 61-00-00-00"): the digits
+    /// and a leading +, which every dialler takes. Null when nothing dialable is left.
+    /// </summary>
+    public static string? TelephoneLink(string? number)
+    {
+        if (string.IsNullOrWhiteSpace(number)) return null;
+
+        var trimmed = number.Trim();
+        var digits = new string([.. trimmed.Where(char.IsAsciiDigit)]);
+        if (digits.Length == 0) return null;
+
+        return trimmed.StartsWith('+') ? $"tel:+{digits}" : $"tel:{digits}";
+    }
 }

@@ -3595,6 +3595,15 @@
   },
 
   "Validation": {
+    "Prescriber": "Prescripteur",
+    "PrescriberCriticalLine": "Ligne valeurs critiques",
+    "PrescriberPhone": "Tél.",
+    "PrescriberMobile": "Mobile",
+    "PrescriberEmail": "E-mail",
+    "PrescriberFax": "Fax",
+    "PrescriberCopy": "Copier",
+    "PrescriberCopied": "Copié : {0}",
+    "CriticalCallWhom": "À appeler : {0}",
     "ValidatedCount": "{0} {0:plural:résultat validé|résultats validés}",
     "KeyNextOrder": "dossier suivant",
     "KeyValidate": "valider la sélection",
@@ -6334,6 +6343,10 @@
   "Stats_PeriodReversed": "La date de fin précède la date de début.",
   "Stats_PeriodTooLong": "La période ne peut pas dépasser {0} jours.",
   "MobileUi": {
+    "PrescriberCopy": "Copier {0}",
+    "PrescriberCopied": "Copié",
+    "PrescriberCall": "Appeler {0}",
+    "PrescriberWrite": "Écrire à {0}",
     "OfflineTitle": "Hors connexion",
     "OfflineDetail": "Rien ne peut être validé sans réseau.",
     "SignInAgain": "Se reconnecter",
