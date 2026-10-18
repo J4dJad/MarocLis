@@ -198,6 +198,9 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<Application.Migration.IMigrationWorkbook, Reprise.MigrationWorkbook>();
 
         services.AddScoped<DatabaseInitializer>();
+
+        // Paramètres › Sauvegardes: BACKUP, RESTORE and SQL Server's history, on connections of its own.
+        services.AddScoped<Application.Administration.IDatabaseBackupEngine, SqlServerBackupEngine>();
         services.AddScoped<DemoDataSeeder>();
 
         return services;

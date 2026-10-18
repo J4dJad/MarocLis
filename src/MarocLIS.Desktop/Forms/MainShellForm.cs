@@ -22,7 +22,7 @@ namespace MarocLIS.Desktop.Forms;
 /// it *and* refusing the call is defence in depth.
 /// </para>
 /// </summary>
-public sealed class MainShellForm : LocalizedForm
+public sealed partial class MainShellForm : LocalizedForm
 {
     private readonly ICurrentUser _currentUser;
     private readonly INavigationService _navigation;
@@ -803,6 +803,7 @@ public sealed class MainShellForm : LocalizedForm
     {
         base.OnShown(e);
         await ActivateAsync(_entries[0]);
+        await CheckBackupAgeAsync();
     }
 
     protected override void ApplyTexts()
@@ -818,6 +819,7 @@ public sealed class MainShellForm : LocalizedForm
         _siteInfo.Text = $"{T("App.Site")} : {_currentUser.SiteCode}   ·   " +
                          $"{T("App.Workstation")} : {_currentUser.Workstation}";
         ShowStatusBar();
+        ShowBackupWarning();
         ShowBreadcrumb();
 
         // Each language in its own name, only those the laboratory works in, chosen by value.

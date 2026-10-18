@@ -8,6 +8,8 @@
 #                                MarocLIS database and the logins the workstations and the API
 #                                service sign in with
 #   -Action InstallService       server type, first install: scripts/install-api-service.ps1
+#   -Action InstallBackupTask    server type: the backup folder, its rights for SQL Server, and the
+#                                scheduled task "MarocLIS - Sauvegarde" (scripts/maroclis-backup.ps1)
 #   -Action StopService          upgrade: stop MarocLIS.Api before its files are replaced
 #   -Action StartService         upgrade: start it again afterwards
 #
@@ -19,7 +21,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('SetConnectionString', 'ConfigureServer', 'InstallService', 'StopService', 'StartService')]
+    [ValidateSet('SetConnectionString', 'ConfigureServer', 'InstallService', 'StopService', 'StartService',
+                 'InstallBackupTask')]
     [string] $Action,
     [string] $File,
     [string] $Server,
@@ -28,6 +31,12 @@ param(
     [string] $UsersGroup = 'MarocLIS-Utilisateurs',
     [string] $ApiDirectory,
     [string] $ServiceName = 'MarocLIS.Api',
+    [string] $BackupScript,
+    [string] $BackupFolder = 'C:\MarocLIS\Sauvegardes',
+    [string] $BackupTimes = '22:00',
+    [int] $RetentionDays = 14,
+    [ValidateSet('true', 'false')]
+    [string] $BackupEnabled = 'true',
     [string] $LogFile
 )
 
@@ -220,10 +229,82 @@ function Set-ServerConfiguration {
         Grant-DatabaseAccess $connection ([Security.Principal.WindowsIdentity]::GetCurrent().Name)
         # MarocLIS.Api runs as LocalSystem (install-api-service.ps1 without -Account).
         Grant-DatabaseAccess $connection 'NT AUTHORITY\SYSTEM'
+        # The scheduled backup runs as SYSTEM too. db_owner may BACKUP, but RESTORE VERIFYONLY, which
+        # checks every backup it writes and those taken from a workstation, needs CREATE DATABASE.
+        # SYSTEM can already stop SQL Server and start it in single-user mode, so this gives it
+        # nothing it could not take.
+        Invoke-Sql $connection 'GRANT CREATE ANY DATABASE TO [NT AUTHORITY\SYSTEM];'
+        Write-Log 'NT AUTHORITY\SYSTEM may verify backups (CREATE ANY DATABASE).'
     }
     finally {
         $connection.Dispose()
     }
+}
+
+# --- Scheduled backup ------------------------------------------------------------------------
+
+$BackupTaskName = 'MarocLIS - Sauvegarde'
+
+# The account SQL Server runs as: it, not this script nor the task, writes the backup files.
+function Get-SqlServiceAccount {
+    $name = if ($Instance -eq 'MSSQLSERVER') { 'MSSQLSERVER' } else { 'MSSQL$' + $Instance }
+    $service = Get-CimInstance -ClassName Win32_Service -Filter ("Name = '" + $name + "'") -ErrorAction SilentlyContinue
+    if ($service -and $service.StartName) { return $service.StartName }
+    return "NT Service\$name"
+}
+
+# The folder, SQL Server's right to write in it, and the task. The task reads its schedule from the
+# database (Parametres > Sauvegardes in MarocLIS); the values given here are written there by the
+# task the first time it finds none, so an upgrade keeps what the laboratory chose since.
+function Install-BackupTask {
+    if (-not $BackupScript -or -not (Test-Path $BackupScript)) { throw "Backup script not found: $BackupScript" }
+    if ($BackupFolder -match '["<>|?*]') { throw "Invalid backup folder: $BackupFolder" }
+    # "E:" from the setup program is the root of E: (a trailing "\" would escape its closing quote).
+    if ($BackupFolder -match '^[A-Za-z]:$') { $BackupFolder += '\' }
+
+    if ($BackupFolder -match '^[A-Za-z]:\\') {
+        if (-not (Test-Path -LiteralPath $BackupFolder)) {
+            try {
+                New-Item -ItemType Directory -Path $BackupFolder -Force | Out-Null
+                Write-Log "Backup folder $BackupFolder created."
+            }
+            catch { Write-Warn "Backup folder $BackupFolder could not be created: $($_.Exception.Message)" }
+        }
+        if (Test-Path -LiteralPath $BackupFolder) {
+            $account = Get-SqlServiceAccount
+            # LocalSystem is SYSTEM, which every folder of a local disk already admits.
+            if ($account -eq 'LocalSystem') { $account = 'NT AUTHORITY\SYSTEM' }
+            & icacls.exe $BackupFolder /grant "${account}:(OI)(CI)M" | Out-Null
+            if ($LASTEXITCODE -eq 0) { Write-Log "$account (SQL Server service) may write into $BackupFolder." }
+            else { Write-Warn "icacls could not give $account the right to write into $BackupFolder (exit code $LASTEXITCODE)." }
+        }
+    }
+    elseif ($BackupFolder.StartsWith('\\')) {
+        # A share is reached by SQL Server's service as the server's computer account.
+        Write-Warn "Backup folder $BackupFolder is a network share: its share and NTFS permissions must let the computer account $env:USERDOMAIN\$env:COMPUTERNAME`$ write, or every backup will fail (MarocLIS shows it in Parametres > Sauvegardes)."
+    }
+    else {
+        Write-Warn "Backup folder $BackupFolder is neither a local path nor a share; the backups will fail until it is corrected in MarocLIS (Parametres > Sauvegardes)."
+    }
+
+    $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $arguments = ('-NoProfile -ExecutionPolicy Bypass -File "{0}" -Server "{1}" -Database "{2}" ' +
+                  '-DefaultFolder "{3}" -DefaultTimes "{4}" -DefaultRetentionDays {5} -DefaultEnabled {6}') -f
+                 $BackupScript, (Get-DataSource), $Database, $BackupFolder.TrimEnd('\'), $BackupTimes, $RetentionDays, $BackupEnabled
+
+    $action = New-ScheduledTaskAction -Execute $powershell -Argument $arguments -WorkingDirectory (Split-Path -Parent $BackupScript)
+    # Every 15 minutes, from midnight today, without end; and at startup, so a server switched off
+    # at the backup time catches up as soon as it is on again.
+    $repeat = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 15)
+    $startup = New-ScheduledTaskTrigger -AtStartup
+    $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 4)
+
+    Register-ScheduledTask -TaskName $BackupTaskName -Action $action -Trigger @($repeat, $startup) -Principal $principal `
+        -Settings $settings -Force `
+        -Description 'Sauvegarde de la base MarocLIS selon les reglages de MarocLIS (Parametres > Sauvegardes).' | Out-Null
+    Write-Log "Scheduled task '$BackupTaskName' registered (every 15 minutes, as SYSTEM): $powershell $arguments"
 }
 
 # --- MarocLIS.Api service ---------------------------------------------------------------------
@@ -256,6 +337,7 @@ try {
         'InstallService'      { Install-ApiService }
         'StopService'         { Stop-ApiService }
         'StartService'        { Start-ApiService }
+        'InstallBackupTask'   { Install-BackupTask }
     }
 }
 catch {

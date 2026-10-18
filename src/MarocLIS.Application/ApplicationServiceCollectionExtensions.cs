@@ -29,6 +29,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Administration.IActiveLanguages>(
             sp => sp.GetRequiredService<Administration.ActiveLanguagesService>());
 
+        // Paramètres › Sauvegardes; its SQL Server side is the infrastructure's backup engine.
+        services.AddScoped<Administration.BackupService>();
+
         services.AddScoped<Patients.PatientRegistrationService>();
         services.AddScoped<OrderComposer>();
         services.AddScoped<OrderRegistrationService>();

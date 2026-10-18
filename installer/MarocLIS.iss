@@ -10,9 +10,15 @@
 ; Built by installer/build-installer.ps1, which publishes the Desktop and the Api self-contained
 ; for win-x64 (no .NET runtime to install) into the staging folder this script packages.
 ;
+; The server type also registers the scheduled task "MarocLIS - Sauvegarde" (scripts/maroclis-backup.ps1,
+; every 15 minutes as SYSTEM), which backs the database up following the schedule kept in the
+; database and changed in MarocLIS (Paramètres › Sauvegardes); the wizard's « Sauvegarde » page
+; gives its first values.
+;
 ; Upgrades keep the same AppId: the service is stopped before its files are replaced and started
 ; again afterwards, and an existing appsettings.json is never overwritten. Uninstalling removes
-; the service and the program files, never the database nor SQL Server.
+; the service, the backup task and the program files, never the database, SQL Server nor the
+; backup files.
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
@@ -28,6 +34,8 @@
 #define ApiServiceName "MarocLIS.Api"
 #define UsersGroup "MarocLIS-Utilisateurs"
 #define DatabaseName "MarocLIS"
+#define BackupTaskName "MarocLIS - Sauvegarde"
+#define DefaultBackupFolder "C:\MarocLIS\Sauvegardes"
 ; The SQL Server Express download offered on https://www.microsoft.com/sql-server/sql-server-downloads
 ; ("Express", "Download now"): Microsoft's SQL2025-SSEI-Expr.exe bootstrapper.
 #define SqlExpressBootstrapperUrl "https://go.microsoft.com/fwlink/p/?linkid=2216019&clcid=0x409&culture=en-us&country=us"
@@ -89,6 +97,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; administrators.
 Name: "{app}\Desktop\logs"; Permissions: users-modify; Components: desktop
 Name: "{app}\Api\logs"; Components: api
+Name: "{app}\Sauvegarde\logs"; Components: api
 
 [Files]
 Source: "{#StagingDir}\Desktop\*"; DestDir: "{app}\Desktop"; Excludes: "\appsettings.json,\appsettings.Development.json"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: desktop
@@ -96,6 +105,7 @@ Source: "{#StagingDir}\Desktop\appsettings.json"; DestDir: "{app}\Desktop"; Flag
 Source: "{#StagingDir}\Api\*"; DestDir: "{app}\Api"; Excludes: "\appsettings.json,\appsettings.Development.json"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: api
 Source: "{#StagingDir}\Api\appsettings.json"; DestDir: "{app}\Api"; Flags: onlyifdoesntexist; Components: api
 Source: "{#RepoRoot}\scripts\install-api-service.ps1"; DestDir: "{app}\Api"; Flags: ignoreversion; Components: api
+Source: "{#RepoRoot}\scripts\maroclis-backup.ps1"; DestDir: "{app}\Sauvegarde"; Flags: ignoreversion; Components: api
 Source: "maroclis-setup.ps1"; Flags: dontcopy
 
 [Icons]
@@ -109,6 +119,8 @@ Filename: "{app}\Desktop\MarocLIS.exe"; WorkingDir: "{app}\Desktop"; Description
 ; Stops and deletes the service; the published files go with the rest of {app}. The database and
 ; SQL Server are left alone.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Api\install-api-service.ps1"" -Uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveApiService"; Components: api
+; The backup task goes; the backup files stay where they are, whatever folder they are in.
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""{#BackupTaskName}"" /F"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveBackupTask"; Components: api
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\Installer"
@@ -186,6 +198,37 @@ french.SrvTestFailed=Connexion impossible à %1 :%n%n%2%n%nVérifiez le nom, que
 english.SrvTestFailed=Cannot connect to %1:%n%n%2%n%nCheck the name, that the server is on, and that this Windows account may use MarocLIS. You may continue: the connection string will be written as entered.
 french.SrvKept=Ce poste a déjà un fichier appsettings.json : sa chaîne de connexion est conservée.
 english.SrvKept=This workstation already has an appsettings.json: its connection string is kept.
+
+french.BkPageCaption=Sauvegarde automatique
+english.BkPageCaption=Automatic backup
+french.BkPageDescription=Sauvegarde de la base MarocLIS par le Planificateur de tâches de Windows.
+english.BkPageDescription=Backup of the MarocLIS database by the Windows Task Scheduler.
+french.BkPageSubCaption=Dossier où SQL Server écrit les sauvegardes : un dossier de ce serveur, un disque externe ou un partage réseau (\\serveur\partage). Évitez une lettre de lecteur réseau : un service n'en a pas.
+english.BkPageSubCaption=Folder where SQL Server writes the backups: a folder of this server, an external disk or a network share (\\server\share). Avoid a mapped drive letter: a service has none.
+french.BkEnabled=&Activer la sauvegarde automatique
+english.BkEnabled=&Enable the automatic backup
+french.BkTime=&Heure de la sauvegarde quotidienne (HH:MM) :
+english.BkTime=Daily backup &time (HH:MM):
+french.BkRetention=&Conservation (jours) :
+english.BkRetention=&Keep for (days):
+french.BkNote=Tous ces réglages se modifient ensuite dans MarocLIS, Paramètres › Sauvegardes (plusieurs heures par jour, jours de la semaine). Les sauvegardes sont vérifiées après écriture ; la plus récente vérifiée n'est jamais supprimée.
+english.BkNote=All these settings can be changed later in MarocLIS, Settings › Backups (several times a day, days of the week). Backups are verified once written; the most recent verified one is never deleted.
+french.BkUpgradeNote=Mise à jour : si les sauvegardes ont déjà été réglées dans MarocLIS, ces réglages restent en vigueur et les valeurs ci-dessus ne servent pas.
+english.BkUpgradeNote=Upgrade: if backups were already set up in MarocLIS, those settings stay in force and the values above are not used.
+french.BkFolderRequired=Indiquez le dossier des sauvegardes (chemin complet, par exemple C:\MarocLIS\Sauvegardes ou \\serveur\partage).
+english.BkFolderRequired=Enter the backup folder (full path, for example C:\MarocLIS\Sauvegardes or \\server\share).
+french.BkTimeInvalid=L'heure doit s'écrire HH:MM, de 00:00 à 23:59.
+english.BkTimeInvalid=The time must be written HH:MM, from 00:00 to 23:59.
+french.BkRetentionInvalid=La conservation est un nombre de jours, de 1 à 365.
+english.BkRetentionInvalid=Keep for is a number of days, from 1 to 365.
+french.ReadyBackup=Sauvegarde automatique :%n%1%2 à %3, conservation %4 jours, dans %5%n%1tâche planifiée « {#BackupTaskName} » (compte SYSTEM)
+english.ReadyBackup=Automatic backup:%n%1%2 at %3, kept %4 days, in %5%n%1scheduled task "{#BackupTaskName}" (SYSTEM account)
+french.ReadyBackupOff=désactivée
+english.ReadyBackupOff=disabled
+french.ReadyBackupOn=tous les jours
+english.ReadyBackupOn=every day
+french.PostBackup=Sauvegarde automatique (dossier et tâche planifiée)…
+english.PostBackup=Automatic backup (folder and scheduled task)…
 
 french.ProgressCaption=Installation de SQL Server Express
 english.ProgressCaption=Installing SQL Server Express
@@ -268,6 +311,12 @@ var
 
   ServerPage: TInputQueryWizardPage;
   ServerKeptLabel: TNewStaticText;
+
+  BackupPage: TInputDirWizardPage;
+  BackupEnabledCheck: TNewCheckBox;
+  BackupTimeEdit: TNewEdit;
+  BackupRetentionEdit: TNewEdit;
+  BackupUpgradeLabel: TNewStaticText;
 
   TypeDetailLabel: TNewStaticText;
   TypesComboChange: TNotifyEvent;
@@ -614,6 +663,112 @@ begin
   ServerKeptLabel.Visible := False;
 end;
 
+{ The server's backup: the folder, whether the task backs up, one daily time and the retention.
+  The task reads its schedule from the database; these are its first values (scripts/maroclis-backup.ps1). }
+procedure CreateBackupPage;
+var
+  TimeLabel, RetentionLabel, NoteLabel: TNewStaticText;
+  Top: Integer;
+begin
+  BackupPage := CreateInputDirPage(LicensePage.ID, CustomMessage('BkPageCaption'), CustomMessage('BkPageDescription'),
+    CustomMessage('BkPageSubCaption'), False, '');
+  BackupPage.Add('');
+  BackupPage.Values[0] := GetPreviousData('BackupFolder', '{#DefaultBackupFolder}');
+
+  Top := BackupPage.Edits[0].Top + BackupPage.Edits[0].Height + ScaleY(14);
+
+  BackupEnabledCheck := TNewCheckBox.Create(BackupPage);
+  BackupEnabledCheck.Parent := BackupPage.Surface;
+  BackupEnabledCheck.Top := Top;
+  BackupEnabledCheck.Width := BackupPage.SurfaceWidth;
+  BackupEnabledCheck.Height := ScaleY(17);
+  BackupEnabledCheck.Caption := CustomMessage('BkEnabled');
+  BackupEnabledCheck.Checked := GetPreviousData('BackupEnabled', 'true') = 'true';
+
+  Top := Top + ScaleY(28);
+  TimeLabel := TNewStaticText.Create(BackupPage);
+  TimeLabel.Parent := BackupPage.Surface;
+  TimeLabel.Top := Top + ScaleY(3);
+  TimeLabel.Caption := CustomMessage('BkTime');
+
+  BackupTimeEdit := TNewEdit.Create(BackupPage);
+  BackupTimeEdit.Parent := BackupPage.Surface;
+  BackupTimeEdit.Top := Top;
+  BackupTimeEdit.Left := ScaleX(250);
+  BackupTimeEdit.Width := ScaleX(60);
+  BackupTimeEdit.MaxLength := 5;
+  BackupTimeEdit.Text := GetPreviousData('BackupTime', '22:00');
+  TimeLabel.FocusControl := BackupTimeEdit;
+
+  Top := Top + BackupTimeEdit.Height + ScaleY(8);
+  RetentionLabel := TNewStaticText.Create(BackupPage);
+  RetentionLabel.Parent := BackupPage.Surface;
+  RetentionLabel.Top := Top + ScaleY(3);
+  RetentionLabel.Caption := CustomMessage('BkRetention');
+
+  BackupRetentionEdit := TNewEdit.Create(BackupPage);
+  BackupRetentionEdit.Parent := BackupPage.Surface;
+  BackupRetentionEdit.Top := Top;
+  BackupRetentionEdit.Left := ScaleX(250);
+  BackupRetentionEdit.Width := ScaleX(60);
+  BackupRetentionEdit.MaxLength := 3;
+  BackupRetentionEdit.Text := GetPreviousData('BackupRetention', '14');
+  RetentionLabel.FocusControl := BackupRetentionEdit;
+
+  Top := Top + BackupRetentionEdit.Height + ScaleY(14);
+  NoteLabel := TNewStaticText.Create(BackupPage);
+  NoteLabel.Parent := BackupPage.Surface;
+  NoteLabel.AutoSize := False;
+  NoteLabel.WordWrap := True;
+  NoteLabel.Top := Top;
+  NoteLabel.Width := BackupPage.SurfaceWidth;
+  NoteLabel.Height := ScaleY(44);
+  NoteLabel.Caption := CustomMessage('BkNote');
+
+  BackupUpgradeLabel := TNewStaticText.Create(BackupPage);
+  BackupUpgradeLabel.Parent := BackupPage.Surface;
+  BackupUpgradeLabel.AutoSize := False;
+  BackupUpgradeLabel.WordWrap := True;
+  BackupUpgradeLabel.Top := NoteLabel.Top + NoteLabel.Height + ScaleY(6);
+  BackupUpgradeLabel.Width := BackupPage.SurfaceWidth;
+  BackupUpgradeLabel.Height := ScaleY(32);
+  BackupUpgradeLabel.Font.Style := [fsBold];
+  BackupUpgradeLabel.Caption := CustomMessage('BkUpgradeNote');
+  BackupUpgradeLabel.Visible := False;
+end;
+
+{ HH:MM, 00:00 to 23:59. }
+function ValidBackupTime(const S: String): Boolean;
+var
+  Hours, Minutes: Integer;
+begin
+  Result := (Length(S) = 5) and (S[3] = ':');
+  if Result then begin
+    Hours := StrToIntDef(Copy(S, 1, 2), -1);
+    Minutes := StrToIntDef(Copy(S, 4, 2), -1);
+    Result := (Hours >= 0) and (Hours <= 23) and (Minutes >= 0) and (Minutes <= 59);
+  end;
+end;
+
+function BackupRetentionDays: Integer;
+begin
+  Result := StrToIntDef(Trim(BackupRetentionEdit.Text), 0);
+end;
+
+function BackupFolderValue: String;
+begin
+  Result := Trim(BackupPage.Values[0]);
+  { Without its trailing separator: before a closing quote on a command line, "E:\" would escape the
+    quote. A drive root goes as "E:", which the backup script turns back into E:\. }
+  if (Length(Result) >= 3) and (Result[Length(Result)] = '\') then
+    Result := Copy(Result, 1, Length(Result) - 1);
+end;
+
+function BackupEnabledValue: String;
+begin
+  if BackupEnabledCheck.Checked then Result := 'true' else Result := 'false';
+end;
+
 function DesktopSettingsPresent: Boolean;
 begin
   Result := FileExists(AddBackslash(WizardDirValue) + 'Desktop\appsettings.json');
@@ -659,6 +814,7 @@ begin
   CreateSqlPage;
   CreateLicensePage;
   CreateServerPage;
+  CreateBackupPage;
   DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), CustomMessage('ProgressDownloadMedia'), nil);
   ProgressPage := CreateOutputProgressPage(CustomMessage('ProgressCaption'), CustomMessage('ProgressDescription'));
 end;
@@ -671,7 +827,9 @@ begin
   else if PageID = LicensePage.ID then
     Result := not MustInstallSql
   else if PageID = ServerPage.ID then
-    Result := IsServer;
+    Result := IsServer
+  else if PageID = BackupPage.ID then
+    Result := not IsServer;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
@@ -690,6 +848,9 @@ begin
     ServerPage.Edits[0].Enabled := not DesktopSettingsPresent;
     ServerPage.Edits[1].Enabled := not DesktopSettingsPresent;
   end
+  else if CurPageID = BackupPage.ID then
+    { The task keeps the schedule already set in MarocLIS: said here rather than discovered later. }
+    BackupUpgradeLabel.Visible := ServiceInstalled
   else if CurPageID = wpFinished then begin
     if IsServer then
       WizardForm.FinishedLabel.Caption := CustomMessage('FinishedServer')
@@ -712,6 +873,8 @@ begin
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Folder: String;
 begin
   Result := True;
   if CurPageID = SqlPage.ID then begin
@@ -725,6 +888,22 @@ begin
     end
     else if not ValidServerName(Trim(ServerPage.Values[0])) or not ValidServerName(Trim(ServerPage.Values[1])) then begin
       MsgBox(CustomMessage('SrvNameInvalid'), mbError, MB_OK);
+      Result := False;
+    end;
+  end
+  else if CurPageID = BackupPage.ID then begin
+    Folder := Trim(BackupPage.Values[0]);
+    if (Folder = '') or (Pos('"', Folder) > 0) or (Pos('''', Folder) > 0) or
+       not ((Pos(':\', Folder) = 2) or (Copy(Folder, 1, 2) = '\\')) then begin
+      MsgBox(CustomMessage('BkFolderRequired'), mbError, MB_OK);
+      Result := False;
+    end
+    else if not ValidBackupTime(Trim(BackupTimeEdit.Text)) then begin
+      MsgBox(CustomMessage('BkTimeInvalid'), mbError, MB_OK);
+      Result := False;
+    end
+    else if (BackupRetentionDays < 1) or (BackupRetentionDays > 365) then begin
+      MsgBox(CustomMessage('BkRetentionInvalid'), mbError, MB_OK);
       Result := False;
     end;
   end
@@ -753,12 +932,18 @@ procedure RegisterPreviousData(PreviousDataKey: Integer);
 begin
   SetPreviousData(PreviousDataKey, 'ServerName', Trim(ServerPage.Values[0]));
   SetPreviousData(PreviousDataKey, 'ServerInstance', Trim(ServerPage.Values[1]));
+  if IsServer then begin
+    SetPreviousData(PreviousDataKey, 'BackupFolder', BackupFolderValue);
+    SetPreviousData(PreviousDataKey, 'BackupEnabled', BackupEnabledValue);
+    SetPreviousData(PreviousDataKey, 'BackupTime', Trim(BackupTimeEdit.Text));
+    SetPreviousData(PreviousDataKey, 'BackupRetention', IntToStr(BackupRetentionDays));
+  end;
 end;
 
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo,
   MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
 var
-  S, Source: String;
+  S, Source, Days: String;
 begin
   S := MemoDirInfo + NewLine + NewLine + MemoTypeInfo + NewLine + NewLine;
   if IsServer then begin
@@ -770,6 +955,9 @@ begin
       S := S + FmtMessage(CustomMessage('ReadySqlExisting'), [SqlInstance]) + NewLine;
     S := S + CustomMessage('ReadyConnection') + NewLine + Space + ConnectionStringFor(ServerDataSource) + NewLine;
     S := S + FmtMessage(CustomMessage('ReadyService'), [Space]) + NewLine;
+    if BackupEnabledCheck.Checked then Days := CustomMessage('ReadyBackupOn') else Days := CustomMessage('ReadyBackupOff');
+    S := S + FmtMessage(CustomMessage('ReadyBackup'), [Space, Days, Trim(BackupTimeEdit.Text),
+                                                       IntToStr(BackupRetentionDays), BackupFolderValue]) + NewLine;
   end else if not DesktopSettingsPresent then
     S := S + CustomMessage('ReadyConnection') + NewLine + Space + ConnectionStringFor(ClientDataSource) + NewLine
   else
@@ -933,6 +1121,13 @@ begin
       SetStatus(CustomMessage('PostServer'));
       RunHelper('ConfigureServer', '-Instance ' + Quote(SqlInstance) + ' -UsersGroup ' + Quote('{#UsersGroup}') +
                 ' -Database ' + Quote('{#DatabaseName}'), CustomMessage('PostServer'));
+
+      SetStatus(CustomMessage('PostBackup'));
+      RunHelper('InstallBackupTask', '-Instance ' + Quote(SqlInstance) + ' -Database ' + Quote('{#DatabaseName}') +
+                ' -BackupScript ' + Quote(ExpandConstant('{app}\Sauvegarde\maroclis-backup.ps1')) +
+                ' -BackupFolder ' + Quote(BackupFolderValue) + ' -BackupTimes ' + Quote(Trim(BackupTimeEdit.Text)) +
+                ' -RetentionDays ' + IntToStr(BackupRetentionDays) + ' -BackupEnabled ' + BackupEnabledValue,
+                CustomMessage('PostBackup'));
 
       SetStatus(CustomMessage('PostService'));
       if ServiceExisted then

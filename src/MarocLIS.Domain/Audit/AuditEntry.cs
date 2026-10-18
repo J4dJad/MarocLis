@@ -224,5 +224,30 @@ public enum SecurityEventKind
     DataPurged = 16,
 
     /// <summary>A biologist's handwritten signature, printed on released reports, was set or removed.</summary>
-    SignatureChanged = 17
+    SignatureChanged = 17,
+
+    // 18 to 29 are left to the licensing events. The backup events are numbered explicitly from 30
+    // so the two series could be written in parallel without one renumbering the other's stored rows.
+
+    /// <summary>A backup of the database was written (scheduled task or « Sauvegarder maintenant »).</summary>
+    BackupCompleted = 30,
+
+    /// <summary>A backup was attempted and failed, or its verification failed.</summary>
+    BackupFailed = 31,
+
+    /// <summary>
+    /// A restore was started. Written to the database about to be replaced, so the row survives only
+    /// in the safety backup taken just before; <see cref="RestoreCompleted"/> is written afterwards
+    /// into the restored database and names that safety backup.
+    /// </summary>
+    RestoreStarted = 32,
+
+    /// <summary>The database was replaced by a backup and brought to the current schema.</summary>
+    RestoreCompleted = 33,
+
+    /// <summary>A restore was refused by SQL Server or failed part-way.</summary>
+    RestoreFailed = 34,
+
+    /// <summary>The backup schedule, folder or retention was changed in Paramètres › Sauvegardes.</summary>
+    BackupSettingsChanged = 35
 }

@@ -140,9 +140,11 @@ public sealed partial class SettingsView : LocalizedView
                         WorkstationPrinters? printers = null,
                         ILabelPrinter? labelPrinter = null,
                         InvoicePrintSettingsService? invoicePrint = null,
-                        ActiveLanguagesService? languages = null)
+                        ActiveLanguagesService? languages = null,
+                        BackupService? backups = null)
         : base(localizer, cultureManager)
     {
+        _backups = backups;
         _invoicePrint = invoicePrint;
         _languages = languages;
         _cultureManager = cultureManager;
@@ -173,6 +175,7 @@ public sealed partial class SettingsView : LocalizedView
         BuildStorageTab();
         BuildInvoicePrintTab();
         BuildLanguagesTab();
+        BuildBackupsTab();
 
         _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _invoicePrintTab, _languagesTab, _storageTab,
                                  _printersTab]);
@@ -180,6 +183,8 @@ public sealed partial class SettingsView : LocalizedView
         // The storage list is settings work: without the right the tab is not offered at all.
         if (!PermissionGate.Allows(Permissions.Administration.ManageSettings))
             _tabs.TabPages.Remove(_storageTab);
+        // Likewise the backups, with a right of their own: not even listed without it.
+        if (BackupsOffered) _tabs.TabPages.Add(_backupsTab);
         Controls.Add(AdminLayout.FlatTabs(_tabs));
         Controls.Add(AdminLayout.PageHeader(_pageTitle, _pageCaption));
     }
@@ -881,6 +886,7 @@ public sealed partial class SettingsView : LocalizedView
         PopulatePrinters();
         ApplyInvoicePrintTexts();
         ApplyLanguagesTexts();
+        ApplyBackupsTexts();
 
         SetText(_siteTab, "legalHeading", T("Site.LegalIdentity"));
         SetText(_siteTab, "authHeading", T("Site.Authorization"));
@@ -1007,6 +1013,7 @@ public sealed partial class SettingsView : LocalizedView
             await LoadPlacesAsync(ct);
             await LoadInvoicePrintAsync(ct);
             await LoadLanguagesAsync(ct);
+            await LoadBackupsAsync(ct);
         }
         catch (OperationCanceledException) { }
         // Left before the load finished: the screen is gone, there is nothing to report on it.

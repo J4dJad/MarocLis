@@ -200,6 +200,13 @@ public static class Permissions
         /// so an existing database receives it at the next start).
         /// </summary>
         public const string Migration = "admin.migration";
+
+        /// <summary>
+        /// Paramètres › Sauvegardes: the backup schedule, « Sauvegarder maintenant » and the restore.
+        /// Administrator only by default (the role holds every permission). Restoring also needs the
+        /// server itself and SQL Server rights of its own, checked when it is asked for.
+        /// </summary>
+        public const string Backup = "admin.backup";
     }
 
     public static class HumanResources
