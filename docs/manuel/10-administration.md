@@ -9,6 +9,7 @@
 - les liaisons avec les automates ;
 - les données de référence : équipements, contrôle interne, articles, fournisseurs, prescripteurs, organismes payeurs ;
 - les paramètres du laboratoire : identité du site, numérotations, paramètres généraux, format des factures, lieux de stockage des tubes, imprimantes du poste ;
+- les sauvegardes de la base : planification, sauvegarde immédiate, restauration sur le serveur ;
 - la reprise des données de l'application utilisée avant MarocLIS (patients, prescripteurs, catalogue, antériorités, créances).
 
 **Qui l'utilise.** L'administrateur règle presque tout. Le biologiste responsable tient le catalogue et les automates. Le responsable qualité tient les valeurs usuelles, les équipements et le contrôle interne, et lit le journal d'audit. Le service comptable tient les tarifs, les organismes payeurs, les articles et les fournisseurs. Le détail des droits est donné plus bas.
@@ -22,7 +23,7 @@
 | **Catalogue des analyses** | Analyses, paramètres, valeurs usuelles, tarifs, profils, analyses en cascade, listes de référence, nomenclature des actes et écarts | aucun |
 | **Automates** | Liaisons avec les automates, table de correspondance, journal des messages | aucun |
 | **Données de référence** | Équipements, contrôle interne, articles, fournisseurs, prescripteurs, organismes payeurs | aucun |
-| **Paramètres** | Identité légale du site, numérotations, paramètres, format des factures, lieux de stockage, imprimantes du poste | aucun |
+| **Paramètres** | Identité légale du site, numérotations, paramètres, format des factures, lieux de stockage, imprimantes du poste, sauvegardes de la base | aucun |
 | **Reprise de données** | Reprendre les données de l'ancienne application depuis un fichier Excel/CSV ou sa base, contrôlées avant import | aucun |
 
 Le groupe n'apparaît que si vous avez le droit d'ouvrir au moins un de ces écrans. Une entrée pour laquelle vous n'avez pas le droit n'est pas affichée du tout.
@@ -58,7 +59,8 @@ flowchart TD
     G --> H[Catalogue › Tarifs<br/>prix laboratoire et tarifs par organisme]
     H --> I[Données de référence<br/>équipements, contrôles, prescripteurs, organismes]
     I --> J[Automates › Nouvelle interface<br/>puis Table de correspondance]
-    J --> K[Exploitation quotidienne]
+    J --> S[Paramètres › Sauvegardes<br/>dossier, heures, Tester le dossier,<br/>Sauvegarder maintenant]
+    S --> K[Exploitation quotidienne]
     K --> L[Journal d'audit<br/>contrôle a posteriori]
 ```
 
@@ -83,10 +85,12 @@ flowchart TD
 | `admin.sites.manage` | Onglet **Site** des **Paramètres**, **Nouveau site** | Administrateur seul |
 | `admin.settings.manage` | Numérotations, paramètres, format des factures, plafond des remises, lieux de stockage | Administrateur seul |
 | `billing.discount.approve` | Approuver, sur place, une remise au-delà du plafond accordée par un autre utilisateur (jamais la sienne) | Administrateur, Biologiste responsable, Comptabilité |
+| `admin.backup` | Onglet **Sauvegardes** des **Paramètres** : planifier la sauvegarde, **Sauvegarder maintenant**, **Restaurer…** (sur le serveur), avertissement d'une sauvegarde trop ancienne | Administrateur seul (accordé aussi aux installations existantes au démarrage) |
 | `admin.migration` | Ouvrir **Reprise de données** : lire l'ancienne application, simuler, importer, annuler la dernière reprise | Administrateur seul (accordé aussi aux installations existantes au démarrage) |
 | `results.validate_remote` | **Validation à distance** : se connecter au service de validation depuis un téléphone (exige aussi `results.validate_biological`) | Aucun rôle livré (l'Administrateur a tous les droits mais ne peut pas valider sans qualification de biologiste) : à ajouter dans **Rôles et droits** au rôle des biologistes de garde |
 
 Changements récents des rôles livrés :
+- nouveau droit `admin.backup` (onglet **Sauvegardes** des **Paramètres**), donné à l'Administrateur, y compris sur une base existante au démarrage suivant ;
 - nouveau droit `results.validate_remote` (validation à distance depuis un téléphone), donné à aucun rôle clinique : l'administrateur l'ajoute au rôle des biologistes concernés, ou crée un rôle « Biologiste de garde » (voir « Service de validation à distance ») ;
 - nouveau droit `billing.discount.approve` (approuver une remise au-delà du plafond), donné à l'Administrateur, au Biologiste responsable et à la Comptabilité, y compris sur une base existante au démarrage suivant ; il peut être retiré ou ajouté à un rôle dans **Rôles et droits** ;
 - le Biologiste et le Technicien de laboratoire peuvent maintenant **Réimporter** une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
@@ -717,7 +721,7 @@ Régler ce qui est propre au laboratoire :
 - les lieux de stockage des tubes ;
 - les imprimantes du poste.
 
-**Qui y a accès** : l'entrée apparaît avec `admin.sites.manage` ou `admin.settings.manage` (livrés à l'administrateur seul). Onglet **Site** et **Nouveau site** modifiables avec `admin.sites.manage` ; onglets **Numérotations**, **Paramètres** et **Factures** modifiables avec `admin.settings.manage`. L'onglet **Lieux de stockage** n'apparaît qu'avec `admin.settings.manage`. L'onglet **Imprimantes** concerne le poste sur lequel vous êtes.
+**Qui y a accès** : l'entrée apparaît avec `admin.sites.manage` ou `admin.settings.manage` (livrés à l'administrateur seul). Onglet **Site** et **Nouveau site** modifiables avec `admin.sites.manage` ; onglets **Numérotations**, **Paramètres** et **Factures** modifiables avec `admin.settings.manage`. L'onglet **Lieux de stockage** n'apparaît qu'avec `admin.settings.manage`. L'onglet **Imprimantes** concerne le poste sur lequel vous êtes. L'onglet **Sauvegardes** n'apparaît qu'avec `admin.backup` (voir « Sauvegardes » plus bas).
 
 **Fonctionnalités**
 
@@ -850,6 +854,95 @@ flowchart TD
     O --> P{Erreur ?}
     P -- oui --> Q[Réouvrir la série + motif]
     R[Nouveau site] --> A
+```
+
+### Sauvegardes
+
+**À quoi sert cet onglet**
+
+L'onglet **Sauvegardes** de **Paramètres** règle et surveille la sauvegarde de la base de données du laboratoire :
+- la **sauvegarde automatique** : activée ou non, ses heures, ses jours, le dossier où elle est écrite et combien de jours elle est conservée ;
+- la **liste des sauvegardes** : date, origine (qui ou quoi l'a faite), taille, état de vérification, nom du fichier ;
+- **Sauvegarder maintenant** : une sauvegarde immédiate, par exemple avant une mise à jour ou une grosse reprise de données ;
+- **Restaurer…** : remplacer toute la base par une sauvegarde, sur le serveur seulement.
+
+La sauvegarde est faite par SQL Server lui-même (`BACKUP DATABASE … WITH CHECKSUM`), base ouverte : les autres postes continuent de travailler pendant qu'elle s'écrit. Chaque sauvegarde est ensuite relue (`RESTORE VERIFYONLY`) ; une sauvegarde non relue n'est pas une sauvegarde sur laquelle compter.
+
+**Qui y a accès** : le droit `admin.backup`, livré à l'administrateur seul (et accordé au rôle Administrateur d'une installation existante au démarrage qui suit la mise à jour). Sans ce droit, l'onglet n'apparaît pas. L'onglet se règle depuis n'importe quel poste ; la restauration ne se fait que sur le serveur (voir plus bas).
+
+**Comment fonctionne la sauvegarde automatique.** SQL Server Express n'a pas d'agent de planification. L'installation serveur de MarocLIS crée donc dans Windows une tâche planifiée, **MarocLIS - Sauvegarde**, qui tourne sous le compte SYSTEM toutes les 15 minutes et au démarrage du serveur. À chaque passage, elle lit les réglages de cet onglet dans la base et ne sauvegarde que si une heure prévue est passée depuis sa dernière sauvegarde. Conséquences :
+- un réglage changé dans l'onglet est pris en compte au plus tard 15 minutes après, sans toucher au Planificateur de tâches ;
+- un serveur éteint à l'heure prévue rattrape la sauvegarde à son redémarrage, une seule fois, si l'heure manquée date de moins de 24 heures ;
+- la tâche écrit son passage dans la base : l'onglet affiche « Tâche planifiée active sur … (dernier passage : …) », ou un avertissement si elle ne s'est plus manifestée depuis plus d'une heure ;
+- la tâche supprime les sauvegardes plus anciennes que la durée de conservation, mais jamais la dernière sauvegarde vérifiée, même ancienne ; elle ne supprime que les fichiers qu'elle reconnaît comme les siens (`MarocLIS_AAAAMMJJ_HHMMSS….bak`) ;
+- elle tient un journal mensuel dans `Sauvegarde\logs` du dossier d'installation sur le serveur.
+
+**Fonctionnalités**
+
+Carte **Sauvegarde automatique** :
+- **Sauvegarde automatique activée** : décochée, plus aucune sauvegarde planifiée ; **Sauvegarder maintenant** reste possible.
+- **Heures (HH:mm, séparées par des virgules)** : une ou plusieurs heures par jour, 6 au plus (par défaut `22:00`). Exemple : `13:00, 22:00` pour une sauvegarde à la pause de midi et une le soir.
+- **Jours** : les jours de la semaine où la sauvegarde a lieu (tous cochés par défaut).
+- **Conservation (jours)** : de 1 à 365 jours (14 par défaut).
+- **Dossier de sauvegarde (sur le serveur)** : un chemin complet tel que SQL Server le voit sur le serveur (`D:\Sauvegardes\MarocLIS`), ou un partage réseau (`\\nas\maroclis`). Jamais une lettre de lecteur réseau : un service Windows n'en a pas.
+- **Tester le dossier** : SQL Server écrit un petit fichier de test dans le dossier, avec son propre compte de service. Si SQL Server ne peut pas y écrire, le message le dit et donne la réponse de SQL Server.
+- **Enregistrer** : un nouveau dossier est d'abord testé de la même façon. S'il échoue, MarocLIS propose de l'enregistrer quand même : utile pour un dossier local qui n'existe pas encore, que la tâche du serveur crée à son prochain passage en donnant au compte de SQL Server le droit d'y écrire. Le changement est inscrit au journal de sécurité (« Paramètres de sauvegarde modifiés »).
+- **Actualiser** : relit l'état et la liste.
+
+Sous la carte, trois lignes d'état :
+- la dernière sauvegarde réussie et son âge (bandeau rouge si elle a plus de 48 heures ou s'il n'y en a aucune) ;
+- l'état de la tâche planifiée et la **prochaine sauvegarde automatique** (ou « Sauvegarde automatique désactivée ») ;
+- le résultat de la dernière tentative, réussie ou en échec avec sa raison.
+
+Carte **Sauvegardes de la base** :
+- la liste des sauvegardes de la durée de conservation plus une semaine, la plus récente en haut : **Date**, **Origine** (« Automatique — » suivi du nom du serveur, « Manuelle — Par … (…) depuis … », « Avant restauration — … », « Autre outil » pour une sauvegarde faite par exemple avec SQL Server Management Studio), **Taille**, **Vérification** (Vérifiée, À vérifier, Vérification échouée, Non vérifiée, Endommagée), **Fichier** ;
+- **Sauvegarder maintenant** : sauvegarde immédiate dans le dossier réglé ; une barre de progression tourne pendant l'écriture, puis la ligne d'état dit « Sauvegarde terminée et vérifiée : … ». Depuis un poste, la vérification est souvent laissée au serveur (« Sauvegarde terminée : … Elle sera vérifiée par la tâche planifiée du serveur. ») : le compte SQL des postes peut sauvegarder mais pas relire un fichier de sauvegarde ;
+- **Restaurer…** : sur le serveur seulement. Sur un poste, une note dit où le faire : « La restauration se fait sur le serveur (…) : ouvrez MarocLIS sur ce poste avec un compte administrateur Windows, puis Paramètres › Sauvegardes › Restaurer. »
+
+**Avertissement au démarrage.** Pour un utilisateur qui a `admin.backup`, la barre d'état en bas de la fenêtre affiche en rouge « ⚠ Dernière sauvegarde : … » quand la dernière sauvegarde réussie a plus de 48 heures, ou « ⚠ Aucune sauvegarde de la base » s'il n'y en a jamais eu. Un clic ouvre l'onglet. L'avertissement est relu toutes les 30 minutes et disparaît dès qu'une sauvegarde réussit.
+
+**Restaurer une sauvegarde**
+
+La restauration remplace **toute** la base par le contenu de la sauvegarde choisie : tout ce qui a été saisi depuis (dossiers, résultats, paiements) est perdu, et tous les postes sont déconnectés. Elle n'est proposée que si les trois conditions sont réunies :
+1. MarocLIS est ouvert **sur le serveur** (la machine de SQL Server) ;
+2. l'utilisateur Windows est **administrateur de ce poste** ;
+3. son compte a le droit SQL de remplacer la base (propriétaire de la base, `dbcreator` ou `sysadmin`). Sur un serveur installé par MarocLIS, les administrateurs Windows sont `sysadmin` quand MarocLIS est lancé « en tant qu'administrateur » : si le droit manque, MarocLIS propose de se relancer ainsi.
+
+Étapes :
+1. Choisir la sauvegarde dans la liste, puis **Restaurer…**.
+2. La fenêtre **Restaurer une sauvegarde** rappelle la date, l'origine, la taille et le fichier, liste les postes encore connectés à la base (qui seront déconnectés), et demande de **saisir le nom du laboratoire** (celui de la fiche du site principal ; majuscules et accents indifférents). Le bouton rouge **Restaurer** reste grisé tant que le nom ne correspond pas ; **Entrée** ne restaure jamais.
+3. MarocLIS relit la sauvegarde, puis fait une **sauvegarde de sécurité** de la base telle qu'elle est (fichier `…_avant-restauration.bak`) : si elle échoue, rien n'est restauré.
+4. La base est fermée à tous (`SINGLE_USER WITH ROLLBACK IMMEDIATE`), remplacée (`RESTORE … WITH REPLACE`), puis rouverte (`MULTI_USER`). Si la restauration échoue, la base est rouverte telle qu'elle était et le message donne le nom de la sauvegarde de sécurité.
+5. Une sauvegarde d'une version plus ancienne de MarocLIS est mise à jour vers la version installée (migrations), comme au démarrage.
+6. MarocLIS redémarre. Les autres postes doivent redémarrer MarocLIS.
+
+Le journal de sécurité garde la trace : « Restauration de la base lancée » est écrit dans la base remplacée (il se retrouve donc dans la sauvegarde de sécurité), puis « Restauration de la base terminée » ou « Échec de la restauration de la base » dans la base restaurée, avec le fichier restauré et la sauvegarde de sécurité. Les sauvegardes réussies et échouées y figurent aussi (« Sauvegarde de la base effectuée », « Échec de la sauvegarde de la base »), qu'elles viennent d'un poste ou de la tâche planifiée.
+
+**Copie hors du serveur.** Une sauvegarde sur le disque du serveur ne protège ni d'un vol, ni d'un incendie, ni d'un rançongiciel. Choisissez un partage réseau sur une autre machine comme dossier, ou copiez régulièrement le dossier sur un disque externe rangé ailleurs. Pour un partage, c'est le compte de service de SQL Server (et le compte SYSTEM du serveur pour la conservation) qui doivent pouvoir y écrire.
+
+**Règles métier**
+- Le dossier est un chemin complet (`X:\…`) ou un partage (`\\serveur\partage…`), de 200 caractères au plus.
+- 1 à 6 heures par jour, au moins un jour coché, conservation de 1 à 365 jours.
+- Une sauvegarde endommagée, ou dont la vérification a échoué, ne peut pas être restaurée.
+- La restauration exige le nom du laboratoire, le serveur, un administrateur Windows et le droit SQL.
+- La compression des sauvegardes n'est utilisée que par les éditions de SQL Server qui la proposent (pas par Express).
+
+**Flux**
+
+```mermaid
+flowchart TD
+    A[Tâche planifiée du serveur<br/>toutes les 15 minutes] --> B{Sauvegarde activée et<br/>heure prévue passée ?}
+    B -- non --> A
+    B -- oui --> C[BACKUP WITH CHECKSUM]
+    C --> D[RESTORE VERIFYONLY]
+    D --> E[Supprimer les fichiers au-delà de la conservation<br/>sauf la dernière sauvegarde vérifiée]
+    F[Paramètres › Sauvegardes] -->|heures, jours, dossier,<br/>conservation| A
+    F --> G[Sauvegarder maintenant] --> C
+    F --> H{Sur le serveur, administrateur Windows,<br/>droit SQL ?}
+    H -- non --> I[Note : restaurer depuis le serveur]
+    H -- oui --> J[Restaurer… : nom du laboratoire]
+    J --> K[Sauvegarde de sécurité] --> L[SINGLE_USER, RESTORE WITH REPLACE, MULTI_USER]
+    L --> M[Migrations] --> N[Redémarrage de MarocLIS]
 ```
 
 ### Reprise de données
@@ -1222,6 +1315,28 @@ Le service **MarocLIS.Api** permet aux biologistes de valider depuis leur télé
 | « Aucune imprimante n'est installée sur ce poste. » | Onglet **Imprimantes** sans imprimante | Installer une imprimante dans Windows, puis **Actualiser**. |
 | « Imprimantes enregistrées pour ce poste. » / « Étiquette de test envoyée à « … ». » | Enregistrement ou test réussi | Vérifier l'étiquette imprimée. |
 | « Impossible d'enregistrer le choix des imprimantes sur ce poste. » | Écriture du réglage local impossible | Réessayer ; prévenir le support informatique. |
+
+#### Sauvegardes
+
+| Message | Quand il apparaît | Que faire |
+|---|---|---|
+| « SQL Server ne peut pas écrire dans le dossier « … ». Le compte de service de SQL Server (et non votre compte Windows) doit y avoir le droit d'écriture … » | **Tester le dossier**, **Enregistrer**, **Sauvegarder maintenant** ou dernière tentative de la tâche | Créer le dossier sur le serveur et donner au compte de service de SQL Server (par exemple `NT Service\MSSQL$SQLEXPRESS`) le droit Modifier ; pour un partage, le compte de la machine serveur. Ou enregistrer quand même un dossier local : la tâche le crée. |
+| « Dossier de sauvegarde invalide : « … » … » | Chemin relatif, lettre seule, caractère interdit | Taper un chemin complet ou un partage. |
+| « Heures de sauvegarde illisibles : « … » … » / « Indiquez au moins une heure de sauvegarde. » / « Au plus 6 sauvegardes par jour. » | Champ **Heures** | Écrire `HH:mm`, séparées par des virgules. |
+| « Cochez au moins un jour de sauvegarde. » | Aucun jour coché | Cocher un jour, ou décocher **Sauvegarde automatique activée**. |
+| « La durée de conservation doit être comprise entre 1 et 365 jours. » | **Conservation** hors limites | Corriger. |
+| « Droits SQL Server insuffisants pour cette opération … » | Le compte SQL du poste n'est pas `db_owner`, ou ne peut pas vérifier/restaurer | Sauvegarder depuis un poste installé par MarocLIS ; restaurer depuis le serveur. |
+| « La sauvegarde « … » a été écrite mais sa vérification a échoué : ne comptez pas sur ce fichier. » | Fichier relu en erreur | Relancer **Sauvegarder maintenant** ; vérifier le disque du serveur. |
+| « Dernière sauvegarde réussie : … (il y a …). Elle date de plus de 48 heures … » / « Aucune sauvegarde réussie de la base n'est connue. » | Bandeau de l'onglet, barre d'état | Vérifier la tâche planifiée et le dossier ; **Sauvegarder maintenant**. |
+| « La tâche planifiée de … ne s'est plus manifestée depuis … » / « … n'a jamais tourné sur … » | Tâche arrêtée, désactivée, ou non installée | Sur le serveur, ouvrir le Planificateur de tâches, vérifier **MarocLIS - Sauvegarde** et son journal (`Sauvegarde\logs`) ; réinstaller le serveur si elle manque. |
+| « La restauration se fait uniquement depuis le serveur, par un administrateur Windows de ce poste. » | **Restaurer…** ailleurs que sur le serveur | Ouvrir MarocLIS sur le serveur. |
+| « Le compte « … » n'a pas le droit de restaurer la base. … » | Droit SQL manquant | Accepter la relance « en tant qu'administrateur », ou faire donner le rôle `dbcreator` au compte. |
+| « Le nom saisi ne correspond pas au nom du laboratoire (« … ») : restauration annulée. » | Nom mal tapé | Retaper le nom affiché. |
+| « La sauvegarde « … » est endommagée ou a échoué à la vérification : elle ne peut pas être restaurée. » | Fichier abîmé ou supprimé | Choisir une autre sauvegarde. |
+| « La sauvegarde de sécurité préalable a échoué, la restauration n'a pas été lancée. » | Dossier plein ou interdit | Libérer de la place ou corriger le dossier, puis recommencer. |
+| « La base n'a pas pu être prise en accès exclusif pour la restauration … » | Une connexion n'a pas pu être coupée | Fermer MarocLIS et le service de validation à distance sur les autres postes, puis recommencer. |
+| « La restauration a échoué : … La base a été remise en service ; la sauvegarde de sécurité prise juste avant est « … ». » | Erreur de SQL Server pendant la restauration | La base est celle d'avant ; noter le message et prévenir le support. |
+| « La base a été restaurée mais sa mise à jour vers cette version de MarocLIS a échoué. … » | Migration impossible | Ne pas travailler ; relancer MarocLIS sur le serveur ou restaurer la sauvegarde de sécurité, et prévenir le support. |
 
 #### Reprise de données
 

@@ -139,6 +139,26 @@ Chemins relatifs à `src/`. « V/ » = `MarocLIS.Desktop/Views/`. « Présent ? 
 | Imprimantes du poste | Paramètres › Imprimantes | **Enregistrer**, **Imprimer une étiquette de test**, **Actualiser** | Oui | :600-602 |
 | Onglets Site, Imprimantes et Factures en arabe | Paramètres | champs sous leurs libellés, cases inversées | Oui | **Corrigé (cycle 5).** Site et Imprimantes : colonne de lecture V/SettingsView.cs:438-440, 584-588, 701-743 (32340ff) ; Factures : V/SettingsView.InvoicePrint.cs:72-92 (71b58ad). Avant : en arabe, les champs restaient à gauche, loin de leurs libellés alignés à droite. Numérotations, Paramètres et Lieux de stockage (grilles) étaient déjà corrects |
 
+### Sauvegardes
+
+État du code sur la branche `sauvegarde` (2026-10-18). « BS » = `MarocLIS.Application/Administration/BackupService.cs`, « BE » = `MarocLIS.Infrastructure/Persistence/SqlServerBackupEngine.cs`, « SB » = `V/SettingsView.Backups.cs`.
+
+| Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |
+|---|---|---|---|---|
+| Droit de l'onglet | Utilisateurs › Rôles et droits | `admin.backup` (module admin) | Oui | **Nouveau.** Domain/Identity/Permissions.cs:209 ; l'Administrateur l'a via tous les droits, ajouté aux bases existantes par `ApplyShippedPermissions` ; onglet absent sans le droit (`BackupsOffered`, V/SettingsView.cs) |
+| Régler la sauvegarde automatique | Paramètres › **Sauvegardes** | **Sauvegarde automatique activée**, **Heures (HH:mm, séparées par des virgules)**, **Jours**, **Conservation (jours)**, **Dossier de sauvegarde (sur le serveur)**, **Enregistrer** | Oui | SB:71 (onglet), SB:495 → BS:225 ; clés `Backup.*` de `cfg.Settings` (Application/Administration/BackupSettings.cs), lues par scripts/maroclis-backup.ps1 |
+| Tester le dossier par SQL Server | Paramètres › Sauvegardes | **Tester le dossier** | Oui | SB:530 → BE:330 (certificat écrit par le compte de service puis supprimé) ; message `Backup_FolderNotWritable` avec la réponse de SQL Server |
+| Prochaine sauvegarde, état de la tâche, dernier résultat | Paramètres › Sauvegardes | lignes d'état sous la carte | Oui | SB:325 (`RenderBackups`) ; `BackupSchedule.NextRun`, clés `Backup.State.*` écrites par la tâche |
+| Liste des sauvegardes | Paramètres › Sauvegardes | colonnes **Date**, **Origine**, **Taille**, **Vérification**, **Fichier** | Oui | BE (`GetHistoryAsync`, msdb.dbo.backupset) ; vérification par fichier `Backup.Check.<fichier>` |
+| Sauvegarder maintenant | Paramètres › Sauvegardes | **Sauvegarder maintenant** | Oui | SB:549 → BS:293 ; vérifiée tout de suite si le compte peut relire, sinon « À vérifier » par la tâche du serveur |
+| Restaurer depuis le serveur | Paramètres › Sauvegardes | **Restaurer…**, fenêtre **Restaurer une sauvegarde**, bouton **Restaurer** | Oui | SB:580 → BS:369, BS:421 ; V/BackupRestoreDialog.cs (nom du laboratoire à saisir) ; BE `RestoreAsync` (SINGLE_USER, OFFLINE, RESTORE WITH REPLACE, MULTI_USER) puis migrations, redémarrage |
+| Restauration demandée d'un poste | Paramètres › Sauvegardes | note sous la liste | Oui | SB:388 (`Backup.RestoreNoteWorkstation`) ; poste du serveur reconnu par `SERVERPROPERTY('ComputerNamePhysicalNetBIOS')` (Desktop/Infrastructure/ServerMachine.cs) |
+| Avertissement d'une sauvegarde de plus de 48 h | barre d'état | « ⚠ Dernière sauvegarde : … » | Oui | Desktop/Forms/MainShellForm.Backups.cs:25 ; relu toutes les 30 minutes ; clic → onglet |
+| Journal de sécurité | Utilisateurs › Journal de sécurité | Sauvegarde de la base effectuée / Échec…, Restauration lancée / terminée / Échec…, Paramètres de sauvegarde modifiés | Oui | Domain/Audit/AuditEntry.cs (`SecurityEventKind` 30 à 35) ; la tâche du serveur écrit 30 et 31 |
+| Tâche planifiée du serveur | Installation serveur | page **Sauvegarde** de l'assistant | Oui | installer/MarocLIS.iss (`CreateBackupPage`), installer/maroclis-setup.ps1:259 (`Install-BackupTask`) ; supprimée à la désinstallation (MarocLIS.iss:123), les fichiers de sauvegarde restent |
+| Compression | — | — | PARTIEL | Seulement si l'édition la propose (`EngineEdition` 2, 3 ou 8) : SQL Server Express (la version installée par MarocLIS) n'en a pas, les fichiers ont la taille de la base |
+| Copie hors du serveur | — | — | MANQUANT | Pas de copie automatique vers un second support : le laboratoire choisit un partage réseau comme dossier ou copie le dossier lui-même |
+
 ### Service de validation à distance
 
 | Scénario | Écran | Bouton / champ (libellé exact) | Présent ? | Remarque |

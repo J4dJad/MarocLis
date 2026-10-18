@@ -623,6 +623,33 @@ interventions, user administration, the analysis catalogue and the analyser inte
 First run creates the schema and seeds reference data, including a single administrator:
 `admin` / `Maroc-LIS-2026!`, which **must** change its password before it can do anything.
 
+## Backups
+
+SQL Server Express has no SQL Agent, so the server installation registers a Windows scheduled task,
+**MarocLIS - Sauvegarde** (SYSTEM, every 15 minutes and at startup), that runs
+`{app}\Sauvegarde\maroclis-backup.ps1` (`scripts/maroclis-backup.ps1`). The task reads the schedule
+from `cfg.Settings` (`Backup.Enabled`, `Backup.Times`, `Backup.Days`, `Backup.Folder`,
+`Backup.RetentionDays`) and backs up only when a slot is due, so the schedule is changed in
+**Paramètres › Sauvegardes** from any workstation, by a user with `admin.backup`:
+
+- `BACKUP DATABASE … WITH CHECKSUM` (COMPRESSION only on editions that have it), then
+  `RESTORE VERIFYONLY`; a missed slot is caught up once within 24 hours;
+- files older than the retention are deleted, never the newest verified one, and only files named
+  `<database>_yyyyMMdd_HHmmss[_suffix].bak`;
+- a monthly log in `{app}\Sauvegarde\logs`; heartbeat and last result in `Backup.State.*`.
+
+The setup wizard's **Sauvegarde** page (server installs) sets the initial folder (default
+`C:\MarocLIS\Sauvegardes`), time (22:00), retention (14 days) and on/off. They are written only where
+no value exists yet, so an upgrade keeps the laboratory's settings. The installer grants the SQL
+Server service account write access to a local folder, and grants `CREATE ANY DATABASE` to
+`NT AUTHORITY\SYSTEM` so the task can verify. Uninstalling removes the task, never the backup files.
+
+A restore (**Restaurer…**) is offered only on the SQL Server machine, to a Windows administrator whose
+login may replace the database (owner, `dbcreator` or `sysadmin`; an elevated MarocLIS on a server
+installed by the setup is `sysadmin` through `BUILTIN\Administrators`). It takes a safety backup,
+runs `SINGLE_USER WITH ROLLBACK IMMEDIATE`, `RESTORE … WITH REPLACE` and `MULTI_USER`, applies the
+migrations, and restarts the application. See `docs/manuel/10-administration.md`, « Sauvegardes ».
+
 ## Before going live — figures the laboratory must set
 
 The seed deliberately ships placeholders rather than guesses, because a wrong value here is a
