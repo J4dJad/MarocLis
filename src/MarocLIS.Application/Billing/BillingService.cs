@@ -1,8 +1,10 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Licensing;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Organization;
 using MarocLIS.Domain.Patients;
@@ -223,7 +225,8 @@ public sealed class BillingService(
     ICurrentUser currentUser,
     IClock clock,
     IInvoicePrintSettingsQueries? settingsQueries = null,
-    IAuthenticationService? authentication = null)
+    IAuthenticationService? authentication = null,
+    ILicenceState? licence = null)
 {
     // ---- Reading -------------------------------------------------------------------------------
 
@@ -1527,6 +1530,9 @@ public sealed class BillingService(
     {
         var permitted = guard.Require(Permissions.Billing.ExportAccounting);
         if (permitted.IsFailure) return Result.Failure<ClaimSubmission>(permitted.FirstError);
+
+        var licensed = licence.RequireModule(LicenceModules.ThirdPartyPayer);
+        if (licensed.IsFailure) return Result.Failure<ClaimSubmission>(licensed.FirstError);
 
         if (invoiceIds.Count == 0)
             return Result.Failure<ClaimSubmission>(Error.Validation("Message.NothingSelected"));

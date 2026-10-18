@@ -224,5 +224,14 @@ public enum SecurityEventKind
     DataPurged = 16,
 
     /// <summary>A biologist's handwritten signature, printed on released reports, was set or removed.</summary>
-    SignatureChanged = 17
+    SignatureChanged = 17,
+
+    /// <summary>A licence was imported where none was in force.</summary>
+    LicenceImported = 18,
+
+    /// <summary>A licence was imported in place of another (a new version, a renewal, another pack).</summary>
+    LicenceReplaced = 19,
+
+    /// <summary>A licence file was refused at import, with the reason; or the licence in force stopped being valid.</summary>
+    LicenceRefused = 20
 }

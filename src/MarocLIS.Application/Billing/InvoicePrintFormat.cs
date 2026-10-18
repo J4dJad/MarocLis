@@ -1,6 +1,7 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -111,7 +112,8 @@ public sealed class InvoicePrintSettingsService(
     IInvoicePrintSettingsQueries queries,
     IConfigurationWriter settingsWriter,
     IUnitOfWork unitOfWork,
-    IPermissionGuard guard)
+    IPermissionGuard guard,
+    ILicenceState? licence = null)
 {
     /// <summary>Read by whoever prints an invoice, and by whoever manages the settings.</summary>
     public async Task<Result<InvoicePrintSettings>> GetAsync(CancellationToken ct = default)
@@ -129,6 +131,9 @@ public sealed class InvoicePrintSettingsService(
 
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return permitted;
+
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return licensed;
 
         if (!Enum.IsDefined(settings.DefaultFormat))
             return Result.Failure(Error.Validation("InvoicePrint_UnknownFormat"));
@@ -163,6 +168,9 @@ public sealed class InvoicePrintSettingsService(
 
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return permitted;
+
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return licensed;
 
         var valid = cap.Validate();
         if (valid.IsFailure) return valid;

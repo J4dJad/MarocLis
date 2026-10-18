@@ -1,10 +1,13 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Desktop.Views;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Licensing;
 using MarocLIS.Domain.Organization;
 using MarocLIS.Localization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace MarocLIS.Desktop.Forms;
 
@@ -463,6 +466,15 @@ public sealed class LoginForm : LocalizedForm
             if (language != _cultureManager.CurrentLanguage)
                 _cultureManager.SetLanguage(language);
 
+            // A place among the licence's workstations, once the operator is known: their name is
+            // what the workstation one too many is shown in the list.
+            if (!await ClaimWorkstationAsync(scope, result.Value.UserName))
+            {
+                await auth.SignOutAsync();
+                _password.Clear();
+                return;
+            }
+
             if (result.Value.MustChangePassword && !await ForcePasswordChangeAsync(result.Value.UserId))
             {
                 // They declined: the session is not usable, so it is ended rather than left open.
@@ -470,6 +482,8 @@ public sealed class LoginForm : LocalizedForm
                 _status.Text = T("Login.PasswordExpiredMessage");
                 return;
             }
+
+            ShowLicenceNotice();
 
             DialogResult = DialogResult.OK;
             Close();
@@ -479,6 +493,49 @@ public sealed class LoginForm : LocalizedForm
             Cursor = Cursors.Default;
             _signIn.Enabled = true;
         }
+    }
+
+    /// <summary>
+    /// Asks for this workstation's place under the licence. Refused, the operator is shown the
+    /// workstations signed in and the session is not opened; a database that cannot answer lets
+    /// the sign-in through, like the other checks that are not the password's.
+    /// </summary>
+    private async Task<bool> ClaimWorkstationAsync(IServiceScope scope, string userName)
+    {
+        WorkstationClaim claim;
+        try
+        {
+            claim = await scope.ServiceProvider.GetRequiredService<WorkstationPresenceService>()
+                               .ClaimAsync(Environment.MachineName, userName, LicenceFileActions.AppVersion);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            scope.ServiceProvider.GetService<ILogger<LoginForm>>()?.LogWarning(ex, "The workstation could not be counted.");
+            return true;
+        }
+
+        if (claim.Granted) return true;
+
+        using var refusal = new WorkstationLimitForm(claim, Localizer, _cultureManager);
+        refusal.ShowDialog(this);
+        _status.Text = T("Licence.Workstations.Reached", claim.InUse, claim.Limit);
+        return false;
+    }
+
+    /// <summary>
+    /// Once, at sign-in, to everyone: the grace period after the end of the licence, or the
+    /// read-only mode and its cause.
+    /// </summary>
+    private void ShowLicenceNotice()
+    {
+        var status = _services.GetRequiredService<LicenceStatusHolder>().Current;
+        if (LicenceNavigation.SignInNoticeKey(status) is not { } key) return;
+
+        var cause = LicenceNavigation.CauseKey(status) is { } causeKey ? T(causeKey) : string.Empty;
+        var problem = status.Problem is { } error ? Localizer.Describe(error) : string.Empty;
+
+        _dialogs.Warn(T(key, status.Terms?.EndsOn, status.GraceDaysRemaining, cause, problem,
+                        status.BenchClearingUntil), T("Licence.Title"));
     }
 
     /// <summary>

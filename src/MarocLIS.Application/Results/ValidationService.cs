@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
@@ -85,7 +86,8 @@ public sealed class ValidationService(
     IPermissionGuard guard,
     ICurrentUser currentUser,
     IDataAccessAuditor accessAuditor,
-    IClock clock)
+    IClock clock,
+    ILicenceState? licence = null)
 {
     /// <param name="includeValidated">
     /// Also lists files whose results are validated but not yet reported, so a release can be
@@ -130,6 +132,9 @@ public sealed class ValidationService(
         // results being validated, so a batch of refusals went through with no permission at all.
         var permitted = guard.Require(Permissions.Results.BiologicalValidate);
         if (permitted.IsFailure) return Result.Failure<ValidationOutcome>(permitted.FirstError);
+
+        var licensed = licence.RequireBenchWork();
+        if (licensed.IsFailure) return Result.Failure<ValidationOutcome>(licensed.FirstError);
 
         var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
         if (order is null) return Result.Failure<ValidationOutcome>(Error.NotFound("Order_NotFound"));
@@ -329,6 +334,9 @@ public sealed class ValidationService(
     {
         var permitted = guard.Require(Permissions.Results.Unvalidate);
         if (permitted.IsFailure) return permitted;
+
+        var licensed = licence.RequireBenchWork();
+        if (licensed.IsFailure) return licensed;
 
         if (string.IsNullOrWhiteSpace(reason))
             return Result.Failure(Error.Validation("Item_UnvalidationReasonRequired"));

@@ -159,7 +159,9 @@ public sealed class AuditSaveChangesInterceptor(
 
         foreach (var entry in context.ChangeTracker.Entries().ToList())
         {
-            if (entry.Entity is AuditEntry or DataAccessLog or SecurityEvent) continue;
+            // The workstations' heartbeat rewrites a row every five minutes on every PC: auditing
+            // it would bury the trail in noise. Imports of a licence go to the security log.
+            if (entry.Entity is AuditEntry or DataAccessLog or SecurityEvent or Domain.Licensing.Workstation) continue;
             if (entry.State is EntityState.Detached or EntityState.Unchanged) continue;
 
             StampAuditableFields(entry, now, userId);

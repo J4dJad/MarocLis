@@ -1,5 +1,6 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
@@ -150,7 +151,8 @@ public sealed class PatientRegistrationService(
     IClock clock,
     IRepository<LabOrder> orders,
     ResultEntryService resultEntry,
-    IActiveLanguages? activeLanguages = null)
+    IActiveLanguages? activeLanguages = null,
+    ILicenceState? licence = null)
 {
     /// <summary>A language the laboratory has switched off is never recorded: French in its place.</summary>
     private async Task<AppLanguage> ActiveLanguageAsync(AppLanguage language, CancellationToken ct) =>
@@ -184,6 +186,11 @@ public sealed class PatientRegistrationService(
         var permitted = guard.Require(Permissions.Patients.Create);
         if (permitted.IsFailure)
             return Result.Failure<PatientRegistrationOutcome>(permitted.FirstError);
+
+        // Without a licence in force no new patient: the read-only mode lets the laboratory finish
+        // and hand over what it has, not take on more.
+        var licensed = licence.RequireNewWork();
+        if (licensed.IsFailure) return Result.Failure<PatientRegistrationOutcome>(licensed.FirstError);
 
         var measures = CheckBodyMeasures(identity);
         if (measures.IsFailure) return Result.Failure<PatientRegistrationOutcome>(measures.Errors);
@@ -297,6 +304,9 @@ public sealed class PatientRegistrationService(
     {
         var permitted = guard.Require(Permissions.Patients.Create);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
+
+        var licensed = licence.RequireNewWork();
+        if (licensed.IsFailure) return Result.Failure<Guid>(licensed.FirstError);
 
         if (estimatedAgeYears is < 0 or > 130)
             return Result.Failure<Guid>(Error.Validation("Patient_EstimatedAgeInvalid"));

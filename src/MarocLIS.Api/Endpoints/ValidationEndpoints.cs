@@ -1,5 +1,6 @@
 using MarocLIS.Api.Contracts;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Common;
@@ -148,8 +149,13 @@ public static class ValidationEndpoints
     /// </summary>
     private static async Task<IResult> ValidateAsync(
         Guid orderId, ValidationRequest request, HttpContext http, ValidationService validation,
-        ICurrentUser user, ILocalizer localizer, CancellationToken ct)
+        ICurrentUser user, ILocalizer localizer, ILicenceState licence, CancellationToken ct)
     {
+        // Asked again of a session opened before the licence changed: the phone validates only
+        // under a licence in force with the « Validation mobile » module — no bench days here.
+        if (licence.RequireMobileValidation() is { IsFailure: true } unlicensed)
+            return ApiProblems.From(http, unlicensed.FirstError, StatusCodes.Status403Forbidden);
+
         if (request.Decisions is not { Count: > 0 } decisions)
             return ApiProblems.From(http, Error.Validation("Message.NothingSelected"));
 

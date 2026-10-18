@@ -5,6 +5,7 @@ using MarocLIS.Application.Results;
 using MarocLIS.Desktop.Forms;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Desktop.Views;
+using MarocLIS.Infrastructure.Licensing;
 using MarocLIS.Infrastructure.Queries;
 using MarocLIS.Reporting;
 using Microsoft.Extensions.Configuration;
@@ -124,6 +125,11 @@ public static class DesktopServiceCollectionExtensions
         // Transient so a screen reopened after an error starts from a clean state rather than
         // inheriting the half-populated one that failed.
         services.AddTransient<LoginForm>();
+
+        // The licence: evaluated at start-up and with each heartbeat of the shell, the import
+        // screen of a new installation, and the workstations' count at sign-in.
+        services.AddMarocLisLicensing();
+        services.AddTransient<LicenceImportForm>();
         services.AddTransient<ChangePasswordForm>();
         services.AddSingleton<MainShellForm>();
 

@@ -1,6 +1,8 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Equipment;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Licensing;
 using MarocLIS.Instruments.Drivers;
 using MarocLIS.Instruments.Transport;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,7 +37,8 @@ public sealed class InstrumentHostedService(
     InstrumentHostOptions options,
     InstrumentServiceAccount serviceAccount,
     InstrumentLinkMonitor monitor,
-    ILogger<InstrumentHostedService>? logger = null) : BackgroundService
+    ILogger<InstrumentHostedService>? logger = null,
+    ILicenceState? licence = null) : BackgroundService
 {
     private readonly Dictionary<Guid, RunningLink> _running = [];
     private readonly LinkRestartPolicy _restarts = new();
@@ -74,12 +77,24 @@ public sealed class InstrumentHostedService(
                     continue;
                 }
 
-                await ReconcileAsync(stoppingToken);
+                // « Connexion automates » is a module of the licence: without it no link is opened.
+                // Until the licence is first read (it is, once the database is ready) nothing is
+                // started either, and nothing is reported.
+                if (licence is not null && !licence.Current.HasModule(LicenceModules.Instruments))
+                {
+                    await StopAllAsync();
+                    if (licence.Current.State != LicenceState.Pending)
+                        monitor.ReportHostError("Licence_InstrumentsNotLicensed");
+                }
+                else
+                {
+                    await ReconcileAsync(stoppingToken);
 
-                // A pass that went through clears the last failure. The host starts before the
-                // database is migrated, so the first pass after an update fails on the new
-                // columns; without this the banner kept that stale error for the whole session.
-                monitor.ClearHostError();
+                    // A pass that went through clears the last failure. The host starts before the
+                    // database is migrated, so the first pass after an update fails on the new
+                    // columns; without this the banner kept that stale error for the whole session.
+                    monitor.ClearHostError();
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

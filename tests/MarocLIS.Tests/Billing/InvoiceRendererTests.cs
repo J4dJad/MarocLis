@@ -25,7 +25,7 @@ public sealed class InvoiceRendererTests
         FontDirectory = Path.Combine(AppContext.BaseDirectory, "no-fonts-here")
     });
 
-    private static InvoiceDocument Sample(params InvoiceDocumentPayment[] payments) => new(
+    internal static InvoiceDocument Sample(params InvoiceDocumentPayment[] payments) => new(
         InvoiceId: Guid.NewGuid(),
         Number: "FAC/CASA/2026/000318",
         Kind: InvoiceKind.Invoice,

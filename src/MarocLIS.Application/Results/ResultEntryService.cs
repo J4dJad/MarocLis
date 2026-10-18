@@ -1,5 +1,6 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Calculations;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -179,7 +180,8 @@ public sealed class ResultEntryService(
     IPermissionGuard guard,
     ICurrentUser currentUser,
     IDataAccessAuditor accessAuditor,
-    IClock clock)
+    IClock clock,
+    ILicenceState? licence = null)
 {
     /// <summary>The steps every stored value goes through, shared with the analyser interface.</summary>
     private readonly ResultPostEntryPipeline _pipeline = new(analyses, patients, samples, queries, clock);
@@ -381,6 +383,9 @@ public sealed class ResultEntryService(
         var permitted = guard.Require(Permissions.Results.Enter);
         if (permitted.IsFailure) return Result.Failure<ResultEntryOutcome>(permitted.FirstError);
 
+        var licensed = licence.RequireBenchWork();
+        if (licensed.IsFailure) return Result.Failure<ResultEntryOutcome>(licensed.FirstError);
+
         var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
         if (order is null) return Result.Failure<ResultEntryOutcome>(Error.NotFound("Order_NotFound"));
 
@@ -579,6 +584,9 @@ public sealed class ResultEntryService(
     {
         var permitted = guard.RequireAll(Permissions.Results.Modify, Permissions.Results.Unvalidate);
         if (permitted.IsFailure) return Result.Failure<ResultEntryOutcome>(permitted.FirstError);
+
+        var licensed = licence.RequireBenchWork();
+        if (licensed.IsFailure) return Result.Failure<ResultEntryOutcome>(licensed.FirstError);
 
         if (string.IsNullOrWhiteSpace(reason))
             return Result.Failure<ResultEntryOutcome>(Error.Validation("Result_RevisionReasonRequired"));
@@ -859,6 +867,9 @@ public sealed class ResultEntryService(
     {
         var permitted = guard.Require(Permissions.Results.TechnicalValidate);
         if (permitted.IsFailure) return permitted;
+
+        var licensed = licence.RequireBenchWork();
+        if (licensed.IsFailure) return licensed;
 
         var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
         if (order is null) return Result.Failure(Error.NotFound("Order_NotFound"));

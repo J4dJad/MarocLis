@@ -1,3 +1,4 @@
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Reports;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
@@ -62,13 +63,15 @@ public sealed class QuestPdfReportRenderer : IReportRenderer
 {
     private readonly ReportingOptions _options;
     private readonly ILocalizer _localizer;
+    private readonly ILicenceState? _licence;
     private static bool _initialised;
     private static readonly object InitLock = new();
 
-    public QuestPdfReportRenderer(ReportingOptions options, ILocalizer localizer)
+    public QuestPdfReportRenderer(ReportingOptions options, ILocalizer localizer, ILicenceState? licence = null)
     {
         _options = options;
         _localizer = localizer;
+        _licence = licence;
         Initialise(options);
     }
 
@@ -159,6 +162,9 @@ public sealed class QuestPdfReportRenderer : IReportRenderer
                 page.Header().Element(c => ComposeHeader(c, model));
                 page.Content().Element(c => ComposeContent(c, model));
                 page.Footer().Element(c => ComposeFooter(c, model));
+
+                if (_licence?.Current.IsMarked == true)
+                    TrialMark.Apply(page, _localizer.Get(TrialMark.ResourceKey, model.Language));
             });
         });
     }

@@ -1,9 +1,11 @@
 using MarocLIS.Application;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Desktop.Composition;
 using MarocLIS.Desktop.Forms;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Licensing;
 using MarocLIS.Infrastructure;
 using MarocLIS.Infrastructure.Persistence;
 using MarocLIS.Instruments;
@@ -55,6 +57,10 @@ internal static class Program
             cultureManager.SetLanguage(defaultLanguage);
 
             if (!InitialiseDatabase(configuration)) return;
+
+            // Before the languages, which Arabic is a module of, and before the login, which a new
+            // installation without a licence does not reach.
+            if (!CheckLicence()) return;
 
             // Before the login screen fills its language list: only the languages the laboratory
             // works in are offered, and a configured default switched off gives way to French.
@@ -147,6 +153,51 @@ internal static class Program
         MessageBox.Show(localizer.Describe(result.Errors),
                         localizer["App.Title"], MessageBoxButtons.OK, MessageBoxIcon.Error);
         return false;
+    }
+
+    /// <summary>
+    /// Evaluates the licence, and on a new installation without one asks for it.
+    /// <para>
+    /// The installer may have put the laboratory's <c>licence.lic</c> beside the program: it is
+    /// imported on the first start, as from the import screen. Without a licence and with no
+    /// patient in the database, the import screen opens in place of the login; with patients, the
+    /// login opens as usual and MarocLIS runs in read-only mode — never a screen that keeps a
+    /// laboratory from its results. False when the operator quits the import screen.
+    /// </para>
+    /// </summary>
+    private static bool CheckLicence()
+    {
+        var holder = Services.GetRequiredService<LicenceStatusHolder>();
+
+        try
+        {
+            using (var scope = Services.CreateScope())
+            {
+                var licence = scope.ServiceProvider.GetRequiredService<LicenceService>();
+                var status = licence.RefreshAsync().GetAwaiter().GetResult();
+
+                var beside = Path.Combine(AppContext.BaseDirectory, "licence" + LicenceFile.Extension);
+                if (status.State == LicenceState.Missing && File.Exists(beside))
+                {
+                    var imported = licence.ImportAsync(File.ReadAllText(beside), beside).GetAwaiter().GetResult();
+                    if (imported.IsFailure)
+                        Log.Warning("The licence beside the program was refused: {Reason}.",
+                                    imported.FirstError.ResourceKey);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // The database answered the initialiser a moment ago: a failure here is the licence's
+            // own, and the status stays pending — read-only — until the shell's first heartbeat.
+            Log.Error(ex, "Evaluating the licence failed.");
+            return true;
+        }
+
+        if (!holder.Current.NeedsImportScreen) return true;
+
+        using var form = Services.GetRequiredService<LicenceImportForm>();
+        return form.ShowDialog() == DialogResult.OK;
     }
 
     /// <summary>

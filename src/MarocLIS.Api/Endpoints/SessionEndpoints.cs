@@ -2,6 +2,7 @@ using MarocLIS.Api.Contracts;
 using MarocLIS.Api.Security;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -44,7 +45,7 @@ public static class SessionEndpoints
     private static async Task<IResult> SignInAsync(
         SignInRequest request, HttpContext http, IAuthenticationService authentication,
         ISecurityAuditor securityAuditor, MobileSessionStore store, LisDbContext db, IActiveLanguages languages,
-        CancellationToken ct)
+        ILicenceState licence, CancellationToken ct)
     {
         // Read first: a refusal below is written in a language the laboratory works in.
         var active = await languages.GetAsync(ct);
@@ -66,7 +67,11 @@ public static class SessionEndpoints
                 ? Error.Forbidden("Mobile_RemoteValidationNotGranted")
                 : session.MustChangePassword
                     ? Error.Forbidden("Mobile_PasswordChangeRequired")
-                    : null;
+                    // Last, so a phone that could not validate anyway is told that first: the
+                    // « Validation mobile » module, and a licence in force.
+                    : licence.RequireMobileValidation() is { IsFailure: true } unlicensed
+                        ? unlicensed.FirstError
+                        : null;
 
         if (refusal is not null)
         {

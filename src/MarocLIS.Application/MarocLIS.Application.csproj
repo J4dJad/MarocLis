@@ -15,4 +15,25 @@
     <ProjectReference Include="..\MarocLIS.Domain\MarocLIS.Domain.csproj" />
   </ItemGroup>
 
+  <!--
+    Licensing: the vendor's public key and the numbers revoked are compiled in, so a licence is
+    verified with what this version shipped with and nothing a laboratory can edit beside the
+    executable. The release date is stamped at build: a perpetual licence's « mises à jour
+    jusqu'au » is compared with it. MAROCLIS_RELEASE_DATE (yyyy-MM-dd) pins it for a rebuild of an
+    earlier release.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Licensing\licence-public-key.pem" LogicalName="MarocLIS.Application.Licensing.licence-public-key.pem" />
+    <EmbeddedResource Include="Licensing\licence-revoked.txt" LogicalName="MarocLIS.Application.Licensing.licence-revoked.txt" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <MarocLisReleaseDate Condition="'$(MAROCLIS_RELEASE_DATE)' != ''">$(MAROCLIS_RELEASE_DATE)</MarocLisReleaseDate>
+    <MarocLisReleaseDate Condition="'$(MarocLisReleaseDate)' == ''">$([System.DateTime]::UtcNow.ToString("yyyy-MM-dd"))</MarocLisReleaseDate>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="MarocLIS.ReleaseDate" Value="$(MarocLisReleaseDate)" />
+  </ItemGroup>
+
 </Project>

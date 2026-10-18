@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Desktop.Views;
 using MarocLIS.Domain.Audit;
@@ -22,7 +23,7 @@ namespace MarocLIS.Desktop.Forms;
 /// it *and* refusing the call is defence in depth.
 /// </para>
 /// </summary>
-public sealed class MainShellForm : LocalizedForm
+public sealed partial class MainShellForm : LocalizedForm
 {
     private readonly ICurrentUser _currentUser;
     private readonly INavigationService _navigation;
@@ -101,9 +102,12 @@ public sealed class MainShellForm : LocalizedForm
                          IUserDialogs dialogs, PasswordPolicy policy,
                          IListPdfRenderer lists, IDocumentOutput documents,
                          ISessionValidator sessionValidator, IServiceScopeFactory scopes,
-                         ILogger<MainShellForm>? logger = null)
+                         ILogger<MainShellForm>? logger = null,
+                         LicenceStatusHolder? licence = null)
         : base(localizer, cultureManager)
     {
+        // First: the menu built below shows only the modules the licence opens.
+        _licence = licence;
         _sessionValidator = sessionValidator;
         _scopes = scopes;
         _logger = logger;
@@ -161,6 +165,8 @@ public sealed class MainShellForm : LocalizedForm
         System.Windows.Forms.Application.AddMessageFilter(_activity);
 
         _languagePicker.SelectedIndexChanged += OnLanguagePicked;
+
+        StartLicence();
     }
 
     // ---- Layout -----------------------------------------------------------------------------------
@@ -254,12 +260,15 @@ public sealed class MainShellForm : LocalizedForm
         var sidebarLine = new Panel { Dock = DockStyle.Left, Width = 1, BackColor = UiTheme.Border };
 
         BuildStatusBar();
+        BuildLicenceBanner();
 
         // Content before sidebar before header, so docking resolves in the right order; the status
         // bar runs the whole width under the menu, as the header does above it.
         Controls.Add(_content);
         Controls.Add(sidebarLine);
         Controls.Add(_sidebar);
+        // Under the header and across the menu: the licence's banner is about the whole application.
+        Controls.Add(_licenceBanner);
         Controls.Add(headerLine);
         Controls.Add(_statusBar);
         Controls.Add(_header);
@@ -569,8 +578,11 @@ public sealed class MainShellForm : LocalizedForm
             new("migration", "Nav.Migration", [Permissions.Administration.Migration],
                 n => n.NavigateToAsync<DataMigrationView>()),
 
+            // The licence tab is reachable with its own right alone: importing the next licence
+            // must not take the right to change every setting.
             new("settings", "Nav.Settings", [Permissions.Administration.ManageSites,
-                                              Permissions.Administration.ManageSettings],
+                                              Permissions.Administration.ManageSettings,
+                                              Permissions.Administration.License],
                 n => n.NavigateToAsync<SettingsView>())
         ]);
 
@@ -725,8 +737,10 @@ public sealed class MainShellForm : LocalizedForm
         graphics.FillPolygon(brush, points);
     }
 
+    // A module the licence does not open is hidden like a screen without the permission.
     private bool IsPermitted(NavigationEntry entry) =>
-        entry.RequiredPermissions.Length == 0 || entry.RequiredPermissions.Any(_currentUser.Has);
+        (entry.RequiredPermissions.Length == 0 || entry.RequiredPermissions.Any(_currentUser.Has))
+        && IsLicensed(entry);
 
     // The entries listed under a group header, up to the next header.
     private IEnumerable<NavigationEntry> GroupEntries(string groupKey) =>
@@ -1142,7 +1156,10 @@ public sealed class MainShellForm : LocalizedForm
 
         _idleTimer.Stop();
         _sessionTimer.Stop();
+        _heartbeatTimer.Stop();
         ConcealOpenWindows();
+
+        await ReleaseWorkstationAsync();
 
         try
         {
@@ -1204,12 +1221,15 @@ public sealed class MainShellForm : LocalizedForm
             _endingSession = true;
             _idleTimer.Stop();
             _sessionTimer.Stop();
+            _heartbeatTimer.Stop();
 
             var details = $"Application window closed ({e.CloseReason})";
             try
             {
                 var recorded = Task.Run(async () =>
                 {
+                    await ReleaseWorkstationAsync();
+
                     using var scope = _scopes.CreateScope();
                     await scope.ServiceProvider.GetRequiredService<IAuthenticationService>()
                                .SignOutAsync(SecurityEventKind.Logout, details);
@@ -1236,6 +1256,7 @@ public sealed class MainShellForm : LocalizedForm
             _clockTimer.Dispose();
             _idleTimer.Dispose();
             _sessionTimer.Dispose();
+            StopLicence();
         }
         base.Dispose(disposing);
     }

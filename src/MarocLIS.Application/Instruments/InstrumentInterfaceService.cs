@@ -1,9 +1,11 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Licensing;
 
 namespace MarocLIS.Application.Instruments;
 
@@ -176,7 +178,8 @@ public sealed class InstrumentInterfaceService(
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
     ICurrentUser currentUser,
-    IClock clock)
+    IClock clock,
+    ILicenceState? licence = null)
 {
     /// <summary>A conversion factor or offset this large does not fit its column, decimal(18,8).</summary>
     public const decimal MaximumConversion = 10_000_000_000m;
@@ -353,6 +356,9 @@ public sealed class InstrumentInterfaceService(
         var permitted = guard.Require(Permissions.Instruments.Configure);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
+        var licensed = licence.RequireConfiguration(LicenceModules.Instruments);
+        if (licensed.IsFailure) return Result.Failure<Guid>(licensed.FirstError);
+
         var instrument = await instruments.GetByIdAsync(request.InstrumentId, ct);
         if (instrument is null) return Result.Failure<Guid>(Error.NotFound("Instrument_NotFound"));
 
@@ -508,6 +514,9 @@ public sealed class InstrumentInterfaceService(
         var permitted = guard.Require(Permissions.Instruments.Configure);
         if (permitted.IsFailure) return permitted;
 
+        var licensed = licence.RequireConfiguration(LicenceModules.Instruments);
+        if (licensed.IsFailure) return licensed;
+
         var link = await interfaces.GetByIdWithDetailsAsync(interfaceId, ct);
         if (link is null) return Result.Failure(Error.NotFound("Interface_NotFound"));
 
@@ -632,6 +641,9 @@ public sealed class InstrumentInterfaceService(
     {
         var permitted = guard.Require(Permissions.Instruments.StartStop);
         if (permitted.IsFailure) return permitted;
+
+        var licensed = licence.RequireConfiguration(LicenceModules.Instruments);
+        if (licensed.IsFailure) return licensed;
 
         if (string.IsNullOrWhiteSpace(reason))
             return Result.Failure(Error.Validation("Interface_StateChangeReasonRequired"));

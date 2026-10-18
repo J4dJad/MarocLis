@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Samples;
@@ -23,7 +24,8 @@ public sealed class SampleStorageLocationService(
     ISampleStorageLocationQueries queries,
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ILicenceState? licence = null)
 {
     /// <summary>Every place of the operator's site, active or not, with the tubes recorded there.</summary>
     public async Task<Result<IReadOnlyList<SampleStorageLocationRow>>> GetAllAsync(CancellationToken ct = default)
@@ -39,6 +41,9 @@ public sealed class SampleStorageLocationService(
     {
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
+
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return Result.Failure<Guid>(licensed.FirstError);
 
         var created = SampleStorageLocation.Create(currentUser.SiteId, name);
         if (created.IsFailure) return Result.Failure<Guid>(created.FirstError);
@@ -61,6 +66,9 @@ public sealed class SampleStorageLocationService(
     {
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return permitted;
+
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return licensed;
 
         var valid = SampleStorageLocation.ValidateName(name);
         if (valid.IsFailure) return valid;
@@ -92,6 +100,9 @@ public sealed class SampleStorageLocationService(
     {
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return permitted;
+
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return licensed;
 
         var place = await places.GetByIdAsync(id, ct);
         if (place is null) return Result.Failure(Error.NotFound("SampleStorageLocation_NotFound"));

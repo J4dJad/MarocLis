@@ -228,6 +228,8 @@ public class LisDbContext : DbContext
     public DbSet<SecurityEvent> SecurityEvents => Set<SecurityEvent>();
     public DbSet<NumberSequence> NumberSequences => Set<NumberSequence>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
+    public DbSet<Domain.Licensing.LicenceRecord> Licences => Set<Domain.Licensing.LicenceRecord>();
+    public DbSet<Domain.Licensing.Workstation> Workstations => Set<Domain.Licensing.Workstation>();
 
     // ---- Reprise de données (take-over from the previous application) -------------------------
 

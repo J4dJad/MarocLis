@@ -2,9 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
+using MarocLIS.Api;
 using MarocLIS.Api.Contracts;
 using MarocLIS.Application;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Orders;
 using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
@@ -32,6 +34,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace MarocLIS.Tests.Api;
@@ -97,7 +100,17 @@ public sealed class MobileApiFactory(string connectionString) : WebApplicationFa
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Database:ConnectionString", connectionString);
-        builder.ConfigureTestServices(services => services.AddSingleton<IStartupFilter, PeerAddress>());
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddSingleton<IStartupFilter, PeerAddress>();
+
+            // A licence in force with every module, and no background evaluation of the scratch
+            // database: what the licence refuses has tests of its own (LicenceApiTests).
+            services.RemoveAll<ILicenceState>();
+            services.AddSingleton<ILicenceState>(new FixedLicenceState(Licensing.LicenceTestKit.FullStatus()));
+            var refresher = services.FirstOrDefault(d => d.ImplementationType == typeof(LicenceRefresher));
+            if (refresher is not null) services.Remove(refresher);
+        });
     }
 
     private sealed class PeerAddress : IStartupFilter

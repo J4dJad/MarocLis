@@ -402,6 +402,11 @@ $enumGroups = [ordered] @{
     'PayrollStatus'       = 'PayrollStatus'
     'ShiftKind'           = 'ShiftKind'
     'StaffCategory'       = 'StaffCategory'
+
+    # The licence: its modules, kinds and states, read on the licence tab and in its refusals.
+    'LicenceModule'       = 'LicenceModule'
+    'LicenceKind'         = 'LicenceKind'
+    'LicenceState'        = 'LicenceState'
 }
 
 foreach ($prefix in $enumGroups.Keys) {

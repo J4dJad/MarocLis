@@ -1,7 +1,9 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Licensing;
 using MarocLIS.Domain.Morocco;
 using MarocLIS.Domain.Organization;
 using MarocLIS.Domain.Sequencing;
@@ -153,7 +155,8 @@ public sealed class ConfigurationService(
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
     ISecurityAuditor securityAuditor,
-    IClock clock)
+    IClock clock,
+    ILicenceState? licence = null)
 {
     // ---- Sites ---------------------------------------------------------------------------------
 
@@ -184,6 +187,9 @@ public sealed class ConfigurationService(
         var permitted = guard.Require(Permissions.Administration.ManageSites);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return Result.Failure<Guid>(licensed.FirstError);
+
         var errors = new List<Error>();
         var code = (request.Code ?? string.Empty).Trim().ToUpperInvariant();
 
@@ -202,6 +208,12 @@ public sealed class ConfigurationService(
 
         if (await queries.SiteCodeExistsAsync(code, Guid.Empty, ct))
             return Result.Failure<Guid>(Error.Conflict("Site_CodeAlreadyTaken", code));
+
+        // A second working site — laboratory or collection centre — is what the « Multi-sites »
+        // module sells; a partner laboratory analyses are sent to is not a site of the laboratory's own.
+        if (request.Kind != LabSiteKind.ReferralPartner && !licence.HasModule(LicenceModules.MultiSite)
+            && (await queries.GetSiteDetailsAsync(clock.Today, ct)).Any(s => s.Kind != LabSiteKind.ReferralPartner))
+            return Result.Failure<Guid>(licence.RequireModule(LicenceModules.MultiSite).FirstError);
 
         var site = new LabSite(code,
                                new MultilingualText(request.Name!.Fr.Trim(),
@@ -237,6 +249,9 @@ public sealed class ConfigurationService(
     {
         var permitted = guard.Require(Permissions.Administration.ManageSites);
         if (permitted.IsFailure) return Result.Failure<SiteSaveOutcome>(permitted.FirstError);
+
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return Result.Failure<SiteSaveOutcome>(licensed.FirstError);
 
         var errors = new List<Error>();
 
@@ -392,6 +407,9 @@ public sealed class ConfigurationService(
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return permitted;
 
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return licensed;
+
         if (string.IsNullOrWhiteSpace(format))
             return Result.Failure(Error.Validation("Sequence_FormatRequired"));
 
@@ -444,6 +462,9 @@ public sealed class ConfigurationService(
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return permitted;
 
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return licensed;
+
         var sequence = await writer.GetSequenceAsync(sequenceId, ct);
         if (sequence is null) return Result.Failure(Error.NotFound("Sequence_NotFound"));
 
@@ -479,6 +500,9 @@ public sealed class ConfigurationService(
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return permitted;
 
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return licensed;
+
         if (string.IsNullOrWhiteSpace(reason))
             return Result.Failure(Error.Validation("Sequence_CloseReasonRequired"));
 
@@ -507,11 +531,12 @@ public sealed class ConfigurationService(
 
     /// <summary>
     /// Settings owned by a screen of their own, which checks their wording, format and permission
-    /// (the patient messages, the cost allocation, the active languages): neither listed nor written here.
+    /// (the patient messages, the cost allocation, the active languages, the licence's markers): neither listed nor written here.
     /// </summary>
     public static readonly IReadOnlyList<string> DedicatedPrefixes =
         [MarocLIS.Application.Relations.MessagingSettings.Prefix, MarocLIS.Application.Steering.CostSettings.Prefix,
-         MarocLIS.Application.Billing.InvoicePrintSettings.Prefix, LanguageSettings.Prefix];
+         MarocLIS.Application.Billing.InvoicePrintSettings.Prefix, LanguageSettings.Prefix,
+         LicenceSettings.Prefix];
 
     public static bool IsDedicated(string key) =>
         DedicatedPrefixes.Any(p => key.Trim().StartsWith(p, StringComparison.OrdinalIgnoreCase));
@@ -533,6 +558,9 @@ public sealed class ConfigurationService(
     {
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return permitted;
+
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return licensed;
 
         if (string.IsNullOrWhiteSpace(key))
             return Result.Failure(Error.Validation("Setting_KeyRequired"));

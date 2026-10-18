@@ -1,6 +1,7 @@
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Billing;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Orders;
 using MarocLIS.Application.Samples;
 using MarocLIS.Desktop.Infrastructure;
@@ -10,6 +11,7 @@ using MarocLIS.Domain.Morocco;
 using MarocLIS.Domain.Organization;
 using MarocLIS.Domain.Samples;
 using MarocLIS.Localization;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MarocLIS.Desktop.Views;
@@ -140,9 +142,15 @@ public sealed partial class SettingsView : LocalizedView
                         WorkstationPrinters? printers = null,
                         ILabelPrinter? labelPrinter = null,
                         InvoicePrintSettingsService? invoicePrint = null,
-                        ActiveLanguagesService? languages = null)
+                        ActiveLanguagesService? languages = null,
+                        LicenceService? licence = null,
+                        WorkstationPresenceService? presence = null,
+                        IServiceScopeFactory? scopes = null)
         : base(localizer, cultureManager)
     {
+        _licence = licence;
+        _presence = presence;
+        _scopes = scopes;
         _invoicePrint = invoicePrint;
         _languages = languages;
         _cultureManager = cultureManager;
@@ -173,13 +181,21 @@ public sealed partial class SettingsView : LocalizedView
         BuildStorageTab();
         BuildInvoicePrintTab();
         BuildLanguagesTab();
+        BuildLicenceTab();
 
         _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _invoicePrintTab, _languagesTab, _storageTab,
-                                 _printersTab]);
+                                 _printersTab, _licenceTab]);
 
         // The storage list is settings work: without the right the tab is not offered at all.
         if (!PermissionGate.Allows(Permissions.Administration.ManageSettings))
             _tabs.TabPages.Remove(_storageTab);
+
+        // The licence tab with its own right; and that right alone opens the screen on it only.
+        if (!PermissionGate.Allows(Permissions.Administration.License) || _licence is null)
+            _tabs.TabPages.Remove(_licenceTab);
+        else if (!HasSettingsRight)
+            foreach (var tab in _tabs.TabPages.Cast<TabPage>().Where(t => t != _licenceTab).ToList())
+                _tabs.TabPages.Remove(tab);
         Controls.Add(AdminLayout.FlatTabs(_tabs));
         Controls.Add(AdminLayout.PageHeader(_pageTitle, _pageCaption));
     }
@@ -881,6 +897,7 @@ public sealed partial class SettingsView : LocalizedView
         PopulatePrinters();
         ApplyInvoicePrintTexts();
         ApplyLanguagesTexts();
+        ApplyLicenceTexts();
 
         SetText(_siteTab, "legalHeading", T("Site.LegalIdentity"));
         SetText(_siteTab, "authHeading", T("Site.Authorization"));
@@ -962,10 +979,18 @@ public sealed partial class SettingsView : LocalizedView
 
     // ---- Loading -------------------------------------------------------------------------------------
 
+    private static bool HasSettingsRight =>
+        PermissionGate.Allows(Permissions.Administration.ManageSites, Permissions.Administration.ManageSettings);
+
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
         try
         {
+            await LoadLicenceAsync(ct: ct);
+
+            // An administrator who holds only the licence's right has the one tab, nothing else to read.
+            if (!HasSettingsRight) return;
+
             var users = await _administration.GetUsersAsync(includeInactive: false, ct: ct);
 
             if (users.IsSuccess)

@@ -200,6 +200,13 @@ public static class Permissions
         /// so an existing database receives it at the next start).
         /// </summary>
         public const string Migration = "admin.migration";
+
+        /// <summary>
+        /// Paramètres › Licence: importing a licence and exporting the request for one. Administrator
+        /// only by default (the role holds every permission). Importing stays possible in read-only
+        /// mode, which is how a laboratory leaves it.
+        /// </summary>
+        public const string License = "admin.license";
     }
 
     public static class HumanResources
