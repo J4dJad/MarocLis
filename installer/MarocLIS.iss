@@ -207,7 +207,7 @@ french.BkPageSubCaption=Dossier où SQL Server écrit les sauvegardes : un dossi
 english.BkPageSubCaption=Folder where SQL Server writes the backups: a folder of this server, an external disk or a network share (\\server\share). Avoid a mapped drive letter: a service has none.
 french.BkEnabled=&Activer la sauvegarde automatique
 english.BkEnabled=&Enable the automatic backup
-french.BkTime=&Heure de la sauvegarde quotidienne (HH:MM) :
+french.BkTime=&Heure de la sauvegarde (HH:MM) :
 english.BkTime=Daily backup &time (HH:MM):
 french.BkRetention=&Conservation (jours) :
 english.BkRetention=&Keep for (days):
@@ -694,7 +694,7 @@ begin
   BackupTimeEdit := TNewEdit.Create(BackupPage);
   BackupTimeEdit.Parent := BackupPage.Surface;
   BackupTimeEdit.Top := Top;
-  BackupTimeEdit.Left := ScaleX(250);
+  BackupTimeEdit.Left := ScaleX(290);
   BackupTimeEdit.Width := ScaleX(60);
   BackupTimeEdit.MaxLength := 5;
   BackupTimeEdit.Text := GetPreviousData('BackupTime', '22:00');
@@ -709,7 +709,7 @@ begin
   BackupRetentionEdit := TNewEdit.Create(BackupPage);
   BackupRetentionEdit.Parent := BackupPage.Surface;
   BackupRetentionEdit.Top := Top;
-  BackupRetentionEdit.Left := ScaleX(250);
+  BackupRetentionEdit.Left := ScaleX(290);
   BackupRetentionEdit.Width := ScaleX(60);
   BackupRetentionEdit.MaxLength := 3;
   BackupRetentionEdit.Text := GetPreviousData('BackupRetention', '14');
