@@ -1,6 +1,8 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Billing;
 using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
+using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Orders;
@@ -598,6 +600,8 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
             .Take(500)
             .ToListAsync(ct);
 
+        var payments = await GetPaymentsAsync([.. rows.Select(x => x.Id)], ct);
+
         return rows
             .Select(x => new PendingReportRow(
                 x.Id,
@@ -611,8 +615,65 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
                 x.AwaitingAnalyses,
                 x.LastValidatedAt,
                 x.ReleasedVersions,
-                x.PrescriberName ?? x.PrescriberFreeText))
+                x.PrescriberName ?? x.PrescriberFreeText,
+                payments.GetValueOrDefault(x.Id)))
             .ToList();
+    }
+
+    /// <summary>
+    /// Where the patient stands on paying for each order, as the Caisse reads it: the patient
+    /// payable of the issued invoice the order carries, or, with none, what the patient will owe
+    /// less the deposits held (<see cref="OrderPayment"/>). Two queries for the whole list, not
+    /// one per row.
+    /// </summary>
+    private async Task<Dictionary<Guid, OrderPayment>> GetPaymentsAsync(
+        IReadOnlyCollection<Guid> orderIds, CancellationToken ct)
+    {
+        if (orderIds.Count == 0) return [];
+
+        var orders = await db.LabOrders.AsNoTracking()
+            .Where(o => orderIds.Contains(o.Id))
+            .Select(o => new
+            {
+                o.Id,
+                o.InvoiceId,
+                // As the billing desk lists an order awaiting invoicing: its live acts only.
+                Total = o.Items.Where(i => i.Status != LabOrderItemStatus.Cancelled).Sum(i => i.ChargedPrice),
+                PatientShare = o.Items.Where(i => i.Status != LabOrderItemStatus.Cancelled).Sum(i => i.PatientShare),
+                PayerBilledDirectly = o.PayerId != null && o.DirectBillingAtRegistration,
+                DepositHeld = db.Deposits.Where(d => d.LabOrderId == o.Id && d.Status == DepositStatus.Held)
+                                         .Sum(d => d.Amount - d.AppliedAmount - d.RefundedAmount)
+            })
+            .ToListAsync(ct);
+
+        var invoiceIds = orders.Where(o => o.InvoiceId != null).Select(o => o.InvoiceId!.Value).Distinct().ToList();
+
+        var invoices = invoiceIds.Count == 0
+            ? []
+            : await db.Invoices.AsNoTracking()
+                .Where(i => invoiceIds.Contains(i.Id)
+                            && i.Status != InvoiceStatus.Draft && i.Status != InvoiceStatus.Cancelled)
+                .Select(i => new
+                {
+                    i.Id,
+                    i.Number,
+                    i.Kind,
+                    i.TotalAmount,
+                    i.PaidAmount,
+                    i.CreditedAmount,
+                    i.ClaimStatus,
+                    i.PayerShareAmount,
+                    i.PayerAcceptedAmount,
+                    CoveredOrders = db.LabOrders.Count(o => o.InvoiceId == i.Id)
+                })
+                .ToDictionaryAsync(i => i.Id, ct);
+
+        return orders.ToDictionary(
+            o => o.Id,
+            o => o.InvoiceId is { } id && invoices.TryGetValue(id, out var i)
+                ? OrderPayment.ForInvoice(i.Number, i.Kind, i.TotalAmount, i.PaidAmount, i.CreditedAmount,
+                                          i.ClaimStatus, i.PayerShareAmount, i.PayerAcceptedAmount, i.CoveredOrders)
+                : OrderPayment.ForUninvoiced(o.Total, o.PatientShare, o.PayerBilledDirectly, o.DepositHeld));
     }
 
     /// <summary>
@@ -716,6 +777,7 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
             .ToListAsync(ct);
 
         var byId = patients.ToDictionary(p => p.Id);
+        var payments = await GetPaymentsAsync([.. rows.Select(r => r.LabOrderId).Distinct()], ct);
 
         var result = rows
             .Select(r =>
@@ -754,7 +816,8 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
                     r.Order?.PrescriberName ?? r.Order?.PrescriberFreeText,
                     r.Order?.PrescriberPreference ?? ReportDeliveryPreference.PatientCollects,
                     patient?.Email,
-                    r.Order?.PrescriberEmail);
+                    r.Order?.PrescriberEmail,
+                    payments.GetValueOrDefault(r.LabOrderId));
             })
             .Where(r => !onlyUndelivered || r.AwaitingDelivery)
             // Critical and undelivered first: ISO 15189 §5.9 makes reaching a clinician with a

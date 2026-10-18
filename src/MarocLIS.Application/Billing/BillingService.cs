@@ -52,8 +52,15 @@ public sealed record BillableOrderRow(
     /// share can be taken in advance, as <see cref="BillingService.TakeDepositAsync"/> enforces.
     /// </summary>
     public decimal DepositCeiling =>
-        Math.Max(0m, Money.Round((PayerId is not null && DirectBilling ? PatientShare : Total)
-                                 - DepositHeld));
+        ComputeDepositCeiling(Total, PatientShare, PayerId is not null && DirectBilling, DepositHeld);
+
+    /// <summary>
+    /// The deposit-ceiling rule — what the patient will owe on an order not invoiced yet, less the
+    /// deposits held — shared with the report counter's payment status (<see cref="OrderPayment"/>).
+    /// </summary>
+    public static decimal ComputeDepositCeiling(decimal total, decimal patientShare, bool payerBilledDirectly,
+                                                decimal depositHeld) =>
+        Math.Max(0m, Money.Round((payerBilledDirectly ? patientShare : total) - depositHeld));
 }
 
 /// <summary>One invoice in the ledger view.</summary>
