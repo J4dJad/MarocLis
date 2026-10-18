@@ -36,6 +36,16 @@ public sealed partial class MainShellForm
             _statusBackup.Padding = new Padding(6, 0, 6, 0);
             _statusBackup.Visible = false;
             _statusBackup.Click += async (_, _) => await OpenBackupsAsync();
+            // The status bar's renderer paints no item background: drawn here, so the warning reads
+            // as one on the bar's accent colour rather than as red text lost on it.
+            _statusBackup.Paint += (_, e) =>
+            {
+                var area = new Rectangle(Point.Empty, _statusBackup.Size);
+                using (var fill = new SolidBrush(UiTheme.CriticalBackground)) e.Graphics.FillRectangle(fill, area);
+                var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis
+                            | TextFormatFlags.NoPrefix | (RightToLeft == RightToLeft.Yes ? TextFormatFlags.RightToLeft : 0);
+                TextRenderer.DrawText(e.Graphics, _statusBackup.Text, _statusBackup.Font, area, UiTheme.CriticalInk, flags);
+            };
             _statusBar.Items.Insert(1, _statusBackup);
 
             _backupTimer.Tick += async (_, _) => await CheckBackupAgeAsync();
@@ -57,6 +67,9 @@ public sealed partial class MainShellForm
 
         ShowBackupWarning();
     }
+
+    /// <summary>Read again at once after a backup taken from the tab, rather than at the next half hour.</summary>
+    internal Task RefreshBackupWarningAsync() => CheckBackupAgeAsync();
 
     private void ShowBackupWarning()
     {

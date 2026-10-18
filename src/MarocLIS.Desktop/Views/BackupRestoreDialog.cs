@@ -105,8 +105,6 @@ internal sealed class BackupRestoreDialog : Form
         _restore = UiTheme.PrimaryButton(localizer["Backup.RestoreConfirm"]);
         _restore.DialogResult = DialogResult.OK;
         _restore.Enabled = false;
-        // The danger colour: this button is not « Enregistrer ».
-        _restore.BackColor = UiTheme.Critical;
 
         var cancel = UiTheme.SecondaryButton(localizer["Action.Cancel"]);
         cancel.DialogResult = DialogResult.Cancel;
@@ -121,6 +119,18 @@ internal sealed class BackupRestoreDialog : Form
         PatientDialogFrame.Apply(this, Text, lead.Text, lead, null, cancel, _restore);
         ButtonIcons.Apply(this, localizer);
         RtlLayout.Apply(this, localizer.CurrentLanguage);
+
+        // The danger colour once it may be pressed: this button is not « Enregistrer ». Subscribed
+        // last, after the primary style's own handler (which the frame may set again), so it wins;
+        // disabled, the button keeps the pale fill on which its grey caption reads.
+        _restore.EnabledChanged += (_, _) =>
+        {
+            if (!_restore.Enabled) return;
+            _restore.BackColor = UiTheme.Critical;
+            _restore.FlatAppearance.BorderColor = UiTheme.Critical;
+            _restore.FlatAppearance.MouseOverBackColor = UiTheme.CriticalInk;
+            _restore.FlatAppearance.MouseDownBackColor = UiTheme.CriticalInk;
+        };
 
         Shown += (_, _) => _name.Focus();
     }

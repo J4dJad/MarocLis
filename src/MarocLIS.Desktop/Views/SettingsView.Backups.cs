@@ -90,16 +90,29 @@ public sealed partial class SettingsView
             line.Height = 20;
             line.Padding = new Padding(12, 2, 12, 0);
             line.UseMnemonic = false;
+            // A failure quoted from SQL Server runs long: cut with "…" rather than under the card's edge.
+            line.AutoEllipsis = true;
         }
+
+        // The outcome of the last action of this screen (saved, folder tried, backup taken), with
+        // the state lines rather than at the foot of the schedule card, whose buttons it overran.
+        _bkStatus.Font = UiTheme.SmallBold;
+        _bkStatus.ForeColor = UiTheme.TextSecondary;
+        _bkStatus.AutoSize = false;
+        _bkStatus.Dock = DockStyle.Top;
+        _bkStatus.Height = 22;
+        _bkStatus.Padding = new Padding(12, 3, 12, 0);
+        _bkStatus.UseMnemonic = false;
+        _bkStatus.AutoEllipsis = true;
 
         _bkProgress.Dock = DockStyle.Top;
         _bkProgress.Height = 6;
         _bkProgress.Visible = false;
 
-        var status = new Panel { Dock = DockStyle.Top, Height = 100, BackColor = UiTheme.SurfaceRaised,
+        var status = new Panel { Dock = DockStyle.Top, Height = 122, BackColor = UiTheme.SurfaceRaised,
                                  Padding = new Padding(1, 1, 1, 6) };
         // Docked from the bottom up: the last added sits on top.
-        status.Controls.AddRange([_bkProgress, _bkLastResult, _bkNext, _bkAgent, _bkBanner]);
+        status.Controls.AddRange([_bkProgress, _bkStatus, _bkLastResult, _bkNext, _bkAgent, _bkBanner]);
         UiChrome.AsCard(status);
 
         // ---- Schedule card, on the reading side.
@@ -141,11 +154,12 @@ public sealed partial class SettingsView
 
         Caption(_bkFolderLabel, new Rectangle(0, 178, 520, 18));
         _bkFolder.Location = new Point(0, 196);
+        _bkFolder.Width = 350;
         _bkFolder.Tag = UiTags.LatinValue;
         _bkFolder.MaxLength = BackupSettings.MaxFolderLength;
         AdminLayout.Action(_bkTestFolder);
         _bkTestFolder.AutoSize = false;
-        _bkTestFolder.Bounds = new Rectangle(408, 194, 112, UiTheme.ButtonHeight);
+        _bkTestFolder.Bounds = new Rectangle(360, 194, 160, UiTheme.ButtonHeight);
         Caption(_bkFolderHint, new Rectangle(0, 232, 520, 64));
 
         var fields = new Control[]
@@ -160,7 +174,7 @@ public sealed partial class SettingsView
         var schedule = new Panel { Dock = DockStyle.Left, Width = 560, BackColor = UiTheme.SurfaceRaised,
                                    Padding = new Padding(18, 14, 2, 1) };
         schedule.Controls.Add(body);
-        schedule.Controls.Add(ActionBar(_bkStatus, _bkSave, _bkReload));
+        schedule.Controls.Add(ActionBar(new Label(), _bkSave, _bkReload));
         UiChrome.AsCard(schedule);
 
         // ---- The backups.
@@ -196,7 +210,10 @@ public sealed partial class SettingsView
                 }
             : null);
 
-        var list = AdminLayout.CardSection(_bkListHeading, _bkList, AdminLayout.Actions(_bkBackupNow, _bkRestore));
+        // « Restaurer… » along the foot: the card is too narrow for its title and both buttons, and
+        // the restore is the rare, deliberate action, not the one beside the title.
+        var list = AdminLayout.CardSection(_bkListHeading, _bkList, AdminLayout.Actions(_bkBackupNow),
+                                           AdminLayout.Actions(null, _bkRestore));
         var listHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface, Padding = new Padding(AdminLayout.Gap, 0, 0, 0) };
         listHost.Controls.Add(list);
         listHost.Controls.Add(AdminLayout.Note(_bkRestoreNote, 58));
@@ -544,6 +561,9 @@ public sealed partial class SettingsView
 
         _bkStatus.ForeColor = tested.IsSuccess ? UiTheme.Normal : UiTheme.Critical;
         _bkStatus.Text = tested.IsSuccess ? T("Backup.FolderOk", _bkFolder.Text.Trim()) : Localizer.Describe(tested.Errors);
+
+        // SQL Server's own answer is the useful part, and it does not fit on the state line.
+        if (tested.IsFailure) _dialogs.ShowFailure(tested, T("Backup.TestFolder"));
     }
 
     private async Task BackupNowAsync()
@@ -570,6 +590,9 @@ public sealed partial class SettingsView
             _dialogs.ShowFailure(outcome, T("Backup.BackupNow"));
             return;
         }
+
+        // The status bar's « dernière sauvegarde » warning goes with the backup that answers it.
+        if (FindForm() is Forms.MainShellForm shell) await shell.RefreshBackupWarningAsync();
 
         _bkStatus.ForeColor = UiTheme.Normal;
         _bkStatus.Text = outcome.Value.Verification == BackupCheckStatus.Verified

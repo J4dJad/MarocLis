@@ -369,12 +369,16 @@ public sealed class SqlServerBackupEngine(LisDbContext db, IServiceScopeFactory 
         await using var connection = await OpenAsync(onMaster: false, ct);
 
         // Other logins' sessions are visible with VIEW SERVER STATE only, which the server's
-        // administrator has: the only place a restore is offered.
+        // administrator has: the only place a restore is offered. This process's own pooled
+        // connections (same machine, same client process) are left out: they are not another
+        // workstation, and the application restarts after the restore anyway.
         await using var command = Command(connection, """
-            SELECT session_id, host_name, program_name, login_name, login_time
-            FROM sys.dm_exec_sessions
-            WHERE database_id = DB_ID() AND session_id <> @@SPID AND is_user_process = 1
-            ORDER BY host_name, login_time;
+            SELECT s.session_id, s.host_name, s.program_name, s.login_name, s.login_time
+            FROM sys.dm_exec_sessions AS s
+            CROSS JOIN (SELECT host_name, host_process_id FROM sys.dm_exec_sessions WHERE session_id = @@SPID) AS me
+            WHERE s.database_id = DB_ID() AND s.session_id <> @@SPID AND s.is_user_process = 1
+              AND NOT (s.host_name = me.host_name AND s.host_process_id = me.host_process_id)
+            ORDER BY s.host_name, s.login_time;
             """);
         await using var reader = await command.ExecuteReaderAsync(ct);
 

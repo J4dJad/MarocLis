@@ -307,6 +307,9 @@ public sealed class BackupDatabaseTests(BackupScratchDatabase database) : IClass
         await using var workstation = new SqlConnection(new SqlConnectionStringBuilder(database.ConnectionString)
         {
             ApplicationName = "MarocLIS poste test", Pooling = false,
+            // Another machine as SQL Server sees it: the restore lists the other workstations, not
+            // the connections of the process asking for it.
+            WorkstationID = "POSTE-ACCUEIL",
             // Without it SqlClient reconnects an idle connection behind the caller's back, and the
             // cut would not show: the real workstations do reconnect, which is why they restart.
             ConnectRetryCount = 0
@@ -314,7 +317,9 @@ public sealed class BackupDatabaseTests(BackupScratchDatabase database) : IClass
         await workstation.OpenAsync();
 
         var sessions = (await app.Backups.GetSessionsAsync()).Value;
-        sessions.Should().Contain(s => s.Program == "MarocLIS poste test");
+        sessions.Should().Contain(s => s.Program == "MarocLIS poste test" && s.Host == "POSTE-ACCUEIL");
+        sessions.Should().NotContain(s => s.Host == Environment.MachineName && s.Program != "MarocLIS poste test",
+                                     "this process's own connections are not another workstation");
 
         (await app.Backups.RestoreAsync(new RestoreRequest(setId, "pas le bon nom", OnServer))).FirstError.ResourceKey
             .Should().Be("Backup_RestoreConfirmationMismatch");
