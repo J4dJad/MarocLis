@@ -47,8 +47,32 @@ public static class LicenceKeys
     public static string Fingerprint(ECDsa key)
     {
         ArgumentNullException.ThrowIfNull(key);
+        return FingerprintOf(key.ExportSubjectPublicKeyInfo());
+    }
 
-        var hash = SHA256.HashData(key.ExportSubjectPublicKeyInfo());
+    /// <summary>
+    /// The fingerprint of the public key in <paramref name="pem"/>, read from the file's bytes
+    /// without loading the key: what the generator shows of the key on its disk, and the same
+    /// figure the installer's build computes in PowerShell.
+    /// </summary>
+    public static string FingerprintOfPem(string pem)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pem);
+
+        var text = pem.AsSpan();
+        while (PemEncoding.TryFind(text, out var fields))
+        {
+            if (text[fields.Label].SequenceEqual("PUBLIC KEY"))
+                return FingerprintOf(Convert.FromBase64String(text[fields.Base64Data].ToString()));
+            text = text[fields.Location.End..];
+        }
+
+        throw new CryptographicException("No public key in the text.");
+    }
+
+    private static string FingerprintOf(byte[] subjectPublicKeyInfo)
+    {
+        var hash = SHA256.HashData(subjectPublicKeyInfo);
         var hex = Convert.ToHexString(hash, 0, 16);
         return string.Join("-", Enumerable.Range(0, 8).Select(i => hex.Substring(i * 4, 4)));
     }

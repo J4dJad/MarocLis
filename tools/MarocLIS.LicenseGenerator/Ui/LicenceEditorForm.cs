@@ -67,7 +67,7 @@ internal sealed partial class LicenceEditorForm : Form
         MinimizeBox = false;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(900, 640);
+        ClientSize = new Size(1000, 700);
         BackColor = UiTheme.SurfaceRaised;
         Font = Look.Body;
 
@@ -97,14 +97,14 @@ internal sealed partial class LicenceEditorForm : Form
             RowCount = 3,
             Padding = new Padding(20, 16, 20, 12)
         };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var fields = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoScroll = true };
-        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+        var fields = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         var numberRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
@@ -125,7 +125,7 @@ internal sealed partial class LicenceEditorForm : Form
         Row(fields, "Postes simultanés", _workstations);
 
         var server = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty };
-        _serverId.Width = 260;
+        _serverId.Width = 240;
         _serverId.Font = Look.Mono;
         _serverId.PlaceholderText = "XXXX-XXXX-XXXX-XXXX-XXXX";
         var serverLine = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
@@ -138,8 +138,9 @@ internal sealed partial class LicenceEditorForm : Form
         foreach (var (label, box) in new[] { ("préavis", _warning), ("grâce", _grace), ("paillasse", _bench) })
         {
             box.Width = 64;
+            periods.Controls.Add(new Label { Text = label, AutoSize = true, Margin = new Padding(0, 6, 4, 0), ForeColor = UiTheme.TextSecondary });
             periods.Controls.Add(box);
-            periods.Controls.Add(new Label { Text = label, AutoSize = true, Margin = new Padding(4, 6, 14, 0), ForeColor = UiTheme.TextSecondary });
+            box.Margin = new Padding(0, 0, 14, 0);
         }
 
         Row(fields, "Périodes (jours)", periods);
@@ -199,7 +200,7 @@ internal sealed partial class LicenceEditorForm : Form
 
     private static TextBox Field(bool readOnly = false) => new() { Width = 360, ReadOnly = readOnly, Font = Look.Body };
     private static ComboBox Choice() => new() { Width = 360, DropDownStyle = ComboBoxStyle.DropDownList, Font = Look.Body };
-    private static DateTimePicker Date() => new() { Width = 160, Format = DateTimePickerFormat.Short, Font = Look.Body };
+    private static DateTimePicker Date() => new() { Width = 160, Format = DateTimePickerFormat.Custom, CustomFormat = "dd/MM/yyyy", Font = Look.Body };
     private static NumericUpDown Number(int min, int max) => new() { Minimum = min, Maximum = max, Width = 90, Font = Look.Body };
 
     private void Show(LicenceTerms terms)

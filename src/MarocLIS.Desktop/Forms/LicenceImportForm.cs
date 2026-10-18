@@ -46,7 +46,7 @@ public sealed class LicenceImportForm : LocalizedForm
         MaximizeBox = false;
         MinimizeBox = false;
         ShowInTaskbar = true;
-        ClientSize = new Size(860, 470);
+        ClientSize = new Size(1000, 470);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = UiTheme.SurfaceRaised;
 
@@ -138,9 +138,12 @@ public sealed class LicenceImportForm : LocalizedForm
         _keyWarning.Bounds = new Rectangle(left, 322, width, 44);
 
         var buttonTop = ClientSize.Height - 36 - 34;
-        _quit.Bounds = new Rectangle(left, buttonTop, 120, 34);
-        _export.Bounds = new Rectangle(left + width - 190 - 12 - 210, buttonTop, 210, 34);
-        _import.Bounds = new Rectangle(left + width - 190, buttonTop, 190, 34);
+        // Wide enough for each caption with its icon, side by side: "Quitter" at the start, the
+        // two file actions at the end.
+        const int quitWidth = 130, exportWidth = 226, importWidth = 236;
+        _quit.Bounds = new Rectangle(left, buttonTop, quitWidth, 34);
+        _import.Bounds = new Rectangle(left + width - importWidth, buttonTop, importWidth, 34);
+        _export.Bounds = new Rectangle(_import.Left - 10 - exportWidth, buttonTop, exportWidth, 34);
 
         Controls.AddRange([_band, _heading, _intro, _serverLabel, _serverId, _copy, _steps, _keyWarning,
                            _quit, _export, _import]);

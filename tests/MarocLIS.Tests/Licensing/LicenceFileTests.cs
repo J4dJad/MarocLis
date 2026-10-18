@@ -135,6 +135,7 @@ public sealed class LicenceFileTests
         using var reread = LicenceKeys.ImportPublicKey("Clé de l'éditeur\n" + LicenceKeys.ExportPublicKey(pair));
         LicenceFile.Verify(LicenceFile.Parse(text).Value, reread).Should().BeTrue();
         LicenceKeys.Fingerprint(reread).Should().Be(LicenceKeys.Fingerprint(pair)).And.MatchRegex("^([0-9A-F]{4}-){7}[0-9A-F]{4}$");
+        LicenceKeys.FingerprintOfPem("Clé de l'éditeur\n" + LicenceKeys.ExportPublicKey(pair)).Should().Be(LicenceKeys.Fingerprint(pair));
     }
 
     [Fact]

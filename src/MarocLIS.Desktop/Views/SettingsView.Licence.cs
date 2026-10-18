@@ -78,7 +78,7 @@ public sealed partial class SettingsView
             var value = new Label
             {
                 Font = UiTheme.Body, ForeColor = UiTheme.TextPrimary, AutoSize = false,
-                Bounds = new Rectangle(LicenceCaptionWidth, y, LicenceColumnWidth - LicenceCaptionWidth, tall ? 40 : 24)
+                Bounds = new Rectangle(LicenceCaptionWidth, y, LicenceColumnWidth - LicenceCaptionWidth, tall ? 60 : 24)
             };
 
             if (key is "number" or "server" or "key") value.Font = UiTheme.MonospaceBold;
@@ -93,7 +93,8 @@ public sealed partial class SettingsView
 
             _licenceRows[key] = (caption, value);
             column.Controls.AddRange([caption, value]);
-            y += tall ? 44 : 28;
+            // Thirteen module names take three lines.
+            y += tall ? 64 : 28;
         }
 
         _licenceKeyWarning.Font = UiTheme.SmallBold;
@@ -205,6 +206,10 @@ public sealed partial class SettingsView
         _licenceStatus.Text = string.Empty;
     }
 
+    /// <summary>A cause written to follow « Lecture seule — », as a sentence of its own.</summary>
+    private static string Sentence(string text) =>
+        text.Length == 0 ? text : char.ToUpper(text[0], CultureInfo.CurrentUICulture) + text[1..] + (char.IsPunctuation(text[^1]) ? "" : ".");
+
     private void ShowLicence(LicenceStatus status, int? inUse, IReadOnlyList<LicenceHistoryRow> history)
     {
         var terms = status.Terms;
@@ -226,11 +231,11 @@ public sealed partial class SettingsView
         // Why the licence is not in force, in the words of the refusal; and a clock found behind.
         var problems = new List<string>();
         if (status.Problem is { } problem) problems.Add(Localizer.Describe(problem));
-        else if (status.State == LicenceState.Missing) problems.Add(T("Licence.Cause.Missing"));
+        else if (status.State == LicenceState.Missing) problems.Add(Sentence(T("Licence.Cause.Missing")));
         if (status.ClockRolledBack) problems.Add(T("Licence.ClockRolledBack", Date(status.LatestDateSeen)));
         if (status.IsReadOnly && status.BenchClearingUntil is { } bench && status.State != LicenceState.Pending)
             problems.Add(status.InBenchClearing ? T("Licence.BenchUntil", Date(bench)) : T("Licence.BenchOver"));
-        _licenceProblem.Text = string.Join("  ", problems);
+        _licenceProblem.Text = string.Join(" ", problems);
         _licenceProblem.Visible = problems.Count > 0;
 
         void Row(string key, string text, Color? colour = null)

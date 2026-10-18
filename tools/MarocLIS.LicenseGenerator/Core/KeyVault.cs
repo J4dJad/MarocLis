@@ -38,9 +38,7 @@ public sealed class KeyVault(string folder)
     /// <summary>The fingerprint of the key on this computer, from its public half; null before one is created.</summary>
     public string? Fingerprint()
     {
-        if (!File.Exists(PublicKeyFile)) return null;
-        using var key = LicenceKeys.ImportPublicKey(File.ReadAllText(PublicKeyFile));
-        return LicenceKeys.Fingerprint(key);
+        return File.Exists(PublicKeyFile) ? LicenceKeys.FingerprintOfPem(File.ReadAllText(PublicKeyFile)) : null;
     }
 
     /// <summary>

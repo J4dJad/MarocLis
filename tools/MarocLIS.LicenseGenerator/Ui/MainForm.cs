@@ -187,7 +187,7 @@ internal sealed class MainForm : Form
         delete.Click += (_, _) => DeletePack();
         reset.Click += (_, _) => ResetPacks();
 
-        var editor = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(20, 0, 0, 0) };
+        var editor = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(20, 6, 0, 0) };
         var note = Look.Text("Un pack ne fait que préremplir le formulaire : le fichier de licence liste toujours les modules un à un, "
                              + "et chaque licence peut s'écarter de son pack.", Look.Small, UiTheme.TextSecondary);
         note.MaximumSize = new Size(560, 0);
@@ -199,7 +199,7 @@ internal sealed class MainForm : Form
             Look.Bar(save, delete)
         ]);
 
-        var left = new Panel { Dock = DockStyle.Left, Width = 300 };
+        var left = new Panel { Dock = DockStyle.Left, Width = 360 };
         left.Controls.Add(_packList);
         left.Controls.Add(Look.Bar(add, reset));
 
