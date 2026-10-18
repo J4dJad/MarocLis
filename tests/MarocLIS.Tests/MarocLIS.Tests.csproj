@@ -68,6 +68,8 @@
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\DataMigrationProfiles.cs" Link="Desktop\DataMigrationProfiles.cs" />
     <!-- What the licence opens in the menu, and the banner its state calls for. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\LicenceNavigation.cs" Link="Desktop\LicenceNavigation.cs" />
+    <!-- The licence generator's keys, register and drafts: no WinForms in them. -->
+    <Compile Include="..\..\tools\MarocLIS.LicenseGenerator\Core\*.cs" Link="Licensing\Generator\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

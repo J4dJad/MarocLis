@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The vendor's licence generator. A tool of the vendor's own computer: it holds the private key
+    that signs the licences, so it is not part of the installer, not published with MarocLIS, and
+    never given to a laboratory. Its interface is in French only, for the people who issue licences.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationVisualStyles>true</ApplicationVisualStyles>
+    <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
+    <ApplicationDefaultFont>Segoe UI, 9pt</ApplicationDefaultFont>
+    <RootNamespace>MarocLIS.LicenseGenerator</RootNamespace>
+    <AssemblyName>MarocLIS.GenerateurLicences</AssemblyName>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- French screens for a French-speaking vendor: the ambient culture is the one wanted. -->
+    <NoWarn>$(NoWarn);CA1305</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The licence file, the keys and the request: the very code MarocLIS reads them with. -->
+    <ProjectReference Include="..\..\src\MarocLIS.Domain\MarocLIS.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- MarocLIS's icons and colours, so the two programs look like one family. -->
+    <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\Glyph.cs" Link="Ui\Shared\Glyph.cs" />
+    <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\UiTheme.Palette.cs" Link="Ui\Shared\UiTheme.Palette.cs" />
+    <EmbeddedResource Include="..\..\src\MarocLIS.Desktop\Resources\Icons\icons.png" Link="Ui\Shared\icons.png"
+                      LogicalName="MarocLIS.LicenseGenerator.icons.png" />
+    <None Include="..\..\src\MarocLIS.Desktop\Resources\Icons\LICENSE-lucide.txt" Link="LICENSE-lucide.txt"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
