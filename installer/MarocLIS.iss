@@ -187,6 +187,25 @@ english.SrvTestFailed=Cannot connect to %1:%n%n%2%n%nCheck the name, that the se
 french.SrvKept=Ce poste a déjà un fichier appsettings.json : sa chaîne de connexion est conservée.
 english.SrvKept=This workstation already has an appsettings.json: its connection string is kept.
 
+french.LicFilePageCaption=Licence MarocLIS
+english.LicFilePageCaption=MarocLIS licence
+french.LicFilePageDescription=Le fichier de licence reçu de l'éditeur, si vous l'avez déjà.
+english.LicFilePageDescription=The licence file received from the vendor, if you already have it.
+french.LicFilePageSubCaption=Si vous avez reçu un fichier de licence (.lic), indiquez-le : il est copié à côté de MarocLIS et importé au premier démarrage. Sinon laissez vide : au premier démarrage, MarocLIS affiche l'identifiant du serveur et exporte la demande à envoyer à l'éditeur, puis la licence s'importe depuis Paramètres › Licence.
+english.LicFilePageSubCaption=If you received a licence file (.lic), select it: it is copied beside MarocLIS and imported on first start. Otherwise leave it empty: on first start, MarocLIS shows the server's identifier and exports the request to send to the vendor; the licence is then imported from Settings > Licence.
+french.LicFilePrompt=&Fichier de licence (facultatif) :
+english.LicFilePrompt=&Licence file (optional):
+french.LicFileFilter=Licence MarocLIS (*.lic)|*.lic|Tous les fichiers (*.*)|*.*
+english.LicFileFilter=MarocLIS licence (*.lic)|*.lic|All files (*.*)|*.*
+french.LicFileInvalid=Ce fichier n'est pas une licence MarocLIS (un fichier .lic de moins de 64 Ko).
+english.LicFileInvalid=This file is not a MarocLIS licence (a .lic file under 64 KB).
+french.ReadyLicence=Licence : %1, importée au premier démarrage
+english.ReadyLicence=Licence: %1, imported on first start
+french.ReadyNoLicence=Licence : à importer au premier démarrage (Paramètres › Licence)
+english.ReadyNoLicence=Licence: to import on first start (Settings > Licence)
+french.PostLicence=Copie du fichier de licence…
+english.PostLicence=Copying the licence file…
+
 french.ProgressCaption=Installation de SQL Server Express
 english.ProgressCaption=Installing SQL Server Express
 french.ProgressDescription=Cette étape peut durer de 10 à 30 minutes. Ne fermez pas cette fenêtre.
@@ -267,6 +286,7 @@ var
   LicenseDecline: TNewRadioButton;
 
   ServerPage: TInputQueryWizardPage;
+  LicenceFilePage: TInputFileWizardPage;
   ServerKeptLabel: TNewStaticText;
 
   TypeDetailLabel: TNewStaticText;
@@ -651,6 +671,21 @@ begin
   WizardForm.TypesCombo.OnChange := @TypesComboChanged;
 end;
 
+{ The licence file, optional: MarocLIS imports a licence.lic it finds beside itself on its first
+  start, on an installation that has none yet. Most licences are bound to the server and asked for
+  once it is installed, so the page is usually left empty. }
+procedure CreateLicenceFilePage;
+begin
+  LicenceFilePage := CreateInputFilePage(ServerPage.ID, CustomMessage('LicFilePageCaption'),
+    CustomMessage('LicFilePageDescription'), CustomMessage('LicFilePageSubCaption'));
+  LicenceFilePage.Add(CustomMessage('LicFilePrompt'), CustomMessage('LicFileFilter'), '.lic');
+end;
+
+function LicenceFileChosen: String;
+begin
+  Result := Trim(LicenceFilePage.Values[0]);
+end;
+
 procedure InitializeWizard;
 begin
   DetectSqlInstances;
@@ -659,6 +694,7 @@ begin
   CreateSqlPage;
   CreateLicensePage;
   CreateServerPage;
+  CreateLicenceFilePage;
   DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), CustomMessage('ProgressDownloadMedia'), nil);
   ProgressPage := CreateOutputProgressPage(CustomMessage('ProgressCaption'), CustomMessage('ProgressDescription'));
 end;
@@ -728,6 +764,13 @@ begin
       Result := False;
     end;
   end
+  else if (CurPageID = LicenceFilePage.ID) and (LicenceFileChosen <> '') then begin
+    { MarocLIS refuses a file over 64 KB or that is not a licence; said here rather than at first start. }
+    if not FileExists(LicenceFileChosen) or (CompareText(ExtractFileExt(LicenceFileChosen), '.lic') <> 0) then begin
+      MsgBox(CustomMessage('LicFileInvalid'), mbError, MB_OK);
+      Result := False;
+    end;
+  end
   else if (CurPageID = wpReady) and MustInstallSql and (SqlOfflineMedia = '') then begin
     { Microsoft's bootstrapper is small; it downloads the media itself in PrepareToInstall. }
     DownloadPage.Clear;
@@ -774,6 +817,10 @@ begin
     S := S + CustomMessage('ReadyConnection') + NewLine + Space + ConnectionStringFor(ClientDataSource) + NewLine
   else
     S := S + CustomMessage('SrvKept') + NewLine;
+  if LicenceFileChosen <> '' then
+    S := S + FmtMessage(CustomMessage('ReadyLicence'), [ExtractFileName(LicenceFileChosen)]) + NewLine
+  else
+    S := S + CustomMessage('ReadyNoLicence') + NewLine;
   if ServiceInstalled or DesktopSettingsPresent then
     S := S + NewLine + CustomMessage('ReadyUpgrade') + NewLine;
   if MemoTasksInfo <> '' then
@@ -948,10 +995,20 @@ begin
   end;
 end;
 
+procedure CopyLicenceFile;
+begin
+  if LicenceFileChosen = '' then exit;
+  WizardForm.StatusLabel.Caption := CustomMessage('PostLicence');
+  if not CopyFile(LicenceFileChosen, ExpandConstant('{app}\Desktop\licence.lic'), False) then
+    StepMessages := StepMessages + #13#10 + '- ' + CustomMessage('PostLicence');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssPostInstall then
+  if CurStep = ssPostInstall then begin
+    CopyLicenceFile;
     ConfigureAfterInstall;
+  end;
 end;
 
 function NeedRestart: Boolean;

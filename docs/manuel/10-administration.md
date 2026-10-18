@@ -8,7 +8,7 @@
 - le catalogue des analyses : analyses, paramètres, valeurs usuelles, tarifs, profils, analyses en cascade, listes de référence, et la nomenclature officielle des actes de biologie médicale (NABM) ;
 - les liaisons avec les automates ;
 - les données de référence : équipements, contrôle interne, articles, fournisseurs, prescripteurs, organismes payeurs ;
-- les paramètres du laboratoire : identité du site, numérotations, paramètres généraux, format des factures, lieux de stockage des tubes, imprimantes du poste ;
+- les paramètres du laboratoire : identité du site, numérotations, paramètres généraux, format des factures, lieux de stockage des tubes, imprimantes du poste, licence ;
 - la reprise des données de l'application utilisée avant MarocLIS (patients, prescripteurs, catalogue, antériorités, créances).
 
 **Qui l'utilise.** L'administrateur règle presque tout. Le biologiste responsable tient le catalogue et les automates. Le responsable qualité tient les valeurs usuelles, les équipements et le contrôle interne, et lit le journal d'audit. Le service comptable tient les tarifs, les organismes payeurs, les articles et les fournisseurs. Le détail des droits est donné plus bas.
@@ -22,7 +22,7 @@
 | **Catalogue des analyses** | Analyses, paramètres, valeurs usuelles, tarifs, profils, analyses en cascade, listes de référence, nomenclature des actes et écarts | aucun |
 | **Automates** | Liaisons avec les automates, table de correspondance, journal des messages | aucun |
 | **Données de référence** | Équipements, contrôle interne, articles, fournisseurs, prescripteurs, organismes payeurs | aucun |
-| **Paramètres** | Identité légale du site, numérotations, paramètres, format des factures, lieux de stockage, imprimantes du poste | aucun |
+| **Paramètres** | Identité légale du site, numérotations, paramètres, format des factures, lieux de stockage, imprimantes du poste, licence | aucun |
 | **Reprise de données** | Reprendre les données de l'ancienne application depuis un fichier Excel/CSV ou sa base, contrôlées avant import | aucun |
 
 Le groupe n'apparaît que si vous avez le droit d'ouvrir au moins un de ces écrans. Une entrée pour laquelle vous n'avez pas le droit n'est pas affichée du tout.
@@ -83,10 +83,12 @@ flowchart TD
 | `admin.sites.manage` | Onglet **Site** des **Paramètres**, **Nouveau site** | Administrateur seul |
 | `admin.settings.manage` | Numérotations, paramètres, format des factures, plafond des remises, lieux de stockage | Administrateur seul |
 | `billing.discount.approve` | Approuver, sur place, une remise au-delà du plafond accordée par un autre utilisateur (jamais la sienne) | Administrateur, Biologiste responsable, Comptabilité |
+| `admin.license` | Onglet **Licence** des **Paramètres** : importer une licence, exporter la demande | Administrateur seul |
 | `admin.migration` | Ouvrir **Reprise de données** : lire l'ancienne application, simuler, importer, annuler la dernière reprise | Administrateur seul (accordé aussi aux installations existantes au démarrage) |
 | `results.validate_remote` | **Validation à distance** : se connecter au service de validation depuis un téléphone (exige aussi `results.validate_biological`) | Aucun rôle livré (l'Administrateur a tous les droits mais ne peut pas valider sans qualification de biologiste) : à ajouter dans **Rôles et droits** au rôle des biologistes de garde |
 
 Changements récents des rôles livrés :
+- nouveau droit `admin.license` (onglet **Licence** des **Paramètres**), donné à l'Administrateur, y compris sur une base existante au démarrage suivant ;
 - nouveau droit `results.validate_remote` (validation à distance depuis un téléphone), donné à aucun rôle clinique : l'administrateur l'ajoute au rôle des biologistes concernés, ou crée un rôle « Biologiste de garde » (voir « Service de validation à distance ») ;
 - nouveau droit `billing.discount.approve` (approuver une remise au-delà du plafond), donné à l'Administrateur, au Biologiste responsable et à la Comptabilité, y compris sur une base existante au démarrage suivant ; il peut être retiré ou ajouté à un rôle dans **Rôles et droits** ;
 - le Biologiste et le Technicien de laboratoire peuvent maintenant **Réimporter** une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
@@ -717,7 +719,7 @@ Régler ce qui est propre au laboratoire :
 - les lieux de stockage des tubes ;
 - les imprimantes du poste.
 
-**Qui y a accès** : l'entrée apparaît avec `admin.sites.manage` ou `admin.settings.manage` (livrés à l'administrateur seul). Onglet **Site** et **Nouveau site** modifiables avec `admin.sites.manage` ; onglets **Numérotations**, **Paramètres** et **Factures** modifiables avec `admin.settings.manage`. L'onglet **Lieux de stockage** n'apparaît qu'avec `admin.settings.manage`. L'onglet **Imprimantes** concerne le poste sur lequel vous êtes.
+**Qui y a accès** : l'entrée apparaît avec `admin.sites.manage`, `admin.settings.manage` ou `admin.license` (livrés à l'administrateur seul). Onglet **Site** et **Nouveau site** modifiables avec `admin.sites.manage` ; onglets **Numérotations**, **Paramètres** et **Factures** modifiables avec `admin.settings.manage`. L'onglet **Lieux de stockage** n'apparaît qu'avec `admin.settings.manage`. L'onglet **Imprimantes** concerne le poste sur lequel vous êtes. L'onglet **Licence** n'apparaît qu'avec `admin.license` (voir « Licence » ci-dessous).
 
 **Fonctionnalités**
 
@@ -851,6 +853,47 @@ flowchart TD
     P -- oui --> Q[Réouvrir la série + motif]
     R[Nouveau site] --> A
 ```
+
+### Licence
+
+**À quoi sert cet écran**
+
+L'onglet **Licence** des **Paramètres** montre la licence de MarocLIS en vigueur sur ce serveur, et c'est là qu'une nouvelle licence s'importe. La licence est un fichier `.lic` signé par l'éditeur : elle nomme le laboratoire, le type de licence, ses dates, le nombre de postes et les modules ouverts. Elle est gardée dans la base de données, donc valable pour tous les postes reliés à ce serveur ; MarocLIS la vérifie au démarrage puis chaque jour.
+
+**Qui y a accès** : `admin.license` (livré à l'administrateur seul). Avec ce seul droit, l'entrée **Paramètres** apparaît et ne montre que l'onglet **Licence**. L'onglet reste modifiable en lecture seule : c'est par lui qu'on en sort.
+
+**L'écran**
+
+- En haut, **Licence en vigueur** et une pastille d'état : **Valide** (vert), **Période de grâce** (orange), **Expirée**, **Non valide** ou **Aucune licence** (rouge). Dessous, la cause quand la licence n'est pas valide (par exemple « Cette licence a été émise pour le serveur … ; ce serveur est … »), et le délai pour terminer les dossiers en cours en lecture seule.
+- Les lignes : **Laboratoire**, **Numéro** (numéro et version, « LIC-2026-0042 v2 »), **Type** (Annuelle, Perpétuelle, Essai, Formation), **Validité**, **Jours restants** (en vert ; en orange à 30 jours ou moins ; en rouge après la fin), **Mises à jour jusqu'au** (licence perpétuelle), **Postes utilisés** (« 3 / 5 »), **Modules ouverts**, **Non inclus**, **Identifiant serveur** avec le bouton **Copier**, **Liaison** (liée à ce serveur, à un autre, ou à aucun), **Clé de vérification** (empreinte de la clé de l'éditeur).
+- **Licences importées** : l'historique (numéro, version, type, **Importée le**, **Par**, poste, **Remplacée le**).
+- Au pied : **Importer une licence…**, **Exporter la demande** et **Actualiser**.
+
+**Scénarios**
+
+1. **Première installation.** Sur une base vide, MarocLIS s'ouvre sur l'écran « Aucune licence installée » au lieu de la connexion. Il affiche l'**Identifiant de ce serveur**. **Exporter la demande** enregistre un fichier `demande-licence-<site>.demande` (identifiant, site, version) à envoyer au fournisseur ; **Copier** met l'identifiant dans le presse-papiers. Le fichier `licence.lic` reçu s'importe avec **Importer une licence…** : MarocLIS s'ouvre aussitôt sur la connexion, sans redémarrer. Si le programme d'installation a reçu le fichier, la licence est importée toute seule au premier démarrage.
+2. **Renouveler ou remplacer.** Le fournisseur envoie une nouvelle version de la même licence (même numéro, version supérieure). **Importer une licence…** : elle remplace l'ancienne immédiatement, sur ce poste, et sur les autres au plus tard cinq minutes après. Une version plus ancienne que celle en place est refusée.
+3. **Changer de serveur.** La licence est liée au serveur. Après une copie de la base sur un autre serveur, la licence n'est plus valide : MarocLIS passe en lecture seule et l'onglet le dit. **Exporter la demande** sur le nouveau serveur, l'envoyer au fournisseur, importer la licence reçue.
+4. **Trop de postes.** Le poste de trop voit « Nombre de postes atteint (n / n) » à la connexion, avec la liste des postes connectés (poste, utilisateur, connecté depuis, dernier signe). Il suffit qu'un poste se déconnecte. Un poste resté allumé sans activité libère sa place après 15 minutes. Les téléphones ne comptent pas.
+
+**Ce que la licence règle**
+
+- **Dates.** 30 jours avant la fin, un bandeau orange « Licence : expire dans N jours » apparaît pour les administrateurs et les biologistes. Après la fin, une période de grâce (15 jours par défaut, fixée par la licence) : tout fonctionne, un bandeau rouge s'affiche pour tous et un message le rappelle à la connexion. Après la grâce, MarocLIS passe en lecture seule.
+- **Lecture seule** (licence expirée après la grâce, non valide, ou absente sur une base qui contient des patients) :
+  - restent possibles : la connexion et la recherche, la consultation des résultats, de l'historique et des comptes rendus, la réimpression et la remise des comptes rendus déjà diffusés, l'encaissement d'un dossier existant, l'import d'une licence ;
+  - pendant 7 jours (fixés par la licence), les dossiers déjà enregistrés peuvent encore être saisis, validés et diffusés : la paillasse se vide ;
+  - sont bloqués : la création d'un patient ou d'un dossier, la réception des résultats des automates (les trames sont gardées dans le journal et pourront être réimportées), la validation sur téléphone, et la modification des paramètres autres que la licence.
+  - Une base qui contient des patients n'est jamais bloquée par un écran : sans licence, elle s'ouvre en lecture seule.
+- **Postes** : nombre d'ordinateurs connectés en même temps, pas d'utilisateurs.
+- **Modules.** Le socle est toujours inclus (patients, dossiers, prélèvements, réception, résultats, validation, comptes rendus, facturation, caisse, statistiques simples, catalogue, utilisateurs, audit, paramètres, reprise de données). Treize modules sont optionnels : Connexion automates, Validation mobile, Langue arabe, Tiers payant, Qualité, Stocks et achats, Équipements, Ressources humaines, Paie, Relations et messagerie, Finance et comptabilité, Pilotage, Multi-sites. Un module non inclus disparaît du menu ; l'arabe n'est plus proposé dans **Paramètres › Langues** ; un second site de travail ne peut pas être créé sans **Multi-sites** (les laboratoires partenaires restent possibles).
+- **Licence d'essai et de formation.** Chaque compte rendu et chaque facture porte « VERSION D'ESSAI – NE PAS REMETTRE AU PATIENT ». La licence de formation vaut pour un poste, sans date de fin, et est refusée dès que la base contient plus de 200 dossiers.
+- **Horloge.** MarocLIS retient le dernier jour où il a fonctionné et la date du dernier dossier : reculer l'horloge d'un poste ne prolonge pas la licence.
+
+**Règles et contrôles**
+
+- L'identifiant serveur est calculé à partir de ce que SQL Server déclare (nom de la machine qui l'héberge et instance) et d'un identifiant écrit dans la base à sa création. Il ne change pas quand on remplace un disque ou une carte réseau ; il change quand la base est copiée sur un autre serveur.
+- Toute licence modifiée, même d'un caractère, est refusée (signature non valide). Une licence révoquée par l'éditeur est refusée par les versions de MarocLIS publiées après la révocation.
+- Chaque import, remplacement et refus est inscrit au journal de sécurité (« Licence importée », « Licence remplacée », « Licence refusée »).
 
 ### Reprise de données
 
@@ -1222,6 +1265,28 @@ Le service **MarocLIS.Api** permet aux biologistes de valider depuis leur télé
 | « Aucune imprimante n'est installée sur ce poste. » | Onglet **Imprimantes** sans imprimante | Installer une imprimante dans Windows, puis **Actualiser**. |
 | « Imprimantes enregistrées pour ce poste. » / « Étiquette de test envoyée à « … ». » | Enregistrement ou test réussi | Vérifier l'étiquette imprimée. |
 | « Impossible d'enregistrer le choix des imprimantes sur ce poste. » | Écriture du réglage local impossible | Réessayer ; prévenir le support informatique. |
+
+#### Licence
+
+| Message | Quand il apparaît | Que faire |
+|---|---|---|
+| « Licence : expire dans … jours » / « Licence : expire aujourd'hui » | Bandeau orange, 30 jours avant la fin (administrateurs, biologistes) | Demander le renouvellement au fournisseur. |
+| « Licence expirée le … : MarocLIS passe en lecture seule dans … jours. Importez la nouvelle licence. » | Bandeau rouge et message à la connexion pendant la grâce | Importer la nouvelle licence au plus vite. |
+| « Lecture seule — … » | Bandeau rouge après la grâce, ou licence non valide | Lire la cause dans **Paramètres › Licence** ; importer une licence valide. |
+| « Nombre de postes atteint (n / n) » | Connexion d'un poste de trop | Faire déconnecter un poste de la liste, ou attendre 15 minutes qu'un poste inactif libère sa place. |
+| « La signature de la licence ne correspond pas : le fichier a été modifié ou n'a pas été émis pour MarocLIS. » | Import d'un fichier modifié | Redemander le fichier au fournisseur. |
+| « Cette licence a été émise pour le serveur … ; ce serveur est … . Demandez une licence pour ce serveur (Exporter la demande). » | Licence d'un autre serveur | **Exporter la demande** et l'envoyer au fournisseur. |
+| « Cette licence a expiré le … : elle ne peut pas être importée. » / « Cette licence ne commence que le … . » | Import hors dates | Demander une licence aux bonnes dates. |
+| « Cette licence est la version …, plus ancienne que la version … déjà importée. » / « La licence … version … a déjà été importée. » | Import d'une version ancienne ou en double | Rien : la licence en place est la bonne. |
+| « La licence … a été révoquée par l'éditeur. » | Licence révoquée | Contacter le fournisseur. |
+| « Cette licence perpétuelle couvre les mises à jour jusqu'au … ; cette version de MarocLIS date du … . » | Mise à jour au-delà de la maintenance | Réinstaller la version précédente ou renouveler la maintenance. |
+| « Une licence de formation ne vaut que pour une base d'au plus … dossiers ; celle-ci en compte … . » | Licence de formation sur une vraie base | Demander une licence d'exploitation. |
+| « MarocLIS est en lecture seule faute de licence valide : aucun nouveau patient ni dossier ne peut être créé. » | Création refusée en lecture seule | Importer une licence valide. |
+| « MarocLIS est en lecture seule : les dossiers en cours ne pouvaient être terminés que jusqu'au … . » | Saisie ou validation après le délai de paillasse | Importer une licence valide. |
+| « MarocLIS est en lecture seule : les paramètres ne peuvent pas être modifiés, hormis la licence. » | Modification d'un paramètre en lecture seule | Importer une licence valide. |
+| « Le module « … » n'est pas inclus dans la licence. » | Action d'un module non acheté | Demander le module au fournisseur. |
+| « L'horloge de ce poste est en retard sur le …, dernier jour vu par MarocLIS : c'est cette date qui compte. » | Horloge du poste reculée | Remettre l'horloge à l'heure. |
+| « Cette version vérifie les licences avec la clé de DÉVELOPPEMENT … » | Version de test installée | Installer la version livrée par l'éditeur. |
 
 #### Reprise de données
 
