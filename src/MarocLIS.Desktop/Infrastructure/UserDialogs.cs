@@ -139,23 +139,33 @@ internal sealed class TextPromptForm : Form
         MinimizeBox = false;
         MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(460, 168);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
         RightToLeft = rightToLeft ? RightToLeft.Yes : RightToLeft.No;
         RightToLeftLayout = rightToLeft;
 
+        // Sized to the prompt rather than fixed at two lines: a critical-result call puts the
+        // parameter, a blank line and the question in it, and the question was drawn under the
+        // text box.
+        var promptHeight = Math.Max(40, TextRenderer.MeasureText(
+            prompt, UiTheme.Body, new Size(428, int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height + 4);
+
+        ClientSize = new Size(460, promptHeight + 128);
+
         var label = new Label
         {
             Text = prompt,
             AutoSize = false,
-            Bounds = new Rectangle(16, 14, 428, 40),
+            Bounds = new Rectangle(16, 14, 428, promptHeight),
             ForeColor = UiTheme.TextPrimary
         };
 
+        var inputTop = 14 + promptHeight + 6;
+
         _input = new TextBox
         {
-            Bounds = new Rectangle(16, 60, 428, 56),
+            Bounds = new Rectangle(16, inputTop, 428, 56),
             Multiline = true,
             ScrollBars = ScrollBars.Vertical,
             BorderStyle = BorderStyle.FixedSingle,
@@ -164,11 +174,11 @@ internal sealed class TextPromptForm : Form
         };
 
         var ok = UiTheme.PrimaryButton(okText);
-        ok.Bounds = new Rectangle(268, 126, 84, UiTheme.ButtonHeight);
+        ok.Bounds = new Rectangle(268, inputTop + 66, 84, UiTheme.ButtonHeight);
         ok.DialogResult = DialogResult.OK;
 
         var cancel = UiTheme.SecondaryButton(cancelText);
-        cancel.Bounds = new Rectangle(360, 126, 84, UiTheme.ButtonHeight);
+        cancel.Bounds = new Rectangle(360, inputTop + 66, 84, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
         Controls.AddRange([label, _input, ok, cancel]);
