@@ -108,6 +108,10 @@ public sealed record ResultEntrySheet
     public OrderPriority Priority { get; init; }
     public string? ClinicalInformation { get; init; }
     public DateTimeOffset? DueAt { get; init; }
+
+    /// <summary>Who prescribed the order and how to reach them; null when the order names nobody.</summary>
+    public OrderPrescriber? Prescriber { get; init; }
+
     public required IReadOnlyList<ResultEntryRow> Rows { get; init; }
 }
 
@@ -311,6 +315,13 @@ public sealed class ResultEntryService(
         await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.ViewOrder, order.PatientId, order.Id,
                                      "ResultEntry", rows.Count, ct: ct);
 
+        // Who to call about the file: the directory's record, else the name typed on the order.
+        var prescriber = order.PrescriberId is { } prescriberId
+            ? await queries.GetOrderPrescriberAsync(prescriberId, ct)
+            : null;
+        if (prescriber is null && !string.IsNullOrWhiteSpace(order.PrescriberFreeText))
+            prescriber = new OrderPrescriber { FreeText = order.PrescriberFreeText.Trim() };
+
         return Result.Success(new ResultEntrySheet
         {
             LabOrderId = order.Id,
@@ -324,6 +335,7 @@ public sealed class ResultEntryService(
             Priority = order.Priority,
             ClinicalInformation = order.ClinicalInformation,
             DueAt = order.DueAt,
+            Prescriber = prescriber,
             Rows = rows
         });
     }
@@ -980,6 +992,13 @@ public interface IResultQueries
     /// only; returns null when nothing matches.
     /// </summary>
     Task<Guid?> ResolveOrderIdAsync(string term, Guid siteId, CancellationToken ct = default);
+
+    /// <summary>
+    /// The prescriber an order names, with the contact details the validation screens show. Read
+    /// past the soft-delete filter: a prescriber removed from the directory since still prescribed
+    /// the order. Null when the identifier matches nobody.
+    /// </summary>
+    Task<OrderPrescriber?> GetOrderPrescriberAsync(Guid prescriberId, CancellationToken ct = default);
 
     /// <summary>
     /// Of the given results, those whose current value an acknowledged, read-back notification

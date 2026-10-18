@@ -299,6 +299,33 @@ public sealed class ResultQueries(LisDbContext db) : IResultQueries
                   (a, s) => (Guid?)s.LabOrderId)
             .FirstOrDefaultAsync(ct);
     }
+
+    /// <summary>
+    /// Without the query filters: the order was read through its own, and a prescriber deleted or
+    /// deactivated since is still the one who prescribed it — and still the one to call.
+    /// </summary>
+    public Task<OrderPrescriber?> GetOrderPrescriberAsync(Guid prescriberId, CancellationToken ct = default) =>
+        db.Prescribers
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(p => p.Id == prescriberId)
+            .Select(p => new OrderPrescriber
+            {
+                PrescriberId = p.Id,
+                Kind = p.Kind,
+                LastName = p.LastName,
+                FirstName = p.FirstName,
+                FullNameArabic = p.FullNameArabic,
+                InstitutionName = p.InstitutionName,
+                Speciality = p.Speciality,
+                CriticalResultPhone = p.CriticalResultPhone,
+                Phone = p.Phone,
+                MobilePhone = p.MobilePhone,
+                Email = p.Email,
+                Fax = p.Fax,
+                City = p.City
+            })
+            .FirstOrDefaultAsync(ct);
 }
 
 public sealed class ValidationQueries(LisDbContext db, IUnitOfWork unitOfWork) : IValidationQueries

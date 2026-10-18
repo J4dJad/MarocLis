@@ -601,6 +601,8 @@ public sealed class MobileApiDatabaseTests(MobileApiDatabase database) : IClassF
         opened.Patient.Name.Should().Contain("TAZI");
         opened.ClinicalInformation.Should().Be("Bilan de contrôle");
         opened.CanIssueReport.Should().BeFalse();
+        // A prescriber typed on the order: the name, and no number to offer.
+        opened.Prescriber.Should().Be(new PrescriberSummary("Dr Prescripteur"));
         opened.Context.Should().Contain(l => l.Text.Length > 0 && l.Tone == ApiProtocol.Tones.Warning);
 
         var checkedRow = opened.Rows.Single(r => r.ResultId == file.ByAnalysis[lab.Creatinine.Id].Id);

@@ -312,6 +312,26 @@ textarea.input { height: auto; padding: 10px 12px; line-height: 1.45; resize: no
 .message-ok { background: var(--normal-tint); color: var(--normal-text); }
 .message-critical { background: var(--critical-tint); color: var(--critical-text); }
 
+.prescriber { overflow: hidden; }
+.prescriber-toggle {
+  width: 100%; min-height: 48px; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border: none;
+  background: transparent; text-align: start; cursor: pointer; color: var(--text);
+}
+[dir='rtl'] .prescriber-toggle { padding: 6px 14px 6px 8px; }
+.prescriber-toggle .prescriber-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prescriber-toggle svg { color: var(--text-3); flex-shrink: 0; transition: transform 0.15s ease-out; }
+.prescriber-toggle[aria-expanded='true'] svg { transform: rotate(180deg); }
+.prescriber-body { padding: 0 8px 8px 14px; display: flex; flex-direction: column; }
+[dir='rtl'] .prescriber-body { padding: 0 14px 8px 8px; }
+.prescriber-speciality { font-size: 14px; color: var(--text-3); padding-bottom: 4px; }
+.contact-row { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); min-height: 44px; }
+.contact-label { font-size: 13px; color: var(--text-3); min-width: 76px; }
+.contact-value { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.contact-row.critical .contact-label, .contact-row.critical .contact-value { color: var(--critical-text); font-weight: 600; }
+.contact-copied { font-size: 12px; color: var(--normal-text); }
+.call-to { font-size: 14px; color: var(--text-2); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.call-to a { font-weight: 600; }
+
 /* ---- Context and summaries ---------------------------------------------------------------- */
 
 .facts { background: var(--background); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--text-2); }

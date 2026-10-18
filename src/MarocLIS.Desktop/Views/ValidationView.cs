@@ -78,6 +78,8 @@ public sealed class ValidationView : LocalizedView
     // ---- the context card ----
     private readonly Label _contextTitle = new();
     private readonly TableLayoutPanel _contextLines = new();
+    private readonly TableLayoutPanel _prescriber = new();
+    private Bitmap? _copyIcon;
     private readonly Label _clinicalCaption = ValidationPaint.Caption();
     private readonly Label _clinicalText = new();
     private readonly Label _commentCaption = ValidationPaint.Caption();
@@ -368,14 +370,14 @@ public sealed class ValidationView : LocalizedView
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 8,
+            RowCount = 9,
             Padding = new Padding(14, 12, 14, 12),
             Margin = new Padding(0),
             AutoScroll = true,
             BackColor = UiTheme.SurfaceRaised
         };
         body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var i = 0; i < 6; i++) body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var i = 0; i < 7; i++) body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         body.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
         body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
@@ -394,6 +396,17 @@ public sealed class ValidationView : LocalizedView
 
         // The rule between the signals and the clinical information.
         var rule = new Panel { Dock = DockStyle.Fill, Height = 1, Margin = new Padding(0, 6, 0, 10), BackColor = UiTheme.Border };
+
+        // « Prescripteur »: who to call, each number with its copy button. A table, so the labels
+        // go to the right in Arabic like the signals above.
+        _prescriber.AutoSize = true;
+        _prescriber.Dock = DockStyle.Fill;
+        _prescriber.ColumnCount = 3;
+        _prescriber.Margin = new Padding(0, 0, 0, 12);
+        _prescriber.BackColor = UiTheme.SurfaceRaised;
+        _prescriber.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _prescriber.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        _prescriber.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         _clinicalText.AutoSize = true;
         _clinicalText.Font = UiTheme.Body;
@@ -420,11 +433,12 @@ public sealed class ValidationView : LocalizedView
         body.Controls.Add(_contextTitle, 0, 0);
         body.Controls.Add(_contextLines, 0, 1);
         body.Controls.Add(rule, 0, 2);
-        body.Controls.Add(_clinicalCaption, 0, 3);
-        body.Controls.Add(_clinicalText, 0, 4);
-        body.Controls.Add(_commentCaption, 0, 5);
-        body.Controls.Add(_comment, 0, 6);
-        body.Controls.Add(_openOrder, 0, 7);
+        body.Controls.Add(_prescriber, 0, 3);
+        body.Controls.Add(_clinicalCaption, 0, 4);
+        body.Controls.Add(_clinicalText, 0, 5);
+        body.Controls.Add(_commentCaption, 0, 6);
+        body.Controls.Add(_comment, 0, 7);
+        body.Controls.Add(_openOrder, 0, 8);
 
         card.Controls.Add(body);
         return card;
@@ -1349,6 +1363,150 @@ public sealed class ValidationView : LocalizedView
         var clinical = string.IsNullOrWhiteSpace(sheet.ClinicalInformation) ? null : sheet.ClinicalInformation.Trim();
         _clinicalText.Text = clinical ?? T("Validation.NotProvided");
         _clinicalText.ForeColor = clinical is null ? UiTheme.TextSecondary : UiTheme.TextPrimary;
+
+        RenderPrescriber(sheet.Prescriber);
+    }
+
+    /// <summary>
+    /// The « Prescripteur » block: the name, the speciality, then each recorded way of reaching
+    /// them — the critical line first and in red, as it is the one to dial for a critical value.
+    /// A value not recorded is not listed; a prescriber typed on the order has a name only.
+    /// </summary>
+    private void RenderPrescriber(OrderPrescriber? prescriber)
+    {
+        var language = Localizer.CurrentLanguage;
+        var name = PrescriberContactRules.DisplayName(prescriber, language);
+
+        _prescriber.SuspendLayout();
+        ClearPrescriber();
+
+        var row = 0;
+        void Whole(Control control)
+        {
+            _prescriber.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _prescriber.Controls.Add(control, 0, row);
+            _prescriber.SetColumnSpan(control, 3);
+            row++;
+        }
+
+        Label Line(string text, Font font, Color colour, int width) => new()
+        {
+            Text = text,
+            AutoSize = true,
+            Font = font,
+            ForeColor = colour,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 2, 0, 2),
+            MaximumSize = new Size(width, 0),
+            UseMnemonic = false
+        };
+
+        var caption = ValidationPaint.Caption();
+        caption.Text = T("Validation.Prescriber");
+        Whole(caption);
+
+        Whole(Line(name ?? T("Validation.NotProvided"), name is null ? UiTheme.Body : UiTheme.BodyBold,
+                   name is null ? UiTheme.TextSecondary : UiTheme.TextPrimary, ContextWidth - 36));
+
+        var speciality = prescriber?.Speciality?.For(language);
+        if (!string.IsNullOrWhiteSpace(speciality))
+            Whole(Line(speciality.Trim(), UiTheme.Small, UiTheme.TextSecondary, ContextWidth - 36));
+
+        foreach (var contact in PrescriberContactRules.Contacts(prescriber))
+        {
+            var critical = contact.Kind == PrescriberContactKind.CriticalLine;
+            _prescriber.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var label = Line(T(ContactKey(contact.Kind)), critical ? UiTheme.SmallBold : UiTheme.Small,
+                             critical ? UiTheme.CriticalInk : UiTheme.TextSecondary, 120);
+            label.Margin = new Padding(0, 4, 8, 4);
+
+            var value = Line(contact.Value, critical ? UiTheme.BodyBold : UiTheme.Body,
+                             critical ? UiTheme.CriticalInk : UiTheme.TextPrimary, ContextWidth - 36 - 120);
+            // A number reads left to right in Arabic too.
+            value.RightToLeft = RightToLeft.No;
+
+            _prescriber.Controls.Add(label, 0, row);
+            _prescriber.Controls.Add(value, 1, row);
+            _prescriber.Controls.Add(CopyButton(contact.Value), 2, row);
+            row++;
+        }
+
+        _prescriber.RowCount = row;
+        _prescriber.ResumeLayout(performLayout: true);
+    }
+
+    private static string ContactKey(PrescriberContactKind kind) => kind switch
+    {
+        PrescriberContactKind.CriticalLine => "Validation.PrescriberCriticalLine",
+        PrescriberContactKind.Phone => "Validation.PrescriberPhone",
+        PrescriberContactKind.Mobile => "Validation.PrescriberMobile",
+        PrescriberContactKind.Email => "Validation.PrescriberEmail",
+        _ => "Validation.PrescriberFax"
+    };
+
+    /// <summary>A small button copying one value, which the status line then confirms.</summary>
+    private Button CopyButton(string value)
+    {
+        var button = new Button
+        {
+            FlatStyle = FlatStyle.Flat,
+            Size = new Size(26, 24),
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(4, 1, 0, 1),
+            BackColor = UiTheme.SurfaceRaised,
+            Cursor = Cursors.Hand,
+            AccessibleName = $"{T("Validation.PrescriberCopy")} {value}",
+            UseMnemonic = false
+        };
+        button.FlatAppearance.BorderSize = 0;
+
+        _copyIcon ??= Icons.Render(Glyph.CopyPlus, UiTheme.TextSecondary, ButtonIcons.Size(this));
+        if (_copyIcon is not null)
+        {
+            button.Image = _copyIcon;
+        }
+        else
+        {
+            // Without the icon font, the word.
+            button.AutoSize = true;
+            button.Font = UiTheme.Small;
+            button.Text = T("Validation.PrescriberCopy");
+        }
+
+        _tips.SetToolTip(button, T("Validation.PrescriberCopy"));
+        button.Click += (_, _) => CopyToClipboard(value);
+        return button;
+    }
+
+    private void CopyToClipboard(string value)
+    {
+        try
+        {
+            Clipboard.SetText(value);
+            _status.ForeColor = UiTheme.TextSecondary;
+            _status.Text = T("Validation.PrescriberCopied", value);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // Clipboard held by another application: the biologist can click again.
+        }
+    }
+
+    /// <summary>Empties the block; its controls are the screen's own, so they are disposed (the shared icon is not).</summary>
+    private void ClearPrescriber()
+    {
+        var old = _prescriber.Controls.Cast<Control>().ToList();
+        _prescriber.Controls.Clear();
+        _prescriber.RowStyles.Clear();
+        _prescriber.RowCount = 0;
+
+        foreach (var control in old)
+        {
+            if (control is Button button) button.Image = null;
+            _tips.SetToolTip(control, null);
+            control.Dispose();
+        }
     }
 
     private void ClearDetails()
@@ -1361,6 +1519,7 @@ public sealed class ValidationView : LocalizedView
         _detailSubtitle.Text = string.Empty;
         _selectionCount.Text = string.Empty;
         _contextLines.Controls.Clear();
+        ClearPrescriber();
         _clinicalText.Text = string.Empty;
         _communicate.ForeColor = UiTheme.TextPrimary;
         _communicate.Font = UiTheme.Body;
@@ -1739,6 +1898,14 @@ public sealed class ValidationView : LocalizedView
 
         if (critical.Count == 0) return;
 
+        // Whom the value is phoned to, and the number recorded against the call: the one the
+        // « Prescripteur » block shows first (PrescriberContactRules).
+        var prescriber = sheet.Prescriber;
+        var contactUsed = PrescriberContactRules.ContactUsed(null, prescriber, NotificationChannel.Telephone);
+        var whom = string.Join(" — ", new[] { PrescriberContactRules.DisplayName(prescriber, Localizer.CurrentLanguage), contactUsed }
+                                          .Where(part => part is not null));
+        var callLine = whom.Length > 0 ? $"{T("Validation.CriticalCallWhom", whom)}\n\n" : string.Empty;
+
         foreach (var row in critical)
         {
             var parameterName = row.ParameterName.For(Localizer.CurrentLanguage);
@@ -1746,7 +1913,7 @@ public sealed class ValidationView : LocalizedView
 
             var raised = await _validation.RaiseCriticalNotificationAsync(
                 row.TestResultId, parameterName, value,
-                NotificationChannel.Telephone, contactUsed: null, prescriberId: null,
+                NotificationChannel.Telephone, contactUsed, prescriber?.PrescriberId,
                 displayedEnteredAt: row.EnteredAt);
 
             if (raised.IsFailure)
@@ -1758,7 +1925,7 @@ public sealed class ValidationView : LocalizedView
             // Within the notification's columns: a longer name or read-back failed the save and
             // left the call open with the value unreleasable.
             var recipient = _dialogs.PromptForText(
-                $"{parameterName} : {value}\n\n{T("Notification_RecipientNameRequired")}",
+                $"{parameterName} : {value}\n\n{callLine}{T("Notification_RecipientNameRequired")}",
                 T("Nav.CriticalResults"), maxLength: 200);
 
             if (recipient is null)

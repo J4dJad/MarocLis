@@ -3595,6 +3595,15 @@
   },
 
   "Validation": {
+    "Prescriber": "Prescriber",
+    "PrescriberCriticalLine": "Critical-values line",
+    "PrescriberPhone": "Tel.",
+    "PrescriberMobile": "Mobile",
+    "PrescriberEmail": "Email",
+    "PrescriberFax": "Fax",
+    "PrescriberCopy": "Copy",
+    "PrescriberCopied": "Copied: {0}",
+    "CriticalCallWhom": "To call: {0}",
     "ValidatedCount": "{0} result(s) validated",
     "KeyNextOrder": "next file",
     "KeyValidate": "validate selection",
@@ -6359,6 +6368,10 @@
   "Stats_PeriodReversed": "The end date is before the start date.",
   "Stats_PeriodTooLong": "The period cannot exceed {0} days.",
   "MobileUi": {
+    "PrescriberCopy": "Copy {0}",
+    "PrescriberCopied": "Copied",
+    "PrescriberCall": "Call {0}",
+    "PrescriberWrite": "Write to {0}",
     "OfflineTitle": "Offline",
     "OfflineDetail": "Nothing can be validated without a network.",
     "SignInAgain": "Sign in again",

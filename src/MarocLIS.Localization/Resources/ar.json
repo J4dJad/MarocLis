@@ -3595,6 +3595,15 @@
   },
 
   "Validation": {
+    "Prescriber": "الطبيب الواصف",
+    "PrescriberCriticalLine": "خط القيم الحرجة",
+    "PrescriberPhone": "الهاتف",
+    "PrescriberMobile": "المحمول",
+    "PrescriberEmail": "البريد الإلكتروني",
+    "PrescriberFax": "الفاكس",
+    "PrescriberCopy": "نسخ",
+    "PrescriberCopied": "تم النسخ: {0}",
+    "CriticalCallWhom": "الاتصال بـ: {0}",
     "ValidatedCount": "نتائج مصادق عليها: {0}",
     "KeyNextOrder": "الملف التالي",
     "KeyValidate": "المصادقة على التحديد",
@@ -6359,6 +6368,10 @@
   "Stats_PeriodReversed": "تاريخ النهاية يسبق تاريخ البداية.",
   "Stats_PeriodTooLong": "لا يمكن أن تتجاوز الفترة {0} يوماً.",
   "MobileUi": {
+    "PrescriberCopy": "نسخ {0}",
+    "PrescriberCopied": "تم النسخ",
+    "PrescriberCall": "الاتصال بـ {0}",
+    "PrescriberWrite": "مراسلة {0}",
     "OfflineTitle": "غير متصل",
     "OfflineDetail": "لا يمكن المصادقة على أي شيء دون شبكة.",
     "SignInAgain": "إعادة الدخول",

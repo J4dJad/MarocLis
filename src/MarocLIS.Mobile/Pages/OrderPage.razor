@@ -35,6 +35,14 @@
             @if (_file is { } file)
             {
                 var uncalled = file.Rows.Where(Display.IsUncalledCritical).ToList();
+
+                // Who to call, unfolded when a critical value is waiting for the call.
+                if (file.Prescriber is { } prescriber)
+                {
+                    <PrescriberCard @key="file.OrderId" Prescriber="prescriber" Expanded="uncalled.Count > 0"
+                                    OnDial="number => _dialled = number" />
+                }
+
                 if (uncalled.Count > 0)
                 {
                     <div class="critical-banner">
@@ -152,7 +160,7 @@
     @switch (_sheet)
     {
         case OrderSheet.Critical when _file is not null && _criticalRow is not null:
-            <CriticalSheet File="_file" Row="_criticalRow" OnDone="CriticalDoneAsync" OnCancel="CloseSheet" />
+            <CriticalSheet File="_file" Row="_criticalRow" Dialled="_dialled" OnDone="CriticalDoneAsync" OnCancel="CloseSheet" />
             break;
         case OrderSheet.Derogation when _file is not null:
             <DerogationSheet File="_file" Rows="QcRows" OnConfirm="SendAsync" OnCancel="CloseSheet" />
@@ -175,6 +183,9 @@
     private readonly Dictionary<Guid, string> _comments = [];
     private Guid? _commentRow;
     private ResultRow? _criticalRow;
+
+    /// <summary>The prescriber's number last tapped on this file: the contact recorded with a critical call.</summary>
+    private string? _dialled;
     private OrderSheet _sheet;
     private bool _loading;
     private bool _busy;
@@ -194,6 +205,7 @@
         _loadedFor = OrderId;
         _message = null;
         _comments.Clear();
+        _dialled = null;
         await LoadAsync();
     }
 

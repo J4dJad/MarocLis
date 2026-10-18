@@ -1,0 +1,108 @@
+@*
+    « Prescripteur » at the head of a file: who prescribed it and how to reach them. Folded to the
+    name; unfolded, each recorded number is a tel: link (the critical line first, in red), the
+    address a mailto: link, and each value has its copy button. A number tapped is reported to the
+    page, which records it as the contact used if a critical call follows.
+*@
+@inherits UiComponent
+@inject Browser Browser
+
+<section class="card prescriber" aria-labelledby="prescriber-title">
+    <button type="button" class="prescriber-toggle" aria-expanded="@(_open ? "true" : "false")" aria-controls="prescriber-body"
+            @onclick="() => _open = !_open">
+        <span class="card-title" id="prescriber-title">@T("Validation.Prescriber")</span>
+        <span class="prescriber-name">@Prescriber.Name</span>
+        <Icon Name="chevron-down" Size="18" />
+    </button>
+    @if (_open)
+    {
+        <div class="prescriber-body" id="prescriber-body">
+            @if (Subtitle is { Length: > 0 } subtitle)
+            {
+                <div class="prescriber-speciality">@subtitle</div>
+            }
+            @foreach (var contact in Contacts)
+            {
+                var current = contact;
+                <div class="contact-row @(current.Critical ? "critical" : "")">
+                    <span class="contact-label">@current.Label</span>
+                    @if (current.Href is { } href)
+                    {
+                        <a class="contact-value ltr" href="@href" aria-label="@current.Action"
+                           @onclick="() => DialledAsync(current)">@current.Value</a>
+                    }
+                    else
+                    {
+                        <span class="contact-value ltr">@current.Value</span>
+                    }
+                    @if (_copied == current.Value)
+                    {
+                        <span class="contact-copied" role="status">@T("MobileUi.PrescriberCopied")</span>
+                    }
+                    <button type="button" class="icon-button contact-copy" aria-label="@T("MobileUi.PrescriberCopy", current.Value)"
+                            @onclick="() => CopyAsync(current.Value)">
+                        <Icon Name="copy" Size="18" />
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public PrescriberSummary Prescriber { get; set; } = default!;
+
+    /// <summary>Unfolded from the start: the page opens it when a critical value is waiting to be called.</summary>
+    [Parameter] public bool Expanded { get; set; }
+
+    /// <summary>A number was tapped to call it.</summary>
+    [Parameter] public EventCallback<string> OnDial { get; set; }
+
+    private sealed record Contact(string Label, string Value, string? Href, string? Action, bool Critical, bool IsPhone);
+
+    private bool _open;
+    private bool _expandedSeen;
+    private string? _copied;
+
+    protected override void OnParametersSet()
+    {
+        // Follows the page only the first time: once folded or unfolded by hand, it stays so.
+        if (_expandedSeen) return;
+        _expandedSeen = true;
+        _open = Expanded;
+    }
+
+    private string Subtitle =>
+        string.Join(" · ", new[] { Prescriber.Speciality, Prescriber.City }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+    /// <summary>In the workstation's order: the critical line, the telephone, the mobile, the e-mail, the fax.</summary>
+    private IEnumerable<Contact> Contacts
+    {
+        get
+        {
+            if (Prescriber.CriticalLine is { Length: > 0 } critical)
+                yield return Phone(T("Validation.PrescriberCriticalLine"), critical, true);
+            if (Prescriber.Phone is { Length: > 0 } phone)
+                yield return Phone(T("Validation.PrescriberPhone"), phone, false);
+            if (Prescriber.Mobile is { Length: > 0 } mobile)
+                yield return Phone(T("Validation.PrescriberMobile"), mobile, false);
+            if (Prescriber.Email is { Length: > 0 } email)
+                yield return new Contact(T("Validation.PrescriberEmail"), email, $"mailto:{email}",
+                                         T("MobileUi.PrescriberWrite", email), false, false);
+            // A fax is not dialled from a phone: copied only.
+            if (Prescriber.Fax is { Length: > 0 } fax)
+                yield return new Contact(T("Validation.PrescriberFax"), fax, null, null, false, false);
+        }
+    }
+
+    private Contact Phone(string label, string number, bool critical) =>
+        new(label, number, Display.TelephoneLink(number), T("MobileUi.PrescriberCall", number), critical, true);
+
+    private Task DialledAsync(Contact contact) =>
+        contact.IsPhone ? OnDial.InvokeAsync(contact.Value) : Task.CompletedTask;
+
+    private async Task CopyAsync(string value)
+    {
+        _copied = await Browser.CopyAsync(value) ? value : null;
+    }
+}
