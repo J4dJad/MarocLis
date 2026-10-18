@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Billing;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
@@ -418,6 +419,11 @@ public sealed class ReportReleaseService(
         await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.Search, recordCount: rows.Count,
                                       queryDescription: "Registre des comptes rendus", ct: ct);
 
+        // The counter needs to know a file is not paid, whoever is at it; the amounts and the
+        // invoice are billing's, and only a user who may see billing gets them.
+        if (!currentUser.Has(Permissions.Billing.View))
+            rows = [.. rows.Select(r => r with { Payment = r.Payment?.WithoutAmounts() })];
+
         return Result.Success(rows);
     }
 
@@ -441,6 +447,9 @@ public sealed class ReportReleaseService(
 
         await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.Search, recordCount: rows.Count,
                                       queryDescription: "Comptes rendus à émettre", ct: ct);
+
+        if (!currentUser.Has(Permissions.Billing.View))
+            rows = [.. rows.Select(r => r with { Payment = r.Payment?.WithoutAmounts() })];
 
         return Result.Success(rows);
     }
@@ -471,7 +480,8 @@ public sealed class ReportReleaseService(
         Guid reportId, DeliveryChannel channel, ReportRecipientKind recipientKind,
         string? recipientName, string? recipientIdentifier,
         string? bearerName = null, string? bearerCin = null,
-        Guid? authorizingConsentId = null, CancellationToken ct = default)
+        Guid? authorizingConsentId = null, OrderPayment? unsettledPayment = null,
+        CancellationToken ct = default)
     {
         var permitted = guard.RequireAny(Permissions.Reports.Print, Permissions.Reports.Send);
         if (permitted.IsFailure) return Result.Failure<DeliveryOutcome>(permitted.FirstError);
@@ -584,11 +594,17 @@ public sealed class ReportReleaseService(
         unitOfWork.AuditReason = outcome == DeliveryResultKind.Failed
             ? $"Échec d'envoi du compte rendu v{report.VersionNumber} ({channel}) : {failure}"
             : $"Remise du compte rendu v{report.VersionNumber} ({channel})";
+
+        // Handed over although the operator was warned the patient's share is not settled: a
+        // warning, never a refusal, but the choice is on record.
+        var paymentNote = unsettledPayment is { IsSettled: false } unsettled ? unsettled.AuditNote("remis") : null;
+        if (paymentNote is not null) unitOfWork.AuditReason += $" — {paymentNote}";
+
         await unitOfWork.SaveChangesAsync(ct);
 
         if (outcome != DeliveryResultKind.Failed)
             await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.Transmit, null, report.LabOrderId,
-                                         $"Delivery/{channel}", ct: ct);
+                                         $"Delivery/{channel}", queryDescription: paymentNote, ct: ct);
 
         return Result.Success(new DeliveryOutcome(outcome, failureError));
     }
@@ -684,9 +700,11 @@ public sealed class ReportReleaseService(
 
     /// <summary>
     /// Returns the stored PDF of a released version. Reprinting a validated report is a logged
-    /// disclosure, not a neutral read.
+    /// disclosure, not a neutral read. <paramref name="unsettledPayment"/> is the payment status the
+    /// operator was warned of and went past; the log says the report went out unpaid.
     /// </summary>
-    public async Task<Result<byte[]>> GetStoredPdfAsync(Guid reportId, CancellationToken ct = default)
+    public async Task<Result<byte[]>> GetStoredPdfAsync(Guid reportId, OrderPayment? unsettledPayment = null,
+                                                        CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Reports.ReprintValidated);
         if (permitted.IsFailure) return Result.Failure<byte[]>(permitted.FirstError);
@@ -704,7 +722,11 @@ public sealed class ReportReleaseService(
         }
 
         await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.ViewReport, null,
-                                     report.LabOrderId, "ReportReprint", ct: ct);
+                                     report.LabOrderId, "ReportReprint",
+                                     queryDescription: unsettledPayment is { IsSettled: false } unsettled
+                                         ? unsettled.AuditNote("réimprimé")
+                                         : null,
+                                     ct: ct);
 
         return Result.Success(report.RenderedPdf);
     }
@@ -1001,7 +1023,9 @@ public sealed record PendingReportRow(
     /// <summary>Versions already released for the order; above zero, this one completes a partial.</summary>
     int ReleasedVersions,
     /// <summary>The prescriber as the report will name them: establishment, doctor, or free text.</summary>
-    string? PrescriberName = null);
+    string? PrescriberName = null,
+    /// <summary>Where the patient stands on paying for the order; null when it was not read.</summary>
+    OrderPayment? Payment = null);
 
 public enum DeliveryResultKind
 {
@@ -1047,7 +1071,9 @@ public sealed record ReportRegisterRow(
     /// <summary>How the prescriber asked for it — which channel the operator should reach for.</summary>
     ReportDeliveryPreference PrescriberPreference,
     string? PatientEmail = null,
-    string? PrescriberEmail = null)
+    string? PrescriberEmail = null,
+    /// <summary>Where the patient stands on paying for the order; null when it was not read.</summary>
+    OrderPayment? Payment = null)
 {
     public bool IsSuperseded => SupersededByReportId is not null;
 

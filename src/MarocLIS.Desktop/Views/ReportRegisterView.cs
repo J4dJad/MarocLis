@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Billing;
 using MarocLIS.Application.Reports;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
@@ -78,7 +79,8 @@ public sealed class ReportRegisterView : LocalizedView
     private readonly Label _signatoryCaption = new(), _signatory = new(),
                            _prescriberCaption = new(), _prescriber = new(),
                            _versionsCaption = new(), _versions = new(),
-                           _deliveryCaption = new(), _delivery = new();
+                           _deliveryCaption = new(), _delivery = new(),
+                           _paymentCaption = new(), _payment = new();
 
     // ---- bottom bar ----
     private readonly Button _more = UiTheme.SecondaryButton(string.Empty);
@@ -251,6 +253,7 @@ public sealed class ReportRegisterView : LocalizedView
 
         _deliveries.RowTemplate.Height = 28;
         _pending.CellPainting += PaintPendingCell;
+        _pending.CellFormatting += OnPendingFormatting;
         _register.CellPainting += PaintRegisterCell;
 
         // « À émettre »: the files, and the note on partial reports at the foot.
@@ -357,7 +360,7 @@ public sealed class ReportRegisterView : LocalizedView
         _facts.AutoSize = true;
         _facts.Dock = DockStyle.Fill;
         _facts.ColumnCount = 2;
-        _facts.RowCount = 4;
+        _facts.RowCount = 5;
         _facts.Margin = new Padding(0);
         _facts.BackColor = UiTheme.SurfaceRaised;
         _facts.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
@@ -366,7 +369,8 @@ public sealed class ReportRegisterView : LocalizedView
         var pairs = new (Label Caption, Label Value)[]
         {
             (_signatoryCaption, _signatory), (_prescriberCaption, _prescriber),
-            (_versionsCaption, _versions), (_deliveryCaption, _delivery)
+            (_versionsCaption, _versions), (_deliveryCaption, _delivery),
+            (_paymentCaption, _payment)
         };
 
         for (var i = 0; i < pairs.Length; i++)
@@ -524,6 +528,7 @@ public sealed class ReportRegisterView : LocalizedView
         AddColumn(_pending, "awaiting", 9, UiTheme.Monospace, right: true);
         AddColumn(_pending, "validatedat", 14, UiTheme.Monospace);
         AddColumn(_pending, "kind", 12);
+        AddColumn(_pending, "payment", 11, UiTheme.Small);
     }
 
     private void BuildRegisterColumns()
@@ -538,6 +543,9 @@ public sealed class ReportRegisterView : LocalizedView
         // « Remise » and « Statut » before the prescriber: they are what the desk works from, and
         // at 1366×768 the last columns scroll out of sight.
         AddColumn(_register, "delivery", 12, UiTheme.SmallBold);
+        // « Paiement » beside « Remise »: whether the patient still owes is asked as the report is
+        // handed over, at the counter.
+        AddColumn(_register, "payment", 10, UiTheme.Small);
         AddColumn(_register, "flags", 14, UiTheme.SmallBold);
         AddColumn(_register, "prescriber", 12, UiTheme.Small);
     }
@@ -724,6 +732,14 @@ public sealed class ReportRegisterView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _register.Rows.Count) return;
         if (_register.Rows[e.RowIndex].Tag is not ReportRegisterRow row) return;
 
+        // An unsettled patient share reads in the warning ink on any version, superseded or not:
+        // the reprint asks about it all the same.
+        if (_register.Columns[e.ColumnIndex].Name == "payment" && row.Payment is { IsSettled: false })
+        {
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
+            return;
+        }
+
         if (row.IsSuperseded)
         {
             // Superseded versions stay in the list — a reprint of what a clinician actually holds
@@ -745,6 +761,15 @@ public sealed class ReportRegisterView : LocalizedView
         {
             e.CellStyle!.ForeColor = UiTheme.Accent;
         }
+    }
+
+    private void OnPendingFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.RowIndex >= _pending.Rows.Count) return;
+        if (_pending.Columns[e.ColumnIndex].Name != "payment") return;
+
+        if (_pending.Rows[e.RowIndex].Tag is PendingReportRow { Payment.IsSettled: false })
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
     }
 
     /// <summary>The nature of a report as a pill: « Définitif » in the ok pair, « Partiel » in the info pair.</summary>
@@ -845,6 +870,7 @@ public sealed class ReportRegisterView : LocalizedView
         _prescriberCaption.Text = T("Order.Prescriber");
         _versionsCaption.Text = T("Report.Versions");
         _deliveryCaption.Text = T("Report.Delivery");
+        _paymentCaption.Text = T("Report.Payment");
 
         RefreshWindows();
 
@@ -857,6 +883,7 @@ public sealed class ReportRegisterView : LocalizedView
             _register.Column("released").HeaderText = T("Report.ReleasedAt");
             _register.Column("prescriber").HeaderText = T("Order.Prescriber");
             _register.Column("delivery").HeaderText = T("Report.Delivery");
+            _register.Column("payment").HeaderText = T("Report.Payment");
             _register.Column("flags").HeaderText = T("Field.Status");
         }
 
@@ -869,6 +896,7 @@ public sealed class ReportRegisterView : LocalizedView
             _pending.Column("awaiting").HeaderText = T("Report.AwaitingShort");
             _pending.Column("validatedat").HeaderText = T("Report.LastValidatedAt");
             _pending.Column("kind").HeaderText = T("Report.Completeness");
+            _pending.Column("payment").HeaderText = T("Report.Payment");
         }
 
         if (_deliveries.Columns.Count > 0)
@@ -965,6 +993,7 @@ public sealed class ReportRegisterView : LocalizedView
                 T($"ReportCompleteness.{row.Completeness}"),
                 row.ReleasedAt.ToLocalTime().ToString("dd/MM/yy HH:mm"),
                 DeliveryText(row),
+                PaymentText(row.Payment),
                 string.Join(" · ", Flags(row)),
                 row.PrescriberName ?? string.Empty);
 
@@ -1021,6 +1050,65 @@ public sealed class ReportRegisterView : LocalizedView
                 ? T($"ReportDeliveryPreference.{row.PrescriberPreference}")
                 : "—";
 
+    private string Amount(decimal amount) => Money.Of(amount).Format(Localizer.CurrentLanguage);
+
+    /// <summary>
+    /// The patient's payment status in a cell: « Payé », « Reste 120,00 DH », « Non facturé »; to
+    /// a user without billing.view, who gets no amount, « Payé » or « Non payé ».
+    /// </summary>
+    private string PaymentText(OrderPayment? payment) => payment switch
+    {
+        { State: OrderPaymentState.Paid } => T("Report.PaymentPaid"),
+        { State: OrderPaymentState.PatientShareDue, PatientDue: { } due } => T("Report.PaymentDue", Amount(due)),
+        { State: OrderPaymentState.NotInvoiced, PatientDue: not null } => T("Report.PaymentNotInvoiced"),
+        { IsSettled: false } => T("Report.PaymentUnpaid"),
+        _ => "—"
+    };
+
+    /// <summary>The status in the side panel, with the invoice it is read from or the estimate.</summary>
+    private string PaymentDetail(OrderPayment? payment)
+    {
+        var text = PaymentText(payment);
+
+        if (payment?.InvoiceNumber is { } number)
+            return $"{text} · " + (payment.CoveredOrders > 1
+                ? T("Report.PaymentInvoiceShared", number, payment.CoveredOrders)
+                : T("Report.PaymentInvoice", number));
+
+        return payment is { State: OrderPaymentState.NotInvoiced, PatientDue: { } estimate }
+            ? $"{text} · {T("Report.PaymentEstimate", Amount(estimate))}"
+            : text;
+    }
+
+    private void ShowPayment(OrderPayment? payment)
+    {
+        _payment.Text = PaymentDetail(payment);
+        _payment.ForeColor = payment is { IsSettled: false } ? UiTheme.Abnormal : UiTheme.TextPrimary;
+    }
+
+    /// <summary>
+    /// Before a report goes out on an order whose patient share is not settled: says what is owed
+    /// and asks whether to go on. A warning, never a refusal — a report owed to the prescriber goes
+    /// to them whatever the patient paid — and the answer is logged with the act.
+    /// </summary>
+    private bool ConfirmUnpaid(string accession, OrderPayment? payment, string questionKey)
+    {
+        if (payment is not { IsSettled: false }) return true;
+
+        var said = payment switch
+        {
+            { State: OrderPaymentState.NotInvoiced, PatientDue: { } estimate } =>
+                T("Report.UnpaidNotInvoiced", accession, Amount(estimate)),
+            { PatientDue: { } due, InvoiceNumber: { } number, CoveredOrders: > 1 } =>
+                T("Report.UnpaidDueShared", accession, Amount(due), number, payment.CoveredOrders),
+            { State: OrderPaymentState.PatientShareDue, PatientDue: { } due } =>
+                T("Report.UnpaidDue", accession, Amount(due)),
+            _ => T("Report.UnpaidNoAmount", accession)
+        };
+
+        return _dialogs.Confirm($"{said}\n\n{T(questionKey)}", T("Report.Payment"));
+    }
+
     private void RenderPending()
     {
         var selected = (_pending.CurrentRow?.Tag as PendingReportRow)?.LabOrderId;
@@ -1041,7 +1129,8 @@ public sealed class ReportRegisterView : LocalizedView
                 row.ValidatedResults.ToString(),
                 row.AwaitingAnalyses.ToString(),
                 row.LastValidatedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—",
-                kind);
+                kind,
+                PaymentText(row.Payment));
 
             _pending.Rows[index].Tag = row;
         }
@@ -1161,6 +1250,7 @@ public sealed class ReportRegisterView : LocalizedView
                 : T("Report.IssuedVersions", pending.ReleasedVersions, next);
             _versions.ForeColor = UiTheme.TextSecondary;
             _delivery.Text = "—";
+            ShowPayment(pending.Payment);
             return;
         }
 
@@ -1189,6 +1279,7 @@ public sealed class ReportRegisterView : LocalizedView
             _versions.ForeColor = row.IsSuperseded ? UiTheme.TextMuted : UiTheme.TextPrimary;
 
             _delivery.Text = DeliveryText(row);
+            ShowPayment(row.Payment);
             return;
         }
 
@@ -1197,7 +1288,7 @@ public sealed class ReportRegisterView : LocalizedView
         _openPdf.Visible = false;
         // Nothing selected: no blank page and no column of dashes floating under it.
         _facts.Visible = false;
-        _signatory.Text = _prescriber.Text = _versions.Text = _delivery.Text = "—";
+        _signatory.Text = _prescriber.Text = _versions.Text = _delivery.Text = _payment.Text = "—";
     }
 
     private void RefreshActions()
@@ -1237,7 +1328,9 @@ public sealed class ReportRegisterView : LocalizedView
     {
         if (Selected is not { } row) return;
 
-        var result = await _reports.GetStoredPdfAsync(row.ReportId);
+        if (!ConfirmUnpaid(row.AccessionNumber, row.Payment, "Report.ConfirmReprintUnpaid")) return;
+
+        var result = await _reports.GetStoredPdfAsync(row.ReportId, row.Payment);
 
         if (result.IsFailure) { _dialogs.ShowFailure(result, T("Report.Reprint")); return; }
 
@@ -1310,6 +1403,10 @@ public sealed class ReportRegisterView : LocalizedView
     {
         if (Selected is not { } row) return;
 
+        // Asked before the form, whichever channel it then records: to the prescriber as well,
+        // the report goes out on the operator's word.
+        if (!ConfirmUnpaid(row.AccessionNumber, row.Payment, "Report.ConfirmDeliveryUnpaid")) return;
+
         var (emailReady, smsReady) = _reports.ElectronicChannels;
 
         using var dialog = new ReportDeliveryDialog(Localizer, _dialogs, row, emailReady, smsReady);
@@ -1324,7 +1421,7 @@ public sealed class ReportRegisterView : LocalizedView
             result = await _reports.RecordDeliveryAsync(
                 row.ReportId, dialog.Channel, dialog.RecipientKind, dialog.RecipientName,
                 dialog.RecipientIdentifier, dialog.BearerName, dialog.BearerCin,
-                dialog.AuthorizingConsentId);
+                dialog.AuthorizingConsentId, row.Payment);
         }
         finally
         {
