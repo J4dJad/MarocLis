@@ -4854,6 +4854,13 @@
     "SiteAccessButton": "Sites accessibles",
     "RolesButton": "Rôles et droits",
     "PrescriberHint": "Uniquement pour le rôle Prescripteur : le compte ne voit que les demandes de ce prescripteur. Sans prescripteur associé, il ne voit rien.",
+    "Signature": "Signature manuscrite",
+    "NoSignature": "Aucune signature",
+    "LoadSignature": "Charger…",
+    "RemoveSignature": "Retirer",
+    "SignatureHint": "PNG ou JPG, à l'encre sur fond blanc. Imprimée sous le nom du biologiste sur les comptes rendus qu'il valide. Prise en compte à l'enregistrement.",
+    "SignatureBiologistOnly": "Réservée aux médecins et pharmaciens biologistes : choisissez d'abord la qualification.",
+    "SignatureInvalid": "Ce fichier n'est pas une image lisible. Choisissez un fichier PNG ou JPG.",
     "NoPrescriber": "(aucun)",
     "Prescriber": "Prescripteur associé",
     "Users": "Utilisateurs",
@@ -5093,7 +5100,8 @@
     "SessionTimeout": "Session expirée par inactivité",
     "BackupOperation": "Sauvegarde / restauration",
     "SecuritySettingChanged": "Paramètre de sécurité modifié",
-    "DataPurged": "Purge de données"
+    "DataPurged": "Purge de données",
+    "SignatureChanged": "Signature manuscrite modifiée"
   },
 
   "Qualification": {
@@ -5847,6 +5855,10 @@
   "User_CannotEditOwnQualification": "Vous ne pouvez pas modifier votre propre qualification, votre numéro d'inscription à l'Ordre, sa validité, vos secteurs autorisés ni votre prescripteur associé. Demandez-le à un autre administrateur.",
   "User_PrescriberNotFound": "Le prescripteur sélectionné est introuvable.",
   "User_PartnerSiteNotAccessible": "Un laboratoire partenaire (sous-traitance) ne peut pas être attribué comme site de travail à un utilisateur.",
+  "User_SignatureRequiresBiologist": "Le compte {0} n'est pas enregistré comme médecin ou pharmacien biologiste : une signature manuscrite, qui atteste la validation biologique des comptes rendus (loi n° 12-01), ne peut pas lui être attribuée.",
+  "User_SignatureNotPng": "La signature doit être une image PNG ou JPG complète et lisible.",
+  "User_SignatureTooLarge": "L'image de la signature dépasse {0} Ko. Recadrez-la ou réduisez sa résolution.",
+  "User_SignatureBadDimensions": "L'image de la signature mesure {0} × {1} pixels : elle doit faire au plus {2} × {3} pixels et ne pas être minuscule.",
 
   "Role_NotFound": "Rôle introuvable.",
   "Role_CodeRequired": "Le code du rôle est obligatoire.",

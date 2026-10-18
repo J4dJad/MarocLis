@@ -221,5 +221,8 @@ public enum SecurityEventKind
     /// reason, which is what an auditor actually asks for.
     /// </para>
     /// </summary>
-    DataPurged = 16
+    DataPurged = 16,
+
+    /// <summary>A biologist's handwritten signature, printed on released reports, was set or removed.</summary>
+    SignatureChanged = 17
 }

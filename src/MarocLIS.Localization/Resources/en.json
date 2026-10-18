@@ -4853,6 +4853,13 @@
     "SiteAccessButton": "Accessible sites",
     "RolesButton": "Roles and rights",
     "PrescriberHint": "Only for the Prescriber role: the account sees only this prescriber's orders. With no linked prescriber it sees nothing.",
+    "Signature": "Handwritten signature",
+    "NoSignature": "No signature",
+    "LoadSignature": "Load…",
+    "RemoveSignature": "Remove",
+    "SignatureHint": "PNG or JPG, ink on a white background. Printed under the biologist's name on the reports they validate. Applied on save.",
+    "SignatureBiologistOnly": "Reserved for medical and pharmacist biologists: choose the qualification first.",
+    "SignatureInvalid": "This file is not a readable image. Choose a PNG or JPG file.",
     "NoPrescriber": "(none)",
     "Prescriber": "Linked prescriber",
     "Users": "Users",
@@ -5092,7 +5099,8 @@
     "SessionTimeout": "Session expired through inactivity",
     "BackupOperation": "Backup / restore",
     "SecuritySettingChanged": "Security setting changed",
-    "DataPurged": "Data purge"
+    "DataPurged": "Data purge",
+    "SignatureChanged": "Handwritten signature changed"
   },
 
   "Qualification": {
@@ -5846,6 +5854,10 @@
   "User_CannotEditOwnQualification": "You cannot change your own qualification, Order registration number, its validity, your authorised departments or your linked prescriber. Ask another administrator.",
   "User_PrescriberNotFound": "The selected prescriber cannot be found.",
   "User_PartnerSiteNotAccessible": "A partner (subcontracting) laboratory cannot be given to a user as a working site.",
+  "User_SignatureRequiresBiologist": "Account {0} is not recorded as a medical or pharmacist biologist: a handwritten signature, which attests the biological validation of reports (law 12-01), cannot be given to it.",
+  "User_SignatureNotPng": "The signature must be a complete, readable PNG or JPG image.",
+  "User_SignatureTooLarge": "The signature image exceeds {0} KB. Crop it or reduce its resolution.",
+  "User_SignatureBadDimensions": "The signature image is {0} × {1} pixels: it must be at most {2} × {3} pixels and not tiny.",
 
   "Role_NotFound": "Role not found.",
   "Role_CodeRequired": "The role code is mandatory.",

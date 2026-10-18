@@ -16,13 +16,20 @@ public static class LogoImage
     private const int MaxWidth = 800;
 
     /// <summary>The file as a PNG, or null when it is not a picture that can be read.</summary>
-    public static byte[]? ToPng(string path)
+    public static byte[]? ToPng(string path) => ToPng(path, MaxWidth, int.MaxValue);
+
+    /// <summary>
+    /// The file as a PNG scaled down to fit <paramref name="maxWidth"/> × <paramref name="maxHeight"/>,
+    /// or null when it is not a picture that can be read. A JPEG or BMP comes out as a PNG.
+    /// </summary>
+    public static byte[]? ToPng(string path, int maxWidth, int maxHeight)
     {
         try
         {
             using var source = Image.FromFile(path);
 
-            var scale = Math.Min(1.0, (double)MaxWidth / source.Width);
+            var scale = Math.Min(1.0, Math.Min((double)maxWidth / source.Width,
+                                               (double)maxHeight / source.Height));
             var width = Math.Max(1, (int)Math.Round(source.Width * scale));
             var height = Math.Max(1, (int)Math.Round(source.Height * scale));
 

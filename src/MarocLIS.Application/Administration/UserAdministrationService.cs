@@ -609,6 +609,123 @@ public sealed class UserAdministrationService(
         return await authentication.ResetPasswordAsync(userId, newPassword, ct);
     }
 
+    // ---- Handwritten signature ------------------------------------------------------------------
+
+    /// <summary>The largest signature scan accepted, in bytes.</summary>
+    public const int MaxSignatureBytes = 500 * 1024;
+
+    /// <summary>Bounds of a signature scan, in pixels: below them it prints as a smudge, above them it is a page.</summary>
+    public const int MinSignatureWidth = 60, MinSignatureHeight = 20,
+                     MaxSignatureWidth = 2000, MaxSignatureHeight = 1000;
+
+    /// <summary>The stored signature scan of an account, for the editor's preview; null when none.</summary>
+    public async Task<Result<byte[]?>> GetSignatureAsync(Guid userId, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Administration.ViewUsers);
+        if (permitted.IsFailure) return Result.Failure<byte[]?>(permitted.FirstError);
+
+        var user = await users.GetByIdAsync(userId, ct);
+        if (user is null) return Result.Failure<byte[]?>(Error.NotFound("User_NotFound"));
+
+        return Result.Success(user.SignaturePng);
+    }
+
+    /// <summary>
+    /// Stores the handwritten signature printed under a biologist's name on the reports they
+    /// release.
+    /// <para>
+    /// Only a biologist's record may carry one: the signature on a report attests a biological
+    /// validation, which loi n° 12-01 reserves to them, and a technician's scan sitting in the
+    /// database is one configuration mistake away from appearing on a report. The scan must be a
+    /// PNG — the desktop converts a JPEG before sending it — of a size a signature block can hold.
+    /// </para>
+    /// </summary>
+    public async Task<Result> SetSignatureAsync(Guid userId, byte[] png, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Administration.ManageUsers);
+        if (permitted.IsFailure) return permitted;
+
+        var user = await users.GetByIdAsync(userId, ct);
+        if (user is null) return Result.Failure(Error.NotFound("User_NotFound"));
+
+        if (user.Qualification is not (ProfessionalQualification.MedicalBiologist
+                                    or ProfessionalQualification.PharmacistBiologist))
+            return Result.Failure(Error.Regulatory("User_SignatureRequiresBiologist", user.UserName));
+
+        var valid = ValidateSignature(png);
+        if (valid.IsFailure) return valid;
+
+        user.SignaturePng = png;
+        users.Update(user);
+
+        unitOfWork.AuditReason = $"Signature manuscrite de {user.UserName} enregistrée";
+        await unitOfWork.SaveChangesAsync(ct);
+
+        await securityAuditor.LogAsync(SecurityEventKind.SignatureChanged, succeeded: true,
+                                        targetUserId: user.Id,
+                                        details: $"Signature enregistrée ({png.Length / 1024} Ko)",
+                                        ct: ct);
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Removes an account's signature scan. Allowed whatever the record now says: a biologist since
+    /// recorded otherwise is exactly the account whose old signature must be able to go.
+    /// </summary>
+    public async Task<Result> RemoveSignatureAsync(Guid userId, CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Administration.ManageUsers);
+        if (permitted.IsFailure) return permitted;
+
+        var user = await users.GetByIdAsync(userId, ct);
+        if (user is null) return Result.Failure(Error.NotFound("User_NotFound"));
+
+        if (user.SignaturePng is null) return Result.Success();
+
+        user.SignaturePng = null;
+        users.Update(user);
+
+        unitOfWork.AuditReason = $"Signature manuscrite de {user.UserName} retirée";
+        await unitOfWork.SaveChangesAsync(ct);
+
+        await securityAuditor.LogAsync(SecurityEventKind.SignatureChanged, succeeded: true,
+                                        targetUserId: user.Id, details: "Signature retirée", ct: ct);
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Checks the bytes are a whole PNG of a signature's size: the eight-byte signature, the IHDR
+    /// header that carries the dimensions, and the IEND trailer. A truncated upload or a renamed
+    /// file is refused here rather than failing the report renderer at release time.
+    /// </summary>
+    internal static Result ValidateSignature(byte[]? png)
+    {
+        ReadOnlySpan<byte> magic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        ReadOnlySpan<byte> ihdr = [0x49, 0x48, 0x44, 0x52];
+        ReadOnlySpan<byte> iend = [0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82];
+
+        if (png is null || png.Length < 8 + 25 + 12
+            || !png.AsSpan(0, 8).SequenceEqual(magic)
+            || !png.AsSpan(12, 4).SequenceEqual(ihdr)
+            || !png.AsSpan(png.Length - 8).SequenceEqual(iend))
+            return Result.Failure(Error.Validation("User_SignatureNotPng"));
+
+        if (png.Length > MaxSignatureBytes)
+            return Result.Failure(Error.Validation("User_SignatureTooLarge", MaxSignatureBytes / 1024));
+
+        var width = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(16, 4));
+        var height = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(20, 4));
+
+        if (width is < MinSignatureWidth or > MaxSignatureWidth
+            || height is < MinSignatureHeight or > MaxSignatureHeight)
+            return Result.Failure(Error.Validation("User_SignatureBadDimensions", width, height,
+                                                    MaxSignatureWidth, MaxSignatureHeight));
+
+        return Result.Success();
+    }
+
     // ---- Roles -------------------------------------------------------------------------------------
 
     public async Task<Result<Guid>> CreateRoleAsync(string code, MultilingualText name,

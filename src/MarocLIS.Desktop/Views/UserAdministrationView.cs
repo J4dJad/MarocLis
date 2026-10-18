@@ -983,6 +983,8 @@ public sealed class UserAdministrationView : LocalizedView
             return;
         }
 
+        await ApplySignatureAsync(result.Value, dialog);
+
         // Says what the operator must do next: the account cannot be used until the holder changes
         // the password the administrator just typed.
         _dialogs.Info(T("Admin.UserCreatedMustChangePassword", dialog.CreateRequest.UserName),
@@ -995,7 +997,12 @@ public sealed class UserAdministrationView : LocalizedView
     {
         if (_users.CurrentRow?.Tag is not UserRow row) return;
 
-        using var dialog = new UserDialog(Localizer, _dialogs, row, await LoadPrescriberOptionsAsync());
+        byte[]? signature = null;
+
+        if (row.HasSignature && await _administration.GetSignatureAsync(row.UserId) is { IsSuccess: true } stored)
+            signature = stored.Value;
+
+        using var dialog = new UserDialog(Localizer, _dialogs, row, await LoadPrescriberOptionsAsync(), signature);
 
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.UpdateRequest is null) return;
 
@@ -1007,7 +1014,26 @@ public sealed class UserAdministrationView : LocalizedView
             return;
         }
 
+        await ApplySignatureAsync(row.UserId, dialog);
+
         await LoadUsersAsync();
+    }
+
+    /// <summary>
+    /// Stores or removes the signature chosen in the editor, once the record it belongs to is saved:
+    /// the service checks the qualification as recorded, so a biologist's qualification entered in
+    /// the same edit must be saved first.
+    /// </summary>
+    private async Task ApplySignatureAsync(Guid userId, UserDialog dialog)
+    {
+        Result? outcome = dialog.NewSignature is { } png
+            ? await _administration.SetSignatureAsync(userId, png)
+            : dialog.SignatureRemoved
+                ? await _administration.RemoveSignatureAsync(userId)
+                : null;
+
+        if (outcome is { IsFailure: true })
+            _dialogs.ShowFailure(outcome, T("Admin.Signature"));
     }
 
     /// <summary>The prescribers for the editor's picker; an empty list if they cannot be read.</summary>
@@ -1255,11 +1281,23 @@ internal sealed class UserDialog : Form
     private readonly Label _qualificationNotice = new();
     private readonly ComboBox _prescriber = new();
 
+    private readonly PictureBox _signature = new();
+    private readonly Label _noSignature = new();
+    private readonly Button _loadSignature = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _removeSignature = UiTheme.SecondaryButton(string.Empty);
+    private readonly Label _signatureHint = new();
+
     internal CreateUserRequest? CreateRequest { get; private set; }
     internal UpdateUserRequest? UpdateRequest { get; private set; }
 
+    /// <summary>A signature scan chosen in this editor, as a PNG; null when none was chosen.</summary>
+    internal byte[]? NewSignature { get; private set; }
+
+    /// <summary>Whether the stored signature was removed in this editor.</summary>
+    internal bool SignatureRemoved { get; private set; }
+
     internal UserDialog(ILocalizer localizer, IUserDialogs dialogs, UserRow? existing,
-                        IReadOnlyList<PrescriberOption> prescribers)
+                        IReadOnlyList<PrescriberOption> prescribers, byte[]? signature = null)
     {
         _localizer = localizer;
         _dialogs = dialogs;
@@ -1273,7 +1311,7 @@ internal sealed class UserDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(500, 640);
+        ClientSize = new Size(760, 640);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
@@ -1327,7 +1365,11 @@ internal sealed class UserDialog : Form
                 new EnumChoice((int)value, localizer[$"Qualification.{value}"]));
         }
 
-        _qualification.SelectedIndexChanged += (_, _) => RefreshQualificationNotice();
+        _qualification.SelectedIndexChanged += (_, _) =>
+        {
+            RefreshQualificationNotice();
+            RefreshSignature();
+        };
 
         Field("Admin.Language", y, 250);
         _language.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -1425,6 +1467,39 @@ internal sealed class UserDialog : Form
         };
         Controls.Add(prescriberHint);
 
+        // The handwritten signature printed under the biologist's name on the reports they release.
+        // A column of its own: the form is already as tall as a 768-pixel screen allows.
+        Field("Admin.Signature", 12, 520);
+        _signature.Bounds = new Rectangle(520, 30, 220, 100);
+        _signature.SizeMode = PictureBoxSizeMode.Zoom;
+        _signature.BorderStyle = BorderStyle.FixedSingle;
+        _signature.BackColor = Color.White;
+
+        _noSignature.Text = localizer["Admin.NoSignature"];
+        _noSignature.Dock = DockStyle.Fill;
+        _noSignature.TextAlign = ContentAlignment.MiddleCenter;
+        _noSignature.ForeColor = UiTheme.TextSecondary;
+        _noSignature.BackColor = Color.Transparent;
+        _signature.Controls.Add(_noSignature);
+
+        _loadSignature.Text = localizer["Admin.LoadSignature"];
+        _loadSignature.Bounds = new Rectangle(520, 140, 220, UiTheme.ButtonHeight);
+        _loadSignature.Click += (_, _) => LoadSignature();
+
+        _removeSignature.Text = localizer["Admin.RemoveSignature"];
+        _removeSignature.Bounds = new Rectangle(520, 140 + UiTheme.ButtonHeight + 8, 220, UiTheme.ButtonHeight);
+        _removeSignature.Click += (_, _) =>
+        {
+            NewSignature = null;
+            SignatureRemoved = true;
+            ShowSignature(null);
+        };
+
+        _signatureHint.Font = UiTheme.Small;
+        _signatureHint.AutoSize = false;
+        _signatureHint.Bounds = new Rectangle(520, 140 + 2 * (UiTheme.ButtonHeight + 8), 220, 96);
+        Controls.Add(_signatureHint);
+
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
         ok.Bounds = new Rectangle(20, 592, 220, UiTheme.ButtonHeight);
         ok.Click += (_, _) => Accept();
@@ -1435,7 +1510,8 @@ internal sealed class UserDialog : Form
 
         Controls.AddRange([_userName, _password, _fullName, _fullNameArabic, _email, _phone,
                            _qualification, _language, _orderNumber, _inpe, _validUntil,
-                           _departments, _prescriber, ok, cancel]);
+                           _departments, _prescriber, _signature, _loadSignature, _removeSignature,
+                           ok, cancel]);
 
         AcceptButton = ok;
         CancelButton = cancel;
@@ -1443,6 +1519,61 @@ internal sealed class UserDialog : Form
 
         Populate(existing);
         RefreshQualificationNotice();
+        ShowSignature(signature);
+    }
+
+    private bool IsBiologist =>
+        (ProfessionalQualification)((_qualification.SelectedItem as EnumChoice)?.Value ?? 0)
+            is ProfessionalQualification.MedicalBiologist or ProfessionalQualification.PharmacistBiologist;
+
+    private void LoadSignature()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = _localizer["Admin.Signature"],
+            Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg"
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        // Scaled to what a signature block holds; a JPEG comes out as the PNG the service stores.
+        var png = LogoImage.ToPng(dialog.FileName, maxWidth: 600, maxHeight: 300);
+
+        if (png is null)
+        {
+            _dialogs.Warn(_localizer["Admin.SignatureInvalid"], _localizer["Admin.Signature"]);
+            return;
+        }
+
+        NewSignature = png;
+        SignatureRemoved = false;
+        ShowSignature(png);
+    }
+
+    private void ShowSignature(byte[]? png)
+    {
+        var previous = _signature.Image;
+        _signature.Image = png is { Length: > 0 } ? LogoImage.Load(png) : null;
+        previous?.Dispose();
+        _noSignature.Visible = _signature.Image is null;
+        RefreshSignature();
+    }
+
+    /// <summary>
+    /// Only a biologist's record carries a signature: it attests the biological validation the
+    /// reports it is printed on went through.
+    /// </summary>
+    private void RefreshSignature()
+    {
+        var biologist = IsBiologist;
+
+        _loadSignature.Enabled = biologist;
+        _removeSignature.Enabled = biologist && _signature.Image is not null;
+
+        _signatureHint.ForeColor = biologist ? UiTheme.TextSecondary : UiTheme.Abnormal;
+        _signatureHint.Text = biologist
+            ? _localizer["Admin.SignatureHint"]
+            : _localizer["Admin.SignatureBiologistOnly"];
     }
 
     private void Populate(UserRow? existing)
@@ -1602,6 +1733,9 @@ internal sealed class UserDialog : Form
                 PrescriberId = prescriberId
             };
         }
+
+        // A scan chosen before the qualification was changed away from biologist is not sent.
+        if (!IsBiologist) NewSignature = null;
 
         DialogResult = DialogResult.OK;
         Close();
