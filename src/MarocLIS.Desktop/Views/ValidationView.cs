@@ -657,10 +657,13 @@ public sealed class ValidationView : LocalizedView
         // ignored (a double-click on "communicate" recorded every critical value twice), a release
         // can no longer be confirmed for one file while a validation still running moves the
         // screen to the next, and leaving the screen mid-write no longer disposes its context.
-        _validate.Click += async (_, _) => await RunBusyAsync(ValidateSelectedAsync);
-        _communicate.Click += async (_, _) => await RunBusyAsync(CommunicateCriticalAsync);
-        _release.Click += async (_, _) => await RunBusyAsync(ReleaseReportAsync);
-        _unvalidate.Click += async (_, _) => await RunBusyAsync(UnvalidateSelectedAsync);
+        // Each also waits its turn behind a selection load: the two share the view's context, and
+        // « Résultats critiques… » clicked while the file was still loading failed with "A second
+        // operation was started on this context instance".
+        _validate.Click += async (_, _) => await RunBusyAsync(() => _selectionLoads.RunAsync(ValidateSelectedAsync));
+        _communicate.Click += async (_, _) => await RunBusyAsync(() => _selectionLoads.RunAsync(CommunicateCriticalAsync));
+        _release.Click += async (_, _) => await RunBusyAsync(() => _selectionLoads.RunAsync(ReleaseReportAsync));
+        _unvalidate.Click += async (_, _) => await RunBusyAsync(() => _selectionLoads.RunAsync(UnvalidateSelectedAsync));
 
         // Greyed out for a user without the right; the service refuses them in any case.
         PermissionGate.Require(Permissions.Results.BiologicalValidate, _validate);
