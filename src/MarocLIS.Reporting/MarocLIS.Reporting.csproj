@@ -20,9 +20,10 @@
   </ItemGroup>
 
   <!--
-    Arabic report rendering needs a Naskh font with full Arabic glyph coverage.
-    Drop Amiri-Regular.ttf / Amiri-Bold.ttf (SIL OFL) into Assets\Fonts\
-    and they are copied next to the executable.
+    The report fonts ship with the code: Amiri (Arabic, a Naskh face with full Arabic glyph
+    coverage) and Carlito (Latin, metric-compatible with Calibri), both SIL OFL, licences beside
+    them. They are copied to Assets\Fonts next to the executable and into the published Api, so
+    no workstation or service account has to install them.
   -->
   <ItemGroup>
     <None Include="Assets\Fonts\**\*.ttf" CopyToOutputDirectory="PreserveNewest" />

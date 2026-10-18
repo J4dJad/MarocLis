@@ -187,7 +187,13 @@ internal static class Program
         var fonts = Services.GetRequiredService<IFontAvailability>();
         var localizer = Services.GetRequiredService<ILocalizer>();
 
-        var missing = fonts.MissingFrom([fonts.LatinFamily, fonts.ArabicFamily]);
+        // The Arabic face only matters while Arabic is offered: a laboratory that switched it off in
+        // Paramètres › Langues issues no Arabic report, and a warning about it would be noise.
+        var families = LanguageChoices.Active.Contains(AppLanguage.Arabic)
+            ? new[] { fonts.LatinFamily, fonts.ArabicFamily }
+            : new[] { fonts.LatinFamily };
+
+        var missing = fonts.MissingFrom(families);
 
         if (missing.Count == 0) return;
 
