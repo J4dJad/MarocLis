@@ -207,6 +207,13 @@ public static class Permissions
         /// server itself and SQL Server rights of its own, checked when it is asked for.
         /// </summary>
         public const string Backup = "admin.backup";
+
+        /// <summary>
+        /// Paramètres › Licence: importing a licence and exporting the request for one. Administrator
+        /// only by default (the role holds every permission). Importing stays possible in read-only
+        /// mode, which is how a laboratory leaves it.
+        /// </summary>
+        public const string License = "admin.license";
     }
 
     public static class HumanResources

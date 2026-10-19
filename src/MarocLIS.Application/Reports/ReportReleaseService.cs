@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Billing;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
@@ -210,7 +211,8 @@ public sealed class ReportReleaseService(
     IDataAccessAuditor accessAuditor,
     IClock clock,
     IMessageSender messages,
-    IActiveLanguages? activeLanguages = null)
+    IActiveLanguages? activeLanguages = null,
+    ILicenceState? licence = null)
 {
     /// <summary>
     /// Releases a report for the analyses validated so far.
@@ -234,6 +236,9 @@ public sealed class ReportReleaseService(
             : Permissions.Reports.Amend);
 
         if (permitted.IsFailure) return Result.Failure<ReleasedReport>(permitted.FirstError);
+
+        var licensed = licence.RequireBenchWork();
+        if (licensed.IsFailure) return Result.Failure<ReleasedReport>(licensed.FirstError);
 
         // Issuing a report is the laboratory's act; an outside prescriber only consults what was
         // issued. Refused on the scope as well as on the permission, so a prescriber role that an

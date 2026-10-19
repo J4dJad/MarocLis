@@ -1,6 +1,8 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Licensing;
 using MarocLIS.Domain.Organization;
 
 namespace MarocLIS.Application.Administration;
@@ -124,7 +126,8 @@ public sealed class ActiveLanguagesService(
     IConfigurationWriter settingsWriter,
     IUnitOfWork unitOfWork,
     IPermissionGuard guard,
-    IClock clock) : IActiveLanguages
+    IClock clock,
+    ILicenceState? licence = null) : IActiveLanguages
 {
     public LanguageSettings Current => cache.Current;
 
@@ -134,7 +137,7 @@ public sealed class ActiveLanguagesService(
         var now = clock.Now;
         if (cache.IsFresh(now)) return cache.Current;
 
-        var settings = LanguageSettings.FromValues(await queries.GetSettingValuesAsync(LanguageSettings.Prefix, ct));
+        var settings = Licensed(LanguageSettings.FromValues(await queries.GetSettingValuesAsync(LanguageSettings.Prefix, ct)));
         cache.Store(settings, now);
         return settings;
     }
@@ -153,7 +156,16 @@ public sealed class ActiveLanguagesService(
         var permitted = guard.Require(Permissions.Administration.ManageSettings);
         if (permitted.IsFailure) return permitted;
 
+        var licensed = licence.RequireSettingsChange();
+        if (licensed.IsFailure) return licensed;
+
         var settings = LanguageSettings.Of(active);
+
+        if (settings.Active.Contains(AppLanguage.Arabic))
+        {
+            var arabic = licence.RequireModule(LicenceModules.Arabic);
+            if (arabic.IsFailure) return arabic;
+        }
 
         var changed = false;
         foreach (var (key, value) in settings.ToValues())
@@ -184,4 +196,14 @@ public sealed class ActiveLanguagesService(
         cache.Store(settings, clock.Now);
         return Result.Success();
     }
+
+    /// <summary>
+    /// Arabic is a module of the licence: switched on in the settings but not licensed — a licence
+    /// replaced by one without it — it is off, and what would have been in Arabic is in French. The
+    /// setting is kept, so the module bought back brings the choice back as it was.
+    /// </summary>
+    private LanguageSettings Licensed(LanguageSettings settings) =>
+        licence.HasModule(LicenceModules.Arabic) || !settings.Active.Contains(AppLanguage.Arabic)
+            ? settings
+            : LanguageSettings.Of(settings.Active.Where(l => l != AppLanguage.Arabic));
 }

@@ -195,6 +195,7 @@ public sealed partial class QuestPdfInvoiceRenderer
     {
         private static readonly Dictionary<string, string> FrenchTexts = new(StringComparer.Ordinal)
         {
+            ["Licence.TrialMark"] = TrialMark.French,
             ["InvoicePrint.Invoice"] = "Facture",
             ["InvoicePrint.CreditNote"] = "Facture d'avoir",
             ["InvoicePrint.Quotation"] = "Devis",

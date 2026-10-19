@@ -2,13 +2,16 @@ using System.Reflection;
 using FluentAssertions;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Licensing;
 using MarocLIS.Domain.Organization;
 using MarocLIS.Domain.Sequencing;
 using MarocLIS.Infrastructure.Persistence;
 using MarocLIS.Localization;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace MarocLIS.Tests.Domain;
@@ -659,6 +662,55 @@ public sealed class BackupTests
         overview.Agent.Should().Be(BackupAgentStatus.Silent);
         overview.NextRunAt.Should().Be(new DateTime(2026, 10, 18, 22, 0, 0));
         overview.IsStale.Should().BeFalse();
+    }
+
+    // ---- Licence in read-only mode ------------------------------------------------------------------
+
+    [Fact]
+    public async Task Read_only_licence_leaves_backup_restore_and_schedule_open()
+    {
+        // The licence's read-only mode refuses changes to the settings (except the licence), but a
+        // laboratory in read-only mode still holds its patients' records and must be able to protect
+        // them: the backups stay open. The service is composed the way the container builds it, with
+        // the read-only licence registered, so a licence gate added to it later would be handed that
+        // state and fail here.
+        var readOnly = new LicenceStatus { State = LicenceState.Expired, Mode = LicenceMode.ReadOnly };
+        readOnly.RequireSettingsChange().FirstError.ResourceKey.Should().Be("Licence_ReadOnlySettings",
+            "this is the gate the backups are kept out of");
+
+        var holder = new LicenceStatusHolder();
+        holder.Publish(readOnly);
+        var engine = new FakeEngine();
+        var events = new List<Logged>();
+        var user = new Admin(true);
+        using var provider = new ServiceCollection()
+            .AddSingleton(holder)
+            .AddSingleton<ILicenceState>(holder)
+            .AddSingleton<IDatabaseBackupEngine>(engine)
+            .AddSingleton<IConfigurationWriter>(engine.Writer)
+            .AddSingleton<IUnitOfWork>(engine.Writer)
+            .AddSingleton<IPermissionGuard>(new Guard(user))
+            .AddSingleton<ISecurityAuditor>(new Auditor(events))
+            .AddSingleton<ICurrentUser>(user)
+            .AddSingleton<IClock>(new Clock())
+            .BuildServiceProvider();
+        var service = ActivatorUtilities.CreateInstance<BackupService>(provider);
+        engine.History.Add(engine.Set(1, "MarocLIS_20261017_220000.bak"));
+
+        (await service.GetOverviewAsync()).IsSuccess.Should().BeTrue();
+        (await service.SaveSettingsAsync(BackupSettings.Default with { Folder = @"E:\B", RetentionDays = 30 }))
+            .IsSuccess.Should().BeTrue("the backup schedule is not a setting the licence closes");
+        engine.Writer.Settings[BackupSettings.FolderKey].Value.Should().Be(@"E:\B");
+        (await service.TestFolderAsync(@"E:\B")).IsSuccess.Should().BeTrue();
+        (await service.BackupNowAsync()).IsSuccess.Should().BeTrue("« Sauvegarder maintenant » stays open");
+        (await service.CanRestoreAsync(OnServer)).IsSuccess.Should().BeTrue();
+        (await service.RestoreAsync(new RestoreRequest(1, "Laboratoire Atlas", OnServer))).IsSuccess
+            .Should().BeTrue("the restore stays open");
+        (await service.GetHealthAsync()).Should().NotBeNull();
+
+        events.Select(x => x.Kind).Should().Contain([SecurityEventKind.BackupSettingsChanged, SecurityEventKind.BackupCompleted,
+                                                     SecurityEventKind.RestoreCompleted]);
+        events.Should().OnlyContain(x => x.Succeeded);
     }
 
     // ---- Fakes --------------------------------------------------------------------------------------

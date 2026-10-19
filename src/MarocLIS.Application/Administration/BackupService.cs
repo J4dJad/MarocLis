@@ -149,6 +149,11 @@ public interface IDatabaseBackupEngine
 /// <summary>
 /// Paramètres › Sauvegardes: the schedule the server's task follows, « Sauvegarder maintenant »,
 /// the list of backups and the restore. Every entry point requires <see cref="Permissions.Administration.Backup"/>.
+/// <para>
+/// No licence gate, on purpose: in read-only mode (licence expired, invalid or missing) the backup,
+/// the restore and the backup schedule all keep working. A laboratory in read-only mode still holds
+/// its patients' data and must still be able to protect it; see <c>LicenceStatus.RequireSettingsChange</c>.
+/// </para>
 /// </summary>
 public sealed class BackupService(
     IDatabaseBackupEngine engine,

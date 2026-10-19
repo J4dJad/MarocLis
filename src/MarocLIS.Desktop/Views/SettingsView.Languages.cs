@@ -2,6 +2,7 @@ using MarocLIS.Application.Administration;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Licensing;
 using MarocLIS.Localization;
 
 namespace MarocLIS.Desktop.Views;
@@ -125,6 +126,13 @@ public sealed partial class SettingsView
     {
         _languageArabic.Checked = settings.IsActive(AppLanguage.Arabic);
         _languageEnglish.Checked = settings.IsActive(AppLanguage.English);
+
+        // Arabic is a module of the licence: without it the box stays off, and says why.
+        var arabicLicensed = _licence?.Current.HasModule(LicenceModules.Arabic) ?? true;
+        _languageArabic.Enabled = arabicLicensed;
+        _languageArabic.Text = arabicLicensed
+            ? T("AppLanguage.Arabic")
+            : $"{T("AppLanguage.Arabic")} — {T("Licence.ModuleNotLicensed")}";
     }
 
     private async Task SaveLanguagesAsync()

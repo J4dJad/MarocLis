@@ -36,7 +36,8 @@ ul.toc li { margin: 4px 0; }
 - le catalogue des analyses : analyses, paramètres, valeurs usuelles, tarifs, profils, analyses en cascade, listes de référence, et la nomenclature officielle des actes de biologie médicale (NABM) ;
 - les liaisons avec les automates ;
 - les données de référence : équipements, contrôle interne, articles, fournisseurs, prescripteurs, organismes payeurs ;
-- les paramètres du laboratoire : identité du site, numérotations, paramètres généraux, format des factures, lieux de stockage des tubes, imprimantes du poste ;
+- les paramètres du laboratoire : identité du site, numérotations, paramètres généraux, format des factures, lieux de stockage des tubes, imprimantes du poste, licence ;
+- les sauvegardes de la base : planification, sauvegarde immédiate, restauration sur le serveur ;
 - la reprise des données de l'application utilisée avant MarocLIS (patients, prescripteurs, catalogue, antériorités, créances).</p>
 <p><strong>Qui l'utilise.</strong> L'administrateur règle presque tout. Le biologiste responsable tient le catalogue et les automates. Le responsable qualité tient les valeurs usuelles, les équipements et le contrôle interne, et lit le journal d'audit. Le service comptable tient les tarifs, les organismes payeurs, les articles et les fournisseurs. Le détail des droits est donné plus bas.</p>
 <p><strong>Ses écrans</strong> (groupe <strong>ADMINISTRATION</strong> du menu) :</p>
@@ -76,7 +77,7 @@ ul.toc li { margin: 4px 0; }
 </tr>
 <tr>
 <td><strong>Paramètres</strong></td>
-<td>Identité légale du site, numérotations, paramètres, format des factures, lieux de stockage, imprimantes du poste</td>
+<td>Identité légale du site, numérotations, paramètres, format des factures, lieux de stockage, imprimantes du poste, sauvegardes de la base, licence</td>
 <td>aucun</td>
 </tr>
 <tr>
@@ -101,7 +102,7 @@ ul.toc li { margin: 4px 0; }
 - Les automates déclarés dans <strong>Données de référence</strong> reçoivent leur liaison dans <strong>Automates</strong> ; leurs résultats arrivent dans <strong>Saisie des résultats</strong> ou au <strong>Contrôle interne</strong>.</p>
 <h3>Vue d'ensemble : mettre en service une installation</h3>
 <p>L'ordre ci-dessous est celui qu'impose l'application : chaque étape a besoin de la précédente.</p>
-<div class="diagram"><img src="img/diagramme-48f87b07ec74056a.png" alt="Diagramme"></div>
+<div class="diagram"><img src="img/diagramme-32af07f558bfa64f.png" alt="Diagramme"></div>
 
 <h3>Qui a accès à quoi (rôles livrés)</h3>
 <table>
@@ -199,6 +200,16 @@ ul.toc li { margin: 4px 0; }
 <td>Administrateur, Biologiste responsable, Comptabilité</td>
 </tr>
 <tr>
+<td><code>admin.backup</code></td>
+<td>Onglet <strong>Sauvegardes</strong> des <strong>Paramètres</strong> : planifier la sauvegarde, <strong>Sauvegarder maintenant</strong>, <strong>Restaurer…</strong> (sur le serveur), avertissement d'une sauvegarde trop ancienne</td>
+<td>Administrateur seul (accordé aussi aux installations existantes au démarrage)</td>
+</tr>
+<tr>
+<td><code>admin.license</code></td>
+<td>Onglet <strong>Licence</strong> des <strong>Paramètres</strong> : importer une licence, exporter la demande</td>
+<td>Administrateur seul</td>
+</tr>
+<tr>
 <td><code>admin.migration</code></td>
 <td>Ouvrir <strong>Reprise de données</strong> : lire l'ancienne application, simuler, importer, annuler la dernière reprise</td>
 <td>Administrateur seul (accordé aussi aux installations existantes au démarrage)</td>
@@ -211,6 +222,8 @@ ul.toc li { margin: 4px 0; }
 </tbody>
 </table>
 <p>Changements récents des rôles livrés :
+- nouveau droit <code>admin.backup</code> (onglet <strong>Sauvegardes</strong> des <strong>Paramètres</strong>), donné à l'Administrateur, y compris sur une base existante au démarrage suivant ;
+- nouveau droit <code>admin.license</code> (onglet <strong>Licence</strong> des <strong>Paramètres</strong>), donné à l'Administrateur, y compris sur une base existante au démarrage suivant ;
 - nouveau droit <code>results.validate_remote</code> (validation à distance depuis un téléphone), donné à aucun rôle clinique : l'administrateur l'ajoute au rôle des biologistes concernés, ou crée un rôle « Biologiste de garde » (voir « Service de validation à distance ») ;
 - nouveau droit <code>billing.discount.approve</code> (approuver une remise au-delà du plafond), donné à l'Administrateur, au Biologiste responsable et à la Comptabilité, y compris sur une base existante au démarrage suivant ; il peut être retiré ou ajouté à un rôle dans <strong>Rôles et droits</strong> ;
 - le Biologiste et le Technicien de laboratoire peuvent maintenant <strong>Réimporter</strong> une transmission d'automate retenue (avant : biologiste responsable et administrateur seulement) ;
@@ -881,7 +894,7 @@ ul.toc li { margin: 4px 0; }
 - le format d'impression des factures patients ;
 - les lieux de stockage des tubes ;
 - les imprimantes du poste.</p>
-<p><strong>Qui y a accès</strong> : l'entrée apparaît avec <code>admin.sites.manage</code> ou <code>admin.settings.manage</code> (livrés à l'administrateur seul). Onglet <strong>Site</strong> et <strong>Nouveau site</strong> modifiables avec <code>admin.sites.manage</code> ; onglets <strong>Numérotations</strong>, <strong>Paramètres</strong> et <strong>Factures</strong> modifiables avec <code>admin.settings.manage</code>. L'onglet <strong>Lieux de stockage</strong> n'apparaît qu'avec <code>admin.settings.manage</code>. L'onglet <strong>Imprimantes</strong> concerne le poste sur lequel vous êtes.</p>
+<p><strong>Qui y a accès</strong> : l'entrée apparaît avec <code>admin.sites.manage</code>, <code>admin.settings.manage</code> ou <code>admin.license</code> (livrés à l'administrateur seul). Onglet <strong>Site</strong> et <strong>Nouveau site</strong> modifiables avec <code>admin.sites.manage</code> ; onglets <strong>Numérotations</strong>, <strong>Paramètres</strong> et <strong>Factures</strong> modifiables avec <code>admin.settings.manage</code>. L'onglet <strong>Lieux de stockage</strong> n'apparaît qu'avec <code>admin.settings.manage</code>. L'onglet <strong>Imprimantes</strong> concerne le poste sur lequel vous êtes. L'onglet <strong>Sauvegardes</strong> n'apparaît qu'avec <code>admin.backup</code> (voir « Sauvegardes » plus bas). L'onglet <strong>Licence</strong> n'apparaît qu'avec <code>admin.license</code> (voir « Licence » plus bas).</p>
 <p><strong>Fonctionnalités</strong></p>
 <p>Onglet <strong>Site</strong> :
 - Liste du site à afficher (code — raison sociale).
@@ -1009,6 +1022,101 @@ ul.toc li { margin: 4px 0; }
 <p><strong>Flux</strong> : Paramètres (site complet) → débloque <strong>Facturation</strong> et la diffusion dans <strong>Comptes rendus</strong> ; numérotations → numéros de dossier à l'enregistrement, factures, bordereaux ; format des factures → impression des factures patients ; lieux de stockage → <strong>Réception</strong> et <strong>Sérothèque</strong> ; imprimantes → étiquettes au <strong>Prélèvement</strong> et documents A4.</p>
 <div class="diagram"><img src="img/diagramme-dc7c55d3edd192e6.png" alt="Diagramme"></div>
 
+<h3>Sauvegardes</h3>
+<p><strong>À quoi sert cet onglet</strong></p>
+<p>L'onglet <strong>Sauvegardes</strong> de <strong>Paramètres</strong> règle et surveille la sauvegarde de la base de données du laboratoire :
+- la <strong>sauvegarde automatique</strong> : activée ou non, ses heures, ses jours, le dossier où elle est écrite et combien de jours elle est conservée ;
+- la <strong>liste des sauvegardes</strong> : date, origine (qui ou quoi l'a faite), taille, état de vérification, nom du fichier ;
+- <strong>Sauvegarder maintenant</strong> : une sauvegarde immédiate, par exemple avant une mise à jour ou une grosse reprise de données ;
+- <strong>Restaurer…</strong> : remplacer toute la base par une sauvegarde, sur le serveur seulement.</p>
+<p>La sauvegarde est faite par SQL Server lui-même (<code>BACKUP DATABASE … WITH CHECKSUM</code>), base ouverte : les autres postes continuent de travailler pendant qu'elle s'écrit. Chaque sauvegarde est ensuite relue (<code>RESTORE VERIFYONLY</code>) ; une sauvegarde non relue n'est pas une sauvegarde sur laquelle compter.</p>
+<p><strong>Qui y a accès</strong> : le droit <code>admin.backup</code>, livré à l'administrateur seul (et accordé au rôle Administrateur d'une installation existante au démarrage qui suit la mise à jour). Sans ce droit, l'onglet n'apparaît pas. L'onglet se règle depuis n'importe quel poste ; la restauration ne se fait que sur le serveur (voir plus bas). Tout l'onglet, comme la sauvegarde automatique du serveur, reste utilisable quand MarocLIS est en lecture seule faute de licence valide (voir « Licence » plus bas).</p>
+<p><strong>Comment fonctionne la sauvegarde automatique.</strong> SQL Server Express n'a pas d'agent de planification. L'installation serveur de MarocLIS crée donc dans Windows une tâche planifiée, <strong>MarocLIS - Sauvegarde</strong>, qui tourne sous le compte SYSTEM toutes les 15 minutes et au démarrage du serveur. À chaque passage, elle lit les réglages de cet onglet dans la base et ne sauvegarde que si une heure prévue est passée depuis sa dernière sauvegarde. Conséquences :
+- un réglage changé dans l'onglet est pris en compte au plus tard 15 minutes après, sans toucher au Planificateur de tâches ;
+- un serveur éteint à l'heure prévue rattrape la sauvegarde à son redémarrage, une seule fois, si l'heure manquée date de moins de 24 heures ;
+- la tâche écrit son passage dans la base : l'onglet affiche « Tâche planifiée active sur … (dernier passage : …) », ou un avertissement si elle ne s'est plus manifestée depuis plus d'une heure ;
+- la tâche supprime les sauvegardes plus anciennes que la durée de conservation, mais jamais la dernière sauvegarde vérifiée, même ancienne ; elle ne supprime que les fichiers qu'elle reconnaît comme les siens (<code>MarocLIS_AAAAMMJJ_HHMMSS….bak</code>) ;
+- elle tient un journal mensuel dans <code>Sauvegarde\logs</code> du dossier d'installation sur le serveur.</p>
+<p><strong>Fonctionnalités</strong></p>
+<p>Carte <strong>Sauvegarde automatique</strong> :
+- <strong>Sauvegarde automatique activée</strong> : décochée, plus aucune sauvegarde planifiée ; <strong>Sauvegarder maintenant</strong> reste possible.
+- <strong>Heures (HH:mm, séparées par des virgules)</strong> : une ou plusieurs heures par jour, 6 au plus (par défaut <code>22:00</code>). Exemple : <code>13:00, 22:00</code> pour une sauvegarde à la pause de midi et une le soir.
+- <strong>Jours</strong> : les jours de la semaine où la sauvegarde a lieu (tous cochés par défaut).
+- <strong>Conservation (jours)</strong> : de 1 à 365 jours (14 par défaut).
+- <strong>Dossier de sauvegarde (sur le serveur)</strong> : un chemin complet tel que SQL Server le voit sur le serveur (<code>D:\Sauvegardes\MarocLIS</code>), ou un partage réseau (<code>\\nas\maroclis</code>). Jamais une lettre de lecteur réseau : un service Windows n'en a pas.
+- <strong>Tester le dossier</strong> : SQL Server écrit un petit fichier de test dans le dossier, avec son propre compte de service. Si SQL Server ne peut pas y écrire, le message le dit et donne la réponse de SQL Server.
+- <strong>Enregistrer</strong> : un nouveau dossier est d'abord testé de la même façon. S'il échoue, MarocLIS propose de l'enregistrer quand même : utile pour un dossier local qui n'existe pas encore, que la tâche du serveur crée à son prochain passage en donnant au compte de SQL Server le droit d'y écrire. Le changement est inscrit au journal de sécurité (« Paramètres de sauvegarde modifiés »).
+- <strong>Actualiser</strong> : relit l'état et la liste.</p>
+<p>Sous la carte, trois lignes d'état :
+- la dernière sauvegarde réussie et son âge (bandeau rouge si elle a plus de 48 heures ou s'il n'y en a aucune) ;
+- l'état de la tâche planifiée et la <strong>prochaine sauvegarde automatique</strong> (ou « Sauvegarde automatique désactivée ») ;
+- le résultat de la dernière tentative, réussie ou en échec avec sa raison.</p>
+<p>Carte <strong>Sauvegardes de la base</strong> :
+- la liste des sauvegardes de la durée de conservation plus une semaine, la plus récente en haut : <strong>Date</strong>, <strong>Origine</strong> (« Automatique — » suivi du nom du serveur, « Manuelle — Par … (…) depuis … », « Avant restauration — … », « Autre outil » pour une sauvegarde faite par exemple avec SQL Server Management Studio), <strong>Taille</strong>, <strong>Vérification</strong> (Vérifiée, À vérifier, Vérification échouée, Non vérifiée, Endommagée), <strong>Fichier</strong> ;
+- <strong>Sauvegarder maintenant</strong> : sauvegarde immédiate dans le dossier réglé ; une barre de progression tourne pendant l'écriture, puis la ligne d'état dit « Sauvegarde terminée et vérifiée : … ». Depuis un poste, la vérification est souvent laissée au serveur (« Sauvegarde terminée : … Elle sera vérifiée par la tâche planifiée du serveur. ») : le compte SQL des postes peut sauvegarder mais pas relire un fichier de sauvegarde ;
+- <strong>Restaurer…</strong> : sur le serveur seulement. Sur un poste, une note dit où le faire : « La restauration se fait sur le serveur (…) : ouvrez MarocLIS sur ce poste avec un compte administrateur Windows, puis Paramètres › Sauvegardes › Restaurer. »</p>
+<p><strong>Avertissement au démarrage.</strong> Pour un utilisateur qui a <code>admin.backup</code>, la barre d'état en bas de la fenêtre affiche en rouge « ⚠ Dernière sauvegarde : … » quand la dernière sauvegarde réussie a plus de 48 heures, ou « ⚠ Aucune sauvegarde de la base » s'il n'y en a jamais eu. Un clic ouvre l'onglet. L'avertissement est relu toutes les 30 minutes et disparaît dès qu'une sauvegarde réussit.</p>
+<p><strong>Restaurer une sauvegarde</strong></p>
+<p>La restauration remplace <strong>toute</strong> la base par le contenu de la sauvegarde choisie : tout ce qui a été saisi depuis (dossiers, résultats, paiements) est perdu, et tous les postes sont déconnectés. Elle n'est proposée que si les trois conditions sont réunies :
+1. MarocLIS est ouvert <strong>sur le serveur</strong> (la machine de SQL Server) ;
+2. l'utilisateur Windows est <strong>administrateur de ce poste</strong> ;
+3. son compte a le droit SQL de remplacer la base (propriétaire de la base, <code>dbcreator</code> ou <code>sysadmin</code>). Sur un serveur installé par MarocLIS, les administrateurs Windows sont <code>sysadmin</code> quand MarocLIS est lancé « en tant qu'administrateur » : si le droit manque, MarocLIS propose de se relancer ainsi.</p>
+<p>Étapes :
+1. Choisir la sauvegarde dans la liste, puis <strong>Restaurer…</strong>.
+2. La fenêtre <strong>Restaurer une sauvegarde</strong> rappelle la date, l'origine, la taille et le fichier, liste les postes encore connectés à la base (qui seront déconnectés), et demande de <strong>saisir le nom du laboratoire</strong> (celui de la fiche du site principal ; majuscules et accents indifférents). Le bouton rouge <strong>Restaurer</strong> reste grisé tant que le nom ne correspond pas ; <strong>Entrée</strong> ne restaure jamais.
+3. MarocLIS relit la sauvegarde, puis fait une <strong>sauvegarde de sécurité</strong> de la base telle qu'elle est (fichier <code>…_avant-restauration.bak</code>) : si elle échoue, rien n'est restauré.
+4. La base est fermée à tous (<code>SINGLE_USER WITH ROLLBACK IMMEDIATE</code>), remplacée (<code>RESTORE … WITH REPLACE</code>), puis rouverte (<code>MULTI_USER</code>). Si la restauration échoue, la base est rouverte telle qu'elle était et le message donne le nom de la sauvegarde de sécurité.
+5. Une sauvegarde d'une version plus ancienne de MarocLIS est mise à jour vers la version installée (migrations), comme au démarrage.
+6. MarocLIS redémarre. Les autres postes doivent redémarrer MarocLIS.</p>
+<p>Le journal de sécurité garde la trace : « Restauration de la base lancée » est écrit dans la base remplacée (il se retrouve donc dans la sauvegarde de sécurité), puis « Restauration de la base terminée » ou « Échec de la restauration de la base » dans la base restaurée, avec le fichier restauré et la sauvegarde de sécurité. Les sauvegardes réussies et échouées y figurent aussi (« Sauvegarde de la base effectuée », « Échec de la sauvegarde de la base »), qu'elles viennent d'un poste ou de la tâche planifiée.</p>
+<p><strong>Copie hors du serveur.</strong> Une sauvegarde sur le disque du serveur ne protège ni d'un vol, ni d'un incendie, ni d'un rançongiciel. Choisissez un partage réseau sur une autre machine comme dossier, ou copiez régulièrement le dossier sur un disque externe rangé ailleurs. Pour un partage, c'est le compte de service de SQL Server (et le compte SYSTEM du serveur pour la conservation) qui doivent pouvoir y écrire.</p>
+<p><strong>Règles métier</strong>
+- Le dossier est un chemin complet (<code>X:\…</code>) ou un partage (<code>\\serveur\partage…</code>), de 200 caractères au plus.
+- 1 à 6 heures par jour, au moins un jour coché, conservation de 1 à 365 jours.
+- Une sauvegarde endommagée, ou dont la vérification a échoué, ne peut pas être restaurée.
+- La restauration exige le nom du laboratoire, le serveur, un administrateur Windows et le droit SQL.
+- La compression des sauvegardes n'est utilisée que par les éditions de SQL Server qui la proposent (pas par Express).</p>
+<p><strong>Flux</strong></p>
+<div class="diagram"><img src="img/diagramme-3d54a687bebc1606.png" alt="Diagramme"></div>
+
+<h3>Licence</h3>
+<p><strong>À quoi sert cet écran</strong></p>
+<p>L'onglet <strong>Licence</strong> des <strong>Paramètres</strong> montre la licence de MarocLIS en vigueur sur ce serveur, et c'est là qu'une nouvelle licence s'importe. La licence est un fichier <code>.lic</code> signé par l'éditeur : elle nomme le laboratoire, le type de licence, ses dates, le nombre de postes et les modules ouverts. Elle est gardée dans la base de données, donc valable pour tous les postes reliés à ce serveur ; MarocLIS la vérifie au démarrage puis chaque jour.</p>
+<p><strong>Qui y a accès</strong> : <code>admin.license</code> (livré à l'administrateur seul). Avec ce seul droit, l'entrée <strong>Paramètres</strong> apparaît et ne montre que l'onglet <strong>Licence</strong> (et l'onglet <strong>Sauvegardes</strong> si <code>admin.backup</code> est aussi accordé). L'onglet reste modifiable en lecture seule : c'est par lui qu'on en sort.</p>
+<p><strong>L'écran</strong></p>
+<ul>
+<li>En haut, <strong>Licence en vigueur</strong> et une pastille d'état : <strong>Valide</strong> (vert), <strong>Période de grâce</strong> (orange), <strong>Expirée</strong>, <strong>Non valide</strong> ou <strong>Aucune licence</strong> (rouge). Dessous, la cause quand la licence n'est pas valide (par exemple « Cette licence a été émise pour le serveur … ; ce serveur est … »), et le délai pour terminer les dossiers en cours en lecture seule.</li>
+<li>Les lignes : <strong>Laboratoire</strong>, <strong>Numéro</strong> (numéro et version, « LIC-2026-0042 v2 »), <strong>Type</strong> (Annuelle, Perpétuelle, Essai, Formation), <strong>Validité</strong>, <strong>Jours restants</strong> (en vert ; en orange à 30 jours ou moins ; en rouge après la fin), <strong>Mises à jour jusqu'au</strong> (licence perpétuelle), <strong>Postes utilisés</strong> (« 3 / 5 »), <strong>Modules ouverts</strong>, <strong>Non inclus</strong>, <strong>Identifiant serveur</strong> avec le bouton <strong>Copier</strong>, <strong>Liaison</strong> (liée à ce serveur, à un autre, ou à aucun), <strong>Clé de vérification</strong> (empreinte de la clé de l'éditeur).</li>
+<li><strong>Licences importées</strong> : l'historique (numéro, version, type, <strong>Importée le</strong>, <strong>Par</strong>, poste, <strong>Remplacée le</strong>).</li>
+<li>Au pied : <strong>Importer une licence…</strong>, <strong>Exporter la demande</strong> et <strong>Actualiser</strong>.</li>
+</ul>
+<p><strong>Scénarios</strong></p>
+<ol>
+<li><strong>Première installation.</strong> Sur une base vide, MarocLIS s'ouvre sur l'écran « Aucune licence installée » au lieu de la connexion. Il affiche l'<strong>Identifiant de ce serveur</strong>. <strong>Exporter la demande</strong> enregistre un fichier <code>demande-licence-&lt;site&gt;.demande</code> (identifiant, site, version) à envoyer au fournisseur ; <strong>Copier</strong> met l'identifiant dans le presse-papiers. Le fichier <code>licence.lic</code> reçu s'importe avec <strong>Importer une licence…</strong> : MarocLIS s'ouvre aussitôt sur la connexion, sans redémarrer. Si le programme d'installation a reçu le fichier, la licence est importée toute seule au premier démarrage.</li>
+<li><strong>Renouveler ou remplacer.</strong> Le fournisseur envoie une nouvelle version de la même licence (même numéro, version supérieure). <strong>Importer une licence…</strong> : elle remplace l'ancienne immédiatement, sur ce poste, et sur les autres au plus tard cinq minutes après. Une version plus ancienne que celle en place est refusée.</li>
+<li><strong>Changer de serveur.</strong> La licence est liée au serveur. Après une copie de la base sur un autre serveur, la licence n'est plus valide : MarocLIS passe en lecture seule et l'onglet le dit. <strong>Exporter la demande</strong> sur le nouveau serveur, l'envoyer au fournisseur, importer la licence reçue.</li>
+<li><strong>Trop de postes.</strong> Le poste de trop voit « Nombre de postes atteint (n / n) » à la connexion, avec la liste des postes connectés (poste, utilisateur, connecté depuis, dernier signe). Il suffit qu'un poste se déconnecte. Un poste resté allumé sans activité libère sa place après 15 minutes. Les téléphones ne comptent pas.</li>
+</ol>
+<p><strong>Ce que la licence règle</strong></p>
+<ul>
+<li><strong>Dates.</strong> 30 jours avant la fin, un bandeau orange « Licence : expire dans N jours » apparaît pour les administrateurs et les biologistes. Après la fin, une période de grâce (15 jours par défaut, fixée par la licence) : tout fonctionne, un bandeau rouge s'affiche pour tous et un message le rappelle à la connexion. Après la grâce, MarocLIS passe en lecture seule.</li>
+<li><strong>Lecture seule</strong> (licence expirée après la grâce, non valide, ou absente sur une base qui contient des patients) :</li>
+<li>restent possibles : la connexion et la recherche, la consultation des résultats, de l'historique et des comptes rendus, la réimpression et la remise des comptes rendus déjà diffusés, l'encaissement d'un dossier existant, l'import d'une licence ;</li>
+<li>restent possibles aussi, sans limite de durée : les <strong>sauvegardes</strong> — la sauvegarde automatique du serveur, <strong>Sauvegarder maintenant</strong>, la <strong>restauration</strong> et le réglage de l'onglet <strong>Sauvegardes</strong>. Un laboratoire en lecture seule garde les données de ses patients : il doit pouvoir les protéger, et les copier sur un nouveau serveur pour y recevoir sa licence ;</li>
+<li>pendant 7 jours (fixés par la licence), les dossiers déjà enregistrés peuvent encore être saisis, validés et diffusés : la paillasse se vide ;</li>
+<li>sont bloqués : la création d'un patient ou d'un dossier, la réception des résultats des automates (les trames sont gardées dans le journal et pourront être réimportées), la validation sur téléphone, et la modification des paramètres autres que la licence et les sauvegardes.</li>
+<li>Une base qui contient des patients n'est jamais bloquée par un écran : sans licence, elle s'ouvre en lecture seule.</li>
+<li><strong>Postes</strong> : nombre d'ordinateurs connectés en même temps, pas d'utilisateurs.</li>
+<li><strong>Modules.</strong> Le socle est toujours inclus (patients, dossiers, prélèvements, réception, résultats, validation, comptes rendus, facturation, caisse, statistiques simples, catalogue, utilisateurs, audit, paramètres, reprise de données). Treize modules sont optionnels : Connexion automates, Validation mobile, Langue arabe, Tiers payant, Qualité, Stocks et achats, Équipements, Ressources humaines, Paie, Relations et messagerie, Finance et comptabilité, Pilotage, Multi-sites. Un module non inclus disparaît du menu ; l'arabe n'est plus proposé dans <strong>Paramètres › Langues</strong> ; un second site de travail ne peut pas être créé sans <strong>Multi-sites</strong> (les laboratoires partenaires restent possibles).</li>
+<li><strong>Licence d'essai et de formation.</strong> Chaque compte rendu et chaque facture porte « VERSION D'ESSAI – NE PAS REMETTRE AU PATIENT ». La licence de formation vaut pour un poste, sans date de fin, et est refusée dès que la base contient plus de 200 dossiers.</li>
+<li><strong>Horloge.</strong> MarocLIS retient le dernier jour où il a fonctionné et la date du dernier dossier : reculer l'horloge d'un poste ne prolonge pas la licence.</li>
+</ul>
+<p><strong>Règles et contrôles</strong></p>
+<ul>
+<li>L'identifiant serveur est calculé à partir de ce que SQL Server déclare (nom de la machine qui l'héberge et instance) et d'un identifiant écrit dans la base à sa création. Il ne change pas quand on remplace un disque ou une carte réseau ; il change quand la base est copiée sur un autre serveur.</li>
+<li>Toute licence modifiée, même d'un caractère, est refusée (signature non valide). Une licence révoquée par l'éditeur est refusée par les versions de MarocLIS publiées après la révocation.</li>
+<li>Chaque import, remplacement et refus est inscrit au journal de sécurité (« Licence importée », « Licence remplacée », « Licence refusée »).</li>
+</ul>
 <h3 id="migration">Reprise de données</h3>
 <p><strong>À quoi sert cet écran</strong></p>
 <p>Faire entrer dans MarocLIS les données de l'application que le laboratoire utilisait avant, sans les ressaisir :
@@ -2207,6 +2315,200 @@ ul.toc li { margin: 4px 0; }
 <td>« Impossible d'enregistrer le choix des imprimantes sur ce poste. »</td>
 <td>Écriture du réglage local impossible</td>
 <td>Réessayer ; prévenir le support informatique.</td>
+</tr>
+</tbody>
+</table>
+<h4>Sauvegardes</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« SQL Server ne peut pas écrire dans le dossier « … ». Le compte de service de SQL Server (et non votre compte Windows) doit y avoir le droit d'écriture … »</td>
+<td><strong>Tester le dossier</strong>, <strong>Enregistrer</strong>, <strong>Sauvegarder maintenant</strong> ou dernière tentative de la tâche</td>
+<td>Créer le dossier sur le serveur et donner au compte de service de SQL Server (par exemple <code>NT Service\MSSQL$SQLEXPRESS</code>) le droit Modifier ; pour un partage, le compte de la machine serveur. Ou enregistrer quand même un dossier local : la tâche le crée.</td>
+</tr>
+<tr>
+<td>« Dossier de sauvegarde invalide : « … » … »</td>
+<td>Chemin relatif, lettre seule, caractère interdit</td>
+<td>Taper un chemin complet ou un partage.</td>
+</tr>
+<tr>
+<td>« Heures de sauvegarde illisibles : « … » … » / « Indiquez au moins une heure de sauvegarde. » / « Au plus 6 sauvegardes par jour. »</td>
+<td>Champ <strong>Heures</strong></td>
+<td>Écrire <code>HH:mm</code>, séparées par des virgules.</td>
+</tr>
+<tr>
+<td>« Cochez au moins un jour de sauvegarde. »</td>
+<td>Aucun jour coché</td>
+<td>Cocher un jour, ou décocher <strong>Sauvegarde automatique activée</strong>.</td>
+</tr>
+<tr>
+<td>« La durée de conservation doit être comprise entre 1 et 365 jours. »</td>
+<td><strong>Conservation</strong> hors limites</td>
+<td>Corriger.</td>
+</tr>
+<tr>
+<td>« Droits SQL Server insuffisants pour cette opération … »</td>
+<td>Le compte SQL du poste n'est pas <code>db_owner</code>, ou ne peut pas vérifier/restaurer</td>
+<td>Sauvegarder depuis un poste installé par MarocLIS ; restaurer depuis le serveur.</td>
+</tr>
+<tr>
+<td>« La sauvegarde « … » a été écrite mais sa vérification a échoué : ne comptez pas sur ce fichier. »</td>
+<td>Fichier relu en erreur</td>
+<td>Relancer <strong>Sauvegarder maintenant</strong> ; vérifier le disque du serveur.</td>
+</tr>
+<tr>
+<td>« Dernière sauvegarde réussie : … (il y a …). Elle date de plus de 48 heures … » / « Aucune sauvegarde réussie de la base n'est connue. »</td>
+<td>Bandeau de l'onglet, barre d'état</td>
+<td>Vérifier la tâche planifiée et le dossier ; <strong>Sauvegarder maintenant</strong>.</td>
+</tr>
+<tr>
+<td>« La tâche planifiée de … ne s'est plus manifestée depuis … » / « … n'a jamais tourné sur … »</td>
+<td>Tâche arrêtée, désactivée, ou non installée</td>
+<td>Sur le serveur, ouvrir le Planificateur de tâches, vérifier <strong>MarocLIS - Sauvegarde</strong> et son journal (<code>Sauvegarde\logs</code>) ; réinstaller le serveur si elle manque.</td>
+</tr>
+<tr>
+<td>« La restauration se fait uniquement depuis le serveur, par un administrateur Windows de ce poste. »</td>
+<td><strong>Restaurer…</strong> ailleurs que sur le serveur</td>
+<td>Ouvrir MarocLIS sur le serveur.</td>
+</tr>
+<tr>
+<td>« Le compte « … » n'a pas le droit de restaurer la base. … »</td>
+<td>Droit SQL manquant</td>
+<td>Accepter la relance « en tant qu'administrateur », ou faire donner le rôle <code>dbcreator</code> au compte.</td>
+</tr>
+<tr>
+<td>« Le nom saisi ne correspond pas au nom du laboratoire (« … ») : restauration annulée. »</td>
+<td>Nom mal tapé</td>
+<td>Retaper le nom affiché.</td>
+</tr>
+<tr>
+<td>« La sauvegarde « … » est endommagée ou a échoué à la vérification : elle ne peut pas être restaurée. »</td>
+<td>Fichier abîmé ou supprimé</td>
+<td>Choisir une autre sauvegarde.</td>
+</tr>
+<tr>
+<td>« La sauvegarde de sécurité préalable a échoué, la restauration n'a pas été lancée. »</td>
+<td>Dossier plein ou interdit</td>
+<td>Libérer de la place ou corriger le dossier, puis recommencer.</td>
+</tr>
+<tr>
+<td>« La base n'a pas pu être prise en accès exclusif pour la restauration … »</td>
+<td>Une connexion n'a pas pu être coupée</td>
+<td>Fermer MarocLIS et le service de validation à distance sur les autres postes, puis recommencer.</td>
+</tr>
+<tr>
+<td>« La restauration a échoué : … La base a été remise en service ; la sauvegarde de sécurité prise juste avant est « … ». »</td>
+<td>Erreur de SQL Server pendant la restauration</td>
+<td>La base est celle d'avant ; noter le message et prévenir le support.</td>
+</tr>
+<tr>
+<td>« La base a été restaurée mais sa mise à jour vers cette version de MarocLIS a échoué. … »</td>
+<td>Migration impossible</td>
+<td>Ne pas travailler ; relancer MarocLIS sur le serveur ou restaurer la sauvegarde de sécurité, et prévenir le support.</td>
+</tr>
+</tbody>
+</table>
+<h4>Licence</h4>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Quand il apparaît</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Licence : expire dans … jours » / « Licence : expire aujourd'hui »</td>
+<td>Bandeau orange, 30 jours avant la fin (administrateurs, biologistes)</td>
+<td>Demander le renouvellement au fournisseur.</td>
+</tr>
+<tr>
+<td>« Licence expirée le … : MarocLIS passe en lecture seule dans … jours. Importez la nouvelle licence. »</td>
+<td>Bandeau rouge et message à la connexion pendant la grâce</td>
+<td>Importer la nouvelle licence au plus vite.</td>
+</tr>
+<tr>
+<td>« Lecture seule — … »</td>
+<td>Bandeau rouge après la grâce, ou licence non valide</td>
+<td>Lire la cause dans <strong>Paramètres › Licence</strong> ; importer une licence valide.</td>
+</tr>
+<tr>
+<td>« Nombre de postes atteint (n / n) »</td>
+<td>Connexion d'un poste de trop</td>
+<td>Faire déconnecter un poste de la liste, ou attendre 15 minutes qu'un poste inactif libère sa place.</td>
+</tr>
+<tr>
+<td>« La signature de la licence ne correspond pas : le fichier a été modifié ou n'a pas été émis pour MarocLIS. »</td>
+<td>Import d'un fichier modifié</td>
+<td>Redemander le fichier au fournisseur.</td>
+</tr>
+<tr>
+<td>« Cette licence a été émise pour le serveur … ; ce serveur est … . Demandez une licence pour ce serveur (Exporter la demande). »</td>
+<td>Licence d'un autre serveur</td>
+<td><strong>Exporter la demande</strong> et l'envoyer au fournisseur.</td>
+</tr>
+<tr>
+<td>« Cette licence a expiré le … : elle ne peut pas être importée. » / « Cette licence ne commence que le … . »</td>
+<td>Import hors dates</td>
+<td>Demander une licence aux bonnes dates.</td>
+</tr>
+<tr>
+<td>« Cette licence est la version …, plus ancienne que la version … déjà importée. » / « La licence … version … a déjà été importée. »</td>
+<td>Import d'une version ancienne ou en double</td>
+<td>Rien : la licence en place est la bonne.</td>
+</tr>
+<tr>
+<td>« La licence … a été révoquée par l'éditeur. »</td>
+<td>Licence révoquée</td>
+<td>Contacter le fournisseur.</td>
+</tr>
+<tr>
+<td>« Cette licence perpétuelle couvre les mises à jour jusqu'au … ; cette version de MarocLIS date du … . »</td>
+<td>Mise à jour au-delà de la maintenance</td>
+<td>Réinstaller la version précédente ou renouveler la maintenance.</td>
+</tr>
+<tr>
+<td>« Une licence de formation ne vaut que pour une base d'au plus … dossiers ; celle-ci en compte … . »</td>
+<td>Licence de formation sur une vraie base</td>
+<td>Demander une licence d'exploitation.</td>
+</tr>
+<tr>
+<td>« MarocLIS est en lecture seule faute de licence valide : aucun nouveau patient ni dossier ne peut être créé. »</td>
+<td>Création refusée en lecture seule</td>
+<td>Importer une licence valide.</td>
+</tr>
+<tr>
+<td>« MarocLIS est en lecture seule : les dossiers en cours ne pouvaient être terminés que jusqu'au … . »</td>
+<td>Saisie ou validation après le délai de paillasse</td>
+<td>Importer une licence valide.</td>
+</tr>
+<tr>
+<td>« MarocLIS est en lecture seule : les paramètres ne peuvent pas être modifiés, hormis la licence et les sauvegardes. »</td>
+<td>Modification d'un paramètre en lecture seule</td>
+<td>Importer une licence valide.</td>
+</tr>
+<tr>
+<td>« Le module « … » n'est pas inclus dans la licence. »</td>
+<td>Action d'un module non acheté</td>
+<td>Demander le module au fournisseur.</td>
+</tr>
+<tr>
+<td>« L'horloge de ce poste est en retard sur le …, dernier jour vu par MarocLIS : c'est cette date qui compte. »</td>
+<td>Horloge du poste reculée</td>
+<td>Remettre l'horloge à l'heure.</td>
+</tr>
+<tr>
+<td>« Cette version vérifie les licences avec la clé de DÉVELOPPEMENT … »</td>
+<td>Version de test installée</td>
+<td>Installer la version livrée par l'éditeur.</td>
 </tr>
 </tbody>
 </table>

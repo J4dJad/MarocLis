@@ -1,10 +1,12 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Quality;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
+using MarocLIS.Domain.Licensing;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
 using MarocLIS.Domain.Quality;
@@ -62,7 +64,8 @@ public sealed class InstrumentMessageSink(
     IUnitOfWork unitOfWork,
     IClock clock,
     IInstrumentServiceAccount serviceAccount,
-    ILogger<InstrumentMessageSink>? logger = null)
+    ILogger<InstrumentMessageSink>? logger = null,
+    ILicenceState? licence = null)
     : IInstrumentMessageSink, IInstrumentResultReplayer
 {
     public async Task<bool> HandleAsync(Guid interfaceId, InstrumentMessage message,
@@ -111,6 +114,15 @@ public sealed class InstrumentMessageSink(
         {
             await CloseAsync(logId, InstrumentMessageProcessingStatus.Ignored, message, 0, issues, ct);
             return true;
+        }
+
+        // Without the « Connexion automates » module, or in the read-only mode, the frame is kept
+        // and nothing reaches a patient file: a replay imports it once a licence allows it.
+        if (LicenceBlock() is { } unlicensed)
+        {
+            issues.Add(unlicensed);
+            await CloseAsync(logId, InstrumentMessageProcessingStatus.Failed, message, 0, issues, ct);
+            return false;
         }
 
         // An analyser declared out of service, retired or out of calibration may not produce
@@ -182,6 +194,8 @@ public sealed class InstrumentMessageSink(
         if (string.IsNullOrWhiteSpace(entry.RawContent))
             return Result.Failure<int>(Error.Validation("Interface_RawFrameEmpty"));
 
+        if (LicenceBlock() is { } unlicensed) return Result.Failure<int>(Error.Forbidden(unlicensed));
+
         // Checked before the interface is loaded, not after. Without a resolved service account the
         // import would attribute every value to Guid.Empty, so this refusal is absolute and does not
         // depend on anything the link says — and a refusal that first reads the database has already
@@ -214,6 +228,13 @@ public sealed class InstrumentMessageSink(
     }
 
     /// <summary>The issue that holds the link's results back, or null when its analyser may produce them.</summary>
+    /// <summary>Why the licence keeps analyser results out, as the log line's issue; null when it does not.</summary>
+    private string? LicenceBlock() =>
+        licence is null ? null
+        : !licence.Current.HasModule(LicenceModules.Instruments) ? Describe("Licence_InstrumentsNotLicensed")
+        : licence.Current.IsReadOnly ? Describe("Licence_ReadOnlyInstruments")
+        : null;
+
     private async Task<string?> EquipmentBlockAsync(InstrumentInterface link, CancellationToken ct)
     {
         var instrument = await instruments.GetByIdAsync(link.InstrumentId, ct);

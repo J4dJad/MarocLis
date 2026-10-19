@@ -5,6 +5,7 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
 using MarocLIS.Infrastructure;
+using MarocLIS.Infrastructure.Licensing;
 using MarocLIS.Infrastructure.Queries;
 using MarocLIS.Infrastructure.Security;
 using MarocLIS.Localization;
@@ -32,6 +33,11 @@ public static class ApiServiceCollectionExtensions
         services.AddMarocLisInfrastructure(configuration);
         services.UsePerRequestCurrentUser();
         services.AddMarocLisApplication(configuration);
+
+        // ---- The licence: the same evaluation as the workstation's, refreshed in the background.
+        // The phone signs in only with the « Validation mobile » module and a licence in force.
+        services.AddMarocLisLicensing();
+        services.AddHostedService<LicenceRefresher>();
 
         // ---- Reporting: the workstation's renderer, so a report issued from the phone is the
         // same document, fonts and licence included.

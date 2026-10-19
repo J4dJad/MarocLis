@@ -226,7 +226,16 @@ public enum SecurityEventKind
     /// <summary>A biologist's handwritten signature, printed on released reports, was set or removed.</summary>
     SignatureChanged = 17,
 
-    // 18 to 29 are left to the licensing events. The backup events are numbered explicitly from 30
+    /// <summary>A licence was imported where none was in force.</summary>
+    LicenceImported = 18,
+
+    /// <summary>A licence was imported in place of another (a new version, a renewal, another pack).</summary>
+    LicenceReplaced = 19,
+
+    /// <summary>A licence file was refused at import, with the reason; or the licence in force stopped being valid.</summary>
+    LicenceRefused = 20,
+
+    // 18 to 29 are left to the licensing events (18 to 20 above). The backup events are numbered from 30
     // so the two series could be written in parallel without one renumbering the other's stored rows.
 
     /// <summary>A backup of the database was written (scheduled task or « Sauvegarder maintenant »).</summary>

@@ -1,0 +1,5 @@
+# Licences révoquées, compilées dans MarocLIS : un numéro par ligne.
+#   LIC-2026-0042      toutes les versions de ce numéro
+#   LIC-2026-0042/1    la version 1 seulement
+# Le Générateur de licences donne la ligne à ajouter quand une licence est révoquée (impayé,
+# fichier perdu ou volé). Une nouvelle version de MarocLIS refuse alors cette licence.

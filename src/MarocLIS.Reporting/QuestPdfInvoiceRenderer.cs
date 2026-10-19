@@ -1,5 +1,6 @@
 using System.Globalization;
 using MarocLIS.Application.Billing;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Localization;
@@ -32,11 +33,14 @@ public sealed partial class QuestPdfInvoiceRenderer : IInvoiceRenderer
 {
     private readonly ReportingOptions _options;
     private readonly ILocalizer? _localizer;
+    private readonly ILicenceState? _licence;
 
-    public QuestPdfInvoiceRenderer(ReportingOptions options, ILocalizer? localizer = null)
+    public QuestPdfInvoiceRenderer(ReportingOptions options, ILocalizer? localizer = null,
+                                   ILicenceState? licence = null)
     {
         _options = options;
         _localizer = localizer;
+        _licence = licence;
         QuestPdfReportRenderer.Initialise(options);
     }
 
@@ -93,6 +97,8 @@ public sealed partial class QuestPdfInvoiceRenderer : IInvoiceRenderer
                 page.Header().Element(c => ComposeHeader(c, doc, format, wording, title, receipt));
                 page.Content().PaddingTop(6).Element(body);
                 page.Footer().Element(c => ComposeFooter(c, doc, wording));
+
+                if (_licence?.Current.IsMarked == true) TrialMark.Apply(page, wording[TrialMark.ResourceKey]);
             });
         });
 

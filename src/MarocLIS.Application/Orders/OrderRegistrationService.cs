@@ -1,5 +1,6 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Pricing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -96,7 +97,8 @@ public sealed class OrderRegistrationService(
     IDataAccessAuditor accessAuditor,
     IClock clock,
     OrderRegistrationOptions options,
-    IActiveLanguages? activeLanguages = null)
+    IActiveLanguages? activeLanguages = null,
+    ILicenceState? licence = null)
 {
     /// <summary>
     /// The language the file's report is written in: the one asked for, else the patient's, and
@@ -111,6 +113,9 @@ public sealed class OrderRegistrationService(
     {
         var permitted = guard.Require(Permissions.Orders.Create);
         if (permitted.IsFailure) return Result.Failure<RegisteredOrder>(permitted.FirstError);
+
+        var licensed = licence.RequireNewWork();
+        if (licensed.IsFailure) return Result.Failure<RegisteredOrder>(licensed.FirstError);
 
         if (request.Priority != OrderPriority.Routine)
         {

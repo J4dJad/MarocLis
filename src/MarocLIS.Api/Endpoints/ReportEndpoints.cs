@@ -1,5 +1,6 @@
 using MarocLIS.Api.Contracts;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Reports;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
@@ -33,8 +34,11 @@ public static class ReportEndpoints
     /// </summary>
     private static async Task<IResult> ReleaseAsync(
         Guid orderId, HttpContext http, ReportReleaseService reports, ICurrentUser user,
-        ReportPreviews previews, IReportQueries queries, CancellationToken ct)
+        ReportPreviews previews, IReportQueries queries, ILicenceState licence, CancellationToken ct)
     {
+        if (licence.RequireMobileValidation() is { IsFailure: true } unlicensed)
+            return ApiProblems.From(http, unlicensed.FirstError, StatusCodes.Status403Forbidden);
+
         var released = await reports.ReleaseAsync(orderId, renderPageImages: true, ct: ct);
         if (released.IsFailure) return ApiProblems.From(http, released);
 

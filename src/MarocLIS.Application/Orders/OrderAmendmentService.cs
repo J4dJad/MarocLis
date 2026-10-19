@@ -1,5 +1,6 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Pricing;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
@@ -209,7 +210,8 @@ public sealed class OrderAmendmentService(
     IDataAccessAuditor accessAuditor,
     IClock clock,
     IRepository<TestResult> results,
-    IActiveLanguages? activeLanguages = null)
+    IActiveLanguages? activeLanguages = null,
+    ILicenceState? licence = null)
 {
     // ---- Reading -------------------------------------------------------------------------------
 
@@ -301,6 +303,9 @@ public sealed class OrderAmendmentService(
     {
         var permitted = guard.Require(Permissions.Orders.Edit);
         if (permitted.IsFailure) return Result.Failure<OrderAmendment>(permitted.FirstError);
+
+        var licensed = licence.RequireNewWork();
+        if (licensed.IsFailure) return Result.Failure<OrderAmendment>(licensed.FirstError);
 
         if (analysisTestIds.Count == 0 && testPanelIds.Count == 0)
             return Result.Failure<OrderAmendment>(
@@ -546,6 +551,9 @@ public sealed class OrderAmendmentService(
     {
         var permitted = guard.Require(Permissions.Results.Enter);
         if (permitted.IsFailure) return permitted;
+
+        var licensed = licence.RequireBenchWork();
+        if (licensed.IsFailure) return licensed;
 
         if (string.IsNullOrWhiteSpace(reason))
             return Result.Failure(Error.Validation("Item_RepeatReasonRequired"));
