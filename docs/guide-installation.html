@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide d&#x27;installation et d&#x27;exploitation de MarocLIS</title>
+<style>
+body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; line-height: 1.55;
+       color: #1c1e21; background: #ffffff; margin: 0; padding: 0; }
+.page { max-width: 940px; margin: 0 auto; padding: 16px 28px 56px 28px; }
+.crumb { font-size: 13px; color: #5c616a; margin-bottom: 4px; }
+h1 { font-size: 26px; color: #1b5e8c; border-bottom: 2px solid #1b5e8c; padding-bottom: 6px; margin-top: 8px; }
+h2 { font-size: 21px; color: #1b5e8c; margin-top: 36px; border-bottom: 1px solid #d8dade; padding-bottom: 4px; }
+h3 { font-size: 17px; color: #1c1e21; margin-top: 26px; }
+h4 { font-size: 15px; color: #1c1e21; margin-top: 20px; }
+a { color: #1b5e8c; }
+code { font-family: Consolas, monospace; font-size: 13px; background: #f0f1f3; padding: 1px 4px; }
+pre { background: #f0f1f3; padding: 10px; overflow: auto; }
+table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+th, td { border: 1px solid #d8dade; padding: 6px 8px; text-align: left; vertical-align: top; font-size: 14px; }
+th { background: #e6eef4; }
+.diagram { margin: 16px 0 20px 0; text-align: center; }
+.diagram img { max-width: 100%; border: 1px solid #d8dade; padding: 8px; background: #ffffff; }
+ul.toc li { margin: 4px 0; }
+.top { font-size: 13px; margin-top: 32px; }
+
+.lead { font-size: 13px; color: #5c616a; margin: 0 0 16px 0; }
+.toc { background: #f7f8fa; border: 1px solid #d8dade; padding: 12px 20px 14px 20px; margin: 18px 0 28px 0; }
+.toc h2 { margin-top: 4px; border-bottom: none; font-size: 18px; }
+.toc ol { margin: 6px 0 0 0; padding-left: 22px; }
+.toc ol ol { margin: 2px 0 6px 0; padding-left: 20px; list-style-type: none; }
+.toc li { margin: 3px 0; }
+.toc ol ol li { font-size: 14px; margin: 1px 0; }
+.toc a { text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+pre { border: 1px solid #d8dade; white-space: pre-wrap; word-wrap: break-word; }
+pre code { background: transparent; padding: 0; font-size: 13px; }
+tr:nth-child(even) td { background: #fafbfc; }
+blockquote { margin: 12px 0; padding: 8px 14px; border-left: 4px solid #1b5e8c; background: #e6eef4; }
+li { margin: 2px 0; }
+@media print {
+  body { font-size: 11pt; }
+  .page { max-width: none; padding: 0; }
+  a { color: #1c1e21; text-decoration: none; }
+  .top { display: none; }
+  .toc { page-break-after: always; border: none; background: #ffffff; padding: 0; }
+  h2 { page-break-before: always; }
+  .toc h2 { page-break-before: auto; }
+  h2, h3, h4 { page-break-after: avoid; }
+  pre, tr, blockquote { page-break-inside: avoid; }
+  th { background: #e6eef4; }
+  tr:nth-child(even) td { background: #ffffff; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="crumb">MarocLIS · Documentation</div>
+<h1 id="guide-dinstallation-et-dexploitation-de-maroclis">Guide d'installation et d'exploitation de MarocLIS</h1>
+<p>Ce guide s'adresse au technicien qui installe MarocLIS dans un laboratoire, et, pour la construction du programme d'installation et la clé de licence, à l'éditeur. Il décrit ce que fait réellement le programme d'installation (<code>installer/MarocLIS.iss</code> et ses scripts) : chaque page, chaque valeur par défaut, chaque fichier écrit. Le fonctionnement de chaque écran de MarocLIS est décrit dans le manuel utilisateur (chapitre « Administration », ouvert par <strong>F1</strong> dans l'application).</p>
+<p>Conventions : <code>{app}</code> désigne le dossier d'installation choisi dans l'assistant, <code>C:\MarocLIS</code> par défaut (plus exactement <code>&lt;lecteur système&gt;\MarocLIS</code>). Les menus de MarocLIS s'écrivent <strong>Paramètres › Sauvegardes</strong>.</p>
+<div class="toc" id="sommaire">
+<h2>Sommaire</h2>
+<ol style="list-style-type: none; padding-left: 4px;">
+<li><a href="#1-vue-densemble">1. Vue d'ensemble</a></li>
+<li><a href="#2-configuration-requise">2. Configuration requise</a>
+<ol>
+<li><a href="#systeme-dexploitation">Système d'exploitation</a></li>
+<li><a href="#droits">Droits</a></li>
+<li><a href="#sql-server-express">SQL Server Express</a></li>
+<li><a href="#espace-disque">Espace disque</a></li>
+<li><a href="#reseau">Réseau</a></li>
+<li><a href="#domaine-ou-groupe-de-travail">Domaine ou groupe de travail</a></li>
+</ol>
+</li>
+<li><a href="#3-construire-le-programme-dinstallation-editeur">3. Construire le programme d'installation (éditeur)</a>
+<ol>
+<li><a href="#31-prerequis">3.1 Prérequis</a></li>
+<li><a href="#32-commande">3.2 Commande</a></li>
+<li><a href="#33-ce-que-fait-le-script">3.3 Ce que fait le script</a></li>
+<li><a href="#34-refus-de-la-cle-de-developpement">3.4 Refus de la clé de développement</a></li>
+<li><a href="#35-controles-facultatifs-du-code">3.5 Contrôles facultatifs du code</a></li>
+</ol>
+</li>
+<li><a href="#4-installer-le-serveur">4. Installer le serveur</a>
+<ol>
+<li><a href="#41-avant-de-commencer">4.1 Avant de commencer</a></li>
+<li><a href="#42-les-pages-de-lassistant">4.2 Les pages de l'assistant</a></li>
+<li><a href="#43-installation-de-sql-server-express">4.3 Installation de SQL Server Express</a></li>
+<li><a href="#44-chaine-de-connexion">4.4 Chaîne de connexion</a></li>
+<li><a href="#45-base-de-donnees-acces-et-pare-feu">4.5 Base de données, accès et pare-feu</a></li>
+<li><a href="#46-tache-planifiee-de-sauvegarde">4.6 Tâche planifiée de sauvegarde</a></li>
+<li><a href="#47-service-maroclisapi">4.7 Service MarocLIS.Api</a></li>
+<li><a href="#48-ordre-exact-des-operations">4.8 Ordre exact des opérations</a></li>
+<li><a href="#49-apres-linstallation-du-serveur">4.9 Après l'installation du serveur</a></li>
+</ol>
+</li>
+<li><a href="#5-installer-un-poste-client">5. Installer un poste client</a>
+<ol>
+<li><a href="#51-avant-de-commencer">5.1 Avant de commencer</a></li>
+<li><a href="#52-les-pages-de-lassistant">5.2 Les pages de l'assistant</a></li>
+<li><a href="#53-comment-le-poste-trouve-le-serveur">5.3 Comment le poste trouve le serveur</a></li>
+</ol>
+</li>
+<li><a href="#6-premier-demarrage">6. Premier démarrage</a></li>
+<li><a href="#7-sauvegardes-et-restauration">7. Sauvegardes et restauration</a>
+<ol>
+<li><a href="#71-principe">7.1 Principe</a></li>
+<li><a href="#72-valeurs-par-defaut-et-reglage">7.2 Valeurs par défaut et réglage</a></li>
+<li><a href="#73-sauvegarde-manuelle">7.3 Sauvegarde manuelle</a></li>
+<li><a href="#74-restauration">7.4 Restauration</a></li>
+</ol>
+</li>
+<li><a href="#8-licence">8. Licence</a>
+<ol>
+<li><a href="#partie-1-installer-la-licence-dun-laboratoire">Partie 1 — Installer la licence d'un laboratoire</a></li>
+<li><a href="#partie-2-pour-lediteur-la-cle-de-licence-et-le-generateur">Partie 2 — Pour l'éditeur : la clé de licence et le Générateur</a></li>
+</ol>
+</li>
+<li><a href="#9-mise-a-jour-vers-une-nouvelle-version">9. Mise à jour vers une nouvelle version</a></li>
+<li><a href="#10-desinstallation">10. Désinstallation</a></li>
+<li><a href="#11-depannage">11. Dépannage</a>
+<ol>
+<li><a href="#111-construction-du-programme-dinstallation">11.1 Construction du programme d'installation</a></li>
+<li><a href="#112-pendant-lassistant">11.2 Pendant l'assistant</a></li>
+<li><a href="#113-a-verifier-en-fin-dinstallation">11.3 « À vérifier » en fin d'installation</a></li>
+<li><a href="#114-maroclis-ne-demarre-pas">11.4 MarocLIS ne démarre pas</a></li>
+<li><a href="#115-un-poste-naccede-pas-a-la-base">11.5 Un poste n'accède pas à la base</a></li>
+<li><a href="#116-le-service-de-validation-a-distance-ne-repond-pas">11.6 Le service de validation à distance ne répond pas</a></li>
+<li><a href="#117-licence-et-lecture-seule">11.7 Licence et lecture seule</a></li>
+<li><a href="#118-polices-manquantes">11.8 Polices manquantes</a></li>
+<li><a href="#119-sauvegardes">11.9 Sauvegardes</a></li>
+</ol>
+</li>
+<li><a href="#12-annexe-fichiers-et-emplacements">12. Annexe : fichiers et emplacements</a>
+<ol>
+<li><a href="#121-dossiers-et-fichiers">12.1 Dossiers et fichiers</a></li>
+<li><a href="#122-objets-windows-et-sql-server-crees-serveur">12.2 Objets Windows et SQL Server créés (serveur)</a></li>
+<li><a href="#123-cles-de-appsettingsjson-utiles-a-linstallation">12.3 Clés de appsettings.json utiles à l'installation</a></li>
+<li><a href="#124-reglages-de-sauvegarde-dans-la-base">12.4 Réglages de sauvegarde dans la base</a></li>
+</ol>
+</li>
+</ol>
+</div>
+<h2 id="1-vue-densemble">1. Vue d'ensemble</h2>
+<p>Un laboratoire compte <strong>un seul serveur</strong>, des <strong>postes clients</strong> et, s'il utilise la validation à distance, les <strong>téléphones</strong> des biologistes. Un seul programme d'installation, <code>MarocLIS-Setup-&lt;version&gt;.exe</code>, sert pour le serveur et pour les postes : le type d'installation se choisit dans l'assistant.</p>
+<table>
+<thead>
+<tr>
+<th>Ordinateur</th>
+<th>Ce qui y est installé</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Serveur</strong> (type « Serveur »)</td>
+<td>SQL Server Express 2025, instance <code>SQLEXPRESS</code> (seulement si aucun SQL Server n'est déjà installé) ; la base <code>MarocLIS</code> ; l'application MarocLIS ; le service Windows <code>MarocLIS.Api</code> ; la tâche planifiée « MarocLIS - Sauvegarde »</td>
+<td>Garde la base de données, la sauvegarde, sert l'application du téléphone. On peut aussi y travailler avec MarocLIS.</td>
+</tr>
+<tr>
+<td><strong>Poste client</strong> (type « Poste client »)</td>
+<td>L'application MarocLIS seule</td>
+<td>Se connecte à la base du serveur par le réseau local, avec le compte Windows de l'utilisateur.</td>
+</tr>
+<tr>
+<td><strong>Téléphone</strong> du biologiste</td>
+<td>Rien depuis le programme d'installation : l'application Tailscale, puis l'application web « MarocLIS Validation » servie par le serveur</td>
+<td>Validation biologique à distance, par le réseau privé Tailscale.</td>
+</tr>
+</tbody>
+</table>
+<p>Points communs :</p>
+<ul>
+<li>L'application et le service sont publiés « autonomes » (self-contained) pour Windows 64 bits : <strong>aucun runtime .NET n'est à installer</strong>, ni sur le serveur ni sur les postes.</li>
+<li>Les postes et le service se connectent à SQL Server en <strong>authentification Windows</strong> (<code>Integrated Security=true</code>) : il n'y a pas de mot de passe SQL dans les fichiers de configuration. Les comptes Windows des utilisateurs doivent appartenir au groupe local <strong><code>MarocLIS-Utilisateurs</code></strong> du serveur, créé par l'installation.</li>
+<li>Le service <code>MarocLIS.Api</code> n'écoute que sur la machine elle-même (<code>http://127.0.0.1:5080</code>). Les téléphones l'atteignent uniquement par <code>tailscale serve</code>, qui ajoute le HTTPS ; aucun port n'est ouvert pour lui, ni sur Internet ni sur le réseau du laboratoire.</li>
+<li>Les téléphones ne comptent pas dans le nombre de postes de la licence.</li>
+</ul>
+<p>Ordre d'installation : <strong>d'abord le serveur</strong>, puis chaque poste client.</p>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="2-configuration-requise">2. Configuration requise</h2>
+<h3 id="systeme-dexploitation">Système d'exploitation</h3>
+<ul>
+<li><strong>Windows 64 bits</strong> (x64), version <strong>10.0 ou ultérieure</strong> : le programme d'installation refuse toute autre architecture et toute version antérieure (<code>ArchitecturesAllowed=x64compatible</code>, <code>MinVersion=10.0</code>). Cela couvre Windows 10, Windows 11 et les Windows Server du même noyau.</li>
+<li>Les versions de Windows prises en charge par <strong>SQL Server 2025 Express</strong> sur le serveur sont fixées par Microsoft ; le code de MarocLIS ne les vérifie pas. Consultez la documentation de Microsoft avant de choisir le serveur.</li>
+</ul>
+<h3 id="droits">Droits</h3>
+<ul>
+<li>Le programme d'installation exige un <strong>compte administrateur</strong> de l'ordinateur (<code>PrivilegesRequired=admin</code>) : Windows demande l'élévation au lancement.</li>
+<li>Sur un serveur où SQL Server est <strong>déjà installé</strong>, le compte qui installe doit être <strong>administrateur (sysadmin) de l'instance</strong> choisie : l'installation y crée la base et les connexions.</li>
+<li>Quand l'installation installe elle-même SQL Server Express, elle fait des administrateurs Windows de la machine (<code>BUILTIN\Administrators</code>) les administrateurs de SQL Server.</li>
+</ul>
+<h3 id="sql-server-express">SQL Server Express</h3>
+<p>L'installation serveur installe <strong>Microsoft SQL Server 2025 Express</strong> quand aucun SQL Server n'est présent (voir 4.3). Limites de cette édition, publiées par Microsoft (le code de MarocLIS ne les contrôle pas) :</p>
+<table>
+<thead>
+<tr>
+<th>Limite</th>
+<th>Valeur</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Taille maximale d'une base</td>
+<td>50 Go</td>
+</tr>
+<tr>
+<td>Mémoire utilisée pour le cache des données</td>
+<td>environ 1,4 Go (1 410 Mo)</td>
+</tr>
+<tr>
+<td>Processeurs</td>
+<td>le plus petit de : 1 socket ou 4 cœurs</td>
+</tr>
+<tr>
+<td>Agent SQL Server (planificateur de travaux)</td>
+<td>absent : c'est pourquoi MarocLIS sauvegarde par une tâche planifiée Windows (section 7)</td>
+</tr>
+<tr>
+<td>Compression des sauvegardes</td>
+<td>non proposée par Express : les fichiers <code>.bak</code> ont à peu près la taille de la base</td>
+</tr>
+</tbody>
+</table>
+<h3 id="espace-disque">Espace disque</h3>
+<p>Le code ne fixe aucun minimum d'espace disque. À prévoir :</p>
+<ul>
+<li>le téléchargement de SQL Server Express (environ 300 Mo selon le programme d'installation) et son installation ;</li>
+<li>la base de données, qui grandit avec l'activité ;</li>
+<li>les sauvegardes : non compressées avec Express, une par horaire prévu, conservées 14 jours par défaut, plus la dernière sauvegarde vérifiée. Avec une sauvegarde par jour, comptez au moins quinze fois la taille de la base dans le dossier des sauvegardes.</li>
+</ul>
+<h3 id="reseau">Réseau</h3>
+<table>
+<thead>
+<tr>
+<th>Flux</th>
+<th>Sens</th>
+<th>Ouvert par l'installation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Moteur SQL Server (programme <code>sqlservr.exe</code> de l'instance, quel que soit son port TCP)</td>
+<td>Postes → serveur</td>
+<td>Oui : règle de pare-feu entrante « MarocLIS - SQL Server (<code>&lt;instance&gt;</code>) », sous-réseau local seulement</td>
+</tr>
+<tr>
+<td>SQL Server Browser, UDP 1434 (instance nommée, par exemple <code>SQLEXPRESS</code>)</td>
+<td>Postes → serveur</td>
+<td>Oui : règle « MarocLIS - SQL Server Browser », sous-réseau local seulement</td>
+</tr>
+<tr>
+<td>Service <code>MarocLIS.Api</code>, <code>http://127.0.0.1:5080</code></td>
+<td>Machine elle-même</td>
+<td>Aucun port à ouvrir : il n'écoute que sur la boucle locale</td>
+</tr>
+<tr>
+<td>Tailscale (<code>tailscale serve --bg 5080</code>, publié en HTTPS sur le réseau Tailscale)</td>
+<td>Téléphones → serveur</td>
+<td>Non : Tailscale s'installe et se configure à part (section 4.9)</td>
+</tr>
+<tr>
+<td>Téléchargement de SQL Server Express depuis Microsoft</td>
+<td>Serveur → Internet</td>
+<td>Seulement si aucun support hors ligne n'est posé à côté du programme d'installation</td>
+</tr>
+</tbody>
+</table>
+<p>Les règles de pare-feu créées s'appliquent à <strong>tous les profils réseau</strong> (domaine, privé, public), parce que le réseau d'un petit laboratoire est souvent classé « public », et n'admettent que le <strong>sous-réseau local</strong> (<code>LocalSubnet</code>). Elles sont rangées dans le groupe de règles « MarocLIS ».</p>
+<p>TCP/IP doit être activé sur l'instance SQL Server. Il l'est quand l'installation installe SQL Server Express ; sur une instance existante, l'installation se contente de le vérifier (voir 11.3).</p>
+<h3 id="domaine-ou-groupe-de-travail">Domaine ou groupe de travail</h3>
+<p>Les postes s'authentifient auprès de SQL Server avec leur compte Windows :</p>
+<ul>
+<li><strong>en domaine</strong>, ajoutez au groupe local <code>MarocLIS-Utilisateurs</code> du serveur les comptes ou groupes du domaine ;</li>
+<li><strong>en groupe de travail</strong>, créez sur le serveur, pour chaque utilisateur, un compte local <strong>de même nom et de même mot de passe</strong> que sur son poste, et ajoutez-le au groupe.</li>
+</ul>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="3-construire-le-programme-dinstallation-editeur">3. Construire le programme d'installation (éditeur)</h2>
+<p>Cette section concerne l'éditeur, pas le laboratoire, qui reçoit le fichier <code>MarocLIS-Setup-&lt;version&gt;.exe</code> déjà construit.</p>
+<h3 id="31-prerequis">3.1 Prérequis</h3>
+<ul>
+<li><strong>Windows PowerShell 5.1</strong> ou PowerShell 7. Les scripts sont écrits en ASCII, encodés en UTF-8 avec BOM, pour que Windows PowerShell 5.1 les lise correctement.</li>
+<li><strong>SDK .NET 10</strong> : le fichier <code>global.json</code> du dépôt demande la version <code>10.0.100</code> (ou une version plus récente de la même bande, <code>rollForward: latestFeature</code>).</li>
+<li><strong>Inno Setup 6</strong> (https://jrsoftware.org/isdl.php). Le compilateur <code>ISCC.exe</code> est cherché dans cet ordre : le paramètre <code>-Iscc</code>, la variable d'environnement <code>INNO_SETUP_ISCC</code>, le <code>PATH</code>, puis <code>%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe</code>, <code>%ProgramFiles%\Inno Setup 6\ISCC.exe</code> et <code>%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe</code>.</li>
+<li>La <strong>clé publique de licence de production</strong> à la place de la clé de développement (voir 3.4 et la section 8, partie 2).</li>
+</ul>
+<h3 id="32-commande">3.2 Commande</h3>
+<p>Depuis la racine du dépôt :</p>
+<pre><code>powershell -ExecutionPolicy Bypass -File .\installer\build-installer.ps1
+</code></pre>
+<p><code>-ExecutionPolicy Bypass</code> évite le refus de Windows quand l'exécution de scripts est désactivée sur le poste.</p>
+<table>
+<thead>
+<tr>
+<th>Paramètre</th>
+<th>Effet</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-Configuration &lt;nom&gt;</code></td>
+<td>Configuration de compilation, <code>Release</code> par défaut.</td>
+</tr>
+<tr>
+<td><code>-SkipPublish</code></td>
+<td>Ne publie pas : compile le dossier de préparation tel qu'il est.</td>
+</tr>
+<tr>
+<td><code>-Iscc &lt;chemin&gt;</code></td>
+<td>Chemin de <code>ISCC.exe</code>, par exemple <code>-Iscc 'D:\Tools\Inno Setup 6\ISCC.exe'</code>.</td>
+</tr>
+<tr>
+<td><code>-AllowDevelopmentKey</code></td>
+<td>Construit malgré la clé de licence de développement (essais internes seulement, voir 3.4).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-ce-que-fait-le-script">3.3 Ce que fait le script</h3>
+<ol>
+<li>Lit la version du produit dans <code>Directory.Build.props</code> (élément <code>&lt;Version&gt;</code>, actuellement <code>1.0.0</code>) ; s'arrête si elle manque (« No <Version> in Directory.Build.props. »).</li>
+<li>Calcule et affiche l'<strong>empreinte de la clé de licence</strong> compilée (<code>src/MarocLIS.Application/Licensing/licence-public-key.pem</code>) : « Licence key fingerprint: … ».</li>
+<li>Publie, sauf avec <code>-SkipPublish</code>, l'application (<code>src/MarocLIS.Desktop</code>) et le service (<code>src/MarocLIS.Api</code>) en mode autonome pour <code>win-x64</code> dans <code>installer\build\staging\Desktop</code> et <code>installer\build\staging\Api</code>. Le fichier <code>appsettings.Development.json</code> est retiré : il ne doit jamais être livré. La publication du service y place aussi l'application du téléphone (<code>MarocLIS.Mobile</code>, Blazor WebAssembly) dans <code>wwwroot</code>.</li>
+<li>Vérifie la présence des fichiers indispensables, et s'arrête sur « Missing from the published files: … » s'il en manque un :<ul>
+<li><code>Desktop</code> : <code>MarocLIS.exe</code>, <code>hostfxr.dll</code>, <code>appsettings.json</code>, <code>Resources/fr.json</code>, <code>Help</code>, <code>Assets/Fonts/Amiri-Regular.ttf</code>, <code>Assets/Fonts/Carlito-Regular.ttf</code>, <code>libSkiaSharp.dll</code>, <code>QuestPdfSkia.dll</code>, <code>Microsoft.Data.SqlClient.SNI.dll</code> ;</li>
+<li><code>Api</code> : les mêmes (sauf <code>MarocLIS.exe</code> et <code>Help</code>), <code>MarocLIS.Api.exe</code>, et <code>wwwroot/index.html</code>, <code>wwwroot/_framework/dotnet.js</code>, <code>wwwroot/_framework/dotnet.native.wasm</code>, <code>wwwroot/_framework/MarocLIS.Mobile.wasm</code>, <code>wwwroot/service-worker-assets.js</code>.</li>
+</ul>
+</li>
+<li>Compile <code>installer/MarocLIS.iss</code> avec Inno Setup et affiche le chemin et la taille du résultat.</li>
+</ol>
+<p>Résultat : <strong><code>installer\output\MarocLIS-Setup-&lt;version&gt;.exe</code></strong>. Les dossiers <code>installer\build\</code> et <code>installer\output\</code> sont ignorés par Git (<code>installer/.gitignore</code>).</p>
+<p>Le script rappelle à la fin : pour installer SQL Server Express sans Internet sur le serveur, posez <code>SQLEXPR_x64_ENU.exe</code> à côté du programme d'installation (voir 4.3).</p>
+<h3 id="34-refus-de-la-cle-de-developpement">3.4 Refus de la clé de développement</h3>
+<p>Le dépôt contient une clé de licence de <strong>développement</strong> (empreinte <code>CDC1-D2A2-222A-4A92-B835-95FB-909A-18BB</code>) dont la clé privée est dans <code>tests/MarocLIS.Tests/Licensing</code> : n'importe qui ayant le code pourrait signer des licences acceptées par une version compilée avec elle. Si l'empreinte calculée est celle-ci, le script <strong>s'arrête</strong> et explique la marche à suivre (exporter la clé publique depuis le Générateur de licences, la copier sur <code>src/MarocLIS.Application/Licensing/licence-public-key.pem</code>, valider ce changement, relancer).</p>
+<p>Avec <code>-AllowDevelopmentKey</code>, il construit quand même, avec un avertissement, un fichier nommé <strong><code>MarocLIS-Setup-&lt;version&gt;-CLE-DEV.exe</code></strong>, réservé aux essais internes et à ne jamais installer dans un laboratoire. La procédure de création de la clé de production est décrite en section 8, partie 2.</p>
+<h3 id="35-controles-facultatifs-du-code">3.5 Contrôles facultatifs du code</h3>
+<p>Deux scripts du dossier <code>scripts</code> vérifient le code source sans SDK ; ils ne jouent aucun rôle dans l'installation. Depuis la racine du dépôt : <code>powershell -ExecutionPolicy Bypass -File .\scripts\check-reachability.ps1</code> (chaque fonction a un chemin depuis l'interface, chaque écran est enregistré et dans la navigation, etc.) et <code>scripts\check-resource-keys.ps1</code> (clés de traduction).</p>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="4-installer-le-serveur">4. Installer le serveur</h2>
+<h3 id="41-avant-de-commencer">4.1 Avant de commencer</h3>
+<ul>
+<li>Ouvrez une session avec un compte <strong>administrateur</strong> de la machine (et sysadmin de SQL Server si SQL Server est déjà installé).</li>
+<li>Choisissez l'ordinateur définitivement : la licence d'exploitation est liée au serveur (nom de la machine, instance SQL Server, base), voir section 8.</li>
+<li>Sans Internet sur le serveur : posez le support de SQL Server Express à côté de <code>MarocLIS-Setup-&lt;version&gt;.exe</code>, sous l'une de ces formes (cherchées dans cet ordre) :</li>
+<li>un dossier <code>SQLEXPR\</code> contenant <code>setup.exe</code> ;</li>
+<li>un dossier <code>SQLEXPR_x64_ENU\</code> contenant <code>setup.exe</code> ;</li>
+<li>le paquet de Microsoft <code>SQLEXPR*.exe</code> lui-même, par exemple <code>SQLEXPR_x64_ENU.exe</code>.</li>
+</ul>
+<p>Le programme d'installation obtient ce paquet, quand il est en ligne, en lançant le programme de Microsoft <code>SQL2025-SSEI-Expr.exe</code> avec <code>/Action=Download /MediaType=Core /MediaPath=&lt;dossier&gt; /Quiet</code> ; la même commande, lancée sur un ordinateur relié à Internet, fournit le paquet à copier.
+- Si vous avez déjà un fichier de licence <code>.lic</code> (essai, formation, réinstallation sur le même serveur), gardez-le à portée.</p>
+<h3 id="42-les-pages-de-lassistant">4.2 Les pages de l'assistant</h3>
+<p>Lancez <code>MarocLIS-Setup-&lt;version&gt;.exe</code>. Les pages se suivent ainsi ; une page sans objet pour le type choisi est sautée.</p>
+<ol>
+<li><strong>Langue de l'assistant.</strong> Le français est proposé en premier quelle que soit la langue de Windows ; l'anglais reste disponible.</li>
+<li><strong>Dossier de destination.</strong> Par défaut <code>C:\MarocLIS</code> (<code>{sd}\MarocLIS</code>). Lors d'une mise à jour, le dossier de l'installation précédente est repris.</li>
+<li><strong>Type d'installation.</strong> Choisissez <strong>« Serveur : base de données, application et service de validation mobile »</strong>. Le texte sous la liste résume ce qui sera installé : SQL Server Express (instance <code>SQLEXPRESS</code>) sauf si SQL Server est déjà installé, l'application MarocLIS reliée à la base de ce serveur, le service Windows <code>MarocLIS.Api</code>, et le pare-feu Windows ouvert à SQL Server pour le réseau local. Lors d'une mise à jour, le type précédent est repris.</li>
+<li><strong>SQL Server.</strong> Deux cas :<ul>
+<li><strong>SQL Server déjà installé</strong> : la page affiche « SQL Server est déjà installé sur cet ordinateur. Instance utilisée par MarocLIS : » et une liste des instances trouvées. <code>SQLEXPRESS</code> est présélectionnée si elle existe, sinon la première instance. La note rappelle que l'installation crée la base « MarocLIS » si elle n'existe pas, donne l'accès au groupe <code>MarocLIS-Utilisateurs</code> et au service, active SQL Server Browser et ouvre le pare-feu au réseau local, et que votre compte doit être sysadmin de l'instance.</li>
+<li><strong>Aucun SQL Server</strong> : la page annonce l'installation de Microsoft SQL Server 2025 Express (moteur seul, instance <code>SQLEXPRESS</code>, TCP/IP activé, pare-feu ouvert au réseau local, administrateurs de l'ordinateur administrateurs de SQL Server), puis indique la source : le support hors ligne trouvé à côté du programme, ou le téléchargement depuis Microsoft (environ 300 Mo, Internet nécessaire).</li>
+</ul>
+</li>
+<li><strong>Licence de Microsoft SQL Server Express</strong> (seulement si SQL Server doit être installé). SQL Server s'installe sans les écrans de Microsoft : c'est ici que vous acceptez sa licence (lien vers <code>https://aka.ms/useterms</code>) et la collecte de données décrite dans la déclaration de confidentialité de Microsoft. « Je n'accepte pas » est coché au départ et le bouton <strong>Suivant</strong> reste grisé tant que « J'accepte la licence Microsoft SQL Server » n'est pas coché ; sans accepter, revenez en arrière (choisir un autre type) ou annulez.</li>
+<li>
+<p><strong>Sauvegarde automatique.</strong> Premières valeurs de la sauvegarde de la base (section 7) :</p>
+<ul>
+<li><strong>dossier</strong> où SQL Server écrit les sauvegardes, par défaut <code>C:\MarocLIS\Sauvegardes</code> : un chemin complet (<code>X:\…</code>) ou un partage réseau (<code>\\serveur\partage</code>), jamais une lettre de lecteur réseau (un service n'en a pas) ; les guillemets et apostrophes sont refusés ;</li>
+<li><strong>Activer la sauvegarde automatique</strong> : coché par défaut ;</li>
+<li><strong>Heure de la sauvegarde (HH:MM)</strong> : <code>22:00</code> par défaut, de <code>00:00</code> à <code>23:59</code> ;</li>
+<li><strong>Conservation (jours)</strong> : <code>14</code> par défaut, de 1 à 365.</li>
+</ul>
+<p>Tous ces réglages se modifient ensuite dans MarocLIS, <strong>Paramètres › Sauvegardes</strong> (plusieurs heures par jour, jours de la semaine). Lors d'une mise à jour, un avertissement en gras rappelle que si les sauvegardes ont déjà été réglées dans MarocLIS, ces réglages restent en vigueur et les valeurs de la page ne servent pas.</p>
+</li>
+<li>
+<p><strong>Licence MarocLIS</strong> (facultative). Indiquez le fichier <code>.lic</code> reçu de l'éditeur, ou laissez vide. Le fichier doit exister et porter l'extension <code>.lic</code> ; il est copié sous le nom <code>{app}\Desktop\licence.lic</code> et importé au premier démarrage (section 6).</p>
+</li>
+<li><strong>Tâches supplémentaires</strong> : <strong>Créer une icône sur le Bureau</strong> (facultatif). Un raccourci « MarocLIS » est toujours créé dans le menu Démarrer.</li>
+<li>
+<p><strong>Prêt à installer.</strong> Le récapitulatif indique : le dossier, le type, SQL Server (installation et source, ou instance existante), la chaîne de connexion qui sera écrite (<code>Server=localhost\SQLEXPRESS;Database=MarocLIS;Integrated Security=true</code> pour l'instance <code>SQLEXPRESS</code> ; <code>Server=localhost;…</code> pour l'instance par défaut <code>MSSQLSERVER</code>), le service (« compte LocalSystem, http://127.0.0.1:5080, démarrage automatique différé »), la sauvegarde (« tous les jours à 22:00, conservation 14 jours, dans … », tâche planifiée « MarocLIS - Sauvegarde », compte SYSTEM), et la licence. Lors d'une mise à jour, il ajoute que le service est arrêté pendant la copie puis redémarré, et que les fichiers <code>appsettings.json</code> existants sont conservés.</p>
+<p>Si SQL Server doit être téléchargé, un clic sur <strong>Installer</strong> télécharge d'abord le petit programme de Microsoft <code>SQL2025-SSEI-Expr.exe</code> ; en cas d'échec : « Le téléchargement de SQL Server Express a échoué : … ».</p>
+</li>
+<li>
+<p><strong>Installation de SQL Server Express</strong> (si nécessaire), puis copie des fichiers et configuration (4.3 à 4.8). L'étape SQL Server peut durer <strong>de 10 à 30 minutes</strong> : ne fermez pas la fenêtre.</p>
+</li>
+<li>
+<p><strong>Fin.</strong> Le message rappelle les étapes suivantes :</p>
+<ul>
+<li>au premier démarrage, MarocLIS crée les tables de la base (identifiant <code>admin</code>, mot de passe initial <code>Maroc-LIS-2026!</code>, à changer aussitôt) ;</li>
+<li>postes clients : ajouter les comptes Windows des utilisateurs au groupe local <code>MarocLIS-Utilisateurs</code> du serveur (en groupe de travail, créer sur le serveur un compte de même nom et même mot de passe que sur le poste), puis installer « Poste client » sur chaque poste ;</li>
+<li>validation depuis le téléphone : installer Tailscale sur le serveur puis exécuter <code>tailscale serve --bg 5080</code>.</li>
+</ul>
+<p>Si une étape a échoué ou s'est terminée avec un avertissement, la liste <strong>« À vérifier : »</strong> la nomme et renvoie au journal <code>{app}\Installer\install.log</code> (section 11.3). La case <strong>Lancer MarocLIS</strong> démarre l'application avec le compte de la session (sans les droits élevés de l'installation). Si l'installation de SQL Server a demandé un redémarrage (code 3010), l'assistant propose de redémarrer l'ordinateur.</p>
+</li>
+</ol>
+<h3 id="43-installation-de-sql-server-express">4.3 Installation de SQL Server Express</h3>
+<p>Seulement quand aucune instance SQL Server n'est enregistrée sur l'ordinateur (clé de registre <code>HKLM\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL</code>).</p>
+<p><strong>Source.</strong> Le support hors ligne trouvé à côté du programme d'installation, sinon le téléchargement par <code>SQL2025-SSEI-Expr.exe</code> du paquet « Core » (moteur seul). Un paquet <code>SQLEXPR*.exe</code> est d'abord décompressé (<code>/q /x:</code>).</p>
+<p><strong>Installation silencieuse</strong>, avec ces options :</p>
+<pre><code>/QS /ACTION=Install /FEATURES=SQLEngine /INSTANCENAME=SQLEXPRESS
+/SQLSVCACCOUNT=&quot;NT Service\MSSQL$SQLEXPRESS&quot; /SQLSVCSTARTUPTYPE=Automatic
+/BROWSERSVCSTARTUPTYPE=Automatic /TCPENABLED=1
+/SQLSYSADMINACCOUNTS=&quot;BUILTIN\Administrators&quot; /UpdateEnabled=False
+/IACCEPTSQLSERVERLICENSETERMS /SUPPRESSPRIVACYSTATEMENTNOTICE
+</code></pre>
+<p>(plus <code>/ENU</code> pour un support anglais sur un Windows non anglais).</p>
+<p><strong>Contrôle.</strong> Un code de retour autre que 0 ou 3010 arrête l'installation avec « L'installation de SQL Server Express a échoué (code …) » ; si aucune instance n'est enregistrée après coup : « … aucune instance SQL Server n'est enregistrée sur cet ordinateur ». Dans les deux cas, le détail est dans le journal de SQL Server : <code>C:\Program Files\Microsoft SQL Server\&lt;version&gt;\Setup Bootstrap\Log\Summary.txt</code>.</p>
+<h3 id="44-chaine-de-connexion">4.4 Chaîne de connexion</h3>
+<p>Pour une <strong>première installation</strong> seulement, l'installation écrit dans <code>{app}\Desktop\appsettings.json</code> et <code>{app}\Api\appsettings.json</code> la clé <code>Database:ConnectionString</code> :</p>
+<pre><code>Server=localhost\&lt;instance&gt;;Database=MarocLIS;Integrated Security=true
+</code></pre>
+<p>(<code>Server=localhost;…</code> pour l'instance par défaut). Seule cette valeur est réécrite : les commentaires et la disposition du fichier livré sont conservés. Un fichier <code>appsettings.json</code> déjà présent n'est <strong>jamais</strong> remplacé ni modifié, ni par la copie des fichiers ni par cette étape.</p>
+<h3 id="45-base-de-donnees-acces-et-pare-feu">4.5 Base de données, accès et pare-feu</h3>
+<p>Étape « Base de données, accès et pare-feu… » :</p>
+<ol>
+<li><strong>TCP/IP</strong> de l'instance : vérifié ; s'il est désactivé, avertissement (les postes ne pourront pas se connecter tant qu'il n'est pas activé dans le Gestionnaire de configuration SQL Server et le service SQL Server redémarré).</li>
+<li><strong>SQL Server Browser</strong> (instance nommée seulement) : mis en démarrage automatique et démarré. S'il est introuvable, avertissement : les postes devront indiquer le port de l'instance dans le nom du serveur.</li>
+<li><strong>Pare-feu Windows</strong> : règle entrante « MarocLIS - SQL Server (<code>&lt;instance&gt;</code>) » pour le programme <code>sqlservr.exe</code> de l'instance, et, pour une instance nommée, règle « MarocLIS - SQL Server Browser » (UDP 1434) ; sous-réseau local, tous profils, groupe « MarocLIS ». Une règle du même nom est d'abord supprimée puis recréée.</li>
+<li><strong>Groupe local <code>MarocLIS-Utilisateurs</code></strong> : créé s'il n'existe pas (description « Comptes autorises a utiliser MarocLIS (connexion Windows a SQL Server). »).</li>
+<li><strong>Base <code>MarocLIS</code></strong> : créée <strong>vide</strong> si elle n'existe pas. Les tables sont créées au premier démarrage de MarocLIS (section 6).</li>
+<li><strong>Connexions SQL Server</strong>, chacune membre du rôle <code>db_owner</code> de la base (les postes appliquent les mises à jour du schéma au démarrage, d'où ce rôle) :<ul>
+<li>le groupe <code>&lt;SERVEUR&gt;\MarocLIS-Utilisateurs</code> ;</li>
+<li>le compte Windows qui exécute l'installation (un groupe ajouté maintenant ne figurerait dans son jeton qu'à sa prochaine ouverture de session) ;</li>
+<li><code>NT AUTHORITY\SYSTEM</code>, compte du service <code>MarocLIS.Api</code> et de la tâche de sauvegarde.</li>
+</ul>
+</li>
+<li><code>GRANT CREATE ANY DATABASE TO [NT AUTHORITY\SYSTEM]</code> : nécessaire à <code>RESTORE VERIFYONLY</code>, qui vérifie chaque sauvegarde.</li>
+</ol>
+<h3 id="46-tache-planifiee-de-sauvegarde">4.6 Tâche planifiée de sauvegarde</h3>
+<p>Étape « Sauvegarde automatique (dossier et tâche planifiée)… » :</p>
+<ul>
+<li><strong>Dossier local</strong> (<code>X:\…</code>) : créé s'il n'existe pas, et le compte du service SQL Server (par exemple <code>NT Service\MSSQL$SQLEXPRESS</code>) reçoit le droit <strong>Modifier</strong> dessus (<code>icacls … /grant &lt;compte&gt;:(OI)(CI)M</code>) : c'est SQL Server, et non la tâche, qui écrit les fichiers.</li>
+<li><strong>Partage réseau</strong> (<code>\\…</code>) : rien ne peut être réglé d'ici ; avertissement rappelant que les autorisations du partage et NTFS doivent laisser écrire le <strong>compte ordinateur du serveur</strong> (<code>DOMAINE\SERVEUR$</code>).</li>
+<li><strong>Tâche « MarocLIS - Sauvegarde »</strong> enregistrée (remplacée si elle existe) :</li>
+<li>programme : <code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{app}\Sauvegarde\maroclis-backup.ps1" -Server "localhost\&lt;instance&gt;" -Database "MarocLIS" -DefaultFolder "…" -DefaultTimes "22:00" -DefaultRetentionDays 14 -DefaultEnabled true</code> (valeurs de la page Sauvegarde) ;</li>
+<li>déclencheurs : <strong>toutes les 15 minutes</strong>, sans fin, à partir de minuit le jour de l'installation, et <strong>au démarrage</strong> de l'ordinateur ;</li>
+<li>compte <strong>SYSTEM</strong>, privilèges les plus élevés ; une seule instance à la fois ; démarre dès que possible si un passage a été manqué ; fonctionne sur batterie ; arrêtée au-delà de 4 heures.</li>
+</ul>
+<p>Les valeurs de l'assistant ne sont que des valeurs initiales : la tâche les écrit dans la base au premier passage où elle n'en trouve pas, jamais par-dessus un réglage existant (section 7).</p>
+<h3 id="47-service-maroclisapi">4.7 Service MarocLIS.Api</h3>
+<p>Étape « Service MarocLIS.Api… », par <code>{app}\Api\install-api-service.ps1</code> :</p>
+<ul>
+<li>nom <code>MarocLIS.Api</code>, nom affiché « MarocLIS - validation a distance (API) » ;</li>
+<li>compte <strong>LocalSystem</strong> (<code>NT AUTHORITY\SYSTEM</code>), programme <code>{app}\Api\MarocLIS.Api.exe</code> ;</li>
+<li>démarrage <strong>automatique différé</strong> (SQL Server et Tailscale démarrent d'abord après un redémarrage) ;</li>
+<li>redémarrage après un arrêt anormal : après 1 minute, 1 minute, puis 5 minutes ; compteur remis à zéro après un jour ;</li>
+<li>dossier de journaux <code>{app}\Api\logs</code> ;</li>
+<li>démarrage, puis contrôle que <code>http://127.0.0.1:5080/</code> répond (sinon avertissement : voir les journaux et le journal d'événements Windows).</li>
+</ul>
+<p>Lors d'une mise à jour, le service existant est seulement arrêté avant la copie et redémarré après.</p>
+<p>Le script peut aussi servir à la main, dans un PowerShell lancé en administrateur, dans <code>{app}\Api</code> :</p>
+<pre><code>.\install-api-service.ps1                         # créer et démarrer le service (LocalSystem)
+.\install-api-service.ps1 -Account 'LAB\svc-maroclis' -Password (Read-Host -AsSecureString)
+.\install-api-service.ps1 -Uninstall              # arrêter et supprimer le service
+</code></pre>
+<p>Avec <code>-Account</code>, le compte reçoit le droit « Ouvrir une session en tant que service » et le droit Modifier sur <code>logs</code> ; il doit alors avoir lui-même accès à la base (même rôle que les postes). Le manuel recommande un compte dédié plutôt que LocalSystem ; l'installation, elle, utilise LocalSystem. Si le service existe déjà, le script refuse (« Service MarocLIS.Api already exists… ») : utilisez d'abord <code>-Uninstall</code>.</p>
+<h3 id="48-ordre-exact-des-operations">4.8 Ordre exact des opérations</h3>
+<table>
+<thead>
+<tr>
+<th>Moment</th>
+<th>Opération</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Avant la copie des fichiers</td>
+<td>Installation de SQL Server Express (si nécessaire) ; arrêt du service <code>MarocLIS.Api</code> s'il existe (mise à jour)</td>
+</tr>
+<tr>
+<td>Copie</td>
+<td><code>{app}\Desktop</code> (application), <code>{app}\Api</code> (service et application du téléphone, <code>install-api-service.ps1</code>), <code>{app}\Sauvegarde\maroclis-backup.ps1</code> ; <code>appsettings.json</code> seulement s'il n'existe pas encore</td>
+</tr>
+<tr>
+<td>Après la copie</td>
+<td>Copie de la licence en <code>{app}\Desktop\licence.lic</code> ; chaîne de connexion ; base, accès et pare-feu ; tâche de sauvegarde ; création du service (première installation) ou redémarrage (mise à jour)</td>
+</tr>
+</tbody>
+</table>
+<p>Une étape qui échoue n'interrompt pas l'installation : elle est signalée sur la dernière page (« Étape non terminée : … » ou « Étape terminée avec un avertissement : … ») et détaillée dans <code>{app}\Installer\install.log</code>.</p>
+<h3 id="49-apres-linstallation-du-serveur">4.9 Après l'installation du serveur</h3>
+<ol>
+<li><strong>Démarrer MarocLIS sur le serveur</strong> (section 6) : création des tables, compte <code>admin</code>, licence.</li>
+<li><strong>Ajouter les utilisateurs</strong> au groupe local <code>MarocLIS-Utilisateurs</code> du serveur (Gestion de l'ordinateur › Utilisateurs et groupes locaux). Un utilisateur ajouté doit fermer puis rouvrir sa session Windows pour que l'appartenance soit prise en compte.</li>
+<li><strong>Vérifier la sauvegarde</strong> : <strong>Paramètres › Sauvegardes</strong>, <strong>Tester le dossier</strong>, puis <strong>Sauvegarder maintenant</strong> (section 7).</li>
+<li><strong>Validation sur téléphone</strong> (si le module est utilisé ; détail dans le manuel, Administration › « Service de validation à distance ») :<ol>
+<li>installer <strong>Tailscale</strong> sur le serveur, le relier au réseau Tailscale (tailnet) du laboratoire ; dans la console d'administration Tailscale (DNS), activer <strong>MagicDNS</strong> et <strong>HTTPS Certificates</strong> ;</li>
+<li>sur le serveur : <code>tailscale serve --bg 5080</code> ; l'adresse publiée est <code>https://&lt;machine&gt;.&lt;tailnet&gt;.ts.net</code>, conservée aux redémarrages (<code>tailscale serve status</code> l'affiche, <code>tailscale serve --https=443 off</code> la retire) ;</li>
+<li><strong>ne jamais</strong> utiliser <code>tailscale funnel</code>, qui publierait le service sur Internet ;</li>
+<li>sur chaque téléphone : application Tailscale, connexion au tailnet, ouverture de l'adresse publiée, ajout de « MarocLIS Validation » à l'écran d'accueil ;</li>
+<li>dans MarocLIS, <strong>Rôles et droits</strong> : droit <code>results.validate_remote</code> pour les biologistes concernés (avec <code>results.validate_biological</code> et une qualification de biologiste valide).</li>
+</ol>
+</li>
+<li><strong>Une copie hors du serveur</strong> des sauvegardes : un partage sur une autre machine, ou une copie régulière sur un disque externe rangé ailleurs (section 7).</li>
+</ol>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="5-installer-un-poste-client">5. Installer un poste client</h2>
+<h3 id="51-avant-de-commencer">5.1 Avant de commencer</h3>
+<ul>
+<li>Le serveur est installé et MarocLIS y a été démarré une fois (la base existe et contient ses tables).</li>
+<li>Le compte Windows de chaque utilisateur du poste est membre du groupe <code>MarocLIS-Utilisateurs</code> du serveur (ou, en groupe de travail, a son jumeau de même nom et même mot de passe sur le serveur).</li>
+<li>Notez le <strong>nom de l'ordinateur serveur</strong> et l'<strong>instance</strong> (<code>SQLEXPRESS</code> si l'installation l'a installée).</li>
+</ul>
+<h3 id="52-les-pages-de-lassistant">5.2 Les pages de l'assistant</h3>
+<ol>
+<li><strong>Langue</strong>, puis <strong>Dossier de destination</strong> (<code>C:\MarocLIS</code> par défaut).</li>
+<li><strong>Type d'installation</strong> : <strong>« Poste client : application seule, reliée au serveur »</strong>. Rien d'autre n'est à installer : l'application contient tout ce qu'il lui faut, .NET compris.</li>
+<li><strong>Serveur du laboratoire</strong> :<ul>
+<li><strong>Nom du serveur</strong> : le nom de l'ordinateur serveur, obligatoire, sans espace, <code>\</code>, <code>;</code> ni guillemet (l'instance se saisit à part) ;</li>
+<li><strong>Instance SQL Server</strong> : <code>SQLEXPRESS</code> par défaut ; laissez vide ou saisissez <code>MSSQLSERVER</code> pour l'instance par défaut ;</li>
+<li><strong>Tester la connexion</strong> : ouvre la base <code>MarocLIS</code> du serveur indiqué (délai 10 secondes) avec <strong>le compte Windows qui exécute l'installation</strong>, pas forcément celui de l'utilisateur final. En cas d'échec, le message donne la raison ; vous pouvez continuer, la chaîne sera écrite telle quelle.</li>
+<li>Si le poste a déjà un <code>{app}\Desktop\appsettings.json</code> (réinstallation, mise à jour), les champs sont grisés et la page indique « Ce poste a déjà un fichier appsettings.json : sa chaîne de connexion est conservée. »</li>
+</ul>
+</li>
+<li><strong>Licence MarocLIS</strong> (facultative) : la page est aussi proposée sur un poste client. Un fichier indiqué ici est copié en <code>{app}\Desktop\licence.lic</code> et importé au premier démarrage de ce poste si la base n'a pas encore de licence. La licence étant enregistrée dans la base, une seule pour le serveur et tous les postes, laissez la page vide si elle a déjà été installée depuis le serveur (section 8).</li>
+<li><strong>Tâches supplémentaires</strong> (icône sur le Bureau), <strong>Prêt à installer</strong> (chaîne de connexion qui sera écrite), <strong>Installation</strong>, <strong>Fin</strong> : « MarocLIS est installé sur ce poste. Il utilise la base du serveur indiqué ; l'utilisateur Windows doit faire partie du groupe « MarocLIS-Utilisateurs » du serveur. »</li>
+</ol>
+<h3 id="53-comment-le-poste-trouve-le-serveur">5.3 Comment le poste trouve le serveur</h3>
+<p>L'installation écrit dans <code>{app}\Desktop\appsettings.json</code> :</p>
+<pre><code>Server=&lt;nom du serveur&gt;\&lt;instance&gt;;Database=MarocLIS;Integrated Security=true
+</code></pre>
+<p>(<code>Server=&lt;nom du serveur&gt;;…</code> pour l'instance par défaut). Une instance nommée est localisée par le service <strong>SQL Server Browser</strong> du serveur (UDP 1434), activé et ouvert par l'installation serveur.</p>
+<p>Pour changer de serveur plus tard, modifiez la clé <code>Database:ConnectionString</code> de ce fichier (l'installation ne la réécrit jamais une fois le fichier présent). Une variable d'environnement de la machine peut aussi la remplacer : MarocLIS lit les variables préfixées <code>MAROCLIS_</code>, par exemple <code>MAROCLIS_Database__ConnectionString</code>.</p>
+<p>Un poste client n'a ni service, ni tâche planifiée, ni règle de pare-feu MarocLIS.</p>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="6-premier-demarrage">6. Premier démarrage</h2>
+<p>Au lancement, MarocLIS suit cet ordre (<code>src/MarocLIS.Desktop/Program.cs</code>) :</p>
+<ol>
+<li><strong>Base de données.</strong> Lecture de <code>appsettings.json</code>, puis création ou mise à jour du schéma (migrations) et des données de référence. Le premier démarrage crée les tables et un seul compte administrateur. Plusieurs postes démarrés ensemble attendent leur tour. En cas d'échec, un message s'affiche et MarocLIS se ferme (section 11.4).</li>
+<li><strong>Licence.</strong> Si aucune licence n'est enregistrée et qu'un fichier <code>licence.lic</code> se trouve à côté du programme (<code>{app}\Desktop\licence.lic</code>, posé par l'assistant), il est importé. Puis :<ul>
+<li>base sans patient ni dossier et sans licence : l'écran <strong>« Aucune licence installée »</strong> s'ouvre à la place de la connexion (identifiant serveur, <strong>Copier</strong>, <strong>Exporter la demande</strong>, <strong>Importer une licence…</strong>) ; le quitter ferme MarocLIS ;</li>
+<li>base qui contient déjà des patients ou des dossiers : jamais d'écran bloquant ; sans licence valide, MarocLIS s'ouvre en lecture seule.</li>
+</ul>
+</li>
+<li><strong>Langues</strong> actives du laboratoire.</li>
+<li>
+<p><strong>Polices des comptes rendus.</strong> Si la police latine (<code>Carlito</code> par défaut) ou, quand l'arabe est actif, la police arabe (<code>Amiri</code>) est introuvable, un avertissement s'affiche une fois avant la connexion :</p>
+<ul>
+<li>« Police(s) de compte rendu absente(s) : … Les comptes rendus seront édités dans une police de substitution : la mise en page sera dégradée, le contenu restera juste. »</li>
+<li>« Police(s) de compte rendu absente(s) : … Les comptes rendus en arabe ne pourront pas être édités depuis ce poste tant que la police arabe n'est pas installée. »</li>
+</ul>
+<p>Les polices sont cherchées dans <code>{app}\Desktop\Assets\Fonts</code> (livrées par l'installation) et parmi les polices installées dans Windows.</p>
+</li>
+<li>
+<p><strong>Connexion.</strong> Au premier démarrage : identifiant <strong><code>admin</code></strong>, mot de passe initial <strong><code>Maroc-LIS-2026!</code></strong>. Ce compte doit changer son mot de passe avant de pouvoir faire quoi que ce soit. Règles par défaut (<code>PasswordPolicy</code>) : 10 caractères au moins, majuscule, minuscule, chiffre et caractère spécial ; expiration 180 jours ; 5 derniers mots de passe interdits ; blocage 15 minutes après 5 échecs ; déconnexion après 15 minutes d'inactivité.</p>
+</li>
+</ol>
+<p>Ensuite, la mise en service se poursuit dans l'application, dans l'ordre que décrit le manuel (Administration › « Vue d'ensemble : mettre en service une installation ») : fiche du site, numérotations, utilisateurs, catalogue, automates, sauvegardes.</p>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="7-sauvegardes-et-restauration">7. Sauvegardes et restauration</h2>
+<h3 id="71-principe">7.1 Principe</h3>
+<p>SQL Server Express n'a pas d'Agent SQL. L'installation serveur enregistre donc la tâche planifiée Windows <strong>« MarocLIS - Sauvegarde »</strong>, qui exécute <code>{app}\Sauvegarde\maroclis-backup.ps1</code> sous le compte <strong>SYSTEM</strong>, <strong>toutes les 15 minutes</strong> et <strong>au démarrage</strong> du serveur. À chaque passage, la tâche :</p>
+<ol>
+<li>ne fait rien si la base n'existe pas, ou si MarocLIS n'a jamais été démarré (schéma absent) ;</li>
+<li>écrit dans la base les valeurs initiales de l'assistant, seulement pour les réglages absents ;</li>
+<li>note son passage (affiché dans <strong>Paramètres › Sauvegardes</strong>) ;</li>
+<li>sauvegarde si un horaire prévu est passé depuis le dernier horaire traité : <code>BACKUP DATABASE … WITH CHECKSUM</code> (compression seulement sur les éditions qui la proposent, pas Express), puis <code>RESTORE VERIFYONLY</code> ; un horaire manqué (serveur éteint) est rattrapé une seule fois s'il date de moins de 24 heures ; un horaire en échec est signalé, pas retenté toutes les 15 minutes ;</li>
+<li>vérifie les sauvegardes faites depuis un poste, que le compte des postes peut écrire mais pas vérifier ;</li>
+<li>supprime les sauvegardes plus anciennes que la conservation, <strong>jamais la dernière sauvegarde vérifiée</strong>, et seulement les fichiers qu'elle reconnaît (<code>MarocLIS_AAAAMMJJ_HHMMSS.bak</code>, avec un suffixe <code>_manuelle</code> ou <code>_avant-restauration</code> pour les autres origines) ;</li>
+<li>inscrit chaque sauvegarde réussie ou échouée au journal de sécurité de MarocLIS ;</li>
+<li>tient un journal mensuel <code>{app}\Sauvegarde\logs\maroclis-backup-AAAAMM.log</code>.</li>
+</ol>
+<p>Les heures sont celles de l'horloge du serveur SQL.</p>
+<h3 id="72-valeurs-par-defaut-et-reglage">7.2 Valeurs par défaut et réglage</h3>
+<table>
+<thead>
+<tr>
+<th>Réglage</th>
+<th>Par défaut</th>
+<th>Limites</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sauvegarde automatique activée</td>
+<td>oui</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Dossier</td>
+<td><code>C:\MarocLIS\Sauvegardes</code></td>
+<td>chemin complet <code>X:\…</code> ou partage <code>\\…</code>, 200 caractères au plus, jamais une lettre de lecteur réseau</td>
+</tr>
+<tr>
+<td>Heures</td>
+<td><code>22:00</code></td>
+<td>1 à 6 heures par jour, <code>HH:mm</code>, séparées par des virgules</td>
+</tr>
+<tr>
+<td>Jours</td>
+<td>tous</td>
+<td>au moins un jour</td>
+</tr>
+<tr>
+<td>Conservation</td>
+<td>14 jours</td>
+<td>1 à 365 jours</td>
+</tr>
+<tr>
+<td>Alerte « dernière sauvegarde trop ancienne »</td>
+<td>48 heures</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Ces réglages sont gardés dans la base (et non dans la tâche) : ils se changent depuis n'importe quel poste, dans <strong>Paramètres › Sauvegardes</strong>, par un utilisateur qui a le droit <strong><code>admin.backup</code></strong> (livré au seul rôle Administrateur). Un changement est pris en compte au plus tard 15 minutes après, sans toucher au Planificateur de tâches. <strong>Tester le dossier</strong> fait écrire par SQL Server un petit fichier de test dans le dossier, avec son propre compte de service.</p>
+<p>Pour un utilisateur qui a <code>admin.backup</code>, la barre d'état affiche en rouge « ⚠ Dernière sauvegarde : … » quand la dernière sauvegarde réussie a plus de <strong>48 heures</strong>, ou « ⚠ Aucune sauvegarde de la base ».</p>
+<p>Les sauvegardes restent possibles même quand MarocLIS est en lecture seule faute de licence.</p>
+<h3 id="73-sauvegarde-manuelle">7.3 Sauvegarde manuelle</h3>
+<p><strong>Dans MarocLIS</strong> : <strong>Paramètres › Sauvegardes › Sauvegarder maintenant</strong>, depuis n'importe quel poste (droit <code>admin.backup</code>). Depuis un poste, la vérification est souvent laissée à la tâche du serveur. À faire notamment <strong>avant une mise à jour</strong> ou une reprise de données.</p>
+<p><strong>Sur le serveur, en dehors de MarocLIS</strong> : le script de la tâche accepte <code>-Now</code>, qui sauvegarde aussitôt quel que soit l'horaire. Dans un PowerShell lancé en administrateur (adaptez le dossier et l'instance) :</p>
+<pre><code>powershell -NoProfile -ExecutionPolicy Bypass -File &quot;C:\MarocLIS\Sauvegarde\maroclis-backup.ps1&quot; -Server &quot;localhost\SQLEXPRESS&quot; -Now
+</code></pre>
+<p>Le script se connecte alors avec votre compte Windows.</p>
+<h3 id="74-restauration">7.4 Restauration</h3>
+<p>La restauration remplace <strong>toute</strong> la base par une sauvegarde : ce qui a été saisi depuis est perdu, et tous les postes sont déconnectés. Elle n'est proposée que si :</p>
+<ol>
+<li>MarocLIS est ouvert <strong>sur le serveur</strong> (la machine où tourne SQL Server) ;</li>
+<li>l'utilisateur Windows est <strong>administrateur de ce poste</strong> ;</li>
+<li>son compte a le droit SQL de remplacer la base (propriétaire, <code>dbcreator</code> ou <code>sysadmin</code>). Sur un serveur installé par MarocLIS, les administrateurs Windows sont <code>sysadmin</code> quand MarocLIS est lancé « en tant qu'administrateur » : si le droit manque, MarocLIS propose de se relancer ainsi (élévation Windows).</li>
+</ol>
+<p>Étapes : choisir la sauvegarde dans <strong>Paramètres › Sauvegardes</strong>, <strong>Restaurer…</strong>, <strong>saisir le nom du laboratoire</strong> (celui de la fiche du site principal ; le bouton <strong>Restaurer</strong> reste grisé tant qu'il ne correspond pas, <strong>Entrée</strong> ne restaure jamais). MarocLIS relit la sauvegarde, fait une <strong>sauvegarde de sécurité</strong> de la base actuelle (<code>…_avant-restauration.bak</code> ; si elle échoue, rien n'est restauré), ferme la base à tous, la remplace, la rouvre, applique les migrations si la sauvegarde vient d'une version plus ancienne, puis redémarre. Les autres postes doivent redémarrer MarocLIS. Fermez aussi le service de validation à distance si la base ne peut pas être prise en accès exclusif.</p>
+<p>Une sauvegarde endommagée ou dont la vérification a échoué ne peut pas être restaurée.</p>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="8-licence">8. Licence</h2>
+<h3 id="partie-1-installer-la-licence-dun-laboratoire">Partie 1 — Installer la licence d'un laboratoire</h3>
+<h4 id="ce-quil-faut-savoir-avant">Ce qu'il faut savoir avant</h4>
+<ul>
+<li>La licence est un fichier <code>.lic</code> signé par l'éditeur. Elle est enregistrée dans la base de données : une seule licence pour le serveur et tous ses postes.</li>
+<li>Une licence d'exploitation est <strong>liée au serveur</strong> : elle porte l'identifiant du serveur pour lequel elle a été émise. Une licence d'essai ou de formation ne l'est généralement pas, elle peut être installée avant le serveur définitif.</li>
+<li>La licence fixe le nombre de <strong>postes</strong> (ordinateurs connectés en même temps ; les téléphones ne comptent pas) et les <strong>modules</strong> ouverts en plus du socle.</li>
+</ul>
+<h4 id="lidentifiant-serveur">L'identifiant serveur</h4>
+<p>Il se lit dans MarocLIS (écran d'accueil sans licence, ou <strong>Paramètres › Licence</strong>), sous la forme <code>A1B2-C3D4-E5F6-0718-293A</code>. Il est calculé à partir de trois éléments que SQL Server fournit, et non du matériel de l'ordinateur :</p>
+<ul>
+<li>le nom Windows de la machine qui fait tourner SQL Server, tel que SQL Server le déclare (<code>SERVERPROPERTY('MachineName')</code>) ;</li>
+<li>le nom de l'instance SQL Server (<code>SERVERPROPERTY('InstanceName')</code>, « MSSQLSERVER » pour l'instance par défaut) ;</li>
+<li>un identifiant tiré au hasard et écrit dans la base MarocLIS la première fois qu'elle est lue.</li>
+</ul>
+<p>L'empreinte SHA-256 de ces trois valeurs, tronquée à 10 octets, donne l'identifiant.</p>
+<p>Pourquoi ce choix :</p>
+<ul>
+<li><strong>Tous les postes lisent le même identifiant</strong>, quel que soit le nom ou l'adresse par lesquels ils joignent le serveur (adresse IP, alias, « localhost » sur le serveur lui-même) : c'est SQL Server qui répond, pas le poste.</li>
+<li><strong>Remplacer un disque, une carte réseau, de la mémoire</strong> ne change rien : aucun de ces éléments n'entre dans le calcul. Restaurer une sauvegarde de la base sur le même serveur ne change rien non plus.</li>
+<li><strong>Copier la base et l'application sur un autre serveur</strong> change le nom de la machine : l'identifiant change, la licence n'y est plus valide. Installer une seconde base vierge sur le même serveur change l'identifiant de base : une licence ne sert pas deux bases.</li>
+<li>Renommer l'ordinateur serveur change aussi l'identifiant : il faut alors redemander la licence (comme pour un changement de serveur).</li>
+</ul>
+<h4 id="pendant-linstallation">Pendant l'installation</h4>
+<p>Le programme d'installation propose une page <strong>Licence MarocLIS</strong> (facultative). Si vous avez déjà le fichier <code>.lic</code> (licence d'essai, de formation, ou réinstallation sur le même serveur), indiquez-le : il est copié à côté de MarocLIS et importé automatiquement au premier démarrage. Sinon laissez vide.</p>
+<h4 id="au-premier-demarrage">Au premier démarrage</h4>
+<ol>
+<li>Sur une base vide et sans licence, MarocLIS s'ouvre sur l'écran <strong>Aucune licence installée</strong> au lieu de la connexion.</li>
+<li><strong>Exporter la demande</strong> : enregistre <code>demande-licence-&lt;site&gt;.demande</code> (identifiant serveur, nom du site, version de MarocLIS). Envoyez ce fichier au fournisseur. À défaut, <strong>Copier</strong> l'identifiant et le lui transmettre.</li>
+<li>Le fournisseur renvoie un fichier <code>licence.lic</code>. <strong>Importer une licence…</strong> : MarocLIS s'ouvre aussitôt sur la connexion, sans redémarrer.</li>
+<li>Plus tard, une nouvelle licence (renouvellement, postes ou modules ajoutés) s'importe dans <strong>Paramètres › Licence</strong> avec le droit <code>admin.license</code> (administrateur). Elle est en vigueur immédiatement sur le poste qui l'importe, et sur les autres au plus tard cinq minutes après.</li>
+</ol>
+<p>Une base qui contient déjà des patients n'affiche jamais cet écran bloquant : sans licence valide, elle s'ouvre en <strong>lecture seule</strong> (consultation, réimpression des comptes rendus, encaissements), et l'administrateur importe la licence depuis <strong>Paramètres › Licence</strong>. Le détail des états (préavis, grâce, lecture seule) est au chapitre « Administration » du manuel, section « Licence ».</p>
+<h4 id="changer-de-serveur">Changer de serveur</h4>
+<ol>
+<li>Installer MarocLIS sur le nouveau serveur et y restaurer la base.</li>
+<li>Au démarrage, MarocLIS signale que la licence a été émise pour un autre serveur et passe en lecture seule.</li>
+<li><strong>Paramètres › Licence › Exporter la demande</strong>, envoyer la demande au fournisseur, importer la licence reçue (même numéro, version suivante).</li>
+</ol>
+<p>À noter (constaté dans le code) : sur le nouveau serveur, la base neuve créée par le premier démarrage ne contient ni patient ni licence, et MarocLIS s'ouvre donc d'abord sur l'écran « Aucune licence installée » ; l'onglet <strong>Sauvegardes</strong>, et sa restauration, ne sont accessibles qu'après la connexion. Il faut donc soit importer d'abord une licence que ce serveur accepte (par exemple une licence d'essai non liée au serveur), soit restaurer la base avec les outils de SQL Server, en dehors de MarocLIS. L'identifiant serveur est recalculé après la restauration (il dépend de l'identifiant écrit dans la base restaurée) : c'est la demande exportée <strong>après</strong> la restauration qu'il faut envoyer.</p>
+<h3 id="partie-2-pour-lediteur-la-cle-de-licence-et-le-generateur">Partie 2 — Pour l'éditeur : la clé de licence et le Générateur</h3>
+<p>Cette partie ne concerne pas les laboratoires. Le <strong>Générateur de licences</strong> (<code>tools/MarocLIS.LicenseGenerator</code>) est un outil de l'éditeur : il n'est ni dans le programme d'installation, ni livré aux laboratoires.</p>
+<h4 id="principe">Principe</h4>
+<ul>
+<li>Chaque licence est signée en ECDSA (courbe P-256, SHA-256) avec la <strong>clé privée</strong> de l'éditeur. Le fichier contient les termes de la licence en JSON lisible et la signature à part ; la signature porte sur une forme canonique des termes, si bien qu'un seul caractère modifié la rend invalide.</li>
+<li>MarocLIS vérifie la signature avec la <strong>clé publique</strong> compilée dans l'application (<code>src/MarocLIS.Application/Licensing/licence-public-key.pem</code>). La clé privée n'est jamais dans le dépôt de code.</li>
+<li>Le dépôt contient une <strong>clé de DÉVELOPPEMENT</strong> (empreinte <code>CDC1-D2A2-222A-4A92-B835-95FB-909A-18BB</code>), dont la clé privée est dans <code>tests/MarocLIS.Tests/Licensing/</code> pour les tests. N'importe qui ayant le code peut signer des licences qu'elle accepte : une version compilée avec elle ne doit jamais être installée chez un laboratoire. MarocLIS l'affiche en clair dans <strong>Paramètres › Licence</strong>, et <code>installer/build-installer.ps1</code> refuse de construire le programme d'installation avec elle.</li>
+</ul>
+<h4 id="ceremonie-de-la-cle-une-seule-fois">Cérémonie de la clé (une seule fois)</h4>
+<ol>
+<li><strong>Choisir l'ordinateur</strong> qui gardera la clé : un poste de l'éditeur, à jour, avec un compte Windows personnel, chiffrement du disque activé (BitLocker), sans partage réseau du profil.</li>
+<li><strong>Choisir la phrase de passe</strong> : 12 caractères au moins, une phrase plutôt qu'un mot. Elle n'est enregistrée nulle part ; l'écrire sur papier et la ranger au coffre, à part de toute sauvegarde.</li>
+<li>Lancer le Générateur (<code>MarocLIS.GenerateurLicences.exe</code>) : il s'ouvre sur l'onglet <strong>Clé de signature</strong>. <strong>Créer la clé…</strong>, saisir deux fois la phrase de passe. La clé privée est écrite chiffrée (PKCS#8, AES-256, phrase de passe étirée par PBKDF2-SHA-256 sur 600 000 itérations) dans <code>%APPDATA%\MarocLIS\GenerateurLicences\cle-privee.pem</code>, la clé publique à côté. Noter l'<strong>empreinte</strong> affichée.</li>
+<li><strong>Exporter une sauvegarde chiffrée…</strong> : choisir la phrase de passe de la sauvegarde (la même ou une autre, elle aussi notée au coffre), enregistrer le fichier <code>.cle-sauvegarde</code> sur <strong>deux supports</strong> gardés en deux lieux distincts (clé USB au coffre, second exemplaire hors des locaux). Sans cette sauvegarde, une panne de l'ordinateur rend impossible toute nouvelle licence pour les installations existantes : il faudrait livrer à chacune une version de MarocLIS avec une nouvelle clé.</li>
+<li><strong>Exporter la clé publique…</strong> : enregistrer <code>licence-public-key.pem</code>, le copier sur <code>src/MarocLIS.Application/Licensing/licence-public-key.pem</code> dans le code source, et valider ce changement dans le dépôt (la clé publique n'est pas secrète).</li>
+<li>Construire le programme d'installation : <code>installer\build-installer.ps1</code> affiche l'empreinte de la clé compilée ; elle doit être celle notée à l'étape 3. Avec la clé de développement, le script s'arrête et explique la marche à suivre (<code>-AllowDevelopmentKey</code> ne sert qu'aux essais internes et produit <code>MarocLIS-Setup-&lt;version&gt;-CLE-DEV.exe</code>).</li>
+<li>Après installation chez un premier laboratoire, vérifier dans <strong>Paramètres › Licence › Clé de vérification</strong> que l'empreinte est la bonne.</li>
+</ol>
+<p>Restaurer la clé sur un autre ordinateur : <strong>Restaurer une sauvegarde…</strong> (phrase de passe de la sauvegarde, puis nouvelle phrase de passe locale). Le Générateur refuse d'écraser une autre clé déjà présente.</p>
+<h4 id="emettre-une-licence">Émettre une licence</h4>
+<ul>
+<li><strong>Nouvelle licence…</strong> ou <strong>Depuis une demande…</strong> (le fichier <code>.demande</code> du laboratoire remplit l'identifiant serveur, le site et le laboratoire). Le numéro suit la série de l'année (<code>LIC-2026-0001</code>, …).</li>
+<li>Le <strong>pack</strong> (Essentiel 2 postes, Professionnel 5 postes, Complet 10 postes) ne fait que préremplir les postes et les modules ; les modules restent cochables un à un, et le fichier les liste toujours un par un. Les packs se modifient dans l'onglet <strong>Packs</strong>.</li>
+<li>Valeurs proposées, modifiables pour chaque licence : essai de 30 jours ; préavis 30 jours avant la fin ; grâce 15 jours après ; 7 jours de paillasse en lecture seule ; liaison au serveur cochée pour une licence annuelle ou perpétuelle, décochée pour l'essai et la formation ; licence perpétuelle avec une date « mises à jour jusqu'au » (un an par défaut) ; licence de formation à un poste, sans fin.</li>
+<li><strong>Signer et enregistrer…</strong> : la phrase de passe est demandée une fois par session ; la licence est relue et vérifiée avec la clé publique avant d'être inscrite au registre, puis enregistrée sous <code>LIC-…-vN.lic</code>.</li>
+</ul>
+<h4 id="remplacer-renouveler-revoquer">Remplacer, renouveler, révoquer</h4>
+<ul>
+<li><strong>Remplacer…</strong> : même numéro, version suivante (postes ou modules ajoutés, nouveau serveur). MarocLIS remplace une licence par une version supérieure du même numéro et refuse ensuite les versions antérieures.</li>
+<li>Onglet <strong>Renouvellements</strong> : les licences en vigueur dont la fin (ou la fin des mises à jour d'une perpétuelle) tombe dans les 45 jours, et celles déjà échues non renouvelées, avec le contact noté sur la licence. <strong>Renouveler…</strong> prépare la version suivante sur un an de plus ; <strong>Exporter en CSV…</strong> donne la liste de relance.</li>
+<li><strong>Révoquer…</strong> (impayé, fichier perdu ou volé) : la ligne de révocation est copiée ; l'ajouter à <code>src/MarocLIS.Application/Licensing/licence-revoked.txt</code> et publier une nouvelle version de MarocLIS. Les versions publiées ensuite refusent cette licence (une version précise <code>LIC-2026-0042/1</code>, ou toutes <code>LIC-2026-0042</code>).</li>
+</ul>
+<h4 id="fichiers-du-generateur">Fichiers du Générateur</h4>
+<p>Dans <code>%APPDATA%\MarocLIS\GenerateurLicences\</code> (ou le dossier donné par <code>--dossier</code> ou la variable <code>MAROCLIS_GENERATEUR_DOSSIER</code>) : <code>cle-privee.pem</code> (chiffrée), <code>cle-publique.pem</code>, <code>registre-licences.json</code> (licences émises, avec leur fichier signé) et <code>packs.json</code>. Sauvegarder le registre avec la sauvegarde habituelle de l'éditeur ; il ne contient aucun secret.</p>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="9-mise-a-jour-vers-une-nouvelle-version">9. Mise à jour vers une nouvelle version</h2>
+<p>Une nouvelle version s'installe en lançant simplement le nouveau <code>MarocLIS-Setup-&lt;version&gt;.exe</code>, sur le serveur puis sur chaque poste. Le programme garde le même identifiant d'application : il reconnaît l'installation existante et reprend son dossier, son type (Serveur ou Poste client) et les valeurs saisies la fois précédente.</p>
+<p>Ce qui est conservé :</p>
+<ul>
+<li>les fichiers <code>appsettings.json</code> de <code>{app}\Desktop</code> et <code>{app}\Api</code> (jamais remplacés : les nouveaux réglages éventuels du fichier livré ne sont donc pas ajoutés d'eux-mêmes) ;</li>
+<li>la base de données et ses données ;</li>
+<li>les réglages de sauvegarde faits dans MarocLIS (la page Sauvegarde de l'assistant ne sert alors pas ; la tâche planifiée est réenregistrée avec les mêmes chemins) ;</li>
+<li>la licence, qui est dans la base.</li>
+</ul>
+<p>Déroulement :</p>
+<ol>
+<li><strong>Avant</strong> : faites une sauvegarde (<strong>Paramètres › Sauvegardes › Sauvegarder maintenant</strong>) et fermez MarocLIS (l'assistant propose de fermer les applications ouvertes).</li>
+<li><strong>Sur le serveur</strong> : lancez le programme. Le service <code>MarocLIS.Api</code> est arrêté avant la copie, puis redémarré ; la base, les accès, le pare-feu et la tâche de sauvegarde sont reconfigurés de la même façon qu'à l'installation (opérations sans effet si tout est déjà en place).</li>
+<li><strong>Mettre la base à jour</strong> : le schéma n'est pas modifié par le programme d'installation, mais par <strong>le premier MarocLIS de la nouvelle version qui démarre</strong> (migrations appliquées au démarrage, depuis n'importe quel poste, le serveur compris). Le service ne met pas la base à jour.</li>
+<li><strong>Redémarrer le service <code>MarocLIS.Api</code></strong> après ce premier démarrage (Services Windows, ou <code>sc.exe stop MarocLIS.Api</code> puis <code>sc.exe start MarocLIS.Api</code>). La dernière page de l'assistant le rappelle : « Mise à jour : lancez d'abord MarocLIS sur un poste (il met la base à jour), puis redémarrez le service MarocLIS.Api. » Les téléphones doivent se reconnecter.</li>
+<li><strong>Sur chaque poste</strong> : lancez le programme ; la chaîne de connexion existante est conservée.</li>
+</ol>
+<p>Une licence perpétuelle ne couvre les mises à jour que jusqu'à sa date « mises à jour jusqu'au » : au-delà, MarocLIS le signale (section 11.7).</p>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="10-desinstallation">10. Désinstallation</h2>
+<p>Par <strong>Paramètres Windows › Applications</strong> (ou Programmes et fonctionnalités), entrée <strong>MarocLIS</strong>.</p>
+<p>Ce qui est retiré :</p>
+<ul>
+<li>le service <code>MarocLIS.Api</code> (arrêté puis supprimé, sur un serveur) ;</li>
+<li>la tâche planifiée « MarocLIS - Sauvegarde » (sur un serveur) ;</li>
+<li>les fichiers installés par le programme dans <code>{app}</code> (<code>Desktop</code>, <code>Api</code>, <code>Sauvegarde</code>), les raccourcis, et le dossier <code>{app}\Installer</code> (journal d'installation).</li>
+</ul>
+<p>Ce qui est conservé, volontairement :</p>
+<ul>
+<li>la <strong>base de données</strong> <code>MarocLIS</code> et <strong>SQL Server</strong> lui-même ;</li>
+<li>les <strong>fichiers de sauvegarde</strong>, où qu'ils soient ;</li>
+<li>ce que le programme d'installation n'a pas copié lui-même, notamment les journaux (<code>logs</code>) et le fichier <code>licence.lic</code> copié par l'assistant : le dossier qui les contient reste en place.</li>
+</ul>
+<p>Le code de désinstallation ne retire pas non plus le groupe local <code>MarocLIS-Utilisateurs</code>, les connexions SQL Server, ni les règles de pare-feu du groupe « MarocLIS » : retirez-les à la main si le serveur ne sert plus à MarocLIS.</p>
+<p><strong>Attention</strong> : avec les valeurs par défaut, le dossier des sauvegardes <code>C:\MarocLIS\Sauvegardes</code> est <strong>dans</strong> le dossier d'installation <code>C:\MarocLIS</code>. Ne supprimez pas ce dossier à la main sans avoir mis les sauvegardes à l'abri.</p>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="11-depannage">11. Dépannage</h2>
+<h3 id="111-construction-du-programme-dinstallation">11.1 Construction du programme d'installation</h3>
+<table>
+<thead>
+<tr>
+<th>Symptôme</th>
+<th>Cause et solution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PowerShell refuse d'exécuter le script (exécution de scripts désactivée)</td>
+<td>Lancer <code>powershell -ExecutionPolicy Bypass -File .\installer\build-installer.ps1</code>.</td>
+</tr>
+<tr>
+<td>« MarocLIS embeds the DEVELOPMENT licence key … »</td>
+<td>Clé de développement compilée : remplacer la clé publique (section 8, partie 2), ou <code>-AllowDevelopmentKey</code> pour un essai interne.</td>
+</tr>
+<tr>
+<td>« ISCC.exe (Inno Setup 6) not found. … »</td>
+<td>Installer Inno Setup 6, ou passer <code>-Iscc</code>, ou définir <code>INNO_SETUP_ISCC</code>.</td>
+</tr>
+<tr>
+<td>« dotnet publish … failed (exit code …) »</td>
+<td>Vérifier le SDK .NET 10 (<code>global.json</code>) et relire la sortie de <code>dotnet publish</code>.</td>
+</tr>
+<tr>
+<td>« Missing from the published files: … »</td>
+<td>Un fichier indispensable manque après la publication (police, bibliothèque native, application du téléphone) : corriger la publication ; ne pas livrer le programme.</td>
+</tr>
+<tr>
+<td>« No <Version> in Directory.Build.props. »</td>
+<td>Ajouter l'élément <code>&lt;Version&gt;</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="112-pendant-lassistant">11.2 Pendant l'assistant</h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Le téléchargement de SQL Server Express a échoué : … »</td>
+<td>Vérifier la connexion Internet, ou poser <code>SQLEXPR_x64_ENU.exe</code> à côté du programme et le relancer.</td>
+</tr>
+<tr>
+<td>« Le support d'installation de SQL Server Express est introuvable après le téléchargement. »</td>
+<td>Même remède : support hors ligne.</td>
+</tr>
+<tr>
+<td>« L'installation de SQL Server Express a échoué (code …). » / « … aucune instance SQL Server n'est enregistrée … »</td>
+<td>Lire <code>C:\Program Files\Microsoft SQL Server\&lt;version&gt;\Setup Bootstrap\Log\Summary.txt</code>.</td>
+</tr>
+<tr>
+<td>« Indiquez le nom du serveur. » / « Le nom du serveur ne doit contenir ni espace, ni « \ », ni « ; ». … »</td>
+<td>Poste client : nom de l'ordinateur seul ; l'instance va dans le champ suivant.</td>
+</tr>
+<tr>
+<td>« Connexion impossible à … » (bouton Tester)</td>
+<td>Voir 11.5. On peut continuer : la chaîne est écrite telle quelle.</td>
+</tr>
+<tr>
+<td>« Indiquez le dossier des sauvegardes (chemin complet …) »</td>
+<td>Chemin <code>X:\…</code> ou <code>\\serveur\partage</code>, sans guillemet ni apostrophe.</td>
+</tr>
+<tr>
+<td>« L'heure doit s'écrire HH:MM, de 00:00 à 23:59. » / « La conservation est un nombre de jours, de 1 à 365. »</td>
+<td>Corriger la valeur.</td>
+</tr>
+<tr>
+<td>« Ce fichier n'est pas une licence MarocLIS (un fichier .lic de moins de 64 Ko). »</td>
+<td>Le fichier n'existe pas ou n'a pas l'extension <code>.lic</code> ; laisser vide et importer la licence plus tard.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="113-a-verifier-en-fin-dinstallation">11.3 « À vérifier » en fin d'installation</h3>
+<p>Les étapes de configuration écrivent leur détail dans <strong><code>{app}\Installer\install.log</code></strong>. Le journal général de l'assistant est activé (<code>SetupLogging=yes</code>) ; Inno Setup l'écrit dans le dossier temporaire de Windows. Avertissements possibles :</p>
+<table>
+<thead>
+<tr>
+<th>Dans le journal</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« TCP/IP is disabled on … »</td>
+<td>Activer TCP/IP dans le Gestionnaire de configuration SQL Server, puis redémarrer le service SQL Server.</td>
+</tr>
+<tr>
+<td>« SQL Server Browser service not found … »</td>
+<td>Les postes devront indiquer le port de l'instance dans le nom du serveur (modifier leur <code>appsettings.json</code>).</td>
+</tr>
+<tr>
+<td>« Firewall rule '…' could not be created … » / « sqlservr.exe of … not found … »</td>
+<td>Créer à la main la règle entrante pour SQL Server (et UDP 1434 pour une instance nommée), limitée au sous-réseau local.</td>
+</tr>
+<tr>
+<td>« Backup folder … is a network share … »</td>
+<td>Donner au compte ordinateur du serveur (<code>DOMAINE\SERVEUR$</code>) le droit d'écrire sur le partage et dans le dossier.</td>
+</tr>
+<tr>
+<td>« Backup folder … could not be created … » / « icacls could not give … »</td>
+<td>Créer le dossier, donner le droit Modifier au compte du service SQL Server, ou choisir un autre dossier dans <strong>Paramètres › Sauvegardes</strong>.</td>
+</tr>
+<tr>
+<td>« FAILED: … »</td>
+<td>L'étape a échoué : lire le message. Relancer le programme d'installation (comme une mise à jour) une fois la cause corrigée reprend toutes les étapes.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="114-maroclis-ne-demarre-pas">11.4 MarocLIS ne démarre pas</h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« L'application n'a pas pu démarrer. … Consultez logs/maroclis-*.log. »</td>
+<td>Lire le journal du jour dans <code>{app}\Desktop\logs</code>.</td>
+</tr>
+<tr>
+<td>« Échec de l'initialisation de la base de données : … »</td>
+<td>Serveur injoignable, compte sans accès, ou mise à jour du schéma impossible : voir 11.5 et le journal.</td>
+</tr>
+<tr>
+<td>« La base de données existe mais ne correspond pas au schéma attendu. »</td>
+<td>La chaîne de connexion désigne une autre base que celle de MarocLIS : corriger <code>Database:ConnectionString</code>.</td>
+</tr>
+<tr>
+<td>Écran « Aucune licence installée »</td>
+<td>Normal sur une base neuve : section 8, partie 1.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="115-un-poste-naccede-pas-a-la-base">11.5 Un poste n'accède pas à la base</h3>
+<p>Vérifier, dans l'ordre :</p>
+<ol>
+<li>le serveur est allumé et SQL Server démarré (Services Windows : <code>SQL Server (SQLEXPRESS)</code>, et <code>SQL Server Browser</code> pour une instance nommée) ;</li>
+<li>le nom du serveur et l'instance dans <code>{app}\Desktop\appsettings.json</code> ;</li>
+<li>le compte Windows de l'utilisateur est dans le groupe <code>MarocLIS-Utilisateurs</code> du serveur, et l'utilisateur a rouvert sa session depuis ; en groupe de travail, le compte jumeau du serveur a le même nom et le même mot de passe ;</li>
+<li>les règles de pare-feu « MarocLIS - SQL Server (…) » et « MarocLIS - SQL Server Browser » existent sur le serveur, et le poste est dans le même sous-réseau (les règles n'admettent que le sous-réseau local) ;</li>
+<li>TCP/IP est activé sur l'instance (11.3).</li>
+</ol>
+<h3 id="116-le-service-de-validation-a-distance-ne-repond-pas">11.6 Le service de validation à distance ne répond pas</h3>
+<ul>
+<li>Services Windows : « MarocLIS - validation a distance (API) » doit être démarré (démarrage automatique différé : il démarre quelques minutes après le système).</li>
+<li>Sur le serveur, <code>http://127.0.0.1:5080/</code> doit répondre.</li>
+<li>Journaux : <code>{app}\Api\logs\maroclis-api-*.log</code>, et le journal d'événements Windows en cas d'échec au démarrage.</li>
+<li>Après une mise à jour : démarrer MarocLIS une fois (mise à jour de la base), puis redémarrer le service.</li>
+<li>Côté téléphone : Tailscale connecté au tailnet du laboratoire, <code>tailscale serve status</code> sur le serveur, droit <code>results.validate_remote</code> du biologiste. Redémarrer le service déconnecte tous les téléphones.</li>
+</ul>
+<h3 id="117-licence-et-lecture-seule">11.7 Licence et lecture seule</h3>
+<p>Les messages et leur remède sont listés dans le manuel, Administration › « Messages d'erreur et d'avertissement » › « Licence ». Les plus fréquents à l'installation :</p>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Lecture seule — … »</td>
+<td>Lire la cause dans <strong>Paramètres › Licence</strong> ; importer une licence valide.</td>
+</tr>
+<tr>
+<td>« Cette licence a été émise pour le serveur … ; ce serveur est … »</td>
+<td><strong>Exporter la demande</strong> et l'envoyer au fournisseur.</td>
+</tr>
+<tr>
+<td>« Nombre de postes atteint (n / n) »</td>
+<td>Faire déconnecter un poste, ou attendre 15 minutes qu'un poste inactif libère sa place.</td>
+</tr>
+<tr>
+<td>« Cette licence perpétuelle couvre les mises à jour jusqu'au … ; cette version de MarocLIS date du … »</td>
+<td>Réinstaller la version précédente ou renouveler la maintenance.</td>
+</tr>
+<tr>
+<td>« Cette version vérifie les licences avec la clé de DÉVELOPPEMENT … »</td>
+<td>Version de test installée : installer la version livrée par l'éditeur.</td>
+</tr>
+</tbody>
+</table>
+<p>En lecture seule, les sauvegardes et la restauration restent possibles.</p>
+<h3 id="118-polices-manquantes">11.8 Polices manquantes</h3>
+<p>L'avertissement de la section 6 signifie qu'une police configurée (<code>Reporting:LatinFontFamily</code>, <code>Reporting:ArabicFontFamily</code>) n'est ni dans <code>{app}\Desktop\Assets\Fonts</code> ni installée dans Windows. Vérifier la présence de <code>Carlito-Regular.ttf</code> et <code>Amiri-Regular.ttf</code> dans ce dossier (les réinstaller par le programme d'installation), ou installer la police dans Windows, ou remettre le nom de police par défaut dans <code>appsettings.json</code>. Sans la police arabe, l'édition d'un compte rendu en arabe est refusée sur ce poste.</p>
+<h3 id="119-sauvegardes">11.9 Sauvegardes</h3>
+<table>
+<thead>
+<tr>
+<th>Message dans Paramètres › Sauvegardes</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« SQL Server ne peut pas écrire dans le dossier « … ». … »</td>
+<td>Donner au compte de service SQL Server (par exemple <code>NT Service\MSSQL$SQLEXPRESS</code>) le droit Modifier sur le dossier ; pour un partage, au compte ordinateur du serveur.</td>
+</tr>
+<tr>
+<td>« La tâche planifiée de … ne s'est plus manifestée depuis … » / « … n'a jamais tourné sur … »</td>
+<td>Sur le serveur, Planificateur de tâches : vérifier « MarocLIS - Sauvegarde » et son journal <code>{app}\Sauvegarde\logs</code> ; si elle manque, relancer le programme d'installation serveur.</td>
+</tr>
+<tr>
+<td>« Dernière sauvegarde réussie : … Elle date de plus de 48 heures … » / « Aucune sauvegarde réussie de la base n'est connue. »</td>
+<td>Vérifier la tâche et le dossier ; <strong>Sauvegarder maintenant</strong>.</td>
+</tr>
+<tr>
+<td>« La restauration se fait uniquement depuis le serveur, par un administrateur Windows de ce poste. »</td>
+<td>Ouvrir MarocLIS sur le serveur.</td>
+</tr>
+<tr>
+<td>« Le compte « … » n'a pas le droit de restaurer la base. … »</td>
+<td>Accepter la relance « en tant qu'administrateur ».</td>
+</tr>
+</tbody>
+</table>
+<p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+<h2 id="12-annexe-fichiers-et-emplacements">12. Annexe : fichiers et emplacements</h2>
+<h3 id="121-dossiers-et-fichiers">12.1 Dossiers et fichiers</h3>
+<table>
+<thead>
+<tr>
+<th>Emplacement</th>
+<th>Contenu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{app}</code> = <code>C:\MarocLIS</code> par défaut</td>
+<td>Dossier d'installation</td>
+</tr>
+<tr>
+<td><code>{app}\Desktop\MarocLIS.exe</code></td>
+<td>Application MarocLIS</td>
+</tr>
+<tr>
+<td><code>{app}\Desktop\appsettings.json</code></td>
+<td>Configuration de l'application (chaîne de connexion…), jamais remplacée par une mise à jour</td>
+</tr>
+<tr>
+<td><code>{app}\Desktop\licence.lic</code></td>
+<td>Licence fournie à l'assistant, importée au premier démarrage</td>
+</tr>
+<tr>
+<td><code>{app}\Desktop\Assets\Fonts</code></td>
+<td>Polices des comptes rendus (Carlito, Amiri)</td>
+</tr>
+<tr>
+<td><code>{app}\Desktop\Help</code></td>
+<td>Aide en ligne (touche F1)</td>
+</tr>
+<tr>
+<td><code>{app}\Desktop\logs\maroclis-AAAAMMJJ.log</code></td>
+<td>Journal de l'application, un fichier par jour, 31 conservés ; dossier modifiable par les utilisateurs</td>
+</tr>
+<tr>
+<td><code>{app}\Api\MarocLIS.Api.exe</code>, <code>{app}\Api\wwwroot</code></td>
+<td>Service de validation à distance et application du téléphone (serveur)</td>
+</tr>
+<tr>
+<td><code>{app}\Api\appsettings.json</code></td>
+<td>Configuration du service, jamais remplacée par une mise à jour</td>
+</tr>
+<tr>
+<td><code>{app}\Api\install-api-service.ps1</code></td>
+<td>Création et suppression du service</td>
+</tr>
+<tr>
+<td><code>{app}\Api\logs\maroclis-api-AAAAMMJJ.log</code></td>
+<td>Journal du service, un fichier par jour, 31 conservés</td>
+</tr>
+<tr>
+<td><code>{app}\Sauvegarde\maroclis-backup.ps1</code></td>
+<td>Script de la tâche de sauvegarde (serveur)</td>
+</tr>
+<tr>
+<td><code>{app}\Sauvegarde\logs\maroclis-backup-AAAAMM.log</code></td>
+<td>Journal mensuel de la tâche</td>
+</tr>
+<tr>
+<td><code>{app}\Installer\install.log</code></td>
+<td>Journal des étapes de configuration de l'installation</td>
+</tr>
+<tr>
+<td><code>C:\MarocLIS\Sauvegardes</code></td>
+<td>Dossier des sauvegardes par défaut</td>
+</tr>
+<tr>
+<td><code>C:\Program Files\Microsoft SQL Server\&lt;version&gt;\Setup Bootstrap\Log\Summary.txt</code></td>
+<td>Journal de l'installation de SQL Server</td>
+</tr>
+</tbody>
+</table>
+<h3 id="122-objets-windows-et-sql-server-crees-serveur">12.2 Objets Windows et SQL Server créés (serveur)</h3>
+<table>
+<thead>
+<tr>
+<th>Objet</th>
+<th>Nom</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Instance SQL Server (si installée)</td>
+<td><code>SQLEXPRESS</code>, service <code>MSSQL$SQLEXPRESS</code>, compte <code>NT Service\MSSQL$SQLEXPRESS</code></td>
+</tr>
+<tr>
+<td>Base de données</td>
+<td><code>MarocLIS</code></td>
+</tr>
+<tr>
+<td>Groupe local Windows</td>
+<td><code>MarocLIS-Utilisateurs</code></td>
+</tr>
+<tr>
+<td>Connexions SQL Server (<code>db_owner</code> de <code>MarocLIS</code>)</td>
+<td><code>&lt;SERVEUR&gt;\MarocLIS-Utilisateurs</code>, le compte qui a installé, <code>NT AUTHORITY\SYSTEM</code> (avec <code>CREATE ANY DATABASE</code>)</td>
+</tr>
+<tr>
+<td>Service Windows</td>
+<td><code>MarocLIS.Api</code> (« MarocLIS - validation a distance (API) »), LocalSystem, automatique différé, <code>http://127.0.0.1:5080</code></td>
+</tr>
+<tr>
+<td>Tâche planifiée</td>
+<td><code>MarocLIS - Sauvegarde</code>, SYSTEM, toutes les 15 minutes et au démarrage</td>
+</tr>
+<tr>
+<td>Règles de pare-feu (groupe « MarocLIS »)</td>
+<td><code>MarocLIS - SQL Server (&lt;instance&gt;)</code>, <code>MarocLIS - SQL Server Browser</code> (UDP 1434)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="123-cles-de-appsettingsjson-utiles-a-linstallation">12.3 Clés de <code>appsettings.json</code> utiles à l'installation</h3>
+<p>Application (<code>{app}\Desktop\appsettings.json</code>) :</p>
+<table>
+<thead>
+<tr>
+<th>Clé</th>
+<th>Valeur livrée</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Database:ConnectionString</code></td>
+<td><code>Server=localhost\SQLEXPRESS;Database=MarocLIS;Integrated Security=true</code> (réécrite par l'installation)</td>
+<td>Base du serveur</td>
+</tr>
+<tr>
+<td><code>Application:DefaultLanguage</code></td>
+<td><code>French</code></td>
+<td>Langue de l'écran de connexion</td>
+</tr>
+<tr>
+<td><code>Application:SeedDemoDataOnFirstRun</code></td>
+<td><code>false</code></td>
+<td>Laisser <code>false</code> en production : <code>true</code> crée des données et des comptes de démonstration aux mots de passe publiés</td>
+</tr>
+<tr>
+<td><code>Instruments:EnableInstrumentHost</code></td>
+<td><code>false</code></td>
+<td>Mettre <code>true</code> sur le seul poste qui pilote les automates</td>
+</tr>
+<tr>
+<td><code>Labels:LabelPrinterName</code></td>
+<td>vide</td>
+<td>Nom Windows de l'imprimante d'étiquettes ; vide = étiquettes en PDF</td>
+</tr>
+<tr>
+<td><code>Reporting:LatinFontFamily</code> / <code>Reporting:ArabicFontFamily</code></td>
+<td><code>Carlito</code> / <code>Amiri</code></td>
+<td>Polices des comptes rendus</td>
+</tr>
+<tr>
+<td><code>Messaging:Smtp:*</code>, <code>Messaging:Sms:*</code></td>
+<td>vides</td>
+<td>Envoi des comptes rendus par courriel et SMS</td>
+</tr>
+<tr>
+<td><code>PasswordPolicy:*</code></td>
+<td>voir section 6</td>
+<td>Règles des mots de passe</td>
+</tr>
+<tr>
+<td><code>Serilog</code> (chemin <code>logs/maroclis-.log</code>)</td>
+<td>—</td>
+<td>Journal</td>
+</tr>
+</tbody>
+</table>
+<p>Toute clé peut être remplacée sur une machine par une variable d'environnement préfixée <code>MAROCLIS_</code> (les <code>:</code> deviennent <code>__</code>), par exemple <code>MAROCLIS_Instruments__EnableInstrumentHost=true</code>.</p>
+<p>Service (<code>{app}\Api\appsettings.json</code>) :</p>
+<table>
+<thead>
+<tr>
+<th>Clé</th>
+<th>Valeur livrée</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Urls</code></td>
+<td><code>http://127.0.0.1:5080</code></td>
+<td>Ne pas changer : le service ne doit écouter que la machine elle-même</td>
+</tr>
+<tr>
+<td><code>Database:ConnectionString</code></td>
+<td>réécrite par l'installation</td>
+<td>Même base que les postes</td>
+</tr>
+<tr>
+<td><code>MobileApi:MaxSessionLifetime</code></td>
+<td><code>12:00:00</code></td>
+<td>Durée maximale d'une session de téléphone</td>
+</tr>
+<tr>
+<td><code>PasswordPolicy</code>, <code>Reporting</code></td>
+<td>—</td>
+<td>À garder identiques à ceux des postes</td>
+</tr>
+</tbody>
+</table>
+<h3 id="124-reglages-de-sauvegarde-dans-la-base">12.4 Réglages de sauvegarde dans la base</h3>
+<p>Table <code>cfg.Settings</code>, réglages communs à l'installation :</p>
+<table>
+<thead>
+<tr>
+<th>Clé</th>
+<th>Contenu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Backup.Enabled</code></td>
+<td><code>true</code> ou <code>false</code></td>
+</tr>
+<tr>
+<td><code>Backup.Folder</code></td>
+<td>Dossier des sauvegardes, vu du serveur</td>
+</tr>
+<tr>
+<td><code>Backup.Times</code></td>
+<td>Heures, par exemple <code>22:00</code> ou <code>08:00,13:00</code></td>
+</tr>
+<tr>
+<td><code>Backup.Days</code></td>
+<td>Jours en anglais (<code>Monday,Friday</code>) ; vide = tous les jours</td>
+</tr>
+<tr>
+<td><code>Backup.RetentionDays</code></td>
+<td>Conservation en jours</td>
+</tr>
+<tr>
+<td><code>Backup.State.*</code></td>
+<td>État écrit par la tâche (dernier passage, serveur, dernier horaire traité, dernier résultat, dernière réussite, dossier ouvert au compte SQL Server)</td>
+</tr>
+<tr>
+<td><code>Backup.Check.&lt;fichier&gt;</code></td>
+<td>Résultat de la vérification de chaque fichier</td>
+</tr>
+</tbody>
+</table>
+<p>Ces valeurs se règlent dans <strong>Paramètres › Sauvegardes</strong> ; ne les modifiez pas directement dans la base.</p><p class="top"><a href="#sommaire">Retour au sommaire</a></p>
+</div>
+</body>
+</html>
