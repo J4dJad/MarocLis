@@ -289,7 +289,7 @@ public sealed class OrderEntryScreenDatabaseTests(OrderEntryScratchDatabase data
         }
 
         var recent = await provider.GetRequiredService<IOrderEntryQueries>().GetRecentAnalysesAsync(
-            lab.Insured.Id, DateTimeOffset.Now.AddDays(-MarocLIS.Desktop.Views.OrderRegistrationRules.RepeatWindowDays));
+            lab.Insured.Id, DateTimeOffset.Now.AddDays(-MarocLIS.Application.Orders.OrderRegistrationRules.RepeatWindowDays));
 
         recent.Should().ContainSingle();
         recent[0].AnalysisTestId.Should().Be(lab.Hba1c.Id);

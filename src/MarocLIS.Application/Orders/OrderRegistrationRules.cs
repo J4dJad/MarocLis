@@ -1,11 +1,11 @@
-using MarocLIS.Application.Orders;
-using MarocLIS.Infrastructure.Queries;
+using MarocLIS.Application.Catalog;
 
-namespace MarocLIS.Desktop.Views;
+namespace MarocLIS.Application.Orders;
 
 /// <summary>
-/// The rules of the "Nouvelle demande" screen that need no window, kept free of WinForms so the
-/// test project can compile them in.
+/// The rules of the "Nouvelle demande" screen that need no window. They live in the application
+/// layer so every client that registers an order — the workstation today, the web client next —
+/// ranks the catalogue and points out a repeat the same way.
 /// </summary>
 public static class OrderRegistrationRules
 {

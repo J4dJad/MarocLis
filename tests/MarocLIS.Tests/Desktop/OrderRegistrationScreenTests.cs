@@ -1,9 +1,8 @@
 using FluentAssertions;
+using MarocLIS.Application.Catalog;
 using MarocLIS.Application.Orders;
-using MarocLIS.Desktop.Views;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
-using MarocLIS.Infrastructure.Queries;
 using Xunit;
 
 namespace MarocLIS.Tests.Desktop;

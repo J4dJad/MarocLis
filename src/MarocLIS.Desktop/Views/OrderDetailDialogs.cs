@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Catalog;
 using MarocLIS.Application.Orders;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Catalog;
