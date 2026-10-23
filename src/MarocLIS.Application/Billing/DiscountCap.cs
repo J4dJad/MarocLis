@@ -90,4 +90,13 @@ public sealed record DiscountApproval(string UserName, string Password)
 {
     // The password stays out of logs and of the audit trail if the record is ever printed.
     public override string ToString() => $"DiscountApproval {{ UserName = {UserName} }}";
+
+    /// <summary>
+    /// Whether a refusal is the approval's — the approver's name or password, the approver being the
+    /// clerk, their account locked — rather than the invoice's: the same dialog is shown again, the
+    /// discount and the reason still filled in, and only the approver's password is asked again.
+    /// </summary>
+    public static bool IsRefusal(string resourceKey) =>
+        resourceKey.StartsWith("Approval_", StringComparison.Ordinal)
+        || resourceKey is "Invoice_DiscountApprovalRequired" or "Auth_AccountLockedOut";
 }

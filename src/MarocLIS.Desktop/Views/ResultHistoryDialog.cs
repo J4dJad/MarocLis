@@ -168,8 +168,7 @@ internal sealed class ResultHistoryDialog : Form
 internal static class ResultHistory
 {
     /// <summary>Only a measured number has a curve; a coded or text result has none.</summary>
-    internal static bool IsCharted(ResultEntryRow? row) =>
-        row is { IsHeading: false, ValueType: ResultValueType.Numeric or ResultValueType.NumericWithOperator };
+    internal static bool IsCharted(ResultEntryRow? row) => ResultEntryRules.IsCharted(row);
 
     /// <summary>
     /// The chart's data for <paramref name="row"/>: the validated values read from the database, the
@@ -186,7 +185,7 @@ internal static class ResultHistory
         ResultTrendPoint? current = null;
 
         // Dated now: it is not released, and when it is that is the date it will carry.
-        if (TryParse(typed, out var oper, out var value)
+        if (ResultEntryRules.TryParseTyped(typed, out var oper, out var value)
             && !string.Equals(typed?.Trim(), row.CurrentValue?.Trim(), StringComparison.Ordinal))
             current = new ResultTrendPoint(DateTimeOffset.Now, value, oper, accessionNumber);
         else if (row.NumericValue is { } stored
@@ -195,26 +194,5 @@ internal static class ResultHistory
 
         return new ResultTrendSeries(points, row.LowerLimit, row.UpperLimit, row.Decimals, row.UnitSymbol,
                                      current);
-    }
-
-    /// <summary>The same reading of a typed value as the entry service: an optional operator, then a number.</summary>
-    private static bool TryParse(string? raw, out string? oper, out decimal value)
-    {
-        oper = null;
-        value = 0m;
-
-        var text = raw?.Trim();
-        if (string.IsNullOrEmpty(text)) return false;
-
-        foreach (var candidate in (string[])["<=", ">=", "≤", "≥", "<", ">"])
-        {
-            if (!text.StartsWith(candidate, StringComparison.Ordinal)) continue;
-            oper = candidate;
-            text = text[candidate.Length..].Trim();
-            break;
-        }
-
-        return decimal.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture,
-                                out value);
     }
 }

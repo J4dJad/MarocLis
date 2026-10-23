@@ -147,11 +147,10 @@ public sealed class RecollectionView : LocalizedView
         Render();
     }
 
-    private static bool IsOverdue(RecollectionRow row) =>
-        row.ContactCount == 0 && DateTimeOffset.Now - row.RejectedAt > TimeSpan.FromHours(24);
+    private static bool IsOverdue(RecollectionRow row) => RecollectionRules.IsOverdue(row, DateTimeOffset.Now);
 
     /// <summary>The rows drawn in red: an urgent file, or a patient not reached within a day.</summary>
-    private static bool IsPriority(RecollectionRow row) => row.Priority != OrderPriority.Routine || IsOverdue(row);
+    private static bool IsPriority(RecollectionRow row) => RecollectionRules.IsPriority(row, DateTimeOffset.Now);
 
     private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {

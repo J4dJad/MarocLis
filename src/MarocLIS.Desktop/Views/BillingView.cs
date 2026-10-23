@@ -819,7 +819,7 @@ public sealed class BillingView : LocalizedView
 
                     // A refused approval is corrected in the same dialog, the discount and the
                     // reason still filled in: only the approver's password is asked again.
-                    if (issue.Approval is not null && IsApprovalRefusal(result.FirstError.ResourceKey))
+                    if (issue.Approval is not null && DiscountApproval.IsRefusal(result.FirstError.ResourceKey))
                     {
                         issue.ApprovalRefused();
                         continue;
@@ -842,10 +842,6 @@ public sealed class BillingView : LocalizedView
             _issue.Enabled = true;
         }
     }
-
-    private static bool IsApprovalRefusal(string key) =>
-        key.StartsWith("Approval_", StringComparison.Ordinal)
-        || key is "Invoice_DiscountApprovalRequired" or "Auth_AccountLockedOut";
 
     /// <summary>
     /// Refunds a settled payment.

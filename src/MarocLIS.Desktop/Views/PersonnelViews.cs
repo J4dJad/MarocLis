@@ -322,7 +322,7 @@ public sealed class PersonnelView : LocalizedView
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
 
     /// <summary>On the staff today: no departure, or one not reached yet (the notice being served).</summary>
-    private static bool OnStaff(EmployeeRow row) => row.ExitDate is not { } exit || exit >= Today;
+    private static bool OnStaff(EmployeeRow row) => PersonnelRules.OnStaff(row, Today);
 
     /// <summary>
     /// The departure button follows the file: record an exit; correct or withdraw one not reached

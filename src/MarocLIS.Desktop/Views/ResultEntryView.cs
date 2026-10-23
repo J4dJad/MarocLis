@@ -1370,8 +1370,7 @@ public sealed class ResultEntryView : LocalizedView
         }
     }
 
-    private static IEnumerable<string> SectorsOf(PendingEntryOrder order) =>
-        order.Departments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    private static IEnumerable<string> SectorsOf(PendingEntryOrder order) => ResultEntryRules.SectorsOf(order);
 
     /// <summary>« Tous » and one chip per sector present in the list.</summary>
     private void RenderSectorChips()
@@ -2087,9 +2086,7 @@ public sealed class ResultEntryView : LocalizedView
     // ---- Actions on the selected line -------------------------------------------------------------
 
     /// <summary>A line a value can be keyed on: not derived, not a heading, its tube received, not released.</summary>
-    private static bool IsKeyable(ResultEntryRow? row) =>
-        row is { IsEditable: true, IsAwaitingSample: false }
-        && row.Status is not (TestResultStatus.Validated or TestResultStatus.Reported);
+    private static bool IsKeyable(ResultEntryRow? row) => ResultEntryRules.IsKeyable(row);
 
     /// <summary>
     /// Enables the menu's line actions for the selected line, and only for a user with their right

@@ -101,7 +101,7 @@ public sealed class SampleReceptionView : LocalizedView
 
     private SampleReceptionCandidate? _candidate;
     private IReadOnlyList<SampleReceptionCandidate> _awaitingRows = [];
-    private AwaitingFilter _filter = AwaitingFilter.All;
+    private AwaitingReceptionFilter _filter = AwaitingReceptionFilter.All;
 
     // Set while an accept or reject for the displayed tube is being recorded. A scan arriving then
     // is held and shown once the decision is in, rather than replacing the tube being decided.
@@ -129,7 +129,6 @@ public sealed class SampleReceptionView : LocalizedView
 
     private bool IsRightToLeft => RightToLeft == RightToLeft.Yes;
 
-    private enum AwaitingFilter { All, Urgent, LongDelay }
 
     // ---- Layout ------------------------------------------------------------------------------------
 
@@ -732,9 +731,9 @@ public sealed class SampleReceptionView : LocalizedView
         _awaiting.CellFormatting += OnAwaitingFormatting;
         _awaiting.CellPainting += OnAwaitingPainting;
 
-        _chipAll.Click += (_, _) => SetFilter(AwaitingFilter.All);
-        _chipUrgent.Click += (_, _) => SetFilter(AwaitingFilter.Urgent);
-        _chipLongDelay.Click += (_, _) => SetFilter(AwaitingFilter.LongDelay);
+        _chipAll.Click += (_, _) => SetFilter(AwaitingReceptionFilter.All);
+        _chipUrgent.Click += (_, _) => SetFilter(AwaitingReceptionFilter.Urgent);
+        _chipLongDelay.Click += (_, _) => SetFilter(AwaitingReceptionFilter.LongDelay);
 
         CollectionKeyHint.Attach(_accept, () => T("Sample.EnterKey"));
     }
@@ -956,27 +955,23 @@ public sealed class SampleReceptionView : LocalizedView
         }
     }
 
-    private void SetFilter(AwaitingFilter filter)
+    private void SetFilter(AwaitingReceptionFilter filter)
     {
         _filter = filter;
-        _chipAll.Selected = filter == AwaitingFilter.All;
-        _chipUrgent.Selected = filter == AwaitingFilter.Urgent;
-        _chipLongDelay.Selected = filter == AwaitingFilter.LongDelay;
+        _chipAll.Selected = filter == AwaitingReceptionFilter.All;
+        _chipUrgent.Selected = filter == AwaitingReceptionFilter.Urgent;
+        _chipLongDelay.Selected = filter == AwaitingReceptionFilter.LongDelay;
         RenderAwaiting();
     }
 
-    private static bool Matches(SampleReceptionCandidate candidate, AwaitingFilter filter) => filter switch
-    {
-        AwaitingFilter.Urgent => candidate.Priority != OrderPriority.Routine,
-        AwaitingFilter.LongDelay => candidate.StabilityExceeded,
-        _ => true
-    };
+    private static bool Matches(SampleReceptionCandidate candidate, AwaitingReceptionFilter filter) =>
+        SampleReceptionRules.Matches(candidate, filter);
 
     private void RenderAwaiting()
     {
         _chipAll.Text = T("Collection.FilterAll", _awaitingRows.Count);
-        _chipUrgent.Text = T("Collection.FilterUrgent", _awaitingRows.Count(c => Matches(c, AwaitingFilter.Urgent)));
-        _chipLongDelay.Text = T("Sample.FilterLongDelay", _awaitingRows.Count(c => Matches(c, AwaitingFilter.LongDelay)));
+        _chipUrgent.Text = T("Collection.FilterUrgent", _awaitingRows.Count(c => Matches(c, AwaitingReceptionFilter.Urgent)));
+        _chipLongDelay.Text = T("Sample.FilterLongDelay", _awaitingRows.Count(c => Matches(c, AwaitingReceptionFilter.LongDelay)));
         _awaitingCount.Text = _awaitingRows.Count == 1
             ? T("Collection.OneTube")
             : T("Collection.ManyTubes", _awaitingRows.Count);

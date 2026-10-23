@@ -231,8 +231,7 @@ public sealed class PurchaseOrderView : LocalizedView
         _ => StockPill.Waiting
     };
 
-    private static bool IsPendingPriority(PurchaseOrderRow row) =>
-        row.IsPriority && row.Status is not (PurchaseOrderStatus.Received or PurchaseOrderStatus.Cancelled);
+    private static bool IsPendingPriority(PurchaseOrderRow row) => PurchaseOrderRules.IsPendingPriority(row);
 
     protected override void ApplyTexts()
     {

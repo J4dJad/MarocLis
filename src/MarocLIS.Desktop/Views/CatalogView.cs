@@ -660,7 +660,7 @@ public sealed partial class CatalogView : LocalizedView
     /// An analysis somebody has to come back to: one that cannot be ordered (no tariff, no active
     /// parameter) or has age bands whose unit is still to confirm — the warnings of the list.
     /// </summary>
-    private static bool NeedsAttention(AnalysisRow row) => !row.IsOrderable || row.UnconfirmedAgeBandCount > 0;
+    private static bool NeedsAttention(AnalysisRow row) => CatalogRules.NeedsAttention(row);
 
     /// <summary>The two chips above the list, with the number of analyses each one shows.</summary>
     private void RefreshChips()
