@@ -1,7 +1,6 @@
 using FluentAssertions;
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Licensing;
-using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Licensing;
 using Xunit;
 using static MarocLIS.Tests.Licensing.LicenceTestKit;

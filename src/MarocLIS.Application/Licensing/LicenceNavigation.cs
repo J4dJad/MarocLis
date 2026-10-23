@@ -1,12 +1,13 @@
 using MarocLIS.Domain.Licensing;
 
-namespace MarocLIS.Desktop.Infrastructure;
+namespace MarocLIS.Application.Licensing;
 
 /// <summary>
 /// What the licence changes in the shell: which menu entries a module holds, and which banner the
-/// state of the licence calls for. Kept apart from the forms so the rules can be tested.
+/// state of the licence calls for. Kept apart from the forms so the rules can be tested, and in the
+/// application layer so every client opens and closes the same entries.
 /// </summary>
-internal static class LicenceNavigation
+public static class LicenceNavigation
 {
     /// <summary>
     /// The menu entries of the optional modules, by the key of the entry. An entry not listed is
@@ -135,7 +136,7 @@ internal static class LicenceNavigation
         };
 }
 
-internal enum LicenceBannerLevel
+public enum LicenceBannerLevel
 {
     Normal,
     Warning,
@@ -146,5 +147,5 @@ internal enum LicenceBannerLevel
 /// A banner's level, its resource and the arguments it is formatted with; a read-only banner also
 /// names its cause, which the shell writes in as the last argument.
 /// </summary>
-internal sealed record LicenceBanner(LicenceBannerLevel Level, string ResourceKey, object?[] Arguments,
+public sealed record LicenceBanner(LicenceBannerLevel Level, string ResourceKey, object?[] Arguments,
                                      string? CauseKey = null);
