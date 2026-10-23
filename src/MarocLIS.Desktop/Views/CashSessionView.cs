@@ -1,5 +1,6 @@
 using MarocLIS.Application.Billing;
 using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Localization;
@@ -57,10 +58,10 @@ public sealed class CashSessionView : LocalizedView
     private CashSessionSummary? _summary;
 
     /// <summary>
-    /// Variance the laboratory tolerates without an explanation, in dirham. Matches the domain's
-    /// default so the screen and the rule agree; the domain is the one that enforces it.
+    /// Variance the laboratory tolerates without an explanation, in dirham: the domain's, so the
+    /// screen and the rule agree; the domain is the one that enforces it.
     /// </summary>
-    private const decimal ToleranceMad = 10m;
+    private const decimal ToleranceMad = CashSession.VarianceToleranceMad;
 
     public CashSessionView(BillingService billing, IUserDialogs dialogs,
                            ILocalizer localizer, ICultureManager cultureManager,
@@ -362,7 +363,7 @@ public sealed class CashSessionView : LocalizedView
         _variance.Text = (variance > 0m ? "+" : string.Empty) +
                          Money.Of(variance).Format(Localizer.CurrentLanguage);
 
-        var beyondTolerance = Math.Abs(variance) > ToleranceMad;
+        var beyondTolerance = CashSession.RequiresExplanation(variance);
 
         _variance.ForeColor = variance == 0m
             ? UiTheme.Normal
@@ -489,7 +490,7 @@ public sealed class CashSessionView : LocalizedView
         var variance = Money.Round(counted - _summary.ExpectedClosingCash);
         var explanation = _explanation.Text.Trim();
 
-        if (Math.Abs(variance) > ToleranceMad && explanation.Length == 0)
+        if (CashSession.RequiresExplanation(variance) && explanation.Length == 0)
         {
             _dialogs.Warn(
                 Localizer.Format("CashSession_VarianceExplanationRequired", variance),

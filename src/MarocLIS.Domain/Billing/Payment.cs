@@ -310,12 +310,22 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
         if (at is { } when) _withdrawals.Add(new CashWithdrawal(Id, amount, when, reason));
     }
 
+    /// <summary>Variance the laboratory tolerates without an explanation, in dirham.</summary>
+    public const decimal VarianceToleranceMad = 10m;
+
+    /// <summary>
+    /// Whether a till count <paramref name="variance"/> away from what was expected needs an
+    /// explanation before the session can close: beyond the tolerance either way.
+    /// </summary>
+    public static bool RequiresExplanation(decimal variance, decimal toleranceMad = VarianceToleranceMad) =>
+        Math.Abs(variance) > toleranceMad;
+
     /// <summary>
     /// Closes the shift. A variance beyond the tolerance must be explained before the session can
     /// close, so an unexplained shortfall cannot simply be clicked away.
     /// </summary>
     public Result Close(DateTimeOffset at, Guid byUserId, decimal countedCash,
-                        string? explanation, decimal toleranceMad = 10m)
+                        string? explanation, decimal toleranceMad = VarianceToleranceMad)
     {
         if (Status != CashSessionStatus.Open)
             return Result.Failure(Error.Conflict("CashSession_NotOpen"));
@@ -331,7 +341,7 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
 
         // Checked before anything is set: a refused closing left the count on the open session,
         // and the next save on the screen wrote it there.
-        if (Math.Abs(variance) > toleranceMad && string.IsNullOrWhiteSpace(explanation))
+        if (RequiresExplanation(variance, toleranceMad) && string.IsNullOrWhiteSpace(explanation))
             return Result.Failure(Error.Validation("CashSession_VarianceExplanationRequired", variance));
 
         CountedCash = counted;
