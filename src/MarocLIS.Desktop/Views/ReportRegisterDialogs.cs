@@ -73,7 +73,7 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
         // The prescriber's stated preference is offered as the default channel: it is what the
         // laboratory agreed to, and re-deciding it at the counter is how a prescriber ends up
         // telephoning to ask where the report went.
-        _channel = Choice("Report.Channel", 20, 40, 260, DefaultChannel(row.PrescriberPreference),
+        _channel = Choice("Report.Channel", 20, 40, 260, ReportRegisterRules.DefaultChannel(row.PrescriberPreference),
                           "DeliveryChannel");
 
         _recipientKind = Choice("Report.RecipientKind", 300, 40, 280,
@@ -120,18 +120,6 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
         // on the wrong side.
         RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
-
-    /// <summary>Maps the prescriber's preference onto the channel that carries it.</summary>
-    private static DeliveryChannel DefaultChannel(ReportDeliveryPreference preference) =>
-        preference switch
-        {
-            ReportDeliveryPreference.Email => DeliveryChannel.Email,
-            ReportDeliveryPreference.Fax => DeliveryChannel.Fax,
-            ReportDeliveryPreference.SmsLink => DeliveryChannel.SmsLink,
-            ReportDeliveryPreference.Courier => DeliveryChannel.Courier,
-            ReportDeliveryPreference.ElectronicInterface => DeliveryChannel.ElectronicInterface,
-            _ => DeliveryChannel.PrintedAtCounter
-        };
 
     private void RefreshForKind()
     {

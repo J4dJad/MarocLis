@@ -1,6 +1,7 @@
-using MarocLIS.Application.Reports;
+using MarocLIS.Domain.Orders;
+using MarocLIS.Domain.Reports;
 
-namespace MarocLIS.Desktop.Views;
+namespace MarocLIS.Application.Reports;
 
 /// <summary>The tabs of the « Comptes rendus » screen.</summary>
 public enum ReportTab
@@ -16,8 +17,9 @@ public enum ReportTab
 }
 
 /// <summary>
-/// The rules of the « Comptes rendus » screen that need no window, kept free of WinForms so the test
-/// project can compile them in.
+/// The rules of the « Comptes rendus » screen that need no window. They live in the application
+/// layer so every screen that lists the register — the workstation today, the web client next —
+/// applies the same ones.
 /// </summary>
 public static class ReportRegisterRules
 {
@@ -53,4 +55,16 @@ public static class ReportRegisterRules
     /// </summary>
     public static (bool Final, int NextVersion) NextRelease(PendingReportRow row) =>
         (row.AwaitingAnalyses == 0, row.ReleasedVersions + 1);
+
+    /// <summary>Maps the prescriber's preference onto the channel that carries it.</summary>
+    public static DeliveryChannel DefaultChannel(ReportDeliveryPreference preference) =>
+        preference switch
+        {
+            ReportDeliveryPreference.Email => DeliveryChannel.Email,
+            ReportDeliveryPreference.Fax => DeliveryChannel.Fax,
+            ReportDeliveryPreference.SmsLink => DeliveryChannel.SmsLink,
+            ReportDeliveryPreference.Courier => DeliveryChannel.Courier,
+            ReportDeliveryPreference.ElectronicInterface => DeliveryChannel.ElectronicInterface,
+            _ => DeliveryChannel.PrintedAtCounter
+        };
 }

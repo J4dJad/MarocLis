@@ -60,8 +60,6 @@
     <!-- The rules of the "Nouvelle demande" screen: Enter's match, the repeat reminder, initials. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\OrderRegistrationRules.cs" Link="Desktop\OrderRegistrationRules.cs" />
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\PatientListRules.cs" Link="Desktop\PatientListRules.cs" />
-    <!-- The rules of the "Comptes rendus" screen: tabs (those of "Validation biologique" are in Application). -->
-    <Compile Include="..\..\src\MarocLIS.Desktop\Views\ReportRegisterRules.cs" Link="Desktop\ReportRegisterRules.cs" />
     <!-- The progress line of the "Consultation d'un dossier" screen. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\OrderFileProgress.cs" Link="Desktop\OrderFileProgress.cs" />
     <!-- The take-over profiles kept on the workstation (« Reprise de données »). -->

@@ -1,7 +1,6 @@
 using FluentAssertions;
 using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
-using MarocLIS.Desktop.Views;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Orders;
@@ -237,4 +236,15 @@ public sealed class ValidationScreensTests
         ReportRegisterRules.NextRelease(Pending(0, 0)).Should().Be((true, 1));
         ReportRegisterRules.NextRelease(Pending(3, 1)).Should().Be((false, 2));
     }
+
+    [Theory]
+    [InlineData(ReportDeliveryPreference.Email, DeliveryChannel.Email)]
+    [InlineData(ReportDeliveryPreference.Fax, DeliveryChannel.Fax)]
+    [InlineData(ReportDeliveryPreference.SmsLink, DeliveryChannel.SmsLink)]
+    [InlineData(ReportDeliveryPreference.Courier, DeliveryChannel.Courier)]
+    [InlineData(ReportDeliveryPreference.ElectronicInterface, DeliveryChannel.ElectronicInterface)]
+    [InlineData(ReportDeliveryPreference.PatientCollects, DeliveryChannel.PrintedAtCounter)]
+    public void Delivery_IsOfferedOnThePrescribersPreferredChannel(ReportDeliveryPreference preference,
+                                                                   DeliveryChannel channel) =>
+        ReportRegisterRules.DefaultChannel(preference).Should().Be(channel);
 }
