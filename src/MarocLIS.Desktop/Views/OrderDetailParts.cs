@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using MarocLIS.Application.Orders;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Samples;
@@ -14,30 +15,21 @@ internal static class FilePaint
 {
     public static readonly (Color Back, Color Fore) Ok = (UiTheme.NormalBackground, UiTheme.Normal);
 
-    /// <summary>A file's state: waiting in grey, under way in blue, released in green, cancelled in red.</summary>
-    public static (Color Back, Color Fore) ForOrder(LabOrderStatus status) => status switch
-    {
-        LabOrderStatus.Draft or LabOrderStatus.Registered or LabOrderStatus.AwaitingCollection => EntryPaint.Waiting,
-        LabOrderStatus.Validated or LabOrderStatus.Reported => Ok,
-        LabOrderStatus.Cancelled => EntryPaint.Critical,
-        _ => EntryPaint.Info
-    };
+    /// <summary>A file's state, in the colours of its tone (<see cref="OrderFileTones.ForOrder"/>).</summary>
+    public static (Color Back, Color Fore) ForOrder(LabOrderStatus status) => Colours(OrderFileTones.ForOrder(status));
 
     /// <summary>An analysis's state, on the same scale.</summary>
-    public static (Color Back, Color Fore) ForItem(LabOrderItemStatus status) => status switch
-    {
-        LabOrderItemStatus.Pending => EntryPaint.Waiting,
-        LabOrderItemStatus.Validated or LabOrderItemStatus.Reported => Ok,
-        LabOrderItemStatus.Cancelled => EntryPaint.Critical,
-        _ => EntryPaint.Info
-    };
+    public static (Color Back, Color Fore) ForItem(LabOrderItemStatus status) => Colours(OrderFileTones.ForItem(status));
 
-    /// <summary>A tube's state: to draw in amber, refused or discarded in red, the rest under way.</summary>
-    public static (Color Back, Color Fore) ForSample(SampleStatus status) => status switch
+    /// <summary>A tube's state (<see cref="OrderFileTones.ForSample"/>).</summary>
+    public static (Color Back, Color Fore) ForSample(SampleStatus status) => Colours(OrderFileTones.ForSample(status));
+
+    private static (Color Back, Color Fore) Colours(OrderStatusTone tone) => tone switch
     {
-        SampleStatus.AwaitingCollection => EntryPaint.Warning,
-        SampleStatus.Rejected or SampleStatus.Discarded => EntryPaint.Critical,
-        SampleStatus.Stored => Ok,
+        OrderStatusTone.Ok => Ok,
+        OrderStatusTone.Waiting => EntryPaint.Waiting,
+        OrderStatusTone.Warning => EntryPaint.Warning,
+        OrderStatusTone.Critical => EntryPaint.Critical,
         _ => EntryPaint.Info
     };
 }

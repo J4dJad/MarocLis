@@ -1,6 +1,5 @@
 using FluentAssertions;
 using MarocLIS.Application.Orders;
-using MarocLIS.Desktop.Views;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
@@ -105,4 +104,37 @@ public sealed class OrderFileScreenTests
         steps.Should().NotContain(s => s.State == FileStageState.Current);
         steps[0].State.Should().Be(FileStageState.Done);
     }
+
+    [Theory]
+    [InlineData(LabOrderStatus.Draft, OrderStatusTone.Waiting)]
+    [InlineData(LabOrderStatus.Registered, OrderStatusTone.Waiting)]
+    [InlineData(LabOrderStatus.AwaitingCollection, OrderStatusTone.Waiting)]
+    [InlineData(LabOrderStatus.PartiallyCollected, OrderStatusTone.Info)]
+    [InlineData(LabOrderStatus.InProgress, OrderStatusTone.Info)]
+    [InlineData(LabOrderStatus.PartiallyValidated, OrderStatusTone.Info)]
+    [InlineData(LabOrderStatus.Validated, OrderStatusTone.Ok)]
+    [InlineData(LabOrderStatus.Reported, OrderStatusTone.Ok)]
+    [InlineData(LabOrderStatus.Cancelled, OrderStatusTone.Critical)]
+    public void FileTone_WaitingGrey_UnderWayBlue_ReleasedGreen_CancelledRed(LabOrderStatus status, OrderStatusTone tone) =>
+        OrderFileTones.ForOrder(status).Should().Be(tone);
+
+    [Theory]
+    [InlineData(LabOrderItemStatus.Pending, OrderStatusTone.Waiting)]
+    [InlineData(LabOrderItemStatus.Received, OrderStatusTone.Info)]
+    [InlineData(LabOrderItemStatus.TechnicallyValidated, OrderStatusTone.Info)]
+    [InlineData(LabOrderItemStatus.Validated, OrderStatusTone.Ok)]
+    [InlineData(LabOrderItemStatus.Reported, OrderStatusTone.Ok)]
+    [InlineData(LabOrderItemStatus.Cancelled, OrderStatusTone.Critical)]
+    public void AnalysisTone_IsOnTheSameScale(LabOrderItemStatus status, OrderStatusTone tone) =>
+        OrderFileTones.ForItem(status).Should().Be(tone);
+
+    [Theory]
+    [InlineData(SampleStatus.AwaitingCollection, OrderStatusTone.Warning)]
+    [InlineData(SampleStatus.Collected, OrderStatusTone.Info)]
+    [InlineData(SampleStatus.Received, OrderStatusTone.Info)]
+    [InlineData(SampleStatus.Stored, OrderStatusTone.Ok)]
+    [InlineData(SampleStatus.Rejected, OrderStatusTone.Critical)]
+    [InlineData(SampleStatus.Discarded, OrderStatusTone.Critical)]
+    public void TubeTone_ToDrawAmber_RefusedRed(SampleStatus status, OrderStatusTone tone) =>
+        OrderFileTones.ForSample(status).Should().Be(tone);
 }
