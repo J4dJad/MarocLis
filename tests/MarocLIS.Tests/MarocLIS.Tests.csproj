@@ -38,6 +38,8 @@
     <ProjectReference Include="..\..\src\MarocLIS.Api.Contracts\MarocLIS.Api.Contracts.csproj" />
     <!-- The phone's application: its components rendered by bUnit, its rules called directly. -->
     <ProjectReference Include="..\..\src\MarocLIS.Mobile\MarocLIS.Mobile.csproj" />
+    <!-- The web interface: its rules called directly, its pages rendered by bUnit, its pipeline started in memory. -->
+    <ProjectReference Include="..\..\src\MarocLIS.Web\MarocLIS.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

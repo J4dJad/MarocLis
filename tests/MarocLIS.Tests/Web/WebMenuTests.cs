@@ -1,0 +1,125 @@
+using FluentAssertions;
+using MarocLIS.Application.Navigation;
+using MarocLIS.Desktop.Infrastructure;
+using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Licensing;
+using MarocLIS.Web.Navigation;
+using Xunit;
+using static MarocLIS.Tests.Licensing.LicenceTestKit;
+
+namespace MarocLIS.Tests.Web;
+
+/// <summary>
+/// The web interface's menu and the screens its addresses open: the Windows shell's menu, cut by
+/// the same rights and licence modules, and a typed address refused exactly where the menu hides.
+/// </summary>
+public sealed class WebMenuTests
+{
+    private static LicenceStatus WithModules(params string[] modules) => FullStatus() with
+    {
+        Modules = new HashSet<string>(modules, StringComparer.Ordinal)
+    };
+
+    private static IEnumerable<string> Keys(IReadOnlyList<WebMenuGroup> groups) =>
+        groups.SelectMany(g => g.Items).Select(i => i.Entry.Key);
+
+    [Fact]
+    public void TheMenu_ShowsOnlyTheScreensOfTheUsersRights()
+    {
+        var biller = new User(permissions: Permissions.Billing.View);
+
+        var keys = Keys(WebMenu.Build(biller, FullStatus())).ToList();
+
+        // « billing » by its right; the dashboard, statistics and the like have no right of their own.
+        keys.Should().Contain("billing");
+        keys.Should().NotContain(["users", "validation", "cash", "interfaces", "settings"]);
+        keys.Should().Equal(NavigationMenu.Entries
+            .Where(e => !e.IsGroupHeader && NavigationMenu.IsPermitted(e, biller, FullStatus()))
+            .Select(e => e.Key), "the web menu is the shell's rule, not one of its own");
+    }
+
+    [Fact]
+    public void AnAdministrator_SeesEveryScreen_AndAGroupWithNothingToOpenIsLeftOut()
+    {
+        var everything = new User(permissions: [.. Permissions.All]);
+        var all = WebMenu.Build(everything, FullStatus());
+
+        Keys(all).Should().Equal(NavigationMenu.Entries.Where(e => !e.IsGroupHeader).Select(e => e.Key));
+        all.Should().OnlyContain(g => g.Items.Count > 0);
+
+        var biller = WebMenu.Build(new User(permissions: Permissions.Billing.View), FullStatus());
+        biller.Select(g => g.Header?.Key).Should().Contain("group.billing").And.NotContain("group.quality");
+    }
+
+    [Fact]
+    public void AScreenOfAModuleOutsideTheLicence_IsNotInTheMenu()
+    {
+        var everything = new User(permissions: [.. Permissions.All]);
+        var withoutQuality = LicenceModules.All.Where(m => m != LicenceModules.Quality).ToArray();
+
+        var keys = Keys(WebMenu.Build(everything, WithModules(withoutQuality))).ToList();
+
+        keys.Should().NotContain(["qc", "nonconformities", "eqa", "documents"]);
+        keys.Should().Contain(["billing", "users"]);
+    }
+
+    [Fact]
+    public void EveryScreen_LinksToItsPlaceholder_WithTheShellsIcon()
+    {
+        var items = WebMenu.Build(new User(permissions: [.. Permissions.All]), FullStatus()).SelectMany(g => g.Items).ToList();
+
+        items.Should().OnlyContain(i => i.Href == "ecran/" + i.Entry.Key);
+        items.Single(i => i.Entry.Key == "billing").Icon.Should().Be(IconCatalog.Navigation["billing"]);
+        items.Where(i => IconCatalog.Navigation.ContainsKey(i.Entry.Key)).Should().OnlyContain(i => i.Icon != null);
+    }
+
+    [Theory]
+    [InlineData("billing", ScreenDecision.Open)]
+    [InlineData("users", ScreenDecision.NoPermission)]
+    [InlineData("qc", ScreenDecision.NotLicensed)]
+    [InlineData("group.billing", ScreenDecision.NotFound)]
+    [InlineData("nothing-here", ScreenDecision.NotFound)]
+    [InlineData("", ScreenDecision.NotFound)]
+    public void ATypedAddress_OpensWhatTheMenuShows_AndNothingElse(string key, ScreenDecision expected)
+    {
+        var user = new User(permissions: [Permissions.Billing.View, Permissions.Quality.EnterQc]);
+        var licence = WithModules([.. LicenceModules.All.Where(m => m != LicenceModules.Quality)]);
+
+        ScreenAccess.Decide(key, user, licence).Decision.Should().Be(expected);
+    }
+
+    [Fact]
+    public void ATypedAddress_IsDecidedForEveryScreen_AsTheMenuIs()
+    {
+        var user = new User(permissions: [Permissions.Billing.View, Permissions.Results.Enter, Permissions.Quality.EnterQc]);
+        var licence = WithModules(LicenceModules.Instruments, LicenceModules.Web);
+        var shown = Keys(WebMenu.Build(user, licence)).ToHashSet();
+
+        foreach (var entry in NavigationMenu.Entries.Where(e => !e.IsGroupHeader))
+        {
+            var opens = ScreenAccess.Decide(entry.Key, user, licence).Decision == ScreenDecision.Open;
+            opens.Should().Be(shown.Contains(entry.Key), $"« {entry.Key} » opens exactly when it is in the menu");
+        }
+    }
+
+    [Fact]
+    public void EveryIconOfTheMenu_IsExportedForTheBrowser()
+    {
+        var icons = Path.Combine(RepositoryRoot(), "src", "MarocLIS.Web", "wwwroot", "icons");
+
+        var missing = IconCatalog.Navigation.Values.Distinct()
+            .Concat([Glyph.FlaskConical, Glyph.LogIn, Glyph.LogOut, Glyph.KeyRound, Glyph.Save, Glyph.Cpu, Glyph.Ban])
+            .Where(glyph => !File.Exists(Path.Combine(icons, glyph + ".png")))
+            .ToList();
+
+        missing.Should().BeEmpty("each glyph of the shell's menu and of the web pages has its PNG in wwwroot/icons");
+    }
+
+    internal static string RepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "MarocLIS.sln")))
+            directory = directory.Parent;
+        return directory?.FullName ?? throw new DirectoryNotFoundException("MarocLIS.sln not found above the test binaries.");
+    }
+}
