@@ -1,8 +1,7 @@
 using FluentAssertions;
-using MarocLIS.Desktop.Views;
+using MarocLIS.Application.Patients;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
-using MarocLIS.Infrastructure.Queries;
 using Xunit;
 
 namespace MarocLIS.Tests.Desktop;

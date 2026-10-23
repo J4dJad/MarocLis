@@ -33,23 +33,6 @@ public sealed record PatientSearchRow(
     public bool IsAnonymized { get; init; }
 }
 
-/// <summary>
-/// The parts of an identity a file can still be missing. A file opened in an emergency, or typed
-/// from a phone call, is completed later; the patient list shows which ones are still waiting.
-/// </summary>
-[Flags]
-public enum PatientIdentityGap
-{
-    None = 0,
-
-    /// <summary>Opened as "X-URG" before the patient could be identified.</summary>
-    Provisional = 1,
-
-    Gender = 2,
-
-    DateOfBirth = 4
-}
-
 /// <summary>Which files the patient list shows, besides the search term.</summary>
 public enum PatientListScope
 {

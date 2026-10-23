@@ -1,8 +1,7 @@
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
-using MarocLIS.Infrastructure.Queries;
 
-namespace MarocLIS.Desktop.Views;
+namespace MarocLIS.Application.Patients;
 
 /// <summary>The colour family of a pill on the patient screen.</summary>
 public enum PatientListTone
@@ -16,8 +15,8 @@ public enum PatientListTone
 }
 
 /// <summary>
-/// The rules of the patient screen that need no window, kept free of WinForms so the test project
-/// can compile them in.
+/// The rules of the patient screen that need no window. They live in the application layer so the
+/// workstation and the web client search, describe and colour a patient file the same way.
 /// </summary>
 public static class PatientListRules
 {

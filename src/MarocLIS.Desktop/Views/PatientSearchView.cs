@@ -1,6 +1,7 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Orders;
+using MarocLIS.Application.Patients;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Identity;

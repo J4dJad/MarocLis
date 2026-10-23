@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using MarocLIS.Application.Patients;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Infrastructure.Queries;
 
