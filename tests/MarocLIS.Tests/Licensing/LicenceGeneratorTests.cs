@@ -40,6 +40,20 @@ public sealed class LicenceGeneratorTests : IDisposable
     }
 
     [Fact]
+    public void EveryModule_HasTheFrenchNameOfMarocLisCatalogue_InTheGenerator()
+    {
+        // The generator lists LicenceModules.All: a module added to the core reaches its form with
+        // the name MarocLIS's licence tab gives it, « Version Web » among them.
+        var localizer = new MarocLIS.Localization.JsonLocalizer(new MarocLIS.Localization.LocalizationOptions());
+
+        foreach (var module in LicenceModules.All)
+            GeneratorTexts.Module(module).Should().Be(
+                localizer.Get(LicenceModules.NameKey(module), MarocLIS.Domain.Common.AppLanguage.French), module);
+
+        GeneratorTexts.Module(LicenceModules.Web).Should().Be("Version Web");
+    }
+
+    [Fact]
     public void ThePublicKeyFile_IsWhatMarocLisEmbeds_AndVerifiesTheGeneratorsLicences()
     {
         var vault = new KeyVault(_folder);

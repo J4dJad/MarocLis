@@ -71,6 +71,9 @@ public static class LicenceGuards
     public static Result RequireMobileValidation(this ILicenceState? licence) =>
         licence?.Current.RequireMobileValidation() ?? Result.Success();
 
+    public static Result RequireWebAccess(this ILicenceState? licence) =>
+        licence?.Current.RequireWebAccess() ?? Result.Success();
+
     /// <summary>Configuring a module: the module licensed, and the settings open to changes.</summary>
     public static Result RequireConfiguration(this ILicenceState? licence, string module)
     {

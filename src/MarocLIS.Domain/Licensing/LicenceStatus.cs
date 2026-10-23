@@ -153,6 +153,29 @@ public sealed record LicenceStatus
         return IsReadOnly ? Result.Failure(Error.Forbidden("Licence_ReadOnlyInstruments")) : Result.Success();
     }
 
+    /// <summary>
+    /// Opening the web interface: a licence evaluated, imported, and holding the « Version Web »
+    /// module. Unlike the phone, the read-only mode does not close it: in a browser as on a Windows
+    /// workstation, a laboratory whose licence lapsed keeps consulting and reprinting its results,
+    /// and the services refuse the rest as they do at the workstation.
+    /// <para>
+    /// No licence at all is said apart from a missing module: the web interface has no import
+    /// screen, and the administrator is sent to the Windows application on the server for it.
+    /// </para>
+    /// </summary>
+    public Result RequireWebAccess()
+    {
+        if (State == LicenceState.Pending) return Result.Failure(Error.Forbidden("Licence_WebPending"));
+        if (State == LicenceState.Missing) return Result.Failure(Error.Forbidden("Licence_WebNoLicence"));
+
+        // An altered or unreadable licence has no terms, so no module to read: its cause is what
+        // the administrator needs, not the name of a module it may well hold.
+        if (State == LicenceState.Invalid && Terms is null)
+            return Result.Failure(Error.Forbidden("Licence_WebInvalid"));
+
+        return RequireModule(LicenceModules.Web);
+    }
+
     /// <summary>Validation from the phone: the module, and never in read-only mode (bench clearing included).</summary>
     public Result RequireMobileValidation()
     {

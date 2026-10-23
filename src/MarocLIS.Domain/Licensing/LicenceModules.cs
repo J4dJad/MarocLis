@@ -19,7 +19,8 @@ public enum LicenceModule
     Relations,
     Finance,
     Pilotage,
-    MultiSites
+    MultiSites,
+    VersionWeb
 }
 
 /// <summary>
@@ -44,6 +45,12 @@ public static class LicenceModules
 
     /// <summary>The biologist's phone application: validation, critical values, report release.</summary>
     public const string MobileValidation = nameof(LicenceModule.ValidationMobile);
+
+    /// <summary>
+    /// The web interface: MarocLIS in a browser of the laboratory's local network, served by the
+    /// laboratory's server. Each web session takes a workstation's place like a Windows workstation.
+    /// </summary>
+    public const string Web = nameof(LicenceModule.VersionWeb);
 
     /// <summary>The Arabic interface and Arabic reports.</summary>
     public const string Arabic = nameof(LicenceModule.Arabe);
@@ -81,7 +88,7 @@ public static class LicenceModules
     /// <summary>Every module, in the order the licence tab and the generator list them.</summary>
     public static IReadOnlyList<string> All { get; } =
     [
-        Instruments, MobileValidation, Arabic, ThirdPartyPayer, Quality,
+        Instruments, MobileValidation, Web, Arabic, ThirdPartyPayer, Quality,
         StockAndPurchasing, Equipment, HumanResources, Payroll, Relations, Finance, Steering,
         MultiSite
     ];
@@ -113,9 +120,10 @@ public static class LicencePacks
         LicenceModules.ThirdPartyPayer, LicenceModules.Quality
     ]);
 
-    // Multi-site is an option of every pack, not part of the complete one.
+    // Multi-site is an option of every pack, not part of the complete one; so is the web interface,
+    // sold on its own to the laboratories that ask for it.
     public static Pack Complete { get; } = new("Complet", 10,
-        [.. LicenceModules.All.Where(m => m != LicenceModules.MultiSite)]);
+        [.. LicenceModules.All.Where(m => m is not (LicenceModules.MultiSite or LicenceModules.Web))]);
 
     public static IReadOnlyList<Pack> Defaults { get; } = [Essential, Professional, Complete];
 }

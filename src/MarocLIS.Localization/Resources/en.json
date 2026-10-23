@@ -5136,6 +5136,9 @@
   "Licence_ReadOnlyInstruments": "MarocLIS is read-only: analyser results are kept in the log and not imported.",
   "Licence_InstrumentsNotLicensed": "The « Analyser connection » module is not included in the licence: frames are kept and not imported.",
   "Licence_ReadOnlyMobile": "Phone validation is not available while MarocLIS is read-only.",
+  "Licence_WebPending": "The licence could not be checked on this server yet. Try again in a minute; if the message stays, check that the database answers.",
+  "Licence_WebNoLicence": "No licence is installed on this server. Import the licence from the MarocLIS Windows application, on the server, then reload this page.",
+  "Licence_WebInvalid": "The licence installed is not valid on this server. Open the MarocLIS Windows application, on the server, to see why and import a valid licence.",
   "LicenceModule": {
     "Instruments": "Analyser connection",
     "ValidationMobile": "Mobile validation",
@@ -5149,7 +5152,8 @@
     "Relations": "Relations and messaging",
     "Finance": "Finance and accounting",
     "Pilotage": "Steering",
-    "MultiSites": "Multi-site"
+    "MultiSites": "Multi-site",
+    "VersionWeb": "Web version"
   },
   "LicenceKind": {
     "Trial": "Trial",

@@ -44,12 +44,45 @@ public sealed class LicenceGatesTests
     [Fact]
     public void EveryOptionalModule_HoldsAMenuEntry_ExceptThoseGatedElsewhere()
     {
-        // Mobile validation (the API), Arabic (the languages) and multi-site (site creation) have no
-        // screen of their own in the workstation's menu.
+        // Mobile validation (the API), the web interface (MarocLIS.Web as a whole), Arabic (the
+        // languages) and multi-site (site creation) have no screen of their own in the menu.
         var inMenu = LicenceNavigation.ModuleOfEntry.Values.Distinct().ToHashSet();
 
         LicenceModules.All.Except(inMenu).Should().BeEquivalentTo(
-            [LicenceModules.MobileValidation, LicenceModules.Arabic, LicenceModules.MultiSite]);
+            [LicenceModules.MobileValidation, LicenceModules.Web, LicenceModules.Arabic, LicenceModules.MultiSite]);
+    }
+
+    [Fact]
+    public void TheWebModule_IsKnown_NamedInTheFile_AndInNoPackByDefault()
+    {
+        LicenceModules.Web.Should().Be("VersionWeb", "the identifier is part of the signed text");
+        LicenceModules.IsKnown(LicenceModules.Web).Should().BeTrue();
+        LicenceModules.AsEnum(LicenceModules.Web).Should().Be(LicenceModule.VersionWeb);
+        LicencePacks.Defaults.Should().OnlyContain(p => !p.Modules.Contains(LicenceModules.Web),
+            "the web interface is sold on its own");
+    }
+
+    [Fact]
+    public void TheWebInterface_NeedsALicence_AndItsModule_ButStaysOpenReadOnly()
+    {
+        LicenceStatus.Pending.RequireWebAccess().FirstError.ResourceKey.Should().Be("Licence_WebPending");
+        new LicenceStatus { State = LicenceState.Missing, Mode = LicenceMode.ReadOnly, HasData = true }
+            .RequireWebAccess().FirstError.ResourceKey.Should().Be("Licence_WebNoLicence",
+                "the web has no import screen: the licence is imported from the Windows application");
+        new LicenceStatus { State = LicenceState.Invalid, Mode = LicenceMode.ReadOnly }
+            .RequireWebAccess().FirstError.ResourceKey.Should().Be("Licence_WebInvalid");
+
+        var refused = WithModules(LicenceModules.MobileValidation).RequireWebAccess();
+        refused.FirstError.ResourceKey.Should().Be("Licence_ModuleMissing");
+        refused.FirstError.Args.Should().Equal(LicenceModule.VersionWeb);
+
+        WithModules(LicenceModules.Web).RequireWebAccess().IsSuccess.Should().BeTrue();
+        ReadOnlyStatus().RequireWebAccess().IsSuccess.Should().BeTrue(
+            "read-only, results stay readable in a browser as at a workstation");
+
+        ILicenceState? none = null;
+        none.RequireWebAccess().IsSuccess.Should().BeTrue();
+        new FixedLicenceState(WithModules()).RequireWebAccess().IsFailure.Should().BeTrue();
     }
 
     [Fact]

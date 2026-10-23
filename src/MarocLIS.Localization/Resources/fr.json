@@ -5137,6 +5137,9 @@
   "Licence_ReadOnlyInstruments": "MarocLIS est en lecture seule : les résultats des automates sont conservés dans le journal et ne sont pas importés.",
   "Licence_InstrumentsNotLicensed": "Le module « Connexion automates » n'est pas inclus dans la licence : les trames sont conservées et ne sont pas importées.",
   "Licence_ReadOnlyMobile": "La validation sur téléphone n'est pas possible tant que MarocLIS est en lecture seule.",
+  "Licence_WebPending": "La licence n'a pas encore pu être vérifiée sur ce serveur. Réessayez dans une minute ; si le message reste, vérifiez que la base de données répond.",
+  "Licence_WebNoLicence": "Aucune licence n'est installée sur ce serveur. Importez la licence depuis l'application Windows MarocLIS, sur le serveur, puis rechargez cette page.",
+  "Licence_WebInvalid": "La licence installée n'est pas valide sur ce serveur. Ouvrez l'application Windows MarocLIS, sur le serveur, pour en voir la cause et importer une licence valide.",
   "LicenceModule": {
     "Instruments": "Connexion automates",
     "ValidationMobile": "Validation mobile",
@@ -5150,7 +5153,8 @@
     "Relations": "Relations et messagerie",
     "Finance": "Finance et comptabilité",
     "Pilotage": "Pilotage",
-    "MultiSites": "Multi-sites"
+    "MultiSites": "Multi-sites",
+    "VersionWeb": "Version Web"
   },
   "LicenceKind": {
     "Trial": "Essai",

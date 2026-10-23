@@ -21,6 +21,7 @@ public static class GeneratorTexts
     {
         LicenceModules.Instruments => "Connexion automates",
         LicenceModules.MobileValidation => "Validation mobile",
+        LicenceModules.Web => "Version Web",
         LicenceModules.Arabic => "Langue arabe",
         LicenceModules.ThirdPartyPayer => "Tiers payant",
         LicenceModules.Quality => "Qualité",
