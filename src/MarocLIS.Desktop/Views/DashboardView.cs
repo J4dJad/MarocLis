@@ -1,6 +1,7 @@
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Navigation;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -97,67 +98,29 @@ public sealed class DashboardView : LocalizedView
 
     // ---- Where each figure leads ----------------------------------------------------------------
 
-    /// <summary>A screen a figure opens, with the rights its menu entry asks for.</summary>
-    private sealed record Target(string[] AnyOf, Func<INavigationService, Task> Open);
-
-    // The same screens and the same rights as the shell's menu entries of the same key: a figure
-    // offers its screen only to whom the menu offers it.
-    private static readonly Dictionary<string, Target> Targets = new(StringComparer.Ordinal)
+    // The screen each figure opens. Which figure opens which screen, and for whom, is decided by
+    // DashboardRights (with the rights of the shared menu); this only says how to open it here.
+    private static readonly Dictionary<string, Func<INavigationService, Task>> Targets = new(StringComparer.Ordinal)
     {
-        ["collection"] = new([Permissions.Samples.Collect], n => n.NavigateToAsync<CollectionView>()),
-        ["reception"] = new([Permissions.Samples.Receive], n => n.NavigateToAsync<SampleReceptionView>()),
-        ["recollections"] = new([Permissions.Orders.Edit, Permissions.Samples.Reject],
-                                n => n.NavigateToAsync<RecollectionView>()),
-        ["entry"] = new([Permissions.Results.Enter], n => n.NavigateToAsync<ResultEntryView>()),
-        ["validation"] = new([Permissions.Results.BiologicalValidate], n => n.NavigateToAsync<ValidationView>()),
-        ["reports"] = new([Permissions.Reports.View], n => n.NavigateToAsync<ReportRegisterView>()),
-        ["billing"] = new([Permissions.Billing.View], n => n.NavigateToAsync<BillingView>()),
-        ["qc"] = new([Permissions.Quality.EnterQc, Permissions.Quality.ReviewQc],
-                     n => n.NavigateToAsync<QualityControlView>()),
-        ["nonconformities"] = new([Permissions.Quality.ManageNonConformity, Permissions.Quality.View],
-                                  n => n.NavigateToAsync<NonConformityView>()),
-        ["inventory"] = new([Permissions.Inventory.View], n => n.NavigateToAsync<InventoryView>()),
-        ["supplierinvoices"] = new([Permissions.Inventory.EnterInvoices, Permissions.Inventory.ApprovePayments],
-                                   n => n.NavigateToAsync<SupplierInvoiceView>()),
-        ["temperatures"] = new([Permissions.Inventory.RecordTemperatures, Permissions.Inventory.ManageStorageUnits],
-                               n => n.NavigateToAsync<TemperatureView>()),
-        ["equipment"] = new([Permissions.Equipment.View], n => n.NavigateToAsync<EquipmentView>()),
-        ["catalog"] = new([Permissions.Catalog.View], n => n.NavigateToAsync<CatalogView>())
+        ["collection"] = n => n.NavigateToAsync<CollectionView>(),
+        ["reception"] = n => n.NavigateToAsync<SampleReceptionView>(),
+        ["recollections"] = n => n.NavigateToAsync<RecollectionView>(),
+        ["entry"] = n => n.NavigateToAsync<ResultEntryView>(),
+        ["validation"] = n => n.NavigateToAsync<ValidationView>(),
+        ["reports"] = n => n.NavigateToAsync<ReportRegisterView>(),
+        ["billing"] = n => n.NavigateToAsync<BillingView>(),
+        ["qc"] = n => n.NavigateToAsync<QualityControlView>(),
+        ["nonconformities"] = n => n.NavigateToAsync<NonConformityView>(),
+        ["inventory"] = n => n.NavigateToAsync<InventoryView>(),
+        ["supplierinvoices"] = n => n.NavigateToAsync<SupplierInvoiceView>(),
+        ["temperatures"] = n => n.NavigateToAsync<TemperatureView>(),
+        ["equipment"] = n => n.NavigateToAsync<EquipmentView>(),
+        ["catalog"] = n => n.NavigateToAsync<CatalogView>()
     };
 
-    private static bool CanOpen(string? key) =>
-        key is not null && Targets.TryGetValue(key, out var target) && PermissionGate.Allows(target.AnyOf);
+    private static bool CanOpen(string? key) => DashboardRights.CanOpen(key, PermissionGate.User);
 
-    // The right each figure belongs to. The dashboard is open to everyone signed in, and showing the
-    // cashier the critical results waiting, or the technician the unpaid invoices, is telling them
-    // about work the rest of the application keeps from them.
-    private static readonly Dictionary<string, string> TileRights = new(StringComparer.Ordinal)
-    {
-        ["Dashboard.OrdersToday"] = Permissions.Orders.View,
-        ["Dashboard.OverdueOrders"] = Permissions.Orders.View,
-        ["Dashboard.AwaitingCollection"] = Permissions.Samples.View,
-        ["Dashboard.AwaitingReception"] = Permissions.Samples.View,
-        ["Dashboard.RejectedSamplesToday"] = Permissions.Samples.View,
-        ["Dashboard.AwaitingEntry"] = Permissions.Results.View,
-        ["Dashboard.AwaitingValidation"] = Permissions.Results.View,
-        ["Dashboard.CriticalPending"] = Permissions.Results.View,
-        ["Dashboard.ReportsToRelease"] = Permissions.Reports.View,
-        ["Report.Plural"] = Permissions.Reports.View,
-        ["Dashboard.QcAlerts"] = Permissions.Quality.View,
-        ["Dashboard.OpenNonConformities"] = Permissions.Quality.View,
-        ["Equipment.NextCalibration"] = Permissions.Equipment.View,
-        ["Inventory.ToReorder"] = Permissions.Inventory.View,
-        ["Inventory.ExpiringSoon"] = Permissions.Inventory.View,
-        ["Stock.DashboardExpiringCritical"] = Permissions.Inventory.View,
-        ["Stock.DashboardStockOuts"] = Permissions.Inventory.View,
-        ["Temperatures.DashboardMissing"] = Permissions.Inventory.RecordTemperatures,
-        ["Dashboard.Receivables"] = Permissions.Billing.View,
-        ["SupplierInvoices.DashboardOverdue"] = Permissions.Inventory.EnterInvoices,
-        ["SupplierInvoices.DashboardDueSoon"] = Permissions.Inventory.EnterInvoices
-    };
-
-    private static bool MaySee(DashboardMetric metric) =>
-        !TileRights.TryGetValue(metric.LabelKey, out var right) || PermissionGate.Allows(right);
+    private static bool MaySee(DashboardMetric metric) => DashboardRights.MaySee(metric.LabelKey, PermissionGate.User);
 
     /// <summary>The five steps of a file through the laboratory, in the order it takes them.</summary>
     private static readonly (string MetricKey, string StepKey)[] FlowSteps =
@@ -965,7 +928,7 @@ public sealed class DashboardView : LocalizedView
     /// </summary>
     private async Task OpenAsync(string key)
     {
-        if (!Targets.TryGetValue(key, out var target) || !PermissionGate.Allows(target.AnyOf)) return;
+        if (!CanOpen(key) || !Targets.TryGetValue(key, out var open)) return;
 
         if (FindForm() is { } shell && FindMenuEntry(shell, key) is { CanSelect: true } entry)
         {
@@ -973,7 +936,7 @@ public sealed class DashboardView : LocalizedView
             return;
         }
 
-        await target.Open(_navigation);
+        await open(_navigation);
     }
 
     private Button? FindMenuEntry(Control parent, string key)

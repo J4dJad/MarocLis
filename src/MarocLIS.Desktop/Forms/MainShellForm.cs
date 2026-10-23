@@ -1,5 +1,6 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Licensing;
+using MarocLIS.Application.Navigation;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Desktop.Views;
 using MarocLIS.Domain.Audit;
@@ -359,232 +360,81 @@ public sealed partial class MainShellForm : LocalizedForm
 
     // ---- Navigation -------------------------------------------------------------------------------
 
-    private sealed record NavigationEntry(
-        string Key,
-        string LabelKey,
-        string[] RequiredPermissions,
-        Func<INavigationService, Task> Navigate,
-        bool IsGroupHeader = false);
+    /// <summary>A menu entry of the shared menu (<see cref="NavigationMenu"/>) and how this shell opens its screen.</summary>
+    private sealed record NavigationEntry(MenuEntry Menu, Func<INavigationService, Task> Navigate)
+    {
+        public string Key => Menu.Key;
+        public string LabelKey => Menu.LabelKey;
+        public bool IsGroupHeader => Menu.IsGroupHeader;
+    }
+
+    // The screen each menu entry opens. The entries themselves — their order, labels, rights and
+    // groups — are the shared menu's; a group header opens nothing.
+    private static readonly Dictionary<string, Func<INavigationService, Task>> Screens = new(StringComparer.Ordinal)
+    {
+        ["dashboard"] = n => n.NavigateToAsync<DashboardView>(),
+        ["statistics"] = n => n.NavigateToAsync<StatisticsView>(),
+        ["steering"] = n => n.NavigateToAsync<SteeringView>(),
+        ["patients"] = n => n.NavigateToAsync<PatientSearchView>(),
+        ["orders"] = n => n.NavigateToAsync<OrderRegistrationView>(),
+        ["orderdetail"] = n => n.NavigateToAsync<OrderDetailView>(),
+        ["collection"] = n => n.NavigateToAsync<CollectionView>(),
+        ["reception"] = n => n.NavigateToAsync<SampleReceptionView>(),
+        ["recollections"] = n => n.NavigateToAsync<RecollectionView>(),
+        ["serumbank"] = n => n.NavigateToAsync<SampleStorageView>(),
+        ["subcontracting"] = n => n.NavigateToAsync<SubcontractingView>(),
+        ["entry"] = n => n.NavigateToAsync<ResultEntryView>(),
+        ["validation"] = n => n.NavigateToAsync<ValidationView>(),
+        ["reports"] = n => n.NavigateToAsync<ReportRegisterView>(),
+        ["billing"] = n => n.NavigateToAsync<BillingView>(),
+        ["cash"] = n => n.NavigateToAsync<CashSessionView>(),
+        ["claims"] = n => n.NavigateToAsync<ClaimBatchView>(),
+        ["qc"] = n => n.NavigateToAsync<QualityControlView>(),
+        ["nonconformities"] = n => n.NavigateToAsync<NonConformityView>(),
+        ["eqa"] = n => n.NavigateToAsync<EqaView>(),
+        ["documents"] = n => n.NavigateToAsync<QualityDocumentsView>(),
+        ["inventory"] = n => n.NavigateToAsync<InventoryView>(),
+        ["purchaseorders"] = n => n.NavigateToAsync<PurchaseOrderView>(),
+        ["quotes"] = n => n.NavigateToAsync<QuoteRequestView>(),
+        ["supplierinvoices"] = n => n.NavigateToAsync<SupplierInvoiceView>(),
+        ["supplierevaluation"] = n => n.NavigateToAsync<SupplierEvaluationView>(),
+        ["consumption"] = n => n.NavigateToAsync<ConsumptionView>(),
+        ["inventorycounts"] = n => n.NavigateToAsync<InventoryCountView>(),
+        ["temperatures"] = n => n.NavigateToAsync<TemperatureView>(),
+        ["equipment"] = n => n.NavigateToAsync<EquipmentView>(),
+        ["contracts"] = n => n.NavigateToAsync<InstrumentContractView>(),
+        ["personnel"] = n => n.NavigateToAsync<PersonnelView>(),
+        ["habilitations"] = n => n.NavigateToAsync<HabilitationView>(),
+        ["hrdeadlines"] = n => n.NavigateToAsync<PersonnelDeadlinesView>(),
+        ["leave"] = n => n.NavigateToAsync<LeaveView>(),
+        ["planning"] = n => n.NavigateToAsync<PlanningView>(),
+        ["payroll"] = n => n.NavigateToAsync<PayrollView>(),
+        ["accidents"] = n => n.NavigateToAsync<AccidentView>(),
+        ["prescriberstats"] = n => n.NavigateToAsync<PrescriberStatisticsView>(),
+        ["relations"] = n => n.NavigateToAsync<RelationsView>(),
+        ["patientmessaging"] = n => n.NavigateToAsync<PatientMessagingView>(),
+        ["accountingexport"] = n => n.NavigateToAsync<AccountingExportView>(),
+        ["accountingsettings"] = n => n.NavigateToAsync<AccountingSettingsView>(),
+        ["fixedassets"] = n => n.NavigateToAsync<FixedAssetView>(),
+        ["bankreconciliation"] = n => n.NavigateToAsync<BankReconciliationView>(),
+        ["cashforecast"] = n => n.NavigateToAsync<CashForecastView>(),
+        ["cashreview"] = n => n.NavigateToAsync<CashSessionReviewView>(),
+        ["costmargin"] = n => n.NavigateToAsync<CostMarginView>(),
+        ["users"] = n => n.NavigateToAsync<UserAdministrationView>(),
+        ["audit"] = n => n.NavigateToAsync<AuditTrailView>(),
+        ["catalog"] = n => n.NavigateToAsync<CatalogView>(),
+        ["interfaces"] = n => n.NavigateToAsync<InstrumentInterfaceView>(),
+        ["masterdata"] = n => n.NavigateToAsync<MasterDataView>(),
+        ["migration"] = n => n.NavigateToAsync<DataMigrationView>(),
+        ["settings"] = n => n.NavigateToAsync<SettingsView>()
+    };
 
     private void BuildNavigation()
     {
         _entries.Clear();
 
-        _entries.AddRange(
-        [
-            new("dashboard", "Nav.Dashboard", [],
-                n => n.NavigateToAsync<DashboardView>()),
-
-            new("statistics", "Nav.Statistics", [Permissions.Statistics.View],
-                n => n.NavigateToAsync<StatisticsView>()),
-
-            // The director's dashboard sits with the dashboard and the statistics: it reads every
-            // module, and belongs to none of the groups below.
-            new("steering", "Nav.Steering", [Permissions.Steering.View],
-                n => n.NavigateToAsync<SteeringView>()),
-
-            new("group.reception", "Nav.Reception", [Permissions.Patients.View],
-                _ => Task.CompletedTask, IsGroupHeader: true),
-
-            new("patients", "Nav.Patients", [Permissions.Patients.View],
-                n => n.NavigateToAsync<PatientSearchView>()),
-
-            new("orders", "Nav.Orders", [Permissions.Orders.Create],
-                n => n.NavigateToAsync<OrderRegistrationView>()),
-
-            new("orderdetail", "Nav.OrderFile", [Permissions.Orders.View],
-                n => n.NavigateToAsync<OrderDetailView>()),
-
-            new("group.technical", "Nav.Worklist", [Permissions.Results.View],
-                _ => Task.CompletedTask, IsGroupHeader: true),
-
-            new("collection", "Nav.Collection", [Permissions.Samples.Collect],
-                n => n.NavigateToAsync<CollectionView>()),
-
-            new("reception", "Nav.SampleReception", [Permissions.Samples.Receive],
-                n => n.NavigateToAsync<SampleReceptionView>()),
-
-            new("recollections", "Nav.Recollections", [Permissions.Orders.Edit, Permissions.Samples.Reject],
-                n => n.NavigateToAsync<RecollectionView>()),
-
-            new("serumbank", "Nav.SerumBank", [Permissions.Samples.Receive],
-                n => n.NavigateToAsync<SampleStorageView>()),
-
-            new("subcontracting", "Nav.Subcontracting", [Permissions.Samples.Subcontract],
-                n => n.NavigateToAsync<SubcontractingView>()),
-
-            new("entry", "Nav.ResultEntry", [Permissions.Results.Enter],
-                n => n.NavigateToAsync<ResultEntryView>()),
-
-            new("validation", "Nav.Validation", [Permissions.Results.BiologicalValidate],
-                n => n.NavigateToAsync<ValidationView>()),
-
-            new("reports", "Nav.Reports", [Permissions.Reports.View],
-                n => n.NavigateToAsync<ReportRegisterView>()),
-
-            new("group.billing", "Nav.Billing", [Permissions.Billing.View],
-                _ => Task.CompletedTask, IsGroupHeader: true),
-
-            new("billing", "Nav.Billing", [Permissions.Billing.View],
-                n => n.NavigateToAsync<BillingView>()),
-
-            new("cash", "Nav.CashDesk", [Permissions.Billing.RecordPayment],
-                n => n.NavigateToAsync<CashSessionView>()),
-
-            new("claims", "Nav.Claims", [Permissions.Billing.View],
-                n => n.NavigateToAsync<ClaimBatchView>()),
-
-            new("group.quality", "Nav.Quality", [Permissions.Quality.View],
-                _ => Task.CompletedTask, IsGroupHeader: true),
-
-            new("qc", "Nav.QualityControl", [Permissions.Quality.EnterQc,
-                                              Permissions.Quality.ReviewQc],
-                n => n.NavigateToAsync<QualityControlView>()),
-
-            new("nonconformities", "Nav.NonConformities", [Permissions.Quality.ManageNonConformity,
-                                                            Permissions.Quality.View],
-                n => n.NavigateToAsync<NonConformityView>()),
-
-            new("eqa", "Nav.Eqa", [Permissions.Quality.View],
-                n => n.NavigateToAsync<EqaView>()),
-
-            new("documents", "Nav.Documents", [Permissions.Quality.View],
-                n => n.NavigateToAsync<QualityDocumentsView>()),
-
-            new("group.logistics", "Nav.Inventory", [Permissions.Inventory.View,
-                                                      Permissions.Equipment.View,
-                                                      Permissions.Inventory.EnterInvoices,
-                                                      Permissions.Inventory.RecordTemperatures],
-                _ => Task.CompletedTask, IsGroupHeader: true),
-
-            new("inventory", "Nav.Inventory", [Permissions.Inventory.View],
-                n => n.NavigateToAsync<InventoryView>()),
-
-            new("purchaseorders", "Nav.PurchaseOrders", [Permissions.Inventory.View],
-                n => n.NavigateToAsync<PurchaseOrderView>()),
-
-            new("quotes", "Nav.Quotes", [Permissions.Inventory.ManageQuotes],
-                n => n.NavigateToAsync<QuoteRequestView>()),
-            new("supplierinvoices", "Nav.SupplierInvoices", [Permissions.Inventory.EnterInvoices,
-                                                              Permissions.Inventory.ApprovePayments],
-                n => n.NavigateToAsync<SupplierInvoiceView>()),
-            new("supplierevaluation", "Nav.SupplierEvaluation", [Permissions.Inventory.ManagePurchaseOrders],
-                n => n.NavigateToAsync<SupplierEvaluationView>()),
-            new("consumption", "Nav.Consumption", [Permissions.Inventory.View],
-                n => n.NavigateToAsync<ConsumptionView>()),
-            new("inventorycounts", "Nav.InventoryCounts", [Permissions.Inventory.Receive,
-                                                            Permissions.Inventory.CloseCounts],
-                n => n.NavigateToAsync<InventoryCountView>()),
-            new("temperatures", "Nav.Temperatures", [Permissions.Inventory.RecordTemperatures,
-                                                      Permissions.Inventory.ManageStorageUnits],
-                n => n.NavigateToAsync<TemperatureView>()),
-
-            new("equipment", "Nav.Equipment", [Permissions.Equipment.View],
-                n => n.NavigateToAsync<EquipmentView>()),
-
-            new("contracts", "Nav.Contracts", [Permissions.Equipment.ViewContracts],
-                n => n.NavigateToAsync<InstrumentContractView>()),
-
-            new("group.personnel", "Nav.HumanResources",
-                [Permissions.HumanResources.View, Permissions.HumanResources.RequestLeave,
-                 Permissions.HumanResources.ApproveLeave, Permissions.HumanResources.ManagePlanning,
-                 Permissions.HumanResources.Salary, Permissions.HumanResources.Accidents],
-                _ => Task.CompletedTask, IsGroupHeader: true),
-
-            new("personnel", "Nav.Personnel", [Permissions.HumanResources.View],
-                n => n.NavigateToAsync<PersonnelView>()),
-
-            new("habilitations", "Nav.Habilitations", [Permissions.HumanResources.View],
-                n => n.NavigateToAsync<HabilitationView>()),
-
-            new("hrdeadlines", "Nav.PersonnelDeadlines", [Permissions.HumanResources.View],
-                n => n.NavigateToAsync<PersonnelDeadlinesView>()),
-
-            // Every employee asks for their own leave here; the list shows them their own only.
-            new("leave", "Nav.Leave",
-                [Permissions.HumanResources.RequestLeave, Permissions.HumanResources.ApproveLeave,
-                 Permissions.HumanResources.View],
-                n => n.NavigateToAsync<LeaveView>()),
-
-            new("planning", "Nav.Planning",
-                [Permissions.HumanResources.View, Permissions.HumanResources.ManagePlanning],
-                n => n.NavigateToAsync<PlanningView>()),
-
-            new("payroll", "Nav.Payroll", [Permissions.HumanResources.Salary],
-                n => n.NavigateToAsync<PayrollView>()),
-
-            // A blood exposure is declared by whoever is on duty with the right, HR or biologist.
-            new("accidents", "Nav.Accidents", [Permissions.HumanResources.Accidents, Permissions.HumanResources.View],
-                n => n.NavigateToAsync<AccidentView>()),
-
-            new("group.relations", "Nav.RelationsGroup", [Permissions.Relations.View, Permissions.Messaging.Campaign],
-                _ => Task.CompletedTask, IsGroupHeader: true),
-
-            new("prescriberstats", "Nav.PrescriberStatistics", [Permissions.Relations.View],
-                n => n.NavigateToAsync<PrescriberStatisticsView>()),
-
-            new("relations", "Nav.Relations", [Permissions.Relations.View],
-                n => n.NavigateToAsync<RelationsView>()),
-
-            new("patientmessaging", "Nav.PatientMessaging", [Permissions.Messaging.Campaign],
-                n => n.NavigateToAsync<PatientMessagingView>()),
-
-            new("group.finance", "Nav.Finance", [Permissions.Accounting.Export],
-                _ => Task.CompletedTask, IsGroupHeader: true),
-
-            new("accountingexport", "Nav.AccountingExport", [Permissions.Accounting.Export],
-                n => n.NavigateToAsync<AccountingExportView>()),
-
-            new("accountingsettings", "Nav.AccountingSettings", [Permissions.Accounting.Export],
-                n => n.NavigateToAsync<AccountingSettingsView>()),
-
-            new("fixedassets", "Nav.FixedAssets", [Permissions.Assets.View],
-                n => n.NavigateToAsync<FixedAssetView>()),
-
-            new("bankreconciliation", "Nav.BankReconciliation", [Permissions.Treasury.View, Permissions.Treasury.Manage],
-                n => n.NavigateToAsync<BankReconciliationView>()),
-
-            new("cashforecast", "Nav.CashForecast", [Permissions.Treasury.View, Permissions.Treasury.Manage],
-                n => n.NavigateToAsync<CashForecastView>()),
-
-            new("cashreview", "Nav.CashSessionReview", [Permissions.Billing.ReconcileCashSession],
-                n => n.NavigateToAsync<CashSessionReviewView>()),
-
-            new("costmargin", "Nav.CostMargin", [Permissions.Steering.View],
-                n => n.NavigateToAsync<CostMarginView>()),
-
-            new("group.administration", "Nav.Administration", [Permissions.Administration.ViewUsers],
-                _ => Task.CompletedTask, IsGroupHeader: true),
-
-            new("users", "Nav.Users", [Permissions.Administration.ViewUsers],
-                n => n.NavigateToAsync<UserAdministrationView>()),
-
-            new("audit", "Nav.AuditTrail", [Permissions.Administration.ViewAuditTrail],
-                n => n.NavigateToAsync<AuditTrailView>()),
-
-            new("catalog", "Nav.Catalog", [Permissions.Catalog.View],
-                n => n.NavigateToAsync<CatalogView>()),
-
-            new("interfaces", "Nav.Instruments", [Permissions.Instruments.View],
-                n => n.NavigateToAsync<InstrumentInterfaceView>()),
-
-            new("masterdata", "Nav.MasterData", [Permissions.Equipment.Manage,
-                                              Permissions.Quality.ManageQcRules,
-                                              Permissions.Inventory.ManagePurchaseOrders,
-                                              Permissions.Catalog.Manage,
-                                              Permissions.Billing.ManageTariffs],
-                n => n.NavigateToAsync<MasterDataView>()),
-
-            new("migration", "Nav.Migration", [Permissions.Administration.Migration],
-                n => n.NavigateToAsync<DataMigrationView>()),
-
-            // The licence tab is reachable with its own right alone: importing the next licence
-            // must not take the right to change every setting.
-            new("settings", "Nav.Settings", [Permissions.Administration.ManageSites,
-                                              Permissions.Administration.ManageSettings,
-                                              Permissions.Administration.License],
-                n => n.NavigateToAsync<SettingsView>())
-        ]);
+        _entries.AddRange(NavigationMenu.Entries.Select(menu =>
+            new NavigationEntry(menu, menu.IsGroupHeader ? _ => Task.CompletedTask : Screens[menu.Key])));
 
         RenderNavigation();
     }
@@ -619,7 +469,7 @@ public sealed partial class MainShellForm : LocalizedForm
                 // A group is shown when the user can open at least one of its screens, whatever
                 // the header itself was declared with: a phlebotomist has Collection without
                 // Results.View, and the technical header used to vanish above the entry it held.
-                if (!GroupEntries(entry.Key).Any(IsPermitted)) continue;
+                if (!NavigationMenu.IsGroupShown(entry.Key, _currentUser, _licence?.Current)) continue;
 
                 var collapsed = _collapsedGroups.IsCollapsed(entry.Key);
                 var header = new Label
@@ -739,24 +589,10 @@ public sealed partial class MainShellForm : LocalizedForm
 
     // A module the licence does not open is hidden like a screen without the permission.
     private bool IsPermitted(NavigationEntry entry) =>
-        (entry.RequiredPermissions.Length == 0 || entry.RequiredPermissions.Any(_currentUser.Has))
-        && IsLicensed(entry);
-
-    // The entries listed under a group header, up to the next header.
-    private IEnumerable<NavigationEntry> GroupEntries(string groupKey) =>
-        _entries.SkipWhile(e => e.Key != groupKey).Skip(1).TakeWhile(e => !e.IsGroupHeader);
+        NavigationMenu.IsPermitted(entry.Menu, _currentUser, _licence?.Current);
 
     // The group an entry is listed under, or null for the entries above the first header.
-    private string? GroupOf(string key)
-    {
-        string? group = null;
-        foreach (var entry in _entries)
-        {
-            if (entry.IsGroupHeader) group = entry.Key;
-            else if (entry.Key == key) return group;
-        }
-        return null;
-    }
+    private static string? GroupOf(string key) => NavigationMenu.GroupOf(key);
 
     private async Task ActivateAsync(NavigationEntry entry)
     {

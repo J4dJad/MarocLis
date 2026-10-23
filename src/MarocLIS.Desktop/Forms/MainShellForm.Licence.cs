@@ -24,9 +24,6 @@ public sealed partial class MainShellForm
     };
     private bool _beating;
 
-    private bool IsLicensed(NavigationEntry entry) =>
-        _licence is null || LicenceNavigation.IsLicensed(entry.Key, _licence.Current);
-
     private void BuildLicenceBanner()
     {
         _licenceBanner.Dock = DockStyle.Top;

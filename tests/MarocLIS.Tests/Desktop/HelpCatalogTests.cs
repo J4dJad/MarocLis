@@ -1,5 +1,5 @@
-using System.Text.RegularExpressions;
 using FluentAssertions;
+using MarocLIS.Application.Navigation;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using Xunit;
@@ -10,22 +10,16 @@ namespace MarocLIS.Tests.Desktop;
 /// The help F1 opens: every screen of the menu has a chapter, every chapter is shipped in French
 /// with the screen's section in it, and a page missing in a language falls back to French.
 /// </summary>
-public sealed partial class HelpCatalogTests : IDisposable
+public sealed class HelpCatalogTests : IDisposable
 {
     private static readonly string Repo = FindRepo();
     private static readonly string ShippedRoot = Path.Combine(Repo, "src", "MarocLIS.Desktop", "Help");
 
     private readonly string _temp = Path.Combine(Path.GetTempPath(), "maroclis-help-" + Guid.NewGuid().ToString("N"));
 
-    [GeneratedRegex("""new\("([a-z.]+)", "Nav\.""")]
-    private static partial Regex NavigationEntry();
-
-    // The screens of the menu, as declared in the shell's BuildNavigation (group headers aside).
+    // The screens of the menu, as the shared menu declares them (group headers aside).
     private static List<string> NavigationKeys() =>
-        NavigationEntry().Matches(File.ReadAllText(Path.Combine(Repo, "src", "MarocLIS.Desktop", "Forms", "MainShellForm.cs")))
-            .Select(m => m.Groups[1].Value)
-            .Where(k => !k.StartsWith("group.", StringComparison.Ordinal))
-            .ToList();
+        NavigationMenu.Entries.Where(e => !e.IsGroupHeader).Select(e => e.Key).ToList();
 
     [Fact]
     public void Map_CoversEveryScreenOfTheMenu_AndNothingElse()
