@@ -44,7 +44,8 @@ public static class WebServiceCollectionExtensions
         // The web interface opens only with the « Version Web » module (WebGates.RequireLicence),
         // and each browser signed in takes a workstation's place (WebWorkstations).
         services.AddMarocLisLicensing();
-        services.AddHostedService<WebLicenceRefresher>();
+        services.AddSingleton<WebLicenceRefresher>();
+        services.AddHostedService(sp => sp.GetRequiredService<WebLicenceRefresher>());
 
         // ---- Reporting: the workstation's renderer, so a document printed from the web is the
         // same document. The screens that print bring their renderers as they arrive.

@@ -6744,7 +6744,8 @@
     "Edition": "Web version",
     "Licence": {
       "Title": "MarocLIS Web is unavailable",
-      "Retry": "Try again"
+      "Retry": "Try again",
+      "ModuleHint": "Import a licence that includes this module from the MarocLIS Windows application, on the server, then reload this page."
     }
   }
 }

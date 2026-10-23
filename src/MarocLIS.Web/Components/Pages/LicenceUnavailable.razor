@@ -3,9 +3,11 @@
 @attribute [ExcludeFromInteractiveRouting]
 @layout PlainLayout
 @using MarocLIS.Application.Licensing
+@using MarocLIS.Domain.Licensing
 @inject WebTexts Texts
 @inject ILicenceState Licence
 @inject NavigationManager Navigation
+@inject MarocLIS.Web.Hosting.WebLicenceRefresher Refresher
 
 @*
     The web interface without the licence that opens it. No import screen here, unlike the Windows
@@ -18,13 +20,22 @@
 
 <p class="message is-critical" role="alert" data-state="licence">@_message</p>
 
+@if (_moduleMissing)
+{
+    <p class="form-lead">@Texts["Web.Licence.ModuleHint"]</p>
+}
+
 <a class="btn btn-secondary" href="">@Texts["Web.Licence.Retry"]</a>
 
 @code {
     private string? _message;
+    private bool _moduleMissing;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        // « Importez la licence … puis rechargez cette page »: the reload looks again.
+        await Refresher.RefreshNowAsync();
+
         var access = Licence.RequireWebAccess();
         if (access.IsSuccess)
         {
@@ -33,5 +44,9 @@
         }
 
         _message = Texts.Describe(access.Errors);
+
+        // A licence in force without the « Version Web » module: the other messages already say
+        // where to import one; this one only names the module.
+        _moduleMissing = Licence.Current.Terms is not null && !Licence.Current.HasModule(LicenceModules.Web);
     }
 }

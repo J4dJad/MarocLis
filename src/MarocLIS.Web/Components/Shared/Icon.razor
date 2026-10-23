@@ -1,10 +1,11 @@
 @*
     One of the Windows application's icons: its glyph, exported from the workstation's icon sheet as
-    a white mask (wwwroot/icons), painted in the colour of the text around it.
+    a white mask (wwwroot/icons), painted in the colour of the text around it. The address is the
+    fingerprinted one, kept by the browser's cache once fetched.
 *@
 @if (Glyph is { } glyph)
 {
-    <span class="icon @Class" aria-hidden="true" style="--icon: url('/icons/@(glyph).png')"></span>
+    <span class="icon @Class" aria-hidden="true" style="--icon: url('/@Assets[$"icons/{glyph}.png"]')"></span>
 }
 
 @code {

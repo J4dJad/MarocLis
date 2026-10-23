@@ -106,9 +106,16 @@ else
         var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0];
         var key = path.StartsWith("ecran/", StringComparison.Ordinal) ? Uri.UnescapeDataString(path["ecran/".Length..]) : null;
 
-        if (key is null || MarocLIS.Application.Navigation.NavigationMenu.Find(key) is not { IsGroupHeader: false } entry)
+        if (key is null)
         {
             yield return (Texts["Web.Home.Title"], true);
+            yield break;
+        }
+
+        // A screen the operator may not open is not named, here no more than in the menu.
+        if (ScreenAccess.Decide(key, Context.User, Licence.Current) is not (ScreenDecision.Open, { } entry))
+        {
+            yield return (Texts["Web.ScreenRefusedTitle"], true);
             yield break;
         }
 
