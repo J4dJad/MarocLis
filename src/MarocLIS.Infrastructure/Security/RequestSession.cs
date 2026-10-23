@@ -30,6 +30,14 @@ public sealed class RequestSession(CurrentUserAccessor accessor)
     public ICurrentUser User => accessor;
 
     /// <summary>
+    /// The account's security stamp as the session holds it now. The operator's own password
+    /// change moves it (<see cref="IAuthenticationService.ChangePasswordAsync"/>): a host that keeps
+    /// the session between requests — the web interface — takes the new one from here, or the next
+    /// request would read the change as a revocation.
+    /// </summary>
+    public string? SecurityStamp => accessor.SecurityStamp;
+
+    /// <summary>
     /// Names the device the request comes from (« Mobile · … »), recorded on every audit entry,
     /// data-access log and security event of the request. Set first, before signing in, so the
     /// sign-in itself is recorded against the phone.

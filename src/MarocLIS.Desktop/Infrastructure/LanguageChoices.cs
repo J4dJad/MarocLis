@@ -26,16 +26,8 @@ internal static class LanguageChoices
 
     private static LanguageSettings Current => Languages?.Current ?? LanguageSettings.Default;
 
-    /// <summary>
-    /// Each language in its own name, whatever the interface's language: an Arabic speaker looks
-    /// for « العربية », not for « Arabe ».
-    /// </summary>
-    public static string OwnName(AppLanguage language) => language switch
-    {
-        AppLanguage.Arabic => "العربية",
-        AppLanguage.English => "English",
-        _ => "Français"
-    };
+    /// <summary>Each language in its own name (<see cref="LanguageSettings.OwnName"/>).</summary>
+    public static string OwnName(AppLanguage language) => LanguageSettings.OwnName(language);
 
     /// <summary>
     /// Fills <paramref name="combo"/> with the active languages, labelled by <paramref name="label"/>,

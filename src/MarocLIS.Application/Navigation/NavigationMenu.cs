@@ -16,6 +16,18 @@ public sealed record MenuEntry(
     IReadOnlyList<string> RequiredPermissions,
     bool IsGroupHeader = false);
 
+/// <summary>Why a menu entry is or is not open to a user.</summary>
+public enum MenuAccess
+{
+    Permitted,
+
+    /// <summary>The user holds none of the entry's rights.</summary>
+    NoPermission,
+
+    /// <summary>The entry belongs to a module the licence does not open.</summary>
+    NotLicensed
+}
+
 /// <summary>
 /// The menu every client shows, in its order, and who is shown which entry.
 /// <para>
@@ -193,8 +205,25 @@ public static class NavigationMenu
     /// </para>
     /// </summary>
     public static bool IsPermitted(MenuEntry entry, ICurrentUser user, LicenceStatus? licence) =>
-        (entry.RequiredPermissions.Count == 0 || entry.RequiredPermissions.Any(user.Has))
-        && (licence is null || LicenceNavigation.IsLicensed(entry.Key, licence));
+        Access(entry, user, licence) == MenuAccess.Permitted;
+
+    /// <summary>
+    /// Whether <paramref name="user"/> may open <paramref name="entry"/>, and if not why: no right
+    /// to it, or a module the licence does not open. The menu hides both alike; a client asked for
+    /// the screen directly — the web's address bar — refuses it and says which.
+    /// </summary>
+    public static MenuAccess Access(MenuEntry entry, ICurrentUser user, LicenceStatus? licence)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(user);
+
+        if (entry.RequiredPermissions.Count > 0 && !entry.RequiredPermissions.Any(user.Has))
+            return MenuAccess.NoPermission;
+
+        return licence is null || LicenceNavigation.IsLicensed(entry.Key, licence)
+            ? MenuAccess.Permitted
+            : MenuAccess.NotLicensed;
+    }
 
     /// <summary>The entries listed under a group header, up to the next header.</summary>
     public static IEnumerable<MenuEntry> GroupEntries(string groupKey) =>

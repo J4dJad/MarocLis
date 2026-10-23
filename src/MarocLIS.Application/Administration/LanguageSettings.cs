@@ -41,6 +41,17 @@ public sealed record LanguageSettings
 
     public bool IsActive(AppLanguage language) => Active.Contains(language);
 
+    /// <summary>
+    /// Each language in its own name, whatever the interface's language: an Arabic speaker looks
+    /// for « العربية », not for « Arabe ». Every client's language list shows these.
+    /// </summary>
+    public static string OwnName(AppLanguage language) => language switch
+    {
+        AppLanguage.Arabic => "العربية",
+        AppLanguage.English => "English",
+        _ => "Français"
+    };
+
     /// <summary>The language itself when the laboratory works in it, French otherwise.</summary>
     public AppLanguage Coerce(AppLanguage language) => IsActive(language) ? language : AppLanguage.French;
 

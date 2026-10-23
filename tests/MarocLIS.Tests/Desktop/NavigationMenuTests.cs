@@ -70,6 +70,35 @@ public sealed class NavigationMenuTests
     }
 
     [Fact]
+    public void Access_SaysWhyAnEntryIsClosed_TheRightBeforeTheLicence()
+    {
+        var instruments = new User(permissions: Permissions.Instruments.View);
+        var nobody = new User(permissions: []);
+
+        NavigationMenu.Access(Entry("interfaces"), instruments, WithModules(LicenceModules.Instruments))
+            .Should().Be(MenuAccess.Permitted);
+        NavigationMenu.Access(Entry("interfaces"), instruments, WithModules()).Should().Be(MenuAccess.NotLicensed);
+        NavigationMenu.Access(Entry("interfaces"), nobody, WithModules()).Should().Be(MenuAccess.NoPermission,
+            "a screen the user has no right to is refused for that, whatever the licence");
+        NavigationMenu.Access(Entry("dashboard"), nobody, WithModules()).Should().Be(MenuAccess.Permitted);
+
+        foreach (var entry in NavigationMenu.Entries)
+            NavigationMenu.IsPermitted(entry, instruments, WithModules())
+                .Should().Be(NavigationMenu.Access(entry, instruments, WithModules()) == MenuAccess.Permitted);
+    }
+
+    [Fact]
+    public void EachLanguage_IsNamedInItself_ForEveryClientsList()
+    {
+        MarocLIS.Application.Administration.LanguageSettings.OwnName(MarocLIS.Domain.Common.AppLanguage.Arabic)
+            .Should().Be("العربية");
+        MarocLIS.Application.Administration.LanguageSettings.OwnName(MarocLIS.Domain.Common.AppLanguage.English)
+            .Should().Be("English");
+        MarocLIS.Application.Administration.LanguageSettings.OwnName(MarocLIS.Domain.Common.AppLanguage.French)
+            .Should().Be("Français");
+    }
+
+    [Fact]
     public void AGroup_IsShownWhenOneOfItsScreensIs_WhateverItsHeaderAsks()
     {
         // A phlebotomist: Collection without Results.View, the right the technical header names.
