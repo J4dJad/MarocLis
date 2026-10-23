@@ -1,0 +1,26 @@
+@inject WebTexts Texts
+
+@*
+    « Déconnexion », confirmed first as in the Windows shell. The sign-out itself is a form: it
+    ends the session on the server and clears the cookie, which only a response to a request can.
+*@
+@if (!_confirming)
+{
+    <button type="button" class="btn btn-secondary" @onclick="() => _confirming = true">
+        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.LogOut" />@Texts["Action.Logout"]
+    </button>
+}
+else
+{
+    <form class="signout-confirm" method="post" action="@WebPaths.SignOut.TrimStart('/')">
+        <span>@Texts["Web.ConfirmSignOut"]</span>
+        <button type="submit" class="btn btn-primary">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.LogOut" />@Texts["Action.Logout"]
+        </button>
+        <button type="button" class="btn btn-secondary" @onclick="() => _confirming = false">@Texts["Action.Cancel"]</button>
+    </form>
+}
+
+@code {
+    private bool _confirming;
+}

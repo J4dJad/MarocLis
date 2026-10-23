@@ -1,0 +1,11 @@
+@page "/erreur"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout PlainLayout
+@inject WebTexts Texts
+
+<PageTitle>MarocLIS</PageTitle>
+
+<h1 class="form-title">MarocLIS</h1>
+<p class="message is-critical" role="alert">@Texts["Message.UnexpectedError"]</p>
+<a class="btn btn-secondary" href="">@Texts["Web.BackHome"]</a>

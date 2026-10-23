@@ -1,0 +1,13 @@
+@*
+    One of the Windows application's icons: its glyph, exported from the workstation's icon sheet as
+    a white mask (wwwroot/icons), painted in the colour of the text around it.
+*@
+@if (Glyph is { } glyph)
+{
+    <span class="icon @Class" aria-hidden="true" style="--icon: url('/icons/@(glyph).png')"></span>
+}
+
+@code {
+    [Parameter] public MarocLIS.Desktop.Infrastructure.Glyph? Glyph { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

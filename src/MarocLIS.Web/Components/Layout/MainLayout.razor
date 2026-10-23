@@ -1,0 +1,169 @@
+@inherits LayoutComponentBase
+@implements IAsyncDisposable
+@using MarocLIS.Application.Licensing
+@inject SessionContext Context
+@inject WebTexts Texts
+@inject LicenceStatusHolder Licence
+@inject NavigationManager Navigation
+@inject SessionMonitor Monitor
+@inject WebSessionStore Store
+@inject IJSRuntime JS
+
+@*
+    The Windows shell, in a browser: the white header with the brand, the breadcrumb and the
+    operator; the licence's banner under it; the menu of the screens the operator may open on the
+    leading side; the screen itself on the work surface.
+*@
+@if (Context.Session is not { } session)
+{
+    <RedirectToLogin />
+}
+else
+{
+    <div class="shell">
+        <header class="topbar">
+            <a class="brand" href="">MarocLIS</a>
+            <span class="topbar-rule" aria-hidden="true"></span>
+            <nav class="breadcrumb" aria-label="@Texts["Web.Breadcrumb"]">
+                @foreach (var (text, last) in Breadcrumb())
+                {
+                    <span class="@(last ? "crumb crumb-current" : "crumb")">@text</span>
+                    @if (!last)
+                    {
+                        <span class="crumb-sep" aria-hidden="true">›</span>
+                    }
+                }
+            </nav>
+            <div class="topbar-end">
+                <div class="who">
+                    <span class="who-name">@Context.User.FullName</span>
+                    <span class="who-place">@Texts["App.Site"] : @Context.User.SiteCode · @Texts["App.Workstation"] : <bdi>@session.Workstation</bdi></span>
+                </div>
+                <LanguageSwitch ReturnUrl="@CurrentPath" />
+                <a class="btn btn-secondary" href="@WebPaths.PasswordChange.TrimStart('/')">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.KeyRound" />@Texts["Action.ChangePassword"]
+                </a>
+                <SignOutButton />
+            </div>
+        </header>
+
+        <LicenceBannerBar Status="Licence.Current" />
+
+        @if (session.SignInNoticePending && NoticeText() is { } notice)
+        {
+            <div class="notice" role="alert">
+                <div class="notice-text">@notice</div>
+                <button type="button" class="btn btn-secondary" @onclick="DismissNotice">@Texts["Action.Close"]</button>
+            </div>
+        }
+
+        <div class="frame">
+            <aside class="sidebar">
+                <NavMenu Groups="WebMenu.Build(Context.User, Licence.Current)" />
+            </aside>
+            <main class="content" id="contenu">
+                @Body
+            </main>
+        </div>
+    </div>
+}
+
+@code {
+    private DotNetObjectReference<ActivityRelay>? _relay;
+
+    private string CurrentPath => "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+
+    protected override void OnInitialized()
+    {
+        Licence.Changed += OnLicenceChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+        Context.Changed += OnSessionChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Context.Session is null) return;
+
+        Monitor.Start(reason => InvokeAsync(() =>
+            Navigation.NavigateTo($"{WebSessionCookie.LoginPath}?{WebSessionCookie.ReasonParameter}={Uri.EscapeDataString(reason)}",
+                                  forceLoad: true)));
+
+        // The mouse moving over a list, a scroll, a key in a field the server does not hear: told
+        // by the page, at most twice a minute, so reading without clicking is activity too — as the
+        // workstation counts a mouse move.
+        _relay = DotNetObjectReference.Create(new ActivityRelay(Context));
+        try
+        {
+            await JS.InvokeVoidAsync("marocLis.watchActivity", _relay, 20_000);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private IEnumerable<(string Text, bool Last)> Breadcrumb()
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0];
+        var key = path.StartsWith("ecran/", StringComparison.Ordinal) ? Uri.UnescapeDataString(path["ecran/".Length..]) : null;
+
+        if (key is null || MarocLIS.Application.Navigation.NavigationMenu.Find(key) is not { IsGroupHeader: false } entry)
+        {
+            yield return (Texts["Web.Home.Title"], true);
+            yield break;
+        }
+
+        if (ScreenAccess.GroupOf(key) is { } group) yield return (Texts[group.LabelKey], false);
+        yield return (Texts[entry.LabelKey], true);
+    }
+
+    /// <summary>The licence's notice at sign-in, as the Windows login shows it once.</summary>
+    private string? NoticeText()
+    {
+        var status = Licence.Current;
+        if (LicenceNavigation.SignInNoticeKey(status) is not { } key) return null;
+
+        var cause = LicenceNavigation.CauseKey(status) is { } causeKey ? Texts[causeKey] : string.Empty;
+        var problem = status.Problem is { } error ? Texts.Describe(error) : string.Empty;
+        return Texts.T(key, status.Terms?.EndsOn, status.GraceDaysRemaining, cause, problem, status.BenchClearingUntil);
+    }
+
+    private void DismissNotice()
+    {
+        Store.Update(Context.Session?.Id, s => s with { SignInNoticePending = false });
+        Context.Refresh();
+    }
+
+    private void OnLicenceChanged(object? sender, EventArgs e) => _ = InvokeAsync(() =>
+    {
+        // A licence imported without the « Version Web » module, or ended badly: the tab goes to
+        // the licence's message. Otherwise the menu and the banner follow at once, without signing
+        // out, as in the Windows shell.
+        if (Licence.Current.RequireWebAccess().IsFailure)
+        {
+            Navigation.NavigateTo(WebPaths.Licence, forceLoad: true);
+            return;
+        }
+
+        StateHasChanged();
+    });
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public async ValueTask DisposeAsync()
+    {
+        Licence.Changed -= OnLicenceChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+        Context.Changed -= OnSessionChanged;
+        _relay?.Dispose();
+        await Monitor.DisposeAsync();
+    }
+
+    /// <summary>What the page's activity watcher calls.</summary>
+    public sealed class ActivityRelay(SessionContext context)
+    {
+        [JSInvokable]
+        public void Activity() => context.RecordActivity();
+    }
+}

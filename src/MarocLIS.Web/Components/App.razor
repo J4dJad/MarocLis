@@ -1,0 +1,35 @@
+@inject WebTexts Texts
+
+<!DOCTYPE html>
+<html lang="@Texts.LanguageTag" dir="@Texts.Direction">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="@Assets["css/app.css"]" />
+    <link rel="icon" type="image/png" href="icons/FlaskConical.png" />
+    <title>MarocLIS</title>
+    <HeadOutlet @rendermode="PageRenderMode" />
+</head>
+
+<body>
+    <Routes @rendermode="PageRenderMode" />
+    <script src="_framework/blazor.web.js"></script>
+    <script src="@Assets["js/maroclis.js"]"></script>
+</body>
+
+</html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    // The application's screens run on the circuit, without prerendering: nothing of a screen is
+    // computed for a request and thrown away when the circuit takes over, and the circuit's own
+    // scope is the only one that holds the operator. The sign-in, the password change and the
+    // licence's message are plain pages ([ExcludeFromInteractiveRouting]): they set or clear the
+    // session cookie, which only a response to a request can.
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext.AcceptsInteractiveRouting() ? new InteractiveServerRenderMode(prerender: false) : null;
+}

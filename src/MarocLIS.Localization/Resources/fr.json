@@ -5473,6 +5473,7 @@
   "Auth_PasswordReused": "Ce mot de passe a déjà été utilisé récemment.",
   "Auth_PasswordMismatch": "Les deux mots de passe saisis ne correspondent pas.",
   "Auth_SessionRevoked": "Votre compte a été modifié (désactivation, mot de passe réinitialisé ou droits changés). La session est fermée ; reconnectez-vous.",
+  "Web_DeviceMismatch": "Session web présentée par un autre navigateur que celui de la connexion.",
   "Auth_DemoAccountDisabled": "Ce compte de démonstration a été désactivé : la base contient désormais des données réelles et son mot de passe est publié. Utilisez un compte nominatif.",
 
   "Site_LegalNameRequired": "La raison sociale du site est obligatoire pour facturer.",
@@ -6725,5 +6726,26 @@
     "Restoring": "Restauration de la base…",
     "Upgrading": "Mise à jour de la base…",
     "Done": "Restauration terminée."
+  },
+  "Web": {
+    "NetworkRefused": "Accès refusé : MarocLIS Web n'est accessible que depuis le réseau local du laboratoire.",
+    "Breadcrumb": "Fil d'Ariane",
+    "Menu": "Menu principal",
+    "Home": {
+      "Title": "Accueil",
+      "Welcome": "Bienvenue, {0}",
+      "Intro": "Choisissez un écran dans le menu. Les écrans sont proposés selon vos droits et les modules de la licence.",
+      "Today": "Aujourd'hui"
+    },
+    "ScreenUnavailable": "Cet écran n'est pas encore disponible dans la version Web. Utilisez la version Windows.",
+    "ScreenNotFound": "Cet écran n'existe pas.",
+    "ScreenRefusedTitle": "Accès refusé",
+    "BackHome": "Retour à l'accueil",
+    "ConfirmSignOut": "Fermer la session ?",
+    "Edition": "Version Web",
+    "Licence": {
+      "Title": "MarocLIS Web est indisponible",
+      "Retry": "Réessayer"
+    }
   }
 }

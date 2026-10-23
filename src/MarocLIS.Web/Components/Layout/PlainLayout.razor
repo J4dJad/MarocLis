@@ -1,0 +1,21 @@
+@inherits LayoutComponentBase
+@inject WebTexts Texts
+
+@*
+    The Windows login's layout: the application's mark, name and what it is on a teal band at the
+    start, the form at the end. The sign-in, the password change and the licence's message share it.
+*@
+<div class="plain">
+    <div class="plain-card">
+        <section class="band">
+            <span class="band-mark"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FlaskConical" /></span>
+            <span class="band-title">MarocLIS</span>
+            <span class="band-subtitle">@Texts["Login.Subtitle"]</span>
+            <span class="band-edition">@Texts["Web.Edition"]</span>
+            <span class="band-footer">@Texts["App.Version"] @WebWorkstations.AppVersion</span>
+        </section>
+        <section class="plain-body">
+            @Body
+        </section>
+    </div>
+</div>

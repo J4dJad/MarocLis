@@ -1,0 +1,143 @@
+@page "/connexion"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout PlainLayout
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Domain.Licensing
+@using MarocLIS.Domain.Organization
+@inject WebTexts Texts
+@inject WebSignIn SignIn
+@inject IRepository<LabSite> Sites
+@inject NavigationManager Navigation
+
+@*
+    Sign-in, as the Windows login: user name, password, the site to work on, the language. The
+    password check, the lockout after repeated failures and the security log are the core's own
+    (IAuthenticationService), the same at the workstation and here.
+*@
+<PageTitle>MarocLIS — @Texts["Login.Title"]</PageTitle>
+
+<h1 class="form-title">@Texts["Login.Title"]</h1>
+<p class="form-lead">@Texts["Login.Prompt"]</p>
+
+@if (Reason is { } reason && WebEndpoints.Reasons.Contains(reason))
+{
+    <p class="message is-warning" role="status">@Texts[reason]</p>
+}
+
+<EditForm Model="Input" FormName="connexion" OnSubmit="SubmitAsync" method="post" class="form" autocomplete="off">
+    <label class="field">
+        <span class="field-label">@Texts["Login.UserName"]</span>
+        <InputText @bind-Value="Input.UserName" class="input" dir="ltr" autocomplete="username" autofocus />
+    </label>
+
+    <label class="field">
+        <span class="field-label">@Texts["Login.Password"]</span>
+        <InputText @bind-Value="Input.Password" type="password" class="input" dir="ltr" autocomplete="current-password" />
+    </label>
+
+    @if (_sites.Count > 0)
+    {
+        <label class="field">
+            <span class="field-label">@Texts["Login.Site"]</span>
+            <InputSelect @bind-Value="Input.SiteId" class="input">
+                @foreach (var site in _sites)
+                {
+                    <option value="@site.Id">@site.Code — @site.Name.For(Texts.Language)</option>
+                }
+            </InputSelect>
+        </label>
+    }
+
+    <button type="submit" class="btn btn-primary btn-wide">
+        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.LogIn" />@Texts["Login.SignIn"]
+    </button>
+
+    @if (_error is not null)
+    {
+        <p class="message is-critical" role="alert" data-state="refused">@_error</p>
+    }
+</EditForm>
+
+@if (_workstations is { } claim)
+{
+    <div class="workstations" data-state="workstations-reached">
+        <p>@Texts.T("Licence.Workstations.Explanation", (int)Workstation.SilenceTimeout.TotalMinutes)</p>
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>@Texts["Licence.Workstations.Machine"]</th>
+                    <th>@Texts["Licence.Workstations.User"]</th>
+                    <th>@Texts["Licence.Workstations.Since"]</th>
+                    <th>@Texts["Licence.Workstations.LastSeen"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in claim.Active)
+                {
+                    <tr>
+                        <td><bdi>@row.MachineName</bdi></td>
+                        <td><bdi>@row.UserName</bdi></td>
+                        <td>@row.Since.ToLocalTime().ToString("g", Texts.Culture)</td>
+                        <td>@row.LastSeenAt.ToLocalTime().ToString("t", Texts.Culture)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<p class="form-hint">@Texts["Login.ForgotPassword"]</p>
+
+<div class="form-footer">
+    <LanguageSwitch ReturnUrl="@Navigation.ToBaseRelativePath(Navigation.Uri).Insert(0, "/")" />
+</div>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "connexion")]
+    private LoginInput Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "retour")] private string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery(Name = "motif")] private string? Reason { get; set; }
+
+    private IReadOnlyList<LabSite> _sites = [];
+    private string? _error;
+    private WorkstationClaim? _workstations;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+
+        // Before sign-in the site filter is inert, so every active site is listed — which is right
+        // here: the operator picks one before having any scope. A partner laboratory is not offered:
+        // samples are sent there, nobody works there. As the Windows login lists them.
+        _sites = [.. (await Sites.ListAsync(s => s.IsActive && s.Kind != LabSiteKind.ReferralPartner))
+                     .OrderBy(s => s.Code, StringComparer.Ordinal)];
+
+        if (Input.SiteId is null && _sites.Count > 0) Input.SiteId = _sites[0].Id;
+    }
+
+    private async Task SubmitAsync()
+    {
+        var outcome = await SignIn.SignInAsync(HttpContext, Input.UserName, Input.Password, Input.SiteId, ReturnUrl);
+
+        if (outcome.Succeeded)
+        {
+            Navigation.NavigateTo(outcome.Redirect!, forceLoad: true);
+            return;
+        }
+
+        _error = outcome.Error;
+        _workstations = outcome.Workstations;
+        Input.Password = null;
+    }
+
+    private sealed class LoginInput
+    {
+        public string? UserName { get; set; }
+        public string? Password { get; set; }
+        public Guid? SiteId { get; set; }
+    }
+}

@@ -1,0 +1,37 @@
+@page "/licence"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout PlainLayout
+@using MarocLIS.Application.Licensing
+@inject WebTexts Texts
+@inject ILicenceState Licence
+@inject NavigationManager Navigation
+
+@*
+    The web interface without the licence that opens it. No import screen here, unlike the Windows
+    application's on a new installation: the licence is imported from the Windows application on the
+    server, and this page says so, or names the missing module.
+*@
+<PageTitle>MarocLIS — @Texts["Web.Licence.Title"]</PageTitle>
+
+<h1 class="form-title">@Texts["Web.Licence.Title"]</h1>
+
+<p class="message is-critical" role="alert" data-state="licence">@_message</p>
+
+<a class="btn btn-secondary" href="">@Texts["Web.Licence.Retry"]</a>
+
+@code {
+    private string? _message;
+
+    protected override void OnInitialized()
+    {
+        var access = Licence.RequireWebAccess();
+        if (access.IsSuccess)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        _message = Texts.Describe(access.Errors);
+    }
+}

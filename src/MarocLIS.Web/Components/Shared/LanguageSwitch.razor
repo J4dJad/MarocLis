@@ -1,0 +1,25 @@
+@using MarocLIS.Application.Administration
+@inject WebTexts Texts
+@inject ActiveLanguagesCache Languages
+
+@*
+    The language of the interface, as the shell's and the login's lists: only the languages the
+    laboratory works in (and the licence allows), each named in itself. A plain form: the page is
+    reloaded in the language chosen, mirrored for Arabic.
+*@
+@if (Languages.Current.Active.Count > 1)
+{
+    <form class="language-switch" method="post" action="@WebPaths.Language.TrimStart('/')" aria-label="@Texts["App.Language"]">
+        <input type="hidden" name="retour" value="@ReturnUrl" />
+        @foreach (var language in Languages.Current.Active)
+        {
+            <button type="submit" name="langue" value="@language" lang="@language.ToCultureName()[..2]"
+                    class="@(language == Texts.Language ? "lang is-current" : "lang")"
+                    aria-pressed="@(language == Texts.Language ? "true" : "false")">@LanguageSettings.OwnName(language)</button>
+        }
+    </form>
+}
+
+@code {
+    [Parameter] public string ReturnUrl { get; set; } = "/";
+}

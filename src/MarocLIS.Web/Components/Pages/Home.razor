@@ -1,0 +1,23 @@
+@page "/"
+@inject WebTexts Texts
+@inject SessionContext Context
+
+<PageTitle>MarocLIS — @Texts["Web.Home.Title"]</PageTitle>
+
+<div class="page">
+    <h1 class="page-title">@Texts.T("Web.Home.Welcome", Context.User.FullName)</h1>
+    <p class="page-lead">@Texts["Web.Home.Intro"]</p>
+
+    <div class="card">
+        <dl class="facts">
+            <dt>@Texts["App.ConnectedAs"]</dt>
+            <dd><bdi>@Context.User.UserName</bdi></dd>
+            <dt>@Texts["App.Site"]</dt>
+            <dd>@Context.User.SiteCode</dd>
+            <dt>@Texts["App.Workstation"]</dt>
+            <dd><bdi>@Context.Session?.Workstation</bdi></dd>
+            <dt>@Texts["Web.Home.Today"]</dt>
+            <dd>@DateTime.Now.ToString("dddd d MMMM yyyy", Texts.Culture)</dd>
+        </dl>
+    </div>
+</div>

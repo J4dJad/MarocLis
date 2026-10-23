@@ -5472,6 +5472,7 @@
   "Auth_PasswordReused": "This password has been used recently.",
   "Auth_PasswordMismatch": "The two passwords do not match.",
   "Auth_SessionRevoked": "Your account has been changed (deactivated, password reset or rights changed). The session is closed; please sign in again.",
+  "Web_DeviceMismatch": "Web session presented by a browser other than the one that signed in.",
   "Auth_DemoAccountDisabled": "This demonstration account has been disabled: the database now holds real data and its password is published. Use a personal account.",
 
   "Site_LegalNameRequired": "The site's registered name is required in order to invoice.",
@@ -6724,5 +6725,26 @@
     "Restoring": "Restoring the database…",
     "Upgrading": "Upgrading the database…",
     "Done": "Restore finished."
+  },
+  "Web": {
+    "NetworkRefused": "Access denied: MarocLIS Web can only be reached from the laboratory's local network.",
+    "Breadcrumb": "Breadcrumb",
+    "Menu": "Main menu",
+    "Home": {
+      "Title": "Home",
+      "Welcome": "Welcome, {0}",
+      "Intro": "Choose a screen from the menu. Screens are offered according to your rights and the licence modules.",
+      "Today": "Today"
+    },
+    "ScreenUnavailable": "This screen is not yet available in the Web version. Use the Windows version.",
+    "ScreenNotFound": "This screen does not exist.",
+    "ScreenRefusedTitle": "Access denied",
+    "BackHome": "Back to home",
+    "ConfirmSignOut": "Sign out?",
+    "Edition": "Web version",
+    "Licence": {
+      "Title": "MarocLIS Web is unavailable",
+      "Retry": "Try again"
+    }
   }
 }

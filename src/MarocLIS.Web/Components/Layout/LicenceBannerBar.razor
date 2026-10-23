@@ -1,0 +1,35 @@
+@using MarocLIS.Application.Licensing
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Licensing
+@inject WebTexts Texts
+@inject SessionContext Context
+
+@*
+    The banner under the header, as the Windows shell's (MainShellForm.Licence): the core decides
+    which one the licence calls for and for whom — orange before the end for those who can act on
+    it, red in the grace period and in read-only mode for everyone.
+*@
+@if (Banner is { } banner)
+{
+    <div class="licence-banner @(banner.Level == LicenceBannerLevel.Warning ? "is-warning" : "is-critical")" role="status">
+        <span class="licence-banner-text">@Text(banner)</span>
+        @if (Context.User.Has(Permissions.Administration.License))
+        {
+            <a class="licence-banner-link" href="@WebMenu.HrefOf("settings")">@Texts["Licence.Banner.Open"]</a>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public LicenceStatus Status { get; set; } = LicenceStatus.Pending;
+
+    private LicenceBanner? Banner =>
+        LicenceNavigation.BannerFor(Status, Context.User.Has(Permissions.Administration.License),
+                                    Context.User.Has(Permissions.Results.BiologicalValidate));
+
+    private string Text(LicenceBanner banner)
+    {
+        object?[] arguments = banner.CauseKey is { } cause ? [.. banner.Arguments, Texts[cause]] : banner.Arguments;
+        return Texts.T(banner.ResourceKey, arguments);
+    }
+}

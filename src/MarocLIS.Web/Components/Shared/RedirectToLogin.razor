@@ -1,0 +1,8 @@
+@inject NavigationManager Navigation
+
+@code {
+    // A tab whose session is gone: the sign-in, reloaded so the cookie's end is read by the server.
+    protected override void OnInitialized() =>
+        Navigation.NavigateTo($"{WebSessionCookie.LoginPath}?retour={Uri.EscapeDataString("/" + Navigation.ToBaseRelativePath(Navigation.Uri))}",
+                              forceLoad: true);
+}

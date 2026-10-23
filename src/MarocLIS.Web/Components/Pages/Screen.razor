@@ -1,0 +1,91 @@
+@page "/ecran/{Key}"
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Licensing
+@using MarocLIS.Domain.Audit
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject ILicenceState Licence
+@inject IPermissionGuard Guard
+@inject ISecurityAuditor Auditor
+
+@*
+    A screen of the menu. Opened only by the rule that builds the menu: a screen the operator may not
+    see is refused here too when its address is typed, and the refusal is recorded as the services
+    record one. For now every screen says it is not yet in the web version.
+*@
+<PageTitle>MarocLIS — @Title</PageTitle>
+
+<div class="page">
+    <h1 class="page-title">
+        @if (_decision == ScreenDecision.Open)
+        {
+            <Icon Glyph="WebMenu.IconOf(Key)" Class="icon-title" />
+        }
+        @Title
+    </h1>
+
+    @switch (_decision)
+    {
+        case ScreenDecision.Open:
+            <div class="card card-empty" data-state="unavailable">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Cpu" Class="icon-large" />
+                <p>@Texts["Web.ScreenUnavailable"]</p>
+            </div>
+            break;
+
+        case ScreenDecision.NotFound:
+            <div class="card card-refused" data-state="not-found" role="alert">
+                <p>@Texts["Web.ScreenNotFound"]</p>
+                <a href="">@Texts["Web.BackHome"]</a>
+            </div>
+            break;
+
+        default:
+            <div class="card card-refused" data-state="refused" role="alert">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Ban" Class="icon-large" />
+                <p>@_refusal</p>
+                <a href="">@Texts["Web.BackHome"]</a>
+            </div>
+            break;
+    }
+</div>
+
+@code {
+    [Parameter] public string Key { get; set; } = string.Empty;
+
+    private ScreenDecision _decision = ScreenDecision.NotFound;
+    private MarocLIS.Application.Navigation.MenuEntry? _entry;
+    private string? _refusal;
+    private string? _decidedFor;
+
+    private string Title => _decision == ScreenDecision.Open && _entry is not null
+        ? Texts[_entry.LabelKey]
+        : Texts["Web.ScreenRefusedTitle"];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_decidedFor == Key) return;
+        _decidedFor = Key;
+
+        (_decision, _entry) = ScreenAccess.Decide(Key, Context.User, Licence.Current);
+        _refusal = null;
+
+        switch (_decision)
+        {
+            case ScreenDecision.NoPermission:
+                // The guard refuses as it refuses any operation, and records the refusal.
+                var denied = Guard.RequireAny([.. _entry!.RequiredPermissions]);
+                _refusal = Texts.Describe(denied.Errors);
+                break;
+
+            case ScreenDecision.NotLicensed:
+                var module = LicenceNavigation.ModuleOfEntry[_entry!.Key];
+                var refused = Licence.RequireModule(module);
+                _refusal = Texts.Describe(refused.Errors);
+                await Auditor.LogAsync(SecurityEventKind.AuthorizationDenied, false,
+                                       failureReasonKey: refused.FirstError.ResourceKey,
+                                       details: $"Web screen {_entry.Key}: module {module} not licensed");
+                break;
+        }
+    }
+}

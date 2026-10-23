@@ -1,0 +1,36 @@
+@inject WebTexts Texts
+
+@*
+    The menu of the Windows shell: the same entries, groups and icons, only those the operator may
+    open. A group folds like the shell's (a native <details>, nothing to script).
+*@
+<nav class="nav" aria-label="@Texts["Web.Menu"]">
+    <NavLink class="nav-item" href="" Match="NavLinkMatch.All">
+        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FlaskConical" /><span>@Texts["Web.Home.Title"]</span>
+    </NavLink>
+
+    @foreach (var group in Groups)
+    {
+        if (group.Header is null)
+        {
+            @foreach (var item in group.Items)
+            {
+                <MenuLink Item="item" />
+            }
+        }
+        else
+        {
+            <details class="nav-group" open>
+                <summary class="nav-group-title">@Texts[group.Header.LabelKey]</summary>
+                @foreach (var item in group.Items)
+                {
+                    <MenuLink Item="item" />
+                }
+            </details>
+        }
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<WebMenuGroup> Groups { get; set; } = [];
+}

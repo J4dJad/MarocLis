@@ -1,0 +1,9 @@
+@inject WebTexts Texts
+
+<NavLink class="nav-item" href="@Item.Href" data-key="@Item.Entry.Key">
+    <Icon Glyph="Item.Icon" /><span>@Texts[Item.Entry.LabelKey]</span>
+</NavLink>
+
+@code {
+    [Parameter, EditorRequired] public WebMenuItem Item { get; set; } = default!;
+}

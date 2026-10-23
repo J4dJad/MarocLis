@@ -1,0 +1,12 @@
+@page "/introuvable"
+@inject WebTexts Texts
+
+<PageTitle>MarocLIS</PageTitle>
+
+<div class="page">
+    <h1 class="page-title">@Texts["Web.ScreenRefusedTitle"]</h1>
+    <div class="card card-refused" data-state="not-found">
+        <p>@Texts["Web.ScreenNotFound"]</p>
+        <a href="">@Texts["Web.BackHome"]</a>
+    </div>
+</div>
