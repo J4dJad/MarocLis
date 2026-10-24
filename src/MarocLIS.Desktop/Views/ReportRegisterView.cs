@@ -3,7 +3,6 @@ using MarocLIS.Application.Billing;
 using MarocLIS.Application.Reports;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
-using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Reports;
 using MarocLIS.Localization;
@@ -1028,19 +1027,7 @@ public sealed class ReportRegisterView : LocalizedView
         RefreshActions();
     }
 
-    private List<string> Flags(ReportRegisterRow row)
-    {
-        var flags = new List<string>(4);
-
-        if (row.IsSuperseded) flags.Add(T("Report.Superseded"));
-        if (row.IsAmendment) flags.Add(T($"ReportAmendmentKind.{row.AmendmentKind}"));
-        if (row.ContainsCriticalResults) flags.Add(T("Flag.Critical"));
-        if (row.ContainsReservations) flags.Add(T("Report.WithReservations"));
-        if (row.ContainsSubcontractedResults) flags.Add(T("Catalog.Subcontracted"));
-        if (!row.AllResultsAccredited) flags.Add(T("Report.PartlyOutsideScope"));
-
-        return flags;
-    }
+    private IEnumerable<string> Flags(ReportRegisterRow row) => ReportRegisterRules.Flags(row).Select(key => T(key));
 
     private string DeliveryText(ReportRegisterRow row) =>
         row.WasDelivered
@@ -1056,14 +1043,10 @@ public sealed class ReportRegisterView : LocalizedView
     /// The patient's payment status in a cell: « Payé », « Reste 120,00 DH », « Non facturé »; to
     /// a user without billing.view, who gets no amount, « Payé » or « Non payé ».
     /// </summary>
-    private string PaymentText(OrderPayment? payment) => payment switch
-    {
-        { State: OrderPaymentState.Paid } => T("Report.PaymentPaid"),
-        { State: OrderPaymentState.PatientShareDue, PatientDue: { } due } => T("Report.PaymentDue", Amount(due)),
-        { State: OrderPaymentState.NotInvoiced, PatientDue: not null } => T("Report.PaymentNotInvoiced"),
-        { IsSettled: false } => T("Report.PaymentUnpaid"),
-        _ => "—"
-    };
+    private string PaymentText(OrderPayment? payment) =>
+        ReportRegisterRules.PaymentStatus(payment) is { } status
+            ? status.Amount is { } amount ? T(status.Key, Amount(amount)) : T(status.Key)
+            : "—";
 
     /// <summary>The status in the side panel, with the invoice it is read from or the estimate.</summary>
     private string PaymentDetail(OrderPayment? payment)
@@ -1093,17 +1076,13 @@ public sealed class ReportRegisterView : LocalizedView
     /// </summary>
     private bool ConfirmUnpaid(string accession, OrderPayment? payment, string questionKey)
     {
-        if (payment is not { IsSettled: false }) return true;
+        if (ReportRegisterRules.UnpaidWarning(payment) is not { } warning) return true;
 
-        var said = payment switch
+        var said = warning switch
         {
-            { State: OrderPaymentState.NotInvoiced, PatientDue: { } estimate } =>
-                T("Report.UnpaidNotInvoiced", accession, Amount(estimate)),
-            { PatientDue: { } due, InvoiceNumber: { } number, CoveredOrders: > 1 } =>
-                T("Report.UnpaidDueShared", accession, Amount(due), number, payment.CoveredOrders),
-            { State: OrderPaymentState.PatientShareDue, PatientDue: { } due } =>
-                T("Report.UnpaidDue", accession, Amount(due)),
-            _ => T("Report.UnpaidNoAmount", accession)
+            { Amount: { } due, InvoiceNumber: { } number } => T(warning.Key, accession, Amount(due), number, warning.CoveredOrders),
+            { Amount: { } due } => T(warning.Key, accession, Amount(due)),
+            _ => T(warning.Key, accession)
         };
 
         return _dialogs.Confirm($"{said}\n\n{T(questionKey)}", T("Report.Payment"));
@@ -1296,22 +1275,15 @@ public sealed class ReportRegisterView : LocalizedView
         // Nothing is offered while an action is in flight (see RunActionAsync).
         var idle = !IsBusy;
 
-        _issue.Enabled = idle && SelectedPending is not null && _currentUser.Has(Permissions.Reports.Print);
+        // What the selection allows is the rules' (shared with the web): a version replaced by a
+        // newer one is neither handed over nor amended any more.
+        var actions = ReportRegisterRules.Actions(SelectedPending, Selected, _currentUser);
 
-        var row = Selected;
-
-        _reprint.Enabled = idle && row is { HasStoredPdf: true }
-                           && _currentUser.Has(Permissions.Reports.ReprintValidated);
+        _issue.Enabled = idle && actions.Issue;
+        _reprint.Enabled = idle && actions.Reprint;
         _openPdf.Enabled = _reprint.Enabled;
-
-        // A version replaced by a newer one is not handed over any more: the service refuses it.
-        _recordDelivery.Enabled = idle && row is { IsSuperseded: false }
-                                  && (_currentUser.Has(Permissions.Reports.Print)
-                                      || _currentUser.Has(Permissions.Reports.Send));
-
-        // An amendment supersedes the current version, so it is offered on that version only.
-        _amend.Enabled = idle && row is { IsSuperseded: false }
-                         && _currentUser.Has(Permissions.Reports.Amend);
+        _recordDelivery.Enabled = idle && actions.RecordDelivery;
+        _amend.Enabled = idle && actions.Amend;
 
         _refresh.Enabled = idle;
     }
@@ -1471,7 +1443,7 @@ public sealed class ReportRegisterView : LocalizedView
 
         // The menu item is not a gated control: the right is checked again here. The service
         // refuses in any case.
-        if (row.IsSuperseded || !_currentUser.Has(Permissions.Reports.Amend)) return;
+        if (!ReportRegisterRules.Actions(null, row, _currentUser).Amend) return;
 
         using var dialog = new ReportAmendmentDialog(Localizer, _dialogs, row);
 

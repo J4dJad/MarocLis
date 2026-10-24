@@ -94,16 +94,16 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
         _bearerCin = TextField("Report.BearerCin", 300, 200, 180, null, latin: true, mono: true);
 
         // As long as the delivery's columns: a longer entry failed the save of the hand-over.
-        _recipientName.MaxLength = 200;
-        _recipientIdentifier.MaxLength = 250;
-        _bearerName.MaxLength = 200;
-        _bearerCin.MaxLength = 20;
+        _recipientName.MaxLength = ReportDeliveryRules.RecipientNameMaxLength;
+        _recipientIdentifier.MaxLength = ReportDeliveryRules.RecipientIdentifierMaxLength;
+        _bearerName.MaxLength = ReportDeliveryRules.BearerNameMaxLength;
+        _bearerCin.MaxLength = ReportDeliveryRules.BearerCinMaxLength;
 
         Notice(20, 246, 560, 30, "Report.BearerNotice");
 
         _consentReference = TextField("Report.AuthorizingConsent", 20, 280, 380, null,
                                  latin: true, mono: true);
-        _consentReference.MaxLength = 38; // a consent identifier, braces included
+        _consentReference.MaxLength = ReportDeliveryRules.ConsentReferenceMaxLength;
 
         _consentNotice = Notice(20, 326, 560, 44, "Report.ThirdPartyConsentNotice",
                                  UiTheme.Abnormal);
@@ -124,14 +124,14 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
     private void RefreshForKind()
     {
         var kind = RecipientKind;
-        var thirdParty = kind == ReportRecipientKind.AuthorizedThirdParty;
+        var thirdParty = ReportDeliveryRules.NeedsConsent(kind);
 
         Enable(_consentReference, thirdParty);
 
         _consentNotice.Visible = thirdParty;
 
         // A bearer is only meaningful for a hand-over: an e-mail has no bearer.
-        var counter = Channel is DeliveryChannel.PrintedAtCounter or DeliveryChannel.Courier;
+        var counter = ReportDeliveryRules.TakesBearer(Channel);
 
         Enable(_bearerName, counter);
         Enable(_bearerCin, counter);
@@ -140,12 +140,7 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
         // prescriber was picked, and the hand-over was recorded under the patient's name.
         if (_recipientName.Text.Length == 0 || _recipientName.Text == _autoFilledName)
         {
-            _recipientName.Text = kind switch
-            {
-                ReportRecipientKind.Patient => _row.PatientName,
-                ReportRecipientKind.Prescriber => _row.PrescriberName ?? string.Empty,
-                _ => string.Empty
-            };
+            _recipientName.Text = ReportDeliveryRules.RecipientName(kind, _row);
             _autoFilledName = _recipientName.Text;
         }
 
@@ -158,13 +153,7 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
     /// </summary>
     private void FillContact()
     {
-        var contact = (Channel, RecipientKind) switch
-        {
-            (DeliveryChannel.Email, ReportRecipientKind.Patient) => _row.PatientEmail,
-            (DeliveryChannel.Email, ReportRecipientKind.Prescriber) => _row.PrescriberEmail,
-            (DeliveryChannel.SmsLink or DeliveryChannel.PrintedAtCounter, ReportRecipientKind.Patient) => _row.PatientPhone,
-            _ => null
-        };
+        var contact = ReportDeliveryRules.Contact(Channel, RecipientKind, _row);
 
         if (_recipientIdentifier.Text.Length > 0 && _recipientIdentifier.Text != _autoFilled) return;
 
@@ -174,17 +163,7 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
 
     private void RefreshForChannel()
     {
-        var channel = Channel;
-
-        _channelNotice.Text = Localizer[channel switch
-        {
-            DeliveryChannel.PrintedAtCounter => "Report.CounterChannelNotice",
-            DeliveryChannel.Email => _emailReady ? "Report.EmailChannelLive" : "Report.EmailChannelNotConfigured",
-            DeliveryChannel.SmsLink => _smsReady ? "Report.SmsChannelLive" : "Report.SmsChannelNotConfigured",
-            DeliveryChannel.Fax => "Report.FaxChannelNotice",
-            DeliveryChannel.Courier => "Report.CourierChannelNotice",
-            _ => "Report.InterfaceChannelNotice"
-        }];
+        _channelNotice.Text = Localizer[ReportDeliveryRules.ChannelNoticeKey(Channel, _emailReady, _smsReady)];
 
         RefreshForKind();
     }
@@ -198,45 +177,25 @@ internal sealed class ReportDeliveryDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        var kind = RecipientKind;
+        // The checks are the rules' (shared with the web): the recipient, the address an
+        // electronic channel needs, and for a third party the consent and the bearer's name and CIN.
+        var (refusal, consentId) = ReportDeliveryRules.Check(
+            Channel, RecipientKind, _recipientName.Text, _recipientIdentifier.Text,
+            _bearerName.Text, _bearerCin.Text, _consentReference.Text);
 
-        if (string.IsNullOrWhiteSpace(_recipientName.Text))
-        {
-            Dialogs.Warn(Localizer["Report_RecipientNameRequired"], Text);
-            _recipientName.Focus();
-            return;
-        }
+        if (consentId is not null) AuthorizingConsentId = consentId;
 
-        // An electronic channel with nowhere to send it is a delivery that did not happen.
-        if (Channel is DeliveryChannel.Email or DeliveryChannel.SmsLink or DeliveryChannel.Fax
-            && string.IsNullOrWhiteSpace(_recipientIdentifier.Text))
+        if (refusal is not null)
         {
-            Dialogs.Warn(Localizer["Report_RecipientIdentifierRequired"], Text);
-            _recipientIdentifier.Focus();
-            return;
-        }
-
-        if (kind == ReportRecipientKind.AuthorizedThirdParty)
-        {
-            if (!Guid.TryParse(_consentReference.Text.Trim(), out var consentId))
+            Dialogs.Warn(Localizer[refusal.Key], Text);
+            (refusal.Field switch
             {
-                Dialogs.Warn(Localizer["Report_ThirdPartyRequiresConsent"], Text);
-                _consentReference.Focus();
-                return;
-            }
-
-            AuthorizingConsentId = consentId;
-
-            // The bearer is the person physically taking it. Without their name and CIN the record
-            // says a third party collected it and nothing about who.
-            if (Channel == DeliveryChannel.PrintedAtCounter
-                && (string.IsNullOrWhiteSpace(_bearerName.Text)
-                    || string.IsNullOrWhiteSpace(_bearerCin.Text)))
-            {
-                Dialogs.Warn(Localizer["Report_BearerRequired"], Text);
-                _bearerName.Focus();
-                return;
-            }
+                "identifier" => _recipientIdentifier,
+                "consent" => _consentReference,
+                "bearer" => _bearerName,
+                _ => _recipientName
+            }).Focus();
+            return;
         }
 
         DialogResult = DialogResult.OK;
@@ -307,10 +266,7 @@ internal sealed class ReportAmendmentDialog : MasterDataEditor
         // Only the three real amendment kinds are offered: None is what a first release is, and
         // offering it here would let an operator issue an amendment that does not say it is one.
         _kind = Choice("Report.AmendmentKind", 20, 70, 260, ReportAmendmentKind.ResultCorrection,
-                       "ReportAmendmentKind",
-                       [ReportAmendmentKind.ResultCorrection, ReportAmendmentKind.Addition,
-                        ReportAmendmentKind.CommentRevision, ReportAmendmentKind.IdentityCorrection,
-                        ReportAmendmentKind.Retraction]);
+                       "ReportAmendmentKind", ReportDeliveryRules.AmendmentKinds);
 
         // Only the languages the laboratory works in; French for a report issued in one switched off since.
         _language = Choice("Order.ReportLanguage", 300, 70, 300, LanguageChoices.Coerce(row.Language), "AppLanguage",
@@ -327,8 +283,8 @@ internal sealed class ReportAmendmentDialog : MasterDataEditor
         _conclusionAr = TextField("Report.ConclusionAr", 320, 244, 280, null, arabic: true);
 
         // As long as the report's columns.
-        _reasonFr.MaxLength = _reasonAr.MaxLength = 1000;
-        _conclusionFr.MaxLength = _conclusionAr.MaxLength = 4000;
+        _reasonFr.MaxLength = _reasonAr.MaxLength = ReportDeliveryRules.AmendmentReasonMaxLength;
+        _conclusionFr.MaxLength = _conclusionAr.MaxLength = ReportDeliveryRules.ConclusionMaxLength;
 
         Notice(20, 290, 580, 44, "Report.ConclusionNotice");
 
@@ -346,20 +302,13 @@ internal sealed class ReportAmendmentDialog : MasterDataEditor
     }
 
     private void RefreshKindNotice() =>
-        _kindNotice.Text = Localizer[Kind switch
-        {
-            ReportAmendmentKind.ResultCorrection => "Report.ResultCorrectionNotice",
-            ReportAmendmentKind.Addition => "Report.AdditionNotice",
-            ReportAmendmentKind.CommentRevision => "Report.CommentRevisionNotice",
-            ReportAmendmentKind.Retraction => "Report.RetractionNotice",
-            _ => "Report.IdentityCorrectionNotice"
-        }];
+        _kindNotice.Text = Localizer[ReportDeliveryRules.AmendmentNoticeKey(Kind)];
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_reasonFr.Text))
+        if (ReportDeliveryRules.CheckAmendment(_reasonFr.Text) is { } refusal)
         {
-            Dialogs.Warn(Localizer["Report_AmendmentReasonRequired"], Text);
+            Dialogs.Warn(Localizer[refusal.Key], Text);
             _reasonFr.Focus();
             return;
         }
@@ -367,7 +316,7 @@ internal sealed class ReportAmendmentDialog : MasterDataEditor
         // A corrected identity means the earlier report may have gone to the wrong person, which is
         // a notifiable data breach under loi 08-09 rather than a clerical fix. Confirmed rather
         // than warned, because the operator has to decide whether it is really that.
-        if (Kind is ReportAmendmentKind.IdentityCorrection or ReportAmendmentKind.Retraction
+        if (ReportDeliveryRules.AmendmentNeedsConfirmation(Kind)
             && !Dialogs.Confirm(Localizer["Report.ConfirmIdentityAmendment"], Text))
             return;
 
