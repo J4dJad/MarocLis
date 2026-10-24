@@ -218,6 +218,27 @@ public sealed class WebPipelineTests
             scope.ServiceProvider.GetService(type).Should().NotBeNull(type.Name);
     }
 
+    /// <summary>The same for the report, billing, cash and claim screens, and the invoice's renderer.</summary>
+    [Fact]
+    public void TheServicesOfTheReportAndBillingScreens_AreRegistered()
+    {
+        using var web = new WebFactory(FullStatus());
+        using var scope = web.Services.CreateScope();
+
+        foreach (var type in new[]
+                 {
+                     typeof(MarocLIS.Application.Reports.ReportReleaseService),
+                     typeof(MarocLIS.Application.Billing.BillingService),
+                     typeof(MarocLIS.Application.Billing.InvoicePrintSettingsService),
+                     typeof(MarocLIS.Application.Billing.IInvoiceRenderer),
+                     typeof(MarocLIS.Application.Billing.IInvoicePrintSettingsQueries),
+                     typeof(MarocLIS.Application.Billing.IBillingQueries),
+                     typeof(MarocLIS.Application.Reports.IReportQueries),
+                     typeof(MarocLIS.Application.Administration.ActiveLanguagesCache)
+                 })
+            scope.ServiceProvider.GetService(type).Should().NotBeNull(type.Name);
+    }
+
     internal sealed class WebFactory(LicenceStatus licence) : WebApplicationFactory<MarocLIS.Web.Program>
     {
         private const string PeerHeader = "X-Test-Peer";

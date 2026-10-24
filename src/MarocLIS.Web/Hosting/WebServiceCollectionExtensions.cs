@@ -62,6 +62,8 @@ public static class WebServiceCollectionExtensions
         services.AddSingleton<IFontAvailability, FontAvailability>();
         // The fiche de paillasse of « Saisie des résultats », downloaded rather than printed.
         services.AddSingleton<IBenchWorksheetRenderer, QuestPdfBenchWorksheetRenderer>();
+        // The invoice and the payment receipt of « Facturation », downloaded rather than printed.
+        services.AddSingleton<IInvoiceRenderer, QuestPdfInvoiceRenderer>();
 
         // ---- The read side of the screens: the workstation's queries, one per scope. The
         // workstation isolates each call on a context of its own (IsolatedQueries); a page here runs
@@ -76,6 +78,8 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<IOrderQuotes, OrderQuoteService>();
         services.AddScoped<ISampleQueries, SampleQueries>();
         services.AddScoped<IBillingQueries, BillingQueries>();
+        // The invoice print settings and the discount ceiling of Paramètres › Factures.
+        services.AddScoped<IInvoicePrintSettingsQueries, InvoicePrintSettingsQueries>();
         services.AddScoped<IMasterDataQueries, MasterDataQueries>();
         // The sample and result screens: the patients to call back, the files to enter and to
         // validate, the bench's pending work and the context of a file being entered.

@@ -6728,6 +6728,12 @@
     "Done": "Restore finished."
   },
   "Web": {
+    "ReportsNoneToIssue": "No file is waiting for a report.",
+    "ReportsNoneInRegister": "No report in the period.",
+    "ReportsSelectRow": "Select a file or a version to see its preview.",
+    "BillingNoInvoice": "No invoice matches.",
+    "CashHardwareFromWorkstation": "The cash drawer and the ticket printer are driven from the Windows workstation; here, the receipt is downloaded as a PDF from « Billing ».",
+    "Loading": "Loading…",
     "NetworkRefused": "Access denied: MarocLIS Web can only be reached from the laboratory's local network.",
     "Breadcrumb": "Breadcrumb",
     "Menu": "Main menu",

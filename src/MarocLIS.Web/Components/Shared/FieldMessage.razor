@@ -1,0 +1,24 @@
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+
+@*
+    What a rule refused next to the field it names (FieldRefusal), as the workstation says it in a
+    warning and puts the cursor in that box: the text typed, or the amount, quoted in the message.
+*@
+@if (Refusal is { } refusal && refusal.Field == Field)
+{
+    <span class="message is-warning small" role="alert" data-refusal="@Field">@Say(Texts, refusal)</span>
+}
+
+@code {
+    [Parameter] public FieldRefusal? Refusal { get; set; }
+    [Parameter, EditorRequired] public string Field { get; set; } = string.Empty;
+
+    /// <summary>The refusal in the session's language, its amount written as money.</summary>
+    public static string Say(WebTexts texts, FieldRefusal refusal) => refusal switch
+    {
+        { Typed: { } typed } => texts.T(refusal.Key, typed),
+        { Amount: { } amount } => texts.T(refusal.Key, Money.Of(amount).Format(texts.Language, texts.Culture)),
+        _ => texts[refusal.Key]
+    };
+}

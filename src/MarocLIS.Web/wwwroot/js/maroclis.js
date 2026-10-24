@@ -107,7 +107,7 @@
     document.addEventListener("keydown", (e) => {
         if (e.altKey || e.metaKey) return;
         const name = (e.ctrlKey ? "Ctrl+" : "") + (e.key.length === 1 ? e.key.toUpperCase() : e.key);
-        if (!/^(F\d{1,2}|Ctrl\+S)$/.test(name)) return;
+        if (!/^(F\d{1,2}|Ctrl\+[SE])$/.test(name)) return;
 
         const scope = document.querySelector(".modal-backdrop:last-of-type") || document;
         const button = scope.querySelector(`[data-shortcut="${name}"]:not([disabled])`);

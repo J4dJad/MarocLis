@@ -6728,6 +6728,12 @@
     "Done": "اكتملت الاستعادة."
   },
   "Web": {
+    "ReportsNoneToIssue": "لا يوجد ملف في انتظار تقرير.",
+    "ReportsNoneInRegister": "لا يوجد تقرير خلال هذه الفترة.",
+    "ReportsSelectRow": "اختر ملفًا أو نسخة لعرض معاينتها.",
+    "BillingNoInvoice": "لا توجد فاتورة مطابقة.",
+    "CashHardwareFromWorkstation": "يُدار درج النقود وطابعة التذاكر من محطة Windows؛ هنا يُنزَّل الإيصال بصيغة PDF من « الفاتورة ».",
+    "Loading": "جارٍ التحميل…",
     "NetworkRefused": "تم رفض الوصول: لا يمكن الوصول إلى MarocLIS Web إلا من الشبكة المحلية للمختبر.",
     "Breadcrumb": "مسار التنقل",
     "Menu": "القائمة الرئيسية",

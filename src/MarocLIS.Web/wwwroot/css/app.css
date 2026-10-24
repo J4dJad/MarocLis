@@ -808,3 +808,17 @@ html[dir="rtl"] .input-value { text-align: start; }
 .trend-outside { fill: var(--abnormal); stroke: var(--surface-raised); stroke-width: 1.5; }
 .trend-current { fill: var(--surface-raised); stroke: var(--accent); stroke-width: 2.5; }
 .grid tr.is-current td { background: var(--accent-subtle); font-style: italic; }
+
+/* ---------- « Comptes rendus », « Facturation », « Caisse », « Tiers payant » ---------- */
+
+.sr-only { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.input-narrow { inline-size: auto; min-inline-size: 150px; }
+.grid .col-check { inline-size: 36px; text-align: center; }
+.grid tr.is-muted td { color: var(--text-muted); }
+.grid tr.is-credit td { font-style: italic; }
+.tabs .pill { margin-inline-start: 6px; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-block: 8px 12px; }
+.tile { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; background: var(--surface-sunken); border-radius: var(--radius); }
+.tile-value { font-size: 22px; font-weight: 700; }
+.takings td { padding-block: 6px; }
+.takings tr.is-total td { border-block-start: 2px solid var(--border-strong); }

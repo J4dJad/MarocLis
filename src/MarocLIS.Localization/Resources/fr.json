@@ -6729,6 +6729,12 @@
     "Done": "Restauration terminée."
   },
   "Web": {
+    "ReportsNoneToIssue": "Aucun dossier n'attend de compte rendu.",
+    "ReportsNoneInRegister": "Aucun compte rendu dans la période.",
+    "ReportsSelectRow": "Sélectionnez un dossier ou une version pour en voir l'aperçu.",
+    "BillingNoInvoice": "Aucune facture ne correspond.",
+    "CashHardwareFromWorkstation": "Le tiroir-caisse et l'imprimante de tickets se commandent depuis le poste Windows ; ici, le reçu se télécharge en PDF depuis « Facturation ».",
+    "Loading": "Chargement…",
     "NetworkRefused": "Accès refusé : MarocLIS Web n'est accessible que depuis le réseau local du laboratoire.",
     "Breadcrumb": "Fil d'Ariane",
     "Menu": "Menu principal",
