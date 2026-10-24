@@ -23,7 +23,7 @@
         <nav class="tabs" role="tablist">
             @foreach (var (tab, key) in Tabs)
             {
-                <button type="button" role="tab" class="tab @(tab == _tab ? "is-current" : null)" aria-selected="@(tab == _tab)"
+                <button type="button" role="tab" class="tab @(tab == _tab ? "is-current" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
                         data-tab="@tab" @onclick="() => _tab = tab">@Texts[key]</button>
             }
         </nav>

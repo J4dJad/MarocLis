@@ -33,11 +33,11 @@
                            value="@_term" @oninput="TermChanged" @onkeydown="SearchKey" />
                 </div>
                 <div class="chips" role="group">
-                    <button type="button" class="chip @(_filter.LastWeek ? "is-pressed" : null)" aria-pressed="@_filter.LastWeek" data-filter="week"
+                    <button type="button" class="chip @(_filter.LastWeek ? "is-pressed" : null)" aria-pressed="@(_filter.LastWeek ? "true" : "false")" data-filter="week"
                             @onclick="() => _filter = _filter with { LastWeek = !_filter.LastWeek }">@Texts["OrderFile.FilterWeek"]</button>
-                    <button type="button" class="chip @(_filter.ActiveOnly ? "is-pressed" : null)" aria-pressed="@_filter.ActiveOnly" data-filter="active"
+                    <button type="button" class="chip @(_filter.ActiveOnly ? "is-pressed" : null)" aria-pressed="@(_filter.ActiveOnly ? "true" : "false")" data-filter="active"
                             @onclick="() => _filter = _filter with { ActiveOnly = !_filter.ActiveOnly }">@Texts["OrderFile.FilterActive"]</button>
-                    <button type="button" class="chip @(_filter.UrgentOnly ? "is-pressed" : null)" aria-pressed="@_filter.UrgentOnly" data-filter="urgent"
+                    <button type="button" class="chip @(_filter.UrgentOnly ? "is-pressed" : null)" aria-pressed="@(_filter.UrgentOnly ? "true" : "false")" data-filter="urgent"
                             @onclick="() => _filter = _filter with { UrgentOnly = !_filter.UrgentOnly }">@Texts["OrderFile.FilterUrgent"]</button>
                 </div>
                 <span class="list-tools-end">
@@ -140,7 +140,7 @@
                     <div class="tabs" role="tablist">
                         @foreach (var (tab, caption) in Tabs(detail))
                         {
-                            <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab)"
+                            <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
                                     data-tab="@tab" @onclick="() => _tab = tab">@caption</button>
                         }
                     </div>

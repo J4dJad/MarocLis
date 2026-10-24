@@ -38,7 +38,7 @@
         <div class="chips" role="group">
         @foreach (var (scope, key, count) in Chips())
         {
-            <button type="button" class="chip @(scope == _scope ? "is-pressed" : null)" aria-pressed="@(scope == _scope)"
+            <button type="button" class="chip @(scope == _scope ? "is-pressed" : null)" aria-pressed="@(scope == _scope ? "true" : "false")"
                     data-scope="@scope" @onclick="() => ScopeAsync(scope)">
                 @Texts[key]@(count is { } n ? $" ({n.ToString(CultureInfo.InvariantCulture)})" : string.Empty)
             </button>

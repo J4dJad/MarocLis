@@ -59,6 +59,11 @@ public sealed class WebOrderFileTests : WebScreenContext
 
         page.Find("[data-tab=Tubes]").Click();
         page.FindAll("[data-grid=samples] tbody tr").Should().ContainSingle();
+
+        // The states are said as « true » / « false », as a screen reader expects them, not as a bare attribute.
+        page.Find("[data-tab=Tubes]").GetAttribute("aria-selected").Should().Be("true");
+        page.Find("[data-tab=Analyses]").GetAttribute("aria-selected").Should().Be("false");
+        page.FindAll("[data-filter]").Select(c => c.GetAttribute("aria-pressed")).Should().OnlyContain(v => v == "true" || v == "false");
     }
 
     [Fact]

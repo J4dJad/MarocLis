@@ -118,7 +118,7 @@
                     <div class="segmented" role="group" data-field="fasting">
                         @foreach (var (value, key) in FastingChoices)
                         {
-                            <button type="button" class="btn @(value == _fasting ? "btn-primary" : "btn-secondary")" aria-pressed="@(value == _fasting)"
+                            <button type="button" class="btn @(value == _fasting ? "btn-primary" : "btn-secondary")" aria-pressed="@(value == _fasting ? "true" : "false")"
                                     data-fasting="@(value?.ToString() ?? "unknown")" @onclick="() => SetFasting(value)">@Texts[key]</button>
                         }
                     </div>
@@ -162,7 +162,7 @@
                     <span class="chips-label">@Texts["OrderEntry.Catalogue"]</span>
                     @foreach (var (key, text) in FilterChips())
                     {
-                        <button type="button" class="chip @(key == _filter ? "is-pressed" : null)" aria-pressed="@(key == _filter)"
+                        <button type="button" class="chip @(key == _filter ? "is-pressed" : null)" aria-pressed="@(key == _filter ? "true" : "false")"
                                 data-filter="@key" @onclick="() => _filter = key">@text</button>
                     }
                 </div>

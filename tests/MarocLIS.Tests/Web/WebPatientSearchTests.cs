@@ -55,6 +55,7 @@ public sealed class WebPatientSearchTests : WebScreenContext
                                                 && e.Count == 1 && e.Query == "alaoui");
         DataAudit.Entries.Should().Contain(e => e.Kind == DataAccessKind.ViewPatient && e.PatientId == _fatima.Id);
         page.Find("[data-panel=patient]").TextContent.Should().Contain("2610-000042");
+        page.FindAll("[data-scope]").Select(c => c.GetAttribute("aria-pressed")).Should().Contain("true").And.Contain("false");
     }
 
     [Fact]
