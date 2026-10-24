@@ -1280,12 +1280,10 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
 
         // The stored names as they are: splitting the displayed full name at its first space moved
         // half of a compound surname ("El Amrani") into the first name on every save.
-        var parts = (row?.FullName ?? typedName?.Trim() ?? string.Empty).Split(' ', 2);
+        var (last, first) = PrescriberEntryRules.SplitTypedName(row?.FullName ?? typedName);
 
-        _lastName = TextField("Patient.LastName", 20, 14, 200,
-                              _stored?.LastName ?? parts.ElementAtOrDefault(0));
-        _firstName = TextField("Patient.FirstName", 240, 14, 200,
-                               _stored?.FirstName ?? parts.ElementAtOrDefault(1));
+        _lastName = TextField("Patient.LastName", 20, 14, 200, _stored?.LastName ?? last);
+        _firstName = TextField("Patient.FirstName", 240, 14, 200, _stored?.FirstName ?? first);
         _nameAr = TextField("Patient.LastNameArabic", 460, 14, 240, row?.FullNameArabic, arabic: true);
 
         _kind = Choice("Field.Name", 20, 68, 220, row?.Kind ?? PrescriberKind.GeneralPractitioner,
@@ -1358,9 +1356,7 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
 
         // Only a physician files an AMO claim, so the INPE warning is scoped to those kinds rather
         // than nagging on a dentist or an institution.
-        _inpeNotice.Visible = kind is PrescriberKind.GeneralPractitioner
-                                   or PrescriberKind.Specialist
-                              && string.IsNullOrWhiteSpace(_inpe.Text);
+        _inpeNotice.Visible = PrescriberEntryRules.WarnsOfMissingInpe(kind, _inpe.Text);
 
         var delivery = Selected<ReportDeliveryPreference>(_delivery);
 
@@ -1373,9 +1369,9 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_lastName.Text))
+        if (PrescriberEntryRules.Problem(_lastName.Text) is { } problem)
         {
-            Dialogs.Warn(Localizer["Prescriber_LastNameRequired"]);
+            Dialogs.Warn(Localizer[problem]);
             _lastName.Focus();
             return;
         }
