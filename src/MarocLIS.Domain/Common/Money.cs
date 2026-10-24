@@ -49,11 +49,18 @@ public readonly record struct Money(decimal Amount)
         return result;
     }
 
-    public string Format(AppLanguage language) => language switch
+    public string Format(AppLanguage language) => Format(language, System.Globalization.CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// The amount in the language's currency notation, its digits in <paramref name="culture"/>: the
+    /// workstation formats in its thread's culture, a web page in its session's, which the server's
+    /// thread does not carry.
+    /// </summary>
+    public string Format(AppLanguage language, IFormatProvider culture) => language switch
     {
-        AppLanguage.Arabic => $"{Amount:N2} {SymbolAr}",
-        AppLanguage.English => $"{Amount:N2} {CurrencyCode}",
-        _ => $"{Amount:N2} {SymbolFr}"
+        AppLanguage.Arabic => string.Format(culture, "{0:N2} {1}", Amount, SymbolAr),
+        AppLanguage.English => string.Format(culture, "{0:N2} {1}", Amount, CurrencyCode),
+        _ => string.Format(culture, "{0:N2} {1}", Amount, SymbolFr)
     };
 
     public override string ToString() => Format(AppLanguage.French);
