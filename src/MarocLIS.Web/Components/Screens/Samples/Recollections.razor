@@ -1,0 +1,302 @@
+@using System.Globalization
+@using MarocLIS.Application.Samples
+@using MarocLIS.Domain.Orders
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<Recollections> Logger
+
+@*
+    « Re-prélèvements », the workstation's RecollectionView: every replacement tube not drawn yet,
+    oldest refusal first, with the patient's number and the calls already made; the patient's card
+    beside it, from which the call, the SMS and the closing of the case are taken. The row leaves
+    the list on its own once the new tube is drawn at « Prélèvements ». The chips, the search, the
+    red rows and the actions offered are RecollectionRules'; what is done, RecollectionService's.
+*@
+<div class="screen recollections" data-screen="recollections">
+    <div class="toolbar">
+        <span class="muted" data-state="count">@Texts.T("Recollection.Count", _rows.Count, _rows.Count(r => r.ContactCount == 0))</span>
+        <span class="toolbar-spacer"></span>
+        <ActionButton Key="Action.Refresh" OnClick="ActivateAsync" />
+        <ActionButton Key="Recollection.RecordCall" Primary="true" Disabled="@(!Actions.RecordCall)" OnClick="AskCall" />
+    </div>
+
+    <div class="toolbar">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["Recollection.SearchPlaceholder"]" aria-label="@Texts["Recollection.SearchPlaceholder"]"
+                   data-field="recollection-search" autocomplete="off" @bind="_term" @bind:event="oninput" />
+        </div>
+        <div class="chips" role="group">
+            @foreach (var (filter, caption) in Chips)
+            {
+                <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
+                        data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => _filter = filter">@caption</button>
+            }
+        </div>
+    </div>
+
+    @if (_status is { } status)
+    {
+        <p class="message is-@status.Tone" role="status" data-state="status">@status.Text</p>
+    }
+
+    <div class="split">
+        <div class="card card-flush split-main">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="recollections">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Recollection.RejectedAt"]</th>
+                            <th>@Texts["Order.AccessionNumber"]</th>
+                            <th>@Texts["Patient.Title"]</th>
+                            <th>@Texts["Recollection.Analyses"]</th>
+                            <th>@Texts["Recollection.Reason"]</th>
+                            <th>@Texts["Recollection.LastContact"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Shown)
+                        {
+                            <tr class="@(row.ReplacementSampleId == Selected?.ReplacementSampleId ? "is-selected" : null) @(RecollectionRules.IsPriority(row, Clock.Now) ? "is-priority" : row.ContactCount > 0 ? "is-contacted" : null)"
+                                data-row="@row.AccessionNumber" @onclick="() => _selectedId = row.ReplacementSampleId">
+                                <td class="mono small">@row.RejectedAt.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
+                                <td class="mono">@row.AccessionNumber</td>
+                                <td>@row.PatientName</td>
+                                <td class="small">@row.AnalysisCodes</td>
+                                <td class="small">@Reason(row)</td>
+                                <td class="small">@Contact(row, withCount: true)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <aside class="card split-side" data-card="recall">
+            @if (Selected is not { } selected)
+            {
+                <p class="muted" data-state="no-row">@Texts["Recollection.SelectRow"]</p>
+            }
+            else
+            {
+                <div class="identity">
+                    <span class="identity-name">@selected.PatientName</span>
+                    <span class="mono">@(selected.Phone ?? Texts["Recollection.NoPhone"])</span>
+                </div>
+                <div class="pills">
+                    @if (selected.Priority != OrderPriority.Routine)
+                    {
+                        <Pill Text="@($"! {Texts[$"Priority.{selected.Priority}"]}")" Tone="Warning" />
+                    }
+                    @if (RecollectionRules.IsOverdue(selected, Clock.Now))
+                    {
+                        <Pill Text="@($"! {Texts["Recollection.Overdue"]}")" Tone="Critical" />
+                    }
+                    <Pill Text="@(selected.ContactCount == 0 ? $"○ {Texts["Recollection.NotContacted"]}" : $"✓ {Texts.T("Recollection.Contacted", selected.ContactCount)}")"
+                          Tone="@(selected.ContactCount == 0 ? "Waiting" : "Ok")" />
+                </div>
+                <dl class="facts">
+                    <dt>@Texts["Order.AccessionNumber"]</dt><dd class="mono">@selected.AccessionNumber</dd>
+                    <dt>@Texts["Recollection.RejectedAt"]</dt><dd class="mono">@selected.RejectedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)</dd>
+                    <dt>@Texts["Recollection.Analyses"]</dt><dd>@selected.AnalysisCodes</dd>
+                    <dt>@Texts["Recollection.Reason"]</dt><dd>@Reason(selected)</dd>
+                    <dt>@Texts["Recollection.NewTube"]</dt><dd class="mono strong">@selected.ReplacementBarcode</dd>
+                    <dt>@Texts["Recollection.LastContact"]</dt><dd>@Contact(selected, withCount: false)</dd>
+                </dl>
+                <div class="actions">
+                    <ActionButton Key="Recollection.SendSms" Disabled="@(!Actions.SendSms)" OnClick="AskSms" />
+                    <ActionButton Key="Recollection.Abandon" Disabled="@(!Actions.Abandon)" OnClick="AskAbandon" />
+                </div>
+            }
+        </aside>
+    </div>
+</div>
+
+@if (Selected is { } current)
+{
+    @switch (_dialog)
+    {
+        case RecallDialog.Call:
+            <TextPrompt Name="call" Title="@Texts["Recollection.RecordCall"]" MaxLength="490" Multiline="true"
+                        Prompt="@Texts.T("Recollection.CallPrompt", current.PatientName, current.Phone ?? "—")"
+                        OnConfirm="RecordCallAsync"
+                        OnCancel="CloseDialog" />
+            break;
+
+        case RecallDialog.Sms:
+            <TextPrompt Name="sms" Title="@Texts["Recollection.SendSms"]" Initial="@current.Phone"
+                        Prompt="@Texts.T("Recollection.SmsPrompt", current.PatientName)"
+                        OnConfirm="SendSmsAsync" OnCancel="CloseDialog" />
+            break;
+
+        case RecallDialog.Abandon:
+            <ReasonPrompt Title="@Texts["Recollection.Abandon"]" MaxLength="470"
+                          Prompt="@Texts.T("Recollection.AbandonPrompt", current.AccessionNumber, current.AnalysisCodes)"
+                          OnConfirm="AbandonAsync"
+                          OnCancel="CloseDialog" />
+            break;
+
+        case RecallDialog.Message when _message is { } message:
+            <Modal Name="recollection-message" Title="@message.Title" OnCancel="CloseDialog">
+                <ChildContent><p class="info-line">@message.Text</p></ChildContent>
+                <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+            </Modal>
+            break;
+    }
+}
+
+@code {
+    private enum RecallDialog { None, Call, Sms, Abandon, Message }
+
+    private sealed record Message(string Title, string Text);
+
+    private IReadOnlyList<RecollectionRow> _rows = [];
+    private RecollectionFilter _filter = RecollectionFilter.All;
+    private string _term = string.Empty;
+    private Guid? _selectedId;
+    private bool _canSendSms;
+
+    private RecallDialog _dialog;
+    private Message? _message;
+    private (string Text, string Tone)? _status;
+
+    private IReadOnlyList<RecollectionRow> Shown =>
+        [.. _rows.Where(r => RecollectionRules.Matches(r, _filter, _term, Clock.Now))];
+
+    /// <summary>The patient highlighted: the one clicked, kept after a call, else the first listed.</summary>
+    private RecollectionRow? Selected
+    {
+        get
+        {
+            var shown = Shown;
+            return shown.FirstOrDefault(r => r.ReplacementSampleId == _selectedId) ?? shown.FirstOrDefault();
+        }
+    }
+
+    private RecollectionActions Actions => RecollectionRules.Actions(Selected, _canSendSms, Context.User);
+
+    private IEnumerable<(RecollectionFilter Filter, string Caption)> Chips
+    {
+        get
+        {
+            yield return (RecollectionFilter.All, $"{Texts["Recollection.FilterAll"]} · {_rows.Count}");
+            yield return (RecollectionFilter.NotContacted, $"{Texts["Recollection.NotContacted"]} · {_rows.Count(r => r.ContactCount == 0)}");
+            yield return (RecollectionFilter.Priority, $"{Texts["Recollection.FilterPriority"]} · {_rows.Count(r => RecollectionRules.IsPriority(r, Clock.Now))}");
+        }
+    }
+
+    protected override Task OnInitializedAsync() => ActivateAsync();
+
+    private async Task ActivateAsync()
+    {
+        try
+        {
+            var (result, canSendSms) = await Scopes.RunAsync<RecollectionService, (Result<IReadOnlyList<RecollectionRow>>, bool)>(
+                async s => (await s.GetPendingAsync(), s.CanSendSms));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Nav.Recollections"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            _rows = result.Value;
+            _canSendSms = canSendSms;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the recollection list failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private string Reason(RecollectionRow row) =>
+        Texts[$"RejectionReason.{row.Reason}"] + (string.IsNullOrWhiteSpace(row.Comment) ? string.Empty : $" — {row.Comment}");
+
+    private string Contact(RecollectionRow row, bool withCount) =>
+        row.LastContactAt is { } at
+            ? $"{at.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)}  {row.LastContactDetail}" +
+              (withCount && row.ContactCount > 1 ? $"  (×{row.ContactCount})" : string.Empty)
+            : Texts["Recollection.NotContacted"];
+
+    // ---- Actions -----------------------------------------------------------------------------------
+
+    private void CloseDialog()
+    {
+        _dialog = RecallDialog.None;
+        _message = null;
+    }
+
+    private void Show(string title, string text)
+    {
+        _message = new Message(title, text);
+        _dialog = RecallDialog.Message;
+    }
+
+    private void AskCall()
+    {
+        if (Actions.RecordCall) _dialog = RecallDialog.Call;
+    }
+
+    private void AskSms()
+    {
+        if (Actions.SendSms) _dialog = RecallDialog.Sms;
+    }
+
+    private void AskAbandon()
+    {
+        if (Actions.Abandon) _dialog = RecallDialog.Abandon;
+    }
+
+    private async Task SendSmsAsync(string phone)
+    {
+        if (Selected is not { } row) return;
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            CloseDialog();
+            return;
+        }
+
+        await RunAsync(s => s.SendRecallSmsAsync(row.ReplacementSampleId, phone), Texts.T("Recollection.SmsSent", phone.Trim()),
+                       Texts["Recollection.SendSms"]);
+    }
+
+    private Task RecordCallAsync(string note) =>
+        Selected is { } row
+            ? RunAsync(s => s.RecordContactAsync(row.ReplacementSampleId, RecallChannel.Phone, note),
+                       Texts.T("Recollection.CallRecorded", row.AccessionNumber), Texts["Recollection.RecordCall"])
+            : Task.CompletedTask;
+
+    private Task AbandonAsync(string reason) =>
+        Selected is { } row
+            ? RunAsync(s => s.AbandonAsync(row.ReplacementSampleId, reason),
+                       Texts.T("Recollection.Abandoned", row.AccessionNumber), Texts["Recollection.Abandon"])
+            : Task.CompletedTask;
+
+    private async Task RunAsync(Func<RecollectionService, Task<Result>> action, string done, string title)
+    {
+        _dialog = RecallDialog.None;
+        // The patient just called stays highlighted after the reload.
+        _selectedId = Selected?.ReplacementSampleId;
+
+        try
+        {
+            var result = await Scopes.RunAsync(action);
+            if (result.IsFailure)
+            {
+                Show(title, Texts.Describe(result.Errors));
+                return;
+            }
+
+            _status = (done, "normal");
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Recollection action failed.");
+            Show(title, Texts["Message.UnexpectedError"]);
+        }
+    }
+}
