@@ -1,0 +1,67 @@
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Billing
+@inject WebTexts Texts
+
+@*
+    « Réponse de l'organisme », the workstation's ClaimOutcomeDialog: the answers a payer can
+    return on the claims sent (no « Réglé »: a batch answer records no money), the reason mandatory
+    for a refusal or a part-payment. The outcomes and the check are BillingScreenRules'.
+*@
+<Modal Name="claim-outcome" Title="@Texts["Billing.RecordClaimOutcome"]" Hint="@Texts["Finance.Dialog.ClaimOutcome"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <p class="strong" data-state="count">@Texts.T("Billing.ClaimOutcomeForCount", InvoiceCount)</p>
+        <label class="field">
+            <span class="field-label">@Texts["Billing.ClaimOutcome"]</span>
+            <select class="input" data-field="outcome" @onchange="OutcomeChanged">
+                @foreach (var status in BillingScreenRules.ClaimOutcomes)
+                {
+                    <option value="@status" selected="@(status == _outcome)">@Texts[$"ClaimStatus.{status}"]</option>
+                }
+            </select>
+        </label>
+        @if (ReasonRequired)
+        {
+            <p class="small abnormal" data-state="reason-notice">@Texts["Claim_RejectionReasonRequired"]</p>
+        }
+        <label class="field">
+            <span class="field-label @(ReasonRequired ? "abnormal" : "muted")">@Texts["Billing.ClaimRejectionReason"]</span>
+            <input class="input" data-field="reason" maxlength="@BillingScreenRules.ClaimReasonMaxLength" disabled="@(!ReasonRequired)"
+                   @bind="_reason" @bind:event="oninput" />
+            <FieldMessage Refusal="_refusal" Field="reason" />
+        </label>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="AcceptAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public int InvoiceCount { get; set; }
+    [Parameter] public EventCallback<(ClaimStatus Outcome, string? Reason)> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private ClaimStatus _outcome = BillingScreenRules.ClaimOutcomes[0];
+    private string _reason = string.Empty;
+    private FieldRefusal? _refusal;
+
+    private bool ReasonRequired => BillingScreenRules.ClaimOutcomeNeedsReason(_outcome);
+
+    private void OutcomeChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ClaimStatus>(e.Value?.ToString(), out var outcome)) _outcome = outcome;
+        if (!ReasonRequired) _reason = string.Empty;
+        _refusal = null;
+    }
+
+    private async Task AcceptAsync()
+    {
+        _refusal = BillingScreenRules.CheckClaimOutcome(_outcome, _reason);
+        if (_refusal is not null) return;
+
+        await OnConfirm.InvokeAsync((_outcome, string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim()));
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

@@ -1,0 +1,142 @@
+@using System.Globalization
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+
+@*
+    « Émettre la facture », the workstation's InvoiceIssueDialog: the orders listed rather than
+    counted, so a mis-ticked row is seen against the paperwork; for whoever may grant one, the
+    discount (an amount or a percentage) with the net shown live, its reason, and beyond the ceiling
+    of Paramètres › Factures another user's name and password. No Enter key: issuing takes a number
+    from a series the tax law wants unbroken. The reading and the checks are DiscountEntry's.
+*@
+<Modal Name="issue-invoice" Title="@Texts["Billing.IssueInvoice"]" Hint="@Texts["Finance.Dialog.IssueInvoice"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <div class="identity">
+            <span class="identity-name">@Orders[0].PatientName</span>
+            <span class="muted">@(Orders[0].PayerName ?? Texts["Billing.PayerNotCovered"])</span>
+        </div>
+        <ul class="picked" data-state="orders">
+            @foreach (var order in Orders)
+            {
+                <li><span class="mono">@order.AccessionNumber</span><span>@order.AnalysisCount @Texts["Catalog.Analyses"]</span><span class="num mono">@Money(order.Total)</span></li>
+            }
+        </ul>
+        <p class="strong" data-state="gross">@Texts["Billing.Gross"]   @Money(Gross)</p>
+
+        @if (CanDiscount)
+        {
+            var reading = DiscountEntry.Read(_discount, Gross, Cap);
+            <div class="form-grid">
+                <label class="field">
+                    <span class="field-label">@Texts["Billing.DiscountAmountOrPercent"]</span>
+                    <input class="input num mono" dir="ltr" data-field="discount" maxlength="15" placeholder="@Texts["Billing.DiscountPlaceholder"]"
+                           @bind="_discount" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="discount" />
+                </label>
+                <p class="field strong @(reading.AboveCap || !reading.IsValid ? "abnormal" : "accent")" data-state="net">@NetText(reading)</p>
+            </div>
+            <label class="field">
+                <span class="field-label">@Texts["Billing.DiscountReason"]</span>
+                <input class="input" data-field="discount-reason" maxlength="@BillingScreenRules.DiscountReasonMaxLength" @bind="_reason" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="reason" />
+            </label>
+            <p class="small muted">@Texts["Billing.DiscountNotice"]</p>
+
+            @if (reading.AboveCap)
+            {
+                <p class="strong" data-state="approval">@Texts["Billing.DiscountApprovalHeading"]</p>
+                <div class="form-grid">
+                    <label class="field">
+                        <span class="field-label">@Texts["Billing.DiscountApprover"]</span>
+                        <input class="input" dir="ltr" autocomplete="off" data-field="approver" maxlength="@DiscountEntry.ApproverMaxLength"
+                               @bind="_approver" @bind:event="oninput" />
+                        <FieldMessage Refusal="_refusal" Field="approver" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Billing.DiscountApproverPassword"]</span>
+                        <input class="input" type="password" dir="ltr" autocomplete="new-password" data-field="approver-password"
+                               maxlength="@DiscountEntry.ApproverPasswordMaxLength" @bind="_approverPassword" @bind:event="oninput" />
+                        <FieldMessage Refusal="_refusal" Field="password" />
+                    </label>
+                </div>
+            }
+        }
+
+        @if (Refused is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refused">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Billing.IssueInvoice" Primary="true" Disabled="@Busy" OnClick="AcceptAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>What the service is called with.</summary>
+    public sealed record Request(decimal? DiscountAmount, string? DiscountReason, DiscountApproval? Approval);
+
+    [Parameter, EditorRequired] public IReadOnlyList<BillableOrderRow> Orders { get; set; } = [];
+    [Parameter] public decimal Gross { get; set; }
+    [Parameter] public bool CanDiscount { get; set; }
+    [Parameter] public DiscountCapSettings Cap { get; set; } = DiscountCapSettings.Default;
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>The service's refusal of the approval: the dialog stays, the password emptied.</summary>
+    [Parameter] public string? Refused { get; set; }
+
+    [Parameter] public EventCallback<Request> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _discount = string.Empty, _reason = string.Empty, _approver = string.Empty, _approverPassword = string.Empty;
+    private FieldRefusal? _refusal;
+    private string? _refusedSeen;
+
+    protected override void OnParametersSet()
+    {
+        // A refused approval is corrected here, the discount and the reason still filled in.
+        if (Refused != _refusedSeen)
+        {
+            _refusedSeen = Refused;
+            if (Refused is not null) _approverPassword = string.Empty;
+        }
+    }
+
+    private string Money(decimal amount) => MarocLIS.Domain.Common.Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string NetText(DiscountReading reading)
+    {
+        if (!reading.IsValid) return Texts["Billing.DiscountInvalid"];
+
+        if (reading.AboveCap)
+        {
+            var ceiling = Money(reading.Ceiling);
+            return reading.AmountCapApplies
+                ? Texts.T("Billing.DiscountAboveCapAmount", ceiling)
+                : Texts.T("Billing.DiscountAboveCapPercent", Cap.MaxPercent.ToString("0.##", Texts.Culture), ceiling);
+        }
+
+        var discount = reading.Discount!.Value;
+        return reading.IsPercent
+            ? Texts.T("Billing.DiscountAndNet", Money(discount), Money(Gross - discount))
+            : $"{Texts["Billing.Net"]}   {Money(Gross - discount)}";
+    }
+
+    private async Task AcceptAsync()
+    {
+        if (CanDiscount)
+        {
+            _refusal = DiscountEntry.Check(_discount, Gross, Cap, _reason, _approver, _approverPassword);
+            if (_refusal is not null) return;
+        }
+
+        await OnConfirm.InvokeAsync(CanDiscount
+            ? new Request(DiscountEntry.Granted(_discount, Gross), string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
+                          DiscountEntry.Approval(_discount, Gross, Cap, _approver, _approverPassword))
+            : new Request(null, null, null));
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

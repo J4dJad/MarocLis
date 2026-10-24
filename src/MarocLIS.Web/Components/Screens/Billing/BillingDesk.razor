@@ -1,0 +1,851 @@
+@using System.Globalization
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Billing
+@using MarocLIS.Domain.Billing
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Orders
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IInvoiceRenderer InvoiceRenderer
+@inject IJSRuntime JS
+@inject ILogger<BillingDesk> Logger
+
+@*
+    « Facturation », the workstation's BillingView: the work not yet invoiced, ticked to issue one
+    invoice per patient and payer, with its deposits; the receivables ledger with its status chips
+    and search, ticked to settle, correct (credit note, refund, bounced cheque), claim from the payer
+    or print. What may be done and refused is BillingScreenRules' and DiscountEntry's; what is done,
+    BillingService's, which records each act. An invoice or a receipt is downloaded as a PDF where
+    the workstation opens it in its viewer.
+*@
+<div class="screen billing" data-screen="billing">
+    <div class="toolbar">
+        <span class="muted" data-state="count">@Texts.T("Finance.BillingCount", _pending.Count(r => r.IsInvoiceable), _counts.Values.Sum())</span>
+        <span class="toolbar-spacer"></span>
+        <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="ActivateAsync" />
+    </div>
+
+    @{ var actions = Actions; }
+    <div class="card card-flush" data-card="uninvoiced">
+        <div class="card-heading card-pad">
+            <h2 class="card-title">@Texts["Billing.Uninvoiced"]</h2>
+            <span class="muted small" data-state="uninvoiced-count">@PendingCount</span>
+            <span class="toolbar-spacer"></span>
+            <ActionButton Key="Deposit.Take" Disabled="@(!actions.Deposit || _busy)" OnClick="AskDepositAsync" />
+            <ActionButton Key="Deposit.Refund" Danger="true" Disabled="@(!actions.RefundDeposit || _busy)" OnClick="AskRefundDepositAsync" />
+            <ActionButton Key="Billing.IssueInvoice" Primary="true" Disabled="@(!actions.Issue || _busy)" OnClick="AskIssueAsync" />
+        </div>
+        <div class="table-scroll table-scroll-short">
+            <table class="grid" data-grid="uninvoiced">
+                <thead>
+                    <tr>
+                        <th class="col-check"><span class="sr-only">@Texts["Action.SelectAll"]</span></th>
+                        <th>@Texts["Order.AccessionNumber"]</th>
+                        <th>@Texts["Patient.Title"]</th>
+                        <th>@Texts["Order.RegisteredAt"]</th>
+                        <th>@Texts["Coverage.Payer"]</th>
+                        <th class="num">@Texts["Catalog.Analyses"]</th>
+                        <th class="num">@Texts["Billing.TotalShort"]</th>
+                        <th class="num">@Texts["Billing.PayerShare"]</th>
+                        <th class="num">@Texts["Billing.PatientShare"]</th>
+                        <th class="num">@Texts["Deposit.Title"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _pending)
+                    {
+                        var ticked = _tickedOrders.Contains(row.LabOrderId);
+                        <tr class="@(row.Status == LabOrderStatus.Cancelled ? "is-cancelled" : row.InvoiceId is not null ? "is-muted" : null) @(ticked ? "is-selected" : null)"
+                            data-row="@row.AccessionNumber">
+                            <td class="col-check">
+                                <input type="checkbox" checked="@ticked" aria-label="@row.AccessionNumber" data-tick="@row.AccessionNumber"
+                                       @onchange="() => Toggle(_tickedOrders, row.LabOrderId)" />
+                            </td>
+                            <td class="mono">@row.AccessionNumber</td>
+                            <td>@row.PatientName</td>
+                            <td class="mono small">@row.RegisteredAt.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
+                            <td class="small">@(row.InvoiceId is not null ? Texts.T("Billing.InvoicedDepositToRefund", row.InvoiceNumber ?? string.Empty) : row.PayerName ?? Texts["PayerKind.SelfPay"])</td>
+                            <td class="num">@row.AnalysisCount</td>
+                            <td class="num mono strong">@Amount(row.Total)</td>
+                            <td class="num mono">@(row.PayerShare > 0m ? Amount(row.PayerShare) : null)</td>
+                            <td class="num mono">@Amount(row.PatientShare)</td>
+                            <td class="num mono @(row.InvoiceId is not null ? "abnormal" : row.DepositHeld > 0m ? "normal" : null)">@(row.DepositHeld > 0m ? Amount(row.DepositHeld) : null)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <h2 class="card-title">@Texts["Billing.Invoices"]</h2>
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" dir="auto" placeholder="@Texts["Finance.InvoiceSearchHint"]" aria-label="@Texts["Finance.InvoiceSearchHint"]"
+                   data-field="invoice-search" autocomplete="off" @bind="_term" @onkeydown="SearchKeyAsync" />
+        </div>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_statusFilter is null ? "is-pressed" : null)" aria-pressed="@(_statusFilter is null ? "true" : "false")"
+                    data-filter="all" @onclick="() => FilterAsync(null)">@Texts.T("Finance.ChipAll", _counts.Values.Sum())</button>
+            @foreach (var status in BillingScreenRules.LedgerStatuses)
+            {
+                <button type="button" class="chip @(status == _statusFilter ? "is-pressed" : null)" aria-pressed="@(status == _statusFilter ? "true" : "false")"
+                        data-filter="@status.ToString().ToLowerInvariant()" @onclick="() => FilterAsync(status)">@Texts[$"InvoiceStatus.{status}"] · @_counts.GetValueOrDefault(status)</button>
+            }
+        </div>
+    </div>
+
+    <div class="card card-flush" data-card="ledger">
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="ledger">
+                <thead>
+                    <tr>
+                        <th class="col-check"><span class="sr-only">@Texts["Action.SelectAll"]</span></th>
+                        <th>@Texts["Billing.Number"]</th>
+                        <th>@Texts["Billing.KindShort"]</th>
+                        <th>@Texts["Billing.IssueDateShort"]</th>
+                        <th>@Texts["Billing.BilledTo"]</th>
+                        <th class="num">@Texts["Billing.TotalShort"]</th>
+                        <th class="num">@Texts["Billing.Paid"]</th>
+                        <th class="num">@Texts["Billing.Outstanding"]</th>
+                        <th class="num">@Texts["Order.Overdue"]</th>
+                        <th>@Texts["Field.Status"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _ledger.Items)
+                    {
+                        var ticked = _tickedInvoices.Contains(row.InvoiceId);
+                        <tr class="@LedgerClass(row) @(row.InvoiceId == Current?.InvoiceId ? "is-selected" : null)" data-row="@row.Number"
+                            @onclick="() => _currentId = row.InvoiceId">
+                            <td class="col-check" @onclick:stopPropagation="true">
+                                <input type="checkbox" checked="@ticked" aria-label="@row.Number" data-tick="@row.Number"
+                                       @onchange="() => Toggle(_tickedInvoices, row.InvoiceId)" />
+                            </td>
+                            <td class="mono">@row.Number</td>
+                            <td class="small">@Texts[row.Kind == InvoiceKind.CreditNote ? "Billing.CreditNote" : "Billing.Invoice"]</td>
+                            <td class="mono small">@row.IssueDate.ToString("dd/MM/yy", CultureInfo.InvariantCulture)</td>
+                            <td>@row.BilledToName</td>
+                            <td class="num mono strong">@Amount(row.Total)</td>
+                            <td class="num mono" title="@(row.WrittenOff > 0m ? Texts.T("Billing.WrittenOffTooltip", Amount(row.WrittenOff)) : null)">@(row.Paid > 0m ? Amount(row.Paid) : null)</td>
+                            <td class="num mono strong">@(row.Outstanding > 0m ? Amount(row.Outstanding) : null)</td>
+                            <td class="num mono strong">@(row.DaysOverdue > 0 ? Texts.T("Stock.Days", row.DaysOverdue) : null)</td>
+                            <td><Pill Text="@Texts[$"InvoiceStatus.{row.Status}"]" Tone="@StatusTone(row.Status)" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_ledger.Items.Count == 0)
+        {
+            <p class="card-pad muted" data-state="empty">@Texts["Web.BillingNoInvoice"]</p>
+        }
+    </div>
+
+    <footer class="action-bar">
+        <div class="action-bar-start">
+            <details class="more more-up">
+                <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]</summary>
+                <div class="more-menu">
+                    <ActionButton Key="Payment.Refund" Disabled="@(!actions.Refund || _busy)" OnClick="() => AskCorrectionAsync(bounce: false)" />
+                    <ActionButton Key="Payment.MarkBounced" Disabled="@(!actions.Bounce || _busy)" OnClick="() => AskCorrectionAsync(bounce: true)"
+                                  Title="@(actions.Bounce ? null : Texts["Payment.BounceReservedToAccounting"])" />
+                    <ActionButton Key="Billing.SubmitClaim" Disabled="@(!actions.SubmitClaim || _busy)" OnClick="AskSubmitClaim" />
+                    <ActionButton Key="Billing.RecordClaimOutcome" Disabled="@(!actions.ClaimOutcome || _busy)" OnClick="AskClaimOutcome" />
+                    <ActionButton Key="Claim.Settlement" Disabled="@(!actions.PayerSettlement || _busy)" OnClick="AskSettlement" />
+                    <ActionButton Key="Billing.PrintInvoiceStandard" Disabled="@(!actions.Print || _busy)" OnClick="() => PrintAsync(receipt: false, InvoicePrintFormat.Standard)" />
+                    <ActionButton Key="Billing.PrintInvoiceCotation" Disabled="@(!actions.PrintCotation || _busy)" OnClick="() => PrintAsync(receipt: false, InvoicePrintFormat.CotationB)" />
+                </div>
+            </details>
+            <ActionButton Key="Billing.PrintInvoice" Disabled="@(!actions.Print || _busy)" OnClick="() => PrintAsync(receipt: false)" />
+            <ActionButton Key="Billing.PrintReceipt" Disabled="@(!actions.Print || _busy)" OnClick="() => PrintAsync(receipt: true)" />
+            <span class="action-bar-rule" aria-hidden="true"></span>
+            <ActionButton Key="Billing.CreditNote" Danger="true" Disabled="@(!actions.CreditNote || _busy)" OnClick="AskCreditNote" />
+        </div>
+        <p class="action-bar-status is-@(_status?.Tone ?? "muted")" role="status" data-state="status">@(_status?.Text ?? LedgerSummary)</p>
+        <div class="action-bar-end">
+            <ActionButton Key="Payment.Title" Primary="true" Disabled="@(!actions.Pay || _busy)" OnClick="AskPayment" />
+        </div>
+    </footer>
+</div>
+
+@switch (_dialog)
+{
+    case BillingDialog.Reinvoice when _issueOrders is { Count: > 0 } orders:
+        <ConfirmPrompt Title="@Texts["Billing.IssueInvoice"]" Message="@Texts.T("Billing.ReinvoiceToPayer", orders[0].PayerName ?? string.Empty)"
+                       OnYes="() => OpenIssueAsync(BillingScreenRules.ReinvoicePayer(orders))" OnNo="() => OpenIssueAsync(null)" />
+        break;
+
+    case BillingDialog.Issue when _issueOrders is { Count: > 0 } orders:
+        <InvoiceIssueDialog Orders="orders" Gross="BillingScreenRules.Gross(orders).Amount" CanDiscount="@Context.User.Has(Permissions.Billing.ApplyDiscount)"
+                            Cap="_cap" Busy="_busy" Refused="_approvalRefused" OnConfirm="IssueAsync" OnCancel="CloseDialog" />
+        break;
+
+    case BillingDialog.Deposit when _order is { } order:
+        <PaymentDialog Title="@($"{Texts["Deposit.Take"]} — {order.AccessionNumber}")" CeilingCaption="@Texts["Deposit.Available"]"
+                       Ceiling="order.DepositCeiling" OrderId="order.LabOrderId" OnDeposit="TakeDepositAsync" OnCancel="CloseDialog" />
+        break;
+
+    case BillingDialog.RefundDeposit when _order is { } order:
+        <ReasonPrompt Title="@Texts["Deposit.Refund"]" MaxLength="BillingScreenRules.CorrectionReasonMaxLength"
+                      Prompt="@Texts.T("Deposit.RefundPrompt", order.AccessionNumber, Amount(_held.Sum(d => d.Remaining)), string.Join(", ", _held.Select(d => $"{d.Number} ({Texts[$"PaymentMethod.{d.Method}"]})")))"
+                      OnConfirm="RefundDepositAsync" OnCancel="CloseDialog" />
+        break;
+
+    case BillingDialog.Pay when _invoice is { } invoice:
+        <PaymentDialog Title="@($"{Texts["Payment.Title"]} — {invoice.Number}")" CeilingCaption="@Texts[BillingScreenRules.PaymentCeilingKey(invoice)]"
+                       Ceiling="invoice.PatientPayable" InvoiceId="invoice.InvoiceId" OnPayment="RecordPaymentAsync" OnCancel="CloseDialog" />
+        break;
+
+    case BillingDialog.CreditNote when _invoice is { } invoice:
+        <ReasonPrompt Title="@Texts["Billing.CreditNote"]" MinimumLength="BillingScreenRules.CreditNoteReasonMinimumLength" MaxLength="BillingScreenRules.CorrectionReasonMaxLength"
+                      Prompt="@Texts.T("Billing.CreditNoteReasonPrompt", invoice.Number)" OnConfirm="IssueCreditNoteAsync" OnCancel="CloseDialog" />
+        break;
+
+    case BillingDialog.PickPayment when _invoice is { } invoice:
+        <PaymentPickerDialog InvoiceNumber="@invoice.Number" Payments="_candidates" ActionKey="@(_bounce ? "Payment.MarkBounced" : "Payment.Refund")"
+                             OnPick="PickPayment" OnCancel="CloseDialog" />
+        break;
+
+    case BillingDialog.CorrectionReason when _invoice is not null && _payment is { } payment:
+        <ReasonPrompt Title="@Texts[_bounce ? "Payment.MarkBounced" : "Payment.Refund"]" MaxLength="BillingScreenRules.CorrectionReasonMaxLength"
+                      Prompt="@Texts.T(_bounce ? "Payment.BouncePrompt" : "Payment.RefundPrompt", Amount(payment.Amount), Texts[$"PaymentMethod.{payment.Method}"])"
+                      OnConfirm="CorrectPaymentAsync" OnCancel="CloseDialog" />
+        break;
+
+    case BillingDialog.ClaimOutcome:
+        <ClaimOutcomeDialog InvoiceCount="_claimInvoices.Count" OnConfirm="RecordClaimOutcomeAsync" OnCancel="CloseDialog" />
+        break;
+
+    case BillingDialog.Settlement when _invoice is { } invoice:
+        <PayerSettlementDialog Invoice="invoice" OnConfirm="RecordSettlementAsync" OnCancel="CloseDialog" />
+        break;
+
+    case BillingDialog.SubmitClaim:
+        <ConfirmPrompt Title="@Texts["Billing.SubmitClaim"]"
+                       Message="@Texts.T("Claim.ConfirmSubmit", _claimInvoices.Count, string.Join(", ", _claimInvoices.Select(i => i.BilledToName).Distinct()), Amount(_claimInvoices.Sum(i => i.PayerShare)))"
+                       OnYes="SubmitClaimAsync" OnNo="CloseDialog" />
+        break;
+
+    case BillingDialog.Message when _message is { } message:
+        <Modal Name="billing-message" Title="@message.Title" OnCancel="CloseDialog">
+            <ChildContent><p class="prompt-text">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum BillingDialog
+    {
+        None, Reinvoice, Issue, Deposit, RefundDeposit, Pay, CreditNote, PickPayment, CorrectionReason,
+        ClaimOutcome, Settlement, SubmitClaim, Message
+    }
+
+    private sealed record Message(string Title, string Text);
+
+    /// <summary>A file's « Ouvrir la facturation »: the ledger searched on it and the request ticked.</summary>
+    [Parameter] public string? Search { get; set; }
+
+    private IReadOnlyList<BillableOrderRow> _pending = [];
+    private PagedResult<InvoiceRow> _ledger = new([], 0, 1, 0);
+    private IReadOnlyDictionary<InvoiceStatus, int> _counts = new Dictionary<InvoiceStatus, int>();
+    private readonly HashSet<Guid> _tickedOrders = [];
+    private readonly HashSet<Guid> _tickedInvoices = [];
+    private InvoiceStatus? _statusFilter;
+    private string _term = string.Empty;
+    private Guid? _currentId;
+    private bool _busy;
+
+    // What the dialog open works on.
+    private IReadOnlyList<BillableOrderRow>? _issueOrders;
+    private Guid? _payerOverride;
+    private DiscountCapSettings _cap = DiscountCapSettings.Default;
+    private string? _approvalRefused;
+    private BillableOrderRow? _order;
+    private IReadOnlyList<DepositRow> _held = [];
+    private InvoiceRow? _invoice;
+    private IReadOnlyList<PaymentRow> _candidates = [];
+    private PaymentRow? _payment;
+    private bool _bounce;
+    private IReadOnlyList<InvoiceRow> _claimInvoices = [];
+
+    private BillingDialog _dialog;
+    private Message? _message;
+    private (string Text, string Tone)? _status;
+
+    private IReadOnlyList<BillableOrderRow> TickedOrders => [.. _pending.Where(r => _tickedOrders.Contains(r.LabOrderId))];
+    private IReadOnlyList<InvoiceRow> TickedInvoices => [.. _ledger.Items.Where(r => _tickedInvoices.Contains(r.InvoiceId))];
+
+    /// <summary>The invoice highlighted: the one clicked, else the first.</summary>
+    private InvoiceRow? Current => _ledger.Items.FirstOrDefault(r => r.InvoiceId == _currentId) ?? _ledger.Items.FirstOrDefault();
+
+    private InvoiceRow? PrintTarget => BillingScreenRules.PrintTarget(TickedInvoices, Current);
+
+    private BillingActions Actions => BillingScreenRules.Actions(Context.User, PrintTarget);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _term = Search?.Trim() ?? string.Empty;
+        await ActivateAsync();
+
+        // Opened from a file: its request is ticked when it is still to invoice.
+        if (_term.Length > 0 && _pending.FirstOrDefault(r => r.IsInvoiceable && string.Equals(r.AccessionNumber, _term, StringComparison.OrdinalIgnoreCase)) is { } order)
+            _tickedOrders.Add(order.LabOrderId);
+    }
+
+    private async Task ActivateAsync()
+    {
+        await LoadPendingAsync();
+        await LoadLedgerAsync();
+    }
+
+    private async Task LoadPendingAsync()
+    {
+        try
+        {
+            var result = await Scopes.RunAsync<BillingService, Result<IReadOnlyList<BillableOrderRow>>>(s => s.GetUninvoicedOrdersAsync());
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Nav.Billing"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            _pending = result.Value;
+            _tickedOrders.IntersectWith(_pending.Select(r => r.LabOrderId));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading uninvoiced orders failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task LoadLedgerAsync()
+    {
+        try
+        {
+            var term = _term.Trim();
+            var (page, counts) = await Scopes.RunAsync<BillingService, (Result<PagedResult<InvoiceRow>>, Result<IReadOnlyDictionary<InvoiceStatus, int>>)>(
+                async s => (await s.GetInvoicesAsync(_statusFilter, term, 1), await s.GetInvoiceStatusCountsAsync(term)));
+
+            if (page.IsFailure)
+            {
+                Show(Texts["Nav.Billing"], Texts.Describe(page.Errors));
+                return;
+            }
+
+            _ledger = page.Value;
+            _tickedInvoices.IntersectWith(_ledger.Items.Select(r => r.InvoiceId));
+
+            // A failure leaves the last counts.
+            if (counts.IsSuccess) _counts = counts.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the invoice ledger failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task SearchKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        _status = null;
+        await LoadLedgerAsync();
+    }
+
+    private async Task FilterAsync(InvoiceStatus? status)
+    {
+        if (_statusFilter == status) return;
+        _statusFilter = status;
+        await LoadLedgerAsync();
+    }
+
+    private static void Toggle(HashSet<Guid> set, Guid id)
+    {
+        if (!set.Remove(id)) set.Add(id);
+    }
+
+    // ---- What the screen says ------------------------------------------------------------------------
+
+    private string Amount(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    /// <summary>Counted only what is still to invoice; capped at the most recent, and said so.</summary>
+    private string PendingCount
+    {
+        get
+        {
+            var invoiceable = _pending.Where(r => r.IsInvoiceable).ToList();
+            var text = $"{invoiceable.Count} · {Amount(invoiceable.Sum(r => r.Total))}";
+            return _pending.Count >= IBillingQueries.UninvoicedOrdersLimit
+                ? $"{text} — {Texts.T("Billing.UninvoicedTruncated", IBillingQueries.UninvoicedOrdersLimit)}"
+                : text;
+        }
+    }
+
+    private string LedgerSummary =>
+        $"{_ledger.Items.Count} / {_ledger.TotalCount} · {Texts["Billing.Outstanding"]} {Amount(_ledger.Items.Sum(r => r.Outstanding))}";
+
+    /// <summary>The ageing bands, a settled invoice muted, a credit note set apart from the invoices it reverses.</summary>
+    private static string LedgerClass(InvoiceRow row) =>
+        (row.DaysOverdue > 60 ? "is-critical-row" : row.DaysOverdue > 0 ? "is-abnormal" : row.Status == InvoiceStatus.Paid ? "is-muted" : string.Empty)
+        + (row.Kind == InvoiceKind.CreditNote ? " is-credit" : string.Empty);
+
+    private static string StatusTone(InvoiceStatus status) => status switch
+    {
+        InvoiceStatus.Issued => "Info",
+        InvoiceStatus.PartiallyPaid => "Warning",
+        InvoiceStatus.Paid => "Ok",
+        _ => "Waiting"
+    };
+
+    // ---- Dialogs -------------------------------------------------------------------------------------
+
+    private void CloseDialog()
+    {
+        _dialog = BillingDialog.None;
+        _message = null;
+        _approvalRefused = null;
+    }
+
+    private void Show(string title, string text)
+    {
+        _message = new Message(title, text);
+        _dialog = BillingDialog.Message;
+    }
+
+    private void Say(string text, string tone = "muted") => _status = (text, tone);
+
+    /// <summary>The one ticked invoice the action works on, or the status saying to tick one.</summary>
+    private InvoiceRow? OneInvoice()
+    {
+        var ticked = TickedInvoices;
+        if (ticked.Count == 1) return ticked[0];
+        Say(Texts["Billing.SelectOneInvoice"]);
+        return null;
+    }
+
+    private BillableOrderRow? OneOrder()
+    {
+        var ticked = TickedOrders;
+        if (ticked.Count == 1) return ticked[0];
+        Say(Texts["Deposit.SelectOneOrder"]);
+        return null;
+    }
+
+    private async Task<T?> RunAsync<T>(Func<BillingService, Task<Result<T>>> action, string title)
+    {
+        var result = await Scopes.RunAsync(action);
+        if (result.IsSuccess) return result.Value;
+        Show(title, Texts.Describe(result.Errors));
+        return default;
+    }
+
+    private async Task<bool> RunAsync(Func<BillingService, Task<Result>> action, string title)
+    {
+        var result = await Scopes.RunAsync(action);
+        if (result.IsSuccess) return true;
+        Show(title, Texts.Describe(result.Errors));
+        return false;
+    }
+
+    /// <summary>One click, one write: nothing else is offered while it runs.</summary>
+    private async Task BusyAsync(Func<Task> work, string title)
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            await work();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Billing action « {Title} » failed.", title);
+            Show(title, Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- The invoice ---------------------------------------------------------------------------------
+
+    private async Task AskIssueAsync()
+    {
+        var selected = TickedOrders;
+
+        // One patient, one payer, nothing invoiced or cancelled among them.
+        if (BillingScreenRules.IssueRefusal(selected) is { } refusal)
+        {
+            if (refusal.IsInformation) Say(Texts[refusal.Key]);
+            else Show(Texts["Billing.IssueInvoice"], Texts.T(refusal.Key, refusal.Args));
+            return;
+        }
+
+        _issueOrders = selected;
+
+        // Invoiced again after a credit note: offered to address it to the payer.
+        if (BillingScreenRules.ReinvoicePayer(selected) is not null)
+        {
+            _dialog = BillingDialog.Reinvoice;
+            return;
+        }
+
+        await OpenIssueAsync(null);
+    }
+
+    private async Task OpenIssueAsync(Guid? payerOverride)
+    {
+        _payerOverride = payerOverride;
+        _cap = DiscountCapSettings.Default;
+
+        // The ceiling from Paramètres › Factures, so the dialog says when a discount goes beyond it.
+        if (Context.User.Has(Permissions.Billing.ApplyDiscount))
+        {
+            try
+            {
+                var cap = await Scopes.RunAsync<InvoicePrintSettingsService, Result<DiscountCapSettings>>(s => s.GetDiscountCapAsync());
+                if (cap.IsSuccess) _cap = cap.Value;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Reading the discount ceiling failed; the default applies.");
+            }
+        }
+
+        _approvalRefused = null;
+        _dialog = BillingDialog.Issue;
+    }
+
+    private Task IssueAsync(InvoiceIssueDialog.Request request) => BusyAsync(async () =>
+    {
+        if (_issueOrders is not { Count: > 0 } orders) return;
+
+        var result = await Scopes.RunAsync<BillingService, Result<Guid>>(s => s.IssueInvoiceAsync(
+            [.. orders.Select(o => o.LabOrderId)], payerIdOverride: _payerOverride,
+            discountAmount: request.DiscountAmount, discountReason: request.DiscountReason, approval: request.Approval));
+
+        if (result.IsFailure)
+        {
+            // A refused approval is corrected in the same dialog: only the password is asked again.
+            if (request.Approval is not null && DiscountApproval.IsRefusal(result.FirstError.ResourceKey))
+            {
+                _approvalRefused = Texts.Describe(result.Errors);
+                return;
+            }
+
+            Show(Texts["Billing.IssueInvoice"], Texts.Describe(result.Errors));
+            return;
+        }
+
+        CloseDialog();
+        _tickedOrders.Clear();
+        Say(Texts["Message.Saved"], "normal");
+        await ActivateAsync();
+    }, Texts["Billing.IssueInvoice"]);
+
+    private void AskCreditNote()
+    {
+        if (OneInvoice() is not { } invoice) return;
+
+        if (BillingScreenRules.CreditNoteRefusal(invoice) is { } refusal)
+        {
+            Show(Texts["Billing.CreditNote"], Texts.T(refusal.Key, refusal.Args));
+            return;
+        }
+
+        _invoice = invoice;
+        _dialog = BillingDialog.CreditNote;
+    }
+
+    private Task IssueCreditNoteAsync(string reason) => BusyAsync(async () =>
+    {
+        if (_invoice is not { } invoice) return;
+        CloseDialog();
+
+        if (await RunAsync<Guid>(s => s.IssueCreditNoteAsync(invoice.InvoiceId, reason), Texts["Billing.CreditNote"]) == Guid.Empty) return;
+
+        Say(Texts["Message.Saved"], "normal");
+        // Both lists: a full credit note frees its orders, which come back to be invoiced.
+        await ActivateAsync();
+    }, Texts["Billing.CreditNote"]);
+
+    // ---- Deposits ------------------------------------------------------------------------------------
+
+    private Task AskDepositAsync()
+    {
+        if (OneOrder() is not { } order) return Task.CompletedTask;
+
+        if (BillingScreenRules.DepositRefusal(order) is { } refusal)
+        {
+            Show(Texts["Deposit.Take"], Texts.T(refusal.Key, refusal.Args));
+            return Task.CompletedTask;
+        }
+
+        _order = order;
+        _dialog = BillingDialog.Deposit;
+        return Task.CompletedTask;
+    }
+
+    private Task TakeDepositAsync(TakeDepositRequest request) => BusyAsync(async () =>
+    {
+        if (_order is not { } order) return;
+        CloseDialog();
+
+        if (await RunAsync<string>(s => s.TakeDepositAsync(request), Texts["Deposit.Take"]) is not { } number) return;
+
+        Say(Texts.T("Deposit.Taken", number, order.AccessionNumber), "normal");
+        await LoadPendingAsync();
+    }, Texts["Deposit.Take"]);
+
+    private Task AskRefundDepositAsync() => BusyAsync(async () =>
+    {
+        if (OneOrder() is not { } order) return;
+
+        if (await RunAsync<IReadOnlyList<DepositRow>>(s => s.GetDepositsAsync(order.LabOrderId), Texts["Deposit.Refund"]) is not { } deposits) return;
+
+        _held = BillingScreenRules.HeldDeposits(deposits);
+        if (_held.Count == 0)
+        {
+            Show(Texts["Deposit.Refund"], Texts["Deposit.NoneHeld"]);
+            return;
+        }
+
+        _order = order;
+        _dialog = BillingDialog.RefundDeposit;
+    }, Texts["Deposit.Refund"]);
+
+    private Task RefundDepositAsync(string reason) => BusyAsync(async () =>
+    {
+        if (_order is not { } order) return;
+        CloseDialog();
+
+        var refunded = 0;
+        foreach (var deposit in _held)
+        {
+            if (!await RunAsync(s => s.RefundDepositAsync(deposit.DepositId, reason), Texts["Deposit.Refund"])) break;
+            refunded++;
+        }
+
+        // Said refunded only when every deposit was.
+        Say(refunded == _held.Count
+            ? Texts.T("Deposit.Refunded", order.AccessionNumber)
+            : Texts.T("Deposit.RefundedPartly", order.AccessionNumber, refunded, _held.Count), "abnormal");
+        await LoadPendingAsync();
+    }, Texts["Deposit.Refund"]);
+
+    // ---- Payments ------------------------------------------------------------------------------------
+
+    private void AskPayment()
+    {
+        if (OneInvoice() is not { } invoice) return;
+
+        switch (BillingScreenRules.PaymentBlockOf(invoice))
+        {
+            case PaymentBlock.Settled:
+                Show(Texts["Payment.Title"], $"{invoice.Number} — {Texts["InvoiceStatus.Paid"]}");
+                return;
+
+            // What is left is the payer's share, settled through the claim.
+            case PaymentBlock.PayerShareOnly:
+                Show(Texts["Payment.Title"], Texts.T("Payment_ExceedsPatientShare", Amount(0m)));
+                return;
+        }
+
+        _invoice = invoice;
+        _dialog = BillingDialog.Pay;
+    }
+
+    private Task RecordPaymentAsync(RecordPaymentRequest request) => BusyAsync(async () =>
+    {
+        CloseDialog();
+        if (!await RunAsync(s => s.RecordPaymentAsync(request), Texts["Payment.Title"])) return;
+
+        Say(Texts["Message.Saved"], "normal");
+        await LoadLedgerAsync();
+    }, Texts["Payment.Title"]);
+
+    private Task AskCorrectionAsync(bool bounce) => BusyAsync(async () =>
+    {
+        if (OneInvoice() is not { } invoice) return;
+
+        var title = Texts[bounce ? "Payment.MarkBounced" : "Payment.Refund"];
+        if (await RunAsync<IReadOnlyList<PaymentRow>>(s => s.GetPaymentsAsync(invoice.InvoiceId), title) is not { } payments) return;
+
+        // Only the payments the correction can apply to.
+        _candidates = BillingScreenRules.CorrectionCandidates(payments, bounce);
+        if (_candidates.Count == 0)
+        {
+            Show(title, Texts[bounce ? "Payment.NoBounceablePayment" : "Payment.NoRefundablePayment"]);
+            return;
+        }
+
+        _bounce = bounce;
+        _invoice = invoice;
+        _dialog = BillingDialog.PickPayment;
+    }, Texts[bounce ? "Payment.MarkBounced" : "Payment.Refund"]);
+
+    private void PickPayment(PaymentRow payment)
+    {
+        _payment = payment;
+        _dialog = BillingDialog.CorrectionReason;
+    }
+
+    private Task CorrectPaymentAsync(string reason) => BusyAsync(async () =>
+    {
+        if (_invoice is not { } invoice || _payment is not { } payment) return;
+        CloseDialog();
+
+        var title = Texts[_bounce ? "Payment.MarkBounced" : "Payment.Refund"];
+        var bounce = _bounce;
+        if (!await RunAsync(s => bounce
+                ? s.MarkPaymentBouncedAsync(invoice.InvoiceId, payment.PaymentId, reason)
+                : s.RefundPaymentAsync(invoice.InvoiceId, payment.PaymentId, reason), title)) return;
+
+        Say($"{invoice.Number} — {Texts[bounce ? "PaymentStatus.Bounced" : "PaymentStatus.Refunded"]}", "abnormal");
+        await LoadLedgerAsync();
+    }, Texts["Payment.Refund"]);
+
+    // ---- Third-party payer ---------------------------------------------------------------------------
+
+    private void AskSubmitClaim()
+    {
+        _claimInvoices = BillingScreenRules.Claimable(TickedInvoices);
+        if (_claimInvoices.Count == 0)
+        {
+            Say(Texts["Billing.NoClaimableInvoices"]);
+            return;
+        }
+
+        // Asked first: the invoices leave for the payer under a batch number drawn from its series.
+        _dialog = BillingDialog.SubmitClaim;
+    }
+
+    private Task SubmitClaimAsync() => BusyAsync(async () =>
+    {
+        CloseDialog();
+        var title = Texts["Billing.SubmitClaim"];
+        var result = await Scopes.RunAsync<BillingService, Result<ClaimSubmission>>(s => s.SubmitClaimBatchAsync([.. _claimInvoices.Select(i => i.InvoiceId)]));
+
+        if (result.IsFailure)
+        {
+            Show(title, Texts.Describe(result.Errors));
+            await LoadLedgerAsync();
+            return;
+        }
+
+        // Sent, even if some were left out: the reference first, then why the others were not.
+        var batch = result.Value;
+        Show(title, batch.Skipped.Count == 0
+            ? $"{Texts["Billing.ClaimReference"]} : {batch.Reference}"
+            : $"{Texts.T("Claim.PartiallySubmitted", batch.Reference, batch.Submitted, batch.Skipped.Count)}\n\n{Texts.Describe(batch.Skipped)}");
+        _tickedInvoices.Clear();
+        await LoadLedgerAsync();
+    }, Texts["Billing.SubmitClaim"]);
+
+    private void AskClaimOutcome()
+    {
+        var ticked = TickedInvoices;
+        if (ticked.Count == 0)
+        {
+            Say(Texts["Billing.SelectOneInvoice"]);
+            return;
+        }
+
+        _claimInvoices = BillingScreenRules.Submitted(ticked);
+        if (_claimInvoices.Count == 0)
+        {
+            Show(Texts["Billing.RecordClaimOutcome"], Texts["Billing.NoSubmittedClaims"]);
+            return;
+        }
+
+        _dialog = BillingDialog.ClaimOutcome;
+    }
+
+    private Task RecordClaimOutcomeAsync((ClaimStatus Outcome, string? Reason) answer) => BusyAsync(async () =>
+    {
+        CloseDialog();
+        var title = Texts["Billing.RecordClaimOutcome"];
+        if (await RunAsync<ClaimOutcomeRecorded>(s => s.RecordClaimOutcomeAsync([.. _claimInvoices.Select(i => i.InvoiceId)], answer.Outcome, answer.Reason), title)
+            is not { } recorded) return;
+
+        // Invoices whose own settlement was already entered keep it; the operator is told which.
+        if (recorded.Skipped.Count > 0) Show(title, Texts.Describe(recorded.Skipped));
+
+        Say($"{recorded.Updated} × {Texts[$"ClaimStatus.{answer.Outcome}"]}", answer.Outcome == ClaimStatus.Rejected ? "critical" : "normal");
+        await LoadLedgerAsync();
+    }, Texts["Billing.RecordClaimOutcome"]);
+
+    private void AskSettlement()
+    {
+        if (OneInvoice() is not { } invoice) return;
+
+        if (BillingScreenRules.SettlementRefusal(invoice) is { } refusal)
+        {
+            Show(Texts["Claim.Settlement"], Texts.T(refusal.Key, refusal.Args));
+            return;
+        }
+
+        _invoice = invoice;
+        _dialog = BillingDialog.Settlement;
+    }
+
+    private Task RecordSettlementAsync(PayerSettlementDialog.Request request) => BusyAsync(async () =>
+    {
+        if (_invoice is not { } invoice) return;
+        CloseDialog();
+
+        if (!await RunAsync(s => s.RecordPayerSettlementAsync(invoice.InvoiceId, request.Accepted, request.Shortfall, request.Reason, request.Remittance),
+                            Texts["Claim.Settlement"])) return;
+
+        Say(Texts.T("Claim.SettlementRecorded", invoice.Number, Amount(request.Accepted), Amount(invoice.PayerShare)),
+            request.Accepted < invoice.PayerShare ? "abnormal" : "normal");
+        await LoadLedgerAsync();
+    }, Texts["Claim.Settlement"]);
+
+    // ---- Printing ------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The invoice, or its payment receipt, downloaded as the PDF the workstation opens in its
+    /// viewer: in the format asked, or else Paramètres' default with that format's options.
+    /// </summary>
+    private Task PrintAsync(bool receipt, InvoicePrintFormat? requested = null) => BusyAsync(async () =>
+    {
+        var title = Texts[receipt ? "Billing.PrintReceipt" : "Billing.PrintInvoice"];
+
+        if (PrintTarget is not { } invoice)
+        {
+            Say(Texts["Billing.SelectOneInvoice"]);
+            return;
+        }
+
+        if (await RunAsync<InvoiceDocument>(s => s.GetInvoiceDocumentAsync(invoice.InvoiceId), title) is not { } document) return;
+
+        var settings = InvoicePrintSettings.Default;
+        if (!receipt)
+        {
+            var read = await Scopes.RunAsync<InvoicePrintSettingsService, Result<InvoicePrintSettings>>(s => s.GetAsync());
+            if (read.IsFailure)
+            {
+                Show(title, Texts.Describe(read.Errors));
+                return;
+            }
+
+            settings = read.Value;
+        }
+
+        var language = Texts.Language;
+        var format = requested ?? settings.DefaultFormat;
+        var bytes = await Task.Run(() => receipt
+            ? InvoiceRenderer.RenderReceipt(document, language)
+            : InvoiceRenderer.RenderInvoice(document, language, format, settings));
+
+        await JS.InvokeVoidAsync("marocLis.download", $"{invoice.Number}{(receipt ? "-recu" : null)}.pdf", "application/pdf", bytes);
+        Say($"{invoice.Number} — {title}");
+    }, Texts[receipt ? "Billing.PrintReceipt" : "Billing.PrintInvoice"]);
+}

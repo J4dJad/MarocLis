@@ -1,0 +1,127 @@
+@using System.Globalization
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Billing
+@inject WebTexts Texts
+@inject IClock Clock
+
+@*
+    « Règlement », the workstation's PaymentDialog: the method decides which fields are asked (a
+    cheque without its number is not traceable, a transfer without its reference cannot be
+    reconciled), the amount is pre-filled with what may be taken, and cash above the statutory
+    threshold is warned about before the money is taken. Opened on an invoice (the patient's part)
+    or, for a deposit, on an order not invoiced yet. The fields, the warning and the checks are
+    BillingScreenRules'.
+*@
+<Modal Name="payment" Title="@Title" OnCancel="CancelAsync">
+    <ChildContent>
+        <p class="strong accent" data-state="ceiling">@CeilingCaption : @Money.Of(Ceiling).Format(Texts.Language, Texts.Culture)</p>
+
+        <div class="form-grid">
+            <label class="field">
+                <span class="field-label">@Texts["Payment.Method"]</span>
+                <select class="input" data-field="method" @onchange="MethodChanged">
+                    @foreach (var method in BillingScreenRules.CounterMethods)
+                    {
+                        <option value="@method" selected="@(method == _method)">@Texts[$"PaymentMethod.{method}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Payment.Amount"]</span>
+                <input class="input num mono strong" dir="ltr" inputmode="decimal" data-field="amount" maxlength="@CashDeskRules.AmountMaxLength"
+                       @bind="_amount" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="amount" />
+            </label>
+            @if (Fields.Reference)
+            {
+                <label class="field">
+                    <span class="field-label">@Texts["Payment.Reference"]</span>
+                    <input class="input mono" dir="ltr" data-field="reference" maxlength="@BillingScreenRules.ReferenceMaxLength"
+                           @bind="_reference" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="reference" />
+                </label>
+            }
+            @if (Fields.Bank)
+            {
+                <label class="field">
+                    <span class="field-label">@Texts["Payment.Bank"]</span>
+                    <input class="input" data-field="bank" maxlength="@BillingScreenRules.BankMaxLength" @bind="_bank" @bind:event="oninput" />
+                </label>
+            }
+            @if (Fields.Maturity)
+            {
+                <label class="field">
+                    <span class="field-label">@Texts["Payment.Maturity"]</span>
+                    <input class="input" type="date" data-field="maturity" @bind="_maturity" />
+                </label>
+            }
+        </div>
+
+        @if (BillingScreenRules.WarnsCash(_method, _amount))
+        {
+            <p class="message is-warning" role="alert" data-state="cash-warning">@Texts.T("Payment_CashThresholdWarning", Payment.CashPaymentWarningThresholdMad)</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="AcceptAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string CeilingCaption { get; set; } = string.Empty;
+
+    /// <summary>What may be taken: the patient's part of the invoice, or what the order still leaves for a deposit.</summary>
+    [Parameter] public decimal Ceiling { get; set; }
+
+    /// <summary>The invoice settled; null for a deposit.</summary>
+    [Parameter] public Guid? InvoiceId { get; set; }
+
+    /// <summary>The order a deposit is taken on; null for a payment.</summary>
+    [Parameter] public Guid? OrderId { get; set; }
+
+    [Parameter] public EventCallback<RecordPaymentRequest> OnPayment { get; set; }
+    [Parameter] public EventCallback<TakeDepositRequest> OnDeposit { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private PaymentMethod _method = BillingScreenRules.CounterMethods[0];
+    private string _amount = string.Empty, _reference = string.Empty, _bank = string.Empty;
+    private DateOnly? _maturity;
+    private FieldRefusal? _refusal;
+
+    private PaymentFields Fields => BillingScreenRules.FieldsFor(_method);
+
+    // Pre-filled with the balance: settling in full is by far the commonest case.
+    protected override void OnInitialized()
+    {
+        _amount = Ceiling.ToString("0.00", CultureInfo.InvariantCulture);
+        _maturity = Clock.Today;
+    }
+
+    private void MethodChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<PaymentMethod>(e.Value?.ToString(), out var method)) _method = method;
+        _refusal = null;
+    }
+
+    private async Task AcceptAsync()
+    {
+        _refusal = BillingScreenRules.CheckPayment(_amount, Ceiling, deposit: OrderId is not null, _method, _reference);
+        if (_refusal is not null) return;
+
+        var amount = TypedNumber.Parse(_amount)!.Value;
+        var fields = Fields;
+        var reference = fields.Reference && !string.IsNullOrWhiteSpace(_reference) ? _reference.Trim() : null;
+        var bank = fields.Bank && !string.IsNullOrWhiteSpace(_bank) ? _bank.Trim() : null;
+        var maturity = fields.Maturity ? _maturity : null;
+
+        if (OrderId is { } orderId)
+            await OnDeposit.InvokeAsync(new TakeDepositRequest(orderId, amount, _method, reference, bank, maturity));
+        else
+            await OnPayment.InvokeAsync(new RecordPaymentRequest(InvoiceId!.Value, amount, _method, reference, bank, maturity, null));
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

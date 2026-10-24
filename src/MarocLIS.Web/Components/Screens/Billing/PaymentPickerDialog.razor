@@ -1,0 +1,64 @@
+@using System.Globalization
+@using MarocLIS.Application.Billing
+@inject WebTexts Texts
+
+@*
+    The workstation's PaymentPickerDialog: the payments a refund or a bounce can apply to
+    (BillingScreenRules.CorrectionCandidates), one to pick, the first one highlighted.
+*@
+<Modal Name="pick-payment" Title="@($"{ActionLabel} — {InvoiceNumber}")" Hint="@Texts["Finance.Dialog.PickPayment"]" Wide="true" OnCancel="CancelAsync">
+    <ChildContent>
+        <div class="table-scroll table-scroll-short">
+            <table class="grid grid-select" data-grid="payments">
+                <thead>
+                    <tr>
+                        <th>@Texts["Field.Date"]</th>
+                        <th>@Texts["Payment.Method"]</th>
+                        <th class="num">@Texts["Payment.Amount"]</th>
+                        <th>@Texts["Payment.Reference"]</th>
+                        <th>@Texts["Payment.Bank"]</th>
+                        <th>@Texts["Field.CreatedBy"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var payment in Payments)
+                    {
+                        <tr class="@(payment.PaymentId == Current?.PaymentId ? "is-selected" : null)" data-row="@payment.PaymentId"
+                            @onclick="() => _selected = payment.PaymentId" @ondblclick="() => PickAsync(payment)">
+                            <td class="mono">@payment.PaymentDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)</td>
+                            <td class="small">@Texts[$"PaymentMethod.{payment.Method}"]</td>
+                            <td class="num mono strong">@Money.Of(payment.Amount).Format(Texts.Language, Texts.Culture)</td>
+                            <td class="mono">@payment.Reference</td>
+                            <td class="small">@payment.BankName</td>
+                            <td class="small">@payment.ReceivedByName</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="@ActionKey" Text="@ActionLabel" Danger="true" Disabled="@(Current is null)" OnClick="() => PickAsync(Current)" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string InvoiceNumber { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public IReadOnlyList<PaymentRow> Payments { get; set; } = [];
+
+    /// <summary>« Payment.Refund » or « Payment.MarkBounced »: the caption and its icon.</summary>
+    [Parameter, EditorRequired] public string ActionKey { get; set; } = string.Empty;
+    [Parameter] public EventCallback<PaymentRow> OnPick { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Guid? _selected;
+
+    private string ActionLabel => Texts[ActionKey];
+
+    private PaymentRow? Current => Payments.FirstOrDefault(p => p.PaymentId == _selected) ?? Payments.FirstOrDefault();
+
+    private Task PickAsync(PaymentRow? payment) => payment is null ? Task.CompletedTask : OnPick.InvokeAsync(payment);
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

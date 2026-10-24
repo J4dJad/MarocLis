@@ -1,0 +1,81 @@
+@using System.Globalization
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+
+@*
+    « Règlement de l'organisme », the workstation's PayerSettlementDialog: what the payer actually
+    paid on the invoice's share, pre-filled with what it owes; lowered, the form asks what becomes of
+    the difference — the patient pays it, or it is written off — and why. The shortfall and the
+    checks are BillingScreenRules'.
+*@
+<Modal Name="settlement" Title="@($"{Texts["Claim.Settlement"]} — {Invoice.Number}")" Hint="@Texts["Finance.Dialog.Settlement"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <p class="strong accent" data-state="payer-due">@Texts[BillingScreenRules.SettlementCeilingKey(Invoice)] : @Amount(Invoice.PayerDue)</p>
+        <div class="form-grid">
+            <label class="field">
+                <span class="field-label">@Texts["Claim.AcceptedAmount"]</span>
+                <input class="input num mono" dir="ltr" inputmode="decimal" data-field="accepted" maxlength="15" @bind="_accepted" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="accepted" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Claim.RemittanceReference"]</span>
+                <input class="input mono" dir="ltr" data-field="remittance" maxlength="@BillingScreenRules.RemittanceMaxLength" @bind="_remittance" @bind:event="oninput" />
+            </label>
+        </div>
+
+        @{ var missing = BillingScreenRules.Shortfall(_accepted, Invoice.PayerDue); }
+        @if (missing > 0m)
+        {
+            <p class="message is-warning" data-state="shortfall">@Texts.T("Claim.ShortfallAmount", Amount(missing))</p>
+        }
+        <div class="chips" role="radiogroup">
+            <label class="field-check"><input type="radio" name="shortfall" data-field="patient-pays" disabled="@(missing <= 0m)"
+                   checked="@(!_writeOff)" @onchange="() => _writeOff = false" /> @Texts["Claim.ShortfallPatientPays"]</label>
+            <label class="field-check"><input type="radio" name="shortfall" data-field="write-off" disabled="@(missing <= 0m)"
+                   checked="@_writeOff" @onchange="() => _writeOff = true" /> @Texts["Claim.ShortfallWriteOff"]</label>
+        </div>
+        <label class="field">
+            <span class="field-label">@Texts["Billing.ClaimRejectionReason"]</span>
+            <input class="input" data-field="reason" maxlength="@BillingScreenRules.ClaimReasonMaxLength" disabled="@(missing <= 0m)"
+                   @bind="_reason" @bind:event="oninput" />
+            <FieldMessage Refusal="_refusal" Field="reason" />
+        </label>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="AcceptAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>What the service is called with.</summary>
+    public sealed record Request(decimal Accepted, PayerShortfallHandling Shortfall, string? Reason, string? Remittance);
+
+    [Parameter, EditorRequired] public InvoiceRow Invoice { get; set; } = default!;
+    [Parameter] public EventCallback<Request> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _accepted = string.Empty, _remittance = string.Empty, _reason = string.Empty;
+    private bool _writeOff;
+    private FieldRefusal? _refusal;
+
+    protected override void OnInitialized() => _accepted = Invoice.PayerDue.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private string Amount(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private async Task AcceptAsync()
+    {
+        _refusal = BillingScreenRules.CheckSettlement(_accepted, Invoice.PayerDue, _reason);
+        if (_refusal is not null) return;
+
+        var shortfall = BillingScreenRules.Shortfall(_accepted, Invoice.PayerDue) > 0m;
+        await OnConfirm.InvokeAsync(new Request(
+            Money.Round(TypedNumber.Parse(_accepted)!.Value),
+            _writeOff && shortfall ? PayerShortfallHandling.WriteOff : PayerShortfallHandling.PatientPays,
+            shortfall && !string.IsNullOrWhiteSpace(_reason) ? _reason.Trim() : null,
+            string.IsNullOrWhiteSpace(_remittance) ? null : _remittance.Trim()));
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}
