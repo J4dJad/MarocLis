@@ -1,0 +1,351 @@
+@using System.Globalization
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<CashDesk> Logger
+
+@*
+    « Caisse », the workstation's CashSessionView: with no till open, its opening float; open, the
+    takings by method, the cash the drawer should hold, the count typed and the variance as it is
+    typed — beyond the tolerance the till closes only once explained — and the banking taken out
+    mid-shift. The takings, the variance and the checks are CashDeskRules'; what is done,
+    BillingService's, which records each act. The drawer and the ticket printer are the
+    workstation's: said here, the receipt being downloaded from « Facturation ».
+*@
+<div class="screen cash" data-screen="cash">
+    <div class="toolbar">
+        @if (_summary is { } info)
+        {
+            <span class="muted" data-state="session">@info.OperatorName · @Texts["Payment.CashSession"] @info.OpenedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) · @info.PaymentCount @Texts["Payment.Plural"].ToLower(Texts.Culture)</span>
+        }
+        <span class="toolbar-spacer"></span>
+    </div>
+
+    <p class="message is-info" data-state="hardware">
+        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Printer" /> @Texts["Web.CashHardwareFromWorkstation"]
+    </p>
+
+    @if (!_loaded)
+    {
+        <p class="muted">@Texts["Web.Loading"]</p>
+    }
+    else if (_summary is null)
+    {
+        <div class="card" data-card="open-session">
+            <h2 class="card-title">@Texts["Payment.OpenSession"]</h2>
+            <div class="form-grid form-grid-request">
+                <label class="field">
+                    <span class="field-label">@Texts["Payment.OpeningFloat"]</span>
+                    <input class="input num mono" dir="ltr" inputmode="decimal" data-field="float" maxlength="@CashDeskRules.AmountMaxLength"
+                           @bind="_float" @bind:event="oninput" @onkeydown="OpenKeyAsync" />
+                    <FieldMessage Refusal="_refusal" Field="float" />
+                </label>
+                <div class="field">
+                    <ActionButton Key="Payment.OpenSession" Primary="true" Disabled="@(!Actions.Open || _busy)" OnClick="OpenAsync" />
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        var summary = _summary;
+        var reading = CashDeskRules.Variance(_counted, summary.ExpectedClosingCash);
+        <div class="split split-even">
+            <div class="card" data-card="takings">
+                <h2 class="card-title">@Texts["Finance.SessionDetail"]</h2>
+                <table class="grid takings" data-grid="takings">
+                    <tbody>
+                        <tr><td>@Texts["Payment.OpeningFloat"]</td><td class="num mono">@Amount(summary.OpeningFloat)</td></tr>
+                        @foreach (var (key, amount) in CashDeskRules.Takings(summary))
+                        {
+                            <tr data-line="@key"><td>@Texts[key]</td><td class="num mono @(amount < 0m ? "abnormal" : null)">@Amount(amount)</td></tr>
+                        }
+                        <tr class="is-total"><td class="strong">@Texts["Payment.ExpectedCash"]</td><td class="num mono strong">@Amount(summary.ExpectedClosingCash)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card" data-card="closing">
+                <h2 class="card-title">@Texts["Payment.CloseSession"]</h2>
+                <div class="tiles">
+                    <div class="tile">
+                        <span class="field-label">@Texts["Payment.ExpectedCash"]</span>
+                        <span class="tile-value accent mono" data-state="expected">@Amount(summary.ExpectedClosingCash)</span>
+                    </div>
+                    <div class="tile">
+                        <span class="field-label">@Texts["Payment.Variance"]</span>
+                        <span class="tile-value mono @VarianceClass(reading)" data-state="variance">@VarianceText(reading)</span>
+                    </div>
+                </div>
+                <label class="field">
+                    <span class="field-label">@Texts["Payment.CountedCash"]</span>
+                    <input class="input num mono" dir="ltr" inputmode="decimal" data-field="counted" maxlength="@CashDeskRules.AmountMaxLength"
+                           @bind="_counted" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="counted" />
+                </label>
+                @if (reading is { RequiresExplanation: true })
+                {
+                    // Its presence is itself the signal that the variance is not acceptable.
+                    <label class="field">
+                        <span class="field-label">@Texts["Payment.VarianceExplanation"]</span>
+                        <textarea class="input" rows="3" data-field="explanation" maxlength="@CashDeskRules.ExplanationMaxLength"
+                                  @bind="_explanation" @bind:event="oninput"></textarea>
+                        <FieldMessage Refusal="_refusal" Field="explanation" />
+                    </label>
+                }
+            </div>
+        </div>
+
+        <footer class="action-bar">
+            <div class="action-bar-start">
+                <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="ActivateAsync" />
+                <ActionButton Key="Payment.RecordWithdrawal" Disabled="@(!Actions.Withdraw || _busy)" OnClick="() => _dialog = CashDialog.WithdrawAmount" />
+            </div>
+            <p class="action-bar-status is-@(_status?.Tone ?? (reading is { RequiresExplanation: true } ? "critical" : "muted"))" role="status" data-state="status">
+                @(_status?.Text ?? (reading is { RequiresExplanation: true } ? Texts.T("Payment.VarianceRequiresExplanation", CashDeskRules.ToleranceMad) : null))
+            </p>
+            <div class="action-bar-end">
+                <ActionButton Key="Payment.CloseSession" Primary="true" Disabled="@(!Actions.Close || _busy)" OnClick="AskClose" />
+            </div>
+        </footer>
+    }
+</div>
+
+@switch (_dialog)
+{
+    case CashDialog.WithdrawAmount:
+        <TextPrompt Name="withdrawal" Title="@Texts["Payment.RecordWithdrawal"]" Prompt="@Texts["Payment.WithdrawalAmountPrompt"]"
+                    MaxLength="CashDeskRules.AmountMaxLength" OnConfirm="WithdrawAmount" OnCancel="CloseDialog" />
+        break;
+
+    case CashDialog.WithdrawReason when _withdrawal is { } amount:
+        <ReasonPrompt Title="@Texts["Payment.RecordWithdrawal"]" Prompt="@Texts.T("Payment.WithdrawalReasonPrompt", Amount(amount))"
+                      OnConfirm="WithdrawAsync" OnCancel="CloseDialog" />
+        break;
+
+    case CashDialog.Close when _summary is { } summary && CashDeskRules.Variance(_counted, summary.ExpectedClosingCash) is { } reading:
+        <ConfirmPrompt Title="@Texts["Payment.CloseSession"]"
+                       Message="@Texts.T("Payment.ConfirmClose", Amount(TypedNumber.Parse(_counted) ?? 0m), Amount(reading.Variance))"
+                       OnYes="CloseAsync" OnNo="CloseDialog" />
+        break;
+
+    case CashDialog.Message when _message is { } message:
+        <Modal Name="cash-message" Title="@message.Title" OnCancel="CloseDialog">
+            <ChildContent><p class="prompt-text">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum CashDialog { None, WithdrawAmount, WithdrawReason, Close, Message }
+
+    private sealed record Message(string Title, string Text);
+
+    private CashSessionSummary? _summary;
+    private bool _loaded, _busy;
+    private string _float = string.Empty, _counted = string.Empty, _explanation = string.Empty;
+    private decimal? _withdrawal;
+    private FieldRefusal? _refusal;
+
+    private CashDialog _dialog;
+    private Message? _message;
+    private (string Text, string Tone)? _status;
+
+    private CashDeskActions Actions => CashDeskRules.Actions(Context.User);
+
+    protected override Task OnInitializedAsync() => ActivateAsync();
+
+    private async Task ActivateAsync()
+    {
+        try
+        {
+            var result = await Scopes.RunAsync<BillingService, Result<CashSessionSummary>>(s => s.GetOpenCashSessionAsync());
+
+            // No open session is the normal state at the start of a shift, not an error.
+            _summary = result.IsSuccess ? result.Value : null;
+
+            // The count starts at what the drawer should hold.
+            if (_summary is { } summary && string.IsNullOrWhiteSpace(_counted))
+                _counted = summary.ExpectedClosingCash.ToString("0.00", CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the cash session failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private string Amount(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    /// <summary>Signed: a surplus and a shortfall are different problems.</summary>
+    private string VarianceText(CashVariance? reading) =>
+        reading is { Variance: var variance } ? (variance > 0m ? "+" : string.Empty) + Amount(variance) : "—";
+
+    private static string VarianceClass(CashVariance? reading) => reading switch
+    {
+        null => "muted",
+        { Variance: 0m } => "normal",
+        { RequiresExplanation: true } => "critical",
+        _ => "abnormal"
+    };
+
+    private void CloseDialog()
+    {
+        _dialog = CashDialog.None;
+        _message = null;
+    }
+
+    private void Show(string title, string text)
+    {
+        _message = new Message(title, text);
+        _dialog = CashDialog.Message;
+    }
+
+    private async Task OpenKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await OpenAsync();
+    }
+
+    private async Task OpenAsync()
+    {
+        if (!Actions.Open || _busy) return;
+
+        _refusal = CashDeskRules.CheckOpening(_float);
+        if (_refusal is not null) return;
+
+        _busy = true;
+        try
+        {
+            var opening = TypedNumber.Parse(_float) ?? 0m;
+            var result = await Scopes.RunAsync<BillingService, Result<Guid>>(s => s.OpenCashSessionAsync(opening));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Payment.OpenSession"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            _float = string.Empty;
+            _counted = string.Empty;
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Opening the cash session failed.");
+            Show(Texts["Payment.OpenSession"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void WithdrawAmount(string answer)
+    {
+        if (string.IsNullOrWhiteSpace(answer))
+        {
+            CloseDialog();
+            return;
+        }
+
+        if (CashDeskRules.CheckWithdrawal(answer) is { } refusal)
+        {
+            Show(Texts["Payment.RecordWithdrawal"], FieldMessage.Say(Texts, refusal));
+            return;
+        }
+
+        _withdrawal = TypedNumber.Parse(answer);
+        _dialog = CashDialog.WithdrawReason;
+    }
+
+    /// <summary>Cash banked mid-shift: it comes out of what the drawer should hold.</summary>
+    private async Task WithdrawAsync(string reason)
+    {
+        if (_withdrawal is not { } amount) return;
+
+        CloseDialog();
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<BillingService, Result>(s => s.RecordCashWithdrawalAsync(amount, reason));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Payment.RecordWithdrawal"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            _status = ($"{Texts["Payment.Withdrawals"]} −{Amount(amount)}", "muted");
+            _counted = string.Empty;
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Recording a cash withdrawal failed.");
+            Show(Texts["Payment.RecordWithdrawal"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+            _withdrawal = null;
+        }
+    }
+
+    private void AskClose()
+    {
+        if (_summary is not { } summary || !Actions.Close || _busy) return;
+
+        // A count that reads and is not negative, and the explanation of a variance beyond the tolerance.
+        _refusal = CashDeskRules.CheckClosing(_counted, summary.ExpectedClosingCash, _explanation.Trim());
+        if (_refusal is not null)
+        {
+            _status = null;
+            return;
+        }
+
+        _dialog = CashDialog.Close;
+    }
+
+    private async Task CloseAsync()
+    {
+        if (_summary is null) return;
+
+        CloseDialog();
+        _busy = true;
+
+        try
+        {
+            var counted = TypedNumber.Parse(_counted) ?? 0m;
+            var explanation = _explanation.Trim();
+            var result = await Scopes.RunAsync<BillingService, Result<decimal>>(s => s.CloseCashSessionAsync(counted, explanation.Length == 0 ? null : explanation));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Payment.CloseSession"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            Show(Texts["Payment.CloseSession"], $"{Texts["Payment.Variance"]} : {Amount(result.Value)}");
+            _counted = _explanation = string.Empty;
+            _refusal = null;
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Closing the cash session failed.");
+            Show(Texts["Payment.CloseSession"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
