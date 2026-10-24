@@ -1,0 +1,226 @@
+@using System.Globalization
+@using MarocLIS.Application.Results
+@inject WebTexts Texts
+
+@*
+    The antériorités of one parameter, the workstation's ResultHistoryDialog: the patient's validated
+    values as a curve against the reference interval, then the same values as a table, newest first.
+    The interval is a band, not two lines, so inside or outside reads before any number; a value
+    outside it is set apart by colour and by shape; the value on screen, not released yet, is
+    hollow. Time runs in real time, and from the reading side: right to left in Arabic.
+*@
+<Modal Name="history" Title="@Title" Hint="@Summary" Wide="true" OnCancel="CloseAsync">
+    <ChildContent>
+        @if (Series.Points.Count == 0 && Series.Current is null)
+        {
+            <p class="muted" data-state="history-empty">@Texts["Result.HistoryEmpty"]</p>
+        }
+        else
+        {
+            var plot = Plot();
+            <svg class="trend" viewBox="0 0 @Width @Height" role="img" aria-label="@Title" data-chart="history">
+                @if (plot.Band is { } band)
+                {
+                    <rect class="trend-band" x="@F(Left)" y="@F(band.Top)" width="@F(Width - Left - Right)" height="@F(band.Height)" />
+                }
+                @foreach (var tick in plot.Ticks)
+                {
+                    var y = plot.Y(tick);
+                    <line class="trend-grid" x1="@F(Left)" x2="@F(Width - Right)" y1="@F(y)" y2="@F(y)" />
+                    @Label(Texts.IsRightToLeft ? Width - Right + 6 : Left - 6, y + 4, Texts.IsRightToLeft ? "start" : "end",
+                           tick.ToString("N" + Series.Decimals, Texts.Culture))
+                }
+                @if (plot.Points.Count > 1)
+                {
+                    <polyline class="trend-line" points="@string.Join(" ", plot.Points.Select(p => $"{F(p.X)},{F(p.Y)}"))" />
+                }
+                @foreach (var point in plot.Points)
+                {
+                    var outside = ResultEntryRules.IsOutsideInterval(point.Source.Value, Series.LowerLimit, Series.UpperLimit);
+                    @if (point.IsCurrent)
+                    {
+                        <circle class="trend-current" cx="@F(point.X)" cy="@F(point.Y)" r="6"><title>@Texts["Result.HistoryCurrent"] · @ValueText(point.Source)</title></circle>
+                    }
+                    else if (outside)
+                    {
+                        <rect class="trend-outside" x="@F(point.X - 5)" y="@F(point.Y - 5)" width="10" height="10"><title>@Tip(point.Source)</title></rect>
+                    }
+                    else
+                    {
+                        <circle class="trend-point" cx="@F(point.X)" cy="@F(point.Y)" r="5"><title>@Tip(point.Source)</title></circle>
+                    }
+                }
+                @foreach (var (x, label) in plot.Dates)
+                {
+                    @Label(x, Height - 10, "middle", label)
+                }
+            </svg>
+
+            <div class="table-scroll table-scroll-short">
+                <table class="grid" data-grid="history-values">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Field.Date"]</th>
+                            <th class="num">@Texts["Result.HistoryValue"]</th>
+                            <th>@Texts["Order.AccessionNumber"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Series.Current is { } current)
+                        {
+                            <tr class="is-current" title="@Texts["Result.HistoryCurrent"]">
+                                <td class="mono">@current.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)</td>
+                                <td class="num mono">@ValueText(current)</td>
+                                <td class="mono">@current.AccessionNumber</td>
+                            </tr>
+                        }
+                        @foreach (var point in Series.Points.Reverse())
+                        {
+                            <tr>
+                                <td class="mono">@point.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)</td>
+                                <td class="num mono strong @(ResultEntryRules.IsOutsideInterval(point.Value, Series.LowerLimit, Series.UpperLimit) ? "abnormal" : null)">@ValueText(point)</td>
+                                <td class="mono">@Accession(point)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Close" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" OnClick="CloseAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string ParameterName { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public TrendSeries Series { get; set; } = new([], null, null, 0, null);
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private const double Width = 760, Height = 260, Left = 64, Right = 20, Top = 16, Bottom = 36, Inset = 16;
+
+    private sealed record PlotPoint(double X, double Y, TrendPoint Source, bool IsCurrent);
+
+    private sealed record PlotBand(double Top, double Height);
+
+    private sealed record PlotArea(IReadOnlyList<PlotPoint> Points, IReadOnlyList<decimal> Ticks, PlotBand? Band,
+                                   IReadOnlyList<(double X, string Label)> Dates, Func<decimal, double> Y);
+
+    private string Title => string.IsNullOrWhiteSpace(Series.UnitSymbol)
+        ? $"{Texts["Result.History"]} — {ParameterName}"
+        : $"{Texts["Result.History"]} — {ParameterName} ({Series.UnitSymbol})";
+
+    /// <summary>The head's sentence: how many validated values, and the interval they are read against.</summary>
+    private string Summary
+    {
+        get
+        {
+            var count = Texts.T("Result.HistoryCount", Series.Points.Count);
+            var format = "N" + Series.Decimals;
+            var interval = (Series.LowerLimit, Series.UpperLimit) switch
+            {
+                ({ } low, { } high) => $"{low.ToString(format, Texts.Culture)} – {high.ToString(format, Texts.Culture)}",
+                ({ } low, null) => $"≥ {low.ToString(format, Texts.Culture)}",
+                (null, { } high) => $"≤ {high.ToString(format, Texts.Culture)}",
+                _ => null
+            };
+            return interval is null ? count : $"{count} · {Texts.T("Result.HistoryInterval", interval)}";
+        }
+    }
+
+    private string ValueText(TrendPoint point) => $"{point.Operator}{point.Value.ToString("N" + Series.Decimals, Texts.Culture)}";
+
+    private string Tip(TrendPoint point) =>
+        $"{point.At.ToLocalTime().ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)} · {ValueText(point)} · {Accession(point)}";
+
+    /// <summary>An antériorité reprise from the old application: its old number, and the word « reprise ».</summary>
+    private string Accession(TrendPoint point) =>
+        point.Imported
+            ? $"{point.AccessionNumber} · {Texts["Migration.HistoryMarker"]}".TrimStart(' ', '·')
+            : point.AccessionNumber ?? string.Empty;
+
+    /// <summary>
+    /// An SVG label. Written as markup: Razor reads a &lt;text&gt; element inside code as its own
+    /// transition tag and refuses attributes on it.
+    /// </summary>
+    private static MarkupString Label(double x, double y, string anchor, string content) =>
+        new($"<text class=\"trend-label\" x=\"{F(x)}\" y=\"{F(y)}\" text-anchor=\"{anchor}\">{System.Net.WebUtility.HtmlEncode(content)}</text>");
+
+    private static string F(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Where each value sits: the vertical scale spans the values and the interval with a margin,
+    /// in round steps; the horizontal one is real time between the first and the last point.
+    /// </summary>
+    private PlotArea Plot()
+    {
+        var all = Series.Points.Select(p => (Point: p, Current: false)).ToList();
+        if (Series.Current is { } current) all.Add((current, true));
+
+        var values = all.Select(p => p.Point.Value).ToList();
+        if (Series.LowerLimit is { } low) values.Add(low);
+        if (Series.UpperLimit is { } high) values.Add(high);
+
+        var min = values.Min();
+        var max = values.Max();
+        if (min == max)
+        {
+            min -= min == 0 ? 1 : Math.Abs(min) * 0.1m;
+            max += max == 0 ? 1 : Math.Abs(max) * 0.1m;
+        }
+
+        var step = NiceStep((max - min) / 4m);
+        var bottom = Math.Floor(min / step) * step;
+        var top = Math.Ceiling(max / step) * step;
+        var ticks = new List<decimal>();
+        for (var tick = bottom; tick <= top + step / 2; tick += step) ticks.Add(tick);
+
+        double Y(decimal value) =>
+            Top + (double)((top - value) / (top - bottom)) * (Height - Top - Bottom);
+
+        var first = all.Min(p => p.Point.At);
+        var last = all.Max(p => p.Point.At);
+        var span = (last - first).TotalSeconds;
+        var rtl = Texts.IsRightToLeft;
+
+        double X(DateTimeOffset at)
+        {
+            var share = span <= 0 ? 0.5 : (at - first).TotalSeconds / span;
+            var x = Left + Inset + share * (Width - Left - Right - 2 * Inset);
+            return rtl ? Width - x : x;
+        }
+
+        var points = all.OrderBy(p => p.Point.At)
+                        .Select(p => new PlotPoint(X(p.Point.At), Y(p.Point.Value), p.Point, p.Current))
+                        .ToList();
+
+        PlotBand? band = null;
+        if (Series.LowerLimit is not null || Series.UpperLimit is not null)
+        {
+            var upper = Y(Series.UpperLimit ?? top);
+            var lower = Y(Series.LowerLimit ?? bottom);
+            band = new PlotBand(upper, Math.Max(1, lower - upper));
+        }
+
+        var dates = points.Count <= 1
+            ? points.Select(p => (p.X, p.Source.At.ToLocalTime().ToString("dd/MM/yy", CultureInfo.InvariantCulture))).ToList()
+            : new List<(double, string)>
+            {
+                (points[0].X, points[0].Source.At.ToLocalTime().ToString("dd/MM/yy", CultureInfo.InvariantCulture)),
+                (points[^1].X, points[^1].Source.At.ToLocalTime().ToString("dd/MM/yy", CultureInfo.InvariantCulture))
+            };
+
+        return new PlotArea(points, ticks, band, dates, Y);
+    }
+
+    /// <summary>1, 2 or 5 times a power of ten: a step the eye reads.</summary>
+    private static decimal NiceStep(decimal rough)
+    {
+        if (rough <= 0) return 1;
+        var magnitude = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)rough)));
+        var ratio = rough / magnitude;
+        return (ratio <= 1 ? 1 : ratio <= 2 ? 2 : ratio <= 5 ? 5 : 10) * magnitude;
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+}

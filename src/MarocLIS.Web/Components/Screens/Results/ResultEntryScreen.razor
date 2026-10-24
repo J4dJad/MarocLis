@@ -1,0 +1,1029 @@
+@using System.Globalization
+@using MarocLIS.Application.Results
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Orders
+@using MarocLIS.Domain.Patients
+@using MarocLIS.Domain.Results
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject IBenchWorksheetRenderer BenchRenderer
+@inject ILogger<ResultEntryScreen> Logger
+
+@*
+    « Saisie des résultats », the workstation's ResultEntryView: the dossiers waiting on the left —
+    a scan box that takes an accession number or a tube barcode, the sector chips, the fiche de
+    paillasse — and the open dossier on the right: the patient card with its pills, the grid of
+    values by analysis and sector, the keys it answers to, and the action bar (Ctrl+S saves).
+    The analysers' values arrive through the Windows workstation that drives them, as it says.
+    What a line takes, what a save sends and what the menu offers are ResultEntryRules'; what is
+    stored is ResultEntryService's.
+*@
+<div class="screen entry" data-screen="entry">
+    <NavigationLock OnBeforeInternalNavigation="BeforeLeaving" ConfirmExternalNavigation="@HasUnsaved" />
+
+    <div class="split split-list">
+        <aside class="card list-pane" data-card="worklist">
+            <div class="card-heading">
+                <h2 class="card-title" data-state="worklist-count">@Texts.T("ResultEntry.WorklistCount", _pending.Count)</h2>
+                <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="RefreshAsync" />
+            </div>
+            <div class="input-with-button">
+                <input class="input scan-box" type="text" autocomplete="off" data-field="scan" @ref="_scanBox"
+                       placeholder="@Texts["ResultEntry.ScanPlaceholder"]" title="@($"{Texts["Order.AccessionNumber"]} / {Texts["Sample.Barcode"]}")"
+                       @bind="_scan" @bind:event="oninput" @onkeydown="ScanKeyAsync" />
+                <ActionButton Key="Action.Open" OnClick="() => LoadAsync(_scan)" />
+            </div>
+            @if (_sectors.Count > 0)
+            {
+                <div class="chips" role="group" data-filter="sectors">
+                    <button type="button" class="chip @(_sectorFilter is null ? "is-pressed" : null)" aria-pressed="@((_sectorFilter is null) ? "true" : "false")"
+                            data-filter="all" @onclick="() => _sectorFilter = null">@Texts["ResultEntry.AllSectors"]</button>
+                    @foreach (var sector in _sectors)
+                    {
+                        <button type="button" class="chip @(_sectorFilter == sector.Code ? "is-pressed" : null)" aria-pressed="@((_sectorFilter == sector.Code) ? "true" : "false")"
+                                data-filter="@sector.Code" @onclick="() => _sectorFilter = sector.Code">@sector.Name.For(Texts.Language)</button>
+                    }
+                </div>
+            }
+            <ul class="file-list" data-list="worklist">
+                @foreach (var order in Shown)
+                {
+                    var progress = _progress.GetValueOrDefault(order.AccessionNumber);
+                    var pill = ResultEntryRules.WorklistPill(order, progress, DateTimeOffset.Now);
+                    var late = ResultEntryRules.IsLate(order.DueAt, DateTimeOffset.Now);
+                    <li class="@(order.AccessionNumber == _sheet?.AccessionNumber ? "is-selected" : null)" title="@WorklistTip(order)"
+                        data-order="@order.AccessionNumber" @onclick="() => LoadAsync(order.AccessionNumber, skipIfOpen: true)">
+                        <div class="file-list-line">
+                            <span class="strong @(order.IsUrgent ? "critical" : null)">@order.PatientName</span>
+                            @switch (pill)
+                            {
+                                case EntryWorklistPill.ReadyToValidate:
+                                    <Pill Text="@Texts["ResultEntry.ReadyToValidate"]" Tone="Info" />
+                                    break;
+                                case EntryWorklistPill.Late:
+                                    <Pill Text="@Texts["ResultEntry.Late"]" Tone="Critical" />
+                                    break;
+                                case EntryWorklistPill.Progress:
+                                    <Pill Text="@($"{progress!.Entered} / {progress.Total}")" Tone="@(late ? "Critical" : "Waiting")" />
+                                    break;
+                            }
+                        </div>
+                        <div class="file-list-line">
+                            <span class="small muted">
+                                <span class="mono">@order.AccessionNumber</span> ·
+                                @(order.PendingAnalyses == 1 ? Texts["ResultEntry.AnalysisOne"] : Texts.T("ResultEntry.AnalysisMany", order.PendingAnalyses))
+                            </span>
+                            <span class="small mono @(late ? "critical" : "muted")">@DueText(order.DueAt)</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+            <div class="list-pane-footer">
+                <ActionButton Key="BenchSheet.Open" Disabled="@(!Context.User.Has(Permissions.Results.Enter))" OnClick="OpenBenchSheetAsync" />
+            </div>
+        </aside>
+
+        <section class="file-pane" data-card="sheet">
+            @if (_sheet is not { } sheet)
+            {
+                <div class="card card-empty" data-state="no-order">
+                    <Icon Glyph="@EmptyIcon" Class="icon-large" />
+                    <p>@Texts["App.NoData"]</p>
+                </div>
+                @if (_status is { } empty)
+                {
+                    <p class="message is-@empty.Tone" role="status" data-state="status">@empty.Text</p>
+                }
+            }
+            else
+            {
+                var selected = SelectedRow;
+                var actions = selected is null ? ResultRowActions.None : ResultEntryRules.RowActions(selected, Context.User);
+                var (entered, owed) = ResultEntryRules.Progress(sheet.Rows);
+
+                <div class="card patient-band" data-state="patient">
+                    <span class="initials @(sheet.Priority != OrderPriority.Routine ? "is-critical" : null)">@Initials(sheet.PatientName)</span>
+                    <div class="patient-band-text">
+                        <span class="patient-band-name">@sheet.PatientName</span>
+                        <span class="muted small">@Demographics(sheet)</span>
+                    </div>
+                    <div class="pills" data-state="pills">
+                        @if (sheet.Priority != OrderPriority.Routine)
+                        {
+                            <Pill Text="@Texts[$"Priority.{sheet.Priority}"].ToUpperInvariant()" Tone="Critical" />
+                        }
+                        @if (sheet.DueAt is { } due)
+                        {
+                            var at = due.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture);
+                            @if (ResultEntryRules.IsLate(due, DateTimeOffset.Now))
+                            {
+                                <Pill Text="@Texts.T("ResultEntry.Overdue", at)" Tone="Critical" />
+                            }
+                            else
+                            {
+                                <Pill Text="@($"{Texts["Order.DueAt"]} · {at}")" Tone="Waiting" />
+                            }
+                        }
+                        @if (owed > 0)
+                        {
+                            <Pill Text="@Texts.T("ResultEntry.Progress", entered, owed)" Tone="Info" />
+                        }
+                    </div>
+                </div>
+
+                <div class="card card-flush">
+                    <div class="table-scroll table-scroll-tall">
+                        <table class="grid grid-entry" data-grid="entry">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Result.Parameter"]</th>
+                                    <th class="num">@Texts["Result.Value"]</th>
+                                    <th>@Texts["ResultEntry.Indicator"]</th>
+                                    <th>@Texts["Result.Unit"]</th>
+                                    <th>@Texts["Result.ReferenceRange"]</th>
+                                    <th>@Texts["Result.Previous"]</th>
+                                    <th>@Texts["ResultEntry.Origin"]</th>
+                                    <th>@Texts["Result.TechnicalComment"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in Lines)
+                                {
+                                    if (line.Row is not { } row)
+                                    {
+                                        <tr class="section-row" data-section="@line.Section"><td colspan="8">@line.Section</td></tr>
+                                        continue;
+                                    }
+
+                                    var id = row.TestResultId;
+                                    var origin = _origins.GetValueOrDefault(id);
+                                    var keyable = ResultEntryRules.TakesValue(row) && ResultEntryRules.EditRefusal(row) is null;
+                                    var indicator = ResultEntryRules.Indicator(row.Interpretation);
+                                    var comment = _comments.GetValueOrDefault(id);
+                                    <tr class="@RowClass(row)" data-row="@row.ParameterCode" title="@ParameterTip(row)"
+                                        @onclick="() => Select(row)" @ondblclick="() => ShowHistoryAsync(row)">
+                                        <td style="padding-inline-start: @(8 + row.IndentLevel * 16)px">
+                                            @row.ParameterName.For(Texts.Language)@(row.IsCalculated ? "  ƒ" : null)@(string.IsNullOrWhiteSpace(comment) ? null : "  ✎")
+                                        </td>
+                                        <td class="num">
+                                            @if (!row.IsHeading)
+                                            {
+                                                <input class="input input-value mono @ValueClass(row)" type="text" autocomplete="off" data-entry-value
+                                                       data-field="value" aria-label="@row.ParameterName.For(Texts.Language)"
+                                                       readonly="@(!keyable)" data-empty="@string.IsNullOrWhiteSpace(row.CurrentValue)" title="@(row.IsAwaitingSample ? Texts.T("Result_SampleNotReceived", row.ParameterCode) : null)"
+                                                       value="@_typed.GetValueOrDefault(id)"
+                                                       @oninput="e => _typed[id] = e.Value?.ToString()" @onfocus="() => Focused(row)" />
+                                            }
+                                        </td>
+                                        <td title="@(string.IsNullOrEmpty(row.InstrumentFlags) ? null : $"{Texts["Result.InstrumentFlags"]} : {row.InstrumentFlags}")">
+                                            @if (indicator is not null)
+                                            {
+                                                <Pill Text="@($"{indicator.Arrow} {Texts[indicator.Key]}")" Tone="@indicator.Tone.ToString()" />
+                                            }
+                                            <span class="mono small">@ValidationScreenRules.FlagGlyphs(row.Flags)</span>
+                                        </td>
+                                        <td class="small">@row.UnitSymbol</td>
+                                        <td class="small mono">@row.ReferenceRangeText</td>
+                                        <td class="small mono">@Previous(row)</td>
+                                        <td class="small">@(ResultEntryRules.Origin(row, origin, Texts.Language) ?? Texts["ResultEntry.Manual"])</td>
+                                        <td>
+                                            @if (!row.IsHeading)
+                                            {
+                                                <input class="input input-comment" type="text" autocomplete="off" data-field="comment" maxlength="2000"
+                                                       aria-label="@Texts["Result.TechnicalComment"]" readonly="@(!ResultEntryRules.TakesComment(row))"
+                                                       value="@comment" @oninput="e => _comments[id] = e.Value?.ToString()" @onfocus="() => Select(row)" />
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="key-hints" data-state="key-hints">
+                        <kbd class="kbd">@Texts["Shortcut.EnterKey"]</kbd><span>@Texts["ResultEntry.KeyNext"]</span>
+                        <kbd class="kbd">@($"{Texts["Shortcut.ShiftKey"]}+{Texts["Shortcut.EnterKey"]}")</kbd><span>@Texts["ResultEntry.KeyPrevious"]</span>
+                        <kbd class="kbd">F3</kbd><span>@Texts["ResultEntry.KeyComment"]</span>
+                        <kbd class="kbd">@Texts["ResultEntry.DoubleClick"]</kbd><span>@Texts["ResultEntry.KeyHistory"]</span>
+                        <span class="key-hints-note" data-state="instruments">
+                            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Cpu" />@Texts["Web.InstrumentsFromWorkstation"]
+                        </span>
+                    </div>
+                </div>
+
+                <footer class="action-bar">
+                    <p class="action-bar-status is-@(_status?.Tone ?? "muted")" role="status" data-state="status">@_status?.Text</p>
+                    <details class="more more-up">
+                        <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]</summary>
+                        <div class="more-menu">
+                            <ActionButton Key="ResultEntry.MarkNotDone" Disabled="@(!actions.NotDone || _busy)" OnClick="() => Open(EntryDialog.NotDone)" />
+                            <ActionButton Key="ResultEntry.ClearValue" Disabled="@(!actions.Clear || _busy)" OnClick="() => Open(EntryDialog.Clear)" />
+                            <ActionButton Key="ResultEntry.CorrectReleased" Disabled="@(!actions.Correct || _busy)" OnClick="AskCorrection" />
+                            <ActionButton Key="Result.TechnicalComment" Text="@($"{Texts["Result.TechnicalComment"]}…")" Disabled="@(!actions.Comment)"
+                                          Shortcut="F3" OnClick="() => Open(EntryDialog.Comment)" />
+                        </div>
+                    </details>
+                    <ActionButton Key="Result.History" Hidden="@(!Context.User.Has(Permissions.Results.View))"
+                                  Disabled="@(!ResultEntryRules.IsCharted(selected))" OnClick="() => ShowHistoryAsync(selected)" />
+                    <span class="toolbar-spacer"></span>
+                    <span class="muted small" data-state="remaining">@Remaining</span>
+                    <ActionButton Key="Validation.Technical" Disabled="@(!Context.User.Has(Permissions.Results.TechnicalValidate) || !ResultEntryRules.CanTechnicallyValidate(sheet.Rows) || _busy)"
+                                  OnClick="() => Open(EntryDialog.Technical)" />
+                    <ActionButton Key="Action.Save" Primary="true" Shortcut="Ctrl+S"
+                                  Disabled="@(!Context.User.Has(Permissions.Results.Enter) || _busy)" OnClick="SubmitAsync" />
+                </footer>
+            }
+        </section>
+    </div>
+</div>
+
+@switch (_dialog)
+{
+    case EntryDialog.Unsaved when _sheet is { } open:
+        <ConfirmPrompt Title="@open.AccessionNumber" Message="@Texts["Message.UnsavedChanges"]" OnYes="DiscardAsync" OnNo="CloseDialog" />
+        break;
+
+    case EntryDialog.NotDone when SelectedRow is { } row:
+        <ReasonPrompt Title="@Texts["ResultEntry.MarkNotDone"]" MinimumLength="3" MaxLength="500"
+                      Prompt="@Texts.T("ResultEntry.NotDonePrompt", row.ParameterName.For(Texts.Language))"
+                      OnConfirm="MarkNotDoneAsync" OnCancel="CloseDialog" />
+        break;
+
+    case EntryDialog.Clear when SelectedRow is { } row:
+        <ConfirmPrompt Title="@Texts["ResultEntry.ClearValue"]"
+                       Message="@Texts.T("ResultEntry.ClearValueConfirm", row.ParameterName.For(Texts.Language), row.CurrentValue ?? string.Empty)"
+                       OnYes="ClearAsync" OnNo="CloseDialog" />
+        break;
+
+    case EntryDialog.CorrectValue when SelectedRow is { } row:
+        <TextPrompt Name="correct-value" Title="@Texts["ResultEntry.CorrectReleased"]" MaxLength="100" Required="true" Initial="@row.CurrentValue"
+                    Prompt="@Texts.T("ResultEntry.CorrectValuePrompt", row.ParameterName.For(Texts.Language), row.CurrentValue ?? string.Empty, row.UnitSymbol ?? string.Empty)"
+                    OnConfirm="CorrectValueGiven" OnCancel="CloseDialog" />
+        break;
+
+    case EntryDialog.CorrectReason when SelectedRow is { } row:
+        <ReasonPrompt Title="@Texts["ResultEntry.CorrectReleased"]" MinimumLength="15" MaxLength="500"
+                      Prompt="@Texts.T("ResultEntry.CorrectReasonPrompt", row.ParameterName.For(Texts.Language))"
+                      OnConfirm="CorrectAsync" OnCancel="CloseDialog" />
+        break;
+
+    case EntryDialog.Comment when SelectedRow is { } row:
+        <TextPrompt Name="comment" Title="@Texts["Result.TechnicalComment"]" MaxLength="2000" Initial="@_comments.GetValueOrDefault(row.TestResultId)"
+                    Prompt="@Texts.T("ResultEntry.CommentPrompt", row.ParameterName.For(Texts.Language))"
+                    OnConfirm="CommentGiven" OnCancel="CloseDialog" />
+        break;
+
+    case EntryDialog.Technical:
+        <ConfirmPrompt Title="@Texts["Validation.Technical"]" Message="@Texts["Validation.Technical"]" OnYes="TechnicallyValidateAsync" OnNo="CloseDialog" />
+        break;
+
+    case EntryDialog.History when _history is { } history:
+        <ResultHistoryDialog ParameterName="@history.Name" Series="history.Series" OnClose="CloseDialog" />
+        break;
+
+    case EntryDialog.BenchSheet when _benchOptions is { } options:
+        <BenchSheetDialog Options="options" DepartmentId="_lastBenchDepartmentId" OnPrint="PrintBenchSheetAsync" OnCancel="CloseDialog" />
+        break;
+
+    case EntryDialog.Message when _messages.Count > 0:
+        var message = _messages.Peek();
+        <Modal Name="entry-message" Title="@message.Title" OnCancel="NextMessage">
+            <ChildContent><p class="info-line prompt-text @(message.Critical ? "critical" : null)">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="NextMessage" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    /// <summary>A dossier opened from elsewhere (« ?dossier= »): opened instead of the first one waiting.</summary>
+    [Parameter] public Guid? OrderId { get; set; }
+
+    private enum EntryDialog { None, Unsaved, NotDone, Clear, CorrectValue, CorrectReason, Comment, Technical, History, BenchSheet, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical = false);
+
+    /// <summary>A line of the grid: a section heading « CODE · SECTEUR », or a result.</summary>
+    private sealed record Line(string Section, ResultEntryRow? Row);
+
+    private sealed record HistoryView(string Name, TrendSeries Series);
+
+    private IReadOnlyList<PendingEntryOrder> _pending = [];
+    private Dictionary<string, ResultEntryProgress> _progress = new(StringComparer.Ordinal);
+    private IReadOnlyList<ResultEntrySector> _sectors = [];
+    private string? _sectorFilter;
+    private string _scan = string.Empty;
+    private ElementReference _scanBox;
+
+    private ResultEntrySheet? _sheet;
+    private Dictionary<Guid, ResultEntryOrigin> _origins = [];
+    private readonly Dictionary<Guid, string?> _typed = [];
+    private readonly Dictionary<Guid, string?> _comments = [];
+    private Guid? _selectedId;
+
+    private EntryDialog _dialog;
+    private readonly Queue<Message> _messages = new();
+    private Func<Task>? _afterDiscard;
+    private string? _correctedValue;
+    private HistoryView? _history;
+    private BenchWorksheetOptions? _benchOptions;
+    private Guid? _lastBenchDepartmentId;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+    private bool _leaving;
+    private bool _focusFirst;
+
+    private static readonly MarocLIS.Desktop.Infrastructure.Glyph? EmptyIcon = WebMenu.IconOf("entry");
+
+    private IEnumerable<PendingEntryOrder> Shown =>
+        _pending.Where(o => ResultEntryRules.WorklistMatches(o, _sectorFilter, _scan, Texts.Culture));
+
+    private ResultEntryRow? SelectedRow =>
+        _sheet?.Rows.FirstOrDefault(r => r.TestResultId == _selectedId && !r.IsHeading);
+
+    private bool HasUnsaved =>
+        _sheet is { } sheet && !_leaving
+        && ResultEntryRules.HasUnsavedTyping(sheet.Rows, TypedValue, TypedComment);
+
+    private string? TypedValue(Guid id) => _typed.GetValueOrDefault(id);
+
+    private string? TypedComment(Guid id) => _comments.GetValueOrDefault(id);
+
+    /// <summary>One section row per analysis, « CODE · SECTEUR », as the bench reads the panel.</summary>
+    private IEnumerable<Line> Lines
+    {
+        get
+        {
+            if (_sheet is null) yield break;
+
+            string? section = null;
+            foreach (var row in _sheet.Rows)
+            {
+                var caption = _origins.GetValueOrDefault(row.TestResultId)?.DepartmentName is { } department
+                    ? $"{row.AnalysisCode} · {department.For(Texts.Language).ToUpper(Texts.Culture)}"
+                    : row.AnalysisCode;
+
+                if (caption != section)
+                {
+                    section = caption;
+                    yield return new Line(caption, null);
+                }
+
+                yield return new Line(caption, row);
+            }
+        }
+    }
+
+    /// <summary>
+    /// « N valeurs restent à saisir »: the lines still awaited whose box is still empty, so the
+    /// count falls as values are typed, before they are saved.
+    /// </summary>
+    private string Remaining =>
+        _sheet is null
+            ? string.Empty
+            : ResultEntryRules.RemainingToEnter(_sheet.Rows, TypedValue) switch
+            {
+                0 => Texts["ResultEntry.RemainingNone"],
+                1 => Texts["ResultEntry.RemainingOne"],
+                var left => Texts.T("ResultEntry.RemainingMany", left)
+            };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWorklistAsync();
+
+        if (OrderId is { } orderId)
+        {
+            await LoadOrderAsync(orderId);
+        }
+        else if (_pending.Count > 0)
+        {
+            // The first dossier waiting (urgent first) is opened, so the screen starts on work
+            // rather than on an empty grid; scanning a tube still jumps straight to it.
+            await LoadCoreAsync(_pending[0].AccessionNumber);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusFirst) return;
+        _focusFirst = false;
+
+        // The first value still to enter takes the cursor, else the scan box.
+        if (!await JS.InvokeAsync<bool>("marocLis.focusFirst", "[data-entry-value][data-empty]:not([readonly])"))
+            await _scanBox.FocusAsync();
+    }
+
+    // ---- Worklist ---------------------------------------------------------------------------------
+
+    private async Task RefreshAsync()
+    {
+        await LoadWorklistAsync();
+        if (_sheet is { } sheet && !HasUnsaved) await LoadOrderAsync(sheet.LabOrderId);
+    }
+
+    private async Task LoadWorklistAsync()
+    {
+        try
+        {
+            var (pending, progress, sectors) = await Scopes.RunAsync<BenchWorksheetService, ResultEntryContextService,
+                (IReadOnlyList<PendingEntryOrder>, IReadOnlyList<ResultEntryProgress>, IReadOnlyList<ResultEntrySector>)>(
+                async (benches, context) =>
+                {
+                    // Without the right to enter results the list stays empty; the scan box still
+                    // works for the screens that only read.
+                    var orders = await benches.GetPendingOrdersAsync();
+                    IReadOnlyList<PendingEntryOrder> list = orders.IsFailure ? [] : orders.Value;
+
+                    // The progress of each dossier and the names of its sectors, beside the list.
+                    // Either failing leaves the list as it is, without the pill or with the codes.
+                    var known = await context.GetProgressAsync([.. list.Select(p => p.AccessionNumber)]);
+                    var codes = list.SelectMany(ResultEntryRules.SectorsOf).Distinct(StringComparer.Ordinal).ToList();
+                    var named = await context.GetSectorsAsync(codes);
+                    IReadOnlyList<ResultEntrySector> names = named.IsSuccess ? named.Value : [];
+
+                    return (list, known.IsSuccess ? known.Value : [],
+                            [
+                                .. names.Where(s => codes.Contains(s.Code, StringComparer.Ordinal)),
+                                .. codes.Where(c => names.All(s => s.Code != c)).Order()
+                                        .Select(c => new ResultEntrySector(c, new MultilingualText(c)))
+                            ]);
+                });
+
+            _pending = pending;
+            _progress = progress.ToDictionary(p => p.AccessionNumber, StringComparer.Ordinal);
+            _sectors = sectors;
+            if (_sectorFilter is not null && _sectors.All(s => s.Code != _sectorFilter)) _sectorFilter = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the result entry worklist failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private string WorklistTip(PendingEntryOrder order)
+    {
+        // What the two lines leave out: reception time, sectors, priority.
+        var tip = new List<string>();
+        if (order.IsUrgent) tip.Add(Texts[$"Priority.{order.Priority}"]);
+        if (order.ReceivedAt is { } received)
+            tip.Add($"{Texts["ResultEntry.Received"]} {received.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)}");
+        if (order.DueAt is { } due)
+            tip.Add($"{Texts["Order.DueAt"]} {due.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)}");
+        if (order.Departments.Length > 0) tip.Add($"{Texts["ResultEntry.Departments"]} : {order.Departments}");
+        return string.Join("\n", tip);
+    }
+
+    private static string DueText(DateTimeOffset? dueAt)
+    {
+        if (dueAt is not { } due) return string.Empty;
+        var local = due.ToLocalTime();
+        return local.ToString(local.Date == DateTimeOffset.Now.ToLocalTime().Date ? "HH:mm" : "dd/MM HH:mm",
+                              CultureInfo.InvariantCulture);
+    }
+
+    // ---- Loading -----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A scanner types the barcode and ends with Enter, as the operator does with a file number:
+    /// both open the file. The box narrows the list as it is typed into.
+    /// </summary>
+    private async Task ScanKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await LoadAsync(_scan);
+    }
+
+    /// <summary>Another file replaces the grid: asked first when something typed would be lost.</summary>
+    private async Task LoadAsync(string term, bool skipIfOpen = false)
+    {
+        if (string.IsNullOrWhiteSpace(term)) return;
+        if (skipIfOpen && _sheet?.AccessionNumber == term) return;
+
+        if (HasUnsaved)
+        {
+            _afterDiscard = () => LoadCoreAsync(term);
+            _dialog = EntryDialog.Unsaved;
+            return;
+        }
+
+        await LoadCoreAsync(term);
+    }
+
+    private async Task LoadCoreAsync(string term)
+    {
+        _status = (Texts["App.Loading"], "muted");
+
+        try
+        {
+            // Accepts an accession number or a tube barcode: the technician scans whichever label
+            // is in front of them and should not have to know which identifier it carries.
+            var resolved = await Scopes.RunAsync<ResultEntryService, Result<Guid>>(s => s.ResolveOrderAsync(term.Trim()));
+
+            if (resolved.IsFailure)
+            {
+                _status = (Texts.Describe(resolved.Errors), "critical");
+                await JS.InvokeAsync<bool>("marocLis.focusFirst", "[data-field='scan']");
+                return;
+            }
+
+            // The box is emptied once the file is open, so the list it narrowed shows every
+            // dossier again and the next tube goes into an empty box.
+            if (_scan.Trim() == term.Trim()) _scan = string.Empty;
+
+            await LoadOrderAsync(resolved.Value);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Resolving {Term} for entry failed.", term);
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task LoadOrderAsync(Guid orderId)
+    {
+        try
+        {
+            var (sheet, origins) = await Scopes.RunAsync<ResultEntryService, ResultEntryContextService,
+                (Result<ResultEntrySheet>, Result<IReadOnlyList<ResultEntryOrigin>>)>(
+                async (entry, context) => (await entry.OpenAsync(orderId), await context.GetOriginsAsync(orderId)));
+
+            if (sheet.IsFailure)
+            {
+                _status = (Texts.Describe(sheet.Errors), "critical");
+                return;
+            }
+
+            // The sector and the origin of each line; without them the lines still show, under
+            // their analysis code alone.
+            _origins = origins.IsSuccess ? origins.Value.ToDictionary(o => o.TestResultId) : [];
+            Render(sheet.Value);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading order {OrderId} for entry failed.", orderId);
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    /// <summary>The boxes start from what is stored; the first value still to enter takes the cursor.</summary>
+    private void Render(ResultEntrySheet sheet)
+    {
+        var sameFile = _sheet?.LabOrderId == sheet.LabOrderId;
+        _sheet = sheet;
+        _typed.Clear();
+        _comments.Clear();
+
+        foreach (var row in sheet.Rows.Where(r => !r.IsHeading))
+        {
+            _typed[row.TestResultId] = row.CurrentValue;
+            _comments[row.TestResultId] = row.TechnicalComment;
+        }
+
+        if (!sameFile || sheet.Rows.All(r => r.TestResultId != _selectedId))
+            _selectedId = sheet.Rows.FirstOrDefault(r => ResultEntryRules.IsKeyable(r) && r.CurrentValue is null)?.TestResultId
+                          ?? sheet.Rows.FirstOrDefault(r => !r.IsHeading)?.TestResultId;
+
+        // Said once on opening, rather than discovered row by row as the boxes refuse the cursor.
+        var awaiting = ResultEntryRules.AwaitingSample(sheet.Rows);
+        _status = awaiting.Count > 0 ? (Texts.T("Result.AwaitingSample", string.Join(", ", awaiting)), "abnormal") : null;
+
+        _focusFirst = true;
+    }
+
+    private void Select(ResultEntryRow row) => _selectedId = row.TestResultId;
+
+    /// <summary>A box that refuses a value says why, as the workstation's grid does when a cell is entered.</summary>
+    private void Focused(ResultEntryRow row)
+    {
+        _selectedId = row.TestResultId;
+        if (ResultEntryRules.TakesValue(row) && ResultEntryRules.EditRefusal(row) is { } refusal)
+            _status = (Texts.T(refusal, row.ParameterCode), "abnormal");
+    }
+
+    // ---- Leaving with values typed -----------------------------------------------------------------
+
+    private void BeforeLeaving(LocationChangingContext context)
+    {
+        if (!HasUnsaved || _busy) return;
+
+        context.PreventNavigation();
+        var target = context.TargetLocation;
+        _afterDiscard = () =>
+        {
+            _leaving = true;
+            Navigation.NavigateTo(target);
+            return Task.CompletedTask;
+        };
+        _dialog = EntryDialog.Unsaved;
+        StateHasChanged();
+    }
+
+    private async Task DiscardAsync()
+    {
+        _dialog = EntryDialog.None;
+        var next = _afterDiscard;
+        _afterDiscard = null;
+
+        if (next is not null) await next();
+    }
+
+    // ---- What the grid shows -----------------------------------------------------------------------
+
+    private string Demographics(ResultEntrySheet sheet)
+    {
+        var parts = new List<string> { Texts[$"Gender.{sheet.Gender}"] };
+        if (sheet.AgeYears is { } age) parts.Add($"{age} {Texts["Report.Years"]}");
+        if (sheet.DateOfBirth is { } dob)
+            parts.Add(Texts.T(sheet.Gender == Gender.Female ? "ResultEntry.BornOnFemale" : "ResultEntry.BornOn",
+                              dob.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)));
+        parts.Add(sheet.AccessionNumber);
+        if (sheet.IsPregnant) parts.Add(Texts["Patient.IsPregnant"]);
+        return string.Join("  ·  ", parts);
+    }
+
+    private static string Initials(string name) =>
+        string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0])));
+
+    private string RowClass(ResultEntryRow row) =>
+        string.Join(' ', new[]
+        {
+            row.TestResultId == _selectedId ? "is-selected" : null,
+            row.IsHeading ? "is-heading" : null,
+            row.IsAwaitingSample ? "is-pending" : null,
+            row.IsCritical ? "is-critical" : null
+        }.Where(c => c is not null));
+
+    /// <summary>Colour and weight on the value, never colour alone: the indicator pill says it in words beside it.</summary>
+    private static string? ValueClass(ResultEntryRow row) =>
+        row.IsReadOnly ? "is-derived"
+        : ResultEntryRules.Indicator(row.Interpretation)?.Tone switch
+        {
+            ValidationTone.Critical => "critical strong",
+            ValidationTone.Warning or ValidationTone.Info => "abnormal strong",
+            _ => null
+        };
+
+    /// <summary>The sample's defects and the typed technical comment, on the parameter's tooltip.</summary>
+    private string? ParameterTip(ResultEntryRow row)
+    {
+        var tip = new List<string>();
+        if (row.SampleDefects != MarocLIS.Domain.Samples.SampleDefect.None)
+            tip.Add($"{Texts["Sample.Defects"]} : {row.SampleDefects}");
+        if (_comments.GetValueOrDefault(row.TestResultId) is { } comment && !string.IsNullOrWhiteSpace(comment))
+            tip.Add($"{Texts["Result.TechnicalComment"]} : {comment}");
+        return tip.Count == 0 ? null : string.Join("\n", tip);
+    }
+
+    private string Previous(ResultEntryRow row) =>
+        row.PreviousValue is { } value
+            ? value.ToString("N2", Texts.Culture)
+              + (row.PreviousDate is { } date ? $"  {date.ToString("dd/MM/yy", CultureInfo.InvariantCulture)}" : string.Empty)
+              + (row.PreviousImported ? $" · {Texts["Migration.HistoryMarker"]}" : string.Empty)
+            : "—";
+
+    // ---- Dialogs -------------------------------------------------------------------------------------
+
+    private void Open(EntryDialog dialog)
+    {
+        if (dialog == EntryDialog.Comment && SelectedRow is not { } row) return;
+        _dialog = dialog;
+    }
+
+    private void CloseDialog()
+    {
+        _dialog = EntryDialog.None;
+        _afterDiscard = null;
+    }
+
+    private void Show(string title, string text, bool critical = false)
+    {
+        _messages.Enqueue(new Message(title, text, critical));
+        _dialog = EntryDialog.Message;
+    }
+
+    private void NextMessage()
+    {
+        if (_messages.Count > 0) _messages.Dequeue();
+        _dialog = _messages.Count > 0 ? EntryDialog.Message : EntryDialog.None;
+    }
+
+    /// <summary>F3: the comment of the selected line, kept in its box until it is saved with the values.</summary>
+    private void CommentGiven(string comment)
+    {
+        if (SelectedRow is { } row && ResultEntryRules.TakesComment(row)) _comments[row.TestResultId] = comment.Trim();
+        _dialog = EntryDialog.None;
+    }
+
+    // ---- Antériorités ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The chart of the parameter's validated values, with the value typed in its box — saved or
+    /// not — as the current point.
+    /// </summary>
+    private async Task ShowHistoryAsync(ResultEntryRow? row)
+    {
+        if (_sheet is not { } sheet || row is null || !ResultEntryRules.IsCharted(row)) return;
+        if (!Context.User.Has(Permissions.Results.View)) return;
+
+        _selectedId = row.TestResultId;
+
+        try
+        {
+            var history = await Scopes.RunAsync<ResultEntryService, Result<IReadOnlyList<ResultHistoryPoint>>>(
+                s => s.GetHistoryAsync(sheet.LabOrderId, row.TestParameterId));
+
+            if (history.IsFailure)
+            {
+                Show(Texts["Result.History"], Texts.Describe(history.Errors));
+                return;
+            }
+
+            var typed = row.IsEditable ? _typed.GetValueOrDefault(row.TestResultId) : null;
+            _history = new HistoryView(row.ParameterName.For(Texts.Language),
+                                       TrendSeries.For(row, history.Value, sheet.AccessionNumber, typed));
+            _dialog = EntryDialog.History;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the history of parameter {ParameterId} failed.", row.TestParameterId);
+            Show(Texts["Result.History"], Texts["Message.UnexpectedError"]);
+        }
+    }
+
+    // ---- Bench worksheet ---------------------------------------------------------------------------
+
+    private async Task OpenBenchSheetAsync()
+    {
+        try
+        {
+            var options = await Scopes.RunAsync<BenchWorksheetService, Result<BenchWorksheetOptions>>(s => s.GetOptionsAsync());
+
+            if (options.IsFailure)
+            {
+                Show(Texts["BenchSheet.Title"], Texts.Describe(options.Errors));
+                return;
+            }
+
+            _benchOptions = options.Value;
+            _dialog = EntryDialog.BenchSheet;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the bench worksheet options failed.");
+            Show(Texts["BenchSheet.Title"], Texts["Message.UnexpectedError"]);
+        }
+    }
+
+    /// <summary>The sheet as a PDF the browser saves or opens, as the workstation opens it in the PDF viewer.</summary>
+    private async Task PrintBenchSheetAsync(BenchWorksheetRequest request)
+    {
+        var title = Texts["BenchSheet.Title"];
+        _dialog = EntryDialog.None;
+        _lastBenchDepartmentId = request.DepartmentId;
+
+        try
+        {
+            var worksheet = await Scopes.RunAsync<BenchWorksheetService, Result<BenchWorksheet>>(s => s.GetWorksheetAsync(request));
+
+            if (worksheet.IsFailure)
+            {
+                Show(title, Texts.Describe(worksheet.Errors));
+                return;
+            }
+
+            var language = Texts.Language;
+            var bytes = await Task.Run(() => BenchRenderer.Render(worksheet.Value, language));
+
+            await JS.InvokeVoidAsync("marocLis.download",
+                                     $"paillasse-{DateTime.Now.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture)}.pdf",
+                                     "application/pdf", bytes);
+
+            _status = ($"{title} — {Texts.T("Print.RowCount", worksheet.Value.Lines.Count)}", "muted");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Printing the bench worksheet failed.");
+            Show(title, Texts["Message.UnexpectedError"]);
+        }
+    }
+
+    // ---- Submission ----------------------------------------------------------------------------
+
+    private async Task SubmitAsync()
+    {
+        if (_sheet is not { } sheet) return;
+
+        // Only what changed is sent (ResultEntryRules.ChangedEntries), in the grid's order.
+        var entries = ResultEntryRules.ChangedEntries(sheet.Rows, TypedValue, TypedComment);
+
+        if (entries.Count == 0)
+        {
+            _status = (Texts["Message.NothingSelected"], "muted");
+            return;
+        }
+
+        await SubmitEntriesAsync(entries);
+    }
+
+    private async Task SubmitEntriesAsync(List<ResultEntry> entries)
+    {
+        if (_sheet is not { } sheet) return;
+
+        _dialog = EntryDialog.None;
+        _busy = true;
+
+        try
+        {
+            var outcome = await Scopes.RunAsync<ResultEntryService, Result<ResultEntryOutcome>>(
+                s => s.SubmitAsync(sheet.LabOrderId, entries));
+
+            if (outcome.IsFailure)
+            {
+                Show(Texts["Action.Save"], Texts.Describe(outcome.Errors));
+                return;
+            }
+
+            var result = outcome.Value;
+
+            // Reload: calculated parameters, interpretations and flags are all recomputed server
+            // side, and showing the pre-save grid would misrepresent what was stored.
+            await LoadOrderAsync(sheet.LabOrderId);
+            await LoadWorklistAsync();
+
+            ShowCriticalFindings(result);
+            ShowReflexSuggestions(result);
+
+            _status = result.Rejected.Count > 0
+                ? ($"{result.Accepted} {Texts["Message.Saved"]} — {Texts.Describe(result.Rejected)}", "abnormal")
+                : ($"{result.Accepted} · {Texts["Message.Saved"]}", "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving the results of order {OrderId} failed.", sheet.LabOrderId);
+            Show(Texts["Action.Save"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// Records the selected analysis as not done, with the reason printed on the report in the
+    /// value's place. Other values typed meanwhile are saved with it.
+    /// </summary>
+    private async Task MarkNotDoneAsync(string reason)
+    {
+        if (_sheet is not { } sheet || SelectedRow is not { } row || !ResultEntryRules.IsKeyable(row)) return;
+
+        var entries = ResultEntryRules.ChangedEntries(sheet.Rows, TypedValue, TypedComment, except: row.TestResultId);
+        entries.Add(new ResultEntry(row.TestResultId, null, reason, PrintTechnicalComment: true,
+                                    Action: ResultEntryAction.NotDone));
+
+        await SubmitEntriesAsync(entries);
+    }
+
+    /// <summary>Withdraws a value keyed by mistake (or a « non fait »): the line is awaited again.</summary>
+    private async Task ClearAsync()
+    {
+        if (_sheet is not { } sheet || SelectedRow is not { } row || !ResultEntryRules.IsKeyable(row)) return;
+
+        var entries = ResultEntryRules.ChangedEntries(sheet.Rows, TypedValue, TypedComment, except: row.TestResultId);
+        entries.Add(new ResultEntry(row.TestResultId, null, Action: ResultEntryAction.Clear));
+
+        await SubmitEntriesAsync(entries);
+    }
+
+    /// <summary>
+    /// Corrects a released value: the new figure, then a reason. The values typed elsewhere would
+    /// be lost by the reload that follows, so that is asked first.
+    /// </summary>
+    private void AskCorrection()
+    {
+        if (SelectedRow is not { Status: TestResultStatus.Validated or TestResultStatus.Reported }) return;
+
+        _correctedValue = null;
+
+        if (HasUnsaved)
+        {
+            _afterDiscard = () =>
+            {
+                _dialog = EntryDialog.CorrectValue;
+                return Task.CompletedTask;
+            };
+            _dialog = EntryDialog.Unsaved;
+            return;
+        }
+
+        _dialog = EntryDialog.CorrectValue;
+    }
+
+    private void CorrectValueGiven(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            _dialog = EntryDialog.None;
+            return;
+        }
+
+        _correctedValue = value;
+        _dialog = EntryDialog.CorrectReason;
+    }
+
+    private async Task CorrectAsync(string reason)
+    {
+        if (_sheet is not { } sheet || SelectedRow is not { } row || _correctedValue is not { } value) return;
+
+        var title = Texts["ResultEntry.CorrectReleased"];
+        var name = row.ParameterName.For(Texts.Language);
+        _dialog = EntryDialog.None;
+        _busy = true;
+
+        try
+        {
+            var outcome = await Scopes.RunAsync<ResultEntryService, Result<ResultEntryOutcome>>(
+                s => s.CorrectReleasedAsync(sheet.LabOrderId, row.TestResultId, value, reason));
+
+            if (outcome.IsFailure)
+            {
+                Show(title, Texts.Describe(outcome.Errors));
+                return;
+            }
+
+            await LoadOrderAsync(sheet.LabOrderId);
+            await LoadWorklistAsync();
+
+            ShowCriticalFindings(outcome.Value);
+            Show(title, Texts.T("ResultEntry.CorrectedNotice", name));
+            _status = (Texts.T("ResultEntry.CorrectedStatus", name), "abnormal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Correcting result {ResultId} failed.", row.TestResultId);
+            Show(title, Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+            _correctedValue = null;
+        }
+    }
+
+    /// <summary>
+    /// A panic value is announced as a dialog, not as a status line: it obliges the laboratory to
+    /// telephone the prescriber before the result can be released.
+    /// </summary>
+    private void ShowCriticalFindings(ResultEntryOutcome outcome)
+    {
+        if (outcome.CriticalFindings.Count == 0) return;
+
+        var lines = outcome.CriticalFindings
+            .Select(f => $"• {f.ParameterName} : {f.Value}   ({Texts[$"Interpretation.{f.Interpretation}"]})");
+
+        Show(Texts["Nav.CriticalResults"],
+             $"{Texts["Dashboard.CriticalPending"]}\n\n{string.Join('\n', lines)}\n\n{Texts["Result_CriticalMustBeCommunicated"]}",
+             critical: true);
+    }
+
+    private void ShowReflexSuggestions(ResultEntryOutcome outcome)
+    {
+        if (outcome.ReflexSuggestions.Count == 0) return;
+
+        var lines = outcome.ReflexSuggestions.Select(s => $"• {s.Description.For(Texts.Language)}");
+        Show(Texts["Catalog.ReflexRules"], $"{Texts["Catalog.ReflexRules"]}\n\n{string.Join('\n', lines)}");
+    }
+
+    private async Task TechnicallyValidateAsync()
+    {
+        if (_sheet is not { } sheet) return;
+
+        _dialog = EntryDialog.None;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<ResultEntryService, Result>(s => s.TechnicallyValidateAsync(sheet.LabOrderId, []));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Validation.Technical"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            await LoadOrderAsync(sheet.LabOrderId);
+            await LoadWorklistAsync();
+            _status = (Texts["Message.OperationSucceeded"], "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Technical validation of order {OrderId} failed.", sheet.LabOrderId);
+            Show(Texts["Validation.Technical"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

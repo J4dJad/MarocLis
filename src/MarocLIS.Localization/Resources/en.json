@@ -6738,6 +6738,7 @@
       "Today": "Today"
     },
     "ScreenUnavailable": "This screen is not yet available in the Web version. Use the Windows version.",
+    "InstrumentsFromWorkstation": "Analyser values arrive through the Windows workstation that drives the analysers; they show here as soon as they are received.",
     "ScreenNotFound": "This screen does not exist.",
     "ScreenRefusedTitle": "Access denied",
     "BackHome": "Back to home",

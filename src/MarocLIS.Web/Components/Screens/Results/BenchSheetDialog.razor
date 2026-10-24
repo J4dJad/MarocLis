@@ -1,0 +1,79 @@
+@using MarocLIS.Application.Results
+@inject WebTexts Texts
+
+@*
+    Which bench a fiche de paillasse is printed for, the workstation's BenchWorksheetDialog. The
+    disciplines carry the number of analyses waiting in each, so an empty bench is seen before
+    anything is printed; the analysers follow the discipline (BenchWorksheetOptions.InstrumentsFor).
+    « Toutes les disciplines » first: in a small laboratory one technician runs every bench.
+*@
+<Modal Name="bench-sheet" Title="@Texts["BenchSheet.Title"]" Hint="@Texts["BenchSheet.Notice"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label">@Texts["BenchSheet.Department"]</span>
+            <select class="input" data-field="department" @onchange="DepartmentChanged">
+                <option value="" selected="@(_department is null)">@Texts["BenchSheet.AllDepartments"]</option>
+                @foreach (var department in Options.Departments)
+                {
+                    <option value="@department.Id" selected="@(_department == department.Id)">
+                        @($"{department.Name.For(Texts.Language)} ({department.Code}) — {Texts.T("BenchSheet.PendingCount", department.PendingCount)}")
+                    </option>
+                }
+            </select>
+        </label>
+        <label class="field">
+            <span class="field-label">@Texts["BenchSheet.Instrument"]</span>
+            <select class="input" data-field="instrument" @onchange="InstrumentChanged">
+                <option value="" selected="@(_instrument is null)">@Texts["BenchSheet.AllInstruments"]</option>
+                @foreach (var instrument in Options.InstrumentsFor(_department))
+                {
+                    <option value="@instrument.Id" selected="@(_instrument == instrument.Id)">@($"{instrument.Name.For(Texts.Language)} ({instrument.Code})")</option>
+                }
+            </select>
+        </label>
+        <label class="field-check strong">
+            <input type="checkbox" data-field="only-urgent" @bind="_onlyUrgent" />
+            <span>@Texts["BenchSheet.OnlyUrgent"]</span>
+        </label>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Print" Primary="true" OnClick="PrintAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public BenchWorksheetOptions Options { get; set; } = new([], []);
+
+    /// <summary>The discipline last printed for, offered again: a technician prints for their own bench.</summary>
+    [Parameter] public Guid? DepartmentId { get; set; }
+
+    [Parameter] public EventCallback<BenchWorksheetRequest> OnPrint { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Guid? _department;
+    private Guid? _instrument;
+    private bool _onlyUrgent;
+    private bool _initialised;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _department = Options.Departments.Any(d => d.Id == DepartmentId) ? DepartmentId : null;
+    }
+
+    private void DepartmentChanged(ChangeEventArgs e)
+    {
+        _department = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        // The analyser list follows the discipline, back on « Tous les analyseurs ».
+        _instrument = null;
+    }
+
+    private void InstrumentChanged(ChangeEventArgs e) =>
+        _instrument = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    private Task PrintAsync() => OnPrint.InvokeAsync(new BenchWorksheetRequest(_department, _instrument, _onlyUrgent));
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}
