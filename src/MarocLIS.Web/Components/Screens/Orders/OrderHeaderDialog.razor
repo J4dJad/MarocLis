@@ -1,0 +1,123 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Orders
+@using MarocLIS.Domain.Orders
+@inject WebTexts Texts
+@inject IClock Clock
+@inject ActiveLanguagesCache Languages
+
+@*
+    « Modifier l'en-tête » (the workstation's OrderHeaderDialog): the prescriber's name when none
+    was chosen from the directory, the prescription date, the priority, the report's language, the
+    clinical information, the ward and the internal note, against a reason. The coverage is not
+    changed here. The request is OrderFileRules.HeaderRequest's, the authority OrderAmendmentService.
+*@
+<Modal Name="order-header" Title="@($"{Texts["Order.EditHeader"]} — {Detail.AccessionNumber}")" Wide="true" OnCancel="CancelAsync">
+    <ChildContent>
+        <p class="strong accent small">@Detail.PatientName · @Detail.AccessionNumber</p>
+        <p class="muted small">@(Detail.PayerName ?? Texts["Billing.PayerNotCovered"]) — @Texts["Order.CoverageNotEditable"]</p>
+        <div class="form-grid">
+            <label class="field"><span class="field-label">@Texts["Order.Prescriber"]</span>
+                <input class="input" maxlength="200" data-field="prescriber" readonly="@(Detail.PrescriberId is not null)"
+                       @bind="_prescriber" /></label>
+            <div class="field">
+                <label class="field-check"><input type="checkbox" data-field="has-prescription-date" @bind="_hasPrescriptionDate" />
+                    <span>@Texts["Order.PrescriptionDate"]</span></label>
+                <input class="input" type="date" data-field="prescription-date" disabled="@(!_hasPrescriptionDate)"
+                       max="@MaxDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" @bind="_prescriptionDate" />
+            </div>
+            <label class="field"><span class="field-label">@Texts["Field.Priority"]</span>
+                <select class="input" data-field="priority" @bind="_priority">
+                    @foreach (var p in Enum.GetValues<OrderPriority>())
+                    {
+                        <option value="@p">@Texts[$"Priority.{p}"]</option>
+                    }
+                </select></label>
+            <label class="field"><span class="field-label">@Texts["Order.ReportLanguage"]</span>
+                <select class="input" data-field="report-language" @bind="_language">
+                    @foreach (var l in Languages.Current.Active)
+                    {
+                        <option value="@l">@Texts[$"AppLanguage.{l}"]</option>
+                    }
+                </select></label>
+            <label class="field field-wide"><span class="field-label">@Texts["Order.ClinicalInformation"]</span>
+                <input class="input" maxlength="2000" data-field="clinical" @bind="_clinical" /></label>
+            <label class="field"><span class="field-label">@Texts["Order.DiagnosisCode"]</span>
+                <input class="input mono" dir="ltr" maxlength="20" data-field="diagnosis" @bind="_diagnosis" /></label>
+            <label class="field"><span class="field-label">@Texts["Order.Ward"]</span>
+                <input class="input" maxlength="120" data-field="ward" @bind="_ward" /></label>
+            <label class="field"><span class="field-label">@Texts["Order.Room"]</span>
+                <input class="input" maxlength="60" data-field="room" @bind="_room" /></label>
+            <label class="field field-wide"><span class="field-label">@Texts["Order.InternalNote"]</span>
+                <input class="input" maxlength="1000" data-field="note" @bind="_note" /></label>
+            <label class="field field-wide"><span class="field-label">@Texts["Order.AmendmentReason"]</span>
+                <input class="input" maxlength="500" data-field="reason" @bind="_reason" @bind:event="oninput" /></label>
+        </div>
+        <p class="muted small">@Texts["Order.AmendmentNotice"]</p>
+        @if (_problem is not null)
+        {
+            <p class="message is-warning" role="alert">@_problem</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="AcceptAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public OrderDetail Detail { get; set; } = default!;
+
+    /// <summary>The corrected header and the reason.</summary>
+    [Parameter] public EventCallback<(AmendOrderHeaderRequest Request, string Reason)> OnAccept { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string? _prescriber;
+    private bool _hasPrescriptionDate;
+    private DateOnly _prescriptionDate;
+    private OrderPriority _priority;
+    private AppLanguage _language;
+    private string? _clinical;
+    private string? _diagnosis;
+    private string? _ward;
+    private string? _room;
+    private string? _note;
+    private string _reason = string.Empty;
+    private string? _problem;
+
+    private DateOnly MaxDate => OrderFileRules.MaxPrescriptionDate(Detail, Clock.Today);
+
+    protected override void OnInitialized()
+    {
+        _prescriber = Detail.PrescriberName ?? Detail.PrescriberFreeText;
+        _hasPrescriptionDate = Detail.PrescriptionDate is not null;
+        _prescriptionDate = Detail.PrescriptionDate ?? Clock.Today;
+        if (_prescriptionDate > MaxDate) _prescriptionDate = MaxDate;
+        _priority = Detail.Priority;
+        _language = Languages.Current.Coerce(Detail.ReportLanguage);
+        _clinical = Detail.ClinicalInformation;
+        _diagnosis = Detail.DiagnosisCode;
+        _ward = Detail.WardOrUnit;
+        _room = Detail.RoomOrBed;
+        _note = Detail.InternalNote;
+    }
+
+    private async Task AcceptAsync()
+    {
+        if (OrderFileRules.AmendmentProblems(0, _reason, needsAnalyses: false).FirstOrDefault() is { } problem)
+        {
+            _problem = Texts[problem];
+            return;
+        }
+
+        // Empty boxes are sent as the workstation's text boxes send them.
+        var request = OrderFileRules.HeaderRequest(Detail, _prescriber ?? string.Empty,
+                                                   _hasPrescriptionDate ? _prescriptionDate : null,
+                                                   _priority, _clinical ?? string.Empty, _diagnosis ?? string.Empty,
+                                                   _ward ?? string.Empty, _room ?? string.Empty, _note ?? string.Empty, _language);
+
+        await OnAccept.InvokeAsync((request, _reason.Trim()));
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

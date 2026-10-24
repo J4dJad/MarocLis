@@ -1,0 +1,977 @@
+@using System.Globalization
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Orders
+@using MarocLIS.Application.Patients
+@using MarocLIS.Application.Reports
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Orders
+@implements IDisposable
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject ILogger<OrderFile> Logger
+
+@*
+    « Dossier », the workstation's OrderDetailView: the files on the left (a number, a tube barcode,
+    a name; this week, still open, urgent), the file on the right with its header, its progress
+    line and its tabs (analyses, tubes, billing, history), and what can be done to it. What is
+    offered is OrderFileRules.Actions'; what is done, OrderAmendmentService's. Labels are printed
+    by the Windows workstation; the billing desk is not yet in the web.
+*@
+<div class="screen order-file" data-screen="orderdetail">
+    <div class="split split-list">
+        <aside class="card list-pane" data-card="orders">
+            <div class="toolbar">
+                <div class="search-box">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                    <input class="input" type="search" placeholder="@Texts["Order.SearchPlaceholder"]"
+                           aria-label="@Texts["Order.SearchPlaceholder"]" data-field="order-search" autocomplete="off"
+                           value="@_term" @oninput="TermChanged" @onkeydown="SearchKey" />
+                </div>
+                <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="RefreshAsync" />
+            </div>
+            <div class="chips" role="group">
+                <button type="button" class="chip @(_filter.LastWeek ? "is-pressed" : null)" aria-pressed="@_filter.LastWeek" data-filter="week"
+                        @onclick="() => _filter = _filter with { LastWeek = !_filter.LastWeek }">@Texts["OrderFile.FilterWeek"]</button>
+                <button type="button" class="chip @(_filter.ActiveOnly ? "is-pressed" : null)" aria-pressed="@_filter.ActiveOnly" data-filter="active"
+                        @onclick="() => _filter = _filter with { ActiveOnly = !_filter.ActiveOnly }">@Texts["OrderFile.FilterActive"]</button>
+                <button type="button" class="chip @(_filter.UrgentOnly ? "is-pressed" : null)" aria-pressed="@_filter.UrgentOnly" data-filter="urgent"
+                        @onclick="() => _filter = _filter with { UrgentOnly = !_filter.UrgentOnly }">@Texts["OrderFile.FilterUrgent"]</button>
+            </div>
+            <p class="muted small" data-state="list-count">@ListCount</p>
+            <ul class="file-list" data-list="orders">
+                @foreach (var row in Shown)
+                {
+                    var look = OrderFileRules.OrderPill(row.Status, row.Priority);
+                    <li class="@(row.OrderId == OrderId ? "is-selected" : null) @(row.Status == LabOrderStatus.Cancelled ? "is-cancelled" : null)"
+                        data-order="@row.AccessionNumber" title="@ListTooltip(row)" @onclick="() => OpenAsync(row.OrderId)">
+                        <div class="file-list-line">
+                            <span class="strong">@row.PatientName.ToUpper(Texts.Culture)</span>
+                            <span class="muted small">@row.RegisteredAt.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</span>
+                        </div>
+                        <div class="file-list-line">
+                            <span class="mono small">@row.AccessionNumber</span>
+                            <Pill Text="@PillText(row.Status, row.Priority, look.NamesPriority)" Tone="@look.Tone.ToString()" />
+                        </div>
+                    </li>
+                }
+            </ul>
+        </aside>
+
+        <section class="file-pane" data-card="file">
+            @if (_status is { } status)
+            {
+                <p class="message is-@status.Tone" role="status" data-state="status">@status.Text</p>
+            }
+
+            @if (_detail is not { } detail)
+            {
+                <div class="card card-empty" data-state="no-file">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileText" Class="icon-large" />
+                    <p>@Texts["Order.SearchPlaceholder"]</p>
+                </div>
+            }
+            else
+            {
+                var actions = Actions;
+
+                @if (detail.InternalNote is { Length: > 0 } note)
+                {
+                    <p class="message is-abnormal note-banner" data-state="note">!&nbsp; @note</p>
+                }
+
+                <div class="card file-header" data-file="@detail.AccessionNumber">
+                    <div class="file-header-top">
+                        <button type="button" class="accession mono" title="@Texts["Order.AccessionCopyHint"]" data-action="copy-accession"
+                                @ondblclick="CopyAccessionAsync">@detail.AccessionNumber</button>
+                        <Pill Text="@("● " + Texts[$"OrderStatus.{detail.Status}"])" Tone="@OrderFileRules.OrderPill(detail.Status, OrderPriority.Routine).Tone.ToString()" />
+                        @if (detail.Priority != OrderPriority.Routine)
+                        {
+                            <Pill Text="@Texts[$"Priority.{detail.Priority}"]" Tone="@OrderFileRules.PriorityTone(detail.Priority).ToString()" />
+                        }
+                        <span class="muted small">@Registered(detail)</span>
+                    </div>
+                    @if (detail.CancelledAt is { } cancelledAt)
+                    {
+                        <p class="critical small" data-state="cancelled">
+                            @Texts.T("OrderFile.CancelledOn", cancelledAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
+                                     detail.CancellationReason ?? string.Empty)
+                        </p>
+                    }
+                    <div class="file-header-body">
+                        <div class="file-patient">
+                            <div class="strong patient-name">@detail.PatientName</div>
+                            <div class="muted small">@PatientInfo(detail)</div>
+                            <div class="muted small">@Texts["Patient.RecordNumber"] @detail.MedicalRecordNumber</div>
+                            @if (detail.PhoneNumber is { Length: > 0 } phone)
+                            {
+                                <div class="muted small">@Texts["OrderEntry.PhoneShort"] @phone</div>
+                            }
+                        </div>
+                        @foreach (var (caption, value, factNote) in Facts(detail))
+                        {
+                            <div class="fact">
+                                <span class="field-label">@caption</span>
+                                <span class="fact-value" title="@value">@value</span>
+                                <span class="muted small" title="@factNote">@factNote</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <ol class="progress-line" data-state="progress">
+                    @foreach (var step in FileProgress.Compute(detail, ReportReleasedAt))
+                    {
+                        <li class="step step-@step.State.ToString().ToLowerInvariant()" data-stage="@step.Stage">
+                            <span class="step-dot" aria-hidden="true"></span>
+                            <span class="step-name">@Texts[$"OrderFile.Stage{step.Stage}"]</span>
+                            <span class="muted small">@StepDetail(step)</span>
+                        </li>
+                    }
+                </ol>
+
+                <div class="card card-flush">
+                    <div class="tabs" role="tablist">
+                        @foreach (var (tab, caption) in Tabs(detail))
+                        {
+                            <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab)"
+                                    data-tab="@tab" @onclick="() => _tab = tab">@caption</button>
+                        }
+                    </div>
+
+                    <div class="tab-page" role="tabpanel">
+                        @switch (_tab)
+                        {
+                            case FileTab.Analyses:
+                                <table class="grid grid-select" data-grid="items">
+                                    <thead>
+                                        <tr>
+                                            <th>@Texts["Catalog.Analysis"]</th>
+                                            <th>@Texts["Field.Name"]</th>
+                                            <th>@Texts["Field.Department"]</th>
+                                            <th>@Texts["Field.Status"]</th>
+                                            <th>@Texts["Result.Plural"]</th>
+                                            <th>@Texts["OrderEntry.Tube"]</th>
+                                            <th class="num">@Texts["Payment.Amount"]</th>
+                                            <th class="num">@Texts["Billing.PatientShare"]</th>
+                                            <th>@Texts["Field.Comment"]</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in detail.Items)
+                                        {
+                                            <tr class="@(item.ItemId == SelectedItem?.ItemId ? "is-selected" : null) @(item.IsCancelled ? "is-cancelled" : null)"
+                                                data-item="@item.Code" @onclick="() => _itemId = item.ItemId">
+                                                <td class="mono strong">@item.Code</td>
+                                                <td>@item.Name.For(Texts.Language)</td>
+                                                <td class="small">@item.DepartmentCode</td>
+                                                <td>
+                                                    <Pill Text="@ItemStatus(item)" Tone="@OrderFileRules.ItemTone(item, Clock.Now).ToString()" />
+                                                </td>
+                                                <td class="small">@(item.ResultCount == 0 ? string.Empty : $"{item.EnteredResultCount} / {item.ResultCount}")</td>
+                                                <td class="mono small">@item.SampleBarcode</td>
+                                                <td class="num">@Money.Of(item.ChargedPrice).Format(Texts.Language, Texts.Culture)</td>
+                                                <td class="num">@Money.Of(item.PatientShare).Format(Texts.Language, Texts.Culture)</td>
+                                                <td class="small">@ItemNote(item)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                                <div class="tubes">
+                                    @foreach (var sample in OrderFileRules.LiveSamples(detail))
+                                    {
+                                        <span class="tube-chip"><span class="tube-swatch" style="background:@(sample.ContainerColourHex ?? "transparent")"></span>@TubeText(sample)</span>
+                                    }
+                                    <span class="strong accent tubes-total" data-state="totals">
+                                        @Texts.T("OrderFile.Totals", detail.LiveItemCount,
+                                                 Money.Of(detail.ChargedTotal).Format(Texts.Language, Texts.Culture),
+                                                 Money.Of(detail.PatientShareTotal).Format(Texts.Language, Texts.Culture),
+                                                 Money.Of(detail.ChargedTotal - detail.PatientShareTotal).Format(Texts.Language, Texts.Culture))
+                                    </span>
+                                </div>
+                                break;
+
+                            case FileTab.Tubes:
+                                <table class="grid" data-grid="samples">
+                                    <thead>
+                                        <tr>
+                                            <th class="num">@Texts["Sample.Sequence"]</th>
+                                            <th>@Texts["Sample.Barcode"]</th>
+                                            <th>@Texts["Sample.SpecimenType"]</th>
+                                            <th>@Texts["Sample.ContainerType"]</th>
+                                            <th>@Texts["Field.Status"]</th>
+                                            <th>@Texts["Sample.CollectedAt"]</th>
+                                            <th>@Texts["Sample.ReceivedAt"]</th>
+                                            <th>@Texts["Sample.Storage"]</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var sample in detail.Samples)
+                                        {
+                                            <tr data-sample="@sample.Barcode">
+                                                <td class="num">@sample.SequenceInOrder</td>
+                                                <td class="mono">@sample.Barcode</td>
+                                                <td>@sample.SpecimenTypeName.For(Texts.Language)</td>
+                                                <td><span class="tube-swatch" style="background:@(sample.ContainerColourHex ?? "transparent")"></span> @sample.ContainerName</td>
+                                                <td><Pill Text="@Texts[$"SampleStatus.{sample.Status}"]" Tone="@OrderFileTones.ForSample(sample.Status).ToString()" /></td>
+                                                <td class="small">@sample.CollectedAt?.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
+                                                <td class="small">@sample.ReceivedAt?.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
+                                                <td class="small">@sample.StorageLocation</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                                break;
+
+                            case FileTab.Billing:
+                                <div class="billing-facts">
+                                    @foreach (var (caption, value, factNote) in BillingFacts(detail))
+                                    {
+                                        <div class="fact">
+                                            <span class="field-label">@caption</span>
+                                            <span class="fact-value">@value</span>
+                                            <span class="muted small">@factNote</span>
+                                        </div>
+                                    }
+                                </div>
+                                <h3 class="section-title">@Texts["Payment.Plural"]</h3>
+                                @if (PaymentsNote(detail) is { Length: > 0 } paymentsNote)
+                                {
+                                    <p class="muted small" data-state="payments-note">@paymentsNote</p>
+                                }
+                                @if (_payments.Count > 0)
+                                {
+                                    <table class="grid" data-grid="payments">
+                                        <thead>
+                                            <tr>
+                                                <th>@Texts["Field.Date"]</th>
+                                                <th>@Texts["Payment.Method"]</th>
+                                                <th class="num">@Texts["Payment.Amount"]</th>
+                                                <th>@Texts["Field.Status"]</th>
+                                                <th>@Texts["OrderFile.ReceivedBy"]</th>
+                                                <th>@Texts["Payment.Reference"]</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var payment in _payments)
+                                            {
+                                                <tr>
+                                                    <td>@payment.PaymentDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)</td>
+                                                    <td>@Texts[$"PaymentMethod.{payment.Method}"]</td>
+                                                    <td class="num">@Money.Of(payment.Amount).Format(Texts.Language, Texts.Culture)</td>
+                                                    <td>@Texts[$"PaymentStatus.{payment.Status}"]</td>
+                                                    <td>@payment.ReceivedByName</td>
+                                                    <td>@payment.Reference</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                @if (actions.ViewBilling)
+                                {
+                                    @* The billing desk is not yet in the web: the link opens its place, which says so. *@
+                                    <ActionButton Key="OrderFile.OpenBilling" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Receipt"
+                                                  OnClick="@(() => Navigation.NavigateTo("ecran/billing"))" />
+                                }
+                                break;
+
+                            case FileTab.History:
+                                @if (_events.Count == 0)
+                                {
+                                    <p class="muted small" data-state="history-empty">@Texts["OrderFile.HistoryEmpty"]</p>
+                                }
+                                else
+                                {
+                                    <table class="grid" data-grid="history">
+                                        <thead>
+                                            <tr>
+                                                <th>@Texts["Field.Date"]</th>
+                                                <th>@Texts["OrderFile.User"]</th>
+                                                <th>@Texts["Audit.Operation"]</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var entry in _events)
+                                            {
+                                                <tr>
+                                                    <td class="small">@entry.OccurredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)</td>
+                                                    <td>@entry.UserName</td>
+                                                    <td>@EventText(entry)</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                break;
+                        }
+                    </div>
+                </div>
+
+                <footer class="action-bar">
+                    <ActionButton Key="Order.AddAnalyses" Primary="true" Disabled="@(!actions.AddAnalyses)" OnClick="() => _dialog = FileDialog.AddAnalyses" />
+                    <ActionButton Key="Action.PrintLabels" Disabled="@(!actions.PrintLabels)" OnClick="PrintLabels" />
+                    <ActionButton Key="Order.PrintReport" Disabled="@(!actions.PrintReport)" OnClick="OpenReportAsync" />
+                    <ActionButton Key="Order.EditHeader" Disabled="@(!actions.EditHeader)" OnClick="() => _dialog = FileDialog.Header" />
+                    <span class="toolbar-spacer"></span>
+                    <details class="more more-up">
+                        <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]</summary>
+                        <div class="more-menu">
+                            <ActionButton Key="Order.CancelAnalysis" Disabled="@(!actions.CancelItem)" OnClick="AskCancelItem" />
+                            <ActionButton Key="Order.RepeatAnalysis" Disabled="@(!actions.RepeatItem)" OnClick="AskRepeatItem" />
+                            <ActionButton Key="Order.EditHeader" Disabled="@(!actions.EditHeader)" OnClick="() => _dialog = FileDialog.Header" />
+                            <ActionButton Key="Order.PrintReport" Disabled="@(!actions.PrintReport)" OnClick="OpenReportAsync" />
+                            <ActionButton Key="Order.CancelOrder" Danger="true" Disabled="@(!actions.CancelOrder)" OnClick="AskCancelOrder" />
+                        </div>
+                    </details>
+                </footer>
+            }
+        </section>
+    </div>
+</div>
+
+@if (_detail is { } open)
+{
+    @switch (_dialog)
+    {
+        case FileDialog.AddAnalyses:
+            <AddAnalysesDialog AccessionNumber="@open.AccessionNumber" PatientName="@open.PatientName"
+                               AlreadyOnOrder="@([.. open.Items.Where(i => !i.IsCancelled).Select(i => i.AnalysisTestId)])"
+                               OnAccept="AddAnalysesAsync" OnCancel="CloseDialog" />
+            break;
+
+        case FileDialog.Header:
+            <OrderHeaderDialog Detail="open" OnAccept="AmendHeaderAsync" OnCancel="CloseDialog" />
+            break;
+
+        case FileDialog.CancelItem when SelectedItem is { } item:
+            <ReasonPrompt Title="@Texts["Order.CancelAnalysis"]" MaxLength="OrderFileRules.ReasonMaxLength"
+                          Prompt="@Texts.T("Order.CancelAnalysisPrompt", item.Code, item.Name.For(Texts.Language))"
+                          OnConfirm="CancelItemAsync" OnCancel="CloseDialog" />
+            break;
+
+        case FileDialog.RepeatItem when SelectedItem is { } item:
+            <ReasonPrompt Title="@Texts["Order.RepeatAnalysis"]" MaxLength="OrderFileRules.ReasonMaxLength"
+                          Prompt="@Texts.T("Order.RepeatAnalysisPrompt", item.Code, item.RunCount)"
+                          OnConfirm="RepeatItemAsync" OnCancel="CloseDialog" />
+            break;
+
+        case FileDialog.ConfirmCancelOrder:
+            <ConfirmPrompt Title="@Texts["Order.CancelOrder"]"
+                           Message="@Texts.T("Order.ConfirmCancelOrder", open.AccessionNumber, open.LiveItemCount, OrderFileRules.LiveSamples(open).Count)"
+                           OnYes="() => _dialog = FileDialog.CancelOrderReason" OnNo="CloseDialog" />
+            break;
+
+        case FileDialog.CancelOrderReason:
+            <ReasonPrompt Title="@Texts["Order.CancelOrder"]" MaxLength="OrderFileRules.ReasonMaxLength"
+                          Prompt="@Texts.T("Order.CancelOrderPrompt", open.AccessionNumber)"
+                          OnConfirm="CancelOrderAsync" OnCancel="CloseDialog" />
+            break;
+
+        case FileDialog.Message when _message is { } message:
+            <Modal Name="file-message" Title="@message.Title" OnCancel="CloseDialog">
+                <ChildContent><p class="info-line">@message.Text</p></ChildContent>
+                <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+            </Modal>
+            break;
+    }
+}
+
+@code {
+    /// <summary>The file to open: <c>?dossier=</c>, from the patient's history or a new order.</summary>
+    [Parameter] public Guid? OrderId { get; set; }
+
+    private enum FileTab { Analyses, Tubes, Billing, History }
+
+    private enum FileDialog { None, AddAnalyses, Header, CancelItem, RepeatItem, ConfirmCancelOrder, CancelOrderReason, Message }
+
+    private sealed record Message(string Title, string Text);
+
+    private IReadOnlyList<OrderListRow> _rows = [];
+    private OrderListFilter _filter = new();
+    private string _term = string.Empty;
+
+    private OrderDetail? _detail;
+    private Guid? _itemId;
+    private IReadOnlyList<OrderFileEvent> _events = [];
+    private IReadOnlyList<PaymentRow> _payments = [];
+
+    private FileTab _tab = FileTab.Analyses;
+    private FileDialog _dialog;
+    private Message? _message;
+    private (string Text, string Tone)? _status;
+
+    private CancellationTokenSource? _debounce;
+    private int _listVersion;
+    private int _detailVersion;
+    private Guid? _openedFor;
+
+    private ICurrentUser User => Context.User;
+
+    private IReadOnlyList<OrderListRow> Shown => OrderFileRules.Filter(_rows, _filter, Clock.Now);
+
+    private OrderItemDetail? SelectedItem => _detail is null ? null : OrderFileRules.DefaultItem(_detail, _itemId);
+
+    private OrderFileActions Actions => OrderFileRules.Actions(_detail, SelectedItem, User);
+
+    private DateTimeOffset? ReportReleasedAt =>
+        _events.Where(e => e.Kind == OrderFileEventKind.ReportReleased).Select(e => (DateTimeOffset?)e.OccurredAt).Max();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_openedFor == OrderId && _rows.Count > 0) return;
+        _openedFor = OrderId;
+        await ActivateAsync();
+    }
+
+    private async Task ActivateAsync()
+    {
+        await LoadListAsync();
+
+        OrderId ??= Shown.Count > 0 ? Shown[0].OrderId : _rows.Count > 0 ? _rows[0].OrderId : null;
+        if (OrderId is null) return;
+
+        await LoadDetailAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _status = null;
+        await ActivateAsync();
+    }
+
+    // ---- The list ----------------------------------------------------------------------------------
+
+    private string ListCount
+    {
+        get
+        {
+            var term = _term.Trim();
+
+            // Said when the cap is reached, so that a file missing from the list reads as "search
+            // for it", not as "it does not exist".
+            return Shown.Count == 0 && term.Length > 0
+                ? Texts.T("Order.NotFoundForTerm", term)
+                : _rows.Count >= IOrderQueries.ListPageSize
+                    ? Texts.T("Order.ListTruncated", _rows.Count)
+                    : Texts.T("Order.ListCount", Shown.Count);
+        }
+    }
+
+    private string PillText(LabOrderStatus status, OrderPriority priority, bool namesPriority)
+    {
+        var text = Texts[$"OrderStatus.{status}"];
+        return namesPriority ? $"{text} · {Texts[$"Priority.{priority}"]}" : text;
+    }
+
+    private string ListTooltip(OrderListRow row) =>
+        $"{row.PatientName} · {row.AccessionNumber} · {Texts[$"OrderStatus.{row.Status}"]} · " +
+        $"{Texts[$"Priority.{row.Priority}"]} · {Texts.T("ResultEntry.AnalysisMany", row.AnalysisCount)}";
+
+    private async Task TermChanged(ChangeEventArgs e)
+    {
+        _term = e.Value?.ToString() ?? string.Empty;
+
+        // Debounced like the patient search: 300 ms is short enough to feel immediate.
+        _debounce?.Cancel();
+        _debounce?.Dispose();
+        _debounce = new CancellationTokenSource();
+        var token = _debounce.Token;
+
+        try { await Task.Delay(300, token); }
+        catch (TaskCanceledException) { return; }
+
+        await LoadListAsync();
+    }
+
+    private async Task SearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        _debounce?.Cancel();
+        await SearchAsync();
+    }
+
+    private async Task<bool> LoadListAsync()
+    {
+        var version = ++_listVersion;
+        var term = _term.Trim();
+
+        try
+        {
+            var result = await Scopes.RunAsync<OrderAmendmentService, Result<IReadOnlyList<OrderListRow>>>(
+                s => s.SearchOrdersAsync(term));
+            if (version != _listVersion) return false;
+
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return false;
+            }
+
+            _rows = result.Value;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the order list for {Term} failed.", term);
+            _status = (Texts["Message.UnexpectedError"], "critical");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Resolves what the operator typed (an accession number or a tube barcode) to an order. When it
+    /// is neither, Enter opens the first file of the filtered list instead of answering "not found".
+    /// </summary>
+    private async Task SearchAsync()
+    {
+        var term = _term.Trim();
+
+        try
+        {
+            if (term.Length == 0)
+            {
+                await LoadListAsync();
+                return;
+            }
+
+            var resolved = await Scopes.RunAsync<OrderAmendmentService, Result<Guid?>>(s => s.ResolveOrderIdAsync(term));
+            if (resolved.IsFailure)
+            {
+                _status = (Texts.Describe(resolved.Errors), "critical");
+                return;
+            }
+
+            if (resolved.Value is { } orderId)
+            {
+                OrderId = orderId;
+                _status = null;
+                await ActivateAsync();
+                return;
+            }
+
+            if (!await LoadListAsync()) return;
+
+            if (Shown.Count == 0)
+            {
+                _status = (Texts.T("Order.NotFoundForTerm", term), "abnormal");
+                return;
+            }
+
+            _status = null;
+            await OpenAsync(Shown[0].OrderId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Searching orders for {Term} failed.", term);
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task OpenAsync(Guid orderId)
+    {
+        if (orderId == OrderId && _detail?.OrderId == orderId) return;
+        OrderId = orderId;
+        _status = null;
+        await LoadDetailAsync();
+    }
+
+    // ---- The file ----------------------------------------------------------------------------------
+
+    private async Task LoadDetailAsync()
+    {
+        if (OrderId is not { } orderId) return;
+        var version = ++_detailVersion;
+
+        try
+        {
+            var result = await Scopes.RunAsync<OrderAmendmentService, Result<OrderDetail>>(s => s.GetDetailAsync(orderId));
+            if (version != _detailVersion) return;
+
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            // The history and the payments of the previous file are not shown against this one.
+            if (_detail?.OrderId != result.Value.OrderId)
+            {
+                _events = [];
+                _payments = [];
+                _itemId = null;
+            }
+
+            _detail = result.Value;
+            await LoadHistoryAsync(_detail, version);
+            await LoadPaymentsAsync(_detail, version);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading order {OrderId} failed.", orderId);
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    /// <summary>The file's history, for its tab and for the report's date on the progress line.</summary>
+    private async Task LoadHistoryAsync(OrderDetail detail, int version)
+    {
+        try
+        {
+            var events = await Scopes.RunAsync<IOrderFileQueries, IReadOnlyList<OrderFileEvent>>(
+                q => q.GetHistoryAsync(detail.OrderId, User.SiteId));
+            if (version == _detailVersion) _events = events;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the history of {Accession} failed.", detail.AccessionNumber);
+            _events = [];
+        }
+    }
+
+    /// <summary>The payments of the file's invoice, for an operator who may see the billing.</summary>
+    private async Task LoadPaymentsAsync(OrderDetail detail, int version)
+    {
+        if (detail.InvoiceId is not { } invoiceId || !OrderFileRules.Actions(detail, null, User).LoadPayments) return;
+
+        try
+        {
+            var payments = await Scopes.RunAsync<BillingService, Result<IReadOnlyList<PaymentRow>>>(
+                s => s.GetPaymentsAsync(invoiceId));
+            if (version == _detailVersion) _payments = payments.IsSuccess ? payments.Value : [];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the payments of {Accession} failed.", detail.AccessionNumber);
+            _payments = [];
+        }
+    }
+
+    private string Registered(OrderDetail detail)
+    {
+        var registered = detail.RegisteredAt.ToLocalTime();
+        return Texts.T("OrderFile.RegisteredOn", registered.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                       registered.ToString("HH:mm", CultureInfo.InvariantCulture), detail.RegisteredByName);
+    }
+
+    private string PatientInfo(OrderDetail detail)
+    {
+        var info = new List<string>(2) { Texts[$"Gender.{detail.Gender}"] };
+        if (PatientFileRules.AgeYears(detail.DateOfBirth, 0, Clock.Today) is { } age && detail.DateOfBirth is not null)
+            info.Add(Texts.T("OrderFile.AgeYears", age));
+        return string.Join(" · ", info);
+    }
+
+    private IEnumerable<(string Caption, string Value, string Note)> Facts(OrderDetail detail)
+    {
+        yield return (Texts["Order.Prescriber"],
+                      detail.PrescriberName ?? detail.PrescriberFreeText ?? Texts["Order.NoPrescriber"],
+                      detail.PrescriberInpe is { Length: > 0 } inpe ? $"INPE {inpe}" : string.Empty);
+
+        yield return (Texts["OrderFile.PrescriptionOf"],
+                      detail.PrescriptionDate is { } prescribed ? prescribed.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : "—",
+                      Texts[$"OrderOrigin.{detail.Origin}"]);
+
+        var payerNotes = new List<string>(2);
+        if (detail.PriorAgreementNumber is { Length: > 0 } agreement) payerNotes.Add($"{Texts["Coverage.PriorAgreement"]} {agreement}");
+        if (detail.InvoiceNumber is { Length: > 0 } invoice) payerNotes.Add($"{Texts["Billing.Invoice"]} {invoice}");
+        yield return (Texts["OrderFile.Payer"], Payer(detail), string.Join(" · ", payerNotes));
+
+        var clinical = new List<string>(3);
+        if (detail.DiagnosisCode is { Length: > 0 } code) clinical.Add(code);
+        if (detail.WardOrUnit is { Length: > 0 } ward) clinical.Add(detail.RoomOrBed is { Length: > 0 } bed ? $"{ward} / {bed}" : ward);
+        if (detail.PatientFasted is false) clinical.Add(Texts["Order.NotFasted"]);
+        yield return (Texts["Order.ClinicalInformation"],
+                      detail.ClinicalInformation is { Length: > 0 } text ? text : "—",
+                      string.Join(" · ", clinical));
+    }
+
+    private string Payer(OrderDetail detail) =>
+        detail.PayerName is { Length: > 0 } payerName
+            ? payerName + (detail.ReimbursementRate is { } rate ? $" · {rate.ToString("P0", Texts.Culture)}" : string.Empty)
+            : Texts["Billing.PayerNotCovered"];
+
+    private IEnumerable<(string Caption, string Value, string Note)> BillingFacts(OrderDetail detail)
+    {
+        yield return (Texts["Field.Total"], Money.Of(detail.ChargedTotal).Format(Texts.Language, Texts.Culture),
+                      Texts.T("ResultEntry.AnalysisMany", detail.LiveItemCount));
+        yield return (Texts["Billing.PayerShare"], Money.Of(detail.ChargedTotal - detail.PatientShareTotal).Format(Texts.Language, Texts.Culture),
+                      Payer(detail));
+        yield return (Texts["Billing.PatientShare"], Money.Of(detail.PatientShareTotal).Format(Texts.Language, Texts.Culture),
+                      detail.PriorAgreementNumber is { Length: > 0 } agreement ? $"{Texts["Coverage.PriorAgreement"]} {agreement}" : string.Empty);
+        yield return (Texts["Billing.Invoice"], detail.InvoiceNumber is { Length: > 0 } invoice ? invoice : Texts["OrderFile.NotInvoiced"],
+                      string.Empty);
+    }
+
+    private string PaymentsNote(OrderDetail detail) =>
+        !Actions.ViewBilling ? Texts["OrderFile.PaymentsNotAllowed"]
+        : detail.InvoiceId is null ? Texts["OrderFile.NotInvoicedNotice"]
+        : _payments.Count == 0 ? Texts["OrderFile.NoPayments"]
+        : string.Empty;
+
+    private string StepDetail(FileStep step)
+    {
+        if (step.State == FileStageState.Done && step.At is { } at)
+            return at.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture);
+
+        if (step.State == FileStageState.Ahead && step.Done == 0) return "—";
+
+        return step.Stage switch
+        {
+            FileStage.Collected or FileStage.Received => Texts.T("OrderFile.StepTubes", step.Done, step.Total),
+            FileStage.Results => Texts.T("OrderFile.StepValues", step.Done, step.Total),
+            FileStage.Validated => Texts.T("OrderFile.StepAnalyses", step.Done, step.Total),
+            _ => "—"
+        };
+    }
+
+    private IEnumerable<(FileTab Tab, string Caption)> Tabs(OrderDetail detail)
+    {
+        yield return (FileTab.Analyses, Texts.T("OrderFile.TabAnalyses", detail.Items.Count));
+        yield return (FileTab.Tubes, Texts.T("OrderFile.TabTubes", detail.Samples.Count));
+        yield return (FileTab.Billing, Texts["OrderFile.TabBilling"]);
+        yield return (FileTab.History, Texts["OrderFile.TabHistory"]);
+    }
+
+    private string ItemStatus(OrderItemDetail item) =>
+        item.IsOverdueAt(Clock.Now)
+            ? $"{Texts[$"OrderItemStatus.{item.Status}"]} · {Texts["Order.Overdue"]}"
+            : Texts[$"OrderItemStatus.{item.Status}"];
+
+    /// <summary>Why it was cancelled, which run it is on and why, who validated it, or that it is sub-contracted.</summary>
+    private string ItemNote(OrderItemDetail item) =>
+        (item.IsCancelled
+            ? item.CancellationReason
+            : item.RunCount > 1
+                ? $"{Texts["Result.Run"]} {item.RunCount} — {item.RepeatReason}"
+                : item.ValidatedByName is { Length: > 0 } validator
+                    ? $"{Texts["Validation.ValidatedBy"]} {validator}"
+                    : item.IsSubcontracted ? Texts["Catalog.Subcontracted"] : string.Empty) ?? string.Empty;
+
+    private string TubeText(OrderSampleDetail sample) =>
+        string.Join(" · ", new[] { sample.ContainerName, sample.SpecimenTypeName.For(Texts.Language), sample.Barcode }
+                               .Where(s => !string.IsNullOrEmpty(s)));
+
+    private string EventText(OrderFileEvent entry) =>
+        entry.Kind == OrderFileEventKind.ReportReleased
+            ? Texts.T("OrderFile.ReportReleased", entry.ReportVersion ?? 1)
+            : entry.Description ?? string.Empty;
+
+    private async Task CopyAccessionAsync()
+    {
+        if (_detail is not { } detail) return;
+        try
+        {
+            await JS.InvokeVoidAsync("marocLis.copy", detail.AccessionNumber);
+            _status = (Texts.T("Order.AccessionCopied", detail.AccessionNumber), "normal");
+        }
+        catch (JSException)
+        {
+            // The browser refused the clipboard: the operator can select the number instead.
+        }
+    }
+
+    // ---- Actions -----------------------------------------------------------------------------------
+
+    private void CloseDialog()
+    {
+        _dialog = FileDialog.None;
+        _message = null;
+    }
+
+    private void Show(string title, string text)
+    {
+        _message = new Message(title, text);
+        _dialog = FileDialog.Message;
+    }
+
+    private async Task AddAnalysesAsync((IReadOnlyList<Guid> Analyses, IReadOnlyList<Guid> Panels, string Reason) chosen)
+    {
+        if (_detail is not { } detail) return;
+        _dialog = FileDialog.None;
+
+        var result = await Scopes.RunAsync<OrderAmendmentService, Result<OrderAmendment>>(
+            s => s.AddAnalysesAsync(detail.OrderId, chosen.Analyses, chosen.Panels, chosen.Reason));
+
+        if (result.IsFailure)
+        {
+            Show(Texts["Order.AddAnalyses"], Texts.Describe(result.Errors));
+            return;
+        }
+
+        var amendment = result.Value;
+        var text = Texts.T("Order.AnalysesAdded", amendment.Pricing.Acts.Count, amendment.Pricing.Total.Format(Texts.Language, Texts.Culture));
+
+        // A new tube means a new label, printed by the Windows workstation.
+        if (amendment.Labels.Count > 0) text += " — " + Texts["OrderEntry.LabelsFromWorkstation"];
+        _status = (text, "normal");
+
+        await ActivateAsync();
+
+        // Warnings are shown, not swallowed: "added onto a tube already in the laboratory" is a job
+        // for somebody, and it is not visible anywhere else.
+        if (amendment.Warnings.Count > 0) Show(Texts["Order.AddAnalyses"], Texts.Describe(amendment.Warnings));
+    }
+
+    private void AskCancelItem()
+    {
+        if (_detail is not { } detail || SelectedItem is not { } item) return;
+        if (!OrderFileRules.Actions(detail, item, User).CancelItem) return;
+        _dialog = FileDialog.CancelItem;
+    }
+
+    private async Task CancelItemAsync(string reason)
+    {
+        if (_detail is not { } detail || SelectedItem is not { } item) return;
+        _dialog = FileDialog.None;
+
+        var result = await Scopes.RunAsync<OrderAmendmentService, Result>(s => s.CancelItemAsync(detail.OrderId, item.ItemId, reason));
+        if (result.IsFailure)
+        {
+            Show(Texts["Order.CancelAnalysis"], Texts.Describe(result.Errors));
+            return;
+        }
+
+        // Once invoiced, the money is put right by a credit note; saying so here saves the operator
+        // discovering it later.
+        _status = (detail.IsInvoiced
+            ? Texts.T("Order.CancelledItemNeedsCreditNote", item.Code)
+            : $"{item.Code} — {Texts["OrderItemStatus.Cancelled"]}", "muted");
+        _itemId = item.ItemId;
+
+        await ActivateAsync();
+    }
+
+    private void AskRepeatItem()
+    {
+        if (_detail is not { } detail || SelectedItem is not { } item) return;
+        if (!OrderFileRules.Actions(detail, item, User).RepeatItem) return;
+        _dialog = FileDialog.RepeatItem;
+    }
+
+    private async Task RepeatItemAsync(string reason)
+    {
+        if (_detail is not { } detail || SelectedItem is not { } item) return;
+        _dialog = FileDialog.None;
+
+        var result = await Scopes.RunAsync<OrderAmendmentService, Result>(s => s.RepeatItemAsync(detail.OrderId, item.ItemId, reason));
+        if (result.IsFailure)
+        {
+            Show(Texts["Order.RepeatAnalysis"], Texts.Describe(result.Errors));
+            return;
+        }
+
+        _status = (Texts.T("Order.RepeatRecorded", item.Code, item.RunCount + 1), "abnormal");
+        _itemId = item.ItemId;
+
+        await ActivateAsync();
+    }
+
+    private async Task AmendHeaderAsync((AmendOrderHeaderRequest Request, string Reason) amended)
+    {
+        _dialog = FileDialog.None;
+
+        var result = await Scopes.RunAsync<OrderAmendmentService, Result>(s => s.AmendHeaderAsync(amended.Request, amended.Reason));
+        if (result.IsFailure)
+        {
+            Show(Texts["Order.EditHeader"], Texts.Describe(result.Errors));
+            return;
+        }
+
+        _status = (Texts["Message.Saved"], "normal");
+        await ActivateAsync();
+    }
+
+    private void AskCancelOrder()
+    {
+        if (_detail is not { } detail || !OrderFileRules.Actions(detail, null, User).CancelOrder) return;
+
+        // Named in the confirmation, with the tube count, because cancelling a file also discards
+        // its tubes and the operator should know that before they click rather than after.
+        _dialog = FileDialog.ConfirmCancelOrder;
+    }
+
+    private async Task CancelOrderAsync(string reason)
+    {
+        if (_detail is not { } detail) return;
+        _dialog = FileDialog.None;
+
+        var result = await Scopes.RunAsync<OrderAmendmentService, Result>(s => s.CancelOrderAsync(detail.OrderId, reason));
+        if (result.IsFailure)
+        {
+            Show(Texts["Order.CancelOrder"], Texts.Describe(result.Errors));
+            return;
+        }
+
+        _status = (detail.IsInvoiced
+            ? Texts.T("Order.CancelledNeedsCreditNote", detail.InvoiceNumber ?? string.Empty)
+            : Texts["OrderStatus.Cancelled"], "critical");
+
+        await ActivateAsync();
+    }
+
+    /// <summary>
+    /// « Imprimer étiquettes »: the browser cannot reach the label printer, so the labels are
+    /// reprinted from the Windows workstation, where the reprint and its reason are recorded. The
+    /// web records nothing it has not done.
+    /// </summary>
+    private void PrintLabels()
+    {
+        if (!Actions.PrintLabels) return;
+        Show(Texts["Action.PrintLabels"], Texts["OrderEntry.LabelsFromWorkstation"]);
+    }
+
+    /// <summary>
+    /// The latest released report of the file, exactly as it was archived: a reprint gives what the
+    /// clinician was given, never a fresh rendering of today's data. The browser downloads it.
+    /// </summary>
+    private async Task OpenReportAsync()
+    {
+        if (_detail is not { } detail || !Actions.PrintReport) return;
+        var caption = Texts["Order.PrintReport"];
+
+        try
+        {
+            var register = await Scopes.RunAsync<ReportReleaseService, Result<IReadOnlyList<ReportRegisterRow>>>(
+                s => s.GetRegisterAsync(detail.AccessionNumber, withinDays: 3650));
+            if (register.IsFailure)
+            {
+                Show(caption, Texts.Describe(register.Errors));
+                return;
+            }
+
+            var latest = register.Value.Where(r => r.LabOrderId == detail.OrderId)
+                                       .OrderByDescending(r => r.VersionNumber)
+                                       .FirstOrDefault();
+            if (latest is null)
+            {
+                Show(caption, Texts["Order.NoReportYet"]);
+                return;
+            }
+
+            var pdf = await Scopes.RunAsync<ReportReleaseService, Result<byte[]>>(s => s.GetStoredPdfAsync(latest.ReportId));
+            if (pdf.IsFailure)
+            {
+                Show(caption, Texts.Describe(pdf.Errors));
+                return;
+            }
+
+            await JS.InvokeVoidAsync("marocLis.download", $"{detail.AccessionNumber}-v{latest.VersionNumber}.pdf",
+                                     "application/pdf", pdf.Value);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Opening the report of {Accession} failed.", detail.AccessionNumber);
+            Show(caption, Texts["Message.UnexpectedError"]);
+        }
+    }
+
+    public void Dispose()
+    {
+        _debounce?.Cancel();
+        _debounce?.Dispose();
+    }
+}

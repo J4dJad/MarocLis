@@ -2,6 +2,7 @@ using System.ComponentModel;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Billing;
 using MarocLIS.Application.Orders;
+using MarocLIS.Application.Patients;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -2286,13 +2287,8 @@ public sealed class OrderDetailView : LocalizedView
         base.Dispose(disposing);
     }
 
-    private int AgeInYears(DateOnly dateOfBirth)
-    {
-        var today = _clock.Today;
-        var age = today.Year - dateOfBirth.Year;
-        if (dateOfBirth > today.AddYears(-age)) age--;
-        return age;
-    }
+    // The patient file's rule, shared with the web: a date of birth after today reads as 0.
+    private int AgeInYears(DateOnly dateOfBirth) => PatientFileRules.AgeYears(dateOfBirth, 0, _clock.Today) ?? 0;
 
     private void FitTubeLegend()
     {

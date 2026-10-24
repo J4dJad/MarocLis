@@ -1,0 +1,159 @@
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Application.Orders
+@using MarocLIS.Domain.Catalog
+@using MarocLIS.Infrastructure.Queries
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<AddAnalysesDialog> Logger
+
+@*
+    « Ajouter des analyses » on a file (the workstation's AnalysisPickerDialog): the catalogue, the
+    analyses chosen, and the reason ISO 15189 asks for an amendment (OrderFileRules.AmendmentProblems).
+    The service adds them and says what it did; this only composes the request.
+*@
+<Modal Name="add-analyses" Title="@($"{Texts["Order.AddAnalyses"]} — {AccessionNumber}")" Wide="true" OnCancel="CancelAsync">
+    <ChildContent>
+        <p class="strong accent small">@PatientName · @AccessionNumber</p>
+        <div class="split split-picker">
+            <div>
+                <div class="search-box">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                    <input class="input" type="search" placeholder="@Texts["Order.CatalogSearchPlaceholder"]" data-field="picker-search"
+                           aria-label="@Texts["Order.CatalogSearchPlaceholder"]" @bind="_term" @onkeydown="SearchKey" />
+                </div>
+                <div class="table-scroll table-scroll-short">
+                    <table class="grid grid-select" data-grid="picker">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Catalog.Analysis"]</th>
+                                <th>@Texts["Field.Name"]</th>
+                                <th>@Texts["Field.Department"]</th>
+                                <th class="num">@Texts["Billing.Net"]</th>
+                                <th>@Texts["Field.Comment"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _items)
+                            {
+                                <tr class="@(AlreadyOnOrder.Contains(item.Id) ? "is-pending" : _chosen.Any(c => c.Id == item.Id) ? "is-selected" : null)"
+                                    data-code="@item.Code" @onclick="() => Add(item)">
+                                    <td class="mono strong">@item.Code</td>
+                                    <td>@item.Name.For(Texts.Language)</td>
+                                    <td class="small">@item.DepartmentCode</td>
+                                    <td class="num">@Money.Of(item.Price).Format(Texts.Language, Texts.Culture)</td>
+                                    <td class="small">@Notes(item)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="subcard">
+                <span class="field-label">@Texts["Order.Basket"]</span>
+                <ul class="picked" data-list="chosen">
+                    @foreach (var item in _chosen)
+                    {
+                        <li data-code="@item.Code">
+                            <span><span class="mono">@item.Code</span> @item.Name.For(Texts.Language)</span>
+                            <span class="num">@Money.Of(item.Price).Format(Texts.Language, Texts.Culture)</span>
+                            <button type="button" class="btn btn-secondary btn-small" title="@Texts["Action.Remove"]" @onclick="() => _chosen.Remove(item)">
+                                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" />
+                            </button>
+                        </li>
+                    }
+                </ul>
+                <p class="strong accent" data-state="chosen-total">@_chosen.Count · @Money.Of(_chosen.Sum(c => c.Price)).Format(Texts.Language, Texts.Culture)</p>
+            </div>
+        </div>
+        <label class="field"><span class="field-label">@Texts["Order.AmendmentReason"]</span>
+            <input class="input" maxlength="500" data-field="reason" @bind="_reason" @bind:event="oninput" /></label>
+        <p class="muted small">@Texts["Order.AddAnalysesNotice"]</p>
+        @if (_problem is not null)
+        {
+            <p class="message is-warning" role="alert">@_problem</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Order.AddAnalyses" Primary="true" OnClick="AcceptAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string AccessionNumber { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string PatientName { get; set; } = string.Empty;
+    [Parameter] public IReadOnlyCollection<Guid> AlreadyOnOrder { get; set; } = [];
+
+    /// <summary>The analyses, the profiles and the reason.</summary>
+    [Parameter] public EventCallback<(IReadOnlyList<Guid> Analyses, IReadOnlyList<Guid> Panels, string Reason)> OnAccept { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private readonly List<CatalogPickerItem> _items = [];
+    private readonly List<CatalogPickerItem> _chosen = [];
+    private string _term = string.Empty;
+    private string _reason = string.Empty;
+    private string? _problem;
+
+    protected override Task OnInitializedAsync() => SearchAsync();
+
+    private async Task SearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        try
+        {
+            var found = await Scopes.RunAsync<ICatalogQueries, IReadOnlyList<CatalogPickerItem>>(
+                q => q.SearchPickerAsync(_term, payerId: null, Clock.Today));
+            _items.Clear();
+            _items.AddRange(found);
+        }
+        catch (Exception ex)
+        {
+            // The list stays as it was; the operator can search again.
+            Logger.LogWarning(ex, "Searching the catalogue for an amendment failed.");
+        }
+    }
+
+    private string Notes(CatalogPickerItem item)
+    {
+        var notes = new List<string>(4);
+        if (AlreadyOnOrder.Contains(item.Id)) notes.Add(Texts["Order.AlreadyOnOrder"]);
+        if (item.IsPanel) notes.Add($"{item.ComponentCount} {Texts["Catalog.Analyses"].ToLower(Texts.Culture)}");
+        if (item.ConsentRequirement != ConsentRequirement.None) notes.Add(Texts["Consent.Required"]);
+        if (item.IsSubcontracted) notes.Add(Texts["Catalog.Subcontracted"]);
+        return string.Join(" · ", notes);
+    }
+
+    private void Add(CatalogPickerItem item)
+    {
+        if (AlreadyOnOrder.Contains(item.Id))
+        {
+            _problem = Texts.T("Order_AnalysisAlreadyPresent", item.Code);
+            return;
+        }
+
+        _problem = null;
+        if (_chosen.Any(c => c.Id == item.Id)) return;
+        _chosen.Add(item);
+    }
+
+    private async Task AcceptAsync()
+    {
+        if (OrderFileRules.AmendmentProblems(_chosen.Count, _reason).FirstOrDefault() is { } problem)
+        {
+            _problem = Texts[problem];
+            return;
+        }
+
+        await OnAccept.InvokeAsync(([.. _chosen.Where(i => !i.IsPanel).Select(i => i.Id)],
+                                    [.. _chosen.Where(i => i.IsPanel).Select(i => i.Id)],
+                                    _reason.Trim()));
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}
