@@ -1053,7 +1053,7 @@ public sealed class ResultEntryView : LocalizedView
 
         var now = DateTimeOffset.Now;
         var pill = ResultEntryRules.WorklistPill(order, _progress.GetValueOrDefault(accession), now);
-        var late = order.DueAt is { } due && due < now;
+        var late = ResultEntryRules.IsLate(order.DueAt, now);
         const int pad = 14;
         var inner = new Rectangle(bounds.X + pad, bounds.Y + 9, bounds.Width - 2 * pad, bounds.Height - 18);
         var alignment = rtl ? TextFormatFlags.Right | TextFormatFlags.RightToLeft : TextFormatFlags.Left;
@@ -1671,7 +1671,7 @@ public sealed class ResultEntryView : LocalizedView
         ShowRemaining();
 
         // Said once on opening, rather than discovered row by row as cells refuse the cursor.
-        var awaiting = sheet.Rows.Where(r => r.IsAwaitingSample).Select(r => r.AnalysisCode).Distinct().ToList();
+        var awaiting = ResultEntryRules.AwaitingSample(sheet.Rows);
         if (awaiting.Count > 0)
         {
             _status.ForeColor = UiTheme.Abnormal;
@@ -1728,7 +1728,7 @@ public sealed class ResultEntryView : LocalizedView
         if (sheet.DueAt is { } due)
         {
             var at = due.ToLocalTime().ToString("dd/MM HH:mm");
-            if (due < DateTimeOffset.Now)
+            if (ResultEntryRules.IsLate(due, DateTimeOffset.Now))
                 _duePill.Show(T("ResultEntry.Overdue", at), EntryPaint.Critical);
             else
                 _duePill.Show($"{T("Order.DueAt")} · {at}", EntryPaint.Waiting);

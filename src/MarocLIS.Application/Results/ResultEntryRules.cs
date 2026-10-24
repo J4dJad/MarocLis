@@ -39,6 +39,16 @@ public static class ResultEntryRules
         row is { IsEditable: true, IsAwaitingSample: false }
         && row.Status is not (TestResultStatus.Validated or TestResultStatus.Reported);
 
+    /// <summary>A due time passed: the dossier in the worklist, the file on the patient card, said late.</summary>
+    public static bool IsLate(DateTimeOffset? dueAt, DateTimeOffset now) => dueAt is { } due && due < now;
+
+    /// <summary>
+    /// The analyses whose tube is not received yet, said once on opening rather than discovered row
+    /// by row as the cells refuse the cursor.
+    /// </summary>
+    public static IReadOnlyList<string> AwaitingSample(IEnumerable<ResultEntryRow> rows) =>
+        [.. rows.Where(r => r.IsAwaitingSample).Select(r => r.AnalysisCode).Distinct()];
+
     /// <summary>The sectors (department codes) of a file of the worklist, for the sector chips.</summary>
     public static IEnumerable<string> SectorsOf(PendingEntryOrder order) =>
         order.Departments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -90,7 +100,7 @@ public static class ResultEntryRules
     public static EntryWorklistPill WorklistPill(PendingEntryOrder order, ResultEntryProgress? progress, DateTimeOffset now)
     {
         if (progress is { Total: > 0 } known && known.Entered >= known.Total) return EntryWorklistPill.ReadyToValidate;
-        if (order.DueAt is { } due && due < now) return EntryWorklistPill.Late;
+        if (IsLate(order.DueAt, now)) return EntryWorklistPill.Late;
         return progress is null ? EntryWorklistPill.None : EntryWorklistPill.Progress;
     }
 

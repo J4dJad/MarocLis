@@ -1883,7 +1883,7 @@ public sealed class ValidationView : LocalizedView
             if (recipient is null)
             {
                 await _validation.MarkCriticalUnreachableAsync(
-                    raised.Value, "Communication abandonnée par l'opérateur");
+                    raised.Value, CriticalCallNotes.Abandoned);
                 continue;
             }
 
@@ -1895,7 +1895,7 @@ public sealed class ValidationView : LocalizedView
             {
                 _dialogs.Warn(T("Notification_ReadBackRequired"), T("Nav.CriticalResults"));
                 await _validation.MarkCriticalUnreachableAsync(
-                    raised.Value, "Relecture non confirmée");
+                    raised.Value, CriticalCallNotes.ReadBackNotConfirmed);
                 continue;
             }
 

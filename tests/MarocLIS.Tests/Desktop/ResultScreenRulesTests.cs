@@ -185,6 +185,18 @@ public sealed class ResultScreenRulesTests
         ResultEntryRules.IsOutsideInterval(3m, 4m, null).Should().BeTrue();
     }
 
+    [Fact]
+    public void A_file_is_late_once_its_due_time_passed_and_the_tubes_missing_are_named_once()
+    {
+        ResultEntryRules.IsLate(Now.AddMinutes(-1), Now).Should().BeTrue();
+        ResultEntryRules.IsLate(Now, Now).Should().BeFalse();
+        ResultEntryRules.IsLate(null, Now).Should().BeFalse();
+
+        var missing = Row(awaitingSample: true) with { AnalysisCode = "NFS" };
+        ResultEntryRules.AwaitingSample([missing, missing with { TestResultId = Guid.NewGuid() }, Row()])
+            .Should().Equal("NFS");
+    }
+
     // ---- Validation biologique -------------------------------------------------------------------
 
     [Fact]

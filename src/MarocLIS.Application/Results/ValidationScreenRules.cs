@@ -50,6 +50,17 @@ public sealed record ValidationActions(
 }
 
 /// <summary>
+/// The notes a critical value's call is closed with when it did not reach anyone: the operator gave
+/// up before naming whom they spoke to, or the value was not read back. Recorded on the notification
+/// as written, by the workstation and the web alike.
+/// </summary>
+public static class CriticalCallNotes
+{
+    public const string Abandoned = "Communication abandonnée par l'opérateur";
+    public const string ReadBackNotConfirmed = "Relecture non confirmée";
+}
+
+/// <summary>
 /// The rules of the « Validation biologique » screen that need no window: which chip a file falls
 /// under, the order of its alerts, which rows can be ticked and which come pre-ticked.
 /// <para>
