@@ -1292,7 +1292,7 @@ public sealed class OrderDetailView : LocalizedView
     /// </summary>
     private async Task LoadPaymentsAsync(OrderDetail detail, CancellationToken token)
     {
-        if (detail.InvoiceId is not { } invoiceId || !_currentUser.Has(Permissions.Billing.View))
+        if (detail.InvoiceId is not { } invoiceId || !OrderFileRules.Actions(detail, null, _currentUser).LoadPayments)
         {
             RenderBilling(detail);
             return;
@@ -1389,16 +1389,9 @@ public sealed class OrderDetailView : LocalizedView
     /// <summary>The files the quick filters let through, in the list's order.</summary>
     private IReadOnlyList<OrderListRow> Filtered()
     {
-        var since = _clock.Now.AddDays(-7);
-
-        return
-        [
-            .. _rows.Where(r => (!_chipWeek.Selected || r.RegisteredAt >= since)
-                                && (!_chipActive.Selected || r.Status is not (LabOrderStatus.Validated
-                                                                              or LabOrderStatus.Reported
-                                                                              or LabOrderStatus.Cancelled))
-                                && (!_chipUrgent.Selected || r.Priority != OrderPriority.Routine))
-        ];
+        return OrderFileRules.Filter(_rows,
+                                     new OrderListFilter(_chipWeek.Selected, _chipActive.Selected, _chipUrgent.Selected),
+                                     _clock.Now);
     }
 
     private void RenderList()
@@ -1485,14 +1478,11 @@ public sealed class OrderDetailView : LocalizedView
     /// <summary>The text and colours of a file's state pill: « Validé » in green, « En cours · Urgent » in amber.</summary>
     private (string Text, (Color Back, Color Fore) Colours) OrderPill(LabOrderStatus status, OrderPriority priority)
     {
-        var released = status is LabOrderStatus.Validated or LabOrderStatus.Reported;
         var text = T($"OrderStatus.{status}");
 
         // Urgent work still to do is flagged in the warning colours; done or cancelled, it no longer matters.
-        if (priority != OrderPriority.Routine && !released && status != LabOrderStatus.Cancelled)
-            return ($"{text} · {T($"Priority.{priority}")}", EntryPaint.Warning);
-
-        return (text, FilePaint.ForOrder(status));
+        var look = OrderFileRules.OrderPill(status, priority);
+        return (look.NamesPriority ? $"{text} · {T($"Priority.{priority}")}" : text, FilePaint.Colours(look.Tone));
     }
 
     /// <summary>
@@ -1582,7 +1572,7 @@ public sealed class OrderDetailView : LocalizedView
         var (statusText, statusColours) = OrderPill(detail.Status, OrderPriority.Routine);
         _statusPill.Show("● " + statusText, statusColours);
         _priorityPill.Show(detail.Priority == OrderPriority.Routine ? string.Empty : T($"Priority.{detail.Priority}"),
-                           detail.Priority == OrderPriority.VitalEmergency ? EntryPaint.Critical : EntryPaint.Warning);
+                           FilePaint.Colours(OrderFileRules.PriorityTone(detail.Priority)));
 
         var registered = detail.RegisteredAt.ToLocalTime();
         _registered.Text = T("OrderFile.RegisteredOn", registered.ToString("dd/MM/yyyy"),
@@ -1750,10 +1740,9 @@ public sealed class OrderDetailView : LocalizedView
 
         // Otherwise the first live row rather than the first row: the cancelled ones are history
         // and are not what an operator wants an action pointed at.
+        var pointed = OrderFileRules.DefaultItem(detail, kept);
         var live = _items.Rows.Cast<DataGridViewRow>()
-                              .FirstOrDefault(r => kept is { } id && r.Tag is OrderItemDetail item && item.ItemId == id)
-                   ?? _items.Rows.Cast<DataGridViewRow>()
-                              .FirstOrDefault(r => r.Tag is OrderItemDetail { IsCancelled: false });
+                              .FirstOrDefault(r => pointed is not null && r.Tag is OrderItemDetail item && item.ItemId == pointed.ItemId);
 
         if (live is not null)
         {
@@ -1766,7 +1755,7 @@ public sealed class OrderDetailView : LocalizedView
         foreach (Control old in _tubeLegend.Controls.Cast<Control>().Where(c => c != _totals).ToList()) old.Dispose();
         _tubeLegend.Controls.Clear();
 
-        foreach (var sample in detail.Samples.Where(s => s.Status is not (SampleStatus.Rejected or SampleStatus.Discarded)))
+        foreach (var sample in OrderFileRules.LiveSamples(detail))
         {
             var text = string.Join(" · ", new[] { sample.ContainerName, sample.SpecimenTypeName.For(language), sample.Barcode }
                                               .Where(s => !string.IsNullOrEmpty(s)));
@@ -1836,7 +1825,7 @@ public sealed class OrderDetailView : LocalizedView
             _tips.SetToolTip(_billingNotes[i], _billingNotes[i].Text);
         }
 
-        var mayView = _currentUser.Has(Permissions.Billing.View);
+        var mayView = OrderFileRules.Actions(detail, null, _currentUser).ViewBilling;
         _openBilling.Visible = mayView;
 
         _payments.Rows.Clear();
@@ -1953,14 +1942,11 @@ public sealed class OrderDetailView : LocalizedView
 
             case "status":
             {
-                var released = item.Status is LabOrderItemStatus.Validated or LabOrderItemStatus.Reported;
                 var text = T($"OrderItemStatus.{item.Status}");
-                var colours = FilePaint.ForItem(item.Status);
 
                 // Late, or on a second run: the pill in the warning colours, the reason in its tooltip
                 // (« En retard ») or on the line's remark (the run and its reason).
-                if (item.IsOverdueAt(_clock.Now) || (item.RunCount > 1 && !item.IsCancelled && !released))
-                    colours = EntryPaint.Warning;
+                var colours = FilePaint.Colours(OrderFileRules.ItemTone(item, _clock.Now));
 
                 var size = EntryPaint.MeasurePill(text, UiTheme.SmallBold, 10);
                 var pill = EntryPaint.Mirror(
@@ -2045,29 +2031,18 @@ public sealed class OrderDetailView : LocalizedView
         var detail = _detail;
         var item = SelectedItem;
 
-        var editable = detail is { IsCancelled: false };
-
         // Off on an invoiced or reported file, which the service refuses: offered, the operator
         // picked the analyses and typed the reason before being told so.
-        _addAnalyses.Enabled = detail is { CanAddAnalyses: true } && _currentUser.Has(Permissions.Orders.Edit);
-        _editHeader.Enabled = _editHeaderItem.Enabled = editable && _currentUser.Has(Permissions.Orders.Edit);
+        var actions = OrderFileRules.Actions(detail, item, _currentUser);
 
-        _cancelOrder.Enabled = detail is { CanCancel: true }
-                               && _currentUser.Has(Permissions.Orders.Cancel);
-
-        _printLabels.Enabled = detail is { IsCancelled: false }
-                               && _currentUser.Has(Permissions.Samples.Reprint);
-
-        _printReport.Enabled = _printReportItem.Enabled =
-            detail is not null && _currentUser.Has(Permissions.Reports.ReprintValidated);
-
-        _cancelItem.Enabled = _itemCancel.Enabled = item is { CanCancel: true }
-                                                    && _currentUser.Has(Permissions.Orders.Cancel);
-
-        _repeatItem.Enabled = _itemRepeat.Enabled = item is { CanRepeat: true }
-                                                    && _currentUser.Has(Permissions.Results.Enter);
-
-        _more.Enabled = detail is not null;
+        _addAnalyses.Enabled = actions.AddAnalyses;
+        _editHeader.Enabled = _editHeaderItem.Enabled = actions.EditHeader;
+        _cancelOrder.Enabled = actions.CancelOrder;
+        _printLabels.Enabled = actions.PrintLabels;
+        _printReport.Enabled = _printReportItem.Enabled = actions.PrintReport;
+        _cancelItem.Enabled = _itemCancel.Enabled = actions.CancelItem;
+        _repeatItem.Enabled = _itemRepeat.Enabled = actions.RepeatItem;
+        _more.Enabled = actions.MoreActions;
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -2109,11 +2084,11 @@ public sealed class OrderDetailView : LocalizedView
     private async Task CancelItemAsync()
     {
         if (_detail is not { } detail || SelectedItem is not { } item) return;
-        if (!item.CanCancel || !_currentUser.Has(Permissions.Orders.Cancel)) return;
+        if (!OrderFileRules.Actions(detail, item, _currentUser).CancelItem) return;
 
         var reason = _dialogs.PromptForReason(
             T("Order.CancelAnalysisPrompt", item.Code, item.Name.For(Localizer.CurrentLanguage)),
-            T("Order.CancelAnalysis"), maxLength: 500);
+            T("Order.CancelAnalysis"), maxLength: OrderFileRules.ReasonMaxLength);
 
         if (reason is null) return;
 
@@ -2134,11 +2109,11 @@ public sealed class OrderDetailView : LocalizedView
     private async Task RepeatItemAsync()
     {
         if (_detail is not { } detail || SelectedItem is not { } item) return;
-        if (!item.CanRepeat || !_currentUser.Has(Permissions.Results.Enter)) return;
+        if (!OrderFileRules.Actions(detail, item, _currentUser).RepeatItem) return;
 
         var reason = _dialogs.PromptForReason(
             T("Order.RepeatAnalysisPrompt", item.Code, item.RunCount),
-            T("Order.RepeatAnalysis"), maxLength: 500);
+            T("Order.RepeatAnalysis"), maxLength: OrderFileRules.ReasonMaxLength);
 
         if (reason is null) return;
 
@@ -2173,12 +2148,11 @@ public sealed class OrderDetailView : LocalizedView
     private async Task CancelOrderAsync()
     {
         if (_detail is not { } detail) return;
-        if (!detail.CanCancel || !_currentUser.Has(Permissions.Orders.Cancel)) return;
+        if (!OrderFileRules.Actions(detail, null, _currentUser).CancelOrder) return;
 
         // Named in the confirmation, with the tube count, because cancelling a file also discards
         // its tubes and the operator should know that before they click rather than after.
-        var live = detail.Samples.Count(
-            s => s.Status is not (SampleStatus.Rejected or SampleStatus.Discarded));
+        var live = OrderFileRules.LiveSamples(detail).Count;
 
         if (!_dialogs.Confirm(
                 T("Order.ConfirmCancelOrder", detail.AccessionNumber, detail.LiveItemCount, live),
@@ -2186,7 +2160,7 @@ public sealed class OrderDetailView : LocalizedView
             return;
 
         var reason = _dialogs.PromptForReason(
-            T("Order.CancelOrderPrompt", detail.AccessionNumber), T("Order.CancelOrder"), maxLength: 500);
+            T("Order.CancelOrderPrompt", detail.AccessionNumber), T("Order.CancelOrder"), maxLength: OrderFileRules.ReasonMaxLength);
 
         if (reason is null) return;
 

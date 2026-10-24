@@ -24,7 +24,8 @@ internal static class FilePaint
     /// <summary>A tube's state (<see cref="OrderFileTones.ForSample"/>).</summary>
     public static (Color Back, Color Fore) ForSample(SampleStatus status) => Colours(OrderFileTones.ForSample(status));
 
-    private static (Color Back, Color Fore) Colours(OrderStatusTone tone) => tone switch
+    /// <summary>A tone of the file screen (<see cref="OrderFileRules"/>), in its colours.</summary>
+    public static (Color Back, Color Fore) Colours(OrderStatusTone tone) => tone switch
     {
         OrderStatusTone.Ok => Ok,
         OrderStatusTone.Waiting => EntryPaint.Waiting,

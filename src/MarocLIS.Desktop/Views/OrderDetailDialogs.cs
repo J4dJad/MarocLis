@@ -278,16 +278,11 @@ internal sealed class AnalysisPickerDialog : Form
 
     private void Accept()
     {
-        if (_chosen.Count == 0)
+        // The rules of a correction of the request: one analysis at least, and its reason.
+        if (OrderFileRules.AmendmentProblems(_chosen.Count, _reason.Text).FirstOrDefault() is { } problem)
         {
-            _dialogs.Warn(_localizer["Order_AtLeastOneAnalysisRequired"], Text);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_reason.Text))
-        {
-            _dialogs.Warn(_localizer["Order_AmendmentReasonRequired"], Text);
-            _reason.Focus();
+            _dialogs.Warn(_localizer[problem], Text);
+            if (problem == "Order_AmendmentReasonRequired") _reason.Focus();
             return;
         }
 
@@ -330,35 +325,21 @@ internal sealed class OrderHeaderDialog : Form
 
     internal string Reason => _reason.Text.Trim();
 
-    internal AmendOrderHeaderRequest Request => new()
-    {
-        OrderId = _detail.OrderId,
-
-        // A directory prescriber keeps its id and carries no free text; the field is read-only in
-        // that case. Storing the name as free text alongside the id would give the report two
-        // sources for one fact, and they would eventually disagree.
-        PrescriberId = _detail.PrescriberId,
-        PrescriberFreeText = _detail.PrescriberId is not null
-            ? null
-            : string.IsNullOrWhiteSpace(_prescriber.Text) ? null : _prescriber.Text.Trim(),
-
-        PrescriptionDate = _hasPrescriptionDate.Checked
-            ? DateOnly.FromDateTime(_prescriptionDate.Value.Date)
-            : null,
-
-        Priority = (OrderPriority)((_priority.SelectedItem as EnumChoice)?.Value
-                                   ?? (int)_detail.Priority),
-
-        ClinicalInformation = _clinical.Text,
-        DiagnosisCode = _diagnosis.Text,
-        WardOrUnit = _ward.Text,
-        RoomOrBed = _room.Text,
-        InternalNote = _note.Text,
-
-        ReportLanguage = _language.SelectedItem is EnumChoice
+    // A directory prescriber keeps its id and carries no free text; the field is read-only in
+    // that case (OrderFileRules.HeaderRequest).
+    internal AmendOrderHeaderRequest Request => OrderFileRules.HeaderRequest(
+        _detail,
+        _prescriber.Text,
+        _hasPrescriptionDate.Checked ? DateOnly.FromDateTime(_prescriptionDate.Value.Date) : null,
+        (OrderPriority)((_priority.SelectedItem as EnumChoice)?.Value ?? (int)_detail.Priority),
+        _clinical.Text,
+        _diagnosis.Text,
+        _ward.Text,
+        _room.Text,
+        _note.Text,
+        _language.SelectedItem is EnumChoice
             ? LanguageChoices.Selected(_language)
-            : LanguageChoices.Coerce(_detail.ReportLanguage)
-    };
+            : LanguageChoices.Coerce(_detail.ReportLanguage));
 
     internal OrderHeaderDialog(ILocalizer localizer, IUserDialogs dialogs, OrderDetail detail)
     {
@@ -425,7 +406,8 @@ internal sealed class OrderHeaderDialog : Form
                                   ?? DateTime.Today;
         // Not after the file's registration, as the service requires: a later date was refused
         // only once the dialog was filled in.
-        _prescriptionDate.MaxDate = detail.RegisteredAt.Date < DateTime.Today ? detail.RegisteredAt.Date : DateTime.Today;
+        _prescriptionDate.MaxDate = OrderFileRules.MaxPrescriptionDate(detail, DateOnly.FromDateTime(DateTime.Today))
+                                                  .ToDateTime(TimeOnly.MinValue);
 
         _hasPrescriptionDate.CheckedChanged +=
             (_, _) => _prescriptionDate.Enabled = _hasPrescriptionDate.Checked;
@@ -516,9 +498,9 @@ internal sealed class OrderHeaderDialog : Form
 
     private void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_reason.Text))
+        if (OrderFileRules.AmendmentProblems(0, _reason.Text, needsAnalyses: false).FirstOrDefault() is { } problem)
         {
-            _dialogs.Warn(_localizer["Order_AmendmentReasonRequired"], Text);
+            _dialogs.Warn(_localizer[problem], Text);
             _reason.Focus();
             return;
         }

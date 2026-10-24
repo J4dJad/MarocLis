@@ -136,23 +136,18 @@ public sealed class OrderRegistrationView : LocalizedView
     // State
     private readonly List<CatalogPickerItem> _catalogItems = [];
     private readonly List<CatalogPickerItem> _fullCatalog = [];
-    private readonly List<CatalogPickerItem> _selected = [];
+    private readonly OrderBasket _basketItems = new();
     private IReadOnlyList<PatientSearchRow> _patients = [];
     private IReadOnlyList<DepartmentOption> _departments = [];
     private IReadOnlyList<FrequentPanel> _frequent = [];
-    private IReadOnlyList<RecentAnalysis> _recent = [];
-    private readonly HashSet<Guid> _kept = [];
     private PatientSearchRow? _patient;
     private bool? _fasting = true;
-    private string _filter = FilterAll;
+    private string _filter = OrderBasket.FilterAll;
     private OrderQuote? _quote;
     private (string Text, Color Colour)? _notice;
     private bool _settingPatientText;
     private readonly System.Windows.Forms.Timer _debounce = new() { Interval = 300 };
     private readonly System.Windows.Forms.Timer _quoteTimer = new() { Interval = 250 };
-
-    private const string FilterAll = "*";
-    private const string FilterPanels = "#panels";
 
     private Guid? PatientId => _patient?.Id;
 
@@ -1285,8 +1280,8 @@ public sealed class OrderRegistrationView : LocalizedView
             _catalogCard.Controls.Add(chip);
         }
 
-        Add(FilterAll, T("OrderEntry.All"));
-        Add(FilterPanels, T("Catalog.Panels"));
+        Add(OrderBasket.FilterAll, T("OrderEntry.All"));
+        Add(OrderBasket.FilterPanels, T("Catalog.Panels"));
 
         // Only the sectors the catalogue actually has analyses in.
         var used = _fullCatalog.Select(i => i.DepartmentCode).OfType<string>().ToHashSet(StringComparer.Ordinal);
@@ -1369,9 +1364,7 @@ public sealed class OrderRegistrationView : LocalizedView
     {
         if (_prescriber.SelectedItem is PrescriberChoice chosen) return chosen;
 
-        var text = _prescriber.Text.Trim();
-        return _prescriber.Items.OfType<PrescriberChoice>()
-            .FirstOrDefault(c => string.Equals(c.Display, text, StringComparison.CurrentCultureIgnoreCase));
+        return OrderBasket.MatchPrescriber(_prescriber.Items.OfType<PrescriberChoice>(), c => c.Display, _prescriber.Text);
     }
 
     // ---- Fasting -----------------------------------------------------------------------------------
@@ -1516,8 +1509,7 @@ public sealed class OrderRegistrationView : LocalizedView
     private void ClearPatient(bool focusSearch)
     {
         _patient = null;
-        _recent = [];
-        _kept.Clear();
+        _basketItems.ForgetPatient();
         _patientBand.Visible = false;
         LayoutPatientCard();
         RenderBasket();
@@ -1533,7 +1525,7 @@ public sealed class OrderRegistrationView : LocalizedView
                 patientId, _clock.Now.AddDays(-OrderRegistrationRules.RepeatWindowDays));
 
             if (PatientId != patientId) return;
-            _recent = recent;
+            _basketItems.SetRecent(recent);
             RenderBasket();
         }
         catch (Exception ex)
@@ -1649,7 +1641,7 @@ public sealed class OrderRegistrationView : LocalizedView
     // text for the clerk to correct.
     private void ClearCatalogSearchIfAdded(CatalogPickerItem item)
     {
-        if (!_selected.Any(x => x.Id == item.Id && x.IsPanel == item.IsPanel)) return;
+        if (!_basketItems.Contains(item)) return;
 
         _catalogSearch.Clear();
         _catalogSuggestions.Visible = false;
@@ -1701,12 +1693,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _catalogSuggestions.Show([.. OrderRegistrationRules.Ranked(_catalogItems, term).Take(6)], visibleRows: 6);
     }
 
-    private IEnumerable<CatalogPickerItem> Filtered() => _filter switch
-    {
-        FilterAll => _catalogItems,
-        FilterPanels => _catalogItems.Where(i => i.IsPanel),
-        _ => _catalogItems.Where(i => i.DepartmentCode == _filter)
-    };
+    private IEnumerable<CatalogPickerItem> Filtered() => OrderBasket.Filter(_catalogItems, _filter);
 
     private void RenderCatalogue()
     {
@@ -1734,7 +1721,7 @@ public sealed class OrderRegistrationView : LocalizedView
             // the panel rather than its components is both faster and less error-prone.
             if (item.IsPanel) row.Cells["name"].Style.Font = UiTheme.BodyBold;
 
-            if (State(item) != CatalogState.Free)
+            if (_basketItems.StateOf(item) != CatalogItemState.Free)
             {
                 row.DefaultCellStyle.BackColor = UiTheme.Surface;
                 row.DefaultCellStyle.ForeColor = UiTheme.TextSecondary;
@@ -1760,15 +1747,6 @@ public sealed class OrderRegistrationView : LocalizedView
     private static string Price(decimal amount) =>
         Money.Of(amount).Amount.ToString("N2", CultureInfo.CurrentCulture);
 
-    private enum CatalogState { Free, InRequest, InPanel }
-
-    private CatalogState State(CatalogPickerItem item)
-    {
-        if (_selected.Any(s => s.Id == item.Id && s.IsPanel == item.IsPanel)) return CatalogState.InRequest;
-        if (!item.IsPanel && _selected.Any(s => s.IsPanel && Members(s).Contains(item.Id))) return CatalogState.InPanel;
-        return CatalogState.Free;
-    }
-
     private void AddCatalogRow(int rowIndex)
     {
         if (_catalog.Rows[rowIndex].Tag is CatalogPickerItem item) AddItem(item);
@@ -1793,55 +1771,39 @@ public sealed class OrderRegistrationView : LocalizedView
     {
         _notice = null;
 
-        if (_selected.Any(s => s.Id == item.Id && s.IsPanel == item.IsPanel))
+        // The basket's rules: an analysis once, a profile taking out its own members chosen alone.
+        var added = _basketItems.Add(item);
+        var language = Localizer.CurrentLanguage;
+
+        switch (added.Outcome)
         {
-            Notice(T("Order_AnalysisAlreadyPresent"), UiTheme.Abnormal);
-            return;
+            case BasketAddOutcome.AlreadyPresent:
+                Notice(T("Order_AnalysisAlreadyPresent"), UiTheme.Abnormal);
+                return;
+
+            case BasketAddOutcome.AlreadyInPanel:
+                Notice(T("Order.AlreadyInPanel", item.Code, added.CoveringPanel!.Name.For(language)), UiTheme.Abnormal);
+                return;
         }
 
-        // The order holds each analysis once, however many times it was chosen. An analysis
-        // already inside a chosen panel is therefore not added again, and choosing a panel takes
-        // out the analyses chosen on their own that it contains — otherwise the list showed them
-        // twice and the counter total ran above the amount registered and invoiced.
-        if (!item.IsPanel
-            && _selected.FirstOrDefault(s => s.IsPanel && Members(s).Contains(item.Id)) is { } covering)
-        {
-            Notice(T("Order.AlreadyInPanel", item.Code, covering.Name.For(Localizer.CurrentLanguage)),
-                   UiTheme.Abnormal);
-            return;
-        }
-
-        string? merged = null;
-        if (item.IsPanel)
-        {
-            var members = Members(item);
-            var absorbed = _selected.Where(s => !s.IsPanel && members.Contains(s.Id)).ToList();
-
-            if (absorbed.Count > 0)
-            {
-                foreach (var analysis in absorbed) _selected.Remove(analysis);
-
-                merged = T("Order.MergedIntoPanel",
-                           string.Join(", ", absorbed.Select(a => a.Code)),
-                           item.Name.For(Localizer.CurrentLanguage));
-            }
-        }
-
-        _selected.Add(item);
         RenderBasket();
         RenderCatalogue();
 
-        if (merged is not null) Notice(merged, UiTheme.Abnormal);
+        if (added.Outcome == BasketAddOutcome.MergedIntoPanel)
+            Notice(T("Order.MergedIntoPanel", string.Join(", ", added.Absorbed!.Select(a => a.Code)), item.Name.For(language)),
+                   UiTheme.Abnormal);
     }
-
-    private static HashSet<Guid> Members(CatalogPickerItem panel) =>
-        [.. (panel.Components ?? []).Select(c => c.AnalysisTestId)];
 
     // ---- Basket ------------------------------------------------------------------------------------
 
     private sealed record BasketLine(CatalogPickerItem Item);
 
-    private sealed record WarningLine(CatalogPickerItem Item, RecentAnalysis Previous, string? MemberCode);
+    private sealed record WarningLine(BasketRepeat Repeat)
+    {
+        public CatalogPickerItem Item => Repeat.Item;
+        public RecentAnalysis Previous => Repeat.Previous;
+        public string? MemberCode => Repeat.MemberCode;
+    }
 
     private void RemoveBasketRow(int rowIndex)
     {
@@ -1859,20 +1821,18 @@ public sealed class OrderRegistrationView : LocalizedView
     private void Remove(CatalogPickerItem item)
     {
         _notice = null;
-        _selected.Remove(item);
-        _kept.Remove(item.Id);
+        _basketItems.Remove(item);
         RenderBasket();
         RenderCatalogue();
     }
 
     private void RemoveAll()
     {
-        if (_selected.Count == 0) return;
-        if (_selected.Count > 1 && !_dialogs.Confirm(T("OrderEntry.ConfirmRemoveAll", _selected.Count))) return;
+        if (_basketItems.IsEmpty) return;
+        if (_basketItems.Count > 1 && !_dialogs.Confirm(T("OrderEntry.ConfirmRemoveAll", _basketItems.Count))) return;
 
         _notice = null;
-        _selected.Clear();
-        _kept.Clear();
+        _basketItems.Clear();
         RenderBasket();
         RenderCatalogue();
     }
@@ -1885,7 +1845,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _basket.SuspendLayout();
         _basket.Rows.Clear();
 
-        foreach (var item in _selected)
+        foreach (var item in _basketItems.Items)
         {
             var index = _basket.Rows.Add(item.Name.For(language),
                                          item.IsPanel ? T("OrderEntry.SeveralTubes") : item.ContainerName ?? "—",
@@ -1895,19 +1855,14 @@ public sealed class OrderRegistrationView : LocalizedView
             row.Height = 44;
             row.Cells["name"].ToolTipText = BasketNotes(item);
 
-            if (_kept.Contains(item.Id)) continue;
-            if (OrderRegistrationRules.RepeatOf(item.Id, item.IsPanel, Members(item), _recent) is not { } repeat) continue;
+            if (_basketItems.RepeatOf(item, _fullCatalog) is not { } repeat) continue;
 
             row.DefaultCellStyle.BackColor = UiTheme.AbnormalBackground;
             row.DefaultCellStyle.SelectionBackColor = UiTheme.AbnormalBackground;
 
-            var member = item.IsPanel
-                ? _fullCatalog.FirstOrDefault(i => !i.IsPanel && i.Id == repeat.AnalysisId)?.Code ?? item.Code
-                : null;
-
             var warningIndex = _basket.Rows.Add(string.Empty, string.Empty, string.Empty, string.Empty);
             var warning = _basket.Rows[warningIndex];
-            var line = new WarningLine(item, repeat.Previous, member);
+            var line = new WarningLine(repeat);
             warning.Tag = line;
             warning.Height = WarningFits(line) ? 36 : 60;
             warning.DefaultCellStyle.BackColor = UiTheme.AbnormalBackground;
@@ -1916,9 +1871,9 @@ public sealed class OrderRegistrationView : LocalizedView
 
         _basket.ResumeLayout(performLayout: true);
 
-        _basketCount.Text = _selected.Count.ToString(CultureInfo.InvariantCulture);
-        _basketCount.Visible = _selected.Count > 0;
-        _removeAll.Enabled = _selected.Count > 0;
+        _basketCount.Text = _basketItems.Count.ToString(CultureInfo.InvariantCulture);
+        _basketCount.Visible = !_basketItems.IsEmpty;
+        _removeAll.Enabled = !_basketItems.IsEmpty;
         LayoutBasketCard();
 
         RequestQuote();
@@ -1931,10 +1886,7 @@ public sealed class OrderRegistrationView : LocalizedView
         if (item.IsPanel) notes.Add(T("Catalog.Panel"));
 
         // Two panels can share members; the shared ones are billed once, on the first.
-        var counted = new HashSet<Guid>();
-        foreach (var other in _selected.TakeWhile(s => s != item))
-            foreach (var id in other.IsPanel ? Members(other) : [other.Id]) counted.Add(id);
-        var shared = (item.IsPanel ? Members(item) : [item.Id]).Count(id => counted.Contains(id));
+        var shared = _basketItems.SharedCount(item);
         if (shared > 0) notes.Add(T("Order.SharedAnalyses", shared));
         if (item.FastingHours is { } fasting) notes.Add($"{fasting} h");
         if (item.ConsentRequirement != Domain.Catalog.ConsentRequirement.None) notes.Add(T("Consent.Required"));
@@ -1959,7 +1911,7 @@ public sealed class OrderRegistrationView : LocalizedView
     {
         var version = ++_quoteVersion;
 
-        if (_selected.Count == 0)
+        if (_basketItems.IsEmpty)
         {
             _quote = null;
             ShowQuote();
@@ -1971,8 +1923,8 @@ public sealed class OrderRegistrationView : LocalizedView
             var quoted = await _quotes.QuoteAsync(new OrderQuoteRequest
             {
                 PatientId = PatientId,
-                AnalysisTestIds = [.. _selected.Where(s => !s.IsPanel).Select(s => s.Id)],
-                TestPanelIds = [.. _selected.Where(s => s.IsPanel).Select(s => s.Id)],
+                AnalysisTestIds = _basketItems.AnalysisTestIds,
+                TestPanelIds = _basketItems.TestPanelIds,
                 BillDirectlyToPatient = _selfPay.Checked
             });
 
@@ -2036,7 +1988,7 @@ public sealed class OrderRegistrationView : LocalizedView
             _tubeList.Controls.Add(new TubeChip($"{group.Key.Name}{volume} ×{group.Count()}", group.Key.ColourHex));
         }
 
-        var copies = Math.Clamp(_labelOptions.Copies, 1, 5);
+        var copies = OrderBasket.LabelCopies(_labelOptions.Copies);
         _tubesCount.Text = T("OrderEntry.TubeCount", tubes.Count, tubes.Count * copies);
         LayoutBasketCard();
         LayoutTubes();
@@ -2050,7 +2002,7 @@ public sealed class OrderRegistrationView : LocalizedView
     private void RefreshReadiness()
     {
         var hasPatient = _patient is not null;
-        var hasAnalyses = _selected.Count > 0;
+        var hasAnalyses = !_basketItems.IsEmpty;
         _register.Enabled = hasPatient && hasAnalyses;
         _registerWithoutLabels.Enabled = hasPatient && hasAnalyses;
 
@@ -2061,10 +2013,7 @@ public sealed class OrderRegistrationView : LocalizedView
             return;
         }
 
-        var missing = new List<string>();
-        if (!hasPatient) missing.Add(T("OrderEntry.MissingPatient"));
-        if (!hasAnalyses) missing.Add(T("OrderEntry.MissingAnalyses"));
-        if (PrescriberMissing()) missing.Add(T("OrderEntry.MissingPrescriber"));
+        var missing = OrderBasket.MissingKeys(hasPatient, hasAnalyses, PrescriberMissing()).Select(T).ToList();
 
         if (missing.Count > 0)
         {
@@ -2080,9 +2029,9 @@ public sealed class OrderRegistrationView : LocalizedView
         {
             // What the old summary under the basket said: the longest fast and a consent to collect.
             var reminders = new List<string> { T("OrderEntry.Ready") };
-            var maxFasting = _selected.Select(s => s.FastingHours ?? 0).DefaultIfEmpty(0).Max();
+            var maxFasting = _basketItems.MaxFastingHours;
             if (maxFasting > 0) reminders.Add($"{T("Catalog.FastingRequired")} {maxFasting} h");
-            if (_selected.Any(s => s.ConsentRequirement != Domain.Catalog.ConsentRequirement.None))
+            if (_basketItems.RequiresConsent)
                 reminders.Add(T("Consent.Required"));
             _status.Text = string.Join(" · ", reminders);
             _status.ForeColor = UiTheme.Normal;
@@ -2092,7 +2041,7 @@ public sealed class OrderRegistrationView : LocalizedView
     private bool PrescriberMissing()
     {
         var origin = _origin.SelectedItem is EnumChoice<OrderOrigin> o ? o.Value : OrderOrigin.Walkin;
-        return ChosenPrescriber() is null && _prescriber.Text.Trim().Length == 0 && LabOrder.RequiresPrescriber(origin);
+        return OrderBasket.PrescriberMissing(ChosenPrescriber() is not null, _prescriber.Text, origin);
     }
 
     /// <summary>The clerk changed something: last action's message gives way to the readiness.</summary>
@@ -2125,8 +2074,8 @@ public sealed class OrderRegistrationView : LocalizedView
         e.PaintBackground(e.CellBounds, true);
         var g = e.Graphics;
         var bounds = Rectangle.Inflate(e.CellBounds, -8, 0);
-        var state = State(item);
-        var ink = state == CatalogState.Free ? UiTheme.TextPrimary : UiTheme.TextSecondary;
+        var state = _basketItems.StateOf(item);
+        var ink = state == CatalogItemState.Free ? UiTheme.TextPrimary : UiTheme.TextSecondary;
 
         switch (column)
         {
@@ -2159,7 +2108,7 @@ public sealed class OrderRegistrationView : LocalizedView
                 break;
 
             case "action":
-                if (state == CatalogState.Free)
+                if (state == CatalogItemState.Free)
                 {
                     var box = new Rectangle(bounds.Right - 28, bounds.Y + (bounds.Height - 26) / 2, 26, 26);
                     using (var fill = new SolidBrush(UiTheme.SurfaceRaised)) g.FillRectangle(fill, box);
@@ -2169,7 +2118,7 @@ public sealed class OrderRegistrationView : LocalizedView
                 }
                 else
                 {
-                    var text = state == CatalogState.InRequest ? T("OrderEntry.Added") : T("OrderEntry.InPanelShort");
+                    var text = state == CatalogItemState.InRequest ? T("OrderEntry.Added") : T("OrderEntry.InPanelShort");
                     TextRenderer.DrawText(g, text, UiTheme.SmallBold, bounds, UiTheme.Normal,
                                           Flags(CellText | TextFormatFlags.Right));
                 }
@@ -2334,7 +2283,7 @@ public sealed class OrderRegistrationView : LocalizedView
 
         if (buttons.Keep.Contains(point))
         {
-            _kept.Add(warning.Item.Id);
+            _basketItems.Keep(warning.Item);
             RenderBasket();
         }
         else if (buttons.Remove.Contains(point))
@@ -2349,10 +2298,8 @@ public sealed class OrderRegistrationView : LocalizedView
 
         var g = e.Graphics;
         var selected = (e.State & DrawItemState.Selected) != 0;
-        var state = State(item);
-        var containsAdded = item.IsPanel
-            ? _selected.Where(s => !s.IsPanel && Members(item).Contains(s.Id)).Select(s => s.Code).ToList()
-            : [];
+        var state = _basketItems.StateOf(item);
+        var containsAdded = _basketItems.ChosenMembersOf(item);
 
         using (var back = new SolidBrush(selected ? UiTheme.AccentSubtle : UiTheme.SurfaceRaised))
             g.FillRectangle(back, e.Bounds);
@@ -2363,7 +2310,7 @@ public sealed class OrderRegistrationView : LocalizedView
         }
 
         var b = e.Bounds;
-        var ink = state == CatalogState.Free ? UiTheme.TextPrimary : UiTheme.TextSecondary;
+        var ink = state == CatalogItemState.Free ? UiTheme.TextPrimary : UiTheme.TextSecondary;
         var noteWidth = Math.Min(190, b.Width / 4);
         var priceWidth = 80;
         var departmentWidth = Math.Min(130, b.Width / 6);
@@ -2391,9 +2338,8 @@ public sealed class OrderRegistrationView : LocalizedView
 
         var (note, colour, font) = state switch
         {
-            CatalogState.InRequest => ("✓ " + T("OrderEntry.AlreadyInRequest"), UiTheme.TextSecondary, UiTheme.Small),
-            CatalogState.InPanel => (T("OrderEntry.InPanel",
-                                       _selected.First(s => s.IsPanel && Members(s).Contains(item.Id)).Code),
+            CatalogItemState.InRequest => ("✓ " + T("OrderEntry.AlreadyInRequest"), UiTheme.TextSecondary, UiTheme.Small),
+            CatalogItemState.InPanel => (T("OrderEntry.InPanel", _basketItems.CoveringPanel(item)!.Code),
                                      UiTheme.Abnormal, UiTheme.Small),
             _ when containsAdded.Count > 0 => (T("OrderEntry.ContainsAdded", string.Join(", ", containsAdded)),
                                                 UiTheme.Abnormal, UiTheme.Small),
@@ -2469,7 +2415,7 @@ public sealed class OrderRegistrationView : LocalizedView
 
     private async Task RegisterAsync(bool printLabels)
     {
-        if (PatientId is not { } patientId || _selected.Count == 0) return;
+        if (PatientId is not { } patientId || _basketItems.IsEmpty) return;
 
         var origin = _origin.SelectedItem is EnumChoice<OrderOrigin> chosenOrigin
             ? chosenOrigin.Value : OrderOrigin.Walkin;
@@ -2477,7 +2423,7 @@ public sealed class OrderRegistrationView : LocalizedView
         var prescriberText = _prescriber.Text.Trim();
 
         // Checked here as well as on save so the clerk is taken to the field that is missing.
-        if (prescriber is null && prescriberText.Length == 0 && LabOrder.RequiresPrescriber(origin))
+        if (OrderBasket.PrescriberMissing(prescriber is not null, prescriberText, origin))
         {
             _dialogs.Warn(T("Order_PrescriberRequired"));
             _prescriber.Focus();
@@ -2487,8 +2433,8 @@ public sealed class OrderRegistrationView : LocalizedView
         var request = new RegisterOrderRequest
         {
             PatientId = patientId,
-            AnalysisTestIds = [.. _selected.Where(s => !s.IsPanel).Select(s => s.Id)],
-            TestPanelIds = [.. _selected.Where(s => s.IsPanel).Select(s => s.Id)],
+            AnalysisTestIds = _basketItems.AnalysisTestIds,
+            TestPanelIds = _basketItems.TestPanelIds,
             Priority = _priority.SelectedItem is EnumChoice<OrderPriority> p
                 ? p.Value : OrderPriority.Routine,
             Origin = origin,
@@ -2611,7 +2557,7 @@ public sealed class OrderRegistrationView : LocalizedView
     // ---- Abandoning the entry ----------------------------------------------------------------------
 
     private bool HasEntries =>
-        _patient is not null || _selected.Count > 0 || _clinicalInfo.TextLength > 0 || _prescriber.Text.Trim().Length > 0;
+        OrderBasket.HasEntries(_patient is not null, _basketItems.Count, _clinicalInfo.Text, _prescriber.Text);
 
     private bool ConfirmEntryLoss() => !HasEntries || _dialogs.Confirm(T("OrderEntry.ConfirmCancelEntry"));
 
@@ -2625,8 +2571,7 @@ public sealed class OrderRegistrationView : LocalizedView
     private void ResetForm()
     {
         _notice = null;
-        _selected.Clear();
-        _kept.Clear();
+        _basketItems.Clear();
 
         _settingPatientText = true;
         _patientSearch.Clear();
