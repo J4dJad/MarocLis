@@ -1,0 +1,462 @@
+@using System.Globalization
+@using MarocLIS.Application.Billing
+@using MarocLIS.Domain.Billing
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<ClaimBatches> Logger
+
+@*
+    « Tiers payant », the workstation's ClaimBatchView: the invoices whose payer share can be claimed,
+    with what blocks the others (the biologist's or the prescriber's INPE); the batches sent in the
+    period with where each stands — awaiting, to chase after sixty days, partly rejected, accepted;
+    and the invoices of the batch highlighted. One payer per batch: « Sélectionner les
+    transmissibles » ticks one payer's ready invoices. What is ticked, offered and shown is
+    ClaimScreenRules'; what is sent and recorded, BillingService's, which records each act.
+*@
+<div class="screen claims" data-screen="claims">
+    <div class="toolbar">
+        <span class="@(Chasing > 0 ? "critical strong" : "muted")" data-state="outstanding">@Texts.T("Claim.Outstanding", Amount(_batches.Sum(b => b.Unsettled)))</span>
+        <span class="toolbar-spacer"></span>
+        <select class="input input-narrow" data-field="window" aria-label="@Texts.T("Report.WithinDays", _window)" @onchange="WindowChangedAsync">
+            @foreach (var days in ClaimScreenRules.Windows)
+            {
+                <option value="@days" selected="@(days == _window)">@Texts.T("Report.WithinDays", days)</option>
+            }
+        </select>
+    </div>
+
+    <div class="card card-flush" data-card="candidates">
+        <div class="card-heading card-pad">
+            <h2 class="card-title @(Blocked > 0 ? "abnormal" : null)">@CandidateHeading</h2>
+        </div>
+        <div class="table-scroll table-scroll-short">
+            <table class="grid" data-grid="candidates">
+                <thead>
+                    <tr>
+                        <th class="col-check"><span class="sr-only">@Texts["Claim.SelectClaimable"]</span></th>
+                        <th>@Texts["Billing.Number"]</th>
+                        <th>@Texts["Billing.IssueDate"]</th>
+                        <th class="num">@Texts["Claim.AgeDays"]</th>
+                        <th>@Texts["Coverage.Payer"]</th>
+                        <th>@Texts["Patient.Title"]</th>
+                        <th class="num">@Texts["Billing.Net"]</th>
+                        <th class="num">@Texts["Billing.PayerShare"]</th>
+                        <th>@Texts["Claim.Blockers"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _candidates)
+                    {
+                        var ticked = _ticked.Contains(row.InvoiceId);
+                        <tr class="@(!row.IsClaimable ? "is-critical-row" : ClaimScreenRules.IsLate(row) ? "is-abnormal" : null) @(row.InvoiceId == _currentCandidate ? "is-selected" : null)"
+                            data-row="@row.Number" @onclick="() => _currentCandidate = row.InvoiceId">
+                            <td class="col-check" @onclick:stopPropagation="true">
+                                <input type="checkbox" checked="@ticked" aria-label="@row.Number" data-tick="@row.Number"
+                                       @onchange="() => Toggle(row.InvoiceId)" />
+                            </td>
+                            <td class="mono strong">@row.Number</td>
+                            <td class="mono small">@row.IssueDate.ToString("dd/MM/yy", CultureInfo.InvariantCulture)</td>
+                            <td class="num mono">@row.DaysSinceIssue</td>
+                            <td>@row.PayerName</td>
+                            <td>@row.PatientName</td>
+                            <td class="num mono">@Amount(row.Total)</td>
+                            <td class="num mono strong">@Amount(row.PayerShare)</td>
+                            <td class="small strong">@string.Join(" · ", row.Blockers.Select(key => Texts[key]))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="split split-even">
+        <div class="card card-flush" data-card="batches">
+            <div class="card-heading card-pad">
+                <h2 class="card-title @(Chasing > 0 ? "critical" : null)">@BatchHeading</h2>
+            </div>
+            <div class="table-scroll table-scroll-short">
+                <table class="grid grid-select" data-grid="batches">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Billing.ClaimReference"]</th>
+                            <th>@Texts["Coverage.Payer"]</th>
+                            <th>@Texts["Claim.SubmittedOn"]</th>
+                            <th class="num">@Texts["Claim.AgeDays"]</th>
+                            <th class="num">@Texts["Billing.Invoices"]</th>
+                            <th class="num">@Texts["Claim.Claimed"]</th>
+                            <th class="num">@Texts["Billing.Paid"]</th>
+                            <th>@Texts["Billing.ClaimOutcome"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _batches)
+                        {
+                            var state = ClaimScreenRules.State(row, Clock.Today);
+                            <tr class="@(row.NeedsChasing(Clock.Today) ? "is-critical-row" : row.RejectedCount > 0 ? "is-abnormal" : null) @(row.ClaimReference == SelectedBatch?.ClaimReference ? "is-selected" : null)"
+                                data-row="@row.ClaimReference" @onclick="() => SelectBatchAsync(row)">
+                                <td class="mono strong">@row.ClaimReference</td>
+                                <td>@row.PayerName</td>
+                                <td class="mono small">@row.SubmittedOn.ToString("dd/MM/yy", CultureInfo.InvariantCulture)</td>
+                                <td class="num mono">@row.DaysOutstanding(Clock.Today)</td>
+                                <td class="num mono">@row.InvoiceCount</td>
+                                <td class="num mono strong">@Amount(row.PayerShareClaimed)</td>
+                                <td class="num mono">@Amount(row.Settled)</td>
+                                <td><Pill Text="@StateText(row, state)" Tone="@StateTone(state)" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card card-flush" data-card="batch-invoices">
+            <div class="card-heading card-pad">
+                <h2 class="card-title">@(SelectedBatch is { } batch ? $"{Texts["Claim.BatchContents"]} — {batch.ClaimReference}" : Texts["Claim.BatchContents"])</h2>
+            </div>
+            <div class="table-scroll table-scroll-short">
+                <table class="grid" data-grid="batch-invoices">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Billing.Number"]</th>
+                            <th>@Texts["Patient.Title"]</th>
+                            <th class="num">@Texts["Billing.PayerShare"]</th>
+                            <th class="num">@Texts["Billing.Paid"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                            <th>@Texts["Billing.ClaimRejectionReason"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _invoices)
+                        {
+                            <tr class="@(row.IsAbandoned ? "is-critical-row" : row.WasRejected ? "is-abnormal" : null)" data-row="@row.Number">
+                                <td class="mono strong">@row.Number</td>
+                                <td>@row.PatientName</td>
+                                <td class="num mono">@Amount(row.PayerShare)</td>
+                                <td class="num mono">@Amount(row.Paid)</td>
+                                <td><Pill Text="@Texts[$"ClaimStatus.{row.ClaimStatus}"]" Tone="@ClaimScreenRules.InvoiceTone(row)" /></td>
+                                <td class="small">@row.ClaimRejectionReason</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    @{ var actions = Actions; }
+    <footer class="action-bar">
+        <div class="action-bar-start">
+            <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="ActivateAsync" />
+            <ActionButton Key="Claim.SelectClaimable" Disabled="@(!actions.SelectClaimable)" OnClick="SelectClaimable" />
+            <ActionButton Key="Billing.RecordClaimOutcome" Disabled="@(!actions.RecordOutcome || _invoices.Count == 0 || _busy)" OnClick="() => _dialog = ClaimDialog.Outcome" />
+        </div>
+        <p class="action-bar-status is-@(_status?.Tone ?? SelectionTone)" role="status" data-state="status">@(_status?.Text ?? SelectionSummary)</p>
+        <div class="action-bar-end">
+            <ActionButton Key="Billing.SubmitClaim" Primary="true" Disabled="@(!actions.Submit || _busy)" OnClick="AskSubmit" />
+        </div>
+    </footer>
+</div>
+
+@switch (_dialog)
+{
+    case ClaimDialog.Submit when Ticked is { Count: > 0 } ticked:
+        <ConfirmPrompt Title="@Texts["Billing.SubmitClaim"]" Message="@Texts.T("Claim.ConfirmSubmit", ticked.Count, ticked[0].PayerName, Amount(ticked.Sum(t => t.PayerShare)))"
+                       OnYes="SubmitAsync" OnNo="CloseDialog" />
+        break;
+
+    case ClaimDialog.Outcome:
+        <ClaimOutcomeDialog InvoiceCount="_invoices.Count" OnConfirm="RecordOutcomeAsync" OnCancel="CloseDialog" />
+        break;
+
+    case ClaimDialog.Message when _message is { } message:
+        <Modal Name="claims-message" Title="@message.Title" OnCancel="CloseDialog">
+            <ChildContent><p class="prompt-text">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum ClaimDialog { None, Submit, Outcome, Message }
+
+    private sealed record Message(string Title, string Text);
+
+    private IReadOnlyList<ClaimCandidateRow> _candidates = [];
+    private IReadOnlyList<ClaimBatchRow> _batches = [];
+    private IReadOnlyList<ClaimInvoiceRow> _invoices = [];
+    private readonly HashSet<Guid> _ticked = [];
+    private Guid? _currentCandidate;
+    private string? _batchReference, _invoicesOf;
+    private int _window = ClaimScreenRules.DefaultWindow;
+    private bool _busy;
+
+    private ClaimDialog _dialog;
+    private Message? _message;
+    private (string Text, string Tone)? _status;
+
+    private IReadOnlyList<ClaimCandidateRow> Ticked => [.. _candidates.Where(c => _ticked.Contains(c.InvoiceId))];
+
+    private ClaimBatchRow? SelectedBatch => _batches.FirstOrDefault(b => b.ClaimReference == _batchReference) ?? _batches.FirstOrDefault();
+
+    private ClaimActions Actions => ClaimScreenRules.Actions(Ticked, _candidates, SelectedBatch, Context.User);
+
+    private int Blocked => _candidates.Count(c => !c.IsClaimable);
+    private int Chasing => _batches.Count(b => b.NeedsChasing(Clock.Today));
+
+    protected override Task OnInitializedAsync() => ActivateAsync();
+
+    private async Task ActivateAsync()
+    {
+        try
+        {
+            var candidates = await Scopes.RunAsync<BillingService, Result<IReadOnlyList<ClaimCandidateRow>>>(s => s.GetClaimCandidatesAsync());
+
+            if (candidates.IsFailure)
+            {
+                Show(Texts["Nav.Claims"], Texts.Describe(candidates.Errors));
+                return;
+            }
+
+            _candidates = candidates.Value;
+            _ticked.IntersectWith(_candidates.Select(c => c.InvoiceId));
+            await LoadBatchesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the claim register failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task LoadBatchesAsync()
+    {
+        var result = await Scopes.RunAsync<BillingService, Result<IReadOnlyList<ClaimBatchRow>>>(s => s.GetClaimBatchesAsync(_window));
+
+        if (result.IsFailure)
+        {
+            Show(Texts["Nav.Claims"], Texts.Describe(result.Errors));
+            return;
+        }
+
+        _batches = result.Value;
+        await LoadInvoicesAsync(force: true);
+    }
+
+    private async Task LoadInvoicesAsync(bool force = false)
+    {
+        if (SelectedBatch is not { } batch)
+        {
+            _invoices = [];
+            _invoicesOf = null;
+            return;
+        }
+
+        if (!force && _invoicesOf == batch.ClaimReference) return;
+
+        var result = await Scopes.RunAsync<BillingService, Result<IReadOnlyList<ClaimInvoiceRow>>>(s => s.GetClaimInvoicesAsync(batch.ClaimReference, batch.PayerId));
+
+        if (result.IsFailure)
+        {
+            Show(Texts["Nav.Claims"], Texts.Describe(result.Errors));
+            return;
+        }
+
+        _invoices = result.Value;
+        _invoicesOf = batch.ClaimReference;
+    }
+
+    private async Task SelectBatchAsync(ClaimBatchRow row)
+    {
+        _batchReference = row.ClaimReference;
+        await LoadInvoicesAsync();
+    }
+
+    private async Task WindowChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var days)) _window = days;
+        await LoadBatchesAsync();
+    }
+
+    private void Toggle(Guid id)
+    {
+        if (!_ticked.Remove(id)) _ticked.Add(id);
+        _status = null;
+    }
+
+    // ---- What the screen says ------------------------------------------------------------------------
+
+    private string Amount(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string CandidateHeading
+    {
+        get
+        {
+            var claimable = _candidates.Count(c => c.IsClaimable);
+            var waiting = Amount(_candidates.Where(c => c.IsClaimable).Sum(c => c.PayerShare));
+            return Blocked == 0
+                ? Texts.T("Claim.ClaimableSummary", claimable, waiting)
+                : Texts.T("Claim.ClaimableSummaryBlocked", claimable, waiting, Blocked);
+        }
+    }
+
+    private string BatchHeading
+    {
+        get
+        {
+            var unsettled = Amount(_batches.Sum(b => b.Unsettled));
+            return Chasing == 0
+                ? Texts.T("Claim.BatchSummary", _batches.Count, unsettled)
+                : Texts.T("Claim.BatchSummaryChasing", _batches.Count, unsettled, Chasing);
+        }
+    }
+
+    /// <summary>What the ticked invoices come to, or that they span several payers.</summary>
+    private string? SelectionSummary
+    {
+        get
+        {
+            var ticked = Ticked;
+            if (ticked.Count == 0) return null;
+            var payers = ClaimScreenRules.PayerCount(ticked);
+            return payers > 1
+                ? Texts.T("Claim.MixedPayerSelection", ticked.Count, payers)
+                : Texts.T("Claim.SelectionSummary", ticked.Count, Amount(ticked.Sum(t => t.PayerShare)));
+        }
+    }
+
+    private string SelectionTone => ClaimScreenRules.PayerCount(Ticked) > 1 ? "critical" : "muted";
+
+    private string StateText(ClaimBatchRow row, ClaimBatchState state) => state switch
+    {
+        ClaimBatchState.NeedsChasing => Texts["Claim.NeedsChasing"],
+        ClaimBatchState.AwaitingOutcome => Texts["Claim.AwaitingOutcome"],
+        ClaimBatchState.PartlyRejected => Texts.T("Claim.PartlyRejected", row.RejectedCount),
+        _ => Texts["Claim.Accepted"]
+    };
+
+    private static string StateTone(ClaimBatchState state) => state switch
+    {
+        ClaimBatchState.NeedsChasing => "Critical",
+        ClaimBatchState.AwaitingOutcome => "Info",
+        ClaimBatchState.PartlyRejected => "Warning",
+        _ => "Ok"
+    };
+
+    // ---- Actions -------------------------------------------------------------------------------------
+
+    private void CloseDialog()
+    {
+        _dialog = ClaimDialog.None;
+        _message = null;
+    }
+
+    private void Show(string title, string text)
+    {
+        _message = new Message(title, text);
+        _dialog = ClaimDialog.Message;
+    }
+
+    /// <summary>One payer's ready invoices: the highlighted row's when it can be claimed, else the first ready.</summary>
+    private void SelectClaimable()
+    {
+        var current = _candidates.FirstOrDefault(c => c.InvoiceId == _currentCandidate);
+        var payerId = ClaimScreenRules.PayerToSelect(current, _candidates);
+
+        _ticked.Clear();
+        _ticked.UnionWith(ClaimScreenRules.ClaimableOf(_candidates, payerId).Select(c => c.InvoiceId));
+        _status = null;
+    }
+
+    private void AskSubmit()
+    {
+        if (Actions.Submit && !_busy) _dialog = ClaimDialog.Submit;
+    }
+
+    private async Task SubmitAsync()
+    {
+        var ticked = Ticked;
+        CloseDialog();
+        if (ticked.Count == 0) return;
+
+        var title = Texts["Billing.SubmitClaim"];
+        var value = Amount(ticked.Sum(t => t.PayerShare));
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<BillingService, Result<ClaimSubmission>>(s => s.SubmitClaimBatchAsync([.. ticked.Select(t => t.InvoiceId)]));
+
+            if (result.IsFailure)
+            {
+                Show(title, Texts.Describe(result.Errors));
+                await ActivateAsync();
+                return;
+            }
+
+            // Sent, even if some were left out: the reference first, then why the others were not.
+            var batch = result.Value;
+            if (batch.Skipped.Count == 0)
+            {
+                _status = (Texts.T("Claim.Submitted", batch.Reference, batch.Submitted, value), "normal");
+            }
+            else
+            {
+                var partial = Texts.T("Claim.PartiallySubmitted", batch.Reference, batch.Submitted, batch.Skipped.Count);
+                _status = (partial, "critical");
+                Show(title, $"{partial}\n\n{Texts.Describe(batch.Skipped)}");
+            }
+
+            _ticked.Clear();
+            _batchReference = batch.Reference;
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Submitting a claim batch failed.");
+            Show(title, Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>The payer's answer, on every invoice of the batch highlighted.</summary>
+    private async Task RecordOutcomeAsync((ClaimStatus Outcome, string? Reason) answer)
+    {
+        CloseDialog();
+        if (SelectedBatch is not { } batch || _invoices.Count == 0) return;
+
+        var title = Texts["Billing.RecordClaimOutcome"];
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<BillingService, Result<ClaimOutcomeRecorded>>(s => s.RecordClaimOutcomeAsync(
+                [.. _invoices.Select(i => i.InvoiceId)], answer.Outcome, answer.Reason));
+
+            if (result.IsFailure)
+            {
+                Show(title, Texts.Describe(result.Errors));
+                await LoadBatchesAsync();
+                return;
+            }
+
+            if (result.Value.Skipped.Count > 0) Show(title, Texts.Describe(result.Value.Skipped));
+
+            _status = (Texts.T("Claim.OutcomeRecorded", batch.ClaimReference, result.Value.Updated), "normal");
+            await LoadBatchesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Recording the outcome of claim batch {Reference} failed.", batch.ClaimReference);
+            Show(title, Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
