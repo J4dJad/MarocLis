@@ -157,10 +157,8 @@ internal sealed class ResultHistoryDialog : Form
         if (_grid.Columns[e.ColumnIndex].Name != "value") return;
         if (_grid.Rows[e.RowIndex].Tag is not ResultTrendPoint point) return;
 
-        var outside = (series.LowerLimit is { } low && point.Value < low)
-                      || (series.UpperLimit is { } high && point.Value > high);
-
-        if (outside) e.CellStyle!.ForeColor = UiTheme.Abnormal;
+        if (ResultEntryRules.IsOutsideInterval(point.Value, series.LowerLimit, series.UpperLimit))
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
     }
 }
 
@@ -182,15 +180,10 @@ internal static class ResultHistory
             .Select(p => new ResultTrendPoint(p.ValidatedAt, p.Value, p.ValueOperator, p.AccessionNumber, p.Imported))
             .ToList();
 
-        ResultTrendPoint? current = null;
-
         // Dated now: it is not released, and when it is that is the date it will carry.
-        if (ResultEntryRules.TryParseTyped(typed, out var oper, out var value)
-            && !string.Equals(typed?.Trim(), row.CurrentValue?.Trim(), StringComparison.Ordinal))
-            current = new ResultTrendPoint(DateTimeOffset.Now, value, oper, accessionNumber);
-        else if (row.NumericValue is { } stored
-                 && row.Status is not (TestResultStatus.Validated or TestResultStatus.Reported))
-            current = new ResultTrendPoint(DateTimeOffset.Now, stored, row.ValueOperator, accessionNumber);
+        var current = ResultEntryRules.HistoryCurrent(row, typed) is { } point
+            ? new ResultTrendPoint(DateTimeOffset.Now, point.Value, point.Operator, accessionNumber)
+            : null;
 
         return new ResultTrendSeries(points, row.LowerLimit, row.UpperLimit, row.Decimals, row.UnitSymbol,
                                      current);

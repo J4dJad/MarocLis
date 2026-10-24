@@ -108,7 +108,15 @@ public sealed record BenchWorksheetContext(
 /// <summary>The choices offered before printing.</summary>
 public sealed record BenchWorksheetOptions(
     IReadOnlyList<BenchDepartmentOption> Departments,
-    IReadOnlyList<BenchInstrumentOption> Instruments);
+    IReadOnlyList<BenchInstrumentOption> Instruments)
+{
+    /// <summary>
+    /// The analysers offered under a discipline: all of them for « Toutes les disciplines », else
+    /// those of that discipline and those attached to none — a shared analyser runs every bench.
+    /// </summary>
+    public IReadOnlyList<BenchInstrumentOption> InstrumentsFor(Guid? departmentId) =>
+        [.. Instruments.Where(i => departmentId is null || i.DepartmentId is null || i.DepartmentId == departmentId)];
+}
 
 /// <summary>A discipline, with the number of analyses waiting in it so an empty bench is visible before printing.</summary>
 /// <summary>A dossier with results still to enter, for the entry screen's worklist.</summary>

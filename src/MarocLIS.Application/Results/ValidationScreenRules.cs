@@ -1,5 +1,8 @@
 using System.Globalization;
+using MarocLIS.Application.Abstractions;
 using MarocLIS.Domain.Catalog;
+using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Results;
 
@@ -29,6 +32,22 @@ public sealed record ValidationAlert(ValidationTone Tone, string Key, params obj
 
 /// <summary>One line of the « Contexte » card: a badge in a pill, then a sentence.</summary>
 public sealed record ValidationContextLine(ValidationTone Tone, string Badge, string Key, params object[] Args);
+
+/// <summary>« 14 sur 16 sélectionnés » and « Valider la sélection (14) »: the ticks, the tickable rows, and those a validation would release.</summary>
+public sealed record ValidationSelection(int Ticked, int Tickable, int ToValidate);
+
+/// <summary>What the bottom bar and its menu offer on the open file, by its rows and the operator's rights.</summary>
+public sealed record ValidationActions(
+    bool Validate,
+    bool Communicate,
+    bool Release,
+    bool History,
+    bool SelectAll,
+    bool Unvalidate,
+    bool OpenOrder)
+{
+    public static readonly ValidationActions None = new(false, false, false, false, false, false, false);
+}
 
 /// <summary>
 /// The rules of the « Validation biologique » screen that need no window: which chip a file falls
@@ -215,5 +234,112 @@ public static class ValidationScreenRules
             lines.Add(new(ValidationTone.Warning, "!", "Flag.SampleDefect"));
 
         return lines;
+    }
+
+    /// <summary>Whether a listed row's tick box can be ticked: awaiting release, or released and listed to be withdrawn.</summary>
+    public static bool IsTickable(ResultEntryRow row, bool showValidated) =>
+        IsReleasable(row) || IsWithdrawable(row, showValidated);
+
+    /// <summary>The counts under the results and on « Valider la sélection ».</summary>
+    public static ValidationSelection Selection(IEnumerable<ResultEntryRow> listed, Func<Guid, bool> isTicked, bool showValidated)
+    {
+        int tickable = 0, ticked = 0, toValidate = 0;
+
+        foreach (var row in listed.Where(r => IsTickable(r, showValidated)))
+        {
+            tickable++;
+            if (!isTicked(row.TestResultId)) continue;
+            ticked++;
+            if (!IsReleased(row)) toValidate++;
+        }
+
+        return new ValidationSelection(ticked, tickable, toValidate);
+    }
+
+    /// <summary>
+    /// The decisions a validation sends, one per listed value awaiting release, ticked or not: a
+    /// released row is listed for withdrawal only, and validating it again means nothing. The
+    /// biologist's comment goes with the line it was typed for, and only if that line is validated.
+    /// </summary>
+    public static List<ValidationDecision> Decisions(IEnumerable<ResultEntryRow> listed, Func<Guid, bool> isTicked,
+                                                     Func<Guid, string?> commentOf) =>
+    [
+        .. listed.Where(r => !r.IsHeading && !IsReleased(r))
+                 .Select(r =>
+                 {
+                     var selected = isTicked(r.TestResultId);
+                     var comment = selected && commentOf(r.TestResultId) is { Length: > 0 } text
+                         ? new MultilingualText(text)
+                         : null;
+                     return new ValidationDecision(r.TestResultId, selected, comment);
+                 })
+    ];
+
+    /// <summary>
+    /// The ticked values covered by an out-of-control quality control: their override needs its
+    /// justification collected before the attempt, not as a refusal afterwards.
+    /// </summary>
+    public static IReadOnlyList<ResultEntryRow> QcAffected(IEnumerable<ResultEntryRow> listed, Func<Guid, bool> isTicked) =>
+        [.. listed.Where(r => !r.IsHeading && !IsReleased(r) && isTicked(r.TestResultId)
+                              && r.Flags.HasFlag(ResultFlag.QcOutOfControl))];
+
+    /// <summary>The decisions with the QC override's justification on each validated value it covers.</summary>
+    public static List<ValidationDecision> WithQcJustification(IEnumerable<ValidationDecision> decisions,
+                                                               IEnumerable<ResultEntryRow> rows, string justification)
+    {
+        var covered = rows.Where(r => r.Flags.HasFlag(ResultFlag.QcOutOfControl)).Select(r => r.TestResultId).ToHashSet();
+        return [.. decisions.Select(d => d.Validate && covered.Contains(d.TestResultId)
+                                        ? d with { QcOverrideJustification = justification }
+                                        : d)];
+    }
+
+    /// <summary>
+    /// The releases a withdrawal takes back: the ticked rows already released. The ticked rows
+    /// awaiting release are what « Valider » is for.
+    /// </summary>
+    public static IReadOnlyList<Guid> Withdrawals(IEnumerable<ResultEntryRow> listed, Func<Guid, bool> isTicked) =>
+        [.. listed.Where(r => !r.IsHeading && IsReleased(r) && isTicked(r.TestResultId)).Select(r => r.TestResultId)];
+
+    /// <summary>
+    /// « Tout sélectionner »: what awaits release — released rows are ticked one by one, on purpose
+    /// — all ticked, or all unticked once they all are.
+    /// </summary>
+    public static (IReadOnlyList<Guid> Rows, bool Tick) ToggleAll(IEnumerable<ResultEntryRow> listed, Func<Guid, bool> isTicked,
+                                                                  bool showValidated)
+    {
+        var toggleable = listed.Where(r => IsTickable(r, showValidated) && !IsReleased(r)).Select(r => r.TestResultId).ToList();
+        return (toggleable, toggleable.Any(id => !isTicked(id)));
+    }
+
+    /// <summary>The critical values of the file nobody has been told about: only these are called.</summary>
+    public static IReadOnlyList<ResultEntryRow> CriticalToCommunicate(IEnumerable<ResultEntryRow> rows) =>
+        [.. rows.Where(r => r.NeedsCriticalCommunication)];
+
+    /// <summary>
+    /// Whether the selected line takes the biologist's comment: only a line awaiting release, which
+    /// writes it onto the result when validated, and only for someone who may validate.
+    /// </summary>
+    public static bool TakesComment(ResultEntryRow? row, ICurrentUser user) =>
+        row is not null && IsReleasable(row) && user.Has(Permissions.Results.BiologicalValidate);
+
+    /// <summary>
+    /// The bar's actions on the open file: « Valider » once something is listed; « Résultats
+    /// critiques » while a value awaits its call; « Compte rendu » once a value is validated
+    /// (<see cref="CanIssueReport"/>); the history on a measured value; « Dévalider » only when
+    /// something has been released — retracting nothing is no action. Each with its right.
+    /// </summary>
+    public static ValidationActions Actions(IReadOnlyCollection<ResultEntryRow> sheetRows, int listedCount,
+                                            ResultEntryRow? selected, ICurrentUser user)
+    {
+        var loaded = listedCount > 0;
+
+        return new ValidationActions(
+            Validate: loaded && user.Has(Permissions.Results.BiologicalValidate),
+            Communicate: loaded && sheetRows.Any(r => r.NeedsCriticalCommunication) && user.Has(Permissions.Results.EnterCritical),
+            Release: loaded && CanIssueReport(sheetRows) && user.Has(Permissions.Reports.Print),
+            History: loaded && ResultEntryRules.IsCharted(selected) && user.Has(Permissions.Results.View),
+            SelectAll: loaded,
+            Unvalidate: loaded && user.Has(Permissions.Results.Unvalidate) && sheetRows.Any(r => !r.IsHeading && IsReleased(r)),
+            OpenOrder: user.Has(Permissions.Orders.View));
     }
 }

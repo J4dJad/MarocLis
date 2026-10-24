@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Results;
 using MarocLIS.Desktop.Infrastructure;
@@ -871,21 +872,13 @@ public sealed class ResultEntryView : LocalizedView
         if (_grid.Rows[e.RowIndex].Tag is not Guid id) return;
         if (!_rowsById.TryGetValue(id, out var row)) return;
 
-        if (row.IsAwaitingSample)
+        // A tube not received takes nothing; a validated value cannot be edited in the grid: it
+        // needs the revision path, with a recorded reason (ResultEntryRules.EditRefusal).
+        if (ResultEntryRules.EditRefusal(row) is { } refusal)
         {
             e.Cancel = true;
             _status.ForeColor = UiTheme.Abnormal;
-            _status.Text = T("Result_SampleNotReceived", row.ParameterCode);
-            return;
-        }
-
-        // A validated value cannot be edited in the grid: it needs the revision path, with a
-        // recorded reason, because a released figure may already have been acted on.
-        if (row.Status is TestResultStatus.Validated or TestResultStatus.Reported)
-        {
-            e.Cancel = true;
-            _status.ForeColor = UiTheme.Abnormal;
-            _status.Text = T("Result_ValidatedRequiresRevision");
+            _status.Text = T(refusal, row.ParameterCode);
         }
     }
 
@@ -1008,15 +1001,9 @@ public sealed class ResultEntryView : LocalizedView
 
     /// <summary>The indicator pill of an interpretation; null for a normal or uninterpretable value.</summary>
     private (string Text, (Color Back, Color Fore) Colours)? Indicator(ResultInterpretation interpretation) =>
-        interpretation switch
-        {
-            ResultInterpretation.High => ($"▲ {T("ResultEntry.FlagHigh")}", EntryPaint.Warning),
-            ResultInterpretation.Low => ($"▼ {T("ResultEntry.FlagLow")}", EntryPaint.Info),
-            ResultInterpretation.CriticalHigh => ($"▲▲ {T("ResultEntry.FlagCritical")}", EntryPaint.Critical),
-            ResultInterpretation.CriticalLow => ($"▼▼ {T("ResultEntry.FlagCritical")}", EntryPaint.Critical),
-            ResultInterpretation.Abnormal => ($"◆ {T("Interpretation.Abnormal")}", EntryPaint.Warning),
-            _ => null
-        };
+        ResultEntryRules.Indicator(interpretation) is { } indicator
+            ? ($"{indicator.Arrow} {T(indicator.Key)}", ValidationPaint.Colours(indicator.Tone))
+            : null;
 
     /// <summary>A section row, « CODE · SECTEUR », drawn across the whole line.</summary>
     private void PaintSectionRow(object? sender, DataGridViewRowPostPaintEventArgs e)
@@ -1065,6 +1052,7 @@ public sealed class ResultEntryView : LocalizedView
         }
 
         var now = DateTimeOffset.Now;
+        var pill = ResultEntryRules.WorklistPill(order, _progress.GetValueOrDefault(accession), now);
         var late = order.DueAt is { } due && due < now;
         const int pad = 14;
         var inner = new Rectangle(bounds.X + pad, bounds.Y + 9, bounds.Width - 2 * pad, bounds.Height - 18);
@@ -1075,23 +1063,23 @@ public sealed class ResultEntryView : LocalizedView
 
         // Line 1: the name, and the pill at the far end.
         // Every value in: the file stays listed for its technical validation, and says so.
-        var known = _progress.TryGetValue(accession, out var progress);
-        var complete = known && progress!.Total > 0 && progress.Entered >= progress.Total;
-        var pillText = complete
-            ? T("ResultEntry.ReadyToValidate")
-            : late
-                ? T("ResultEntry.Late")
-                : known
-                    ? $"{progress!.Entered} / {progress.Total}"
-                    : string.Empty;
+        var progress = _progress.GetValueOrDefault(accession);
+        var complete = pill == EntryWorklistPill.ReadyToValidate;
+        var pillText = pill switch
+        {
+            EntryWorklistPill.ReadyToValidate => T("ResultEntry.ReadyToValidate"),
+            EntryWorklistPill.Late => T("ResultEntry.Late"),
+            EntryWorklistPill.Progress => $"{progress!.Entered} / {progress.Total}",
+            _ => string.Empty
+        };
         var pillSize = pillText.Length == 0 ? Size.Empty : EntryPaint.MeasurePill(pillText, UiTheme.SmallBold, 8);
         var topLine = new Rectangle(inner.X, inner.Y, inner.Width, 20);
 
         if (pillSize.Width > 0)
         {
-            var pill = EntryPaint.Mirror(new Rectangle(topLine.Right - pillSize.Width, topLine.Y + 1,
-                                                       pillSize.Width, pillSize.Height), bounds, rtl);
-            EntryPaint.DrawPill(graphics, pill, pillText, UiTheme.SmallBold,
+            var pillBounds = EntryPaint.Mirror(new Rectangle(topLine.Right - pillSize.Width, topLine.Y + 1,
+                                                             pillSize.Width, pillSize.Height), bounds, rtl);
+            EntryPaint.DrawPill(graphics, pillBounds, pillText, UiTheme.SmallBold,
                                 complete ? EntryPaint.Info : late ? EntryPaint.Critical : EntryPaint.Waiting, rtl);
         }
 
@@ -1405,10 +1393,7 @@ public sealed class ResultEntryView : LocalizedView
         var term = _scan.Text.Trim();
 
         var shown = _pending
-            .Where(o => _sectorFilter is null || SectorsOf(o).Contains(_sectorFilter, StringComparer.Ordinal))
-            .Where(o => term.Length == 0
-                        || o.AccessionNumber.Contains(term, StringComparison.OrdinalIgnoreCase)
-                        || o.PatientName.Contains(term, StringComparison.CurrentCultureIgnoreCase))
+            .Where(o => ResultEntryRules.WorklistMatches(o, _sectorFilter, term, CultureInfo.CurrentCulture))
             .ToList();
 
         _renderingWorklist = true;
@@ -1658,9 +1643,9 @@ public sealed class ResultEntryView : LocalizedView
             if (!string.IsNullOrEmpty(row.InstrumentFlags))
                 gridRow.Cells[ColumnFlag].ToolTipText = $"{T("Result.InstrumentFlags")} : {row.InstrumentFlags}";
 
-            var locked = row.IsReadOnly || row.IsHeading;
+            var locked = !ResultEntryRules.TakesValue(row);
             gridRow.Cells[ColumnValue].ReadOnly = locked;
-            gridRow.Cells[ColumnComment].ReadOnly = row.IsHeading || row.IsAwaitingSample;
+            gridRow.Cells[ColumnComment].ReadOnly = !ResultEntryRules.TakesComment(row);
 
             if (row.IsAwaitingSample)
                 gridRow.Cells[ColumnValue].ToolTipText = T("Result_SampleNotReceived", row.ParameterCode);
@@ -1680,7 +1665,7 @@ public sealed class ResultEntryView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
 
         // Technical validation only makes sense once something has been entered.
-        _validate.Enabled = sheet.Rows.Any(r => r.Status == TestResultStatus.Entered);
+        _validate.Enabled = ResultEntryRules.CanTechnicallyValidate(sheet.Rows);
         _history.Enabled = ResultHistory.IsCharted(SelectedRow());
         UpdateRowActions();
         ShowRemaining();
@@ -1753,11 +1738,8 @@ public sealed class ResultEntryView : LocalizedView
             _duePill.Show(string.Empty, EntryPaint.Waiting);
         }
 
-        var owed = sheet.Rows.Where(r => !r.IsHeading && !r.IsCalculated).ToList();
-        _progressPill.Show(owed.Count == 0
-                               ? string.Empty
-                               : T("ResultEntry.Progress", owed.Count(r => r.Status != TestResultStatus.Awaited), owed.Count),
-                           EntryPaint.Info);
+        var (entered, owed) = ResultEntryRules.Progress(sheet.Rows);
+        _progressPill.Show(owed == 0 ? string.Empty : T("ResultEntry.Progress", entered, owed), EntryPaint.Info);
     }
 
     /// <summary>
@@ -1772,14 +1754,7 @@ public sealed class ResultEntryView : LocalizedView
             return;
         }
 
-        var left = 0;
-        foreach (DataGridViewRow gridRow in _grid.Rows)
-        {
-            if (gridRow.Tag is not Guid id || !_rowsById.TryGetValue(id, out var row)) continue;
-            if (row.IsHeading || row.IsCalculated || row.Status != TestResultStatus.Awaited) continue;
-            if (!string.IsNullOrWhiteSpace(gridRow.Cells[ColumnValue].Value?.ToString())) continue;
-            left++;
-        }
+        var left = ResultEntryRules.RemainingToEnter(GridRows(), TypedValue);
 
         _remaining.Text = left switch
         {
@@ -1809,16 +1784,8 @@ public sealed class ResultEntryView : LocalizedView
             : "—";
 
     /// <summary>The analyser that sent the value, « Manuel » for a value keyed in, « — » before any value.</summary>
-    private string FormatOrigin(ResultEntryRow row, ResultEntryOrigin? origin)
-    {
-        if (row.IsHeading) return string.Empty;
-        if (row.IsCalculated || row.CurrentValue is null) return "—";
-
-        if (origin?.InstrumentName is { } name && name.For(Localizer.CurrentLanguage) is { Length: > 0 } text)
-            return text;
-
-        return origin?.InstrumentCode ?? T("ResultEntry.Manual");
-    }
+    private string FormatOrigin(ResultEntryRow row, ResultEntryOrigin? origin) =>
+        ResultEntryRules.Origin(row, origin, Localizer.CurrentLanguage) ?? T("ResultEntry.Manual");
 
     private void FocusFirstEditableCell()
     {
@@ -2012,36 +1979,27 @@ public sealed class ResultEntryView : LocalizedView
         await SubmitEntriesAsync(entries);
     }
 
-    /// <summary>The values and comments typed in the grid, except on <paramref name="except"/>.</summary>
-    private List<ResultEntry> CollectTypedEntries(Guid? except = null)
-    {
-        var entries = new List<ResultEntry>();
+    /// <summary>
+    /// The values and comments typed in the grid, except on <paramref name="except"/>: only what
+    /// actually changed is sent (ResultEntryRules.ChangedEntries), in the grid's order.
+    /// </summary>
+    private List<ResultEntry> CollectTypedEntries(Guid? except = null) =>
+        ResultEntryRules.ChangedEntries(GridRows(), TypedValue, TypedComment, except);
 
-        foreach (DataGridViewRow gridRow in _grid.Rows)
-        {
-            if (gridRow.Tag is not Guid id || id == except) continue;
-            if (!_rowsById.TryGetValue(id, out var row)) continue;
-            if (row.IsHeading || row.IsReadOnly) continue;
+    /// <summary>The sheet's rows in the order of the grid.</summary>
+    private IEnumerable<ResultEntryRow> GridRows() =>
+        _grid.Rows.Cast<DataGridViewRow>()
+             .Select(r => r.Tag is Guid id && _rowsById.TryGetValue(id, out var row) ? row : null)
+             .OfType<ResultEntryRow>();
 
-            var typed = gridRow.Cells[ColumnValue].Value?.ToString()?.Trim() ?? string.Empty;
-            var comment = gridRow.Cells[ColumnComment].Value?.ToString()?.Trim();
+    private DataGridViewRow? GridRowOf(Guid id) =>
+        _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Tag is Guid tag && tag == id);
 
-            // Only send what actually changed: resubmitting an unchanged value would stamp a new
-            // entry time and lose the original one.
-            var unchanged = string.Equals(typed, row.CurrentValue?.Trim() ?? string.Empty,
-                                          StringComparison.Ordinal)
-                            && string.Equals(comment ?? string.Empty,
-                                             row.TechnicalComment ?? string.Empty,
-                                             StringComparison.Ordinal);
+    /// <summary>What the value cell of a result holds now, typed or not.</summary>
+    private string? TypedValue(Guid id) => GridRowOf(id)?.Cells[ColumnValue].Value?.ToString();
 
-            if (unchanged || typed.Length == 0) continue;
-
-            entries.Add(new ResultEntry(id, typed, comment,
-                                        PrintTechnicalComment: !string.IsNullOrWhiteSpace(comment)));
-        }
-
-        return entries;
-    }
+    /// <summary>What the comment cell of a result holds now, typed or not.</summary>
+    private string? TypedComment(Guid id) => GridRowOf(id)?.Cells[ColumnComment].Value?.ToString();
 
     private async Task SubmitEntriesAsync(List<ResultEntry> entries)
     {
@@ -2095,16 +2053,12 @@ public sealed class ResultEntryView : LocalizedView
     private void UpdateRowActions()
     {
         var row = SelectedRow();
-        var canEnter = PermissionGate.Allows(Permissions.Results.Enter);
+        var actions = PermissionGate.User is { } user ? ResultEntryRules.RowActions(row, user) : ResultRowActions.None;
 
-        _notDone.Enabled = canEnter && IsKeyable(row) && row!.Status != TestResultStatus.NotDone;
-        _clearValue.Enabled = canEnter && IsKeyable(row) && row!.CurrentValue is not null;
-        // Both rights, as the service asks: with the withdrawal right alone the menu offered a
-        // correction the service then refused.
-        _correct.Enabled = PermissionGate.Allows(Permissions.Results.Unvalidate)
-                           && PermissionGate.Allows(Permissions.Results.Modify)
-                           && row is { IsHeading: false, IsCalculated: false }
-                           && row.Status is TestResultStatus.Validated or TestResultStatus.Reported;
+        _notDone.Enabled = actions.NotDone;
+        _clearValue.Enabled = actions.Clear;
+        // Both rights, as the service asks (ResultEntryRules.RowActions).
+        _correct.Enabled = actions.Correct;
         _comment.Enabled = row is not null && _grid.CurrentRow?.Cells[ColumnComment].ReadOnly == false;
     }
 
@@ -2259,7 +2213,7 @@ public sealed class ResultEntryView : LocalizedView
             Cursor = Cursors.Default;
             // As the reload left it: once every entered value is checked there is nothing more to
             // validate, and the button stays grey.
-            _validate.Enabled = _sheet?.Rows.Any(r => r.Status == TestResultStatus.Entered) == true;
+            _validate.Enabled = _sheet is { } open && ResultEntryRules.CanTechnicallyValidate(open.Rows);
         }
     }
 }

@@ -90,9 +90,7 @@ internal sealed class BenchWorksheetDialog : MasterDataEditor
         _instrument.Items.Clear();
         _instrument.Items.Add(new LookupChoice(null, Localizer["BenchSheet.AllInstruments"]));
 
-        foreach (var instrument in _options.Instruments.Where(i => departmentId is null
-                                                                   || i.DepartmentId is null
-                                                                   || i.DepartmentId == departmentId))
+        foreach (var instrument in _options.InstrumentsFor(departmentId))
         {
             _instrument.Items.Add(new LookupChoice(instrument.Id,
                                                    $"{instrument.Name.For(language)} ({instrument.Code})"));

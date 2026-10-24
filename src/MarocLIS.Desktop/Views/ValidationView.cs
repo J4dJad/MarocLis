@@ -964,15 +964,9 @@ public sealed class ValidationView : LocalizedView
 
     /// <summary>The indicator pill of an interpretation; null for a normal or uninterpretable value.</summary>
     private (string Text, (Color Back, Color Fore) Colours)? Indicator(ResultInterpretation interpretation) =>
-        interpretation switch
-        {
-            ResultInterpretation.High => ($"▲ {T("ResultEntry.FlagHigh")}", EntryPaint.Warning),
-            ResultInterpretation.Low => ($"▼ {T("ResultEntry.FlagLow")}", EntryPaint.Info),
-            ResultInterpretation.CriticalHigh => ($"▲▲ {T("ResultEntry.FlagCritical")}", EntryPaint.Critical),
-            ResultInterpretation.CriticalLow => ($"▼▼ {T("ResultEntry.FlagCritical")}", EntryPaint.Critical),
-            ResultInterpretation.Abnormal => ($"◆ {T("Interpretation.Abnormal")}", EntryPaint.Warning),
-            _ => null
-        };
+        ResultEntryRules.Indicator(interpretation) is { } indicator
+            ? ($"{indicator.Arrow} {T(indicator.Key)}", ValidationPaint.Colours(indicator.Tone))
+            : null;
 
     protected override void ApplyTexts()
     {
@@ -1551,35 +1545,23 @@ public sealed class ValidationView : LocalizedView
     /// </summary>
     private void UpdateMenu()
     {
-        var loaded = _details.Rows.Count > 0;
+        var actions = PermissionGate.User is { } user
+            ? ValidationScreenRules.Actions([.. _rowsById.Values], _details.Rows.Count, SelectedDetail(), user)
+            : ValidationActions.None;
 
-        _selectAll.Enabled = loaded;
-        _unvalidate.Enabled = loaded
-                              && PermissionGate.Allows(Permissions.Results.Unvalidate)
-                              && _rowsById.Values.Any(r => !r.IsHeading && ValidationScreenRules.IsReleased(r));
+        _selectAll.Enabled = actions.SelectAll;
+        _unvalidate.Enabled = actions.Unvalidate;
     }
 
     /// <summary>« 14 sur 16 sélectionnés » and « Valider la sélection (14) ».</summary>
     private void ShowSelectionCount()
     {
-        var tickable = 0;
-        var ticked = 0;
-        var toValidate = 0;
+        var selection = ValidationScreenRules.Selection(_listed, IsTicked, _showValidated.Checked);
 
-        foreach (DataGridViewRow gridRow in _details.Rows)
-        {
-            if (gridRow.Cells[ColumnSelected].ReadOnly) continue;
-            tickable++;
-
-            if (gridRow.Cells[ColumnSelected].Value is not true) continue;
-            ticked++;
-
-            if (gridRow.Tag is Guid id && _rowsById.TryGetValue(id, out var row) && !ValidationScreenRules.IsReleased(row))
-                toValidate++;
-        }
-
-        _selectionCount.Text = tickable == 0 ? string.Empty : T("Validation.SelectedCount", ticked, tickable);
-        ShowValidateCaption(toValidate);
+        _selectionCount.Text = selection.Tickable == 0
+            ? string.Empty
+            : T("Validation.SelectedCount", selection.Ticked, selection.Tickable);
+        ShowValidateCaption(selection.ToValidate);
     }
 
     private void ShowValidateCaption(int count)
@@ -1597,8 +1579,7 @@ public sealed class ValidationView : LocalizedView
     private void ShowComment()
     {
         var row = SelectedDetail();
-        var editable = row is not null && ValidationScreenRules.IsReleasable(row)
-                       && PermissionGate.Allows(Permissions.Results.BiologicalValidate);
+        var editable = PermissionGate.User is { } user && ValidationScreenRules.TakesComment(row, user);
 
         _showingComment = true;
         try
@@ -1702,16 +1683,19 @@ public sealed class ValidationView : LocalizedView
     private void ToggleAll()
     {
         // Selects what awaits release; released rows are ticked one by one, on purpose.
-        var toggleable = _details.Rows.Cast<DataGridViewRow>()
-            .Where(r => !r.Cells[ColumnSelected].ReadOnly
-                        && !(r.Tag is Guid id && _rowsById.TryGetValue(id, out var row)
-                             && ValidationScreenRules.IsReleased(row)))
-            .ToList();
+        var (rows, tick) = ValidationScreenRules.ToggleAll(_listed, IsTicked, _showValidated.Checked);
 
-        var target = toggleable.Any(r => r.Cells[ColumnSelected].Value is not true);
-
-        foreach (var row in toggleable) row.Cells[ColumnSelected].Value = target;
+        foreach (var id in rows)
+            if (GridRowOf(id) is { } gridRow) gridRow.Cells[ColumnSelected].Value = tick;
     }
+
+    /// <summary>Whether the grid line of a result is ticked.</summary>
+    private bool IsTicked(Guid id) => GridRowOf(id)?.Cells[ColumnSelected].Value is true;
+
+    private DataGridViewRow? GridRowOf(Guid id) =>
+        _details.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Tag is Guid tag && tag == id);
+
+    private string? CommentOf(Guid id) => _comments.TryGetValue(id, out var text) ? text : null;
 
     // ---- Validation --------------------------------------------------------------------------------
 
@@ -1741,20 +1725,9 @@ public sealed class ValidationView : LocalizedView
 
         _details.EndEdit();
 
-        var ids = new List<Guid>();
-
-        foreach (DataGridViewRow gridRow in _details.Rows)
-        {
-            if (gridRow.Tag is not Guid id) continue;
-            if (!_rowsById.TryGetValue(id, out var row) || row.IsHeading) continue;
-            if (gridRow.Cells[ColumnSelected].Value is not true) continue;
-
-            // Only a released result has a validation to withdraw; the ticked rows awaiting
-            // release are what the Validate button is for.
-            if (!ValidationScreenRules.IsReleased(row)) continue;
-
-            ids.Add(id);
-        }
+        // Only a released result has a validation to withdraw; the ticked rows awaiting
+        // release are what the Validate button is for.
+        var ids = ValidationScreenRules.Withdrawals(_listed, IsTicked);
 
         if (ids.Count == 0)
         {
@@ -1789,30 +1762,10 @@ public sealed class ValidationView : LocalizedView
 
         _details.EndEdit();
 
-        var decisions = new List<ValidationDecision>();
-        var qcAffected = new List<string>();
-
-        foreach (DataGridViewRow gridRow in _details.Rows)
-        {
-            if (gridRow.Tag is not Guid id) continue;
-            if (!_rowsById.TryGetValue(id, out var row) || row.IsHeading) continue;
-
-            // A released row is listed for un-validation only: validating it again means nothing.
-            if (ValidationScreenRules.IsReleased(row)) continue;
-
-            var selected = gridRow.Cells[ColumnSelected].Value is true;
-
-            if (selected && row.Flags.HasFlag(ResultFlag.QcOutOfControl))
-                qcAffected.Add(row.ParameterName.For(Localizer.CurrentLanguage));
-
-            // The biologist's comment goes with the line it was typed for, and is written onto the
-            // result only if that line is validated.
-            var comment = selected && _comments.TryGetValue(id, out var text)
-                ? new MultilingualText(text)
-                : null;
-
-            decisions.Add(new ValidationDecision(id, selected, comment));
-        }
+        var decisions = ValidationScreenRules.Decisions(_listed, IsTicked, CommentOf);
+        var qcAffected = ValidationScreenRules.QcAffected(_listed, IsTicked)
+            .Select(r => r.ParameterName.For(Localizer.CurrentLanguage))
+            .ToList();
 
         if (decisions.All(d => !d.Validate))
         {
@@ -1835,11 +1788,7 @@ public sealed class ValidationView : LocalizedView
 
             if (qcJustification is null) return;
 
-            decisions = [.. decisions.Select(d =>
-                d.Validate && _rowsById.TryGetValue(d.TestResultId, out var r)
-                           && r.Flags.HasFlag(ResultFlag.QcOutOfControl)
-                    ? d with { QcOverrideJustification = qcJustification }
-                    : d)];
+            decisions = ValidationScreenRules.WithQcJustification(decisions, _rowsById.Values, qcJustification);
         }
 
         _validate.Enabled = false;
@@ -1897,7 +1846,7 @@ public sealed class ValidationView : LocalizedView
         if (_sheet is not { } sheet) return;
 
         // Only the values not yet communicated: one already read back must not be called again.
-        var critical = sheet.Rows.Where(r => r.NeedsCriticalCommunication).ToList();
+        var critical = ValidationScreenRules.CriticalToCommunicate(sheet.Rows);
 
         if (critical.Count == 0) return;
 
