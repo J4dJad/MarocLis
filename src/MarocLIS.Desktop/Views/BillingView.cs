@@ -476,9 +476,7 @@ public sealed class BillingView : LocalizedView
         _statusFilter.Items.Clear();
         _statusFilter.Items.Add(new StatusChoice(null, T("Action.SelectAll")));
 
-        foreach (var status in (InvoiceStatus[])
-                 [InvoiceStatus.Issued, InvoiceStatus.PartiallyPaid,
-                  InvoiceStatus.Paid, InvoiceStatus.WrittenOff])
+        foreach (var status in BillingScreenRules.LedgerStatuses)
             _statusFilter.Items.Add(new StatusChoice(status, T($"InvoiceStatus.{status}")));
 
         _statusFilter.SelectedIndex = selected >= 0 ? selected : 0;
@@ -712,50 +710,20 @@ public sealed class BillingView : LocalizedView
 
         var selected = Selected<BillableOrderRow>(_pending);
 
-        if (selected.Count == 0)
+        // One patient, one payer, nothing invoiced or cancelled among them: the rules' (shared
+        // with the web), said here before the issue dialog is filled in for nothing.
+        if (BillingScreenRules.IssueRefusal(selected) is { } refusal)
         {
-            _status.ForeColor = UiTheme.TextSecondary;
-            _status.Text = T("Message.NothingSelected");
-            return;
-        }
+            if (refusal.IsInformation)
+            {
+                _status.ForeColor = UiTheme.TextSecondary;
+                _status.Text = T(refusal.Key);
+            }
+            else
+            {
+                _dialogs.Warn(T(refusal.Key, refusal.Args), T("Billing.IssueInvoice"));
+            }
 
-        // Several orders can share one invoice only if they belong to one patient — a single
-        // document addressed to two people is not a document anybody can settle.
-        if (selected.Select(s => s.PatientId).Distinct().Count() > 1)
-        {
-            _dialogs.Warn(T("Invoice_MultiplePatients"), T("Billing.IssueInvoice"));
-            return;
-        }
-
-        // An invoiced request is listed only for the deposit it still holds: it is refunded, not
-        // invoiced again. Named here, rather than the whole issue failing on one row nobody can spot.
-        var invoiced = selected.Where(s => s.InvoiceId is not null).ToList();
-
-        if (invoiced.Count > 0)
-        {
-            _dialogs.Warn(T("Invoice_OrderAlreadyInvoiced",
-                            string.Join(", ", invoiced.Select(s => s.AccessionNumber))),
-                          T("Billing.IssueInvoice"));
-            return;
-        }
-
-        // A cancelled request is listed for the deposit it still holds, to be refunded, not invoiced.
-        var cancelled = selected.Where(s => s.Status == Domain.Orders.LabOrderStatus.Cancelled).ToList();
-
-        if (cancelled.Count > 0)
-        {
-            _dialogs.Warn(T("Invoice_OrderCancelled", string.Join(", ", cancelled.Select(s => s.AccessionNumber))),
-                          T("Billing.IssueInvoice"));
-            return;
-        }
-
-        // Nor orders registered with different payers: each was split with its own at registration.
-        // The service refuses it too; said here before the issue dialog is filled in for nothing.
-        if (selected.Select(s => (s.PayerId, s.DirectBilling)).Distinct().Count() > 1)
-        {
-            _dialogs.Warn(T("Invoice_MultiplePayers",
-                            string.Join(", ", selected.Select(s => s.AccessionNumber))),
-                          T("Billing.IssueInvoice"));
             return;
         }
 
@@ -765,13 +733,12 @@ public sealed class BillingView : LocalizedView
         // payer has an agreement in force, without which its share cannot be claimed.
         Guid? payerOverride = null;
 
-        if (selected[0] is { PayerId: { } payerId, DirectBilling: false, PayerAgreementValid: true }
-            && selected.Any(s => s.PreviouslyInvoiced)
+        if (BillingScreenRules.ReinvoicePayer(selected) is { } payerId
             && _dialogs.Confirm(T("Billing.ReinvoiceToPayer", selected[0].PayerName ?? string.Empty),
                                 T("Billing.IssueInvoice")))
             payerOverride = payerId;
 
-        var total = Money.Of(selected.Sum(s => s.Total));
+        var total = BillingScreenRules.Gross(selected);
 
         // The confirmation and the discount are one dialog, not a confirm followed by an optional
         // second step: a discount decided after the operator has already confirmed the total is a
@@ -885,9 +852,7 @@ public sealed class BillingView : LocalizedView
         // Only the ones the chosen correction can actually apply to: a bounce is meaningless for
         // cash, a refund only gives back what the patient paid, and neither applies to a payment
         // already refunded.
-        var candidates = bounce
-            ? payments.Value.Where(p => p.CanBounce).ToList()
-            : payments.Value.Where(p => p.CanRefund).ToList();
+        var candidates = BillingScreenRules.CorrectionCandidates(payments.Value, bounce);
 
         if (candidates.Count == 0)
         {
@@ -905,7 +870,7 @@ public sealed class BillingView : LocalizedView
         var reason = _dialogs.PromptForReason(
             T(bounce ? "Payment.BouncePrompt" : "Payment.RefundPrompt",
               Money.Of(payment.Amount).Format(Localizer.CurrentLanguage), T($"PaymentMethod.{payment.Method}")),
-            T(bounce ? "Payment.MarkBounced" : "Payment.Refund"), maxLength: 500);
+            T(bounce ? "Payment.MarkBounced" : "Payment.Refund"), maxLength: BillingScreenRules.CorrectionReasonMaxLength);
 
         if (reason is null) return;
 
@@ -945,9 +910,7 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
-        var submitted = selected
-            .Where(i => i.ClaimStatus is not (ClaimStatus.NotApplicable or ClaimStatus.Prepared))
-            .ToList();
+        var submitted = BillingScreenRules.Submitted(selected);
 
         if (submitted.Count == 0)
         {
@@ -1000,22 +963,11 @@ public sealed class BillingView : LocalizedView
 
         var order = selected[0];
 
-        if (order.Status == Domain.Orders.LabOrderStatus.Cancelled)
+        // Cancelled, invoiced, or covered by the deposits held: the rules' (shared with the web).
+        if (BillingScreenRules.DepositRefusal(order) is { } refusal)
         {
-            _dialogs.Warn(T("Deposit_OrderCancelled", order.AccessionNumber), T("Deposit.Take"));
-            return;
-        }
-
-        if (order.InvoiceId is not null)
-        {
-            _dialogs.Warn(T("Invoice_OrderAlreadyInvoiced", order.AccessionNumber), T("Deposit.Take"));
-            return;
-        }
-
-        // The patient's share under direct billing, as the service caps it.
-        if (order.DepositCeiling <= 0m)
-        {
-            _dialogs.Info(T("Deposit.FullyCovered"), T("Deposit.Take"));
+            if (refusal.IsInformation) _dialogs.Info(T(refusal.Key, refusal.Args), T("Deposit.Take"));
+            else _dialogs.Warn(T(refusal.Key, refusal.Args), T("Deposit.Take"));
             return;
         }
 
@@ -1064,7 +1016,7 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
-        var held = deposits.Value.Where(d => d.Status == DepositStatus.Held && d.Remaining > 0m).ToList();
+        var held = BillingScreenRules.HeldDeposits(deposits.Value);
 
         if (held.Count == 0)
         {
@@ -1076,7 +1028,7 @@ public sealed class BillingView : LocalizedView
             T("Deposit.RefundPrompt", order.AccessionNumber,
               Money.Of(held.Sum(d => d.Remaining)).Format(Localizer.CurrentLanguage),
               string.Join(", ", held.Select(d => $"{d.Number} ({T($"PaymentMethod.{d.Method}")})"))),
-            T("Deposit.Refund"), maxLength: 500);
+            T("Deposit.Refund"), maxLength: BillingScreenRules.CorrectionReasonMaxLength);
 
         if (reason is null) return;
 
@@ -1123,16 +1075,9 @@ public sealed class BillingView : LocalizedView
 
         var invoice = selected[0];
 
-        if (invoice.PayerShare <= 0m
-            || invoice.ClaimStatus is ClaimStatus.NotApplicable or ClaimStatus.Prepared)
+        if (BillingScreenRules.SettlementRefusal(invoice) is { } refusal)
         {
-            _dialogs.Warn(T("Billing.NoSubmittedClaims"), T("Claim.Settlement"));
-            return;
-        }
-
-        if (invoice.PayerAcceptedAmount is not null)
-        {
-            _dialogs.Warn(T("Claim_SettlementAlreadyRecorded", invoice.Number), T("Claim.Settlement"));
+            _dialogs.Warn(T(refusal.Key, refusal.Args), T("Claim.Settlement"));
             return;
         }
 
@@ -1172,7 +1117,9 @@ public sealed class BillingView : LocalizedView
 
         var invoice = selected[0];
 
-        if (invoice.Outstanding <= 0m)
+        var block = BillingScreenRules.PaymentBlockOf(invoice);
+
+        if (block == PaymentBlock.Settled)
         {
             // The invoice named: a box reading « Réglée » alone did not say what was settled.
             _dialogs.Info($"{invoice.Number} — {T("InvoiceStatus.Paid")}", T("Payment.Title"));
@@ -1180,7 +1127,7 @@ public sealed class BillingView : LocalizedView
         }
 
         // What is left is the payer's share, settled through the claim.
-        if (invoice.PatientPayable <= 0m)
+        if (block == PaymentBlock.PayerShareOnly)
         {
             _dialogs.Info(T("Payment_ExceedsPatientShare",
                             Money.Of(0m).Format(Localizer.CurrentLanguage)));
@@ -1223,31 +1170,18 @@ public sealed class BillingView : LocalizedView
 
         var invoice = selected[0];
 
-        if (invoice.Kind == InvoiceKind.CreditNote)
+        // A credit note, one already reversed in full, or one whose claim was sent: refused by the
+        // service as well, said here before the reason is typed (the rules', shared with the web).
+        if (BillingScreenRules.CreditNoteRefusal(invoice) is { } refusal)
         {
-            _dialogs.Warn(T("Invoice_CannotCreditACreditNote"));
-            return;
-        }
-
-        // Already reversed in full: a second credit note would credit the same charge twice. The
-        // service refuses it as well; this saves the operator typing a reason for nothing.
-        if (invoice.Creditable <= 0m)
-        {
-            _dialogs.Warn(T("Invoice_AlreadyFullyCredited", invoice.Number));
-            return;
-        }
-
-        // Sent to the payer or answered by it: refused by the service as well, said here before
-        // the reason is typed.
-        if (Invoice.ClaimBlocksCreditNote(invoice.ClaimStatus))
-        {
-            _dialogs.Warn(T("Invoice_CreditNoteClaimSent", invoice.Number));
+            _dialogs.Warn(T(refusal.Key, refusal.Args));
             return;
         }
 
         var reason = _dialogs.PromptForReason(
             T("Billing.CreditNoteReasonPrompt", invoice.Number),
-            T("Billing.CreditNote"), minimumLength: 10, maxLength: 500);
+            T("Billing.CreditNote"), minimumLength: BillingScreenRules.CreditNoteReasonMinimumLength,
+            maxLength: BillingScreenRules.CorrectionReasonMaxLength);
 
         if (reason is null) return;
 
@@ -1282,9 +1216,7 @@ public sealed class BillingView : LocalizedView
     {
         _ledger.EndEdit();
 
-        var selected = Selected<InvoiceRow>(_ledger)
-            .Where(i => i.ClaimStatus is ClaimStatus.Prepared or ClaimStatus.Rejected)
-            .ToList();
+        var selected = BillingScreenRules.Claimable(Selected<InvoiceRow>(_ledger));
 
         if (selected.Count == 0)
         {
@@ -1346,27 +1278,18 @@ public sealed class BillingView : LocalizedView
     /// highlighted row when none is. Several ticked rows print nothing — which of them was meant is
     /// not something to guess with an accounting document.
     /// </summary>
-    private InvoiceRow? PrintTarget()
-    {
-        var ticked = Selected<InvoiceRow>(_ledger);
-
-        return ticked.Count switch
-        {
-            1 => ticked[0],
-            0 => _ledger.CurrentRow?.Tag as InvoiceRow,
-            _ => null
-        };
-    }
+    private InvoiceRow? PrintTarget() =>
+        BillingScreenRules.PrintTarget(Selected<InvoiceRow>(_ledger), _ledger.CurrentRow?.Tag as InvoiceRow);
 
     private void UpdatePrintButtons()
     {
-        var enabled = PrintTarget() is not null;
-        _printInvoice.Enabled = enabled;
-        _printReceipt.Enabled = enabled;
+        var actions = BillingScreenRules.Actions(_currentUser, PrintTarget());
+        _printInvoice.Enabled = actions.Print;
+        _printReceipt.Enabled = actions.Print;
 
         // The coded format is that of an invoice: a credit note prints as it always has.
-        _printStandard.Enabled = enabled;
-        _printCotation.Enabled = enabled && PrintTarget() is { Kind: InvoiceKind.Invoice };
+        _printStandard.Enabled = actions.Print;
+        _printCotation.Enabled = actions.PrintCotation;
     }
 
     /// <summary>
@@ -1494,8 +1417,7 @@ internal sealed class PaymentDialog : Form
         // On an invoice whose payer share is claimed from the payer, the patient's part only: asked
         // for the whole balance, the patient paid the payer's share too, and it was claimed again.
         : this(localizer, dialogs, $"{localizer["Payment.Title"]} — {invoice.Number}",
-               localizer[invoice.PatientPayable < invoice.Outstanding
-                   ? "Payment.PatientShareDue" : "Billing.Outstanding"],
+               localizer[BillingScreenRules.PaymentCeilingKey(invoice)],
                invoice.PatientPayable, invoice.InvoiceId, null)
     {
     }
@@ -1558,10 +1480,7 @@ internal sealed class PaymentDialog : Form
         _method.FlatStyle = FlatStyle.Flat;
         _method.Bounds = new Rectangle(20, 70, 200, UiTheme.InputHeight);
 
-        foreach (var method in (PaymentMethod[])
-                 [PaymentMethod.Cash, PaymentMethod.Card, PaymentMethod.Cheque,
-                  PaymentMethod.BankTransfer, PaymentMethod.BillOfExchange,
-                  PaymentMethod.MobilePayment])
+        foreach (var method in BillingScreenRules.CounterMethods)
             _method.Items.Add(new MethodChoice(method, _localizer[$"PaymentMethod.{method}"]));
 
         _method.SelectedIndex = 0;
@@ -1581,8 +1500,8 @@ internal sealed class PaymentDialog : Form
         _reference.Bounds = new Rectangle(20, 124, 200, UiTheme.InputHeight);
         _reference.Tag = UiTags.LatinValue;
         // The longest texts their columns hold: a longer one failed the save with an unexpected error.
-        _reference.MaxLength = 60;
-        _bank.MaxLength = 120;
+        _reference.MaxLength = BillingScreenRules.ReferenceMaxLength;
+        _bank.MaxLength = BillingScreenRules.BankMaxLength;
 
         _bankLabel.Location = new Point(240, 106);
         _bank.Bounds = new Rectangle(240, 124, 160, UiTheme.InputHeight);
@@ -1629,34 +1548,20 @@ internal sealed class PaymentDialog : Form
     /// <summary>Shows only the fields the chosen method actually needs.</summary>
     private void RefreshFieldVisibility()
     {
-        var method = SelectedMethod;
+        var fields = BillingScreenRules.FieldsFor(SelectedMethod);
 
-        var needsReference = method is PaymentMethod.Cheque or PaymentMethod.BankTransfer
-                                    or PaymentMethod.BillOfExchange or PaymentMethod.Card;
-
-        var needsBank = method is PaymentMethod.Cheque or PaymentMethod.BankTransfer
-                                or PaymentMethod.BillOfExchange;
-
-        var needsMaturity = method is PaymentMethod.Cheque or PaymentMethod.BillOfExchange;
-
-        _referenceLabel.Visible = _reference.Visible = needsReference;
-        _bankLabel.Visible = _bank.Visible = needsBank;
-        _maturityLabel.Visible = _maturity.Visible = needsMaturity;
+        _referenceLabel.Visible = _reference.Visible = fields.Reference;
+        _bankLabel.Visible = _bank.Visible = fields.Bank;
+        _maturityLabel.Visible = _maturity.Visible = fields.Maturity;
 
         RefreshWarning();
     }
 
     private void RefreshWarning()
     {
-        if (SelectedMethod != PaymentMethod.Cash || !TryParseAmount(out var amount))
-        {
-            _warning.Visible = false;
-            return;
-        }
-
         // Moroccan tax law penalises cash settlement above this threshold. Warned before the
         // money is taken, not after the receipt is printed.
-        if (amount > Payment.CashPaymentWarningThresholdMad)
+        if (BillingScreenRules.WarnsCash(SelectedMethod, _amount.Text))
         {
             _warning.Text = _localizer.Format("Payment_CashThresholdWarning",
                 Payment.CashPaymentWarningThresholdMad);
@@ -1679,45 +1584,26 @@ internal sealed class PaymentDialog : Form
 
     private void Accept()
     {
-        if (EditorValues.IsUnreadable(_amount.Text))
-        {
-            _dialogs.Warn(_localizer.Format("Result_NotANumber", _amount.Text.Trim()));
-            _amount.Focus();
-            _amount.SelectAll();
-            return;
-        }
-
-        if (!TryParseAmount(out var amount) || amount <= 0m)
-        {
-            _dialogs.Warn(_localizer["Payment_AmountMustBePositive"]);
-            _amount.Focus();
-            return;
-        }
-
-        if (amount > _ceiling)
-        {
-            _dialogs.Warn(_localizer.Format(_orderId is null ? "Payment_ExceedsOutstanding" : "Deposit_ExceedsOrderTotal",
-                Money.Of(_ceiling).Format(_localizer.CurrentLanguage)));
-            _amount.Focus();
-            return;
-        }
-
         var method = SelectedMethod;
 
-        if (_reference.Visible && string.IsNullOrWhiteSpace(_reference.Text)
-            && method is PaymentMethod.Cheque or PaymentMethod.BillOfExchange)
+        // The amount, its ceiling and the reference a method needs: the rules' (shared with the web).
+        if (BillingScreenRules.CheckPayment(_amount.Text, _ceiling, deposit: _orderId is not null, method,
+                                            _reference.Text) is { } refusal)
         {
-            _dialogs.Warn(_localizer["Payment_ReferenceRequired"]);
-            _reference.Focus();
+            _dialogs.Warn(refusal switch
+            {
+                { Typed: { } typed } => _localizer.Format(refusal.Key, typed),
+                { Amount: { } ceiling } => _localizer.Format(refusal.Key, Money.Of(ceiling).Format(_localizer.CurrentLanguage)),
+                _ => _localizer[refusal.Key]
+            });
+
+            var box = refusal.Field == "reference" ? _reference : _amount;
+            box.Focus();
+            if (refusal.Typed is not null) _amount.SelectAll();
             return;
         }
 
-        if (method == PaymentMethod.BankTransfer && string.IsNullOrWhiteSpace(_reference.Text))
-        {
-            _dialogs.Warn(_localizer["Payment_TransferReferenceRequired"]);
-            _reference.Focus();
-            return;
-        }
+        TryParseAmount(out var amount);
 
         var reference = string.IsNullOrWhiteSpace(_reference.Text) ? null : _reference.Text.Trim();
         var bank = string.IsNullOrWhiteSpace(_bank.Text) ? null : _bank.Text.Trim();

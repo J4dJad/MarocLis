@@ -3,7 +3,6 @@ using MarocLIS.Application.Billing;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
-using MarocLIS.Domain.Identity;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
 
@@ -133,9 +132,13 @@ public sealed class ClaimBatchView : LocalizedView
 
         // The answer of a batch and the state of an invoice as pills.
         FinanceUi.PillColumn(_batches, "outcome", row => row.Tag is ClaimBatchRow batch
-            ? batch.IsAwaitingOutcome
-                ? batch.NeedsChasing(_clock.Today) ? FinanceUi.PillCritical : FinanceUi.PillRunning
-                : batch.RejectedCount > 0 ? FinanceUi.PillWarning : FinanceUi.PillDone
+            ? ClaimScreenRules.State(batch, _clock.Today) switch
+            {
+                ClaimBatchState.NeedsChasing => FinanceUi.PillCritical,
+                ClaimBatchState.AwaitingOutcome => FinanceUi.PillRunning,
+                ClaimBatchState.PartlyRejected => FinanceUi.PillWarning,
+                _ => FinanceUi.PillDone
+            }
             : null);
 
         FinanceUi.PillColumn(_invoices, "status", row => row.Tag is ClaimInvoiceRow invoice
@@ -328,13 +331,13 @@ public sealed class ClaimBatchView : LocalizedView
 
         _window.Items.Clear();
 
-        foreach (var days in new[] { 30, 90, 180, 365 })
+        foreach (var days in ClaimScreenRules.Windows)
             _window.Items.Add(new EnumChoice(days, T("Report.WithinDays", days)));
 
         _window.SelectedIndex = selected >= 0 ? selected : 2;
     }
 
-    private int SelectedWindow => (_window.SelectedItem as EnumChoice)?.Value ?? 180;
+    private int SelectedWindow => (_window.SelectedItem as EnumChoice)?.Value ?? ClaimScreenRules.DefaultWindow;
 
     // ---- Loading -------------------------------------------------------------------------------------
 
@@ -441,11 +444,13 @@ public sealed class ClaimBatchView : LocalizedView
 
         foreach (var row in _batchRows)
         {
-            var outcome = row.IsAwaitingOutcome
-                ? row.NeedsChasing(today) ? T("Claim.NeedsChasing") : T("Claim.AwaitingOutcome")
-                : row.RejectedCount > 0
-                    ? T("Claim.PartlyRejected", row.RejectedCount)
-                    : T("Claim.Accepted");
+            var outcome = ClaimScreenRules.State(row, today) switch
+            {
+                ClaimBatchState.NeedsChasing => T("Claim.NeedsChasing"),
+                ClaimBatchState.AwaitingOutcome => T("Claim.AwaitingOutcome"),
+                ClaimBatchState.PartlyRejected => T("Claim.PartlyRejected", row.RejectedCount),
+                _ => T("Claim.Accepted")
+            };
 
             var index = _batches.Rows.Add(
                 row.ClaimReference,
@@ -619,16 +624,17 @@ public sealed class ClaimBatchView : LocalizedView
     {
         _candidates.EndEdit();
 
-        var payerId = _candidates.CurrentRow?.Tag is ClaimCandidateRow { IsClaimable: true } current
-            ? current.PayerId
-            : _candidates.Rows.Cast<DataGridViewRow>().Select(r => r.Tag).OfType<ClaimCandidateRow>()
-                .FirstOrDefault(c => c.IsClaimable)?.PayerId;
+        // The highlighted row's payer when it can be claimed, else the first one ready: the rules'.
+        var payerId = ClaimScreenRules.PayerToSelect(
+            _candidates.CurrentRow?.Tag as ClaimCandidateRow,
+            _candidates.Rows.Cast<DataGridViewRow>().Select(r => r.Tag).OfType<ClaimCandidateRow>());
+        var chosen = ClaimScreenRules.ClaimableOf(_candidateRows, payerId).Select(c => c.InvoiceId).ToHashSet();
 
         foreach (DataGridViewRow row in _candidates.Rows)
         {
             if (row.Tag is not ClaimCandidateRow candidate) continue;
 
-            row.Cells[ColSelected].Value = candidate.IsClaimable && candidate.PayerId == payerId;
+            row.Cells[ColSelected].Value = chosen.Contains(candidate.InvoiceId);
         }
 
         RefreshSelectionSummary();
@@ -646,7 +652,7 @@ public sealed class ClaimBatchView : LocalizedView
             return;
         }
 
-        var payers = ticked.Select(t => t.PayerId).Distinct().Count();
+        var payers = ClaimScreenRules.PayerCount(ticked);
         var value = Money.Of(ticked.Sum(t => t.PayerShare)).Format(Localizer.CurrentLanguage);
 
         _status.ForeColor = payers > 1 ? UiTheme.Critical : UiTheme.Accent;
@@ -663,20 +669,14 @@ public sealed class ClaimBatchView : LocalizedView
         var ticked = Ticked;
         var idle = !IsBusy;
 
-        var onePayer = idle && ticked.Count > 0
-                       && ticked.Select(t => t.PayerId).Distinct().Count() == 1;
+        // One payer per batch, and every member claimable: a payer that receives a batch containing
+        // another payer's invoices rejects the batch, not the invoice. Ticking prepares a
+        // transmission, so it is greyed like « Transmettre » for whoever may not send one.
+        var actions = ClaimScreenRules.Actions(ticked, _candidateRows, SelectedBatch, _currentUser);
 
-        // One payer per batch, and every member claimable. A payer that receives a batch containing
-        // another payer's invoices rejects the batch, not the invoice.
-        _submit.Enabled = onePayer && ticked.All(t => t.IsClaimable)
-                          && _currentUser.Has(Permissions.Billing.ExportAccounting);
-
-        // Ticking prepares a transmission: greyed, like « Transmettre », for whoever may not send one.
-        _selectClaimable.Enabled = _candidateRows.Any(c => c.IsClaimable)
-                                   && _currentUser.Has(Permissions.Billing.ExportAccounting);
-
-        _recordOutcome.Enabled = idle && SelectedBatch is not null
-                                 && _currentUser.Has(Permissions.Billing.ExportAccounting);
+        _submit.Enabled = idle && actions.Submit;
+        _selectClaimable.Enabled = actions.SelectClaimable;
+        _recordOutcome.Enabled = idle && actions.RecordOutcome;
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------

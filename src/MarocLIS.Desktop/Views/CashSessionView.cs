@@ -61,7 +61,7 @@ public sealed class CashSessionView : LocalizedView
     /// Variance the laboratory tolerates without an explanation, in dirham: the domain's, so the
     /// screen and the rule agree; the domain is the one that enforces it.
     /// </summary>
-    private const decimal ToleranceMad = CashSession.VarianceToleranceMad;
+    private const decimal ToleranceMad = CashDeskRules.ToleranceMad;
 
     public CashSessionView(BillingService billing, IUserDialogs dialogs,
                            ILocalizer localizer, ICultureManager cultureManager,
@@ -168,10 +168,10 @@ public sealed class CashSessionView : LocalizedView
 
         _explanation.Width = 420;
         // The longest explanation its column holds: a longer one failed the closing with an unexpected error.
-        _explanation.MaxLength = 1000;
+        _explanation.MaxLength = CashDeskRules.ExplanationMaxLength;
         // An amount, not free text: a run of digits beyond what the amount columns hold failed the
         // opening or the closing with an unexpected error.
-        _openingFloat.MaxLength = _counted.MaxLength = 12;
+        _openingFloat.MaxLength = _counted.MaxLength = CashDeskRules.AmountMaxLength;
 
         var countForm = new FlowLayoutPanel
         {
@@ -311,17 +311,12 @@ public sealed class CashSessionView : LocalizedView
         var lines = new List<string>
         {
             Line("Payment.OpeningFloat", summary.OpeningFloat),
-            new string('-', 50),
-            Line("PaymentMethod.Cash", summary.CashReceipts),
-            Line("PaymentMethod.Cheque", summary.ChequeReceipts),
-            Line("PaymentMethod.Card", summary.CardReceipts),
-            Line("PaymentMethod.BankTransfer", summary.TransferReceipts),
-            Line("PaymentMethod.BillOfExchange", summary.BillOfExchangeReceipts),
-            Line("PaymentMethod.MobilePayment", summary.MobileReceipts)
+            new string('-', 50)
         };
 
-        if (summary.CashRefunds > 0m) lines.Add(Line("Payment.Refunds", -summary.CashRefunds));
-        if (summary.CashWithdrawals > 0m) lines.Add(Line("Payment.Withdrawals", -summary.CashWithdrawals));
+        // The takings by method, then the cash refunds and the banking when there were any: the
+        // rules' (shared with the web).
+        lines.AddRange(CashDeskRules.Takings(summary).Select(line => Line(line.Key, line.Amount)));
 
         lines.Add(new string('-', 50));
 
@@ -350,7 +345,7 @@ public sealed class CashSessionView : LocalizedView
     {
         if (_summary is null) return;
 
-        if (!TryParseCounted(out var counted))
+        if (CashDeskRules.Variance(_counted.Text, _summary.ExpectedClosingCash) is not { } reading)
         {
             _variance.Text = "—";
             _variance.ForeColor = UiTheme.TextMuted;
@@ -358,12 +353,12 @@ public sealed class CashSessionView : LocalizedView
             return;
         }
 
-        var variance = Money.Round(counted - _summary.ExpectedClosingCash);
+        var variance = reading.Variance;
 
         _variance.Text = (variance > 0m ? "+" : string.Empty) +
                          Money.Of(variance).Format(Localizer.CurrentLanguage);
 
-        var beyondTolerance = CashSession.RequiresExplanation(variance);
+        var beyondTolerance = reading.RequiresExplanation;
 
         _variance.ForeColor = variance == 0m
             ? UiTheme.Normal
@@ -394,19 +389,14 @@ public sealed class CashSessionView : LocalizedView
 
     private async Task OpenSessionAsync()
     {
-        if (EditorValues.IsUnreadable(_openingFloat.Text))
+        if (CashDeskRules.CheckOpening(_openingFloat.Text) is { } refusal)
         {
-            _dialogs.Warn(Localizer.Format("Result_NotANumber", _openingFloat.Text.Trim()));
+            _dialogs.Warn(refusal.Typed is { } typed ? Localizer.Format(refusal.Key, typed) : T(refusal.Key));
             _openingFloat.Focus();
             return;
         }
 
-        if (!TryParseAmount(_openingFloat, out var opening) || opening < 0m)
-        {
-            _dialogs.Warn(T("Payment_AmountMustBePositive"));
-            _openingFloat.Focus();
-            return;
-        }
+        TryParseAmount(_openingFloat, out var opening);
 
         _open.Enabled = false;
 
@@ -443,11 +433,13 @@ public sealed class CashSessionView : LocalizedView
 
         if (string.IsNullOrWhiteSpace(answer)) return;
 
-        if (EditorValues.ParseDecimal(answer) is not { } amount || amount <= 0m)
+        if (CashDeskRules.CheckWithdrawal(answer) is { } refusal)
         {
-            _dialogs.Warn(Localizer.Format("Result_NotANumber", answer));
+            _dialogs.Warn(Localizer.Format(refusal.Key, answer));
             return;
         }
+
+        var amount = EditorValues.ParseDecimal(answer)!.Value;
 
         var reason = _dialogs.PromptForReason(
             T("Payment.WithdrawalReasonPrompt", $"{amount:N2}"),
@@ -473,32 +465,28 @@ public sealed class CashSessionView : LocalizedView
     {
         if (_summary is null) return;
 
-        if (EditorValues.IsUnreadable(_counted.Text))
-        {
-            _dialogs.Warn(Localizer.Format("Result_NotANumber", _counted.Text.Trim()));
-            _counted.Focus();
-            return;
-        }
-
-        if (!TryParseCounted(out var counted) || counted < 0m)
-        {
-            _dialogs.Warn(T("Payment_AmountMustBePositive"));
-            _counted.Focus();
-            return;
-        }
-
-        var variance = Money.Round(counted - _summary.ExpectedClosingCash);
         var explanation = _explanation.Text.Trim();
 
-        if (CashSession.RequiresExplanation(variance) && explanation.Length == 0)
+        // A count that reads and is not negative, and the explanation of a variance beyond the
+        // tolerance: the rules' (shared with the web).
+        if (CashDeskRules.CheckClosing(_counted.Text, _summary.ExpectedClosingCash, explanation) is { } refusal)
         {
-            _dialogs.Warn(
-                Localizer.Format("CashSession_VarianceExplanationRequired", variance),
-                T("Payment.CloseSession"));
+            if (refusal.Field == "explanation")
+            {
+                _dialogs.Warn(Localizer.Format(refusal.Key, refusal.Amount), T("Payment.CloseSession"));
+                _explanation.Focus();
+            }
+            else
+            {
+                _dialogs.Warn(refusal.Typed is { } typed ? Localizer.Format(refusal.Key, typed) : T(refusal.Key));
+                _counted.Focus();
+            }
 
-            _explanation.Focus();
             return;
         }
+
+        TryParseCounted(out var counted);
+        var variance = CashDeskRules.Variance(_counted.Text, _summary.ExpectedClosingCash)!.Variance;
 
         if (!_dialogs.Confirm(
                 T("Payment.ConfirmClose",

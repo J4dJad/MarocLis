@@ -150,7 +150,7 @@ internal sealed class ClaimOutcomeDialog : Form
         _dialogs = dialogs;
 
         // The longest text its column holds: a longer one failed the save with an unexpected error.
-        _reason.MaxLength = 500;
+        _reason.MaxLength = BillingScreenRules.ClaimReasonMaxLength;
 
         Text = localizer["Billing.RecordClaimOutcome"];
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -178,11 +178,7 @@ internal sealed class ClaimOutcomeDialog : Form
 
         // No "Settled" here: a batch answer records no money, so "Settled" left the payer's share
         // owing while reading as paid. Settlement goes through the per-invoice accepted amount.
-        foreach (var status in new[]
-                 {
-                     ClaimStatus.Accepted, ClaimStatus.PartiallyAccepted,
-                     ClaimStatus.Rejected, ClaimStatus.Resubmitted
-                 })
+        foreach (var status in BillingScreenRules.ClaimOutcomes)
         {
             _outcome.Items.Add(new EnumChoice((int)status, localizer[$"ClaimStatus.{status}"]));
         }
@@ -223,8 +219,7 @@ internal sealed class ClaimOutcomeDialog : Form
         RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
-    private bool ReasonRequired =>
-        Outcome is ClaimStatus.Rejected or ClaimStatus.PartiallyAccepted;
+    private bool ReasonRequired => BillingScreenRules.ClaimOutcomeNeedsReason(Outcome);
 
     private void RefreshReason()
     {
@@ -239,9 +234,9 @@ internal sealed class ClaimOutcomeDialog : Form
 
     private void Accept()
     {
-        if (ReasonRequired && string.IsNullOrWhiteSpace(_reason.Text))
+        if (BillingScreenRules.CheckClaimOutcome(Outcome, _reason.Text) is { } refusal)
         {
-            _dialogs.Warn(_localizer["Claim_RejectionReasonRequired"]);
+            _dialogs.Warn(_localizer[refusal.Key]);
             _reason.Focus();
             return;
         }
@@ -293,19 +288,14 @@ internal sealed class InvoiceIssueDialog : Form
     private bool _framed;
 
     /// <summary>Null rather than zero when no discount is granted, so the service skips the check.</summary>
-    internal decimal? DiscountAmount => ParsedDiscount is { } value and > 0m ? value : null;
+    internal decimal? DiscountAmount => DiscountEntry.Granted(_discount.Text, _gross);
 
     internal string? DiscountReason =>
         string.IsNullOrWhiteSpace(_reason.Text) ? null : _reason.Text.Trim();
 
     /// <summary>The approver typed in, when the discount is above the ceiling; null otherwise.</summary>
     internal DiscountApproval? Approval =>
-        _canDiscount && AboveCap
-            ? new DiscountApproval(_approver.Text.Trim(), _approverPassword.Text)
-            : null;
-
-    private bool AboveCap => ParsedDiscount is { } value && value > 0m && value <= _gross
-                             && _cap.Exceeds(value, _gross);
+        _canDiscount ? DiscountEntry.Approval(_discount.Text, _gross, _cap, _approver.Text, _approverPassword.Text) : null;
 
     /// <summary>
     /// The service refused the approval (wrong password, no right, the operator's own name): the
@@ -317,18 +307,6 @@ internal sealed class InvoiceIssueDialog : Form
         ActiveControl = string.IsNullOrWhiteSpace(_approver.Text) ? _approver : _approverPassword;
     }
 
-    private decimal? ParsedDiscount
-    {
-        get
-        {
-            // An amount ("50") or a percentage of the gross ("10 %"): the lab grants both. Both
-            // separators accepted: the keypad on a counter terminal produces a full stop and the
-            // French keyboard a comma, and the operator should not have to know which. The shared
-            // reader also takes the space French writes between thousands (« 1 200 »).
-            return EditorValues.ParseDiscount(_discount.Text, _gross);
-        }
-    }
-
     internal InvoiceIssueDialog(ILocalizer localizer, IUserDialogs dialogs,
                                 IReadOnlyList<BillableOrderRow> orders, Money gross,
                                 bool canDiscount, DiscountCapSettings? cap = null)
@@ -338,7 +316,7 @@ internal sealed class InvoiceIssueDialog : Form
         _gross = gross.Amount;
         _canDiscount = canDiscount;
         _cap = cap ?? DiscountCapSettings.Default;
-        _reason.MaxLength = 300;
+        _reason.MaxLength = BillingScreenRules.DiscountReasonMaxLength;
 
         Text = localizer["Billing.IssueInvoice"];
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -437,14 +415,14 @@ internal sealed class InvoiceIssueDialog : Form
             _approverLabel.Text = localizer["Billing.DiscountApprover"];
             _approverLabel.Location = new Point(20, 386);
             _approver.Location = new Point(20, 404);
-            _approver.MaxLength = 100;
+            _approver.MaxLength = DiscountEntry.ApproverMaxLength;
             // A user name is a Latin identifier, as at the sign-in screen.
             _approver.Tag = UiTags.LatinValue;
 
             _approverPasswordLabel.Text = localizer["Billing.DiscountApproverPassword"];
             _approverPasswordLabel.Location = new Point(270, 386);
             _approverPassword.Location = new Point(270, 404);
-            _approverPassword.MaxLength = 128;
+            _approverPassword.MaxLength = DiscountEntry.ApproverPasswordMaxLength;
             _approverPassword.UseSystemPasswordChar = true;
             _approverPassword.Tag = UiTags.LatinValue;
 
@@ -506,7 +484,10 @@ internal sealed class InvoiceIssueDialog : Form
 
     private void RefreshNet()
     {
-        if (ParsedDiscount is not { } discount || discount < 0m || discount > _gross)
+        // An amount ("50") or a percentage of the gross ("10 %"), read as the web reads it.
+        var reading = DiscountEntry.Read(_discount.Text, _gross, _cap);
+
+        if (!reading.IsValid)
         {
             _net.ForeColor = UiTheme.Critical;
             _net.Text = _localizer["Billing.DiscountInvalid"];
@@ -515,14 +496,15 @@ internal sealed class InvoiceIssueDialog : Form
         }
 
         var language = _localizer.CurrentLanguage;
+        var discount = reading.Discount!.Value;
 
-        if (discount > 0m && _cap.Exceeds(discount, _gross))
+        if (reading.AboveCap)
         {
             // Said where the net would be, in the warning colour: what the ceiling is, in dirhams
             // on this invoice, and that the discount needs an approval.
-            var ceiling = Money.Of(_cap.CapFor(_gross)).Format(language);
+            var ceiling = Money.Of(reading.Ceiling).Format(language);
             _net.ForeColor = UiTheme.Abnormal;
-            _net.Text = _cap.AmountCapApplies(_gross)
+            _net.Text = reading.AmountCapApplies
                 ? _localizer.Format("Billing.DiscountAboveCapAmount", ceiling)
                 : _localizer.Format("Billing.DiscountAboveCapPercent",
                                     _cap.MaxPercent.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture),
@@ -535,7 +517,7 @@ internal sealed class InvoiceIssueDialog : Form
         _net.ForeColor = UiTheme.Accent;
 
         // A percentage shows the dirhams it comes to, which is what the invoice will print.
-        _net.Text = EditorValues.IsPercentDiscount(_discount.Text)
+        _net.Text = reading.IsPercent
             ? _localizer.Format("Billing.DiscountAndNet", Money.Of(discount).Format(language),
                          Money.Of(_gross - discount).Format(language))
             : $"{_localizer["Billing.Net"]}   " + Money.Of(_gross - discount).Format(language);
@@ -543,46 +525,22 @@ internal sealed class InvoiceIssueDialog : Form
 
     private void Accept()
     {
-        if (_canDiscount)
+        // Checked here as well as in the domain so the operator is told before a transaction is
+        // opened, and told next to the field they have to fill; beyond the ceiling the approver's
+        // name and password are asked here. The service checks them in any case.
+        if (_canDiscount
+            && DiscountEntry.Check(_discount.Text, _gross, _cap, _reason.Text, _approver.Text, _approverPassword.Text)
+                is { } refusal)
         {
-            if (ParsedDiscount is not { } discount)
+            _dialogs.Warn(_localizer[refusal.Key], Text);
+            (refusal.Field switch
             {
-                _dialogs.Warn(_localizer["Billing.DiscountInvalid"], Text);
-                _discount.Focus();
-                return;
-            }
-
-            if (discount < 0m)
-            {
-                _dialogs.Warn(_localizer["Invoice_DiscountNegative"], Text);
-                _discount.Focus();
-                return;
-            }
-
-            if (discount > _gross)
-            {
-                _dialogs.Warn(_localizer["Invoice_DiscountExceedsGross"], Text);
-                _discount.Focus();
-                return;
-            }
-
-            // Checked here as well as in the domain so the operator is told before a transaction is
-            // opened, and told next to the field they have to fill.
-            if (discount > 0m && string.IsNullOrWhiteSpace(_reason.Text))
-            {
-                _dialogs.Warn(_localizer["Invoice_DiscountReasonRequired"], Text);
-                _reason.Focus();
-                return;
-            }
-
-            // Beyond the ceiling the approver's name and password are asked here; the service
-            // checks them, and refuses the discount without them in any case.
-            if (AboveCap && (string.IsNullOrWhiteSpace(_approver.Text) || string.IsNullOrEmpty(_approverPassword.Text)))
-            {
-                _dialogs.Warn(_localizer["Billing.DiscountApproverRequired"], Text);
-                (string.IsNullOrWhiteSpace(_approver.Text) ? _approver : _approverPassword).Focus();
-                return;
-            }
+                "reason" => _reason,
+                "approver" => _approver,
+                "password" => _approverPassword,
+                _ => (Control)_discount
+            }).Focus();
+            return;
         }
 
         DialogResult = DialogResult.OK;
@@ -627,8 +585,8 @@ internal sealed class PayerSettlementDialog : Form
         _localizer = localizer;
         _dialogs = dialogs;
         _invoice = invoice;
-        _remittance.MaxLength = 60;
-        _reason.MaxLength = 500;
+        _remittance.MaxLength = BillingScreenRules.RemittanceMaxLength;
+        _reason.MaxLength = BillingScreenRules.ClaimReasonMaxLength;
 
         Text = $"{localizer["Claim.Settlement"]} — {invoice.Number}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -643,7 +601,7 @@ internal sealed class PayerSettlementDialog : Form
         {
             // What the payer still owes: after a credit note, the original share overstated it and
             // the shortfall was computed on money the payer no longer owed.
-            Text = $"{localizer[invoice.PayerDue < invoice.PayerShare ? "Claim.PayerDue" : "Billing.PayerShare"]} : " +
+            Text = $"{localizer[BillingScreenRules.SettlementCeilingKey(invoice)]} : " +
                    Money.Of(invoice.PayerDue).Format(localizer.CurrentLanguage),
             Font = UiTheme.SectionTitle,
             ForeColor = UiTheme.Accent,
@@ -714,8 +672,7 @@ internal sealed class PayerSettlementDialog : Form
         return parsed is not null;
     }
 
-    private decimal Missing =>
-        TryParseAccepted(out var amount) ? Money.Round(_invoice.PayerDue - amount) : 0m;
+    private decimal Missing => BillingScreenRules.Shortfall(_accepted.Text, _invoice.PayerDue);
 
     private void RefreshShortfall()
     {
@@ -732,20 +689,16 @@ internal sealed class PayerSettlementDialog : Form
 
     private void Accept()
     {
-        if (!TryParseAccepted(out var amount) || amount < 0m || amount > _invoice.PayerDue)
+        if (BillingScreenRules.CheckSettlement(_accepted.Text, _invoice.PayerDue, _reason.Text) is { } refusal)
         {
-            _dialogs.Warn(_localizer.Format("Claim_AcceptedAmountInvalid",
-                Money.Of(_invoice.PayerDue).Format(_localizer.CurrentLanguage)));
-            _accepted.Focus();
+            _dialogs.Warn(refusal.Amount is { } due
+                ? _localizer.Format(refusal.Key, Money.Of(due).Format(_localizer.CurrentLanguage))
+                : _localizer[refusal.Key]);
+            (refusal.Field == "reason" ? _reason : _accepted).Focus();
             return;
         }
 
-        if (Missing > 0m && string.IsNullOrWhiteSpace(_reason.Text))
-        {
-            _dialogs.Warn(_localizer["Claim_RejectionReasonRequired"]);
-            _reason.Focus();
-            return;
-        }
+        TryParseAccepted(out var amount);
 
         AcceptedAmount = Money.Round(amount);
         DialogResult = DialogResult.OK;
