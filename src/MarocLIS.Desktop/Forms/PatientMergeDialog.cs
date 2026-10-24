@@ -1,3 +1,4 @@
+using MarocLIS.Application.Input;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Infrastructure.Queries;
 using MarocLIS.Localization;
@@ -65,7 +66,7 @@ internal sealed class PatientMergeDialog : Form
         _survivor.Bounds = new Rectangle(20, 68, 540, UiTheme.InputHeight);
 
         // Ordered by history depth: the file that has seen more orders is the one worth keeping.
-        foreach (var c in candidates.OrderByDescending(c => c.OrderCount))
+        foreach (var c in candidates)
         {
             _survivor.Items.Add(new Choice(c.Id,
                 $"{c.MedicalRecordNumber} — {c.FullName} ({c.OrderCount} {localizer["Order.Plural"]})"));
@@ -124,14 +125,14 @@ internal sealed class PatientMergeDialog : Form
                                              choice.Display.Split(" — ")[0]);
     }
 
-    private void RefreshOk() => _ok.Enabled = _reason.Text.Trim().Length >= 5
+    private void RefreshOk() => _ok.Enabled = ReasonRules.IsSufficient(_reason.Text, ReasonRules.MergeMinimumLength)
                                               && _survivor.SelectedItem is Choice;
 
     private void Accept()
     {
         if (_survivor.SelectedItem is not Choice choice) return;
 
-        if (_reason.Text.Trim().Length < 5)
+        if (!ReasonRules.IsSufficient(_reason.Text, ReasonRules.MergeMinimumLength))
         {
             _dialogs.Warn(_localizer["Message.ReasonRequiredPrompt"],
                           _localizer["Message.ReasonRequiredTitle"]);

@@ -1,3 +1,4 @@
+using MarocLIS.Application.Input;
 using MarocLIS.Domain.Common;
 using MarocLIS.Localization;
 
@@ -27,7 +28,7 @@ public interface IUserDialogs
     /// worse than no field at all.
     /// </summary>
     /// <param name="maxLength">The column the answer is stored in, when it has a limit; 0 for none.</param>
-    string? PromptForReason(string prompt, string? title = null, int minimumLength = 5, int maxLength = 0);
+    string? PromptForReason(string prompt, string? title = null, int minimumLength = ReasonRules.DefaultMinimumLength, int maxLength = 0);
 
     string? PromptForText(string prompt, string? title = null, string? initialValue = null, int maxLength = 0);
 }
@@ -91,7 +92,7 @@ public sealed class UserDialogs(ILocalizer localizer, ICultureManager cultureMan
                         // and a reflexive Enter should not be the one that goes through.
                         MessageBoxDefaultButton.Button2, Options) == DialogResult.Yes;
 
-    public string? PromptForReason(string prompt, string? title = null, int minimumLength = 5, int maxLength = 0)
+    public string? PromptForReason(string prompt, string? title = null, int minimumLength = ReasonRules.DefaultMinimumLength, int maxLength = 0)
     {
         while (true)
         {
@@ -99,7 +100,7 @@ public sealed class UserDialogs(ILocalizer localizer, ICultureManager cultureMan
 
             if (answer is null) return null;   // The operator backed out.
 
-            if (answer.Trim().Length >= minimumLength) return answer.Trim();
+            if (ReasonRules.IsSufficient(answer, minimumLength)) return answer.Trim();
 
             Warn(localizer["Message.ReasonRequiredPrompt"],
                  localizer["Message.ReasonRequiredTitle"]);

@@ -1,3 +1,4 @@
+using MarocLIS.Application.Input;
 using MarocLIS.Application.Patients;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Desktop.Views;
@@ -210,11 +211,8 @@ internal sealed class CoverageDialog : Form
             $"{_localizer["Coverage.ReimbursementRate"]} {payer.DefaultReimbursementRate * 100m:0.#} %"
         };
 
-        parts.Add(_localizer[payer.UsesNationalReferenceTariff
-            ? "Coverage.PricedOnNationalTariff"
-            : "Coverage.PricedOnLabPriceList"]);
-
-        if (payer.RequiresPrescription) parts.Add(_localizer["Coverage.PrescriptionRequired"]);
+        parts.AddRange(PatientFileRules.PayerNoticeKeys(payer.UsesNationalReferenceTariff, payer.RequiresPrescription)
+                                       .Select(key => _localizer[key]));
 
         _rateNotice.Text = string.Join("   ·   ", parts);
     }
@@ -222,8 +220,8 @@ internal sealed class CoverageDialog : Form
     /// <summary>The insured person is only meaningful for a dependent (ayant droit).</summary>
     private void RefreshInsuredFields()
     {
-        var dependent = (_relationship.SelectedItem as EnumChoice)?.Value
-                        != (int)BeneficiaryRelationship.Self;
+        var dependent = PatientFileRules.AsksInsuredPerson(
+            (BeneficiaryRelationship)((_relationship.SelectedItem as EnumChoice)?.Value ?? 0));
 
         _insuredName.Enabled = dependent;
         _insuredCin.Enabled = dependent;
@@ -245,54 +243,42 @@ internal sealed class CoverageDialog : Form
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_membership.Text))
+        switch (PatientFileRules.CoverageProblem(_membership.Text, _isAld.Checked, _priorAgreement.Text))
         {
-            _dialogs.Warn(_localizer["Coverage_MembershipNumberRequired"]);
-            _membership.Focus();
+            case "Coverage_MembershipNumberRequired":
+                _dialogs.Warn(_localizer["Coverage_MembershipNumberRequired"]);
+                _membership.Focus();
+                return;
+
+            case { } problem:
+                _dialogs.Warn(_localizer[problem]);
+                _priorAgreement.Focus();
+                return;
+        }
+
+        // Accepts either "70" or "0.70": a clerk types the percentage they read off the card.
+        var typed = PatientFileRules.ReadRate(_rateOverride.Text);
+
+        if (typed.ProblemKey is { } refused)
+        {
+            _dialogs.Warn(refused == "Result_NotANumber"
+                ? _localizer.Format(refused, _rateOverride.Text)
+                : _localizer[refused]);
+            _rateOverride.Focus();
             return;
         }
 
-        if (_isAld.Checked && string.IsNullOrWhiteSpace(_priorAgreement.Text))
+        var rate = typed.Rate;
+
+        // « 1 » or « 0,7 » is read as a fraction (100 %, 70 %), not as 1 % or 0,7 %: said back
+        // before it is saved, since a clerk who meant a small percentage would never notice.
+        if (typed.NeedsFractionConfirmation
+            && !_dialogs.Confirm(_localizer.Format("Coverage.ConfirmFractionRate",
+                                                   _rateOverride.Text.Trim(), $"{rate * 100m:0.#}"),
+                                 _localizer["Coverage.RateOverride"]))
         {
-            _dialogs.Warn(_localizer["Coverage_PriorAgreementRequired"]);
-            _priorAgreement.Focus();
+            _rateOverride.Focus();
             return;
-        }
-
-        decimal? rate = null;
-
-        if (!string.IsNullOrWhiteSpace(_rateOverride.Text))
-        {
-            if (!decimal.TryParse(_rateOverride.Text.Replace(',', '.').TrimEnd('%', ' '),
-                                   System.Globalization.NumberStyles.Float,
-                                   System.Globalization.CultureInfo.InvariantCulture,
-                                   out var parsed))
-            {
-                _dialogs.Warn(_localizer.Format("Result_NotANumber", _rateOverride.Text));
-                _rateOverride.Focus();
-                return;
-            }
-
-            // Accepts either "70" or "0.70": a clerk types the percentage they read off the card.
-            rate = parsed > 1m ? parsed / 100m : parsed;
-
-            if (rate is < 0m or > 1m)
-            {
-                _dialogs.Warn(_localizer["Coverage_RateOutOfRange"]);
-                _rateOverride.Focus();
-                return;
-            }
-
-            // « 1 » or « 0,7 » is read as a fraction (100 %, 70 %), not as 1 % or 0,7 %: said back
-            // before it is saved, since a clerk who meant a small percentage would never notice.
-            if (parsed is > 0m and <= 1m
-                && !_dialogs.Confirm(_localizer.Format("Coverage.ConfirmFractionRate",
-                                                       _rateOverride.Text.Trim(), $"{rate * 100m:0.#}"),
-                                     _localizer["Coverage.RateOverride"]))
-            {
-                _rateOverride.Focus();
-                return;
-            }
         }
 
         Request = new CoverageRequest
@@ -492,16 +478,13 @@ internal sealed class ConsentDialog : Form
         var purpose = (ConsentPurpose)((_purpose.SelectedItem as EnumChoice)?.Value ?? 0);
         var channel = (ConsentChannel)((_channel.SelectedItem as EnumChoice)?.Value ?? 0);
 
-        if (!PatientConsent.RequiresWrittenEvidence(purpose))
+        _writtenNotice.Text = PatientFileRules.ConsentNoticeKey(purpose, channel, _isMinor) switch
         {
-            _writtenNotice.Text = _isMinor ? _localizer["Consent.MinorSignedByGuardian"] : string.Empty;
-            return;
-        }
-
-        _writtenNotice.Text = channel == ConsentChannel.Verbal
-            ? _localizer.Format("Order_ConsentMustBeWritten",
-                                _localizer[$"ConsentPurpose.{purpose}"])
-            : _localizer["Consent.WrittenRequiredNotice"];
+            null => string.Empty,
+            "Order_ConsentMustBeWritten" => _localizer.Format("Order_ConsentMustBeWritten",
+                                                              _localizer[$"ConsentPurpose.{purpose}"]),
+            var key => _localizer[key]
+        };
     }
 
     private void Accept()
@@ -509,18 +492,17 @@ internal sealed class ConsentDialog : Form
         var purpose = (ConsentPurpose)((_purpose.SelectedItem as EnumChoice)?.Value ?? 0);
         var channel = (ConsentChannel)((_channel.SelectedItem as EnumChoice)?.Value ?? 0);
 
-        if (PatientConsent.RequiresWrittenEvidence(purpose) && channel == ConsentChannel.Verbal)
+        switch (PatientFileRules.ConsentProblem(purpose, channel, _isMinor, _signedBy.Text))
         {
-            _dialogs.Warn(_localizer.Format("Order_ConsentMustBeWritten",
-                                             _localizer[$"ConsentPurpose.{purpose}"]));
-            return;
-        }
+            case "Order_ConsentMustBeWritten":
+                _dialogs.Warn(_localizer.Format("Order_ConsentMustBeWritten",
+                                                 _localizer[$"ConsentPurpose.{purpose}"]));
+                return;
 
-        if (_isMinor && string.IsNullOrWhiteSpace(_signedBy.Text))
-        {
-            _dialogs.Warn(_localizer["Patient_MinorRequiresGuardian"]);
-            _signedBy.Focus();
-            return;
+            case { } problem:
+                _dialogs.Warn(_localizer[problem]);
+                _signedBy.Focus();
+                return;
         }
 
         Request = new ConsentRequest
@@ -637,7 +619,7 @@ internal sealed class DuplicateWarningForm : Form
             _grid.Rows[index].Tag = c;
 
             // A CIN match is near-certain identity; a name match is a coincidence worth checking.
-            if (c.MatchedOn == "Patient.Cin")
+            if (PatientFileRules.IsCertainMatch(c))
             {
                 _grid.Rows[index].DefaultCellStyle.BackColor = UiTheme.CriticalBackground;
                 _grid.Rows[index].DefaultCellStyle.ForeColor = UiTheme.Critical;
@@ -694,7 +676,7 @@ internal sealed class DuplicateWarningForm : Form
         _useExisting.Enabled = _grid.CurrentRow?.Tag is DuplicateCandidate;
 
         // The override is gated on a real justification, not merely a non-empty box.
-        var justified = _reason.Text.Trim().Length >= 10;
+        var justified = ReasonRules.IsSufficient(_reason.Text, ReasonRules.JustificationMinimumLength);
 
         _createAnyway.Enabled = justified;
         _createAnyway.ForeColor = justified ? UiTheme.Abnormal : UiTheme.TextMuted;
@@ -714,7 +696,7 @@ internal sealed class DuplicateWarningForm : Form
     {
         var reason = _reason.Text.Trim();
 
-        if (reason.Length < 10)
+        if (!ReasonRules.IsSufficient(reason, ReasonRules.JustificationMinimumLength))
         {
             _dialogs.Warn(_localizer["Message.ReasonRequiredPrompt"],
                           _localizer["Message.ReasonRequiredTitle"]);
@@ -900,19 +882,14 @@ internal sealed class PatientAlertDialog : Form
             _ => UiTheme.TextSecondary
         };
 
-        _severityNotice.Text = _localizer[severity switch
-        {
-            PatientAlertSeverity.Critical => "Patient.AlertCriticalNotice",
-            PatientAlertSeverity.Warning => "Patient.AlertWarningNotice",
-            _ => "Patient.AlertInformationNotice"
-        }];
+        _severityNotice.Text = _localizer[PatientFileRules.AlertNoticeKey(severity)];
     }
 
     private void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_messageFr.Text))
+        if (PatientFileRules.AlertProblem(_messageFr.Text) is { } problem)
         {
-            _dialogs.Warn(_localizer["Alert_MessageRequired"], Text);
+            _dialogs.Warn(_localizer[problem], Text);
             _messageFr.Focus();
             return;
         }
@@ -920,7 +897,7 @@ internal sealed class PatientAlertDialog : Form
         // A critical alert stops the next operator mid-registration, so choosing it is confirmed.
         // Not friction for its own sake: an alert that interrupts everybody gets switched off, and
         // then the one that mattered is off too.
-        if (Severity == PatientAlertSeverity.Critical
+        if (PatientFileRules.AlertNeedsConfirmation(Severity)
             && !_dialogs.Confirm(_localizer["Patient.ConfirmCriticalAlert"], Text))
             return;
 

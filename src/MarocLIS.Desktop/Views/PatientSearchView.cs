@@ -1,3 +1,4 @@
+using MarocLIS.Application.Input;
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Orders;
@@ -724,19 +725,17 @@ public sealed class PatientSearchView : LocalizedView
     {
         var row = Selected;
 
-        _editPatient.Enabled = row is not null;
-        _detailEdit.Enabled = row is not null;
         // An anonymised file is the trace of an erasure: it is not anonymised again, merged or
-        // given a new request, all three of which the services refuse.
-        var live = row is { IsAnonymized: false };
+        // given a new request; merging needs two files (PatientFileRules.ListActions).
+        var actions = PatientFileRules.ListActions(row is not null, row?.IsAnonymized ?? false, _page.Items.Count,
+                                                   _currentUser);
 
-        _anonymize.Enabled = live && PermissionGate.Allows(Permissions.Patients.Anonymize);
+        _editPatient.Enabled = actions.Edit;
+        _detailEdit.Enabled = actions.Edit;
+        _anonymize.Enabled = actions.Anonymize;
+        _merge.Enabled = actions.Merge;
 
-        // Merging needs two files, so it is only offered once a search has produced more than one
-        // candidate — which is exactly the situation a duplicate creates.
-        _merge.Enabled = live && _page.Items.Count > 1 && PermissionGate.Allows(Permissions.Patients.Merge);
-
-        if (!PermissionGate.IsBlocked(_newOrder)) _newOrder.Enabled = live;
+        if (!PermissionGate.IsBlocked(_newOrder)) _newOrder.Enabled = actions.NewOrder;
     }
 
     private async Task CreatePatientAsync()
@@ -783,7 +782,8 @@ public sealed class PatientSearchView : LocalizedView
         if (Selected is not { } duplicate) return;
 
         // An anonymised file is never a merge target: the service refuses it.
-        var others = _page.Items.Where(p => p.Id != duplicate.Id && !p.IsAnonymized).ToList();
+        var others = PatientFileRules.MergeSurvivors(_page.Items, duplicate.Id, p => p.Id, p => p.IsAnonymized,
+                                                     p => p.OrderCount);
 
         if (others.Count == 0)
         {
@@ -828,11 +828,11 @@ public sealed class PatientSearchView : LocalizedView
 
         var justification = _dialogs.PromptForReason(
             T("Patient.AnonymizeJustificationPrompt", row.MedicalRecordNumber),
-            T("Patient.Anonymize"), minimumLength: 10);
+            T("Patient.Anonymize"), minimumLength: ReasonRules.JustificationMinimumLength);
 
         if (justification is null) return;
 
-        var reference = row.MedicalRecordNumber.Replace("-", string.Empty);
+        var reference = PatientFileRules.AnonymizationReference(row.MedicalRecordNumber);
 
         var result = await _service.AnonymizeAsync(row.Id, reference, justification);
 
@@ -840,7 +840,7 @@ public sealed class PatientSearchView : LocalizedView
         {
             // The commonest refusal is a live retention period. Offering the override here rather
             // than up front keeps the obligation as the default answer.
-            if (result.Errors.Any(e => e.ResourceKey == "Patient_RetentionNotExpired"))
+            if (result.Errors.Any(e => e.ResourceKey == PatientFileRules.RetentionNotExpiredKey))
             {
                 if (!_dialogs.Confirm(Describe(result) + Environment.NewLine + Environment.NewLine
                                        + T("Patient.OverrideRetentionQuestion"),
@@ -939,7 +939,7 @@ public sealed class PatientSearchView : LocalizedView
 
             // Loi 08-09: a search over patient data is an access to it, and the number of records
             // returned is what distinguishes a lookup from an extraction.
-            if (term.Length >= 3)
+            if (PatientFileRules.IsLoggedSearch(term))
                 await _accessAuditor.LogAsync(DataAccessKind.Search,
                                               context: "PatientSearch",
                                               recordCount: _page.TotalCount,
@@ -1119,7 +1119,7 @@ public sealed class PatientSearchView : LocalizedView
             _history.SuspendLayout();
             ClearHistory();
 
-            var opens = PermissionGate.Allows(Permissions.Orders.View);
+            var opens = PatientFileRules.ListActions(true, false, 0, _currentUser).OpenOrders;
 
             foreach (var order in orders)
             {

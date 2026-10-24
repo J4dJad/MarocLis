@@ -1,4 +1,5 @@
 using System.Globalization;
+using MarocLIS.Application.Input;
 using MarocLIS.Domain.Catalog;
 
 namespace MarocLIS.Desktop.Infrastructure;
@@ -24,7 +25,7 @@ internal static class EditorValues
     /// the comma. The length caps alone let it through in the "1e17" notation, or in a box that
     /// takes fifteen characters, and the save then failed with an unexpected error.
     /// </summary>
-    public const decimal Limit = 1_000_000_000_000m;
+    public const decimal Limit = TypedNumber.Limit;
 
     /// <summary>
     /// Reads a number typed, pasted or pre-filled in any of the cultures the application runs in.
@@ -67,38 +68,8 @@ internal static class EditorValues
     public static bool IsPercentDiscount(string? text) =>
         !string.IsNullOrWhiteSpace(text) && text.Trim()[^1] is '%' or '\u066A';
 
-    public static decimal? ParseDecimal(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-
-        // The direction marks go with the spaces: the Arabic culture writes a negative number as
-        // "\u200E-2,5" (a left-to-right mark before the sign), and a box pre-filled with it read
-        // back as null, so saving an editor erased every negative bound it had displayed.
-        var compact = new string(text.Where(c => !char.IsWhiteSpace(c) && c is not ' '
-                                                 && !IsDirectionMark(c)).ToArray());
-
-        var lastComma = compact.LastIndexOf(',');
-        var lastPoint = compact.LastIndexOf('.');
-
-        if (lastComma >= 0 && lastPoint >= 0)
-        {
-            var group = lastComma > lastPoint ? "." : ",";
-            compact = compact.Replace(group, string.Empty, StringComparison.Ordinal);
-        }
-
-        foreach (var separator in new[] { ",", "." })
-        {
-            if (compact.IndexOf(separator, StringComparison.Ordinal)
-                != compact.LastIndexOf(separator, StringComparison.Ordinal))
-                compact = compact.Replace(separator, string.Empty, StringComparison.Ordinal);
-        }
-
-        return decimal.TryParse(compact.Replace(',', '.'), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
-                                CultureInfo.InvariantCulture, out var value)
-               && Math.Abs(value) < Limit
-            ? value
-            : null;
-    }
+    /// <summary>The application's reading of a typed number (<see cref="TypedNumber.Parse"/>), shared with the web.</summary>
+    public static decimal? ParseDecimal(string? text) => TypedNumber.Parse(text);
 
     /// <summary>
     /// <see cref="ParseDecimal"/> for the boxes where an empty box means zero (the payroll
@@ -119,8 +90,7 @@ internal static class EditorValues
     /// such a box as "no value"; they check this first so it is refused on its box, not saved as
     /// an empty limit or a zero stock level.
     /// </summary>
-    public static bool IsUnreadable(string? text) =>
-        !string.IsNullOrWhiteSpace(text) && ParseDecimal(text) is null;
+    public static bool IsUnreadable(string? text) => TypedNumber.IsUnreadable(text);
 
     /// <summary>
     /// Writes a value for an editable box: at least <paramref name="decimals"/> decimals, any
@@ -142,14 +112,10 @@ internal static class EditorValues
     /// Arabic letter mark, the embeddings and overrides, and the isolates — which a culture's
     /// number format or a copy from an Arabic text can carry into a number box.
     /// </summary>
-    public static bool IsDirectionMark(char c) =>
-        c is '\u200E' or '\u200F' or '\u061C'
-            or (>= '\u202A' and <= '\u202E')
-            or (>= '\u2066' and <= '\u2069');
+    public static bool IsDirectionMark(char c) => TypedNumber.IsDirectionMark(c);
 
     /// <summary>The text with every <see cref="IsDirectionMark"/> character removed.</summary>
-    public static string WithoutDirectionMarks(string text) =>
-        text.Any(IsDirectionMark) ? new string(text.Where(c => !IsDirectionMark(c)).ToArray()) : text;
+    public static string WithoutDirectionMarks(string text) => TypedNumber.WithoutDirectionMarks(text);
 
     /// <summary>
     /// The unit, in days, to show a stored age band in: the largest of years (365 days) and months

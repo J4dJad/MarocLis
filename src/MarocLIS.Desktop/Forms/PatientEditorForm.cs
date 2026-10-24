@@ -899,20 +899,15 @@ public sealed class PatientEditorForm : LocalizedForm
 
         _ageEcho.ForeColor = age is null ? UiTheme.Abnormal : UiTheme.Accent;
 
-        var minor = age is { } a && a < 18;
-        _guardianBox.Visible = minor;
+        _guardianBox.Visible = PatientFileRules.IsMinor(age);
     }
 
     private int? CurrentAgeYears()
     {
-        if (!_hasDateOfBirth.Checked)
-            return _declaredAge.Value > 0 ? (int)_declaredAge.Value : null;
-
-        var dob = DateOnly.FromDateTime(_dateOfBirth.Value.Date);
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var age = today.Year - dob.Year;
-        if (today < dob.AddYears(age)) age--;
-        return age < 0 ? null : age;
+        return PatientFileRules.AgeYears(
+            _hasDateOfBirth.Checked ? DateOnly.FromDateTime(_dateOfBirth.Value.Date) : null,
+            _hasDateOfBirth.Checked ? 0 : (int)_declaredAge.Value,
+            DateOnly.FromDateTime(DateTime.Today));
     }
 
     /// <summary>
@@ -930,10 +925,7 @@ public sealed class PatientEditorForm : LocalizedForm
     /// </summary>
     private async Task CheckForDuplicatesAsync()
     {
-        if (_patientId is not null) return;
-
-        if (string.IsNullOrWhiteSpace(_lastName.Text) || string.IsNullOrWhiteSpace(_firstName.Text))
-            return;
+        if (!PatientFileRules.ChecksDuplicates(_patientId is null, _lastName.Text, _firstName.Text)) return;
 
         var result = await _service.FindDuplicatesAsync(
             _lastName.Text.Trim(),
@@ -970,7 +962,7 @@ public sealed class PatientEditorForm : LocalizedForm
 
     private void RefreshPregnancyFields()
     {
-        var female = (_gender.SelectedItem as EnumChoice)?.Value == (int)Gender.Female;
+        var female = PatientFileRules.PregnancyApplies((Gender)((_gender.SelectedItem as EnumChoice)?.Value ?? 0));
 
         _pregnant.Enabled = female;
         if (!female) _pregnant.Checked = false;
@@ -985,10 +977,8 @@ public sealed class PatientEditorForm : LocalizedForm
         var note = _clinicalTab.Controls.Find("bsaNote", true);
         if (note.Length == 0) return;
 
-        if (TryParseDecimal(_weight.Text, out var w) && TryParseDecimal(_height.Text, out var h)
-            && w > 0 && h > 0)
+        if (PatientFileRules.BodySurfaceM2(_weight.Text, _height.Text) is { } bsa)
         {
-            var bsa = Math.Round((decimal)Math.Sqrt((double)(w * h) / 3600d), 3);
             note[0].Text = $"{T("Patient.BodySurface")} {bsa:0.000} m²";
         }
         else
@@ -1005,13 +995,6 @@ public sealed class PatientEditorForm : LocalizedForm
     {
         var normalised = MoroccanIdentifiers.TryNormalizePhone(box.Text);
         if (!string.IsNullOrWhiteSpace(normalised)) box.Text = normalised;
-    }
-
-    private static bool TryParseDecimal(string text, out decimal value)
-    {
-        var parsed = EditorValues.ParseDecimal(text);
-        value = parsed ?? 0m;
-        return parsed is not null;
     }
 
     // ---- Coverage ----------------------------------------------------------------------------------
@@ -1062,7 +1045,7 @@ public sealed class PatientEditorForm : LocalizedForm
                 pending.InsuredPersonName ?? string.Empty,
                 pending.IsChronicDiseaseScheme
                     ? "100 %"
-                    : $"{(pending.ReimbursementRateOverride ?? payer?.DefaultReimbursementRate ?? 0m) * 100m:0.#} %",
+                    : $"{PatientFileRules.PendingRate(false, pending.ReimbursementRateOverride, payer?.DefaultReimbursementRate) * 100m:0.#} %",
                 pending.IsChronicDiseaseScheme ? T("Coverage.ChronicScheme") : string.Empty,
                 T("Coverage.PendingSave"));
 
@@ -1075,7 +1058,7 @@ public sealed class PatientEditorForm : LocalizedForm
 
     private void RefreshCoverageActions()
     {
-        _endCoverage.Enabled = _coverages.CurrentRow?.Tag is CoverageRow { ValidUntil: null };
+        _endCoverage.Enabled = _coverages.CurrentRow?.Tag is CoverageRow row && PatientFileRules.CanEndCoverage(row.ValidUntil);
         _addCoverage.Enabled = _save.Enabled;
     }
 
@@ -1148,11 +1131,8 @@ public sealed class PatientEditorForm : LocalizedForm
 
         foreach (var row in _consentRows)
         {
-            var state = row.WithdrawnAt is not null
-                ? T("Consent.Withdrawn")
-                : row.RequiresWrittenEvidence && !row.HasEvidenceDocument
-                    ? T("Consent.EvidenceMissing")
-                    : T("Consent.Active");
+            var state = T(PatientFileRules.ConsentStateKey(row.WithdrawnAt is not null, row.RequiresWrittenEvidence,
+                                                           row.HasEvidenceDocument));
 
             var index = _consents.Rows.Add(
                 T($"ConsentPurpose.{row.Purpose}"),
@@ -1193,14 +1173,14 @@ public sealed class PatientEditorForm : LocalizedForm
 
     private void RefreshConsentActions()
     {
-        _withdrawConsent.Enabled = _consents.CurrentRow?.Tag is ConsentRow { WithdrawnAt: null };
+        _withdrawConsent.Enabled = _consents.CurrentRow?.Tag is ConsentRow row && PatientFileRules.CanWithdrawConsent(row.WithdrawnAt);
         _addConsent.Enabled = _save.Enabled;
     }
 
     private async Task AddConsentAsync()
     {
         using var dialog = new ConsentDialog(Localizer, _dialogs,
-                                              CurrentAgeYears() is { } a && a < 18,
+                                              PatientFileRules.IsMinor(CurrentAgeYears()),
                                               _guardianName.Text);
 
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Request is null) return;
@@ -1335,8 +1315,8 @@ public sealed class PatientEditorForm : LocalizedForm
         IsPregnant = _pregnant.Checked,
         LastMenstrualPeriod = _hasLmp.Checked && _hasLmp.Visible
             ? DateOnly.FromDateTime(_lmp.Value.Date) : null,
-        WeightKg = TryParseDecimal(_weight.Text, out var w) && w > 0 ? w : null,
-        HeightCm = TryParseDecimal(_height.Text, out var h) && h > 0 ? h : null,
+        WeightKg = PatientFileRules.Measure(_weight.Text),
+        HeightCm = PatientFileRules.Measure(_height.Text),
         BloodGroup = (BloodGroup)((_bloodGroup.SelectedItem as EnumChoice)?.Value ?? 0),
         CurrentTreatment = _treatment.Text,
         KnownAllergies = _allergies.Text,
@@ -1346,37 +1326,22 @@ public sealed class PatientEditorForm : LocalizedForm
 
     private async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(_lastName.Text))
+        // The names, then a weight or height the form cannot read (« 72 kg », « 1m70 ») or below
+        // zero, which was saved as no value without a word (PatientFileRules.SaveProblem).
+        if (PatientFileRules.SaveProblem(_lastName.Text, _firstName.Text, _weight.Text, _height.Text) is { } problem)
         {
-            _tabs.SelectedTab = _identityTab;
-            _dialogs.Warn(T("Patient_LastNameRequired"));
-            _lastName.Focus();
-            return;
-        }
+            var box = problem.Field switch
+            {
+                "LastName" => _lastName,
+                "FirstName" => _firstName,
+                "Weight" => _weight,
+                _ => _height
+            };
 
-        if (string.IsNullOrWhiteSpace(_firstName.Text))
-        {
-            _tabs.SelectedTab = _identityTab;
-            _dialogs.Warn(T("Patient_FirstNameRequired"));
-            _firstName.Focus();
-            return;
-        }
-
-        // A weight or height the form cannot read (« 72 kg », « 1m70 ») or below zero was saved
-        // as no value without a word, and the calculations that use it (clearance, body surface)
-        // then had none.
-        foreach (var box in new[] { _weight, _height })
-        {
-            if (!EditorValues.IsUnreadable(box.Text) && !(TryParseDecimal(box.Text, out var measure) && measure < 0m))
-                continue;
-
-            _tabs.SelectedTab = _clinicalTab;
-            _dialogs.Warn(EditorValues.IsUnreadable(box.Text)
-                ? Localizer.Format("Result_NotANumber", box.Text.Trim())
-                : Localizer.Format("Patient_BodyMeasureOutOfRange", PatientRegistrationService.MaxWeightKg,
-                                   PatientRegistrationService.MaxHeightCm));
+            _tabs.SelectedTab = problem.Field is "LastName" or "FirstName" ? _identityTab : _clinicalTab;
+            _dialogs.Warn(problem.Arguments.Length == 0 ? T(problem.Key) : Localizer.Format(problem.Key, problem.Arguments));
             box.Focus();
-            box.SelectAll();
+            if (problem.Field is "Weight" or "Height") box.SelectAll();
             return;
         }
 
