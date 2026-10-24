@@ -149,6 +149,38 @@ public sealed class ResultScreenRulesTests
     }
 
     [Fact]
+    public void Something_typed_is_unsaved_when_a_box_holds_other_text_than_was_loaded()
+    {
+        var stored = Row(TestResultStatus.Entered, value: "5,4", comment: "Contrôlé");
+        var calculated = Row(TestResultStatus.Entered, value: "3,1", calculated: true);
+        var heading = Row(type: ResultValueType.Heading);
+        var rows = new[] { stored, calculated, heading };
+
+        var values = rows.ToDictionary(r => r.TestResultId, r => r.CurrentValue);
+        var comments = rows.ToDictionary(r => r.TestResultId, r => r.TechnicalComment);
+        bool Unsaved() => ResultEntryRules.HasUnsavedTyping(rows, id => values[id], id => comments[id]);
+
+        // As loaded, blanks around it, or an empty box against no value: nothing to lose.
+        Unsaved().Should().BeFalse();
+        values[stored.TestResultId] = " 5,4 ";
+        comments[heading.TestResultId] = "";
+        Unsaved().Should().BeFalse();
+
+        // A derived line's box takes nothing; whatever it holds is not the operator's.
+        values[calculated.TestResultId] = "9";
+        Unsaved().Should().BeFalse();
+
+        // A value emptied counts, though a save would skip it.
+        values[stored.TestResultId] = "";
+        Unsaved().Should().BeTrue();
+        ResultEntryRules.ChangedEntries(rows, id => values[id], id => comments[id]).Should().BeEmpty();
+
+        values[stored.TestResultId] = "5,4";
+        comments[stored.TestResultId] = "Contrôlé deux fois";
+        Unsaved().Should().BeTrue();
+    }
+
+    [Fact]
     public void The_indicator_is_the_same_arrow_word_and_tone_on_both_screens()
     {
         ResultEntryRules.Indicator(ResultInterpretation.High).Should().Be(new ResultIndicator("▲", "ResultEntry.FlagHigh", ValidationTone.Warning));

@@ -1593,9 +1593,7 @@ public sealed class ResultEntryView : LocalizedView
 
         _grid.EndEdit();
 
-        var typed = CaptureTyped();
-
-        return typed.IsEmpty
+        return !ResultEntryRules.HasUnsavedTyping(GridRows(), TypedValue, TypedComment)
                || _dialogs.Confirm(T("Message.UnsavedChanges"), _sheet.AccessionNumber);
     }
 

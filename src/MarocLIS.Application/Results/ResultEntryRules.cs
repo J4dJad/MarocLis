@@ -192,6 +192,21 @@ public static class ResultEntryRules
     }
 
     /// <summary>
+    /// Whether opening another file, or leaving, would lose something typed: a value box that takes
+    /// a value, or a comment, holding other text than was loaded. Surrounding blanks do not count,
+    /// nor an empty box against no value. Unlike <see cref="ChangedEntries"/>, a value emptied
+    /// counts: the operator typed it away and is told before it comes back.
+    /// </summary>
+    public static bool HasUnsavedTyping(IEnumerable<ResultEntryRow> rows, Func<Guid, string?> typedValue,
+                                        Func<Guid, string?> typedComment) =>
+        rows.Any(r => !r.IsHeading
+                      && ((TakesValue(r) && Differs(typedValue(r.TestResultId), r.CurrentValue))
+                          || Differs(typedComment(r.TestResultId), r.TechnicalComment)));
+
+    private static bool Differs(string? typed, string? stored) =>
+        !string.Equals(typed?.Trim() ?? string.Empty, stored?.Trim() ?? string.Empty, StringComparison.Ordinal);
+
+    /// <summary>
     /// The indicator of an interpretation: « ▲ Haut » in the warning pair, « ▼ Bas » in the info pair,
     /// critical in the critical pair, an abnormal coded answer in the warning pair; none for a normal
     /// or uninterpretable value. The entry and the validation screens show the same one.
