@@ -359,7 +359,7 @@ html[dir="rtl"] .nav-group:not([open]) > .nav-group-title::after { content: "◂
 .btn-danger:hover { background: var(--critical-bg); color: var(--critical-ink); }
 .btn:disabled, .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .btn-small { padding: 2px 8px; min-block-size: 26px; font-size: 12px; }
-.link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
+.link { margin-inline-start: 6px; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
 
 .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .toolbar-spacer { flex: 1 1 auto; }
@@ -393,7 +393,7 @@ html[dir="rtl"] .nav-group:not([open]) > .nav-group-title::after { content: "◂
 .chip.is-pressed { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-pressed); font-weight: 600; }
 
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 12px; align-items: start; }
-.split-even { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+.split-even { grid-template-columns: minmax(0, 8fr) minmax(0, 5fr); }
 .split-list { grid-template-columns: 320px minmax(0, 1fr); }
 .split-picker { grid-template-columns: minmax(0, 1fr) 280px; }
 .split-main, .split-side { min-inline-size: 0; }
@@ -548,11 +548,19 @@ html[dir="rtl"] .file-list li.is-selected { box-shadow: inset -3px 0 0 var(--acc
 .step-current .step-name { color: var(--accent); }
 
 /* The patients' screens */
-.history { display: flex; flex-direction: column; gap: 6px; }
+.history { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .history-card { display: block; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); color: inherit; text-decoration: none; }
 .history-card:hover { background: var(--surface-sunken); color: inherit; }
 .history-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .identity { display: flex; flex-direction: column; gap: 2px; }
 .identity-name { font-size: 16px; font-weight: 600; }
 .switch { display: inline-flex; align-items: center; gap: 6px; }
-.check { inline-size: 16px; block-size: 16px; }
+.check { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-weight: 600; font-size: 13px; }
+
+/* The catalogue of the counter keeps its seven columns within its card. */
+.catalog-card .grid { font-size: 12px; }
+.catalog-card .grid th, .catalog-card .grid td { padding: 5px 6px; }
+.catalog-card .grid td { overflow-wrap: anywhere; }
+.list-pane .toolbar { flex-wrap: nowrap; }
+.list-pane .search-box { flex: 1 1 auto; min-inline-size: 0; }
+.catalog-card .grid td.mono { overflow-wrap: normal; white-space: nowrap; }
