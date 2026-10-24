@@ -1,0 +1,163 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Reports
+@using MarocLIS.Domain.Reports
+@inject WebTexts Texts
+
+@*
+    « Enregistrer une remise », the workstation's ReportDeliveryDialog: who took the report, by
+    which channel, and on whose authority. The channel defaults to the prescriber's preference, the
+    recipient's name and address follow the recipient and channel chosen until the operator types
+    over them, and a third party needs the patient's consent and, at the counter, the bearer's name
+    and CIN. What the form fills in and refuses is ReportDeliveryRules'.
+*@
+<Modal Name="delivery" Title="@($"{Texts["Report.RecordDelivery"]} — {Row.AccessionNumber} v{Row.VersionNumber}")" Wide="true" OnCancel="CancelAsync">
+    <ChildContent>
+        <p class="strong accent" data-state="identity">
+            @Row.PatientName · @Row.AccessionNumber · v@(Row.VersionNumber) · @Texts[$"ReportCompleteness.{Row.Completeness}"]
+        </p>
+
+        <div class="form-grid">
+            <label class="field">
+                <span class="field-label">@Texts["Report.Channel"]</span>
+                <select class="input" data-field="channel" @onchange="ChannelChanged">
+                    @foreach (var channel in Enum.GetValues<DeliveryChannel>())
+                    {
+                        <option value="@channel" selected="@(channel == _channel)">@Texts[$"DeliveryChannel.{channel}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Report.RecipientKind"]</span>
+                <select class="input" data-field="recipient-kind" @onchange="KindChanged">
+                    @foreach (var kind in Enum.GetValues<ReportRecipientKind>())
+                    {
+                        <option value="@kind" selected="@(kind == _kind)">@Texts[$"ReportRecipientKind.{kind}"]</option>
+                    }
+                </select>
+            </label>
+        </div>
+        <p class="small muted" data-state="channel-notice">@Texts[ReportDeliveryRules.ChannelNoticeKey(_channel, EmailReady, SmsReady)]</p>
+
+        <div class="form-grid">
+            <label class="field">
+                <span class="field-label">@Texts["Report.Recipient"]</span>
+                <input class="input" data-field="recipient" maxlength="@ReportDeliveryRules.RecipientNameMaxLength"
+                       @bind="_recipientName" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="recipient" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Report.RecipientIdentifier"]</span>
+                <input class="input" dir="ltr" data-field="identifier" maxlength="@ReportDeliveryRules.RecipientIdentifierMaxLength"
+                       @bind="_identifier" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="identifier" />
+            </label>
+        </div>
+        <p class="small muted">@Texts["Report.RecipientIdentifierNotice"]</p>
+
+        <div class="form-grid">
+            <label class="field">
+                <span class="field-label">@Texts["Report.Bearer"]</span>
+                <input class="input" data-field="bearer" maxlength="@ReportDeliveryRules.BearerNameMaxLength" disabled="@(!TakesBearer)"
+                       @bind="_bearerName" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="bearer" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Report.BearerCin"]</span>
+                <input class="input mono" dir="ltr" data-field="bearer-cin" maxlength="@ReportDeliveryRules.BearerCinMaxLength" disabled="@(!TakesBearer)"
+                       @bind="_bearerCin" @bind:event="oninput" />
+            </label>
+        </div>
+        <p class="small muted">@Texts["Report.BearerNotice"]</p>
+
+        <label class="field">
+            <span class="field-label">@Texts["Report.AuthorizingConsent"]</span>
+            <input class="input mono" dir="ltr" data-field="consent" maxlength="@ReportDeliveryRules.ConsentReferenceMaxLength" disabled="@(!NeedsConsent)"
+                   @bind="_consent" @bind:event="oninput" />
+            <FieldMessage Refusal="_refusal" Field="consent" />
+        </label>
+        @if (NeedsConsent)
+        {
+            <p class="message is-warning" data-state="consent-notice">@Texts["Report.ThirdPartyConsentNotice"]</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Report.RecordDelivery" Primary="true" OnClick="AcceptAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>What the form recorded: the service is called with exactly this.</summary>
+    public sealed record Request(DeliveryChannel Channel, ReportRecipientKind Kind, string? RecipientName,
+                                 string? RecipientIdentifier, string? BearerName, string? BearerCin, Guid? ConsentId);
+
+    [Parameter, EditorRequired] public ReportRegisterRow Row { get; set; } = default!;
+    [Parameter] public bool EmailReady { get; set; }
+    [Parameter] public bool SmsReady { get; set; }
+    [Parameter] public EventCallback<Request> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private DeliveryChannel _channel;
+    private ReportRecipientKind _kind = ReportRecipientKind.Patient;
+    private string _recipientName = string.Empty, _identifier = string.Empty, _bearerName = string.Empty,
+                   _bearerCin = string.Empty, _consent = string.Empty;
+
+    // What the form filled in itself, so it is replaced, never what the operator typed.
+    private string? _autoName, _autoContact;
+    private FieldRefusal? _refusal;
+
+    private bool TakesBearer => ReportDeliveryRules.TakesBearer(_channel);
+    private bool NeedsConsent => ReportDeliveryRules.NeedsConsent(_kind);
+
+    protected override void OnInitialized()
+    {
+        // The prescriber's stated preference: what the laboratory agreed to.
+        _channel = ReportRegisterRules.DefaultChannel(Row.PrescriberPreference);
+        Refill();
+    }
+
+    private void ChannelChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<DeliveryChannel>(e.Value?.ToString(), out var channel)) _channel = channel;
+        Refill();
+    }
+
+    private void KindChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ReportRecipientKind>(e.Value?.ToString(), out var kind)) _kind = kind;
+        Refill();
+    }
+
+    private void Refill()
+    {
+        if (!NeedsConsent) _consent = string.Empty;
+        if (!TakesBearer) _bearerName = _bearerCin = string.Empty;
+
+        if (_recipientName.Length == 0 || _recipientName == _autoName)
+        {
+            _recipientName = ReportDeliveryRules.RecipientName(_kind, Row);
+            _autoName = _recipientName;
+        }
+
+        if (_identifier.Length == 0 || _identifier == _autoContact)
+        {
+            _identifier = ReportDeliveryRules.Contact(_channel, _kind, Row) ?? string.Empty;
+            _autoContact = _identifier;
+        }
+    }
+
+    private async Task AcceptAsync()
+    {
+        var (refusal, consentId) = ReportDeliveryRules.Check(_channel, _kind, _recipientName, _identifier,
+                                                             _bearerName, _bearerCin, _consent);
+        _refusal = refusal;
+        if (refusal is not null) return;
+
+        await OnConfirm.InvokeAsync(new Request(_channel, _kind, Blank(_recipientName), Blank(_identifier),
+                                                Blank(_bearerName), Blank(_bearerCin), consentId));
+    }
+
+    private static string? Blank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

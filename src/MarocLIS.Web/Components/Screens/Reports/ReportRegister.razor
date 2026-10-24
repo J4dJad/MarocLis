@@ -1,0 +1,716 @@
+@using System.Globalization
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Reports
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Orders
+@using MarocLIS.Domain.Reports
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IJSRuntime JS
+@inject ILogger<ReportRegister> Logger
+
+@*
+    « Comptes rendus », the workstation's ReportRegisterView: the files waiting for a report, the
+    register of the versions released in the period, and the versions never handed over, each tab
+    with its count; the version's deliveries under the register, its sketch beside it, and the
+    action bar (Ctrl+E issues). A report owed while the patient has not paid is warned about, never
+    refused. What is listed, counted, offered and warned is ReportRegisterRules'; what is released,
+    reprinted and recorded, ReportReleaseService's, which records each act. A PDF is downloaded
+    where the workstation opens it in its viewer.
+*@
+<div class="screen reports" data-screen="reports">
+    <div class="toolbar">
+        <div class="tabs" role="tablist">
+            @foreach (var tab in Enum.GetValues<ReportTab>())
+            {
+                var count = ReportRegisterRules.Count(_pending, _register, tab);
+                <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                        data-tab="@tab" @onclick="() => SelectTabAsync(tab)">
+                    @TabCaption(tab)
+                    @if (count > 0)
+                    {
+                        <Pill Text="@count.ToString(CultureInfo.InvariantCulture)" Tone="@TabTone(tab)" />
+                    }
+                </button>
+            }
+        </div>
+        <span class="toolbar-spacer"></span>
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["Report.RegisterSearchPlaceholder"]" aria-label="@Texts["Report.RegisterSearchPlaceholder"]"
+                   data-field="report-search" autocomplete="off" @bind="_term" @onkeydown="SearchKeyAsync" />
+        </div>
+        <select class="input input-narrow" data-field="window" aria-label="@Texts.T("Report.WithinDays", _window)" @onchange="WindowChangedAsync">
+            @foreach (var days in Windows)
+            {
+                <option value="@days" selected="@(days == _window)">@Texts.T("Report.WithinDays", days)</option>
+            }
+        </select>
+    </div>
+
+    <div class="split">
+        <div class="split-main">
+            <div class="card card-flush">
+                @if (_tab == ReportTab.ToIssue)
+                {
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="pending">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Order.Title"]</th>
+                                    <th>@Texts["Patient.Title"]</th>
+                                    <th>@Texts["Field.Priority"]</th>
+                                    <th class="num">@Texts["Report.ValidatedResults"]</th>
+                                    <th class="num">@Texts["Report.AwaitingShort"]</th>
+                                    <th>@Texts["Report.LastValidatedAt"]</th>
+                                    <th>@Texts["Report.Completeness"]</th>
+                                    <th>@Texts["Report.Payment"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _pending)
+                                {
+                                    var (final, next) = ReportRegisterRules.NextRelease(row);
+                                    <tr class="@(row.LabOrderId == SelectedPending?.LabOrderId ? "is-selected" : null)" data-row="@row.AccessionNumber"
+                                        @onclick="() => _pendingId = row.LabOrderId" @ondblclick="AskIssue">
+                                        <td class="mono">@row.AccessionNumber</td>
+                                        <td>@PatientName(row.PatientName, row.PatientNameArabic)</td>
+                                        <td>
+                                            @if (row.Priority != OrderPriority.Routine)
+                                            {
+                                                <Pill Text="@Texts[$"Priority.{row.Priority}"]" Tone="@(row.Priority == OrderPriority.VitalEmergency ? "Critical" : "Warning")" />
+                                            }
+                                            else
+                                            {
+                                                @Texts[$"Priority.{row.Priority}"]
+                                            }
+                                        </td>
+                                        <td class="num mono">@row.ValidatedResults</td>
+                                        <td class="num mono">@row.AwaitingAnalyses</td>
+                                        <td class="mono small">@(row.LastValidatedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) ?? "—")</td>
+                                        <td>@Texts[$"ReportCompleteness.{(final ? "Final" : "Partial")}"]@(row.ReleasedVersions > 0 ? $" · v{next}" : null)</td>
+                                        <td class="small @(row.Payment is { IsSettled: false } ? "abnormal" : null)">@PaymentText(row.Payment)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (_pending.Count == 0)
+                    {
+                        <p class="card-pad muted" data-state="empty">@Texts["Web.ReportsNoneToIssue"]</p>
+                    }
+                }
+                else
+                {
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="register">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Order.Title"]</th>
+                                    <th>@Texts["Patient.Title"]</th>
+                                    <th class="num">@Texts["Report.Version"]</th>
+                                    <th>@Texts["Report.Completeness"]</th>
+                                    <th>@Texts["Report.ReleasedAt"]</th>
+                                    <th>@Texts["Report.Delivery"]</th>
+                                    <th>@Texts["Report.Payment"]</th>
+                                    <th>@Texts["Field.Status"]</th>
+                                    <th>@Texts["Order.Prescriber"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Shown)
+                                {
+                                    <tr class="@(row.ReportId == Selected?.ReportId ? "is-selected" : null) @(row.IsSuperseded ? "is-cancelled" : row.IsUrgentToDeliver ? "is-critical-row" : null)"
+                                        data-row="@($"{row.AccessionNumber}-v{row.VersionNumber}")" @onclick="() => SelectVersionAsync(row)">
+                                        <td class="mono">@row.AccessionNumber</td>
+                                        <td>@PatientName(row.PatientName, row.PatientNameArabic)</td>
+                                        <td class="num mono strong">v@(row.VersionNumber)</td>
+                                        <td>@Texts[$"ReportCompleteness.{row.Completeness}"]</td>
+                                        <td class="mono small">@row.ReleasedAt.ToLocalTime().ToString("dd/MM/yy HH:mm", CultureInfo.InvariantCulture)</td>
+                                        <td class="small strong @(row.AwaitingDelivery ? "abnormal" : null)">@DeliveryText(row)</td>
+                                        <td class="small @(row.Payment is { IsSettled: false } ? "abnormal" : null)">@PaymentText(row.Payment)</td>
+                                        <td class="small strong @(row.ContainsCriticalResults ? "critical" : null)">@string.Join(" · ", ReportRegisterRules.Flags(row).Select(key => Texts[key]))</td>
+                                        <td class="small">@row.PrescriberName</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (Shown.Count == 0)
+                    {
+                        <p class="card-pad muted" data-state="empty">@Texts["Web.ReportsNoneInRegister"]</p>
+                    }
+                }
+            </div>
+
+            @if (_tab != ReportTab.ToIssue)
+            {
+                <div class="card card-flush" data-card="deliveries">
+                    <div class="card-heading card-pad">
+                        <h2 class="card-title @(Selected is { AwaitingDelivery: true } && _deliveries.Count == 0 ? "abnormal" : null)">@DeliveryHeading</h2>
+                    </div>
+                    <div class="table-scroll table-scroll-short">
+                        <table class="grid" data-grid="deliveries">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.DateTime"]</th>
+                                    <th>@Texts["Report.Channel"]</th>
+                                    <th>@Texts["Report.RecipientKind"]</th>
+                                    <th>@Texts["Report.Recipient"]</th>
+                                    <th>@Texts["Report.Bearer"]</th>
+                                    <th>@Texts["Field.Status"]</th>
+                                    <th>@Texts["Report.HandedOverBy"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var delivery in _deliveries)
+                                {
+                                    <tr class="@(delivery.Status == DeliveryStatus.Failed ? "is-critical-row" : null)" data-delivery="@delivery.DeliveryId">
+                                        <td class="mono small">@((delivery.CompletedAt ?? delivery.RequestedAt).ToLocalTime().ToString("dd/MM/yy HH:mm", CultureInfo.InvariantCulture))</td>
+                                        <td class="small">@Texts[$"DeliveryChannel.{delivery.Channel}"]</td>
+                                        <td class="small">@Texts[$"ReportRecipientKind.{delivery.RecipientKind}"]</td>
+                                        <td>@(delivery.RecipientName ?? delivery.RecipientIdentifier)</td>
+                                        <td class="small">@Bearer(delivery)</td>
+                                        <td><Pill Text="@Texts[$"DeliveryStatus.{delivery.Status}"]" Tone="@DeliveryTone(delivery.Status)" /></td>
+                                        <td class="small">@delivery.HandedOverByName</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <aside class="card split-side" data-card="preview">
+            <h2 class="card-title">@(PreviewAccession is { } accession ? $"{Texts["Report.Preview"]} · {accession}" : Texts["Report.Preview"])</h2>
+            @if (SelectedPending is { } pending)
+            {
+                var (final, next) = ReportRegisterRules.NextRelease(pending);
+                <div class="identity">
+                    <span class="identity-name">@PatientName(pending.PatientName, pending.PatientNameArabic)</span>
+                    <span class="mono">@pending.AccessionNumber · v@(next) · @Texts[$"ReportCompleteness.{(final ? "Final" : "Partial")}"]</span>
+                </div>
+                <dl class="facts">
+                    <dt>@Texts["Report.Signatory"]</dt><dd class="muted">@Texts["Report.SignatoryAtRelease"]</dd>
+                    <dt>@Texts["Order.Prescriber"]</dt><dd>@(pending.PrescriberName ?? "—")</dd>
+                    <dt>@Texts["Report.Versions"]</dt>
+                    <dd class="muted">@(pending.ReleasedVersions == 0 ? Texts["Report.NoneIssued"] : Texts.T("Report.IssuedVersions", pending.ReleasedVersions, next))</dd>
+                    <dt>@Texts["Report.Delivery"]</dt><dd>—</dd>
+                    <dt>@Texts["Report.Payment"]</dt><dd class="@(pending.Payment is { IsSettled: false } ? "abnormal" : null)" data-state="payment">@PaymentDetail(pending.Payment)</dd>
+                </dl>
+                @if (!final)
+                {
+                    <p class="small muted">@Texts["Report.PartialNote"]</p>
+                }
+            }
+            else if (Selected is { } version)
+            {
+                <div class="identity">
+                    <span class="identity-name">@PatientName(version.PatientName, version.PatientNameArabic)</span>
+                    <span class="mono">@version.AccessionNumber · @Texts[$"ReportCompleteness.{version.Completeness}"] · @version.ReleasedAt.ToLocalTime().ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)</span>
+                </div>
+                <dl class="facts">
+                    <dt>@Texts["Report.Signatory"]</dt><dd>@(version.SignatoryName.Length > 0 ? version.SignatoryName : "—")</dd>
+                    <dt>@Texts["Order.Prescriber"]</dt><dd>@(version.PrescriberName ?? "—")</dd>
+                    <dt>@Texts["Report.Versions"]</dt><dd class="@(version.IsSuperseded ? "muted" : null)">@VersionText(version)</dd>
+                    <dt>@Texts["Report.Delivery"]</dt><dd>@DeliveryText(version)</dd>
+                    <dt>@Texts["Report.Payment"]</dt><dd class="@(version.Payment is { IsSettled: false } ? "abnormal" : null)" data-state="payment">@PaymentDetail(version.Payment)</dd>
+                </dl>
+                @if (version.HasStoredPdf)
+                {
+                    <ActionButton Key="Report.OpenPdf" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download" Disabled="@(!Actions.Reprint || _busy)" OnClick="AskReprint" />
+                }
+            }
+            else
+            {
+                <p class="muted" data-state="no-row">@Texts["Web.ReportsSelectRow"]</p>
+            }
+        </aside>
+    </div>
+
+    @{ var actions = Actions; }
+    <footer class="action-bar">
+        <div class="action-bar-start">
+            <details class="more more-up">
+                <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]</summary>
+                <div class="more-menu">
+                    <ActionButton Key="Report.IssueAmendment" Text="@($"{Texts["Report.IssueAmendment"]}…")"
+                                  Hidden="@(!Context.User.Has(Permissions.Reports.Amend))" Disabled="@(!actions.Amend || _busy)" OnClick="AskAmend" />
+                    <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="ActivateAsync" />
+                </div>
+            </details>
+            <ActionButton Key="Report.Reprint" Hidden="@(!Context.User.Has(Permissions.Reports.ReprintValidated))"
+                          Disabled="@(!actions.Reprint || _busy)" OnClick="AskReprint" />
+            <ActionButton Key="Report.RecordDelivery" Hidden="@(!Context.User.Has(Permissions.Reports.Print) && !Context.User.Has(Permissions.Reports.Send))"
+                          Disabled="@(!actions.RecordDelivery || _busy)" OnClick="AskDelivery" />
+        </div>
+        <p class="action-bar-status is-@(_status?.Tone ?? (_tab != ReportTab.ToIssue && _register.Any(r => r.IsUrgentToDeliver) ? "critical" : "muted"))" role="status" data-state="status">@(_status?.Text ?? Hint)</p>
+        <div class="action-bar-end">
+            <ActionButton Key="Report.Issue" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Send" Primary="true" Shortcut="Ctrl+E"
+                          Hidden="@(!Context.User.Has(Permissions.Reports.Print))" Disabled="@(!actions.Issue || _busy)" OnClick="AskIssue" />
+        </div>
+    </footer>
+</div>
+
+@switch (_dialog)
+{
+    case ReportDialog.Issue when SelectedPending is { } waiting:
+        <ConfirmPrompt Title="@Texts["Report.Issue"]" Message="@Texts.T("Report.ConfirmIssue", waiting.AccessionNumber)" OnYes="IssueAsync" OnNo="CloseDialog" />
+        break;
+
+    case ReportDialog.UnpaidReprint when Selected is { } chosen:
+        <ConfirmPrompt Title="@Texts["Report.Payment"]" Message="@UnpaidQuestion(chosen, "Report.ConfirmReprintUnpaid")" OnYes="ReprintAsync" OnNo="CloseDialog" />
+        break;
+
+    case ReportDialog.UnpaidDelivery when Selected is { } chosen:
+        <ConfirmPrompt Title="@Texts["Report.Payment"]" Message="@UnpaidQuestion(chosen, "Report.ConfirmDeliveryUnpaid")" OnYes="() => _dialog = ReportDialog.Delivery" OnNo="CloseDialog" />
+        break;
+
+    case ReportDialog.Delivery when Selected is { } chosen:
+        <ReportDeliveryDialog Row="chosen" EmailReady="_channels.Email" SmsReady="_channels.Sms" OnConfirm="RecordDeliveryAsync" OnCancel="CloseDialog" />
+        break;
+
+    case ReportDialog.Amend when Selected is { } chosen:
+        <ReportAmendmentDialog Row="chosen" OnConfirm="AmendAsync" OnCancel="CloseDialog" />
+        break;
+
+    case ReportDialog.Message when _message is { } message:
+        <Modal Name="report-message" Title="@message.Title" OnCancel="CloseDialog">
+            <ChildContent><p class="prompt-text">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum ReportDialog { None, Issue, UnpaidReprint, UnpaidDelivery, Delivery, Amend, Message }
+
+    private sealed record Message(string Title, string Text);
+
+    private static readonly int[] Windows = [7, 30, 90, 365];
+
+    private IReadOnlyList<PendingReportRow> _pending = [];
+    private IReadOnlyList<ReportRegisterRow> _register = [];
+    private IReadOnlyList<ReportDeliveryRow> _deliveries = [];
+    private ReportTab _tab = ReportRegisterRules.DefaultTab;
+    private string _term = string.Empty;
+    private int _window = 30;
+    private Guid? _pendingId, _reportId, _deliveriesOf;
+    private (bool Email, bool Sms) _channels;
+    private bool _busy;
+
+    private ReportDialog _dialog;
+    private Message? _message;
+    private (string Text, string Tone)? _status;
+
+    private IReadOnlyList<ReportRegisterRow> Shown => ReportRegisterRules.RegisterRows(_register, _tab);
+
+    /// <summary>The waiting file highlighted while « À émettre » is shown: the one clicked, else the first.</summary>
+    private PendingReportRow? SelectedPending =>
+        _tab == ReportTab.ToIssue ? _pending.FirstOrDefault(r => r.LabOrderId == _pendingId) ?? _pending.FirstOrDefault() : null;
+
+    /// <summary>The version highlighted while the register is shown: the one clicked, else the first.</summary>
+    private ReportRegisterRow? Selected
+    {
+        get
+        {
+            if (_tab == ReportTab.ToIssue) return null;
+            var shown = Shown;
+            return shown.FirstOrDefault(r => r.ReportId == _reportId) ?? shown.FirstOrDefault();
+        }
+    }
+
+    private ReportRegisterActions Actions => ReportRegisterRules.Actions(SelectedPending, Selected, Context.User);
+
+    private string? PreviewAccession => SelectedPending?.AccessionNumber ?? Selected?.AccessionNumber;
+
+    /// <summary>A file's report link: the register searched on its number, on « À émettre » when it waits there.</summary>
+    [Parameter] public string? Search { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _term = Search?.Trim() ?? string.Empty;
+        await ActivateAsync();
+
+        if (_term.Length > 0 && _pending.Count > 0 && _register.Count == 0) await SelectTabAsync(ReportTab.ToIssue);
+    }
+
+    private async Task ActivateAsync()
+    {
+        try
+        {
+            var search = string.IsNullOrWhiteSpace(_term) ? null : _term.Trim();
+            var (pending, register, channels) = await Scopes.RunAsync<ReportReleaseService, (Result<IReadOnlyList<PendingReportRow>>, Result<IReadOnlyList<ReportRegisterRow>>, (bool, bool))>(
+                async s => (await s.GetPendingReleaseAsync(search), await s.GetRegisterAsync(search, onlyUndelivered: false, _window), s.ElectronicChannels));
+
+            _pending = pending.IsSuccess ? pending.Value : [];
+            _channels = channels;
+
+            if (register.IsFailure)
+            {
+                Show(Texts["Report.Plural"], Texts.Describe(register.Errors));
+                return;
+            }
+
+            _register = register.Value;
+            await LoadDeliveriesAsync(force: true);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the report register failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task LoadDeliveriesAsync(bool force = false)
+    {
+        if (Selected is not { } row)
+        {
+            _deliveries = [];
+            _deliveriesOf = null;
+            return;
+        }
+
+        if (!force && _deliveriesOf == row.ReportId) return;
+
+        var result = await Scopes.RunAsync<ReportReleaseService, Result<IReadOnlyList<ReportDeliveryRow>>>(s => s.GetDeliveriesAsync(row.ReportId));
+        _deliveries = result.IsSuccess ? result.Value : [];
+        _deliveriesOf = row.ReportId;
+    }
+
+    private async Task SelectTabAsync(ReportTab tab)
+    {
+        _tab = tab;
+        _status = null;
+        await LoadDeliveriesAsync();
+    }
+
+    private async Task SelectVersionAsync(ReportRegisterRow row)
+    {
+        _reportId = row.ReportId;
+        await LoadDeliveriesAsync();
+    }
+
+    private async Task SearchKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ActivateAsync();
+    }
+
+    private async Task WindowChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var days)) _window = days;
+        await ActivateAsync();
+    }
+
+    // ---- What the screen says ------------------------------------------------------------------------
+
+    private string TabCaption(ReportTab tab) => tab switch
+    {
+        ReportTab.ToIssue => Texts["Report.TabToIssue"],
+        ReportTab.ToDeliver => Texts["Report.TabToDeliver"],
+        _ => Texts["Report.TabIssued"]
+    };
+
+    /// <summary>Files to issue in the warning pair, versions to hand over in the critical pair when one carries a critical value.</summary>
+    private string TabTone(ReportTab tab) =>
+        tab == ReportTab.ToIssue ? "Warning"
+        : ReportRegisterRules.IsUrgent(_register, tab) ? "Critical"
+        : tab == ReportTab.ToDeliver ? "Warning"
+        : "Info";
+
+    /// <summary>The line of the action bar: what follows an issue, or the register's counts.</summary>
+    private string Hint
+    {
+        get
+        {
+            if (_tab == ReportTab.ToIssue) return Texts["Report.ActionsAfterIssue"];
+
+            var parts = new List<string>(3) { Texts.T("Report.VersionCount", _register.Count) };
+            var undelivered = _register.Count(r => r.AwaitingDelivery);
+            var urgent = _register.Count(r => r.IsUrgentToDeliver);
+            if (undelivered > 0) parts.Add($"{undelivered} {Texts["Report.AwaitingDelivery"].ToLower(Texts.Culture)}");
+            if (urgent > 0) parts.Add($"{urgent} {Texts["Report.CriticalUndelivered"].ToLower(Texts.Culture)}");
+            return string.Join(" · ", parts);
+        }
+    }
+
+    private string DeliveryHeading =>
+        Selected is not { } row ? Texts["Report.Deliveries"]
+        : _deliveries.Count == 0 ? $"{Texts["Report.Deliveries"]} — {Texts["Report.NoDeliveryRecorded"]}"
+        : $"{Texts["Report.Deliveries"]} — {row.AccessionNumber} v{row.VersionNumber}";
+
+    private string PatientName(string latin, string? arabic) =>
+        Texts.Language == AppLanguage.Arabic && arabic is { Length: > 0 } ? arabic : latin;
+
+    private string Amount(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string DeliveryText(ReportRegisterRow row) =>
+        row.LastDeliveredAt is { } at
+            ? at.ToLocalTime().ToString("dd/MM/yy HH:mm", CultureInfo.InvariantCulture) + (row.DeliveryCount > 1 ? $" ({row.DeliveryCount})" : null)
+            : row.AwaitingDelivery ? Texts[$"ReportDeliveryPreference.{row.PrescriberPreference}"] : "—";
+
+    private string VersionText(ReportRegisterRow row)
+    {
+        var parts = new List<string>(4) { $"v{row.VersionNumber} · {Texts[$"ReportCompleteness.{row.Completeness}"]}" };
+        if (row.IsAmendment) parts.Add(Texts[$"ReportAmendmentKind.{row.AmendmentKind}"]);
+        if (row.IsSuperseded) parts.Add(Texts["Report.Superseded"]);
+        if (row.PageCount > 0) parts.Add(Texts.T("Report.PageCountShort", row.PageCount));
+        return string.Join(" · ", parts);
+    }
+
+    private string PaymentText(OrderPayment? payment) =>
+        ReportRegisterRules.PaymentStatus(payment) is { } status
+            ? status.Amount is { } amount ? Texts.T(status.Key, Amount(amount)) : Texts[status.Key]
+            : "—";
+
+    /// <summary>The status in the side panel, with the invoice it is read from or the estimate.</summary>
+    private string PaymentDetail(OrderPayment? payment)
+    {
+        var text = PaymentText(payment);
+
+        if (payment?.InvoiceNumber is { } number)
+            return $"{text} · " + (payment.CoveredOrders > 1
+                ? Texts.T("Report.PaymentInvoiceShared", number, payment.CoveredOrders)
+                : Texts.T("Report.PaymentInvoice", number));
+
+        return payment is { State: OrderPaymentState.NotInvoiced, PatientDue: { } estimate }
+            ? $"{text} · {Texts.T("Report.PaymentEstimate", Amount(estimate))}"
+            : text;
+    }
+
+    private string UnpaidQuestion(ReportRegisterRow row, string questionKey)
+    {
+        var warning = ReportRegisterRules.UnpaidWarning(row.Payment)!;
+        var said = warning switch
+        {
+            { Amount: { } due, InvoiceNumber: { } number } => Texts.T(warning.Key, row.AccessionNumber, Amount(due), number, warning.CoveredOrders),
+            { Amount: { } due } => Texts.T(warning.Key, row.AccessionNumber, Amount(due)),
+            _ => Texts.T(warning.Key, row.AccessionNumber)
+        };
+        return $"{said}\n\n{Texts[questionKey]}";
+    }
+
+    private static string? Bearer(ReportDeliveryRow delivery) =>
+        delivery.BearerName is { Length: > 0 } bearer
+            ? bearer + (delivery.BearerCin is { Length: > 0 } cin ? $" ({cin})" : null)
+            : null;
+
+    private static string DeliveryTone(DeliveryStatus status) => status switch
+    {
+        DeliveryStatus.Delivered => "Ok",
+        DeliveryStatus.Sent => "Info",
+        DeliveryStatus.Failed => "Critical",
+        _ => "Waiting"
+    };
+
+    // ---- Actions -------------------------------------------------------------------------------------
+
+    private void CloseDialog()
+    {
+        _dialog = ReportDialog.None;
+        _message = null;
+    }
+
+    private void Show(string title, string text)
+    {
+        _message = new Message(title, text);
+        _dialog = ReportDialog.Message;
+    }
+
+    private void AskIssue()
+    {
+        if (Actions.Issue && !_busy) _dialog = ReportDialog.Issue;
+    }
+
+    private async Task AskReprint()
+    {
+        if (!Actions.Reprint || _busy || Selected is not { } row) return;
+
+        // A warning, never a refusal: the answer is logged with the reprint.
+        if (ReportRegisterRules.UnpaidWarning(row.Payment) is not null) _dialog = ReportDialog.UnpaidReprint;
+        else await ReprintAsync();
+    }
+
+    private void AskDelivery()
+    {
+        if (!Actions.RecordDelivery || _busy || Selected is not { } row) return;
+
+        // Asked before the form, whichever channel it then records.
+        _dialog = ReportRegisterRules.UnpaidWarning(row.Payment) is not null ? ReportDialog.UnpaidDelivery : ReportDialog.Delivery;
+    }
+
+    private void AskAmend()
+    {
+        if (Actions.Amend && !_busy) _dialog = ReportDialog.Amend;
+    }
+
+    /// <summary>Releases the waiting file: partial while analyses are awaited, final once none are.</summary>
+    private async Task IssueAsync()
+    {
+        if (SelectedPending is not { } row) return;
+
+        _dialog = ReportDialog.None;
+        _busy = true;
+
+        try
+        {
+            var released = await Scopes.RunAsync<ReportReleaseService, Result<ReleasedReport>>(s => s.ReleaseAsync(row.LabOrderId));
+
+            if (released.IsFailure)
+            {
+                Show(Texts["Report.Issue"], Texts.Describe(released.Errors));
+                return;
+            }
+
+            await DownloadAsync(row.AccessionNumber, released.Value.VersionNumber, released.Value.Pdf);
+            _status = (Texts.T("Report.Issued", row.AccessionNumber, released.Value.VersionNumber), "normal");
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Releasing the report of order {OrderId} failed.", row.LabOrderId);
+            Show(Texts["Report.Issue"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>The stored PDF, byte for byte — never a re-render; the reprint is a logged disclosure.</summary>
+    private async Task ReprintAsync()
+    {
+        if (Selected is not { } row) return;
+
+        _dialog = ReportDialog.None;
+        _busy = true;
+
+        try
+        {
+            var pdf = await Scopes.RunAsync<ReportReleaseService, Result<byte[]>>(s => s.GetStoredPdfAsync(row.ReportId, row.Payment));
+
+            if (pdf.IsFailure)
+            {
+                Show(Texts["Report.Reprint"], Texts.Describe(pdf.Errors));
+                return;
+            }
+
+            await DownloadAsync(row.AccessionNumber, row.VersionNumber, pdf.Value);
+            _status = (Texts.T("Report.ReprintLogged", row.AccessionNumber, row.VersionNumber), "muted");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reprinting report {ReportId} failed.", row.ReportId);
+            Show(Texts["Report.Reprint"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RecordDeliveryAsync(ReportDeliveryDialog.Request request)
+    {
+        if (Selected is not { } row) return;
+
+        _dialog = ReportDialog.None;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<ReportReleaseService, Result<DeliveryOutcome>>(s => s.RecordDeliveryAsync(
+                row.ReportId, request.Channel, request.Kind, request.RecipientName, request.RecipientIdentifier,
+                request.BearerName, request.BearerCin, request.ConsentId, row.Payment));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Report.RecordDelivery"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            switch (result.Value.Kind)
+            {
+                case DeliveryResultKind.Failed:
+                    // The attempt is on record; the operator learns it did not go, and why.
+                    var reason = result.Value.Failure is { } error ? Texts.Describe(error) : string.Empty;
+                    Show(Texts["Report.RecordDelivery"], Texts.T("Report.SendFailed", request.RecipientIdentifier, reason));
+                    _status = (Texts.T("Report.SendFailedShort", row.AccessionNumber), "critical");
+                    break;
+
+                case DeliveryResultKind.Sent:
+                    _status = (Texts.T(request.Channel == DeliveryChannel.Email ? "Report.EmailSent" : "Report.SmsSent",
+                                       row.AccessionNumber, request.RecipientIdentifier), "normal");
+                    break;
+
+                default:
+                    _status = (Texts.T("Report.DeliveryRecorded", row.AccessionNumber, row.VersionNumber), "normal");
+                    break;
+            }
+
+            _reportId = row.ReportId;
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Recording the delivery of report {ReportId} failed.", row.ReportId);
+            Show(Texts["Report.RecordDelivery"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>A rectified version, its reason printed on its face; the previous one is superseded.</summary>
+    private async Task AmendAsync(ReportAmendmentDialog.Request request)
+    {
+        if (Selected is not { } row) return;
+
+        _dialog = ReportDialog.None;
+        if (!ReportRegisterRules.Actions(null, row, Context.User).Amend) return;
+
+        _busy = true;
+
+        try
+        {
+            var released = await Scopes.RunAsync<ReportReleaseService, Result<ReleasedReport>>(s => s.ReleaseAsync(
+                row.LabOrderId, request.Language, request.Conclusion, request.Kind, request.Reason));
+
+            if (released.IsFailure)
+            {
+                Show(Texts["Report.IssueAmendment"], Texts.Describe(released.Errors));
+                return;
+            }
+
+            await DownloadAsync(row.AccessionNumber, released.Value.VersionNumber, released.Value.Pdf);
+            _status = (Texts.T("Report.AmendmentIssued", released.Value.VersionNumber, row.AccessionNumber), "abnormal");
+            _reportId = released.Value.ReportId;
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Amending report {ReportId} failed.", row.ReportId);
+            Show(Texts["Report.IssueAmendment"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Handed to the browser as the workstation hands it to the operator's PDF viewer.
+    private async Task DownloadAsync(string accession, int version, byte[] pdf)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("marocLis.download", $"{accession}-v{version}.pdf", "application/pdf", pdf);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+            // The report exists either way; it can be reprinted from the register.
+            Logger.LogWarning(ex, "Handing report {Accession} v{Version} to the browser failed.", accession, version);
+        }
+    }
+}

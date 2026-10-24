@@ -1,0 +1,146 @@
+@using System.Globalization
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Reports
+@using MarocLIS.Domain.Reports
+@inject WebTexts Texts
+@inject ActiveLanguagesCache Languages
+
+@*
+    « Émettre un rectificatif », the workstation's ReportAmendmentDialog: the kind chosen
+    deliberately, the language among those the laboratory works in, the reason printed on the face
+    of the new version and an optional conclusion. A corrected identity or a withdrawn report is
+    confirmed: the earlier one may have gone to the wrong person (loi 08-09). The kinds, the notice
+    and the checks are ReportDeliveryRules'.
+*@
+@if (_confirming)
+{
+    <ConfirmPrompt Title="@Texts["Report.IssueAmendment"]" Message="@Texts["Report.ConfirmIdentityAmendment"]"
+                   OnYes="ConfirmedAsync" OnNo="() => _confirming = false" />
+}
+else
+{
+    <Modal Name="amendment" Title="@($"{Texts["Report.IssueAmendment"]} — {Row.AccessionNumber} v{Row.VersionNumber}")" Wide="true" OnCancel="CancelAsync">
+        <ChildContent>
+            <p class="strong accent" data-state="identity">
+                @Row.AccessionNumber · @Texts.T("Report.AmendsVersion", Row.VersionNumber, Row.VersionNumber + 1) · @Row.PatientName
+            </p>
+            @if (Row.LastDeliveredAt is { } delivered)
+            {
+                <p class="message is-critical" data-state="delivered">@Texts.T("Report.AlreadyDeliveredNotice", delivered.ToLocalTime().ToString("dd/MM/yyyy", CultureInfo.InvariantCulture))</p>
+            }
+            else
+            {
+                <p class="small muted" data-state="delivered">@Texts["Report.NotYetDeliveredNotice"]</p>
+            }
+
+            <div class="form-grid">
+                <label class="field">
+                    <span class="field-label">@Texts["Report.AmendmentKind"]</span>
+                    <select class="input" data-field="kind" @onchange="KindChanged">
+                        @foreach (var kind in ReportDeliveryRules.AmendmentKinds)
+                        {
+                            <option value="@kind" selected="@(kind == _kind)">@Texts[$"ReportAmendmentKind.{kind}"]</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Order.ReportLanguage"]</span>
+                    <select class="input" data-field="language" @onchange="LanguageChanged">
+                        @foreach (var language in Languages.Current.Active)
+                        {
+                            <option value="@language" selected="@(language == _language)">@LanguageSettings.OwnName(language)</option>
+                        }
+                    </select>
+                </label>
+            </div>
+            <p class="small muted" data-state="kind-notice">@Texts[ReportDeliveryRules.AmendmentNoticeKey(_kind)]</p>
+
+            <div class="form-grid">
+                <label class="field">
+                    <span class="field-label">@Texts["Report.AmendmentReasonFr"]</span>
+                    <textarea class="input" rows="2" dir="ltr" data-field="reason-fr" maxlength="@ReportDeliveryRules.AmendmentReasonMaxLength"
+                              @bind="_reasonFr" @bind:event="oninput"></textarea>
+                    <FieldMessage Refusal="_refusal" Field="reason" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Report.AmendmentReasonAr"]</span>
+                    <textarea class="input" rows="2" dir="rtl" lang="ar" data-field="reason-ar" maxlength="@ReportDeliveryRules.AmendmentReasonMaxLength"
+                              @bind="_reasonAr" @bind:event="oninput"></textarea>
+                </label>
+            </div>
+            <p class="small abnormal">@Texts["Report.AmendmentReasonNotice"]</p>
+
+            <div class="form-grid">
+                <label class="field">
+                    <span class="field-label">@Texts["Report.ConclusionFr"]</span>
+                    <textarea class="input" rows="2" dir="ltr" data-field="conclusion-fr" maxlength="@ReportDeliveryRules.ConclusionMaxLength"
+                              @bind="_conclusionFr" @bind:event="oninput"></textarea>
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Report.ConclusionAr"]</span>
+                    <textarea class="input" rows="2" dir="rtl" lang="ar" data-field="conclusion-ar" maxlength="@ReportDeliveryRules.ConclusionMaxLength"
+                              @bind="_conclusionAr" @bind:event="oninput"></textarea>
+                </label>
+            </div>
+            <p class="small muted">@Texts["Report.ConclusionNotice"]</p>
+            <p class="small muted">@Texts["Report.AmendmentSupersedesNotice"]</p>
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+            <ActionButton Key="Report.IssueAmendment" Primary="true" OnClick="AcceptAsync" />
+        </Footer>
+    </Modal>
+}
+
+@code {
+    /// <summary>The rectification as the release takes it.</summary>
+    public sealed record Request(ReportAmendmentKind Kind, AppLanguage Language, MultilingualText Reason, MultilingualText? Conclusion);
+
+    [Parameter, EditorRequired] public ReportRegisterRow Row { get; set; } = default!;
+    [Parameter] public EventCallback<Request> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private ReportAmendmentKind _kind = ReportAmendmentKind.ResultCorrection;
+    private AppLanguage _language;
+    private string _reasonFr = string.Empty, _reasonAr = string.Empty, _conclusionFr = string.Empty, _conclusionAr = string.Empty;
+    private FieldRefusal? _refusal;
+    private bool _confirming;
+
+    // The report's own language when the laboratory still works in it, French otherwise.
+    protected override void OnInitialized() => _language = Languages.Current.Coerce(Row.Language);
+
+    private void KindChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ReportAmendmentKind>(e.Value?.ToString(), out var kind)) _kind = kind;
+    }
+
+    private void LanguageChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<AppLanguage>(e.Value?.ToString(), out var language)) _language = language;
+    }
+
+    private async Task AcceptAsync()
+    {
+        _refusal = ReportDeliveryRules.CheckAmendment(_reasonFr);
+        if (_refusal is not null) return;
+
+        // Confirmed rather than warned: the operator decides whether it is really that.
+        if (ReportDeliveryRules.AmendmentNeedsConfirmation(_kind))
+        {
+            _confirming = true;
+            return;
+        }
+
+        await ConfirmedAsync();
+    }
+
+    private Task ConfirmedAsync() =>
+        OnConfirm.InvokeAsync(new Request(
+            _kind, _language, new MultilingualText(_reasonFr.Trim(), Blank(_reasonAr)),
+            Blank(_conclusionFr) is { } conclusion ? new MultilingualText(conclusion, Blank(_conclusionAr)) : null));
+
+    private static string? Blank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}
