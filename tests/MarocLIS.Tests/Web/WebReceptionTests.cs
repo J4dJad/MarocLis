@@ -80,6 +80,26 @@ public sealed class WebReceptionTests : WebBenchContext
     }
 
     [Fact]
+    public void TheDecision_IsBesideTheTube_TheRefusalWithItsReason()
+    {
+        SignIn(AppLanguage.French, Permissions.Samples.View, Permissions.Samples.Receive, Permissions.Samples.Reject);
+        var page = Render<SampleReception>();
+
+        var scan = page.Find("[data-field=scan]");
+        scan.Input("T-2610-0042");
+        scan.KeyDown(new KeyboardEventArgs { Key = "Enter" });
+
+        var decision = page.Find("[data-state=decision]");
+        var groups = decision.QuerySelectorAll(".decision-group");
+        groups.Should().HaveCount(2);
+        groups[0].QuerySelector("[data-field=storage]").Should().NotBeNull();
+        groups[0].QuerySelector("[data-action='Action.Accept']").Should().NotBeNull();
+        groups[0].QuerySelector("[data-action='Action.AcceptWithReservation']").Should().NotBeNull();
+        groups[1].QuerySelector("[data-field=reject-reason]").Should().NotBeNull();
+        groups[1].QuerySelector("[data-action='Action.Reject']")!.ClassList.Should().Contain("btn-danger");
+    }
+
+    [Fact]
     public void TheTubesAwaitingReception_AreListed()
     {
         SignIn(AppLanguage.French, Permissions.Samples.View, Permissions.Samples.Receive);

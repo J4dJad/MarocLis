@@ -16,162 +16,179 @@
     tube is printed by the Windows workstation.
 *@
 <div class="screen reception" data-screen="reception">
-    <div class="card" data-card="scan">
-        <label class="field">
-            <span class="field-label">@Texts["Sample.ScanTube"]</span>
-            <div class="search-box search-box-wide scan-box">
-                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
-                <input class="input" type="text" placeholder="@Texts["Sample.ScanPrompt"]" data-field="scan" autocomplete="off"
-                       @ref="_scanBox" @bind="_scan" @bind:event="oninput" @onkeydown="ScanKey" />
-            </div>
-            <span class="muted small">@Texts["Sample.ScannerReady"]</span>
-        </label>
+    <div class="screen-body">
+        <div class="card" data-card="scan">
+            <label class="field">
+                <span class="field-label">@Texts["Sample.ScanTube"]</span>
+                <div class="search-box search-box-wide scan-box">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                    <input class="input" type="text" placeholder="@Texts["Sample.ScanPrompt"]" data-field="scan" autocomplete="off"
+                           @ref="_scanBox" @bind="_scan" @bind:event="oninput" @onkeydown="ScanKey" />
+                </div>
+                <span class="muted small">@Texts["Sample.ScannerReady"]</span>
+            </label>
 
-        @if (_status is { } status)
-        {
-            <p class="message is-@status.Tone" role="status" data-state="status">@status.Text</p>
-        }
+            @if (_status is { } status)
+            {
+                <p class="message is-@status.Tone" role="status" data-state="status">@status.Text</p>
+            }
+        </div>
 
         @if (_candidate is { } tube)
         {
             var actions = Actions;
 
-            <div class="tube-band" data-state="candidate" data-tube="@tube.Barcode">
-                <span class="tube-cap" style="background:@(tube.ContainerColourHex ?? "#FFFFFF")"></span>
-                <div class="tube-band-text">
-                    <div class="file-header-top">
-                        <span class="patient-band-name">@tube.PatientName</span>
-                        <span class="mono strong">@tube.AccessionNumber</span>
-                        <span class="muted small">@Identity(tube)</span>
-                        @if (tube.Priority != OrderPriority.Routine)
-                        {
-                            <Pill Text="@Texts[$"Priority.{tube.Priority}"]" Tone="Warning" />
-                        }
+            @* The tube on the start side, what was seen on it; the decision beside it, on the end side. *@
+            <div class="reception-work">
+                <section class="card reception-tube" data-card="tube">
+                    <div class="tube-band" data-state="candidate" data-tube="@tube.Barcode">
+                        <span class="tube-cap" style="background:@(tube.ContainerColourHex ?? "#FFFFFF")"></span>
+                        <div class="tube-band-text">
+                            <div class="file-header-top">
+                                <span class="patient-band-name">@tube.PatientName</span>
+                                <span class="mono strong">@tube.AccessionNumber</span>
+                                <span class="muted small">@Identity(tube)</span>
+                                @if (tube.Priority != OrderPriority.Routine)
+                                {
+                                    <Pill Text="@Texts[$"Priority.{tube.Priority}"]" Tone="Warning" />
+                                }
+                            </div>
+                            <div class="small">@TubeLine(tube)</div>
+                            <div class="mono small muted">@string.Join(" ", tube.AnalysisCodes)</div>
+                        </div>
+                        <div class="delay">
+                            <span class="field-label">@Texts["Sample.TransportDelay"]</span>
+                            <span class="delay-value @(tube.StabilityExceeded ? "critical" : tube.Elapsed is null ? "abnormal" : "normal-ink")">@DelayValue(tube)</span>
+                        </div>
                     </div>
-                    <div class="small">@TubeLine(tube)</div>
-                    <div class="mono small muted">@string.Join(" ", tube.AnalysisCodes)</div>
-                </div>
-                <div class="delay">
-                    <span class="field-label">@Texts["Sample.TransportDelay"]</span>
-                    <span class="delay-value @(tube.StabilityExceeded ? "critical" : tube.Elapsed is null ? "abnormal" : "normal-ink")">@DelayValue(tube)</span>
-                </div>
-            </div>
-            @if (tube.StabilityExceeded)
-            {
-                <p class="message is-critical" data-state="delay">⚠ @Texts["SampleDefect.ExcessiveDelay"] — @FormatElapsed(tube.Elapsed) &gt; @tube.ShortestStabilityHours h</p>
-            }
-            else if (tube.Elapsed is null)
-            {
-                <p class="message is-abnormal" data-state="delay">@Texts["Sample_NotCollected"]</p>
-            }
-
-            <fieldset class="defects" disabled="@(!actions.Reject)">
-                <legend class="field-label">@Texts["Sample.DefectsLegend"]</legend>
-                <div class="chips">
-                    @foreach (var defect in Enum.GetValues<SampleDefect>().Where(d => d != SampleDefect.None))
+                    @if (tube.StabilityExceeded)
                     {
-                        var on = _defects.HasFlag(defect);
-                        <button type="button" class="chip @(on ? "is-pressed is-defect" : null)" aria-pressed="@(on ? "true" : "false")" data-defect="@defect"
-                                @onclick="() => ToggleDefect(defect)">@Texts[$"SampleDefect.{defect}"]</button>
+                        <p class="message is-critical" data-state="delay">⚠ @Texts["SampleDefect.ExcessiveDelay"] — @FormatElapsed(tube.Elapsed) &gt; @tube.ShortestStabilityHours h</p>
                     }
-                </div>
-            </fieldset>
+                    else if (tube.Elapsed is null)
+                    {
+                        <p class="message is-abnormal" data-state="delay">@Texts["Sample_NotCollected"]</p>
+                    }
 
-            <div class="form-grid">
-                @if (tube.RequiresColdChain)
-                {
-                    <label class="field">
-                        <span class="field-label">@Texts["Sample.Temperature"]</span>
-                        <input class="input" type="text" inputmode="decimal" data-field="temperature" @bind="_temperature" @bind:event="oninput" />
-                    </label>
-                    <label class="field field-check">
-                        <input type="checkbox" data-field="cold-chain" @bind="_coldChain" />
-                        <span>@Texts["Sample.ColdChain"]</span>
-                    </label>
-                }
-                <label class="field">
-                    <span class="field-label">@Texts["Sample.Storage"]</span>
-                    <select class="input" data-field="storage" @bind="_storage">
-                        <option value="">@Texts["Sample.StorageNotSpecified"]</option>
-                        @foreach (var place in _places)
-                        {
-                            <option value="@place">@place</option>
-                        }
-                    </select>
-                </label>
-            </div>
+                    <fieldset class="defects" disabled="@(!actions.Reject)">
+                        <legend class="field-label">@Texts["Sample.DefectsLegend"]</legend>
+                        <div class="defect-grid">
+                            @foreach (var defect in Enum.GetValues<SampleDefect>().Where(d => d != SampleDefect.None))
+                            {
+                                var on = _defects.HasFlag(defect);
+                                <button type="button" class="chip @(on ? "is-pressed is-defect" : null)" aria-pressed="@(on ? "true" : "false")" data-defect="@defect"
+                                        @onclick="() => ToggleDefect(defect)">@Texts[$"SampleDefect.{defect}"]</button>
+                            }
+                        </div>
+                    </fieldset>
 
-            <div class="decision" data-state="decision">
-                <ActionButton Key="Action.Accept" Primary="true" Disabled="@(_deciding || !actions.Accept)" Title="@Texts["Sample.EnterKey"]"
-                              OnClick="() => AcceptAsync(withReservation: false)" />
-                <ActionButton Key="Action.AcceptWithReservation" Class="@(_defects != SampleDefect.None ? "is-emphasised" : null)"
-                              Disabled="@(_deciding || !actions.AcceptWithReservation)" OnClick="() => AcceptAsync(withReservation: true)" />
-                <span class="toolbar-spacer"></span>
-                <label class="field">
-                    <span class="field-label">@Texts["Recollection.Reason"]</span>
-                    <select class="input" data-field="reject-reason" disabled="@(_deciding || !actions.Reject)" @onchange="ReasonChanged">
-                        <option value="" selected="@(_reason is null)"></option>
-                        @foreach (var reason in Enum.GetValues<SampleRejectionReason>())
-                        {
-                            <option value="@reason" selected="@(_reason == reason)">@Texts[$"RejectionReason.{reason}"]</option>
-                        }
-                    </select>
-                </label>
-                <label class="field-check">
-                    <input type="checkbox" data-field="request-recollection" disabled="@(_deciding || !actions.Reject)" @bind="_requestRecollection" />
-                    <span>@Texts["Sample.RequestRecollection"]</span>
-                </label>
-                <ActionButton Key="Action.Reject" Danger="true" Disabled="@(_deciding || !actions.Reject)" OnClick="AskReject" />
+                    @if (tube.RequiresColdChain)
+                    {
+                        <div class="form-grid">
+                            <label class="field">
+                                <span class="field-label">@Texts["Sample.Temperature"]</span>
+                                <input class="input" type="text" inputmode="decimal" data-field="temperature" @bind="_temperature" @bind:event="oninput" />
+                            </label>
+                            <label class="field field-check">
+                                <input type="checkbox" data-field="cold-chain" @bind="_coldChain" />
+                                <span>@Texts["Sample.ColdChain"]</span>
+                            </label>
+                        </div>
+                    }
+                </section>
+
+                <aside class="card decision" data-state="decision">
+                    <h2 class="card-title">@Texts["Web.Decision"]</h2>
+                    <div class="decision-group">
+                        <label class="field">
+                            <span class="field-label">@Texts["Sample.Storage"]</span>
+                            <select class="input" data-field="storage" @bind="_storage">
+                                <option value="">@Texts["Sample.StorageNotSpecified"]</option>
+                                @foreach (var place in _places)
+                                {
+                                    <option value="@place">@place</option>
+                                }
+                            </select>
+                        </label>
+                        <ActionButton Key="Action.Accept" Primary="true" Disabled="@(_deciding || !actions.Accept)" Title="@Texts["Sample.EnterKey"]"
+                                      OnClick="() => AcceptAsync(withReservation: false)" />
+                        <ActionButton Key="Action.AcceptWithReservation" Class="@(_defects != SampleDefect.None ? "is-emphasised" : null)"
+                                      Disabled="@(_deciding || !actions.AcceptWithReservation)" OnClick="() => AcceptAsync(withReservation: true)" />
+                    </div>
+                    <div class="decision-group">
+                        <label class="field">
+                            <span class="field-label">@Texts["Recollection.Reason"]</span>
+                            <select class="input" data-field="reject-reason" disabled="@(_deciding || !actions.Reject)" @onchange="ReasonChanged">
+                                <option value="" selected="@(_reason is null)"></option>
+                                @foreach (var reason in Enum.GetValues<SampleRejectionReason>())
+                                {
+                                    <option value="@reason" selected="@(_reason == reason)">@Texts[$"RejectionReason.{reason}"]</option>
+                                }
+                            </select>
+                        </label>
+                        <label class="field-check">
+                            <input type="checkbox" data-field="request-recollection" disabled="@(_deciding || !actions.Reject)" @bind="_requestRecollection" />
+                            <span>@Texts["Sample.RequestRecollection"]</span>
+                        </label>
+                        <ActionButton Key="Action.Reject" Danger="true" Disabled="@(_deciding || !actions.Reject)" OnClick="AskReject" />
+                    </div>
+                </aside>
             </div>
         }
-    </div>
 
-    <div class="card card-flush" data-card="awaiting">
-        <div class="toolbar card-pad">
-            <h2 class="card-title">@Texts["Sample.AwaitingReception"]</h2>
-            <span class="muted small" data-state="awaiting-count">@(_awaiting.Count == 1 ? Texts["Collection.OneTube"] : Texts.T("Collection.ManyTubes", _awaiting.Count))</span>
-            <span class="toolbar-spacer"></span>
-            <div class="chips" role="group">
-                @foreach (var (filter, caption) in Chips)
-                {
-                    <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
-                            data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => _filter = filter">@caption</button>
-                }
+        <div class="card card-flush" data-card="awaiting">
+            <div class="card-pad">
+                <div class="card-heading">
+                    <h2 class="card-title">@Texts["Sample.AwaitingReception"]
+                        <span class="count" data-state="awaiting-count">@(_awaiting.Count == 1 ? Texts["Collection.OneTube"] : Texts.T("Collection.ManyTubes", _awaiting.Count))</span>
+                    </h2>
+                </div>
+                <div class="list-tools">
+                    <div class="chips" role="group">
+                        @foreach (var (filter, caption) in Chips)
+                        {
+                            <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
+                                    data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => _filter = filter">@caption</button>
+                        }
+                    </div>
+                    <span class="list-tools-end">
+                        <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="RefreshAwaitingAsync" />
+                    </span>
+                </div>
             </div>
-            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="RefreshAwaitingAsync" />
-        </div>
-        <div class="table-scroll table-scroll-short">
-            <table class="grid grid-select" data-grid="awaiting">
-                <thead>
-                    <tr>
-                        <th>@Texts["Sample.Barcode"]</th>
-                        <th>@Texts["Order.AccessionNumber"]</th>
-                        <th>@Texts["Patient.Title"]</th>
-                        <th>@Texts["Sample.SpecimenType"]</th>
-                        <th>@Texts["Field.Priority"]</th>
-                        <th>@Texts["Sample.CollectedAt"]</th>
-                        <th>@Texts["Sample.TransportDelay"]</th>
-                        <th>@Texts["Field.Status"]</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var row in _awaiting.Where(c => SampleReceptionRules.Matches(c, _filter)))
-                    {
-                        var (text, tone) = Verdict(row);
-                        <tr class="@(row.SampleId == _candidate?.SampleId ? "is-selected" : null)" data-tube="@row.Barcode"
-                            @onclick="() => ScanAsync(row.Barcode)">
-                            <td class="mono">@row.Barcode</td>
-                            <td class="mono">@row.AccessionNumber</td>
-                            <td>@row.PatientName</td>
-                            <td>@row.SpecimenTypeName.For(Texts.Language)</td>
-                            <td class="@(row.Priority == OrderPriority.Routine ? "muted" : "strong")">@Texts[$"Priority.{row.Priority}"]</td>
-                            <td class="small">@row.CollectedAt?.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
-                            <td class="small">@FormatElapsed(row.Elapsed)</td>
-                            <td><Pill Text="@text" Tone="@tone" /></td>
+            <div class="table-scroll table-scroll-short">
+                <table class="grid grid-select" data-grid="awaiting">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Sample.Barcode"]</th>
+                            <th>@Texts["Order.AccessionNumber"]</th>
+                            <th>@Texts["Patient.Title"]</th>
+                            <th>@Texts["Sample.SpecimenType"]</th>
+                            <th>@Texts["Field.Priority"]</th>
+                            <th>@Texts["Sample.CollectedAt"]</th>
+                            <th>@Texts["Sample.TransportDelay"]</th>
+                            <th>@Texts["Field.Status"]</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _awaiting.Where(c => SampleReceptionRules.Matches(c, _filter)))
+                        {
+                            var (text, tone) = Verdict(row);
+                            <tr class="@(row.SampleId == _candidate?.SampleId ? "is-selected" : null)" data-tube="@row.Barcode"
+                                @onclick="() => ScanAsync(row.Barcode)">
+                                <td class="mono">@row.Barcode</td>
+                                <td class="mono">@row.AccessionNumber</td>
+                                <td>@row.PatientName</td>
+                                <td>@row.SpecimenTypeName.For(Texts.Language)</td>
+                                <td class="@(row.Priority == OrderPriority.Routine ? "muted" : "strong")">@Texts[$"Priority.{row.Priority}"]</td>
+                                <td class="small">@row.CollectedAt?.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
+                                <td class="small">@FormatElapsed(row.Elapsed)</td>
+                                <td><Pill Text="@text" Tone="@tone" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>

@@ -24,30 +24,34 @@
 <div class="screen entry" data-screen="entry">
     <NavigationLock OnBeforeInternalNavigation="BeforeLeaving" ConfirmExternalNavigation="@HasUnsaved" />
 
-    <div class="split split-list">
+    <div class="screen-body split split-list">
         <aside class="card list-pane" data-card="worklist">
             <div class="card-heading">
                 <h2 class="card-title" data-state="worklist-count">@Texts.T("ResultEntry.WorklistCount", _pending.Count)</h2>
-                <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="RefreshAsync" />
             </div>
-            <div class="input-with-button">
-                <input class="input scan-box" type="text" autocomplete="off" data-field="scan" @ref="_scanBox"
-                       placeholder="@Texts["ResultEntry.ScanPlaceholder"]" title="@($"{Texts["Order.AccessionNumber"]} / {Texts["Sample.Barcode"]}")"
-                       @bind="_scan" @bind:event="oninput" @onkeydown="ScanKeyAsync" />
-                <ActionButton Key="Action.Open" OnClick="() => LoadAsync(_scan)" />
-            </div>
-            @if (_sectors.Count > 0)
-            {
-                <div class="chips" role="group" data-filter="sectors">
-                    <button type="button" class="chip @(_sectorFilter is null ? "is-pressed" : null)" aria-pressed="@((_sectorFilter is null) ? "true" : "false")"
-                            data-filter="all" @onclick="() => _sectorFilter = null">@Texts["ResultEntry.AllSectors"]</button>
-                    @foreach (var sector in _sectors)
-                    {
-                        <button type="button" class="chip @(_sectorFilter == sector.Code ? "is-pressed" : null)" aria-pressed="@((_sectorFilter == sector.Code) ? "true" : "false")"
-                                data-filter="@sector.Code" @onclick="() => _sectorFilter = sector.Code">@sector.Name.For(Texts.Language)</button>
-                    }
+            <div class="list-tools">
+                <div class="input-with-button">
+                    <input class="input scan-box" type="text" autocomplete="off" data-field="scan" @ref="_scanBox"
+                           placeholder="@Texts["ResultEntry.ScanPlaceholder"]" title="@($"{Texts["Order.AccessionNumber"]} / {Texts["Sample.Barcode"]}")"
+                           @bind="_scan" @bind:event="oninput" @onkeydown="ScanKeyAsync" />
+                    <ActionButton Key="Action.Open" OnClick="() => LoadAsync(_scan)" />
                 </div>
-            }
+                @if (_sectors.Count > 0)
+                {
+                    <div class="chips" role="group" data-filter="sectors">
+                        <button type="button" class="chip @(_sectorFilter is null ? "is-pressed" : null)" aria-pressed="@((_sectorFilter is null) ? "true" : "false")"
+                                data-filter="all" @onclick="() => _sectorFilter = null">@Texts["ResultEntry.AllSectors"]</button>
+                        @foreach (var sector in _sectors)
+                        {
+                            <button type="button" class="chip @(_sectorFilter == sector.Code ? "is-pressed" : null)" aria-pressed="@((_sectorFilter == sector.Code) ? "true" : "false")"
+                                    data-filter="@sector.Code" @onclick="() => _sectorFilter = sector.Code">@sector.Name.For(Texts.Language)</button>
+                        }
+                    </div>
+                }
+                <span class="list-tools-end">
+                    <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="RefreshAsync" />
+                </span>
+            </div>
             <ul class="file-list" data-list="worklist">
                 @foreach (var order in Shown)
                 {
@@ -81,9 +85,6 @@
                     </li>
                 }
             </ul>
-            <div class="list-pane-footer">
-                <ActionButton Key="BenchSheet.Open" Disabled="@(!Context.User.Has(Permissions.Results.Enter))" OnClick="OpenBenchSheetAsync" />
-            </div>
         </aside>
 
         <section class="file-pane" data-card="sheet">
@@ -100,8 +101,6 @@
             }
             else
             {
-                var selected = SelectedRow;
-                var actions = selected is null ? ResultRowActions.None : ResultEntryRules.RowActions(selected, Context.User);
                 var (entered, owed) = ResultEntryRules.Progress(sheet.Rows);
 
                 <div class="card patient-band" data-state="patient">
@@ -134,7 +133,7 @@
                     </div>
                 </div>
 
-                <div class="card card-flush">
+                <div class="card card-flush pane-fill">
                     <div class="table-scroll table-scroll-tall">
                         <table class="grid grid-entry" data-grid="entry">
                             <thead>
@@ -213,30 +212,47 @@
                     </div>
                 </div>
 
-                <footer class="action-bar">
-                    <p class="action-bar-status is-@(_status?.Tone ?? "muted")" role="status" data-state="status">@_status?.Text</p>
-                    <details class="more more-up">
-                        <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]</summary>
-                        <div class="more-menu">
-                            <ActionButton Key="ResultEntry.MarkNotDone" Disabled="@(!actions.NotDone || _busy)" OnClick="() => Open(EntryDialog.NotDone)" />
-                            <ActionButton Key="ResultEntry.ClearValue" Disabled="@(!actions.Clear || _busy)" OnClick="() => Open(EntryDialog.Clear)" />
-                            <ActionButton Key="ResultEntry.CorrectReleased" Disabled="@(!actions.Correct || _busy)" OnClick="AskCorrection" />
-                            <ActionButton Key="Result.TechnicalComment" Text="@($"{Texts["Result.TechnicalComment"]}…")" Disabled="@(!actions.Comment)"
-                                          Shortcut="F3" OnClick="() => Open(EntryDialog.Comment)" />
-                        </div>
-                    </details>
-                    <ActionButton Key="Result.History" Hidden="@(!Context.User.Has(Permissions.Results.View))"
-                                  Disabled="@(!ResultEntryRules.IsCharted(selected))" OnClick="() => ShowHistoryAsync(selected)" />
-                    <span class="toolbar-spacer"></span>
-                    <span class="muted small" data-state="remaining">@Remaining</span>
-                    <ActionButton Key="Validation.Technical" Disabled="@(!Context.User.Has(Permissions.Results.TechnicalValidate) || !ResultEntryRules.CanTechnicallyValidate(sheet.Rows) || _busy)"
-                                  OnClick="() => Open(EntryDialog.Technical)" />
-                    <ActionButton Key="Action.Save" Primary="true" Shortcut="Ctrl+S"
-                                  Disabled="@(!Context.User.Has(Permissions.Results.Enter) || _busy)" OnClick="SubmitAsync" />
-                </footer>
             }
         </section>
     </div>
+
+    @{
+        var selected = SelectedRow;
+        var actions = selected is null ? ResultRowActions.None : ResultEntryRules.RowActions(selected, Context.User);
+    }
+    @* The bench sheet is always at hand; what acts on a file waits until one is open. *@
+    <ActionBar ShowStatus="@(_sheet is not null)" ShowMore="@(_sheet is not null)" StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="BenchSheet.Open" Disabled="@(!Context.User.Has(Permissions.Results.Enter))" OnClick="OpenBenchSheetAsync" />
+            @if (_sheet is { } open)
+            {
+                <ActionButton Key="Result.History" Hidden="@(!Context.User.Has(Permissions.Results.View))"
+                              Disabled="@(!ResultEntryRules.IsCharted(selected))" OnClick="() => ShowHistoryAsync(selected)" />
+                <ActionButton Key="Validation.Technical" Disabled="@(!Context.User.Has(Permissions.Results.TechnicalValidate) || !ResultEntryRules.CanTechnicallyValidate(open.Rows) || _busy)"
+                              OnClick="() => Open(EntryDialog.Technical)" />
+            }
+        </Secondary>
+        <More>
+            <ActionButton Key="Result.TechnicalComment" Text="@($"{Texts["Result.TechnicalComment"]}…")" Disabled="@(!actions.Comment)"
+                          Shortcut="F3" OnClick="() => Open(EntryDialog.Comment)" />
+            <ActionButton Key="ResultEntry.MarkNotDone" Disabled="@(!actions.NotDone || _busy)" OnClick="() => Open(EntryDialog.NotDone)" />
+            <ActionButton Key="ResultEntry.ClearValue" Disabled="@(!actions.Clear || _busy)" OnClick="() => Open(EntryDialog.Clear)" />
+            <ActionButton Key="ResultEntry.CorrectReleased" Disabled="@(!actions.Correct || _busy)" OnClick="AskCorrection" />
+        </More>
+        <Info>
+            @if (_sheet is not null)
+            {
+                <span data-state="remaining">@Remaining</span>
+            }
+        </Info>
+        <Primary>
+            @if (_sheet is not null)
+            {
+                <ActionButton Key="Action.Save" Primary="true" Shortcut="Ctrl+S"
+                              Disabled="@(!Context.User.Has(Permissions.Results.Enter) || _busy)" OnClick="SubmitAsync" />
+            }
+        </Primary>
+    </ActionBar>
 </div>
 
 @switch (_dialog)

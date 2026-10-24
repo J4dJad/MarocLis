@@ -15,14 +15,7 @@
     red rows and the actions offered are RecollectionRules'; what is done, RecollectionService's.
 *@
 <div class="screen recollections" data-screen="recollections">
-    <div class="toolbar">
-        <span class="muted" data-state="count">@Texts.T("Recollection.Count", _rows.Count, _rows.Count(r => r.ContactCount == 0))</span>
-        <span class="toolbar-spacer"></span>
-        <ActionButton Key="Action.Refresh" OnClick="ActivateAsync" />
-        <ActionButton Key="Recollection.RecordCall" Primary="true" Disabled="@(!Actions.RecordCall)" OnClick="AskCall" />
-    </div>
-
-    <div class="toolbar">
+    <div class="list-tools">
         <div class="search-box">
             <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
             <input class="input" type="search" placeholder="@Texts["Recollection.SearchPlaceholder"]" aria-label="@Texts["Recollection.SearchPlaceholder"]"
@@ -35,14 +28,13 @@
                         data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => _filter = filter">@caption</button>
             }
         </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@Texts.T("Recollection.Count", _rows.Count, _rows.Count(r => r.ContactCount == 0))</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="ActivateAsync" />
+        </span>
     </div>
 
-    @if (_status is { } status)
-    {
-        <p class="message is-@status.Tone" role="status" data-state="status">@status.Text</p>
-    }
-
-    <div class="split">
+    <div class="screen-body split">
         <div class="card card-flush split-main">
             <div class="table-scroll">
                 <table class="grid grid-select" data-grid="recollections">
@@ -105,13 +97,21 @@
                     <dt>@Texts["Recollection.NewTube"]</dt><dd class="mono strong">@selected.ReplacementBarcode</dd>
                     <dt>@Texts["Recollection.LastContact"]</dt><dd>@Contact(selected, withCount: false)</dd>
                 </dl>
-                <div class="actions">
-                    <ActionButton Key="Recollection.SendSms" Disabled="@(!Actions.SendSms)" OnClick="AskSms" />
-                    <ActionButton Key="Recollection.Abandon" Disabled="@(!Actions.Abandon)" OnClick="AskAbandon" />
-                </div>
             }
         </aside>
     </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Recollection.SendSms" Disabled="@(!Actions.SendSms)" OnClick="AskSms" />
+        </Secondary>
+        <Destructive>
+            <ActionButton Key="Recollection.Abandon" Danger="true" Disabled="@(!Actions.Abandon)" OnClick="AskAbandon" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Recollection.RecordCall" Primary="true" Disabled="@(!Actions.RecordCall)" OnClick="AskCall" />
+        </Primary>
+    </ActionBar>
 </div>
 
 @if (Selected is { } current)

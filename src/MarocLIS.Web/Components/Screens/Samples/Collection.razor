@@ -20,18 +20,22 @@
     SampleWorkflowService's. Labels are printed by the Windows workstation.
 *@
 <div class="screen collection" data-screen="collection">
-    <div class="split split-list">
+    <div class="screen-body split split-list">
         <aside class="card list-pane" data-card="patients">
             <div class="card-heading">
                 <h2 class="card-title">@Texts["SampleStatus.AwaitingCollection"]</h2>
-                <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="ActivateAsync" />
             </div>
-            <div class="chips" role="group">
-                @foreach (var (filter, caption) in Chips)
-                {
-                    <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
-                            data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => SetFilter(filter)">@caption</button>
-                }
+            <div class="list-tools">
+                <div class="chips" role="group">
+                    @foreach (var (filter, caption) in Chips)
+                    {
+                        <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
+                                data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => SetFilter(filter)">@caption</button>
+                    }
+                </div>
+                <span class="list-tools-end">
+                    <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="ActivateAsync" />
+                </span>
             </div>
             <p class="muted small" data-state="list-count">@Texts.T("Collection.PatientsAndTubes", All.Count, _entries.Count)</p>
             <ul class="file-list" data-list="patients">
@@ -191,17 +195,25 @@
                     </label>
                 </div>
 
-                <footer class="action-bar">
-                    <p class="action-bar-status is-@(_status?.Tone ?? "muted")" role="status" data-state="status">@(_status?.Text ?? Remaining)</p>
-                    <ActionButton Key="Action.PrintLabels" Disabled="@(!actions.Reprint)" Shortcut="F8" OnClick="PrintLabels" />
-                    <ActionButton Key="Collection.DispatchToBench" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Truck"
-                                  Disabled="@(!actions.Dispatch)" OnClick="() => RecordAsync(dispatch: true)" />
-                    <ActionButton Key="Collection.ValidateDraw" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Syringe" Primary="true"
-                                  Disabled="@(!actions.Record)" Shortcut="F12" OnClick="() => RecordAsync(dispatch: false)" />
-                </footer>
             }
         </section>
     </div>
+
+    @if (_set.Count > 0)
+    {
+        var actions = Actions;
+        <ActionBar StatusText="@(_status?.Text ?? Remaining)" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+            <Secondary>
+                <ActionButton Key="Action.PrintLabels" Disabled="@(!actions.Reprint)" Shortcut="F8" OnClick="PrintLabels" />
+                <ActionButton Key="Collection.DispatchToBench" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Truck"
+                              Disabled="@(!actions.Dispatch)" OnClick="() => RecordAsync(dispatch: true)" />
+            </Secondary>
+            <Primary>
+                <ActionButton Key="Collection.ValidateDraw" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Syringe" Primary="true"
+                              Disabled="@(!actions.Record)" Shortcut="F12" OnClick="() => RecordAsync(dispatch: false)" />
+            </Primary>
+        </ActionBar>
+    }
 </div>
 
 @switch (_dialog)

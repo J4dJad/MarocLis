@@ -154,6 +154,20 @@ public sealed class WebValidationTests : WebBenchContext
     }
 
     [Fact]
+    public void TheActions_AreInOneBar_ThePrimaryAtTheEnd_AndUnvalidatingSetApart()
+    {
+        SignIn(AppLanguage.French, Biologist);
+
+        var page = Open();
+
+        page.FindAll("[data-bar=actions]").Should().ContainSingle();
+        page.Find(".action-bar-end [data-action='Validation.ValidateSelection']").ClassList.Should().Contain("btn-primary");
+        page.Find(".action-bar-start [data-action='Result.History']").Should().NotBeNull();
+        page.Find(".more-menu [data-action='Validation.Unvalidate']").ClassList.Should().Contain("btn-danger");
+        page.Find("[data-card=worklist] [data-action='Action.Refresh']").Should().NotBeNull("the refresh is at the top of the list");
+    }
+
+    [Fact]
     public void TheScreen_IsInArabic_ForAnArabicSession()
     {
         SignIn(AppLanguage.Arabic, Biologist);

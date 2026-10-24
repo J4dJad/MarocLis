@@ -24,225 +24,243 @@
 <div class="screen validation" data-screen="validation">
     <NavigationLock OnBeforeInternalNavigation="BeforeLeaving" ConfirmExternalNavigation="@(_comments.Count > 0)" />
 
-    <div class="card" data-card="worklist">
-        <div class="card-heading">
-            <h2 class="card-title">@Texts["Dashboard.AwaitingValidation"]</h2>
-            <div class="chips" role="group">
-                @foreach (var filter in Enum.GetValues<ValidationFilter>())
-                {
-                    <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
-                            data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => _filter = filter">@ChipText(filter)</button>
-                }
-                <label class="field-check chips-count">
+    <div class="screen-body split split-list split-list-wide">
+        <aside class="card list-pane" data-card="worklist">
+            <div class="card-heading">
+                <h2 class="card-title">@Texts["Dashboard.AwaitingValidation"]</h2>
+            </div>
+            <div class="list-tools">
+                <div class="chips" role="group">
+                    @foreach (var filter in Enum.GetValues<ValidationFilter>())
+                    {
+                        <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
+                                data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => _filter = filter">@ChipText(filter)</button>
+                    }
+                </div>
+                <label class="field-check small">
                     <input type="checkbox" data-field="show-validated" checked="@_showValidated" @onchange="ShowValidatedChanged" />
                     <span>@Texts["Validation.ShowValidated"]</span>
                 </label>
+                <span class="list-tools-end">
+                    <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="ActivateAsync" />
+                </span>
             </div>
-        </div>
-        <div class="table-scroll table-scroll-short">
-            <table class="grid grid-select" data-grid="worklist">
-                <thead>
-                    <tr>
-                        <th>@Texts["Order.Title"]</th>
-                        <th>@Texts["Patient.Title"]</th>
-                        <th>@Texts["Field.Priority"]</th>
-                        <th class="num">@Texts["Validation.ToValidateColumn"]</th>
-                        <th class="num">@Texts["Validation.AbnormalColumn"]</th>
-                        <th>@Texts["Result.Flags"]</th>
-                        <th>@Texts["Order.RegisteredAt"]</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var entry in Visible)
-                    {
-                        var critical = entry.UncommunicatedCriticalCount > 0;
-                        <tr class="@(entry.LabOrderId == _orderId ? "is-selected" : null) @(critical ? "is-critical-row" : null)"
-                            data-order="@entry.AccessionNumber" @onclick="() => SelectAsync(entry.LabOrderId)">
-                            <td class="mono @(entry.LabOrderId == _orderId ? "strong" : null)">@entry.AccessionNumber</td>
-                            <td>
-                                <span class="strong">@entry.PatientName</span>
-                                @if (PatientDetail(entry) is { Length: > 0 } detail)
-                                {
-                                    <span class="muted"> · @detail</span>
-                                }
-                            </td>
-                            <td>
-                                @if (entry.Priority == OrderPriority.Routine)
-                                {
-                                    <span class="muted">@Texts["Priority.Routine"]</span>
-                                }
-                                else
-                                {
-                                    <Pill Text="@Texts[$"Priority.{entry.Priority}"]" Tone="@OrderFileRules.PriorityTone(entry.Priority).ToString()" />
-                                }
-                            </td>
-                            <td class="num mono">@entry.AwaitingCount</td>
-                            <td class="num mono @(entry.AbnormalCount > 0 ? "abnormal strong" : null)">@(entry.AbnormalCount > 0 ? entry.AbnormalCount : null)</td>
-                            <td>
-                                <span class="pills">
-                                    @foreach (var alert in ValidationScreenRules.Alerts(entry))
-                                    {
-                                        <Pill Text="@Texts.T(alert.Key, alert.Args)" Tone="@alert.Tone.ToString()" />
-                                    }
-                                </span>
-                            </td>
-                            <td class="small mono">@entry.RegisteredAt.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="split">
-        <div class="card card-flush" data-card="results">
-            <div class="card-heading card-pad">
-                <div>
-                    <h2 class="card-title" data-state="file">@(_sheet is { } open ? $"{open.AccessionNumber} — {open.PatientName}" : Texts["App.NoData"])</h2>
-                    @if (_sheet is { } shown)
-                    {
-                        <span class="muted small">@Subtitle(shown)</span>
-                    }
-                </div>
-                <span class="muted small" data-state="selection">@SelectionText</span>
-            </div>
-            <div class="table-scroll table-scroll-tall">
-                <table class="grid" data-grid="results">
+            <div class="table-scroll">
+                <table class="grid grid-select worklist-table" data-grid="worklist">
                     <thead>
                         <tr>
-                            <th class="tick-col"></th>
-                            <th>@Texts["Result.Parameter"]</th>
-                            <th class="num">@Texts["Result.Value"]</th>
-                            <th>@Texts["ResultEntry.Indicator"]</th>
-                            <th>@Texts["Result.Unit"]</th>
-                            <th>@Texts["Result.ReferenceRange"]</th>
-                            <th>@Texts["Result.Previous"]</th>
-                            <th>@Texts["Result.InstrumentFlags"]</th>
+                            <th>@Texts["Order.Title"] · @Texts["Patient.Title"]</th>
+                            <th class="num">@Texts["Validation.ToValidateColumn"]</th>
+                            <th class="num">@Texts["Validation.AbnormalColumn"]</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in _listed)
+                        @foreach (var entry in Visible)
                         {
-                            var id = row.TestResultId;
-                            var indicator = ResultEntryRules.Indicator(row.Interpretation);
-                            var tickable = ValidationScreenRules.IsTickable(row, _showValidated);
-                            <tr class="@DetailClass(row)" data-row="@row.ParameterCode" title="@_comments.GetValueOrDefault(id)"
-                                @onclick="() => _selectedId = id" @ondblclick="() => ShowHistoryAsync(row)">
-                                <td class="tick-col">
-                                    @if (!row.IsHeading)
-                                    {
-                                        <input type="checkbox" data-field="tick" aria-label="@row.ParameterName.For(Texts.Language)"
-                                               disabled="@(!tickable)" checked="@_ticked.Contains(id)"
-                                               @onchange="e => Tick(id, e.Value is true)" @onfocus="() => _selectedId = id" />
-                                    }
-                                </td>
-                                <td style="padding-inline-start: @(8 + row.IndentLevel * 16)px">
-                                    @row.ParameterName.For(Texts.Language)@(_comments.ContainsKey(id) ? "  ✎" : null)
-                                </td>
-                                <td class="num mono @ValueClass(row)">@(row.IsHeading ? null : row.CurrentValue)</td>
+                            var critical = entry.UncommunicatedCriticalCount > 0;
+                            <tr class="@(entry.LabOrderId == _orderId ? "is-selected" : null) @(critical ? "is-critical-row" : null)"
+                                data-order="@entry.AccessionNumber" @onclick="() => SelectAsync(entry.LabOrderId)">
                                 <td>
-                                    @if (indicator is not null)
+                                    <div class="file-list-line">
+                                        <span class="mono @(entry.LabOrderId == _orderId ? "strong" : null)">@entry.AccessionNumber</span>
+                                        @if (entry.Priority == OrderPriority.Routine)
+                                        {
+                                            <span class="muted small">@Texts["Priority.Routine"]</span>
+                                        }
+                                        else
+                                        {
+                                            <Pill Text="@Texts[$"Priority.{entry.Priority}"]" Tone="@OrderFileRules.PriorityTone(entry.Priority).ToString()" />
+                                        }
+                                    </div>
+                                    <div>
+                                        <span class="strong">@entry.PatientName</span>
+                                        @if (PatientDetail(entry) is { Length: > 0 } detail)
+                                        {
+                                            <span class="muted"> · @detail</span>
+                                        }
+                                    </div>
+                                    <div class="small mono muted">@entry.RegisteredAt.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</div>
+                                    @if (ValidationScreenRules.Alerts(entry).Any())
                                     {
-                                        <Pill Text="@($"{indicator.Arrow} {Texts[indicator.Key]}")" Tone="@indicator.Tone.ToString()" />
+                                        <span class="pills">
+                                            @foreach (var alert in ValidationScreenRules.Alerts(entry))
+                                            {
+                                                <Pill Text="@Texts.T(alert.Key, alert.Args)" Tone="@alert.Tone.ToString()" />
+                                            }
+                                        </span>
                                     }
-                                    <span class="mono small abnormal strong">@ValidationScreenRules.FlagGlyphs(row.Flags)</span>
                                 </td>
-                                <td class="small">@row.UnitSymbol</td>
-                                <td class="small mono"><bdi dir="ltr">@row.ReferenceRangeText</bdi></td>
-                                <td class="small mono">@Previous(row)</td>
-                                <td class="small">@row.InstrumentFlags</td>
+                                <td class="num mono">@entry.AwaitingCount</td>
+                                <td class="num mono @(entry.AbnormalCount > 0 ? "abnormal strong" : null)">@(entry.AbnormalCount > 0 ? entry.AbnormalCount : null)</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-            <div class="key-hints" data-state="key-hints">
-                <kbd class="kbd">@Texts["Validation.KeySpace"]</kbd><span>@Texts["Validation.KeyTick"]</span>
-                <kbd class="kbd">F9</kbd><span>@Texts["Validation.KeyValidate"]</span>
-                <kbd class="kbd">F10</kbd><span>@Texts["Validation.KeyNextOrder"]</span>
-                <kbd class="kbd">@Texts["ResultEntry.DoubleClick"]</kbd><span>@Texts["ResultEntry.KeyHistory"]</span>
-            </div>
-        </div>
-
-        <aside class="card" data-card="context">
-            <h2 class="card-title">@Texts["Validation.Context"]</h2>
-            @if (_sheet is { } sheet)
-            {
-                <ul class="context-lines" data-state="context">
-                    @foreach (var line in ContextLines(sheet))
-                    {
-                        <li><Pill Text="@line.Badge" Tone="@line.Tone.ToString()" /><span class="@(line.Tone == ValidationTone.Critical ? "critical" : null)">@Texts.T(line.Key, line.Args)</span></li>
-                    }
-                </ul>
-
-                <p class="caption">@Texts["Order.ClinicalInformation"]</p>
-                <p class="@(string.IsNullOrWhiteSpace(sheet.ClinicalInformation) ? "muted" : null)">@(string.IsNullOrWhiteSpace(sheet.ClinicalInformation) ? Texts["Validation.NotProvided"] : sheet.ClinicalInformation.Trim())</p>
-
-                <p class="caption">@Texts["Validation.Prescriber"]</p>
-                <div data-state="prescriber">
-                    @{ var name = PrescriberContactRules.DisplayName(sheet.Prescriber, Texts.Language); }
-                    <p class="@(name is null ? "muted" : "strong")">@(name ?? Texts["Validation.NotProvided"])</p>
-                    @if (sheet.Prescriber?.Speciality?.For(Texts.Language) is { Length: > 0 } speciality)
-                    {
-                        <p class="small muted">@speciality.Trim()</p>
-                    }
-                    <dl class="contacts">
-                        @foreach (var contact in PrescriberContactRules.Contacts(sheet.Prescriber))
-                        {
-                            var line = contact.Kind == PrescriberContactKind.CriticalLine;
-                            <dt class="small @(line ? "critical strong" : "muted")">@Texts[ContactKey(contact.Kind)]</dt>
-                            <dd class="@(line ? "critical strong" : null)">
-                                <span dir="ltr" class="mono">@contact.Value</span>
-                                <button type="button" class="btn-icon" title="@Texts["Validation.PrescriberCopy"]" aria-label="@($"{Texts["Validation.PrescriberCopy"]} {contact.Value}")"
-                                        data-action="Validation.PrescriberCopy" @onclick="() => CopyAsync(contact.Value)">
-                                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.CopyPlus" />
-                                </button>
-                            </dd>
-                        }
-                    </dl>
-                </div>
-
-                var commentRow = SelectedRow;
-                var editable = ValidationScreenRules.TakesComment(commentRow, Context.User);
-                <label class="field">
-                    <span class="caption">@(editable ? $"{Texts["Validation.BiologistComment"]} · {commentRow!.ParameterName.For(Texts.Language)}" : Texts["Validation.BiologistComment"])</span>
-                    <textarea class="input" rows="3" data-field="biologist-comment" disabled="@(!editable)"
-                              placeholder="@(editable ? Texts["Validation.BiologistCommentHint"] : null)"
-                              value="@(editable ? _comments.GetValueOrDefault(commentRow!.TestResultId) : null)"
-                              @oninput="e => KeepComment(commentRow, e.Value?.ToString())"></textarea>
-                </label>
-
-                @if (Context.User.Has(Permissions.Orders.View))
-                {
-                    <a class="link" href="@($"ecran/orderdetail?dossier={sheet.LabOrderId}")" data-action="Validation.OpenFullOrder">@Texts["Validation.OpenFullOrder"]</a>
-                }
-            }
         </aside>
+
+        <section class="file-pane" data-card="file">
+            <div class="card card-flush context-card" data-card="context">
+                <div class="context-band">
+                    <div>
+                        <h2 class="card-title">@Texts["Validation.Context"]</h2>
+                        @if (_sheet is { } sheet)
+                        {
+                            <ul class="context-lines" data-state="context">
+                                @foreach (var line in ContextLines(sheet))
+                                {
+                                    <li><Pill Text="@line.Badge" Tone="@line.Tone.ToString()" /><span class="@(line.Tone == ValidationTone.Critical ? "critical" : null)">@Texts.T(line.Key, line.Args)</span></li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                    @if (_sheet is { } open)
+                    {
+                        <div>
+                            <p class="caption">@Texts["Order.ClinicalInformation"]</p>
+                            <p class="@(string.IsNullOrWhiteSpace(open.ClinicalInformation) ? "muted" : null)">@(string.IsNullOrWhiteSpace(open.ClinicalInformation) ? Texts["Validation.NotProvided"] : open.ClinicalInformation.Trim())</p>
+
+                            <p class="caption">@Texts["Validation.Prescriber"]</p>
+                            <div data-state="prescriber">
+                                @{ var name = PrescriberContactRules.DisplayName(open.Prescriber, Texts.Language); }
+                                <p class="@(name is null ? "muted" : "strong")">@(name ?? Texts["Validation.NotProvided"])</p>
+                                @if (open.Prescriber?.Speciality?.For(Texts.Language) is { Length: > 0 } speciality)
+                                {
+                                    <p class="small muted">@speciality.Trim()</p>
+                                }
+                                <dl class="contacts">
+                                    @foreach (var contact in PrescriberContactRules.Contacts(open.Prescriber))
+                                    {
+                                        var line = contact.Kind == PrescriberContactKind.CriticalLine;
+                                        <dt class="small @(line ? "critical strong" : "muted")">@Texts[ContactKey(contact.Kind)]</dt>
+                                        <dd class="@(line ? "critical strong" : null)">
+                                            <span dir="ltr" class="mono">@contact.Value</span>
+                                            <button type="button" class="btn-icon" title="@Texts["Validation.PrescriberCopy"]" aria-label="@($"{Texts["Validation.PrescriberCopy"]} {contact.Value}")"
+                                                    data-action="Validation.PrescriberCopy" @onclick="() => CopyAsync(contact.Value)">
+                                                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.CopyPlus" />
+                                            </button>
+                                        </dd>
+                                    }
+                                </dl>
+                            </div>
+                        </div>
+                        <div>
+                            @{
+                                var commentRow = SelectedRow;
+                                var editable = ValidationScreenRules.TakesComment(commentRow, Context.User);
+                            }
+                            <label class="field">
+                                <span class="caption">@(editable ? $"{Texts["Validation.BiologistComment"]} · {commentRow!.ParameterName.For(Texts.Language)}" : Texts["Validation.BiologistComment"])</span>
+                                <textarea class="input" rows="3" data-field="biologist-comment" disabled="@(!editable)"
+                                          placeholder="@(editable ? Texts["Validation.BiologistCommentHint"] : null)"
+                                          value="@(editable ? _comments.GetValueOrDefault(commentRow!.TestResultId) : null)"
+                                          @oninput="e => KeepComment(commentRow, e.Value?.ToString())"></textarea>
+                            </label>
+
+                            @if (Context.User.Has(Permissions.Orders.View))
+                            {
+                                <a class="link" href="@($"ecran/orderdetail?dossier={open.LabOrderId}")" data-action="Validation.OpenFullOrder">@Texts["Validation.OpenFullOrder"]</a>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="card card-flush pane-fill" data-card="results">
+                <div class="card-heading card-pad">
+                    <div>
+                        <h2 class="card-title" data-state="file">@(_sheet is { } title ? $"{title.AccessionNumber} — {title.PatientName}" : Texts["App.NoData"])</h2>
+                        @if (_sheet is { } shown)
+                        {
+                            <span class="muted small">@Subtitle(shown)</span>
+                        }
+                    </div>
+                    <span class="muted small" data-state="selection">@SelectionText</span>
+                </div>
+                <div class="table-scroll table-scroll-tall">
+                    <table class="grid" data-grid="results">
+                        <thead>
+                            <tr>
+                                <th class="tick-col"></th>
+                                <th>@Texts["Result.Parameter"]</th>
+                                <th class="num">@Texts["Result.Value"]</th>
+                                <th>@Texts["ResultEntry.Indicator"]</th>
+                                <th>@Texts["Result.Unit"]</th>
+                                <th>@Texts["Result.ReferenceRange"]</th>
+                                <th>@Texts["Result.Previous"]</th>
+                                <th>@Texts["Result.InstrumentFlags"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _listed)
+                            {
+                                var id = row.TestResultId;
+                                var indicator = ResultEntryRules.Indicator(row.Interpretation);
+                                var tickable = ValidationScreenRules.IsTickable(row, _showValidated);
+                                <tr class="@DetailClass(row)" data-row="@row.ParameterCode" title="@_comments.GetValueOrDefault(id)"
+                                    @onclick="() => _selectedId = id" @ondblclick="() => ShowHistoryAsync(row)">
+                                    <td class="tick-col">
+                                        @if (!row.IsHeading)
+                                        {
+                                            <input type="checkbox" data-field="tick" aria-label="@row.ParameterName.For(Texts.Language)"
+                                                   disabled="@(!tickable)" checked="@_ticked.Contains(id)"
+                                                   @onchange="e => Tick(id, e.Value is true)" @onfocus="() => _selectedId = id" />
+                                        }
+                                    </td>
+                                    <td style="padding-inline-start: @(8 + row.IndentLevel * 16)px">
+                                        @row.ParameterName.For(Texts.Language)@(_comments.ContainsKey(id) ? "  ✎" : null)
+                                    </td>
+                                    <td class="num mono @ValueClass(row)">@(row.IsHeading ? null : row.CurrentValue)</td>
+                                    <td>
+                                        @if (indicator is not null)
+                                        {
+                                            <Pill Text="@($"{indicator.Arrow} {Texts[indicator.Key]}")" Tone="@indicator.Tone.ToString()" />
+                                        }
+                                        <span class="mono small abnormal strong">@ValidationScreenRules.FlagGlyphs(row.Flags)</span>
+                                    </td>
+                                    <td class="small">@row.UnitSymbol</td>
+                                    <td class="small mono"><bdi dir="ltr">@row.ReferenceRangeText</bdi></td>
+                                    <td class="small mono">@Previous(row)</td>
+                                    <td class="small">@row.InstrumentFlags</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="key-hints" data-state="key-hints">
+                    <kbd class="kbd">@Texts["Validation.KeySpace"]</kbd><span>@Texts["Validation.KeyTick"]</span>
+                    <kbd class="kbd">F9</kbd><span>@Texts["Validation.KeyValidate"]</span>
+                    <kbd class="kbd">F10</kbd><span>@Texts["Validation.KeyNextOrder"]</span>
+                    <kbd class="kbd">@Texts["ResultEntry.DoubleClick"]</kbd><span>@Texts["ResultEntry.KeyHistory"]</span>
+                </div>
+            </div>
+        </section>
     </div>
 
     @{ var actions = Actions; }
-    <footer class="action-bar">
-        <p class="action-bar-status is-@(_status?.Tone ?? "muted")" role="status" data-state="status">@_status?.Text</p>
-        <details class="more more-up">
-            <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]</summary>
-            <div class="more-menu">
-                <ActionButton Key="Action.SelectAll" Disabled="@(!actions.SelectAll)" OnClick="ToggleAll" />
-                <ActionButton Key="Validation.Unvalidate" Text="@($"{Texts["Validation.Unvalidate"]}…")" Disabled="@(!actions.Unvalidate || _busy)" OnClick="AskUnvalidate" />
-                <ActionButton Key="Action.Refresh" OnClick="ActivateAsync" />
-            </div>
-        </details>
-        <ActionButton Key="Result.History" Hidden="@(!Context.User.Has(Permissions.Results.View))" Disabled="@(!actions.History)"
-                      OnClick="() => ShowHistoryAsync(SelectedRow)" />
-        <ActionButton Key="Nav.CriticalResults" Text="@($"{Texts["Nav.CriticalResults"]}…")" Class="@(actions.Communicate ? "is-emphasised" : null)"
-                      Disabled="@(!actions.Communicate || _busy)" OnClick="CommunicateCriticalAsync" />
-        <ActionButton Key="Report.Title" Disabled="@(!actions.Release || _busy)" OnClick="() => _dialog = ValidationDialog.Release" />
-        <span class="toolbar-spacer"></span>
-        <span class="muted small" data-state="remaining">@Texts.T("Validation.PendingSummary", Visible.Count, Visible.Sum(e => e.AwaitingCount))</span>
-        <ActionButton Key="Validation.ValidateSelection" Text="@Texts.T("Validation.ValidateSelection", Selection.ToValidate)"
-                      Glyph="MarocLIS.Desktop.Infrastructure.Glyph.BadgeCheck" Primary="true" Shortcut="F9"
-                      Disabled="@(!actions.Validate || _busy)" OnClick="ValidateAsync" />
-        <ActionButton Key="Validation.KeyNextOrder" Class="shortcut-only" Shortcut="F10" Disabled="@_busy" OnClick="SelectNextAsync" />
-    </footer>
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Result.History" Hidden="@(!Context.User.Has(Permissions.Results.View))" Disabled="@(!actions.History)"
+                          OnClick="() => ShowHistoryAsync(SelectedRow)" />
+            <ActionButton Key="Nav.CriticalResults" Text="@($"{Texts["Nav.CriticalResults"]}…")" Class="@(actions.Communicate ? "is-emphasised" : null)"
+                          Disabled="@(!actions.Communicate || _busy)" OnClick="CommunicateCriticalAsync" />
+            <ActionButton Key="Report.Title" Disabled="@(!actions.Release || _busy)" OnClick="() => _dialog = ValidationDialog.Release" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Action.SelectAll" Disabled="@(!actions.SelectAll)" OnClick="ToggleAll" />
+            <hr class="more-rule" />
+            <ActionButton Key="Validation.Unvalidate" Text="@($"{Texts["Validation.Unvalidate"]}…")" Danger="true" Disabled="@(!actions.Unvalidate || _busy)" OnClick="AskUnvalidate" />
+        </More>
+        <Info>
+            <span data-state="remaining">@Texts.T("Validation.PendingSummary", Visible.Count, Visible.Sum(e => e.AwaitingCount))</span>
+        </Info>
+        <Primary>
+            <ActionButton Key="Validation.ValidateSelection" Text="@Texts.T("Validation.ValidateSelection", Selection.ToValidate)"
+                          Glyph="MarocLIS.Desktop.Infrastructure.Glyph.BadgeCheck" Primary="true" Shortcut="F9"
+                          Disabled="@(!actions.Validate || _busy)" OnClick="ValidateAsync" />
+            <ActionButton Key="Validation.KeyNextOrder" Class="shortcut-only" Shortcut="F10" Disabled="@_busy" OnClick="SelectNextAsync" />
+        </Primary>
+    </ActionBar>
 </div>
 
 @switch (_dialog)
