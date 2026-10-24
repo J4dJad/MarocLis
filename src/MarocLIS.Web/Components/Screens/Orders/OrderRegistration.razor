@@ -1,0 +1,1220 @@
+@using System.Globalization
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Application.Orders
+@using MarocLIS.Application.Patients
+@using MarocLIS.Domain.Catalog
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Orders
+@using MarocLIS.Domain.Patients
+@using MarocLIS.Infrastructure.Queries
+@implements IDisposable
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject ILogger<OrderRegistration> Logger
+
+@*
+    « Nouvelle demande », the workstation's OrderRegistrationView: the patient, the request (priority,
+    origin, prescriber, fasting, clinical information, direct payment), the catalogue and the basket
+    with its tubes and the counter's total, then « Enregistrer ». Every rule is the application's:
+    the basket (OrderBasket), the quote (IOrderQuotes, the pricing the save applies), the
+    registration (OrderRegistrationService). The labels are printed by the Windows workstation: the
+    browser has no access to the counter's label printer.
+*@
+<div class="screen order-entry" data-screen="orders">
+    <p class="page-lead">@Texts["OrderEntry.Subtitle"]</p>
+
+    <section class="card patient-card" data-card="patient">
+        @if (_patient is { } patient)
+        {
+            <div class="patient-band" data-state="patient" data-patient="@patient.MedicalRecordNumber">
+                <span class="initials @(patient.HasCriticalAlert ? "is-critical" : null)" aria-hidden="true">@OrderRegistrationRules.Initials(patient.FullName)</span>
+                <div class="patient-band-text">
+                    <div class="patient-band-name @(patient.HasCriticalAlert ? "critical" : "accent")">@patient.FullName</div>
+                    <div class="muted">@Facts(patient)</div>
+                    <div class="muted small">@Ids(patient)</div>
+                </div>
+                <div class="patient-band-end">
+                    <span class="small">
+                        @History(patient)
+                        @if (patient.OrderCount > 0 && User.Has(Permissions.Orders.View))
+                        {
+                            <button type="button" class="link" data-action="OrderEntry.View" @onclick="AskOpenLatestOrder">@Texts["OrderEntry.View"]</button>
+                        }
+                    </span>
+                    <ActionButton Key="OrderEntry.ChangePatient" OnClick="ChangePatient" />
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="toolbar">
+                <div class="search-box search-box-wide">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                    <input class="input" type="search" placeholder="@Texts["OrderEntry.PatientSearchPlaceholder"]"
+                           aria-label="@Texts["OrderEntry.PatientSearchPlaceholder"]" data-field="patient-search"
+                           autocomplete="off" value="@_patientTerm" @oninput="PatientTermChanged" @onkeydown="PatientKey" />
+                    @if (_patients.Count > 0)
+                    {
+                        <ul class="suggestions" role="listbox" data-list="patients">
+                            @foreach (var row in _patients)
+                            {
+                                <li role="option" class="@(row.HasCriticalAlert ? "is-critical" : null)" data-patient="@row.MedicalRecordNumber"
+                                    @onclick="() => PickPatientAsync(row)">
+                                    <span class="strong">@row.FullName</span>
+                                    <span class="muted small">@row.MedicalRecordNumber · @Texts[$"Gender.{row.Gender}"]@(row.AgeYears is { } a ? $" · {a} {Texts["Report.Years"]}" : string.Empty)@(row.Cin is { Length: > 0 } ? $" · {row.Cin}" : string.Empty)</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+                <ActionButton Key="Patient.NewFile" Disabled="@(!User.Has(Permissions.Patients.Create))" OnClick="() => _newPatient = true" />
+                <ActionButton Key="OrderEntry.UnidentifiedPatient" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.TriangleAlert"
+                              Disabled="@(!User.Has(Permissions.Patients.Create))" OnClick="() => _provisional = true" />
+            </div>
+        }
+    </section>
+
+    <section class="card request-card" data-card="request">
+        <div class="form-grid form-grid-request">
+            <label class="field"><span class="field-label">@Texts["Field.Priority"]</span>
+                <select class="input" data-field="priority" value="@_priority" @onchange="PriorityChanged">
+                    @foreach (var p in Enum.GetValues<OrderPriority>())
+                    {
+                        <option value="@p" selected="@(p == _priority)">@Texts[$"Priority.{p}"]</option>
+                    }
+                </select></label>
+            <label class="field"><span class="field-label">@Texts["Order.Origin"]</span>
+                <select class="input" data-field="origin" value="@_origin" @onchange="OriginChanged">
+                    @foreach (var o in Enum.GetValues<OrderOrigin>())
+                    {
+                        <option value="@o" selected="@(o == _origin)">@Texts[$"OrderOrigin.{o}"]</option>
+                    }
+                </select></label>
+            <div class="field field-wide">
+                <label class="field-label" for="order-prescriber">@PrescriberCaption</label>
+                <div class="input-with-button">
+                    <input id="order-prescriber" class="input" list="order-prescribers" data-field="prescriber" autocomplete="off"
+                           value="@_prescriberText" @oninput="PrescriberChanged" />
+                    <ActionButton Key="Order.NewPrescriber" Text="" Title="@Texts["Order.NewPrescriber"]"
+                                  Disabled="@(!(User.Has(Permissions.Catalog.Manage) || User.Has(Permissions.Orders.Create)))"
+                                  OnClick="() => _newPrescriber = true" />
+                </div>
+                <datalist id="order-prescribers">
+                    @foreach (var p in _prescribers)
+                    {
+                        <option value="@p.Display"></option>
+                    }
+                </datalist>
+            </div>
+            <div class="field">
+                <span class="field-label">@Texts["Order.Fasted"]</span>
+                <div class="segmented" role="group" data-field="fasting">
+                    @foreach (var (value, key) in FastingChoices)
+                    {
+                        <button type="button" class="btn @(value == _fasting ? "btn-primary" : "btn-secondary")" aria-pressed="@(value == _fasting)"
+                                data-fasting="@(value?.ToString() ?? "unknown")" @onclick="() => SetFasting(value)">@Texts[key]</button>
+                    }
+                </div>
+            </div>
+            <label class="field field-wide"><span class="field-label">@Texts["Order.ClinicalInformation"]</span>
+                <input class="input" data-field="clinical" maxlength="2000" placeholder="@Texts["OrderEntry.ClinicalPlaceholder"]"
+                       value="@_clinical" @oninput="ClinicalChanged" /></label>
+            <label class="field field-check">
+                <input type="checkbox" data-field="self-pay" checked="@_selfPay" @onchange="SelfPayChanged" />
+                <span>@Texts["OrderEntry.DirectPayment"]</span>
+            </label>
+        </div>
+    </section>
+
+    <div class="split split-even">
+        <section class="card catalog-card" data-card="catalogue">
+            <h2 class="card-title">@Texts["Order.AddAnalyses"]</h2>
+            <p class="muted small">@Texts["OrderEntry.TypeHint"]</p>
+            @if (_frequent.Count > 0)
+            {
+                <div class="chips" role="group">
+                    <span class="chips-label">@Texts["OrderEntry.FrequentPanels"]</span>
+                    @foreach (var panel in _frequent)
+                    {
+                        <button type="button" class="chip" title="@panel.Code" data-panel="@panel.Code" @onclick="() => AddPanelAsync(panel.PanelId)">
+                            @panel.Name.For(Texts.Language)
+                        </button>
+                    }
+                </div>
+            }
+            <div class="search-box search-box-wide">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                <input class="input" type="search" placeholder="@Texts["Order.CatalogSearchPlaceholder"]"
+                       aria-label="@Texts["Order.CatalogSearchPlaceholder"]" data-field="catalogue-search" autocomplete="off"
+                       value="@_catalogTerm" @oninput="CatalogTermChanged" @onkeydown="CatalogKey" />
+                @if (Suggestions.Count > 0)
+                {
+                    <ul class="suggestions" role="listbox" data-list="analyses">
+                        @foreach (var item in Suggestions)
+                        {
+                            <li role="option" data-code="@item.Code" @onclick="() => AddFromSuggestion(item)">
+                                <span class="strong">@item.Name.For(Texts.Language)</span>
+                                <span class="muted small">@Subline(item)</span>
+                                <span class="num small">@Price(item.Price)</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+            <div class="chips" role="group">
+                <span class="chips-label">@Texts["OrderEntry.Catalogue"]</span>
+                @foreach (var (key, text) in FilterChips())
+                {
+                    <button type="button" class="chip @(key == _filter ? "is-pressed" : null)" aria-pressed="@(key == _filter)"
+                            data-filter="@key" @onclick="() => _filter = key">@text</button>
+                }
+            </div>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="catalogue">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Field.Code"]</th>
+                            <th>@Texts["Field.Name"]</th>
+                            <th>@Texts["Field.Department"]</th>
+                            <th>@Texts["OrderEntry.Tube"]</th>
+                            <th class="num">@Texts["OrderEntry.Delay"]</th>
+                            <th class="num">@Texts["OrderEntry.PriceDh"]</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in OrderBasket.Filter(_catalogItems, _filter))
+                        {
+                            var state = _basket.StateOf(item);
+                            <tr class="@(state != CatalogItemState.Free ? "is-pending" : null)" data-code="@item.Code" title="@Notes(item)"
+                                @ondblclick="() => AddItem(item)">
+                                <td class="mono">@item.Code</td>
+                                <td class="@(item.IsPanel ? "strong" : null)">@item.Name.For(Texts.Language)</td>
+                                <td>@(item.IsPanel ? "—" : item.DepartmentName?.For(Texts.Language) ?? string.Empty)</td>
+                                <td>@(item.IsPanel ? Texts["OrderEntry.SeveralTubes"] : item.ContainerName ?? "—")</td>
+                                <td class="num">@item.TurnaroundHours h</td>
+                                <td class="num">@Price(item.Price)</td>
+                                <td class="cell-action">
+                                    @if (state == CatalogItemState.Free)
+                                    {
+                                        <button type="button" class="btn btn-secondary btn-small" title="@Texts["Action.Add"]" data-action="add"
+                                                @onclick="() => AddItem(item)"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" /></button>
+                                    }
+                                    else
+                                    {
+                                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" />
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card basket-card" data-card="basket">
+            <div class="card-heading">
+                <h2 class="card-title">@Texts["Order.Analyses"]
+                    @if (!_basket.IsEmpty)
+                    {
+                        <span class="count-badge" data-state="basket-count">@_basket.Count</span>
+                    }
+                </h2>
+                <ActionButton Key="OrderEntry.RemoveAll" Disabled="@_basket.IsEmpty" OnClick="AskRemoveAll" />
+            </div>
+            <table class="grid" data-grid="basket">
+                <thead>
+                    <tr>
+                        <th>@Texts["Catalog.Analysis"]</th>
+                        <th>@Texts["OrderEntry.Tube"]</th>
+                        <th class="num">@Texts["OrderEntry.PriceDh"]</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_basket.IsEmpty)
+                    {
+                        <tr><td colspan="4" class="muted">@Texts["App.NoData"]</td></tr>
+                    }
+                    @foreach (var item in _basket.Items)
+                    {
+                        var repeat = _basket.RepeatOf(item, _fullCatalog);
+                        <tr class="@(repeat is not null ? "is-abnormal" : null)" data-code="@item.Code" title="@BasketNotes(item)">
+                            <td>
+                                <div class="@(item.IsPanel ? "strong" : null)">@item.Name.For(Texts.Language)</div>
+                                <div class="muted small">@Subline(item)@(BasketNotes(item) is { Length: > 0 } notes ? $" · {notes}" : string.Empty)</div>
+                            </td>
+                            <td>@(item.IsPanel ? Texts["OrderEntry.SeveralTubes"] : item.ContainerName ?? "—")</td>
+                            <td class="num">@Price(item.Price)</td>
+                            <td class="cell-action">
+                                <button type="button" class="btn btn-secondary btn-small" title="@Texts["Action.Remove"]" data-action="remove"
+                                        @onclick="() => Remove(item)"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" /></button>
+                            </td>
+                        </tr>
+                        @if (repeat is not null)
+                        {
+                            <tr class="is-abnormal basket-warning" data-warning="@item.Code">
+                                <td colspan="4">
+                                    <span class="abnormal strong">@WarningText(repeat)</span>
+                                    <button type="button" class="btn btn-secondary btn-small" data-action="keep" @onclick="() => Keep(item)">@Texts["OrderEntry.Keep"]</button>
+                                    <button type="button" class="btn btn-secondary btn-small" data-action="remove-repeat" @onclick="() => Remove(item)">@Texts["Action.Remove"]</button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+
+            <div class="tubes" data-state="tubes">
+                <span class="strong">@Texts["OrderEntry.TubesToDraw"]</span>
+                @foreach (var tube in TubeGroups())
+                {
+                    <span class="tube-chip"><span class="tube-swatch" style="background:@tube.Colour"></span>@tube.Text</span>
+                }
+                <span class="muted small">@Texts.T("OrderEntry.TubeCount", TubeCount, TubeCount * LabelCopies)</span>
+            </div>
+
+            <dl class="totals" data-state="totals">
+                <dt>@Texts.T("OrderEntry.GrossFor", _quote?.AnalysisCount ?? 0)</dt>
+                <dd class="num" data-total="gross">@((_quote?.Pricing.Total ?? Money.Zero).Format(Texts.Language, Texts.Culture))</dd>
+                @if (_quote?.PayerName is { } payer)
+                {
+                    <dt>@Texts.T("OrderEntry.PayerShareOf", payer.For(Texts.Language))</dt>
+                    <dd class="num" data-total="payer">− @((_quote.Pricing.Total - _quote.Pricing.DueAtCounter).Format(Texts.Language, Texts.Culture))</dd>
+                }
+                <dt class="strong">@Texts["OrderEntry.PatientRemainder"]</dt>
+                <dd class="num strong accent" data-total="due">@((_quote?.Pricing.DueAtCounter ?? Money.Zero).Format(Texts.Language, Texts.Culture))</dd>
+            </dl>
+        </section>
+    </div>
+
+    <footer class="action-bar">
+        <ActionButton Key="OrderEntry.CancelEntry" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Eraser" OnClick="AskCancelEntry" />
+        <p class="action-bar-status @StatusClass" role="status" data-state="status">@StatusText</p>
+        <ActionButton Key="OrderEntry.SaveWithoutLabels" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Tag"
+                      Disabled="@(!CanRegister || !User.Has(Permissions.Orders.Create))"
+                      OnClick="() => RegisterAsync(OrderRegistrationRules.PrintsLabels(withoutLabels: true))" />
+        <ActionButton Key="Action.Save" Primary="true"
+                      Disabled="@(!CanRegister || !User.Has(Permissions.Orders.Create))"
+                      OnClick="() => RegisterAsync(OrderRegistrationRules.PrintsLabels(withoutLabels: false))" />
+    </footer>
+</div>
+
+@if (_newPatient)
+{
+    <MarocLIS.Web.Components.Screens.Patients.PatientEditor PatientId="null" OnSaved="NewPatientSavedAsync" OnCancel="() => _newPatient = false" />
+}
+
+@if (_provisional)
+{
+    <MarocLIS.Web.Components.Screens.Patients.ProvisionalPatientDialog OnCreate="CreateProvisionalAsync" OnCancel="() => _provisional = false" />
+}
+
+@if (_newPrescriber)
+{
+    <NewPrescriberDialog TypedName="@(ChosenPrescriber() is null ? _prescriberText : null)"
+                         OnCreated="PrescriberCreatedAsync" OnCancel="() => _newPrescriber = false" />
+}
+
+@if (_confirm is { } confirm)
+{
+    <ConfirmPrompt Title="@confirm.Title" Message="@confirm.Message" OnYes="ConfirmedAsync" OnNo="() => _confirm = null" />
+}
+
+@if (_info is { } info)
+{
+    <Modal Name="@info.Name" Title="@info.Title" OnCancel="() => _info = null">
+        <ChildContent>
+            @foreach (var line in info.Lines)
+            {
+                @if (line.Length == 0)
+                {
+                    <div class="spacer"></div>
+                }
+                else
+                {
+                    <p class="info-line">@line</p>
+                }
+            }
+        </ChildContent>
+        <Footer>
+            @if (info.OrderId is { } orderId && User.Has(Permissions.Orders.View))
+            {
+                <ActionButton Key="OrderEntry.View" OnClick="() => OpenOrder(orderId)" />
+            }
+            <ActionButton Key="Action.Ok" Primary="true" OnClick="() => _info = null" />
+        </Footer>
+    </Modal>
+}
+
+@code {
+    /// <summary>
+    /// A patient to choose when the screen opens: « Nouvelle demande pour ce patient » on the patient
+    /// list, as <c>?patient=</c>.
+    /// </summary>
+    [Parameter] public Guid? PatientToSelect { get; set; }
+
+    private sealed record PrescriberChoice(Guid Id, string Display);
+
+    private sealed record Info(string Name, string Title, IReadOnlyList<string> Lines, Guid? OrderId = null);
+
+    private sealed record Confirmation(string Title, string Message, Func<Task> OnYes);
+
+    private static readonly (bool? Value, string Key)[] FastingChoices =
+        [(true, "Action.Yes"), (false, "Action.No"), (null, "OrderEntry.FastingUnknown")];
+
+    private readonly OrderBasket _basket = new();
+    private readonly List<CatalogPickerItem> _fullCatalog = [];
+    private readonly List<CatalogPickerItem> _catalogItems = [];
+    private IReadOnlyList<DepartmentOption> _departments = [];
+    private IReadOnlyList<FrequentPanel> _frequent = [];
+    private IReadOnlyList<PrescriberChoice> _prescribers = [];
+    private IReadOnlyList<PatientSearchRow> _patients = [];
+
+    private PatientSearchRow? _patient;
+    private string _patientTerm = string.Empty;
+    private string _catalogTerm = string.Empty;
+    private string _filter = OrderBasket.FilterAll;
+
+    private OrderPriority _priority = OrderPriority.Routine;
+    private OrderOrigin _origin = OrderOrigin.Walkin;
+    private string _prescriberText = string.Empty;
+    private bool? _fasting = true;
+    private string _clinical = string.Empty;
+    private bool _selfPay;
+
+    private OrderQuote? _quote;
+    private (string Text, string Tone)? _notice;
+    private bool _busy;
+
+    private bool _newPatient;
+    private bool _provisional;
+    private bool _newPrescriber;
+    private Confirmation? _confirm;
+    private Info? _info;
+
+    private CancellationTokenSource? _patientDebounce;
+    private CancellationTokenSource? _catalogDebounce;
+    private CancellationTokenSource? _quoteDebounce;
+    private int _patientVersion;
+    private int _catalogVersion;
+    private int _quoteVersion;
+
+    private ICurrentUser User => Context.User;
+
+    private int LabelCopies => OrderBasket.LabelCopies(Configuration.GetValue("Labels:Copies", 1));
+
+    private bool CanRegister => _patient is not null && !_basket.IsEmpty && !_busy;
+
+    private string PrescriberCaption =>
+        LabOrder.RequiresPrescriber(_origin) ? Texts["Order.Prescriber"] + " *" : Texts["Order.Prescriber"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCatalogueReferenceAsync();
+        await SearchCatalogueAsync();
+        await LoadPrescribersAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (PatientToSelect is { } patientId)
+        {
+            // Used once, so coming back to the screen does not choose them again.
+            PatientToSelect = null;
+            await SelectPatientAsync(patientId);
+        }
+    }
+
+    // ---- Reference data ----------------------------------------------------------------------------
+
+    /// <summary>
+    /// The whole catalogue once (for the profiles offered in one click and the sector filter), the
+    /// sectors, and the profiles the site orders most.
+    /// </summary>
+    private async Task LoadCatalogueReferenceAsync()
+    {
+        try
+        {
+            var all = await Scopes.RunAsync<ICatalogQueries, IReadOnlyList<CatalogPickerItem>>(
+                q => q.SearchPickerAsync(null, payerId: null, Clock.Today, take: 1000));
+            _fullCatalog.Clear();
+            _fullCatalog.AddRange(all);
+
+            _departments = await Scopes.RunAsync<ICatalogQueries, IReadOnlyList<DepartmentOption>>(q => q.GetDepartmentsAsync());
+            _frequent = await Scopes.RunAsync<IOrderEntryQueries, IReadOnlyList<FrequentPanel>>(
+                q => q.GetFrequentPanelsAsync(User.SiteId, Clock.Now.AddDays(-180), take: 5));
+        }
+        catch (Exception ex)
+        {
+            // Only the shortcuts are lost; the search still finds every analysis.
+            Logger.LogWarning(ex, "Loading the catalogue shortcuts failed.");
+        }
+    }
+
+    private async Task LoadPrescribersAsync()
+    {
+        try
+        {
+            var rows = await Scopes.RunAsync<IMasterDataQueries, IReadOnlyList<PrescriberRow>>(
+                q => q.GetPrescribersAsync(null, includeInactive: false));
+
+            _prescribers =
+            [
+                .. rows.Select(p =>
+                {
+                    var speciality = p.Speciality?.For(Texts.Language);
+                    return new PrescriberChoice(p.PrescriberId,
+                        string.IsNullOrWhiteSpace(speciality) ? p.FullName : $"{p.FullName} — {speciality}");
+                })
+            ];
+        }
+        catch (Exception ex)
+        {
+            // The list only helps typing; a name typed freely is still accepted without it.
+            Logger.LogWarning(ex, "Loading the prescribers failed.");
+        }
+    }
+
+    private IEnumerable<(string Key, string Text)> FilterChips()
+    {
+        yield return (OrderBasket.FilterAll, Texts["OrderEntry.All"]);
+        yield return (OrderBasket.FilterPanels, Texts["Catalog.Panels"]);
+
+        // Only the sectors the catalogue actually has analyses in.
+        var used = _fullCatalog.Select(i => i.DepartmentCode).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        foreach (var department in _departments.Where(d => used.Contains(d.Code)))
+            yield return (department.Code, department.Name.For(Texts.Language));
+    }
+
+    // ---- Patient -----------------------------------------------------------------------------------
+
+    private async Task PatientTermChanged(ChangeEventArgs e)
+    {
+        _patientTerm = e.Value?.ToString() ?? string.Empty;
+        if (!await Debounce(Restart(ref _patientDebounce), 300)) return;
+        await SearchPatientsAsync(showAll: false);
+    }
+
+    private async Task PatientKey(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown" when _patients.Count == 0:
+                await SearchPatientsAsync(showAll: true);
+                break;
+            case "Enter" when _patients.Count > 0:
+                await PickPatientAsync(_patients[0]);
+                break;
+            case "Escape":
+                _patients = [];
+                break;
+        }
+    }
+
+    private async Task SearchPatientsAsync(bool showAll)
+    {
+        var term = _patientTerm.Trim();
+        var version = ++_patientVersion;
+
+        // One or two characters match too much to be useful. An empty box lists the patients only
+        // when asked (the down arrow), so nobody is chosen until the clerk picks one.
+        if (term.Length is > 0 and < 3 || (term.Length == 0 && !showAll))
+        {
+            _patients = [];
+            return;
+        }
+
+        try
+        {
+            var page = await Scopes.RunAsync<IPatientQueries, PagedResult<PatientSearchRow>>(
+                q => q.SearchAsync(term, User.SiteId, pageSize: term.Length == 0 ? 100 : 25));
+            if (version != _patientVersion) return;
+            _patients = [.. page.Items.Take(8)];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Patient lookup failed during registration.");
+        }
+    }
+
+    private async Task PickPatientAsync(PatientSearchRow row)
+    {
+        _patients = [];
+        _patientTerm = string.Empty;
+
+        _basket.ForgetPatient();
+        _patient = row;
+        Changed();
+        RequestQuote();
+
+        // A critical patient alert is stated before the clerk starts composing the order.
+        if (row.HasCriticalAlert) _info = new Info("alerts", Texts["Patient.Title"], [Texts["Patient.Alerts"]]);
+
+        await LoadRecentAnalysesAsync(row.Id);
+    }
+
+    private string Facts(PatientSearchRow row)
+    {
+        var facts = new List<string> { Texts[$"Gender.{row.Gender}"] };
+        if (row.AgeYears is { } age) facts.Add($"{age} {Texts["Report.Years"]}");
+        if (row.DateOfBirth is { } born)
+            facts.Add(Texts.T("OrderEntry.BornOn", born.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)));
+        return string.Join(" · ", facts);
+    }
+
+    private string Ids(PatientSearchRow row)
+    {
+        var ids = new List<string> { $"{Texts["Order.Title"]} {row.MedicalRecordNumber}" };
+        if (row.Cin is { Length: > 0 }) ids.Add($"{Texts["Patient.Cin"]} {row.Cin}");
+        if (row.MobilePhone is { Length: > 0 }) ids.Add($"{Texts["OrderEntry.PhoneShort"]} {row.MobilePhone}");
+        ids.Add($"{Texts["Statistics.Payer"]} {row.PayerName ?? Texts["PayerKind.SelfPay"]}");
+        return string.Join("  ·  ", ids);
+    }
+
+    private string History(PatientSearchRow row) =>
+        row.OrderCount > 0 && row.LastOrderAt is { } last
+            ? Texts.T("OrderEntry.PreviousOrders", row.OrderCount,
+                      last.ToLocalTime().ToString("dd/MM/yyyy", CultureInfo.InvariantCulture))
+            : Texts["OrderEntry.FirstOrder"];
+
+    private void ChangePatient()
+    {
+        _patient = null;
+        _basket.ForgetPatient();
+        Changed();
+        RequestQuote();
+    }
+
+    private async Task LoadRecentAnalysesAsync(Guid patientId)
+    {
+        try
+        {
+            var recent = await Scopes.RunAsync<IOrderEntryQueries, IReadOnlyList<RecentAnalysis>>(
+                q => q.GetRecentAnalysesAsync(patientId, Clock.Now.AddDays(-OrderRegistrationRules.RepeatWindowDays)));
+
+            if (_patient?.Id != patientId) return;
+            _basket.SetRecent(recent);
+        }
+        catch (Exception ex)
+        {
+            // The reminder is a help; registering does not depend on it.
+            Logger.LogWarning(ex, "Loading the patient's recent analyses failed.");
+        }
+    }
+
+    /// <summary>« Voir »: the patient's latest file, on the file screen, asking first if the entry would be lost.</summary>
+    private void AskOpenLatestOrder()
+    {
+        if (HasEntries)
+            _confirm = new Confirmation(Texts["OrderEntry.CancelEntry"], Texts["OrderEntry.ConfirmCancelEntry"], OpenLatestOrderAsync);
+        else
+            _ = OpenLatestOrderAsync();
+    }
+
+    private async Task OpenLatestOrderAsync()
+    {
+        if (_patient is not { } patient || !User.Has(Permissions.Orders.View)) return;
+
+        try
+        {
+            var latest = await Scopes.RunAsync<IPatientQueries, IReadOnlyList<PatientOrderRow>>(
+                q => q.GetOrderHistoryAsync(patient.Id, take: 1));
+            if (latest.Count == 0) return;
+            OpenOrder(latest[0].Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Opening the patient's latest file failed.");
+            _notice = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private void OpenOrder(Guid orderId) => Navigation.NavigateTo($"ecran/orderdetail?dossier={orderId}");
+
+    /// <summary>
+    /// The editor may hand back an existing patient rather than a new one: its duplicate check lets
+    /// the clerk recognise somebody already on file. Either way the order is raised against it.
+    /// </summary>
+    private async Task NewPatientSavedAsync(Guid id)
+    {
+        _newPatient = false;
+        await SelectPatientAsync(id);
+    }
+
+    /// <summary>
+    /// A provisional file, selected with the priority set to urgent: a patient who cannot be named
+    /// is, by construction, an emergency.
+    /// </summary>
+    private async Task CreateProvisionalAsync((Gender Gender, int EstimatedAge) answer)
+    {
+        _provisional = false;
+
+        try
+        {
+            var created = await Scopes.RunAsync<PatientRegistrationService, Result<Guid>>(
+                s => s.RegisterProvisionalAsync(answer.Gender, answer.EstimatedAge));
+
+            if (created.IsFailure)
+            {
+                _info = new Info("failure", Texts["Patient.Provisional"], [Texts.Describe(created.Errors)]);
+                return;
+            }
+
+            await SelectPatientAsync(created.Value);
+            _priority = OrderPriority.Urgent;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Opening a provisional file failed.");
+            _info = new Info("failure", Texts["Patient.Provisional"], [Texts["Message.UnexpectedError"]]);
+        }
+    }
+
+    private async Task SelectPatientAsync(Guid id)
+    {
+        try
+        {
+            var detail = await Scopes.RunAsync<IPatientQueries, PatientDetail?>(q => q.GetDetailAsync(id));
+            if (detail is null) return;
+
+            // Found again by its file number, so the band shows exactly what the search shows.
+            var page = await Scopes.RunAsync<IPatientQueries, PagedResult<PatientSearchRow>>(
+                q => q.SearchAsync(detail.MedicalRecordNumber, User.SiteId, pageSize: 10));
+            if (page.Items.FirstOrDefault(p => p.Id == id) is not { } row) return;
+
+            await PickPatientAsync(row);
+            Notice($"{detail.MedicalRecordNumber} — {detail.LastName} {detail.FirstName}", "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Selecting the patient failed.");
+        }
+    }
+
+    // ---- Request -----------------------------------------------------------------------------------
+
+    private void PriorityChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<OrderPriority>(e.Value?.ToString(), out var value)) _priority = value;
+        Changed();
+    }
+
+    private void OriginChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<OrderOrigin>(e.Value?.ToString(), out var value)) _origin = value;
+        Changed();
+    }
+
+    private void PrescriberChanged(ChangeEventArgs e)
+    {
+        _prescriberText = e.Value?.ToString() ?? string.Empty;
+        Changed();
+    }
+
+    private void ClinicalChanged(ChangeEventArgs e)
+    {
+        _clinical = e.Value?.ToString() ?? string.Empty;
+        Changed();
+    }
+
+    private void SelfPayChanged(ChangeEventArgs e)
+    {
+        _selfPay = e.Value is true || string.Equals(e.Value?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+        Changed();
+        RequestQuote();
+    }
+
+    /// <summary>
+    /// Oui, Non or Non renseigné: the order's fasting is a yes/no that may be left unknown, and a
+    /// clerk who did not ask should not have to claim either.
+    /// </summary>
+    private void SetFasting(bool? value)
+    {
+        _fasting = value;
+        Changed();
+    }
+
+    /// <summary>A doctor from the list, matched when the name was picked or typed out in full.</summary>
+    private PrescriberChoice? ChosenPrescriber() =>
+        OrderBasket.MatchPrescriber(_prescribers, c => c.Display, _prescriberText);
+
+    private bool PrescriberMissing() =>
+        OrderBasket.PrescriberMissing(ChosenPrescriber() is not null, _prescriberText, _origin);
+
+    private async Task PrescriberCreatedAsync(Guid id)
+    {
+        _newPrescriber = false;
+        await LoadPrescribersAsync();
+        if (_prescribers.FirstOrDefault(p => p.Id == id) is { } created) _prescriberText = created.Display;
+        Changed();
+    }
+
+    // ---- Catalogue ---------------------------------------------------------------------------------
+
+    private IReadOnlyList<CatalogPickerItem> Suggestions =>
+        _catalogTerm.Trim().Length == 0 ? [] : [.. OrderRegistrationRules.Ranked(_catalogItems, _catalogTerm.Trim()).Take(6)];
+
+    private async Task CatalogTermChanged(ChangeEventArgs e)
+    {
+        _catalogTerm = e.Value?.ToString() ?? string.Empty;
+        if (!await Debounce(Restart(ref _catalogDebounce), 200)) return;
+        await SearchCatalogueAsync();
+    }
+
+    private async Task CatalogKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") { _catalogTerm = string.Empty; await SearchCatalogueAsync(); return; }
+        if (e.Key != "Enter") return;
+
+        var term = _catalogTerm.Trim();
+        if (term.Length == 0) return;
+
+        // Enter can arrive before the search started by the last keystroke has answered.
+        _catalogDebounce?.Cancel();
+        await SearchCatalogueAsync();
+
+        if (OrderRegistrationRules.BestMatch(_catalogItems, term) is not { } match)
+        {
+            Notice(Texts["App.NoData"], "abnormal");
+            return;
+        }
+
+        await AddAndClearAsync(match);
+    }
+
+    private Task AddFromSuggestion(CatalogPickerItem item) => AddAndClearAsync(item);
+
+    // Cleared only when the analysis went in, so a refusal ("already in the panel") leaves the text
+    // for the clerk to correct.
+    private async Task AddAndClearAsync(CatalogPickerItem item)
+    {
+        AddItem(item);
+        if (!_basket.Contains(item)) return;
+        _catalogTerm = string.Empty;
+        await SearchCatalogueAsync();
+    }
+
+    private async Task SearchCatalogueAsync()
+    {
+        var version = ++_catalogVersion;
+        var term = _catalogTerm;
+
+        try
+        {
+            IReadOnlyList<CatalogPickerItem> items = string.IsNullOrWhiteSpace(term) && _fullCatalog.Count > 0
+                ? _fullCatalog
+                : await Scopes.RunAsync<ICatalogQueries, IReadOnlyList<CatalogPickerItem>>(
+                    q => q.SearchPickerAsync(term, payerId: null, Clock.Today));
+
+            // Each keystroke starts a search; only the latest one may fill the list.
+            if (version != _catalogVersion) return;
+
+            _catalogItems.Clear();
+            _catalogItems.AddRange(items);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the catalogue picker failed.");
+        }
+    }
+
+    private async Task AddPanelAsync(Guid panelId)
+    {
+        var item = _fullCatalog.FirstOrDefault(i => i.IsPanel && i.Id == panelId);
+
+        if (item is null && _frequent.FirstOrDefault(f => f.PanelId == panelId)?.Code is { } code)
+        {
+            var found = await Scopes.RunAsync<ICatalogQueries, IReadOnlyList<CatalogPickerItem>>(
+                q => q.SearchPickerAsync(code, payerId: null, Clock.Today));
+            item = found.FirstOrDefault(i => i.IsPanel && i.Id == panelId);
+        }
+
+        if (item is not null) AddItem(item);
+    }
+
+    private void AddItem(CatalogPickerItem item)
+    {
+        _notice = null;
+
+        // The basket's rules: an analysis once, a profile taking out its own members chosen alone.
+        var added = _basket.Add(item);
+
+        switch (added.Outcome)
+        {
+            case BasketAddOutcome.AlreadyPresent:
+                Notice(Texts["Order_AnalysisAlreadyPresent"], "abnormal");
+                return;
+
+            case BasketAddOutcome.AlreadyInPanel:
+                Notice(Texts.T("Order.AlreadyInPanel", item.Code, added.CoveringPanel!.Name.For(Texts.Language)), "abnormal");
+                return;
+
+            case BasketAddOutcome.MergedIntoPanel:
+                Notice(Texts.T("Order.MergedIntoPanel", string.Join(", ", added.Absorbed!.Select(a => a.Code)),
+                               item.Name.For(Texts.Language)), "abnormal");
+                break;
+        }
+
+        RequestQuote();
+    }
+
+    private string Notes(CatalogPickerItem item)
+    {
+        var notes = new List<string>();
+        if (item.IsPanel) notes.Add(Texts.T("ResultEntry.AnalysisMany", item.ComponentCount));
+        if (item.FastingHours is { } fasting) notes.Add($"{Texts["Order.Fasted"]} {fasting} h");
+        if (item.ConsentRequirement != ConsentRequirement.None) notes.Add(Texts["Consent.Required"]);
+        if (item.IsSubcontracted) notes.Add(Texts["Catalog.Subcontracted"]);
+        return string.Join(" · ", notes);
+    }
+
+    private string Subline(CatalogPickerItem item) =>
+        string.Join(" · ", item.Code,
+                    item.IsPanel ? Texts.T("OrderEntry.PanelBadge", item.ComponentCount)
+                                 : item.DepartmentName?.For(Texts.Language) ?? "—",
+                    $"{item.TurnaroundHours} h");
+
+    private string Price(decimal amount) => Money.Of(amount).Amount.ToString("N2", Texts.Culture);
+
+    // ---- Basket ------------------------------------------------------------------------------------
+
+    private void Remove(CatalogPickerItem item)
+    {
+        _notice = null;
+        _basket.Remove(item);
+        RequestQuote();
+    }
+
+    private void Keep(CatalogPickerItem item) => _basket.Keep(item);
+
+    private void AskRemoveAll()
+    {
+        if (_basket.IsEmpty) return;
+        if (_basket.Count > 1)
+            _confirm = new Confirmation(Texts["OrderEntry.RemoveAll"], Texts.T("OrderEntry.ConfirmRemoveAll", _basket.Count),
+                                        () => { RemoveAll(); return Task.CompletedTask; });
+        else
+            RemoveAll();
+    }
+
+    private void RemoveAll()
+    {
+        _notice = null;
+        _basket.Clear();
+        RequestQuote();
+    }
+
+    private string BasketNotes(CatalogPickerItem item)
+    {
+        var notes = new List<string>();
+        if (item.IsPanel) notes.Add(Texts["Catalog.Panel"]);
+
+        // Two panels can share members; the shared ones are billed once, on the first.
+        var shared = _basket.SharedCount(item);
+        if (shared > 0) notes.Add(Texts.T("Order.SharedAnalyses", shared));
+        if (item.FastingHours is { } fasting) notes.Add($"{fasting} h");
+        if (item.ConsentRequirement != ConsentRequirement.None) notes.Add(Texts["Consent.Required"]);
+        return string.Join(" · ", notes);
+    }
+
+    private string WarningText(BasketRepeat repeat)
+    {
+        var date = repeat.Previous.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+        return repeat.MemberCode is { } code
+            ? Texts.T("OrderEntry.AlreadyTestedMember", code, date, repeat.Previous.AccessionNumber)
+            : Texts.T("OrderEntry.AlreadyTested", date, repeat.Previous.AccessionNumber);
+    }
+
+    private int TubeCount => _quote?.Tubes.Count ?? 0;
+
+    private IEnumerable<(string Text, string Colour)> TubeGroups() =>
+        (_quote?.Tubes ?? [])
+        .GroupBy(t => (Name: t.Name.For(Texts.Language), t.ColourHex, t.VolumeMl))
+        .Select(g => ($"{g.Key.Name}{(g.Key.VolumeMl is { } ml ? $" {ml.ToString("0.#", Texts.Culture)} mL" : string.Empty)} ×{g.Count()}",
+                      g.Key.ColourHex));
+
+    // ---- Quote and readiness -----------------------------------------------------------------------
+
+    private void RequestQuote() => _ = RequestQuoteAsync();
+
+    private async Task RequestQuoteAsync()
+    {
+        if (!await Debounce(Restart(ref _quoteDebounce), 250)) return;
+        await RefreshQuoteAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Asks the registration's pricing for the request as it stands: the same resolution of the
+    /// profiles, the same coverage and the same tariff the save will apply.
+    /// </summary>
+    private async Task RefreshQuoteAsync()
+    {
+        var version = ++_quoteVersion;
+
+        if (_basket.IsEmpty)
+        {
+            _quote = null;
+            return;
+        }
+
+        try
+        {
+            var request = new OrderQuoteRequest
+            {
+                PatientId = _patient?.Id,
+                AnalysisTestIds = _basket.AnalysisTestIds,
+                TestPanelIds = _basket.TestPanelIds,
+                BillDirectlyToPatient = _selfPay
+            };
+            var quoted = await Scopes.RunAsync<IOrderQuotes, Result<OrderQuote>>(q => q.QuoteAsync(request));
+
+            if (version != _quoteVersion) return;
+
+            if (quoted.IsFailure)
+            {
+                _quote = null;
+                Notice(Texts.Describe(quoted.Errors), "critical");
+                return;
+            }
+
+            _quote = quoted.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Pricing the request failed.");
+        }
+    }
+
+    /// <summary>
+    /// What the bar says next to the buttons: ready, what is missing, or what the save would refuse.
+    /// A message from the last action stays until the next change.
+    /// </summary>
+    private (string Text, string Tone) Status
+    {
+        get
+        {
+            if (_notice is { } notice) return notice;
+
+            var missing = OrderBasket.MissingKeys(_patient is not null, !_basket.IsEmpty, PrescriberMissing())
+                                     .Select(k => Texts[k]).ToList();
+
+            if (missing.Count > 0) return (Texts.T("OrderEntry.Missing", string.Join(", ", missing)), "muted");
+            if (_quote?.Problems is { Count: > 0 } problems) return (Texts.Describe(problems), "critical");
+
+            // The longest fast and a consent to collect.
+            var reminders = new List<string> { Texts["OrderEntry.Ready"] };
+            if (_basket.MaxFastingHours is > 0 and var hours) reminders.Add($"{Texts["Catalog.FastingRequired"]} {hours} h");
+            if (_basket.RequiresConsent) reminders.Add(Texts["Consent.Required"]);
+            return (string.Join(" · ", reminders), "normal");
+        }
+    }
+
+    private string StatusText => Status.Text;
+
+    private string StatusClass => $"is-{Status.Tone}";
+
+    /// <summary>The clerk changed something: the last action's message gives way to the readiness.</summary>
+    private void Changed() => _notice = null;
+
+    private void Notice(string text, string tone) => _notice = (text, tone);
+
+    // ---- Registration ------------------------------------------------------------------------------
+
+    private async Task RegisterAsync(bool printLabels)
+    {
+        if (_patient is not { } patient || _basket.IsEmpty || _busy) return;
+        if (!User.Has(Permissions.Orders.Create)) return;
+
+        var prescriber = ChosenPrescriber();
+        var prescriberText = _prescriberText.Trim();
+
+        if (OrderBasket.PrescriberMissing(prescriber is not null, prescriberText, _origin))
+        {
+            _info = new Info("warning", Texts["Order.Title"], [Texts["Order_PrescriberRequired"]]);
+            return;
+        }
+
+        var request = new RegisterOrderRequest
+        {
+            PatientId = patient.Id,
+            AnalysisTestIds = _basket.AnalysisTestIds,
+            TestPanelIds = _basket.TestPanelIds,
+            Priority = _priority,
+            Origin = _origin,
+            PrescriberId = prescriber?.Id,
+            PrescriberFreeText = prescriber is null && prescriberText.Length > 0 ? prescriberText : null,
+            ClinicalInformation = string.IsNullOrWhiteSpace(_clinical) ? null : _clinical.Trim(),
+            PatientFasted = _fasting,
+            BillDirectlyToPatient = _selfPay
+        };
+
+        _busy = true;
+        try
+        {
+            var result = await Scopes.RunAsync<OrderRegistrationService, Result<RegisteredOrder>>(s => s.RegisterAsync(request));
+
+            if (result.IsFailure)
+            {
+                _info = new Info("failure", Texts["Order.Title"], [Texts.Describe(result.Errors)]);
+                return;
+            }
+
+            var registered = result.Value;
+            ResetForm();
+
+            var message = $"{Texts["Order.AccessionNumber"]} {registered.AccessionNumber} — " +
+                          $"{registered.Labels.Count} {Texts["Sample.Plural"].ToLower(Texts.Culture)}";
+
+            // The browser cannot reach the counter's label printer: the labels are printed from the
+            // Windows workstation (the file's « Imprimer étiquettes »), whichever button was used.
+            if (registered.Labels.Count > 0)
+                message += " — " + (printLabels ? Texts["OrderEntry.LabelsFromWorkstation"] : Texts["OrderEntry.LabelsNotPrinted"]);
+            Notice(message, "normal");
+
+            _info = new Info("registered", Texts["Billing.Invoice"], PricingLines(registered, printLabels), registered.OrderId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Order registration failed.");
+            _info = new Info("failure", Texts["Order.Title"], [Texts["Message.UnexpectedError"]]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// The authoritative breakdown from the pricing engine: the payer's share, the patient's share,
+    /// and any excess over the national reference tariff stated separately.
+    /// </summary>
+    private List<string> PricingLines(RegisteredOrder registered, bool printLabels)
+    {
+        var pricing = registered.Pricing;
+        var language = Texts.Language;
+
+        var lines = new List<string>
+        {
+            $"{Texts["Order.AccessionNumber"]} : {registered.AccessionNumber}",
+            string.Empty,
+            $"{Texts["Billing.Gross"]} : {pricing.Gross.Format(language, Texts.Culture)}"
+        };
+
+        if (!pricing.Discount.IsZero) lines.Add($"{Texts["Billing.Discount"]} : {pricing.Discount.Format(language, Texts.Culture)}");
+        lines.Add($"{Texts["Billing.TotalDue"]} : {pricing.Total.Format(language, Texts.Culture)}");
+
+        if (!pricing.PayerShare.IsZero)
+        {
+            lines.Add($"{Texts["Billing.PayerShare"]} : {pricing.PayerShare.Format(language, Texts.Culture)}");
+            lines.Add($"{Texts["Billing.PatientShare"]} : {pricing.PatientShare.Format(language, Texts.Culture)}");
+        }
+
+        if (!pricing.ExcessOverReferenceTariff.IsZero)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"{Texts["Billing.ExcessOverTariff"]} : {pricing.ExcessOverReferenceTariff.Format(language, Texts.Culture)}");
+        }
+
+        lines.Add(string.Empty);
+        lines.Add($"{Texts["Payment.Title"]} : {pricing.DueAtCounter.Format(language, Texts.Culture)}");
+
+        // Warnings are advisory (a non-fasting sample a clinician knowingly accepts): reported, the
+        // registration stands.
+        if (registered.Warnings.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add(Texts.Describe(registered.Warnings));
+        }
+
+        if (printLabels && registered.Labels.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add(Texts["OrderEntry.LabelsFromWorkstation"]);
+        }
+
+        return lines;
+    }
+
+    // ---- Abandoning the entry ----------------------------------------------------------------------
+
+    private bool HasEntries => OrderBasket.HasEntries(_patient is not null, _basket.Count, _clinical, _prescriberText);
+
+    /// <summary>« Annuler la saisie »: asks first when anything was typed, then starts afresh.</summary>
+    private void AskCancelEntry()
+    {
+        if (!HasEntries) { ResetForm(); return; }
+        _confirm = new Confirmation(Texts["OrderEntry.CancelEntry"], Texts["OrderEntry.ConfirmCancelEntry"],
+                                    () => { ResetForm(); return Task.CompletedTask; });
+    }
+
+    private async Task ConfirmedAsync()
+    {
+        var confirm = _confirm;
+        _confirm = null;
+        if (confirm is not null) await confirm.OnYes();
+    }
+
+    private void ResetForm()
+    {
+        _notice = null;
+        _basket.Clear();
+        _basket.ForgetPatient();
+        _patient = null;
+        _patients = [];
+        _patientTerm = string.Empty;
+        _catalogTerm = string.Empty;
+        _catalogItems.Clear();
+        _catalogItems.AddRange(_fullCatalog);
+        _clinical = string.Empty;
+        _fasting = true;
+        _selfPay = false;
+        _priority = OrderPriority.Routine;
+        _origin = OrderOrigin.Walkin;
+        _prescriberText = string.Empty;
+        _quote = null;
+        ++_quoteVersion;
+    }
+
+    // ---- Plumbing ----------------------------------------------------------------------------------
+
+    /// <summary>Cancels the wait a previous keystroke started and starts this one's.</summary>
+    private static CancellationToken Restart(ref CancellationTokenSource? source)
+    {
+        source?.Cancel();
+        source?.Dispose();
+        source = new CancellationTokenSource();
+        return source.Token;
+    }
+
+    /// <summary>Waits for the typing to pause; false when a later keystroke superseded this one.</summary>
+    private static async Task<bool> Debounce(CancellationToken token, int milliseconds)
+    {
+        try
+        {
+            await Task.Delay(milliseconds, token);
+            return true;
+        }
+        catch (TaskCanceledException)
+        {
+            return false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _patientDebounce?.Cancel();
+        _patientDebounce?.Dispose();
+        _catalogDebounce?.Cancel();
+        _catalogDebounce?.Dispose();
+        _quoteDebounce?.Cancel();
+        _quoteDebounce?.Dispose();
+    }
+}

@@ -1,0 +1,118 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Domain.Orders
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<NewPrescriberDialog> Logger
+
+@*
+    « + » beside the prescriber of « Nouvelle demande »: the doctor met for the first time at the
+    counter, created without leaving the request. The workstation opens its directory form here; the
+    web asks for what the counter knows (the name, the kind, the speciality, the INPE, a telephone,
+    the city) and the directory completes the rest. The rules are PrescriberEntryRules', the
+    authority MasterDataService's (Catalog.Manage or Orders.Create for a new doctor).
+*@
+<Modal Name="new-prescriber" Title="@Texts["Order.NewPrescriber"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <div class="form-grid">
+            <label class="field"><span class="field-label">@Texts["Patient.LastName"] *</span>
+                <input class="input" data-field="lastName" @bind="_lastName" @bind:event="oninput" maxlength="100" /></label>
+            <label class="field"><span class="field-label">@Texts["Patient.FirstName"]</span>
+                <input class="input" data-field="firstName" @bind="_firstName" maxlength="100" /></label>
+            <label class="field"><span class="field-label">@Texts["Field.Name"]</span>
+                <select class="input" data-field="kind" @bind="_kind">
+                    @foreach (var kind in Enum.GetValues<PrescriberKind>())
+                    {
+                        <option value="@kind">@Texts[$"PrescriberKind.{kind}"]</option>
+                    }
+                </select></label>
+            <label class="field"><span class="field-label">@Texts["Order.Speciality"]</span>
+                <input class="input" data-field="speciality" @bind="_speciality" maxlength="100" /></label>
+            <label class="field"><span class="field-label">@Texts["Site.Inpe"]</span>
+                <input class="input mono" dir="ltr" data-field="inpe" @bind="_inpe" @bind:event="oninput" maxlength="20" /></label>
+            <label class="field"><span class="field-label">@Texts["Patient.MobilePhone"]</span>
+                <input class="input mono" dir="ltr" type="tel" data-field="mobile" @bind="_mobile" maxlength="20" /></label>
+            <label class="field"><span class="field-label">@Texts["Patient.City"]</span>
+                <input class="input" data-field="city" @bind="_city" maxlength="100" /></label>
+        </div>
+        @if (PrescriberEntryRules.WarnsOfMissingInpe(_kind, _inpe))
+        {
+            <p class="message is-abnormal" data-state="inpe-notice">@Texts["Order.InpeNotice"]</p>
+        }
+        @if (_error is not null)
+        {
+            <p class="message is-critical" role="alert">@_error</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>What was typed in the prescriber box and matched nobody: the new doctor's name.</summary>
+    [Parameter] public string? TypedName { get; set; }
+
+    /// <summary>The doctor created, by id.</summary>
+    [Parameter] public EventCallback<Guid> OnCreated { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string? _lastName;
+    private string? _firstName;
+    private PrescriberKind _kind = PrescriberKind.GeneralPractitioner;
+    private string? _speciality;
+    private string? _inpe;
+    private string? _mobile;
+    private string? _city;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        (_lastName, _firstName) = PrescriberEntryRules.SplitTypedName(TypedName);
+    }
+
+    private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+    private async Task SaveAsync()
+    {
+        if (PrescriberEntryRules.Problem(_lastName) is { } problem)
+        {
+            _error = Texts[problem];
+            return;
+        }
+
+        var request = new PrescriberRequest
+        {
+            LastName = _lastName!.Trim(),
+            FirstName = _firstName?.Trim() ?? string.Empty,
+            Kind = _kind,
+            Speciality = Blank(_speciality) is { } speciality ? new MultilingualText(speciality) : null,
+            Inpe = Blank(_inpe),
+            MobilePhone = Blank(_mobile),
+            City = Blank(_city),
+            DeliveryPreference = ReportDeliveryPreference.PatientCollects
+        };
+
+        try
+        {
+            var saved = await Scopes.RunAsync<MasterDataService, Result<Guid>>(s => s.SavePrescriberAsync(request));
+
+            // The form stays open with what was typed, as in the directory screen.
+            if (saved.IsFailure)
+            {
+                _error = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            await OnCreated.InvokeAsync(saved.Value);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Creating a prescriber from the counter failed.");
+            _error = Texts["Message.UnexpectedError"];
+        }
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

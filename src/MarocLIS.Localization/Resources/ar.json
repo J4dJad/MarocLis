@@ -953,6 +953,7 @@
   },
 
   "OrderEntry": {
+    "LabelsFromWorkstation": "تُطبع الملصقات من حاسوب ويندوز بالمختبر (المتصفح لا يصل إلى طابعة الملصقات)",
     "MissingPrescriber": "الطبيب الواصف",
     "MissingAnalyses": "تحليل واحد على الأقل",
     "MissingPatient": "المريض",

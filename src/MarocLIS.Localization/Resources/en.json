@@ -953,6 +953,7 @@
   },
 
   "OrderEntry": {
+    "LabelsFromWorkstation": "labels to be printed from the laboratory's Windows workstation (the browser cannot reach the label printer)",
     "MissingPrescriber": "the prescriber",
     "MissingAnalyses": "at least one analysis",
     "MissingPatient": "the patient",

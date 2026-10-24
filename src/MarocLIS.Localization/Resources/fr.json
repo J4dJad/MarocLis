@@ -953,6 +953,7 @@
   },
 
   "OrderEntry": {
+    "LabelsFromWorkstation": "étiquettes à imprimer depuis le poste Windows du laboratoire (le navigateur n'accède pas à l'imprimante d'étiquettes)",
     "MissingPrescriber": "le prescripteur",
     "MissingAnalyses": "au moins une analyse",
     "MissingPatient": "le patient",
