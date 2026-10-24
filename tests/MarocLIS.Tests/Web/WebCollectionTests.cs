@@ -1,19 +1,23 @@
 using Bunit;
 using FluentAssertions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Application.Samples;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Orders;
+using MarocLIS.Web.Components.Pages;
 using MarocLIS.Web.Components.Screens.Samples;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static MarocLIS.Tests.Licensing.LicenceTestKit;
 
 namespace MarocLIS.Tests.Web;
 
 /// <summary>
 /// « Prélèvements » in the browser: the patients to draw, the tubes ticked by CollectionRules, the
 /// scanner in the scan box, the fasting question before the draw, the labels left to the
-/// workstation.
+/// workstation — and a préleveur who types the address of another screen.
 /// </summary>
 public sealed class WebCollectionTests : WebBenchContext
 {
@@ -23,6 +27,7 @@ public sealed class WebCollectionTests : WebBenchContext
 
     public WebCollectionTests()
     {
+        Services.AddSingleton<ILicenceState>(new FixedLicenceState(FullStatus()));
         SampleQueries.On(nameof(ISampleQueries.GetCollectionWorklistAsync), _ => (IReadOnlyList<CollectionWorklistEntry>)
         [
             Tube(1, "T-2610-0001", fasting: 12),
@@ -110,6 +115,21 @@ public sealed class WebCollectionTests : WebBenchContext
 
         page.Find("[data-action='Collection.ValidateDraw']").HasAttribute("disabled").Should().BeTrue();
         page.Find("[data-action='Collection.DispatchToBench']").HasAttribute("disabled").Should().BeTrue();
+    }
+
+    [Fact]
+    public void APreleveur_TypingTheAddressOfEntryOrValidation_IsRefused_ButCollectionOpens()
+    {
+        SignIn(AppLanguage.French, Collector);
+
+        foreach (var key in new[] { "entry", "validation", "reception" })
+        {
+            var refused = Render<Screen>(p => p.Add(x => x.Key, key));
+            refused.Find("[data-state=refused]").TextContent.Should().Contain("Vous n'avez pas le droit", key);
+            refused.FindAll("[data-screen]").Should().BeEmpty(key);
+        }
+
+        Render<Screen>(p => p.Add(x => x.Key, "collection")).Find("[data-screen=collection]").Should().NotBeNull();
     }
 
     [Fact]
