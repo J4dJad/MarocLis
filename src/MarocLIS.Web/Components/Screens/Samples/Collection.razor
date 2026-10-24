@@ -1,0 +1,600 @@
+@using System.Globalization
+@using MarocLIS.Application.Orders
+@using MarocLIS.Application.Samples
+@using MarocLIS.Domain.Orders
+@using MarocLIS.Domain.Samples
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject ILogger<Collection> Logger
+
+@*
+    « Prélèvements », the workstation's CollectionView: the patients to draw on the left with their
+    chips, the patient at the chair on the right — the alerts and the fasting band stated before
+    the draw, the tubes in draw order with a scan box to tick them, the collection details — and
+    the action bar (F8 labels, F12 validate the draw). Which tubes come ticked, what the fasting
+    band records and which volume is refused are CollectionRules'; what is recorded is
+    SampleWorkflowService's. Labels are printed by the Windows workstation.
+*@
+<div class="screen collection" data-screen="collection">
+    <div class="split split-list">
+        <aside class="card list-pane" data-card="patients">
+            <div class="card-heading">
+                <h2 class="card-title">@Texts["SampleStatus.AwaitingCollection"]</h2>
+                <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="ActivateAsync" />
+            </div>
+            <div class="chips" role="group">
+                @foreach (var (filter, caption) in Chips)
+                {
+                    <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
+                            data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => SetFilter(filter)">@caption</button>
+                }
+            </div>
+            <p class="muted small" data-state="list-count">@Texts.T("Collection.PatientsAndTubes", All.Count, _entries.Count)</p>
+            <ul class="file-list" data-list="patients">
+                @foreach (var group in Shown)
+                {
+                    var first = group.First();
+                    var set = group.ToList();
+                    var toDraw = CollectionRules.ToDraw(set);
+                    var alerted = set.Any(e => e.PatientAlerts.Count > 0);
+                    var fasting = CollectionRules.RequiredFasting(set);
+                    <li class="@(group.Key == _orderId ? "is-selected" : null) @(alerted ? "is-alerted" : null) @(toDraw == 0 ? "is-drawn" : null)"
+                        data-order="@first.AccessionNumber" @onclick="() => SelectPatient(group.Key)">
+                        <div class="file-list-line">
+                            <span class="strong @(first.Priority != OrderPriority.Routine ? "critical" : null)">@(alerted ? "⚠ " : null)@DisplayName(first)</span>
+                            <Pill Text="@(toDraw > 0 ? Texts.T("Collection.ToDraw", toDraw) : Texts["Collection.ReadyToDispatch"])"
+                                  Tone="@(toDraw > 0 ? "Waiting" : "Ok")" />
+                        </div>
+                        <div class="file-list-line">
+                            <span class="small muted"><span class="mono">@first.AccessionNumber</span> · @PatientFacts(first, set)</span>
+                            @if (fasting > 0)
+                            {
+                                <span class="small strong abnormal">@Texts.T("Collection.FastingHours", fasting)</span>
+                            }
+                            else if (first.Priority != OrderPriority.Routine)
+                            {
+                                <span class="small strong critical">@Texts[$"Priority.{first.Priority}"]</span>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        </aside>
+
+        <section class="file-pane" data-card="patient">
+            @if (_set.Count == 0)
+            {
+                <div class="card card-empty" data-state="no-patient">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Syringe" Class="icon-large" />
+                    <p>@Texts["App.NoData"]</p>
+                </div>
+            }
+            else
+            {
+                var first = _set[0];
+                var actions = Actions;
+
+                <div class="card patient-band" data-state="patient">
+                    <span class="initials @(first.Priority != OrderPriority.Routine ? "is-critical" : null)">@Initials(DisplayName(first))</span>
+                    <div class="patient-band-text">
+                        <span class="patient-band-name">@DisplayName(first)</span>
+                        <span class="muted small">@Identity(first)</span>
+                    </div>
+                    <ActionButton Key="Collection.OpenFile" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FolderOpen"
+                                  Disabled="@(!actions.OpenFile)" OnClick="OpenFile" />
+                </div>
+
+                @if (Alerts is { Count: > 0 } alerts)
+                {
+                    <p class="message is-critical" role="alert" data-state="alerts">⚠ @string.Join("   ·   ", alerts)</p>
+                }
+
+                @if (CollectionRules.RequiredFasting(_set) is var required and > 0)
+                {
+                    var shown = CollectionRules.ShownFasting(_fasting, first.PatientDeclaredFasted);
+                    <div class="card fasting-band @(shown is false ? "is-critical" : null)" data-state="fasting">
+                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.CalendarCheck" />
+                        <span class="fasting-text">@FastingText(required, shown)</span>
+                        <div class="segmented" role="group">
+                            <button type="button" class="btn btn-secondary @(shown is true ? "is-pressed" : null)" aria-pressed="@((shown is true) ? "true" : "false")"
+                                    data-action="fasting-yes" @onclick="() => _fasting = FastingAnswer.Yes">@Texts["Action.Yes"]</button>
+                            <button type="button" class="btn btn-secondary @(shown is false ? "is-pressed" : null)" aria-pressed="@((shown is false) ? "true" : "false")"
+                                    data-action="fasting-no" @onclick="() => _fasting = FastingAnswer.No">@Texts["Action.No"]</button>
+                            <button type="button" class="btn btn-secondary @(_fasting == FastingAnswer.Unknown ? "is-pressed" : null)"
+                                    aria-pressed="@((_fasting == FastingAnswer.Unknown) ? "true" : "false")"
+                                    data-action="fasting-unknown" @onclick="() => _fasting = FastingAnswer.Unknown">@Texts["Collection.FastingUnknown"]</button>
+                        </div>
+                    </div>
+                }
+
+                <div class="card" data-card="tubes">
+                    <div class="card-heading">
+                        <h2 class="card-title">@Texts["Collection.TubesHeading"]</h2>
+                        @{ var drawn = _set.Count(e => e.IsCollected); }
+                        <Pill Text="@Texts.T("Collection.DrawnOfTotal", drawn, _set.Count)" Tone="@(drawn == 0 ? "Waiting" : "Ok")" />
+                    </div>
+                    <div class="search-box scan-box">
+                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                        <input class="input" type="text" placeholder="@Texts["Collection.ScanPlaceholder"]" title="@Texts["Sample.Barcode"]"
+                               aria-label="@Texts["Sample.Barcode"]" data-field="scan" autocomplete="off"
+                               @ref="_scanBox" @bind="_scan" @bind:event="oninput" @onkeydown="ScanKey" />
+                    </div>
+                    <div class="table-scroll">
+                        <table class="grid" data-grid="tubes">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th class="num">#</th>
+                                    <th>@Texts["Sample.ContainerType"]</th>
+                                    <th>@Texts["Sample.Barcode"]</th>
+                                    <th>@Texts["Field.Time"]</th>
+                                    <th>@Texts["Sample.Volume"]</th>
+                                    <th>@Texts["Field.Status"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{ var position = 1; }
+                                @foreach (var tube in _set)
+                                {
+                                    var sampleId = tube.SampleId;
+                                    <tr class="@(tube.IsCollected ? "is-drawn" : null)" data-tube="@tube.Barcode" title="@TubeTip(tube)">
+                                        <td><input type="checkbox" checked="@_ticked.Contains(sampleId)" aria-label="@tube.Barcode"
+                                                   data-field="tick" @onchange="e => Tick(sampleId, e.Value is true)" /></td>
+                                        <td class="num">@(position++)</td>
+                                        <td>
+                                            <span class="tube-swatch" style="background:@tube.ContainerColourHex"></span>
+                                            <span class="strong">@(tube.ContainerName?.For(Texts.Language) ?? "-")</span>
+                                            <span class="cell-sub">@tube.SpecimenTypeName.For(Texts.Language)</span>
+                                        </td>
+                                        <td class="mono">@tube.Barcode</td>
+                                        <td class="small">@(tube.CollectedAt is { } at ? at.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture) : "—")</td>
+                                        <td>
+                                            <input class="input input-volume" type="text" inputmode="decimal" data-field="volume" aria-label="@Texts["Sample.Volume"]"
+                                                   readonly="@tube.IsCollected" value="@_volumes.GetValueOrDefault(sampleId)"
+                                                   @oninput="e => _volumes[sampleId] = e.Value?.ToString()" />
+                                        </td>
+                                        <td><Pill Text="@Texts[tube.IsCollected ? "SampleStatus.Collected" : "SampleStatus.AwaitingCollection"]"
+                                                  Tone="@(tube.IsCollected ? "Ok" : "Waiting")" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card form-grid" data-card="details">
+                    <label class="field">
+                        <span class="field-label">@Texts["Sample.CollectedBy"]</span>
+                        <input class="input" type="text" readonly value="@Context.User.FullName" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Field.Time"]</span>
+                        <input class="input" type="text" readonly value="@Clock.Now.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Sample.CollectionLocation"]</span>
+                        <select class="input" data-field="location" @onchange="LocationChanged">
+                            @foreach (var place in Enum.GetValues<CollectionLocation>())
+                            {
+                                <option value="@place" selected="@(place == _location)">@Texts[$"Collection.Location.{place}"]</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Field.Comment"]</span>
+                        <input class="input" type="text" placeholder="@Texts["Collection.CommentPlaceholder"]" data-field="comment"
+                               @bind="_comment" @bind:event="oninput" />
+                    </label>
+                </div>
+
+                <footer class="action-bar">
+                    <p class="action-bar-status is-@(_status?.Tone ?? "muted")" role="status" data-state="status">@(_status?.Text ?? Remaining)</p>
+                    <ActionButton Key="Action.PrintLabels" Disabled="@(!actions.Reprint)" Shortcut="F8" OnClick="PrintLabels" />
+                    <ActionButton Key="Collection.DispatchToBench" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Truck"
+                                  Disabled="@(!actions.Dispatch)" OnClick="() => RecordAsync(dispatch: true)" />
+                    <ActionButton Key="Collection.ValidateDraw" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Syringe" Primary="true"
+                                  Disabled="@(!actions.Record)" Shortcut="F12" OnClick="() => RecordAsync(dispatch: false)" />
+                </footer>
+            }
+        </section>
+    </div>
+</div>
+
+@switch (_dialog)
+{
+    case CollectionDialog.Fasting when _pending is { } pending:
+        <ConfirmPrompt Title="@Texts["Catalog.FastingRequired"]" Message="@Texts.T("Collection.FastingQuestion", pending.RequiredFasting)"
+                       OnYes="() => AnswerFastingAsync(true)" OnNo="() => AnswerFastingAsync(false)" />
+        break;
+
+    case CollectionDialog.Message when _message is { } message:
+        <Modal Name="collection-message" Title="@message.Title" OnCancel="CloseDialog">
+            <ChildContent><p class="info-line">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum CollectionDialog { None, Fasting, Message }
+
+    private sealed record Message(string Title, string Text);
+
+    /// <summary>A draw waiting for the fasting answer asked before it is recorded.</summary>
+    private sealed record PendingDraw(bool Dispatch, IReadOnlyList<Guid> Ticked, IReadOnlyList<Guid> ToDraw,
+                                      IReadOnlyList<(Guid SampleId, decimal? VolumeMl)> Volumes, int RequiredFasting);
+
+    private IReadOnlyList<CollectionWorklistEntry> _entries = [];
+    private CollectionFilter _filter = CollectionFilter.All;
+    private Guid? _orderId;
+    private IReadOnlyList<CollectionWorklistEntry> _set = [];
+
+    private readonly HashSet<Guid> _ticked = [];
+    private readonly Dictionary<Guid, string?> _volumes = [];
+    private FastingAnswer _fasting = FastingAnswer.NotAsked;
+    private CollectionLocation _location;
+    private bool _locationChosen;
+    private string _comment = string.Empty;
+
+    private string _scan = string.Empty;
+    private ElementReference _scanBox;
+
+    private CollectionDialog _dialog;
+    private Message? _message;
+    private PendingDraw? _pending;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<IGrouping<Guid, CollectionWorklistEntry>> All => CollectionRules.Orders(_entries, CollectionFilter.All);
+
+    private IReadOnlyList<IGrouping<Guid, CollectionWorklistEntry>> Shown => CollectionRules.Orders(_entries, _filter);
+
+    private CollectionActions Actions => CollectionRules.Actions(_set, Context.User);
+
+    private IEnumerable<(CollectionFilter Filter, string Caption)> Chips
+    {
+        get
+        {
+            yield return (CollectionFilter.All, Texts.T("Collection.FilterAll", All.Count));
+            yield return (CollectionFilter.Urgent, Texts.T("Collection.FilterUrgent", CollectionRules.Orders(_entries, CollectionFilter.Urgent).Count));
+            yield return (CollectionFilter.Fasting, Texts.T("Collection.FilterFasting", CollectionRules.Orders(_entries, CollectionFilter.Fasting).Count));
+        }
+    }
+
+    protected override Task OnInitializedAsync() => ActivateAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The chair is a scanning loop: the scan box holds the cursor, as on the workstation.
+        if (firstRender && _set.Count > 0) await FocusScanAsync();
+    }
+
+    private async Task ActivateAsync()
+    {
+        try
+        {
+            // Everything is loaded and the chips filter on screen, so each chip can show its count.
+            var result = await Scopes.RunAsync<SampleWorkflowService, Result<IReadOnlyList<CollectionWorklistEntry>>>(
+                s => s.GetCollectionWorklistAsync(false));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Nav.Collection"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            _entries = result.Value;
+            ShowPatient();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the collection worklist failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private void SetFilter(CollectionFilter filter)
+    {
+        _filter = filter;
+        ShowPatient();
+    }
+
+    private void SelectPatient(Guid orderId)
+    {
+        _orderId = orderId;
+        _status = null;
+        ShowPatient();
+    }
+
+    /// <summary>
+    /// The patient being drawn stays across a refresh, as long as they are listed; otherwise the
+    /// first. Another patient starts from a blank fasting answer, comment and place.
+    /// </summary>
+    private void ShowPatient()
+    {
+        var shown = Shown;
+        var previous = _set.Count > 0 ? _set[0].LabOrderId : (Guid?)null;
+
+        if (_orderId is not { } wanted || shown.All(g => g.Key != wanted))
+            _orderId = shown.Count > 0 ? shown[0].Key : null;
+
+        _set = _orderId is { } orderId ? CollectionRules.DrawSet(_entries, orderId) : [];
+
+        if (_set.Count > 0 && previous != _orderId)
+        {
+            _fasting = FastingAnswer.NotAsked;
+            _comment = string.Empty;
+            _location = _set[0].CollectionLocation;
+            _locationChosen = false;
+        }
+
+        // The tubes still to draw come ticked, or all of them once drawn, ready for « Expédier ».
+        _ticked.Clear();
+        _volumes.Clear();
+        foreach (var tube in _set)
+        {
+            if (CollectionRules.IsTickedByDefault(tube, _set)) _ticked.Add(tube.SampleId);
+            _volumes[tube.SampleId] = tube.NominalVolumeMl?.ToString("N1", Texts.Culture);
+        }
+    }
+
+    private void Tick(Guid sampleId, bool ticked)
+    {
+        if (ticked) _ticked.Add(sampleId);
+        else _ticked.Remove(sampleId);
+    }
+
+    private void LocationChanged(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<CollectionLocation>(e.Value?.ToString(), out var place)) return;
+        _location = place;
+        _locationChosen = true;
+    }
+
+    // ---- What the screen shows ---------------------------------------------------------------------
+
+    private string DisplayName(CollectionWorklistEntry entry) =>
+        Texts.Language == AppLanguage.Arabic && entry.PatientNameArabic is { Length: > 0 } arabic ? arabic : entry.PatientName;
+
+    private static string Initials(string name) =>
+        string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0])));
+
+    private string PatientFacts(CollectionWorklistEntry first, IReadOnlyCollection<CollectionWorklistEntry> set)
+    {
+        var facts = new List<string>(3);
+        if (first.AgeYears is { } age) facts.Add($"{age} {Texts["Report.Years"]}");
+        facts.Add(set.Count == 1 ? Texts["Collection.OneTube"] : Texts.T("Collection.ManyTubes", set.Count));
+        facts.Add($"{Texts["Collection.Registered"]} {first.RegisteredAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)}");
+        return string.Join(" · ", facts);
+    }
+
+    private string Identity(CollectionWorklistEntry first)
+    {
+        var identity = new List<string> { Texts[$"Gender.{first.Gender}"] };
+        if (first.AgeYears is { } age) identity.Add($"{age} {Texts["Report.Years"]}");
+        if (first.DateOfBirth is { } dob) identity.Add(Texts.T("Collection.BornOn", dob.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)));
+        identity.Add(Texts.T("Collection.OrderNumber", first.AccessionNumber));
+        if (first.Priority != OrderPriority.Routine) identity.Add(Texts[$"Priority.{first.Priority}"].ToUpper(Texts.Culture));
+        return string.Join(" · ", identity);
+    }
+
+    /// <summary>Patient alerts — biohazard, difficult draw, unpaid balance — before the draw.</summary>
+    private IReadOnlyList<string> Alerts =>
+        [.. _set.SelectMany(e => e.PatientAlerts).Select(a => a.For(Texts.Language)).Distinct()];
+
+    private string FastingText(int required, bool? shown)
+    {
+        var analyses = CollectionRules.FastingAnalyses(_set);
+        var forWhat = analyses.Count > 0 ? " " + Texts.T("Collection.FastingFor", string.Join(", ", analyses)) : string.Empty;
+
+        var verdict = shown switch
+        {
+            true => $"{Texts["Order.Fasted"]} ✓",
+            false => Texts["SampleDefect.FastingNotRespected"],
+            _ when _fasting == FastingAnswer.Unknown => Texts["Collection.FastingUnknown"],
+            _ => Texts["Collection.FastingBandQuestion"]
+        };
+
+        return $"{Texts["Catalog.FastingRequired"]} : {required} h{forWhat}. {verdict}";
+    }
+
+    private string TubeTip(CollectionWorklistEntry tube)
+    {
+        var tip = new List<string>();
+        if (tube.CollectionInstructions is { } instructions) tip.Add(instructions.For(Texts.Language));
+
+        var handling = new List<string>(2);
+        if (tube.RequiresLightProtection) handling.Add(Texts["Collection.ProtectFromLight"]);
+        if (tube.RequiresIceTransport) handling.Add(Texts["Collection.TransportOnIce"]);
+        if (handling.Count > 0) tip.Add(string.Join(" · ", handling));
+
+        if (tube.MinimumVolumeMl is { } minimum) tip.Add($"{Texts["Sample.Volume"]} ≥ {minimum.ToString("N1", Texts.Culture)} mL");
+        if (tube.AnalysisCodes.Count > 0) tip.Add($"{Texts["Catalog.Analyses"]} : {string.Join(" ", tube.AnalysisCodes)}");
+        return string.Join(Environment.NewLine, tip);
+    }
+
+    /// <summary>« 2 tubes restent à cocher », or « Prélevé · à expédier » once all are drawn.</summary>
+    private string Remaining
+    {
+        get
+        {
+            var left = CollectionRules.RemainingToTick(_set, _ticked);
+            return left == 0
+                ? _set.All(e => e.IsCollected) ? Texts["Collection.ReadyToDispatch"] : string.Empty
+                : left == 1 ? Texts["Collection.RemainingToTickOne"] : Texts.T("Collection.RemainingToTick", left);
+        }
+    }
+
+    // ---- Scan --------------------------------------------------------------------------------------
+
+    private async Task FocusScanAsync()
+    {
+        try { await _scanBox.FocusAsync(); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException) { }
+    }
+
+    /// <summary>A scanner types the barcode and ends with Enter, like a keyboard.</summary>
+    private async Task ScanKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        TickScanned(_scan);
+        await FocusScanAsync();
+    }
+
+    /// <summary>
+    /// Ticks the scanned tube. A tube of another patient on the list brings that patient up first:
+    /// the label in the operator's hand is the most reliable identification there is.
+    /// </summary>
+    private void TickScanned(string text)
+    {
+        var barcode = text.Trim();
+        if (barcode.Length == 0) return;
+
+        if (CollectionRules.Scanned(_entries, barcode) is not { } tube)
+        {
+            _status = (Texts.T("Collection.ScanUnknown", barcode), "critical");
+            return;
+        }
+
+        if (_set.All(e => e.SampleId != tube.SampleId))
+        {
+            if (Shown.All(g => g.Key != tube.LabOrderId)) _filter = CollectionFilter.All;
+            _orderId = tube.LabOrderId;
+            ShowPatient();
+        }
+
+        _ticked.Add(tube.SampleId);
+        _status = (Texts.T("Collection.ScanTicked", barcode), "normal");
+        _scan = string.Empty;
+    }
+
+    // ---- Actions -----------------------------------------------------------------------------------
+
+    private void CloseDialog()
+    {
+        _dialog = CollectionDialog.None;
+        _message = null;
+    }
+
+    private void Show(string title, string text)
+    {
+        _message = new Message(title, text);
+        _dialog = CollectionDialog.Message;
+    }
+
+    private void OpenFile()
+    {
+        if (_set.Count == 0 || !Actions.OpenFile) return;
+        Navigation.NavigateTo($"ecran/orderdetail?dossier={_set[0].LabOrderId}");
+    }
+
+    /// <summary>
+    /// « Imprimer étiquettes »: the browser cannot reach the label printer, so the labels are
+    /// reprinted from the Windows workstation, where the reprint and its reason are recorded. The
+    /// web records nothing it has not done.
+    /// </summary>
+    private void PrintLabels()
+    {
+        if (!Actions.Reprint) return;
+        Show(Texts["Action.PrintLabels"], Texts["OrderEntry.LabelsFromWorkstation"]);
+    }
+
+    /// <summary>
+    /// « Prélever » records the draw of the ticked tubes; « Expédier » sends the ticked tubes,
+    /// drawing first any that were not drawn yet. Where fasting matters and was neither answered in
+    /// the band nor declared, it is asked now — before the draw is recorded.
+    /// </summary>
+    private async Task RecordAsync(bool dispatch)
+    {
+        if (_busy || _set.Count == 0) return;
+
+        var ticked = _set.Where(e => _ticked.Contains(e.SampleId)).Select(e => e.SampleId).ToList();
+        var (toDraw, refusal) = CollectionRules.Plan(_set, ticked, dispatch);
+
+        if (refusal != CollectionRefusal.None)
+        {
+            _status = (Texts[refusal == CollectionRefusal.NothingSelected ? "Message.NothingSelected" : "Collection.AlreadyCollected"], "muted");
+            return;
+        }
+
+        var volumes = new List<(Guid, decimal?)>(toDraw.Count);
+        foreach (var id in toDraw)
+        {
+            var typed = _volumes.GetValueOrDefault(id);
+            if (CollectionRules.IsVolumeRefused(typed))
+            {
+                var barcode = _set.FirstOrDefault(e => e.SampleId == id)?.Barcode ?? string.Empty;
+                Show(Texts["Sample.Volume"], Texts.T("Sample_CollectedVolumeInvalid", barcode));
+                return;
+            }
+
+            volumes.Add((id, CollectionRules.Volume(typed)));
+        }
+
+        var required = CollectionRules.RequiredFasting(_set);
+        _pending = new PendingDraw(dispatch, ticked, toDraw, volumes, required);
+
+        if (CollectionRules.MustAskFasting(_fasting, _set[0].PatientDeclaredFasted, required, toDraw.Count))
+        {
+            _dialog = CollectionDialog.Fasting;
+            return;
+        }
+
+        await CompleteAsync(asked: null);
+    }
+
+    private async Task AnswerFastingAsync(bool fasted)
+    {
+        _dialog = CollectionDialog.None;
+        await CompleteAsync(asked: fasted);
+    }
+
+    private async Task CompleteAsync(bool? asked)
+    {
+        if (_pending is not { } pending) return;
+        _pending = null;
+        _busy = true;
+
+        try
+        {
+            var fasted = CollectionRules.FastingToRecord(_fasting, asked, pending.RequiredFasting, pending.ToDraw.Count);
+            var requests = CollectionRules.Requests(pending.Volumes, fasted, pending.RequiredFasting,
+                                                    _locationChosen ? _location : null, _comment);
+
+            if (requests.Count > 0)
+            {
+                var recorded = await Scopes.RunAsync<SampleWorkflowService, Result>(s => s.RecordCollectionAsync(requests));
+                if (recorded.IsFailure)
+                {
+                    Show(Texts["Collection.ValidateDraw"], Texts.Describe(recorded.Errors));
+                    return;
+                }
+
+                _status = ($"{requests.Count} {Texts["SampleStatus.Collected"].ToLower(Texts.Culture)}", "normal");
+                _comment = string.Empty;
+            }
+
+            if (pending.Dispatch)
+            {
+                var sent = await Scopes.RunAsync<SampleWorkflowService, Result>(s => s.DispatchAsync(pending.Ticked));
+                if (sent.IsFailure) Show(Texts["Collection.DispatchToBench"], Texts.Describe(sent.Errors));
+                else _status = ($"{pending.Ticked.Count} {Texts["SampleStatus.InTransit"].ToLower(Texts.Culture)}", "normal");
+            }
+
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Recording the draw failed.");
+            Show(Texts["Collection.ValidateDraw"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
