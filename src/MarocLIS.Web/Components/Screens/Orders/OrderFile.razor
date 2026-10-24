@@ -275,9 +275,9 @@
                                 }
                                 @if (actions.ViewBilling)
                                 {
-                                    @* The billing desk is not yet in the web: the link opens its place, which says so. *@
+                                    @* « Facturation » searched on the file, its request ticked when still to invoice. *@
                                     <ActionButton Key="OrderFile.OpenBilling" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Receipt"
-                                                  OnClick="@(() => Navigation.NavigateTo("ecran/billing"))" />
+                                                  OnClick="@(() => Navigation.NavigateTo($"ecran/billing?recherche={Uri.EscapeDataString(detail.AccessionNumber)}"))" />
                                 }
                                 break;
 
@@ -302,7 +302,18 @@
                                                 <tr>
                                                     <td class="small">@entry.OccurredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)</td>
                                                     <td>@entry.UserName</td>
-                                                    <td>@EventText(entry)</td>
+                                                    <td>
+                                                        @if (entry.Kind == OrderFileEventKind.ReportReleased && Context.User.Has(Permissions.Reports.View))
+                                                        {
+                                                            @* A report released opens « Comptes rendus » on the file. *@
+                                                            <a class="link" data-action="OrderFile.OpenReports"
+                                                               href="@($"ecran/reports?recherche={Uri.EscapeDataString(detail.AccessionNumber)}")">@EventText(entry)</a>
+                                                        }
+                                                        else
+                                                        {
+                                                            @EventText(entry)
+                                                        }
+                                                    </td>
                                                 </tr>
                                             }
                                         </tbody>

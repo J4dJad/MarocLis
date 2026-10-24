@@ -59,6 +59,22 @@
             <MarocLIS.Web.Components.Screens.Results.BiologicalValidation />
             break;
 
+        case ScreenDecision.Open when Key == "reports":
+            <MarocLIS.Web.Components.Screens.Reports.ReportRegister Search="Recherche" />
+            break;
+
+        case ScreenDecision.Open when Key == "billing":
+            <MarocLIS.Web.Components.Screens.Billing.BillingDesk Search="Recherche" />
+            break;
+
+        case ScreenDecision.Open when Key == "cash":
+            <MarocLIS.Web.Components.Screens.Billing.CashDesk />
+            break;
+
+        case ScreenDecision.Open when Key == "claims":
+            <MarocLIS.Web.Components.Screens.Billing.ClaimBatches />
+            break;
+
         case ScreenDecision.Open:
             <div class="card card-empty" data-state="unavailable">
                 <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Cpu" Class="icon-large" />
@@ -94,6 +110,12 @@
     /// screen opened on a file, as the workstation's InitialOrderId.
     /// </summary>
     [SupplyParameterFromQuery(Name = "dossier")] public Guid? Dossier { get; set; }
+
+    /// <summary>
+    /// « Facturation » or « Comptes rendus » opened from a file: searched on its number, as the
+    /// workstation's file opens them on it.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "recherche")] public string? Recherche { get; set; }
 
     private ScreenDecision _decision = ScreenDecision.NotFound;
     private MarocLIS.Application.Navigation.MenuEntry? _entry;
