@@ -57,11 +57,11 @@ public sealed class WebPageTests : BunitContext
     [Fact]
     public void AScreenOfTheMenu_SaysItIsNotYetInTheWebVersion()
     {
-        SignIn(AppLanguage.French, Permissions.Billing.View);
+        SignIn(AppLanguage.French, Permissions.Billing.ReconcileCashSession);
 
-        var page = Render<Screen>(p => p.Add(x => x.Key, "billing"));
+        var page = Render<Screen>(p => p.Add(x => x.Key, "cashreview"));
 
-        page.Find("h1").TextContent.Should().Contain("Facturation");
+        page.Find("h1").TextContent.Should().Contain("Visa des caisses");
         page.Find("[data-state=unavailable]").TextContent.Should()
             .Contain("Cet écran n'est pas encore disponible dans la version Web. Utilisez la version Windows.");
         _auditor.Events.Should().BeEmpty();
@@ -108,9 +108,9 @@ public sealed class WebPageTests : BunitContext
     [Fact]
     public void TheArabicPlaceholder_IsInArabic()
     {
-        SignIn(AppLanguage.Arabic, Permissions.Billing.View);
+        SignIn(AppLanguage.Arabic, Permissions.Billing.ReconcileCashSession);
 
-        var page = Render<Screen>(p => p.Add(x => x.Key, "billing"));
+        var page = Render<Screen>(p => p.Add(x => x.Key, "cashreview"));
 
         page.Find("[data-state=unavailable]").TextContent.Should().Contain("نسخة الويب");
         Services.GetRequiredService<WebTexts>().Direction.Should().Be("rtl");

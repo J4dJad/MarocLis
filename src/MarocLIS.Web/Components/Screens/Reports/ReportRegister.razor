@@ -20,7 +20,7 @@
     where the workstation opens it in its viewer.
 *@
 <div class="screen reports" data-screen="reports">
-    <div class="toolbar">
+    <div class="list-tools">
         <div class="tabs" role="tablist">
             @foreach (var tab in Enum.GetValues<ReportTab>())
             {
@@ -35,7 +35,6 @@
                 </button>
             }
         </div>
-        <span class="toolbar-spacer"></span>
         <div class="search-box">
             <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
             <input class="input" type="search" placeholder="@Texts["Report.RegisterSearchPlaceholder"]" aria-label="@Texts["Report.RegisterSearchPlaceholder"]"
@@ -47,9 +46,12 @@
                 <option value="@days" selected="@(days == _window)">@Texts.T("Report.WithinDays", days)</option>
             }
         </select>
+        <span class="list-tools-end">
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="ActivateAsync" />
+        </span>
     </div>
 
-    <div class="split">
+    <div class="screen-body split">
         <div class="split-main">
             <div class="card card-flush">
                 @if (_tab == ReportTab.ToIssue)
@@ -231,27 +233,24 @@
     </div>
 
     @{ var actions = Actions; }
-    <footer class="action-bar">
-        <div class="action-bar-start">
-            <details class="more more-up">
-                <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]</summary>
-                <div class="more-menu">
-                    <ActionButton Key="Report.IssueAmendment" Text="@($"{Texts["Report.IssueAmendment"]}…")"
-                                  Hidden="@(!Context.User.Has(Permissions.Reports.Amend))" Disabled="@(!actions.Amend || _busy)" OnClick="AskAmend" />
-                    <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="ActivateAsync" />
-                </div>
-            </details>
+    <ActionBar StatusText="@(_status?.Text ?? Hint)"
+               StatusClass="@($"is-{_status?.Tone ?? (_tab != ReportTab.ToIssue && _register.Any(r => r.IsUrgentToDeliver) ? "critical" : "muted")}")"
+               ShowMore="@Context.User.Has(Permissions.Reports.Amend)">
+        <Secondary>
             <ActionButton Key="Report.Reprint" Hidden="@(!Context.User.Has(Permissions.Reports.ReprintValidated))"
                           Disabled="@(!actions.Reprint || _busy)" OnClick="AskReprint" />
             <ActionButton Key="Report.RecordDelivery" Hidden="@(!Context.User.Has(Permissions.Reports.Print) && !Context.User.Has(Permissions.Reports.Send))"
                           Disabled="@(!actions.RecordDelivery || _busy)" OnClick="AskDelivery" />
-        </div>
-        <p class="action-bar-status is-@(_status?.Tone ?? (_tab != ReportTab.ToIssue && _register.Any(r => r.IsUrgentToDeliver) ? "critical" : "muted"))" role="status" data-state="status">@(_status?.Text ?? Hint)</p>
-        <div class="action-bar-end">
+        </Secondary>
+        <More>
+            <ActionButton Key="Report.IssueAmendment" Text="@($"{Texts["Report.IssueAmendment"]}…")"
+                          Hidden="@(!Context.User.Has(Permissions.Reports.Amend))" Disabled="@(!actions.Amend || _busy)" OnClick="AskAmend" />
+        </More>
+        <Primary>
             <ActionButton Key="Report.Issue" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Send" Primary="true" Shortcut="Ctrl+E"
                           Hidden="@(!Context.User.Has(Permissions.Reports.Print))" Disabled="@(!actions.Issue || _busy)" OnClick="AskIssue" />
-        </div>
-    </footer>
+        </Primary>
+    </ActionBar>
 </div>
 
 @switch (_dialog)

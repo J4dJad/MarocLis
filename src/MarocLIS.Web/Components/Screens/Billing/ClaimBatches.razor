@@ -16,17 +16,20 @@
     ClaimScreenRules'; what is sent and recorded, BillingService's, which records each act.
 *@
 <div class="screen claims" data-screen="claims">
-    <div class="toolbar">
+    <div class="list-tools">
         <span class="@(Chasing > 0 ? "critical strong" : "muted")" data-state="outstanding">@Texts.T("Claim.Outstanding", Amount(_batches.Sum(b => b.Unsettled)))</span>
-        <span class="toolbar-spacer"></span>
+        <span class="list-tools-end">
         <select class="input input-narrow" data-field="window" aria-label="@Texts.T("Report.WithinDays", _window)" @onchange="WindowChangedAsync">
             @foreach (var days in ClaimScreenRules.Windows)
             {
                 <option value="@days" selected="@(days == _window)">@Texts.T("Report.WithinDays", days)</option>
             }
         </select>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="ActivateAsync" />
+        </span>
     </div>
 
+    <div class="screen-body">
     <div class="card card-flush" data-card="candidates">
         <div class="card-heading card-pad">
             <h2 class="card-title @(Blocked > 0 ? "abnormal" : null)">@CandidateHeading</h2>
@@ -145,18 +148,18 @@
         </div>
     </div>
 
+    </div>
+
     @{ var actions = Actions; }
-    <footer class="action-bar">
-        <div class="action-bar-start">
-            <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="ActivateAsync" />
+    <ActionBar StatusText="@(_status?.Text ?? SelectionSummary)" StatusClass="@($"is-{_status?.Tone ?? SelectionTone}")">
+        <Secondary>
             <ActionButton Key="Claim.SelectClaimable" Disabled="@(!actions.SelectClaimable)" OnClick="SelectClaimable" />
             <ActionButton Key="Billing.RecordClaimOutcome" Disabled="@(!actions.RecordOutcome || _invoices.Count == 0 || _busy)" OnClick="() => _dialog = ClaimDialog.Outcome" />
-        </div>
-        <p class="action-bar-status is-@(_status?.Tone ?? SelectionTone)" role="status" data-state="status">@(_status?.Text ?? SelectionSummary)</p>
-        <div class="action-bar-end">
+        </Secondary>
+        <Primary>
             <ActionButton Key="Billing.SubmitClaim" Primary="true" Disabled="@(!actions.Submit || _busy)" OnClick="AskSubmit" />
-        </div>
-    </footer>
+        </Primary>
+    </ActionBar>
 </div>
 
 @switch (_dialog)

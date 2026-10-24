@@ -20,21 +20,33 @@
     the workstation opens it in its viewer.
 *@
 <div class="screen billing" data-screen="billing">
-    <div class="toolbar">
-        <span class="muted" data-state="count">@Texts.T("Finance.BillingCount", _pending.Count(r => r.IsInvoiceable), _counts.Values.Sum())</span>
-        <span class="toolbar-spacer"></span>
-        <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="ActivateAsync" />
+    @{ var actions = Actions; }
+    <div class="list-tools">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" dir="auto" placeholder="@Texts["Finance.InvoiceSearchHint"]" aria-label="@Texts["Finance.InvoiceSearchHint"]"
+                   data-field="invoice-search" autocomplete="off" @bind="_term" @onkeydown="SearchKeyAsync" />
+        </div>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_statusFilter is null ? "is-pressed" : null)" aria-pressed="@(_statusFilter is null ? "true" : "false")"
+                    data-filter="all" @onclick="() => FilterAsync(null)">@Texts.T("Finance.ChipAll", _counts.Values.Sum())</button>
+            @foreach (var status in BillingScreenRules.LedgerStatuses)
+            {
+                <button type="button" class="chip @(status == _statusFilter ? "is-pressed" : null)" aria-pressed="@(status == _statusFilter ? "true" : "false")"
+                        data-filter="@status.ToString().ToLowerInvariant()" @onclick="() => FilterAsync(status)">@Texts[$"InvoiceStatus.{status}"] · @_counts.GetValueOrDefault(status)</button>
+            }
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@Texts.T("Finance.BillingCount", _pending.Count(r => r.IsInvoiceable), _counts.Values.Sum())</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="ActivateAsync" />
+        </span>
     </div>
 
-    @{ var actions = Actions; }
+    <div class="screen-body">
     <div class="card card-flush" data-card="uninvoiced">
         <div class="card-heading card-pad">
             <h2 class="card-title">@Texts["Billing.Uninvoiced"]</h2>
             <span class="muted small" data-state="uninvoiced-count">@PendingCount</span>
-            <span class="toolbar-spacer"></span>
-            <ActionButton Key="Deposit.Take" Disabled="@(!actions.Deposit || _busy)" OnClick="AskDepositAsync" />
-            <ActionButton Key="Deposit.Refund" Danger="true" Disabled="@(!actions.RefundDeposit || _busy)" OnClick="AskRefundDepositAsync" />
-            <ActionButton Key="Billing.IssueInvoice" Primary="true" Disabled="@(!actions.Issue || _busy)" OnClick="AskIssueAsync" />
         </div>
         <div class="table-scroll table-scroll-short">
             <table class="grid" data-grid="uninvoiced">
@@ -78,23 +90,7 @@
         </div>
     </div>
 
-    <div class="toolbar">
-        <h2 class="card-title">@Texts["Billing.Invoices"]</h2>
-        <div class="search-box">
-            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
-            <input class="input" type="search" dir="auto" placeholder="@Texts["Finance.InvoiceSearchHint"]" aria-label="@Texts["Finance.InvoiceSearchHint"]"
-                   data-field="invoice-search" autocomplete="off" @bind="_term" @onkeydown="SearchKeyAsync" />
-        </div>
-        <div class="chips" role="group">
-            <button type="button" class="chip @(_statusFilter is null ? "is-pressed" : null)" aria-pressed="@(_statusFilter is null ? "true" : "false")"
-                    data-filter="all" @onclick="() => FilterAsync(null)">@Texts.T("Finance.ChipAll", _counts.Values.Sum())</button>
-            @foreach (var status in BillingScreenRules.LedgerStatuses)
-            {
-                <button type="button" class="chip @(status == _statusFilter ? "is-pressed" : null)" aria-pressed="@(status == _statusFilter ? "true" : "false")"
-                        data-filter="@status.ToString().ToLowerInvariant()" @onclick="() => FilterAsync(status)">@Texts[$"InvoiceStatus.{status}"] · @_counts.GetValueOrDefault(status)</button>
-            }
-        </div>
-    </div>
+    <h2 class="card-title">@Texts["Billing.Invoices"]</h2>
 
     <div class="card card-flush" data-card="ledger">
         <div class="table-scroll">
@@ -143,31 +139,34 @@
         }
     </div>
 
-    <footer class="action-bar">
-        <div class="action-bar-start">
-            <details class="more more-up">
-                <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]</summary>
-                <div class="more-menu">
-                    <ActionButton Key="Payment.Refund" Disabled="@(!actions.Refund || _busy)" OnClick="() => AskCorrectionAsync(bounce: false)" />
-                    <ActionButton Key="Payment.MarkBounced" Disabled="@(!actions.Bounce || _busy)" OnClick="() => AskCorrectionAsync(bounce: true)"
-                                  Title="@(actions.Bounce ? null : Texts["Payment.BounceReservedToAccounting"])" />
-                    <ActionButton Key="Billing.SubmitClaim" Disabled="@(!actions.SubmitClaim || _busy)" OnClick="AskSubmitClaim" />
-                    <ActionButton Key="Billing.RecordClaimOutcome" Disabled="@(!actions.ClaimOutcome || _busy)" OnClick="AskClaimOutcome" />
-                    <ActionButton Key="Claim.Settlement" Disabled="@(!actions.PayerSettlement || _busy)" OnClick="AskSettlement" />
-                    <ActionButton Key="Billing.PrintInvoiceStandard" Disabled="@(!actions.Print || _busy)" OnClick="() => PrintAsync(receipt: false, InvoicePrintFormat.Standard)" />
-                    <ActionButton Key="Billing.PrintInvoiceCotation" Disabled="@(!actions.PrintCotation || _busy)" OnClick="() => PrintAsync(receipt: false, InvoicePrintFormat.CotationB)" />
-                </div>
-            </details>
+    </div>
+
+    <ActionBar StatusText="@(_status?.Text ?? LedgerSummary)" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
             <ActionButton Key="Billing.PrintInvoice" Disabled="@(!actions.Print || _busy)" OnClick="() => PrintAsync(receipt: false)" />
             <ActionButton Key="Billing.PrintReceipt" Disabled="@(!actions.Print || _busy)" OnClick="() => PrintAsync(receipt: true)" />
-            <span class="action-bar-rule" aria-hidden="true"></span>
+            <ActionButton Key="Deposit.Take" Disabled="@(!actions.Deposit || _busy)" OnClick="AskDepositAsync" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Billing.SubmitClaim" Disabled="@(!actions.SubmitClaim || _busy)" OnClick="AskSubmitClaim" />
+            <ActionButton Key="Billing.RecordClaimOutcome" Disabled="@(!actions.ClaimOutcome || _busy)" OnClick="AskClaimOutcome" />
+            <ActionButton Key="Claim.Settlement" Disabled="@(!actions.PayerSettlement || _busy)" OnClick="AskSettlement" />
+            <ActionButton Key="Billing.PrintInvoiceStandard" Disabled="@(!actions.Print || _busy)" OnClick="() => PrintAsync(receipt: false, InvoicePrintFormat.Standard)" />
+            <ActionButton Key="Billing.PrintInvoiceCotation" Disabled="@(!actions.PrintCotation || _busy)" OnClick="() => PrintAsync(receipt: false, InvoicePrintFormat.CotationB)" />
+            <hr class="more-rule" />
+            <ActionButton Key="Payment.Refund" Danger="true" Disabled="@(!actions.Refund || _busy)" OnClick="() => AskCorrectionAsync(bounce: false)" />
+            <ActionButton Key="Payment.MarkBounced" Danger="true" Disabled="@(!actions.Bounce || _busy)" OnClick="() => AskCorrectionAsync(bounce: true)"
+                          Title="@(actions.Bounce ? null : Texts["Payment.BounceReservedToAccounting"])" />
+            <ActionButton Key="Deposit.Refund" Danger="true" Disabled="@(!actions.RefundDeposit || _busy)" OnClick="AskRefundDepositAsync" />
+        </More>
+        <Destructive>
             <ActionButton Key="Billing.CreditNote" Danger="true" Disabled="@(!actions.CreditNote || _busy)" OnClick="AskCreditNote" />
-        </div>
-        <p class="action-bar-status is-@(_status?.Tone ?? "muted")" role="status" data-state="status">@(_status?.Text ?? LedgerSummary)</p>
-        <div class="action-bar-end">
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Billing.IssueInvoice" Disabled="@(!actions.Issue || _busy)" OnClick="AskIssueAsync" />
             <ActionButton Key="Payment.Title" Primary="true" Disabled="@(!actions.Pay || _busy)" OnClick="AskPayment" />
-        </div>
-    </footer>
+        </Primary>
+    </ActionBar>
 </div>
 
 @switch (_dialog)

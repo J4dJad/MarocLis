@@ -15,14 +15,18 @@
     workstation's: said here, the receipt being downloaded from « Facturation ».
 *@
 <div class="screen cash" data-screen="cash">
-    <div class="toolbar">
+    <div class="list-tools">
         @if (_summary is { } info)
         {
             <span class="muted" data-state="session">@info.OperatorName · @Texts["Payment.CashSession"] @info.OpenedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) · @info.PaymentCount @Texts["Payment.Plural"].ToLower(Texts.Culture)</span>
         }
-        <span class="toolbar-spacer"></span>
+        <span class="list-tools-end">
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="ActivateAsync" />
+        </span>
     </div>
 
+    @{ var variance = _summary is { } open ? CashDeskRules.Variance(_counted, open.ExpectedClosingCash) : null; }
+    <div class="screen-body">
     <p class="message is-info" data-state="hardware">
         <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Printer" /> @Texts["Web.CashHardwareFromWorkstation"]
     </p>
@@ -42,16 +46,13 @@
                            @bind="_float" @bind:event="oninput" @onkeydown="OpenKeyAsync" />
                     <FieldMessage Refusal="_refusal" Field="float" />
                 </label>
-                <div class="field">
-                    <ActionButton Key="Payment.OpenSession" Primary="true" Disabled="@(!Actions.Open || _busy)" OnClick="OpenAsync" />
-                </div>
             </div>
         </div>
     }
     else
     {
         var summary = _summary;
-        var reading = CashDeskRules.Variance(_counted, summary.ExpectedClosingCash);
+        var reading = variance;
         <div class="split split-even">
             <div class="card" data-card="takings">
                 <h2 class="card-title">@Texts["Finance.SessionDetail"]</h2>
@@ -98,19 +99,28 @@
             </div>
         </div>
 
-        <footer class="action-bar">
-            <div class="action-bar-start">
-                <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="ActivateAsync" />
-                <ActionButton Key="Payment.RecordWithdrawal" Disabled="@(!Actions.Withdraw || _busy)" OnClick="() => _dialog = CashDialog.WithdrawAmount" />
-            </div>
-            <p class="action-bar-status is-@(_status?.Tone ?? (reading is { RequiresExplanation: true } ? "critical" : "muted"))" role="status" data-state="status">
-                @(_status?.Text ?? (reading is { RequiresExplanation: true } ? Texts.T("Payment.VarianceRequiresExplanation", CashDeskRules.ToleranceMad) : null))
-            </p>
-            <div class="action-bar-end">
-                <ActionButton Key="Payment.CloseSession" Primary="true" Disabled="@(!Actions.Close || _busy)" OnClick="AskClose" />
-            </div>
-        </footer>
     }
+    </div>
+
+    <ActionBar StatusText="@(_status?.Text ?? (variance is { RequiresExplanation: true } ? Texts.T("Payment.VarianceRequiresExplanation", CashDeskRules.ToleranceMad) : null))"
+               StatusClass="@($"is-{_status?.Tone ?? (variance is { RequiresExplanation: true } ? "critical" : "muted")}")">
+        <Secondary>
+            @if (_summary is not null)
+            {
+                <ActionButton Key="Payment.RecordWithdrawal" Disabled="@(!Actions.Withdraw || _busy)" OnClick="() => _dialog = CashDialog.WithdrawAmount" />
+            }
+        </Secondary>
+        <Primary>
+            @if (_summary is null)
+            {
+                <ActionButton Key="Payment.OpenSession" Primary="true" Hidden="@(!_loaded)" Disabled="@(!Actions.Open || _busy)" OnClick="OpenAsync" />
+            }
+            else
+            {
+                <ActionButton Key="Payment.CloseSession" Primary="true" Disabled="@(!Actions.Close || _busy)" OnClick="AskClose" />
+            }
+        </Primary>
+    </ActionBar>
 </div>
 
 @switch (_dialog)

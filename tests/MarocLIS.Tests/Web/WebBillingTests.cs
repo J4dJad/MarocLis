@@ -56,6 +56,20 @@ public sealed class WebBillingTests : WebFinanceContext
     }
 
     [Fact]
+    public void TheActions_AreInTheCommonBar_TheCollectionAtItsEnd_TheCreditNoteSetApart()
+    {
+        SignIn(AppLanguage.French, Accounting);
+        var page = Render<BillingDesk>();
+
+        page.FindAll("[data-bar=actions]").Should().ContainSingle();
+        page.Find("[data-bar=actions] .action-bar-end [data-action='Payment.Title']").ClassList.Should().Contain("btn-primary");
+        page.Find("[data-bar=actions] .action-bar-rule + [data-action='Billing.CreditNote']").Should().NotBeNull();
+        page.Find("[data-bar=actions] .more-menu [data-action='Payment.MarkBounced']").Should().NotBeNull();
+        page.FindAll(".screen-body [data-action]").Select(b => b.GetAttribute("data-action")).Should()
+            .NotContain(["Billing.IssueInvoice", "Payment.Title", "Deposit.Take"], "the actions are in the bar only");
+    }
+
+    [Fact]
     public void TwoPatientsTicked_AreRefusedOneInvoice_BeforeTheDialog()
     {
         SignIn(AppLanguage.French, Cashier);

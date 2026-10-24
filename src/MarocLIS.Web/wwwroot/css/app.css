@@ -822,3 +822,5 @@ html[dir="rtl"] .input-value { text-align: start; }
 .tile-value { font-size: 22px; font-weight: 700; }
 .takings td { padding-block: 6px; }
 .takings tr.is-total td { border-block-start: 2px solid var(--border-strong); }
+.screen-body.split > .split-main { display: flex; flex-direction: column; gap: var(--gap); }
+.screen-body.split > .split-main > * { flex: none; }
