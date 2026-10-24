@@ -1,0 +1,571 @@
+@using System.Globalization
+@using MarocLIS.Application.Samples
+@using MarocLIS.Domain.Orders
+@using MarocLIS.Domain.Samples
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<SampleReception> Logger
+
+@*
+    « Réception des échantillons », the workstation's SampleReceptionView: one card for the scanned
+    tube — the scan box, which keeps the cursor, the tube's band with its transport delay, the
+    non-conformities as toggles, the conditions and the decision — and below it the tubes awaiting
+    reception, with chips. The verdict, the defects ticked in advance and which button is offered
+    are SampleReceptionRules'; the decision is SampleWorkflowService's. The label of a replacement
+    tube is printed by the Windows workstation.
+*@
+<div class="screen reception" data-screen="reception">
+    <div class="card" data-card="scan">
+        <label class="field">
+            <span class="field-label">@Texts["Sample.ScanTube"]</span>
+            <div class="search-box search-box-wide scan-box">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                <input class="input" type="text" placeholder="@Texts["Sample.ScanPrompt"]" data-field="scan" autocomplete="off"
+                       @ref="_scanBox" @bind="_scan" @bind:event="oninput" @onkeydown="ScanKey" />
+            </div>
+            <span class="muted small">@Texts["Sample.ScannerReady"]</span>
+        </label>
+
+        @if (_status is { } status)
+        {
+            <p class="message is-@status.Tone" role="status" data-state="status">@status.Text</p>
+        }
+
+        @if (_candidate is { } tube)
+        {
+            var actions = Actions;
+
+            <div class="tube-band" data-state="candidate" data-tube="@tube.Barcode">
+                <span class="tube-cap" style="background:@(tube.ContainerColourHex ?? "#FFFFFF")"></span>
+                <div class="tube-band-text">
+                    <div class="file-header-top">
+                        <span class="patient-band-name">@tube.PatientName</span>
+                        <span class="mono strong">@tube.AccessionNumber</span>
+                        <span class="muted small">@Identity(tube)</span>
+                        @if (tube.Priority != OrderPriority.Routine)
+                        {
+                            <Pill Text="@Texts[$"Priority.{tube.Priority}"]" Tone="Warning" />
+                        }
+                    </div>
+                    <div class="small">@TubeLine(tube)</div>
+                    <div class="mono small muted">@string.Join(" ", tube.AnalysisCodes)</div>
+                </div>
+                <div class="delay">
+                    <span class="field-label">@Texts["Sample.TransportDelay"]</span>
+                    <span class="delay-value @(tube.StabilityExceeded ? "critical" : tube.Elapsed is null ? "abnormal" : "normal-ink")">@DelayValue(tube)</span>
+                </div>
+            </div>
+            @if (tube.StabilityExceeded)
+            {
+                <p class="message is-critical" data-state="delay">⚠ @Texts["SampleDefect.ExcessiveDelay"] — @FormatElapsed(tube.Elapsed) &gt; @tube.ShortestStabilityHours h</p>
+            }
+            else if (tube.Elapsed is null)
+            {
+                <p class="message is-abnormal" data-state="delay">@Texts["Sample_NotCollected"]</p>
+            }
+
+            <fieldset class="defects" disabled="@(!actions.Reject)">
+                <legend class="field-label">@Texts["Sample.DefectsLegend"]</legend>
+                <div class="chips">
+                    @foreach (var defect in Enum.GetValues<SampleDefect>().Where(d => d != SampleDefect.None))
+                    {
+                        var on = _defects.HasFlag(defect);
+                        <button type="button" class="chip @(on ? "is-pressed is-defect" : null)" aria-pressed="@(on ? "true" : "false")" data-defect="@defect"
+                                @onclick="() => ToggleDefect(defect)">@Texts[$"SampleDefect.{defect}"]</button>
+                    }
+                </div>
+            </fieldset>
+
+            <div class="form-grid">
+                @if (tube.RequiresColdChain)
+                {
+                    <label class="field">
+                        <span class="field-label">@Texts["Sample.Temperature"]</span>
+                        <input class="input" type="text" inputmode="decimal" data-field="temperature" @bind="_temperature" @bind:event="oninput" />
+                    </label>
+                    <label class="field field-check">
+                        <input type="checkbox" data-field="cold-chain" @bind="_coldChain" />
+                        <span>@Texts["Sample.ColdChain"]</span>
+                    </label>
+                }
+                <label class="field">
+                    <span class="field-label">@Texts["Sample.Storage"]</span>
+                    <select class="input" data-field="storage" @bind="_storage">
+                        <option value="">@Texts["Sample.StorageNotSpecified"]</option>
+                        @foreach (var place in _places)
+                        {
+                            <option value="@place">@place</option>
+                        }
+                    </select>
+                </label>
+            </div>
+
+            <div class="decision" data-state="decision">
+                <ActionButton Key="Action.Accept" Primary="true" Disabled="@(_deciding || !actions.Accept)" Title="@Texts["Sample.EnterKey"]"
+                              OnClick="() => AcceptAsync(withReservation: false)" />
+                <ActionButton Key="Action.AcceptWithReservation" Class="@(_defects != SampleDefect.None ? "is-emphasised" : null)"
+                              Disabled="@(_deciding || !actions.AcceptWithReservation)" OnClick="() => AcceptAsync(withReservation: true)" />
+                <span class="toolbar-spacer"></span>
+                <label class="field">
+                    <span class="field-label">@Texts["Recollection.Reason"]</span>
+                    <select class="input" data-field="reject-reason" disabled="@(_deciding || !actions.Reject)" @onchange="ReasonChanged">
+                        <option value="" selected="@(_reason is null)"></option>
+                        @foreach (var reason in Enum.GetValues<SampleRejectionReason>())
+                        {
+                            <option value="@reason" selected="@(_reason == reason)">@Texts[$"RejectionReason.{reason}"]</option>
+                        }
+                    </select>
+                </label>
+                <label class="field-check">
+                    <input type="checkbox" data-field="request-recollection" disabled="@(_deciding || !actions.Reject)" @bind="_requestRecollection" />
+                    <span>@Texts["Sample.RequestRecollection"]</span>
+                </label>
+                <ActionButton Key="Action.Reject" Danger="true" Disabled="@(_deciding || !actions.Reject)" OnClick="AskReject" />
+            </div>
+        }
+    </div>
+
+    <div class="card card-flush" data-card="awaiting">
+        <div class="toolbar card-pad">
+            <h2 class="card-title">@Texts["Sample.AwaitingReception"]</h2>
+            <span class="muted small" data-state="awaiting-count">@(_awaiting.Count == 1 ? Texts["Collection.OneTube"] : Texts.T("Collection.ManyTubes", _awaiting.Count))</span>
+            <span class="toolbar-spacer"></span>
+            <div class="chips" role="group">
+                @foreach (var (filter, caption) in Chips)
+                {
+                    <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
+                            data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => _filter = filter">@caption</button>
+                }
+            </div>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="RefreshAwaitingAsync" />
+        </div>
+        <div class="table-scroll table-scroll-short">
+            <table class="grid grid-select" data-grid="awaiting">
+                <thead>
+                    <tr>
+                        <th>@Texts["Sample.Barcode"]</th>
+                        <th>@Texts["Order.AccessionNumber"]</th>
+                        <th>@Texts["Patient.Title"]</th>
+                        <th>@Texts["Sample.SpecimenType"]</th>
+                        <th>@Texts["Field.Priority"]</th>
+                        <th>@Texts["Sample.CollectedAt"]</th>
+                        <th>@Texts["Sample.TransportDelay"]</th>
+                        <th>@Texts["Field.Status"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _awaiting.Where(c => SampleReceptionRules.Matches(c, _filter)))
+                    {
+                        var (text, tone) = Verdict(row);
+                        <tr class="@(row.SampleId == _candidate?.SampleId ? "is-selected" : null)" data-tube="@row.Barcode"
+                            @onclick="() => ScanAsync(row.Barcode)">
+                            <td class="mono">@row.Barcode</td>
+                            <td class="mono">@row.AccessionNumber</td>
+                            <td>@row.PatientName</td>
+                            <td>@row.SpecimenTypeName.For(Texts.Language)</td>
+                            <td class="@(row.Priority == OrderPriority.Routine ? "muted" : "strong")">@Texts[$"Priority.{row.Priority}"]</td>
+                            <td class="small">@row.CollectedAt?.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
+                            <td class="small">@FormatElapsed(row.Elapsed)</td>
+                            <td><Pill Text="@text" Tone="@tone" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@switch (_dialog)
+{
+    case ReceptionDialog.RejectComment when _candidate is { } refused && _reason is { } reason:
+        <TextPrompt Name="reject-comment" Title="@Texts["Action.Reject"]" MaxLength="500" Multiline="true"
+                    Prompt="@($"{refused.Barcode} — {Texts[$"RejectionReason.{reason}"]}\n\n{Texts["Field.Comment"]}")"
+                    OnConfirm="CommentGiven" OnCancel="CloseDialog" />
+        break;
+
+    case ReceptionDialog.RejectConfirm when _candidate is { } rejected && _reason is { } why:
+        <ConfirmPrompt Title="@Texts["Action.Reject"]"
+                       Message="@Texts.T("Sample.ConfirmRejection", rejected.Barcode, Texts[$"RejectionReason.{why}"])"
+                       OnYes="RejectAsync" OnNo="CloseDialog" />
+        break;
+
+    case ReceptionDialog.Message when _message is { } message:
+        <Modal Name="reception-message" Title="@message.Title" OnCancel="CloseDialog">
+            <ChildContent><p class="info-line">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum ReceptionDialog { None, RejectComment, RejectConfirm, Message }
+
+    private sealed record Message(string Title, string Text);
+
+    private IReadOnlyList<SampleReceptionCandidate> _awaiting = [];
+    private IReadOnlyList<string> _places = [];
+    private AwaitingReceptionFilter _filter = AwaitingReceptionFilter.All;
+
+    private SampleReceptionCandidate? _candidate;
+    private SampleDefect _defects;
+    private string _temperature = string.Empty;
+    private bool _coldChain = true;
+    private string _storage = string.Empty;
+    private SampleRejectionReason? _reason;
+    private bool _requestRecollection = true;
+    private string? _rejectComment;
+
+    private string _scan = string.Empty;
+    private ElementReference _scanBox;
+    private bool _deciding;
+    private string? _queuedScan;
+
+    private ReceptionDialog _dialog;
+    private Message? _message;
+    private (string Text, string Tone)? _status;
+
+    private ReceptionActions Actions => SampleReceptionRules.Actions(_candidate, _defects, Context.User);
+
+    private IEnumerable<(AwaitingReceptionFilter Filter, string Caption)> Chips
+    {
+        get
+        {
+            yield return (AwaitingReceptionFilter.All, Texts.T("Collection.FilterAll", _awaiting.Count));
+            yield return (AwaitingReceptionFilter.Urgent,
+                          Texts.T("Collection.FilterUrgent", _awaiting.Count(c => SampleReceptionRules.Matches(c, AwaitingReceptionFilter.Urgent))));
+            yield return (AwaitingReceptionFilter.LongDelay,
+                          Texts.T("Sample.FilterLongDelay", _awaiting.Count(c => SampleReceptionRules.Matches(c, AwaitingReceptionFilter.LongDelay))));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAwaitingAsync();
+        await LoadPlacesAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Reception is a scanning loop, not a form: the scan box holds the cursor.
+        if (firstRender) await FocusScanAsync();
+    }
+
+    private async Task FocusScanAsync()
+    {
+        try { await _scanBox.FocusAsync(); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException) { }
+    }
+
+    private async Task RefreshAwaitingAsync()
+    {
+        try
+        {
+            var awaiting = await Scopes.RunAsync<SampleWorkflowService, Result<IReadOnlyList<SampleReceptionCandidate>>>(
+                s => s.GetAwaitingReceptionAsync());
+            if (awaiting.IsSuccess) _awaiting = awaiting.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the reception list failed.");
+        }
+    }
+
+    /// <summary>The site's active storage places, the only ones the list offers.</summary>
+    private async Task LoadPlacesAsync()
+    {
+        try
+        {
+            var places = await Scopes.RunAsync<SampleWorkflowService, Result<IReadOnlyList<string>>>(s => s.GetStorageLocationsAsync());
+            if (places.IsSuccess) _places = places.Value;
+        }
+        catch (Exception ex)
+        {
+            // Without the list the tube is received unshelved; it is shelved later in the serum bank.
+            Logger.LogError(ex, "Loading the storage places failed.");
+        }
+    }
+
+    // ---- What the screen shows ---------------------------------------------------------------------
+
+    private (string Text, string Tone) Verdict(SampleReceptionCandidate candidate) =>
+        SampleReceptionRules.Verdict(candidate, _candidate?.SampleId) switch
+        {
+            ReceptionVerdict.Scanned => (Texts["Sample.Scanned"], "Info"),
+            ReceptionVerdict.ExcessiveDelay => (Texts["SampleDefect.ExcessiveDelay"], "Critical"),
+            ReceptionVerdict.Defects => (Texts["Sample.Defects"], "Warning"),
+            ReceptionVerdict.InTransit => (Texts[$"SampleStatus.{candidate.Status}"], "Info"),
+            _ => (Texts[$"SampleStatus.{candidate.Status}"], "Waiting")
+        };
+
+    private string Identity(SampleReceptionCandidate tube)
+    {
+        var identity = new List<string> { Texts[$"Gender.{tube.Gender}"] };
+        if (tube.DateOfBirth is { } dob) identity.Add(dob.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
+        return string.Join(" · ", identity);
+    }
+
+    /// <summary>The tube: specimen, container, barcode, volume, when it was drawn, how many tubes the order has.</summary>
+    private string TubeLine(SampleReceptionCandidate tube)
+    {
+        var info = new List<string> { tube.SpecimenTypeName.For(Texts.Language) };
+        if (tube.ContainerName is { } container) info.Add(container.For(Texts.Language));
+        info.Add(tube.Barcode);
+        if (tube.VolumeMl is { } volume) info.Add($"{volume.ToString("N1", Texts.Culture)} mL");
+        if (tube.CollectedAt is { } collected)
+        {
+            var local = collected.ToLocalTime();
+            info.Add(Texts.T("Sample.CollectedOnAt", local.ToString("dd/MM", CultureInfo.InvariantCulture),
+                             local.ToString("HH:mm", CultureInfo.InvariantCulture)));
+        }
+
+        if (tube.TotalSamplesInOrder > 0)
+            info.Add(tube.TotalSamplesInOrder == 1 ? Texts["Sample.TubesInOrderOne"] : Texts.T("Sample.TubesInOrder", tube.TotalSamplesInOrder));
+        return string.Join(" · ", info);
+    }
+
+    private string DelayValue(SampleReceptionCandidate tube) =>
+        tube.Elapsed is null
+            ? "—"
+            : FormatElapsed(tube.Elapsed) + (!tube.StabilityExceeded && tube.ShortestStabilityHours is { } hours ? $" / {hours} h" : string.Empty);
+
+    private static string FormatElapsed(TimeSpan? elapsed) =>
+        elapsed is not { } value
+            ? string.Empty
+            : value.TotalHours >= 1
+                ? $"{(int)value.TotalHours}h{value.Minutes:D2}"
+                : $"{value.Minutes} min";
+
+    private void ToggleDefect(SampleDefect defect) => _defects ^= defect;
+
+    private void ReasonChanged(ChangeEventArgs e) =>
+        _reason = Enum.TryParse<SampleRejectionReason>(e.Value?.ToString(), out var reason) ? reason : null;
+
+    // ---- Scan --------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A scanner types the barcode and ends with Enter. Enter on an empty box accepts the tube
+    /// shown, when it is conforming — the « Entrée » the accept button names.
+    /// </summary>
+    private async Task ScanKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+
+        if (string.IsNullOrWhiteSpace(_scan))
+        {
+            if (_candidate is not null && Actions.Accept && !_deciding) await AcceptAsync(withReservation: false);
+            return;
+        }
+
+        await ScanAsync(_scan);
+    }
+
+    private async Task ScanAsync(string barcode)
+    {
+        if (string.IsNullOrWhiteSpace(barcode)) return;
+
+        // A tube scanned while the previous one is being decided waits its turn.
+        if (_deciding)
+        {
+            _queuedScan = barcode.Trim();
+            _status = (Texts.T("Sample.ScanQueued", _queuedScan), "muted");
+            _scan = string.Empty;
+            return;
+        }
+
+        try
+        {
+            var result = await Scopes.RunAsync<SampleWorkflowService, Result<SampleReceptionCandidate>>(s => s.ScanAsync(barcode));
+
+            if (result.IsFailure)
+            {
+                _candidate = null;
+                ResetTubeInputs();
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            // Every tube starts from blank inputs, its known defects ticked: the ticks, temperature
+            // and place entered for the previous one say nothing about this one.
+            _candidate = result.Value;
+            ResetTubeInputs();
+            _defects = SampleReceptionRules.PresetDefects(_candidate);
+            _scan = string.Empty;
+
+            // Scanned again after reception or after a refusal: say where the tube stands. The line
+            // of the previous decision stays otherwise, as on the workstation.
+            if (SampleReceptionRules.IsAlreadyDecided(_candidate))
+                _status = ($"{_candidate.Barcode} — {Texts[$"SampleStatus.{_candidate.Status}"]}", "abnormal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Scanning {Barcode} at reception failed.", barcode);
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            await FocusScanAsync();
+        }
+    }
+
+    private void ResetTubeInputs()
+    {
+        _defects = SampleDefect.None;
+        _temperature = string.Empty;
+        _coldChain = true;
+        _storage = string.Empty;
+        _reason = null;
+        _requestRecollection = true;
+        _rejectComment = null;
+    }
+
+    // ---- Decisions ---------------------------------------------------------------------------------
+
+    private void CloseDialog()
+    {
+        _dialog = ReceptionDialog.None;
+        _message = null;
+    }
+
+    private void Show(string title, string text)
+    {
+        _message = new Message(title, text);
+        _dialog = ReceptionDialog.Message;
+    }
+
+    private async Task AcceptAsync(bool withReservation)
+    {
+        // The tube being decided, held locally: a scan may replace _candidate before this returns.
+        if (_deciding || _candidate is not { } candidate) return;
+
+        var defects = _defects;
+        if (defects != SampleDefect.None && !withReservation)
+        {
+            Show(Texts["Action.Accept"], Texts.T("Sample_DefectsRequireExplicitDecision", defects));
+            return;
+        }
+
+        // A figure that cannot be read is said, not dropped.
+        if (SampleReceptionRules.IsTemperatureRefused(_temperature))
+        {
+            Show(Texts["Sample.Temperature"], Texts["Temperature_ValueImplausible"]);
+            return;
+        }
+
+        var request = SampleReceptionRules.Request(candidate, defects, withReservation, _temperature, _coldChain,
+                                                   string.IsNullOrEmpty(_storage) ? null : _storage);
+        _deciding = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<SampleWorkflowService, Result<ReceptionOutcome>>(s => s.ReceiveAsync([request]));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Action.Accept"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            _status = result.Value.Problems.Count > 0
+                ? (Texts.Describe(result.Value.Problems), "abnormal")
+                : withReservation
+                    ? ($"{candidate.Barcode} — {Texts["Action.AcceptWithReservation"]}", "abnormal")
+                    : ($"{candidate.Barcode} — {Texts["SampleStatus.Received"]}", "normal");
+
+            if (ReferenceEquals(_candidate, candidate)) _candidate = null;
+            await RefreshAwaitingAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Receiving {Barcode} failed.", candidate.Barcode);
+            Show(Texts["Action.Accept"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            await EndDecisionAsync();
+        }
+    }
+
+    /// <summary>A rejection reason comes from a closed list: the rate by reason is a quality indicator.</summary>
+    private void AskReject()
+    {
+        if (_deciding || _candidate is null || !Actions.Reject) return;
+
+        if (_reason is null)
+        {
+            Show(Texts["Action.Reject"], Texts["Sample_RejectionReasonRequired"]);
+            return;
+        }
+
+        _dialog = ReceptionDialog.RejectComment;
+    }
+
+    private void CommentGiven(string comment)
+    {
+        _rejectComment = comment;
+        _dialog = ReceptionDialog.RejectConfirm;
+    }
+
+    private async Task RejectAsync()
+    {
+        _dialog = ReceptionDialog.None;
+        if (_deciding || _candidate is not { } candidate || _reason is not { } reason) return;
+
+        _deciding = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<SampleWorkflowService, Result<ReceptionOutcome>>(
+                s => s.RejectAsync([new RejectSampleRequest(candidate.SampleId, reason, _rejectComment, _requestRecollection)]));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Action.Reject"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            // Refused by the rules (already refused, nothing left to redraw): nothing was recorded.
+            if (result.Value.Rejected == 0)
+            {
+                Show(Texts["Action.Reject"], Texts.Describe(result.Value.Problems));
+                return;
+            }
+
+            // A recollection produces a fresh tube with a new barcode; its label is printed by the
+            // Windows workstation, which the browser cannot reach the label printer for.
+            _status = result.Value.ReplacementLabels.Count > 0
+                ? ($"{candidate.Barcode} — {Texts["SampleStatus.Rejected"]} · {Texts["Sample.ReplacementIssued"]} — {Texts["OrderEntry.LabelsFromWorkstation"]}", "abnormal")
+                : ($"{candidate.Barcode} — {Texts["SampleStatus.Rejected"]}", "abnormal");
+
+            if (result.Value.Problems.Count > 0) Show(Texts["Action.Reject"], Texts.Describe(result.Value.Problems));
+
+            if (ReferenceEquals(_candidate, candidate)) _candidate = null;
+            await RefreshAwaitingAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Rejecting {Barcode} failed.", candidate.Barcode);
+            Show(Texts["Action.Reject"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            await EndDecisionAsync();
+        }
+    }
+
+    /// <summary>Ends a decision, then shows a tube scanned in the meantime.</summary>
+    private async Task EndDecisionAsync()
+    {
+        _deciding = false;
+
+        if (_queuedScan is { } queued)
+        {
+            _queuedScan = null;
+            await ScanAsync(queued);
+        }
+        else
+        {
+            await FocusScanAsync();
+        }
+    }
+}
