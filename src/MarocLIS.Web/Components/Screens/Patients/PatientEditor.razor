@@ -1,0 +1,736 @@
+@using System.Globalization
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Patients
+@using MarocLIS.Domain.Common
+@using MarocLIS.Domain.Morocco
+@using MarocLIS.Domain.Patients
+@using MarocLIS.Infrastructure.Queries
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ActiveLanguagesCache Languages
+@inject ILogger<PatientEditor> Logger
+
+@*
+    The patient file, the workstation's PatientEditorForm: identity, contact, clinical context,
+    coverages, consents and alerts. What it echoes and what it refuses before a save are the
+    application's rules (PatientFileRules); the save is PatientRegistrationService's, with its
+    duplicate question. On a new file the coverages, consents and alerts wait for the save.
+*@
+<Modal Name="patient" Wide="true" Title="@(IsNew ? Texts["Patient.NewFile"] : Texts["Patient.EditFile"])"
+       Hint="@(IsNew ? Texts["PatientDialog.EditorNewHint"] : _header)" OnCancel="CancelAsync">
+    <ChildContent>
+        <nav class="tabs" role="tablist">
+            @foreach (var (tab, key) in Tabs)
+            {
+                <button type="button" role="tab" class="tab @(tab == _tab ? "is-current" : null)" aria-selected="@(tab == _tab)"
+                        data-tab="@tab" @onclick="() => _tab = tab">@Texts[key]</button>
+            }
+        </nav>
+
+        <fieldset class="tab-page" disabled="@(!FileActions.Save)" data-page="@_tab">
+            @switch (_tab)
+            {
+                case Tab.Identity:
+                    <div class="form-grid">
+                        <label class="field"><span class="field-label">@Texts["Patient.LastName"]</span>
+                            <input class="input" maxlength="120" data-field="lastName" @bind="F.LastName" @onblur="CheckDuplicatesAsync" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.FirstName"]</span>
+                            <input class="input" maxlength="120" data-field="firstName" @bind="F.FirstName" @onblur="CheckDuplicatesAsync" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.Gender"]</span>
+                            <select class="input" data-field="gender" @bind="F.Gender" @bind:after="GenderChanged">
+                                @foreach (var g in Enum.GetValues<Gender>())
+                                {
+                                    <option value="@g">@Texts[$"Gender.{g}"]</option>
+                                }
+                            </select></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.LastNameArabic"]</span>
+                            <input class="input" dir="rtl" maxlength="120" @bind="F.LastNameArabic" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.FirstNameArabic"]</span>
+                            <input class="input" dir="rtl" maxlength="120" @bind="F.FirstNameArabic" /></label>
+                        <div class="field">
+                            <label class="check"><input type="checkbox" data-field="hasDob" @bind="F.HasDateOfBirth" />@Texts["Patient.DateOfBirth"]</label>
+                            <input class="input" type="date" min="1900-01-01" max="@Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
+                                   disabled="@(!F.HasDateOfBirth)" data-field="dob" @bind="F.DateOfBirth" @onblur="CheckDuplicatesAsync" />
+                        </div>
+                        <label class="field"><span class="field-label">@Texts["Patient.DeclaredAge"]</span>
+                            <input class="input" type="number" min="0" max="130" disabled="@F.HasDateOfBirth" data-field="declaredAge" @bind="F.DeclaredAge" /></label>
+                        <div class="field">
+                            <span class="field-label">&nbsp;</span>
+                            <span class="age-echo @(Age is null ? "is-warning" : null)" data-state="age">
+                                @(Age is { } years ? $"{years} {Texts["Report.Years"]}" : Texts["Patient_AgeOrBirthDateRequired"])
+                            </span>
+                        </div>
+                        <label class="field"><span class="field-label">@Texts["Patient.PlaceOfBirth"]</span>
+                            <input class="input" maxlength="120" @bind="F.PlaceOfBirth" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.Cin"]</span>
+                            <input class="input mono" dir="ltr" maxlength="20" data-field="cin" @bind="F.Cin" @onblur="CheckDuplicatesAsync" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.Passport"]</span>
+                            <input class="input mono" dir="ltr" maxlength="30" @bind="F.Passport" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.Nationality"]</span>
+                            <input class="input mono" dir="ltr" maxlength="2" @bind="F.Nationality" /></label>
+                    </div>
+                    @if (PatientFileRules.IsMinor(Age))
+                    {
+                        <div class="subcard" data-panel="guardian">
+                            <p class="message is-warning">@Texts["Patient_MinorRequiresGuardian"]</p>
+                            <div class="form-grid">
+                                <label class="field"><span class="field-label">@Texts["Patient.Guardian"]</span>
+                                    <input class="input" maxlength="200" data-field="guardian" @bind="F.GuardianName" /></label>
+                                <label class="field"><span class="field-label">@Texts["Patient.GuardianCin"]</span>
+                                    <input class="input mono" dir="ltr" maxlength="20" @bind="F.GuardianCin" /></label>
+                                <label class="field"><span class="field-label">@Texts["Patient.GuardianRelationship"]</span>
+                                    <input class="input" maxlength="60" @bind="F.GuardianRelationship" /></label>
+                            </div>
+                        </div>
+                    }
+                    break;
+
+                case Tab.Contact:
+                    <div class="form-grid">
+                        <label class="field span-2"><span class="field-label">@Texts["Patient.Address"]</span>
+                            <input class="input" maxlength="400" @bind="F.Address" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.City"]</span>
+                            <input class="input" maxlength="100" @bind="F.City" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.Region"]</span>
+                            <select class="input" @bind="F.Region">
+                                @foreach (var r in Enum.GetValues<MoroccanRegion>())
+                                {
+                                    <option value="@r">@Texts[$"MoroccanRegion.{r}"]</option>
+                                }
+                            </select></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.PostalCode"]</span>
+                            <input class="input mono" dir="ltr" maxlength="10" @bind="F.PostalCode" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.MobilePhone"]</span>
+                            <input class="input mono" dir="ltr" maxlength="20" data-field="mobile" @bind="F.Mobile" @onblur="() => F.Mobile = Normalise(F.Mobile)" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.AlternatePhone"]</span>
+                            <input class="input mono" dir="ltr" maxlength="20" @bind="F.AltPhone" @onblur="() => F.AltPhone = Normalise(F.AltPhone)" /></label>
+                        <label class="field"><span class="field-label">@Texts["Field.Email"]</span>
+                            <input class="input" dir="ltr" maxlength="200" @bind="F.Email" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.PreferredLanguage"]</span>
+                            <select class="input" @bind="F.Language">
+                                @foreach (var l in Languages.Current.Active)
+                                {
+                                    <option value="@l">@Texts[$"AppLanguage.{l}"]</option>
+                                }
+                            </select></label>
+                    </div>
+                    <p class="form-hint">@Texts["Patient.PhoneNormalisedNotice"]</p>
+                    <label class="check"><input type="checkbox" @bind="F.OptOut" />@Texts["Patient.OptOutOfSecondaryUse"]</label>
+                    <p class="form-hint">@Texts["Patient.OptOutExplanation"]</p>
+                    break;
+
+                case Tab.Clinical:
+                    <div class="form-grid">
+                        <label class="check"><input type="checkbox" disabled="@(!PatientFileRules.PregnancyApplies(F.Gender))" @bind="F.Pregnant" />@Texts["Patient.IsPregnant"]</label>
+                        @if (PatientFileRules.PregnancyApplies(F.Gender) || F.Pregnant)
+                        {
+                            <div class="field">
+                                <label class="check"><input type="checkbox" @bind="F.HasLmp" />@Texts["Patient.LastMenstrualPeriod"]</label>
+                                <input class="input" type="date" max="@Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" disabled="@(!F.HasLmp)" @bind="F.Lmp" />
+                            </div>
+                        }
+                    </div>
+                    <p class="form-hint">@Texts["Patient.PregnancyExplanation"]</p>
+                    <div class="form-grid">
+                        <label class="field"><span class="field-label">@Texts["Patient.Weight"]</span>
+                            <input class="input num" dir="ltr" maxlength="8" data-field="weight" @bind="F.Weight" @bind:event="oninput" /></label>
+                        <label class="field"><span class="field-label">@Texts["Patient.Height"]</span>
+                            <input class="input num" dir="ltr" maxlength="8" data-field="height" @bind="F.Height" @bind:event="oninput" /></label>
+                        <div class="field"><span class="field-label">&nbsp;</span>
+                            <span class="age-echo" data-state="bsa">
+                                @(PatientFileRules.BodySurfaceM2(F.Weight, F.Height) is { } bsa ? $"{Texts["Patient.BodySurface"]} {bsa.ToString("0.000", Texts.Culture)} m²" : string.Empty)
+                            </span>
+                        </div>
+                        <label class="field"><span class="field-label">@Texts["Patient.BloodGroup"]</span>
+                            <select class="input" @bind="F.BloodGroup">
+                                @foreach (var b in Enum.GetValues<BloodGroup>())
+                                {
+                                    <option value="@b">@Texts[$"BloodGroup.{b}"]</option>
+                                }
+                            </select></label>
+                        <label class="field span-2"><span class="field-label">@Texts["Patient.CurrentTreatment"]</span>
+                            <textarea class="input" rows="2" maxlength="1000" @bind="F.Treatment"></textarea></label>
+                        <label class="field span-2"><span class="field-label">@Texts["Patient.Allergies"]</span>
+                            <textarea class="input" rows="2" maxlength="500" @bind="F.Allergies"></textarea></label>
+                    </div>
+                    <p class="form-hint">@Texts["Patient.InterferenceExplanation"]</p>
+                    break;
+
+                case Tab.Coverage:
+                    <table class="grid" data-grid="coverages">
+                        <thead><tr>
+                            <th>@Texts["Coverage.Payer"]</th><th>@Texts["Coverage.MembershipNumber"]</th>
+                            <th>@Texts["Coverage.RelationshipShort"]</th><th>@Texts["Coverage.InsuredPerson"]</th>
+                            <th class="num">@Texts["Coverage.RateShort"]</th><th>@Texts["Coverage.ChronicScheme"]</th>
+                            <th>@Texts["Coverage.Validity"]</th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach (var row in _coverages)
+                            {
+                                <tr class="@(row.CoverageId == _coverageId ? "is-selected" : null) @(!row.IsValidToday ? "muted" : row.IsPrimary ? "strong" : null)"
+                                    @onclick="() => _coverageId = row.CoverageId">
+                                    <td>@row.PayerName</td><td class="mono">@row.MembershipNumber</td>
+                                    <td>@Texts[$"BeneficiaryRelationship.{row.Relationship}"]</td><td>@row.InsuredPersonName</td>
+                                    <td class="num">@($"{row.EffectiveRate * 100m:0.#} %")</td>
+                                    <td>@(row.IsChronicDiseaseScheme ? Texts["Coverage.ChronicScheme"] : string.Empty)</td>
+                                    <td class="mono">@(row.ValidUntil is { } until ? $"{row.ValidFrom:dd/MM/yy} – {until:dd/MM/yy}" : $"{row.ValidFrom:dd/MM/yy} – …")</td>
+                                </tr>
+                            }
+                            @foreach (var pending in _pendingCoverages)
+                            {
+                                var payer = _payers.FirstOrDefault(p => p.Id == pending.PayerId);
+                                <tr class="is-pending">
+                                    <td>@(payer?.Name ?? "—")</td><td class="mono">@pending.MembershipNumber</td>
+                                    <td>@Texts[$"BeneficiaryRelationship.{pending.Relationship}"]</td><td>@pending.InsuredPersonName</td>
+                                    <td class="num">@(pending.IsChronicDiseaseScheme ? "100 %" : $"{PatientFileRules.PendingRate(false, pending.ReimbursementRateOverride, payer?.DefaultReimbursementRate) * 100m:0.#} %")</td>
+                                    <td>@(pending.IsChronicDiseaseScheme ? Texts["Coverage.ChronicScheme"] : string.Empty)</td>
+                                    <td>@Texts["Coverage.PendingSave"]</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <div class="actions">
+                        <ActionButton Key="Coverage.Add" Disabled="@(!FileActions.EditLists)" OnClick="AddCoverage" />
+                        <ActionButton Key="Coverage.End" Disabled="@(!FileActions.EditLists || SelectedCoverage is not { } c || !PatientFileRules.CanEndCoverage(c.ValidUntil))"
+                                      OnClick="() => _endingCoverage = true" />
+                    </div>
+                    <p class="form-hint">@Texts["Coverage.PricingNotice"]</p>
+                    break;
+
+                case Tab.Consent:
+                    <table class="grid" data-grid="consents">
+                        <thead><tr>
+                            <th>@Texts["Consent.Purpose"]</th><th>@Texts["Consent.Channel"]</th><th>@Texts["Consent.GivenAt"]</th>
+                            <th>@Texts["Consent.SignedBy"]</th><th>@Texts["Field.Date"]</th><th>@Texts["Field.Status"]</th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach (var row in _consents)
+                            {
+                                var missing = row.WithdrawnAt is null && row.RequiresWrittenEvidence && !row.HasEvidenceDocument;
+                                <tr class="@(row.ConsentId == _consentId ? "is-selected" : null) @(row.WithdrawnAt is not null ? "muted" : missing ? "is-warning" : null)"
+                                    @onclick="() => _consentId = row.ConsentId">
+                                    <td>@Texts[$"ConsentPurpose.{row.Purpose}"]</td><td>@Texts[$"ConsentChannel.{row.Channel}"]</td>
+                                    <td class="mono">@row.GivenAt.ToLocalTime().ToString("dd/MM/yy HH:mm", CultureInfo.InvariantCulture)</td>
+                                    <td>@row.SignedByName</td><td class="mono">@row.ExpiresOn?.ToString("dd/MM/yy", CultureInfo.InvariantCulture)</td>
+                                    <td>@Texts[PatientFileRules.ConsentStateKey(row.WithdrawnAt is not null, row.RequiresWrittenEvidence, row.HasEvidenceDocument)]</td>
+                                </tr>
+                            }
+                            @foreach (var pending in _pendingConsents)
+                            {
+                                <tr class="is-pending">
+                                    <td>@Texts[$"ConsentPurpose.{pending.Purpose}"]</td><td>@Texts[$"ConsentChannel.{pending.Channel}"]</td>
+                                    <td>@Texts["Coverage.PendingSave"]</td><td>@pending.SignedByName</td>
+                                    <td class="mono">@pending.ExpiresOn?.ToString("dd/MM/yy", CultureInfo.InvariantCulture)</td><td>@Texts["Coverage.PendingSave"]</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <div class="actions">
+                        <ActionButton Key="Consent.Record" Disabled="@(!FileActions.EditLists)" OnClick="() => _addingConsent = true" />
+                        <ActionButton Key="Consent.Withdraw" Disabled="@(!FileActions.EditLists || SelectedConsent is not { } k || !PatientFileRules.CanWithdrawConsent(k.WithdrawnAt))"
+                                      OnClick="() => _withdrawingConsent = true" />
+                    </div>
+                    <p class="form-hint">@Texts["Consent.WrittenEvidenceNotice"]</p>
+                    break;
+
+                case Tab.Alerts:
+                    <table class="grid" data-grid="alerts">
+                        <thead><tr>
+                            <th>@Texts["Patient.AlertSeverity"]</th><th>@Texts["Patient.AlertMessageFr"]</th>
+                            <th>@Texts["Patient.AlertExpiresOn"]</th><th>@Texts["Field.Status"]</th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach (var row in _alerts)
+                            {
+                                <tr class="@(row.IsActive(Today) ? (row.IsBlocking ? "is-critical" : null) : "muted")">
+                                    <td>@Texts[$"PatientAlertSeverity.{row.Severity}"]</td><td>@row.Message.For(Texts.Language)</td>
+                                    <td>@(row.ExpiresOn?.ToString("dd/MM/yy", CultureInfo.InvariantCulture) ?? Texts["Patient.AlertNoExpiry"])</td>
+                                    <td>@(row.IsActive(Today) ? Texts["Patient.AlertActive"] : Texts["Patient.AlertExpired"])</td>
+                                </tr>
+                            }
+                            @foreach (var pending in _pendingAlerts)
+                            {
+                                <tr class="is-pending">
+                                    <td>@Texts[$"PatientAlertSeverity.{pending.Severity}"]</td><td>@pending.Message.For(Texts.Language)</td>
+                                    <td>@(pending.ExpiresOn?.ToString("dd/MM/yy", CultureInfo.InvariantCulture) ?? Texts["Patient.AlertNoExpiry"])</td>
+                                    <td>@Texts["Coverage.PendingSave"]</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <div class="actions">
+                        <ActionButton Key="Patient.AddAlert" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" Disabled="@(!FileActions.EditLists)" OnClick="() => _addingAlert = true" />
+                    </div>
+                    break;
+            }
+        </fieldset>
+    </ChildContent>
+    <Footer>
+        @if (_status is not null)
+        {
+            <p class="message is-@_statusTone footer-status" role="status" data-state="editor-status">@_status</p>
+        }
+        <ActionButton Key="Action.Cancel" Disabled="_saving" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="@(_saving || !FileActions.Save)" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@if (_addingCoverage)
+{
+    <CoverageDialog Payers="_payers" OnAdd="CoverageAddedAsync" OnCancel="() => _addingCoverage = false" />
+}
+@if (_endingCoverage && SelectedCoverage is { } ending)
+{
+    <EndCoverageDialog Coverage="ending" OnEnd="EndCoverageAsync" OnCancel="() => _endingCoverage = false" />
+}
+@if (_addingConsent)
+{
+    <ConsentDialog IsMinor="PatientFileRules.IsMinor(Age)" GuardianName="@F.GuardianName"
+                   OnRecord="ConsentAddedAsync" OnCancel="() => _addingConsent = false" />
+}
+@if (_withdrawingConsent && SelectedConsent is { } withdrawing)
+{
+    <ReasonPrompt Title="@Texts["Consent.Withdraw"]" MaxLength="500"
+                  Prompt="@Texts.T("Consent.WithdrawPrompt", Texts[$"ConsentPurpose.{withdrawing.Purpose}"])"
+                  OnConfirm="WithdrawConsentAsync" OnCancel="() => _withdrawingConsent = false" />
+}
+@if (_addingAlert)
+{
+    <PatientAlertDialog OnAdd="AlertAddedAsync" OnCancel="() => _addingAlert = false" />
+}
+@if (_duplicates is { } candidates)
+{
+    <DuplicateDialog Candidates="candidates" OnUseExisting="UseExistingAsync" OnCreateAnyway="CreateAnywayAsync"
+                     OnCancel="() => _duplicates = null" />
+}
+
+@code {
+    /// <summary>The file to open; null for a new one.</summary>
+    [Parameter] public Guid? PatientId { get; set; }
+
+    /// <summary>The file created or edited — or, from the duplicate question, the existing file chosen.</summary>
+    [Parameter] public EventCallback<Guid> OnSaved { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private enum Tab { Identity, Contact, Clinical, Coverage, Consent, Alerts }
+
+    private static readonly (Tab, string)[] Tabs =
+    [
+        (Tab.Identity, "Patient.Identity"), (Tab.Contact, "Patient.Contact"), (Tab.Clinical, "Patient.ClinicalContext"),
+        (Tab.Coverage, "Coverage.Plural"), (Tab.Consent, "Consent.Plural"), (Tab.Alerts, "Patient.Alerts")
+    ];
+
+    private Tab _tab = Tab.Identity;
+    private readonly PatientForm F = new();
+    private string? _header;
+    private bool _anonymized;
+    private bool _saving;
+    private string? _status;
+    private string _statusTone = "warning";
+    private bool _duplicateWarningShown;
+
+    private IReadOnlyList<PayerOption> _payers = [];
+    private IReadOnlyList<CoverageRow> _coverages = [];
+    private IReadOnlyList<ConsentRow> _consents = [];
+    private IReadOnlyList<AlertRow> _alerts = [];
+    private readonly List<CoverageRequest> _pendingCoverages = [];
+    private readonly List<ConsentRequest> _pendingConsents = [];
+    private readonly List<(PatientAlertSeverity Severity, MultilingualText Message, DateOnly? ExpiresOn)> _pendingAlerts = [];
+    private Guid? _coverageId;
+    private Guid? _consentId;
+
+    private bool _addingCoverage;
+    private bool _endingCoverage;
+    private bool _addingConsent;
+    private bool _withdrawingConsent;
+    private bool _addingAlert;
+    private IReadOnlyList<DuplicateCandidate>? _duplicates;
+
+    private bool IsNew => PatientId is null;
+
+    private DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    private int? Age => PatientFileRules.AgeYears(F.HasDateOfBirth ? F.DateOfBirth : null,
+                                                  F.HasDateOfBirth ? 0 : F.DeclaredAge, Today);
+
+    private PatientFileActions FileActions => PatientFileRules.Actions(IsNew, _anonymized, Context.User);
+
+    private CoverageRow? SelectedCoverage => _coverages.FirstOrDefault(c => c.CoverageId == _coverageId);
+    private ConsentRow? SelectedConsent => _consents.FirstOrDefault(c => c.ConsentId == _consentId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _payers = await Scopes.RunAsync<IPatientQueries, IReadOnlyList<PayerOption>>(q => q.GetPayersAsync());
+            if (PatientId is { } id) await LoadAsync(id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Opening the patient file failed.");
+            Say(Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task LoadAsync(Guid id)
+    {
+        var detail = await Scopes.RunAsync<IPatientQueries, PatientDetail?>(q => q.GetDetailAsync(id));
+        if (detail is null) return;
+
+        _header = $"{detail.MedicalRecordNumber} — {detail.LastName} {detail.FirstName}";
+        F.Load(detail, Languages.Current.Coerce(detail.PreferredLanguage));
+
+        // An anonymised file is a record of an erasure, not an editable patient.
+        _anonymized = detail.IsAnonymized;
+        if (_anonymized) Say(Texts["Patient_AnonymizedIsReadOnly"]);
+
+        await ReloadListsAsync(id);
+    }
+
+    private async Task ReloadListsAsync(Guid id)
+    {
+        (_coverages, _consents, _alerts) = await Scopes.RunAsync<IPatientQueries, (IReadOnlyList<CoverageRow>, IReadOnlyList<ConsentRow>, IReadOnlyList<AlertRow>)>(
+            async q => (await q.GetCoveragesAsync(id), await q.GetConsentsAsync(id), await q.GetAlertsAsync(id)));
+    }
+
+    private void Say(string text, string tone = "warning")
+    {
+        _status = text;
+        _statusTone = tone;
+    }
+
+    private void GenderChanged()
+    {
+        if (!PatientFileRules.PregnancyApplies(F.Gender)) F.Pregnant = false;
+    }
+
+    /// <summary>
+    /// Rewrites the number to E.164 as the field is left, visibly, so the clerk can see that +212
+    /// replaced the leading zero and confirm it is right.
+    /// </summary>
+    private static string? Normalise(string? phone) =>
+        MoroccanIdentifiers.TryNormalizePhone(phone) is { Length: > 0 } normalised ? normalised : phone;
+
+    /// <summary>
+    /// Warns, before the file is saved, that one may already exist for this person, while they are
+    /// still at the counter. Silent when the operator may not see other files.
+    /// </summary>
+    private async Task CheckDuplicatesAsync()
+    {
+        if (!PatientFileRules.ChecksDuplicates(IsNew, F.LastName, F.FirstName)) return;
+
+        try
+        {
+            var result = await Scopes.RunAsync<PatientRegistrationService, Result<IReadOnlyList<DuplicateCandidate>>>(
+                s => s.FindDuplicatesAsync(F.LastName!.Trim(), F.FirstName!.Trim(),
+                                           string.IsNullOrWhiteSpace(F.Cin) ? null : F.Cin.Trim(),
+                                           F.HasDateOfBirth ? F.DateOfBirth : null));
+
+            if (result.IsFailure) return;
+
+            if (result.Value.Count == 0)
+            {
+                if (_duplicateWarningShown) { _status = null; _duplicateWarningShown = false; }
+                return;
+            }
+
+            _duplicateWarningShown = true;
+            Say("⚠ " + Texts.T("Patient.PossibleDuplicateNotice", result.Value.Count,
+                                string.Join(", ", result.Value.Take(3).Select(d => d.MedicalRecordNumber))));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "The duplicate check failed.");
+        }
+    }
+
+    // ---- Coverages, consents, alerts -----------------------------------------------------------
+
+    private void AddCoverage()
+    {
+        if (_payers.Count == 0)
+        {
+            Say(Texts["Coverage.NoPayersConfigured"]);
+            return;
+        }
+
+        _addingCoverage = true;
+    }
+
+    private async Task CoverageAddedAsync(CoverageRequest request)
+    {
+        _addingCoverage = false;
+
+        if (PatientId is { } id)
+        {
+            var result = await Scopes.RunAsync<PatientRegistrationService, Result>(s => s.AddCoverageAsync(id, request));
+            if (result.IsFailure) { Say(Texts.Describe(result.Errors), "critical"); return; }
+            await ReloadListsAsync(id);
+        }
+        else
+        {
+            // Held until the file exists: the coverage needs a patient to hang from.
+            _pendingCoverages.Add(request);
+        }
+    }
+
+    private async Task EndCoverageAsync(DateOnly until)
+    {
+        _endingCoverage = false;
+        if (PatientId is not { } id || SelectedCoverage is not { } row) return;
+
+        var result = await Scopes.RunAsync<PatientRegistrationService, Result>(s => s.EndCoverageAsync(id, row.CoverageId, until));
+        if (result.IsFailure) { Say(Texts.Describe(result.Errors), "critical"); return; }
+        await ReloadListsAsync(id);
+    }
+
+    private async Task ConsentAddedAsync(ConsentRequest request)
+    {
+        _addingConsent = false;
+
+        if (PatientId is { } id)
+        {
+            var result = await Scopes.RunAsync<PatientRegistrationService, Result>(s => s.RecordConsentAsync(id, request));
+            if (result.IsFailure) { Say(Texts.Describe(result.Errors), "critical"); return; }
+            await ReloadListsAsync(id);
+        }
+        else
+        {
+            _pendingConsents.Add(request);
+        }
+    }
+
+    private async Task WithdrawConsentAsync(string reason)
+    {
+        _withdrawingConsent = false;
+        if (PatientId is not { } id || SelectedConsent is not { } row) return;
+
+        var result = await Scopes.RunAsync<PatientRegistrationService, Result>(s => s.WithdrawConsentAsync(id, row.ConsentId, reason));
+        if (result.IsFailure) { Say(Texts.Describe(result.Errors), "critical"); return; }
+        await ReloadListsAsync(id);
+    }
+
+    private async Task AlertAddedAsync((PatientAlertSeverity Severity, MultilingualText Message, DateOnly? ExpiresOn) alert)
+    {
+        _addingAlert = false;
+
+        if (PatientId is { } id)
+        {
+            var result = await Scopes.RunAsync<PatientRegistrationService, Result>(
+                s => s.AddAlertAsync(id, alert.Severity, alert.Message, alert.ExpiresOn));
+            if (result.IsFailure) { Say(Texts.Describe(result.Errors), "critical"); return; }
+            await ReloadListsAsync(id);
+        }
+        else
+        {
+            // Held until the file exists, like the coverages and consents.
+            _pendingAlerts.Add(alert);
+        }
+    }
+
+    // ---- Save ----------------------------------------------------------------------------------
+
+    private async Task SaveAsync()
+    {
+        if (_saving || !FileActions.Save) return;
+
+        if (PatientFileRules.SaveProblem(F.LastName, F.FirstName, F.Weight, F.Height) is { } problem)
+        {
+            _tab = problem.Field is "LastName" or "FirstName" ? Tab.Identity : Tab.Clinical;
+            Say(problem.Arguments.Length == 0 ? Texts[problem.Key] : Texts.T(problem.Key, problem.Arguments));
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            if (PatientId is { } id)
+            {
+                var updated = await Scopes.RunAsync<PatientRegistrationService, Result>(s => s.UpdateAsync(id, F.Identity(null)));
+                if (updated.IsFailure) { Say(Texts.Describe(updated.Errors), "critical"); return; }
+
+                await OnSaved.InvokeAsync(id);
+                return;
+            }
+
+            await CreateAsync(null);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving the patient file failed.");
+            Say(Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    /// <summary>
+    /// Creates the file, with the duplicate question the service may come back with: use the
+    /// existing file, or state why it is somebody else.
+    /// </summary>
+    private async Task CreateAsync(string? overrideReason)
+    {
+        var result = await Scopes.RunAsync<PatientRegistrationService, Result<PatientRegistrationOutcome>>(
+            s => s.RegisterAsync(F.Identity(overrideReason), _pendingCoverages, _pendingConsents));
+
+        if (result.IsFailure) { Say(Texts.Describe(result.Errors), "critical"); return; }
+
+        var outcome = result.Value;
+
+        if (outcome.NeedsDuplicateDecision)
+        {
+            _duplicates = outcome.Duplicates;
+            return;
+        }
+
+        // Alerts are attached once the file exists; attaching one must not fail the registration.
+        if (outcome.PatientId is { } created)
+        {
+            foreach (var (severity, message, expiresOn) in _pendingAlerts)
+            {
+                var attached = await Scopes.RunAsync<PatientRegistrationService, Result>(
+                    s => s.AddAlertAsync(created, severity, message, expiresOn));
+
+                if (attached.IsFailure)
+                {
+                    Say(Texts.Describe(attached.Errors), "critical");
+                    break;
+                }
+            }
+
+            await OnSaved.InvokeAsync(created);
+        }
+    }
+
+    private async Task UseExistingAsync(Guid existing)
+    {
+        // The clerk recognised the patient. Nothing was written; the caller receives the file
+        // that already existed, which is the whole point of the check.
+        _duplicates = null;
+        await OnSaved.InvokeAsync(existing);
+    }
+
+    private async Task CreateAnywayAsync(string reason)
+    {
+        _duplicates = null;
+        _saving = true;
+        try { await CreateAsync(reason); }
+        finally { _saving = false; }
+    }
+
+    private Task CancelAsync() => _saving ? Task.CompletedTask : OnCancel.InvokeAsync();
+
+    /// <summary>What the form holds, as typed.</summary>
+    private sealed class PatientForm
+    {
+        public string? LastName { get; set; }
+        public string? FirstName { get; set; }
+        public string? LastNameArabic { get; set; }
+        public string? FirstNameArabic { get; set; }
+        public Gender Gender { get; set; }
+        public bool HasDateOfBirth { get; set; } = true;
+        public DateOnly? DateOfBirth { get; set; } = new DateOnly(1990, 1, 1);
+        public int DeclaredAge { get; set; }
+        public string? PlaceOfBirth { get; set; }
+        public string? Cin { get; set; }
+        public string? Passport { get; set; }
+        public string? Nationality { get; set; } = "MA";
+        public string? GuardianName { get; set; }
+        public string? GuardianCin { get; set; }
+        public string? GuardianRelationship { get; set; }
+        public string? Address { get; set; }
+        public string? City { get; set; }
+        public MoroccanRegion Region { get; set; }
+        public string? PostalCode { get; set; }
+        public string? Mobile { get; set; }
+        public string? AltPhone { get; set; }
+        public string? Email { get; set; }
+        public AppLanguage Language { get; set; } = AppLanguage.French;
+        public bool OptOut { get; set; }
+        public bool Pregnant { get; set; }
+        public bool HasLmp { get; set; }
+        public DateOnly? Lmp { get; set; }
+        public string? Weight { get; set; }
+        public string? Height { get; set; }
+        public BloodGroup BloodGroup { get; set; }
+        public string? Treatment { get; set; }
+        public string? Allergies { get; set; }
+
+        public void Load(PatientDetail d, AppLanguage language)
+        {
+            LastName = d.LastName;
+            FirstName = d.FirstName;
+            LastNameArabic = d.LastNameArabic;
+            FirstNameArabic = d.FirstNameArabic;
+            Gender = d.Gender;
+            HasDateOfBirth = d.DateOfBirth is not null;
+            DateOfBirth = d.DateOfBirth ?? DateOfBirth;
+            DeclaredAge = d.DateOfBirth is null ? Math.Clamp(d.DeclaredAgeYears ?? 0, 0, 130) : 0;
+            PlaceOfBirth = d.PlaceOfBirth;
+            Cin = d.Cin;
+            Passport = d.PassportNumber;
+            Nationality = d.NationalityCode;
+            GuardianName = d.GuardianFullName;
+            GuardianCin = d.GuardianCin;
+            GuardianRelationship = d.GuardianRelationship;
+            Address = d.AddressLine;
+            City = d.City;
+            Region = d.Region;
+            PostalCode = d.PostalCode;
+            Mobile = d.MobilePhone;
+            AltPhone = d.AlternatePhone;
+            Email = d.Email;
+            // French when the patient's language has since been switched off.
+            Language = language;
+            OptOut = d.OptedOutOfSecondaryUse;
+            Pregnant = d.IsPregnant;
+            HasLmp = d.LastMenstrualPeriod is not null;
+            Lmp = d.LastMenstrualPeriod;
+            Weight = d.WeightKg?.ToString("0.##", CultureInfo.InvariantCulture);
+            Height = d.HeightCm?.ToString("0.##", CultureInfo.InvariantCulture);
+            BloodGroup = d.BloodGroup;
+            Treatment = d.CurrentTreatment;
+            Allergies = d.KnownAllergies;
+        }
+
+        public PatientIdentityRequest Identity(string? duplicateOverrideReason) => new()
+        {
+            LastName = LastName?.Trim() ?? string.Empty,
+            FirstName = FirstName?.Trim() ?? string.Empty,
+            LastNameArabic = LastNameArabic,
+            FirstNameArabic = FirstNameArabic,
+            Gender = Gender,
+            DateOfBirth = HasDateOfBirth ? DateOfBirth : null,
+            DeclaredAgeYears = !HasDateOfBirth && DeclaredAge > 0 ? DeclaredAge : null,
+            PlaceOfBirth = PlaceOfBirth,
+            Cin = Cin,
+            PassportNumber = Passport,
+            NationalityCode = Nationality ?? string.Empty,
+            GuardianFullName = GuardianName,
+            GuardianCin = GuardianCin,
+            GuardianRelationship = GuardianRelationship,
+            AddressLine = Address,
+            City = City,
+            Region = Region,
+            PostalCode = PostalCode,
+            MobilePhone = Mobile,
+            AlternatePhone = AltPhone,
+            Email = Email,
+            PreferredLanguage = Language,
+            IsPregnant = Pregnant,
+            LastMenstrualPeriod = HasLmp && (PatientFileRules.PregnancyApplies(Gender) || Pregnant) ? Lmp : null,
+            WeightKg = PatientFileRules.Measure(Weight),
+            HeightCm = PatientFileRules.Measure(Height),
+            BloodGroup = BloodGroup,
+            CurrentTreatment = Treatment,
+            KnownAllergies = Allergies,
+            OptedOutOfSecondaryUse = OptOut,
+            DuplicateOverrideReason = duplicateOverrideReason
+        };
+    }
+}

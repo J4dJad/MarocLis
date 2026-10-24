@@ -1,0 +1,86 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Patients
+@inject WebTexts Texts
+
+@*
+    The duplicate question (the workstation's DuplicateWarningForm), deliberately hard to dismiss:
+    open the file that already exists, or state in writing why this is a different person.
+*@
+<Modal Name="duplicate" Wide="true" Title="@Texts["Patient.DuplicateTitle"]" Hint="@Texts["Patient.DuplicateExplanation"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <p class="message is-warning">@Texts.T("Patient_DuplicateSuspected", Candidates.Count)</p>
+        <table class="grid grid-select" data-grid="duplicates">
+            <thead><tr>
+                <th>@Texts["Patient.RecordNumber"]</th><th>@Texts["Patient.Title"]</th><th>@Texts["Patient.Gender"]</th>
+                <th class="num">@Texts["Patient.Age"]</th><th>@Texts["Patient.Cin"]</th><th>@Texts["Patient.MobilePhone"]</th>
+                <th>@Texts["Patient.MatchedOn"]</th>
+            </tr></thead>
+            <tbody>
+                @foreach (var c in Candidates)
+                {
+                    <tr class="@(c.PatientId == _selected ? "is-selected" : null) @(PatientFileRules.IsCertainMatch(c) ? "is-critical" : null)"
+                        @onclick="() => _selected = c.PatientId">
+                        <td class="mono">@c.MedicalRecordNumber</td><td>@c.FullName</td><td>@Texts[$"Gender.{c.Gender}"]</td>
+                        <td class="num">@(c.AgeYears?.ToString() ?? "—")</td><td class="mono">@c.Cin</td>
+                        <td class="mono" dir="ltr">@c.MobilePhone</td><td class="strong">@Texts[c.MatchedOn]</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <label class="field">
+            <span class="field-label">@Texts["Patient.DuplicateOverrideReason"]</span>
+            <input class="input" data-field="override" @bind="_reason" @bind:event="oninput" />
+        </label>
+        @if (_warning is not null)
+        {
+            <p class="message is-warning" role="alert">@_warning</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Patient.CreateAnyway" Disabled="@(!ReasonRules.IsSufficient(_reason, ReasonRules.JustificationMinimumLength))" OnClick="AskAsync" />
+        <ActionButton Key="Patient.UseExistingFile" Primary="true" Disabled="@(_selected is null)" OnClick="UseAsync" />
+    </Footer>
+</Modal>
+
+@if (_confirming)
+{
+    <ConfirmPrompt Title="@Texts["Patient.DuplicateTitle"]" Message="@Texts.T("Patient.ConfirmCreateDuplicate", Candidates.Count)"
+                   OnYes="CreateAsync" OnNo="() => _confirming = false" />
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DuplicateCandidate> Candidates { get; set; } = [];
+    [Parameter] public EventCallback<Guid> OnUseExisting { get; set; }
+    [Parameter] public EventCallback<string> OnCreateAnyway { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Guid? _selected;
+    private string _reason = string.Empty;
+    private string? _warning;
+    private bool _confirming;
+
+    protected override void OnInitialized() => _selected = Candidates.FirstOrDefault()?.PatientId;
+
+    private Task UseAsync() => _selected is { } id ? OnUseExisting.InvokeAsync(id) : Task.CompletedTask;
+
+    private void AskAsync()
+    {
+        // The override is gated on a real justification, not merely a non-empty box.
+        if (!ReasonRules.IsSufficient(_reason, ReasonRules.JustificationMinimumLength))
+        {
+            _warning = Texts["Message.ReasonRequiredPrompt"];
+            return;
+        }
+
+        _confirming = true;
+    }
+
+    private async Task CreateAsync()
+    {
+        _confirming = false;
+        await OnCreateAnyway.InvokeAsync(_reason.Trim());
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

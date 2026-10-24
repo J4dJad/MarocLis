@@ -1,0 +1,126 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Patients
+@using MarocLIS.Domain.Common
+@using MarocLIS.Domain.Patients
+@inject WebTexts Texts
+@inject ActiveLanguagesCache Languages
+
+@*
+    A consent on file (the workstation's ConsentDialog). What the law wants in writing is said
+    while the purpose is chosen; a minor's consent needs its signer (PatientFileRules).
+*@
+<Modal Name="consent" Title="@Texts["Consent.Record"]" Hint="@Texts["PatientDialog.ConsentHint"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <div class="form-grid">
+            <label class="field span-2"><span class="field-label">@Texts["Consent.Purpose"]</span>
+                <select class="input" data-field="purpose" @bind="_purpose">
+                    @foreach (var p in Enum.GetValues<ConsentPurpose>())
+                    {
+                        <option value="@p">@Texts[$"ConsentPurpose.{p}"]</option>
+                    }
+                </select></label>
+            @if (Notice is { Length: > 0 } notice)
+            {
+                <p class="message is-info span-2" data-state="written-notice">@notice</p>
+            }
+            <label class="field"><span class="field-label">@Texts["Consent.Channel"]</span>
+                <select class="input" data-field="channel" @bind="_channel">
+                    @foreach (var c in Enum.GetValues<ConsentChannel>())
+                    {
+                        <option value="@c">@Texts[$"ConsentChannel.{c}"]</option>
+                    }
+                </select></label>
+            <label class="field"><span class="field-label">@Texts["Consent.PresentedIn"]</span>
+                <select class="input" @bind="_language">
+                    @foreach (var l in Languages.Current.Active)
+                    {
+                        <option value="@l">@Texts[$"AppLanguage.{l}"]</option>
+                    }
+                </select></label>
+            <label class="field"><span class="field-label">@Texts["Consent.SignedBy"]</span>
+                <input class="input" maxlength="200" data-field="signedBy" @bind="_signedBy" /></label>
+            <label class="field"><span class="field-label">@Texts["Consent.SignedByCin"]</span>
+                <input class="input mono" dir="ltr" maxlength="20" @bind="_signedByCin" /></label>
+            <label class="field"><span class="field-label">@Texts["Consent.SignedByRelationship"]</span>
+                <input class="input" maxlength="60" @bind="_relationship" /></label>
+            <label class="field"><span class="field-label">@Texts["Consent.FormVersion"]</span>
+                <input class="input mono" dir="ltr" maxlength="40" @bind="_formVersion" /></label>
+            <div class="field">
+                <label class="check"><input type="checkbox" @bind="_hasExpiry" />@Texts["Consent.ExpiresOn"]</label>
+                <input class="input" type="date" min="@DateTime.Today.ToString("yyyy-MM-dd")" disabled="@(!_hasExpiry)" @bind="_expires" />
+            </div>
+            <label class="field span-2"><span class="field-label">@Texts["Field.Notes"]</span>
+                <input class="input" maxlength="1000" @bind="_notes" /></label>
+        </div>
+        @if (_warning is not null)
+        {
+            <p class="message is-warning" role="alert">@_warning</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="AcceptAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public bool IsMinor { get; set; }
+    [Parameter] public string? GuardianName { get; set; }
+    [Parameter] public EventCallback<ConsentRequest> OnRecord { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private ConsentPurpose _purpose = Enum.GetValues<ConsentPurpose>()[0];
+    private ConsentChannel _channel = Enum.GetValues<ConsentChannel>()[0];
+    private AppLanguage _language = AppLanguage.French;
+    private string? _signedBy;
+    private string? _signedByCin;
+    private string? _relationship;
+    private string? _formVersion;
+    private bool _hasExpiry;
+    private DateOnly? _expires = DateOnly.FromDateTime(DateTime.Today.AddYears(1));
+    private string? _notes;
+    private string? _warning;
+
+    protected override void OnInitialized()
+    {
+        _signedBy = IsMinor ? GuardianName : null;
+        _relationship = IsMinor ? Texts["Patient.Guardian"] : null;
+    }
+
+    private string? Notice => PatientFileRules.ConsentNoticeKey(_purpose, _channel, IsMinor) switch
+    {
+        null => null,
+        "Order_ConsentMustBeWritten" => Texts.T("Order_ConsentMustBeWritten", Texts[$"ConsentPurpose.{_purpose}"]),
+        var key => Texts[key]
+    };
+
+    private async Task AcceptAsync()
+    {
+        switch (PatientFileRules.ConsentProblem(_purpose, _channel, IsMinor, _signedBy))
+        {
+            case "Order_ConsentMustBeWritten":
+                _warning = Texts.T("Order_ConsentMustBeWritten", Texts[$"ConsentPurpose.{_purpose}"]);
+                return;
+            case { } problem:
+                _warning = Texts[problem];
+                return;
+        }
+
+        await OnRecord.InvokeAsync(new ConsentRequest
+        {
+            Purpose = _purpose,
+            Channel = _channel,
+            PresentedInLanguage = _language,
+            SignedByName = Blank(_signedBy),
+            SignedByCin = Blank(_signedByCin),
+            SignedByRelationship = Blank(_relationship),
+            FormVersion = Blank(_formVersion),
+            ExpiresOn = _hasExpiry ? _expires : null,
+            Notes = Blank(_notes)
+        });
+    }
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

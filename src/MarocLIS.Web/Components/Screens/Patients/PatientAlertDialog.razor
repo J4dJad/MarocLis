@@ -1,0 +1,82 @@
+@using MarocLIS.Application.Patients
+@using MarocLIS.Domain.Common
+@using MarocLIS.Domain.Patients
+@inject WebTexts Texts
+
+@*
+    A clinical or logistic flag on the file (the workstation's PatientAlertDialog): what the
+    severity does is said before it is chosen, and a critical one is confirmed (PatientFileRules).
+*@
+<Modal Name="alert" Title="@Texts["Patient.AddAlert"]" Hint="@Texts["PatientDialog.AlertHint"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <label class="field"><span class="field-label">@Texts["Patient.AlertSeverity"]</span>
+            <select class="input" data-field="severity" @bind="_severity">
+                @foreach (var s in Enum.GetValues<PatientAlertSeverity>())
+                {
+                    <option value="@s">@Texts[$"PatientAlertSeverity.{s}"]</option>
+                }
+            </select></label>
+        <p class="small @(_severity switch { PatientAlertSeverity.Critical => "critical", PatientAlertSeverity.Warning => "abnormal", _ => "muted" })"
+           data-state="severity-notice">@Texts[PatientFileRules.AlertNoticeKey(_severity)]</p>
+        <label class="field"><span class="field-label">@Texts["Patient.AlertMessageFr"]</span>
+            <input class="input" dir="ltr" maxlength="@PatientFileRules.AlertMessageMaxLength" data-field="messageFr" @bind="_french" /></label>
+        <label class="field"><span class="field-label">@Texts["Patient.AlertMessageAr"]</span>
+            <input class="input" dir="rtl" maxlength="@PatientFileRules.AlertMessageMaxLength" @bind="_arabic" /></label>
+        <div class="field">
+            <label class="check"><input type="checkbox" @bind="_hasExpiry" />@Texts["Patient.AlertExpiresOn"]</label>
+            <input class="input" type="date" min="@DateTime.Today.ToString("yyyy-MM-dd")" disabled="@(!_hasExpiry)" @bind="_expiry" />
+        </div>
+        <p class="form-hint">@Texts["Patient.AlertExpiryNotice"]</p>
+        @if (_warning is not null)
+        {
+            <p class="message is-warning" role="alert">@_warning</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Add" Primary="true" OnClick="() => AcceptAsync(confirmed: false)" />
+    </Footer>
+</Modal>
+
+@if (_confirming)
+{
+    <ConfirmPrompt Title="@Texts["Patient.AddAlert"]" Message="@Texts["Patient.ConfirmCriticalAlert"]"
+                   OnYes="() => AcceptAsync(confirmed: true)" OnNo="() => _confirming = false" />
+}
+
+@code {
+    [Parameter] public EventCallback<(PatientAlertSeverity Severity, MultilingualText Message, DateOnly? ExpiresOn)> OnAdd { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private PatientAlertSeverity _severity = Enum.GetValues<PatientAlertSeverity>()[0];
+    private string? _french;
+    private string? _arabic;
+    private bool _hasExpiry;
+    private DateOnly? _expiry = DateOnly.FromDateTime(DateTime.Today.AddMonths(6));
+    private string? _warning;
+    private bool _confirming;
+
+    private async Task AcceptAsync(bool confirmed)
+    {
+        _confirming = false;
+
+        if (PatientFileRules.AlertProblem(_french) is { } problem)
+        {
+            _warning = Texts[problem];
+            return;
+        }
+
+        // A critical alert stops the next operator mid-registration, so choosing it is confirmed.
+        if (PatientFileRules.AlertNeedsConfirmation(_severity) && !confirmed)
+        {
+            _confirming = true;
+            return;
+        }
+
+        await OnAdd.InvokeAsync((_severity,
+                                 new MultilingualText(_french!.Trim(), string.IsNullOrWhiteSpace(_arabic) ? null : _arabic.Trim()),
+                                 _hasExpiry ? _expiry : null));
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

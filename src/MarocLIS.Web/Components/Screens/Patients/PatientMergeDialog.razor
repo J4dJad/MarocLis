@@ -1,0 +1,89 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Infrastructure.Queries
+@inject WebTexts Texts
+
+@*
+    Merges a duplicate into the file the operator picks (the workstation's PatientMergeDialog). The
+    losing file is kept and pointed at the survivor: a redirect, not a deletion.
+*@
+<Modal Name="merge" Title="@Texts["Patient.Merge"]" Hint="@Texts["PatientDialog.MergeHint"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <p class="strong">@($"{Texts["Patient.FileToMerge"]} : {Duplicate.MedicalRecordNumber} — {Duplicate.FullName} ({Duplicate.OrderCount} {Texts["Order.Plural"]})")</p>
+        <label class="field">
+            <span class="field-label">@Texts["Patient.SurvivingFile"]</span>
+            <select class="input" data-field="survivor" @bind="_survivorId">
+                @foreach (var c in Candidates)
+                {
+                    <option value="@c.Id">@($"{c.MedicalRecordNumber} — {c.FullName} ({c.OrderCount} {Texts["Order.Plural"]})")</option>
+                }
+            </select>
+        </label>
+        @if (Survivor is { } survivor)
+        {
+            <p class="accent strong small">@Texts.T("Patient.MergeDirection", Duplicate.MedicalRecordNumber, survivor.MedicalRecordNumber)</p>
+        }
+        <p class="muted small">@Texts["Patient.MergeExplanation"]</p>
+        <label class="field">
+            <span class="field-label">@Texts["Field.Reason"]</span>
+            <input class="input" data-field="reason" @bind="_reason" @bind:event="oninput" />
+        </label>
+        @if (_warning is not null)
+        {
+            <p class="message is-warning" role="alert">@_warning</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Patient.Merge" Primary="true"
+                      Disabled="@(!ReasonRules.IsSufficient(_reason, ReasonRules.MergeMinimumLength) || Survivor is null)"
+                      OnClick="AskAsync" />
+    </Footer>
+</Modal>
+
+@if (_confirming && Survivor is { } chosen)
+{
+    <ConfirmPrompt Title="@Texts["Patient.Merge"]"
+                   Message="@Texts.T("Patient.ConfirmMerge", Duplicate.MedicalRecordNumber, chosen.MedicalRecordNumber)"
+                   OnYes="MergeAsync" OnNo="() => _confirming = false" />
+}
+
+@code {
+    [Parameter, EditorRequired] public PatientSearchRow Duplicate { get; set; } = default!;
+
+    /// <summary>The files it may go into, the one with the most orders first (PatientFileRules.MergeSurvivors).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<PatientSearchRow> Candidates { get; set; } = [];
+
+    [Parameter] public EventCallback<(Guid Survivor, string Reason)> OnMerge { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Guid _survivorId;
+    private string _reason = string.Empty;
+    private string? _warning;
+    private bool _confirming;
+
+    private PatientSearchRow? Survivor => Candidates.FirstOrDefault(c => c.Id == _survivorId);
+
+    protected override void OnParametersSet()
+    {
+        if (Survivor is null && Candidates.Count > 0) _survivorId = Candidates[0].Id;
+    }
+
+    private void AskAsync()
+    {
+        if (!ReasonRules.IsSufficient(_reason, ReasonRules.MergeMinimumLength))
+        {
+            _warning = Texts["Message.ReasonRequiredPrompt"];
+            return;
+        }
+
+        _confirming = true;
+    }
+
+    private async Task MergeAsync()
+    {
+        _confirming = false;
+        await OnMerge.InvokeAsync((_survivorId, _reason.Trim()));
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

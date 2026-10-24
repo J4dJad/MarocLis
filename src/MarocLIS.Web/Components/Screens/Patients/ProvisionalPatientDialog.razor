@@ -1,0 +1,37 @@
+@using MarocLIS.Domain.Patients
+@inject WebTexts Texts
+
+@*
+    The emergency file of a patient who cannot be named (the workstation's ProvisionalPatientDialog):
+    the sex and an estimated age, nothing else.
+*@
+<Modal Name="provisional" Title="@Texts["Patient.Provisional"]" Hint="@Texts["Patient.ProvisionalHelp"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <div class="form-grid">
+            <label class="field"><span class="field-label">@Texts["Patient.Gender"]</span>
+                <select class="input" data-field="gender" @bind="_gender">
+                    @foreach (var g in new[] { Gender.Male, Gender.Female, Gender.Unknown })
+                    {
+                        <option value="@g">@Texts[$"Gender.{g}"]</option>
+                    }
+                </select></label>
+            <label class="field"><span class="field-label">@Texts["Patient.EstimatedAge"]</span>
+                <input class="input" type="number" min="0" max="120" data-field="age" @bind="_age" /></label>
+        </div>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Patient.ProvisionalCreate" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.TriangleAlert" Primary="true" OnClick="CreateAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public EventCallback<(Gender Gender, int EstimatedAge)> OnCreate { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Gender _gender = Gender.Male;
+    private int _age = 40;
+
+    private Task CreateAsync() => OnCreate.InvokeAsync((_gender, Math.Clamp(_age, 0, 120)));
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

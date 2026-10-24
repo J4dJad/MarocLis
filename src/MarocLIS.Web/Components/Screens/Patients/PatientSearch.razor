@@ -1,0 +1,543 @@
+@using System.Globalization
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Orders
+@using MarocLIS.Application.Patients
+@using MarocLIS.Domain.Audit
+@using MarocLIS.Domain.Common
+@using MarocLIS.Infrastructure.Queries
+@implements IDisposable
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject NavigationManager Navigation
+@inject ILogger<PatientSearch> Logger
+
+@*
+    « Patients », the workstation's PatientSearchView: one box for whatever the patient said (a name,
+    a file number, a CIN, a telephone), the scope chips with their counts, the payer, the list, and
+    the file it points at with its history. The rules are the application's (PatientListRules,
+    PatientFileRules); the accesses are logged as the workstation logs them (loi 08-09).
+*@
+<div class="screen patients" data-screen="patients">
+    <div class="toolbar">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["PatientList.SearchPlaceholder"]"
+                   aria-label="@Texts["PatientList.SearchPlaceholder"]" data-field="search"
+                   value="@_term" @oninput="TermChanged" @onkeydown="SearchKey" />
+        </div>
+        <select class="input select-payer" aria-label="@Texts["PatientList.Payer"]" data-field="payer"
+                @onchange="PayerChanged">
+            <option value="" selected="@(_payerId is null)">@Texts["PatientList.AllPayers"]</option>
+            @foreach (var payer in _payers)
+            {
+                <option value="@payer.Id" selected="@(_payerId == payer.Id)">@payer.Name</option>
+            }
+        </select>
+        <span class="toolbar-spacer"></span>
+        <ActionButton Key="Patient.NewFile" Primary="true" Disabled="@(!Actions.NewPatient)" OnClick="NewPatient" />
+    </div>
+
+    <div class="chips" role="group">
+        @foreach (var (scope, key, count) in Chips())
+        {
+            <button type="button" class="chip @(scope == _scope ? "is-pressed" : null)" aria-pressed="@(scope == _scope)"
+                    data-scope="@scope" @onclick="() => ScopeAsync(scope)">
+                @Texts[key]@(count is { } n ? $" ({n.ToString(CultureInfo.InvariantCulture)})" : string.Empty)
+            </button>
+        }
+        <span class="chips-count">@(_counts is { } c ? Texts.T("PatientList.Count", c.All) : string.Empty)</span>
+    </div>
+
+    @if (_error is not null)
+    {
+        <p class="message is-critical" role="alert">@_error</p>
+    }
+    @if (_status is not null)
+    {
+        <p class="message is-@_statusTone" role="status" data-state="status">@_status</p>
+    }
+
+    <div class="split">
+        <section class="card card-flush split-main">
+            <table class="grid grid-select" data-grid="patients">
+                <thead>
+                    <tr>
+                        <th>@Texts["Patient.Title"]</th>
+                        <th>@Texts["Patient.RecordNumber"]</th>
+                        <th>@Texts["Patient.Cin"]</th>
+                        <th>@Texts["PatientList.Phone"]</th>
+                        <th>@Texts["PatientList.Payer"]</th>
+                        <th class="num">@Texts["PatientList.Orders"]</th>
+                        <th>@Texts["PatientList.LastVisit"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _page.Items)
+                    {
+                        <tr class="@(row.Id == _selected?.Id ? "is-selected" : null) @(row.HasCriticalAlert ? "is-critical" : null)"
+                            data-patient="@row.MedicalRecordNumber" @onclick="() => SelectAsync(row)" @ondblclick="() => Edit(row)">
+                            <td>
+                                <div class="cell-name">@DisplayName(row)</div>
+                                <div class="cell-sub">
+                                    @if (PatientListRules.IdentityGapKey(row.IdentityGaps) is { } gap)
+                                    {
+                                        <Pill Text="@($"! {Texts["PatientList.ScopeIncomplete"]}")" Tone="Warning" />
+                                        @Texts[gap]
+                                    }
+                                    else
+                                    {
+                                        @Facts(row)
+                                    }
+                                </div>
+                            </td>
+                            <td class="mono">@row.MedicalRecordNumber</td>
+                            <td class="mono @(row.Cin is null ? "muted" : null)">@(row.Cin ?? "—")</td>
+                            <td class="mono @(row.MobilePhone is null ? "muted" : null)" dir="ltr">@(row.MobilePhone ?? "—")</td>
+                            <td class="@(row.PayerName is null ? "muted" : null)">@(row.PayerName ?? Texts["PatientList.NoPayer"])</td>
+                            <td class="num">@row.OrderCount</td>
+                            <td class="@(row.LastOrderAt is null ? "muted" : null)">@(row.LastOrderAt?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="grid-footer" data-state="footer">@Footer()</p>
+        </section>
+
+        <aside class="card split-side" data-panel="patient">
+            @if (_selected is not { } sel)
+            {
+                <p class="muted">@Texts["PatientList.NoSelection"]</p>
+            }
+            else
+            {
+                <div class="identity">
+                    <span class="initials @(sel.HasCriticalAlert ? "is-critical" : null)">@OrderRegistrationRules.Initials(sel.FullName)</span>
+                    <div>
+                        <div class="identity-name @(sel.HasCriticalAlert ? "is-critical" : null)">@DisplayName(sel)</div>
+                        <div class="muted">@Facts(sel)</div>
+                    </div>
+                </div>
+                <div class="pills">
+                    @if (PatientListRules.IdentityGapKey(sel.IdentityGaps) is { } gap)
+                    {
+                        <Pill Text="@($"! {Texts["PatientList.ScopeIncomplete"]} — {Texts[gap]}")" Tone="Warning" />
+                    }
+                    @if (sel.HasCriticalAlert)
+                    {
+                        <Pill Text="@($"! {Texts["PatientList.CriticalAlert"]}")" Tone="Critical" />
+                    }
+                </div>
+                <dl class="facts">
+                    <dt>@Texts["Patient.RecordNumber"]</dt><dd class="mono">@sel.MedicalRecordNumber</dd>
+                    <dt>@Texts["Patient.Cin"]</dt><dd class="mono">@(sel.Cin ?? "—")</dd>
+                    <dt>@Texts["PatientList.Phone"]</dt><dd class="mono" dir="ltr">@(sel.MobilePhone ?? "—")</dd>
+                    <dt>@Texts["PatientList.Payer"]</dt><dd class="@(sel.PayerName is null ? "muted" : null)">@(sel.PayerName ?? Texts["PatientList.NoPayer"])</dd>
+                </dl>
+                <div class="actions">
+                    <ActionButton Key="Action.Edit" Disabled="@(!Actions.Edit)" OnClick="() => Edit(sel)" />
+                    <ActionButton Key="PatientList.NewOrderForPatient" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus"
+                                  Primary="true" Disabled="@(!Actions.NewOrder)" OnClick="() => NewOrder(sel)" />
+                </div>
+                <details class="more">
+                    <summary class="btn btn-secondary">@Texts["ResultEntry.MoreActions"]</summary>
+                    <div class="more-menu">
+                        <ActionButton Key="Patient.Merge" Disabled="@(!Actions.Merge)" OnClick="() => Merge(sel)" />
+                        <ActionButton Key="Patient.Anonymize" Disabled="@(!Actions.Anonymize)" OnClick="() => AskAnonymize(sel)" />
+                    </div>
+                </details>
+
+                <h2 class="section-title">@Texts["PatientList.Orders"] <span class="count">@(_history?.Count.ToString(CultureInfo.InvariantCulture))</span></h2>
+                @if (_history is { Count: 0 })
+                {
+                    <p class="muted">@Texts["PatientList.NoOrders"]</p>
+                }
+                else if (_history is not null)
+                {
+                    <ul class="history" data-list="history">
+                        @foreach (var order in _history)
+                        {
+                            <li>
+                                @if (Actions.OpenOrders)
+                                {
+                                    <a class="history-card" href="@($"ecran/orderdetail?dossier={order.Id}")" data-order="@order.AccessionNumber">
+                                        <HistoryCard Order="order" />
+                                    </a>
+                                }
+                                else
+                                {
+                                    <div class="history-card" data-order="@order.AccessionNumber"><HistoryCard Order="order" /></div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+        </aside>
+    </div>
+</div>
+
+@if (_editing is { } editing)
+{
+    <PatientEditor PatientId="editing.PatientId" OnSaved="EditedAsync" OnCancel="() => _editing = null" />
+}
+
+@if (_merging is { } duplicate)
+{
+    <PatientMergeDialog Duplicate="duplicate"
+                        Candidates="PatientFileRules.MergeSurvivors(_page.Items, duplicate.Id, p => p.Id, p => p.IsAnonymized, p => p.OrderCount)"
+                        OnMerge="MergeAsync" OnCancel="() => _merging = null" />
+}
+
+@switch (_anonymizeStep)
+{
+    case AnonymizeStep.Confirm when _selected is { } target:
+        <ConfirmPrompt Title="@Texts["Patient.Anonymize"]"
+                       Message="@Texts.T("Patient.ConfirmAnonymize", target.FullName, target.MedicalRecordNumber)"
+                       OnYes="() => _anonymizeStep = AnonymizeStep.Justify" OnNo="() => _anonymizeStep = AnonymizeStep.None" />
+        break;
+
+    case AnonymizeStep.Justify when _selected is { } target:
+        <ReasonPrompt Title="@Texts["Patient.Anonymize"]"
+                      Prompt="@Texts.T("Patient.AnonymizeJustificationPrompt", target.MedicalRecordNumber)"
+                      MinimumLength="ReasonRules.JustificationMinimumLength"
+                      OnConfirm="AnonymizeAsync" OnCancel="() => _anonymizeStep = AnonymizeStep.None" />
+        break;
+
+    case AnonymizeStep.Override when _selected is not null:
+        <ConfirmPrompt Title="@Texts["Patient.Anonymize"]"
+                       Message="@($"{_retentionRefusal}\n\n{Texts["Patient.OverrideRetentionQuestion"]}")"
+                       OnYes="ForceAnonymizeAsync" OnNo="() => _anonymizeStep = AnonymizeStep.None" />
+        break;
+}
+
+@code {
+    private string _term = string.Empty;
+    private PatientListScope _scope = PatientListScope.All;
+    private Guid? _payerId;
+    private IReadOnlyList<PayerOption> _payers = [];
+    private PagedResult<PatientSearchRow> _page = PagedResult<PatientSearchRow>.Empty();
+    private PatientListCounts? _counts;
+    private PatientSearchRow? _selected;
+    private IReadOnlyList<PatientOrderRow>? _history;
+    private string? _error;
+    private string? _status;
+    private string _statusTone = "success";
+
+    private EditRequest? _editing;
+    private PatientSearchRow? _merging;
+    private AnonymizeStep _anonymizeStep;
+    private string? _justification;
+    private string? _retentionRefusal;
+
+    private int _searchVersion;
+    private int _historyVersion;
+    private CancellationTokenSource? _debounce;
+
+    private sealed record EditRequest(Guid? PatientId);
+
+    private enum AnonymizeStep { None, Confirm, Justify, Override }
+
+    private ICurrentUser User => Context.User;
+
+    private PatientListActions Actions =>
+        PatientFileRules.ListActions(_selected is not null, _selected?.IsAnonymized ?? false, _page.Items.Count, User);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _payers = await Scopes.RunAsync<IPatientQueries, IReadOnlyList<PayerOption>>(q => q.GetPayersAsync());
+        }
+        catch (Exception ex)
+        {
+            // The list still works without its payer filter.
+            Logger.LogWarning(ex, "Loading the payers for the patient list failed.");
+        }
+
+        await SearchAsync();
+    }
+
+    private IEnumerable<(PatientListScope Scope, string Key, int? Count)> Chips()
+    {
+        yield return (PatientListScope.All, "OrderEntry.All", _counts?.All);
+        yield return (PatientListScope.IdentityIncomplete, "PatientList.ScopeIncomplete", _counts?.IdentityIncomplete);
+        yield return (PatientListScope.SeenToday, "PatientList.ScopeSeenToday", _counts?.SeenToday);
+    }
+
+    private async Task TermChanged(ChangeEventArgs e)
+    {
+        _term = e.Value?.ToString() ?? string.Empty;
+
+        _debounce?.Cancel();
+        _debounce?.Dispose();
+        _debounce = new CancellationTokenSource();
+        var token = _debounce.Token;
+
+        try { await Task.Delay(300, token); }
+        catch (TaskCanceledException) { return; }
+
+        await SearchAsync();
+    }
+
+    private async Task SearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        _debounce?.Cancel();
+        await SearchAsync();
+    }
+
+    private async Task PayerChanged(ChangeEventArgs e)
+    {
+        _payerId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await SearchAsync();
+    }
+
+    private async Task ScopeAsync(PatientListScope scope)
+    {
+        if (_scope == scope) return;
+        _scope = scope;
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync(Guid? keep = null)
+    {
+        var term = _term.Trim();
+        var version = ++_searchVersion;
+        keep ??= _selected?.Id;
+
+        if (!PatientListRules.IsSearchable(term))
+        {
+            _page = PagedResult<PatientSearchRow>.Empty();
+            _counts = null;
+            await SelectAsync(null);
+            return;
+        }
+
+        try
+        {
+            var query = new PatientListQuery(term, User.SiteId, _scope, _payerId);
+            var (page, counts) = await Scopes.RunAsync<IPatientQueries, (PagedResult<PatientSearchRow>, PatientListCounts)>(
+                async q => (await q.ListAsync(query), await q.CountListAsync(query)));
+
+            // A later keystroke or chip has started another search: its answer is the one shown.
+            if (version != _searchVersion) return;
+
+            _page = page;
+            _counts = counts;
+            _error = null;
+
+            await SelectAsync(_page.Items.FirstOrDefault(p => p.Id == keep) ?? _page.Items.FirstOrDefault());
+
+            // Loi 08-09: a search over patient data is an access to it, and the number of records
+            // returned is what distinguishes a lookup from an extraction.
+            if (PatientFileRules.IsLoggedSearch(term))
+                await Scopes.RunAsync<IDataAccessAuditor>(a => a.LogAsync(DataAccessKind.Search, context: "PatientSearch",
+                                                                           recordCount: page.TotalCount,
+                                                                           queryDescription: term));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Patient search failed for '{Term}'.", term);
+            _error = Texts["Message.UnexpectedError"];
+        }
+    }
+
+    private async Task SelectAsync(PatientSearchRow? row)
+    {
+        var changed = row?.Id != _selected?.Id || _history is null;
+        _selected = row;
+        if (!changed) return;
+
+        var version = ++_historyVersion;
+        _history = null;
+
+        if (row is null) return;
+
+        try
+        {
+            var orders = await Scopes.RunAsync<IPatientQueries, IReadOnlyList<PatientOrderRow>>(
+                q => q.GetOrderHistoryAsync(row.Id));
+
+            // The selection moved on while this was loading.
+            if (version != _historyVersion) return;
+            _history = orders;
+
+            // Opening a patient's file is itself a logged access under loi 08-09.
+            await Scopes.RunAsync<IDataAccessAuditor>(a => a.LogAsync(DataAccessKind.ViewPatient, row.Id,
+                                                                       context: "PatientHistory",
+                                                                       recordCount: orders.Count));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the order history for {PatientId} failed.", row.Id);
+            _history = [];
+        }
+    }
+
+    private string Footer()
+    {
+        if (_page.Items.Count == 0) return Texts["App.NoData"];
+
+        return Texts.T("PatientList.Shown", _page.Items.Count, _page.TotalCount)
+               + (_page.Items.Count < _page.TotalCount ? " · " + Texts["PatientList.RefineForMore"] : string.Empty);
+    }
+
+    private string DisplayName(PatientSearchRow row) =>
+        Texts.Language == AppLanguage.Arabic && row.FullNameArabic is { Length: > 0 } ? row.FullNameArabic : row.FullName;
+
+    /// <summary>"Masculin · 67 ans · né le 04/09/1959".</summary>
+    private string Facts(PatientSearchRow row)
+    {
+        var facts = new List<string> { Texts[$"Gender.{row.Gender}"] };
+        if (row.AgeYears is { } age) facts.Add($"{age} {Texts["Report.Years"]}");
+        if (row.DateOfBirth is { } born)
+            facts.Add(Texts.T(PatientListRules.BornOnKey(row.Gender), born.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)));
+        return string.Join(" · ", facts);
+    }
+
+    private void Say(string text, string tone = "success")
+    {
+        _status = text;
+        _statusTone = tone;
+    }
+
+    // ---- Actions --------------------------------------------------------------------------------
+
+    private void NewPatient()
+    {
+        if (!Actions.NewPatient) return;
+        _editing = new EditRequest(null);
+    }
+
+    private void Edit(PatientSearchRow row)
+    {
+        _selected = row;
+        _editing = new EditRequest(row.Id);
+    }
+
+    private async Task EditedAsync(Guid patientId)
+    {
+        var created = _editing?.PatientId is null;
+        _editing = null;
+        if (created) Say(Texts["Message.Saved"]);
+
+        // Re-run so the new or edited file appears and is selected: the clerk is about to register
+        // an order against it.
+        _history = null;
+        await SearchAsync(patientId);
+    }
+
+    private void NewOrder(PatientSearchRow row)
+    {
+        if (!Actions.NewOrder) return;
+        Navigation.NavigateTo($"ecran/orders?patient={row.Id}");
+    }
+
+    private void Merge(PatientSearchRow row)
+    {
+        if (!Actions.Merge) return;
+
+        if (PatientFileRules.MergeSurvivors(_page.Items, row.Id, p => p.Id, p => p.IsAnonymized, p => p.OrderCount).Count == 0)
+        {
+            Say(Texts["Patient.MergeNeedsTwoFiles"], "warning");
+            return;
+        }
+
+        _merging = row;
+    }
+
+    private async Task MergeAsync((Guid Survivor, string Reason) choice)
+    {
+        if (_merging is not { } duplicate) return;
+
+        var result = await Scopes.RunAsync<PatientRegistrationService, Result>(
+            s => s.MergeAsync(duplicate.Id, choice.Survivor, choice.Reason));
+
+        _merging = null;
+
+        if (result.IsFailure)
+        {
+            Say(Texts.Describe(result.Errors), "critical");
+            return;
+        }
+
+        Say(Texts["Patient.Merged"]);
+
+        // The surviving file stays selected, as after an edit.
+        _history = null;
+        await SearchAsync(choice.Survivor);
+    }
+
+    private void AskAnonymize(PatientSearchRow row)
+    {
+        if (!Actions.Anonymize) return;
+        _selected = row;
+        _anonymizeStep = AnonymizeStep.Confirm;
+    }
+
+    /// <summary>
+    /// The loi 08-09 right-to-erasure path. Pseudonymises rather than deletes, because the ten-year
+    /// medical retention obligation and the unbroken invoice series both survive the request.
+    /// </summary>
+    private async Task AnonymizeAsync(string justification)
+    {
+        if (_selected is not { } row) return;
+        _justification = justification;
+
+        var result = await Scopes.RunAsync<PatientRegistrationService, Result>(
+            s => s.AnonymizeAsync(row.Id, PatientFileRules.AnonymizationReference(row.MedicalRecordNumber), justification));
+
+        if (result.IsFailure)
+        {
+            // The commonest refusal is a live retention period. Offering the override here rather
+            // than up front keeps the obligation as the default answer.
+            if (result.Errors.Any(e => e.ResourceKey == PatientFileRules.RetentionNotExpiredKey))
+            {
+                _retentionRefusal = Texts.Describe(result.Errors);
+                _anonymizeStep = AnonymizeStep.Override;
+                return;
+            }
+
+            _anonymizeStep = AnonymizeStep.None;
+            Say(Texts.Describe(result.Errors), "critical");
+            return;
+        }
+
+        await AnonymizedAsync(row.Id);
+    }
+
+    private async Task ForceAnonymizeAsync()
+    {
+        if (_selected is not { } row || _justification is not { } justification) return;
+
+        var forced = await Scopes.RunAsync<PatientRegistrationService, Result>(
+            s => s.AnonymizeAsync(row.Id, PatientFileRules.AnonymizationReference(row.MedicalRecordNumber), justification,
+                                  overrideRetention: true));
+
+        if (forced.IsFailure)
+        {
+            _anonymizeStep = AnonymizeStep.None;
+            Say(Texts.Describe(forced.Errors), "critical");
+            return;
+        }
+
+        await AnonymizedAsync(row.Id);
+    }
+
+    private async Task AnonymizedAsync(Guid patientId)
+    {
+        _anonymizeStep = AnonymizeStep.None;
+        _justification = null;
+        Say(Texts["Patient.Anonymized"], "warning");
+        _history = null;
+        await SearchAsync(patientId);
+    }
+
+    public void Dispose()
+    {
+        _debounce?.Cancel();
+        _debounce?.Dispose();
+    }
+}

@@ -1,0 +1,164 @@
+@using MarocLIS.Application.Patients
+@using MarocLIS.Domain.Patients
+@using MarocLIS.Infrastructure.Queries
+@inject WebTexts Texts
+
+@*
+    An insurance entitlement (the workstation's CoverageDialog). The rate the payer implies is said
+    before anything is saved; the membership number, the ALD prior agreement and the override rate
+    are checked by the application's rules (PatientFileRules) before the request goes out.
+*@
+<Modal Name="coverage" Title="@Texts["Coverage.Add"]" Hint="@Texts["PatientDialog.CoverageHint"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <div class="form-grid">
+            <label class="field span-2"><span class="field-label">@Texts["Coverage.Payer"]</span>
+                <select class="input" data-field="payer" @bind="_payerId">
+                    @foreach (var p in Payers)
+                    {
+                        <option value="@p.Id">@($"{p.Code} — {p.Name}")</option>
+                    }
+                </select></label>
+            @if (Payer is { } payer)
+            {
+                <p class="accent strong small span-2" data-state="rate-notice">
+                    @string.Join("   ·   ", new[] { $"{Texts["Coverage.ReimbursementRate"]} {payer.DefaultReimbursementRate * 100m:0.#} %" }
+                                               .Concat(PatientFileRules.PayerNoticeKeys(payer.UsesNationalReferenceTariff, payer.RequiresPrescription).Select(k => Texts[k])))
+                </p>
+            }
+            <label class="field"><span class="field-label">@Texts["Coverage.MembershipNumber"]</span>
+                <input class="input mono" dir="ltr" maxlength="40" data-field="membership" @bind="_membership" /></label>
+            <label class="field"><span class="field-label">@Texts["Coverage.Relationship"]</span>
+                <select class="input" @bind="_relationship" @bind:after="RelationshipChanged">
+                    @foreach (var r in Enum.GetValues<BeneficiaryRelationship>())
+                    {
+                        <option value="@r">@Texts[$"BeneficiaryRelationship.{r}"]</option>
+                    }
+                </select></label>
+            <label class="field"><span class="field-label">@Texts["Coverage.InsuredPerson"]</span>
+                <input class="input" maxlength="200" disabled="@(!PatientFileRules.AsksInsuredPerson(_relationship))" @bind="_insuredName" /></label>
+            <label class="field"><span class="field-label">@Texts["Coverage.InsuredPersonCin"]</span>
+                <input class="input mono" dir="ltr" maxlength="20" disabled="@(!PatientFileRules.AsksInsuredPerson(_relationship))" @bind="_insuredCin" /></label>
+            <label class="field"><span class="field-label">@Texts["Coverage.Employer"]</span>
+                <input class="input" maxlength="200" @bind="_employer" /></label>
+            <label class="field"><span class="field-label">@Texts["Coverage.RateOverride"]</span>
+                <input class="input num" dir="ltr" maxlength="10" data-field="rate" @bind="_rate" /></label>
+            <label class="field"><span class="field-label">@Texts["Coverage.ValidFrom"]</span>
+                <input class="input" type="date" @bind="_validFrom" /></label>
+            <div class="field">
+                <label class="check"><input type="checkbox" @bind="_hasValidUntil" />@Texts["Coverage.ValidUntil"]</label>
+                <input class="input" type="date" disabled="@(!_hasValidUntil)" @bind="_validUntil" />
+            </div>
+            <label class="check"><input type="checkbox" @bind="_isPrimary" />@Texts["Coverage.Primary"]</label>
+            <label class="check"><input type="checkbox" @bind="_directBilling" />@Texts["Coverage.DirectBilling"]</label>
+            <label class="check strong span-2"><input type="checkbox" data-field="ald" @bind="_isAld" />@Texts["Coverage.ChronicScheme"]</label>
+            <label class="field"><span class="field-label">@Texts["Coverage.PriorAgreement"]</span>
+                <input class="input mono" dir="ltr" maxlength="60" disabled="@(!_isAld)" data-field="agreement" @bind="_agreement" /></label>
+            <label class="field"><span class="field-label">@Texts["Coverage.PriorAgreementValidUntil"]</span>
+                <input class="input" type="date" disabled="@(!_isAld)" @bind="_agreementUntil" /></label>
+        </div>
+        @if (_warning is not null)
+        {
+            <p class="message is-warning" role="alert">@_warning</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="() => AcceptAsync(confirmed: false)" />
+    </Footer>
+</Modal>
+
+@if (_confirmFraction is { } rate)
+{
+    <ConfirmPrompt Title="@Texts["Coverage.RateOverride"]"
+                   Message="@Texts.T("Coverage.ConfirmFractionRate", _rate?.Trim() ?? string.Empty, $"{rate * 100m:0.#}")"
+                   OnYes="() => AcceptAsync(confirmed: true)" OnNo="() => _confirmFraction = null" />
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<PayerOption> Payers { get; set; } = [];
+    [Parameter] public EventCallback<CoverageRequest> OnAdd { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Guid _payerId;
+    private string? _membership;
+    private BeneficiaryRelationship _relationship = BeneficiaryRelationship.Self;
+    private string? _insuredName;
+    private string? _insuredCin;
+    private string? _employer;
+    private string? _rate;
+    private DateOnly? _validFrom = DateOnly.FromDateTime(DateTime.Today);
+    private bool _hasValidUntil;
+    private DateOnly? _validUntil = DateOnly.FromDateTime(DateTime.Today.AddYears(1));
+    private bool _isPrimary = true;
+    private bool _directBilling = true;
+    private bool _isAld;
+    private string? _agreement;
+    private DateOnly? _agreementUntil = DateOnly.FromDateTime(DateTime.Today.AddYears(1));
+    private string? _warning;
+    private decimal? _confirmFraction;
+
+    private PayerOption? Payer => Payers.FirstOrDefault(p => p.Id == _payerId);
+
+    protected override void OnInitialized()
+    {
+        if (Payers.Count > 0) _payerId = Payers[0].Id;
+    }
+
+    /// <summary>The insured person is only meaningful for a dependent (ayant droit).</summary>
+    private void RelationshipChanged()
+    {
+        if (PatientFileRules.AsksInsuredPerson(_relationship)) return;
+        _insuredName = null;
+        _insuredCin = null;
+    }
+
+    private async Task AcceptAsync(bool confirmed)
+    {
+        _confirmFraction = null;
+
+        if (Payer is not { } payer) { _warning = Texts["Coverage.NoPayersConfigured"]; return; }
+
+        if (PatientFileRules.CoverageProblem(_membership, _isAld, _agreement) is { } problem)
+        {
+            _warning = Texts[problem];
+            return;
+        }
+
+        // Accepts either "70" or "0.70": a clerk types the percentage they read off the card.
+        var typed = PatientFileRules.ReadRate(_rate);
+        if (typed.ProblemKey is { } refused)
+        {
+            _warning = refused == "Result_NotANumber" ? Texts.T(refused, _rate ?? string.Empty) : Texts[refused];
+            return;
+        }
+
+        // « 1 » or « 0,7 » is read as a fraction: said back before it is saved.
+        if (typed.NeedsFractionConfirmation && !confirmed)
+        {
+            _confirmFraction = typed.Rate;
+            return;
+        }
+
+        await OnAdd.InvokeAsync(new CoverageRequest
+        {
+            PayerId = payer.Id,
+            MembershipNumber = _membership!.Trim(),
+            Relationship = _relationship,
+            InsuredPersonName = Blank(_insuredName),
+            InsuredPersonCin = Blank(_insuredCin),
+            EmployerName = Blank(_employer),
+            ValidFrom = _validFrom,
+            ValidUntil = _hasValidUntil ? _validUntil : null,
+            IsPrimary = _isPrimary,
+            ReimbursementRateOverride = typed.Rate,
+            IsChronicDiseaseScheme = _isAld,
+            PriorAgreementNumber = Blank(_agreement),
+            PriorAgreementValidUntil = _isAld ? _agreementUntil : null,
+            DirectBillingEnabled = _directBilling
+        });
+    }
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

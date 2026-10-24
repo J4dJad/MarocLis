@@ -1,0 +1,27 @@
+@using MarocLIS.Infrastructure.Queries
+@inject WebTexts Texts
+
+@* Ends an open coverage on a date (the workstation asks for it in a text box). *@
+<Modal Name="end-coverage" Title="@Texts["Coverage.End"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label">@Texts.T("Coverage.EndDatePrompt", Coverage.PayerName)</span>
+            <input class="input" type="date" data-field="until" @bind="_until" />
+        </label>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Coverage.End" Primary="true" Disabled="@(_until is null)" OnClick="EndAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public CoverageRow Coverage { get; set; } = default!;
+    [Parameter] public EventCallback<DateOnly> OnEnd { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private DateOnly? _until = DateOnly.FromDateTime(DateTime.Today);
+
+    private Task EndAsync() => _until is { } until ? OnEnd.InvokeAsync(until) : Task.CompletedTask;
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

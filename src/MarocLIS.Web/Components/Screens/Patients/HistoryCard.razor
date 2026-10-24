@@ -1,0 +1,41 @@
+@using System.Globalization
+@using MarocLIS.Application.Patients
+@using MarocLIS.Infrastructure.Queries
+@inject WebTexts Texts
+
+@* One past order in the patient's history (the workstation's PatientOrderCard). *@
+<div class="history-head">
+    <span class="mono strong">@Order.AccessionNumber</span>
+    <span class="mono muted">@Order.RegisteredAt.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)</span>
+</div>
+<div class="pills">
+    <Pill Text="@Texts[$"OrderStatus.{Order.Status}"]" Tone="@Tone(PatientListRules.StatusTone(Order.Status))" />
+    @if (Order.Priority != MarocLIS.Domain.Orders.OrderPriority.Routine)
+    {
+        <Pill Text="@Texts[$"Priority.{Order.Priority}"]" Tone="@Tone(PatientListRules.PriorityTone(Order.Priority))" />
+    }
+</div>
+<div class="muted small">@Detail</div>
+
+@code {
+    [Parameter, EditorRequired] public PatientOrderRow Order { get; set; } = default!;
+
+    private string Detail
+    {
+        get
+        {
+            var analyses = Texts.T("PatientList.AnalysisCount", Order.AnalysisCount);
+            return Order.PrescriberName is { Length: > 0 } prescriber ? $"{analyses} · {prescriber}" : analyses;
+        }
+    }
+
+    /// <summary>The pill tones of the patient screen, in the design system's colours.</summary>
+    public static string Tone(PatientListTone tone) => tone switch
+    {
+        PatientListTone.Running => "Info",
+        PatientListTone.Done => "Ok",
+        PatientListTone.Warning => "Warning",
+        PatientListTone.Critical => "Critical",
+        _ => "Waiting"
+    };
+}
