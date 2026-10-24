@@ -145,9 +145,9 @@
         <Secondary>
             <ActionButton Key="Billing.PrintInvoice" Disabled="@(!actions.Print || _busy)" OnClick="() => PrintAsync(receipt: false)" />
             <ActionButton Key="Billing.PrintReceipt" Disabled="@(!actions.Print || _busy)" OnClick="() => PrintAsync(receipt: true)" />
-            <ActionButton Key="Deposit.Take" Disabled="@(!actions.Deposit || _busy)" OnClick="AskDepositAsync" />
         </Secondary>
         <More>
+            <ActionButton Key="Deposit.Take" Disabled="@(!actions.Deposit || _busy)" OnClick="AskDepositAsync" />
             <ActionButton Key="Billing.SubmitClaim" Disabled="@(!actions.SubmitClaim || _busy)" OnClick="AskSubmitClaim" />
             <ActionButton Key="Billing.RecordClaimOutcome" Disabled="@(!actions.ClaimOutcome || _busy)" OnClick="AskClaimOutcome" />
             <ActionButton Key="Claim.Settlement" Disabled="@(!actions.PayerSettlement || _busy)" OnClick="AskSettlement" />
