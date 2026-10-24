@@ -821,17 +821,15 @@ public sealed class SampleReceptionView : LocalizedView
     }
 
     /// <summary>The status pill of a waiting tube.</summary>
-    private (string Text, (Color Back, Color Fore) Colours) Verdict(SampleReceptionCandidate candidate)
-    {
-        if (_candidate is { } shown && shown.SampleId == candidate.SampleId)
-            return (T("Sample.Scanned"), (UiTheme.Accent, UiTheme.TextOnAccent));
-        if (candidate.StabilityExceeded)
-            return (T("SampleDefect.ExcessiveDelay"), EntryPaint.Critical);
-        if (candidate.ExistingDefects != SampleDefect.None)
-            return (T("Sample.Defects"), EntryPaint.Warning);
-        return (T("SampleStatus." + candidate.Status),
-                candidate.Status == SampleStatus.InTransit ? EntryPaint.Info : EntryPaint.Waiting);
-    }
+    private (string Text, (Color Back, Color Fore) Colours) Verdict(SampleReceptionCandidate candidate) =>
+        SampleReceptionRules.Verdict(candidate, _candidate?.SampleId) switch
+        {
+            ReceptionVerdict.Scanned => (T("Sample.Scanned"), (UiTheme.Accent, UiTheme.TextOnAccent)),
+            ReceptionVerdict.ExcessiveDelay => (T("SampleDefect.ExcessiveDelay"), EntryPaint.Critical),
+            ReceptionVerdict.Defects => (T("Sample.Defects"), EntryPaint.Warning),
+            ReceptionVerdict.InTransit => (T("SampleStatus." + candidate.Status), EntryPaint.Info),
+            _ => (T("SampleStatus." + candidate.Status), EntryPaint.Waiting)
+        };
 
     protected override void ApplyTexts()
     {
@@ -1108,10 +1106,6 @@ public sealed class SampleReceptionView : LocalizedView
                               $"{FormatElapsed(candidate.Elapsed)} > {candidate.ShortestStabilityHours} h";
             _delayLine.ForeColor = UiTheme.Critical;
             _delayLine.Visible = true;
-
-            // Pre-tick the defect: the operator still decides, but is not left to notice it.
-            if (_defectChecks.TryGetValue(SampleDefect.ExcessiveDelay, out var check))
-                check.Checked = true;
         }
         else if (candidate.Elapsed is { } elapsed)
         {
@@ -1131,16 +1125,12 @@ public sealed class SampleReceptionView : LocalizedView
 
         _detail.Height = _delayLine.Visible ? 112 : 92;
 
-        // Volume already recorded as insufficient at the draw.
-        if (candidate.VolumeMl is { } drawn && candidate.MinimumVolumeMl is { } minimum
-            && drawn < minimum
-            && _defectChecks.TryGetValue(SampleDefect.InsufficientVolume, out var volumeCheck))
-            volumeCheck.Checked = true;
-
-        // Defects already recorded upstream are shown as ticked, so reception cannot unknowingly
-        // accept a tube the phlebotomist already flagged.
+        // The delay exceeded, a volume recorded as insufficient at the draw and the defects recorded
+        // upstream are shown as ticked (SampleReceptionRules), so reception cannot unknowingly
+        // accept a tube the phlebotomist already flagged. The operator still decides.
+        var preset = SampleReceptionRules.PresetDefects(candidate);
         foreach (var (defect, check) in _defectChecks)
-            if (candidate.ExistingDefects.HasFlag(defect)) check.Checked = true;
+            if (preset.HasFlag(defect)) check.Checked = true;
 
         _coldChain.Visible = candidate.RequiresColdChain;
         if (_temperatureField is not null) _temperatureField.Visible = candidate.RequiresColdChain;
@@ -1149,8 +1139,7 @@ public sealed class SampleReceptionView : LocalizedView
         RefreshActionAvailability();
 
         // Scanned again after reception or after a refusal: say where the tube stands.
-        if (candidate.Status is not (SampleStatus.Collected or SampleStatus.InTransit
-                                     or SampleStatus.AwaitingCollection))
+        if (SampleReceptionRules.IsAlreadyDecided(candidate))
         {
             _status.ForeColor = UiTheme.Abnormal;
             _status.Text = $"{candidate.Barcode} — {T("SampleStatus." + candidate.Status)}";
@@ -1240,25 +1229,18 @@ public sealed class SampleReceptionView : LocalizedView
     {
         if (_candidate is null) return;
 
-        var hasDefects = SelectedDefects() != SampleDefect.None;
+        var defects = SelectedDefects();
+        var hasDefects = defects != SampleDefect.None;
+        var actions = SampleReceptionRules.Actions(_candidate, defects);
 
-        _accept.Enabled = !hasDefects;
-        _acceptReserved.Enabled = hasDefects;
+        _accept.Enabled = actions.Accept;
+        _acceptReserved.Enabled = actions.AcceptWithReservation;
 
         _acceptReserved.ForeColor = hasDefects ? UiTheme.Abnormal : UiTheme.TextSecondary;
         _acceptReserved.Font = hasDefects ? UiTheme.BodyBold : UiTheme.Body;
 
-        // A tube already on the bench can still be refused (a clot found after centrifugation),
-        // but not received a second time; a refused or discarded tube admits neither.
-        if (_candidate.Status is SampleStatus.Received or SampleStatus.InAnalysis or SampleStatus.Stored)
-        {
-            _accept.Enabled = false;
-            _acceptReserved.Enabled = false;
-        }
-        else if (_candidate.Status is SampleStatus.Rejected or SampleStatus.Discarded)
-        {
-            SetActionsEnabled(false);
-        }
+        // A refused or discarded tube admits nothing, not even the reason box.
+        if (!actions.Reject) SetActionsEnabled(false);
     }
 
     private SampleDefect SelectedDefects()
@@ -1290,10 +1272,7 @@ public sealed class SampleReceptionView : LocalizedView
 
         // A figure that cannot be read is said, not dropped: the tube used to be received with no
         // temperature at all, cold chain or not, and a figure beyond the column failed the save.
-        var temperature = EditorValues.ParseDecimal(_temperature.Text);
-
-        if ((!string.IsNullOrWhiteSpace(_temperature.Text) && temperature is null)
-            || temperature is < Sample.MinimumReceptionTemperature or > Sample.MaximumReceptionTemperature)
+        if (SampleReceptionRules.IsTemperatureRefused(_temperature.Text))
         {
             _dialogs.Warn(T("Temperature_ValueImplausible"), T("Sample.Temperature"));
             _temperature.Focus();
@@ -1301,15 +1280,8 @@ public sealed class SampleReceptionView : LocalizedView
             return;
         }
 
-        var request = new ReceiveSampleRequest
-        {
-            SampleId = candidate.SampleId,
-            ObservedDefects = defects,
-            AcceptWithReservation = withReservation,
-            TemperatureCelsius = temperature,
-            ColdChainRespected = candidate.RequiresColdChain ? _coldChain.Checked : null,
-            StorageLocation = StoragePlacePicker.Selected(_storage)
-        };
+        var request = SampleReceptionRules.Request(candidate, defects, withReservation, _temperature.Text,
+                                                   _coldChain.Checked, StoragePlacePicker.Selected(_storage));
 
         _deciding = true;
         SetActionsEnabled(false);

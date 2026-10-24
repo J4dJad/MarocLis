@@ -113,7 +113,7 @@ public sealed class CollectionView : LocalizedView
     private IReadOnlyList<CollectionWorklistEntry> _entries = [];
     private IReadOnlyList<CollectionWorklistEntry> _currentSet = [];
 
-    private PatientFilter _filter = PatientFilter.All;
+    private CollectionFilter _filter = CollectionFilter.All;
 
     /// <summary>
     /// The fasting answer given in the band for the patient on screen: true, false, or "Ne sait
@@ -149,10 +149,6 @@ public sealed class CollectionView : LocalizedView
     public override string Title => T("Nav.Collection");
 
     private bool IsRightToLeft => RightToLeft == RightToLeft.Yes;
-
-    private enum PatientFilter { All, Urgent, Fasting }
-
-    private enum FastingAnswer { NotAsked, Yes, No, Unknown }
 
     // ---- Layout ------------------------------------------------------------------------------------
 
@@ -686,9 +682,9 @@ public sealed class CollectionView : LocalizedView
     {
         _refresh.Click += async (_, _) => await ActivateAsync();
 
-        _chipAll.Click += (_, _) => SetFilter(PatientFilter.All);
-        _chipUrgent.Click += (_, _) => SetFilter(PatientFilter.Urgent);
-        _chipFasting.Click += (_, _) => SetFilter(PatientFilter.Fasting);
+        _chipAll.Click += (_, _) => SetFilter(CollectionFilter.All);
+        _chipUrgent.Click += (_, _) => SetFilter(CollectionFilter.Urgent);
+        _chipFasting.Click += (_, _) => SetFilter(CollectionFilter.Fasting);
 
         _patients.SelectionChanged += (_, _) => ShowSelectedPatient();
 
@@ -870,40 +866,29 @@ public sealed class CollectionView : LocalizedView
         }
     }
 
-    private void SetFilter(PatientFilter filter)
+    private void SetFilter(CollectionFilter filter)
     {
         _filter = filter;
-        _chipAll.Selected = filter == PatientFilter.All;
-        _chipUrgent.Selected = filter == PatientFilter.Urgent;
-        _chipFasting.Selected = filter == PatientFilter.Fasting;
+        _chipAll.Selected = filter == CollectionFilter.All;
+        _chipUrgent.Selected = filter == CollectionFilter.Urgent;
+        _chipFasting.Selected = filter == CollectionFilter.Fasting;
         RenderPatients();
     }
 
-    /// <summary>The patients' orders, one group per order, in priority then arrival order.</summary>
-    private List<IGrouping<Guid, CollectionWorklistEntry>> Orders(PatientFilter filter) =>
-    [
-        .. _entries
-            .GroupBy(e => e.LabOrderId)
-            .Where(g => filter switch
-            {
-                PatientFilter.Urgent => g.First().Priority != OrderPriority.Routine,
-                PatientFilter.Fasting => g.Max(e => e.RequiredFastingHours) > 0,
-                _ => true
-            })
-            .OrderByDescending(g => g.First().Priority)
-            .ThenBy(g => g.First().RegisteredAt)
-    ];
+    /// <summary>The patients' orders, one group per order, in priority then arrival order (CollectionRules).</summary>
+    private IReadOnlyList<IGrouping<Guid, CollectionWorklistEntry>> Orders(CollectionFilter filter) =>
+        CollectionRules.Orders(_entries, filter);
 
     private void RenderPatients()
     {
         var previous = SelectedOrderId();
 
-        var all = Orders(PatientFilter.All);
+        var all = Orders(CollectionFilter.All);
         var shown = Orders(_filter);
 
         _chipAll.Text = T("Collection.FilterAll", all.Count);
-        _chipUrgent.Text = T("Collection.FilterUrgent", Orders(PatientFilter.Urgent).Count);
-        _chipFasting.Text = T("Collection.FilterFasting", Orders(PatientFilter.Fasting).Count);
+        _chipUrgent.Text = T("Collection.FilterUrgent", Orders(CollectionFilter.Urgent).Count);
+        _chipFasting.Text = T("Collection.FilterFasting", Orders(CollectionFilter.Fasting).Count);
 
         _patientsCount.Text = T("Collection.PatientsAndTubes", all.Count, _entries.Count);
 
@@ -961,7 +946,7 @@ public sealed class CollectionView : LocalizedView
         var rtl = IsRightToLeft;
         var selected = (e.State & DataGridViewElementStates.Selected) != 0;
         var alerted = set.Any(x => x.PatientAlerts.Count > 0);
-        var toDraw = set.Count(x => !x.IsCollected);
+        var toDraw = CollectionRules.ToDraw(set);
 
         var background = selected ? UiTheme.AccentSubtle
                        : alerted ? UiTheme.CriticalBackground
@@ -1052,7 +1037,7 @@ public sealed class CollectionView : LocalizedView
         var previousOrder = _currentSet.Count > 0 ? _currentSet[0].LabOrderId : (Guid?)null;
 
         // Selecting a tube selects the patient's whole set: they are drawn together, in draw order.
-        _currentSet = [.. _entries.Where(e => e.LabOrderId == orderId).OrderBy(e => e.DrawOrder)];
+        _currentSet = CollectionRules.DrawSet(_entries, orderId);
 
         if (_currentSet.Count == 0)
         {
@@ -1124,7 +1109,7 @@ public sealed class CollectionView : LocalizedView
     /// </summary>
     private void ShowFasting()
     {
-        var fasting = _currentSet.Count == 0 ? 0 : _currentSet.Max(e => e.RequiredFastingHours);
+        var fasting = CollectionRules.RequiredFasting(_currentSet);
 
         if (fasting <= 0)
         {
@@ -1133,18 +1118,9 @@ public sealed class CollectionView : LocalizedView
         }
 
         var declared = _currentSet[0].PatientDeclaredFasted;
-        var answer = _fastingAnswer switch
-        {
-            FastingAnswer.Yes => true,
-            FastingAnswer.No => false,
-            FastingAnswer.Unknown => (bool?)null,
-            _ => declared
-        };
+        var answer = CollectionRules.ShownFasting(_fastingAnswer, declared);
 
-        var analyses = _currentSet.Where(e => e.RequiredFastingHours > 0)
-                                  .SelectMany(e => e.AnalysisCodes)
-                                  .Distinct()
-                                  .ToList();
+        var analyses = CollectionRules.FastingAnalyses(_currentSet);
         var forWhat = analyses.Count > 0 ? " " + T("Collection.FastingFor", string.Join(", ", analyses)) : string.Empty;
 
         var verdict = answer switch
@@ -1187,7 +1163,7 @@ public sealed class CollectionView : LocalizedView
 
             // Tubes still to draw are ticked; once they are all drawn, the drawn ones are ticked
             // instead, ready for "Expédier".
-            var ticked = anyAwaiting ? !entry.IsCollected : true;
+            var ticked = CollectionRules.IsTickedByDefault(entry, _currentSet);
 
             var index = _tubes.Rows.Add(
                 position.ToString(),
@@ -1258,8 +1234,7 @@ public sealed class CollectionView : LocalizedView
             return;
         }
 
-        var ticked = SelectedSampleIds().ToHashSet();
-        var left = _currentSet.Count(e => !e.IsCollected && !ticked.Contains(e.SampleId));
+        var left = CollectionRules.RemainingToTick(_currentSet, SelectedSampleIds().ToHashSet());
 
         _remaining.Text = left == 0
             ? _currentSet.All(e => e.IsCollected) ? T("Collection.ReadyToDispatch") : string.Empty
@@ -1376,7 +1351,7 @@ public sealed class CollectionView : LocalizedView
         if (barcode.Length == 0) return;
 
         // Equality, not a partial match: a near barcode is another tube.
-        var entry = _entries.FirstOrDefault(e => e.Barcode == barcode);
+        var entry = CollectionRules.Scanned(_entries, barcode);
 
         if (entry is null)
         {
@@ -1388,9 +1363,9 @@ public sealed class CollectionView : LocalizedView
 
         if (_currentSet.All(e => e.SampleId != entry.SampleId))
         {
-            if (_filter != PatientFilter.All
+            if (_filter != CollectionFilter.All
                 && _patients.Rows.Cast<DataGridViewRow>().All(r => r.Tag is not Guid g || g != entry.LabOrderId))
-                SetFilter(PatientFilter.All);
+                SetFilter(CollectionFilter.All);
 
             var patientRow = _patients.Rows.Cast<DataGridViewRow>()
                                  .FirstOrDefault(r => r.Tag is Guid g && g == entry.LabOrderId);
@@ -1444,21 +1419,12 @@ public sealed class CollectionView : LocalizedView
         _tubes.EndEdit();
 
         var selected = SelectedSampleIds();
+        var (toDraw, refusal) = CollectionRules.Plan(_currentSet, selected, dispatch);
 
-        if (selected.Count == 0)
+        if (refusal != CollectionRefusal.None)
         {
             _status.ForeColor = UiTheme.TextSecondary;
-            _status.Text = T("Message.NothingSelected");
-            return;
-        }
-
-        var collected = _currentSet.Where(e => e.IsCollected).Select(e => e.SampleId).ToHashSet();
-        var toDraw = selected.Where(id => !collected.Contains(id)).ToList();
-
-        if (!dispatch && toDraw.Count == 0)
-        {
-            _status.ForeColor = UiTheme.TextSecondary;
-            _status.Text = T("Collection.AlreadyCollected");
+            _status.Text = T(refusal == CollectionRefusal.NothingSelected ? "Message.NothingSelected" : "Collection.AlreadyCollected");
             return;
         }
 
@@ -1475,10 +1441,7 @@ public sealed class CollectionView : LocalizedView
 
             // The shared reader, as for an aliquot: the nominal volume pre-filled in the cell is
             // written with the culture's separators, a figure past 999 with its group space.
-            var volume = EditorValues.ParseDecimal(typed);
-
-            if ((!string.IsNullOrEmpty(typed) && volume is null)
-                || volume is <= 0m or >= Sample.MaximumVolumeMl)
+            if (CollectionRules.IsVolumeRefused(typed))
             {
                 var barcode = _currentSet.FirstOrDefault(e => e.SampleId == id)?.Barcode ?? string.Empty;
                 _dialogs.Warn(T("Sample_CollectedVolumeInvalid", barcode), T("Sample.Volume"));
@@ -1486,50 +1449,21 @@ public sealed class CollectionView : LocalizedView
                 return;
             }
 
-            volumes.Add((id, volume));
+            volumes.Add((id, CollectionRules.Volume(typed)));
         }
 
         // Where fasting matters, the answer given in the band is used. Not answered there and not
         // declared before, it is asked now — before the draw is recorded, because afterwards the
         // answer cannot honestly be obtained. « Ne sait pas » records nothing.
-        bool? fasted = null;
-        var requiredFasting = _currentSet.Max(e => e.RequiredFastingHours);
-
-        if (toDraw.Count > 0 && requiredFasting > 0)
-        {
-            switch (_fastingAnswer)
-            {
-                case FastingAnswer.Yes:
-                    fasted = true;
-                    break;
-                case FastingAnswer.No:
-                    fasted = false;
-                    break;
-                case FastingAnswer.NotAsked when _currentSet[0].PatientDeclaredFasted is null:
-                    fasted = _dialogs.Confirm(
-                        T("Collection.FastingQuestion", requiredFasting),
-                        T("Catalog.FastingRequired"));
-                    break;
-            }
-        }
+        var requiredFasting = CollectionRules.RequiredFasting(_currentSet);
+        bool? asked = CollectionRules.MustAskFasting(_fastingAnswer, _currentSet[0].PatientDeclaredFasted,
+                                                     requiredFasting, toDraw.Count)
+            ? _dialogs.Confirm(T("Collection.FastingQuestion", requiredFasting), T("Catalog.FastingRequired"))
+            : null;
+        var fasted = CollectionRules.FastingToRecord(_fastingAnswer, asked, requiredFasting, toDraw.Count);
 
         var location = _locationChosen ? (_location.SelectedItem as LocationChoice)?.Value : null;
-        var note = string.IsNullOrWhiteSpace(_comment.Text) ? null : _comment.Text.Trim();
-
-        var requests = new List<RecordCollectionRequest>(selected.Count);
-
-        foreach (var (id, volume) in volumes)
-        {
-            requests.Add(new RecordCollectionRequest
-            {
-                SampleId = id,
-                VolumeMl = volume,
-                PatientFasted = fasted,
-                DeclaredFastingHours = fasted == true ? requiredFasting : null,
-                Location = location,
-                Note = note
-            });
-        }
+        var requests = CollectionRules.Requests(volumes, fasted, requiredFasting, location, _comment.Text);
 
         _record.Enabled = false;
         Cursor = Cursors.WaitCursor;

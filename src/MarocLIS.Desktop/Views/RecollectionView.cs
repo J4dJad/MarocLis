@@ -36,8 +36,7 @@ public sealed class RecollectionView : LocalizedView
     private Label _status => _card.Footer;
 
     // The chips filter the loaded list: everyone, those never reached, those the red rows mark.
-    private enum Filter { All, NotContacted, Priority }
-    private Filter _filter = Filter.All;
+    private RecollectionFilter _filter = RecollectionFilter.All;
     private readonly ChipButton _allChip;
     private readonly ChipButton _notContactedChip;
     private readonly ChipButton _priorityChip;
@@ -54,9 +53,9 @@ public sealed class RecollectionView : LocalizedView
         _logger = logger;
 
         _card = new ListCard(_grid);
-        _allChip = _filters.Chip((_, _) => Choose(Filter.All));
-        _notContactedChip = _filters.Chip((_, _) => Choose(Filter.NotContacted));
-        _priorityChip = _filters.Chip((_, _) => Choose(Filter.Priority));
+        _allChip = _filters.Chip((_, _) => Choose(RecollectionFilter.All));
+        _notContactedChip = _filters.Chip((_, _) => Choose(RecollectionFilter.NotContacted));
+        _priorityChip = _filters.Chip((_, _) => Choose(RecollectionFilter.Priority));
 
         BuildLayout();
         WireBehaviour();
@@ -141,7 +140,7 @@ public sealed class RecollectionView : LocalizedView
         _grid.SelectionChanged += (_, _) => ShowSelected();
     }
 
-    private void Choose(Filter filter)
+    private void Choose(RecollectionFilter filter)
     {
         _filter = filter;
         Render();
@@ -221,19 +220,8 @@ public sealed class RecollectionView : LocalizedView
         var term = _search.Text.Trim();
         var kept = (_grid.CurrentRow?.Tag as RecollectionRow)?.ReplacementSampleId;
 
-        var rows = _filter switch
-        {
-            Filter.NotContacted => _rows.Where(r => r.ContactCount == 0),
-            Filter.Priority => _rows.Where(IsPriority),
-            _ => _rows
-        };
-
-        rows = term.Length == 0
-            ? rows
-            : rows.Where(r => r.AccessionNumber.Contains(term, StringComparison.OrdinalIgnoreCase)
-                               || r.PatientName.Contains(term, StringComparison.OrdinalIgnoreCase)
-                               || r.ReplacementBarcode.Contains(term, StringComparison.OrdinalIgnoreCase)
-                               || (r.Phone?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false));
+        var now = DateTimeOffset.Now;
+        var rows = _rows.Where(r => RecollectionRules.Matches(r, _filter, term, now));
 
         _grid.SuspendLayout();
         _grid.Rows.Clear();
@@ -275,9 +263,9 @@ public sealed class RecollectionView : LocalizedView
         _allChip.Text = $"{T("Recollection.FilterAll")} · {_rows.Count}";
         _notContactedChip.Text = $"{T("Recollection.NotContacted")} · {notContacted}";
         _priorityChip.Text = $"{T("Recollection.FilterPriority")} · {_rows.Count(IsPriority)}";
-        _allChip.Selected = _filter == Filter.All;
-        _notContactedChip.Selected = _filter == Filter.NotContacted;
-        _priorityChip.Selected = _filter == Filter.Priority;
+        _allChip.Selected = _filter == RecollectionFilter.All;
+        _notContactedChip.Selected = _filter == RecollectionFilter.NotContacted;
+        _priorityChip.Selected = _filter == RecollectionFilter.Priority;
         _filters.PerformLayout();
 
         ShowSelected();
