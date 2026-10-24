@@ -1,0 +1,10 @@
+@* A state in a pill, in the colours of its tone (Waiting, Info, Ok, Warning, Critical). *@
+@if (!string.IsNullOrEmpty(Text))
+{
+    <span class="pill pill-@Tone.ToLowerInvariant()" data-tone="@Tone">@Text</span>
+}
+
+@code {
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public string Tone { get; set; } = "Waiting";
+}

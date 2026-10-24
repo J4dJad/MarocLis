@@ -1,0 +1,40 @@
+@inject WebTexts Texts
+
+@*
+    A dialog of a screen, as the workstation's modal forms: over the page, which it keeps the
+    operator out of until it is answered. Escape and the close cross cancel it.
+*@
+<div class="modal-backdrop" data-modal="@Name">
+    <div class="modal @(Wide ? "modal-wide" : null)" role="dialog" aria-modal="true" aria-labelledby="@($"modal-{Name}")"
+         @onkeydown="KeyAsync">
+        <header class="modal-header">
+            <h2 id="@($"modal-{Name}")" class="modal-title">@Title</h2>
+            <button type="button" class="modal-close" title="@Texts["Action.Close"]" @onclick="CancelAsync">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" />
+            </button>
+        </header>
+        @if (Hint is { Length: > 0 })
+        {
+            <p class="modal-hint">@Hint</p>
+        }
+        <div class="modal-body">@ChildContent</div>
+        @if (Footer is not null)
+        {
+            <footer class="modal-footer">@Footer</footer>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "dialog";
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public bool Wide { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+
+    private Task KeyAsync(KeyboardEventArgs e) => e.Key == "Escape" ? CancelAsync() : Task.CompletedTask;
+}

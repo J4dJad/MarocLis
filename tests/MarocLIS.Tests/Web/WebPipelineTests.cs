@@ -158,7 +158,40 @@ public sealed class WebPipelineTests
     /// The web interface on no database: the pages reached here need none. The test server has no
     /// TCP peer, so a filter gives each request the address the client names.
     /// </summary>
-    private sealed class WebFactory(LicenceStatus licence) : WebApplicationFactory<MarocLIS.Web.Program>
+    /// <summary>
+    /// What the patient and order screens ask for, in the web's own composition: a screen opened on a
+    /// service that is not registered would fail on the operator's first click, not at start-up.
+    /// </summary>
+    [Fact]
+    public void TheServicesOfThePatientAndOrderScreens_AreRegistered()
+    {
+        using var web = new WebFactory(FullStatus());
+        using var scope = web.Services.CreateScope();
+
+        foreach (var type in new[]
+                 {
+                     typeof(MarocLIS.Application.Patients.PatientRegistrationService),
+                     typeof(MarocLIS.Application.Orders.OrderRegistrationService),
+                     typeof(MarocLIS.Application.Orders.OrderAmendmentService),
+                     typeof(MarocLIS.Application.Billing.BillingService),
+                     typeof(MarocLIS.Application.Samples.SampleWorkflowService),
+                     typeof(MarocLIS.Application.Reports.ReportReleaseService),
+                     typeof(MarocLIS.Application.Administration.MasterDataService),
+                     typeof(MarocLIS.Application.Administration.ActiveLanguagesCache),
+                     typeof(MarocLIS.Application.Abstractions.IDataAccessAuditor),
+                     typeof(MarocLIS.Infrastructure.Queries.IPatientQueries),
+                     typeof(MarocLIS.Infrastructure.Queries.ICatalogQueries),
+                     typeof(MarocLIS.Application.Orders.IOrderQueries),
+                     typeof(MarocLIS.Application.Orders.IOrderEntryQueries),
+                     typeof(MarocLIS.Application.Orders.IOrderFileQueries),
+                     typeof(MarocLIS.Application.Orders.IOrderQuotes),
+                     typeof(MarocLIS.Application.Administration.IMasterDataQueries),
+                     typeof(MarocLIS.Web.Session.UserScopes)
+                 })
+            scope.ServiceProvider.GetService(type).Should().NotBeNull(type.Name);
+    }
+
+    internal sealed class WebFactory(LicenceStatus licence) : WebApplicationFactory<MarocLIS.Web.Program>
     {
         private const string PeerHeader = "X-Test-Peer";
 

@@ -1,0 +1,56 @@
+@using MarocLIS.Desktop.Infrastructure
+@inject WebTexts Texts
+
+@*
+    A button of a screen, with the icon the Windows application puts on the same caption
+    (IconCatalog.Actions, keyed by the caption's text key) or the one the workstation sets on it
+    explicitly. A right the operator lacks hides it or turns it off as the workstation's
+    PermissionGate does; the action's own conditions turn it off.
+*@
+@if (!Hidden)
+{
+    <button type="@(Submit ? "submit" : "button")"
+            class="btn @(Primary ? "btn-primary" : Danger ? "btn-danger" : "btn-secondary") @Class"
+            disabled="@Disabled"
+            title="@Title"
+            data-action="@Key"
+            @onclick="ClickAsync">
+        @if ((Glyph ?? IconOf(Key)) is { } glyph)
+        {
+            <Icon Glyph="glyph" />
+        }
+        @(Text ?? Texts[Key])
+    </button>
+}
+
+@code {
+    /// <summary>The caption's text key, which also picks the icon.</summary>
+    [Parameter, EditorRequired] public string Key { get; set; } = string.Empty;
+
+    /// <summary>A caption other than <see cref="Key"/>'s text, the icon still being the key's.</summary>
+    [Parameter] public string? Text { get; set; }
+
+    [Parameter] public Glyph? Glyph { get; set; }
+    [Parameter] public bool Primary { get; set; }
+    [Parameter] public bool Danger { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool Hidden { get; set; }
+    [Parameter] public bool Submit { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private bool _running;
+
+    public static Glyph? IconOf(string key) =>
+        IconCatalog.Actions.TryGetValue(key, out var glyph) ? glyph : null;
+
+    // A second click while the first one runs is not a second registration.
+    private async Task ClickAsync()
+    {
+        if (_running || Disabled) return;
+        _running = true;
+        try { await OnClick.InvokeAsync(); }
+        finally { _running = false; }
+    }
+}

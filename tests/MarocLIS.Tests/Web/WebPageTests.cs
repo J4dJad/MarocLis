@@ -124,7 +124,7 @@ public sealed class WebPageTests : BunitContext
             .Where(f => (f.EndsWith(".razor", StringComparison.Ordinal) || f.EndsWith(".cs", StringComparison.Ordinal))
                         && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                         && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .SelectMany(f => Regex.Matches(File.ReadAllText(f), "(?:Texts\\[|\\bT\\(|\\.Get\\()\"([A-Za-z_.]+)\"").Select(m => m.Groups[1].Value))
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), "(?:Texts\\[|\\bT\\(|\\.Get\\(|\\bKey=)\"([A-Za-z_.]+)\"").Select(m => m.Groups[1].Value))
             .Concat(WebEndpoints.Reasons)
             .Concat(["Web.NetworkRefused", "Web_DeviceMismatch", "Licence_WebNoLicence", "Licence_WebPending",
                      "Licence_WebInvalid", "LicenceModule.VersionWeb"])

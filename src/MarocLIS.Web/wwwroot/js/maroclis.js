@@ -25,6 +25,25 @@
             for (const name of events) {
                 window.addEventListener(name, notify, { passive: true, capture: true });
             }
+        },
+
+        // Hands the operator a file the server produced (a stored report), as the workstation
+        // opens it in the PDF viewer.
+        download(fileName, contentType, bytes) {
+            const url = URL.createObjectURL(new Blob([bytes], { type: contentType }));
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+        },
+
+        // Copies a number to the clipboard, as a double click on the accession number does on
+        // the workstation.
+        copy(text) {
+            return navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.resolve();
         }
     };
 })();

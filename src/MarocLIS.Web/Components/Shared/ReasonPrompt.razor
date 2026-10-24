@@ -1,0 +1,49 @@
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+
+@*
+    The workstation's reason box (IUserDialogs.PromptForReason): the reason a cancellation, a
+    reprint or a correction is recorded with, refused under its minimum length (ReasonRules).
+*@
+<Modal Name="reason" Title="@(Title ?? Texts["Message.ReasonRequiredTitle"])" OnCancel="CancelAsync">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label">@Prompt</span>
+            <textarea class="input" rows="3" maxlength="@(MaxLength > 0 ? MaxLength : null)" data-field="reason"
+                      @bind="_reason" @bind:event="oninput"></textarea>
+        </label>
+        @if (_refused)
+        {
+            <p class="message is-warning" role="alert">@Texts["Message.ReasonRequiredPrompt"]</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Ok" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" Primary="true" OnClick="ConfirmAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string Prompt { get; set; } = string.Empty;
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public int MinimumLength { get; set; } = ReasonRules.DefaultMinimumLength;
+    [Parameter] public int MaxLength { get; set; }
+    [Parameter] public EventCallback<string> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _reason = string.Empty;
+    private bool _refused;
+
+    private async Task ConfirmAsync()
+    {
+        if (!ReasonRules.IsSufficient(_reason, MinimumLength))
+        {
+            _refused = true;
+            return;
+        }
+
+        await OnConfirm.InvokeAsync(_reason.Trim());
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

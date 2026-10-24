@@ -1,9 +1,15 @@
 using MarocLIS.Application;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Administration;
+using MarocLIS.Application.Billing;
+using MarocLIS.Application.Orders;
 using MarocLIS.Application.Reports;
+using MarocLIS.Application.Results;
+using MarocLIS.Application.Samples;
 using MarocLIS.Domain.Common;
 using MarocLIS.Infrastructure;
 using MarocLIS.Infrastructure.Licensing;
+using MarocLIS.Infrastructure.Queries;
 using MarocLIS.Infrastructure.Security;
 using MarocLIS.Localization;
 using MarocLIS.Reporting;
@@ -54,6 +60,21 @@ public static class WebServiceCollectionExtensions
         services.AddSingleton(reporting);
         services.AddSingleton<IReportRenderer, QuestPdfReportRenderer>();
         services.AddSingleton<IFontAvailability, FontAvailability>();
+
+        // ---- The read side of the screens: the workstation's queries, one per scope. The
+        // workstation isolates each call on a context of its own (IsolatedQueries); a page here runs
+        // each operation on a scope of its own instead (UserScopes.RunAsync), which is the same.
+        services.AddScoped<IResultQueries, ResultQueries>();
+        services.AddScoped<IReportQueries, ReportQueries>();
+        services.AddScoped<IPatientQueries, PatientQueries>();
+        services.AddScoped<ICatalogQueries, CatalogQueries>();
+        services.AddScoped<IOrderQueries, OrderQueries>();
+        services.AddScoped<IOrderEntryQueries, OrderEntryQueries>();
+        services.AddScoped<IOrderFileQueries, OrderFileQueries>();
+        services.AddScoped<IOrderQuotes, OrderQuoteService>();
+        services.AddScoped<ISampleQueries, SampleQueries>();
+        services.AddScoped<IBillingQueries, BillingQueries>();
+        services.AddScoped<IMasterDataQueries, MasterDataQueries>();
 
         // ---- Sessions: the browsers signed in, their workstations, and each scope's session.
         services.AddSingleton<WebSessionStore>();

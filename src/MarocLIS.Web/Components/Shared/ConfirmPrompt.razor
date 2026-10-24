@@ -1,0 +1,22 @@
+@inject WebTexts Texts
+
+@* The workstation's « Oui / Non » question (IUserDialogs.Confirm), « Non » being the default. *@
+<Modal Name="confirm" Title="@Title" OnCancel="NoAsync">
+    <ChildContent>
+        <p class="prompt-text" data-prompt="confirm">@Message</p>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.No" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" OnClick="NoAsync" />
+        <ActionButton Key="Action.Yes" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" Primary="true" OnClick="YesAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Message { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnYes { get; set; }
+    [Parameter] public EventCallback OnNo { get; set; }
+
+    private Task YesAsync() => OnYes.InvokeAsync();
+    private Task NoAsync() => OnNo.InvokeAsync();
+}

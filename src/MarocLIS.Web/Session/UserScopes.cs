@@ -19,4 +19,24 @@ public sealed class UserScopes(IServiceScopeFactory scopes, SessionContext conte
             scope.ServiceProvider.GetRequiredService<SessionContext>().Attach(session);
         return scope;
     }
+
+    /// <summary>
+    /// Runs one operation of a screen — a query, a use case — on a scope of its own, as each query of
+    /// a workstation screen runs on a context of its own: two operations of one page never share a
+    /// database context, and none sees entities another left tracked.
+    /// </summary>
+    public async Task<T> RunAsync<TService, T>(Func<TService, Task<T>> work) where TService : notnull
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        await using var scope = Create();
+        return await work(scope.ServiceProvider.GetRequiredService<TService>());
+    }
+
+    /// <summary><see cref="RunAsync{TService,T}"/> for an operation that answers nothing.</summary>
+    public async Task RunAsync<TService>(Func<TService, Task> work) where TService : notnull
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        await using var scope = Create();
+        await work(scope.ServiceProvider.GetRequiredService<TService>());
+    }
 }
