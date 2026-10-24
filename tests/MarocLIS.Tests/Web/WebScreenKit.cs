@@ -54,6 +54,7 @@ public class Fake<T> : DispatchProxy where T : class
         var returns = targetMethod.ReturnType;
         var value = _answers.TryGetValue(targetMethod.Name, out var answer) ? answer(args) : null;
 
+        if (returns == typeof(void)) return null;
         if (returns == typeof(Task)) return Task.CompletedTask;
         if (returns.IsGenericType && returns.GetGenericTypeDefinition() == typeof(Task<>))
         {
@@ -67,8 +68,11 @@ public class Fake<T> : DispatchProxy where T : class
 
     private static object? Empty(Type type)
     {
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IReadOnlyList<>))
+        if (type.IsGenericType && type.GetGenericTypeDefinition() is var generic
+            && (generic == typeof(IReadOnlyList<>) || generic == typeof(IReadOnlyCollection<>)))
             return Array.CreateInstance(type.GetGenericArguments()[0], 0);
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>))
+            return Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(type.GetGenericArguments()));
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(PagedResult<>))
             return type.GetMethod("Empty")!.Invoke(null, [50]);
         return type.IsValueType ? Activator.CreateInstance(type) : null;

@@ -1,0 +1,65 @@
+@inject WebTexts Texts
+
+@*
+    The workstation's text box (IUserDialogs.PromptForText): a note, a telephone number, a
+    corrected value, offered with what it holds already and cut at the length its column takes.
+    Unlike the reason box it takes an empty answer, unless the screen needs one (Required).
+*@
+<Modal Name="@Name" Title="@Title" OnCancel="CancelAsync">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label prompt-text">@Prompt</span>
+            @if (Multiline)
+            {
+                <textarea class="input" rows="3" maxlength="@(MaxLength > 0 ? MaxLength : null)" data-field="text"
+                          @bind="_text" @bind:event="oninput"></textarea>
+            }
+            else
+            {
+                <input class="input" type="text" maxlength="@(MaxLength > 0 ? MaxLength : null)" data-field="text" autocomplete="off"
+                       @bind="_text" @bind:event="oninput" @onkeydown="KeyAsync" />
+            }
+        </label>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Ok" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" Primary="true"
+                      Disabled="@(Required && string.IsNullOrWhiteSpace(_text))" OnClick="ConfirmAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public string Name { get; set; } = "text";
+    [Parameter, EditorRequired] public string Prompt { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Initial { get; set; }
+    [Parameter] public int MaxLength { get; set; }
+    [Parameter] public bool Multiline { get; set; }
+
+    /// <summary>An empty answer is no answer: « OK » stays off until something is typed.</summary>
+    [Parameter] public bool Required { get; set; }
+
+    [Parameter] public EventCallback<string> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _text = string.Empty;
+    private bool _initialised;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _text = Initial ?? string.Empty;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (Required && string.IsNullOrWhiteSpace(_text)) return;
+        await OnConfirm.InvokeAsync(_text);
+    }
+
+    // Enter answers a one-line box, as the workstation's OK button is its default.
+    private Task KeyAsync(KeyboardEventArgs e) => e.Key == "Enter" ? ConfirmAsync() : Task.CompletedTask;
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

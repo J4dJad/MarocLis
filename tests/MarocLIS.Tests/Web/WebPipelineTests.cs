@@ -191,6 +191,33 @@ public sealed class WebPipelineTests
             scope.ServiceProvider.GetService(type).Should().NotBeNull(type.Name);
     }
 
+    /// <summary>The same for the sample and result screens: collection, reception, recollections, entry and validation.</summary>
+    [Fact]
+    public void TheServicesOfTheSampleAndResultScreens_AreRegistered()
+    {
+        using var web = new WebFactory(FullStatus());
+        using var scope = web.Services.CreateScope();
+
+        foreach (var type in new[]
+                 {
+                     typeof(MarocLIS.Application.Samples.SampleWorkflowService),
+                     typeof(MarocLIS.Application.Samples.RecollectionService),
+                     typeof(MarocLIS.Application.Results.ResultEntryService),
+                     typeof(MarocLIS.Application.Results.ResultEntryContextService),
+                     typeof(MarocLIS.Application.Results.BenchWorksheetService),
+                     typeof(MarocLIS.Application.Results.ValidationService),
+                     typeof(MarocLIS.Application.Reports.ReportReleaseService),
+                     typeof(MarocLIS.Application.Samples.ISampleQueries),
+                     typeof(MarocLIS.Application.Samples.IRecollectionQueries),
+                     typeof(MarocLIS.Application.Results.IResultQueries),
+                     typeof(MarocLIS.Application.Results.IValidationQueries),
+                     typeof(MarocLIS.Application.Results.IBenchWorksheetQueries),
+                     typeof(MarocLIS.Application.Results.IResultEntryContextQueries),
+                     typeof(MarocLIS.Application.Results.IBenchWorksheetRenderer)
+                 })
+            scope.ServiceProvider.GetService(type).Should().NotBeNull(type.Name);
+    }
+
     internal sealed class WebFactory(LicenceStatus licence) : WebApplicationFactory<MarocLIS.Web.Program>
     {
         private const string PeerHeader = "X-Test-Peer";

@@ -32,6 +32,19 @@ public sealed class UserScopes(IServiceScopeFactory scopes, SessionContext conte
         return await work(scope.ServiceProvider.GetRequiredService<TService>());
     }
 
+    /// <summary>
+    /// <see cref="RunAsync{TService,T}"/> for an operation that reads through two services, as the
+    /// workstation reads a list and its context beside it in one screen load.
+    /// </summary>
+    public async Task<T> RunAsync<TFirst, TSecond, T>(Func<TFirst, TSecond, Task<T>> work)
+        where TFirst : notnull where TSecond : notnull
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        await using var scope = Create();
+        return await work(scope.ServiceProvider.GetRequiredService<TFirst>(),
+                          scope.ServiceProvider.GetRequiredService<TSecond>());
+    }
+
     /// <summary><see cref="RunAsync{TService,T}"/> for an operation that answers nothing.</summary>
     public async Task RunAsync<TService>(Func<TService, Task> work) where TService : notnull
     {

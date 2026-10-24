@@ -564,3 +564,79 @@ html[dir="rtl"] .file-list li.is-selected { box-shadow: inset -3px 0 0 var(--acc
 .list-pane .toolbar { flex-wrap: nowrap; }
 .list-pane .search-box { flex: 1 1 auto; min-inline-size: 0; }
 .catalog-card .grid td.mono { overflow-wrap: normal; white-space: nowrap; }
+
+/* The bench screens: collection, reception, recollections, entry and validation. */
+.kbd {
+    display: inline-block; margin-inline-start: 8px; padding: 0 5px; border-radius: 3px; font: 600 11px/18px ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color: inherit; opacity: .75; border: 1px solid currentColor;
+}
+.btn-primary .kbd { opacity: .8; }
+.btn.is-pressed { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-pressed); font-weight: 600; }
+.btn.is-emphasised { border-color: var(--critical); color: var(--critical); font-weight: 600; }
+.shortcut-only { display: none !important; }
+.card-pad { padding: 12px 16px; margin: 0; }
+.caption { margin: 12px 0 4px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.normal-ink { color: var(--normal); }
+.scan-box .input, .input.scan-box { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+
+.file-list li.is-alerted { box-shadow: inset 3px 0 0 var(--critical); }
+html[dir="rtl"] .file-list li.is-alerted { box-shadow: inset -3px 0 0 var(--critical); }
+.file-list li.is-drawn { opacity: .75; }
+.grid tr.is-drawn td { color: var(--text-secondary); }
+.list-pane-footer { display: flex; justify-content: flex-end; padding-block-start: 4px; border-block-start: 1px solid var(--border); }
+
+.fasting-band { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; background: var(--info-bg); border-color: #C9D6EE; }
+.fasting-band.is-critical { background: var(--critical-bg); border-color: #F3B8B2; color: var(--critical-ink); }
+.fasting-text { flex: 1 1 260px; font-weight: 600; }
+.input-volume { inline-size: 80px; text-align: end; }
+
+.tube-band { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-sunken); }
+.tube-cap { inline-size: 18px; block-size: 46px; border-radius: 4px 4px 9px 9px; border: 1px solid var(--border-strong); flex: none; }
+.tube-band-text { flex: 1 1 auto; min-inline-size: 0; display: flex; flex-direction: column; gap: 2px; }
+.delay { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: var(--text-secondary); }
+.delay-value { font: 600 18px ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.defects { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.is-defect { background: var(--abnormal-bg); border-color: var(--abnormal); color: var(--abnormal); }
+.decision { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-block-start: 8px; border-block-start: 1px solid var(--border); }
+.grid tr.is-priority td:first-child { box-shadow: inset 3px 0 0 var(--critical); }
+html[dir="rtl"] .grid tr.is-priority td:first-child { box-shadow: inset -3px 0 0 var(--critical); }
+.grid tr.is-contacted td { color: var(--text-secondary); }
+
+/* Saisie des résultats */
+.table-scroll-tall { max-block-size: calc(100vh - 360px); min-block-size: 220px; border: 0; border-radius: 0; }
+.grid-entry td { vertical-align: middle; }
+.grid tr.section-row td { background: var(--surface-sunken); color: var(--accent-pressed); font-size: 12px; font-weight: 700; letter-spacing: .04em; padding-block: 4px; }
+.grid tr.is-heading td { background: var(--surface-sunken); font-weight: 600; font-style: italic; }
+.grid tr.is-critical-row td { background: var(--critical-bg); }
+.grid tr.is-critical-row td:first-child, .grid tr.is-critical-row td:nth-child(2) { color: var(--critical); font-weight: 600; }
+.grid tr.is-released td { color: var(--text-secondary); font-style: italic; }
+.input-value { inline-size: 110px; text-align: end; padding-block: 3px; }
+html[dir="rtl"] .input-value { text-align: start; }
+.input-value[readonly] { background: var(--surface-sunken); color: var(--text-secondary); border-color: var(--border); }
+.input-value.is-derived { font-style: italic; }
+.input-comment { inline-size: 100%; min-inline-size: 120px; padding-block: 3px; font-size: 12px; }
+.input-comment[readonly] { background: transparent; border-color: transparent; }
+.key-hints { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 8px 12px; border-block-start: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
+.key-hints .kbd { margin-inline-start: 0; color: var(--text); opacity: 1; border-color: var(--border-strong); background: var(--surface-raised); }
+.key-hints span { margin-inline-end: 12px; }
+.key-hints-note { display: inline-flex; align-items: center; gap: 6px; margin-inline-start: auto; color: var(--text-muted); }
+
+/* Validation biologique */
+.tick-col { inline-size: 32px; text-align: center; }
+.context-lines { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.context-lines li { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.contacts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; margin: 6px 0 0; align-items: center; }
+.contacts dd { margin: 0; display: flex; align-items: center; gap: 6px; }
+.btn-icon { border: 0; background: none; padding: 2px; cursor: pointer; color: var(--text-secondary); border-radius: var(--radius); display: inline-flex; }
+.btn-icon:hover { background: var(--surface-sunken); color: var(--text); }
+
+/* Antériorités */
+.trend { inline-size: 100%; block-size: auto; display: block; margin-block-end: 12px; background: var(--surface-raised); }
+.trend-band { fill: var(--normal-bg); }
+.trend-grid { stroke: var(--border); stroke-width: 1; }
+.trend-label { fill: var(--text-secondary); font-size: 11px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.trend-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.trend-point { fill: var(--accent); stroke: var(--surface-raised); stroke-width: 1.5; }
+.trend-outside { fill: var(--abnormal); stroke: var(--surface-raised); stroke-width: 1.5; }
+.trend-current { fill: var(--surface-raised); stroke: var(--accent); stroke-width: 2.5; }
+.grid tr.is-current td { background: var(--accent-subtle); font-style: italic; }

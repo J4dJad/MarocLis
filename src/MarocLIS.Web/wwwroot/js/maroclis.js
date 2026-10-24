@@ -44,6 +44,51 @@
         // the workstation.
         copy(text) {
             return navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.resolve();
+        },
+
+        // Puts the cursor in the first box a selector names, its text selected: the first value
+        // still to enter when a file opens, the scan box after a decision.
+        focusFirst(selector) {
+            const box = document.querySelector(selector);
+            if (!box) return false;
+            box.focus();
+            if (typeof box.select === "function") box.select();
+            return true;
         }
     };
+
+    // The keys of the workstation's action bars — F3, F8, F9, F10, F12, Ctrl+S — press the button
+    // that carries them (data-shortcut), when it is on the page and not disabled; the browser
+    // keeps its own keys otherwise. A dialog open keeps them to its own buttons.
+    document.addEventListener("keydown", (e) => {
+        if (e.altKey || e.metaKey) return;
+        const name = (e.ctrlKey ? "Ctrl+" : "") + (e.key.length === 1 ? e.key.toUpperCase() : e.key);
+        if (!/^(F\d{1,2}|Ctrl\+S)$/.test(name)) return;
+
+        const scope = document.querySelector(".modal-backdrop:last-of-type") || document;
+        const button = scope.querySelector(`[data-shortcut="${name}"]:not([disabled])`);
+        if (!button) return;
+
+        e.preventDefault();
+        button.click();
+    });
+
+    // « Saisie des résultats »: Enter and Shift+Enter step down and up the values to enter, as in
+    // the workstation's grid; past the last one the cursor goes to « Enregistrer ». A tube scanned
+    // into a value box ends with Enter too, and lands on the next line instead of submitting.
+    document.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" || !(e.target instanceof Element)) return;
+        const box = e.target.closest("[data-entry-value]");
+        if (!box) return;
+
+        e.preventDefault();
+        const boxes = [...document.querySelectorAll("[data-entry-value]:not([readonly])")];
+        const next = boxes[boxes.indexOf(box) + (e.shiftKey ? -1 : 1)];
+        if (next) {
+            next.focus();
+            next.select();
+        } else if (!e.shiftKey) {
+            document.querySelector('[data-action="Action.Save"]')?.focus();
+        }
+    });
 })();

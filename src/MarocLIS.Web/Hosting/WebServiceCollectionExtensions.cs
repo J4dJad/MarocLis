@@ -60,6 +60,8 @@ public static class WebServiceCollectionExtensions
         services.AddSingleton(reporting);
         services.AddSingleton<IReportRenderer, QuestPdfReportRenderer>();
         services.AddSingleton<IFontAvailability, FontAvailability>();
+        // The fiche de paillasse of « Saisie des résultats », downloaded rather than printed.
+        services.AddSingleton<IBenchWorksheetRenderer, QuestPdfBenchWorksheetRenderer>();
 
         // ---- The read side of the screens: the workstation's queries, one per scope. The
         // workstation isolates each call on a context of its own (IsolatedQueries); a page here runs
@@ -75,6 +77,12 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<ISampleQueries, SampleQueries>();
         services.AddScoped<IBillingQueries, BillingQueries>();
         services.AddScoped<IMasterDataQueries, MasterDataQueries>();
+        // The sample and result screens: the patients to call back, the files to enter and to
+        // validate, the bench's pending work and the context of a file being entered.
+        services.AddScoped<IRecollectionQueries, RecollectionQueries>();
+        services.AddScoped<IValidationQueries, ValidationQueries>();
+        services.AddScoped<IBenchWorksheetQueries, BenchWorksheetQueries>();
+        services.AddScoped<IResultEntryContextQueries, ResultEntryContextQueries>();
 
         // ---- Sessions: the browsers signed in, their workstations, and each scope's session.
         services.AddSingleton<WebSessionStore>();
