@@ -114,7 +114,7 @@ public sealed class UserAdministrationView : LocalizedView
 
         // The security log is the audit trail's, and opened with an error for whoever may manage
         // accounts without reading it.
-        if (!PermissionGate.Allows(Permissions.Administration.ViewAuditTrail))
+        if (PermissionGate.User is not { } viewer || !UserAdministrationRules.SecurityLogOffered(viewer))
             _tabs.TabPages.Remove(_securityTab);
 
         Controls.Add(AdminLayout.FlatTabs(_tabs));
@@ -490,15 +490,14 @@ public sealed class UserAdministrationView : LocalizedView
         }
 
         // A validating role on an unqualified record is the regulatory defect this list exists to
-        // expose, so it is flagged as strongly as a lockout.
-        if (row.Qualification is ProfessionalQualification.MedicalBiologist
-                              or ProfessionalQualification.PharmacistBiologist
-            && !row.QualifiedToValidate)
+        // expose, so it is flagged as strongly as a lockout (the rules', shared with the web).
+        var tone = UserAdministrationRules.Tone(row);
+        if (tone == AccountTone.Critical)
         {
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
         }
-        else if (row.PasswordExpired || row.MustChangePassword || row.QualificationExpired)
+        else if (tone == AccountTone.Warning)
         {
             e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
             e.CellStyle.ForeColor = UiTheme.Abnormal;
@@ -510,15 +509,12 @@ public sealed class UserAdministrationView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _events.Rows.Count) return;
         if (_events.Rows[e.RowIndex].Tag is not SecurityEventRow row) return;
 
-        if (!row.Succeeded)
+        var emphasis = UserAdministrationRules.Emphasis(row);
+        if (emphasis == SecurityEventEmphasis.Failed)
         {
             e.CellStyle!.ForeColor = UiTheme.Critical;
         }
-        else if (row.Kind is SecurityEventKind.RoleAssigned or SecurityEventKind.RoleRemoved
-                          or SecurityEventKind.PermissionsChanged
-                          or SecurityEventKind.PasswordReset
-                          or SecurityEventKind.UserDeactivated
-                          or SecurityEventKind.SecuritySettingChanged)
+        else if (emphasis == SecurityEventEmphasis.Privilege)
         {
             // Privilege changes are the entries a security review is looking for; they should not
             // read the same as four hundred routine sign-ins.
@@ -650,19 +646,10 @@ public sealed class UserAdministrationView : LocalizedView
 
         foreach (var row in _userRows)
         {
-            var state = !row.IsActive ? T("Admin.Inactive")
-                : row.IsLockedOut ? T("Admin.LockedOut")
-                : row.FailedLoginAttempts > 0
-                    ? $"{T("Admin.Active")} ({row.FailedLoginAttempts})"
-                    : T("Admin.Active");
+            var state = StateText(row);
 
-            // A short glyph column rather than three more text columns: the administrator needs to
-            // see that something is wrong with the credential, then open the record to find out.
-            var flags = new List<string>(3);
-            if (row.MustChangePassword) flags.Add("⚿");
-            if (row.PasswordExpired) flags.Add("!");
-            if (row.QualificationExpired) flags.Add("⌛");
-            if (row.QualifiedToValidate) flags.Add("✓");
+            // A short glyph column rather than three more text columns (the rules').
+            var flags = UserAdministrationRules.Flags(row);
 
             var index = _users.Rows.Add(
                 row.UserName,
@@ -758,8 +745,7 @@ public sealed class UserAdministrationView : LocalizedView
         var granted = role?.Permissions.ToHashSet(StringComparer.Ordinal)
                       ?? new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var (module, permissions) in UserAdministrationService.GetPermissionCatalogue()
-                                                             .OrderBy(g => g.Key, StringComparer.Ordinal))
+        foreach (var (module, permissions) in UserAdministrationRules.Catalogue())
         {
             var moduleNode = new TreeNode(T($"PermissionModule.{module}")) { Tag = null };
 
@@ -796,9 +782,10 @@ public sealed class UserAdministrationView : LocalizedView
 
         // A built-in role cannot be deactivated — the seeded role that holds admin.* has to stay
         // identifiable — so the button is only offered for a role the laboratory created itself.
+        var actions = UserAdministrationRules.RoleActions(_currentUser, role);
         _toggleRole.Enabled = role is { IsBuiltIn: false };
 
-        _toggleRole.Text = role is { IsActive: false }
+        _toggleRole.Text = actions.Activates
             ? T("Admin.ActivateRole")
             : T("Admin.DeactivateRole");
     }
@@ -811,7 +798,7 @@ public sealed class UserAdministrationView : LocalizedView
                 ? (_users.CurrentRow?.Tag as UserRow)?.UserId
                 : null;
 
-            var result = await _administration.GetRecentSecurityEventsAsync(userId, 300, ct);
+            var result = await _administration.GetRecentSecurityEventsAsync(userId, UserAdministrationRules.RecentEventCount, ct);
 
             if (result.IsFailure)
             {
@@ -863,49 +850,27 @@ public sealed class UserAdministrationView : LocalizedView
     {
         var row = _users.CurrentRow?.Tag as UserRow;
 
+        // What is offered on the account, by its state: the rules' (shared with the web). The
+        // rights still grey the buttons through the gate; an inactive account is reactivated, not
+        // unlocked; your own account cannot be deactivated (the service refuses it): greyed out on
+        // it, rather than refused once the reason has been typed.
+        var actions = UserAdministrationRules.Actions(_currentUser, row);
         _editUser.Enabled = row is not null;
         _assignRoles.Enabled = row is not null;
         _siteAccess.Enabled = row is not null;
         _resetPassword.Enabled = row is not null;
-        // An inactive account is reactivated, not unlocked: the service refuses it.
         _unlock.Enabled = row is { IsActive: true } and ({ IsLockedOut: true } or { FailedLoginAttempts: > 0 });
-
-        // Your own account cannot be deactivated (the service refuses it): greyed out on it,
-        // rather than refused once the reason has been typed.
-        var ownAccount = row is { IsActive: true } && row.UserId == _currentUser.UserId;
-        _toggleActive.Enabled = row is not null && !ownAccount;
-        _toggleActive.Text = row is { IsActive: false } ? T("Admin.Reactivate") : T("Admin.Deactivate");
-        _tips.SetToolTip(_toggleActive, ownAccount ? T("User_CannotDeactivateSelf") : null);
+        _toggleActive.Enabled = row is not null && !actions.OwnAccount;
+        _toggleActive.Text = actions.Reactivates ? T("Admin.Reactivate") : T("Admin.Deactivate");
+        _tips.SetToolTip(_toggleActive, actions.OwnAccount ? T("User_CannotDeactivateSelf") : null);
 
         ShowSelectedUser(row);
 
-        if (row is null)
-        {
-            _userNotice.Text = string.Empty;
-            return;
-        }
-
         // Names the specific defect. "Invalid" tells an administrator nothing they can act on.
-        if (row.Qualification is ProfessionalQualification.MedicalBiologist
-                              or ProfessionalQualification.PharmacistBiologist
-            && !row.QualifiedToValidate)
+        if (row is not null && UserAdministrationRules.Notice(row) is { } notice)
         {
-            _userNotice.ForeColor = UiTheme.Critical;
-            _userNotice.Text = row.QualificationExpired
-                ? T("Admin.QualificationExpiredNotice", row.QualificationValidUntil!.Value)
-                : T("Admin.OrderNumberMissingNotice");
-        }
-        else if (row.IsLockedOut)
-        {
-            _userNotice.ForeColor = UiTheme.Critical;
-            _userNotice.Text = T("Admin.LockedOutNotice", row.LockedOutUntil!.Value.ToLocalTime());
-        }
-        else if (row.PasswordExpired)
-        {
-            _userNotice.ForeColor = UiTheme.Abnormal;
-            _userNotice.Text = row.PasswordAgeDays is { } age
-                ? T("Admin.PasswordExpiredNotice", age)
-                : T("Admin.PasswordNeverChangedNotice");
+            _userNotice.ForeColor = notice.Critical ? UiTheme.Critical : UiTheme.Abnormal;
+            _userNotice.Text = notice.Argument is { } argument ? T(notice.Key, argument) : T(notice.Key);
         }
         else
         {
@@ -942,30 +907,19 @@ public sealed class UserAdministrationView : LocalizedView
     }
 
     private string StateText(UserRow row) =>
-        !row.IsActive ? T("Admin.Inactive")
-        : row.IsLockedOut ? T("Admin.LockedOut")
-        : row.FailedLoginAttempts > 0 ? $"{T("Admin.Active")} ({row.FailedLoginAttempts})"
-        : T("Admin.Active");
+        UserAdministrationRules.State(row) is var (key, failed) && failed is { } count ? $"{T(key)} ({count})" : T(key);
 
     /// <summary>
     /// The pill of an account's state: the same reading as the row colours — a lockout or a
     /// biologist who may not sign is critical, an expired credential a warning.
     /// </summary>
-    private static (Color Back, Color Fore) StateColours(UserRow row)
+    private static (Color Back, Color Fore) StateColours(UserRow row) => UserAdministrationRules.Tone(row) switch
     {
-        if (!row.IsActive) return AdminLayout.Wait;
-        if (row.IsLockedOut) return AdminLayout.Crit;
-
-        if (row.Qualification is ProfessionalQualification.MedicalBiologist
-                              or ProfessionalQualification.PharmacistBiologist
-            && !row.QualifiedToValidate)
-            return AdminLayout.Crit;
-
-        if (row.PasswordExpired || row.MustChangePassword || row.QualificationExpired)
-            return AdminLayout.Warn;
-
-        return AdminLayout.Ok;
-    }
+        AccountTone.Inactive => AdminLayout.Wait,
+        AccountTone.Critical => AdminLayout.Crit,
+        AccountTone.Warning => AdminLayout.Warn,
+        _ => AdminLayout.Ok
+    };
 
     // ---- Actions ---------------------------------------------------------------------------------------
 
@@ -1152,10 +1106,12 @@ public sealed class UserAdministrationView : LocalizedView
     {
         // Capped to their columns (code 40, name 300): a longer one failed the save with an
         // unexpected error.
-        var code = _dialogs.PromptForText(T("Admin.NewRoleCodePrompt"), T("Admin.NewRole"), maxLength: 40);
+        var code = _dialogs.PromptForText(T("Admin.NewRoleCodePrompt"), T("Admin.NewRole"),
+                                          maxLength: UserAdministrationRules.RoleCodeMaxLength);
         if (string.IsNullOrWhiteSpace(code)) return;
 
-        var name = _dialogs.PromptForText(T("Admin.NewRoleNamePrompt"), T("Admin.NewRole"), maxLength: 300);
+        var name = _dialogs.PromptForText(T("Admin.NewRoleNamePrompt"), T("Admin.NewRole"),
+                                          maxLength: UserAdministrationRules.RoleNameMaxLength);
         if (string.IsNullOrWhiteSpace(name)) return;
 
         // Created with no permissions at all, then granted in the tree. A role that arrives with a
@@ -1193,7 +1149,7 @@ public sealed class UserAdministrationView : LocalizedView
 
         var activating = !role.IsActive;
 
-        if (!activating && role.ActiveUserCount > 0)
+        if (UserAdministrationRules.DeactivationNeedsConfirmation(role))
         {
             if (!_dialogs.Confirm(T("Admin.ConfirmDeactivateRole", role.Code, role.ActiveUserCount),
                                    T("Admin.DeactivateRole")))
@@ -1222,10 +1178,9 @@ public sealed class UserAdministrationView : LocalizedView
             .Select(node => (string)node.Tag!)
             .ToList();
 
-        var removed = role.Permissions.Except(selected, StringComparer.Ordinal).Count();
-        var added = selected.Except(role.Permissions, StringComparer.Ordinal).Count();
+        var (added, removed) = UserAdministrationRules.Change(role, selected);
 
-        if (removed == 0 && added == 0)
+        if (added == 0 && removed == 0)
         {
             _roleNotice.ForeColor = UiTheme.TextSecondary;
             _roleNotice.Text = T("Message.NoChanges");
@@ -1406,12 +1361,12 @@ internal sealed class UserDialog : Form
 
         // The lengths of the columns: a longer value was refused by the database with an unexpected
         // error, and the form was lost with it.
-        _userName.MaxLength = 60;
-        _fullName.MaxLength = _fullNameArabic.MaxLength = _email.MaxLength = 200;
-        _phone.MaxLength = 30;
-        _orderNumber.MaxLength = 40;
-        _inpe.MaxLength = 20;
-        _departments.MaxLength = 500;
+        _userName.MaxLength = UserAdministrationRules.UserNameMaxLength;
+        _fullName.MaxLength = _fullNameArabic.MaxLength = _email.MaxLength = UserAdministrationRules.NameMaxLength;
+        _phone.MaxLength = UserAdministrationRules.PhoneMaxLength;
+        _orderNumber.MaxLength = UserAdministrationRules.OrderNumberMaxLength;
+        _inpe.MaxLength = UserAdministrationRules.InpeMaxLength;
+        _departments.MaxLength = UserAdministrationRules.DepartmentsMaxLength;
 
         y += 54;
 
@@ -1446,16 +1401,9 @@ internal sealed class UserDialog : Form
         _prescriber.Bounds = new Rectangle(20, y + 18, 460, UiTheme.InputHeight);
         _prescriber.Items.Add(new PrescriberChoice(null, localizer["Admin.NoPrescriber"]));
 
-        foreach (var option in prescribers)
-        {
-            var display = string.IsNullOrWhiteSpace(option.City)
-                ? option.FullName
-                : $"{option.FullName} — {option.City}";
-
-            // A retired prescriber stays pickable only for the account already linked to it.
-            if (option.IsActive || option.PrescriberId == existing?.PrescriberId)
-                _prescriber.Items.Add(new PrescriberChoice(option.PrescriberId, display));
-        }
+        // A retired prescriber stays pickable only for the account already linked to it.
+        foreach (var option in UserAdministrationRules.PickablePrescribers(prescribers, existing?.PrescriberId))
+            _prescriber.Items.Add(new PrescriberChoice(option.PrescriberId, UserAdministrationRules.PrescriberDisplay(option)));
 
         var prescriberHint = new Label
         {
@@ -1523,8 +1471,7 @@ internal sealed class UserDialog : Form
     }
 
     private bool IsBiologist =>
-        (ProfessionalQualification)((_qualification.SelectedItem as EnumChoice)?.Value ?? 0)
-            is ProfessionalQualification.MedicalBiologist or ProfessionalQualification.PharmacistBiologist;
+        UserAdministrationRules.SignatureAllowed((ProfessionalQualification)((_qualification.SelectedItem as EnumChoice)?.Value ?? 0));
 
     private void LoadSignature()
     {
@@ -1537,7 +1484,7 @@ internal sealed class UserDialog : Form
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
         // Scaled to what a signature block holds; a JPEG comes out as the PNG the service stores.
-        var png = LogoImage.ToPng(dialog.FileName, maxWidth: 600, maxHeight: 300);
+        var png = LogoImage.ToPng(dialog.FileName, UserAdministrationRules.SignatureMaxWidth, UserAdministrationRules.SignatureMaxHeight);
 
         if (png is null)
         {
@@ -1592,7 +1539,7 @@ internal sealed class UserDialog : Form
             // Not in the list (it could not be read): kept as it is rather than shown as "none",
             // which saving would turn into a silent unlink.
             if (index < 0)
-                index = _prescriber.Items.Add(new PrescriberChoice(linked, $"#{linked.ToString()[..8]}"));
+                index = _prescriber.Items.Add(new PrescriberChoice(linked, UserAdministrationRules.UnlistedPrescriberDisplay(linked)));
 
             _prescriber.SelectedIndex = index;
         }
@@ -1643,96 +1590,41 @@ internal sealed class UserDialog : Form
         var qualification = (ProfessionalQualification)
             ((_qualification.SelectedItem as EnumChoice)?.Value ?? 0);
 
-        _qualificationNotice.Text = qualification switch
-        {
-            ProfessionalQualification.MedicalBiologist or
-            ProfessionalQualification.PharmacistBiologist =>
-                _localizer["Admin.BiologistRequirementNotice"],
-
-            ProfessionalQualification.PrescribingPhysician =>
-                _localizer["Admin.PhysicianRequirementNotice"],
-
-            _ => string.Empty
-        };
+        _qualificationNotice.Text = UserAdministrationRules.QualificationNoticeKey(qualification) is { } key
+            ? _localizer[key]
+            : string.Empty;
     }
 
     private void Accept()
     {
-        var qualification = (ProfessionalQualification)
-            ((_qualification.SelectedItem as EnumChoice)?.Value ?? 0);
-
-        var language = (AppLanguage)((_language.SelectedItem as EnumChoice)?.Value ?? 0);
-
-        if (string.IsNullOrWhiteSpace(_fullName.Text))
+        var form = new UserForm
         {
-            _dialogs.Warn(_localizer["User_FullNameRequired"]);
-            _fullName.Focus();
+            UserName = _userName.Text,
+            Password = _password.Text,
+            FullName = _fullName.Text,
+            FullNameArabic = _fullNameArabic.Text,
+            Email = _email.Text,
+            Phone = _phone.Text,
+            Qualification = (ProfessionalQualification)((_qualification.SelectedItem as EnumChoice)?.Value ?? 0),
+            OrderNumber = _orderNumber.Text,
+            Inpe = _inpe.Text,
+            QualificationValidUntil = _hasExpiry.Checked ? DateOnly.FromDateTime(_validUntil.Value.Date) : null,
+            Language = (AppLanguage)((_language.SelectedItem as EnumChoice)?.Value ?? 0),
+            Departments = _departments.Text,
+            PrescriberId = (_prescriber.SelectedItem as PrescriberChoice)?.Id
+        };
+
+        // What the editor refuses before the service is asked, and the request it sends: the
+        // rules' (shared with the web).
+        if (UserAdministrationRules.Check(form, creating: _existing is null) is { } refusal)
+        {
+            _dialogs.Warn(refusal.Typed is { } typed ? _localizer.Format(refusal.Key, typed) : _localizer[refusal.Key]);
+            (refusal.Field switch { "username" => _userName, "password" => _password, _ => _fullName }).Focus();
             return;
         }
 
-        var departments = _departments.Text
-            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(d => d.ToUpperInvariant())
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-
-        DateOnly? validUntil = _hasExpiry.Checked
-            ? DateOnly.FromDateTime(_validUntil.Value.Date)
-            : null;
-
-        var prescriberId = (_prescriber.SelectedItem as PrescriberChoice)?.Id;
-
-        if (_existing is null)
-        {
-            if (_userName.Text.Trim().Length < 3)
-            {
-                _dialogs.Warn(_localizer.Format("User_NameTooShort", 3));
-                _userName.Focus();
-                return;
-            }
-
-            if (string.IsNullOrEmpty(_password.Text))
-            {
-                _dialogs.Warn(_localizer["Admin.InitialPasswordRequired"]);
-                _password.Focus();
-                return;
-            }
-
-            CreateRequest = new CreateUserRequest
-            {
-                UserName = _userName.Text.Trim(),
-                FullName = _fullName.Text.Trim(),
-                InitialPassword = _password.Text,
-                FullNameArabic = Blank(_fullNameArabic.Text),
-                Email = Blank(_email.Text),
-                Phone = Blank(_phone.Text),
-                Qualification = qualification,
-                ProfessionalOrderNumber = Blank(_orderNumber.Text),
-                Inpe = Blank(_inpe.Text),
-                QualificationValidUntil = validUntil,
-                PreferredLanguage = language,
-                AuthorizedDepartmentCodes = departments,
-                PrescriberId = prescriberId
-            };
-        }
-        else
-        {
-            UpdateRequest = new UpdateUserRequest
-            {
-                UserId = _existing.UserId,
-                FullName = _fullName.Text.Trim(),
-                FullNameArabic = Blank(_fullNameArabic.Text),
-                Email = Blank(_email.Text),
-                Phone = Blank(_phone.Text),
-                Qualification = qualification,
-                ProfessionalOrderNumber = Blank(_orderNumber.Text),
-                Inpe = Blank(_inpe.Text),
-                QualificationValidUntil = validUntil,
-                PreferredLanguage = language,
-                AuthorizedDepartmentCodes = departments,
-                PrescriberId = prescriberId
-            };
-        }
+        if (_existing is null) CreateRequest = UserAdministrationRules.ToCreateRequest(form);
+        else UpdateRequest = UserAdministrationRules.ToUpdateRequest(_existing.UserId, form);
 
         // A scan chosen before the qualification was changed away from biologist is not sent.
         if (!IsBiologist) NewSignature = null;
@@ -1740,9 +1632,6 @@ internal sealed class UserDialog : Form
         DialogResult = DialogResult.OK;
         Close();
     }
-
-    private static string? Blank(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private sealed record PrescriberChoice(Guid? Id, string Display)
     {
@@ -1769,7 +1658,7 @@ internal sealed class RoleAssignmentDialog : Form
     internal RoleAssignmentDialog(ILocalizer localizer, UserRow user, IReadOnlyList<RoleRow> roles)
     {
         _localizer = localizer;
-        _roles = [.. roles.Where(r => r.IsActive)];
+        _roles = UserAdministrationRules.AssignableRoles(roles);
 
         Text = $"{localizer["Nav.Roles"]} — {user.UserName}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -1829,15 +1718,11 @@ internal sealed class RoleAssignmentDialog : Form
 
         var role = _roles[_list.SelectedIndex];
 
-        var validates = role.Permissions.Contains(Permissions.Results.BiologicalValidate,
-                                                   StringComparer.Ordinal);
-
-        var administers = role.Permissions.Contains(Permissions.Administration.ManageUsers,
-                                                     StringComparer.Ordinal);
+        var (count, validates, administers) = UserAdministrationRules.Grants(role);
 
         var lines = new List<string>(3)
         {
-            _localizer.Format("Admin.RolePermissionCount", role.Permissions.Count)
+            _localizer.Format("Admin.RolePermissionCount", count)
         };
 
         // The two grants with consequences beyond the application: one is reserved by law, the
@@ -1870,7 +1755,7 @@ internal sealed class SiteAccessDialog : Form
     {
         _localizer = localizer;
         _dialogs = dialogs;
-        _sites = [.. sites.Where(s => s.IsActive)];
+        _sites = UserAdministrationRules.AssignableSites(sites);
 
         Text = $"{localizer["Admin.SiteAccess"]} — {user.UserName}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -1945,9 +1830,9 @@ internal sealed class SiteAccessDialog : Form
 
     private void Accept()
     {
-        if (_list.CheckedIndices.Count == 0)
+        if (UserAdministrationRules.CheckSites(SelectedSiteIds) is { } refusal)
         {
-            _dialogs.Warn(_localizer["User_AtLeastOneSiteRequired"]);
+            _dialogs.Warn(_localizer[refusal]);
             return;
         }
 

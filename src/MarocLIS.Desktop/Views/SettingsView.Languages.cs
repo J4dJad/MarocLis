@@ -128,7 +128,7 @@ public sealed partial class SettingsView
         _languageEnglish.Checked = settings.IsActive(AppLanguage.English);
 
         // Arabic is a module of the licence: without it the box stays off, and says why.
-        var arabicLicensed = _licence?.Current.HasModule(LicenceModules.Arabic) ?? true;
+        var arabicLicensed = SettingsScreenRules.ArabicLicensed(_licence?.Current);
         _languageArabic.Enabled = arabicLicensed;
         _languageArabic.Text = arabicLicensed
             ? T("AppLanguage.Arabic")
@@ -139,9 +139,7 @@ public sealed partial class SettingsView
     {
         if (_languages is null) return;
 
-        List<AppLanguage> active = [AppLanguage.French];
-        if (_languageArabic.Checked) active.Add(AppLanguage.Arabic);
-        if (_languageEnglish.Checked) active.Add(AppLanguage.English);
+        var active = SettingsScreenRules.ActiveLanguages(_languageArabic.Checked, _languageEnglish.Checked);
 
         var saved = await _languages.SaveAsync(active);
 

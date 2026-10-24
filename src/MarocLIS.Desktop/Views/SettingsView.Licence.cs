@@ -206,35 +206,32 @@ public sealed partial class SettingsView
         _licenceStatus.Text = string.Empty;
     }
 
-    /// <summary>A cause written to follow « Lecture seule — », as a sentence of its own.</summary>
-    private static string Sentence(string text) =>
-        text.Length == 0 ? text : char.ToUpper(text[0], CultureInfo.CurrentUICulture) + text[1..] + (char.IsPunctuation(text[^1]) ? "" : ".");
-
     private void ShowLicence(LicenceStatus status, int? inUse, IReadOnlyList<LicenceHistoryRow> history)
     {
         var terms = status.Terms;
         var culture = CultureInfo.CurrentUICulture;
         string Date(DateOnly? date) => date?.ToString("d", culture) ?? "—";
 
-        var (pillBack, pillInk) = status.State switch
+        var tone = LicenceTabRules.Tone(status);
+        var (pillBack, pillInk) = tone switch
         {
-            LicenceState.Valid when status.IsExpiringSoon => (UiTheme.AbnormalBackground, UiTheme.Abnormal),
-            LicenceState.Valid => (UiTheme.NormalBackground, UiTheme.Normal),
+            LicenceBannerLevel.Warning => (UiTheme.AbnormalBackground, UiTheme.Abnormal),
+            LicenceBannerLevel.Normal => (UiTheme.NormalBackground, UiTheme.Normal),
             _ => (UiTheme.CriticalBackground, UiTheme.CriticalInk)
         };
-        _licenceState.Text = status.IsReadOnly && status.State != LicenceState.Pending
+        _licenceState.Text = LicenceTabRules.SaysReadOnly(status)
             ? $"{T($"LicenceState.{status.State}")} · {T("Licence.ReadOnly")}"
             : T($"LicenceState.{status.State}");
         _licenceState.BackColor = pillBack;
         _licenceState.ForeColor = pillInk;
 
         // Why the licence is not in force, in the words of the refusal; and a clock found behind.
-        var problems = new List<string>();
-        if (status.Problem is { } problem) problems.Add(Localizer.Describe(problem));
-        else if (status.State == LicenceState.Missing) problems.Add(Sentence(T("Licence.Cause.Missing")));
-        if (status.ClockRolledBack) problems.Add(T("Licence.ClockRolledBack", Date(status.LatestDateSeen)));
-        if (status.IsReadOnly && status.BenchClearingUntil is { } bench && status.State != LicenceState.Pending)
-            problems.Add(status.InBenchClearing ? T("Licence.BenchUntil", Date(bench)) : T("Licence.BenchOver"));
+        var problems = LicenceTabRules.Notes(status).Select(note =>
+        {
+            if (note.Problem is { } problem) return Localizer.Describe(problem);
+            var text = T(note.Key!, [.. note.Arguments.Select(a => a switch { DateOnly d => Date(d), null => "—", _ => a })]);
+            return note.AsSentence ? LicenceTabRules.Sentence(text, culture) : text;
+        }).ToList();
         _licenceProblem.Text = string.Join(" ", problems);
         _licenceProblem.Visible = problems.Count > 0;
 
@@ -253,38 +250,40 @@ public sealed partial class SettingsView
             : terms.EndsOn is { } end ? T("Licence.Period", Date(terms.StartsOn), Date(end))
             : T("Licence.PeriodOpen", Date(terms.StartsOn)));
 
-        var level = LicenceNavigation.DaysLevel(status) switch
+        var level = tone switch
         {
             LicenceBannerLevel.Normal => UiTheme.Normal,
             LicenceBannerLevel.Warning => UiTheme.Abnormal,
             _ => UiTheme.Critical
         };
-        Row("remaining", status.State switch
+        var (remainingKey, remaining) = LicenceTabRules.Remaining(status);
+        Row("remaining", remainingKey switch
         {
-            LicenceState.Valid when status.DaysRemaining is { } days => T("Licence.DaysRemaining", days),
-            LicenceState.Valid => T("Licence.NoEnd"),
-            LicenceState.Grace => T("Licence.GraceRemaining", status.GraceDaysRemaining),
-            LicenceState.Expired => T("Licence.ExpiredOn", Date(terms?.EndsOn)),
-            _ => "—"
+            null => "—",
+            "Licence.NoEnd" => T(remainingKey),
+            "Licence.ExpiredOn" => T(remainingKey, Date(remaining as DateOnly?)),
+            _ => T(remainingKey, remaining)
         }, level);
         Row("updates", terms?.UpdatesUntil is { } updates ? Date(updates) : "—");
 
-        var limit = status.WorkstationLimit ?? terms?.Workstations;
+        var limit = LicenceTabRules.WorkstationLimit(status);
         Row("workstations", limit is null ? "—" : $"{inUse?.ToString(culture) ?? "?"} / {limit}");
 
-        var open = terms is null ? [] : LicenceModules.All.Where(terms.HasModule).ToList();
-        var closed = LicenceModules.All.Except(open).ToList();
+        var (open, closed) = LicenceTabRules.Modules(status);
         Row("modules", string.Join(", ", new[] { T("Licence.Base") }
             .Concat(open.Select(m => T(LicenceModules.NameKey(m))))));
         Row("closed", closed.Count == 0 ? "—" : string.Join(", ", closed.Select(m => T(LicenceModules.NameKey(m)))),
             UiTheme.TextSecondary);
 
         Row("server", status.ServerId ?? "—");
-        Row("binding", terms is null ? "—"
-            : terms.ServerId is null ? T("Licence.Unbound")
-            : string.Equals(terms.ServerId, status.ServerId, StringComparison.Ordinal) ? T("Licence.BoundHere")
-            : T("Licence.BoundElsewhere", terms.ServerId), terms?.ServerId is { } bound
-              && !string.Equals(bound, status.ServerId, StringComparison.Ordinal) ? UiTheme.Critical : null);
+        var binding = LicenceTabRules.Binding(status);
+        Row("binding", binding switch
+        {
+            LicenceBinding.Unbound => T("Licence.Unbound"),
+            LicenceBinding.BoundHere => T("Licence.BoundHere"),
+            LicenceBinding.BoundElsewhere => T("Licence.BoundElsewhere", terms!.ServerId),
+            _ => "—"
+        }, binding == LicenceBinding.BoundElsewhere ? UiTheme.Critical : null);
         Row("key", _licence?.KeyFingerprint ?? "—");
         _licenceKeyWarning.Visible = _licence?.IsDevelopmentKey == true;
 

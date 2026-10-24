@@ -1,3 +1,4 @@
+using MarocLIS.Application.Administration;
 using MarocLIS.Application.Billing;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Identity;
@@ -189,35 +190,20 @@ public sealed partial class SettingsView
 
     private void ShowDiscountCap(DiscountCapSettings cap)
     {
-        var culture = System.Globalization.CultureInfo.CurrentCulture;
-        _capPercent.Text = cap.MaxPercent.ToString("0.##", culture);
-        _capAmount.Text = cap.MaxAmount is { } amount ? EditorValues.FormatForEditing(amount, 2, culture) : string.Empty;
+        (_capPercent.Text, _capAmount.Text) = SettingsScreenRules.DiscountCapTexts(cap, System.Globalization.CultureInfo.CurrentCulture);
     }
 
     /// <summary>The ceiling as typed, or null after telling the operator which box is wrong.</summary>
     private DiscountCapSettings? ReadDiscountCap()
     {
-        var percent = EditorValues.ParseDecimal(_capPercent.Text);
-        if (percent is not { } rate || rate < 0m || rate > 100m)
+        var (cap, refusal) = SettingsScreenRules.ReadDiscountCap(_capPercent.Text, _capAmount.Text);
+        if (refusal is not null)
         {
-            _dialogs.Warn(T("DiscountCap_PercentOutOfRange"), T("InvoicePrint.DiscountCap"));
-            _capPercent.Focus();
-            return null;
+            _dialogs.Warn(T(refusal.Key), T("InvoicePrint.DiscountCap"));
+            (refusal.Field == "cap-amount" ? _capAmount : _capPercent).Focus();
         }
 
-        decimal? amount = null;
-        if (!string.IsNullOrWhiteSpace(_capAmount.Text))
-        {
-            amount = EditorValues.ParseDecimal(_capAmount.Text);
-            if (amount is not { } value || value < 0m || value > DiscountCapSettings.AmountLimit)
-            {
-                _dialogs.Warn(T("DiscountCap_AmountOutOfRange"), T("InvoicePrint.DiscountCap"));
-                _capAmount.Focus();
-                return null;
-            }
-        }
-
-        return new DiscountCapSettings { MaxPercent = rate, MaxAmount = amount };
+        return cap;
     }
 
     private void ShowInvoicePrint(InvoicePrintSettings settings)

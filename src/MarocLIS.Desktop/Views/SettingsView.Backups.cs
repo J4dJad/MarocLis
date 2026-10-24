@@ -57,16 +57,12 @@ public sealed partial class SettingsView
     private bool _bkBusy;
 
     // Monday first, as a French calendar is printed; the stored names are English (BackupSettings).
-    private static readonly DayOfWeek[] WeekDays =
-    [
-        DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday,
-        DayOfWeek.Saturday, DayOfWeek.Sunday
-    ];
+    private static IReadOnlyList<DayOfWeek> WeekDays => BackupScreenRules.WeekDays;
 
     /// <summary>Where a restore would be asked from; read once, the machine does not change.</summary>
     private RestoreContext _restoreContext = new(IsServerMachine: false, IsLocalAdministrator: false);
 
-    private bool BackupsOffered => _backups is not null && PermissionGate.Allows(Permissions.Administration.Backup);
+    private bool BackupsOffered => PermissionGate.User is { } user && SettingsScreenRules.BackupsOffered(user, _backups is not null);
 
     private void BuildBackupsTab()
     {
@@ -323,8 +319,8 @@ public sealed partial class SettingsView
     private void ShowBackupSettings(BackupSettings settings)
     {
         _bkEnabled.Checked = settings.Enabled;
-        _bkTimes.Text = string.Join(", ", settings.Times.Select(t => t.ToString("HH\\:mm", CultureInfo.InvariantCulture)));
-        _bkRetention.Value = Math.Clamp(settings.RetentionDays, BackupSettings.MinRetentionDays, BackupSettings.MaxRetentionDays);
+        _bkTimes.Text = BackupScreenRules.TimesText(settings);
+        _bkRetention.Value = BackupScreenRules.Retention(settings.RetentionDays);
         foreach (var box in _bkDays)
             box.Checked = settings.RunsOn((DayOfWeek)box.Tag!);
         _bkFolder.Text = settings.Folder;
@@ -344,40 +340,24 @@ public sealed partial class SettingsView
         if (_bkOverview is not { } overview) return;
 
         // ---- The banner: older than 48 hours, or none at all, in the critical colours.
-        if (overview.LastSuccessAt is not { } last)
-        {
-            Banner(critical: true, T("Backup.NoneYet"));
-        }
-        else
-        {
-            var age = Age(overview.ServerNow - last);
-            Banner(overview.IsStale, overview.IsStale
-                ? T("Backup.StaleBanner", Moment(last), age)
-                : T("Backup.LastSuccess", Moment(last), age));
-        }
+        var (critical, banner) = BackupScreenRules.Banner(overview);
+        Banner(critical, Line(banner));
 
-        _bkAgent.Text = overview.Agent switch
-        {
-            BackupAgentStatus.Running => T("Backup.AgentRunning", overview.State.AgentHost ?? overview.Server.ServerMachine,
-                                           Moment(overview.State.AgentSeenAt!.Value.LocalDateTime)),
-            BackupAgentStatus.Silent => T("Backup.AgentSilent", overview.State.AgentHost ?? overview.Server.ServerMachine,
-                                          Moment(overview.State.AgentSeenAt!.Value.LocalDateTime)),
-            _ => T("Backup.AgentNeverSeen", overview.Server.ServerMachine)
-        };
-        _bkAgent.ForeColor = overview.Agent == BackupAgentStatus.Running ? UiTheme.TextSecondary : UiTheme.Abnormal;
+        var (agentWarning, agent) = BackupScreenRules.Agent(overview);
+        _bkAgent.Text = Line(agent);
+        _bkAgent.ForeColor = agentWarning ? UiTheme.Abnormal : UiTheme.TextSecondary;
 
-        _bkNext.Text = overview.NextRunAt is { } next
-            ? T("Backup.NextRun", Moment(next))
-            : T("Backup.ScheduleOff");
-        _bkNext.ForeColor = overview.NextRunAt is null ? UiTheme.Abnormal : UiTheme.TextSecondary;
+        var (nextWarning, next) = BackupScreenRules.Next(overview);
+        _bkNext.Text = Line(next);
+        _bkNext.ForeColor = nextWarning ? UiTheme.Abnormal : UiTheme.TextSecondary;
 
-        if (overview.State.LastResult is { } result && result.Status != BackupCheckStatus.Unknown)
+        if (BackupScreenRules.LastResult(overview) is { } result)
         {
-            var at = result.At is { } when ? Moment(when.LocalDateTime) : string.Empty;
-            _bkLastResult.Text = result.Status == BackupCheckStatus.Failed
+            var at = result.At is { } when ? Moment(when) : string.Empty;
+            _bkLastResult.Text = result.Failed
                 ? T("Backup.LastResultFailed", at, Reason(result.Message))
                 : T("Backup.LastResultOk", at, result.Message ?? string.Empty);
-            _bkLastResult.ForeColor = result.Status == BackupCheckStatus.Failed ? UiTheme.Critical : UiTheme.TextSecondary;
+            _bkLastResult.ForeColor = result.Failed ? UiTheme.Critical : UiTheme.TextSecondary;
         }
         else
         {
@@ -397,7 +377,7 @@ public sealed partial class SettingsView
         });
 
         // ---- The restore: on the server only, said where it is done otherwise.
-        var onServer = _restoreContext is { IsServerMachine: true, IsLocalAdministrator: true };
+        var onServer = BackupScreenRules.RestoreOfferedHere(_restoreContext);
         _bkRestore.Visible = onServer;
         _bkRestoreNote.ForeColor = onServer ? UiTheme.TextSecondary : UiTheme.Info;
         _bkRestoreNote.Text = onServer
@@ -416,10 +396,11 @@ public sealed partial class SettingsView
 
     private void RefreshBackupActions()
     {
-        _bkBackupNow.Enabled = !_bkBusy && _bkOverview is not null;
-        _bkRestore.Enabled = !_bkBusy && _bkList.CurrentRow?.Tag is BackupEntry { Restorable: true };
-        _bkSave.Enabled = !_bkBusy && _bkOverview is not null;
-        _bkTestFolder.Enabled = !_bkBusy;
+        var actions = BackupScreenRules.Actions(_bkBusy, _bkOverview, _bkList.CurrentRow?.Tag as BackupEntry);
+        _bkBackupNow.Enabled = actions.BackupNow;
+        _bkRestore.Enabled = actions.Restore;
+        _bkSave.Enabled = actions.Save;
+        _bkTestFolder.Enabled = actions.TestFolder;
     }
 
     /// <summary>
@@ -443,70 +424,52 @@ public sealed partial class SettingsView
 
     private static string Moment(DateTime at) => at.ToString("g", CultureInfo.CurrentCulture);
 
-    private string Age(TimeSpan age) =>
-        age.TotalMinutes < 90 ? T("Backup.AgeMinutes", Math.Max(0, (int)age.TotalMinutes))
-        : age.TotalHours < 48 ? T("Backup.AgeHours", (int)age.TotalHours)
-        : T("Backup.AgeDays", (int)age.TotalDays);
+    /// <summary>A sentence of the tab (BackupScreenRules), its moments and its age written out.</summary>
+    private string Line(BackupLine line) =>
+        T(line.Key, [.. line.Arguments.Select(a => a switch
+        {
+            DateTime at => Moment(at),
+            BackupLine inner => Line(inner),
+            _ => a
+        })]);
 
-    private string FileSize(long bytes) =>
-        bytes >= 1024L * 1024 * 1024
-            ? T("Backup.SizeGb", (bytes / (1024d * 1024 * 1024)).ToString("0.0", CultureInfo.CurrentCulture))
-            : T("Backup.SizeMb", Math.Max(1, bytes / (1024 * 1024)).ToString("N0", CultureInfo.CurrentCulture));
+    private string FileSize(long bytes)
+    {
+        var (key, value, format) = BackupScreenRules.Size(bytes);
+        return T(key, value.ToString(format, CultureInfo.CurrentCulture));
+    }
 
     private string Origin(BackupEntry entry)
     {
-        var kind = T($"BackupKind.{entry.Kind}");
         // Who: the description we wrote for a manual one, SQL Server's login for one we did not write.
-        var who = entry.Kind switch
-        {
-            BackupKind.Scheduled => entry.Set.MachineName,
-            BackupKind.Other => entry.Set.UserName,
-            _ => entry.Set.Description
-        };
-        return string.IsNullOrWhiteSpace(who) ? kind : $"{kind} — {who}";
+        var (kindKey, who) = BackupScreenRules.Origin(entry);
+        return who is null ? T(kindKey) : $"{T(kindKey)} — {who}";
     }
 
-    private string CheckText(BackupEntry entry) =>
-        entry.Set.IsDamaged ? T("Backup.Damaged") : T($"BackupCheckStatus.{entry.Check.Status}");
+    private string CheckText(BackupEntry entry) => T(BackupScreenRules.CheckKey(entry));
 
     /// <summary>
     /// A failure recorded as a resource key (by MarocLIS or the server's task), in words: the
     /// messages name the folder, which is the schedule's.
     /// </summary>
     private string Reason(string? key) =>
-        string.IsNullOrWhiteSpace(key) ? string.Empty
-        : Localizer.Describe(Error.Conflict(key, _bkOverview?.Settings.Folder ?? string.Empty, string.Empty));
+        BackupScreenRules.Reason(key, _bkOverview?.Settings.Folder) is { } error ? Localizer.Describe(error) : string.Empty;
 
     // ---- Actions ------------------------------------------------------------------------------------
 
     private BackupSettings? ReadBackupSettings()
     {
-        var typed = _bkTimes.Text.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var times = BackupSettings.ParseTimes(_bkTimes.Text);
-
-        // Every piece typed must be a time: "22:00, 2h" would otherwise quietly drop the second.
-        if (typed.Length == 0 || times.Count != typed.Distinct().Count())
+        // Every piece typed must be a time, a day at least ticked (BackupScreenRules.Read).
+        var read = BackupScreenRules.Read(_bkEnabled.Checked, _bkTimes.Text,
+                                          _bkDays.Where(b => b.Checked).Select(b => (DayOfWeek)b.Tag!),
+                                          (int)_bkRetention.Value, _bkFolder.Text);
+        if (read.IsFailure)
         {
-            _dialogs.ShowFailure(Result.Failure(Error.Validation("Backup_TimesInvalid", _bkTimes.Text)), T("Backup.Tab"));
+            _dialogs.ShowFailure(read, T("Backup.Tab"));
             return null;
         }
 
-        var days = _bkDays.Where(b => b.Checked).Select(b => (DayOfWeek)b.Tag!).ToList();
-        if (days.Count == 0)
-        {
-            _dialogs.ShowFailure(Result.Failure(Error.Validation("Backup_DaysRequired")), T("Backup.Tab"));
-            return null;
-        }
-
-        return new BackupSettings
-        {
-            Enabled = _bkEnabled.Checked,
-            Times = times,
-            // Every day ticked is stored as "every day", which a day added to the week would keep.
-            Days = days.Count == 7 ? [] : days,
-            RetentionDays = (int)_bkRetention.Value,
-            Folder = _bkFolder.Text.Trim()
-        };
+        return read.Value;
     }
 
     private async Task SaveBackupSettingsAsync()
@@ -521,7 +484,7 @@ public sealed partial class SettingsView
 
             // A new folder SQL Server cannot write to yet: the server's task creates a missing local
             // folder and opens it to SQL Server, so saving anyway is a real choice, not a mistake.
-            if (saved.IsFailure && saved.FirstError.ResourceKey == "Backup_FolderNotWritable"
+            if (BackupScreenRules.MaySaveAnyway(saved)
                 && _dialogs.Confirm(T("Backup.SaveAnyway", Localizer.Describe(saved.Errors)), T("Backup.Tab")))
             {
                 saved = await _backups.SaveSettingsAsync(settings, checkFolder: false);
@@ -595,9 +558,7 @@ public sealed partial class SettingsView
         if (FindForm() is Forms.MainShellForm shell) await shell.RefreshBackupWarningAsync();
 
         _bkStatus.ForeColor = UiTheme.Normal;
-        _bkStatus.Text = outcome.Value.Verification == BackupCheckStatus.Verified
-            ? T("Backup.DoneVerified", BackupNaming.FileOf(outcome.Value.Path))
-            : T("Backup.DonePending", BackupNaming.FileOf(outcome.Value.Path));
+        _bkStatus.Text = T(BackupScreenRules.DoneKey(outcome.Value), BackupNaming.FileOf(outcome.Value.Path));
     }
 
     private async Task RestoreAsync()

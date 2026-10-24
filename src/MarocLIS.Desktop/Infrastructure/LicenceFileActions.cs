@@ -35,7 +35,7 @@ internal static class LicenceFileActions
         try
         {
             // A licence is a few hundred bytes; anything far larger is not one, and is not read.
-            if (new FileInfo(picker.FileName).Length > LicenceFile.MaxFileBytes)
+            if (!LicenceTabRules.IsReadableSize(new FileInfo(picker.FileName).Length))
             {
                 dialogs.Warn(localizer["Licence_FileUnreadable"], title);
                 return null;
@@ -96,12 +96,7 @@ internal static class LicenceFileActions
     }
 
     /// <summary>« demande-licence-LABO-CENTRAL.demande »: the site in the name, so the vendor's inbox tells them apart.</summary>
-    internal static string RequestFileName(LicenceRequest request)
-    {
-        var site = new string([.. request.Site.Select(c => char.IsLetterOrDigit(c) ? c : '-')]).Trim('-');
-        if (site.Length > 40) site = site[..40];
-        return $"demande-licence{(site.Length == 0 ? "" : "-" + site)}{LicenceRequest.Extension}";
-    }
+    internal static string RequestFileName(LicenceRequest request) => LicenceTabRules.RequestFileName(request);
 
     public static void CopyServerId(string? serverId, IUserDialogs dialogs, ILocalizer localizer)
     {

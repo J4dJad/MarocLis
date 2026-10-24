@@ -257,17 +257,7 @@ public sealed class AuditTrailView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _changes.Rows.Count) return;
         if (_changes.Rows[e.RowIndex].Tag is not AuditEntryRow row) return;
 
-        // A deletion of clinical data is the entry a review looks for first.
-        if (row.Operation is AuditOperation.SoftDelete or AuditOperation.Delete)
-        {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (row.Reason is { Length: > 0 })
-        {
-            // A change that needed a justification is a change somebody had to account for.
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-        }
+        Emphasise(e.CellStyle!, AuditTrailRules.Emphasis(row));
     }
 
     private void OnAccessFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -275,17 +265,7 @@ public sealed class AuditTrailView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _access.Rows.Count) return;
         if (_access.Rows[e.RowIndex].Tag is not DataAccessRow row) return;
 
-        if (row.IsBreakGlass)
-        {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (row.Kind is DataAccessKind.Export or DataAccessKind.Transmit
-                          or DataAccessKind.SubjectAccessRequest)
-        {
-            // Data leaving the laboratory, as distinct from being looked at inside it.
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-        }
+        Emphasise(e.CellStyle!, AuditTrailRules.Emphasis(row));
     }
 
     private void OnSecurityFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -293,17 +273,26 @@ public sealed class AuditTrailView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _security.Rows.Count) return;
         if (_security.Rows[e.RowIndex].Tag is not SecurityEventRow row) return;
 
-        if (!row.Succeeded)
+        // A refusal is read in red on the row's own background; a privilege changed is shaded.
+        switch (AuditTrailRules.Emphasis(row))
         {
-            e.CellStyle!.ForeColor = UiTheme.Critical;
+            case AuditEmphasis.Critical: e.CellStyle!.ForeColor = UiTheme.Critical; break;
+            case AuditEmphasis.Notable: e.CellStyle!.BackColor = UiTheme.AbnormalBackground; break;
         }
-        else if (row.Kind is SecurityEventKind.RoleAssigned or SecurityEventKind.RoleRemoved
-                          or SecurityEventKind.PermissionsChanged
-                          or SecurityEventKind.PasswordReset
-                          or SecurityEventKind.UserDeactivated
-                          or SecurityEventKind.SecuritySettingChanged)
+    }
+
+    /// <summary>The colours of a row that stands out (AuditTrailRules says which).</summary>
+    private static void Emphasise(DataGridViewCellStyle style, AuditEmphasis emphasis)
+    {
+        switch (emphasis)
         {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
+            case AuditEmphasis.Critical:
+                style.BackColor = UiTheme.CriticalBackground;
+                style.ForeColor = UiTheme.Critical;
+                break;
+            case AuditEmphasis.Notable:
+                style.BackColor = UiTheme.AbnormalBackground;
+                break;
         }
     }
 
@@ -374,10 +363,9 @@ public sealed class AuditTrailView : LocalizedView
             // A file number turns the consultation tab into a subject-access answer: scoped to that
             // patient and complete rather than capped, because a right of access under loi n° 08-09
             // is not satisfied by the first five hundred rows.
-            var access = string.IsNullOrWhiteSpace(_recordNumber.Text)
+            var access = AuditTrailRules.PatientRecordNumber(_recordNumber.Text) is not { } recordNumber
                 ? await _audit.GetDataAccessAsync(filter, ct)
-                : await _audit.GetPatientAccessHistoryAsync(_recordNumber.Text.Trim(),
-                                                              filter.From, filter.To, ct);
+                : await _audit.GetPatientAccessHistoryAsync(recordNumber, filter.From, filter.To, ct);
 
             if (access.IsFailure) { _dialogs.ShowFailure(access, Title); return; }
 
@@ -406,13 +394,8 @@ public sealed class AuditTrailView : LocalizedView
         }
     }
 
-    private AuditTrailFilter CurrentFilter() => new()
-    {
-        From = DateOnly.FromDateTime(_from.Value.Date),
-        To = DateOnly.FromDateTime(_to.Value.Date),
-        UserName = string.IsNullOrWhiteSpace(_user.Text) ? null : _user.Text.Trim(),
-        Search = string.IsNullOrWhiteSpace(_search.Text) ? null : _search.Text.Trim()
-    };
+    private AuditTrailFilter CurrentFilter() => AuditTrailRules.Filter(
+        DateOnly.FromDateTime(_from.Value.Date), DateOnly.FromDateTime(_to.Value.Date), _user.Text, _search.Text);
 
     /// <summary>
     /// Row count for the visible tab, and whether the ceiling cut it short.
@@ -431,15 +414,9 @@ public sealed class AuditTrailView : LocalizedView
             _ => (_changeRows.Count, _changesTruncated)
         };
 
-        if (truncated)
-        {
-            _status.ForeColor = UiTheme.Abnormal;
-            _status.Text = "⚠ " + T("Audit.Truncated", count);
-            return;
-        }
-
-        _status.ForeColor = UiTheme.TextSecondary;
-        _status.Text = T("Audit.RowCount", count);
+        var status = AuditTrailRules.Status(count, truncated);
+        _status.ForeColor = status.Truncated ? UiTheme.Abnormal : UiTheme.TextSecondary;
+        _status.Text = (status.Truncated ? "⚠ " : "") + T(status.Key, status.Count);
     }
 
     private void ShowDetail()
@@ -449,21 +426,18 @@ public sealed class AuditTrailView : LocalizedView
         _detail.Text = _tabs.SelectedIndex switch
         {
             1 => (_access.CurrentRow?.Tag as DataAccessRow) is { } access
-                ? Join(access.QueryDescription, access.BreakGlassJustification)
+                ? AuditTrailRules.Detail(access)
                 : string.Empty,
 
             2 => (_security.CurrentRow?.Tag as SecurityEventRow) is { } security
-                ? Join(security.Details, security.OsUser)
+                ? AuditTrailRules.Detail(security)
                 : string.Empty,
 
             _ => (_changes.CurrentRow?.Tag as AuditEntryRow) is { } change
-                ? Join(change.Changes, change.Reason)
+                ? AuditTrailRules.Detail(change)
                 : string.Empty
         };
     }
-
-    private static string Join(params string?[] parts) =>
-        string.Join("   ·   ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
 
     // ---- Rendering ---------------------------------------------------------------------------------
 
@@ -485,9 +459,7 @@ public sealed class AuditTrailView : LocalizedView
             var index = _changes.Rows.Add(
                 row.OccurredAt.ToString("dd/MM/yy HH:mm:ss", CultureInfo.CurrentCulture),
                 row.UserName ?? "—",
-                row.AggregateName is { Length: > 0 } && row.AggregateName != row.EntityName
-                    ? $"{row.EntityName} ({row.AggregateName})"
-                    : row.EntityName,
+                AuditTrailRules.Entity(row),
                 T($"AuditOperation.{row.Operation}"),
                 row.PatientRecordNumber ?? string.Empty,
                 row.ChangedProperties ?? string.Empty,

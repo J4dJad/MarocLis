@@ -189,20 +189,15 @@ public sealed partial class SettingsView : LocalizedView
         _tabs.TabPages.AddRange([_siteTab, _numberingTab, _settingsTab, _invoicePrintTab, _languagesTab, _storageTab,
                                  _printersTab, _backupsTab, _licenceTab]);
 
-        // The storage list is settings work: without the right the tab is not offered at all.
-        if (!PermissionGate.Allows(Permissions.Administration.ManageSettings))
-            _tabs.TabPages.Remove(_storageTab);
-        // Likewise the backups, with a right of their own: not even listed without it.
-        if (!BackupsOffered)
-            _tabs.TabPages.Remove(_backupsTab);
-
-        // The licence tab with its own right; and that right alone opens the screen on it only
-        // (with the backups beside it when that right is held too: both are governed by their own).
-        if (!PermissionGate.Allows(Permissions.Administration.License) || _licence is null)
-            _tabs.TabPages.Remove(_licenceTab);
-        else if (!HasSettingsRight)
-            foreach (var tab in _tabs.TabPages.Cast<TabPage>().Where(t => t != _licenceTab && t != _backupsTab).ToList())
-                _tabs.TabPages.Remove(tab);
+        // The storage list and the backups are not even listed without their right; the licence tab
+        // with its own right, and that right alone opens the screen on it only (SettingsScreenRules.Tabs).
+        IReadOnlyList<SettingsTab> offered = PermissionGate.User is { } user
+            ? SettingsScreenRules.Tabs(user, licenceAvailable: _licence is not null, backupsAvailable: _backups is not null)
+            : [];
+        TabPage[] pages = [_siteTab, _numberingTab, _settingsTab, _invoicePrintTab, _languagesTab, _storageTab,
+                           _printersTab, _backupsTab, _licenceTab];
+        foreach (var tab in Enum.GetValues<SettingsTab>().Where(t => !offered.Contains(t)))
+            _tabs.TabPages.Remove(pages[(int)tab]);
         Controls.Add(AdminLayout.FlatTabs(_tabs));
         Controls.Add(AdminLayout.PageHeader(_pageTitle, _pageCaption));
     }
@@ -455,14 +450,14 @@ public sealed partial class SettingsView : LocalizedView
         // inattendue ». The identifiers the service checks (ICE, IF, CNSS, INPE) are left to its
         // message, which says what is wrong with them.
         _code.MaxLength = ConfigurationService.MaxSiteCodeLength;
-        _nameFr.MaxLength = _nameAr.MaxLength = 300;
-        _legalName.MaxLength = 250;
-        _rc.MaxLength = _taxNumber.MaxLength = 40;
-        _rcCourt.MaxLength = _city.MaxLength = 100;
-        _ministryAuth.MaxLength = _accreditationNumber.MaxLength = 60;
-        _addressFr.MaxLength = _addressAr.MaxLength = 400;
-        _postalCode.MaxLength = 10;
-        _phone.MaxLength = _fax.MaxLength = _email.MaxLength = _website.MaxLength = 400;
+        _nameFr.MaxLength = _nameAr.MaxLength = SettingsScreenRules.SiteNameMaxLength;
+        _legalName.MaxLength = SettingsScreenRules.LegalNameMaxLength;
+        _rc.MaxLength = _taxNumber.MaxLength = SettingsScreenRules.RegisterMaxLength;
+        _rcCourt.MaxLength = _city.MaxLength = SettingsScreenRules.CourtMaxLength;
+        _ministryAuth.MaxLength = _accreditationNumber.MaxLength = SettingsScreenRules.AuthorizationMaxLength;
+        _addressFr.MaxLength = _addressAr.MaxLength = SettingsScreenRules.AddressMaxLength;
+        _postalCode.MaxLength = SettingsScreenRules.PostalCodeMaxLength;
+        _phone.MaxLength = _fax.MaxLength = _email.MaxLength = _website.MaxLength = SettingsScreenRules.ContactMaxLength;
 
         var fields = body.Controls.Cast<Control>().ToArray();
         body.Controls.Clear();
@@ -987,8 +982,7 @@ public sealed partial class SettingsView : LocalizedView
 
     // ---- Loading -------------------------------------------------------------------------------------
 
-    private static bool HasSettingsRight =>
-        PermissionGate.Allows(Permissions.Administration.ManageSites, Permissions.Administration.ManageSettings);
+    private static bool HasSettingsRight => PermissionGate.User is { } user && SettingsScreenRules.HasSettingsRight(user);
 
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
@@ -1003,10 +997,8 @@ public sealed partial class SettingsView : LocalizedView
 
             if (users.IsSuccess)
             {
-                // Only a qualified biologist may be named responsible for the site: loi n° 12-01
-                // reserves the direction of a medical biology laboratory to one, and the service
-                // refuses anyone else.
-                _biologists = [.. users.Value.Where(u => u.QualifiedToValidate)];
+                // Only a qualified biologist may be named responsible for the site (loi n° 12-01).
+                _biologists = [.. SettingsScreenRules.ResponsibleCandidates(users.Value)];
             }
 
             var sites = await _configuration.GetSitesAsync(ct);
@@ -1057,9 +1049,7 @@ public sealed partial class SettingsView : LocalizedView
     /// The code, the legal name (the site's name while it has none, as a site just created) and
     /// the kind, so a partner laboratory is not mistaken for one of the laboratory's own sites.
     /// </summary>
-    private string SiteDisplay(SiteDetail site) =>
-        $"{site.Code} — {(string.IsNullOrWhiteSpace(site.LegalName) ? site.Name.Fr : site.LegalName)}"
-        + $" ({T($"LabSiteKind.{site.Kind}")})";
+    private string SiteDisplay(SiteDetail site) => SettingsScreenRules.SiteDisplay(site, T($"LabSiteKind.{site.Kind}"));
 
     private SiteDetail? Current =>
         _sitePicker.SelectedItem is SiteChoice choice
@@ -1097,7 +1087,7 @@ public sealed partial class SettingsView : LocalizedView
         _responsible.Items.Clear();
         _responsible.Items.Add(new SiteChoice(Guid.Empty, "—"));
         foreach (var b in _biologists)
-            _responsible.Items.Add(new SiteChoice(b.UserId, $"{b.FullName} ({b.ProfessionalOrderNumber})"));
+            _responsible.Items.Add(new SiteChoice(b.UserId, SettingsScreenRules.ResponsibleDisplay(b)));
 
         var responsibleIndex = site.ResponsibleBiologistUserId is { } rid
             ? _responsible.Items.Cast<SiteChoice>().ToList().FindIndex(c => c.Id == rid)
@@ -1168,9 +1158,8 @@ public sealed partial class SettingsView : LocalizedView
     /// </summary>
     private void RenderBanners(IReadOnlyList<string> invoicing, IReadOnlyList<string> operation)
     {
-        // A partner laboratory neither invoices nor releases reports here: only its identity and
-        // contact details are used, on the dispatch slips. Its blockers would only be noise.
-        if ((_kind.SelectedItem as EnumChoice)?.Value == (int)LabSiteKind.ReferralPartner)
+        // A partner laboratory neither invoices nor releases reports here: its blockers would only be noise.
+        if (!SettingsScreenRules.ShowsBlockers((LabSiteKind)((_kind.SelectedItem as EnumChoice)?.Value ?? 0)))
         {
             _invoicingBanner.ForeColor = UiTheme.TextSecondary;
             _invoicingBanner.Text = T("Site.PartnerNotice");
@@ -1217,13 +1206,11 @@ public sealed partial class SettingsView : LocalizedView
     {
         if (Current is not { } site) return;
 
-        var responsible = (_responsible.SelectedItem as SiteChoice)?.Id;
-
-        var request = new SiteRequest
+        var form = new SiteForm
         {
-            SiteId = site.Id,
             Code = _code.Text,
-            Name = new MultilingualText(_nameFr.Text.Trim(), _nameAr.Text.Trim(), site.Name.En),
+            NameFr = _nameFr.Text,
+            NameAr = _nameAr.Text,
             Kind = (LabSiteKind)((_kind.SelectedItem as EnumChoice)?.Value ?? 0),
             LegalName = _legalName.Text,
             Ice = _ice.Text,
@@ -1233,16 +1220,14 @@ public sealed partial class SettingsView : LocalizedView
             ProfessionalTaxNumber = _taxNumber.Text,
             CnssAffiliationNumber = _cnss.Text,
             Inpe = _inpe.Text,
-            HealthMinistryAuthorizationNumber = _ministryAuth.Text,
-            HealthMinistryAuthorizationDate = _hasMinistryDate.Checked
-                ? DateOnly.FromDateTime(_ministryDate.Value.Date) : null,
+            MinistryAuthorization = _ministryAuth.Text,
+            MinistryAuthorizationDate = _hasMinistryDate.Checked ? DateOnly.FromDateTime(_ministryDate.Value.Date) : null,
             IsAccredited = _accredited.Checked,
             AccreditationNumber = _accreditationNumber.Text,
-            AccreditationValidUntil = _accredited.Checked
-                ? DateOnly.FromDateTime(_accreditationUntil.Value.Date) : null,
-            ResponsibleBiologistUserId = responsible == Guid.Empty ? null : responsible,
-            AddressLine = new MultilingualText(_addressFr.Text.Trim(), _addressAr.Text.Trim(),
-                                                site.AddressLine?.En),
+            AccreditationValidUntil = DateOnly.FromDateTime(_accreditationUntil.Value.Date),
+            ResponsibleBiologistUserId = (_responsible.SelectedItem as SiteChoice)?.Id,
+            AddressFr = _addressFr.Text,
+            AddressAr = _addressAr.Text,
             City = _city.Text,
             Region = (MoroccanRegion)((_region.SelectedItem as EnumChoice)?.Value ?? 0),
             PostalCode = _postalCode.Text,
@@ -1250,10 +1235,10 @@ public sealed partial class SettingsView : LocalizedView
             Fax = _fax.Text,
             Email = _email.Text,
             Website = _website.Text,
-            LogoPng = _pendingLogo,
-            RemoveLogo = _logoRemoved && _pendingLogo is null,
-            IsActive = site.IsActive
+            NewLogo = _pendingLogo,
+            LogoRemoved = _logoRemoved
         };
+        var request = SettingsScreenRules.ToRequest(site, form);
 
         var result = await _configuration.SaveSiteAsync(request);
 
@@ -1267,12 +1252,9 @@ public sealed partial class SettingsView : LocalizedView
 
         RenderBanners(outcome.InvoicingBlockers, outcome.OperationBlockers);
 
-        _siteStatus.ForeColor = outcome.CanInvoice && outcome.CanReleaseReports
-            ? UiTheme.Normal : UiTheme.Abnormal;
-
-        _siteStatus.Text = outcome.CanInvoice && outcome.CanReleaseReports
-            ? T("Site.ConfigurationComplete")
-            : T("Message.Saved");
+        var (savedKey, complete) = SettingsScreenRules.SavedStatus(outcome);
+        _siteStatus.ForeColor = complete ? UiTheme.Normal : UiTheme.Abnormal;
+        _siteStatus.Text = T(savedKey);
 
         await ActivateAsync();
     }
@@ -1309,12 +1291,7 @@ public sealed partial class SettingsView : LocalizedView
             nameAr = arBox.Text.Trim();
             kind = FieldDialog.Selected<LabSiteKind>(kindBox);
 
-            var result = await _configuration.CreateSiteAsync(new NewSiteRequest
-            {
-                Code = code,
-                Name = new MultilingualText(nameFr, nameAr.Length == 0 ? null : nameAr),
-                Kind = kind
-            });
+            var result = await _configuration.CreateSiteAsync(SettingsScreenRules.NewSite(code, nameFr, nameAr, kind));
 
             if (result.IsFailure)
             {
@@ -1361,9 +1338,7 @@ public sealed partial class SettingsView : LocalizedView
                     row.Preview,
                     row.NextValue.ToString("N0"),
                     row.HasBeenUsed ? row.LastAllocatedValue.ToString("N0") : "—",
-                    row.IsClosed ? T("Admin.SequenceClosed")
-                                 : row.HasBeenUsed ? T("Admin.SequenceInUse")
-                                                   : T("Admin.SequenceEditable"));
+                    T(SettingsScreenRules.StateKey(row)));
 
                 _sequences.Rows[index].Tag = row;
             }
@@ -1376,18 +1351,16 @@ public sealed partial class SettingsView : LocalizedView
     {
         var row = _sequences.CurrentRow?.Tag as SequenceRow;
 
-        // Editable only before the first number is handed out. After that the DGI's requirement
-        // for an unbroken chronological series makes a format change unreconcilable.
-        _editFormat.Enabled = row is { HasBeenUsed: false, IsClosed: false };
-        _toggleClosed.Enabled = row is not null;
+        // The format before the first number only (the DGI's unbroken series); the start before
+        // it, or forward on a series that is not fiscal (SettingsScreenRules.Actions).
+        var actions = PermissionGate.User is { } user
+            ? SettingsScreenRules.Actions(user, row)
+            : new SequenceActions(false, false, false, row is not { IsClosed: true });
+        _editFormat.Enabled = actions.EditFormat;
+        _toggleClosed.Enabled = actions.ToggleClosed;
+        _sequenceStart.Enabled = actions.SetStart;
 
-        // Before the first number, or forward on a series that is not fiscal (see SetNextValue).
-        _sequenceStart.Enabled = row is { IsClosed: false }
-                                 && (!row.HasBeenUsed || !Domain.Sequencing.NumberSequence.IsFiscal(row.Purpose));
-
-        _toggleClosed.Text = row is { IsClosed: true }
-            ? T("Admin.ReopenSequence")
-            : T("Admin.CloseSequence");
+        _toggleClosed.Text = actions.Closes ? T("Admin.CloseSequence") : T("Admin.ReopenSequence");
     }
 
     private async Task EditFormatAsync()
@@ -1396,7 +1369,7 @@ public sealed partial class SettingsView : LocalizedView
 
         var answer = _dialogs.PromptForText(
             T("Admin.SequenceFormatPrompt", T($"SequencePurpose.{row.Purpose}")),
-            T("Admin.EditSequenceFormat"), row.Format, maxLength: 100);
+            T("Admin.EditSequenceFormat"), row.Format, maxLength: SettingsScreenRules.SequenceFormatMaxLength);
 
         if (string.IsNullOrWhiteSpace(answer) || answer.Trim() == row.Format) return;
 
@@ -1417,12 +1390,12 @@ public sealed partial class SettingsView : LocalizedView
 
         var answer = _dialogs.PromptForText(
             T("Admin.SequenceStartPrompt", T($"SequencePurpose.{row.Purpose}"), row.LastAllocatedValue),
-            T("Admin.SequenceStart"), row.NextValue.ToString(System.Globalization.CultureInfo.InvariantCulture), maxLength: 12);
+            T("Admin.SequenceStart"), row.NextValue.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            maxLength: SettingsScreenRules.SequenceStartMaxLength);
 
         if (string.IsNullOrWhiteSpace(answer)) return;
 
-        if (!long.TryParse(answer.Trim(), System.Globalization.NumberStyles.None,
-                           System.Globalization.CultureInfo.InvariantCulture, out var next))
+        if (SettingsScreenRules.ParseStart(answer) is not { } next)
         {
             _dialogs.Warn(T("Sequence_StartOutOfRange"), T("Admin.SequenceStart"));
             return;
@@ -1451,7 +1424,8 @@ public sealed partial class SettingsView : LocalizedView
             closing
                 ? T("Admin.CloseSequencePrompt", T($"SequencePurpose.{row.Purpose}"))
                 : T("Admin.ReopenSequencePrompt", T($"SequencePurpose.{row.Purpose}")),
-            closing ? T("Admin.CloseSequence") : T("Admin.ReopenSequence"), maxLength: 500);
+            closing ? T("Admin.CloseSequence") : T("Admin.ReopenSequence"),
+            maxLength: SettingsScreenRules.SequenceReasonMaxLength);
 
         if (reason is null) return;
 
@@ -1469,8 +1443,8 @@ public sealed partial class SettingsView : LocalizedView
     // ---- Settings ------------------------------------------------------------------------------------
 
     // The columns of a setting: a longer key or value failed the save with an unexpected error.
-    private const int SettingKeyMaxLength = 120;
-    private const int SettingValueMaxLength = 2000;
+    private const int SettingKeyMaxLength = SettingsScreenRules.SettingKeyMaxLength;
+    private const int SettingValueMaxLength = SettingsScreenRules.SettingValueMaxLength;
 
     private async Task LoadSettingsAsync(CancellationToken ct = default)
     {
@@ -1496,7 +1470,7 @@ public sealed partial class SettingsView : LocalizedView
                     row.Key,
                     // A sensitive value is not shown: some of these hold credentials, and this screen
                     // is used at a shared administrative workstation.
-                    row.IsSecuritySensitive ? "••••••••" : row.Value ?? string.Empty,
+                    SettingsScreenRules.DisplayValue(row),
                     row.SiteId is null ? "—" : _sites.FirstOrDefault(s => s.Id == row.SiteId)?.Code ?? "?",
                     row.Description ?? string.Empty,
                     row.IsSecuritySensitive ? T("Admin.SettingSensitive") : string.Empty);
@@ -1517,7 +1491,7 @@ public sealed partial class SettingsView : LocalizedView
 
         var answer = _dialogs.PromptForText(
             T("Admin.SettingValuePrompt", row.Key),
-            T("Action.Edit"), row.IsSecuritySensitive ? string.Empty : row.Value, SettingValueMaxLength);
+            T("Action.Edit"), SettingsScreenRules.EditInitial(row), SettingValueMaxLength);
 
         if (answer is null) return;
 
@@ -1593,9 +1567,12 @@ public sealed partial class SettingsView : LocalizedView
     {
         var row = _places.CurrentRow?.Tag as SampleStorageLocationRow;
 
-        _renamePlace.Enabled = row is not null;
-        _togglePlace.Enabled = row is not null;
-        _togglePlace.Text = row is { IsActive: false } ? T("Admin.Reactivate") : T("Admin.Deactivate");
+        var (rename, toggle, reactivates) = PermissionGate.User is { } user
+            ? SettingsScreenRules.PlaceActions(user, row)
+            : (false, false, row is { IsActive: false });
+        _renamePlace.Enabled = rename;
+        _togglePlace.Enabled = toggle;
+        _togglePlace.Text = reactivates ? T("Admin.Reactivate") : T("Admin.Deactivate");
     }
 
     private async Task AddPlaceAsync()

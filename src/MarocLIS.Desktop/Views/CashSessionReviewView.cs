@@ -51,8 +51,9 @@ public sealed class CashSessionReviewView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
 
-        _from.Value = DateTime.Today.AddDays(-30);
-        _to.Value = DateTime.Today;
+        var (from, to) = CashReviewRules.DefaultPeriod(DateOnly.FromDateTime(DateTime.Today));
+        _from.Value = from.ToDateTime(TimeOnly.MinValue);
+        _to.Value = to.ToDateTime(TimeOnly.MinValue);
 
         BuildLayout();
 
@@ -105,8 +106,8 @@ public sealed class CashSessionReviewView : LocalizedView
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not CashSessionReviewRow row) return;
-            if (row.Variance is { } v && v != 0m && _grid.Columns[e.ColumnIndex].Name == "variance")
-                e.CellStyle!.ForeColor = Math.Abs(v) > 10m ? UiTheme.Critical : UiTheme.Abnormal;
+            if (_grid.Columns[e.ColumnIndex].Name == "variance" && VarianceColour(row.Variance) is { } colour)
+                e.CellStyle!.ForeColor = colour;
         };
 
         FinanceUi.PillColumn(_grid, "status", row => row.Tag is CashSessionReviewRow session
@@ -205,7 +206,7 @@ public sealed class CashSessionReviewView : LocalizedView
 
     private void RenderChips()
     {
-        var pending = _rows.Count(r => !r.IsReconciled);
+        var pending = CashReviewRules.PendingCount(_rows);
 
         // « Toutes » counts only once the whole period is loaded; « À viser » counts in both cases.
         _pendingChip.Text = $"{T("Treasury.SessionToReview")} · {pending}";
@@ -291,11 +292,9 @@ public sealed class CashSessionReviewView : LocalizedView
         var row = Current;
         // Disabled up front on one's own till: the domain refuses it (four eyes), and it used to say
         // so only after the comment had been typed.
-        var ownTill = row is { IsReconciled: false } && PermissionGate.User?.UserId == row.OperatorUserId;
+        var ownTill = PermissionGate.User is { } operatorUser && CashReviewRules.IsOwnTill(operatorUser, row);
 
-        _reconcile.Enabled = row is not null && PermissionGate.User is { } user
-                             && row.CanBeReconciledBy(user.UserId)
-                             && PermissionGate.Allows(Permissions.Billing.ReconcileCashSession);
+        _reconcile.Enabled = PermissionGate.User is { } user && CashReviewRules.CanReconcile(user, row);
 
         RenderAside(row);
 
@@ -333,10 +332,16 @@ public sealed class CashSessionReviewView : LocalizedView
             : [row.ExpectedClosingCash, row.CountedCash, row.Variance, row.CashWithdrawals, row.NonCashReceipts];
         for (var i = 0; i < values.Length; i++) _factValues[i].Text = row is null ? string.Empty : Amount(values[i]);
 
-        _factValues[2].ForeColor = row?.Variance is { } v && v != 0m
-            ? Math.Abs(v) > 10m ? UiTheme.Critical : UiTheme.Abnormal
-            : UiTheme.TextPrimary;
+        _factValues[2].ForeColor = VarianceColour(row?.Variance) ?? UiTheme.TextPrimary;
     }
+
+    /// <summary>A variance in amber, beyond the tolerance in red (CashReviewRules reads it).</summary>
+    private static Color? VarianceColour(decimal? variance) => CashReviewRules.Reading(variance) switch
+    {
+        VarianceReading.BeyondTolerance => UiTheme.Critical,
+        VarianceReading.WithinTolerance => UiTheme.Abnormal,
+        _ => null
+    };
 
     private async Task ReconcileAsync()
     {
@@ -344,17 +349,17 @@ public sealed class CashSessionReviewView : LocalizedView
 
         // A till that balanced is signed off with an optional comment; one that did not needs one.
         string? comment;
-        if (row.Variance is { } v && v != 0m)
+        if (CashReviewRules.CommentRequired(row) && row.Variance is { } v)
         {
             comment = _dialogs.PromptForReason(T("Treasury.ReconcileCommentPrompt", row.OperatorName, Amount(v)),
                                                _reconcile.Text,
-                                               maxLength: Domain.Billing.CashSession.ReconciliationCommentMaxLength);
+                                               maxLength: CashReviewRules.CommentMaxLength);
             if (comment is null) return;
         }
         else
         {
             comment = _dialogs.PromptForText(T("Treasury.ReconcileOptionalPrompt", row.OperatorName), _reconcile.Text,
-                                             maxLength: Domain.Billing.CashSession.ReconciliationCommentMaxLength);
+                                             maxLength: CashReviewRules.CommentMaxLength);
             if (comment is null) return;
         }
 
