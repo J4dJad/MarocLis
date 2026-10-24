@@ -11,7 +11,8 @@
 @*
     A screen of the menu. Opened only by the rule that builds the menu: a screen the operator may not
     see is refused here too when its address is typed, and the refusal is recorded as the services
-    record one. For now every screen says it is not yet in the web version.
+    record one. The screens ported so far open here; the others say they are not yet in the web
+    version.
 *@
 <PageTitle>MarocLIS — @Title</PageTitle>
 
@@ -26,6 +27,18 @@
 
     @switch (_decision)
     {
+        case ScreenDecision.Open when Key == "patients":
+            <MarocLIS.Web.Components.Screens.Patients.PatientSearch />
+            break;
+
+        case ScreenDecision.Open when Key == "orders":
+            <MarocLIS.Web.Components.Screens.Orders.OrderRegistration PatientToSelect="Patient" />
+            break;
+
+        case ScreenDecision.Open when Key == "orderdetail":
+            <MarocLIS.Web.Components.Screens.Orders.OrderFile OrderId="Dossier" />
+            break;
+
         case ScreenDecision.Open:
             <div class="card card-empty" data-state="unavailable">
                 <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Cpu" Class="icon-large" />
@@ -52,6 +65,12 @@
 
 @code {
     [Parameter] public string Key { get; set; } = string.Empty;
+
+    /// <summary>« Nouvelle demande pour ce patient »: the order screen with this patient chosen.</summary>
+    [SupplyParameterFromQuery(Name = "patient")] public Guid? Patient { get; set; }
+
+    /// <summary>A file opened from a patient's history or a registration: the file screen on it.</summary>
+    [SupplyParameterFromQuery(Name = "dossier")] public Guid? Dossier { get; set; }
 
     private ScreenDecision _decision = ScreenDecision.NotFound;
     private MarocLIS.Application.Navigation.MenuEntry? _entry;
