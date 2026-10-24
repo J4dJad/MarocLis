@@ -578,6 +578,8 @@ html[dir="rtl"] .file-list li.is-selected { box-shadow: inset -3px 0 0 var(--acc
 .caption { margin: 12px 0 4px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
 .normal-ink { color: var(--normal); }
 .scan-box .input, .input.scan-box { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+/* In a column of a .field, the box's flex basis would be its height: it keeps its own. */
+.field > .search-box { flex: 0 0 auto; }
 
 .file-list li.is-alerted { box-shadow: inset 3px 0 0 var(--critical); }
 html[dir="rtl"] .file-list li.is-alerted { box-shadow: inset -3px 0 0 var(--critical); }

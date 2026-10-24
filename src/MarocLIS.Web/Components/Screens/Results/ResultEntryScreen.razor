@@ -186,7 +186,7 @@
                                             <span class="mono small">@ValidationScreenRules.FlagGlyphs(row.Flags)</span>
                                         </td>
                                         <td class="small">@row.UnitSymbol</td>
-                                        <td class="small mono">@row.ReferenceRangeText</td>
+                                        <td class="small mono"><bdi dir="ltr">@row.ReferenceRangeText</bdi></td>
                                         <td class="small mono">@Previous(row)</td>
                                         <td class="small">@(ResultEntryRules.Origin(row, origin, Texts.Language) ?? Texts["ResultEntry.Manual"])</td>
                                         <td>
