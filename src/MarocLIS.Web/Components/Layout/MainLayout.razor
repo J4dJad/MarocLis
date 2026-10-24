@@ -35,15 +35,24 @@ else
                 }
             </nav>
             <div class="topbar-end">
-                <div class="who">
-                    <span class="who-name">@Context.User.FullName</span>
-                    <span class="who-place">@Texts["App.Site"] : @Context.User.SiteCode · @Texts["App.Workstation"] : <bdi>@session.Workstation</bdi></span>
-                </div>
                 <LanguageSwitch ReturnUrl="@CurrentPath" />
-                <a class="btn btn-secondary" href="@WebPaths.PasswordChange.TrimStart('/')">
-                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.KeyRound" />@Texts["Action.ChangePassword"]
-                </a>
-                <SignOutButton />
+                @* The operator, folded: the name and the workstation; the password and the sign-out under it. *@
+                <details class="user-menu" data-menu="user">
+                    <summary class="user-menu-button" aria-label="@Texts["Web.UserMenu"]">
+                        <span class="who-initials" aria-hidden="true">@MarocLIS.Application.Orders.OrderRegistrationRules.Initials(Context.User.FullName)</span>
+                        <span class="who">
+                            <span class="who-name">@Context.User.FullName</span>
+                            <span class="who-place">@Texts["App.Site"] : @Context.User.SiteCode · @Texts["App.Workstation"] : <bdi>@session.Workstation</bdi></span>
+                        </span>
+                        <span class="user-menu-caret" aria-hidden="true">▾</span>
+                    </summary>
+                    <div class="user-menu-panel">
+                        <a class="btn btn-secondary" href="@WebPaths.PasswordChange.TrimStart('/')">
+                            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.KeyRound" />@Texts["Action.ChangePassword"]
+                        </a>
+                        <SignOutButton />
+                    </div>
+                </details>
             </div>
         </header>
 
@@ -60,6 +69,13 @@ else
         <div class="frame">
             <aside class="sidebar">
                 <NavMenu Groups="WebMenu.Build(Context.User, Licence.Current)" />
+                @* The menu folded to its icons, for the screens that need the width; remembered by the browser (maroclis.js). *@
+                <div class="sidebar-foot">
+                    <button type="button" class="nav-toggle" data-action="toggle-nav" aria-expanded="true">
+                        <span class="when-expanded"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.ChevronLeft" /><span>@Texts["Web.CollapseMenu"]</span></span>
+                        <span class="when-collapsed" title="@Texts["Web.ExpandMenu"]"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.ChevronRight" /><span class="visually-hidden">@Texts["Web.ExpandMenu"]</span></span>
+                    </button>
+                </div>
             </aside>
             <main class="content" id="contenu">
                 @Body

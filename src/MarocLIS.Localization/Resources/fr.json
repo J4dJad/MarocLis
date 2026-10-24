@@ -6732,6 +6732,13 @@
     "NetworkRefused": "Accès refusé : MarocLIS Web n'est accessible que depuis le réseau local du laboratoire.",
     "Breadcrumb": "Fil d'Ariane",
     "Menu": "Menu principal",
+    "UserMenu": "Menu de l'utilisateur",
+    "CollapseMenu": "Réduire le menu",
+    "ExpandMenu": "Déplier le menu",
+    "Decision": "Décision",
+    "CivilStatus": "État civil",
+    "Birth": "Naissance",
+    "IdentityDocuments": "Pièces d'identité",
     "Home": {
       "Title": "Accueil",
       "Welcome": "Bienvenue, {0}",

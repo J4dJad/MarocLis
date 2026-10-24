@@ -1,6 +1,6 @@
 @inject WebTexts Texts
 
-<NavLink class="nav-item" href="@Item.Href" data-key="@Item.Entry.Key">
+<NavLink class="nav-item" href="@Item.Href" data-key="@Item.Entry.Key" title="@Texts[Item.Entry.LabelKey]">
     <Icon Glyph="Item.Icon" /><span>@Texts[Item.Entry.LabelKey]</span>
 </NavLink>
 

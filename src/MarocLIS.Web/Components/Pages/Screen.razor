@@ -16,7 +16,7 @@
 *@
 <PageTitle>MarocLIS — @Title</PageTitle>
 
-<div class="page">
+<div class="page @(_decision == ScreenDecision.Open ? "page-screen" : null)">
     <h1 class="page-title">
         @if (_decision == ScreenDecision.Open)
         {

@@ -6731,6 +6731,13 @@
     "NetworkRefused": "تم رفض الوصول: لا يمكن الوصول إلى MarocLIS Web إلا من الشبكة المحلية للمختبر.",
     "Breadcrumb": "مسار التنقل",
     "Menu": "القائمة الرئيسية",
+    "UserMenu": "قائمة المستخدم",
+    "CollapseMenu": "طي القائمة",
+    "ExpandMenu": "توسيع القائمة",
+    "Decision": "القرار",
+    "CivilStatus": "الحالة المدنية",
+    "Birth": "الولادة",
+    "IdentityDocuments": "وثائق الهوية",
     "Home": {
       "Title": "الصفحة الرئيسية",
       "Welcome": "مرحبًا، {0}",

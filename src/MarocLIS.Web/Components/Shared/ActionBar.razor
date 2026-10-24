@@ -1,0 +1,64 @@
+@inject WebTexts Texts
+
+@*
+    The action bar of a screen, the same on every screen: one row at the foot of the screen, out of
+    the scrolled content so it never hides a line. At the start, the secondary actions, then
+    « Plus d'actions » for the rarely used ones, then — set apart — the destructive ones; in the
+    middle, the last action's message and what is left to do; at the end, the primary action. In
+    Arabic the row is mirrored: the primary action is on the left. The buttons, their rights and
+    their conditions are the screen's: the bar only places them.
+*@
+<footer class="action-bar" data-bar="actions">
+    <div class="action-bar-start">
+        @Secondary
+        @if (More is not null && ShowMore)
+        {
+            <details class="more more-up">
+                <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]<span class="more-caret" aria-hidden="true">▴</span></summary>
+                <div class="more-menu">@More</div>
+            </details>
+        }
+        @if (Destructive is not null)
+        {
+            <span class="action-bar-rule" aria-hidden="true"></span>
+            @Destructive
+        }
+    </div>
+    <div class="action-bar-middle">
+        @if (ShowStatus)
+        {
+            <p class="action-bar-status @StatusClass" role="status" data-state="status" title="@StatusText">@StatusText</p>
+        }
+        @if (Info is not null)
+        {
+            <span class="action-bar-info">@Info</span>
+        }
+    </div>
+    <div class="action-bar-end">@Primary</div>
+</footer>
+
+@code {
+    /// <summary>The actions at the start of the row (left in French, right in Arabic).</summary>
+    [Parameter] public RenderFragment? Secondary { get; set; }
+
+    /// <summary>The rarely used actions, behind « Plus d'actions ».</summary>
+    [Parameter] public RenderFragment? More { get; set; }
+
+    /// <summary>« Plus d'actions » offered only when there is something to act on.</summary>
+    [Parameter] public bool ShowMore { get; set; } = true;
+
+    /// <summary>The destructive actions, set apart from the others and from the primary one.</summary>
+    [Parameter] public RenderFragment? Destructive { get; set; }
+
+    /// <summary>What is left to do, beside the message.</summary>
+    [Parameter] public RenderFragment? Info { get; set; }
+
+    /// <summary>The primary action (and the hidden buttons that only carry a key), at the end of the row.</summary>
+    [Parameter] public RenderFragment? Primary { get; set; }
+
+    [Parameter] public bool ShowStatus { get; set; } = true;
+    [Parameter] public string? StatusText { get; set; }
+
+    /// <summary>The message's tone, as a class: is-muted, is-normal, is-abnormal, is-critical.</summary>
+    [Parameter] public string StatusClass { get; set; } = "is-muted";
+}

@@ -6731,6 +6731,13 @@
     "NetworkRefused": "Access denied: MarocLIS Web can only be reached from the laboratory's local network.",
     "Breadcrumb": "Breadcrumb",
     "Menu": "Main menu",
+    "UserMenu": "User menu",
+    "CollapseMenu": "Collapse the menu",
+    "ExpandMenu": "Expand the menu",
+    "Decision": "Decision",
+    "CivilStatus": "Civil status",
+    "Birth": "Birth",
+    "IdentityDocuments": "Identity documents",
     "Home": {
       "Title": "Home",
       "Welcome": "Welcome, {0}",

@@ -57,6 +57,50 @@
         }
     };
 
+    // The menu folded to its icons, or not: the operator's choice, kept by this browser. Applied
+    // before the shell is drawn, so the menu does not unfold and fold again on each page.
+    const navKey = "maroclis.nav";
+    const setNav = (collapsed) => {
+        document.documentElement.classList.toggle("nav-collapsed", collapsed);
+        for (const toggle of document.querySelectorAll('[data-action="toggle-nav"]')) {
+            toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        }
+    };
+    try { setNav(localStorage.getItem(navKey) === "collapsed"); } catch { /* no storage: the menu unfolded */ }
+
+    document.addEventListener("click", (e) => {
+        if (!(e.target instanceof Element)) return;
+
+        const toggle = e.target.closest('[data-action="toggle-nav"]');
+        if (toggle) {
+            const collapsed = !document.documentElement.classList.contains("nav-collapsed");
+            setNav(collapsed);
+            try { localStorage.setItem(navKey, collapsed ? "collapsed" : "expanded"); } catch { /* kept for this page only */ }
+            return;
+        }
+
+        // A drop-down (« Plus d'actions », the operator's menu) closes when one of its actions is
+        // taken or when the click lands elsewhere, as a menu of the workstation does.
+        for (const open of document.querySelectorAll("details.more[open], details.user-menu[open]")) {
+            const inside = open.contains(e.target);
+            const onItem = inside && e.target.closest(".more-menu .btn");
+            if (!inside || onItem) open.removeAttribute("open");
+        }
+    });
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        for (const open of document.querySelectorAll("details.more[open], details.user-menu[open]")) open.removeAttribute("open");
+    });
+
+    // The shell is drawn by the circuit after this script ran: the toggle's state follows it.
+    new MutationObserver(() => {
+        const toggle = document.querySelector('[data-action="toggle-nav"]');
+        if (toggle && toggle.getAttribute("aria-expanded") !== (document.documentElement.classList.contains("nav-collapsed") ? "false" : "true")) {
+            setNav(document.documentElement.classList.contains("nav-collapsed"));
+        }
+    }).observe(document.body, { childList: true, subtree: true });
+
     // The keys of the workstation's action bars — F3, F8, F9, F10, F12, Ctrl+S — press the button
     // that carries them (data-shortcut), when it is on the page and not disabled; the browser
     // keeps its own keys otherwise. A dialog open keeps them to its own buttons.
