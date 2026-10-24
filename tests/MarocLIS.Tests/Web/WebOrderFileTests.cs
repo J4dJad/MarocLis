@@ -117,6 +117,19 @@ public sealed class WebOrderFileTests : WebScreenContext
     }
 
     [Fact]
+    public void TheActions_AreInOneBar_ThePrimaryAtTheEnd_AndTheCancellationSetApart()
+    {
+        SignIn(AppLanguage.French, Permissions.Orders.View, Permissions.Orders.Edit, Permissions.Orders.Cancel);
+
+        var page = Open();
+
+        page.FindAll("[data-bar=actions]").Should().ContainSingle();
+        page.Find(".action-bar-end [data-action='Order.AddAnalyses']").ClassList.Should().Contain("btn-primary");
+        page.Find(".more-menu [data-action='Order.CancelOrder']").ClassList.Should().Contain("btn-danger");
+        page.FindAll("[data-action='Order.EditHeader']").Should().ContainSingle("an action is offered once");
+    }
+
+    [Fact]
     public void TheFile_IsInArabic_ForAnArabicSession()
     {
         SignIn(AppLanguage.Arabic, Permissions.Orders.View);

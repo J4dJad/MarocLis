@@ -27,283 +27,293 @@
     browser has no access to the counter's label printer.
 *@
 <div class="screen order-entry" data-screen="orders">
-    <p class="page-lead">@Texts["OrderEntry.Subtitle"]</p>
+    <div class="screen-body">
+        <p class="page-lead">@Texts["OrderEntry.Subtitle"]</p>
 
-    <section class="card patient-card" data-card="patient">
-        @if (_patient is { } patient)
-        {
-            <div class="patient-band" data-state="patient" data-patient="@patient.MedicalRecordNumber">
-                <span class="initials @(patient.HasCriticalAlert ? "is-critical" : null)" aria-hidden="true">@OrderRegistrationRules.Initials(patient.FullName)</span>
-                <div class="patient-band-text">
-                    <div class="patient-band-name @(patient.HasCriticalAlert ? "critical" : "accent")">@patient.FullName</div>
-                    <div class="muted">@Facts(patient)</div>
-                    <div class="muted small">@Ids(patient)</div>
+        <section class="card patient-card" data-card="patient">
+            @if (_patient is { } patient)
+            {
+                <div class="patient-band" data-state="patient" data-patient="@patient.MedicalRecordNumber">
+                    <span class="initials @(patient.HasCriticalAlert ? "is-critical" : null)" aria-hidden="true">@OrderRegistrationRules.Initials(patient.FullName)</span>
+                    <div class="patient-band-text">
+                        <div class="patient-band-name @(patient.HasCriticalAlert ? "critical" : "accent")">@patient.FullName</div>
+                        <div class="muted">@Facts(patient)</div>
+                        <div class="muted small">@Ids(patient)</div>
+                    </div>
+                    <div class="patient-band-end">
+                        <span class="small">
+                            @History(patient)
+                            @if (patient.OrderCount > 0 && User.Has(Permissions.Orders.View))
+                            {
+                                <button type="button" class="link" data-action="OrderEntry.View" @onclick="AskOpenLatestOrder">@Texts["OrderEntry.View"]</button>
+                            }
+                        </span>
+                        <ActionButton Key="OrderEntry.ChangePatient" OnClick="ChangePatient" />
+                    </div>
                 </div>
-                <div class="patient-band-end">
-                    <span class="small">
-                        @History(patient)
-                        @if (patient.OrderCount > 0 && User.Has(Permissions.Orders.View))
+            }
+            else
+            {
+                <div class="toolbar">
+                    <div class="search-box search-box-wide">
+                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                        <input class="input" type="search" placeholder="@Texts["OrderEntry.PatientSearchPlaceholder"]"
+                               aria-label="@Texts["OrderEntry.PatientSearchPlaceholder"]" data-field="patient-search"
+                               autocomplete="off" value="@_patientTerm" @oninput="PatientTermChanged" @onkeydown="PatientKey" />
+                        @if (_patients.Count > 0)
                         {
-                            <button type="button" class="link" data-action="OrderEntry.View" @onclick="AskOpenLatestOrder">@Texts["OrderEntry.View"]</button>
+                            <ul class="suggestions" role="listbox" data-list="patients">
+                                @foreach (var row in _patients)
+                                {
+                                    <li role="option" class="@(row.HasCriticalAlert ? "is-critical" : null)" data-patient="@row.MedicalRecordNumber"
+                                        @onclick="() => PickPatientAsync(row)">
+                                        <span class="strong">@row.FullName</span>
+                                        <span class="muted small">@row.MedicalRecordNumber · @Texts[$"Gender.{row.Gender}"]@(row.AgeYears is { } a ? $" · {a} {Texts["Report.Years"]}" : string.Empty)@(row.Cin is { Length: > 0 } ? $" · {row.Cin}" : string.Empty)</span>
+                                    </li>
+                                }
+                            </ul>
                         }
-                    </span>
-                    <ActionButton Key="OrderEntry.ChangePatient" OnClick="ChangePatient" />
+                    </div>
+                    <ActionButton Key="Patient.NewFile" Disabled="@(!User.Has(Permissions.Patients.Create))" OnClick="() => _newPatient = true" />
+                    <ActionButton Key="OrderEntry.UnidentifiedPatient" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.TriangleAlert"
+                                  Disabled="@(!User.Has(Permissions.Patients.Create))" OnClick="() => _provisional = true" />
                 </div>
+            }
+        </section>
+
+        <section class="card request-card" data-card="request">
+            <div class="form-grid form-grid-request">
+                <label class="field"><span class="field-label">@Texts["Field.Priority"]</span>
+                    <select class="input" data-field="priority" value="@_priority" @onchange="PriorityChanged">
+                        @foreach (var p in Enum.GetValues<OrderPriority>())
+                        {
+                            <option value="@p" selected="@(p == _priority)">@Texts[$"Priority.{p}"]</option>
+                        }
+                    </select></label>
+                <label class="field"><span class="field-label">@Texts["Order.Origin"]</span>
+                    <select class="input" data-field="origin" value="@_origin" @onchange="OriginChanged">
+                        @foreach (var o in Enum.GetValues<OrderOrigin>())
+                        {
+                            <option value="@o" selected="@(o == _origin)">@Texts[$"OrderOrigin.{o}"]</option>
+                        }
+                    </select></label>
+                <div class="field field-prescriber">
+                    <label class="field-label" for="order-prescriber">@PrescriberCaption</label>
+                    <div class="input-with-button">
+                        <input id="order-prescriber" class="input" list="order-prescribers" data-field="prescriber" autocomplete="off"
+                               value="@_prescriberText" @oninput="PrescriberChanged" />
+                        <ActionButton Key="Order.NewPrescriber" Text="" Title="@Texts["Order.NewPrescriber"]"
+                                      Disabled="@(!(User.Has(Permissions.Catalog.Manage) || User.Has(Permissions.Orders.Create)))"
+                                      OnClick="() => _newPrescriber = true" />
+                    </div>
+                    <datalist id="order-prescribers">
+                        @foreach (var p in _prescribers)
+                        {
+                            <option value="@p.Display"></option>
+                        }
+                    </datalist>
+                </div>
+                <div class="field">
+                    <span class="field-label">@Texts["Order.Fasted"]</span>
+                    <div class="segmented" role="group" data-field="fasting">
+                        @foreach (var (value, key) in FastingChoices)
+                        {
+                            <button type="button" class="btn @(value == _fasting ? "btn-primary" : "btn-secondary")" aria-pressed="@(value == _fasting)"
+                                    data-fasting="@(value?.ToString() ?? "unknown")" @onclick="() => SetFasting(value)">@Texts[key]</button>
+                        }
+                    </div>
+                </div>
+                <label class="field field-clinical"><span class="field-label">@Texts["Order.ClinicalInformation"]</span>
+                    <input class="input" data-field="clinical" maxlength="2000" placeholder="@Texts["OrderEntry.ClinicalPlaceholder"]"
+                           value="@_clinical" @oninput="ClinicalChanged" /></label>
+                <label class="field field-check field-self-pay">
+                    <input type="checkbox" data-field="self-pay" checked="@_selfPay" @onchange="SelfPayChanged" />
+                    <span>@Texts["OrderEntry.DirectPayment"]</span>
+                </label>
             </div>
-        }
-        else
-        {
-            <div class="toolbar">
+        </section>
+
+        <div class="split split-even">
+            <section class="card catalog-card" data-card="catalogue">
+                <div class="card-heading">
+                    <h2 class="card-title">@Texts["Order.AddAnalyses"]</h2>
+                    <span class="muted small">@Texts["OrderEntry.TypeHint"]</span>
+                </div>
                 <div class="search-box search-box-wide">
                     <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
-                    <input class="input" type="search" placeholder="@Texts["OrderEntry.PatientSearchPlaceholder"]"
-                           aria-label="@Texts["OrderEntry.PatientSearchPlaceholder"]" data-field="patient-search"
-                           autocomplete="off" value="@_patientTerm" @oninput="PatientTermChanged" @onkeydown="PatientKey" />
-                    @if (_patients.Count > 0)
+                    <input class="input" type="search" placeholder="@Texts["Order.CatalogSearchPlaceholder"]"
+                           aria-label="@Texts["Order.CatalogSearchPlaceholder"]" data-field="catalogue-search" autocomplete="off"
+                           value="@_catalogTerm" @oninput="CatalogTermChanged" @onkeydown="CatalogKey" />
+                    @if (Suggestions.Count > 0)
                     {
-                        <ul class="suggestions" role="listbox" data-list="patients">
-                            @foreach (var row in _patients)
+                        <ul class="suggestions" role="listbox" data-list="analyses">
+                            @foreach (var item in Suggestions)
                             {
-                                <li role="option" class="@(row.HasCriticalAlert ? "is-critical" : null)" data-patient="@row.MedicalRecordNumber"
-                                    @onclick="() => PickPatientAsync(row)">
-                                    <span class="strong">@row.FullName</span>
-                                    <span class="muted small">@row.MedicalRecordNumber · @Texts[$"Gender.{row.Gender}"]@(row.AgeYears is { } a ? $" · {a} {Texts["Report.Years"]}" : string.Empty)@(row.Cin is { Length: > 0 } ? $" · {row.Cin}" : string.Empty)</span>
+                                <li role="option" data-code="@item.Code" @onclick="() => AddFromSuggestion(item)">
+                                    <span class="strong">@item.Name.For(Texts.Language)</span>
+                                    <span class="muted small">@Subline(item)</span>
+                                    <span class="num small">@Price(item.Price)</span>
                                 </li>
                             }
                         </ul>
                     }
                 </div>
-                <ActionButton Key="Patient.NewFile" Disabled="@(!User.Has(Permissions.Patients.Create))" OnClick="() => _newPatient = true" />
-                <ActionButton Key="OrderEntry.UnidentifiedPatient" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.TriangleAlert"
-                              Disabled="@(!User.Has(Permissions.Patients.Create))" OnClick="() => _provisional = true" />
-            </div>
-        }
-    </section>
-
-    <section class="card request-card" data-card="request">
-        <div class="form-grid form-grid-request">
-            <label class="field"><span class="field-label">@Texts["Field.Priority"]</span>
-                <select class="input" data-field="priority" value="@_priority" @onchange="PriorityChanged">
-                    @foreach (var p in Enum.GetValues<OrderPriority>())
-                    {
-                        <option value="@p" selected="@(p == _priority)">@Texts[$"Priority.{p}"]</option>
-                    }
-                </select></label>
-            <label class="field"><span class="field-label">@Texts["Order.Origin"]</span>
-                <select class="input" data-field="origin" value="@_origin" @onchange="OriginChanged">
-                    @foreach (var o in Enum.GetValues<OrderOrigin>())
-                    {
-                        <option value="@o" selected="@(o == _origin)">@Texts[$"OrderOrigin.{o}"]</option>
-                    }
-                </select></label>
-            <div class="field field-wide">
-                <label class="field-label" for="order-prescriber">@PrescriberCaption</label>
-                <div class="input-with-button">
-                    <input id="order-prescriber" class="input" list="order-prescribers" data-field="prescriber" autocomplete="off"
-                           value="@_prescriberText" @oninput="PrescriberChanged" />
-                    <ActionButton Key="Order.NewPrescriber" Text="" Title="@Texts["Order.NewPrescriber"]"
-                                  Disabled="@(!(User.Has(Permissions.Catalog.Manage) || User.Has(Permissions.Orders.Create)))"
-                                  OnClick="() => _newPrescriber = true" />
-                </div>
-                <datalist id="order-prescribers">
-                    @foreach (var p in _prescribers)
-                    {
-                        <option value="@p.Display"></option>
-                    }
-                </datalist>
-            </div>
-            <div class="field">
-                <span class="field-label">@Texts["Order.Fasted"]</span>
-                <div class="segmented" role="group" data-field="fasting">
-                    @foreach (var (value, key) in FastingChoices)
-                    {
-                        <button type="button" class="btn @(value == _fasting ? "btn-primary" : "btn-secondary")" aria-pressed="@(value == _fasting)"
-                                data-fasting="@(value?.ToString() ?? "unknown")" @onclick="() => SetFasting(value)">@Texts[key]</button>
-                    }
-                </div>
-            </div>
-            <label class="field field-wide"><span class="field-label">@Texts["Order.ClinicalInformation"]</span>
-                <input class="input" data-field="clinical" maxlength="2000" placeholder="@Texts["OrderEntry.ClinicalPlaceholder"]"
-                       value="@_clinical" @oninput="ClinicalChanged" /></label>
-            <label class="field field-check">
-                <input type="checkbox" data-field="self-pay" checked="@_selfPay" @onchange="SelfPayChanged" />
-                <span>@Texts["OrderEntry.DirectPayment"]</span>
-            </label>
-        </div>
-    </section>
-
-    <div class="split split-even">
-        <section class="card catalog-card" data-card="catalogue">
-            <h2 class="card-title">@Texts["Order.AddAnalyses"]</h2>
-            <p class="muted small">@Texts["OrderEntry.TypeHint"]</p>
-            @if (_frequent.Count > 0)
-            {
                 <div class="chips" role="group">
-                    <span class="chips-label">@Texts["OrderEntry.FrequentPanels"]</span>
-                    @foreach (var panel in _frequent)
+                    <span class="chips-label">@Texts["OrderEntry.Catalogue"]</span>
+                    @foreach (var (key, text) in FilterChips())
                     {
-                        <button type="button" class="chip" title="@panel.Code" data-panel="@panel.Code" @onclick="() => AddPanelAsync(panel.PanelId)">
-                            @panel.Name.For(Texts.Language)
-                        </button>
+                        <button type="button" class="chip @(key == _filter ? "is-pressed" : null)" aria-pressed="@(key == _filter)"
+                                data-filter="@key" @onclick="() => _filter = key">@text</button>
                     }
                 </div>
-            }
-            <div class="search-box search-box-wide">
-                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
-                <input class="input" type="search" placeholder="@Texts["Order.CatalogSearchPlaceholder"]"
-                       aria-label="@Texts["Order.CatalogSearchPlaceholder"]" data-field="catalogue-search" autocomplete="off"
-                       value="@_catalogTerm" @oninput="CatalogTermChanged" @onkeydown="CatalogKey" />
-                @if (Suggestions.Count > 0)
+                @if (_frequent.Count > 0)
                 {
-                    <ul class="suggestions" role="listbox" data-list="analyses">
-                        @foreach (var item in Suggestions)
+                    <div class="chips" role="group">
+                        <span class="chips-label">@Texts["OrderEntry.FrequentPanels"]</span>
+                        @foreach (var panel in _frequent)
                         {
-                            <li role="option" data-code="@item.Code" @onclick="() => AddFromSuggestion(item)">
-                                <span class="strong">@item.Name.For(Texts.Language)</span>
-                                <span class="muted small">@Subline(item)</span>
-                                <span class="num small">@Price(item.Price)</span>
-                            </li>
+                            <button type="button" class="chip" title="@panel.Code" data-panel="@panel.Code" @onclick="() => AddPanelAsync(panel.PanelId)">
+                                @panel.Name.For(Texts.Language)
+                            </button>
                         }
-                    </ul>
+                    </div>
                 }
-            </div>
-            <div class="chips" role="group">
-                <span class="chips-label">@Texts["OrderEntry.Catalogue"]</span>
-                @foreach (var (key, text) in FilterChips())
-                {
-                    <button type="button" class="chip @(key == _filter ? "is-pressed" : null)" aria-pressed="@(key == _filter)"
-                            data-filter="@key" @onclick="() => _filter = key">@text</button>
-                }
-            </div>
-            <div class="table-scroll">
-                <table class="grid grid-select" data-grid="catalogue">
+                <div class="table-scroll">
+                    <table class="grid grid-select" data-grid="catalogue">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Field.Code"]</th>
+                                <th>@Texts["Field.Name"]</th>
+                                <th>@Texts["Field.Department"]</th>
+                                <th>@Texts["OrderEntry.Tube"]</th>
+                                <th class="num">@Texts["OrderEntry.Delay"]</th>
+                                <th class="num">@Texts["OrderEntry.PriceDh"]</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in OrderBasket.Filter(_catalogItems, _filter))
+                            {
+                                var state = _basket.StateOf(item);
+                                <tr class="@(state != CatalogItemState.Free ? "is-pending" : null)" data-code="@item.Code" title="@Notes(item)"
+                                    @ondblclick="() => AddItem(item)">
+                                    <td class="mono">@item.Code</td>
+                                    <td class="@(item.IsPanel ? "strong" : null)">@item.Name.For(Texts.Language)</td>
+                                    <td>@(item.IsPanel ? "—" : item.DepartmentName?.For(Texts.Language) ?? string.Empty)</td>
+                                    <td>@(item.IsPanel ? Texts["OrderEntry.SeveralTubes"] : item.ContainerName ?? "—")</td>
+                                    <td class="num">@item.TurnaroundHours h</td>
+                                    <td class="num">@Price(item.Price)</td>
+                                    <td class="cell-action">
+                                        @if (state == CatalogItemState.Free)
+                                        {
+                                            <button type="button" class="btn btn-secondary btn-small" title="@Texts["Action.Add"]" data-action="add"
+                                                    @onclick="() => AddItem(item)"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" /></button>
+                                        }
+                                        else
+                                        {
+                                            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" />
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card basket-card" data-card="basket">
+                <div class="card-heading">
+                    <h2 class="card-title">@Texts["Order.Analyses"]
+                        @if (!_basket.IsEmpty)
+                        {
+                            <span class="count-badge" data-state="basket-count">@_basket.Count</span>
+                        }
+                    </h2>
+                    <ActionButton Key="OrderEntry.RemoveAll" Disabled="@_basket.IsEmpty" OnClick="AskRemoveAll" />
+                </div>
+                <table class="grid" data-grid="basket">
                     <thead>
                         <tr>
-                            <th>@Texts["Field.Code"]</th>
-                            <th>@Texts["Field.Name"]</th>
-                            <th>@Texts["Field.Department"]</th>
+                            <th>@Texts["Catalog.Analysis"]</th>
                             <th>@Texts["OrderEntry.Tube"]</th>
-                            <th class="num">@Texts["OrderEntry.Delay"]</th>
                             <th class="num">@Texts["OrderEntry.PriceDh"]</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in OrderBasket.Filter(_catalogItems, _filter))
+                        @if (_basket.IsEmpty)
                         {
-                            var state = _basket.StateOf(item);
-                            <tr class="@(state != CatalogItemState.Free ? "is-pending" : null)" data-code="@item.Code" title="@Notes(item)"
-                                @ondblclick="() => AddItem(item)">
-                                <td class="mono">@item.Code</td>
-                                <td class="@(item.IsPanel ? "strong" : null)">@item.Name.For(Texts.Language)</td>
-                                <td>@(item.IsPanel ? "—" : item.DepartmentName?.For(Texts.Language) ?? string.Empty)</td>
+                            <tr><td colspan="4" class="muted">@Texts["App.NoData"]</td></tr>
+                        }
+                        @foreach (var item in _basket.Items)
+                        {
+                            var repeat = _basket.RepeatOf(item, _fullCatalog);
+                            <tr class="@(repeat is not null ? "is-abnormal" : null)" data-code="@item.Code" title="@BasketNotes(item)">
+                                <td>
+                                    <div class="@(item.IsPanel ? "strong" : null)">@item.Name.For(Texts.Language)</div>
+                                    <div class="muted small">@Subline(item)@(BasketNotes(item) is { Length: > 0 } notes ? $" · {notes}" : string.Empty)</div>
+                                </td>
                                 <td>@(item.IsPanel ? Texts["OrderEntry.SeveralTubes"] : item.ContainerName ?? "—")</td>
-                                <td class="num">@item.TurnaroundHours h</td>
                                 <td class="num">@Price(item.Price)</td>
                                 <td class="cell-action">
-                                    @if (state == CatalogItemState.Free)
-                                    {
-                                        <button type="button" class="btn btn-secondary btn-small" title="@Texts["Action.Add"]" data-action="add"
-                                                @onclick="() => AddItem(item)"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" /></button>
-                                    }
-                                    else
-                                    {
-                                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" />
-                                    }
+                                    <button type="button" class="btn btn-secondary btn-small" title="@Texts["Action.Remove"]" data-action="remove"
+                                            @onclick="() => Remove(item)"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" /></button>
                                 </td>
                             </tr>
+                            @if (repeat is not null)
+                            {
+                                <tr class="is-abnormal basket-warning" data-warning="@item.Code">
+                                    <td colspan="4">
+                                        <span class="abnormal strong">@WarningText(repeat)</span>
+                                        <button type="button" class="btn btn-secondary btn-small" data-action="keep" @onclick="() => Keep(item)">@Texts["OrderEntry.Keep"]</button>
+                                        <button type="button" class="btn btn-secondary btn-small" data-action="remove-repeat" @onclick="() => Remove(item)">@Texts["Action.Remove"]</button>
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>
-            </div>
-        </section>
 
-        <section class="card basket-card" data-card="basket">
-            <div class="card-heading">
-                <h2 class="card-title">@Texts["Order.Analyses"]
-                    @if (!_basket.IsEmpty)
+                <div class="tubes" data-state="tubes">
+                    <span class="strong">@Texts["OrderEntry.TubesToDraw"]</span>
+                    @foreach (var tube in TubeGroups())
                     {
-                        <span class="count-badge" data-state="basket-count">@_basket.Count</span>
+                        <span class="tube-chip"><span class="tube-swatch" style="background:@tube.Colour"></span>@tube.Text</span>
                     }
-                </h2>
-                <ActionButton Key="OrderEntry.RemoveAll" Disabled="@_basket.IsEmpty" OnClick="AskRemoveAll" />
-            </div>
-            <table class="grid" data-grid="basket">
-                <thead>
-                    <tr>
-                        <th>@Texts["Catalog.Analysis"]</th>
-                        <th>@Texts["OrderEntry.Tube"]</th>
-                        <th class="num">@Texts["OrderEntry.PriceDh"]</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_basket.IsEmpty)
-                    {
-                        <tr><td colspan="4" class="muted">@Texts["App.NoData"]</td></tr>
-                    }
-                    @foreach (var item in _basket.Items)
-                    {
-                        var repeat = _basket.RepeatOf(item, _fullCatalog);
-                        <tr class="@(repeat is not null ? "is-abnormal" : null)" data-code="@item.Code" title="@BasketNotes(item)">
-                            <td>
-                                <div class="@(item.IsPanel ? "strong" : null)">@item.Name.For(Texts.Language)</div>
-                                <div class="muted small">@Subline(item)@(BasketNotes(item) is { Length: > 0 } notes ? $" · {notes}" : string.Empty)</div>
-                            </td>
-                            <td>@(item.IsPanel ? Texts["OrderEntry.SeveralTubes"] : item.ContainerName ?? "—")</td>
-                            <td class="num">@Price(item.Price)</td>
-                            <td class="cell-action">
-                                <button type="button" class="btn btn-secondary btn-small" title="@Texts["Action.Remove"]" data-action="remove"
-                                        @onclick="() => Remove(item)"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" /></button>
-                            </td>
-                        </tr>
-                        @if (repeat is not null)
-                        {
-                            <tr class="is-abnormal basket-warning" data-warning="@item.Code">
-                                <td colspan="4">
-                                    <span class="abnormal strong">@WarningText(repeat)</span>
-                                    <button type="button" class="btn btn-secondary btn-small" data-action="keep" @onclick="() => Keep(item)">@Texts["OrderEntry.Keep"]</button>
-                                    <button type="button" class="btn btn-secondary btn-small" data-action="remove-repeat" @onclick="() => Remove(item)">@Texts["Action.Remove"]</button>
-                                </td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
+                    <span class="muted small">@Texts.T("OrderEntry.TubeCount", TubeCount, TubeCount * LabelCopies)</span>
+                </div>
 
-            <div class="tubes" data-state="tubes">
-                <span class="strong">@Texts["OrderEntry.TubesToDraw"]</span>
-                @foreach (var tube in TubeGroups())
-                {
-                    <span class="tube-chip"><span class="tube-swatch" style="background:@tube.Colour"></span>@tube.Text</span>
-                }
-                <span class="muted small">@Texts.T("OrderEntry.TubeCount", TubeCount, TubeCount * LabelCopies)</span>
-            </div>
+                <dl class="totals" data-state="totals">
+                    <dt>@Texts.T("OrderEntry.GrossFor", _quote?.AnalysisCount ?? 0)</dt>
+                    <dd class="num" data-total="gross">@((_quote?.Pricing.Total ?? Money.Zero).Format(Texts.Language, Texts.Culture))</dd>
+                    @if (_quote?.PayerName is { } payer)
+                    {
+                        <dt>@Texts.T("OrderEntry.PayerShareOf", payer.For(Texts.Language))</dt>
+                        <dd class="num" data-total="payer">− @((_quote.Pricing.Total - _quote.Pricing.DueAtCounter).Format(Texts.Language, Texts.Culture))</dd>
+                    }
+                    <dt class="strong">@Texts["OrderEntry.PatientRemainder"]</dt>
+                    <dd class="num strong accent" data-total="due">@((_quote?.Pricing.DueAtCounter ?? Money.Zero).Format(Texts.Language, Texts.Culture))</dd>
+                </dl>
+            </section>
+        </div>
 
-            <dl class="totals" data-state="totals">
-                <dt>@Texts.T("OrderEntry.GrossFor", _quote?.AnalysisCount ?? 0)</dt>
-                <dd class="num" data-total="gross">@((_quote?.Pricing.Total ?? Money.Zero).Format(Texts.Language, Texts.Culture))</dd>
-                @if (_quote?.PayerName is { } payer)
-                {
-                    <dt>@Texts.T("OrderEntry.PayerShareOf", payer.For(Texts.Language))</dt>
-                    <dd class="num" data-total="payer">− @((_quote.Pricing.Total - _quote.Pricing.DueAtCounter).Format(Texts.Language, Texts.Culture))</dd>
-                }
-                <dt class="strong">@Texts["OrderEntry.PatientRemainder"]</dt>
-                <dd class="num strong accent" data-total="due">@((_quote?.Pricing.DueAtCounter ?? Money.Zero).Format(Texts.Language, Texts.Culture))</dd>
-            </dl>
-        </section>
     </div>
 
-    <footer class="action-bar">
-        <ActionButton Key="OrderEntry.CancelEntry" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Eraser" OnClick="AskCancelEntry" />
-        <p class="action-bar-status @StatusClass" role="status" data-state="status">@StatusText</p>
-        <ActionButton Key="OrderEntry.SaveWithoutLabels" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Tag"
-                      Disabled="@(!CanRegister || !User.Has(Permissions.Orders.Create))"
-                      OnClick="() => RegisterAsync(OrderRegistrationRules.PrintsLabels(withoutLabels: true))" />
-        <ActionButton Key="Action.Save" Primary="true"
-                      Disabled="@(!CanRegister || !User.Has(Permissions.Orders.Create))"
-                      OnClick="() => RegisterAsync(OrderRegistrationRules.PrintsLabels(withoutLabels: false))" />
-    </footer>
+    <ActionBar StatusText="@StatusText" StatusClass="@StatusClass">
+        <Secondary>
+            <ActionButton Key="OrderEntry.SaveWithoutLabels" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Tag"
+                          Disabled="@(!CanRegister || !User.Has(Permissions.Orders.Create))"
+                          OnClick="() => RegisterAsync(OrderRegistrationRules.PrintsLabels(withoutLabels: true))" />
+        </Secondary>
+        <Destructive>
+            <ActionButton Key="OrderEntry.CancelEntry" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Eraser" Danger="true" OnClick="AskCancelEntry" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Action.Save" Primary="true"
+                          Disabled="@(!CanRegister || !User.Has(Permissions.Orders.Create))"
+                          OnClick="() => RegisterAsync(OrderRegistrationRules.PrintsLabels(withoutLabels: false))" />
+        </Primary>
+    </ActionBar>
 </div>
 
 @if (_newPatient)

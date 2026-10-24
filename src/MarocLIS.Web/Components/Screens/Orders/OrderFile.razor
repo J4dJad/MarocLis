@@ -23,24 +23,26 @@
     by the Windows workstation; the billing desk is not yet in the web.
 *@
 <div class="screen order-file" data-screen="orderdetail">
-    <div class="split split-list">
+    <div class="screen-body split split-list">
         <aside class="card list-pane" data-card="orders">
-            <div class="toolbar">
+            <div class="list-tools">
                 <div class="search-box">
                     <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
                     <input class="input" type="search" placeholder="@Texts["Order.SearchPlaceholder"]"
                            aria-label="@Texts["Order.SearchPlaceholder"]" data-field="order-search" autocomplete="off"
                            value="@_term" @oninput="TermChanged" @onkeydown="SearchKey" />
                 </div>
-                <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="RefreshAsync" />
-            </div>
-            <div class="chips" role="group">
-                <button type="button" class="chip @(_filter.LastWeek ? "is-pressed" : null)" aria-pressed="@_filter.LastWeek" data-filter="week"
-                        @onclick="() => _filter = _filter with { LastWeek = !_filter.LastWeek }">@Texts["OrderFile.FilterWeek"]</button>
-                <button type="button" class="chip @(_filter.ActiveOnly ? "is-pressed" : null)" aria-pressed="@_filter.ActiveOnly" data-filter="active"
-                        @onclick="() => _filter = _filter with { ActiveOnly = !_filter.ActiveOnly }">@Texts["OrderFile.FilterActive"]</button>
-                <button type="button" class="chip @(_filter.UrgentOnly ? "is-pressed" : null)" aria-pressed="@_filter.UrgentOnly" data-filter="urgent"
-                        @onclick="() => _filter = _filter with { UrgentOnly = !_filter.UrgentOnly }">@Texts["OrderFile.FilterUrgent"]</button>
+                <div class="chips" role="group">
+                    <button type="button" class="chip @(_filter.LastWeek ? "is-pressed" : null)" aria-pressed="@_filter.LastWeek" data-filter="week"
+                            @onclick="() => _filter = _filter with { LastWeek = !_filter.LastWeek }">@Texts["OrderFile.FilterWeek"]</button>
+                    <button type="button" class="chip @(_filter.ActiveOnly ? "is-pressed" : null)" aria-pressed="@_filter.ActiveOnly" data-filter="active"
+                            @onclick="() => _filter = _filter with { ActiveOnly = !_filter.ActiveOnly }">@Texts["OrderFile.FilterActive"]</button>
+                    <button type="button" class="chip @(_filter.UrgentOnly ? "is-pressed" : null)" aria-pressed="@_filter.UrgentOnly" data-filter="urgent"
+                            @onclick="() => _filter = _filter with { UrgentOnly = !_filter.UrgentOnly }">@Texts["OrderFile.FilterUrgent"]</button>
+                </div>
+                <span class="list-tools-end">
+                    <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="RefreshAsync" />
+                </span>
             </div>
             <p class="muted small" data-state="list-count">@ListCount</p>
             <ul class="file-list" data-list="orders">
@@ -311,26 +313,30 @@
                     </div>
                 </div>
 
-                <footer class="action-bar">
-                    <ActionButton Key="Order.AddAnalyses" Primary="true" Disabled="@(!actions.AddAnalyses)" OnClick="() => _dialog = FileDialog.AddAnalyses" />
-                    <ActionButton Key="Action.PrintLabels" Disabled="@(!actions.PrintLabels)" OnClick="PrintLabels" />
-                    <ActionButton Key="Order.PrintReport" Disabled="@(!actions.PrintReport)" OnClick="OpenReportAsync" />
-                    <ActionButton Key="Order.EditHeader" Disabled="@(!actions.EditHeader)" OnClick="() => _dialog = FileDialog.Header" />
-                    <span class="toolbar-spacer"></span>
-                    <details class="more more-up">
-                        <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]</summary>
-                        <div class="more-menu">
-                            <ActionButton Key="Order.CancelAnalysis" Disabled="@(!actions.CancelItem)" OnClick="AskCancelItem" />
-                            <ActionButton Key="Order.RepeatAnalysis" Disabled="@(!actions.RepeatItem)" OnClick="AskRepeatItem" />
-                            <ActionButton Key="Order.EditHeader" Disabled="@(!actions.EditHeader)" OnClick="() => _dialog = FileDialog.Header" />
-                            <ActionButton Key="Order.PrintReport" Disabled="@(!actions.PrintReport)" OnClick="OpenReportAsync" />
-                            <ActionButton Key="Order.CancelOrder" Danger="true" Disabled="@(!actions.CancelOrder)" OnClick="AskCancelOrder" />
-                        </div>
-                    </details>
-                </footer>
             }
         </section>
     </div>
+
+    @if (_detail is not null)
+    {
+        var actions = Actions;
+        <ActionBar ShowStatus="false">
+            <Secondary>
+                <ActionButton Key="Action.PrintLabels" Disabled="@(!actions.PrintLabels)" OnClick="PrintLabels" />
+                <ActionButton Key="Order.PrintReport" Disabled="@(!actions.PrintReport)" OnClick="OpenReportAsync" />
+                <ActionButton Key="Order.EditHeader" Disabled="@(!actions.EditHeader)" OnClick="() => _dialog = FileDialog.Header" />
+            </Secondary>
+            <More>
+                <ActionButton Key="Order.CancelAnalysis" Disabled="@(!actions.CancelItem)" OnClick="AskCancelItem" />
+                <ActionButton Key="Order.RepeatAnalysis" Disabled="@(!actions.RepeatItem)" OnClick="AskRepeatItem" />
+                <hr class="more-rule" />
+                <ActionButton Key="Order.CancelOrder" Danger="true" Disabled="@(!actions.CancelOrder)" OnClick="AskCancelOrder" />
+            </More>
+            <Primary>
+                <ActionButton Key="Order.AddAnalyses" Primary="true" Disabled="@(!actions.AddAnalyses)" OnClick="() => _dialog = FileDialog.AddAnalyses" />
+            </Primary>
+        </ActionBar>
+    }
 </div>
 
 @if (_detail is { } open)

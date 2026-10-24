@@ -32,49 +32,61 @@
             @switch (_tab)
             {
                 case Tab.Identity:
-                    <div class="form-grid">
-                        <label class="field"><span class="field-label">@Texts["Patient.LastName"]</span>
-                            <input class="input" maxlength="120" data-field="lastName" @bind="F.LastName" @onblur="CheckDuplicatesAsync" /></label>
-                        <label class="field"><span class="field-label">@Texts["Patient.FirstName"]</span>
-                            <input class="input" maxlength="120" data-field="firstName" @bind="F.FirstName" @onblur="CheckDuplicatesAsync" /></label>
-                        <label class="field"><span class="field-label">@Texts["Patient.Gender"]</span>
-                            <select class="input" data-field="gender" @bind="F.Gender" @bind:after="GenderChanged">
-                                @foreach (var g in Enum.GetValues<Gender>())
-                                {
-                                    <option value="@g">@Texts[$"Gender.{g}"]</option>
-                                }
-                            </select></label>
-                        <label class="field"><span class="field-label">@Texts["Patient.LastNameArabic"]</span>
-                            <input class="input" dir="rtl" maxlength="120" @bind="F.LastNameArabic" /></label>
-                        <label class="field"><span class="field-label">@Texts["Patient.FirstNameArabic"]</span>
-                            <input class="input" dir="rtl" maxlength="120" @bind="F.FirstNameArabic" /></label>
-                        <div class="field">
-                            <label class="check"><input type="checkbox" data-field="hasDob" @bind="F.HasDateOfBirth" />@Texts["Patient.DateOfBirth"]</label>
-                            <input class="input" type="date" min="1900-01-01" max="@Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
-                                   disabled="@(!F.HasDateOfBirth)" data-field="dob" @bind="F.DateOfBirth" @onblur="CheckDuplicatesAsync" />
+                    <fieldset class="form-section">
+                        <legend class="form-section-title">@Texts["Web.CivilStatus"]</legend>
+                        <div class="form-grid form-grid-3">
+                            <label class="field"><span class="field-label">@Texts["Patient.LastName"]</span>
+                                <input class="input" maxlength="120" data-field="lastName" @bind="F.LastName" @onblur="CheckDuplicatesAsync" /></label>
+                            <label class="field"><span class="field-label">@Texts["Patient.FirstName"]</span>
+                                <input class="input" maxlength="120" data-field="firstName" @bind="F.FirstName" @onblur="CheckDuplicatesAsync" /></label>
+                            <label class="field"><span class="field-label">@Texts["Patient.Gender"]</span>
+                                <select class="input" data-field="gender" @bind="F.Gender" @bind:after="GenderChanged">
+                                    @foreach (var g in Enum.GetValues<Gender>())
+                                    {
+                                        <option value="@g">@Texts[$"Gender.{g}"]</option>
+                                    }
+                                </select></label>
+                            <label class="field"><span class="field-label">@Texts["Patient.LastNameArabic"]</span>
+                                <input class="input" dir="rtl" maxlength="120" @bind="F.LastNameArabic" /></label>
+                            <label class="field"><span class="field-label">@Texts["Patient.FirstNameArabic"]</span>
+                                <input class="input" dir="rtl" maxlength="120" @bind="F.FirstNameArabic" /></label>
                         </div>
-                        <label class="field"><span class="field-label">@Texts["Patient.DeclaredAge"]</span>
-                            <input class="input" type="number" min="0" max="130" disabled="@F.HasDateOfBirth" data-field="declaredAge" @bind="F.DeclaredAge" /></label>
-                        <div class="field">
-                            <span class="field-label">&nbsp;</span>
-                            <span class="age-echo @(Age is null ? "is-warning" : null)" data-state="age">
-                                @(Age is { } years ? $"{years} {Texts["Report.Years"]}" : Texts["Patient_AgeOrBirthDateRequired"])
-                            </span>
+                    </fieldset>
+                    <fieldset class="form-section">
+                        <legend class="form-section-title">@Texts["Web.Birth"]</legend>
+                        <div class="form-grid form-grid-3">
+                            <div class="field">
+                                <label class="check field-label"><input type="checkbox" data-field="hasDob" @bind="F.HasDateOfBirth" />@Texts["Patient.DateOfBirth"]</label>
+                                <input class="input" type="date" min="1900-01-01" max="@Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
+                                       disabled="@(!F.HasDateOfBirth)" data-field="dob" @bind="F.DateOfBirth" @onblur="CheckDuplicatesAsync" />
+                            </div>
+                            <div class="field">
+                                <label class="field-label" for="patient-declared-age">@Texts["Patient.DeclaredAge"]</label>
+                                <input id="patient-declared-age" class="input" type="number" min="0" max="130" disabled="@F.HasDateOfBirth" data-field="declaredAge" @bind="F.DeclaredAge" />
+                                <span class="age-echo @(Age is null ? "is-warning" : null)" data-state="age">
+                                    @(Age is { } years ? $"{years} {Texts["Report.Years"]}" : Texts["Patient_AgeOrBirthDateRequired"])
+                                </span>
+                            </div>
+                            <label class="field"><span class="field-label">@Texts["Patient.PlaceOfBirth"]</span>
+                                <input class="input" maxlength="120" @bind="F.PlaceOfBirth" /></label>
                         </div>
-                        <label class="field"><span class="field-label">@Texts["Patient.PlaceOfBirth"]</span>
-                            <input class="input" maxlength="120" @bind="F.PlaceOfBirth" /></label>
-                        <label class="field"><span class="field-label">@Texts["Patient.Cin"]</span>
-                            <input class="input mono" dir="ltr" maxlength="20" data-field="cin" @bind="F.Cin" @onblur="CheckDuplicatesAsync" /></label>
-                        <label class="field"><span class="field-label">@Texts["Patient.Passport"]</span>
-                            <input class="input mono" dir="ltr" maxlength="30" @bind="F.Passport" /></label>
-                        <label class="field"><span class="field-label">@Texts["Patient.Nationality"]</span>
-                            <input class="input mono" dir="ltr" maxlength="2" @bind="F.Nationality" /></label>
-                    </div>
+                    </fieldset>
+                    <fieldset class="form-section">
+                        <legend class="form-section-title">@Texts["Web.IdentityDocuments"]</legend>
+                        <div class="form-grid form-grid-3">
+                            <label class="field"><span class="field-label">@Texts["Patient.Cin"]</span>
+                                <input class="input mono" dir="ltr" maxlength="20" data-field="cin" @bind="F.Cin" @onblur="CheckDuplicatesAsync" /></label>
+                            <label class="field"><span class="field-label">@Texts["Patient.Passport"]</span>
+                                <input class="input mono" dir="ltr" maxlength="30" @bind="F.Passport" /></label>
+                            <label class="field"><span class="field-label">@Texts["Patient.Nationality"]</span>
+                                <input class="input mono" dir="ltr" maxlength="2" @bind="F.Nationality" /></label>
+                        </div>
+                    </fieldset>
                     @if (PatientFileRules.IsMinor(Age))
                     {
                         <div class="subcard" data-panel="guardian">
                             <p class="message is-warning">@Texts["Patient_MinorRequiresGuardian"]</p>
-                            <div class="form-grid">
+                            <div class="form-grid form-grid-3">
                                 <label class="field"><span class="field-label">@Texts["Patient.Guardian"]</span>
                                     <input class="input" maxlength="200" data-field="guardian" @bind="F.GuardianName" /></label>
                                 <label class="field"><span class="field-label">@Texts["Patient.GuardianCin"]</span>
@@ -87,7 +99,7 @@
                     break;
 
                 case Tab.Contact:
-                    <div class="form-grid">
+                    <div class="form-grid form-grid-3">
                         <label class="field span-2"><span class="field-label">@Texts["Patient.Address"]</span>
                             <input class="input" maxlength="400" @bind="F.Address" /></label>
                         <label class="field"><span class="field-label">@Texts["Patient.City"]</span>
@@ -121,7 +133,7 @@
                     break;
 
                 case Tab.Clinical:
-                    <div class="form-grid">
+                    <div class="form-grid form-grid-3">
                         <label class="check"><input type="checkbox" disabled="@(!PatientFileRules.PregnancyApplies(F.Gender))" @bind="F.Pregnant" />@Texts["Patient.IsPregnant"]</label>
                         @if (PatientFileRules.PregnancyApplies(F.Gender) || F.Pregnant)
                         {
@@ -132,7 +144,7 @@
                         }
                     </div>
                     <p class="form-hint">@Texts["Patient.PregnancyExplanation"]</p>
-                    <div class="form-grid">
+                    <div class="form-grid form-grid-3">
                         <label class="field"><span class="field-label">@Texts["Patient.Weight"]</span>
                             <input class="input num" dir="ltr" maxlength="8" data-field="weight" @bind="F.Weight" @bind:event="oninput" /></label>
                         <label class="field"><span class="field-label">@Texts["Patient.Height"]</span>

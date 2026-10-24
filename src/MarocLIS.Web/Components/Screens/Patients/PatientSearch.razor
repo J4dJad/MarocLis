@@ -20,7 +20,7 @@
     PatientFileRules); the accesses are logged as the workstation logs them (loi 08-09).
 *@
 <div class="screen patients" data-screen="patients">
-    <div class="toolbar">
+    <div class="list-tools">
         <div class="search-box">
             <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
             <input class="input" type="search" placeholder="@Texts["PatientList.SearchPlaceholder"]"
@@ -35,11 +35,7 @@
                 <option value="@payer.Id" selected="@(_payerId == payer.Id)">@payer.Name</option>
             }
         </select>
-        <span class="toolbar-spacer"></span>
-        <ActionButton Key="Patient.NewFile" Primary="true" Disabled="@(!Actions.NewPatient)" OnClick="NewPatient" />
-    </div>
-
-    <div class="chips" role="group">
+        <div class="chips" role="group">
         @foreach (var (scope, key, count) in Chips())
         {
             <button type="button" class="chip @(scope == _scope ? "is-pressed" : null)" aria-pressed="@(scope == _scope)"
@@ -47,20 +43,17 @@
                 @Texts[key]@(count is { } n ? $" ({n.ToString(CultureInfo.InvariantCulture)})" : string.Empty)
             </button>
         }
-        <span class="chips-count">@(_counts is { } c ? Texts.T("PatientList.Count", c.All) : string.Empty)</span>
+        </div>
+        <span class="list-tools-end muted small">@(_counts is { } c ? Texts.T("PatientList.Count", c.All) : string.Empty)</span>
     </div>
 
     @if (_error is not null)
     {
         <p class="message is-critical" role="alert">@_error</p>
     }
-    @if (_status is not null)
-    {
-        <p class="message is-@_statusTone" role="status" data-state="status">@_status</p>
-    }
-
-    <div class="split">
+    <div class="screen-body split">
         <section class="card card-flush split-main">
+            <div class="grid-scroll">
             <table class="grid grid-select" data-grid="patients">
                 <thead>
                     <tr>
@@ -102,6 +95,7 @@
                     }
                 </tbody>
             </table>
+            </div>
             <p class="grid-footer" data-state="footer">@Footer()</p>
         </section>
 
@@ -135,18 +129,6 @@
                     <dt>@Texts["PatientList.Phone"]</dt><dd class="mono" dir="ltr">@(sel.MobilePhone ?? "—")</dd>
                     <dt>@Texts["PatientList.Payer"]</dt><dd class="@(sel.PayerName is null ? "muted" : null)">@(sel.PayerName ?? Texts["PatientList.NoPayer"])</dd>
                 </dl>
-                <div class="actions">
-                    <ActionButton Key="Action.Edit" Disabled="@(!Actions.Edit)" OnClick="() => Edit(sel)" />
-                    <ActionButton Key="PatientList.NewOrderForPatient" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus"
-                                  Primary="true" Disabled="@(!Actions.NewOrder)" OnClick="() => NewOrder(sel)" />
-                </div>
-                <details class="more">
-                    <summary class="btn btn-secondary">@Texts["ResultEntry.MoreActions"]</summary>
-                    <div class="more-menu">
-                        <ActionButton Key="Patient.Merge" Disabled="@(!Actions.Merge)" OnClick="() => Merge(sel)" />
-                        <ActionButton Key="Patient.Anonymize" Disabled="@(!Actions.Anonymize)" OnClick="() => AskAnonymize(sel)" />
-                    </div>
-                </details>
 
                 <h2 class="section-title">@Texts["PatientList.Orders"] <span class="count">@(_history?.Count.ToString(CultureInfo.InvariantCulture))</span></h2>
                 @if (_history is { Count: 0 })
@@ -176,6 +158,23 @@
             }
         </aside>
     </div>
+
+    @* The actions on the file chosen are the rules' (PatientFileRules.ListActions): off while none is chosen. *@
+    <ActionBar StatusText="@_status" StatusClass="@($"is-{_statusTone}")">
+        <Secondary>
+            <ActionButton Key="Patient.NewFile" Disabled="@(!Actions.NewPatient)" OnClick="NewPatient" />
+            <ActionButton Key="Action.Edit" Disabled="@(!Actions.Edit)" OnClick="() => Edit(_selected!)" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Patient.Merge" Disabled="@(!Actions.Merge)" OnClick="() => Merge(_selected!)" />
+            <hr class="more-rule" />
+            <ActionButton Key="Patient.Anonymize" Danger="true" Disabled="@(!Actions.Anonymize)" OnClick="() => AskAnonymize(_selected!)" />
+        </More>
+        <Primary>
+            <ActionButton Key="PatientList.NewOrderForPatient" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus"
+                          Primary="true" Disabled="@(!Actions.NewOrder)" OnClick="() => NewOrder(_selected!)" />
+        </Primary>
+    </ActionBar>
 </div>
 
 @if (_editing is { } editing)
