@@ -117,6 +117,18 @@ public sealed class WebReportRegisterTests : WebFinanceContext
     }
 
     [Fact]
+    public void OpenedFromTheMenu_TheRegisterIsNotSearched()
+    {
+        SignIn(AppLanguage.French, Cashier);
+
+        var page = Render<Screen>(p => p.Add(x => x.Key, "reports"));
+
+        page.Find("[data-field=report-search]").GetAttribute("value").Should().BeNullOrEmpty();
+        page.FindAll("[data-grid=register] tbody tr").Should().HaveCount(2);
+        ReportQueries.Calls.Should().Contain(c => c.Method == nameof(IReportQueries.GetRegisterAsync) && c.Arguments[1] == null);
+    }
+
+    [Fact]
     public void AnOperatorWithoutTheRightToReadReports_TypingItsAddress_IsRefused()
     {
         SignIn(AppLanguage.French, Permissions.Samples.View, Permissions.Samples.Collect);

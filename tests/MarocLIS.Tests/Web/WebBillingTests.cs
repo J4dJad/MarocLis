@@ -157,10 +157,9 @@ public sealed class WebBillingTests : WebFinanceContext
         var page = Render<BillingDesk>();
 
         page.Find("[data-action='Billing.PrintInvoice']").Click();
-        page.WaitForAssertion(() => page.FindAll("[data-modal=billing-message]").Should().BeEmpty(page.Markup));
-
-        JSInterop.Invocations.Should().Contain(i => i.Identifier == "marocLis.download"
-                                                    && (string)i.Arguments[0]! == "FA-2026-000045.pdf");
+        page.WaitForAssertion(() => JSInterop.Invocations.Should().Contain(i => i.Identifier == "marocLis.download"
+                                                                             && (string)i.Arguments[0]! == "FA-2026-000045.pdf"));
+        page.FindAll("[data-modal=billing-message]").Should().BeEmpty(page.Markup);
     }
 
     [Fact]
@@ -185,6 +184,17 @@ public sealed class WebBillingTests : WebFinanceContext
         page.Find("[data-field=invoice-search]").GetAttribute("value").Should().Be("2610-000023");
         page.Find("[data-tick='2610-000023']").HasAttribute("checked").Should().BeTrue();
         BillingQueries.Calls.Should().Contain(c => c.Method == nameof(IBillingQueries.GetInvoicesAsync) && (string?)c.Arguments[2] == "2610-000023");
+    }
+
+    [Fact]
+    public void OpenedFromTheMenu_TheLedgerIsNotSearched()
+    {
+        SignIn(AppLanguage.French, Cashier);
+
+        var page = Render<Screen>(p => p.Add(x => x.Key, "billing"));
+
+        page.Find("[data-field=invoice-search]").GetAttribute("value").Should().BeNullOrEmpty();
+        BillingQueries.Calls.Should().Contain(c => c.Method == nameof(IBillingQueries.GetInvoicesAsync) && string.IsNullOrEmpty((string?)c.Arguments[2]));
     }
 
     [Fact]
