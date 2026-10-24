@@ -1,0 +1,926 @@
+@using System.Globalization
+@using MarocLIS.Application.Orders
+@using MarocLIS.Application.Reports
+@using MarocLIS.Application.Results
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Orders
+@using MarocLIS.Domain.Patients
+@using MarocLIS.Domain.Results
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject ILogger<BiologicalValidation> Logger
+
+@*
+    « Validation biologique », the workstation's ValidationView: the files awaiting a biologist with
+    their chips and signals, the open file's results to tick — pre-ticked, the biologist unticks
+    what they hold back — the « Contexte » card with the prescriber to call, the biologist's
+    comment, and the action bar (F9 validates the selection, F10 opens the next file). What is
+    listed, ticked, offered and sent is ValidationScreenRules'; what is released is
+    ValidationService's and ReportReleaseService's. A critical value is phoned, then read back.
+*@
+<div class="screen validation" data-screen="validation">
+    <NavigationLock OnBeforeInternalNavigation="BeforeLeaving" ConfirmExternalNavigation="@(_comments.Count > 0)" />
+
+    <div class="card" data-card="worklist">
+        <div class="card-heading">
+            <h2 class="card-title">@Texts["Dashboard.AwaitingValidation"]</h2>
+            <div class="chips" role="group">
+                @foreach (var filter in Enum.GetValues<ValidationFilter>())
+                {
+                    <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
+                            data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => _filter = filter">@ChipText(filter)</button>
+                }
+                <label class="field-check chips-count">
+                    <input type="checkbox" data-field="show-validated" checked="@_showValidated" @onchange="ShowValidatedChanged" />
+                    <span>@Texts["Validation.ShowValidated"]</span>
+                </label>
+            </div>
+        </div>
+        <div class="table-scroll table-scroll-short">
+            <table class="grid grid-select" data-grid="worklist">
+                <thead>
+                    <tr>
+                        <th>@Texts["Order.Title"]</th>
+                        <th>@Texts["Patient.Title"]</th>
+                        <th>@Texts["Field.Priority"]</th>
+                        <th class="num">@Texts["Validation.ToValidateColumn"]</th>
+                        <th class="num">@Texts["Validation.AbnormalColumn"]</th>
+                        <th>@Texts["Result.Flags"]</th>
+                        <th>@Texts["Order.RegisteredAt"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in Visible)
+                    {
+                        var critical = entry.UncommunicatedCriticalCount > 0;
+                        <tr class="@(entry.LabOrderId == _orderId ? "is-selected" : null) @(critical ? "is-critical-row" : null)"
+                            data-order="@entry.AccessionNumber" @onclick="() => SelectAsync(entry.LabOrderId)">
+                            <td class="mono @(entry.LabOrderId == _orderId ? "strong" : null)">@entry.AccessionNumber</td>
+                            <td>
+                                <span class="strong">@entry.PatientName</span>
+                                @if (PatientDetail(entry) is { Length: > 0 } detail)
+                                {
+                                    <span class="muted"> · @detail</span>
+                                }
+                            </td>
+                            <td>
+                                @if (entry.Priority == OrderPriority.Routine)
+                                {
+                                    <span class="muted">@Texts["Priority.Routine"]</span>
+                                }
+                                else
+                                {
+                                    <Pill Text="@Texts[$"Priority.{entry.Priority}"]" Tone="@OrderFileRules.PriorityTone(entry.Priority).ToString()" />
+                                }
+                            </td>
+                            <td class="num mono">@entry.AwaitingCount</td>
+                            <td class="num mono @(entry.AbnormalCount > 0 ? "abnormal strong" : null)">@(entry.AbnormalCount > 0 ? entry.AbnormalCount : null)</td>
+                            <td>
+                                <span class="pills">
+                                    @foreach (var alert in ValidationScreenRules.Alerts(entry))
+                                    {
+                                        <Pill Text="@Texts.T(alert.Key, alert.Args)" Tone="@alert.Tone.ToString()" />
+                                    }
+                                </span>
+                            </td>
+                            <td class="small mono">@entry.RegisteredAt.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="split">
+        <div class="card card-flush" data-card="results">
+            <div class="card-heading card-pad">
+                <div>
+                    <h2 class="card-title" data-state="file">@(_sheet is { } open ? $"{open.AccessionNumber} — {open.PatientName}" : Texts["App.NoData"])</h2>
+                    @if (_sheet is { } shown)
+                    {
+                        <span class="muted small">@Subtitle(shown)</span>
+                    }
+                </div>
+                <span class="muted small" data-state="selection">@SelectionText</span>
+            </div>
+            <div class="table-scroll table-scroll-tall">
+                <table class="grid" data-grid="results">
+                    <thead>
+                        <tr>
+                            <th class="tick-col"></th>
+                            <th>@Texts["Result.Parameter"]</th>
+                            <th class="num">@Texts["Result.Value"]</th>
+                            <th>@Texts["ResultEntry.Indicator"]</th>
+                            <th>@Texts["Result.Unit"]</th>
+                            <th>@Texts["Result.ReferenceRange"]</th>
+                            <th>@Texts["Result.Previous"]</th>
+                            <th>@Texts["Result.InstrumentFlags"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _listed)
+                        {
+                            var id = row.TestResultId;
+                            var indicator = ResultEntryRules.Indicator(row.Interpretation);
+                            var tickable = ValidationScreenRules.IsTickable(row, _showValidated);
+                            <tr class="@DetailClass(row)" data-row="@row.ParameterCode" title="@_comments.GetValueOrDefault(id)"
+                                @onclick="() => _selectedId = id" @ondblclick="() => ShowHistoryAsync(row)">
+                                <td class="tick-col">
+                                    @if (!row.IsHeading)
+                                    {
+                                        <input type="checkbox" data-field="tick" aria-label="@row.ParameterName.For(Texts.Language)"
+                                               disabled="@(!tickable)" checked="@_ticked.Contains(id)"
+                                               @onchange="e => Tick(id, e.Value is true)" @onfocus="() => _selectedId = id" />
+                                    }
+                                </td>
+                                <td style="padding-inline-start: @(8 + row.IndentLevel * 16)px">
+                                    @row.ParameterName.For(Texts.Language)@(_comments.ContainsKey(id) ? "  ✎" : null)
+                                </td>
+                                <td class="num mono @ValueClass(row)">@(row.IsHeading ? null : row.CurrentValue)</td>
+                                <td>
+                                    @if (indicator is not null)
+                                    {
+                                        <Pill Text="@($"{indicator.Arrow} {Texts[indicator.Key]}")" Tone="@indicator.Tone.ToString()" />
+                                    }
+                                    <span class="mono small abnormal strong">@ValidationScreenRules.FlagGlyphs(row.Flags)</span>
+                                </td>
+                                <td class="small">@row.UnitSymbol</td>
+                                <td class="small mono">@row.ReferenceRangeText</td>
+                                <td class="small mono">@Previous(row)</td>
+                                <td class="small">@row.InstrumentFlags</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="key-hints" data-state="key-hints">
+                <kbd class="kbd">@Texts["Validation.KeySpace"]</kbd><span>@Texts["Validation.KeyTick"]</span>
+                <kbd class="kbd">F9</kbd><span>@Texts["Validation.KeyValidate"]</span>
+                <kbd class="kbd">F10</kbd><span>@Texts["Validation.KeyNextOrder"]</span>
+                <kbd class="kbd">@Texts["ResultEntry.DoubleClick"]</kbd><span>@Texts["ResultEntry.KeyHistory"]</span>
+            </div>
+        </div>
+
+        <aside class="card" data-card="context">
+            <h2 class="card-title">@Texts["Validation.Context"]</h2>
+            @if (_sheet is { } sheet)
+            {
+                <ul class="context-lines" data-state="context">
+                    @foreach (var line in ContextLines(sheet))
+                    {
+                        <li><Pill Text="@line.Badge" Tone="@line.Tone.ToString()" /><span class="@(line.Tone == ValidationTone.Critical ? "critical" : null)">@Texts.T(line.Key, line.Args)</span></li>
+                    }
+                </ul>
+
+                <p class="caption">@Texts["Order.ClinicalInformation"]</p>
+                <p class="@(string.IsNullOrWhiteSpace(sheet.ClinicalInformation) ? "muted" : null)">@(string.IsNullOrWhiteSpace(sheet.ClinicalInformation) ? Texts["Validation.NotProvided"] : sheet.ClinicalInformation.Trim())</p>
+
+                <p class="caption">@Texts["Validation.Prescriber"]</p>
+                <div data-state="prescriber">
+                    @{ var name = PrescriberContactRules.DisplayName(sheet.Prescriber, Texts.Language); }
+                    <p class="@(name is null ? "muted" : "strong")">@(name ?? Texts["Validation.NotProvided"])</p>
+                    @if (sheet.Prescriber?.Speciality?.For(Texts.Language) is { Length: > 0 } speciality)
+                    {
+                        <p class="small muted">@speciality.Trim()</p>
+                    }
+                    <dl class="contacts">
+                        @foreach (var contact in PrescriberContactRules.Contacts(sheet.Prescriber))
+                        {
+                            var line = contact.Kind == PrescriberContactKind.CriticalLine;
+                            <dt class="small @(line ? "critical strong" : "muted")">@Texts[ContactKey(contact.Kind)]</dt>
+                            <dd class="@(line ? "critical strong" : null)">
+                                <span dir="ltr" class="mono">@contact.Value</span>
+                                <button type="button" class="btn-icon" title="@Texts["Validation.PrescriberCopy"]" aria-label="@($"{Texts["Validation.PrescriberCopy"]} {contact.Value}")"
+                                        data-action="Validation.PrescriberCopy" @onclick="() => CopyAsync(contact.Value)">
+                                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.CopyPlus" />
+                                </button>
+                            </dd>
+                        }
+                    </dl>
+                </div>
+
+                var commentRow = SelectedRow;
+                var editable = ValidationScreenRules.TakesComment(commentRow, Context.User);
+                <label class="field">
+                    <span class="caption">@(editable ? $"{Texts["Validation.BiologistComment"]} · {commentRow!.ParameterName.For(Texts.Language)}" : Texts["Validation.BiologistComment"])</span>
+                    <textarea class="input" rows="3" data-field="biologist-comment" disabled="@(!editable)"
+                              placeholder="@(editable ? Texts["Validation.BiologistCommentHint"] : null)"
+                              value="@(editable ? _comments.GetValueOrDefault(commentRow!.TestResultId) : null)"
+                              @oninput="e => KeepComment(commentRow, e.Value?.ToString())"></textarea>
+                </label>
+
+                @if (Context.User.Has(Permissions.Orders.View))
+                {
+                    <a class="link" href="@($"ecran/orderdetail?dossier={sheet.LabOrderId}")" data-action="Validation.OpenFullOrder">@Texts["Validation.OpenFullOrder"]</a>
+                }
+            }
+        </aside>
+    </div>
+
+    @{ var actions = Actions; }
+    <footer class="action-bar">
+        <p class="action-bar-status is-@(_status?.Tone ?? "muted")" role="status" data-state="status">@_status?.Text</p>
+        <details class="more more-up">
+            <summary class="btn btn-secondary" data-action="ResultEntry.MoreActions">@Texts["ResultEntry.MoreActions"]</summary>
+            <div class="more-menu">
+                <ActionButton Key="Action.SelectAll" Disabled="@(!actions.SelectAll)" OnClick="ToggleAll" />
+                <ActionButton Key="Validation.Unvalidate" Text="@($"{Texts["Validation.Unvalidate"]}…")" Disabled="@(!actions.Unvalidate || _busy)" OnClick="AskUnvalidate" />
+                <ActionButton Key="Action.Refresh" OnClick="ActivateAsync" />
+            </div>
+        </details>
+        <ActionButton Key="Result.History" Hidden="@(!Context.User.Has(Permissions.Results.View))" Disabled="@(!actions.History)"
+                      OnClick="() => ShowHistoryAsync(SelectedRow)" />
+        <ActionButton Key="Nav.CriticalResults" Text="@($"{Texts["Nav.CriticalResults"]}…")" Class="@(actions.Communicate ? "is-emphasised" : null)"
+                      Disabled="@(!actions.Communicate || _busy)" OnClick="CommunicateCriticalAsync" />
+        <ActionButton Key="Report.Title" Disabled="@(!actions.Release || _busy)" OnClick="() => _dialog = ValidationDialog.Release" />
+        <span class="toolbar-spacer"></span>
+        <span class="muted small" data-state="remaining">@Texts.T("Validation.PendingSummary", Visible.Count, Visible.Sum(e => e.AwaitingCount))</span>
+        <ActionButton Key="Validation.ValidateSelection" Text="@Texts.T("Validation.ValidateSelection", Selection.ToValidate)"
+                      Glyph="MarocLIS.Desktop.Infrastructure.Glyph.BadgeCheck" Primary="true" Shortcut="F9"
+                      Disabled="@(!actions.Validate || _busy)" OnClick="ValidateAsync" />
+        <ActionButton Key="Validation.KeyNextOrder" Class="shortcut-only" Shortcut="F10" Disabled="@_busy" OnClick="SelectNextAsync" />
+    </footer>
+</div>
+
+@switch (_dialog)
+{
+    case ValidationDialog.Leave:
+        <ConfirmPrompt Title="@Texts["Nav.Validation"]" Message="@Texts.T("Validation.CommentsNotSaved", _comments.Count)" OnYes="LeaveAsync" OnNo="CloseDialog" />
+        break;
+
+    case ValidationDialog.Unvalidate:
+        <ReasonPrompt Title="@Texts["Validation.Unvalidate"]" MinimumLength="15" MaxLength="500"
+                      Prompt="@Texts.T("Validation.UnvalidatePrompt", Withdrawals.Count)" OnConfirm="UnvalidateAsync" OnCancel="CloseDialog" />
+        break;
+
+    case ValidationDialog.QcOverride when _qcNames is { } names:
+        <ReasonPrompt Title="@Texts["Validation.QcOverride"]" MinimumLength="15" MaxLength="1000"
+                      Prompt="@($"{Texts["Result_QcOutOfControlBlocksValidation"]}\n\n{string.Join(", ", names)}\n\n{Texts["Validation.OverrideJustification"]}")"
+                      OnConfirm="QcJustifiedAsync" OnCancel="CloseDialog" />
+        break;
+
+    case ValidationDialog.Release when _sheet is { } releasing:
+        <ConfirmPrompt Title="@Texts["Report.Issue"]" Message="@Texts.T("Report.ConfirmIssue", releasing.AccessionNumber)" OnYes="ReleaseAsync" OnNo="CloseDialog" />
+        break;
+
+    case ValidationDialog.CallRecipient when _call is { } call:
+        <TextPrompt Name="critical-recipient" Title="@Texts["Nav.CriticalResults"]" MaxLength="200"
+                    Prompt="@($"{call.ParameterName} : {call.Value}\n\n{call.CallLine}{Texts["Notification_RecipientNameRequired"]}")"
+                    OnConfirm="RecipientGivenAsync" OnCancel="RecipientRefusedAsync" />
+        break;
+
+    case ValidationDialog.CallReadBack when _call is { } call:
+        <TextPrompt Name="critical-readback" Title="@Texts["Nav.CriticalResults"]" MaxLength="100"
+                    Prompt="@($"{Texts["Validation.ReadBackPrompt"]}\n\n{call.ParameterName}")"
+                    OnConfirm="ReadBackGivenAsync" OnCancel="() => ReadBackGivenAsync(null)" />
+        break;
+
+    case ValidationDialog.History when _history is { } history:
+        <ResultHistoryDialog ParameterName="@history.Name" Series="history.Series" OnClose="CloseDialog" />
+        break;
+
+    case ValidationDialog.Message when _messages.Count > 0:
+        var message = _messages.Peek();
+        <Modal Name="validation-message" Title="@message.Title" OnCancel="NextMessageAsync">
+            <ChildContent><p class="info-line prompt-text">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="NextMessageAsync" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum ValidationDialog { None, Leave, Unvalidate, QcOverride, Release, CallRecipient, CallReadBack, History, Message }
+
+    /// <summary>A message, and what follows once it is read: the next call of a critical round.</summary>
+    private sealed record Message(string Title, string Text, Func<Task>? Then = null);
+
+    private sealed record HistoryView(string Name, TrendSeries Series);
+
+    /// <summary>The call of one critical value: raised, then whom it reached, then what they read back.</summary>
+    private sealed record CriticalCall(Guid NotificationId, string ParameterName, string Value, string CallLine);
+
+    private IReadOnlyList<ValidationWorklistEntry> _entries = [];
+    private ValidationFilter _filter = ValidationFilter.All;
+    private bool _showValidated;
+    private Guid? _orderId;
+
+    private ResultEntrySheet? _sheet;
+    private List<ResultEntryRow> _listed = [];
+    private readonly HashSet<Guid> _ticked = [];
+    private Guid? _selectedId;
+
+    // The comments typed belong to one file: another file starts with none.
+    private readonly Dictionary<Guid, string> _comments = [];
+    private Guid? _commentsOrderId;
+
+    private ValidationDialog _dialog;
+    private readonly Queue<Message> _messages = new();
+    private List<ValidationDecision>? _decisions;
+    private IReadOnlyList<string>? _qcNames;
+    private HistoryView? _history;
+    private Queue<ResultEntryRow>? _toCall;
+    private CriticalCall? _call;
+    private string? _recipient;
+    private string? _leaveTo;
+    private bool _leaving;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<ValidationWorklistEntry> Visible =>
+        [.. _entries.Where(e => ValidationScreenRules.Matches(e, _filter))];
+
+    private ResultEntryRow? SelectedRow => _listed.FirstOrDefault(r => r.TestResultId == _selectedId);
+
+    private ValidationActions Actions =>
+        _sheet is { } sheet
+            ? ValidationScreenRules.Actions([.. sheet.Rows], _listed.Count, SelectedRow, Context.User)
+            : ValidationActions.None;
+
+    private ValidationSelection Selection => ValidationScreenRules.Selection(_listed, IsTicked, _showValidated);
+
+    private IReadOnlyList<Guid> Withdrawals => ValidationScreenRules.Withdrawals(_listed, IsTicked);
+
+    /// <summary>« 14 sur 16 sélectionnés ».</summary>
+    private string SelectionText =>
+        Selection is { Tickable: > 0 } selection ? Texts.T("Validation.SelectedCount", selection.Ticked, selection.Tickable) : string.Empty;
+
+    private bool IsTicked(Guid id) => _ticked.Contains(id);
+
+    private string? CommentOf(Guid id) => _comments.TryGetValue(id, out var text) ? text : null;
+
+    protected override Task OnInitializedAsync() => ActivateAsync();
+
+    // ---- Worklist ---------------------------------------------------------------------------------
+
+    private async Task ActivateAsync()
+    {
+        try
+        {
+            // The whole list, every time: the chips filter it here and show their counts.
+            var result = await Scopes.RunAsync<ValidationService, Result<IReadOnlyList<ValidationWorklistEntry>>>(
+                s => s.GetWorklistAsync(onlyUrgent: false, includeValidated: _showValidated));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Nav.Validation"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            _entries = result.Value;
+
+            // The file that was open stays open across a reload, as long as it is still listed.
+            var visible = Visible;
+            var keep = visible.FirstOrDefault(e => e.LabOrderId == _orderId) ?? visible.FirstOrDefault();
+            if (keep is null) ClearDetails();
+            else await LoadAsync(keep.LabOrderId, keepTicks: keep.LabOrderId == _orderId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the validation worklist failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private string ChipText(ValidationFilter filter)
+    {
+        var caption = filter switch
+        {
+            ValidationFilter.Urgent => Texts["Validation.FilterUrgent"],
+            ValidationFilter.Abnormal => Texts["Validation.FilterAbnormal"],
+            ValidationFilter.QcBlocked => Texts["Validation.FilterQc"],
+            _ => Texts["ResultEntry.AllSectors"]
+        };
+        return $"{caption} · {ValidationScreenRules.Count(_entries, filter)}";
+    }
+
+    private async Task ShowValidatedChanged(ChangeEventArgs e)
+    {
+        _showValidated = e.Value is true;
+        await ActivateAsync();
+    }
+
+    /// <summary>« M · 31 ans »: the sex and the age after the patient's name.</summary>
+    private string PatientDetail(ValidationWorklistEntry entry)
+    {
+        var parts = new List<string>(2);
+        if (entry.Gender != Gender.Unknown) parts.Add(Texts[$"GenderShort.{entry.Gender}"]);
+        if (entry.AgeYears is { } age) parts.Add($"{age} {Texts["Report.Years"]}");
+        return string.Join(" · ", parts);
+    }
+
+    private async Task SelectAsync(Guid orderId)
+    {
+        if (orderId == _orderId) return;
+        await LoadAsync(orderId, keepTicks: false);
+    }
+
+    /// <summary>F10: the next file of the list.</summary>
+    private async Task SelectNextAsync()
+    {
+        var visible = Visible;
+        var index = visible.ToList().FindIndex(e => e.LabOrderId == _orderId);
+        if (index + 1 < visible.Count) await LoadAsync(visible[index + 1].LabOrderId, keepTicks: false);
+    }
+
+    // ---- The open file -------------------------------------------------------------------------------
+
+    private async Task LoadAsync(Guid orderId, bool keepTicks)
+    {
+        try
+        {
+            var sheet = await Scopes.RunAsync<ResultEntryService, Result<ResultEntrySheet>>(s => s.OpenAsync(orderId));
+
+            if (sheet.IsFailure)
+            {
+                ClearDetails();
+                _status = (Texts.Describe(sheet.Errors), "critical");
+                return;
+            }
+
+            Render(sheet.Value, keepTicks);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Opening order {OrderId} for validation failed.", orderId);
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private void Render(ResultEntrySheet sheet, bool keepTicks)
+    {
+        if (_commentsOrderId != sheet.LabOrderId)
+        {
+            _comments.Clear();
+            _commentsOrderId = sheet.LabOrderId;
+        }
+
+        var previousTicks = keepTicks ? _ticked.ToHashSet() : null;
+        var previousListed = keepTicks ? _listed.Select(r => r.TestResultId).ToHashSet() : null;
+
+        _sheet = sheet;
+        _orderId = sheet.LabOrderId;
+        _listed = [.. sheet.Rows.Where(r => ValidationScreenRules.IsListed(r, _showValidated))];
+
+        // Pre-ticked: the common case is releasing the whole file, and the biologist unticks what
+        // they want to hold back. A reload of the same file keeps the ticks they set.
+        _ticked.Clear();
+        foreach (var row in _listed.Where(r => !r.IsHeading))
+        {
+            var ticked = previousTicks is not null && previousListed!.Contains(row.TestResultId)
+                ? previousTicks.Contains(row.TestResultId)
+                : ValidationScreenRules.IsPreTicked(row);
+            if (ticked && ValidationScreenRules.IsTickable(row, _showValidated)) _ticked.Add(row.TestResultId);
+        }
+
+        if (_listed.All(r => r.TestResultId != _selectedId))
+            _selectedId = _listed.FirstOrDefault(r => !r.IsHeading)?.TestResultId;
+    }
+
+    private void ClearDetails()
+    {
+        _sheet = null;
+        _orderId = null;
+        _listed = [];
+        _ticked.Clear();
+        _selectedId = null;
+    }
+
+    private void Tick(Guid id, bool ticked)
+    {
+        if (ticked) _ticked.Add(id);
+        else _ticked.Remove(id);
+    }
+
+    /// <summary>Selects what awaits release; released rows are ticked one by one, on purpose.</summary>
+    private void ToggleAll()
+    {
+        var (rows, tick) = ValidationScreenRules.ToggleAll(_listed, IsTicked, _showValidated);
+        foreach (var id in rows) Tick(id, tick);
+    }
+
+    private string Subtitle(ResultEntrySheet sheet)
+    {
+        var parts = new List<string>(2);
+        if (sheet.AgeYears is { } age) parts.Add($"{age} {Texts["Report.Years"]}");
+        parts.Add(Texts[$"Gender.{sheet.Gender}"]);
+        return string.Join(" · ", parts);
+    }
+
+    private IReadOnlyList<ValidationContextLine> ContextLines(ResultEntrySheet sheet) =>
+        ValidationScreenRules.Context(_listed, sheet.Priority,
+                                      sheet.DueAt ?? _entries.FirstOrDefault(e => e.LabOrderId == sheet.LabOrderId)?.DueAt,
+                                      DateTimeOffset.Now);
+
+    private static string ContactKey(PrescriberContactKind kind) => kind switch
+    {
+        PrescriberContactKind.CriticalLine => "Validation.PrescriberCriticalLine",
+        PrescriberContactKind.Phone => "Validation.PrescriberPhone",
+        PrescriberContactKind.Mobile => "Validation.PrescriberMobile",
+        PrescriberContactKind.Email => "Validation.PrescriberEmail",
+        _ => "Validation.PrescriberFax"
+    };
+
+    private async Task CopyAsync(string value)
+    {
+        await JS.InvokeVoidAsync("marocLis.copy", value);
+        _status = (Texts.T("Validation.PrescriberCopied", value), "muted");
+    }
+
+    /// <summary>
+    /// An abnormal line in the warm tint, the critical one in the critical tint; a line already
+    /// released, listed only so it can be withdrawn, set apart from what awaits release.
+    /// </summary>
+    private string DetailClass(ResultEntryRow row) =>
+        string.Join(' ', new[]
+        {
+            row.TestResultId == _selectedId ? "is-selected" : null,
+            row.IsHeading ? "is-heading" : null,
+            ValidationScreenRules.IsAbnormal(row) ? row.IsCritical ? "is-critical-row" : "is-abnormal" : null,
+            ValidationScreenRules.IsReleased(row) ? "is-released" : null
+        }.Where(c => c is not null));
+
+    private static string? ValueClass(ResultEntryRow row) =>
+        ResultEntryRules.Indicator(row.Interpretation)?.Tone switch
+        {
+            ValidationTone.Critical => "critical strong",
+            ValidationTone.Warning or ValidationTone.Info => "abnormal strong",
+            _ => ValidationScreenRules.IsAbnormal(row) ? "strong" : null
+        };
+
+    private string Previous(ResultEntryRow row) =>
+        row.PreviousValue is { } value
+            ? value.ToString("N2", Texts.Culture)
+              + (row.PreviousDate is { } date ? $"  {date.ToString("dd/MM/yy", CultureInfo.InvariantCulture)}" : string.Empty)
+              + (row.PreviousImported ? $" · {Texts["Migration.HistoryMarker"]}" : string.Empty)
+            : "—";
+
+    // ---- The biologist's comment ----------------------------------------------------------------------
+
+    /// <summary>
+    /// Only a line awaiting release takes one: it is written onto the result when that line is
+    /// validated, and printed under the value.
+    /// </summary>
+    private void KeepComment(ResultEntryRow? row, string? typed)
+    {
+        if (row is null || !ValidationScreenRules.TakesComment(row, Context.User)) return;
+
+        var text = typed?.Trim() ?? string.Empty;
+        if (text.Length == 0) _comments.Remove(row.TestResultId);
+        else _comments[row.TestResultId] = text;
+    }
+
+    /// <summary>Comments typed and not yet written onto a validated result are lost on leaving: asked first.</summary>
+    private void BeforeLeaving(LocationChangingContext context)
+    {
+        if (_comments.Count == 0 || _leaving) return;
+
+        context.PreventNavigation();
+        _leaveTo = context.TargetLocation;
+        _dialog = ValidationDialog.Leave;
+        StateHasChanged();
+    }
+
+    private Task LeaveAsync()
+    {
+        _dialog = ValidationDialog.None;
+        _leaving = true;
+        if (_leaveTo is { } target) Navigation.NavigateTo(target);
+        return Task.CompletedTask;
+    }
+
+    // ---- Dialogs -------------------------------------------------------------------------------------
+
+    private void CloseDialog()
+    {
+        _dialog = ValidationDialog.None;
+        _decisions = null;
+        _qcNames = null;
+    }
+
+    private void Show(string title, string text, Func<Task>? then = null)
+    {
+        _messages.Enqueue(new Message(title, text, then));
+        _dialog = ValidationDialog.Message;
+    }
+
+    private async Task NextMessageAsync()
+    {
+        var read = _messages.Count > 0 ? _messages.Dequeue() : null;
+        _dialog = _messages.Count > 0 ? ValidationDialog.Message : ValidationDialog.None;
+        if (read?.Then is { } then) await then();
+    }
+
+    // ---- Antériorités ---------------------------------------------------------------------------------
+
+    /// <summary>The chart of the parameter's validated values, the value awaiting signature drawn as the current point.</summary>
+    private async Task ShowHistoryAsync(ResultEntryRow? row)
+    {
+        if (_sheet is not { } sheet || row is null || !ResultEntryRules.IsCharted(row)) return;
+        if (!Context.User.Has(Permissions.Results.View)) return;
+
+        _selectedId = row.TestResultId;
+
+        try
+        {
+            var history = await Scopes.RunAsync<ResultEntryService, Result<IReadOnlyList<ResultHistoryPoint>>>(
+                s => s.GetHistoryAsync(sheet.LabOrderId, row.TestParameterId));
+
+            if (history.IsFailure)
+            {
+                Show(Texts["Result.History"], Texts.Describe(history.Errors));
+                return;
+            }
+
+            _history = new HistoryView(row.ParameterName.For(Texts.Language),
+                                       TrendSeries.For(row, history.Value, sheet.AccessionNumber));
+            _dialog = ValidationDialog.History;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the history of parameter {ParameterId} failed.", row.TestParameterId);
+            Show(Texts["Result.History"], Texts["Message.UnexpectedError"]);
+        }
+    }
+
+    // ---- Validation --------------------------------------------------------------------------------
+
+    private async Task ValidateAsync()
+    {
+        if (_sheet is null) return;
+
+        var decisions = ValidationScreenRules.Decisions(_listed, IsTicked, CommentOf);
+
+        if (decisions.All(d => !d.Validate))
+        {
+            _status = (Texts["Message.NothingSelected"], "muted");
+            return;
+        }
+
+        // A QC override needs its justification collected before the attempt, not as a rejection
+        // afterwards — otherwise the biologist validates, is refused, and has to start again.
+        var qcAffected = ValidationScreenRules.QcAffected(_listed, IsTicked)
+            .Select(r => r.ParameterName.For(Texts.Language))
+            .ToList();
+
+        if (qcAffected.Count > 0)
+        {
+            _decisions = decisions;
+            _qcNames = qcAffected;
+            _dialog = ValidationDialog.QcOverride;
+            return;
+        }
+
+        await SendDecisionsAsync(decisions);
+    }
+
+    private async Task QcJustifiedAsync(string justification)
+    {
+        if (_sheet is not { } sheet || _decisions is not { } decisions) return;
+
+        _dialog = ValidationDialog.None;
+        _decisions = null;
+        _qcNames = null;
+        await SendDecisionsAsync(ValidationScreenRules.WithQcJustification(decisions, sheet.Rows, justification));
+    }
+
+    private async Task SendDecisionsAsync(List<ValidationDecision> decisions)
+    {
+        if (_sheet is not { } sheet) return;
+
+        _busy = true;
+
+        try
+        {
+            var outcome = await Scopes.RunAsync<ValidationService, Result<ValidationOutcome>>(
+                s => s.ValidateAsync(sheet.LabOrderId, decisions));
+
+            if (outcome.IsFailure)
+            {
+                Show(Texts["Validation.Biological"], Texts.Describe(outcome.Errors));
+                return;
+            }
+
+            var result = outcome.Value;
+
+            // Refusals are shown in full: each one names a gate the biologist has to clear.
+            if (result.Blocked.Count > 0) Show(Texts["Validation.Biological"], Texts.Describe(result.Blocked));
+
+            _status = (Texts.T("Validation.ValidatedCount", result.Validated), result.Blocked.Count > 0 ? "abnormal" : "normal");
+
+            // The comments of the lines now validated are on their results; the others stay.
+            foreach (var decision in decisions.Where(d => d.Validate && d.BiologistComment is not null))
+                _comments.Remove(decision.TestResultId);
+
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Validating order {OrderId} failed.", sheet.LabOrderId);
+            Show(Texts["Validation.Biological"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>Retracts a biological validation, with its reason; only a released result has one to withdraw.</summary>
+    private void AskUnvalidate()
+    {
+        if (!Context.User.Has(Permissions.Results.Unvalidate) || _sheet is null) return;
+
+        if (Withdrawals.Count == 0)
+        {
+            _status = (Texts["Message.NothingSelected"], "muted");
+            return;
+        }
+
+        _dialog = ValidationDialog.Unvalidate;
+    }
+
+    private async Task UnvalidateAsync(string reason)
+    {
+        if (_sheet is not { } sheet) return;
+
+        var ids = Withdrawals;
+        _dialog = ValidationDialog.None;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<ValidationService, Result>(s => s.UnvalidateAsync(sheet.LabOrderId, ids, reason));
+
+            if (result.IsFailure)
+            {
+                Show(Texts["Validation.Unvalidate"], Texts.Describe(result.Errors));
+                return;
+            }
+
+            _status = ($"{ids.Count} × {Texts["Validation.Unvalidated"]}", "abnormal");
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unvalidating results of order {OrderId} failed.", sheet.LabOrderId);
+            Show(Texts["Validation.Unvalidate"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- Critical values -------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Records the telephone communication of each critical value not yet communicated: the call is
+    /// raised, the operator says whom they reached, then what that person read back. A call without
+    /// a read-back leaves the result unreleasable, which is the intended behaviour.
+    /// </summary>
+    private async Task CommunicateCriticalAsync()
+    {
+        if (_sheet is not { } sheet) return;
+
+        var critical = ValidationScreenRules.CriticalToCommunicate(sheet.Rows);
+        if (critical.Count == 0) return;
+
+        _toCall = new Queue<ResultEntryRow>(critical);
+        _busy = true;
+        await NextCallAsync();
+    }
+
+    private async Task NextCallAsync()
+    {
+        if (_sheet is not { } sheet || _toCall is null || !_toCall.TryDequeue(out var row))
+        {
+            await EndCallsAsync();
+            return;
+        }
+
+        // Whom the value is phoned to, and the number recorded against the call: the one the
+        // « Prescripteur » block shows first (PrescriberContactRules).
+        var prescriber = sheet.Prescriber;
+        var contactUsed = PrescriberContactRules.ContactUsed(null, prescriber, NotificationChannel.Telephone);
+        var whom = string.Join(" — ", new[] { PrescriberContactRules.DisplayName(prescriber, Texts.Language), contactUsed }
+                                          .Where(part => part is not null));
+        var callLine = whom.Length > 0 ? $"{Texts.T("Validation.CriticalCallWhom", whom)}\n\n" : string.Empty;
+
+        var parameterName = row.ParameterName.For(Texts.Language);
+        var value = $"{row.CurrentValue} {row.UnitSymbol}".Trim();
+
+        try
+        {
+            var raised = await Scopes.RunAsync<ValidationService, Result<Guid>>(s => s.RaiseCriticalNotificationAsync(
+                row.TestResultId, parameterName, value, NotificationChannel.Telephone, contactUsed,
+                prescriber?.PrescriberId, row.EnteredAt));
+
+            if (raised.IsFailure)
+            {
+                _toCall = null;
+                Show(Texts["Nav.CriticalResults"], Texts.Describe(raised.Errors), EndCallsAsync);
+                return;
+            }
+
+            _call = new CriticalCall(raised.Value, parameterName, value, callLine);
+            _recipient = null;
+            _dialog = ValidationDialog.CallRecipient;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Raising the critical call of result {ResultId} failed.", row.TestResultId);
+            _toCall = null;
+            Show(Texts["Nav.CriticalResults"], Texts["Message.UnexpectedError"], EndCallsAsync);
+        }
+    }
+
+    private Task RecipientGivenAsync(string recipient)
+    {
+        _recipient = recipient;
+        _dialog = ValidationDialog.CallReadBack;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The operator gave up before naming whom they spoke to: the call is closed as abandoned.</summary>
+    private async Task RecipientRefusedAsync()
+    {
+        _dialog = ValidationDialog.None;
+        if (_call is { } call)
+            await Scopes.RunAsync<ValidationService, Result>(s => s.MarkCriticalUnreachableAsync(call.NotificationId, CriticalCallNotes.Abandoned));
+        await NextCallAsync();
+    }
+
+    private async Task ReadBackGivenAsync(string? readBack)
+    {
+        _dialog = ValidationDialog.None;
+        if (_call is not { } call) return;
+
+        if (string.IsNullOrWhiteSpace(readBack))
+        {
+            await Scopes.RunAsync<ValidationService, Result>(s => s.MarkCriticalUnreachableAsync(call.NotificationId, CriticalCallNotes.ReadBackNotConfirmed));
+            Show(Texts["Nav.CriticalResults"], Texts["Notification_ReadBackRequired"], NextCallAsync);
+            return;
+        }
+
+        var recipient = _recipient ?? string.Empty;
+        var acknowledged = await Scopes.RunAsync<ValidationService, Result>(s => s.AcknowledgeCriticalNotificationAsync(
+            call.NotificationId, recipient, null, true, readBack));
+
+        if (acknowledged.IsFailure)
+        {
+            Show(Texts["Nav.CriticalResults"], Texts.Describe(acknowledged.Errors), NextCallAsync);
+            return;
+        }
+
+        await NextCallAsync();
+    }
+
+    private async Task EndCallsAsync()
+    {
+        _toCall = null;
+        _call = null;
+        _recipient = null;
+        _busy = false;
+        if (_orderId is { } orderId) await LoadAsync(orderId, keepTicks: true);
+    }
+
+    // ---- Report ------------------------------------------------------------------------------------
+
+    private async Task ReleaseAsync()
+    {
+        // The file named in the confirmation is the file released.
+        if (_sheet is not { } sheet) return;
+
+        _dialog = ValidationDialog.None;
+        _busy = true;
+
+        try
+        {
+            var released = await Scopes.RunAsync<ReportReleaseService, Result<ReleasedReport>>(s => s.ReleaseAsync(sheet.LabOrderId));
+
+            if (released.IsFailure)
+            {
+                Show(Texts["Report.Title"], Texts.Describe(released.Errors));
+                return;
+            }
+
+            // Handed to the browser as the workstation hands it to the operator's PDF viewer.
+            await JS.InvokeVoidAsync("marocLis.download", $"{sheet.AccessionNumber}-v{released.Value.VersionNumber}.pdf",
+                                     "application/pdf", released.Value.Pdf);
+
+            _status = ($"{Texts["Report.Title"]} v{released.Value.VersionNumber} — {Texts["Message.Saved"]}", "normal");
+            await ActivateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Releasing the report of order {OrderId} failed.", sheet.LabOrderId);
+            Show(Texts["Report.Title"], Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
