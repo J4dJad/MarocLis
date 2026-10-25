@@ -164,15 +164,7 @@ public sealed class QualityDocumentsView : LocalizedView
         _grid.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadVersionsAsync());
         _grid.CellFormatting += OnDocumentFormatting;
         QhGridPills.Attach(_versions, "status", r => r.Tag is DocumentVersionRow version
-            ? version.Status switch
-            {
-                DocumentVersionStatus.Effective => QhTone.Ok,
-                DocumentVersionStatus.Approved or DocumentVersionStatus.Reviewed
-                    or DocumentVersionStatus.Scheduled => QhTone.Info,
-                DocumentVersionStatus.UnderReview => QhTone.Warn,
-                DocumentVersionStatus.Draft => QhTone.Wait,
-                _ => QhTone.Muted
-            }
+            ? QhTone.Of(QualityDocumentScreenRules.VersionTone(version.Status))
             : null);
         _versions.SelectionChanged += (_, _) => RefreshButtons();
 
@@ -199,22 +191,11 @@ public sealed class QualityDocumentsView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count) return;
         if (_grid.Rows[e.RowIndex].Tag is not ControlledDocumentRow row) return;
 
-        if (!row.IsActive)
-        {
-            e.CellStyle!.ForeColor = UiTheme.TextMuted;
-            return;
-        }
-
         // Overdue review, or nothing in force at all: either way staff are working from a text the
         // laboratory has not currently vouched for. Said in the warning ink on the cell concerned.
-        var column = _grid.Columns[e.ColumnIndex].Name;
-        if ((column == "review" && row.IsReviewOverdue)
-            || (column is "effective" or "effectiveFrom" && row.EffectiveVersion is null)
-            || column == "reference" && (row.IsReviewOverdue || row.EffectiveVersion is null))
-        {
-            e.CellStyle!.ForeColor = UiTheme.Abnormal;
-            e.CellStyle.Font = UiTheme.MonospaceBold;
-        }
+        var ink = QualityDocumentScreenRules.Ink(row, _grid.Columns[e.ColumnIndex].Name);
+        if (QhTone.InkOf(ink) is { } colour) e.CellStyle!.ForeColor = colour;
+        if (ink == QualityInk.Abnormal) e.CellStyle!.Font = UiTheme.MonospaceBold;
     }
 
     protected override void ApplyTexts()
@@ -272,8 +253,7 @@ public sealed class QualityDocumentsView : LocalizedView
 
     /// <summary>The version the buttons act on: the one selected, else the newest.</summary>
     private DocumentVersionRow? SelectedVersion =>
-        _versions.CurrentRow?.Tag as DocumentVersionRow
-        ?? (_versionRows.Count > 0 ? _versionRows[^1] : null);
+        QualityDocumentScreenRules.SelectedVersion(_versionRows, (_versions.CurrentRow?.Tag as DocumentVersionRow)?.Id);
 
     private async Task LoadAsync(Guid? keep = null, CancellationToken ct = default)
     {
@@ -313,18 +293,12 @@ public sealed class QualityDocumentsView : LocalizedView
                 row.Title.For(Localizer.CurrentLanguage),
                 T($"DocumentKind.{row.Kind}"),
                 row.ProcessCode ?? string.Empty,
-                row.EffectiveVersion is { } v ? $"v{v}" : "—",
-                row.EffectiveFrom?.ToString("dd/MM/yy") ?? "—",
-                row.NextReviewDue is { } due
-                    ? row.IsReviewOverdue ? $"! {due:dd/MM/yy}" : due.ToString("dd/MM/yy")
-                    : "—",
-                row.LatestVersion is { } latest && latest != row.EffectiveVersion
-                    ? $"v{latest} · {T($"DocumentVersionStatus.{row.LatestStatus}")}"
-                    : string.Empty,
+                QualityDocumentScreenRules.Effective(row),
+                QualityDocumentScreenRules.EffectiveFrom(row),
+                QualityDocumentScreenRules.NextReview(row),
+                QualityDocumentScreenRules.Latest(row, T),
                 row.OwnerName ?? string.Empty,
-                !row.RequiresAcknowledgement || row.EffectiveVersion is null
-                    ? string.Empty
-                    : row.AcknowledgedByCurrentUser ? "✓" : "!");
+                QualityDocumentScreenRules.Read(row));
 
             _grid.Rows[index].Tag = row;
             if (row.Id == keep) _grid.CurrentCell = _grid.Rows[index].Cells[0];
@@ -343,16 +317,8 @@ public sealed class QualityDocumentsView : LocalizedView
 
     private void RenderHeading()
     {
-        var overdue = _rows.Count(r => r.IsActive && r.IsReviewOverdue);
-        var unread = _rows.Count(r => r.RequiresAcknowledgement && r.EffectiveVersion is not null
-                                      && !r.AcknowledgedByCurrentUser);
-
         _heading.Text = T("Documents.Title");
-
-        var text = Localizer.Format("QualityHr.Documents.Count", _rows.Count);
-        if (overdue > 0) text += $" · {T("Documents.ReviewOverdue")} {overdue}";
-        if (unread > 0) text += $" · {T("Documents.ToRead")} {unread}";
-        _count.Text = text;
+        _count.Text = QualityDocumentScreenRules.Count(_rows, T);
     }
 
     private async Task LoadVersionsAsync()
@@ -400,11 +366,11 @@ public sealed class QualityDocumentsView : LocalizedView
                 row.ChangeSummary?.For(Localizer.CurrentLanguage) ?? string.Empty,
                 row.FileName ?? string.Empty,
                 row.AuthorName,
-                row.CreatedAt.ToString("dd/MM/yy"),
+                QualityDocumentScreenRules.Date(row.CreatedAt),
                 row.ReviewedByName ?? string.Empty,
                 row.ApprovedByName ?? string.Empty,
-                row.EffectiveFrom?.ToString("dd/MM/yy") ?? string.Empty,
-                row.WithdrawnOn?.ToString("dd/MM/yy") ?? string.Empty);
+                row.EffectiveFrom is { } from ? QualityDocumentScreenRules.Date(from) : string.Empty,
+                row.WithdrawnOn is { } withdrawn ? QualityDocumentScreenRules.Date(withdrawn) : string.Empty);
 
             _versions.Rows[index].Tag = row;
         }
@@ -415,9 +381,7 @@ public sealed class QualityDocumentsView : LocalizedView
         if (_versions.Rows.Count > 0)
             _versions.CurrentCell = _versions.Rows[^1].Cells[0];
 
-        _versionsHeading.Text = SelectedDocument is { } document
-            ? $"{T("Documents.Versions")} — {document.Reference}"
-            : T("Documents.Versions");
+        _versionsHeading.Text = QualityDocumentScreenRules.VersionsHeading(SelectedDocument, T);
 
         RefreshButtons();
     }
@@ -429,36 +393,24 @@ public sealed class QualityDocumentsView : LocalizedView
     private void RefreshButtons()
     {
         var document = SelectedDocument;
-        var version = SelectedVersion;
+        var actions = QualityDocumentScreenRules.Actions(p => PermissionGate.Allows(p), document, SelectedVersion);
 
         // A retired document is kept for reference only: its versions no longer move until it is
         // reactivated. One version at a time is in progress, so a new one waits for the last to
         // be put in force (the service refuses it after the file has been chosen otherwise).
-        var active = document is { IsActive: true };
-        _newVersion.Enabled = active
-                              && document!.LatestStatus is not (DocumentVersionStatus.Draft
-                                  or DocumentVersionStatus.UnderReview or DocumentVersionStatus.Reviewed
-                                  or DocumentVersionStatus.Approved);
-        _submit.Enabled = active && version?.Status == DocumentVersionStatus.Draft;
-        _review.Enabled = active && version?.Status == DocumentVersionStatus.UnderReview;
-        _approve.Enabled = active && version?.Status is DocumentVersionStatus.UnderReview
-                                                     or DocumentVersionStatus.Reviewed;
-        _makeEffective.Enabled = active && version?.Status == DocumentVersionStatus.Approved;
-        _open.Enabled = version is { HasContent: true };
-        _acknowledge.Enabled = document is { IsActive: true, EffectiveVersion: not null, AcknowledgedByCurrentUser: false };
-        _withdraw.Enabled = document is not null;
-        _withdraw.Text = document is { IsActive: false } ? T("Documents.Reactivate") : T("Documents.Withdraw");
+        _newVersion.Enabled = actions.NewVersion;
+        _submit.Enabled = actions.Submit;
+        _review.Enabled = actions.Review;
+        _approve.Enabled = actions.Approve;
+        _makeEffective.Enabled = actions.MakeEffective;
+        _open.Enabled = actions.Open;
+        _acknowledge.Enabled = actions.Acknowledge;
+        _withdraw.Enabled = actions.Withdraw;
+        _withdraw.Text = T(actions.WithdrawKey);
 
-        _message.ForeColor = UiTheme.TextSecondary;
-        _message.Text = document switch
-        {
-            null => string.Empty,
-            { EffectiveVersion: null } => T("Documents.NoEffectiveVersionWarning"),
-            { IsReviewOverdue: true } => T("Documents.ReviewOverdueWarning"),
-            _ => string.Empty
-        };
-        if (document is { EffectiveVersion: null } or { IsReviewOverdue: true })
-            _message.ForeColor = UiTheme.Abnormal;
+        var warning = QualityDocumentScreenRules.Warning(document);
+        _message.ForeColor = warning is { Abnormal: true } ? UiTheme.Abnormal : UiTheme.TextSecondary;
+        _message.Text = warning is null ? string.Empty : T(warning.Key);
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -478,7 +430,9 @@ public sealed class QualityDocumentsView : LocalizedView
         await LoadAsync(keep: result.Value);
 
         // A new document has no text yet; the next thing to do is attach its first draft.
-        if (_dialogs.Confirm(T("Documents.AddFirstVersionQuestion"), _newDocument.Text))
+        if (QualityDocumentScreenRules.AsksForFirstVersion(
+                QualityDocumentScreenRules.Actions(p => PermissionGate.Allows(p), SelectedDocument, null))
+            && _dialogs.Confirm(T("Documents.AddFirstVersionQuestion"), _newDocument.Text))
             await AddVersionAsync();
     }
 
@@ -519,7 +473,7 @@ public sealed class QualityDocumentsView : LocalizedView
         if (SelectedDocument is not { } document || SelectedVersion is not { } version) return;
 
         using var dialog = new EffectiveDateDialog(Localizer, _dialogs,
-                                                   $"{document.Reference} v{version.VersionNumber}",
+                                                   QualityDocumentScreenRules.Subject(document, version),
                                                    document.EffectiveVersion);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
@@ -582,8 +536,7 @@ public sealed class QualityDocumentsView : LocalizedView
         if (SelectedDocument is not { } document) return;
 
         var reason = _dialogs.PromptForReason(
-            T(document.IsActive ? "Documents.WithdrawPrompt" : "Documents.ReactivatePrompt",
-              document.Reference),
+            T(QualityDocumentScreenRules.WithdrawPromptKey(document), document.Reference),
             _withdraw.Text);
         if (reason is null) return;
 
@@ -619,11 +572,12 @@ internal sealed class ControlledDocumentDialog : MasterDataEditor
         _titleAr = TextField("Documents.TitleAr", 20, 122, 520, arabic: true);
         _titleEn = TextField("Documents.TitleEn", 20, 176, 520);
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
-        _reference.MaxLength = 40;
-        _process.MaxLength = 30;
-        _titleFr.MaxLength = _titleAr.MaxLength = _titleEn.MaxLength = 300;
+        _reference.MaxLength = QualityDocumentScreenRules.ReferenceMaxLength;
+        _process.MaxLength = QualityDocumentScreenRules.ProcessMaxLength;
+        _titleFr.MaxLength = _titleAr.MaxLength = _titleEn.MaxLength = QualityDocumentScreenRules.TitleMaxLength;
 
-        _reviewPeriod = Number("Documents.ReviewPeriod", 20, 230, 120, 24, 120);
+        _reviewPeriod = Number("Documents.ReviewPeriod", 20, 230, 120, QualityDocumentScreenRules.DefaultReviewPeriodMonths,
+                               QualityDocumentScreenRules.ReviewPeriodMax);
         _acknowledgement = Check("Documents.RequiresAcknowledgement", 180, 252, false);
 
         Notice(20, 290, 520, 46, "Documents.NewDocumentNotice");
@@ -634,29 +588,23 @@ internal sealed class ControlledDocumentDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_reference.Text))
+        var form = new ControlledDocumentForm
         {
-            Dialogs.Warn(Localizer["Document_ReferenceRequired"], Text);
-            _reference.Focus();
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_titleFr.Text))
-        {
-            Dialogs.Warn(Localizer["Document_TitleRequired"], Text);
-            _titleFr.Focus();
-            return;
-        }
-
-        Request = new CreateControlledDocumentRequest
-        {
-            Reference = _reference.Text.Trim(),
-            Title = new MultilingualText(_titleFr.Text.Trim(), Blank(_titleAr), Blank(_titleEn)),
+            Reference = _reference.Text,
             Kind = Selected<DocumentKind>(_kind),
-            ProcessCode = Blank(_process),
-            ReviewPeriodMonths = Math.Max(1, (int)_reviewPeriod.Value),
+            Process = _process.Text,
+            TitleFr = _titleFr.Text,
+            TitleAr = _titleAr.Text,
+            TitleEn = _titleEn.Text,
+            ReviewPeriodMonths = (int)_reviewPeriod.Value,
             RequiresAcknowledgement = _acknowledgement.Checked
         };
+
+        if (Refused(QualityDocumentScreenRules.Check(form),
+                    (QualityDocumentScreenRules.ReferenceField, _reference), (QualityDocumentScreenRules.TitleFrField, _titleFr)))
+            return;
+
+        Request = QualityDocumentScreenRules.ToRequest(form);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -685,7 +633,7 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
 
         _summaryFr = TextField("Documents.ChangeSummaryFr", 20, 68, 520);
         _summaryAr = TextField("Documents.ChangeSummaryAr", 20, 122, 520, arabic: true);
-        _summaryFr.MaxLength = _summaryAr.MaxLength = 2000;
+        _summaryFr.MaxLength = _summaryAr.MaxLength = QualityDocumentScreenRules.SummaryMaxLength;
 
         Notice(20, 180, 520, 46, "Documents.NewVersionNotice");
 
@@ -707,29 +655,13 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_file.Text) || !File.Exists(_file.Text))
-        {
-            Dialogs.Warn(Localizer["Document_ContentRequired"], Text);
+        var info = string.IsNullOrWhiteSpace(_file.Text) || !File.Exists(_file.Text) ? null : new FileInfo(_file.Text);
+        if (Refused(QualityDocumentScreenRules.CheckFile(info?.Name, info?.Length ?? 0), (QualityDocumentScreenRules.FileField, _file)))
             return;
-        }
-
-        var info = new FileInfo(_file.Text);
-        if (SafeDocumentFile.ContentTypeFor(info.Name) is null)
-        {
-            Dialogs.Warn(Localizer["Document_FileType"], Text);
-            return;
-        }
-        if (info.Length > DocumentControlService.MaximumContentBytes)
-        {
-            Dialogs.Warn(Localizer.Format("Document_ContentTooLarge",
-                                          DocumentControlService.MaximumContentBytes / (1024 * 1024)),
-                         Text);
-            return;
-        }
 
         try
         {
-            Content = File.ReadAllBytes(info.FullName);
+            Content = File.ReadAllBytes(info!.FullName);
         }
         catch (IOException ex)
         {
@@ -744,8 +676,8 @@ internal sealed class DocumentVersionDialog : MasterDataEditor
             return;
         }
 
-        FileName = info.Name;
-        ChangeSummary = MultilingualText.FromOptional(_summaryFr.Text, _summaryAr.Text);
+        FileName = info!.Name;
+        ChangeSummary = QualityDocumentScreenRules.ChangeSummary(_summaryFr.Text, _summaryAr.Text);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -769,14 +701,13 @@ internal sealed class EffectiveDateDialog : MasterDataEditor
         {
             Bounds = new Rectangle(20, 32, 180, UiTheme.InputHeight),
             Format = DateTimePickerFormat.Short,
-            MinDate = DateTime.Today,
+            MinDate = QualityDocumentScreenRules.EarliestEffective(DateOnly.FromDateTime(DateTime.Today)).ToDateTime(TimeOnly.MinValue),
             Value = DateTime.Today
         };
         Controls.Add(_date);
 
         var notice = Notice(20, 74, 420, 70, "Documents.MakeEffectiveNotice");
-        if (replacedVersion is { } previous)
-            notice.Text = localizer.Format("Documents.ReplacesVersion", previous) + " " + notice.Text;
+        notice.Text = QualityDocumentScreenRules.EffectiveNotice(replacedVersion, localizer.Format);
 
         Buttons(170, 460);
         QhDialog.Dress(this, localizer, "QualityHr.Hint.EffectiveDate");

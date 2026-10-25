@@ -60,8 +60,8 @@ public sealed class EqaView : LocalizedView
     {
         Padding = QhPage.PagePadding;
 
-        _year.Minimum = 2000;
-        _year.Maximum = 2100;
+        _year.Minimum = EqaScreenRules.YearMin;
+        _year.Maximum = EqaScreenRules.YearMax;
         _year.Value = DateTime.Today.Year;
 
         BuildColumns();
@@ -122,7 +122,7 @@ public sealed class EqaView : LocalizedView
 
         _grid.SelectionChanged += (_, _) => ShowDetail();
         _grid.CellFormatting += OnCellFormatting;
-        QhGridPills.Attach(_grid, "outcome", r => r.Tag is EqaRow row ? OutcomeTone(row) : null);
+        QhGridPills.Attach(_grid, "outcome", r => r.Tag is EqaRow row ? QhTone.Of(EqaScreenRules.OutcomeTone(row)) : null);
 
         _register.Click += async (_, _) => await RegisterRoundAsync();
         _submission.Click += async (_, _) => await RecordSubmissionAsync();
@@ -140,23 +140,14 @@ public sealed class EqaView : LocalizedView
 
         // The verdict is a pill; a submission past its deadline keeps its date in the warning ink,
         // and a bad z-score its value in the critical one.
-        var column = _grid.Columns[e.ColumnIndex].Name;
-        if (column == "deadline" && row is { Outcome: EqaOutcome.Pending, IsSubmissionOverdue: true })
-            e.CellStyle!.ForeColor = UiTheme.Abnormal;
-        else if (column == "z" && row.Outcome == EqaOutcome.Unsatisfactory)
-            e.CellStyle!.ForeColor = UiTheme.Critical;
-        else if (column == "z" && row.Outcome == EqaOutcome.Questionable)
-            e.CellStyle!.ForeColor = UiTheme.Abnormal;
+        var ink = _grid.Columns[e.ColumnIndex].Name switch
+        {
+            "deadline" => EqaScreenRules.DeadlineInk(row),
+            "z" => EqaScreenRules.ZInk(row),
+            _ => QualityInk.Plain
+        };
+        if (QhTone.InkOf(ink) is { } colour) e.CellStyle!.ForeColor = colour;
     }
-
-    private static (Color Back, Color Fore) OutcomeTone(EqaRow row) => row.Outcome switch
-    {
-        EqaOutcome.Satisfactory => QhTone.Ok,
-        EqaOutcome.Questionable => QhTone.Warn,
-        EqaOutcome.Unsatisfactory or EqaOutcome.NotSubmitted => QhTone.Crit,
-        EqaOutcome.Excluded => QhTone.Muted,
-        _ => row.IsSubmissionOverdue ? QhTone.Warn : QhTone.Wait
-    };
 
     protected override void ApplyTexts()
     {
@@ -221,8 +212,7 @@ public sealed class EqaView : LocalizedView
     }
 
     // Shown in the operator's culture, as on the QC screen: « 1.32 » here beside « 1,32 » there.
-    private static string Number(decimal? value, string format = "0.###") =>
-        value?.ToString(format, CultureInfo.CurrentCulture) ?? string.Empty;
+    private static string Number(decimal? value) => EqaScreenRules.Number(value, CultureInfo.CurrentCulture);
 
     private void Render(Guid? keep = null)
     {
@@ -234,16 +224,14 @@ public sealed class EqaView : LocalizedView
             var index = _grid.Rows.Add(
                 row.SchemeName,
                 row.RoundReference,
-                row.RoundDate.ToString("dd/MM/yy"),
-                $"{row.ParameterCode} — {row.ParameterName.For(Localizer.CurrentLanguage)}",
+                EqaScreenRules.Date(row.RoundDate),
+                EqaScreenRules.Parameter(row, Localizer.CurrentLanguage),
                 row.InstrumentCode ?? string.Empty,
-                row.SubmissionDeadline is { } deadline
-                    ? row.IsSubmissionOverdue ? $"! {deadline:dd/MM/yy}" : deadline.ToString("dd/MM/yy")
-                    : string.Empty,
+                EqaScreenRules.Deadline(row),
                 Number(row.ReportedValue),
-                Number(row.AssignedValue ?? row.PeerGroupMean),
-                Number(row.ZScore, "0.00"),
-                Number(row.BiasPercent, "0.0"),
+                EqaScreenRules.Assigned(row, CultureInfo.CurrentCulture),
+                EqaScreenRules.ZScore(row.ZScore, CultureInfo.CurrentCulture),
+                EqaScreenRules.Bias(row.BiasPercent, CultureInfo.CurrentCulture),
                 T($"EqaOutcome.{row.Outcome}"),
                 row.NonConformityReference ?? string.Empty);
 
@@ -261,42 +249,19 @@ public sealed class EqaView : LocalizedView
 
     private void RenderHeading()
     {
-        var evaluated = _rows.Count(r => r.Outcome is EqaOutcome.Satisfactory or EqaOutcome.Questionable
-                                                     or EqaOutcome.Unsatisfactory);
-        var satisfactory = _rows.Count(r => r.Outcome == EqaOutcome.Satisfactory);
-        var overdue = _rows.Count(r => r.IsSubmissionOverdue);
-
         _heading.Text = T("Quality.Eqa");
-
-        var text = Localizer.Format("QualityHr.Eqa.Count", _rows.Count);
-        if (evaluated > 0)
-            text += $" · {T("Eqa.SatisfactoryRate")} {100.0 * satisfactory / evaluated:0}%";
-        if (overdue > 0) text += $" · {T("Eqa.Overdue")} {overdue}";
-        _count.Text = text;
+        _count.Text = EqaScreenRules.Count(_rows, T);
     }
 
     private void ShowDetail()
     {
         var row = _grid.CurrentRow?.Tag as EqaRow;
 
-        _submission.Enabled = row is { Outcome: EqaOutcome.Pending };
-        _evaluation.Enabled = row is not null;
+        var actions = EqaScreenRules.Actions(p => PermissionGate.Allows(p), row);
+        _submission.Enabled = actions.Submission;
+        _evaluation.Enabled = actions.Evaluation;
 
-        if (row is null)
-        {
-            _detail.Text = string.Empty;
-            return;
-        }
-
-        var parts = new List<string>(5);
-        if (row.SubmittedOn is { } submitted)
-            parts.Add($"{T("Eqa.SubmittedOn")} {submitted:dd/MM/yy}");
-        if (row.PeerGroupMean is not null)
-            parts.Add($"{T("Quality.PeerGroup")} {Number(row.PeerGroupMean)} ± {Number(row.PeerGroupSd)}");
-        if (row.InvestigationNotes is { } notes)
-            parts.Add(notes.For(Localizer.CurrentLanguage));
-
-        _detail.Text = string.Join("  ·  ", parts);
+        _detail.Text = string.Join("  ·  ", EqaScreenRules.Detail(row, Localizer.CurrentLanguage, T, CultureInfo.CurrentCulture));
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -320,8 +285,8 @@ public sealed class EqaView : LocalizedView
 
             _dialogs.Info(T("Eqa.RoundRegistered", result.Value), _register.Text);
 
-            if (dialog.Request.RoundDate.Year != (int)_year.Value)
-                _year.Value = dialog.Request.RoundDate.Year;   // Reloads through ValueChanged.
+            if (EqaScreenRules.YearAfterRegistering(dialog.Request) is var year && year != (int)_year.Value)
+                _year.Value = year;   // Reloads through ValueChanged.
             else
                 await LoadAsync();
         }
@@ -357,8 +322,8 @@ public sealed class EqaView : LocalizedView
 
         // The non-conformity was opened by the service; the operator is told which one, since the
         // investigation is now theirs to write.
-        if (result.Value is { } reference)
-            _dialogs.Warn(T("Eqa.NonConformityOpened", reference), _evaluation.Text);
+        if (EqaScreenRules.NonConformityOpened(result.Value, T) is { } opened)
+            _dialogs.Warn(opened, _evaluation.Text);
 
         await LoadAsync();
     }
@@ -385,8 +350,8 @@ internal sealed class EqaRoundDialog : MasterDataEditor
         _scheme = TextField("Quality.Scheme", 20, 14, 300);
         _round = TextField("Quality.Round", 340, 14, 200, null, latin: true, mono: true);
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
-        _scheme.MaxLength = 150;
-        _round.MaxLength = 60;
+        _scheme.MaxLength = EqaScreenRules.SchemeMaxLength;
+        _round.MaxLength = EqaScreenRules.RoundMaxLength;
 
         Label("Eqa.RoundDate", 20, 68);
         _roundDate = new DateTimePicker
@@ -397,18 +362,18 @@ internal sealed class EqaRoundDialog : MasterDataEditor
         };
         Controls.Add(_roundDate);
 
-        _deadline = OptionalDate("Eqa.Deadline", 240, 68, DateOnly.FromDateTime(DateTime.Today.AddDays(14)));
+        _deadline = OptionalDate("Eqa.Deadline", 240, 68, EqaScreenRules.NewRound(DateOnly.FromDateTime(DateTime.Today)).Deadline);
 
         var language = localizer.CurrentLanguage;
         _instrument = Lookup("Eqa.Instrument", 20, 122, 520,
-                             instruments.Select(i => (i.Id, $"{i.Code} — {i.Name.For(language)}")), null);
+                             instruments.Select(i => (i.Id, EqaScreenRules.Option(i, language))), null);
 
         Label("Eqa.Parameters", 20, 176);
         _parameters.Bounds = new Rectangle(20, 194, 520, 250);
         _parameters.CheckOnClick = true;
         _parameters.IntegralHeight = false;
         foreach (var parameter in parameters)
-            _parameters.Items.Add($"{parameter.Code} — {parameter.Name.For(language)}");
+            _parameters.Items.Add(EqaScreenRules.Option(parameter, language));
         Controls.Add(_parameters);
 
         Notice(20, 452, 520, 46, "Eqa.RegisterNotice");
@@ -419,37 +384,24 @@ internal sealed class EqaRoundDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_scheme.Text))
+        var deadline = DateOrNull(_deadline.Toggle, _deadline.Picker);
+        var form = new EqaRoundForm
         {
-            Dialogs.Warn(Localizer["Eqa_SchemeRequired"], Text);
-            _scheme.Focus();
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_round.Text))
-        {
-            Dialogs.Warn(Localizer["Eqa_RoundRequired"], Text);
-            _round.Focus();
-            return;
-        }
-
-        if (_parameters.CheckedIndices.Count == 0)
-        {
-            Dialogs.Warn(Localizer["Eqa_ParameterRequired"], Text);
-            _parameters.Focus();
-            return;
-        }
-
-        Request = new RegisterEqaRoundRequest
-        {
-            SchemeName = _scheme.Text.Trim(),
-            RoundReference = _round.Text.Trim(),
+            Scheme = _scheme.Text,
+            Round = _round.Text,
             RoundDate = DateOnly.FromDateTime(_roundDate.Value.Date),
-            SubmissionDeadline = DateOrNull(_deadline.Toggle, _deadline.Picker),
-            InstrumentId = SelectedId(_instrument),
-            TestParameterIds = _parameters.CheckedIndices.Cast<int>()
-                                          .Select(i => _parameterOptions[i].Id).ToList()
+            HasDeadline = deadline is not null,
+            Deadline = deadline ?? default,
+            InstrumentId = SelectedId(_instrument)
         };
+        form.ParameterIds.AddRange(_parameters.CheckedIndices.Cast<int>().Select(i => _parameterOptions[i].Id));
+
+        if (Refused(EqaScreenRules.Check(form),
+                    (EqaScreenRules.SchemeField, _scheme), (EqaScreenRules.RoundField, _round),
+                    (EqaScreenRules.ParametersField, _parameters), (EqaScreenRules.DeadlineField, _deadline.Picker)))
+            return;
+
+        Request = EqaScreenRules.ToRequest(form);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -492,14 +444,11 @@ internal sealed class EqaSubmissionDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (DecimalOrNull(_value) is not { } value)
-        {
-            Dialogs.Warn(Localizer["Eqa_NoReportedValue"], Text);
-            _value.Focus();
-            return;
-        }
+        var (value, refusal) = EqaScreenRules.Read(new EqaSubmissionForm { Value = _value.Text, SubmittedOn = SubmittedOn },
+                                                   DateOnly.FromDateTime(DateTime.Today));
+        if (Refused(refusal, (EqaScreenRules.ValueField, _value), (EqaScreenRules.SubmittedOnField, _date))) return;
 
-        ReportedValue = value;
+        ReportedValue = value!.Value;
         DialogResult = DialogResult.OK;
         Close();
     }
@@ -519,15 +468,15 @@ internal sealed class EqaEvaluationDialog : MasterDataEditor
         : base(localizer, dialogs, "Eqa.RecordEvaluation",
                $"{row.RoundReference} · {row.ParameterCode}", 560, 420)
     {
-        static string? Raw(decimal? value) => value?.ToString(CultureInfo.InvariantCulture);
+        var form = EqaScreenRules.EvaluationOf(row);
 
-        _assigned = TextField("Quality.AssignedValue", 20, 14, 120, Raw(row.AssignedValue),
+        _assigned = TextField("Quality.AssignedValue", 20, 14, 120, form.Assigned,
                               latin: true, mono: true, right: true);
-        _peerMean = TextField("Eqa.PeerMean", 150, 14, 120, Raw(row.PeerGroupMean),
+        _peerMean = TextField("Eqa.PeerMean", 150, 14, 120, form.PeerMean,
                               latin: true, mono: true, right: true);
-        _peerSd = TextField("Eqa.PeerSd", 280, 14, 120, Raw(row.PeerGroupSd),
+        _peerSd = TextField("Eqa.PeerSd", 280, 14, 120, form.PeerSd,
                             latin: true, mono: true, right: true);
-        _z = TextField("Quality.ZScore", 410, 14, 130, Raw(row.ZScore),
+        _z = TextField("Quality.ZScore", 410, 14, 130, form.ZScore,
                        latin: true, mono: true, right: true);
 
         // A figure typed with its unit (« 12,5 g/l ») was saved as no figure, and the score
@@ -541,20 +490,19 @@ internal sealed class EqaEvaluationDialog : MasterDataEditor
         _outcome.FlatStyle = FlatStyle.Flat;
         _outcome.Bounds = new Rectangle(20, 132, 300, UiTheme.InputHeight);
         _outcome.Items.Add(new EnumChoice(FromScore, localizer["Eqa.OutcomeFromScore"]));
-        foreach (var outcome in new[] { EqaOutcome.NotSubmitted, EqaOutcome.Excluded })
+        foreach (var outcome in EqaScreenRules.OverridableOutcomes)
         {
             var index = _outcome.Items.Add(new EnumChoice((int)outcome, localizer[$"EqaOutcome.{outcome}"]));
-            if (row.Outcome == outcome) _outcome.SelectedIndex = index;
+            if (form.Outcome == outcome) _outcome.SelectedIndex = index;
         }
         if (_outcome.SelectedIndex < 0) _outcome.SelectedIndex = 0;
         Controls.Add(_outcome);
 
         // A note written only in Arabic is stored with itself as the French fallback: the French
         // box opens empty for it rather than showing the Arabic text twice.
-        var notes = row.InvestigationNotes;
-        _notesFr = TextField("Eqa.InvestigationFr", 20, 176, 520, notes?.Fr == notes?.Ar ? null : notes?.Fr);
-        _notesAr = TextField("Eqa.InvestigationAr", 20, 230, 520, row.InvestigationNotes?.Ar, arabic: true);
-        _notesFr.MaxLength = _notesAr.MaxLength = 2000;
+        _notesFr = TextField("Eqa.InvestigationFr", 20, 176, 520, form.NotesFr);
+        _notesAr = TextField("Eqa.InvestigationAr", 20, 230, 520, form.NotesAr, arabic: true);
+        _notesFr.MaxLength = _notesAr.MaxLength = EqaScreenRules.NotesMaxLength;
 
         Notice(20, 290, 520, 60, "Eqa.UnsatisfactoryNotice", UiTheme.Abnormal);
 
@@ -566,15 +514,21 @@ internal sealed class EqaEvaluationDialog : MasterDataEditor
     {
         var choice = (_outcome.SelectedItem as EnumChoice)?.Value ?? FromScore;
 
-        Evaluation = new EqaEvaluation
+        var reading = EqaScreenRules.Read(new EqaEvaluationForm
         {
-            AssignedValue = DecimalOrNull(_assigned),
-            PeerGroupMean = DecimalOrNull(_peerMean),
-            PeerGroupSd = DecimalOrNull(_peerSd),
-            ZScore = DecimalOrNull(_z),
-            OutcomeOverride = choice == FromScore ? null : (EqaOutcome)choice,
-            InvestigationNotes = MultilingualText.FromOptional(_notesFr.Text, _notesAr.Text)
-        };
+            Assigned = _assigned.Text,
+            PeerMean = _peerMean.Text,
+            PeerSd = _peerSd.Text,
+            ZScore = _z.Text,
+            Outcome = choice == FromScore ? null : (EqaOutcome)choice,
+            NotesFr = _notesFr.Text,
+            NotesAr = _notesAr.Text
+        });
+        if (Refused(reading.Refusal, (EqaScreenRules.AssignedField, _assigned), (EqaScreenRules.PeerMeanField, _peerMean),
+                    (EqaScreenRules.PeerSdField, _peerSd), (EqaScreenRules.ZScoreField, _z)))
+            return;
+
+        Evaluation = reading.Value;
 
         DialogResult = DialogResult.OK;
         Close();

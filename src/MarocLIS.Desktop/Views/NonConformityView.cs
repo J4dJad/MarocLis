@@ -198,18 +198,12 @@ public sealed class NonConformityView : LocalizedView
 
         _register.CellFormatting += OnRegisterFormatting;
         QhGridPills.Attach(_register, "severity",
-                           r => r.Tag is NonConformityRow row ? SeverityTone(row.Severity) : null);
+                           r => r.Tag is NonConformityRow row ? QhTone.Of(NonConformityScreenRules.SeverityTone(row.Severity)) : null);
         QhGridPills.Attach(_register, "status",
-                           r => r.Tag is NonConformityRow row ? StatusTone(row.Status) : null);
+                           r => r.Tag is NonConformityRow row ? QhTone.Of(NonConformityScreenRules.StatusTone(row.Status)) : null);
         _actions.CellFormatting += OnActionFormatting;
         QhGridPills.Attach(_actions, "status", r => r.Tag is CorrectiveActionRow action
-            ? action.Status switch
-            {
-                CorrectiveActionStatus.Completed => QhTone.Ok,
-                CorrectiveActionStatus.InProgress => QhTone.Info,
-                CorrectiveActionStatus.Cancelled => QhTone.Muted,
-                _ => action.IsOverdue ? QhTone.Crit : QhTone.Wait
-            }
+            ? QhTone.Of(NonConformityScreenRules.ActionTone(action))
             : null);
     }
 
@@ -220,11 +214,12 @@ public sealed class NonConformityView : LocalizedView
 
         // Severity and status are pills; a closed file is muted, an overdue one bold, and its due
         // date in the critical ink.
-        if (row.Status == NonConformityStatus.Closed)
+        var emphasis = NonConformityScreenRules.Emphasis(row);
+        if (emphasis == NonConformityEmphasis.Closed)
         {
             e.CellStyle!.ForeColor = UiTheme.TextMuted;
         }
-        else if (row.IsOverdue)
+        else if (emphasis == NonConformityEmphasis.Overdue)
         {
             e.CellStyle!.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
             if (_register.Columns[e.ColumnIndex].Name == "due") e.CellStyle.ForeColor = UiTheme.Critical;
@@ -236,13 +231,10 @@ public sealed class NonConformityView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _actions.Rows.Count) return;
         if (_actions.Rows[e.RowIndex].Tag is not CorrectiveActionRow row) return;
 
-        if (row.Status == CorrectiveActionStatus.Completed)
-            e.CellStyle!.ForeColor = UiTheme.Normal;
-        else if (row.IsOverdue)
-        {
-            e.CellStyle!.ForeColor = UiTheme.Critical;
-            e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
-        }
+        var ink = NonConformityScreenRules.ActionInk(row);
+        if (QhTone.InkOf(ink) is { } colour) e.CellStyle!.ForeColor = colour;
+        if (ink == QualityInk.Critical)
+            e.CellStyle!.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
     }
 
     protected override void ApplyTexts()
@@ -342,48 +334,28 @@ public sealed class NonConformityView : LocalizedView
 
             // Markers appended to the reference, so the most important facts about the file are
             // visible in the narrowest column.
-            var reference = row.Reference
-                            + (row.IsRecurrence ? " ↻" : string.Empty)
-                            + (row.AffectedReleasedResults ? " ⚠" : string.Empty);
-
             var index = _register.Rows.Add(
-                reference,
+                NonConformityScreenRules.Reference(row),
                 T($"NcSeverity.{row.Severity}"),
                 T($"NcCategory.{row.Category}"),
-                description.Length > 120 ? description[..119] + "…" : description,
-                row.DetectedAt.ToString("dd/MM/yy"),
+                NonConformityScreenRules.ShortDescription(description),
+                NonConformityScreenRules.ShortDate(row.DetectedAt),
                 row.AssignedToName ?? string.Empty,
-                row.DueDate?.ToString("dd/MM/yy") ?? string.Empty,
-                row.OpenActionCount > 0
-                    ? $"{row.ActionCount - row.OpenActionCount}/{row.ActionCount}"
-                    : row.ActionCount.ToString(),
+                NonConformityScreenRules.ShortDate(row.DueDate),
+                NonConformityScreenRules.ActionsCell(row),
                 T($"NcStatus.{row.Status}"));
 
             var gridRow = _register.Rows[index];
             gridRow.Tag = row;
 
-            var tooltip = new List<string> { description };
-
-            if (row.IsRecurrence) tooltip.Add(T("NonConformity.Recurrence"));
-
-            if (row.AffectedReleasedResults)
-                tooltip.Add($"{T("NonConformity.AffectedResults")} : " +
-                            (row.AffectedPatientCount?.ToString() ?? "?"));
-
-            if (row.DaysOpen is { } days)
-                tooltip.Add($"{T("NonConformity.DaysOpen")} : {days}");
-
-            gridRow.Cells["description"].ToolTipText = string.Join(Environment.NewLine, tooltip);
+            gridRow.Cells["description"].ToolTipText = string.Join(
+                Environment.NewLine, NonConformityScreenRules.Tooltip(row, Localizer.CurrentLanguage, T));
         }
 
         _register.ResumeLayout(performLayout: true);
 
-        var overdue = _rows.Count(r => r.IsOverdue);
-
         _registerHeading.Text = T("NonConformity.Plural");
-        _count.Text = overdue > 0
-            ? Localizer.Format("QualityHr.Nc.CountOverdue", _rows.Count, overdue)
-            : Localizer.Format("QualityHr.Nc.Count", _rows.Count);
+        _count.Text = NonConformityScreenRules.Count(_rows, T);
 
         var kept = _register.Rows.Cast<DataGridViewRow>()
                             .FirstOrDefault(r => keep is not null && r.Tag is NonConformityRow row && row.Id == keep);
@@ -402,7 +374,7 @@ public sealed class NonConformityView : LocalizedView
 
         ShowFile(row);
 
-        _detailHeading.Text = $"{row.Reference} — {T($"NcStatus.{row.Status}")}";
+        _detailHeading.Text = NonConformityScreenRules.ActionsHeading(row, T);
 
         try
         {
@@ -424,9 +396,9 @@ public sealed class NonConformityView : LocalizedView
                     T($"ActionKind.{action.Kind}"),
                     action.Description.For(Localizer.CurrentLanguage),
                     action.ResponsibleName,
-                    action.TargetDate.ToString("dd/MM/yy"),
+                    NonConformityScreenRules.ShortDate(action.TargetDate),
                     T($"ActionStatus.{action.Status}"),
-                    action.CompletedOn?.ToString("dd/MM/yy") ?? string.Empty);
+                    NonConformityScreenRules.ShortDate(action.CompletedOn));
 
                 _actions.Rows[index].Tag = action;
             }
@@ -455,48 +427,13 @@ public sealed class NonConformityView : LocalizedView
     /// </summary>
     private void ShowFile(NonConformityRow row)
     {
-        var reference = row.Reference
-                        + (row.IsRecurrence ? " ↻" : string.Empty)
-                        + (row.AffectedReleasedResults ? " ⚠" : string.Empty);
-
-        var facts = new List<(string, string, bool)>
-        {
-            (T("NonConformity.DetectionSource"), T($"DetectionSource.{row.DetectionSource}"), false),
-            (T("NonConformity.DetectedBy"), row.DetectedByName ?? string.Empty, false),
-            (T("NonConformity.DetectedAt"), row.DetectedAt.ToString("dd/MM/yyyy"), true),
-            (T("NonConformity.AssignedTo"), row.AssignedToName ?? string.Empty, false),
-            (T("NonConformity.DueDate"), row.DueDate?.ToString("dd/MM/yyyy") ?? string.Empty, true),
-            (T("NonConformity.DaysOpen"), row.DaysOpen?.ToString() ?? string.Empty, true)
-        };
-
-        if (row.IsRecurrence) facts.Add((T("NonConformity.Recurrence"), "↻", false));
-
-        if (row.AffectedReleasedResults)
-            facts.Add(($"⚠ {T("NonConformity.AffectedResults")}", row.AffectedPatientCount?.ToString() ?? "?", true));
-
-        _aside.Show(reference,
-                    $"{T($"NcSeverity.{row.Severity}")} · {T($"NcCategory.{row.Category}")}",
-                    (T($"NcStatus.{row.Status}"), StatusTone(row.Status)),
-                    facts,
+        _aside.Show(NonConformityScreenRules.Reference(row),
+                    NonConformityScreenRules.Subtitle(row, T),
+                    (T($"NcStatus.{row.Status}"), QhTone.Of(NonConformityScreenRules.StatusTone(row.Status))),
+                    NonConformityScreenRules.Facts(row, T).Select(f => (f.Label, f.Value, f.Mono)),
                     row.Description.For(Localizer.CurrentLanguage),
                     row.AffectedReleasedResults ? UiTheme.Critical : null);
     }
-
-    private static (Color Back, Color Fore) StatusTone(NonConformityStatus status) => status switch
-    {
-        NonConformityStatus.Open => QhTone.Wait,
-        NonConformityStatus.InProgress => QhTone.Info,
-        NonConformityStatus.AwaitingVerification => QhTone.Warn,
-        NonConformityStatus.Closed => QhTone.Ok,
-        _ => QhTone.Muted
-    };
-
-    private static (Color Back, Color Fore) SeverityTone(NonConformitySeverity severity) => severity switch
-    {
-        NonConformitySeverity.Critical => QhTone.Crit,
-        NonConformitySeverity.Major => QhTone.Warn,
-        _ => QhTone.Wait
-    };
 
     private void ClearDetail()
     {
@@ -509,46 +446,36 @@ public sealed class NonConformityView : LocalizedView
 
     private void SetDetailEnabled(bool enabled)
     {
-        var row = _register.CurrentRow?.Tag as NonConformityRow;
-
         // A closed or dismissed file is not editable; a live one is not reopenable. Each operation
         // is offered only where it means something, so the bar states the file's position rather
         // than presenting eight buttons of which six would be refused.
-        var closed = row is { Status: NonConformityStatus.Closed
-                                    or NonConformityStatus.Rejected };
+        var actions = CurrentActions(enabled);
 
-        _addAction.Enabled = enabled && !closed;
-        _analysis.Enabled = enabled && !closed;
-        _close.Enabled = enabled && !closed;
-        _dismiss.Enabled = enabled && !closed;
-
-        _reopen.Enabled = enabled && row is { Status: NonConformityStatus.Closed };
+        _addAction.Enabled = actions.AddAction;
+        _analysis.Enabled = actions.RecordAnalysis;
+        _close.Enabled = actions.Close;
+        _dismiss.Enabled = actions.Dismiss;
+        _reopen.Enabled = actions.Reopen;
 
         RefreshActionButtons();
     }
 
+    /// <summary>What the bar offers, by right and by the file's and the action's state (NonConformityScreenRules).</summary>
+    private NonConformityScreenActions CurrentActions(bool enabled = true) =>
+        NonConformityScreenRules.Actions(p => PermissionGate.Allows(p),
+                                         enabled ? _register.CurrentRow?.Tag as NonConformityRow : null,
+                                         _actions.CurrentRow?.Tag as CorrectiveActionRow);
+
     /// <summary>Enables the per-action buttons against the selected action's own status.</summary>
     private void RefreshActionButtons()
     {
-        var file = _register.CurrentRow?.Tag as NonConformityRow;
-        var action = _actions.CurrentRow?.Tag as CorrectiveActionRow;
-
-        var editable = file is not null
-                       && file.Status is not (NonConformityStatus.Closed
-                                           or NonConformityStatus.Rejected);
-
-        _startAction.Enabled = editable && action is { Status: CorrectiveActionStatus.Planned };
-
-        _completeAction.Enabled = editable
-                                  && action is { Status: CorrectiveActionStatus.Planned
-                                                       or CorrectiveActionStatus.InProgress };
-
         // A completed action is evidence and stays; an uncompleted one entered by mistake has to
         // be removable, because Close() requires every action to be completed or cancelled and one
         // wrong entry would otherwise block the file for ever.
-        _cancelAction.Enabled = editable
-                                && action is { Status: CorrectiveActionStatus.Planned
-                                                     or CorrectiveActionStatus.InProgress };
+        var actions = CurrentActions();
+        _startAction.Enabled = actions.StartAction;
+        _completeAction.Enabled = actions.CompleteAction;
+        _cancelAction.Enabled = actions.CancelAction;
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -568,7 +495,7 @@ public sealed class NonConformityView : LocalizedView
         }
 
         _status.ForeColor = UiTheme.Normal;
-        _status.Text = $"{T("NonConformity.Reference")} {result.Value}";
+        _status.Text = NonConformityScreenRules.Opened(result.Value, T);
 
         await ActivateAsync();
     }
@@ -581,10 +508,7 @@ public sealed class NonConformityView : LocalizedView
 
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Result is null) return;
 
-        var (kind, description, targetDate) = dialog.Result.Value;
-
-        var result = await _service.AddActionAsync(new AddActionRequest(
-            row.Id, kind, description, Guid.Empty, targetDate));
+        var result = await _service.AddActionAsync(NonConformityScreenRules.ToRequest(dialog.Result, row.Id));
 
         if (result.IsFailure)
         {
@@ -606,7 +530,7 @@ public sealed class NonConformityView : LocalizedView
             return;
         }
 
-        if (action.Status == CorrectiveActionStatus.Completed)
+        if (NonConformityScreenRules.AlreadyCompleted(action))
         {
             _dialogs.Info(T("ActionStatus.Completed"));
             return;
@@ -614,13 +538,13 @@ public sealed class NonConformityView : LocalizedView
 
         // Evidence rather than a tick: "what shows this was done?" is what an assessor asks.
         var evidence = _dialogs.PromptForText(
-            T("NonConformity.EvidencePrompt"), T("NonConformity.CompleteAction"), maxLength: 2000);
+            T("NonConformity.EvidencePrompt"), T("NonConformity.CompleteAction"),
+            maxLength: NonConformityScreenRules.TextMaxLength);
 
         if (evidence is null) return;
 
         var result = await _service.CompleteActionAsync(
-            row.Id, action.Id,
-            string.IsNullOrWhiteSpace(evidence) ? null : new MultilingualText(evidence));
+            row.Id, action.Id, NonConformityScreenRules.Evidence(evidence));
 
         if (result.IsFailure)
         {
@@ -647,13 +571,14 @@ public sealed class NonConformityView : LocalizedView
 
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
+        var analysis = dialog.Analysis;
         var result = await _service.RecordAnalysisAsync(
             row.Id,
-            dialog.RootCause,
-            dialog.RootCauseAnalysis,
-            dialog.ClinicalImpact,
-            dialog.EffectivenessVerification,
-            dialog.AmendedReportsIssued);
+            analysis.RootCause,
+            analysis.RootCauseAnalysis,
+            analysis.ClinicalImpact,
+            analysis.EffectivenessVerification,
+            analysis.AmendedReportsIssued);
 
         if (result.IsFailure)
         {
@@ -689,7 +614,7 @@ public sealed class NonConformityView : LocalizedView
         }
 
         _status.ForeColor = UiTheme.Normal;
-        _status.Text = $"{row.Reference} — {T("NcStatus.Closed")}";
+        _status.Text = NonConformityScreenRules.StatusLine(row, NonConformityStatus.Closed, T);
 
         await ActivateAsync();
     }
@@ -704,7 +629,7 @@ public sealed class NonConformityView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T("NonConformity.ReopenPrompt", row.Reference), T("NonConformity.Reopen"),
-            minimumLength: 10);
+            minimumLength: NonConformityScreenRules.ReopenReasonMinimumLength);
 
         if (reason is null) return;
 
@@ -717,7 +642,7 @@ public sealed class NonConformityView : LocalizedView
         }
 
         _status.ForeColor = UiTheme.Abnormal;
-        _status.Text = $"{row.Reference} — {T("NcStatus.InProgress")}";
+        _status.Text = NonConformityScreenRules.StatusLine(row, NonConformityStatus.InProgress, T);
 
         await ActivateAsync();
     }
@@ -737,7 +662,7 @@ public sealed class NonConformityView : LocalizedView
 
         var justification = _dialogs.PromptForReason(
             T("NonConformity.DismissPrompt", row.Reference), T("NonConformity.Dismiss"),
-            minimumLength: 15);
+            minimumLength: NonConformityScreenRules.DismissReasonMinimumLength);
 
         if (justification is null) return;
 
@@ -750,7 +675,7 @@ public sealed class NonConformityView : LocalizedView
         }
 
         _status.ForeColor = UiTheme.TextSecondary;
-        _status.Text = $"{row.Reference} — {T("NcStatus.Rejected")}";
+        _status.Text = NonConformityScreenRules.StatusLine(row, NonConformityStatus.Rejected, T);
 
         await ActivateAsync();
     }
@@ -782,7 +707,8 @@ public sealed class NonConformityView : LocalizedView
         if (_actions.CurrentRow?.Tag is not CorrectiveActionRow action) return;
 
         var reason = _dialogs.PromptForReason(
-            T("NonConformity.CancelActionPrompt"), T("NonConformity.CancelAction"), maxLength: 1000);
+            T("NonConformity.CancelActionPrompt"), T("NonConformity.CancelAction"),
+            maxLength: NonConformityScreenRules.CancelReasonMaxLength);
 
         if (reason is null) return;
 
@@ -899,13 +825,13 @@ internal sealed class NonConformityDialog : Form
         Field("Field.Description", y);
         _description.Bounds = new Rectangle(20, y + 18, 520, 66);
         _description.Multiline = true;
-        _description.MaxLength = 2000;   // the column; beyond, the save failed with « Erreur inattendue »
+        _description.MaxLength = NonConformityScreenRules.TextMaxLength;   // the column; beyond, the save failed with « Erreur inattendue »
 
         y += 94;
         Field("NonConformity.ImmediateAction", y);
         _immediateAction.Bounds = new Rectangle(20, y + 18, 520, 52);
         _immediateAction.Multiline = true;
-        _immediateAction.MaxLength = 2000;
+        _immediateAction.MaxLength = NonConformityScreenRules.TextMaxLength;
 
         y += 80;
         _affectedResults.Text = _localizer["NonConformity.AffectedResults"];
@@ -915,14 +841,14 @@ internal sealed class NonConformityDialog : Form
         _affectedResults.Location = new Point(20, y);
 
         _patientCount.Bounds = new Rectangle(360, y - 3, 90, UiTheme.InputHeight);
-        _patientCount.Maximum = 100000;
+        _patientCount.Maximum = NonConformityScreenRules.PatientCountMax;
         _patientCount.Enabled = false;
 
         y += 32;
         Field("NonConformity.DueDate", y);
         _dueDate.Bounds = new Rectangle(20, y + 18, 200, UiTheme.InputHeight);
         _dueDate.Format = DateTimePickerFormat.Short;
-        _dueDate.Value = DateTime.Today.AddDays(14);
+        _dueDate.Value = NonConformityScreenRules.NewForm(DateOnly.FromDateTime(DateTime.Today)).DueDate.ToDateTime(TimeOnly.MinValue);
 
         var ok = UiTheme.PrimaryButton(_localizer["Action.Save"]);
         ok.Bounds = new Rectangle(20, 420, 260, UiTheme.ButtonHeight);
@@ -964,27 +890,27 @@ internal sealed class NonConformityDialog : Form
 
     private void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_description.Text))
+        var form = new NonConformityForm
         {
-            _dialogs.Warn(_localizer["Nc_DescriptionRequired"]);
+            Category = ((Choice<NonConformityCategory>)_category.SelectedItem!).Value,
+            Severity = ((Choice<NonConformitySeverity>)_severity.SelectedItem!).Value,
+            Source = ((Choice<DetectionSource>)_source.SelectedItem!).Value,
+            Description = _description.Text,
+            ImmediateAction = _immediateAction.Text,
+            AffectedResults = _affectedResults.Checked,
+            PatientCount = (int)_patientCount.Value,
+            DueDate = DateOnly.FromDateTime(_dueDate.Value.Date),
+            InstrumentId = _instrumentId
+        };
+
+        if (NonConformityScreenRules.Check(form) is { } refusal)
+        {
+            _dialogs.Warn(_localizer[refusal.Key]);
             _description.Focus();
             return;
         }
 
-        Request = new CreateNonConformityRequest
-        {
-            Category = ((Choice<NonConformityCategory>)_category.SelectedItem!).Value,
-            Severity = ((Choice<NonConformitySeverity>)_severity.SelectedItem!).Value,
-            DetectionSource = ((Choice<DetectionSource>)_source.SelectedItem!).Value,
-            Description = new MultilingualText(_description.Text.Trim()),
-            ImmediateAction = string.IsNullOrWhiteSpace(_immediateAction.Text)
-                ? null
-                : new MultilingualText(_immediateAction.Text.Trim()),
-            AffectedReleasedResults = _affectedResults.Checked,
-            AffectedPatientCount = _affectedResults.Checked ? (int)_patientCount.Value : null,
-            DueDate = DateOnly.FromDateTime(_dueDate.Value.Date),
-            InstrumentId = _instrumentId
-        };
+        Request = NonConformityScreenRules.ToRequest(form);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -1006,8 +932,7 @@ internal sealed class CorrectiveActionDialog : Form
     private readonly TextBox _description = UiTheme.Input(460);
     private readonly DateTimePicker _target = new();
 
-    internal (ActionKind Kind, MultilingualText Description, DateOnly TargetDate)? Result
-    { get; private set; }
+    internal CorrectiveActionForm? Result { get; private set; }
 
     internal CorrectiveActionDialog(ILocalizer localizer, IUserDialogs dialogs)
     {
@@ -1034,21 +959,23 @@ internal sealed class CorrectiveActionDialog : Form
             _kind.Items.Add(new NonConformityDialog.Choice<ActionKind>(
                 value, localizer[$"ActionKind.{value}"]));
 
-        _kind.SelectedIndex = 1;   // corrective action, the one ISO 15189 actually asks for
+        // A corrective action, the one ISO 15189 actually asks for.
+        var offered = NonConformityScreenRules.NewAction(DateOnly.FromDateTime(DateTime.Today));
+        _kind.SelectedIndex = Array.IndexOf(Enum.GetValues<ActionKind>(), offered.Kind);
 
         var descriptionLabel = UiTheme.FieldLabel(localizer["Field.Description"]);
         descriptionLabel.Location = new Point(20, 70);
 
         _description.Bounds = new Rectangle(20, 88, 460, 90);
         _description.Multiline = true;
-        _description.MaxLength = 2000;   // the column; beyond, the save failed with « Erreur inattendue »
+        _description.MaxLength = NonConformityScreenRules.TextMaxLength;   // the column; beyond, the save failed with « Erreur inattendue »
 
         var targetLabel = UiTheme.FieldLabel(localizer["NonConformity.DueDate"]);
         targetLabel.Location = new Point(20, 190);
 
         _target.Bounds = new Rectangle(20, 208, 200, UiTheme.InputHeight);
         _target.Format = DateTimePickerFormat.Short;
-        _target.Value = DateTime.Today.AddDays(14);
+        _target.Value = offered.TargetDate.ToDateTime(TimeOnly.MinValue);
 
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
         ok.Bounds = new Rectangle(20, 252, 220, UiTheme.ButtonHeight);
@@ -1069,16 +996,21 @@ internal sealed class CorrectiveActionDialog : Form
 
     private void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_description.Text))
+        var form = new CorrectiveActionForm
         {
-            _dialogs.Warn(_localizer["Nc_ActionDescriptionRequired"]);
+            Kind = ((NonConformityDialog.Choice<ActionKind>)_kind.SelectedItem!).Value,
+            Description = _description.Text,
+            TargetDate = DateOnly.FromDateTime(_target.Value.Date)
+        };
+
+        if (NonConformityScreenRules.Check(form) is { } refusal)
+        {
+            _dialogs.Warn(_localizer[refusal.Key]);
             _description.Focus();
             return;
         }
 
-        Result = (((NonConformityDialog.Choice<ActionKind>)_kind.SelectedItem!).Value,
-                  new MultilingualText(_description.Text.Trim()),
-                  DateOnly.FromDateTime(_target.Value.Date));
+        Result = form;
 
         DialogResult = DialogResult.OK;
         Close();
@@ -1101,23 +1033,23 @@ internal sealed class NonConformityAnalysisDialog : Form
     private readonly TextBox _effectiveness = UiTheme.Input(520);
     private readonly CheckBox _amendedReports = new();
 
-    internal RootCauseCategory? RootCause =>
-        _rootCause.SelectedItem is NonConformityDialog.Choice<RootCauseCategory> choice
+    /// <summary>The analysis as typed, read by NonConformityScreenRules.</summary>
+    internal NonConformityAnalysisInput Analysis => NonConformityScreenRules.Read(new NonConformityAnalysisForm
+    {
+        RootCause = _rootCause.SelectedItem is NonConformityDialog.Choice<RootCauseCategory> choice
             ? choice.Value
-            : null;
-
-    internal MultilingualText? RootCauseAnalysis => Wrap(_rootCauseAnalysis.Text);
-    internal MultilingualText? ClinicalImpact => Wrap(_clinicalImpact.Text);
-    internal MultilingualText? EffectivenessVerification => Wrap(_effectiveness.Text);
-    internal bool AmendedReportsIssued => _amendedReports.Checked;
-
-    private static MultilingualText? Wrap(string? text) =>
-        string.IsNullOrWhiteSpace(text) ? null : new MultilingualText(text.Trim());
+            : Enum.GetValues<RootCauseCategory>()[0],
+        RootCauseAnalysis = _rootCauseAnalysis.Text,
+        ClinicalImpact = _clinicalImpact.Text,
+        Effectiveness = _effectiveness.Text,
+        AmendedReportsIssued = _amendedReports.Checked
+    });
 
     internal NonConformityAnalysisDialog(ILocalizer localizer, NonConformityRow row,
                                          NonConformityAnalysis? recorded = null)
     {
-        Text = $"{localizer["NonConformity.RecordAnalysis"]} — {row.Reference}";
+        Text = NonConformityScreenRules.AnalysisTitle(row, localizer.Format);
+        var form = NonConformityScreenRules.FormOf(recorded);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
@@ -1146,35 +1078,33 @@ internal sealed class NonConformityAnalysisDialog : Form
             _rootCause.Items.Add(new NonConformityDialog.Choice<RootCauseCategory>(
                 value, localizer[$"RootCause.{value}"]));
 
-        _rootCause.SelectedIndex = recorded?.RootCause is { } cause
-            ? Math.Max(0, Array.IndexOf(Enum.GetValues<RootCauseCategory>(), cause))
-            : 0;
+        _rootCause.SelectedIndex = Math.Max(0, Array.IndexOf(Enum.GetValues<RootCauseCategory>(), form.RootCause));
 
         y += 54;
         Field("NonConformity.RootCause", y);
         _rootCauseAnalysis.Bounds = new Rectangle(20, y + 18, 520, 70);
         _rootCauseAnalysis.Multiline = true;
-        _rootCauseAnalysis.MaxLength = 2000;   // the column; beyond, the save failed with « Erreur inattendue »
+        _rootCauseAnalysis.MaxLength = NonConformityScreenRules.TextMaxLength;   // the column; beyond, the save failed with « Erreur inattendue »
 
         y += 98;
         // Emphasised when released results were affected, because the domain will then require it.
         Field("NonConformity.ClinicalImpact", y,
-              row.AffectedReleasedResults ? UiTheme.Critical : null);
+              NonConformityScreenRules.ClinicalImpactRequired(row) ? UiTheme.Critical : null);
         _clinicalImpact.Bounds = new Rectangle(20, y + 18, 520, 70);
         _clinicalImpact.Multiline = true;
-        _clinicalImpact.MaxLength = 2000;
+        _clinicalImpact.MaxLength = NonConformityScreenRules.TextMaxLength;
 
         y += 98;
         Field("NonConformity.Effectiveness", y);
         _effectiveness.Bounds = new Rectangle(20, y + 18, 520, 70);
         _effectiveness.Multiline = true;
-        _effectiveness.MaxLength = 2000;
+        _effectiveness.MaxLength = NonConformityScreenRules.TextMaxLength;
 
         y += 98;
         _amendedReports.Text = localizer["NonConformity.AmendedReportsIssued"];
         _amendedReports.AutoSize = true;
         _amendedReports.Location = new Point(20, y);
-        _amendedReports.Visible = row.AffectedReleasedResults;
+        _amendedReports.Visible = NonConformityScreenRules.AmendedReportsAsked(row);
 
         var ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
         ok.Bounds = new Rectangle(20, 470, 260, UiTheme.ButtonHeight);
@@ -1188,10 +1118,10 @@ internal sealed class NonConformityAnalysisDialog : Form
                            _effectiveness, _amendedReports, ok, cancel]);
 
         // What was already recorded, so completing the file does not mean typing it all again.
-        _rootCauseAnalysis.Text = recorded?.RootCauseAnalysis?.Fr ?? string.Empty;
-        _clinicalImpact.Text = recorded?.ClinicalImpact?.Fr ?? string.Empty;
-        _effectiveness.Text = recorded?.EffectivenessVerification?.Fr ?? string.Empty;
-        _amendedReports.Checked = recorded?.AmendedReportsIssued ?? false;
+        _rootCauseAnalysis.Text = form.RootCauseAnalysis;
+        _clinicalImpact.Text = form.ClinicalImpact;
+        _effectiveness.Text = form.Effectiveness;
+        _amendedReports.Checked = form.AmendedReportsIssued;
 
         AcceptButton = ok;
         CancelButton = cancel;

@@ -21,6 +21,27 @@ internal static class QhTone
     public static readonly (Color Back, Color Fore) Info = (UiTheme.InfoBackground, UiTheme.Info);
     public static readonly (Color Back, Color Fore) Wait = (UiTheme.SurfaceSunken, UiTheme.TextPrimary);
     public static readonly (Color Back, Color Fore) Muted = (UiTheme.SurfaceSunken, UiTheme.TextMuted);
+
+    /// <summary>The pair of a quality screen's tone (QualityTone, shared with the web).</summary>
+    public static (Color Back, Color Fore) Of(Application.Quality.QualityTone tone) => tone switch
+    {
+        Application.Quality.QualityTone.Ok => Ok,
+        Application.Quality.QualityTone.Warning => Warn,
+        Application.Quality.QualityTone.Critical => Crit,
+        Application.Quality.QualityTone.Info => Info,
+        Application.Quality.QualityTone.Muted => Muted,
+        _ => Wait
+    };
+
+    /// <summary>The ink of a quality screen's cell (QualityInk, shared with the web); null keeps the grid's own.</summary>
+    public static Color? InkOf(Application.Quality.QualityInk ink) => ink switch
+    {
+        Application.Quality.QualityInk.Muted => UiTheme.TextMuted,
+        Application.Quality.QualityInk.Normal => UiTheme.Normal,
+        Application.Quality.QualityInk.Abnormal => UiTheme.Abnormal,
+        Application.Quality.QualityInk.Critical => UiTheme.Critical,
+        _ => null
+    };
 }
 
 /// <summary>Builders for the page frame of a list screen.</summary>
