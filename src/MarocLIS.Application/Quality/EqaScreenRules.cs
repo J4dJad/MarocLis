@@ -210,7 +210,7 @@ public static class EqaScreenRules
     public static EqaRow? Keep(IReadOnlyList<EqaRow> rows, Guid? kept)
     {
         ArgumentNullException.ThrowIfNull(rows);
-        return rows.FirstOrDefault(r => r.Id == kept) ?? rows.FirstOrDefault();
+        return rows.FirstOrDefault(r => r.Id == kept) ?? (rows.Count > 0 ? rows[0] : null);
     }
 
     /// <summary>A year typed into the filter, kept within the years a round can carry.</summary>

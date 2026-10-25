@@ -128,7 +128,7 @@ public static class QualityDocumentScreenRules
     public static ControlledDocumentRow? Keep(IReadOnlyList<ControlledDocumentRow> rows, Guid? kept)
     {
         ArgumentNullException.ThrowIfNull(rows);
-        return rows.FirstOrDefault(r => r.Id == kept) ?? rows.FirstOrDefault();
+        return rows.FirstOrDefault(r => r.Id == kept) ?? (rows.Count > 0 ? rows[0] : null);
     }
 
     // ---- The register -------------------------------------------------------------------------------

@@ -323,7 +323,7 @@ public static class NonConformityScreenRules
     public static NonConformityRow? Keep(IReadOnlyList<NonConformityRow> rows, Guid? kept)
     {
         ArgumentNullException.ThrowIfNull(rows);
-        return rows.FirstOrDefault(r => r.Id == kept) ?? rows.FirstOrDefault();
+        return rows.FirstOrDefault(r => r.Id == kept) ?? (rows.Count > 0 ? rows[0] : null);
     }
 
     // ---- Opening a file -------------------------------------------------------------------------------
