@@ -9,6 +9,7 @@
 @inject IMigrationWorkbook Workbook
 @inject MigrationProfileStore Profiles
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 @inject ILogger<DataMigration> Logger
 
 @*
@@ -26,6 +27,9 @@
     What is matched, refused, asked and shown is DataMigrationScreenRules'.
 *@
 <div class="screen migration" data-screen="migration">
+    @* Leaving while a run is going stops it: asked first, as the workstation's ConfirmLeave. *@
+    <NavigationLock OnBeforeInternalNavigation="BeforeLeaving" ConfirmExternalNavigation="@Running" />
+
     <section class="card" data-card="source">
         <div class="card-heading">
             <h2 class="card-title">@Texts["Migration.SourceTitle"]</h2>
@@ -437,6 +441,10 @@
         <ConfirmPrompt Title="@Texts["Migration.Import"]" Message="@DataMigrationScreenRules.ConfirmImport(analysis, _kind, Texts.T)" OnYes="ImportAsync" OnNo="ClosePrompt" />
         break;
 
+    case Prompt.Leave:
+        <ConfirmPrompt Title="@Texts["Migration.Stop"]" Message="@Texts["Migration.ConfirmStop"]" OnYes="Leave" OnNo="ClosePrompt" />
+        break;
+
     case Prompt.Undo when _undoable is { } batch:
         <ConfirmPrompt Title="@Texts["Migration.UndoLast"]" Message="@DataMigrationScreenRules.ConfirmUndo(batch, Texts.T, Texts.Culture)" OnYes="UndoAsync" OnNo="ClosePrompt" />
         break;
@@ -444,7 +452,7 @@
 
 @code {
     private enum Tab { Preview, Columns, Correspondences, Report, Journal, OldNumbers, Balances }
-    private enum Prompt { None, ProfileName, DeleteProfile, Import, Undo }
+    private enum Prompt { None, ProfileName, DeleteProfile, Import, Undo, Leave }
 
     /// <summary>A value of a coded column as shown: where it goes, and where that leaves it.</summary>
     private sealed class CorrespondenceLine
@@ -1112,6 +1120,28 @@
             _message = _deferred;
             _deferred = null;
         }
+    }
+
+    private string? _leaveTo;
+    private bool _leaving;
+
+    private void BeforeLeaving(LocationChangingContext context)
+    {
+        if (!Running || _leaving) return;
+
+        context.PreventNavigation();
+        _leaveTo = context.TargetLocation;
+        _prompt = Prompt.Leave;
+        StateHasChanged();
+    }
+
+    /// <summary>The run is stopped where it stands: the batches written stay, a new run carries on from them.</summary>
+    private void Leave()
+    {
+        _prompt = Prompt.None;
+        _leaving = true;
+        _run?.Cancel();
+        if (_leaveTo is { } target) Navigation.NavigateTo(target);
     }
 
     private void ClosePrompt()
