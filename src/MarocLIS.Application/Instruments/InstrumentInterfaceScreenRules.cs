@@ -3,6 +3,7 @@ using System.Text;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Input;
+using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
 using MarocLIS.Domain.Identity;
 
@@ -148,6 +149,27 @@ public static class InstrumentInterfaceScreenRules
         if (row.HasRecentFailures || row.LastError is { Length: > 0 }) return InterfaceTone.Warning;
 
         return liveStatus == "Running" ? InterfaceTone.Ok : InterfaceTone.Plain;
+    }
+
+    /// <summary>A link somebody has to look at: one the alarm's or the warning's colours fill.</summary>
+    public static bool NeedsAttention(InterfaceRow row, string? liveStatus) =>
+        Tone(row, liveStatus) is InterfaceTone.Critical or InterfaceTone.Warning;
+
+    /// <summary>
+    /// The links a search keeps: the analyser's code or name in the operator's language, its
+    /// protocol or its connection point, whatever the case. An empty search keeps them all.
+    /// </summary>
+    public static bool Matches(InterfaceRow row, string? search, AppLanguage language)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        if (string.IsNullOrWhiteSpace(search)) return true;
+        var text = search.Trim();
+
+        return row.InstrumentCode.Contains(text, StringComparison.CurrentCultureIgnoreCase)
+               || row.InstrumentName.For(language).Contains(text, StringComparison.CurrentCultureIgnoreCase)
+               || row.Protocol.ToString().Contains(text, StringComparison.OrdinalIgnoreCase)
+               || row.Endpoint.Contains(text, StringComparison.CurrentCultureIgnoreCase);
     }
 
     /// <summary>What is wrong or worth knowing about a link: blocked analyser, off, no mappings, auto-accepting, an error.</summary>

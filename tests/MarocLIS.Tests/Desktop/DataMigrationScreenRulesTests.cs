@@ -67,6 +67,12 @@ public sealed class DataMigrationScreenRulesTests
         DataMigrationScreenRules.FileLabel("/tmp/x/patients.xlsx", "Feuil1").Should().Be("patients.xlsx › Feuil1");
         DataMigrationScreenRules.FileLabel("patients.csv", null).Should().Be("patients.csv");
 
+        DataMigrationScreenRules.IsSourceFile("export.TXT").Should().BeTrue();
+        DataMigrationScreenRules.IsSourceFile("export.xls").Should().BeFalse();
+        DataMigrationScreenRules.IsReadableSourceSize(0).Should().BeFalse();
+        DataMigrationScreenRules.IsReadableSourceSize(DataMigrationScreenRules.MaxSourceFileBytes).Should().BeTrue();
+        DataMigrationScreenRules.IsReadableSourceSize(DataMigrationScreenRules.MaxSourceFileBytes + 1).Should().BeFalse();
+
         var profile = new MigrationProfile { Name = "LABOWIN" };
         profile.For(DataMigrationKind.Patients).Sheet = "Patients";
         DataMigrationScreenRules.PreferredSheet(["Feuil1", "Patients"], profile, DataMigrationKind.Patients).Should().Be("Patients");

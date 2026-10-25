@@ -150,6 +150,24 @@ public sealed class InstrumentInterfaceScreenRulesTests
         InstrumentInterfaceScreenRules.LastMessage(Link()).Should().Be("—");
     }
 
+    [Fact]
+    public void A_search_finds_a_link_by_its_analyser_its_protocol_or_its_endpoint_and_the_watch_chip_keeps_the_coloured_ones()
+    {
+        var link = Link();
+
+        InstrumentInterfaceScreenRules.Matches(link, null, AppLanguage.French).Should().BeTrue();
+        InstrumentInterfaceScreenRules.Matches(link, " au4 ", AppLanguage.French).Should().BeTrue();
+        InstrumentInterfaceScreenRules.Matches(link, "beckman", AppLanguage.French).Should().BeTrue();
+        InstrumentInterfaceScreenRules.Matches(link, "astm", AppLanguage.French).Should().BeTrue();
+        InstrumentInterfaceScreenRules.Matches(link, "com3", AppLanguage.French).Should().BeTrue();
+        InstrumentInterfaceScreenRules.Matches(link, "sysmex", AppLanguage.French).Should().BeFalse();
+
+        InstrumentInterfaceScreenRules.NeedsAttention(Link(failed: 1), "Running").Should().BeTrue();
+        InstrumentInterfaceScreenRules.NeedsAttention(Link(enabledMappings: 0), null).Should().BeTrue();
+        InstrumentInterfaceScreenRules.NeedsAttention(Link(), "Running").Should().BeFalse();
+        InstrumentInterfaceScreenRules.NeedsAttention(Link(enabled: false, failed: 4), null).Should().BeFalse();
+    }
+
     // ---- Mappings ------------------------------------------------------------------------------
 
     [Fact]

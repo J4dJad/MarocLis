@@ -58,6 +58,19 @@ public static class DataMigrationScreenRules
     /// <summary>The extensions a source file may have.</summary>
     public static readonly IReadOnlyList<string> SourceExtensions = [".xlsx", ".csv", ".txt"];
 
+    /// <summary>
+    /// The largest source file the web takes from a browser: the import reads at most
+    /// <see cref="DataMigrationService.MaxRows"/> rows, which no export of that many rows exceeds.
+    /// </summary>
+    public const long MaxSourceFileBytes = 200L * 1024 * 1024;
+
+    /// <summary>An .xlsx, a .csv or a .txt, whatever the case: the files « Parcourir… » offers.</summary>
+    public static bool IsSourceFile(string fileName) =>
+        SourceExtensions.Contains(Path.GetExtension(fileName ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A source file sent from a browser is read only within <see cref="MaxSourceFileBytes"/>.</summary>
+    public static bool IsReadableSourceSize(long bytes) => bytes is > 0 and <= MaxSourceFileBytes;
+
     /// <summary>« patients.xlsx › Feuil1 », or the file's name for a text file.</summary>
     public static string FileLabel(string fileName, string? sheet) =>
         sheet is null ? Path.GetFileName(fileName) : $"{Path.GetFileName(fileName)} › {sheet}";
