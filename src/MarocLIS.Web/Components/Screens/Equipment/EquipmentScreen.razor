@@ -1,0 +1,420 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Equipment
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Web.Components.Screens.Quality
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<EquipmentScreen> Logger
+
+@*
+    « Équipements », the workstation's EquipmentView: the register of the instruments that affect a
+    result (ISO 15189 §5.3), built around the question an assessor asks first — is anything overdue?
+    — so it opens on the overdue ones and those out of service. A lapsed calibration or an instrument
+    out of service is in the alarm's colours; a late maintenance or an expired contract on its date,
+    marked « ! » for the printed file. Beside the register, the instrument selected: its status, what
+    is wrong with it, its facts. An intervention, a calibration and a change of status are recorded on
+    it; a failed check after an intervention takes it out of service and offers the non-conformity; a
+    return to service is refused while a calibration is lapsed, and said so. What is shown, offered
+    and refused is EquipmentScreenRules'; every step goes through EquipmentService.
+*@
+<div class="screen equipment" data-screen="equipment">
+    @{ var actions = Actions; var visible = Visible; var selected = Selected; }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchEquipment"]" aria-label="@Texts["StocksUi.SearchEquipment"]" title="@Texts["StocksUi.SearchEquipment"]"
+                   data-field="equipment-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="SearchedAsync" />
+        </div>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_onlyDue ? "is-pressed" : null)" aria-pressed="@(_onlyDue ? "true" : "false")" title="@Texts["Equipment.OnlyDue"]"
+                    data-chip="only-due" @onclick="ToggleDueAsync">@Texts["Equipment.OnlyDue"]</button>
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@EquipmentScreenRules.Count(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => LoadAsync()" />
+        </span>
+    </div>
+
+    <div class="screen-body split equipment-split">
+        <section class="card card-flush" data-card="register">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="equipment">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Equipment.Title"]</th>
+                            <th>@Texts["Equipment.Kind"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                            <th>@Texts["Equipment.SerialNumber"]</th>
+                            <th>@Texts["Equipment.NextMaintenance"]</th>
+                            <th>@Texts["Equipment.NextCalibration"]</th>
+                            <th>@Texts["Equipment.Contract"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in visible)
+                        {
+                            var tone = EquipmentScreenRules.StatusTone(row.Status);
+                            var name = row.Name.For(Texts.Language);
+                            <tr class="@(row.InstrumentId == _selectedId ? "is-selected" : null) @StockTones.Row(EquipmentScreenRules.RowInk(row))"
+                                data-row="@row.Code" @onclick="() => Select(row)">
+                                <td>
+                                    <span class="list-name strong" title="@name">@name</span>
+                                    <span class="cell-sub mono" dir="ltr">@row.Code</span>
+                                </td>
+                                <td class="small"><span class="cell-wrap">@Texts[EquipmentScreenRules.KindKey(row.Kind)]</span></td>
+                                <td><Pill Text="@StockTones.Label(tone, Texts[EquipmentScreenRules.StatusKey(row.Status)])" Tone="@StockTones.Pill(tone)" /></td>
+                                <td class="small">
+                                    <span class="cell-wrap mono" dir="ltr">@row.SerialNumber</span>
+                                    @if (!string.IsNullOrWhiteSpace(row.Location))
+                                    {
+                                        <span class="cell-sub" title="@Texts["Equipment.Location"]">@row.Location</span>
+                                    }
+                                </td>
+                                <td class="mono nowrap small @StockTones.Ink(EquipmentScreenRules.MaintenanceInk(row))" dir="ltr">@EquipmentScreenRules.MaintenanceDue(row)</td>
+                                <td class="mono nowrap small" dir="ltr">@EquipmentScreenRules.CalibrationDue(row)</td>
+                                <td class="mono nowrap small @StockTones.Ink(EquipmentScreenRules.ContractInk(row))" dir="ltr">@EquipmentScreenRules.ContractDue(row)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && visible.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts[_onlyDue ? "Web.EquipmentNoneDue" : "Web.EquipmentNone"]</p>
+                }
+            </div>
+        </section>
+
+        <aside class="card equipment-card" data-card="instrument">
+            @if (selected is { } shown)
+            {
+                var tone = EquipmentScreenRules.StatusTone(shown.Status);
+                var warning = EquipmentScreenRules.Warning(shown);
+                <div class="card-heading stock-heading">
+                    <h2 class="card-title cell-wrap">
+                        @shown.Name.For(Texts.Language)
+                        <span class="muted small mono" dir="ltr" data-state="instrument-code">@shown.Code</span>
+                    </h2>
+                    <Pill Text="@StockTones.Label(tone, Texts[EquipmentScreenRules.StatusKey(shown.Status)])" Tone="@StockTones.Pill(tone)" />
+                </div>
+                @if (EquipmentScreenRules.Detail(shown, Texts.T) is { Length: > 0 } detail)
+                {
+                    <p class="small muted cell-wrap" data-state="instrument-detail">@detail</p>
+                }
+                @if (warning is { } said)
+                {
+                    <p class="message @WarningClass(said.Ink)" role="@(said.Ink == StockInk.Critical ? "alert" : null)" data-state="instrument-warning">@Texts[said.Key]</p>
+                }
+                <dl class="facts facts-compact" data-state="instrument-facts">
+                    @foreach (var fact in EquipmentScreenRules.Facts(shown, Texts.T))
+                    {
+                        <dt>@fact.Label</dt>
+                        <dd class="@(fact.Mono ? "mono" : null) cell-wrap" dir="@(fact.Mono ? "ltr" : null)">@(fact.Value.Length > 0 ? fact.Value : "—")</dd>
+                    }
+                </dl>
+            }
+            else
+            {
+                <p class="muted" data-state="no-instrument">@Texts["StocksUi.NoInstrument"]</p>
+            }
+        </aside>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Equipment.ChangeStatus" Hidden="@(!actions.StatusRight)" Disabled="@(!actions.Status || _busy)" OnClick="() => Ask(Prompt.Status)" />
+            <ActionButton Key="Equipment.RecordCalibration" Hidden="@(!actions.CalibrationRight)" Disabled="@(!actions.Calibration || _busy)" OnClick="() => Ask(Prompt.Calibration)" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Equipment.RecordMaintenance" Primary="true" Hidden="@(!actions.MaintenanceRight)" Disabled="@(!actions.Maintenance || _busy)"
+                          OnClick="() => Ask(Prompt.Maintenance)" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Maintenance when Selected is { } r1:
+        <MaintenanceEditor Row="r1" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="RecordMaintenanceAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Calibration when Selected is { } r2:
+        <CalibrationEditor Row="r2" Today="Clock.Today" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="RecordCalibrationAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Status when Selected is { } r3:
+        <EquipmentStatusEditor Row="r3" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="ChangeStatusAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.OfferNonConformity when _serviced is { } r4:
+        <ConfirmPrompt Title="@Texts["Equipment.RecordMaintenance"]" Message="@EquipmentScreenRules.PostCheckQuestion(r4, Texts.T)"
+                       OnYes="() => Open(Prompt.NonConformity)" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.NonConformity when _serviced is { } r5:
+        <NonConformityEditor Today="Clock.Today" Prefilled="EquipmentScreenRules.NonConformity(r5, Clock.Today, Texts.Language, Texts.T)"
+                             Refusal="@_dialogRefusal" Busy="_busy" OnSave="OpenNonConformityAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="equipment-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="equipment-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Maintenance, Calibration, Status, OfferNonConformity, NonConformity, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<EquipmentRow> _rows = [];
+
+    private string? _search;
+    // The overdue list is the reason the screen exists: it opens on it.
+    private bool _onlyDue = true, _loaded;
+    private Guid? _selectedId;
+    /// <summary>The instrument as it was before an intervention whose check failed: what the non-conformity is about.</summary>
+    private EquipmentRow? _serviced;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<EquipmentRow> Visible =>
+        [.. _rows.Where(r => StockSearch.Matches(_search, [.. EquipmentScreenRules.SearchCells(r, Texts.Language, Texts.T)]))];
+
+    private EquipmentRow? Selected => _rows.FirstOrDefault(r => r.InstrumentId == _selectedId);
+
+    private EquipmentScreenActions Actions => EquipmentScreenRules.Actions(Context.User, Selected);
+
+    private static string WarningClass(StockInk ink) => ink switch
+    {
+        StockInk.Critical => "is-critical",
+        StockInk.Muted => "is-muted",
+        _ => "is-warning"
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync(Guid? keep = null)
+    {
+        try
+        {
+            var onlyDue = _onlyDue;
+            var rows = await Scopes.RunAsync<EquipmentService, Result<IReadOnlyList<EquipmentRow>>>(s => s.GetEquipmentAsync(onlyDue));
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+            _selectedId = EquipmentScreenRules.Keep(_rows, keep ?? _selectedId)?.InstrumentId;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the equipment register failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private void Select(EquipmentRow row) => _selectedId = row.InstrumentId;
+
+    /// <summary>The current line moves to the first one shown when the search hides it, as at the workstation.</summary>
+    private void SearchedAsync()
+    {
+        var visible = Visible;
+        if (visible.Count > 0 && visible.All(r => r.InstrumentId != _selectedId)) _selectedId = visible[0].InstrumentId;
+    }
+
+    private Task ToggleDueAsync()
+    {
+        _onlyDue = !_onlyDue;
+        return LoadAsync();
+    }
+
+    private void Ask(Prompt prompt)
+    {
+        var actions = Actions;
+        var allowed = prompt switch
+        {
+            Prompt.Maintenance => actions.Maintenance,
+            Prompt.Calibration => actions.Calibration,
+            Prompt.Status => actions.Status,
+            _ => false
+        };
+        if (!allowed || _busy) return;
+        Open(prompt);
+    }
+
+    // ---- An intervention ---------------------------------------------------------------------------
+
+    private Task RecordMaintenanceAsync(MaintenanceEntry entry) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } row) return;
+            var id = row.InstrumentId;
+            var recorded = await Scopes.RunAsync<EquipmentService, Result>(s => s.RecordMaintenanceAsync(
+                id, entry.Kind, entry.Description, entry.DowntimeHours, entry.PartsReplaced, entry.PostCheckPassed, entry.ExternalTechnician));
+            if (recorded.IsFailure)
+            {
+                Refused(recorded);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync(id);
+            _status = (Texts["Message.Saved"], "normal");
+            if (!entry.PostCheckPassed) PostCheckFailed(row);
+        });
+
+    /// <summary>
+    /// A failed check after an intervention: the service has taken an operational instrument out of
+    /// service; the operator is told so and offered the non-conformity, opened on the instrument.
+    /// </summary>
+    private void PostCheckFailed(EquipmentRow before)
+    {
+        _serviced = before;
+        if (EquipmentScreenRules.TakenOutOfService(before)) _status = (Texts["Equipment.PostCheckFailedOutOfService"], "critical");
+
+        if (EquipmentScreenRules.MayReportNonConformity(Context.User.Has))
+        {
+            Open(Prompt.OfferNonConformity);
+        }
+        else if (EquipmentScreenRules.TakenOutOfService(before))
+        {
+            Say(Texts["Equipment.RecordMaintenance"], Texts["Equipment.PostCheckFailedOutOfService"], true);
+        }
+    }
+
+    private Task OpenNonConformityAsync(CreateNonConformityRequest request) =>
+        RunAsync(async () =>
+        {
+            var opened = await Scopes.RunAsync<NonConformityService, Result<string>>(s => s.OpenAsync(request));
+            if (opened.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(opened.Errors);
+                return;
+            }
+
+            var said = NonConformityScreenRules.Opened(opened.Value, Texts.T);
+            _serviced = null;
+            _status = (said, "normal");
+            Say(Texts["NonConformity.OpenNew"], said);
+        });
+
+    // ---- A calibration -----------------------------------------------------------------------------
+
+    private Task RecordCalibrationAsync(CalibrationEntry entry) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } row) return;
+            var id = row.InstrumentId;
+            var recorded = await Scopes.RunAsync<EquipmentService, Result>(s => s.RecordCalibrationAsync(
+                id, null, entry.Outcome, entry.CalibratorLotNumber, entry.ValidUntil, entry.Slope, entry.Intercept, entry.Comment));
+            if (recorded.IsFailure)
+            {
+                Refused(recorded);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync(id);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- A change of status ------------------------------------------------------------------------
+
+    /// <summary>
+    /// The domain refuses a return to service while a calibration is lapsed: shown as the refusal it
+    /// is, in the dialog, so the operator knows the next step is to recalibrate.
+    /// </summary>
+    private Task ChangeStatusAsync((EquipmentStatus Status, string Reason) change) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } row) return;
+            var id = row.InstrumentId;
+            var changed = await Scopes.RunAsync<EquipmentService, Result>(s => s.ChangeStatusAsync(id, change.Status, change.Reason));
+            if (changed.IsFailure)
+            {
+                Refused(changed);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync(id);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Plumbing ----------------------------------------------------------------------------------
+
+    private void Refused(Result result)
+    {
+        var error = result.FirstError;
+        if (EquipmentScreenRules.FieldOf(error) is { } field)
+        {
+            _fieldRefusal = FieldRefusal.Of(field, error);
+            _dialogRefusal = null;
+        }
+        else
+        {
+            _fieldRefusal = null;
+            _dialogRefusal = Texts.Describe(result.Errors);
+        }
+    }
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An equipment step failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

@@ -151,6 +151,14 @@
             <MarocLIS.Web.Components.Screens.Purchasing.SupplierEvaluation />
             break;
 
+        case ScreenDecision.Open when Key == "equipment":
+            <MarocLIS.Web.Components.Screens.Equipment.EquipmentScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "contracts":
+            <MarocLIS.Web.Components.Screens.Equipment.InstrumentContracts />
+            break;
+
         case ScreenDecision.Open when Key == "migration":
             <MarocLIS.Web.Components.Screens.Migration.DataMigration />
             break;

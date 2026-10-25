@@ -1156,3 +1156,13 @@ html[dir=rtl] :is([data-screen=inventory], [data-screen=consumption], [data-scre
     [data-modal=quote-request], [data-modal=quote-offer], [data-modal=supplier-invoice]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
 html[dir=rtl] :is([data-screen=purchaseorders], [data-screen=quotes], [data-screen=supplierinvoices], [data-screen=supplierevaluation],
     [data-modal=quote-request], [data-modal=quote-offer], [data-modal=supplier-invoice]) .grid td:last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
+
+/* « Équipements »: the register, and beside it (left in Arabic) the instrument selected, as at the workstation. */
+.screen-body.split.equipment-split { grid-template-columns: minmax(0, 1fr) 340px; gap: var(--gap); }
+.equipment-card { display: flex; flex-direction: column; gap: 12px; }
+.equipment-card > .card-heading { margin: 0; }
+/* « Contrats automates »: an intervention later than the contract allows, marked on its delay. */
+.grid td.stock-alarm-cell { background: var(--critical-bg); color: var(--critical-ink); }
+.contract-pick { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+.contract-pick .grid td .input { min-inline-size: 0; }
+.field-active { align-self: end; min-block-size: var(--control-height); }

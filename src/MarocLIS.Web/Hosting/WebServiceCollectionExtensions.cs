@@ -131,6 +131,8 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<Application.Inventory.IPurchaseOrderDocumentQueries, PurchaseOrderDocumentQueries>();
         services.AddScoped<Application.Inventory.IQuoteQueries, QuoteQueries>();
         services.AddScoped<Application.Inventory.ISupplierInvoiceQueries, SupplierInvoiceQueries>();
+        // « Contrats automates »: the dashboard of the contracts, their interventions and the editor's choices.
+        services.AddScoped<Application.Inventory.IInstrumentContractQueries, InstrumentContractQueries>();
 
         // ---- « Interfaces automates »: configuring the links, replaying a held transmission and
         // trying a frame, through the workstation's services. Never the host: the web server opens

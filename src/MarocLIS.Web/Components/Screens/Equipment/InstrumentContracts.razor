@@ -1,0 +1,554 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Equipment
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Inventory
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<InstrumentContracts> Logger
+
+@*
+    « Contrats automates », the workstation's InstrumentContractView: the placement, comodat, lease
+    and purchase contracts of the analysers and their dashboard — committed against consumed pro
+    rata of the time elapsed, the projection to the end of the period with the risk alert under
+    90 %, the end of the contract within 90 days, in their colours — and under it the supplier's
+    interventions on the contract's analysers against the delay it allows, the delay exceeded marked
+    on its cell. A contract is entered and edited with its analysers and captive reagents; its signed
+    copy is uploaded and downloaded (the older one stays archived); the call and arrival times of an
+    intervention are recorded. What is shown, offered and refused is InstrumentContractScreenRules';
+    every step goes through InstrumentContractService.
+*@
+<div class="screen instrument-contracts" data-screen="contracts">
+    @{ var actions = Actions; var visible = Visible; var selected = Selected; }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchContracts"]" aria-label="@Texts["StocksUi.SearchContracts"]" title="@Texts["StocksUi.SearchContracts"]"
+                   data-field="contract-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="SearchedAsync" />
+        </div>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_includeInactive ? "is-pressed" : null)" aria-pressed="@(_includeInactive ? "true" : "false")"
+                    data-chip="include-inactive" @onclick="ToggleInactiveAsync">@Texts["Contracts.IncludeInactive"]</button>
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@InstrumentContractScreenRules.Count(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => LoadAsync()" />
+        </span>
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush card-fill" data-card="contracts">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="contracts">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Contracts.Reference"]</th>
+                            <th>@Texts["Contracts.Kind"]</th>
+                            <th>@Texts["Contracts.End"]</th>
+                            <th>@Texts["Contracts.Basis"]</th>
+                            <th class="num">@Texts["Contracts.Committed"]</th>
+                            <th class="num">@Texts["Contracts.Consumed"]</th>
+                            <th class="num">@Texts["Contracts.Projected"]</th>
+                            <th>@Texts["Contracts.Alert"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in visible)
+                        {
+                            var c = row.Commitment;
+                            var tone = InstrumentContractScreenRules.AlertTone(row);
+                            var alerts = InstrumentContractScreenRules.Alerts(row, Texts.T);
+                            var maintenance = InstrumentContractScreenRules.Maintenance(row, Texts.T, Texts.Culture);
+                            var ratioInk = StockTones.Ink(InstrumentContractScreenRules.RatioInk(row));
+                            <tr class="@(row.Id == _selectedId ? "is-selected" : null) @StockTones.Row(InstrumentContractScreenRules.RowInk(row))"
+                                data-row="@row.Reference" @onclick="() => SelectAsync(row)">
+                                <td>
+                                    <span class="mono strong cell-wrap" dir="ltr">@row.Reference</span>
+                                    @if (row.FileName is { } file)
+                                    {
+                                        <span class="cell-sub" title="@file"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileText" /> @Texts["Web.ContractFile"]</span>
+                                    }
+                                    <span class="cell-sub list-name" title="@row.SupplierName">@row.SupplierName</span>
+                                </td>
+                                <td class="small">
+                                    <span class="cell-wrap">@Texts[$"InstrumentContractKind.{row.Kind}"]</span>
+                                    <span class="cell-sub mono list-name" dir="ltr" title="@Texts["Contracts.Instruments"] : @row.Instruments">@row.Instruments</span>
+                                </td>
+                                <td class="mono nowrap small @StockTones.Ink(InstrumentContractScreenRules.EndInk(row))"><span dir="ltr">@InstrumentContractScreenRules.End(row, Texts.T)</span></td>
+                                <td class="small">
+                                    <span class="cell-wrap">@Texts[$"CommitmentBasis.{c.Basis}"]</span>
+                                    <span class="cell-sub mono" dir="ltr" title="@Texts["Contracts.Period"]">@InstrumentContractScreenRules.Period(c)</span>
+                                </td>
+                                <td class="num nowrap">@Figure(c.Committed, c)</td>
+                                <td class="num nowrap">
+                                    @Figure(c.Consumed, c)
+                                    @if (InstrumentContractScreenRules.HasCommitment(c))
+                                    {
+                                        <span class="cell-sub" title="@Texts["Contracts.ExpectedToDate"]">@Texts.T("Web.ContractExpected", Figure(c.ExpectedToDate, c))</span>
+                                    }
+                                </td>
+                                <td class="num nowrap">
+                                    @Figure(c.Projected, c)
+                                    <span class="cell-sub strong @ratioInk" title="@Texts["Contracts.Ratio"]"><span dir="ltr">@InstrumentContractScreenRules.Ratio(c, Texts.Culture)</span></span>
+                                </td>
+                                <td>
+                                    @if (tone is { } t)
+                                    {
+                                        <Pill Text="@StockTones.Label(t, alerts)" Tone="@StockTones.Pill(t)" />
+                                    }
+                                    else if (alerts.Length > 0)
+                                    {
+                                        <span class="small cell-wrap">@alerts</span>
+                                    }
+                                    @if (maintenance.Length > 0)
+                                    {
+                                        <span class="cell-sub" title="@Texts["Contracts.Maintenance"]">@maintenance</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && visible.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.ContractNone"]</p>
+                }
+            </div>
+            <p class="card-pad small muted grid-footer" data-state="alert-rule">@InstrumentContractScreenRules.AlertRule(Texts.T)</p>
+        </section>
+
+        <section class="card card-flush quality-sub" data-card="interventions">
+            <div class="card-heading card-pad stock-heading">
+                <h2 class="card-title cell-wrap">
+                    @Texts["Contracts.Interventions"]
+                    <span class="muted small" data-state="interventions-note">@InstrumentContractScreenRules.InterventionsNote(selected, Texts.T)</span>
+                </h2>
+                <div class="card-actions">
+                    <ActionButton Key="Contracts.InterventionTimes" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.CalendarCheck" Hidden="@(!actions.TimesRight)"
+                                  Disabled="@(!actions.Times || _busy)" OnClick="AskTimes" />
+                </div>
+            </div>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="interventions">
+                    <thead>
+                        <tr>
+                            @{ var h = InterventionHeaders; }
+                            <th>@h[0]</th>
+                            <th>@h[1]</th>
+                            <th>@h[2]</th>
+                            <th>@h[3]</th>
+                            <th class="num">@h[4]</th>
+                            <th>@h[5]</th>
+                            <th>@h[6]</th>
+                            <th class="num">@h[7]</th>
+                            <th>@h[8]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _interventions)
+                        {
+                            var cells = InstrumentContractScreenRules.InterventionCells(row, Texts.T, Texts.Culture);
+                            <tr class="@(row.MaintenanceRecordId == _interventionId ? "is-selected" : null)" data-row="@cells[0] @cells[1]"
+                                @onclick="() => _interventionId = row.MaintenanceRecordId">
+                                <td class="mono nowrap small" dir="ltr">@cells[0]</td>
+                                <td class="mono nowrap small" dir="ltr">@cells[1]</td>
+                                <td class="small"><span class="cell-wrap">@cells[2]</span></td>
+                                <td><span class="clamp-2 small" title="@cells[3]">@cells[3]</span></td>
+                                <td class="num mono nowrap" dir="ltr">@cells[4]</td>
+                                <td class="mono small nowrap" dir="ltr">@cells[5]</td>
+                                <td class="mono small nowrap" dir="ltr">@cells[6]</td>
+                                <td class="num mono nowrap @(row.DelayExceeded ? "stock-alarm-cell critical strong" : null)" dir="ltr">@cells[7]</td>
+                                <td class="small"><span class="cell-wrap">@cells[8]</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (selected is not null && _interventions.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="no-intervention">@Texts["Web.ContractNoIntervention"]</p>
+                }
+            </div>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Action.Edit" Hidden="@(!actions.ManageRight)" Disabled="@(!actions.Edit || _busy)" OnClick="() => AskEditAsync(false)" />
+            <ActionButton Key="Contracts.OpenFile" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileText" Disabled="@(!actions.OpenFile || _busy)" OnClick="OpenFileAsync" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Contracts.AttachFile" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" Hidden="@(!actions.ManageRight)"
+                          Disabled="@(!actions.Attach || _busy)" OnClick="AskAttach" />
+        </More>
+        <Primary>
+            <ActionButton Key="Contracts.New" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" Hidden="@(!actions.New)"
+                          Disabled="_busy" OnClick="() => AskEditAsync(true)" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Edit when _options is { } options:
+        <InstrumentContractEditor Form="_form" Options="options" ContractId="_editingId" Reference="@_editingReference"
+                                  Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SaveAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.ReplaceFile when Selected is { } r1 && InstrumentContractScreenRules.ReplaceQuestion(r1, Texts.T) is { } question:
+        <ConfirmPrompt Title="@Texts["Contracts.AttachFile"]" Message="@question" OnYes="() => Open(Prompt.Attach)" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Attach when Selected is { } r2:
+        <Modal Name="contract-file" Title="@($"{Texts["Contracts.AttachFile"]} — {r2.Reference}")" OnCancel="ClosePrompt">
+            <ChildContent>
+                <div class="file-pick">
+                    <label class="btn btn-secondary @(_busy ? "is-disabled" : null)" data-action="contract-pick-file">
+                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" />
+                        @Texts["Contracts.AttachFile"]
+                        <InputFile class="file-input" accept="@InstrumentContractScreenRules.FileAccept" disabled="@_busy" OnChange="AttachAsync" />
+                    </label>
+                    <span class="small muted">@Texts["Credential.ScanFiles"] (@InstrumentContractScreenRules.FileAccept)</span>
+                </div>
+                <FieldMessage Refusal="_fieldRefusal" Field="@InstrumentContractScreenRules.FileField" />
+                @if (_dialogRefusal is { Length: > 0 } refused)
+                {
+                    <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+                }
+            </ChildContent>
+            <Footer><ActionButton Key="Action.Close" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+
+    case Prompt.Times when SelectedIntervention is { } i1:
+        <InterventionTimesEditor Row="i1" Now="_timesNow" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SaveTimesAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="contract-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="contract-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Edit, ReplaceFile, Attach, Times, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<InstrumentContractRow> _rows = [];
+    private IReadOnlyList<ContractInterventionRow> _interventions = [];
+
+    private string? _search;
+    private bool _includeInactive, _loaded;
+    private Guid? _selectedId, _interventionId;
+
+    private ContractOptions? _options;
+    private InstrumentContractForm _form = new();
+    private Guid? _editingId;
+    private string? _editingReference;
+    private DateTimeOffset _timesNow;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<InstrumentContractRow> Visible =>
+        [.. _rows.Where(r => StockSearch.Matches(_search, [.. InstrumentContractScreenRules.SearchCells(r, Texts.T)]))];
+
+    private InstrumentContractRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId);
+
+    private ContractInterventionRow? SelectedIntervention => _interventions.FirstOrDefault(i => i.MaintenanceRecordId == _interventionId);
+
+    private InstrumentContractScreenActions Actions => InstrumentContractScreenRules.Actions(Context.User, Selected, SelectedIntervention);
+
+    private string[] InterventionHeaders =>
+    [
+        Texts["Field.Date"], Texts["Contracts.Instrument"], Texts["Equipment.MaintenanceKind"], Texts["Field.Description"],
+        Texts["Equipment.DowntimeHours"], Texts["Contracts.RequestedAt"], Texts["Contracts.ArrivedAt"], Texts["Contracts.DelayHours"],
+        Texts["Equipment.ExternalTechnician"]
+    ];
+
+    /// <summary>Tests counted whole, an amount bought in DH (MAD, د.م.) as on the other screens.</summary>
+    private string Figure(decimal value, CommitmentStatus commitment) =>
+        InstrumentContractScreenRules.Figure(value, commitment, v => Money.Of(v).Format(Texts.Language, Texts.Culture), Texts.Culture);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync(Guid? keep = null)
+    {
+        try
+        {
+            var inactive = _includeInactive;
+            var rows = await Scopes.RunAsync<InstrumentContractService, Result<IReadOnlyList<InstrumentContractRow>>>(s => s.GetContractsAsync(inactive));
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+            _selectedId = InstrumentContractScreenRules.Keep(_rows, keep ?? _selectedId)?.Id;
+            await LoadInterventionsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the instrument contracts failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadInterventionsAsync()
+    {
+        if (_selectedId is not { } contractId)
+        {
+            _interventions = [];
+            _interventionId = null;
+            return;
+        }
+
+        var rows = await Scopes.RunAsync<InstrumentContractService, Result<IReadOnlyList<ContractInterventionRow>>>(s => s.GetInterventionsAsync(contractId));
+        if (_selectedId != contractId) return;
+        if (rows.IsFailure)
+        {
+            _status = (Texts.Describe(rows.Errors), "critical");
+            return;
+        }
+
+        _interventions = rows.Value;
+        _interventionId = InstrumentContractScreenRules.KeepIntervention(_interventions, _interventionId)?.MaintenanceRecordId;
+    }
+
+    private async Task SelectAsync(InstrumentContractRow row)
+    {
+        if (row.Id == _selectedId) return;
+        _selectedId = row.Id;
+        _interventionId = null;
+        try
+        {
+            await LoadInterventionsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading a contract's interventions failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task SearchedAsync()
+    {
+        var visible = Visible;
+        if (visible.Count > 0 && visible.All(r => r.Id != _selectedId)) await SelectAsync(visible[0]);
+    }
+
+    private Task ToggleInactiveAsync()
+    {
+        _includeInactive = !_includeInactive;
+        return LoadAsync();
+    }
+
+    // ---- A contract --------------------------------------------------------------------------------
+
+    private Task AskEditAsync(bool isNew) =>
+        RunAsync(async () =>
+        {
+            var actions = Actions;
+            if (isNew ? !actions.New : !actions.Edit) return;
+            Guid? id = isNew ? null : _selectedId;
+            var title = isNew ? Texts["Contracts.New"] : Texts["Action.Edit"];
+
+            var options = await Scopes.RunAsync<InstrumentContractService, Result<ContractOptions>>(s => s.GetOptionsAsync(id));
+            if (options.IsFailure)
+            {
+                Say(title, Texts.Describe(options.Errors), true);
+                return;
+            }
+
+            InstrumentContractDetail? detail = null;
+            if (id is { } contractId)
+            {
+                var loaded = await Scopes.RunAsync<InstrumentContractService, Result<InstrumentContractDetail>>(s => s.GetContractAsync(contractId));
+                if (loaded.IsFailure)
+                {
+                    Say(title, Texts.Describe(loaded.Errors), true);
+                    return;
+                }
+
+                detail = loaded.Value;
+            }
+
+            _options = options.Value;
+            _form = InstrumentContractScreenRules.Form(detail, Clock.Today, options.Value);
+            _editingId = id;
+            _editingReference = detail?.Reference;
+            Open(Prompt.Edit);
+        });
+
+    private Task SaveAsync(SaveInstrumentContractRequest request) =>
+        RunAsync(async () =>
+        {
+            var saved = await Scopes.RunAsync<InstrumentContractService, Result<Guid>>(s => s.SaveAsync(request));
+            if (saved.IsFailure)
+            {
+                Refused(saved);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync(saved.Value);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- The contract's file -----------------------------------------------------------------------
+
+    private void AskAttach()
+    {
+        if (!Actions.Attach || _busy || Selected is not { } row) return;
+        Open(row.FileName is null ? Prompt.Attach : Prompt.ReplaceFile);
+    }
+
+    private Task AttachAsync(InputFileChangeEventArgs e) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } row) return;
+            _dialogRefusal = null;
+            _fieldRefusal = InstrumentContractScreenRules.CheckFile(e.File.Name, e.File.Size);
+            if (_fieldRefusal is not null) return;
+
+            byte[] content;
+            await using (var stream = e.File.OpenReadStream(maxAllowedSize: PurchasingDocument.MaximumBytes))
+            {
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer);
+                content = buffer.ToArray();
+            }
+
+            var contractId = row.Id;
+            var name = e.File.Name;
+            var attached = await Scopes.RunAsync<InstrumentContractService, Result>(s => s.AttachFileAsync(contractId, name, content));
+            if (attached.IsFailure)
+            {
+                Refused(attached);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync(contractId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    /// <summary>The signed copy downloaded, to be read in the browser or printed on this computer.</summary>
+    private Task OpenFileAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.OpenFile || Selected is not { } row) return;
+            var contractId = row.Id;
+            var file = await Scopes.RunAsync<InstrumentContractService, Result<(string FileName, byte[] Content)>>(s => s.GetFileAsync(contractId));
+            if (file.IsFailure)
+            {
+                Say(Texts["Contracts.OpenFile"], Texts.Describe(file.Errors), true);
+                return;
+            }
+
+            var (name, content) = file.Value;
+            await JS.InvokeVoidAsync("marocLis.download", name, PurchasingDocument.ContentTypeFor(name) ?? "application/octet-stream", content);
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    // ---- The call and arrival times ----------------------------------------------------------------
+
+    private void AskTimes()
+    {
+        if (!Actions.Times || _busy) return;
+        _timesNow = Clock.Now;
+        Open(Prompt.Times);
+    }
+
+    private Task SaveTimesAsync((DateTimeOffset? Requested, DateTimeOffset? Arrived) times) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } contract || SelectedIntervention is not { } intervention) return;
+            var saved = await Scopes.RunAsync<InstrumentContractService, Result>(s => s.RecordInterventionTimesAsync(
+                intervention.InstrumentId, intervention.MaintenanceRecordId, times.Requested, times.Arrived));
+            if (saved.IsFailure)
+            {
+                Refused(saved);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync(contract.Id);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Plumbing ----------------------------------------------------------------------------------
+
+    private void Refused(Result result)
+    {
+        var error = result.FirstError;
+        if (InstrumentContractScreenRules.FieldOf(error) is { } field)
+        {
+            _fieldRefusal = FieldRefusal.Of(field, error);
+            _dialogRefusal = null;
+        }
+        else
+        {
+            _fieldRefusal = null;
+            _dialogRefusal = Texts.Describe(result.Errors);
+        }
+    }
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An instrument contract step failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _options = null;
+    }
+}

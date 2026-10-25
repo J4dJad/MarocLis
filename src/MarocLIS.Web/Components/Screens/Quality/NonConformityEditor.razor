@@ -78,6 +78,9 @@
 
 @code {
     [Parameter] public DateOnly Today { get; set; }
+
+    /// <summary>A file opened from another screen, filled with what that screen knows (a failed check after an intervention).</summary>
+    [Parameter] public NonConformityForm? Prefilled { get; set; }
     [Parameter] public string? Refusal { get; set; }
     [Parameter] public bool Busy { get; set; }
     [Parameter] public EventCallback<CreateNonConformityRequest> OnSave { get; set; }
@@ -91,7 +94,7 @@
     {
         if (_initialised) return;
         _initialised = true;
-        _form = NonConformityScreenRules.NewForm(Today);
+        _form = Prefilled ?? NonConformityScreenRules.NewForm(Today);
     }
 
     private Task SaveAsync()

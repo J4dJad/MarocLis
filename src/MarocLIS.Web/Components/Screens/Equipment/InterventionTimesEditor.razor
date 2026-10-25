@@ -1,0 +1,83 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@inject WebTexts Texts
+
+@*
+    When the supplier was called and when its technician arrived, the workstation's
+    InterventionTimesDialog, on an intervention already entered on « Équipements »: that is what the
+    contract's maximum delay is measured on. Neither in the future, the arrival not before the call
+    (InstrumentContractScreenRules.Check).
+*@
+<Modal Name="intervention-times" Title="@($"{Texts["Contracts.InterventionTimes"]} — {InstrumentContractScreenRules.TimesTitle(Row)}")"
+       Hint="@Texts["StocksUi.Dialog.InterventionTimes"]" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <div class="field">
+                <label class="field-check">
+                    <input type="checkbox" data-field="times-has-requested" @bind="_form.HasRequested" />
+                    <span>@Texts["Contracts.RequestedAt"]</span>
+                </label>
+                <input class="input @Refused(InstrumentContractScreenRules.RequestedField)" type="datetime-local" max="@Max" disabled="@(!_form.HasRequested)"
+                       aria-label="@Texts["Contracts.RequestedAt"]" data-field="@InstrumentContractScreenRules.RequestedField"
+                       @bind="_form.Requested" @bind:format="yyyy-MM-ddTHH:mm" />
+                <FieldMessage Refusal="Shown" Field="@InstrumentContractScreenRules.RequestedField" />
+            </div>
+            <div class="field">
+                <label class="field-check">
+                    <input type="checkbox" data-field="times-has-arrived" @bind="_form.HasArrived" />
+                    <span>@Texts["Contracts.ArrivedAt"]</span>
+                </label>
+                <input class="input @Refused(InstrumentContractScreenRules.ArrivedField)" type="datetime-local" max="@Max" disabled="@(!_form.HasArrived)"
+                       aria-label="@Texts["Contracts.ArrivedAt"]" data-field="@InstrumentContractScreenRules.ArrivedField"
+                       @bind="_form.Arrived" @bind:format="yyyy-MM-ddTHH:mm" />
+                <FieldMessage Refusal="Shown" Field="@InstrumentContractScreenRules.ArrivedField" />
+            </div>
+            <p class="field-span-2 small muted" data-state="times-notice">@Texts["Contracts.InterventionTimesNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public ContractInterventionRow Row { get; set; } = default!;
+    /// <summary>The laboratory's clock, read once: the times shown and the limit set from the same reading.</summary>
+    [Parameter] public DateTimeOffset Now { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<(DateTimeOffset? Requested, DateTimeOffset? Arrived)> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private InterventionTimesForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised, _checked;
+
+    private string Max => Now.LocalDateTime.ToString("yyyy-MM-ddTHH:mm", System.Globalization.CultureInfo.InvariantCulture);
+
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = false;
+        if (_initialised) return;
+        _initialised = true;
+        _form = InstrumentContractScreenRules.TimesForm(Row, Now.LocalDateTime);
+    }
+
+    private Task SaveAsync()
+    {
+        var (refused, requested, arrived) = InstrumentContractScreenRules.Check(_form, Now.AddMinutes(1));
+        _refusal = refused;
+        _checked = true;
+        return refused is null ? OnSave.InvokeAsync((requested, arrived)) : Task.CompletedTask;
+    }
+}

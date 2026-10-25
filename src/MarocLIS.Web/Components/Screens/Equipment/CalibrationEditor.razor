@@ -1,0 +1,106 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Equipment
+@inject WebTexts Texts
+
+@*
+    A calibration, the workstation's CalibrationDialog: its outcome, the calibrator lot — the
+    traceability link to a reference material, required for a passing calibration and said so before
+    « Enregistrer » — how long it holds, the slope and intercept of the curve and a comment.
+    Refusals are said next to their box (EquipmentScreenRules.Check).
+*@
+<Modal Name="calibration" Title="@EquipmentScreenRules.Title("Equipment.RecordCalibration", Row, Texts.T)" Hint="@Texts["StocksUi.Dialog.Calibration"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        @{ var lotRequired = EquipmentScreenRules.LotRequired(_form.Outcome); }
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Calibration.Outcome"]</span>
+                <select class="input" data-field="calibration-outcome" @bind="_form.Outcome">
+                    @foreach (var value in Enum.GetValues<CalibrationOutcome>())
+                    {
+                        <option value="@value">@Texts[$"CalibrationOutcome.{value}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label @(lotRequired ? "strong" : null)">@Texts["Calibration.CalibratorLot"]</span>
+                <input class="input mono strong @Refused(EquipmentScreenRules.LotField)" type="text" dir="ltr" autocomplete="off"
+                       maxlength="@EquipmentScreenRules.CalibratorLotMaxLength" data-field="@EquipmentScreenRules.LotField" @bind="_form.CalibratorLot" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@EquipmentScreenRules.LotField" />
+            </label>
+            @if (lotRequired)
+            {
+                <p class="field-span-2 small abnormal" data-state="lot-notice">@Texts["Calibration.CalibratorLotRequiredNotice"]</p>
+            }
+            <label class="field-check">
+                <input type="checkbox" data-field="calibration-has-validity" @bind="_form.HasValidity" />
+                <span>@Texts["Calibration.ValidUntil"]</span>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Calibration.ValidUntil"]</span>
+                <input class="input @Refused(EquipmentScreenRules.ValidUntilField)" type="date" min="@Today.ToString("yyyy-MM-dd")" disabled="@(!_form.HasValidity)"
+                       data-field="@EquipmentScreenRules.ValidUntilField" @bind="_form.ValidUntil" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@EquipmentScreenRules.ValidUntilField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Calibration.Slope"]</span>
+                <input class="input mono num @Refused(EquipmentScreenRules.SlopeField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@TypedNumber.MeasureMaxLength" data-field="@EquipmentScreenRules.SlopeField" @bind="_form.Slope" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@EquipmentScreenRules.SlopeField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Calibration.Intercept"]</span>
+                <input class="input mono num @Refused(EquipmentScreenRules.InterceptField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@TypedNumber.MeasureMaxLength" data-field="@EquipmentScreenRules.InterceptField" @bind="_form.Intercept" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@EquipmentScreenRules.InterceptField" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.Comment"]</span>
+                <textarea class="input" rows="2" maxlength="@EquipmentScreenRules.CommentMaxLength" data-field="calibration-comment"
+                          @bind="_form.Comment" @bind:event="oninput"></textarea>
+            </label>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public EquipmentRow Row { get; set; } = default!;
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<CalibrationEntry> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private CalibrationForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised, _checked;
+
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = false;
+        if (_initialised) return;
+        _initialised = true;
+        _form = EquipmentScreenRules.NewCalibration(Today);
+    }
+
+    private Task SaveAsync()
+    {
+        var (refused, entry) = EquipmentScreenRules.Check(_form, Today);
+        _refusal = refused;
+        _checked = true;
+        return entry is not null ? OnSave.InvokeAsync(entry) : Task.CompletedTask;
+    }
+}
