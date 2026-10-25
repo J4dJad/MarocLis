@@ -4178,6 +4178,8 @@
   },
 
   "Inventory": {
+    "DaysShort": "ي",
+    "QuarantinedShort": "ح",
     "DaysToExpiry": "الأيام المتبقية",
     "ItemKind": "النوع",
     "ApplyReorderProposal": "تطبيق",

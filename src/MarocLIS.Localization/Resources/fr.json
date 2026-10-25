@@ -4179,6 +4179,8 @@
   },
 
   "Inventory": {
+    "DaysShort": "j",
+    "QuarantinedShort": "Q",
     "DaysToExpiry": "Jours restants",
     "ItemKind": "Type",
     "ApplyReorderProposal": "Appliquer",

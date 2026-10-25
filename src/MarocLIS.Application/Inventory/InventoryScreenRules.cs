@@ -191,13 +191,14 @@ public static class InventoryScreenRules
     /// that survive a monochrome print — « !! » below the safety stock, « ! » at the reorder point,
     /// « Q » a lot in quarantine, « ⏳ » an expiry within 30 days, « ★ » a critical article.
     /// </summary>
-    public static string AlertGlyphs(StockRow row)
+    public static string AlertGlyphs(StockRow row, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(text);
         var alerts = new List<string>();
         if (row.BelowMinimum) alerts.Add("!!");
         else if (row.NeedsReorder) alerts.Add("!");
-        if (row.QuarantinedLotCount > 0) alerts.Add("Q");
+        if (row.QuarantinedLotCount > 0) alerts.Add(text("Inventory.QuarantinedShort"));
         if (row.DaysToEarliestExpiry is <= ExpirySoonDays) alerts.Add("⏳");
         if (row.IsCritical) alerts.Add("★");
         return string.Join(" ", alerts);
@@ -211,7 +212,7 @@ public static class InventoryScreenRules
         var meanings = new List<string>();
         if (row.BelowMinimum) meanings.Add("!! " + text("Inventory.BelowMinimum"));
         else if (row.NeedsReorder) meanings.Add("! " + text("Inventory.ReorderPoint"));
-        if (row.QuarantinedLotCount > 0) meanings.Add("Q " + text("Inventory.Quarantined"));
+        if (row.QuarantinedLotCount > 0) meanings.Add(text("Inventory.QuarantinedShort") + " " + text("Inventory.Quarantined"));
         if (row.DaysToEarliestExpiry is <= ExpirySoonDays) meanings.Add("⏳ " + text("Inventory.Expiry"));
         if (row.IsCritical) meanings.Add("★ " + text("Web.StockCritical"));
         return meanings;
@@ -242,15 +243,16 @@ public static class InventoryScreenRules
         row.ReorderPoint.ToString("N2", provider ?? CultureInfo.CurrentCulture);
 
     /// <summary>« 3 (1Q) »: the lots, and how many of them are in quarantine.</summary>
-    public static string Lots(StockRow row) =>
+    /// <summary>« 3 (1Q) »: the lots and, among them, the quarantined ones; the letter is the language's.</summary>
+    public static string Lots(StockRow row, ScreenText text) =>
         row.QuarantinedLotCount > 0
-            ? $"{row.LotCount.ToString(CultureInfo.InvariantCulture)} ({row.QuarantinedLotCount.ToString(CultureInfo.InvariantCulture)}Q)"
+            ? $"{row.LotCount.ToString(CultureInfo.InvariantCulture)} ({row.QuarantinedLotCount.ToString(CultureInfo.InvariantCulture)}{text("Inventory.QuarantinedShort")})"
             : row.LotCount.ToString(CultureInfo.InvariantCulture);
 
-    /// <summary>« 12/03/27 (140j) »: the earliest expiry and the days left.</summary>
-    public static string Expiry(StockRow row) =>
+    /// <summary>« 12/03/27 (140j) »: the earliest expiry and the days left, in the language's day abbreviation.</summary>
+    public static string Expiry(StockRow row, ScreenText text) =>
         row.EarliestExpiry is { } expiry
-            ? Date(expiry) + (row.DaysToEarliestExpiry is { } days ? $" ({days.ToString(CultureInfo.InvariantCulture)}j)" : string.Empty)
+            ? Date(expiry) + (row.DaysToEarliestExpiry is { } days ? $" ({days.ToString(CultureInfo.InvariantCulture)}{text("Inventory.DaysShort")})" : string.Empty)
             : string.Empty;
 
     public static string Date(DateOnly date) => date.ToString("dd/MM/yy", CultureInfo.InvariantCulture);

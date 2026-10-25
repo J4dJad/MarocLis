@@ -224,7 +224,9 @@ public sealed class WebInventoryTests : WebScreenContext
 
         var page = Render<InventoryScreen>();
 
-        page.Find("[data-row='BIO-GLU']").TextContent.Should().Contain("غلوكوز");
+        page.Find("[data-row='BIO-GLU']").TextContent.Should().Contain("غلوكوز")
+            .And.Contain("(12ي)", "the days left take the Arabic abbreviation")
+            .And.Contain("(1ح)").And.NotContain("j)").And.NotContain("Q");
         page.Find("[data-action='Inventory.ReceiveLot']").TextContent.Should().NotContain("Réceptionner");
         page.Markup.Should().NotContain("[[", "every text of the screen has its Arabic");
     }

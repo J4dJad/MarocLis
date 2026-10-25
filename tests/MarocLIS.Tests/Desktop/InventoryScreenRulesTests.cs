@@ -64,14 +64,33 @@ public sealed class InventoryScreenRulesTests
             .Match<InventoryScreenActions>(a => !a.Receive && !a.Issue && !a.Compare && !a.Certificates);
     }
 
+    [Theory]
+    [InlineData(MarocLIS.Domain.Common.AppLanguage.French, "27/10/26 (9j)", "3 (1Q)", "Q ⏳")]
+    [InlineData(MarocLIS.Domain.Common.AppLanguage.English, "27/10/26 (9d)", "3 (1Q)", "Q ⏳")]
+    [InlineData(MarocLIS.Domain.Common.AppLanguage.Arabic, "27/10/26 (9ي)", "3 (1ح)", "ح ⏳")]
+    public void The_day_and_quarantine_abbreviations_are_the_language_s_own(MarocLIS.Domain.Common.AppLanguage language,
+                                                                            string expiry, string lots, string glyphs)
+    {
+        // The workstation and the browser both take them from the translation files: « (450j) »
+        // read in Arabic is a French word in an Arabic screen.
+        var localizer = new MarocLIS.Localization.JsonLocalizer(new MarocLIS.Localization.LocalizationOptions { MarkMissingKeys = true });
+        string Lang(string key, params object?[] args) => localizer.Format(language, key, args);
+        var row = Item(lots: 3, quarantined: 1, days: 9);
+
+        InventoryScreenRules.Expiry(row, Lang).Should().Be(expiry);
+        InventoryScreenRules.Lots(row, Lang).Should().Be(lots);
+        InventoryScreenRules.AlertGlyphs(row, Lang).Should().Be(glyphs);
+        InventoryScreenRules.AlertMeanings(row, Lang)[0].Should().StartWith(glyphs.Split(' ')[0] + " ");
+    }
+
     [Fact]
     public void A_stock_line_says_what_is_wrong_in_glyphs_and_in_its_colours()
     {
-        InventoryScreenRules.AlertGlyphs(Item(belowMinimum: true, quarantined: 1, days: 12, critical: true)).Should().Be("!! Q ⏳ ★");
-        InventoryScreenRules.AlertGlyphs(Item(reorder: true)).Should().Be("!");
-        InventoryScreenRules.AlertGlyphs(Item()).Should().BeEmpty();
+        InventoryScreenRules.AlertGlyphs(Item(belowMinimum: true, quarantined: 1, days: 12, critical: true), Text).Should().Be("!! Inventory.QuarantinedShort ⏳ ★");
+        InventoryScreenRules.AlertGlyphs(Item(reorder: true), Text).Should().Be("!");
+        InventoryScreenRules.AlertGlyphs(Item(), Text).Should().BeEmpty();
         InventoryScreenRules.AlertMeanings(Item(reorder: true, quarantined: 1), Text).Should()
-            .Equal("! Inventory.ReorderPoint", "Q Inventory.Quarantined");
+            .Equal("! Inventory.ReorderPoint", "Inventory.QuarantinedShort Inventory.Quarantined");
 
         InventoryScreenRules.Tone(Item(belowMinimum: true, critical: true)).Should().Be(StockRowTone.CriticalBold);
         InventoryScreenRules.Tone(Item(belowMinimum: true)).Should().Be(StockRowTone.Critical);
@@ -82,8 +101,8 @@ public sealed class InventoryScreenRulesTests
         InventoryScreenRules.IsWarningCell("name").Should().BeFalse();
 
         var row = Item(lots: 3, quarantined: 1, days: 9);
-        InventoryScreenRules.Lots(row).Should().Be("3 (1Q)");
-        InventoryScreenRules.Expiry(row).Should().Be("27/10/26 (9j)");
+        InventoryScreenRules.Lots(row, Text).Should().Be("3 (1Inventory.QuarantinedShort)");
+        InventoryScreenRules.Expiry(row, Text).Should().Be("27/10/26 (9Inventory.DaysShort)");
         InventoryScreenRules.OnHand(row, System.Globalization.CultureInfo.InvariantCulture).Should().Be("12.00 coffret");
         InventoryScreenRules.Count([Item(), Item(reorder: true)], Text).Should().Be("StocksUi.Items(2) · 1 inventory.belowminimum");
     }

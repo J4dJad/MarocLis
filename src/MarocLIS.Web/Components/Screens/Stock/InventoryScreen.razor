@@ -69,10 +69,10 @@
                                 </td>
                                 <td class="num nowrap @warn"><span dir="ltr">@InventoryScreenRules.OnHand(row, Texts.Culture)</span></td>
                                 <td class="num nowrap">@InventoryScreenRules.ReorderPoint(row, Texts.Culture)</td>
-                                <td class="nowrap @warn" dir="ltr">@InventoryScreenRules.Lots(row)</td>
-                                <td class="mono nowrap small @warn" dir="ltr">@InventoryScreenRules.Expiry(row)</td>
+                                <td class="nowrap @warn" dir="ltr">@InventoryScreenRules.Lots(row, Texts.T)</td>
+                                <td class="mono nowrap small @warn" dir="ltr">@InventoryScreenRules.Expiry(row, Texts.T)</td>
                                 <td class="small"><span class="cell-wrap">@row.SupplierName</span></td>
-                                <td class="stock-glyphs @warn" title="@string.Join("\n", InventoryScreenRules.AlertMeanings(row, Texts.T))">@InventoryScreenRules.AlertGlyphs(row)</td>
+                                <td class="stock-glyphs @warn" title="@string.Join("\n", InventoryScreenRules.AlertMeanings(row, Texts.T))">@InventoryScreenRules.AlertGlyphs(row, Texts.T)</td>
                             </tr>
                         }
                     </tbody>
@@ -287,7 +287,7 @@
 
     private IReadOnlyList<StockRow> Visible =>
         [.. _rows.Where(r => StockSearch.Matches(_search, r.Code, r.Name.For(Texts.Language), Texts[$"StockItemKind.{r.Kind}"],
-                                                  r.SupplierName, InventoryScreenRules.Expiry(r), InventoryScreenRules.AlertGlyphs(r)))];
+                                                  r.SupplierName, InventoryScreenRules.Expiry(r, Texts.T), InventoryScreenRules.AlertGlyphs(r, Texts.T)))];
 
     private StockRow? Selected => _rows.FirstOrDefault(r => r.StockItemId == _selectedId);
 

@@ -496,10 +496,10 @@ public sealed class InventoryView : LocalizedView
                 T($"StockItemKind.{row.Kind}"),
                 InventoryScreenRules.OnHand(row),
                 InventoryScreenRules.ReorderPoint(row),
-                InventoryScreenRules.Lots(row),
-                InventoryScreenRules.Expiry(row),
+                InventoryScreenRules.Lots(row, T),
+                InventoryScreenRules.Expiry(row, T),
                 row.SupplierName ?? string.Empty,
-                InventoryScreenRules.AlertGlyphs(row));
+                InventoryScreenRules.AlertGlyphs(row, T));
 
             _stock.Rows[index].Tag = row;
         }
