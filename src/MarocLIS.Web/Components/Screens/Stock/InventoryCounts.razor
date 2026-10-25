@@ -103,8 +103,8 @@
                                 <span>@Texts["InventoryCount.SheetTime"]</span>
                             </label>
                             <input class="input mono" type="datetime-local" data-field="sheet-time" disabled="@(!_useSheetTime)"
-                                   max="@Clock.Now.LocalDateTime.ToString("yyyy-MM-ddTHH:mm")" aria-label="@Texts["InventoryCount.SheetTime"]"
-                                   @bind="_sheetTime" @bind:format="yyyy-MM-ddTHH:mm" />
+                                   max="@BrowserDateTime.Write(Clock.Now.LocalDateTime)" aria-label="@Texts["InventoryCount.SheetTime"]"
+                                   value="@BrowserDateTime.Write(_sheetTime)" @onchange="e => _sheetTime = BrowserDateTime.Read(e, _sheetTime)" />
                         </span>
                     }
                     <ActionButton Key="InventoryCount.Close" Primary="true" Hidden="@(!Context.User.Has(Permissions.Inventory.CloseCounts))"

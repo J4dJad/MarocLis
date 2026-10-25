@@ -19,7 +19,7 @@
                 </label>
                 <input class="input @Refused(InstrumentContractScreenRules.RequestedField)" type="datetime-local" max="@Max" disabled="@(!_form.HasRequested)"
                        aria-label="@Texts["Contracts.RequestedAt"]" data-field="@InstrumentContractScreenRules.RequestedField"
-                       value="@Local(_form.Requested)" @onchange="e => _form.Requested = Read(e, _form.Requested)" />
+                       value="@BrowserDateTime.Write(_form.Requested)" @onchange="e => _form.Requested = BrowserDateTime.Read(e, _form.Requested)" />
                 <FieldMessage Refusal="Shown" Field="@InstrumentContractScreenRules.RequestedField" />
             </div>
             <div class="field">
@@ -29,7 +29,7 @@
                 </label>
                 <input class="input @Refused(InstrumentContractScreenRules.ArrivedField)" type="datetime-local" max="@Max" disabled="@(!_form.HasArrived)"
                        aria-label="@Texts["Contracts.ArrivedAt"]" data-field="@InstrumentContractScreenRules.ArrivedField"
-                       value="@Local(_form.Arrived)" @onchange="e => _form.Arrived = Read(e, _form.Arrived)" />
+                       value="@BrowserDateTime.Write(_form.Arrived)" @onchange="e => _form.Arrived = BrowserDateTime.Read(e, _form.Arrived)" />
                 <FieldMessage Refusal="Shown" Field="@InstrumentContractScreenRules.ArrivedField" />
             </div>
             <p class="field-span-2 small muted" data-state="times-notice">@Texts["Contracts.InterventionTimesNotice"]</p>
@@ -59,16 +59,7 @@
     private FieldRefusal? _refusal;
     private bool _initialised, _checked;
 
-    private string Max => Local(Now.LocalDateTime);
-
-    /// <summary>The browser's own writing of a date and time (2026-10-12T14:30), whatever the screen's language.</summary>
-    private static string Local(DateTime value) => value.ToString("yyyy-MM-ddTHH:mm", System.Globalization.CultureInfo.InvariantCulture);
-
-    /// <summary>What the browser's picker sent back, with or without seconds; a cleared box keeps the time shown.</summary>
-    private static DateTime Read(ChangeEventArgs e, DateTime shown) =>
-        DateTime.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var read)
-            ? new DateTime(read.Year, read.Month, read.Day, read.Hour, read.Minute, 0, DateTimeKind.Unspecified)
-            : shown;
+    private string Max => BrowserDateTime.Write(Now.LocalDateTime);
 
     private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
 
