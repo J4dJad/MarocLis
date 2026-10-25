@@ -87,6 +87,12 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<IValidationQueries, ValidationQueries>();
         services.AddScoped<IBenchWorksheetQueries, BenchWorksheetQueries>();
         services.AddScoped<IResultEntryContextQueries, ResultEntryContextQueries>();
+        // The administration screens: the accounts, roles and sites, the audit trail, the tills to
+        // sign off and the storage places of « Paramètres ».
+        services.AddScoped<IAdministrationQueries, AdministrationQueries>();
+        services.AddScoped<IAuditQueries, AuditQueries>();
+        services.AddScoped<Application.Treasury.ITreasuryQueries, TreasuryQueries>();
+        services.AddScoped<ISampleStorageLocationQueries, SampleStorageLocationQueries>();
 
         // ---- Sessions: the browsers signed in, their workstations, and each scope's session.
         services.AddSingleton<WebSessionStore>();

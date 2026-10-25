@@ -3,7 +3,9 @@
 @*
     The workstation's text box (IUserDialogs.PromptForText): a note, a telephone number, a
     corrected value, offered with what it holds already and cut at the length its column takes.
-    Unlike the reason box it takes an empty answer, unless the screen needs one (Required).
+    Unlike the reason box it takes an empty answer, unless the screen needs one (Required). A
+    screen that keeps the box open on a refusal, as the workstation asks again with what was typed,
+    says why under it (Refusal).
 *@
 <Modal Name="@Name" Title="@Title" OnCancel="CancelAsync">
     <ChildContent>
@@ -20,6 +22,10 @@
                        @bind="_text" @bind:event="oninput" @onkeydown="KeyAsync" />
             }
         </label>
+        @if (!string.IsNullOrEmpty(Refusal))
+        {
+            <p class="message is-warning small" role="alert" data-refusal="@Name">@Refusal</p>
+        }
     </ChildContent>
     <Footer>
         <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
@@ -38,6 +44,9 @@
 
     /// <summary>An empty answer is no answer: « OK » stays off until something is typed.</summary>
     [Parameter] public bool Required { get; set; }
+
+    /// <summary>Why the last answer was refused, the box kept open with it.</summary>
+    [Parameter] public string? Refusal { get; set; }
 
     [Parameter] public EventCallback<string> OnConfirm { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }

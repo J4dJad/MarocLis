@@ -824,3 +824,66 @@ html[dir="rtl"] .input-value { text-align: start; }
 .takings tr.is-total td { border-block-start: 2px solid var(--border-strong); }
 .screen-body.split > .split-main { display: flex; flex-direction: column; gap: var(--gap); }
 .screen-body.split > .split-main > * { flex: none; }
+
+/* ---------- « Utilisateurs », « Journal d'audit », « Paramètres », « Visa des caisses » ---------- */
+
+/* A date or a short box beside its caption in the list tools. */
+.field-inline { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+.input-date { inline-size: auto; min-inline-size: 150px; }
+.input-wide { inline-size: auto; min-inline-size: 360px; max-inline-size: 100%; }
+.input-amount { max-inline-size: 200px; text-align: end; }
+
+/* A list over the selected row's detail, in one column: the list takes the height, the detail its own. */
+.screen-body.split.split-stack { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+.audit-detail { max-block-size: 180px; }
+.audit-detail-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+
+.grid tr.is-inactive td { color: var(--text-muted); }
+.grid tr.is-muted-row td { color: var(--text-secondary); }
+.grid tr.is-accent-row td:first-child { color: var(--accent); }
+
+/* The rights of a role, one box per module. */
+.permission-tree { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.permission-module { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; }
+.permission-module legend { padding-inline: 4px; color: var(--accent-pressed); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.permission-module .field-check { min-block-size: 28px; font-size: 13px; }
+
+.check-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-block-size: 320px; overflow: auto; }
+.check-list > li, .check-list > .field-check { padding: 4px 8px; border-radius: var(--radius); min-block-size: var(--control-height); display: flex; align-items: center; }
+.check-list > li.is-selected { background: var(--accent-subtle); }
+.field-check.is-disabled { color: var(--text-muted); }
+
+.facts-wide { grid-template-columns: minmax(160px, max-content) 1fr; }
+.facts dd .btn { margin-inline-start: 8px; }
+
+/* Forms: labels above their fields on an aligned grid. */
+.form-card { display: flex; flex-direction: column; gap: 12px; }
+.form-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.form-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.field-span-2 { grid-column: span 2; }
+.field-align-end { align-self: end; min-block-size: var(--control-height); }
+@media (max-width: 1100px) { .form-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.form-card .section-title { margin-block: 4px 0; }
+.banners { display: flex; flex-direction: column; gap: 6px; }
+.banners p { margin: 0; }
+.reading-column { max-inline-size: 860px; }
+.day-boxes { display: flex; flex-wrap: wrap; gap: 4px 16px; min-block-size: var(--control-height); align-items: center; }
+
+/* A signature or a logo: the image, its two buttons and the hint. */
+.signature-block, .logo-block { display: flex; flex-direction: column; gap: 6px; }
+.logo-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; }
+.signature-box, .logo-box {
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface-raised);
+}
+.signature-box { inline-size: 300px; block-size: 110px; }
+.logo-box { inline-size: 220px; block-size: 90px; }
+.signature-box img, .logo-box img { max-inline-size: 100%; max-block-size: 100%; object-fit: contain; }
+.signature-actions, .logo-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* A file chosen through its button: the input itself out of sight, the label clicked. */
+label.btn { position: relative; cursor: pointer; }
+.file-input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; overflow: hidden; }
+label.btn.is-disabled { opacity: .5; cursor: not-allowed; pointer-events: none; }
+.grid .cell-sub { display: block; }
+.stack-cards { display: flex; flex-direction: column; gap: var(--gap); }
+.nowrap { white-space: nowrap; }
