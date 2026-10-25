@@ -91,6 +91,21 @@ public sealed class WebPageTests : BunitContext
         page.Find("h1").TextContent.Should().NotContain("Contrôle", "a screen refused is not named");
     }
 
+    [Theory]
+    [InlineData("nonconformities", "Non-conformités")]
+    [InlineData("eqa", "Évaluation externe")]
+    [InlineData("documents", "Documents qualité")]
+    public void TheQualityRegisters_TypedWithoutTheRight_AreRefused(string key, string title)
+    {
+        SignIn(AppLanguage.French, Permissions.Samples.Collect);
+
+        var page = Render<Screen>(p => p.Add(x => x.Key, key));
+
+        page.FindAll($"[data-screen={key}]").Should().BeEmpty();
+        page.Find("[data-state=refused]").TextContent.Should().Contain("Vous n'avez pas le droit");
+        page.Find("h1").TextContent.Should().NotContain(title, "a screen refused is not named");
+    }
+
     [Fact]
     public void AScreenOfAModuleOutsideTheLicence_IsRefused_AndTheRefusalRecorded()
     {
