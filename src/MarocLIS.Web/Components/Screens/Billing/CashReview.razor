@@ -1,0 +1,273 @@
+@using System.Globalization
+@using MarocLIS.Application.Treasury
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<CashReview> Logger
+
+@*
+    « Visa des caisses », the workstation's CashSessionReviewView: the closed tills of the period,
+    those still to sign off first, each with its count, its variance and its explanation, the cash
+    banked during the shift; the selected till beside the list, and the sign-off with a comment —
+    required when the till did not balance — never by the operator who ran it. What is counted,
+    offered and required is CashReviewRules'; the sign-off, CashSessionReviewService's, which
+    records it, and the domain's, which refuses one's own till (four eyes).
+*@
+<div class="screen cash-review" data-screen="cashreview">
+    <div class="list-tools">
+        <label class="field-inline">
+            <span class="field-label">@Texts["Field.From"]</span>
+            <input class="input input-date" type="date" data-field="from" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="FromChangedAsync" />
+        </label>
+        <label class="field-inline">
+            <span class="field-label">@Texts["Field.To"]</span>
+            <input class="input input-date" type="date" data-field="to" value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="ToChangedAsync" />
+        </label>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_pendingOnly ? "is-pressed" : null)" aria-pressed="@(_pendingOnly ? "true" : "false")"
+                    data-filter="pending" @onclick="() => ShowPendingAsync(true)">@Texts["Treasury.SessionToReview"] · @CashReviewRules.PendingCount(_rows)</button>
+            <button type="button" class="chip @(!_pendingOnly ? "is-pressed" : null)" aria-pressed="@(!_pendingOnly ? "true" : "false")"
+                    data-filter="all" @onclick="() => ShowPendingAsync(false)">@AllChip</button>
+        </div>
+        <span class="list-tools-end">
+            <span class="muted" data-state="count">@Texts.T("Finance.ToReviewCount", CashReviewRules.PendingCount(_rows))</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="ActivateAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body split">
+        <div class="card card-flush">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="sessions">
+                    <thead>
+                        <tr>
+                            @* The closing under the opening, the workstation under the cashier, the withdrawals and the
+                               other receipts beside: the columns that decide a sign-off fit beside the till opened. *@
+                            <th>@Texts["Treasury.OpenedAt"]<span class="cell-sub">@Texts["Treasury.ClosedAt"]</span></th>
+                            <th>@Texts["Treasury.Operator"]</th>
+                            <th class="num">@Texts["Payment.ExpectedCash"]</th>
+                            <th class="num">@Texts["Payment.CountedCash"]</th>
+                            <th class="num">@Texts["Payment.Variance"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr class="@(row.Id == Selected?.Id ? "is-selected" : null)" data-row="@row.Id" @onclick="() => _selectedId = row.Id">
+                                <td class="mono small nowrap">
+                                    @When(row.OpenedAt)
+                                    <span class="cell-sub">@When(row.ClosedAt)</span>
+                                </td>
+                                <td>
+                                    @row.OperatorName
+                                    <span class="cell-sub">@row.Workstation</span>
+                                </td>
+                                <td class="num mono">@Amount(row.ExpectedClosingCash)</td>
+                                <td class="num mono">@Amount(row.CountedCash)</td>
+                                <td class="num mono strong @VarianceClass(row.Variance)">@Amount(row.Variance)</td>
+                                <td><Pill Text="@StateText(row)" Tone="@(row.IsReconciled ? "Ok" : "Warning")" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_loaded && _rows.Count == 0)
+            {
+                <p class="card-pad muted" data-state="empty">@Texts["Web.CashReviewNone"]</p>
+            }
+        </div>
+
+        <aside class="card split-side" data-card="till">
+            @if (Selected is { } till)
+            {
+                <div class="identity">
+                    <span class="identity-name">@till.OperatorName</span>
+                    <span class="mono small muted">@When(till.OpenedAt) → @When(till.ClosedAt)@(till.Workstation is { } post ? $" · {post}" : null)</span>
+                </div>
+                <p><Pill Text="@StateText(till)" Tone="@(till.IsReconciled ? "Ok" : "Warning")" /></p>
+                <dl class="facts">
+                    <dt>@Texts["Payment.ExpectedCash"]</dt><dd class="mono">@Amount(till.ExpectedClosingCash)</dd>
+                    <dt>@Texts["Payment.CountedCash"]</dt><dd class="mono">@Amount(till.CountedCash)</dd>
+                    <dt>@Texts["Payment.Variance"]</dt><dd class="mono @VarianceClass(till.Variance)" data-state="variance">@Amount(till.Variance)</dd>
+                    <dt>@Texts["Payment.Withdrawals"]</dt><dd class="mono">@Amount(till.CashWithdrawals)</dd>
+                    <dt>@Texts["Treasury.NonCashReceipts"]</dt><dd class="mono">@Amount(till.NonCashReceipts)</dd>
+                </dl>
+                @if (CashReviewRules.IsOwnTill(Context.User, till))
+                {
+                    <p class="message is-warning small" data-state="own-till">@Texts["CashSession_ReconcilerIsOperator"]</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(till.VarianceExplanation))
+                {
+                    <p class="small muted" data-state="explanation">@Texts["Payment.VarianceExplanation"] : @till.VarianceExplanation</p>
+                }
+                @if (till.IsReconciled)
+                {
+                    <p class="small muted" data-state="reconciled">@Texts.T("Treasury.ReconciledBy", till.ReconciledByName ?? "?", When(till.ReconciledAt), till.ReconciliationComment ?? "—")</p>
+                }
+            }
+            else
+            {
+                <p class="muted" data-state="no-row">@Texts["Message.NothingSelected"]</p>
+            }
+        </aside>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Primary>
+            <ActionButton Key="Treasury.ReconcileSession" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Signature" Primary="true"
+                          Hidden="@(!Context.User.Has(Permissions.Billing.ReconcileCashSession))"
+                          Disabled="@(!CashReviewRules.CanReconcile(Context.User, Selected) || _busy)" OnClick="AskReconcile" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_dialog)
+{
+    case ReviewDialog.Reason when Selected is { Variance: { } variance } reviewed:
+        <ReasonPrompt Title="@Texts["Treasury.ReconcileSession"]" Prompt="@Texts.T("Treasury.ReconcileCommentPrompt", reviewed.OperatorName, Amount(variance))"
+                      MaxLength="CashReviewRules.CommentMaxLength" OnConfirm="ReconcileAsync" OnCancel="CloseDialog" />
+        break;
+
+    case ReviewDialog.Comment when Selected is { } balanced:
+        <TextPrompt Name="comment" Title="@Texts["Treasury.ReconcileSession"]" Prompt="@Texts.T("Treasury.ReconcileOptionalPrompt", balanced.OperatorName)"
+                    MaxLength="CashReviewRules.CommentMaxLength" Multiline="true" OnConfirm="ReconcileAsync" OnCancel="CloseDialog" />
+        break;
+
+    case ReviewDialog.Message when _message is { } message:
+        <Modal Name="review-message" Title="@Texts["Treasury.ReconcileSession"]" OnCancel="CloseDialog">
+            <ChildContent><p class="prompt-text">@message</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum ReviewDialog { None, Reason, Comment, Message }
+
+    private IReadOnlyList<CashSessionReviewRow> _rows = [];
+    private DateOnly _from, _to;
+    private bool _pendingOnly = true, _loaded, _busy;
+    private Guid? _selectedId;
+
+    private ReviewDialog _dialog;
+    private string? _message;
+    private (string Text, string Tone)? _status;
+
+    /// <summary>Kept on the till just signed off, or the first when the list no longer shows it.</summary>
+    private CashSessionReviewRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId) ?? _rows.FirstOrDefault();
+
+    /// <summary>« Toutes » counts only once the whole period is loaded; « À viser » counts in both cases.</summary>
+    private string AllChip => _pendingOnly ? Texts["Finance.AllSessions"] : $"{Texts["Finance.AllSessions"]} · {_rows.Count}";
+
+    protected override Task OnInitializedAsync()
+    {
+        (_from, _to) = CashReviewRules.DefaultPeriod(DateOnly.FromDateTime(DateTime.Today));
+        return ActivateAsync();
+    }
+
+    private async Task ActivateAsync()
+    {
+        try
+        {
+            var result = await Scopes.RunAsync<CashSessionReviewService, Result<IReadOnlyList<CashSessionReviewRow>>>(
+                s => s.GetSessionsAsync(_from, _to, _pendingOnly));
+
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _rows = result.Value;
+            _status = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the tills to sign off failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private Task FromChangedAsync(ChangeEventArgs e) =>
+        DateOnly.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out var from) ? Reload(() => _from = from) : Task.CompletedTask;
+
+    private Task ToChangedAsync(ChangeEventArgs e) =>
+        DateOnly.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out var to) ? Reload(() => _to = to) : Task.CompletedTask;
+
+    private Task ShowPendingAsync(bool pendingOnly) => Reload(() => _pendingOnly = pendingOnly);
+
+    private Task Reload(Action change)
+    {
+        change();
+        return ActivateAsync();
+    }
+
+    private string Amount(decimal? value) => value is { } v ? Money.Of(v).Format(Texts.Language, Texts.Culture) : "—";
+
+    private static string When(DateTimeOffset? at) => at?.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) ?? "—";
+
+    private string StateText(CashSessionReviewRow row) =>
+        row.IsReconciled ? Texts["Treasury.SessionReconciled"] : Texts["Treasury.SessionToReview"];
+
+    /// <summary>A variance in amber, beyond the tolerance in red.</summary>
+    private static string? VarianceClass(decimal? variance) => CashReviewRules.Reading(variance) switch
+    {
+        VarianceReading.BeyondTolerance => "critical strong",
+        VarianceReading.WithinTolerance => "abnormal",
+        _ => null
+    };
+
+    private void CloseDialog()
+    {
+        _dialog = ReviewDialog.None;
+        _message = null;
+    }
+
+    /// <summary>A till that balanced is signed off with an optional comment; one that did not needs one.</summary>
+    private void AskReconcile()
+    {
+        if (Selected is not { } till || !CashReviewRules.CanReconcile(Context.User, till) || _busy) return;
+        _dialog = CashReviewRules.CommentRequired(till) ? ReviewDialog.Reason : ReviewDialog.Comment;
+    }
+
+    private async Task ReconcileAsync(string comment)
+    {
+        if (Selected is not { } till) return;
+
+        CloseDialog();
+        _busy = true;
+
+        try
+        {
+            // As the workstation sends it: the domain keeps an empty comment as none.
+            var result = await Scopes.RunAsync<CashSessionReviewService, Result>(s => s.ReconcileAsync(till.Id, comment));
+
+            if (result.IsFailure)
+            {
+                _message = Texts.Describe(result.Errors);
+                _dialog = ReviewDialog.Message;
+                return;
+            }
+
+            _selectedId = till.Id;
+            await ActivateAsync();
+            _status = ($"{Texts["Treasury.SessionReconciled"]} · {till.OperatorName}", "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Signing off a till failed.");
+            _message = Texts["Message.UnexpectedError"];
+            _dialog = ReviewDialog.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

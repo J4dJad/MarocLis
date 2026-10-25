@@ -6763,6 +6763,7 @@
       "Title": "MarocLIS Web is unavailable",
       "Retry": "Try again",
       "ModuleHint": "Import a licence that includes this module from the MarocLIS Windows application, on the server, then reload this page."
-    }
+    },
+    "CashReviewNone": "No till closed in this period."
   }
 }

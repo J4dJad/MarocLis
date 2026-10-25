@@ -6764,6 +6764,7 @@
       "Title": "MarocLIS Web est indisponible",
       "Retry": "Réessayer",
       "ModuleHint": "Importez une licence qui comprend ce module depuis l'application Windows MarocLIS, sur le serveur, puis rechargez cette page."
-    }
+    },
+    "CashReviewNone": "Aucune caisse clôturée dans la période."
   }
 }
