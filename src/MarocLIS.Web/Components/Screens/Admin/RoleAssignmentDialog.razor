@@ -1,0 +1,78 @@
+@using MarocLIS.Application.Administration
+@inject WebTexts Texts
+
+@*
+    The roles of an account, the workstation's RoleAssignmentDialog: the active roles, ticked for
+    those held, and what the role pointed at grants — its count of rights, and the two grants with
+    consequences outside the application: biological validation, reserved by law, and the
+    management of users, which can lock everybody out. Which roles and what they grant are
+    UserAdministrationRules'.
+*@
+<Modal Name="roles" Title="@($"{Texts["Nav.Roles"]} — {User.UserName}")" Hint="@Texts["AdminDialog.RoleAssignmentDialog"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <ul class="check-list" data-list="roles">
+            @foreach (var role in _roles)
+            {
+                <li class="@(role.RoleId == _pointed ? "is-selected" : null)" @onmouseenter="() => _pointed = role.RoleId" @onfocusin="() => _pointed = role.RoleId">
+                    <label class="field-check">
+                        <input type="checkbox" data-role="@role.Code" checked="@_held.Contains(role.RoleId)" @onchange="e => Toggle(role, e)" />
+                        <span><span class="mono strong">@role.Code</span> — @role.Name.For(Texts.Language)</span>
+                    </label>
+                </li>
+            }
+        </ul>
+        @if (_roles.FirstOrDefault(r => r.RoleId == _pointed) is { } pointed)
+        {
+            var (count, validates, administers) = UserAdministrationRules.Grants(pointed);
+            <div class="small muted" data-state="summary">
+                <p>@Texts.T("Admin.RolePermissionCount", count)</p>
+                @if (validates)
+                {
+                    <p class="abnormal">@Texts["Admin.RoleGrantsBiologicalValidation"]</p>
+                }
+                @if (administers)
+                {
+                    <p class="abnormal">@Texts["Admin.RoleGrantsUserManagement"]</p>
+                }
+            </div>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public UserRow User { get; set; } = default!;
+    [Parameter] public IReadOnlyList<RoleRow> Roles { get; set; } = [];
+    [Parameter] public EventCallback<IReadOnlyList<Guid>> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private IReadOnlyList<RoleRow> _roles = [];
+    private HashSet<Guid> _held = [];
+    private Guid? _pointed;
+    private bool _initialised;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+
+        _roles = UserAdministrationRules.AssignableRoles(Roles);
+        _held = [.. User.RoleIds];
+        _pointed = _roles.FirstOrDefault()?.RoleId;
+    }
+
+    private void Toggle(RoleRow role, ChangeEventArgs e)
+    {
+        _pointed = role.RoleId;
+        if (e.Value is true) _held.Add(role.RoleId);
+        else _held.Remove(role.RoleId);
+    }
+
+    // In the list's order, as the workstation's ticked items.
+    private Task SaveAsync() => OnSave.InvokeAsync([.. _roles.Where(r => _held.Contains(r.RoleId)).Select(r => r.RoleId)]);
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

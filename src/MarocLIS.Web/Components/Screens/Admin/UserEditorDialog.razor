@@ -1,0 +1,282 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject ActiveLanguagesCache Languages
+@inject ILogger<UserEditorDialog> Logger
+
+@*
+    Creating or editing a personnel record, the workstation's UserDialog: the identity, the
+    qualification block — the ISO 15189 §5.1 competence record and the loi n° 12-01 authorisation in
+    one, its requirement said as soon as the qualification is chosen — the departments, the
+    prescriber an outside doctor's account is restricted to, and a biologist's signature. The user
+    name is not edited (a renamed account breaks its own audit history), nor the password (reset
+    from the list). The checks and the request are UserAdministrationRules'; the image is scaled in
+    the browser to the size a signature block holds, as the workstation scales it.
+*@
+<Modal Name="user-editor" Title="@Title" Hint="@Texts["AdminDialog.UserDialog"]" Wide="true" OnCancel="CancelAsync">
+    <ChildContent>
+        <div class="user-editor">
+            <div class="form-grid form-grid-2">
+                <label class="field">
+                    <span class="field-label">@Texts["Admin.UserName"]</span>
+                    <input class="input mono" type="text" dir="ltr" autocomplete="off" data-field="username" disabled="@(Existing is not null)"
+                           maxlength="@UserAdministrationRules.UserNameMaxLength" @bind="_userName" @bind:event="oninput" @bind:after="Touched" />
+                    <FieldMessage Refusal="_refusal" Field="username" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts[Existing is null ? "Admin.InitialPassword" : "Admin.PasswordUnchanged"]</span>
+                    <input class="input" type="password" dir="ltr" autocomplete="new-password" data-field="password" disabled="@(Existing is not null)"
+                           @bind="_password" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="password" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Admin.FullName"]</span>
+                    <input class="input" type="text" data-field="fullname" maxlength="@UserAdministrationRules.NameMaxLength"
+                           @bind="_fullName" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="fullname" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Admin.FullNameArabic"]</span>
+                    <input class="input" type="text" dir="rtl" data-field="fullname-ar" maxlength="@UserAdministrationRules.NameMaxLength"
+                           @bind="_fullNameArabic" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Field.Email"]</span>
+                    <input class="input" type="email" dir="ltr" data-field="email" maxlength="@UserAdministrationRules.NameMaxLength" @bind="_email" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Field.Phone"]</span>
+                    <input class="input mono" type="tel" dir="ltr" data-field="phone" maxlength="@UserAdministrationRules.PhoneMaxLength" @bind="_phone" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Admin.Qualification"]</span>
+                    <select class="input" data-field="qualification" @onchange="QualificationChanged">
+                        @foreach (var value in Enum.GetValues<ProfessionalQualification>())
+                        {
+                            <option value="@value" selected="@(value == _qualification)">@Texts[$"Qualification.{value}"]</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Admin.Language"]</span>
+                    <select class="input" data-field="language" @bind="_language">
+                        @* Only the languages the laboratory works in; French when the account's has been switched off. *@
+                        @foreach (var language in Languages.Current.Active)
+                        {
+                            <option value="@language">@Texts[$"AppLanguage.{language}"]</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Admin.OrderNumber"]</span>
+                    <input class="input mono" type="text" dir="ltr" data-field="order" maxlength="@UserAdministrationRules.OrderNumberMaxLength" @bind="_orderNumber" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Admin.Inpe"]</span>
+                    <input class="input mono" type="text" dir="ltr" data-field="inpe" maxlength="@UserAdministrationRules.InpeMaxLength" @bind="_inpe" />
+                </label>
+                <div class="field">
+                    <label class="field-check field-label">
+                        <input type="checkbox" data-field="has-expiry" @bind="_hasExpiry" />
+                        <span>@Texts["Admin.QualificationValidUntil"]</span>
+                    </label>
+                    @* An already-lapsed date is shown as it is: clamping it would edit the record just by opening it. *@
+                    <input class="input" type="date" data-field="valid-until" disabled="@(!_hasExpiry)" @bind="_validUntil" @bind:format="yyyy-MM-dd" />
+                </div>
+            </div>
+
+            @if (UserAdministrationRules.QualificationNoticeKey(_qualification) is { } notice)
+            {
+                <p class="message is-warning small" data-state="qualification-notice">@Texts[notice]</p>
+            }
+
+            <label class="field">
+                <span class="field-label">@Texts["Admin.Departments"]</span>
+                <input class="input mono" type="text" dir="ltr" data-field="departments" maxlength="@UserAdministrationRules.DepartmentsMaxLength" @bind="_departments" />
+                <span class="small muted">@Texts["Admin.DepartmentsHint"]</span>
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Admin.Prescriber"]</span>
+                <select class="input" data-field="prescriber" @onchange="PrescriberChanged">
+                    <option value="" selected="@(_prescriber is null)">@Texts["Admin.NoPrescriber"]</option>
+                    @foreach (var option in UserAdministrationRules.PickablePrescribers(Prescribers, Existing?.PrescriberId))
+                    {
+                        <option value="@option.PrescriberId" selected="@(option.PrescriberId == _prescriber)">@UserAdministrationRules.PrescriberDisplay(option)</option>
+                    }
+                    @if (Existing?.PrescriberId is { } linked && Prescribers.All(p => p.PrescriberId != linked))
+                    {
+                        @* Not in the list (it could not be read): kept, rather than shown as « aucun », which saving would unlink. *@
+                        <option value="@linked" selected="@(linked == _prescriber)">@UserAdministrationRules.UnlistedPrescriberDisplay(linked)</option>
+                    }
+                </select>
+                <span class="small muted">@Texts["Admin.PrescriberHint"]</span>
+            </label>
+
+            <section class="signature-block" data-card="signature">
+                <span class="field-label">@Texts["Admin.Signature"]</span>
+                <div class="signature-box">
+                    @if (_signature is { Length: > 0 } png)
+                    {
+                        <img src="@($"data:image/png;base64,{Convert.ToBase64String(png)}")" alt="@Texts["Admin.Signature"]" data-state="signature" />
+                    }
+                    else
+                    {
+                        <span class="muted small" data-state="no-signature">@Texts["Admin.NoSignature"]</span>
+                    }
+                </div>
+                <div class="signature-actions">
+                    <label class="btn btn-secondary @(SignatureAllowed ? null : "is-disabled")" data-action="Admin.LoadSignature">
+                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Image" />
+                        @Texts["Admin.LoadSignature"]
+                        <InputFile class="file-input" accept="image/png,image/jpeg" disabled="@(!SignatureAllowed)" OnChange="LoadSignatureAsync" />
+                    </label>
+                    <ActionButton Key="Admin.RemoveSignature" Disabled="@(!SignatureAllowed || _signature is null)" OnClick="RemoveSignature" />
+                </div>
+                <p class="small @(SignatureAllowed ? "muted" : "abnormal")" data-state="signature-hint">
+                    @(_signatureRefused ? Texts["Admin.SignatureInvalid"] : SignatureAllowed ? Texts["Admin.SignatureHint"] : Texts["Admin.SignatureBiologistOnly"])
+                </p>
+            </section>
+        </div>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>What the editor hands back: the request, and the signature chosen or removed in it.</summary>
+    public sealed record Outcome(CreateUserRequest? Create, UpdateUserRequest? Update, byte[]? NewSignature, bool SignatureRemoved);
+
+    /// <summary>The account edited; null for a new one.</summary>
+    [Parameter] public UserRow? Existing { get; set; }
+    [Parameter] public IReadOnlyList<PrescriberOption> Prescribers { get; set; } = [];
+
+    /// <summary>The stored signature of the account edited, when it has one.</summary>
+    [Parameter] public byte[]? Signature { get; set; }
+
+    [Parameter] public EventCallback<Outcome> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private UserForm _form = new();
+    private string _userName = string.Empty, _password = string.Empty, _fullName = string.Empty, _fullNameArabic = string.Empty, _email = string.Empty,
+                   _phone = string.Empty, _orderNumber = string.Empty, _inpe = string.Empty, _departments = string.Empty;
+    private ProfessionalQualification _qualification;
+    private AppLanguage _language = AppLanguage.French;
+    private bool _hasExpiry;
+    private DateOnly _validUntil = DateOnly.FromDateTime(DateTime.Today.AddYears(1));
+    private Guid? _prescriber;
+
+    private byte[]? _signature, _newSignature;
+    private bool _signatureRemoved, _signatureRefused, _initialised;
+    private FieldRefusal? _refusal;
+
+    private string Title => Existing is null ? Texts["Admin.NewUser"] : $"{Texts["Action.Edit"]} — {Existing.UserName}";
+
+    private bool SignatureAllowed => UserAdministrationRules.SignatureAllowed(_qualification);
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+
+        _signature = Signature;
+        if (Existing is not { } row) return;
+
+        _form = UserAdministrationRules.FormOf(row);
+        _userName = _form.UserName;
+        _fullName = _form.FullName;
+        _fullNameArabic = _form.FullNameArabic ?? string.Empty;
+        _email = _form.Email ?? string.Empty;
+        _phone = _form.Phone ?? string.Empty;
+        _orderNumber = _form.OrderNumber ?? string.Empty;
+        _inpe = _form.Inpe ?? string.Empty;
+        _departments = _form.Departments ?? string.Empty;
+        _qualification = _form.Qualification;
+        _language = Languages.Current.Coerce(_form.Language);
+        _prescriber = _form.PrescriberId;
+        if (_form.QualificationValidUntil is { } until)
+        {
+            _hasExpiry = true;
+            _validUntil = until;
+        }
+    }
+
+    private void Touched() => _refusal = null;
+
+    private void PrescriberChanged(ChangeEventArgs e) =>
+        _prescriber = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    private void QualificationChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ProfessionalQualification>(e.Value?.ToString(), out var qualification)) _qualification = qualification;
+    }
+
+    /// <summary>Scaled to what a signature block holds, as a PNG: a JPEG comes out as the PNG the service stores.</summary>
+    private async Task LoadSignatureAsync(InputFileChangeEventArgs e)
+    {
+        _signatureRefused = false;
+        try
+        {
+            var image = await e.File.RequestImageFileAsync("image/png", UserAdministrationRules.SignatureMaxWidth,
+                                                           UserAdministrationRules.SignatureMaxHeight);
+            await using var stream = image.OpenReadStream(maxAllowedSize: 4 * 1024 * 1024);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+
+            if (buffer.Length == 0 || !image.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase))
+            {
+                _signatureRefused = true;
+                return;
+            }
+
+            _newSignature = _signature = buffer.ToArray();
+            _signatureRemoved = false;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or JSException)
+        {
+            Logger.LogWarning(ex, "A signature image could not be read.");
+            _signatureRefused = true;
+        }
+    }
+
+    private void RemoveSignature()
+    {
+        _newSignature = _signature = null;
+        _signatureRemoved = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        var form = _form with
+        {
+            UserName = _userName,
+            Password = _password,
+            FullName = _fullName,
+            FullNameArabic = _fullNameArabic,
+            Email = _email,
+            Phone = _phone,
+            Qualification = _qualification,
+            OrderNumber = _orderNumber,
+            Inpe = _inpe,
+            QualificationValidUntil = _hasExpiry ? _validUntil : null,
+            Language = _language,
+            Departments = _departments,
+            PrescriberId = _prescriber
+        };
+
+        _refusal = UserAdministrationRules.Check(form, creating: Existing is null);
+        if (_refusal is not null) return;
+
+        // A scan chosen before the qualification was changed away from biologist is not sent.
+        var signature = SignatureAllowed ? _newSignature : null;
+
+        await OnSave.InvokeAsync(Existing is null
+            ? new Outcome(UserAdministrationRules.ToCreateRequest(form), null, signature, _signatureRemoved)
+            : new Outcome(null, UserAdministrationRules.ToUpdateRequest(Existing.UserId, form), signature, _signatureRemoved));
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

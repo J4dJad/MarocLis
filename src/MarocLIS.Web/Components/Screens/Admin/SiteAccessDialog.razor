@@ -1,0 +1,91 @@
+@using MarocLIS.Application.Administration
+@inject WebTexts Texts
+
+@*
+    The sites an account may work on and the one it lands on at sign-in, the workstation's
+    SiteAccessDialog: the active sites ticked for those held, the default chosen among those ticked,
+    one site at least. Which sites, which default and the check are UserAdministrationRules'.
+*@
+<Modal Name="sites" Title="@($"{Texts["Admin.SiteAccess"]} — {User.UserName}")" Hint="@Texts["AdminDialog.SiteAccessDialog"]" OnCancel="CancelAsync">
+    <ChildContent>
+        <ul class="check-list" data-list="sites">
+            @foreach (var site in _sites)
+            {
+                <li>
+                    <label class="field-check">
+                        <input type="checkbox" data-site="@site.Code" checked="@_ticked.Contains(site.SiteId)" @onchange="e => Toggle(site, e)" />
+                        <span><span class="mono strong">@site.Code</span> — @site.Name.For(Texts.Language)</span>
+                    </label>
+                </li>
+            }
+        </ul>
+        <label class="field">
+            <span class="field-label">@Texts["Admin.DefaultSite"]</span>
+            <select class="input" data-field="default-site" @onchange="DefaultChanged">
+                @foreach (var site in Ticked)
+                {
+                    <option value="@site.SiteId" selected="@(site.SiteId == Default)">@site.Code — @site.Name.For(Texts.Language)</option>
+                }
+            </select>
+        </label>
+        @if (_refusal is { } refusal)
+        {
+            <p class="message is-warning small" role="alert" data-refusal="sites">@Texts[refusal]</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The sites ticked and the default among them.</summary>
+    public sealed record Outcome(IReadOnlyList<Guid> SiteIds, Guid? DefaultSiteId);
+
+    [Parameter, EditorRequired] public UserRow User { get; set; } = default!;
+    [Parameter] public IReadOnlyList<SiteRow> Sites { get; set; } = [];
+    [Parameter] public EventCallback<Outcome> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private IReadOnlyList<SiteRow> _sites = [];
+    private HashSet<Guid> _ticked = [];
+    private Guid? _preferred;
+    private string? _refusal;
+    private bool _initialised;
+
+    private IReadOnlyList<SiteRow> Ticked => [.. _sites.Where(s => _ticked.Contains(s.SiteId))];
+
+    private Guid? Default => UserAdministrationRules.DefaultSite([.. Ticked.Select(s => s.SiteId)], _preferred);
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+
+        _sites = UserAdministrationRules.AssignableSites(Sites);
+        _ticked = [.. User.SiteIds];
+        _preferred = User.DefaultSiteId;
+    }
+
+    private void Toggle(SiteRow site, ChangeEventArgs e)
+    {
+        _refusal = null;
+        if (e.Value is true) _ticked.Add(site.SiteId);
+        else _ticked.Remove(site.SiteId);
+    }
+
+    private void DefaultChanged(ChangeEventArgs e) =>
+        _preferred = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    private async Task SaveAsync()
+    {
+        var ticked = Ticked.Select(s => s.SiteId).ToList();
+        _refusal = UserAdministrationRules.CheckSites(ticked);
+        if (_refusal is not null) return;
+
+        await OnSave.InvokeAsync(new Outcome(ticked, Default));
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

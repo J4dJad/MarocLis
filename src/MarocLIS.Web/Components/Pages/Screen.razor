@@ -83,6 +83,10 @@
             <MarocLIS.Web.Components.Screens.Admin.AuditTrail />
             break;
 
+        case ScreenDecision.Open when Key == "users":
+            <MarocLIS.Web.Components.Screens.Admin.UserAdministration />
+            break;
+
         case ScreenDecision.Open:
             <div class="card card-empty" data-state="unavailable">
                 <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Cpu" Class="icon-large" />

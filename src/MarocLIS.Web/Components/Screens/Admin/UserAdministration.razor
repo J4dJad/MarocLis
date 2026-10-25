@@ -1,0 +1,868 @@
+@using System.Globalization
+@using MarocLIS.Application.Administration
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<UserAdministration> Logger
+
+@*
+    « Utilisateurs », the workstation's UserAdministrationView: the accounts, each one's defect named
+    — a lockout, a biologist who may not sign, a credential to renew — the roles and their rights by
+    module, and the security log beside them for whoever may read the audit trail. An account is
+    deactivated, never deleted: it is the author of the audit trail's entries and the signatory of
+    the reports released. What is shown, offered, checked and counted is UserAdministrationRules';
+    what is done, UserAdministrationService's, which records each act in the security log.
+*@
+<div class="screen users" data-screen="users">
+    <div class="tabs" role="tablist">
+        @foreach (var tab in Tabs)
+        {
+            <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                    data-tab="@tab" @onclick="() => SelectTabAsync(tab)">@TabCaption(tab)</button>
+        }
+    </div>
+
+    @switch (_tab)
+    {
+        case UsersTab.Roles:
+            <div class="screen-body split split-list split-list-wide">
+                <aside class="card list-pane" data-card="roles">
+                    <div class="list-tools">
+                        <span class="muted" data-state="count">@Texts.T("Audit.RowCount", _roles.Count)</span>
+                        <span class="list-tools-end">
+                            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="LoadRolesAsync" />
+                        </span>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="roles">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Code"]</th>
+                                    <th>@Texts["Field.Name"]</th>
+                                    <th class="num">@Texts["Nav.Users"]</th>
+                                    <th class="num">@Texts["Admin.Permissions"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var role in _roles)
+                                {
+                                    <tr class="@(role.RoleId == SelectedRole?.RoleId ? "is-selected" : null) @(role.IsActive ? null : "is-inactive")"
+                                        data-row="@role.Code" @onclick="() => SelectRole(role)">
+                                        <td class="mono small strong">@role.Code</td>
+                                        <td>
+                                            @role.Name.For(Texts.Language)
+                                            @if (role.IsBuiltIn)
+                                            {
+                                                <span class="cell-sub">@Texts["Admin.BuiltIn"]</span>
+                                            }
+                                        </td>
+                                        <td class="num mono strong">@role.ActiveUserCount</td>
+                                        <td class="num mono">@role.Permissions.Count</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </aside>
+
+                <section class="card permissions" data-card="permissions">
+                    <div class="card-heading">
+                        <h2 class="card-title">@(SelectedRole is { } shown ? $"{Texts["Admin.Permissions"]} — {shown.Code}" : Texts["Admin.Permissions"])</h2>
+                        @if (_permissionCount is { } count)
+                        {
+                            <span class="muted small" data-state="ticked">@count / @_catalogue.Sum(m => m.Permissions.Count)</span>
+                        }
+                    </div>
+                    @if (SelectedRole is { IsBuiltIn: true })
+                    {
+                        <p class="message is-warning small" data-state="builtin">@Texts["Admin.BuiltInRoleNotice"]</p>
+                    }
+                    @if (SelectedRole is null)
+                    {
+                        <p class="muted">@Texts["Message.NothingSelected"]</p>
+                    }
+                    else
+                    {
+                        @* Readable, and scrollable, for whoever may only look: ticked only with the right. *@
+                        <div class="permission-tree" data-tree="permissions">
+                            @foreach (var (module, permissions) in _catalogue)
+                            {
+                                <fieldset class="permission-module" data-module="@module">
+                                    <legend class="strong">@Texts[$"PermissionModule.{module}"]</legend>
+                                    @foreach (var permission in permissions)
+                                    {
+                                        <label class="field-check small">
+                                            <input type="checkbox" data-permission="@permission" checked="@_ticked.Contains(permission)"
+                                                   disabled="@(!RoleActions.EditPermissions || _busy)" @onchange="e => TogglePermission(permission, e)" />
+                                            @* The permission string is what a role is defined by, quoted verbatim in the laboratory's procedures. *@
+                                            <span class="mono" dir="ltr">@permission</span>
+                                        </label>
+                                    }
+                                </fieldset>
+                            }
+                        </div>
+                    }
+                </section>
+            </div>
+            break;
+
+        case UsersTab.Security:
+            <div class="list-tools">
+                <label class="field-check small">
+                    <input type="checkbox" data-field="only-selected" checked="@_onlySelected" @onchange="OnlySelectedChangedAsync" />
+                    <span>@Texts["Admin.OnlySelectedUser"]@(_onlySelected && SelectedUser is { } who ? $" · {who.UserName}" : null)</span>
+                </label>
+                <span class="list-tools-end">
+                    <span class="muted" data-state="count">@Texts.T("Audit.RowCount", _events.Count)</span>
+                    <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="LoadEventsAsync" />
+                </span>
+            </div>
+            <div class="screen-body split split-stack">
+                <div class="card card-flush">
+                    <div class="table-scroll">
+                        <table class="grid" data-grid="events">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Date"]</th>
+                                    <th>@Texts["Admin.EventKind"]</th>
+                                    <th>@Texts["Field.Status"]</th>
+                                    <th>@Texts["Admin.UserName"]</th>
+                                    <th>@Texts["App.Workstation"]</th>
+                                    <th>@Texts["Field.Reason"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _events)
+                                {
+                                    var emphasis = UserAdministrationRules.Emphasis(row);
+                                    <tr class="@(emphasis == SecurityEventEmphasis.Privilege ? "is-abnormal" : null)" data-row="@row.SecurityEventId">
+                                        <td class="mono small">@row.OccurredAt.ToLocalTime().ToString("dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture)</td>
+                                        <td class="small strong @(emphasis == SecurityEventEmphasis.Failed ? "critical" : null)">@Texts[$"SecurityEventKind.{row.Kind}"]</td>
+                                        <td><Pill Text="@(row.Succeeded ? Texts["Admin.Succeeded"] : Texts["Admin.Failed"])" Tone="@(row.Succeeded ? "Ok" : "Critical")" /></td>
+                                        <td class="mono small">@(row.UserName ?? "—")</td>
+                                        <td class="mono small">@row.Workstation</td>
+                                        @* The failure is a key, read in the operator's language. *@
+                                        <td class="small">@(string.IsNullOrWhiteSpace(row.FailureReasonKey) ? row.Details : Texts[row.FailureReasonKey])</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            break;
+
+        default:
+            <div class="screen-body split split-list split-list-wide">
+                <aside class="card list-pane" data-card="accounts">
+                    <div class="list-tools">
+                        <div class="search-box">
+                            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                            <input class="input" type="search" placeholder="@Texts["App.SearchPlaceholder"]" aria-label="@Texts["App.SearchPlaceholder"]"
+                                   data-field="user-search" autocomplete="off" @bind="_search" @onkeydown="SearchKeyAsync" />
+                        </div>
+                        <label class="field-check small">
+                            <input type="checkbox" data-field="include-inactive" checked="@_includeInactive" @onchange="IncludeInactiveChangedAsync" />
+                            <span>@Texts["Admin.IncludeInactive"]</span>
+                        </label>
+                        <span class="list-tools-end">
+                            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="LoadUsersAsync" />
+                        </span>
+                    </div>
+                    <span class="muted small" data-state="count">@Texts.T("Admin.UserCount", _users.Count, _users.Count(u => u.IsActive))</span>
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="accounts">
+                            <tbody>
+                                @foreach (var row in _users)
+                                {
+                                    var tone = UserAdministrationRules.Tone(row);
+                                    <tr class="@(row.UserId == SelectedUser?.UserId ? "is-selected" : null) @RowClass(tone)" data-row="@row.UserName"
+                                        @onclick="() => SelectUser(row)" @ondblclick="AskEdit">
+                                        <td>
+                                            <span class="cell-name">@row.FullName</span>
+                                            <span class="cell-sub"><span class="mono">@row.UserName</span> · @Texts[$"Qualification.{row.Qualification}"]</span>
+                                        </td>
+                                        <td class="cell-action">
+                                            <Pill Text="@StateText(row)" Tone="@PillTone(tone)" />
+                                            <span class="mono small strong">@string.Join(" ", UserAdministrationRules.Flags(row))</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </aside>
+
+                <section class="card account" data-card="account">
+                    @if (SelectedUser is { } user)
+                    {
+                        <div class="identity">
+                            <span class="identity-name">@user.FullName@(user.FullNameArabic is { Length: > 0 } arabic ? $" · {arabic}" : null)</span>
+                            <span class="mono">@user.UserName</span>
+                        </div>
+                        <p><Pill Text="@StateText(user)" Tone="@PillTone(UserAdministrationRules.Tone(user))" /></p>
+
+                        @* Names the specific defect: « invalide » tells an administrator nothing they can act on. *@
+                        @if (UserAdministrationRules.Notice(user) is { } notice)
+                        {
+                            <p class="message @(notice.Critical ? "is-critical" : "is-warning")" data-state="notice">@(notice.Argument is { } argument ? Texts.T(notice.Key, NoticeArgument(argument)) : Texts[notice.Key])</p>
+                        }
+
+                        <dl class="facts facts-wide" data-state="facts">
+                            <dt>@Texts["Admin.Qualification"]</dt><dd>@Texts[$"Qualification.{user.Qualification}"]</dd>
+                            <dt>@Texts["Admin.OrderNumber"]</dt><dd class="mono">@(user.ProfessionalOrderNumber ?? "—")</dd>
+                            <dt>@Texts["Admin.Inpe"]</dt><dd class="mono">@(user.Inpe ?? "—")</dd>
+                            <dt>@Texts["Admin.QualificationValidUntil"]</dt>
+                            <dd class="@(user.QualificationExpired ? "critical" : null)">@(user.QualificationValidUntil?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "—")</dd>
+                            <dt>@Texts["Nav.Roles"]</dt><dd class="mono">@(user.RoleCodes.Count == 0 ? "—" : string.Join(", ", user.RoleCodes))</dd>
+                            <dt>@Texts["Admin.Departments"]</dt>
+                            <dd class="mono">@(user.AuthorizedDepartmentCodes.Count == 0 ? Texts["Admin.AllDepartments"] : string.Join(", ", user.AuthorizedDepartmentCodes))</dd>
+                            <dt>@Texts["Admin.SiteAccess"]</dt><dd class="mono">@SitesText(user)</dd>
+                            <dt>@Texts["Admin.Language"]</dt><dd>@Texts[$"AppLanguage.{user.PreferredLanguage}"]</dd>
+                            <dt>@Texts["Field.Email"]</dt><dd>@(user.Email ?? "—")</dd>
+                            <dt>@Texts["Field.Phone"]</dt><dd class="mono">@(user.Phone ?? "—")</dd>
+                            <dt>@Texts["Admin.LastLogin"]</dt>
+                            <dd class="mono">@(user.LastLoginAt?.ToLocalTime().ToString("dd/MM/yy HH:mm", CultureInfo.InvariantCulture) ?? "—")@(user.LastLoginWorkstation is { } post ? $" · {post}" : null)</dd>
+                            <dt>@Texts["Admin.Signature"]</dt><dd>@(user.HasSignature ? "✓" : "—")</dd>
+                        </dl>
+
+                        @* Spelt out on the screen: an administrator looking for a delete button learns at once why there is none. *@
+                        <p class="small muted" data-state="retention">@Texts["Admin.NoDeleteExplanation"]</p>
+                    }
+                    else
+                    {
+                        <p class="muted" data-state="no-row">@Texts["AdminA.NoUserSelected"]</p>
+                        <p class="small muted" data-state="retention">@Texts["Admin.NoDeleteExplanation"]</p>
+                    }
+                </section>
+            </div>
+            break;
+    }
+
+    @{ var actions = UserActions; var roleActions = RoleActions; }
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")"
+               ShowMore="@(_tab == UsersTab.Users && Context.User.Has(Permissions.Administration.ManageUsers))">
+        <Secondary>
+            @if (_tab == UsersTab.Users)
+            {
+                <ActionButton Key="Action.Edit" Hidden="@(!Context.User.Has(Permissions.Administration.ManageUsers))"
+                              Disabled="@(!actions.Edit || _busy)" OnClick="AskEdit" />
+                <ActionButton Key="Admin.RolesButton" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Shield"
+                              Hidden="@(!Context.User.Has(Permissions.Administration.ManageRoles))"
+                              Disabled="@(!actions.AssignRoles || _busy)" OnClick="() => _dialog = UsersDialog.Roles" />
+                <ActionButton Key="Admin.ResetPassword" Hidden="@(!Context.User.Has(Permissions.Administration.ManageUsers))"
+                              Disabled="@(!actions.ResetPassword || _busy)" OnClick="() => _dialog = UsersDialog.ResetPassword" />
+            }
+            else if (_tab == UsersTab.Roles)
+            {
+                <ActionButton Key="Admin.NewRole" Hidden="@(!Context.User.Has(Permissions.Administration.ManageRoles))"
+                              Disabled="@(!roleActions.Create || _busy)" OnClick="() => _dialog = UsersDialog.RoleCode" />
+            }
+        </Secondary>
+        @* The rarer ones: the sites of a multi-site laboratory, and an account locked by mistyped passwords. *@
+        <More>
+            @if (_tab == UsersTab.Users)
+            {
+                <ActionButton Key="Admin.SiteAccessButton" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Building2"
+                              Hidden="@(!Context.User.Has(Permissions.Administration.ManageUsers))"
+                              Disabled="@(!actions.SiteAccess || _busy)" OnClick="() => _dialog = UsersDialog.Sites" />
+                <ActionButton Key="Admin.Unlock" Hidden="@(!Context.User.Has(Permissions.Administration.ManageUsers))"
+                              Disabled="@(!actions.Unlock || _busy)" OnClick="UnlockAsync" />
+            }
+        </More>
+        <Destructive>
+            @if (_tab == UsersTab.Users && Context.User.Has(Permissions.Administration.ManageUsers))
+            {
+                @* One's own account cannot be deactivated: said up front, rather than refused once the reason is typed. *@
+                <ActionButton Key="@(actions.Reactivates ? "Admin.Reactivate" : "Admin.Deactivate")" Danger="@(!actions.Reactivates)"
+                              Glyph="@(actions.Reactivates ? MarocLIS.Desktop.Infrastructure.Glyph.UserCheck : MarocLIS.Desktop.Infrastructure.Glyph.UserX)"
+                              Title="@(actions.OwnAccount ? Texts["User_CannotDeactivateSelf"] : null)"
+                              Disabled="@(!actions.ToggleActive || _busy)" OnClick="() => _dialog = UsersDialog.ToggleActive" />
+            }
+            else if (_tab == UsersTab.Roles && Context.User.Has(Permissions.Administration.ManageRoles))
+            {
+                @* A built-in role cannot be deactivated: the seeded role that holds admin.* has to stay identifiable. *@
+                <ActionButton Key="@(roleActions.Activates ? "Admin.ActivateRole" : "Admin.DeactivateRole")" Danger="@(!roleActions.Activates)"
+                              Glyph="@(roleActions.Activates ? MarocLIS.Desktop.Infrastructure.Glyph.ShieldCheck : MarocLIS.Desktop.Infrastructure.Glyph.UserX)"
+                              Disabled="@(!roleActions.Toggle || _busy)" OnClick="AskToggleRoleAsync" />
+            }
+        </Destructive>
+        <Primary>
+            @if (_tab == UsersTab.Users)
+            {
+                <ActionButton Key="Admin.NewUser" Primary="true" Hidden="@(!Context.User.Has(Permissions.Administration.ManageUsers))"
+                              Disabled="@(!actions.Create || _busy)" OnClick="AskCreateAsync" />
+            }
+            else if (_tab == UsersTab.Roles)
+            {
+                <ActionButton Key="Admin.SavePermissions" Primary="true" Hidden="@(!Context.User.Has(Permissions.Administration.ManageRoles))"
+                              Disabled="@(!roleActions.SavePermissions || _busy)" OnClick="AskSavePermissions" />
+            }
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_dialog)
+{
+    case UsersDialog.Editor:
+        <UserEditorDialog Existing="_editing" Prescribers="_prescribers" Signature="_editingSignature" OnSave="SaveUserAsync" OnCancel="CloseDialog" />
+        break;
+
+    case UsersDialog.Roles when SelectedUser is { } holder:
+        <RoleAssignmentDialog User="holder" Roles="_roles" OnSave="SaveRolesAsync" OnCancel="CloseDialog" />
+        break;
+
+    case UsersDialog.Sites when SelectedUser is { } worker:
+        <SiteAccessDialog User="worker" Sites="_sites" OnSave="SaveSitesAsync" OnCancel="CloseDialog" />
+        break;
+
+    case UsersDialog.ResetPassword when SelectedUser is { } resetting:
+        @* The administrator types it and tells the holder out of band: a generated one shown here would sit in a screenshot. *@
+        <TextPrompt Name="reset-password" Title="@Texts["Admin.ResetPassword"]" Prompt="@Texts.T("Admin.ResetPasswordPrompt", resetting.UserName)"
+                    Required="true" OnConfirm="ResetPasswordAsync" OnCancel="CloseDialog" />
+        break;
+
+    case UsersDialog.ToggleActive when SelectedUser is { } toggled:
+        <ReasonPrompt Title="@Texts[toggled.IsActive ? "Admin.Deactivate" : "Admin.Reactivate"]"
+                      Prompt="@Texts.T(toggled.IsActive ? "Admin.DeactivateReasonPrompt" : "Admin.ReactivateReasonPrompt", toggled.UserName)"
+                      OnConfirm="ToggleActiveAsync" OnCancel="CloseDialog" />
+        break;
+
+    case UsersDialog.RoleCode:
+        <TextPrompt Name="role-code" Title="@Texts["Admin.NewRole"]" Prompt="@Texts["Admin.NewRoleCodePrompt"]" Required="true"
+                    MaxLength="UserAdministrationRules.RoleCodeMaxLength" OnConfirm="RoleCodeTyped" OnCancel="CloseDialog" />
+        break;
+
+    case UsersDialog.RoleName:
+        <TextPrompt Name="role-name" Title="@Texts["Admin.NewRole"]" Prompt="@Texts["Admin.NewRoleNamePrompt"]" Required="true"
+                    MaxLength="UserAdministrationRules.RoleNameMaxLength" OnConfirm="CreateRoleAsync" OnCancel="CloseDialog" />
+        break;
+
+    case UsersDialog.ConfirmRoleDeactivation when SelectedRole is { } deactivated:
+        <ConfirmPrompt Title="@Texts["Admin.DeactivateRole"]" Message="@Texts.T("Admin.ConfirmDeactivateRole", deactivated.Code, deactivated.ActiveUserCount)"
+                       OnYes="ToggleRoleAsync" OnNo="CloseDialog" />
+        break;
+
+    case UsersDialog.ConfirmPermissions when SelectedRole is { } changed && _change is { } change:
+        <ConfirmPrompt Title="@Texts["Admin.SavePermissions"]"
+                       Message="@Texts.T("Admin.ConfirmPermissionChange", changed.Code, change.Added, change.Removed, changed.ActiveUserCount)"
+                       OnYes="SavePermissionsAsync" OnNo="CloseDialog" />
+        break;
+
+    case UsersDialog.Message when _message is { } message:
+        <Modal Name="users-message" Title="@message.Title" OnCancel="CloseDialog">
+            <ChildContent><p class="prompt-text">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum UsersTab { Users, Roles, Security }
+
+    private enum UsersDialog
+    {
+        None, Editor, Roles, Sites, ResetPassword, ToggleActive, RoleCode, RoleName, ConfirmRoleDeactivation, ConfirmPermissions, Message
+    }
+
+    private sealed record Message(string Title, string Text);
+
+    private UsersTab _tab = UsersTab.Users;
+    private IReadOnlyList<UserRow> _users = [];
+    private IReadOnlyList<RoleRow> _roles = [];
+    private IReadOnlyList<SiteRow> _sites = [];
+    private IReadOnlyList<SecurityEventRow> _events = [];
+    private IReadOnlyList<PrescriberOption> _prescribers = [];
+    private readonly IReadOnlyList<(string Module, IReadOnlyList<string> Permissions)> _catalogue = UserAdministrationRules.Catalogue();
+
+    private string _search = string.Empty;
+    private bool _includeInactive, _onlySelected, _busy;
+    private Guid? _userId, _roleId;
+    private HashSet<string> _ticked = new(StringComparer.Ordinal);
+    private int? _permissionCount;
+
+    private UserRow? _editing;
+    private byte[]? _editingSignature;
+    private string? _roleCode;
+    private PermissionChange? _change;
+
+    private UsersDialog _dialog;
+    private Message? _message;
+    private (string Text, string Tone)? _status;
+
+    /// <summary>The security log is the audit trail's, offered with its right.</summary>
+    private IEnumerable<UsersTab> Tabs =>
+        UserAdministrationRules.SecurityLogOffered(Context.User) ? Enum.GetValues<UsersTab>() : [UsersTab.Users, UsersTab.Roles];
+
+    /// <summary>Kept on the record being worked on across a reload, made current rather than only highlighted.</summary>
+    private UserRow? SelectedUser => _users.FirstOrDefault(u => u.UserId == _userId) ?? _users.FirstOrDefault();
+
+    private RoleRow? SelectedRole => _roles.FirstOrDefault(r => r.RoleId == _roleId) ?? _roles.FirstOrDefault();
+
+    private UserActions UserActions => UserAdministrationRules.Actions(Context.User, SelectedUser);
+
+    private RoleActions RoleActions => UserAdministrationRules.RoleActions(Context.User, SelectedRole);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var sites = await Scopes.RunAsync<UserAdministrationService, Result<IReadOnlyList<SiteRow>>>(s => s.GetSitesAsync());
+        if (sites.IsSuccess) _sites = sites.Value;
+
+        await LoadUsersAsync();
+        await LoadRolesAsync();
+    }
+
+    private string TabCaption(UsersTab tab) => tab switch
+    {
+        UsersTab.Roles => Texts["Nav.Roles"],
+        UsersTab.Security => Texts["Admin.SecurityLog"],
+        _ => Texts["Nav.Users"]
+    };
+
+    private async Task SelectTabAsync(UsersTab tab)
+    {
+        _tab = tab;
+        _status = null;
+        if (tab == UsersTab.Security) await LoadEventsAsync();
+    }
+
+    private string StateText(UserRow row) =>
+        UserAdministrationRules.State(row) is var (key, failed) && failed is { } count ? $"{Texts[key]} ({count})" : Texts[key];
+
+    /// <summary>A moment in the session's culture, without the server's offset.</summary>
+    private object NoticeArgument(object argument) => argument switch
+    {
+        DateTimeOffset at => at.ToLocalTime().ToString("g", Texts.Culture),
+        DateOnly day => day.ToString("d", Texts.Culture),
+        _ => argument
+    };
+
+    private static string PillTone(AccountTone tone) => tone switch
+    {
+        AccountTone.Inactive => "Waiting",
+        AccountTone.Critical => "Critical",
+        AccountTone.Warning => "Warning",
+        _ => "Ok"
+    };
+
+    private static string? RowClass(AccountTone tone) => tone switch
+    {
+        AccountTone.Inactive => "is-inactive",
+        AccountTone.Critical => "is-critical-row",
+        AccountTone.Warning => "is-abnormal",
+        _ => null
+    };
+
+    private string SitesText(UserRow row)
+    {
+        var codes = _sites.Where(s => row.SiteIds.Contains(s.SiteId))
+                          .Select(s => s.SiteId == row.DefaultSiteId ? $"{s.Code} ★" : s.Code).ToList();
+        return codes.Count == 0 ? "—" : string.Join(", ", codes);
+    }
+
+    private void SelectUser(UserRow row) => _userId = row.UserId;
+
+    private void SelectRole(RoleRow role)
+    {
+        _roleId = role.RoleId;
+        ShowRolePermissions();
+    }
+
+    private void ShowRolePermissions()
+    {
+        _ticked = SelectedRole is { } role ? new HashSet<string>(role.Permissions, StringComparer.Ordinal) : new(StringComparer.Ordinal);
+        _permissionCount = SelectedRole is null ? null : _ticked.Count;
+    }
+
+    private void TogglePermission(string permission, ChangeEventArgs e)
+    {
+        if (!RoleActions.EditPermissions) return;
+        if (e.Value is true) _ticked.Add(permission);
+        else _ticked.Remove(permission);
+        _permissionCount = _ticked.Count;
+        _status = null;
+    }
+
+    private void CloseDialog()
+    {
+        _dialog = UsersDialog.None;
+        _message = null;
+    }
+
+    private void Show(string title, string text)
+    {
+        _message = new Message(title, text);
+        _dialog = UsersDialog.Message;
+    }
+
+    // ---- Loading -------------------------------------------------------------------------------
+
+    private async Task SearchKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await LoadUsersAsync();
+    }
+
+    private async Task IncludeInactiveChangedAsync(ChangeEventArgs e)
+    {
+        _includeInactive = e.Value is true;
+        await LoadUsersAsync();
+    }
+
+    private async Task OnlySelectedChangedAsync(ChangeEventArgs e)
+    {
+        _onlySelected = e.Value is true;
+        await LoadEventsAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        try
+        {
+            var search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
+            var result = await Scopes.RunAsync<UserAdministrationService, Result<IReadOnlyList<UserRow>>>(
+                s => s.GetUsersAsync(_includeInactive, search));
+
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _users = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the user list failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task LoadRolesAsync()
+    {
+        try
+        {
+            var result = await Scopes.RunAsync<UserAdministrationService, Result<IReadOnlyList<RoleRow>>>(s => s.GetRolesAsync(includeInactive: true));
+            if (result.IsFailure) return;
+
+            _roles = result.Value;
+            ShowRolePermissions();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the roles failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task LoadEventsAsync()
+    {
+        try
+        {
+            var userId = _onlySelected ? SelectedUser?.UserId : null;
+            var result = await Scopes.RunAsync<UserAdministrationService, Result<IReadOnlyList<SecurityEventRow>>>(
+                s => s.GetRecentSecurityEventsAsync(userId, UserAdministrationRules.RecentEventCount));
+
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _events = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the security log failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    /// <summary>Runs a write once at a time: a second click while the first runs is not a second act.</summary>
+    private async Task RunAsync(string title, Func<Task<Result>> write, Func<Task>? after = null)
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var result = await write();
+            if (result.IsFailure)
+            {
+                Show(title, Texts.Describe(result.Errors));
+                return;
+            }
+
+            if (after is not null) await after();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An administration write failed ({Title}).", title);
+            Show(title, Texts["Message.UnexpectedError"]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- Accounts ------------------------------------------------------------------------------
+
+    private async Task<IReadOnlyList<PrescriberOption>> LoadPrescribersAsync()
+    {
+        var result = await Scopes.RunAsync<UserAdministrationService, Result<IReadOnlyList<PrescriberOption>>>(s => s.GetPrescriberOptionsAsync());
+        return result.IsSuccess ? result.Value : [];
+    }
+
+    private async Task AskCreateAsync()
+    {
+        if (!UserActions.Create || _busy) return;
+
+        _prescribers = await LoadPrescribersAsync();
+        _editing = null;
+        _editingSignature = null;
+        _dialog = UsersDialog.Editor;
+    }
+
+    private async Task AskEdit()
+    {
+        if (SelectedUser is not { } row || !UserActions.Edit || _busy) return;
+
+        _prescribers = await LoadPrescribersAsync();
+        _editingSignature = null;
+        if (row.HasSignature)
+        {
+            var stored = await Scopes.RunAsync<UserAdministrationService, Result<byte[]?>>(s => s.GetSignatureAsync(row.UserId));
+            if (stored.IsSuccess) _editingSignature = stored.Value;
+        }
+
+        _editing = row;
+        _dialog = UsersDialog.Editor;
+    }
+
+    private async Task SaveUserAsync(UserEditorDialog.Outcome outcome)
+    {
+        CloseDialog();
+        var title = outcome.Create is null ? Texts["Action.Edit"] : Texts["Admin.NewUser"];
+
+        await RunAsync(title, async () =>
+        {
+            Guid userId;
+            if (outcome.Create is { } create)
+            {
+                var created = await Scopes.RunAsync<UserAdministrationService, Result<Guid>>(s => s.CreateUserAsync(create));
+                if (created.IsFailure) return created;
+                userId = created.Value;
+            }
+            else
+            {
+                var update = outcome.Update!;
+                var updated = await Scopes.RunAsync<UserAdministrationService, Result>(s => s.UpdateUserAsync(update));
+                if (updated.IsFailure) return updated;
+                userId = update.UserId;
+            }
+
+            _userId = userId;
+            await ApplySignatureAsync(userId, outcome);
+            return Result.Success();
+        }, async () =>
+        {
+            await LoadUsersAsync();
+
+            // The account cannot be used until its holder changes the password just typed.
+            if (outcome.Create is { } create && _dialog == UsersDialog.None)
+                Show(Texts["Admin.NewUser"], Texts.T("Admin.UserCreatedMustChangePassword", create.UserName));
+        });
+    }
+
+    /// <summary>
+    /// The signature chosen or removed in the editor, once the record is saved: the service checks
+    /// the qualification as recorded, so a biologist's entered in the same edit is saved first.
+    /// </summary>
+    private async Task ApplySignatureAsync(Guid userId, UserEditorDialog.Outcome outcome)
+    {
+        Result? applied = outcome.NewSignature is { } png
+            ? await Scopes.RunAsync<UserAdministrationService, Result>(s => s.SetSignatureAsync(userId, png))
+            : outcome.SignatureRemoved
+                ? await Scopes.RunAsync<UserAdministrationService, Result>(s => s.RemoveSignatureAsync(userId))
+                : null;
+
+        if (applied is { IsFailure: true }) Show(Texts["Admin.Signature"], Texts.Describe(applied.Errors));
+    }
+
+    private async Task SaveRolesAsync(IReadOnlyList<Guid> roleIds)
+    {
+        if (SelectedUser is not { } row) return;
+        CloseDialog();
+
+        await RunAsync(Texts["Nav.Roles"],
+            () => Scopes.RunAsync<UserAdministrationService, Result>(s => s.SetRolesAsync(row.UserId, roleIds)),
+            async () =>
+            {
+                await LoadUsersAsync();
+                await LoadRolesAsync();
+                _status = (Texts["Message.Saved"], "normal");
+            });
+    }
+
+    private async Task SaveSitesAsync(SiteAccessDialog.Outcome outcome)
+    {
+        if (SelectedUser is not { } row) return;
+        CloseDialog();
+
+        await RunAsync(Texts["Admin.SiteAccess"],
+            () => Scopes.RunAsync<UserAdministrationService, Result>(s => s.SetSiteAccessAsync(row.UserId, outcome.SiteIds, outcome.DefaultSiteId)),
+            async () =>
+            {
+                await LoadUsersAsync();
+                _status = (Texts["Message.Saved"], "normal");
+            });
+    }
+
+    private async Task ResetPasswordAsync(string password)
+    {
+        if (SelectedUser is not { } row) return;
+        CloseDialog();
+        if (string.IsNullOrWhiteSpace(password)) return;
+
+        await RunAsync(Texts["Admin.ResetPassword"],
+            () => Scopes.RunAsync<UserAdministrationService, Result>(s => s.ResetPasswordAsync(row.UserId, password)),
+            async () =>
+            {
+                await LoadUsersAsync();
+                Show(Texts["Admin.ResetPassword"], Texts.T("Admin.PasswordResetMustChange", row.UserName));
+            });
+    }
+
+    private async Task UnlockAsync()
+    {
+        if (SelectedUser is not { } row || !UserActions.Unlock) return;
+
+        await RunAsync(Texts["Admin.Unlock"],
+            () => Scopes.RunAsync<UserAdministrationService, Result>(s => s.UnlockAsync(row.UserId)),
+            async () =>
+            {
+                await LoadUsersAsync();
+                _status = ($"{Texts["Admin.Unlock"]} · {row.UserName}", "normal");
+            });
+    }
+
+    private async Task ToggleActiveAsync(string reason)
+    {
+        if (SelectedUser is not { } row) return;
+        CloseDialog();
+        var activating = !row.IsActive;
+
+        await RunAsync(Texts[activating ? "Admin.Reactivate" : "Admin.Deactivate"],
+            () => Scopes.RunAsync<UserAdministrationService, Result>(s => s.SetActiveAsync(row.UserId, activating, reason)),
+            async () =>
+            {
+                // A deactivated account stays in view while the inactive ones are listed.
+                await LoadUsersAsync();
+                _status = ($"{Texts[activating ? "Admin.Reactivate" : "Admin.Deactivate"]} · {row.UserName}", "normal");
+            });
+    }
+
+    // ---- Roles ---------------------------------------------------------------------------------
+
+    private void RoleCodeTyped(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            CloseDialog();
+            return;
+        }
+
+        _roleCode = code;
+        _dialog = UsersDialog.RoleName;
+    }
+
+    /// <summary>
+    /// Created with no rights at all, then granted in the tree: a role that arrives with a starter
+    /// set nobody chose is how an over-privileged role gets into production.
+    /// </summary>
+    private async Task CreateRoleAsync(string name)
+    {
+        CloseDialog();
+        if (_roleCode is not { } code || string.IsNullOrWhiteSpace(name)) return;
+
+        Guid created = default;
+        await RunAsync(Texts["Admin.NewRole"], async () =>
+        {
+            var result = await Scopes.RunAsync<UserAdministrationService, Result<Guid>>(
+                s => s.CreateRoleAsync(code, new MultilingualText(name.Trim()), []));
+            if (result.IsSuccess) created = result.Value;
+            return result;
+        }, async () =>
+        {
+            await LoadRolesAsync();
+            // The new role made current: the notice sends the administrator to its rights.
+            _roleId = created;
+            ShowRolePermissions();
+            Show(Texts["Admin.NewRole"], Texts["Admin.RoleCreatedNoPermissions"]);
+        });
+        _roleCode = null;
+    }
+
+    private async Task AskToggleRoleAsync()
+    {
+        if (SelectedRole is not { } role || !RoleActions.Toggle || _busy) return;
+
+        // A role its holders still use is switched off only once their number is confirmed.
+        if (UserAdministrationRules.DeactivationNeedsConfirmation(role))
+        {
+            _dialog = UsersDialog.ConfirmRoleDeactivation;
+            return;
+        }
+
+        await ToggleRoleAsync();
+    }
+
+    /// <summary>A deactivated role stops granting its rights, but is not deleted: the audit trail refers to it.</summary>
+    private async Task ToggleRoleAsync()
+    {
+        if (SelectedRole is not { } role) return;
+        CloseDialog();
+        var activating = !role.IsActive;
+
+        await RunAsync(Texts["Admin.DeactivateRole"],
+            () => Scopes.RunAsync<UserAdministrationService, Result>(s => s.SetRoleActiveAsync(role.RoleId, activating)),
+            async () =>
+            {
+                await LoadRolesAsync();
+                await LoadUsersAsync();
+            });
+    }
+
+    private void AskSavePermissions()
+    {
+        if (SelectedRole is not { } role || !RoleActions.SavePermissions || _busy) return;
+
+        _change = UserAdministrationRules.Change(role, _ticked);
+        if (_change.IsNone)
+        {
+            _status = (Texts["Message.NoChanges"], "muted");
+            return;
+        }
+
+        _dialog = UsersDialog.ConfirmPermissions;
+    }
+
+    private async Task SavePermissionsAsync()
+    {
+        if (SelectedRole is not { } role) return;
+        CloseDialog();
+
+        // In the catalogue's order, as the workstation's tree lists them.
+        IReadOnlyList<string> selected = [.. _catalogue.SelectMany(m => m.Permissions).Where(_ticked.Contains)];
+
+        await RunAsync(Texts["Admin.SavePermissions"],
+            () => Scopes.RunAsync<UserAdministrationService, Result>(s => s.SetRolePermissionsAsync(role.RoleId, selected)),
+            async () =>
+            {
+                await LoadRolesAsync();
+                await LoadUsersAsync();
+                _status = (Texts["Message.Saved"], "normal");
+            });
+    }
+}

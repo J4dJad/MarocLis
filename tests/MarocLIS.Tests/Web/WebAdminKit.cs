@@ -35,6 +35,7 @@ public abstract class WebAdminContext : WebScreenContext
     protected readonly Fake<IRepository<CashSession>> TillStore = Fake<IRepository<CashSession>>.Create();
     protected readonly Fake<IRepository<SampleStorageLocation>> PlaceStore = Fake<IRepository<SampleStorageLocation>>.Create();
     protected readonly Fake<IUnitOfWork> Work = Fake<IUnitOfWork>.Create();
+    protected readonly Fake<IAuthenticationService> Authentication = Fake<IAuthenticationService>.Create();
     private protected readonly Store LicenceStore = new();
     protected readonly LicenceStatusHolder Holder = new();
 
@@ -62,7 +63,7 @@ public abstract class WebAdminContext : WebScreenContext
         Services.AddSingleton(TillStore.Object);
         Services.AddSingleton(PlaceStore.Object);
         Services.AddSingleton(Work.Object);
-        Services.AddSingleton(Fake<IAuthenticationService>.Create().Object);
+        Services.AddSingleton(Authentication.Object);
         Services.AddSingleton(Fake<IPasswordHasher>.Create().Object);
 
         Services.AddScoped<UserAdministrationService>();
