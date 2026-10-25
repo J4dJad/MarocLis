@@ -120,12 +120,14 @@
     <Secondary>
         <ActionButton Key="Catalog.EditAnalysis" Disabled="@(!actions.EditAnalysis || _busy)" OnClick="() => Screen.EditAnalysisAsync(Analysis)" />
         <ActionButton Key="Catalog.NewParameter" Disabled="@(!actions.NewParameter || _busy)" OnClick="() => EditParameterAsync(create: true)" />
-        <ActionButton Key="Catalog.EditParameter" Disabled="@(!actions.EditParameter || _busy)" OnClick="() => EditParameterAsync(create: false)" />
         <ActionButton Key="Catalog.NewRange" Disabled="@(!actions.NewRange || _busy)" OnClick="() => EditRange(create: true)" />
-        <ActionButton Key="Catalog.EditRange" Disabled="@(!actions.EditRange || _busy)" OnClick="() => EditRange(create: false)" />
     </Secondary>
-    @* The review that leaves the interval as it was: a separate act, done periodically. *@
+    @* Correcting a parameter or an interval also opens on a double click of its line; the review
+       that leaves the interval as it was is a separate act, done periodically. Behind « Plus
+       d'actions », so the row holds at 1366 pixels with the menu open. *@
     <More>
+        <ActionButton Key="Catalog.EditParameter" Disabled="@(!actions.EditParameter || _busy)" OnClick="() => EditParameterAsync(create: false)" />
+        <ActionButton Key="Catalog.EditRange" Disabled="@(!actions.EditRange || _busy)" OnClick="() => EditRange(create: false)" />
         <ActionButton Key="Catalog.RecordReview" Disabled="@(!actions.ReviewRange || _busy)" OnClick="OpenReview" />
     </More>
     <Primary>
