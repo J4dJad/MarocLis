@@ -5072,6 +5072,8 @@
   },
 
   "PermissionModule": {
+    "accounting": "Finance et comptabilité",
+    "assets": "Immobilisations",
     "steering": "Pilotage",
     "messaging": "Messages aux patients",
     "relations": "Relations prescripteurs",

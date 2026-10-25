@@ -5071,6 +5071,8 @@
   },
 
   "PermissionModule": {
+    "accounting": "المالية والمحاسبة",
+    "assets": "الأصول الثابتة",
     "steering": "القيادة والتسيير",
     "messaging": "رسائل المرضى",
     "relations": "العلاقات مع الواصفين",

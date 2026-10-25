@@ -5071,6 +5071,8 @@
   },
 
   "PermissionModule": {
+    "accounting": "Finance and accounting",
+    "assets": "Fixed assets",
     "steering": "Management steering",
     "messaging": "Patient messaging",
     "relations": "Prescriber relations",
