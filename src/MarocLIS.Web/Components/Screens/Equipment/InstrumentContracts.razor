@@ -390,7 +390,7 @@
             }
 
             _options = options.Value;
-            _form = InstrumentContractScreenRules.Form(detail, Clock.Today, options.Value);
+            _form = InstrumentContractScreenRules.Form(detail, Clock.Today, options.Value, Texts.Culture);
             _editingId = id;
             _editingReference = detail?.Reference;
             Open(Prompt.Edit);

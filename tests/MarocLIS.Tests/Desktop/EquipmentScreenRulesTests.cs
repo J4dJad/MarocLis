@@ -348,6 +348,11 @@ public sealed class EquipmentScreenRulesTests
         form.IsActive.Should().BeFalse();
         form.Reagents.Should().ContainSingle().Which.Price.Should().Be("112.50");
 
+        var french = InstrumentContractScreenRules.Form(detail, Today, options, MarocLIS.Localization.CultureManager.Build(AppLanguage.French));
+        french.PenaltyAmount.Should().Be("1500,00", "the browser writes an amount as its screen does, and reads it back");
+        french.Reagents.Single().Price.Should().Be("112,50");
+        InstrumentContractScreenRules.Check(french, detail.Id).Request!.PenaltyAmountMad.Should().Be(1500m);
+
         InstrumentContractScreenRules.Display(new ContractLookup(item, "R-1", new MultilingualText("Réactif", "كاشف"), false), AppLanguage.Arabic, Text)
             .Should().Be("R-1 — كاشف Contracts.InactiveSuffix");
     }

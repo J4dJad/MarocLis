@@ -317,11 +317,16 @@ public static class InstrumentContractScreenRules
         return entry.IsActive ? shown : $"{shown} {text("Contracts.InactiveSuffix")}";
     }
 
-    private static string Figure(decimal value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
-
-    /// <summary>A new contract starts today for five years, counted in tests a year; one edited shows what was saved.</summary>
-    public static InstrumentContractForm Form(InstrumentContractDetail? detail, DateOnly today, ContractOptions? options = null)
+    /// <summary>
+    /// A new contract starts today for five years, counted in tests a year; one edited shows what was
+    /// saved, its amounts written as <paramref name="provider"/> writes them (the workstation's
+    /// invariant « 25000.00 » unless given; the browser passes the screen's « 25000,00 »).
+    /// </summary>
+    public static InstrumentContractForm Form(InstrumentContractDetail? detail, DateOnly today, ContractOptions? options = null,
+                                              IFormatProvider? provider = null)
     {
+        string Figure(decimal value, string format) => value.ToString(format, provider ?? CultureInfo.InvariantCulture);
+
         if (detail is null) return new InstrumentContractForm { Start = today };
         return new InstrumentContractForm
         {
