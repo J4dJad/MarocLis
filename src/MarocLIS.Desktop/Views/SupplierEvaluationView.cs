@@ -57,7 +57,7 @@ public sealed class SupplierEvaluationView : LocalizedView
         _apply.Click += async (_, _) => await RunBusyAsync(ApplyAsync);
         _pdf.Click += async (_, _) => await RunBusyAsync(PrintAsync);
         _csv.Click += async (_, _) => await RunBusyAsync(ExportAsync);
-        _grid.SelectionChanged += (_, _) => _apply.Enabled = Current?.Kpis.ProposedScore is not null;
+        _grid.SelectionChanged += (_, _) => _apply.Enabled = Actions.Apply;
 
         // Whoever manages suppliers evaluates them.
         PermissionGate.Require(Permissions.Inventory.ManagePurchaseOrders, _apply, _pdf, _csv, _refresh);
@@ -67,13 +67,16 @@ public sealed class SupplierEvaluationView : LocalizedView
 
     private SupplierEvaluationRow? Current => _grid.CurrentRow?.Tag as SupplierEvaluationRow;
 
+    private SupplierEvaluationScreenActions Actions =>
+        SupplierEvaluationScreenRules.Actions(p => PermissionGate.Allows(p), Current);
+
     private void BuildLayout()
     {
         Padding = StockPage.ContentPadding;
 
-        _year.Minimum = 2000;
-        _year.Maximum = 2100;
-        _year.Value = DateTime.Today.Year;
+        _year.Minimum = SupplierEvaluationScreenRules.YearMin;
+        _year.Maximum = SupplierEvaluationScreenRules.YearMax;
+        _year.Value = SupplierEvaluationScreenRules.Year(DateTime.Today.Year);
         _year.Width = 80;
         _year.Font = UiTheme.Monospace;
 
@@ -112,7 +115,7 @@ public sealed class SupplierEvaluationView : LocalizedView
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not SupplierEvaluationRow row) return;
-            if (row.RegistrationExpired || row.Kpis.ProposedScore is < 50)
+            if (SupplierEvaluationScreenRules.Ink(row) == StockInk.Critical)
             {
                 e.CellStyle!.BackColor = UiTheme.CriticalBackground;
                 e.CellStyle.ForeColor = UiTheme.Critical;
@@ -126,14 +129,7 @@ public sealed class SupplierEvaluationView : LocalizedView
         Controls.Add(header);
     }
 
-    private IReadOnlyList<string> Headers() =>
-    [
-        T("Field.Code"), T("Inventory.Supplier"), T("SupplierEvaluation.Deliveries"),
-        T("SupplierEvaluation.OnTime"), T("SupplierEvaluation.AverageDelay"),
-        T("SupplierEvaluation.Refused"), T("SupplierEvaluation.NonConformities"),
-        T("SupplierEvaluation.ProposedScore"), T("SupplierEvaluation.CurrentScore"),
-        T("Inventory.RegulatoryRegistration"), T("Inventory.RegulatoryRegistrationValidUntil")
-    ];
+    private IReadOnlyList<string> Headers() => SupplierEvaluationScreenRules.Headers(T);
 
     protected override void ApplyTexts()
     {
@@ -180,14 +176,14 @@ public sealed class SupplierEvaluationView : LocalizedView
 
         foreach (var row in _rows)
         {
-            var index = _grid.Rows.Add([.. PurchasingCsv.SupplierReportCells(row)]);
+            var index = _grid.Rows.Add([.. SupplierEvaluationScreenRules.Cells(row)]);
             _grid.Rows[index].Tag = row;
             if (row.SupplierId == keep) _grid.MakeCurrent(_grid.Rows[index]);
         }
 
         StockGrid.Filter(_grid, _search.Query);
-        _count.Text = T("StocksUi.Suppliers", _rows.Count, (int)_year.Value);
-        _apply.Enabled = Current?.Kpis.ProposedScore is not null;
+        _count.Text = SupplierEvaluationScreenRules.Count(_rows, (int)_year.Value, T);
+        _apply.Enabled = Actions.Apply;
     }
 
     /// <summary>Applies the proposed score, or one the evaluator types instead, as today's evaluation.</summary>
@@ -195,13 +191,14 @@ public sealed class SupplierEvaluationView : LocalizedView
     {
         if (Current is not { Kpis.ProposedScore: { } proposed } row) return;
 
-        var answer = _dialogs.PromptForText(T("SupplierEvaluation.ApplyPrompt", row.Name, proposed),
-                                            _apply.Text, proposed.ToString(CultureInfo.InvariantCulture));
+        var answer = _dialogs.PromptForText(SupplierEvaluationScreenRules.ApplyPrompt(row, T), _apply.Text,
+                                            SupplierEvaluationScreenRules.Initial(row));
         if (answer is null) return;
 
-        if (!int.TryParse(answer.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var score))
+        var (typed, refusal) = SupplierEvaluationScreenRules.ReadScore(answer);
+        if (typed is not { } score)
         {
-            _dialogs.Warn(Localizer.Format("Result_NotANumber", answer), _apply.Text);
+            _dialogs.Warn(Localizer.Format(refusal!.Key, refusal.Typed ?? string.Empty), _apply.Text);
             return;
         }
 
@@ -214,10 +211,10 @@ public sealed class SupplierEvaluationView : LocalizedView
     private async Task PrintAsync()
     {
         var document = new ListDocument(
-            T("SupplierEvaluation.ReportTitle", (int)_year.Value),
-            $"{T("SupplierEvaluation.Formula")} — {DateTime.Now:dd/MM/yyyy HH:mm}",
+            SupplierEvaluationScreenRules.ReportTitle((int)_year.Value, T),
+            SupplierEvaluationScreenRules.ReportSubtitle(DateTimeOffset.Now, T),
             Headers(),
-            [.. _rows.Select(PurchasingCsv.SupplierReportCells)],
+            [.. _rows.Select(SupplierEvaluationScreenRules.Cells)],
             Localizer.CurrentLanguage == Domain.Common.AppLanguage.Arabic);
 
         var opened = await _output.OpenAsync(_lists.Render(document), "pdf");

@@ -203,7 +203,8 @@ public sealed class SupplierInvoiceView : LocalizedView
         _refresh.Click += async (_, _) => await ActivateAsync();
         _grid.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDetailAsync());
         _grid.CellFormatting += OnFormatting;
-        StockGrid.Pills(_grid, "status", tag => tag is SupplierInvoiceRow row ? StatusPill(row) : null);
+        StockGrid.Pills(_grid, "status", tag => tag is SupplierInvoiceRow row
+                            ? StockPill.Of(SupplierInvoiceScreenRules.StatusTone(row)) : null);
         _search.Changed += (_, _) => StockGrid.Filter(_grid, _search.Query);
 
         _newInvoice.Click += async (_, _) => await RunBusyAsync(NewInvoiceAsync);
@@ -229,32 +230,23 @@ public sealed class SupplierInvoiceView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count) return;
         if (_grid.Rows[e.RowIndex].Tag is not SupplierInvoiceRow row) return;
 
-        if (row.IsOverdue)
+        var ink = SupplierInvoiceScreenRules.RowInk(row);
+        if (ink == StockInk.Critical)
         {
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
         }
-        else if (row.Status == SupplierInvoiceStatus.Blocked)
+        else if (SupplierInvoiceScreenRules.NumberInk(row) == StockInk.AbnormalBold)
         {
             // A blocked invoice is not urgent: its pill and its number say it, not the whole row.
             if (_grid.Columns[e.ColumnIndex].Name is "number")
                 e.CellStyle!.ForeColor = UiTheme.Abnormal;
         }
-        else if (!row.IsOpen)
+        else if (ink == StockInk.Muted)
         {
             e.CellStyle!.ForeColor = UiTheme.TextMuted;
         }
     }
-
-    private static StockPill StatusPill(SupplierInvoiceRow row) => row switch
-    {
-        { IsOverdue: true } => StockPill.Critical,
-        { Status: SupplierInvoiceStatus.Blocked } => StockPill.Warning,
-        { Status: SupplierInvoiceStatus.Cancelled } => StockPill.Waiting,
-        { IsOpen: false } => StockPill.Done,
-        { Status: SupplierInvoiceStatus.PartiallyPaid } => StockPill.Running,
-        _ => StockPill.Waiting
-    };
 
     protected override void ApplyTexts()
     {
@@ -319,10 +311,10 @@ public sealed class SupplierInvoiceView : LocalizedView
 
     private SupplierInvoiceRow? Selected => _grid.CurrentRow?.Tag as SupplierInvoiceRow;
 
-    private static string Amount(decimal value) => value.ToString("N2", CultureInfo.CurrentCulture);
+    private static string Amount(decimal value) => SupplierInvoiceScreenRules.Amount(value);
     // Shown, never read back: written with the decimal comma of the language, not « 2.5 ».
-    private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.CurrentCulture);
-    private static string Date(DateOnly? date) => date?.ToString("dd/MM/yy") ?? string.Empty;
+    private static string Quantity(decimal value) => SupplierInvoiceScreenRules.Quantity(value);
+    private static string Date(DateOnly? date) => SupplierInvoiceScreenRules.Date(date);
 
     private SupplierInvoiceFilter Filter =>
         _filter.SelectedItem is SupplierInvoiceFilter f ? f : SupplierInvoiceFilter.Open;
@@ -359,13 +351,9 @@ public sealed class SupplierInvoiceView : LocalizedView
 
         foreach (var row in _rows)
         {
-            var days = row.IsOpen
-                ? row.DaysUntilDue < 0 ? $"+{-row.DaysUntilDue}" : $"J-{row.DaysUntilDue}"
-                : string.Empty;
-
             var index = _grid.Rows.Add(
                 row.SupplierName, row.InvoiceNumber, Date(row.InvoiceDate), Date(row.DeliveryDate),
-                Date(row.DueDate), days, T($"SupplierInvoiceStatus.{row.Status}"),
+                Date(row.DueDate), SupplierInvoiceScreenRules.Days(row, T), T(SupplierInvoiceScreenRules.StatusKey(row.Status)),
                 Amount(row.TotalIncludingVat), Amount(row.AmountPaid), Amount(row.AmountOutstanding),
                 row.HasScan ? "PDF" : string.Empty);
 
@@ -389,25 +377,11 @@ public sealed class SupplierInvoiceView : LocalizedView
     {
         _heading.Text = T("SupplierInvoices.Title");
         _count.Text = T("StocksUi.Invoices", _rows.Count);
-        foreach (var chip in _chips)
-        {
-            var filter = (SupplierInvoiceFilter)chip.Tag!;
-            int? count = _due is not { } due ? null : filter switch
-            {
-                SupplierInvoiceFilter.Overdue => due.Overdue,
-                SupplierInvoiceFilter.DueWithin7Days => due.DueWithin7Days,
-                SupplierInvoiceFilter.DueWithin15Days => due.DueWithin15Days,
-                SupplierInvoiceFilter.Blocked => due.Blocked,
-                _ => null
-            };
-            chip.Text = count is { } n ? $"{T($"SupplierInvoiceFilter.{filter}")} · {n}" : T($"SupplierInvoiceFilter.{filter}");
-        }
+        foreach (var chip in _chips) chip.Text = SupplierInvoiceScreenRules.Chip((SupplierInvoiceFilter)chip.Tag!, _due, T);
 
-        _summary.Text = _due is { } d
-            ? T("SupplierInvoices.DueSummary", d.Overdue, Amount(d.OverdueAmount), d.DueWithin7Days,
-                Amount(d.DueWithin7DaysAmount), d.DueWithin15Days, Amount(d.DueWithin15DaysAmount), d.Blocked)
-            : string.Empty;
-        _summary.ForeColor = _due is { Overdue: > 0 } ? UiTheme.Critical : UiTheme.TextSecondary;
+        var (summary, alarm) = SupplierInvoiceScreenRules.DueSummary(_due, T, Amount);
+        _summary.Text = summary;
+        _summary.ForeColor = alarm ? UiTheme.Critical : UiTheme.TextSecondary;
     }
 
     private async Task LoadDetailAsync()
@@ -455,49 +429,28 @@ public sealed class SupplierInvoiceView : LocalizedView
                             Amount(l.UnitPriceMad), $"{l.VatRate * 100m:0.#}%", Amount(l.TotalExcludingVat));
 
         foreach (var v in d.Variances)
-            _variances.Rows.Add(v.LineNumber, DescribeVariance(v));
+            _variances.Rows.Add(v.LineNumber, SupplierInvoiceScreenRules.Variance(v, T, Amount));
 
         foreach (var p in d.Payments)
             _payments.Rows.Add(Date(p.PaidOn), Amount(p.AmountMad), T($"SupplierPaymentMethod.{p.Method}"),
                                p.Reference ?? string.Empty, p.RecordedByName);
 
-        var h = d.Header;
-        _detailCard.Note.Text = $"{h.InvoiceNumber} · {h.SupplierName} · {T($"SupplierInvoiceStatus.{h.Status}")}";
-
-        var info = T("SupplierInvoices.DetailInfo", Amount(h.TotalExcludingVat),
-                     Amount(h.TotalIncludingVat - h.TotalExcludingVat), Amount(h.TotalIncludingVat),
-                     d.PaymentTermsDays, Date(h.DueDate), h.EnteredByName);
-        if (d.UnblockJustification is not null)
-            info += "\n" + T("SupplierInvoices.UnblockedInfo", d.UnblockedByName ?? "?",
-                             d.UnblockedAt?.ToString("dd/MM/yy HH:mm") ?? string.Empty, d.UnblockJustification);
-        if (d.CancellationReason is not null)
-            info += "\n" + T("SupplierInvoices.CancelledInfo", d.CancellationReason);
-        _detailInfo.Text = info;
-
-        _variancesTab.Text = d.Variances.Count > 0
-            ? $"{T("SupplierInvoices.Variances")} ({d.Variances.Count})"
-            : T("SupplierInvoices.Variances");
+        _detailCard.Note.Text = SupplierInvoiceScreenRules.DetailNote(d, T);
+        _detailInfo.Text = string.Join("\n", SupplierInvoiceScreenRules.DetailInfo(d, T, Amount));
+        _variancesTab.Text = SupplierInvoiceScreenRules.VariancesTab(d, T);
 
         RefreshButtons();
     }
 
-    private string DescribeVariance(SupplierInvoiceVarianceRow v) => v.Kind switch
-    {
-        VarianceKind.PriceDiffers => T("VarianceKind.PriceDiffers", Amount(v.Expected), Amount(v.Actual)),
-        VarianceKind.VatRateDiffers => T("VarianceKind.VatRateDiffers", $"{v.Expected * 100m:0.#}%",
-                                         $"{v.Actual * 100m:0.#}%"),
-        _ => T("VarianceKind.QuantityExceedsReceived", Quantity(v.Expected), Quantity(v.Actual))
-    };
-
     private void RefreshButtons()
     {
-        var row = Selected;
-        _rematch.Enabled = row?.Status is SupplierInvoiceStatus.Blocked;
-        _unblock.Enabled = row?.Status is SupplierInvoiceStatus.Blocked;
-        _pay.Enabled = row?.Status is SupplierInvoiceStatus.ApprovedForPayment or SupplierInvoiceStatus.PartiallyPaid;
-        _attach.Enabled = row is not null && row.Status != SupplierInvoiceStatus.Cancelled;
-        _viewScan.Enabled = row is { HasScan: true };
-        _cancel.Enabled = row is not null && row.IsOpen && row.AmountPaid == 0m;
+        var actions = SupplierInvoiceScreenRules.Actions(p => PermissionGate.Allows(p), PermissionGate.User?.UserId ?? Guid.Empty, Selected);
+        _rematch.Enabled = actions.Rematch;
+        _unblock.Enabled = actions.Unblock;
+        _pay.Enabled = actions.Pay;
+        _attach.Enabled = actions.Attach;
+        _viewScan.Enabled = actions.ViewScan;
+        _cancel.Enabled = actions.Cancel;
     }
 
     // ---- Actions -------------------------------------------------------------------------------------
@@ -522,11 +475,9 @@ public sealed class SupplierInvoiceView : LocalizedView
             if (result.IsFailure) { _dialogs.ShowFailure(result, _newInvoice.Text); return; }
 
             var outcome = result.Value;
-            if (outcome.Status == SupplierInvoiceStatus.Blocked)
-                _dialogs.Warn(T("SupplierInvoices.CreatedBlocked", outcome.VarianceCount, Date(outcome.DueDate)),
-                              _newInvoice.Text);
-            else
-                _dialogs.Info(T("SupplierInvoices.CreatedApproved", Date(outcome.DueDate)), _newInvoice.Text);
+            var (said, blocked) = SupplierInvoiceScreenRules.Outcome(outcome, T);
+            if (blocked) _dialogs.Warn(said, _newInvoice.Text);
+            else _dialogs.Info(said, _newInvoice.Text);
 
             if (dialog.ScanPath is { } path) await AttachFileAsync(outcome.InvoiceId, path);
 
@@ -546,10 +497,9 @@ public sealed class SupplierInvoiceView : LocalizedView
         var result = await _invoices.RematchAsync(row.Id);
         if (result.IsFailure) { _dialogs.ShowFailure(result, _rematch.Text); return; }
 
-        if (result.Value.Status == SupplierInvoiceStatus.Blocked)
-            _dialogs.Warn(T("SupplierInvoices.StillBlocked", result.Value.VarianceCount), _rematch.Text);
-        else
-            _dialogs.Info(T("SupplierInvoices.CreatedApproved", Date(result.Value.DueDate)), _rematch.Text);
+        var (said, blocked) = SupplierInvoiceScreenRules.Outcome(result.Value, T, rematch: true);
+        if (blocked) _dialogs.Warn(said, _rematch.Text);
+        else _dialogs.Info(said, _rematch.Text);
 
         await LoadAsync(row.Id);
     }
@@ -560,14 +510,15 @@ public sealed class SupplierInvoiceView : LocalizedView
 
         // Said before the justification is asked for: whoever entered the invoice typed the whole
         // justification and was only then told that releasing it was someone else's to do.
-        if (row.EnteredByUserId == PermissionGate.User?.UserId)
+        if (SupplierInvoiceScreenRules.Actions(p => PermissionGate.Allows(p), PermissionGate.User?.UserId ?? Guid.Empty, row).UnblockOwn)
         {
             _dialogs.Warn(T("SupplierInvoice_UnblockerMustDifferFromEnterer"), _unblock.Text);
             return;
         }
 
-        var reason = _dialogs.PromptForReason(T("SupplierInvoices.UnblockPrompt", row.InvoiceNumber, row.VarianceCount),
-                                              _unblock.Text, 10, maxLength: 1000);
+        var reason = _dialogs.PromptForReason(SupplierInvoiceScreenRules.UnblockPrompt(row, T), _unblock.Text,
+                                              SupplierInvoiceScreenRules.UnblockMinLength,
+                                              maxLength: SupplierInvoiceScreenRules.UnblockMaxLength);
         if (reason is null) return;
 
         var result = await _invoices.UnblockAsync(row.Id, reason);
@@ -613,10 +564,9 @@ public sealed class SupplierInvoiceView : LocalizedView
         try
         {
             var info = new FileInfo(path);
-            if (info.Length > SupplierInvoiceFile.MaximumBytes)
+            if (SupplierInvoiceScreenRules.CheckScan(info.Name, info.Length) is { } refused)
             {
-                _dialogs.Warn(T("SupplierInvoice_ScanTooLarge", SupplierInvoiceFile.MaximumBytes / (1024 * 1024)),
-                              _attach.Text);
+                _dialogs.Warn(T(refused.Key, refused.Typed ?? string.Empty), _attach.Text);
                 return;
             }
             content = await File.ReadAllBytesAsync(info.FullName);
@@ -646,7 +596,8 @@ public sealed class SupplierInvoiceView : LocalizedView
     {
         if (Selected is not { } row) return;
 
-        var reason = _dialogs.PromptForReason(T("SupplierInvoices.CancelPrompt", row.InvoiceNumber), _cancel.Text, maxLength: 500);
+        var reason = _dialogs.PromptForReason(T("SupplierInvoices.CancelPrompt", row.InvoiceNumber), _cancel.Text,
+                                              maxLength: SupplierInvoiceScreenRules.CancelReasonMaxLength);
         if (reason is null) return;
 
         var result = await _invoices.CancelAsync(row.Id, reason);
@@ -780,8 +731,8 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
 
         _notes = TextField("Field.Notes", 20, 68, 600);
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
-        _number.MaxLength = 60;
-        _notes.MaxLength = 1000;
+        _number.MaxLength = SupplierInvoiceScreenRules.NumberMaxLength;
+        _notes.MaxLength = SupplierInvoiceScreenRules.NotesMaxLength;
         // Clear of the window's edge in Arabic, where the caption runs longer.
         _scan = Check("SupplierInvoices.AttachScanAfter", 640, 90, false);
 
@@ -857,83 +808,60 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
 
         static string N(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
-        foreach (var line in lines.Value)
+        foreach (var form in SupplierInvoiceScreenRules.Lines(lines.Value))
         {
+            var line = form.Line;
             var index = _grid.Rows.Add(
-                line.ReceivedNotInvoiced > 0m, line.OrderNumber, $"{line.ItemCode} — {line.Description}",
+                form.Included, line.OrderNumber, $"{line.ItemCode} — {line.Description}",
                 N(line.QuantityOrdered), N(line.QuantityReceived), N(line.QuantityInvoiced),
-                N(line.ReceivedNotInvoiced > 0m ? line.ReceivedNotInvoiced : line.QuantityOrdered - line.QuantityInvoiced),
-                line.NetUnitPriceMad.ToString("0.00", CultureInfo.InvariantCulture),
-                N(line.VatRate * 100m));
+                form.Quantity ?? string.Empty, form.UnitPrice ?? string.Empty, form.VatPercent ?? string.Empty);
             _grid.Rows[index].Tag = line;
         }
 
         RefreshTotal();
     }
 
-    private IEnumerable<(InvoiceableOrderLine Line, decimal? Quantity, decimal? Price, decimal? Vat)> Included() =>
-        _grid.Rows.Cast<DataGridViewRow>()
-             .Where(r => r.Tag is InvoiceableOrderLine && r.Cells[ColInclude].Value is true)
-             .Select(r => ((InvoiceableOrderLine)r.Tag!,
-                           EditorValues.ParseDecimal(r.Cells[ColQuantity].Value?.ToString()),
-                           EditorValues.ParseDecimal(r.Cells[ColPrice].Value?.ToString()),
-                           EditorValues.ParseDecimal(r.Cells[ColVat].Value?.ToString())));
+    /// <summary>The invoice as typed so far, its lines as the grid holds them.</summary>
+    private SupplierInvoiceForm Form() => new()
+    {
+        SupplierId = SelectedId(_supplier),
+        InvoiceNumber = _number.Text,
+        InvoiceDate = DateOnly.FromDateTime(_invoiceDate.Value.Date),
+        ReceivedOn = DateOnly.FromDateTime(_receivedOn.Value.Date),
+        Notes = _notes.Text,
+        Lines =
+        [
+            .. _grid.Rows.Cast<DataGridViewRow>().Where(r => r.Tag is InvoiceableOrderLine).Select(r => new SupplierInvoiceLineForm
+            {
+                Line = (InvoiceableOrderLine)r.Tag!,
+                Included = r.Cells[ColInclude].Value is true,
+                Quantity = r.Cells[ColQuantity].Value?.ToString(),
+                UnitPrice = r.Cells[ColPrice].Value?.ToString(),
+                VatPercent = r.Cells[ColVat].Value?.ToString()
+            })
+        ]
+    };
 
     private void RefreshTotal()
     {
-        decimal ht = 0m, vat = 0m;
-        foreach (var (_, quantity, price, rate) in Included())
-        {
-            var lineHt = Money.Round((quantity ?? 0m) * Money.Round(price ?? 0m));
-            ht += lineHt;
-            vat += Money.Round(lineHt * (rate ?? 0m) / 100m);
-        }
-
+        var (ht, vat, ttc) = SupplierInvoiceScreenRules.Totals(Form());
         _total.Text = Localizer.Format("PurchaseOrders.TotalsLine", ht.ToString("N2", CultureInfo.CurrentCulture),
                                        vat.ToString("N2", CultureInfo.CurrentCulture),
-                                       (ht + vat).ToString("N2", CultureInfo.CurrentCulture));
+                                       ttc.ToString("N2", CultureInfo.CurrentCulture));
     }
 
     protected override void Accept()
     {
         _grid.EndEdit();
 
-        if (SelectedId(_supplier) is not { } supplierId) return;
+        if (SelectedId(_supplier) is null) return;
 
-        if (string.IsNullOrWhiteSpace(_number.Text))
+        // A VAT of 120 % was reported as a negative price: it has its own message.
+        var (refusal, request) = SupplierInvoiceScreenRules.CheckInvoice(Form(), DateOnly.FromDateTime(DateTime.Today));
+        if (refusal is not null)
         {
-            Dialogs.Warn(Localizer["SupplierInvoice_NumberRequired"], Text);
-            _number.Focus();
-            return;
-        }
-
-        var lines = new List<SupplierInvoiceLineRequest>();
-        foreach (var (line, quantity, price, vat) in Included())
-        {
-            if (quantity is not > 0m)
-            {
-                Dialogs.Warn(Localizer["SupplierInvoice_QuantityMustBePositive"], Text);
-                return;
-            }
-            if (price is not >= 0m)
-            {
-                Dialogs.Warn(Localizer["SupplierInvoice_PriceMustNotBeNegative"], Text);
-                return;
-            }
-            // A VAT of 120 % was reported as a negative price: it has its own message.
-            if (vat is not (>= 0m and <= 100m))
-            {
-                Dialogs.Warn(Localizer["SupplierInvoice_VatRateOutOfRange"], Text);
-                return;
-            }
-
-            lines.Add(new SupplierInvoiceLineRequest(line.PurchaseOrderLineId, quantity.Value, price.Value,
-                                                     vat.Value / 100m));
-        }
-
-        if (lines.Count == 0)
-        {
-            Dialogs.Warn(Localizer["SupplierInvoice_NoLines"], Text);
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            if (refusal.Field == SupplierInvoiceScreenRules.NumberField) _number.Focus();
             return;
         }
 
@@ -947,15 +875,7 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
             if (picker.ShowDialog(this) == DialogResult.OK) ScanPath = picker.FileName;
         }
 
-        Request = new CreateSupplierInvoiceRequest
-        {
-            SupplierId = supplierId,
-            InvoiceNumber = _number.Text.Trim(),
-            InvoiceDate = DateOnly.FromDateTime(_invoiceDate.Value.Date),
-            ReceivedOn = DateOnly.FromDateTime(_receivedOn.Value.Date),
-            Notes = Blank(_notes),
-            Lines = lines
-        };
+        Request = request;
 
         DialogResult = DialogResult.OK;
         Close();
@@ -990,7 +910,7 @@ internal sealed class SupplierPaymentDialog : MasterDataEditor
         _method = Choice("SupplierInvoices.Method", 360, 14, 140, SupplierPaymentMethod.Transfer,
                          "SupplierPaymentMethod");
         _reference = TextField("SupplierInvoices.Reference", 20, 68, 320, null, latin: true, mono: true);
-        _reference.MaxLength = 60;
+        _reference.MaxLength = SupplierInvoiceScreenRules.ReferenceMaxLength;
         Numeric(EditorValues.AmountMaxLength, _amount);
 
         // An LCN or a post-dated cheque reaches the bank on its due date, which the bank
@@ -1007,7 +927,7 @@ internal sealed class SupplierPaymentDialog : MasterDataEditor
         void Refresh()
         {
             var method = Selected<SupplierPaymentMethod>(_method);
-            _maturity.Enabled = method is SupplierPaymentMethod.Cheque or SupplierPaymentMethod.BillOfExchange;
+            _maturity.Enabled = SupplierInvoiceScreenRules.HasMaturity(method);
             if (_maturity.Value.Date < _date.Value.Date) _maturity.Value = _date.Value.Date;
         }
 
@@ -1024,42 +944,29 @@ internal sealed class SupplierPaymentDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (DecimalOrNull(_amount) is not { } amount || amount <= 0m)
-        {
-            Dialogs.Warn(Localizer["SupplierPayment_AmountMustBePositive"], Text);
-            _amount.Focus();
-            return;
-        }
-
-        var method = Selected<SupplierPaymentMethod>(_method);
-        if (method != SupplierPaymentMethod.Cash && string.IsNullOrWhiteSpace(_reference.Text))
-        {
-            Dialogs.Warn(Localizer["SupplierPayment_ReferenceRequired"], Text);
-            _reference.Focus();
-            return;
-        }
-
-        var paidOn = DateOnly.FromDateTime(_date.Value.Date);
-        var maturity = DateOnly.FromDateTime(_maturity.Value.Date);
-        if (_maturity.Enabled && maturity < paidOn)
-        {
-            Dialogs.Warn(Localizer["SupplierPayment_MaturityBeforePayment"], Text);
-            _maturity.Focus();
-            return;
-        }
-
         // An LCN always falls due after it is issued: left on the payment date, its due date was
         // not entered, and the bank reconciliation and the forecast would look for it on the wrong day.
-        var bill = method == SupplierPaymentMethod.BillOfExchange;
-        if (bill && maturity <= paidOn)
+        var (refusal, request) = SupplierInvoiceScreenRules.CheckPayment(new SupplierPaymentForm
         {
-            Dialogs.Warn(Localizer["SupplierPayment_MaturityRequired"], Text);
-            _maturity.Focus();
+            PaidOn = DateOnly.FromDateTime(_date.Value.Date),
+            Amount = _amount.Text,
+            Method = Selected<SupplierPaymentMethod>(_method),
+            Reference = _reference.Text,
+            MaturityDate = DateOnly.FromDateTime(_maturity.Value.Date)
+        });
+        if (refusal is not null)
+        {
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            (refusal.Field switch
+            {
+                SupplierInvoiceScreenRules.ReferenceField => (Control)_reference,
+                SupplierInvoiceScreenRules.MaturityField => _maturity,
+                _ => _amount
+            }).Focus();
             return;
         }
 
-        Request = new RecordSupplierPaymentRequest(paidOn, amount, method, Blank(_reference),
-                                                   _maturity.Enabled && (bill || maturity > paidOn) ? maturity : null);
+        Request = request;
         DialogResult = DialogResult.OK;
         Close();
     }
@@ -1079,22 +986,21 @@ internal sealed class PurchasingPeriodDialog : MasterDataEditor
         : base(localizer, dialogs, titleKey, null, 520, withLayout ? 250 : 200)
     {
         // The last calendar quarter by default: the declaration of late payments is quarterly.
-        var today = DateTime.Today;
-        var quarterStart = new DateTime(today.Year, (today.Month - 1) / 3 * 3 + 1, 1).AddMonths(-3);
+        var period = SupplierInvoiceScreenRules.DefaultPeriod(DateOnly.FromDateTime(DateTime.Today));
 
         Label("Field.From", 20, 14);
         _from = new DateTimePicker
         {
             Bounds = new Rectangle(20, 32, 180, UiTheme.InputHeight),
             Format = DateTimePickerFormat.Short,
-            Value = quarterStart
+            Value = period.From.ToDateTime(TimeOnly.MinValue)
         };
         Label("Field.To", 220, 14);
         _to = new DateTimePicker
         {
             Bounds = new Rectangle(220, 32, 180, UiTheme.InputHeight),
             Format = DateTimePickerFormat.Short,
-            Value = quarterStart.AddMonths(3).AddDays(-1)
+            Value = period.To.ToDateTime(TimeOnly.MinValue)
         };
         Controls.AddRange([_from, _to]);
 
@@ -1113,9 +1019,9 @@ internal sealed class PurchasingPeriodDialog : MasterDataEditor
     {
         From = DateOnly.FromDateTime(_from.Value.Date);
         To = DateOnly.FromDateTime(_to.Value.Date);
-        if (From > To)
+        if (SupplierInvoiceScreenRules.CheckPeriod(new PurchasingPeriodForm { From = From, To = To }) is { } refusal)
         {
-            Dialogs.Warn(Localizer["Purchasing_PeriodReversed"], Text);
+            Dialogs.Warn(Localizer[refusal.Key], Text);
             return;
         }
 
@@ -1182,7 +1088,7 @@ internal sealed class PurchasingSettingsDialog : MasterDataEditor
         // The service takes journal and account codes of 20 characters at most.
         foreach (var code in new[] { _purchaseJournal, _bankJournal, _cashJournal, _supplierAccount, _vatAccount,
                                      _bankAccount, _cashAccount }.Concat(_charges.Values))
-            code.MaxLength = 20;
+            code.MaxLength = SupplierInvoiceScreenRules.CodeMaxLength;
 
         Buttons(560, 760);
 
@@ -1193,42 +1099,41 @@ internal sealed class PurchasingSettingsDialog : MasterDataEditor
     {
         // A percentage above 100 was only refused by the service, after the dialog had closed and
         // lost what was typed: refused here, on the box, as the service would.
-        decimal? Rate(TextBox box, decimal max = 100m) =>
-            DecimalOrNull(box) is { } v && v >= 0m && v <= max ? v : null;
-
-        foreach (var (box, max) in new[] { (_tolPercent, 100m), (_tolMad, decimal.MaxValue), (_keyRate, 100m),
-                                           (_margin, 100m), (_fineFirst, 100m), (_fineNext, 100m) })
+        var boxes = new Dictionary<string, TextBox>
         {
-            if (Rate(box, max) is not null) continue;
+            [SupplierInvoiceScreenRules.SettingField("tolerance-percent")] = _tolPercent,
+            [SupplierInvoiceScreenRules.SettingField("tolerance-mad")] = _tolMad,
+            [SupplierInvoiceScreenRules.SettingField("key-rate")] = _keyRate,
+            [SupplierInvoiceScreenRules.SettingField("penalty-margin")] = _margin,
+            [SupplierInvoiceScreenRules.SettingField("fine-first")] = _fineFirst,
+            [SupplierInvoiceScreenRules.SettingField("fine-next")] = _fineNext
+        };
 
-            Dialogs.Warn(Localizer["Purchasing_SettingOutOfRange"], Text);
-            box.Focus();
+        var (refusal, settings) = SupplierInvoiceScreenRules.CheckSettings(new PurchasingSettingsForm
+        {
+            TolerancePercent = _tolPercent.Text,
+            ToleranceMad = _tolMad.Text,
+            KeyRate = _keyRate.Text,
+            PenaltyMargin = _margin.Text,
+            FineFirstMonth = _fineFirst.Text,
+            FineNextMonths = _fineNext.Text,
+            PurchaseJournal = _purchaseJournal.Text,
+            BankJournal = _bankJournal.Text,
+            CashJournal = _cashJournal.Text,
+            SupplierAccount = _supplierAccount.Text,
+            VatAccount = _vatAccount.Text,
+            BankAccount = _bankAccount.Text,
+            CashAccount = _cashAccount.Text,
+            ChargeAccounts = _charges.ToDictionary(c => c.Key, c => (string?)c.Value.Text)
+        }, _current);
+        if (refusal is not null)
+        {
+            Dialogs.Warn(Localizer[refusal.Key], Text);
+            if (boxes.TryGetValue(refusal.Field, out var box)) box.Focus();
             return;
         }
 
-        var (tolPercent, tolMad, keyRate, margin, fineFirst, fineNext) =
-            (Rate(_tolPercent)!.Value, Rate(_tolMad, decimal.MaxValue)!.Value, Rate(_keyRate)!.Value,
-             Rate(_margin)!.Value, Rate(_fineFirst)!.Value, Rate(_fineNext)!.Value);
-
-        string Code(TextBox box, string fallback) => Blank(box) ?? fallback;
-
-        Settings = _current with
-        {
-            PriceTolerancePercent = tolPercent,
-            PriceToleranceMad = tolMad,
-            KeyRatePercent = keyRate,
-            PenaltyMarginPoints = margin,
-            FineFirstMonthPercent = fineFirst,
-            FineAdditionalMonthPercent = fineNext,
-            PurchaseJournal = Code(_purchaseJournal, _current.PurchaseJournal),
-            BankJournal = Code(_bankJournal, _current.BankJournal),
-            CashJournal = Code(_cashJournal, _current.CashJournal),
-            SupplierAccount = Code(_supplierAccount, _current.SupplierAccount),
-            VatAccount = Code(_vatAccount, _current.VatAccount),
-            BankAccount = Code(_bankAccount, _current.BankAccount),
-            CashAccount = Code(_cashAccount, _current.CashAccount),
-            ChargeAccounts = _charges.ToDictionary(c => c.Key, c => Code(c.Value, _current.ChargeAccountFor(c.Key)))
-        };
+        Settings = settings;
 
         DialogResult = DialogResult.OK;
         Close();

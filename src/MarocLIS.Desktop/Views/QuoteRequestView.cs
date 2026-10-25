@@ -164,13 +164,7 @@ public sealed class QuoteRequestView : LocalizedView
         _grid.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadDetailAsync());
         _grid.CellFormatting += OnRequestFormatting;
         StockGrid.Pills(_grid, "status", tag => tag is QuoteRequestRow row
-            ? row.Status switch
-            {
-                QuoteRequestStatus.Open => StockPill.Running,
-                QuoteRequestStatus.Awarded => StockPill.Done,
-                _ => StockPill.Waiting
-            }
-            : null);
+                            ? StockPill.Of(QuoteScreenRules.StatusTone(row.Status)) : null);
         _search.Changed += (_, _) => StockGrid.Filter(_grid, _search.Query);
         _suppliers.SelectionChanged += (_, _) => RefreshButtons();
         _suppliers.CellFormatting += OnSupplierFormatting;
@@ -275,12 +269,12 @@ public sealed class QuoteRequestView : LocalizedView
         {
             var index = _grid.Rows.Add(
                 row.Number,
-                row.RequestedOn.ToString("dd/MM/yy"),
+                QuoteScreenRules.Date(row.RequestedOn),
                 row.Subject ?? string.Empty,
-                T($"QuoteRequestStatus.{row.Status}"),
-                row.ResponseDueDate?.ToString("dd/MM/yy") ?? string.Empty,
+                T(QuoteScreenRules.StatusKey(row.Status)),
+                QuoteScreenRules.Date(row.ResponseDueDate),
                 row.ItemCount,
-                $"{row.OfferCount} / {row.SupplierCount}",
+                QuoteScreenRules.Answers(row),
                 row.RaisedByName,
                 row.AwardedSupplierName ?? string.Empty,
                 row.PurchaseOrderNumber ?? string.Empty);
@@ -303,8 +297,7 @@ public sealed class QuoteRequestView : LocalizedView
 
     private void RenderHeading()
     {
-        var open = _rows.Count(r => r.Status == QuoteRequestStatus.Open);
-        _count.Text = T("StocksUi.Quotes", _rows.Count) + (open > 0 ? $" · {T("Quotes.OpenCount")} {open}" : string.Empty);
+        _count.Text = QuoteScreenRules.Count(_rows, T);
     }
 
     private async Task LoadDetailAsync()
@@ -360,31 +353,21 @@ public sealed class QuoteRequestView : LocalizedView
             foreach (var offer in detail.Offers)
             {
                 AddColumn(_comparison, $"o{offer.Id:N}", 14, UiTheme.Monospace, DataGridViewContentAlignment.MiddleRight);
-                _comparison.Columns[$"o{offer.Id:N}"]!.HeaderText = offer.IsExpired
-                    ? $"{offer.SupplierName} ({T("Quotes.Expired")})"
-                    : offer.SupplierName;
+                _comparison.Columns[$"o{offer.Id:N}"]!.HeaderText = QuoteScreenRules.OfferHeader(offer, T);
                 _comparison.Columns[$"o{offer.Id:N}"]!.Tag = offer;
             }
 
             foreach (var line in detail.Comparison)
             {
-                var item = detail.Items.FirstOrDefault(i => i.Id == line.QuoteRequestItemId);
                 var values = new List<object>
                 {
                     line.LineNumber,
-                    item is null ? "?" : $"{item.Code} — {item.Designation}",
-                    $"{line.Quantity:0.##} {item?.Unit}"
+                    QuoteScreenRules.ItemLabel(detail, line),
+                    QuoteScreenRules.LineQuantity(detail, line)
                 };
 
                 foreach (var offer in detail.Offers)
-                {
-                    var cell = line.Cells.FirstOrDefault(c => c.SupplierQuoteId == offer.Id);
-                    values.Add(cell is null
-                        ? "—"
-                        : cell.DeliveryDelayDays is { } days
-                            ? $"{Amount(cell.NetUnitPriceMad)} · {days} {T("Quotes.DaysShort")}"
-                            : Amount(cell.NetUnitPriceMad));
-                }
+                    values.Add(QuoteScreenRules.Cell(line, offer, T, Amount).Text);
 
                 var index = _comparison.Rows.Add([.. values]);
                 _comparison.Rows[index].Tag = line;
@@ -394,11 +377,11 @@ public sealed class QuoteRequestView : LocalizedView
             {
                 var offer = detail.Offers.FirstOrDefault(o => o.SupplierId == supplier.SupplierId);
                 var index = _suppliers.Rows.Add(
-                    supplier.IsApproved ? supplier.Name : $"{supplier.Name} ({T("Quotes.NotApproved")})",
-                    supplier.SentAt is { } sent ? sent.ToString("dd/MM/yy") : T("Quotes.NotSent"),
+                    QuoteScreenRules.SupplierName(supplier, T),
+                    QuoteScreenRules.Sent(supplier, T),
                     offer is null ? T("Quotes.Awaiting") : Amount(offer.TotalExcludingVat),
                     offer?.DeliveryDelayDays?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
-                    offer?.ValidUntil?.ToString("dd/MM/yy") ?? string.Empty,
+                    QuoteScreenRules.Date(offer?.ValidUntil),
                     offer is { MissingItems: > 0 } ? offer.MissingItems : string.Empty,
                     offer?.FileName is null ? string.Empty : T("Action.Yes"));
 
@@ -407,8 +390,7 @@ public sealed class QuoteRequestView : LocalizedView
             }
 
             _comparisonCard.Title.Text = T("Quotes.Comparison");
-            _comparisonCard.Note.Text = detail.Number +
-                                        (detail.Subject is { Length: > 0 } subject ? $" · {subject}" : string.Empty);
+            _comparisonCard.Note.Text = QuoteScreenRules.DetailNote(detail);
             _suppliersHeading.Text = T("Quotes.SuppliersAsked");
         }
         else
@@ -426,25 +408,19 @@ public sealed class QuoteRequestView : LocalizedView
     private void OnRequestFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not QuoteRequestRow row) return;
-        if (row.Status != QuoteRequestStatus.Open) e.CellStyle!.ForeColor = UiTheme.TextMuted;
+        if (QuoteScreenRules.RowInk(row) == StockInk.Muted) e.CellStyle!.ForeColor = UiTheme.TextMuted;
     }
 
     private void OnSupplierFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || _suppliers.Rows[e.RowIndex].Tag is not QuoteSupplierRow row || _detail is null) return;
 
-        if (_detail.Offers.FirstOrDefault(o => o.SupplierId == row.SupplierId) is not { } offer)
-        {
-            e.CellStyle!.ForeColor = UiTheme.TextMuted;
-            return;
-        }
-
-        if (offer.Id == _detail.AwardedQuoteId)
+        if (QuoteScreenRules.IsAwarded(_detail, row))
         {
             e.CellStyle!.BackColor = UiTheme.AccentSubtle;
             e.CellStyle.Font = UiTheme.BodyBold;
         }
-        else if (offer.IsExpired)
+        else if (QuoteScreenRules.SupplierInk(_detail, row) == StockInk.Muted)
         {
             e.CellStyle!.ForeColor = UiTheme.TextMuted;
         }
@@ -456,22 +432,22 @@ public sealed class QuoteRequestView : LocalizedView
         if (e.RowIndex < 0 || _comparison.Rows[e.RowIndex].Tag is not QuoteComparisonLine line) return;
         if (_comparison.Columns[e.ColumnIndex].Tag is not QuoteOfferRow offer) return;
 
-        var cell = line.Cells.FirstOrDefault(c => c.SupplierQuoteId == offer.Id);
-        if (cell is null) return;
+        var look = QuoteScreenRules.Cell(line, offer, T, Amount);
+        if (look.Text == "—") return;
 
-        if (cell.IsExpired)
+        if (look.Expired)
         {
             e.CellStyle!.ForeColor = UiTheme.TextMuted;
             return;
         }
 
-        if (cell.IsCheapest)
+        if (look.Cheapest)
         {
             e.CellStyle!.BackColor = UiTheme.NormalBackground;
             e.CellStyle.ForeColor = UiTheme.Normal;
         }
 
-        if (cell.IsFastest) e.CellStyle!.Font = UiTheme.MonospaceBold;
+        if (look.Fastest) e.CellStyle!.Font = UiTheme.MonospaceBold;
     }
 
     /// <summary>
@@ -494,19 +470,17 @@ public sealed class QuoteRequestView : LocalizedView
     private void RefreshButtons()
     {
         _new.Enabled = !IsBusy;
-        var open = !IsBusy && _detail is { Status: QuoteRequestStatus.Open };
-        var supplier = SelectedSupplier;
-        var offer = SelectedOffer;
+        // Nothing that writes is offered while a write is in flight; its purchase order cancelled,
+        // an awarded request can be awarded again.
+        var actions = QuoteScreenRules.Actions(p => PermissionGate.Allows(p), IsBusy ? null : _detail, SelectedSupplier);
 
-        _sendEmail.Enabled = open && _detail!.Suppliers.Any(s => s.SentAt is null);
-        _markSent.Enabled = open && supplier is { SentAt: null };
-        _addSupplier.Enabled = open;
-        _recordOffer.Enabled = open && supplier is not null;
-        _openFile.Enabled = offer?.FileName is not null;
-        // Its purchase order cancelled, an awarded request can be awarded again.
-        var reawardable = !IsBusy && _detail is { Status: QuoteRequestStatus.Awarded, OrderCancelled: true };
-        _award.Enabled = (open || reawardable) && offer is { IsExpired: false };
-        _cancel.Enabled = open;
+        _sendEmail.Enabled = actions.SendByEmail;
+        _markSent.Enabled = actions.MarkSent;
+        _addSupplier.Enabled = actions.AddSupplier;
+        _recordOffer.Enabled = actions.RecordOffer;
+        _openFile.Enabled = QuoteScreenRules.OfferOf(_detail, SelectedSupplier)?.FileName is not null;
+        _award.Enabled = actions.Award;
+        _cancel.Enabled = actions.Cancel;
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -542,7 +516,7 @@ public sealed class QuoteRequestView : LocalizedView
 
         if (!_quotes.CanEmail)
         {
-            _dialogs.Warn($"{T("Purchasing_EmailNotConfigured")}\n\n{T("Quotes.SendManually")}", _sendEmail.Text);
+            _dialogs.Warn(QuoteScreenRules.NoEmail(T), _sendEmail.Text);
             return;
         }
 
@@ -551,13 +525,7 @@ public sealed class QuoteRequestView : LocalizedView
         var sent = await _quotes.SendByEmailAsync(detail.Id);
         if (sent.IsFailure) { _dialogs.ShowFailure(sent, _sendEmail.Text); return; }
 
-        var message = T("Quotes.SentCount", sent.Value.Sent);
-        if (sent.Value.WithoutEmail.Count > 0)
-            message += "\n\n" + T("Quotes.WithoutEmail", string.Join(", ", sent.Value.WithoutEmail));
-        if (sent.Value.Failed.Count > 0)
-            message += "\n\n" + T("Quotes.SendFailed", string.Join(", ", sent.Value.Failed));
-
-        _dialogs.Info(message, _sendEmail.Text);
+        _dialogs.Info(QuoteScreenRules.SendOutcome(sent.Value, T), _sendEmail.Text);
         await LoadAsync(detail.Id);
     }
 
@@ -577,7 +545,7 @@ public sealed class QuoteRequestView : LocalizedView
         var suppliers = await _quotes.GetSuppliersAsync();
         if (suppliers.IsFailure) { _dialogs.ShowFailure(suppliers, _addSupplier.Text); return; }
 
-        var choices = suppliers.Value.Where(s => detail.Suppliers.All(a => a.SupplierId != s.Id)).ToList();
+        var choices = QuoteScreenRules.Addable(suppliers.Value, detail);
         if (choices.Count == 0) { _dialogs.Info(T("Quotes.AllSuppliersAsked"), _addSupplier.Text); return; }
 
         using var dialog = new QuoteSupplierPickDialog(Localizer, _dialogs, detail.Number, choices);
@@ -615,10 +583,7 @@ public sealed class QuoteRequestView : LocalizedView
     {
         if (_detail is not { } detail || SelectedOffer is not { } offer) return;
 
-        var question = T("Quotes.AwardQuestion", offer.SupplierName, Amount(offer.TotalExcludingVat));
-        if (offer.MissingItems > 0) question += "\n\n" + T("Quotes.AwardMissingItems", offer.MissingItems);
-
-        if (!_dialogs.Confirm(question, _award.Text)) return;
+        if (!_dialogs.Confirm(QuoteScreenRules.AwardQuestion(offer, Amount(offer.TotalExcludingVat), T), _award.Text)) return;
 
         var awarded = await _quotes.AwardAsync(detail.Id, offer.Id);
         if (awarded.IsFailure) { _dialogs.ShowFailure(awarded, _award.Text); return; }
@@ -631,7 +596,8 @@ public sealed class QuoteRequestView : LocalizedView
     {
         if (_detail is not { } detail) return;
 
-        var reason = _dialogs.PromptForReason(T("Quotes.CancelPrompt", detail.Number), _cancel.Text, maxLength: 500);
+        var reason = _dialogs.PromptForReason(T("Quotes.CancelPrompt", detail.Number), _cancel.Text,
+                                              maxLength: QuoteScreenRules.CancelReasonMaxLength);
         if (reason is null) return;
 
         await StepAsync(() => _quotes.CancelAsync(detail.Id, reason), _cancel.Text);
@@ -698,7 +664,7 @@ internal sealed class QuoteRequestDialog : MasterDataEditor
         var language = localizer.CurrentLanguage;
         foreach (var item in items)
         {
-            var index = _items.Rows.Add(false, $"{item.Code} — {item.Name.For(language)} ({item.UnitOfMeasure})",
+            var index = _items.Rows.Add(false, QuoteScreenRules.ItemLabel(item, language),
                                         item.ReorderQuantity > 0m
                                             ? item.ReorderQuantity.ToString("0.##", CultureInfo.InvariantCulture)
                                             : string.Empty,
@@ -718,16 +684,13 @@ internal sealed class QuoteRequestDialog : MasterDataEditor
         Label("Quotes.SuppliersToAsk", 600, 70);
         _suppliers.Bounds = new Rectangle(600, 90, 280, 360);
         _suppliers.CheckOnClick = true;
-        foreach (var supplier in suppliers)
-            _suppliers.Items.Add(supplier.IsApproved
-                ? string.IsNullOrWhiteSpace(supplier.Email) ? $"{supplier.Name} ({localizer["Quotes.NoEmail"]})" : supplier.Name
-                : $"{supplier.Name} ({localizer["Quotes.NotApproved"]})");
+        foreach (var supplier in suppliers) _suppliers.Items.Add(QuoteScreenRules.OptionLabel(supplier, localizer.Format));
         Controls.Add(_suppliers);
 
         _notes = TextField("Field.Notes", 20, 460, 860);
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
-        _subject.MaxLength = 200;
-        _notes.MaxLength = 1000;
+        _subject.MaxLength = QuoteScreenRules.SubjectMaxLength;
+        _notes.MaxLength = QuoteScreenRules.NotesMaxLength;
         Notice(20, 512, 860, 20, "Quotes.OnContractNotice");
 
         Buttons(540, 900);
@@ -739,35 +702,34 @@ internal sealed class QuoteRequestDialog : MasterDataEditor
     {
         _items.EndEdit();
 
-        var chosen = new List<QuoteItemInput>();
-        foreach (DataGridViewRow row in _items.Rows)
+        var rows = _items.Rows.Cast<DataGridViewRow>().Where(r => r.Tag is QuotableItem).ToList();
+        var due = DateOrNull(_due.Toggle, _due.Picker);
+        var form = new QuoteRequestForm
         {
-            if (row.Tag is not QuotableItem item || item.ContractReference is not null) continue;
-            if (row.Cells["include"].Value is not true) continue;
-
-            if (EditorValues.ParseDecimal(row.Cells["quantity"].Value?.ToString()) is not { } quantity || quantity <= 0m)
+            Subject = _subject.Text,
+            HasResponseDue = due is not null,
+            ResponseDue = due ?? default,
+            Notes = _notes.Text,
+            Items = [.. rows.Select(r => new QuoteItemForm
             {
-                Dialogs.Warn(Localizer["Quote_QuantityMustBePositive"], Text);
-                _items.CurrentCell = row.Cells["quantity"];
-                return;
-            }
+                Item = (QuotableItem)r.Tag!,
+                Included = r.Cells["include"].Value is true,
+                Quantity = r.Cells["quantity"].Value?.ToString()
+            })]
+        };
+        foreach (var i in _suppliers.CheckedIndices.Cast<int>()) form.SupplierIds.Add(_supplierOptions[i].Id);
 
-            chosen.Add(new QuoteItemInput(item.Id, quantity));
+        var (refusal, request) = QuoteScreenRules.CheckRequest(form, [.. _supplierOptions.Select(o => o.Id)],
+                                                               DateOnly.FromDateTime(DateTime.Today));
+        if (refusal is not null)
+        {
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            var index = Enumerable.Range(0, rows.Count).FirstOrDefault(i => QuoteScreenRules.QuantityField(i) == refusal.Field, -1);
+            if (index >= 0) _items.CurrentCell = rows[index].Cells["quantity"];
+            return;
         }
 
-        if (chosen.Count == 0) { Dialogs.Warn(Localizer["Quote_NoItems"], Text); return; }
-
-        var suppliers = _suppliers.CheckedIndices.Cast<int>().Select(i => _supplierOptions[i].Id).ToList();
-        if (suppliers.Count == 0) { Dialogs.Warn(Localizer["Quote_NoSuppliers"], Text); return; }
-
-        Request = new CreateQuoteRequest
-        {
-            Subject = Blank(_subject),
-            ResponseDueDate = DateOrNull(_due.Toggle, _due.Picker),
-            Notes = Blank(_notes),
-            Items = chosen,
-            SupplierIds = suppliers
-        };
+        Request = request;
 
         DialogResult = DialogResult.OK;
         Close();
@@ -848,8 +810,8 @@ internal sealed class QuoteOfferDialog : MasterDataEditor
 
         foreach (var item in detail.Items)
         {
-            var index = _lines.Rows.Add($"{item.Code} — {item.Designation}", $"{item.Quantity:0.##} {item.Unit}",
-                                        string.Empty, "0", "20");
+            var (label, quantity) = QuoteScreenRules.OfferLineLabels(item);
+            var index = _lines.Rows.Add(label, quantity, string.Empty, "0", "20");
             _lines.Rows[index].Tag = item;
         }
         Controls.Add(_lines);
@@ -857,9 +819,9 @@ internal sealed class QuoteOfferDialog : MasterDataEditor
         Notice(20, 396, 720, 34, "Quotes.PriceNotice");
 
         _conditions = TextField("Quotes.Conditions", 20, 436, 720);
-        _reference.MaxLength = 60;
-        _conditions.MaxLength = 1000;
-        _delay.MaxLength = 4;
+        _reference.MaxLength = QuoteScreenRules.ReferenceMaxLength;
+        _conditions.MaxLength = QuoteScreenRules.ConditionsMaxLength;
+        _delay.MaxLength = QuoteScreenRules.DelayMaxLength;
 
         var attach = UiTheme.SecondaryButton(localizer["Quotes.AttachFile"]);
         attach.Bounds = new Rectangle(20, 492, 200, UiTheme.ButtonHeight);
@@ -890,9 +852,9 @@ internal sealed class QuoteOfferDialog : MasterDataEditor
         try
         {
             var info = new FileInfo(picker.FileName);
-            if (info.Length > PurchasingDocument.MaximumBytes)
+            if (QuoteScreenRules.CheckFile(info.Name, info.Length) is { } refused)
             {
-                Dialogs.Warn(Localizer.Format("Purchasing_FileTooLarge", PurchasingDocument.MaximumBytes / (1024 * 1024)), Text);
+                Dialogs.Warn(Localizer.Format(refused.Key, refused.Typed ?? string.Empty), Text);
                 return;
             }
 
@@ -910,71 +872,43 @@ internal sealed class QuoteOfferDialog : MasterDataEditor
     {
         _lines.EndEdit();
 
-        var lines = new List<SupplierQuoteLineInput>();
-        foreach (DataGridViewRow row in _lines.Rows)
+        var rows = _lines.Rows.Cast<DataGridViewRow>().Where(r => r.Tag is QuoteItemRow).ToList();
+        var valid = DateOrNull(_valid.Toggle, _valid.Picker);
+        var form = new QuoteOfferForm
         {
-            if (row.Tag is not QuoteItemRow item) continue;
-
-            // A blank price is an article the supplier did not quote.
-            if (string.IsNullOrWhiteSpace(row.Cells["price"].Value?.ToString())) continue;
-
-            // « 10 % » in the discount read as no discount, and a slip in the VAT as 20 %: the offer
-            // was compared and awarded on a price the supplier never quoted.
-            foreach (var column in new[] { "price", "discount", "vat" })
-            {
-                var typed = row.Cells[column].Value?.ToString();
-                if (!EditorValues.IsUnreadable(typed)) continue;
-
-                Dialogs.Warn(Localizer.Format("Result_NotANumber", typed!.Trim()), Text);
-                _lines.CurrentCell = row.Cells[column];
-                return;
-            }
-
-            if (EditorValues.ParseDecimal(row.Cells["price"].Value?.ToString()) is not { } price || price < 0m)
-            {
-                Dialogs.Warn(Localizer["Po_PriceMustNotBeNegative"], Text);
-                _lines.CurrentCell = row.Cells["price"];
-                return;
-            }
-
-            var discount = EditorValues.ParseDecimal(row.Cells["discount"].Value?.ToString()) ?? 0m;
-            var vat = EditorValues.ParseDecimal(row.Cells["vat"].Value?.ToString()) ?? 20m;
-            if (discount is < 0m or >= 100m || vat is < 0m or > 100m)
-            {
-                Dialogs.Warn(Localizer["Po_RateOutOfRange"], Text);
-                _lines.CurrentCell = row.Cells["discount"];
-                return;
-            }
-
-            lines.Add(new SupplierQuoteLineInput(item.Id, price, vat / 100m, discount / 100m));
-        }
-
-        if (lines.Count == 0) { Dialogs.Warn(Localizer["Quote_OfferHasNoPrice"], Text); return; }
-
-        int? delay = null;
-        if (!string.IsNullOrWhiteSpace(_delay.Text))
-        {
-            if (!int.TryParse(_delay.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var days))
-            {
-                Dialogs.Warn(Localizer["Quote_DelayMustNotBeNegative"], Text);
-                _delay.Focus();
-                return;
-            }
-            delay = days;
-        }
-
-        Request = new RecordQuoteOfferRequest
-        {
-            SupplierId = _supplierId,
             ReceivedOn = DateOnly.FromDateTime(_received.Value.Date),
-            ValidUntil = DateOrNull(_valid.Toggle, _valid.Picker),
-            DeliveryDelayDays = delay,
-            SupplierReference = Blank(_reference),
-            Conditions = Blank(_conditions),
-            Lines = lines,
+            HasValidUntil = valid is not null,
+            ValidUntil = valid ?? default,
+            DelayDays = _delay.Text,
+            SupplierReference = _reference.Text,
+            Conditions = _conditions.Text,
             FileName = _fileName,
-            FileContent = _fileContent
+            FileContent = _fileContent,
+            Lines = [.. rows.Select(r => new QuoteOfferLineForm
+            {
+                Item = (QuoteItemRow)r.Tag!,
+                UnitPrice = r.Cells["price"].Value?.ToString(),
+                DiscountPercent = r.Cells["discount"].Value?.ToString(),
+                VatPercent = r.Cells["vat"].Value?.ToString()
+            })]
         };
+
+        // « 10 % » in the discount read as no discount, and a slip in the VAT as 20 %: the offer
+        // was compared and awarded on a price the supplier never quoted.
+        var (refusal, request) = QuoteScreenRules.CheckOffer(form, _supplierId, DateOnly.FromDateTime(DateTime.Today));
+        if (refusal is not null)
+        {
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            for (var i = 0; i < rows.Count; i++)
+            {
+                foreach (var column in new[] { "price", "discount", "vat" })
+                    if (QuoteScreenRules.OfferField(column, i) == refusal.Field) _lines.CurrentCell = rows[i].Cells[column];
+            }
+            if (refusal.Field == QuoteScreenRules.DelayField) _delay.Focus();
+            return;
+        }
+
+        Request = request;
 
         DialogResult = DialogResult.OK;
         Close();

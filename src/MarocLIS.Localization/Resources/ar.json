@@ -1,5 +1,7 @@
 {
   "$comment": "الفهرس العربي — يُعرض من اليمين إلى اليسار. الأرقام تبقى بالصيغة اللاتينية (0-9) تفاديًا لأخطاء النقل في النتائج الطبية.",
+  "Po_SupplierRequired": "اختر مورّد الطلبية.",
+  "Po_ItemRequired": "اختر الصنف المراد طلبه.",
   "Interface_IntegraNoResult": "كتلة نتائج COBAS INTEGRA بدون نتيجة.",
   "Interface_IntegraResultWithoutTest": "سطر نتيجة COBAS INTEGRA بدون رقم اختبار: «{0}».",
   "Interface_IntegraBlockIgnored": "تم تجاهل كتلة COBAS INTEGRA رقم {0}: هذا النوع من الكتل غير معالج.",
@@ -1841,6 +1843,8 @@
   },
 
   "SupplierInvoices": {
+    "DaysLeft": "ي-{0}",
+    "DaysLate": "+{0} ي",
     "MaturityDate": "تاريخ الاستحقاق (كمبيالة، شيك)",
     "DashboardDueSoon": "فواتير موردين مستحقة خلال 7 أيام",
     "DashboardOverdue": "فواتير موردين متأخرة الأداء",

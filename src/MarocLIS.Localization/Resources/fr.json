@@ -1,5 +1,7 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Po_SupplierRequired": "Choisissez le fournisseur de la commande.",
+  "Po_ItemRequired": "Choisissez l'article à commander.",
   "Interface_IntegraNoResult": "Bloc de résultats COBAS INTEGRA sans résultat.",
   "Interface_IntegraResultWithoutTest": "Ligne de résultat COBAS INTEGRA sans numéro de test : « {0} ».",
   "Interface_IntegraBlockIgnored": "Bloc COBAS INTEGRA {0} ignoré : ce type de bloc n'est pas traité.",
@@ -1841,6 +1843,8 @@
   },
 
   "SupplierInvoices": {
+    "DaysLeft": "J-{0}",
+    "DaysLate": "+{0} j",
     "MaturityDate": "Échéance (LCN, chèque)",
     "DashboardDueSoon": "Factures fournisseurs à payer sous 7 jours",
     "DashboardOverdue": "Factures fournisseurs en retard de paiement",

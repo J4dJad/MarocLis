@@ -177,10 +177,10 @@ public sealed class PurchaseOrderView : LocalizedView
 
         _grid.SelectionChanged += async (_, _) => await _selectionLoads.RunAsync(() => LoadLinesAsync());
         _grid.CellFormatting += OnOrderFormatting;
-        StockGrid.Pills(_grid, "status", tag => tag is PurchaseOrderRow row ? StatusPill(row.Status) : null);
+        StockGrid.Pills(_grid, "status", tag => tag is PurchaseOrderRow row
+                            ? StockPill.Of(PurchaseOrderScreenRules.StatusTone(row.Status)) : null);
         StockGrid.Pills(_grid, "priority", tag => tag is PurchaseOrderRow row
-            ? IsPendingPriority(row) ? StockPill.Critical : StockPill.Waiting
-            : null);
+                            ? StockPill.Of(PurchaseOrderScreenRules.PriorityTone(row)) : null);
         _search.Changed += (_, _) => StockGrid.Filter(_grid, _search.Query);
         _lines.SelectionChanged += (_, _) => RefreshButtons();
 
@@ -206,32 +206,20 @@ public sealed class PurchaseOrderView : LocalizedView
 
         // The priority shows on its pill; a late delivery on its date. A whole row in colour is
         // kept for the critical cases, as the design system has it.
-        if (IsPendingPriority(row))
+        switch (PurchaseOrderScreenRules.Ink(row, _grid.Columns[e.ColumnIndex].Name))
         {
-            if (_grid.Columns[e.ColumnIndex].Name == "number") e.CellStyle!.ForeColor = UiTheme.Critical;
-        }
-        else if (row.IsOverdue)
-        {
-            if (_grid.Columns[e.ColumnIndex].Name == "expected")
-            {
+            case StockInk.CriticalBold:
+                e.CellStyle!.ForeColor = UiTheme.Critical;
+                break;
+            case StockInk.AbnormalBold:
                 e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
                 e.CellStyle.ForeColor = UiTheme.Abnormal;
-            }
-        }
-        else if (row.Status is PurchaseOrderStatus.Cancelled or PurchaseOrderStatus.Received)
-        {
-            e.CellStyle!.ForeColor = UiTheme.TextMuted;
+                break;
+            case StockInk.Muted:
+                e.CellStyle!.ForeColor = UiTheme.TextMuted;
+                break;
         }
     }
-
-    private static StockPill StatusPill(PurchaseOrderStatus status) => status switch
-    {
-        PurchaseOrderStatus.Received => StockPill.Done,
-        PurchaseOrderStatus.Approved or PurchaseOrderStatus.Sent or PurchaseOrderStatus.PartiallyReceived => StockPill.Running,
-        _ => StockPill.Waiting
-    };
-
-    private static bool IsPendingPriority(PurchaseOrderRow row) => PurchaseOrderRules.IsPendingPriority(row);
 
     protected override void ApplyTexts()
     {
@@ -292,9 +280,9 @@ public sealed class PurchaseOrderView : LocalizedView
     private PurchaseOrderRow? SelectedOrder => _grid.CurrentRow?.Tag as PurchaseOrderRow;
     private PurchaseOrderLineRow? SelectedLine => _lines.CurrentRow?.Tag as PurchaseOrderLineRow;
 
-    private static string Amount(decimal value) => value.ToString("N2", CultureInfo.CurrentCulture);
+    private static string Amount(decimal value) => PurchaseOrderScreenRules.Amount(value);
     // Shown, never read back: written with the decimal comma of the language, not « 2.5 ».
-    private static string Quantity(decimal value) => value.ToString("0.##", CultureInfo.CurrentCulture);
+    private static string Quantity(decimal value) => PurchaseOrderScreenRules.Quantity(value);
 
     private async Task LoadAsync(Guid? keep = null, CancellationToken ct = default)
     {
@@ -329,19 +317,15 @@ public sealed class PurchaseOrderView : LocalizedView
 
         // The priority orders still to be dealt with come first: they are the ones that stop a
         // consumable from running out.
-        foreach (var row in _rows.OrderByDescending(IsPendingPriority))
+        foreach (var row in PurchaseOrderScreenRules.Ordered(_rows))
         {
             var index = _grid.Rows.Add(
                 row.Number,
-                row.IsPriority
-                    ? T(row.RaisedAutomatically ? "PurchaseOrders.PriorityAutomatic" : "PurchaseOrders.PriorityFlag")
-                    : string.Empty,
+                PurchaseOrderScreenRules.PriorityKey(row) is { } priority ? T(priority) : string.Empty,
                 row.SupplierName,
-                row.OrderDate.ToString("dd/MM/yy"),
-                row.ExpectedDeliveryDate is { } expected
-                    ? row.IsOverdue ? $"! {expected:dd/MM/yy}" : expected.ToString("dd/MM/yy")
-                    : string.Empty,
-                T($"PurchaseOrderStatus.{row.Status}"),
+                PurchaseOrderScreenRules.Date(row.OrderDate),
+                PurchaseOrderScreenRules.Expected(row),
+                T(PurchaseOrderScreenRules.StatusKey(row.Status)),
                 row.LineCount,
                 Amount(row.TotalExcludingVat),
                 Amount(row.TotalIncludingVat),
@@ -366,13 +350,7 @@ public sealed class PurchaseOrderView : LocalizedView
 
     private void RenderHeading()
     {
-        var overdue = _rows.Count(r => r.IsOverdue);
-        var toApprove = _rows.Count(r => r.Status == PurchaseOrderStatus.Draft && r.LineCount > 0);
-
-        var text = T("StocksUi.Orders", _rows.Count);
-        if (toApprove > 0) text += $" · {T("PurchaseOrders.ToApprove")} {toApprove}";
-        if (overdue > 0) text += $" · {T("PurchaseOrders.Late")} {overdue}";
-        _count.Text = text;
+        _count.Text = PurchaseOrderScreenRules.Count(_rows, T);
     }
 
     private async Task LoadLinesAsync()
@@ -422,8 +400,8 @@ public sealed class PurchaseOrderView : LocalizedView
                 Quantity(line.QuantityOutstanding),
                 line.UnitOfMeasure,
                 Amount(line.UnitPriceMad),
-                line.DiscountRate == 0m ? string.Empty : $"{line.DiscountRate * 100m:0.#}%",
-                $"{line.VatRate * 100m:0.#}%",
+                PurchaseOrderScreenRules.Rate(line.DiscountRate, blankWhenZero: true),
+                PurchaseOrderScreenRules.Rate(line.VatRate),
                 Amount(line.LineTotalExcludingVat));
 
             _lines.Rows[index].Tag = line;
@@ -438,16 +416,12 @@ public sealed class PurchaseOrderView : LocalizedView
 
         var order = SelectedOrder;
         _linesCard.Title.Text = T("PurchaseOrders.Lines");
-        _linesCard.Note.Text = order is null ? string.Empty
-            : order is { Status: PurchaseOrderStatus.Cancelled, CancellationReason: { } why }
-                ? $"{order.Number} · {order.SupplierName} · {T("PurchaseOrders.CancelledBecause", why)}"
-                : $"{order.Number} · {order.SupplierName}";
+        _linesCard.Note.Text = PurchaseOrderScreenRules.LinesNote(order, T);
 
+        var totals = order is null ? default : PurchaseOrderScreenRules.Totals(order);
         _totals.Text = order is null
             ? string.Empty
-            : T("PurchaseOrders.TotalsLine", Amount(order.TotalExcludingVat),
-                Amount(order.TotalIncludingVat - order.TotalExcludingVat),
-                Amount(order.TotalIncludingVat));
+            : T("PurchaseOrders.TotalsLine", Amount(totals.ExcludingVat), Amount(totals.Vat), Amount(totals.IncludingVat));
 
         RefreshButtons();
     }
@@ -474,22 +448,18 @@ public sealed class PurchaseOrderView : LocalizedView
         // Nothing that writes is offered while a write is in flight (see RunActionAsync).
         var order = IsBusy ? null : SelectedOrder;
 
+        var actions = PurchaseOrderScreenRules.Actions(p => PermissionGate.Allows(p), PermissionGate.User?.UserId ?? Guid.Empty, order, SelectedLine);
+
         _newOrder.Enabled = !IsBusy;
-        _addLine.Enabled = order?.Status == PurchaseOrderStatus.Draft;
+        _addLine.Enabled = actions.AddLine;
         // The author of an order cannot approve it (the service refuses it): greyed out for them,
         // with the reason on the button rather than a refusal after the click.
-        var ownOrder = order is not null && PermissionGate.User?.UserId == order.RaisedByUserId;
-        _approve.Enabled = order is { Status: PurchaseOrderStatus.Draft, LineCount: > 0 } && !ownOrder;
-        _tips.SetToolTip(_approve, ownOrder && order is { Status: PurchaseOrderStatus.Draft }
-                                       ? T("PurchaseOrders.ApproveOwnOrderTip") : null);
-        _send.Enabled = order?.Status == PurchaseOrderStatus.Approved;
-        _receive.Enabled = order?.Status is PurchaseOrderStatus.Approved or PurchaseOrderStatus.Sent
-                                          or PurchaseOrderStatus.PartiallyReceived
-                           && SelectedLine is { QuantityOutstanding: > 0m };
-        _cancel.Enabled = order?.Status is PurchaseOrderStatus.Draft or PurchaseOrderStatus.Approved
-                                         or PurchaseOrderStatus.Sent;
-        _printPdf.Enabled = _savePdf.Enabled =
-            order is not null && PurchaseOrderDocumentService.IsPrintable(order.Status);
+        _approve.Enabled = actions.Approve;
+        _tips.SetToolTip(_approve, actions.OwnOrder ? T("PurchaseOrders.ApproveOwnOrderTip") : null);
+        _send.Enabled = actions.Send;
+        _receive.Enabled = actions.Receive;
+        _cancel.Enabled = actions.Cancel;
+        _printPdf.Enabled = _savePdf.Enabled = actions.Print;
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
@@ -591,7 +561,8 @@ public sealed class PurchaseOrderView : LocalizedView
                 var pdf = await _documents.RenderAsync(order.Id);
                 if (pdf.IsFailure) { _dialogs.ShowFailure(pdf, _send.Text); return; }
 
-                if (pdf.Value.SupplierEmail is { } address)
+                if (PurchaseOrderScreenRules.SendRoute(_documents.CanEmail, pdf.Value.SupplierEmail) == PurchaseOrderSendRoute.Email
+                    && pdf.Value.SupplierEmail is { } address)
                 {
                     if (!_dialogs.Confirm(T("PurchaseOrders.EmailQuestion", order.Number, order.SupplierName, address),
                                           _send.Text))
@@ -611,16 +582,15 @@ public sealed class PurchaseOrderView : LocalizedView
                 }
                 else
                 {
-                    manualReason = T("Po_SupplierEmailMissing", order.SupplierName);
+                    manualReason = PurchaseOrderScreenRules.ManualReason(canEmail: true, order.SupplierName, T);
                 }
             }
             else
             {
-                manualReason = T("Purchasing_EmailNotConfigured");
+                manualReason = PurchaseOrderScreenRules.ManualReason(canEmail: false, order.SupplierName, T);
             }
 
-            if (!_dialogs.Confirm($"{manualReason}\n\n{T("PurchaseOrders.ManualSendQuestion", order.Number, order.SupplierName)}",
-                                  _send.Text))
+            if (!_dialogs.Confirm(PurchaseOrderScreenRules.ManualQuestion(manualReason, order, T), _send.Text))
                 return;
 
             await StepAsync(o => _orders.SendAsync(o.Id), _send.Text);
@@ -759,8 +729,8 @@ internal sealed class PurchaseOrderDialog : MasterDataEditor
         _supplierReference = TextField("PurchaseOrders.SupplierReference", 240, 68, 260, null, latin: true);
         _notes = TextField("Field.Notes", 20, 128, 480);
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
-        _supplierReference.MaxLength = 60;
-        _notes.MaxLength = 1000;
+        _supplierReference.MaxLength = PurchaseOrderScreenRules.SupplierReferenceMaxLength;
+        _notes.MaxLength = PurchaseOrderScreenRules.NotesMaxLength;
 
         Notice(20, 182, 480, 46, "PurchaseOrders.ApprovalNotice");
 
@@ -771,15 +741,22 @@ internal sealed class PurchaseOrderDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (SelectedId(_supplier) is not { } supplierId) return;
-
-        Request = new CreatePurchaseOrderRequest
+        var expected = DateOrNull(_expected.Toggle, _expected.Picker);
+        var (refusal, request) = PurchaseOrderScreenRules.CheckOrder(new PurchaseOrderForm
         {
-            SupplierId = supplierId,
-            ExpectedDeliveryDate = DateOrNull(_expected.Toggle, _expected.Picker),
-            SupplierReference = Blank(_supplierReference),
-            Notes = Blank(_notes)
-        };
+            SupplierId = SelectedId(_supplier),
+            HasExpectedDelivery = expected is not null,
+            ExpectedDelivery = expected ?? default,
+            SupplierReference = _supplierReference.Text,
+            Notes = _notes.Text
+        }, DateOnly.FromDateTime(DateTime.Today));
+        if (refusal is not null)
+        {
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            return;
+        }
+
+        Request = request;
 
         DialogResult = DialogResult.OK;
         Close();
@@ -803,12 +780,11 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
     {
         _supplierId = supplierId;
         // Articles normally bought from this supplier first: the usual case, and the short list.
-        _items = items.OrderBy(i => supplierId is not null && i.PreferredSupplierId == supplierId ? 0 : 1)
-                      .ThenBy(i => i.Code, StringComparer.Ordinal).ToList();
+        _items = PurchaseOrderScreenRules.ItemsFor(items, supplierId);
 
         var language = localizer.CurrentLanguage;
         _item = Lookup("Inventory.Item", 20, 14, 520,
-                       _items.Select(i => (i.Id, $"{i.Code} — {i.Name.For(language)}")), null,
+                       _items.Select(i => (i.Id, PurchaseOrderScreenRules.ItemLabel(i, language))), null,
                        allowNone: false);
 
         _quantity = TextField("Field.Quantity", 20, 68, 110, null, latin: true, mono: true, right: true);
@@ -850,50 +826,41 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
         if (Current is not { } item) return;
 
         _unit.Text = item.UnitOfMeasure;
-        _quantity.Text = item.ReorderQuantity > 0m
-            ? item.ReorderQuantity.ToString("0.##", CultureInfo.InvariantCulture) : string.Empty;
-        _price.Text = item.LastUnitPriceMad?.ToString("0.00", CultureInfo.InvariantCulture) ?? string.Empty;
-        // The discount was agreed with the preferred supplier: another supplier starts from none.
-        var discount = _supplierId is not null && item.PreferredSupplierId == _supplierId ? item.LastDiscountRate : 0m;
-
-        // A captive reagent ordered from its contract's supplier is bought at the contracted price.
-        if (item.ContractPriceMad is { } contracted && _supplierId is not null && item.ContractSupplierId == _supplierId)
-        {
-            _price.Text = contracted.ToString("0.00", CultureInfo.InvariantCulture);
-            discount = 0m;
-        }
-        _discount.Text = (discount * 100m).ToString("0.##", CultureInfo.InvariantCulture);
+        // The discount was agreed with the preferred supplier: another supplier starts from none; a
+        // captive reagent ordered from its contract's supplier is bought at the contracted price.
+        var form = new PurchaseOrderLineForm();
+        PurchaseOrderScreenRules.Defaults(form, item, _supplierId);
+        _quantity.Text = form.Quantity;
+        _price.Text = form.UnitPrice;
+        _discount.Text = form.DiscountPercent;
     }
 
     protected override void Accept()
     {
         if (Current is not { } item) return;
 
-        if (DecimalOrNull(_quantity) is not { } quantity || quantity <= 0m)
-        {
-            Dialogs.Warn(Localizer["Po_QuantityMustBePositive"], Text);
-            _quantity.Focus();
-            return;
-        }
-
-        if (DecimalOrNull(_price) is not { } price || price < 0m)
-        {
-            Dialogs.Warn(Localizer["Po_PriceMustNotBeNegative"], Text);
-            _price.Focus();
-            return;
-        }
-
-        var discount = DecimalOrNull(_discount) ?? 0m;
-        var vat = DecimalOrNull(_vat) ?? 20m;
-
-        Request = new AddPurchaseOrderLineRequest
+        var (refusal, request) = PurchaseOrderScreenRules.CheckLine(new PurchaseOrderLineForm
         {
             StockItemId = item.Id,
-            Quantity = quantity,
-            UnitPriceMad = price,
-            DiscountRate = discount / 100m,
-            VatRate = vat / 100m
-        };
+            Quantity = _quantity.Text,
+            UnitPrice = _price.Text,
+            DiscountPercent = _discount.Text,
+            VatPercent = _vat.Text
+        });
+        if (refusal is not null)
+        {
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            (refusal.Field switch
+            {
+                PurchaseOrderScreenRules.PriceField => _price,
+                PurchaseOrderScreenRules.DiscountField => _discount,
+                PurchaseOrderScreenRules.VatField => _vat,
+                _ => _quantity
+            }).Focus();
+            return;
+        }
+
+        Request = request;
 
         DialogResult = DialogResult.OK;
         Close();
@@ -903,12 +870,12 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
 /// <summary>A delivery against one line, received straight into stock as a lot.</summary>
 internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
 {
-    private readonly Guid _lineId;
     private readonly TextBox _quantity, _lot, _deliveryNote, _location;
     private readonly DateTimePicker _expiry;
 
     // Reception checks and GS1 scan.
     private readonly PurchaseOrderLineRow _line;
+    private readonly StorageCondition _condition;
     private readonly ReceptionChecksPanel _checks;
     private readonly Func<string, Task<GtinMatch?>>? _findByGtin;
 
@@ -926,8 +893,8 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
                                         Func<string, Task<GtinMatch?>>? findByGtin = null)
         : base(localizer, dialogs, "PurchaseOrders.ReceiveLine", $"{number} · {line.ItemCode}", 520, 520)
     {
-        _lineId = line.Id;
         _line = line;
+        _condition = condition;
         _findByGtin = findByGtin;
 
         _quantity = TextField("Field.Quantity", 20, 14, 120,
@@ -947,8 +914,9 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
 
         _deliveryNote = TextField("Inventory.DeliveryNote", 20, 68, 230, null, latin: true);
         _location = TextField("Inventory.DefaultLocation", 270, 68, 230);
-        _lot.MaxLength = _deliveryNote.MaxLength = 60;
-        _location.MaxLength = 100;
+        _lot.MaxLength = InventoryScreenRules.LotNumberMaxLength;
+        _deliveryNote.MaxLength = InventoryScreenRules.DeliveryNoteMaxLength;
+        _location.MaxLength = InventoryScreenRules.StorageMaxLength;
         Numeric(EditorValues.MeasureMaxLength, _quantity);
 
         _checks = new ReceptionChecksPanel(localizer, condition) { Location = new Point(20, 122) };
@@ -965,7 +933,8 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
         refuse.Click += (_, _) =>
         {
             var reason = Dialogs.PromptForReason(Localizer["Reception.RefusePrompt"],
-                                                 Localizer["Reception.Refuse"], minimumLength: 10, maxLength: 1000);
+                                                 Localizer["Reception.Refuse"], minimumLength: InventoryScreenRules.RefusalMinLength,
+                                                 maxLength: InventoryScreenRules.RefusalMaxLength);
             if (reason is null) return;
             RefusalReason = reason;
             DialogResult = DialogResult.Abort;
@@ -992,41 +961,43 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
 
         var match = await _findByGtin(gtin);
 
-        if (match is null)
-            Dialogs.Info(Localizer.Format("Reception.GtinUnknown", gtin), Text);
-        else if (match.StockItemId != _line.StockItemId)
-            Dialogs.Warn(Localizer.Format("Reception.GtinNotOnLine", match.Code, _line.ItemCode), Text);
+        if (PurchaseOrderScreenRules.ScanMismatch(match, _line, gtin, Localizer.Format) is not { } said) return;
+        if (match is null) Dialogs.Info(said, Text);
+        else Dialogs.Warn(said, Text);
     }
 
     protected override void Accept()
     {
-        if (DecimalOrNull(_quantity) is not { } quantity || quantity <= 0m)
+        var form = new ReceiveLotForm
         {
-            Dialogs.Warn(Localizer["Po_QuantityMustBePositive"], Text);
-            _quantity.Focus();
+            Quantity = _quantity.Text,
+            LotNumber = _lot.Text,
+            ExpiryDate = DateOnly.FromDateTime(_expiry.Value.Date),
+            DeliveryNote = _deliveryNote.Text,
+            StorageLocation = _location.Text
+        };
+        _checks.Fill(form);
+
+        var verdict = PurchaseOrderScreenRules.CheckReceipt(form, _line, _condition, DateOnly.FromDateTime(DateTime.Today));
+        if (verdict.Refusal is { } refusal)
+        {
+            if (refusal.Field == InventoryScreenRules.TemperatureField)
+            {
+                _checks.Confirm(new ArrivalVerdict(refusal, null, false, false), Dialogs, Text);
+                return;
+            }
+
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            (refusal.Field == InventoryScreenRules.LotNumberField ? _lot : _quantity).Focus();
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_lot.Text))
-        {
-            Dialogs.Warn(Localizer["Lot_NumberRequired"], Text);
-            _lot.Focus();
-            return;
-        }
-
-        var check = _checks.Build(Dialogs, Text);
+        // The ambient warning, then the non-conformity a failed check opens, asked about first.
+        var check = _checks.Confirm(new ArrivalVerdict(null, verdict.Request!.Reception, verdict.AmbientWarning,
+                                                       verdict.NeedsNonConformity), Dialogs, Text);
         if (check is null) return;
 
-        Request = new ReceivePurchaseOrderLineRequest
-        {
-            Reception = check,
-            LineId = _lineId,
-            Quantity = quantity,
-            LotNumber = _lot.Text.Trim(),
-            ExpiryDate = DateOnly.FromDateTime(_expiry.Value.Date),
-            DeliveryNoteReference = Blank(_deliveryNote),
-            StorageLocation = Blank(_location)
-        };
+        Request = verdict.Request;
 
         DialogResult = DialogResult.OK;
         Close();
