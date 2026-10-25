@@ -1166,3 +1166,11 @@ html[dir=rtl] :is([data-screen=purchaseorders], [data-screen=quotes], [data-scre
 .contract-pick { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
 .contract-pick .grid td .input { min-inline-size: 0; }
 .field-active { align-self: end; min-block-size: var(--control-height); }
+/* Names and kinds broken between words, never inside one; the last column clear of the edge. */
+:is([data-screen=equipment], [data-screen=contracts]) .grid :is(.cell-wrap, .list-name) { overflow-wrap: break-word; }
+:is([data-screen=equipment], [data-screen=contracts], [data-modal=instrument-contract]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
+html[dir=rtl] :is([data-screen=equipment], [data-screen=contracts]) .grid td:last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
+[data-screen=contracts] .stock-heading > .card-actions { flex: none; }
+[data-grid=contracts] > thead > tr > th:first-child { min-inline-size: 160px; }
+[data-grid=contracts] .pill { white-space: normal; max-inline-size: 100%; border-radius: 10px; }
+html[dir=rtl] .equipment-card .facts dd[dir=ltr] { text-align: right; }
