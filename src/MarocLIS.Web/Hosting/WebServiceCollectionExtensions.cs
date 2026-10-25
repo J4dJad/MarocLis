@@ -105,6 +105,9 @@ public static class WebServiceCollectionExtensions
         // targets a replayed transmission's control results are checked against.
         services.AddScoped<Application.Instruments.IInstrumentInterfaceQueries, InstrumentInterfaceQueries>();
         services.AddScoped<Application.Quality.IQualityQueries, QualityQueries>();
+        // « Contrôle qualité »: the reagent lots a control run can be recorded against (a new lot
+        // under evaluation, or the lot in use).
+        services.AddScoped<Application.Inventory.IPurchasingQualityQueries, PurchasingQualityQueries>();
 
         // ---- « Interfaces automates »: configuring the links, replaying a held transmission and
         // trying a frame, through the workstation's services. Never the host: the web server opens
