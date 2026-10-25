@@ -6735,6 +6735,17 @@
     "Done": "Restore finished."
   },
   "Web": {
+    "QcSearch": "Analyte, lot or analyser…",
+    "QcAllAnalysers": "All analysers",
+    "QcAllLevels": "All levels",
+    "QcRulesShort": "Rules",
+    "QcNoControl": "No control to enter: first create a control target in “Reference data”.",
+    "QcNoneShown": "No control matches the filters.",
+    "QcInstrumentsNotice": "Controls transmitted by the analysers arrive through the Windows workstation that drives them; here values are typed by hand and evaluated by the same rules.",
+    "QcPeriod": "Chart period",
+    "QcDays": "{0} d",
+    "QcNoRejection": "No rejected control awaiting review.",
+    "QcTyped": "{0} {0:plural:value typed|values typed}",
     "ReportsNoneToIssue": "No file is waiting for a report.",
     "ReportsNoneInRegister": "No report in the period.",
     "ReportsSelectRow": "Select a file or a version to see its preview.",

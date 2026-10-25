@@ -6736,6 +6736,17 @@
     "Done": "Restauration terminée."
   },
   "Web": {
+    "QcSearch": "Analyse, lot ou automate…",
+    "QcAllAnalysers": "Tous les automates",
+    "QcAllLevels": "Tous les niveaux",
+    "QcRulesShort": "Règles",
+    "QcNoControl": "Aucun contrôle à saisir : créez d'abord une cible de contrôle dans « Données de référence ».",
+    "QcNoneShown": "Aucun contrôle ne correspond aux filtres.",
+    "QcInstrumentsNotice": "Les contrôles transmis par les automates arrivent par le poste Windows qui les pilote ; ici, les valeurs se saisissent à la main et sont évaluées par les mêmes règles.",
+    "QcPeriod": "Période de la carte",
+    "QcDays": "{0} j",
+    "QcNoRejection": "Aucun contrôle rejeté en attente de revue.",
+    "QcTyped": "{0} {0:plural:valeur saisie|valeurs saisies}",
     "ReportsNoneToIssue": "Aucun dossier n'attend de compte rendu.",
     "ReportsNoneInRegister": "Aucun compte rendu dans la période.",
     "ReportsSelectRow": "Sélectionnez un dossier ou une version pour en voir l'aperçu.",
