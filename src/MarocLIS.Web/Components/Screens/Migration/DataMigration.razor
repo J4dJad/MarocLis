@@ -1,0 +1,1134 @@
+@using System.Globalization
+@using System.IO.Compression
+@using MarocLIS.Application.Migration
+@using MarocLIS.Domain.Migration
+@implements IDisposable
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IMigrationWorkbook Workbook
+@inject MigrationProfileStore Profiles
+@inject IJSRuntime JS
+@inject ILogger<DataMigration> Logger
+
+@*
+    « Reprise de données », the workstation's DataMigrationView: the patients, prescribers,
+    catalogue, antériorités and open balances of the laboratory's previous application, from an
+    Excel or CSV file sent from the browser, matched column by column and value by value, checked
+    row by row in a « Simulation », then imported in batches a second run updates rather than
+    duplicates — with the same confirmations, the same refusals and the same journal as the
+    workstation, since DataMigrationService plans, writes, undoes and journals.
+    The old application's database is read from a workstation only: Windows authentication would
+    run as the server's service account, an ODBC source is the workstation's, a profile's password
+    is kept with DPAPI for one Windows user, and the old database is usually reachable from the
+    laboratory's computers rather than from this server — the screen says so instead of offering
+    it. Profiles live in the server's own folder, kept without a password.
+    What is matched, refused, asked and shown is DataMigrationScreenRules'.
+*@
+<div class="screen migration" data-screen="migration">
+    <section class="card" data-card="source">
+        <div class="card-heading">
+            <h2 class="card-title">@Texts["Migration.SourceTitle"]</h2>
+            <span class="muted small">@Texts["Migration.Caption"]</span>
+        </div>
+        <div class="source-row">
+            <label class="field">
+                <span class="field-label">@Texts["Migration.Kind"]</span>
+                <select class="input" data-field="kind" disabled="@Running" @onchange="KindChangedAsync">
+                    @foreach (var kind in Enum.GetValues<DataMigrationKind>())
+                    {
+                        <option value="@kind" selected="@(kind == _kind)">@Texts[$"MigrationKind.{kind}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Migration.SourceSystem"]</span>
+                <input class="input" dir="ltr" data-field="system" placeholder="@Texts["Migration.SourceSystemHint"]" maxlength="@MigrationBatch.SourceSystemMaxLength"
+                       @bind="_system" @bind:event="oninput" @bind:after="() => Invalidate(analysisOnly: true)" />
+            </label>
+            <label class="field field-wide">
+                <span class="field-label">@Texts["Migration.Profile"]</span>
+                <select class="input" data-field="profile" disabled="@Running" @onchange="ProfileChangedAsync">
+                    <option value="" selected="@(_profile is null)">@Texts["Migration.NoProfile"]</option>
+                    @foreach (var name in _profileNames)
+                    {
+                        <option value="@name" selected="@(name == _profile?.Name)">@name</option>
+                    }
+                </select>
+            </label>
+            <ActionButton Key="Migration.SaveProfile" Disabled="@(!CanRun || Running)" OnClick="AskProfileName" />
+            <label class="field-check small">
+                <input type="checkbox" data-field="linkbyname" checked="@_linkByName" @onchange="LinkByNameChanged" />
+                <span>@Texts["Migration.LinkByName"]</span>
+            </label>
+        </div>
+        <div class="source-row" data-state="file-row">
+            <span class="field-label">@Texts["Migration.Origin"] : @Texts["Migration.FromFile"]</span>
+            @* A file picked in the browser: it travels to the server, which alone reads it. *@
+            <label class="btn btn-secondary @(!CanRun || Running ? "is-disabled" : null)" data-action="Migration.Browse">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FolderOpen" />
+                @Texts["Migration.Browse"]
+                <InputFile class="file-input" accept=".xlsx,.csv,.txt" disabled="@(!CanRun || Running)" OnChange="UploadAsync" />
+            </label>
+            <span class="source-file muted" data-state="file" title="@_fileName">@(_fileName ?? Texts["Migration.NoFile"])</span>
+            @if (_sheets.Count > 0)
+            {
+                <label class="field">
+                    <span class="field-label">@Texts["Migration.Sheet"]</span>
+                    <select class="input" data-field="sheet" disabled="@(Running || _sheets.Count < 2)" @onchange="SheetChangedAsync">
+                        @foreach (var sheet in _sheets)
+                        {
+                            <option value="@sheet" selected="@(sheet == _sheet)">@sheet</option>
+                        }
+                    </select>
+                </label>
+            }
+            <ActionButton Key="Migration.DownloadTemplate" Disabled="Running" OnClick="DownloadTemplateAsync" />
+        </div>
+        <p class="message is-info small" data-state="database-notice">@Texts["Web.MigrationDatabaseNotice"]</p>
+    </section>
+
+    <div class="tabs" role="tablist">
+        @foreach (var tab in Enum.GetValues<Tab>())
+        {
+            <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                    data-tab="@tab" @onclick="() => _tab = tab">@Texts[$"Migration.Tab{tab}"]</button>
+        }
+    </div>
+
+    <div class="screen-body">
+        @switch (_tab)
+        {
+            case Tab.Columns:
+                <section class="card card-flush card-fill" data-card="columns">
+                    <div class="card-heading card-pad">
+                        <h2 class="card-title">@Texts["Migration.ColumnsTitle"]</h2>
+                        <span class="list-tools-end">
+                            <span class="muted small" data-state="count">@DataMigrationScreenRules.ColumnsMapped(_kind, _columns, Texts.T)</span>
+                            <ActionButton Key="Migration.AutoMatch" Disabled="@(_source is null || Running)" OnClick="AutoMatch" />
+                        </span>
+                    </div>
+                    <p class="small muted card-pad">@Texts["Migration.ColumnsNote"]</p>
+                    <div class="table-scroll">
+                        <table class="grid" data-grid="columns">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Migration.ColField"]</th>
+                                    <th>@Texts["Migration.ColRequired"]</th>
+                                    <th>@Texts["Migration.ColSourceColumn"]</th>
+                                    <th>@Texts["Migration.ColSample"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{ var choices = DataMigrationScreenRules.ColumnChoices(_source, Texts.T); }
+                                @foreach (var field in MigrationSchema.Fields(_kind))
+                                {
+                                    var column = _columns.GetValueOrDefault(field.Key) ?? DataMigrationScreenRules.NotMapped;
+                                    <tr class="@(DataMigrationScreenRules.IsMissing(field, _columns) ? "is-tone-critical" : null)" data-row="@field.Key">
+                                        <td>@Texts[field.LabelKey]</td>
+                                        <td class="small">@(field.Required ? Texts["Migration.Required"] : null)</td>
+                                        <td class="cell-input">
+                                            <select class="input" data-field="column" disabled="@(_source is null || Running)" @onchange="e => ColumnChanged(field, e)">
+                                                @foreach (var choice in choices)
+                                                {
+                                                    <option value="@choice.Value" selected="@(choice.Value == column)">@choice.Display</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td class="mono small" dir="auto">@DataMigrationScreenRules.Sample(_source, column)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                break;
+
+            case Tab.Correspondences:
+                <section class="card card-flush card-fill" data-card="correspondences">
+                    <div class="card-heading card-pad">
+                        <h2 class="card-title">@Texts["Migration.CorrespondencesTitle"]</h2>
+                        <span class="small @(_missing > 0 ? "critical strong" : "muted")" data-state="count">@(_source is null ? null : DataMigrationScreenRules.CorrespondencesCount(_lines.Count, _missing, Texts.T))</span>
+                    </div>
+                    <p class="small muted card-pad">@Texts["Migration.CorrespondencesNote"]</p>
+                    <div class="table-scroll">
+                        <table class="grid" data-grid="correspondences">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Migration.ColList"]</th>
+                                    <th>@Texts["Migration.ColSourceValue"]</th>
+                                    <th class="num">@Texts["Migration.ColCount"]</th>
+                                    <th>@Texts["Migration.ColTarget"]</th>
+                                    <th>@Texts["Migration.ColState"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in _lines)
+                                {
+                                    <tr data-row="@($"{line.Row.List}:{line.Row.SourceValue}")">
+                                        <td class="small">@Texts[$"MigrationCodeList.{line.Row.List}"]</td>
+                                        <td class="mono" dir="auto">@line.Row.SourceValue</td>
+                                        <td class="num mono">@line.Row.Count.ToString(Texts.Culture)</td>
+                                        <td class="cell-input">
+                                            <select class="input" data-field="target" disabled="@Running" @onchange="e => TargetChanged(line, e)">
+                                                @foreach (var choice in DataMigrationScreenRules.TargetChoices(line.Row.List, _targets, line.Target, Texts.T))
+                                                {
+                                                    <option value="@choice.Value" selected="@(choice.Value == line.Target)">@choice.Display</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td><Pill Text="@Texts[$"Migration.State{line.State}"]" Tone="@StateTone(line.State)" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                break;
+
+            case Tab.Report:
+                {
+                    var (counts, critical) = DataMigrationScreenRules.ReportCounts(_summary, _analysis, Texts.T);
+                    var anomalies = DataMigrationScreenRules.Anomalies(_summary, _analysis);
+                    <section class="card card-flush card-fill" data-card="report">
+                        <div class="card-heading card-pad">
+                            <h2 class="card-title">@Texts["Migration.ReportTitle"]</h2>
+                            <span class="list-tools-end">
+                                <span class="small @(critical ? "critical strong" : "muted")" data-state="count">@counts</span>
+                                <ActionButton Key="Migration.ExportReport" Disabled="@(anomalies.Count == 0)" OnClick="ExportReportAsync" />
+                            </span>
+                        </div>
+                        <div class="table-scroll">
+                            <table class="grid" data-grid="report">
+                                <thead>
+                                    <tr>
+                                        <th class="num">@Texts["Migration.ColRow"]</th>
+                                        <th>@Texts["Migration.ColField"]</th>
+                                        <th>@Texts["Migration.ColSeverity"]</th>
+                                        <th>@Texts["Migration.ColProblem"]</th>
+                                        <th>@Texts["Migration.ColSuggestion"]</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var line in DataMigrationScreenRules.ReportLines(anomalies, Texts.T))
+                                    {
+                                        <tr data-row="@line.Row">
+                                            <td class="num mono">@line.Row</td>
+                                            <td class="small">@line.Field</td>
+                                            <td><Pill Text="@Texts[$"MigrationSeverity.{line.Severity}"]" Tone="@SeverityTone(line.Severity)" /></td>
+                                            <td class="small">@line.Problem</td>
+                                            <td class="small muted">@line.Suggestion</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                }
+                break;
+
+            case Tab.Journal:
+                <section class="card card-flush card-fill" data-card="journal">
+                    <div class="card-heading card-pad">
+                        <h2 class="card-title">@Texts["Migration.JournalTitle"]</h2>
+                        <ActionButton Key="Action.Refresh" Disabled="Running" OnClick="LoadJournalAsync" />
+                    </div>
+                    <div class="table-scroll">
+                        <table class="grid" data-grid="journal">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Migration.ColStarted"]</th>
+                                    <th>@Texts["Migration.Kind"]</th>
+                                    <th>@Texts["Migration.SourceSystem"]</th>
+                                    <th>@Texts["Migration.ColSource"]</th>
+                                    <th>@Texts["Migration.ColUser"]</th>
+                                    <th class="num">@Texts["Migration.ColRows"]</th>
+                                    <th class="num">@Texts["Migration.ColCreated"]</th>
+                                    <th class="num">@Texts["Migration.ColUpdated"]</th>
+                                    <th class="num">@Texts["Migration.ColSkipped"]</th>
+                                    <th class="num">@Texts["Migration.ColFailed"]</th>
+                                    <th>@Texts["Migration.ColState"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var batch in _batches)
+                                {
+                                    <tr data-row="@batch.Id">
+                                        <td class="mono small">@batch.StartedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", Texts.Culture)</td>
+                                        <td class="small">@Texts[$"MigrationKind.{batch.Kind}"]</td>
+                                        <td class="small">@batch.SourceSystem</td>
+                                        <td class="small" dir="auto">@batch.SourceLabel</td>
+                                        <td class="small">@batch.UserName</td>
+                                        <td class="num mono">@batch.Rows.ToString("N0", Texts.Culture)</td>
+                                        <td class="num mono">@batch.Created.ToString("N0", Texts.Culture)</td>
+                                        <td class="num mono">@batch.Updated.ToString("N0", Texts.Culture)</td>
+                                        <td class="num mono">@batch.Skipped.ToString("N0", Texts.Culture)</td>
+                                        <td class="num mono">@batch.Failed.ToString("N0", Texts.Culture)</td>
+                                        <td><Pill Text="@Texts[DataMigrationScreenRules.BatchState(batch)]" Tone="@BatchTone(batch)" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                break;
+
+            case Tab.OldNumbers:
+                <section class="card card-flush card-fill" data-card="old-numbers">
+                    <div class="card-heading card-pad">
+                        <h2 class="card-title">@Texts["Migration.OldNumbersTitle"]</h2>
+                        <span class="list-tools-end">
+                            <input class="input mono" dir="ltr" data-field="old-number" aria-label="@Texts["Migration.OldNumber"]" placeholder="@Texts["Migration.OldNumber"]"
+                                   maxlength="@MigrationRecord.OldNumberMaxLength" @bind="_oldNumber" @onkeydown="OldNumberKeyAsync" />
+                            <ActionButton Key="Action.Search" Disabled="@(!CanRun || Running)" OnClick="FindOldNumberAsync" />
+                        </span>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="grid" data-grid="old-numbers">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Migration.ColRecord"]</th>
+                                    <th>@Texts["Migration.ColPatient"]</th>
+                                    <th>@Texts["Migration.ColBirth"]</th>
+                                    <th>@Texts["Migration.ColOldNumber"]</th>
+                                    <th>@Texts["Migration.ColDate"]</th>
+                                    <th>@Texts["Migration.ColAnalysis"]</th>
+                                    <th>@Texts["Migration.ColValue"]</th>
+                                    <th>@Texts["Migration.ColRange"]</th>
+                                    <th>@Texts["Migration.ColAccession"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in _oldNumberLines)
+                                {
+                                    <tr>
+                                        <td class="mono">@line.Record</td>
+                                        <td>@line.Patient</td>
+                                        <td class="mono small">@line.Birth</td>
+                                        <td class="mono">@line.OldNumber</td>
+                                        <td class="mono small">@line.Date</td>
+                                        <td class="small">@line.Analysis</td>
+                                        <td class="mono small" dir="ltr">@line.Value</td>
+                                        <td class="mono small" dir="ltr">@line.Range</td>
+                                        <td class="mono small">@line.Accession</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                break;
+
+            case Tab.Balances:
+                <section class="card card-flush card-fill" data-card="balances">
+                    <div class="card-heading card-pad">
+                        <h2 class="card-title">@Texts["Migration.BalancesTitle"]</h2>
+                        <span class="muted small" data-state="count">@DataMigrationScreenRules.BalancesTotal(_balances, Texts.T, Texts.Culture)</span>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="grid" data-grid="balances">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Migration.ColAsOf"]</th>
+                                    <th>@Texts["Migration.ColPatient"]</th>
+                                    <th>@Texts["Migration.ColPayer"]</th>
+                                    <th class="num">@Texts["Migration.ColAmount"]</th>
+                                    <th>@Texts["Migration.ColInvoice"]</th>
+                                    <th>@Texts["Migration.ColInvoiceDate"]</th>
+                                    <th>@Texts["Migration.ColLabel"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var balance in _balances)
+                                {
+                                    <tr>
+                                        <td class="mono small">@balance.AsOf.ToString("dd/MM/yyyy", Texts.Culture)</td>
+                                        <td>@(balance.PatientRecordNumber is null ? null : $"{balance.PatientRecordNumber} — {balance.PatientName}")</td>
+                                        <td>@(balance.PayerCode is null ? null : $"{balance.PayerCode} — {balance.PayerName}")</td>
+                                        <td class="num mono">@balance.Amount.ToString("N2", Texts.Culture)</td>
+                                        <td class="mono small">@balance.OldInvoiceNumber</td>
+                                        <td class="mono small">@balance.OldInvoiceDate?.ToString("dd/MM/yyyy", Texts.Culture)</td>
+                                        <td class="small">@balance.Label</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                break;
+
+            default:
+                <section class="card card-flush card-fill" data-card="preview">
+                    <div class="card-heading card-pad">
+                        <h2 class="card-title">@Texts["Migration.PreviewTitle"]</h2>
+                        <span class="muted small" data-state="count">@DataMigrationScreenRules.RowsRead(_source, Texts.T)</span>
+                    </div>
+                    @if (_source is { } source)
+                    {
+                        <div class="table-scroll">
+                            <table class="grid" data-grid="preview">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in source.Columns) { <th>@column</th> }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in DataMigrationScreenRules.Preview(source))
+                                    {
+                                        <tr>
+                                            @foreach (var value in row) { <td class="small" dir="auto">@value</td> }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="muted card-pad" data-state="no-source">@Texts["Migration.StatusStart"]</p>
+                    }
+                </section>
+                break;
+        }
+    </div>
+
+    <ActionBar StatusText="@StatusText" StatusClass="@($"is-{StatusTone}")">
+        <Secondary>
+            <ActionButton Key="Migration.Simulate" Disabled="@(!CanRun || Running)" OnClick="SimulateAsync" />
+            <ActionButton Key="Migration.Stop" Disabled="@(!Running)" OnClick="Stop" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Migration.AllTemplates" Disabled="Running" OnClick="DownloadAllTemplatesAsync" />
+            <ActionButton Key="Migration.ExportProfile" Disabled="@(_profile is null || Running)" OnClick="ExportProfileAsync" />
+            <label class="btn btn-secondary btn-file @(Running ? "is-disabled" : null)" data-action="Migration.ImportProfile">
+                @Texts["Migration.ImportProfile"]
+                <InputFile class="file-input" accept=".json,application/json" disabled="@Running" OnChange="ImportProfileAsync" />
+            </label>
+        </More>
+        <Destructive>
+            <ActionButton Key="Migration.UndoLast" Danger="true" Disabled="@(!_canUndo || Running)" OnClick="AskUndoAsync" />
+            <ActionButton Key="Migration.DeleteProfile" Danger="true" Disabled="@(_profile is null || Running)" OnClick="() => _prompt = Prompt.DeleteProfile" />
+        </Destructive>
+        <Info>
+            @if (Running)
+            {
+                <span class="run-progress" data-state="progress"><progress max="1000" value="@_thousandths"></progress></span>
+            }
+        </Info>
+        <Primary>
+            <ActionButton Key="Migration.Import" Primary="true" Disabled="@(!DataMigrationScreenRules.CanImport(Context.User, _analysis) || Running)" OnClick="AskImport" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.ProfileName:
+        <TextPrompt Name="profile-name" Title="@Texts["Migration.SaveProfile"]" Prompt="@Texts["Migration.ProfileNamePrompt"]"
+                    Initial="@DataMigrationScreenRules.SuggestedProfileName(_profile, _system)" MaxLength="MigrationProfile.NameMaxLength" Required="true"
+                    Refusal="@_promptRefusal" OnConfirm="SaveProfile" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.DeleteProfile when _profile is { } profile:
+        <ConfirmPrompt Title="@Texts["Migration.DeleteProfile"]" Message="@Texts.T("Migration.ConfirmDeleteProfile", profile.Name)" OnYes="DeleteProfile" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Import when _analysis is { } analysis:
+        <ConfirmPrompt Title="@Texts["Migration.Import"]" Message="@DataMigrationScreenRules.ConfirmImport(analysis, _kind, Texts.T)" OnYes="ImportAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Undo when _undoable is { } batch:
+        <ConfirmPrompt Title="@Texts["Migration.UndoLast"]" Message="@DataMigrationScreenRules.ConfirmUndo(batch, Texts.T, Texts.Culture)" OnYes="UndoAsync" OnNo="ClosePrompt" />
+        break;
+}
+
+@code {
+    private enum Tab { Preview, Columns, Correspondences, Report, Journal, OldNumbers, Balances }
+    private enum Prompt { None, ProfileName, DeleteProfile, Import, Undo }
+
+    /// <summary>A value of a coded column as shown: where it goes, and where that leaves it.</summary>
+    private sealed class CorrespondenceLine
+    {
+        public required CorrespondenceRow Row { get; init; }
+        public string Target { get; set; } = DataMigrationScreenRules.NotMapped;
+        public CorrespondenceState State { get; set; }
+    }
+
+    private DataMigrationKind _kind = DataMigrationKind.Patients;
+    private string _system = string.Empty;
+    private bool _linkByName = true;
+    private Tab _tab = Tab.Preview;
+    private Prompt _prompt;
+    private string? _promptRefusal;
+
+    private IReadOnlyList<string> _profileNames = [];
+    private MigrationProfile? _profile;
+
+    // The file sent from the browser, kept on the server while the screen is open so another sheet
+    // can be read; deleted when another one comes or the screen closes.
+    private string? _uploadPath, _fileName, _sheet;
+    private IReadOnlyList<string> _sheets = [];
+
+    private SourceTable? _source;
+    private string _sourceLabel = string.Empty;
+    private Dictionary<string, string> _columns = new(StringComparer.Ordinal);
+    private CorrespondenceTables _tables = new();
+    private IReadOnlyDictionary<MigrationCodeList, IReadOnlyList<CodeTarget>> _targets = new Dictionary<MigrationCodeList, IReadOnlyList<CodeTarget>>();
+    private List<CorrespondenceLine> _lines = [];
+    private int _missing;
+
+    private MigrationAnalysis? _analysis;
+    private MigrationSummary? _summary;
+
+    private IReadOnlyList<MigrationBatchRow> _batches = [];
+    private MigrationBatchRow? _undoable;
+    private bool _canUndo;
+    private IReadOnlyList<OpeningBalanceRow> _balances = [];
+    private string _oldNumber = string.Empty;
+    private IReadOnlyList<OldNumberLine> _oldNumberLines = [];
+
+    private CancellationTokenSource? _run;
+    private int _thousandths;
+    private string? _progressText;
+    private (string Text, string Tone)? _message;
+
+    private bool Running => _run is not null;
+
+    /// <summary>A long operation, the sources, the profiles and the lookups take the migration right, as the workstation's PermissionGate.</summary>
+    private bool CanRun => DataMigrationScreenRules.CanRun(Context.User);
+
+    private string? StatusText => Running ? _progressText : _message?.Text ?? DataMigrationScreenRules.Status(_source, _analysis, _summary, Texts.T).Text;
+
+    private string StatusTone => Running ? "muted"
+        : _message?.Tone ?? (DataMigrationScreenRules.Status(_source, _analysis, _summary, Texts.T).Critical ? "critical" : "muted");
+
+    protected override async Task OnInitializedAsync()
+    {
+        FillProfiles();
+        await LoadJournalAsync();
+        await LoadBalancesAsync();
+    }
+
+    private static string StateTone(CorrespondenceState state) => state switch
+    {
+        CorrespondenceState.Missing => "Critical",
+        CorrespondenceState.Suggested => "Warning",
+        CorrespondenceState.Ignored => "Waiting",
+        _ => "Ok"
+    };
+
+    private static string SeverityTone(MigrationSeverity severity) => severity switch
+    {
+        MigrationSeverity.Blocking or MigrationSeverity.Error => "Critical",
+        MigrationSeverity.Warning => "Warning",
+        _ => "Info"
+    };
+
+    private static string BatchTone(MigrationBatchRow batch) => batch switch
+    {
+        { Undone: true } => "Waiting",
+        { Interrupted: true } => "Warning",
+        { CompletedAt: null } => "Info",
+        _ => "Ok"
+    };
+
+    private void Say(string text, string tone = "muted") => _message = (text, tone);
+
+    // ---- Source --------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A file sent from the browser, copied to a file of the server's own and read there as the
+    /// workstation reads a local one: a workbook sheet by sheet, anything else as delimited text.
+    /// </summary>
+    private async Task UploadAsync(InputFileChangeEventArgs e)
+    {
+        if (!CanRun || Running) return;
+
+        var file = e.File;
+        if (!DataMigrationScreenRules.IsSourceFile(file.Name) || !DataMigrationScreenRules.IsReadableSourceSize(file.Size))
+        {
+            Say(Texts.T("Migration.FileUnreadable", file.Name), "critical");
+            return;
+        }
+
+        var path = Path.Combine(Path.GetTempPath(), $"maroclis-reprise-{Guid.NewGuid():N}{Path.GetExtension(file.Name).ToLowerInvariant()}");
+        try
+        {
+            await using (var target = File.Create(path))
+            await using (var stream = file.OpenReadStream(DataMigrationScreenRules.MaxSourceFileBytes))
+                await stream.CopyToAsync(target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or JSException)
+        {
+            TryDelete(path);
+            Say(Texts.T("Migration.FileUnreadable", ex.Message), "critical");
+            return;
+        }
+
+        TryDelete(_uploadPath);
+        _uploadPath = path;
+        _fileName = file.Name;
+        _sheets = [];
+        _sheet = null;
+
+        if (DataMigrationScreenRules.IsWorkbook(file.Name))
+        {
+            try
+            {
+                _sheets = Workbook.SheetNames(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or FormatException or ArgumentException)
+            {
+                Say(Texts.T("Migration.FileUnreadable", ex.Message), "critical");
+                return;
+            }
+
+            _sheet = DataMigrationScreenRules.PreferredSheet(_sheets, _profile, _kind);
+        }
+
+        await ReadFileAsync();
+    }
+
+    private async Task SheetChangedAsync(ChangeEventArgs e)
+    {
+        _sheet = e.Value?.ToString();
+        if (_uploadPath is not null) await ReadFileAsync();
+    }
+
+    private async Task ReadFileAsync()
+    {
+        if (_uploadPath is not { } path || _fileName is not { } name) return;
+        var sheet = _sheet;
+
+        await RunAsync(Texts["Migration.Reading"], async ct =>
+        {
+            var table = await Task.Run(() =>
+            {
+                if (DataMigrationScreenRules.IsWorkbook(name)) return Workbook.Read(path, sheet, DataMigrationService.MaxRows);
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                return CsvSource.Read(stream, DataMigrationService.MaxRows);
+            }, ct);
+
+            await UseSourceAsync(table, DataMigrationScreenRules.FileLabel(name, sheet));
+        }, onFailure: ex => ex is IOException or UnauthorizedAccessException or InvalidDataException or FormatException or ArgumentException
+            ? Texts.T("Migration.FileUnreadable", ex.Message is { } m && m.StartsWith("Migration_", StringComparison.Ordinal) ? Texts[m] : ex.Message)
+            : null);
+    }
+
+    /// <summary>A table is read: preview, matching from the profile and automatic, correspondences.</summary>
+    private async Task UseSourceAsync(SourceTable table, string label)
+    {
+        _source = table;
+        _sourceLabel = DataMigrationScreenRules.SourceLabel(label);
+        _summary = null;
+        MatchColumns();
+        await LoadTargetsAsync();
+        Invalidate(analysisOnly: false);
+        _tab = Tab.Columns;
+
+        _deferred = table.Truncated
+            ? (Texts.T("Migration_TooManyRows", DataMigrationService.MaxRows), "warning")
+            : (Texts.T("Migration.SourceRead", table.Rows.Count), "muted");
+    }
+
+    // ---- Columns -----------------------------------------------------------------------------------
+
+    private void MatchColumns() => _columns = DataMigrationScreenRules.MatchColumns(_kind, _source, _profile);
+
+    private void AutoMatch()
+    {
+        if (_source is null) return;
+        _columns = ColumnMatcher.AutoMatch(_kind, _source.Columns);
+        Invalidate(analysisOnly: false);
+    }
+
+    private void ColumnChanged(MigrationField field, ChangeEventArgs e)
+    {
+        DataMigrationScreenRules.SetColumn(_columns, field.Key, e.Value?.ToString());
+        if (field.Type == MigrationFieldType.Coded) RenderCorrespondences();
+        Invalidate(analysisOnly: true);
+    }
+
+    // ---- Correspondences ---------------------------------------------------------------------------
+
+    private async Task LoadTargetsAsync()
+    {
+        var kind = _kind;
+        var system = _system.Trim();
+        try
+        {
+            var context = await Scopes.RunAsync<DataMigrationService, Result<MigrationContext>>(s => s.LoadContextAsync(kind, system));
+            if (context.IsFailure) Say(Texts.Describe(context.Errors), "critical");
+            else _targets = context.Value.Targets;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the data migration targets failed.");
+            Say(Texts["Message.UnexpectedError"], "critical");
+        }
+
+        RenderCorrespondences();
+    }
+
+    private void RenderCorrespondences()
+    {
+        _lines = [];
+        _missing = 0;
+        if (_source is null) return;
+
+        foreach (var row in CorrespondenceSuggester.Rows(_source, _columns, _kind, _tables, _targets))
+        {
+            var target = DataMigrationScreenRules.InitialTarget(row);
+            var line = new CorrespondenceLine { Row = row, Target = target, State = DataMigrationScreenRules.State(row.List, target, row.Suggested) };
+            if (line.State == CorrespondenceState.Missing) _missing++;
+            _lines.Add(line);
+        }
+    }
+
+    private void TargetChanged(CorrespondenceLine line, ChangeEventArgs e)
+    {
+        var target = e.Value?.ToString() ?? DataMigrationScreenRules.NotMapped;
+        _tables.Set(line.Row.List, line.Row.SourceValue, target.Length == 0 ? null : target);
+        line.Target = target;
+        line.State = DataMigrationScreenRules.State(line.Row.List, target, suggested: false);
+        _missing = _lines.Count(l => l.State == CorrespondenceState.Missing);
+        Invalidate(analysisOnly: true);
+    }
+
+    /// <summary>The correspondences shown, the suggestions accepted as they stand, for the request.</summary>
+    private CorrespondenceTables Settled() =>
+        DataMigrationScreenRules.Settled(_tables, _lines.Select(l => (l.Row.List, l.Row.SourceValue, (string?)l.Target)));
+
+    // ---- Simulation and import ---------------------------------------------------------------------
+
+    /// <summary>Settings changed since the simulation: it no longer says what an import would do.</summary>
+    private void Invalidate(bool analysisOnly)
+    {
+        if (!analysisOnly) RenderCorrespondences();
+        _analysis = null;
+        _message = null;
+    }
+
+    private void LinkByNameChanged(ChangeEventArgs e)
+    {
+        _linkByName = e.Value is true;
+        Invalidate(analysisOnly: true);
+    }
+
+    private MigrationRequest? Request()
+    {
+        if (DataMigrationScreenRules.RequestRefusal(_source, _system) is { } refused)
+        {
+            Say(Texts[refused], "warning");
+            return null;
+        }
+
+        return DataMigrationScreenRules.Request(_kind, _system, _sourceLabel, _source!, _columns, Settled(), _linkByName);
+    }
+
+    /// <summary>« Simulation »: what « Importer » would do, row by row, without writing anything.</summary>
+    private async Task SimulateAsync()
+    {
+        if (!CanRun || Request() is not { } request) return;
+
+        await RunAsync(Texts["Migration.StepAnalyse"], async ct =>
+        {
+            var progress = Progress();
+            var analysis = await Scopes.RunAsync<DataMigrationService, Result<MigrationAnalysis>>(s => s.AnalyseAsync(request, progress, ct));
+            if (analysis.IsFailure)
+            {
+                _deferred = (Texts.Describe(analysis.Errors), "critical");
+                return;
+            }
+
+            _analysis = analysis.Value;
+            _summary = null;
+            _tab = Tab.Report;
+        });
+    }
+
+    /// <summary>Refused before the question without a simulation of the settings as they stand, or while one is blocked.</summary>
+    private void AskImport()
+    {
+        if (DataMigrationScreenRules.ImportRefusal(_analysis, Texts.T) is { } refused)
+        {
+            Say(refused, "warning");
+            return;
+        }
+
+        if (Request() is null) return;
+        _prompt = Prompt.Import;
+    }
+
+    private async Task ImportAsync()
+    {
+        _prompt = Prompt.None;
+        if (!CanRun || Request() is not { } request) return;
+
+        await RunAsync(Texts["Migration.StepImport"], async ct =>
+        {
+            var progress = Progress();
+            var imported = await Scopes.RunAsync<DataMigrationService, Result<MigrationSummary>>(s => s.ImportAsync(request, progress, ct));
+            if (imported.IsFailure)
+            {
+                _deferred = (Texts.Describe(imported.Errors), "critical");
+                return;
+            }
+
+            _summary = imported.Value;
+            _analysis = null;
+            _tab = Tab.Report;
+            _deferred = (DataMigrationScreenRules.SummaryMessage(_summary, Texts.T), _summary.Interrupted ? "warning" : "normal");
+        });
+
+        await LoadJournalAsync();
+        if (_kind == DataMigrationKind.OpeningBalances) await LoadBalancesAsync();
+    }
+
+    private IProgress<MigrationProgress> Progress() => new Progress<MigrationProgress>(p =>
+    {
+        _thousandths = DataMigrationScreenRules.Thousandths(p);
+        _progressText = DataMigrationScreenRules.Progress(p, Texts.T, Texts.Culture);
+        _ = InvokeAsync(StateHasChanged);
+    });
+
+    private void Stop() => _run?.Cancel();
+
+    // ---- Report ------------------------------------------------------------------------------------
+
+    private async Task ExportReportAsync()
+    {
+        var anomalies = DataMigrationScreenRules.Anomalies(_summary, _analysis);
+        if (anomalies.Count == 0) return;
+
+        await JS.InvokeVoidAsync("marocLis.download", DataMigrationScreenRules.ReportFileName(_kind, DateTime.Now), "text/csv",
+                                 DataMigrationScreenRules.ReportCsv(anomalies, Texts.T));
+    }
+
+    // ---- Kind and profiles -------------------------------------------------------------------------
+
+    private async Task KindChangedAsync(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<DataMigrationKind>(e.Value?.ToString(), out var kind)) return;
+        _kind = kind;
+        _summary = null;
+        _analysis = null;
+        MatchColumns();
+        await LoadTargetsAsync();
+        Invalidate(analysisOnly: false);
+    }
+
+    private void FillProfiles()
+    {
+        try { _profileNames = Profiles.Names(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _profileNames = []; }
+    }
+
+    private async Task ProfileChangedAsync(ChangeEventArgs e)
+    {
+        var name = e.Value?.ToString();
+        if (string.IsNullOrEmpty(name))
+        {
+            _profile = null;
+            return;
+        }
+
+        try
+        {
+            _profile = Profiles.Load(name);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            Say(Texts.T("Migration.ProfileUnreadable", ex.Message), "critical");
+            _profile = null;
+        }
+
+        if (_profile is not null) await ApplyProfileAsync(_profile);
+    }
+
+    /// <summary>The old application, the matching of the kinds and the correspondences the trials settled.</summary>
+    private async Task ApplyProfileAsync(MigrationProfile profile)
+    {
+        _system = profile.SourceSystem;
+        _linkByName = profile.LinkByNameAndBirthDate;
+        _tables = profile.Correspondences.Clone();
+
+        if (_source is not null) MatchColumns();
+        await LoadTargetsAsync();
+        Invalidate(analysisOnly: false);
+
+        // A profile saved on a workstation reading the old database: its connection is the workstation's.
+        if (profile.Connection is not null) Say(Texts["Web.MigrationProfileConnection"], "warning");
+    }
+
+    private void AskProfileName()
+    {
+        if (!CanRun || Running) return;
+        _promptRefusal = null;
+        _prompt = Prompt.ProfileName;
+    }
+
+    /// <summary>Saved in the server's folder, without a password: the web reads files only.</summary>
+    private void SaveProfile(string typed)
+    {
+        var name = MigrationProfileStore.CleanName(typed);
+        if (name.Length == 0) return;
+
+        try
+        {
+            var profile = DataMigrationScreenRules.ToProfile(_profile, name, _kind, _system, _linkByName, Settled(), _columns,
+                                                             _source is not null, _sheet, _uploadPath is not null);
+            Profiles.Save(profile, null, rememberPassword: false);
+            _profile = profile;
+            FillProfiles();
+            _prompt = Prompt.None;
+            Say(Texts.T("Migration.ProfileSaved", profile.Name), "normal");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            _promptRefusal = Texts.T("Migration.ProfileNotSaved", ex.Message.StartsWith("Migration_", StringComparison.Ordinal) ? Texts[ex.Message] : ex.Message);
+        }
+    }
+
+    private void DeleteProfile()
+    {
+        _prompt = Prompt.None;
+        if (_profile is null) return;
+
+        try
+        {
+            Profiles.Delete(_profile.Name);
+            _profile = null;
+            FillProfiles();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Say(ex.Message, "critical");
+        }
+    }
+
+    /// <summary>The profile as a file to carry where the final run is made: everything but the password.</summary>
+    private async Task ExportProfileAsync()
+    {
+        if (_profile is null) return;
+        await JS.InvokeVoidAsync("marocLis.download", DataMigrationScreenRules.ProfileFileName(_profile), "application/json",
+                                 MigrationProfileStore.Export(_profile));
+    }
+
+    private async Task ImportProfileAsync(InputFileChangeEventArgs e)
+    {
+        if (Running) return;
+
+        var file = e.File;
+        if (!DataMigrationScreenRules.IsReadableProfileSize(file.Size))
+        {
+            Say(Texts.T("Migration.ProfileUnreadable", "> 5 Mo"), "critical");
+            return;
+        }
+
+        try
+        {
+            using var buffer = new MemoryStream();
+            await using (var stream = file.OpenReadStream(MigrationProfile.MaxFileBytes)) await stream.CopyToAsync(buffer);
+
+            var profile = MigrationProfileStore.Import(buffer.ToArray());
+            if (profile.Name.Length == 0) profile.Name = MigrationProfileStore.CleanName(Path.GetFileNameWithoutExtension(file.Name));
+            Profiles.Save(profile, null, rememberPassword: false);
+            FillProfiles();
+
+            _profile = Profiles.Load(profile.Name);
+            if (_profile is not null) await ApplyProfileAsync(_profile);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException
+                                       or ArgumentException or NotSupportedException or InvalidOperationException or JSException)
+        {
+            Say(Texts.T("Migration.ProfileUnreadable", ex.Message), "critical");
+        }
+    }
+
+    // ---- Templates ---------------------------------------------------------------------------------
+
+    private async Task DownloadTemplateAsync() =>
+        await JS.InvokeVoidAsync("marocLis.download", MigrationTemplates.FileName(_kind, ".xlsx"),
+                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", TemplateWorkbook(_kind));
+
+    /// <summary>« Tous les modèles », in Excel and in CSV: one archive, where the workstation writes them into a folder.</summary>
+    private async Task DownloadAllTemplatesAsync()
+    {
+        using var archive = new MemoryStream();
+        using (var zip = new ZipArchive(archive, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (fileName, content) in DataMigrationScreenRules.AllTemplates(TemplateWorkbook))
+            {
+                await using var entry = zip.CreateEntry(fileName, CompressionLevel.Optimal).Open();
+                await entry.WriteAsync(content());
+            }
+        }
+
+        await JS.InvokeVoidAsync("marocLis.download", Texts["Web.MigrationTemplatesArchive"], "application/zip", archive.ToArray());
+    }
+
+    /// <summary>The Excel template the workstation writes, through the same workbook writer.</summary>
+    private byte[] TemplateWorkbook(DataMigrationKind kind)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"maroclis-modele-{Guid.NewGuid():N}.xlsx");
+        try
+        {
+            Workbook.WriteTemplate(kind, path);
+            return File.ReadAllBytes(path);
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    // ---- Journal, old numbers, balances ------------------------------------------------------------
+
+    private async Task LoadJournalAsync()
+    {
+        var batches = await Scopes.RunAsync<DataMigrationService, Result<IReadOnlyList<MigrationBatchRow>>>(s => s.GetBatchesAsync());
+        if (batches.IsFailure) return;
+
+        _batches = batches.Value;
+        _canUndo = DataMigrationScreenRules.CanUndo(Context.User, _batches);
+    }
+
+    private async Task AskUndoAsync()
+    {
+        if (!_canUndo || Running) return;
+
+        var batches = await Scopes.RunAsync<DataMigrationService, Result<IReadOnlyList<MigrationBatchRow>>>(s => s.GetBatchesAsync());
+        if (batches.IsFailure)
+        {
+            Say(Texts.Describe(batches.Errors), "critical");
+            return;
+        }
+
+        _undoable = DataMigrationScreenRules.LastUndoable(batches.Value);
+        if (_undoable is null)
+        {
+            Say(Texts["Migration_NothingToUndo"]);
+            return;
+        }
+
+        _prompt = Prompt.Undo;
+    }
+
+    /// <summary>« Annuler la dernière reprise »: only what that run created and nothing has used since.</summary>
+    private async Task UndoAsync()
+    {
+        _prompt = Prompt.None;
+        try
+        {
+            var undone = await Scopes.RunAsync<DataMigrationService, Result<MigrationUndoOutcome>>(s => s.UndoLastAsync());
+            if (undone.IsFailure) Say(Texts.Describe(undone.Errors), "critical");
+            else Say(Texts.T("Migration.Undone", undone.Value.Removed, undone.Value.Kept), "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Undoing the last data migration failed.");
+            Say(Texts["Message.UnexpectedError"], "critical");
+        }
+
+        await LoadJournalAsync();
+        await LoadBalancesAsync();
+    }
+
+    private async Task OldNumberKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await FindOldNumberAsync();
+    }
+
+    private async Task FindOldNumberAsync()
+    {
+        if (!CanRun) return;
+        var number = _oldNumber.Trim();
+
+        try
+        {
+            var found = await Scopes.RunAsync<DataMigrationService, Result<IReadOnlyList<OldNumberMatch>>>(s => s.FindByOldNumberAsync(number));
+            if (found.IsFailure)
+            {
+                Say(Texts.Describe(found.Errors), "warning");
+                return;
+            }
+
+            _oldNumberLines = DataMigrationScreenRules.OldNumberLines(found.Value, Texts.Culture);
+            if (found.Value.Count == 0) Say(Texts.T("Migration.OldNumberNotFound", number));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Looking up an old number failed.");
+            Say(Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task LoadBalancesAsync()
+    {
+        var balances = await Scopes.RunAsync<DataMigrationService, Result<IReadOnlyList<OpeningBalanceRow>>>(s => s.GetOpeningBalancesAsync());
+        if (balances.IsSuccess) _balances = balances.Value;
+    }
+
+    // ---- Long operations ---------------------------------------------------------------------------
+
+    private (string Text, string Tone)? _deferred;
+
+    /// <summary>
+    /// A long operation with its progress and « Arrêter »: reading a large file, a simulation, an
+    /// import. One at a time; the tabs can still be looked at. Its message is said once it ends.
+    /// </summary>
+    private async Task RunAsync(string step, Func<CancellationToken, Task> work, Func<Exception, string?>? onFailure = null)
+    {
+        if (Running) return;
+
+        using var run = new CancellationTokenSource();
+        _run = run;
+        _thousandths = 0;
+        _progressText = step;
+        _deferred = null;
+        _message = null;
+
+        try
+        {
+            await work(run.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _deferred = (Texts["Migration.Stopped"], "warning");
+        }
+        catch (Exception ex)
+        {
+            var said = onFailure?.Invoke(ex);
+            if (said is null) Logger.LogError(ex, "A data migration step failed.");
+            _deferred = (said ?? Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _run = null;
+            _progressText = null;
+            _message = _deferred;
+            _deferred = null;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _promptRefusal = null;
+    }
+
+    private static void TryDelete(string? path)
+    {
+        if (path is null) return;
+        try { File.Delete(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>Leaving the screen stops a run between two batches, as the workstation's does, and deletes the file sent.</summary>
+    public void Dispose()
+    {
+        _run?.Cancel();
+        TryDelete(_uploadPath);
+    }
+}
