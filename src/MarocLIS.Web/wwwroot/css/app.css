@@ -558,7 +558,7 @@ fieldset:disabled .input { background: var(--surface-sunken); }
 }
 .tab:hover { color: var(--text); }
 .tab.is-selected, .tab.is-current { color: var(--accent); border-block-end-color: var(--accent); font-weight: 600; }
-.tab-page { padding: 12px 16px; overflow-x: auto; }
+.tab-page { padding: 12px 16px; }
 
 .more { position: relative; }
 .more > summary { list-style: none; cursor: pointer; }
@@ -942,3 +942,50 @@ fieldset.subcard:disabled { opacity: .7; }
 /* « Interfaces automates »: the link's facts kept short, so its codes and its log keep the height. */
 .facts-compact { gap: 4px 20px; font-size: 13px; }
 .facts-compact dd.mono { font-weight: 500; }
+
+/* ---------- Nothing cut: the rules every table, list and detail follows at 1366 pixels ---------- */
+
+/*
+   A table fits its card: the work surface scrolls vertically only. A heading wraps (a number's
+   column keeps its figures on one line, not its caption); a text column wraps; a long technical
+   string (field names, a frame, a path, an analyser's alarm) keeps one line and ends in an
+   ellipsis, the whole of it in the cell's tooltip and in the row's detail; a column of little use
+   goes under the main cell (.cell-sub) or into the detail.
+*/
+.grid th { white-space: normal; overflow-wrap: break-word; }
+.grid th.num { white-space: normal; }
+.grid td.num, .grid td.nowrap, .grid td .nowrap { white-space: nowrap; }
+.cell-clip { max-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-clip > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-clip-wide { inline-size: 32%; }
+.cell-clip-mid { inline-size: 22%; }
+.cell-wrap { overflow-wrap: anywhere; }
+/* Two lines at most, the rest behind an ellipsis, the whole text in the tooltip. */
+.clamp-3, .grid .clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
+.clamp-2, .grid .clamp-2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+
+/* A name in a work list on the start side: two lines at most, never cut in the middle of a letter. */
+.list-name, .grid .list-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; min-inline-size: 0; }
+.file-list-line > .list-name { flex: 1 1 auto; }
+.file-list-line > * { min-inline-size: 0; }
+.file-list-line > .pill, .file-list-line > .num, .file-list-line > .mono { flex: none; }
+
+/* A value too long for its box ends in an ellipsis; the box's tooltip holds it whole. */
+.input { text-overflow: ellipsis; }
+
+/* A long technical text read in full: wrapped, never past the panel's edge. */
+.text-full { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+
+/* A change of the audit trail opened: field, value before, value after — one line each, wrapped. */
+.change-list { inline-size: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.change-list th, .change-list td { padding: 4px 8px; border-block-end: 1px solid var(--border); text-align: start; vertical-align: top; overflow-wrap: anywhere; }
+.change-list th { color: var(--text-secondary); font-weight: 600; background: var(--surface-sunken); }
+.change-list .col-field { inline-size: 24%; }
+.change-list td.old { color: var(--text-secondary); }
+.change-list td.empty { color: var(--text-muted); }
+/* « Saisie des résultats »: the technical comment keeps the width to be read. */
+.grid-entry th.col-comment { inline-size: 26%; }
+/* A list beside its context keeps the height to show several rows: the pane scrolls, not the list to a slit. */
+.pane-fill { min-block-size: 360px; }
+/* A bar with no button and no message (a read-only tab): not drawn, no empty band at the foot of the screen. */
+.action-bar:not(:has(.btn, summary, .action-bar-info, .action-bar-status:not(:empty))) { display: none; }

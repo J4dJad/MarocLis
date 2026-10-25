@@ -8,6 +8,9 @@
     Arabic the row is mirrored: the primary action is on the left. The buttons, their rights and
     their conditions are the screen's: the bar only places them.
 *@
+@* A bar with nothing to offer and nothing to say is not drawn: no empty band at the foot of the screen. *@
+@if (Secondary is not null || More is not null || Destructive is not null || Info is not null || Primary is not null || StatusText is { Length: > 0 })
+{
 <footer class="action-bar" data-bar="actions">
     <div class="action-bar-start">
         @Secondary
@@ -31,11 +34,12 @@
         }
         @if (Info is not null)
         {
-            <span class="action-bar-info">@Info</span>
+            <span class="action-bar-info" title="@InfoTitle">@Info</span>
         }
     </div>
     <div class="action-bar-end">@Primary</div>
 </footer>
+}
 
 @code {
     /// <summary>The actions at the start of the row (left in French, right in Arabic).</summary>
@@ -52,6 +56,9 @@
 
     /// <summary>What is left to do, beside the message.</summary>
     [Parameter] public RenderFragment? Info { get; set; }
+
+    /// <summary>The whole of <see cref="Info"/>, in its tooltip: shortened in the bar, never lost.</summary>
+    [Parameter] public string? InfoTitle { get; set; }
 
     /// <summary>The primary action (and the hidden buttons that only carry a key), at the end of the row.</summary>
     [Parameter] public RenderFragment? Primary { get; set; }
