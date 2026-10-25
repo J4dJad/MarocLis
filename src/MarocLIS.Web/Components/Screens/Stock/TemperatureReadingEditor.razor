@@ -1,0 +1,88 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@inject WebTexts Texts
+
+@*
+    A reading, the workstation's TemperatureReadingDialog: the value, and the minimum and maximum of
+    the period when the thermometer gives them. Typed by hand from the display, here as there. An
+    excursion — the value or a period bound outside the unit's range — is said while it is typed, so
+    that the comment, the first corrective action, is asked for before « Enregistrer »; it opens a
+    non-conformity on its own. Refusals are said next to their box (TemperatureScreenRules.Check).
+*@
+<Modal Name="temperature-reading" Title="@($"{Texts["Temperatures.Record"]} — {Unit.Name}")" Hint="@Texts["StocksUi.Dialog.TemperatureReading"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        @{ var excursion = TemperatureScreenRules.IsExcursion(_form, Unit); }
+        <div class="form-grid form-grid-3">
+            <label class="field">
+                <span class="field-label">@Texts["Temperatures.Value"]</span>
+                <input class="input mono strong num @Refused(TemperatureScreenRules.ValueField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@TemperatureScreenRules.ValueMaxLength" data-field="@TemperatureScreenRules.ValueField"
+                       @bind="_form.Value" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@TemperatureScreenRules.ValueField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Temperatures.PeriodMin"]</span>
+                <input class="input mono num @Refused(TemperatureScreenRules.MinimumField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@TemperatureScreenRules.ValueMaxLength" data-field="@TemperatureScreenRules.MinimumField"
+                       @bind="_form.Minimum" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@TemperatureScreenRules.MinimumField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Temperatures.PeriodMax"]</span>
+                <input class="input mono num @Refused(TemperatureScreenRules.MaximumField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@TemperatureScreenRules.ValueMaxLength" data-field="@TemperatureScreenRules.MaximumField"
+                       @bind="_form.Maximum" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@TemperatureScreenRules.MaximumField" />
+            </label>
+            @if (excursion)
+            {
+                <p class="field-span-3 message is-critical" role="alert" data-state="excursion">@Texts["Web.TemperatureExcursion"]</p>
+            }
+            <label class="field field-span-3">
+                <span class="field-label @(excursion ? "critical strong" : null)">@Texts["Field.Comment"]</span>
+                <textarea class="input @Refused(TemperatureScreenRules.CommentField)" rows="3" maxlength="@TemperatureScreenRules.CommentMaxLength"
+                          data-field="@TemperatureScreenRules.CommentField" @bind="_form.Comment" @bind:event="oninput"></textarea>
+                <FieldMessage Refusal="Shown" Field="@TemperatureScreenRules.CommentField" />
+            </label>
+            <p class="field-span-3 small muted" data-state="reading-notice">@TemperatureScreenRules.ReadingNotice(Unit, Texts.T, Texts.Culture)</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public StorageUnitRow Unit { get; set; } = default!;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<TemperatureReadingRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private readonly TemperatureReadingForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _checked;
+
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = false;
+    }
+
+    private Task SaveAsync()
+    {
+        var (refused, request) = TemperatureScreenRules.Check(_form, Unit);
+        _refusal = refused;
+        _checked = true;
+        return request is not null ? OnSave.InvokeAsync(request) : Task.CompletedTask;
+    }
+}

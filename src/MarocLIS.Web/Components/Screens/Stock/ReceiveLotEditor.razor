@@ -1,0 +1,213 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+@inject ILogger<ReceiveLotEditor> Logger
+
+@*
+    Recording a delivery, the workstation's ReceiveLotDialog and its ReceptionChecksPanel: the lot
+    number and the expiry that make it traceable, the quantity, the supplier and the price, then the
+    checks at the door — the GS1 DataMatrix scanned, the temperature on arrival, the checklist. A
+    wedge scanner types the symbol and presses Enter in the scan box, here as at the workstation.
+    The form is the screen's (it survives the non-conformity question and the refusal's reason);
+    what is checked, refused box by box and sent is InventoryScreenRules'.
+*@
+<Modal Name="receive-lot" Title="@($"{Texts["Inventory.ReceiveLot"]} — {Item.Code}")" Hint="@Texts["StocksUi.Dialog.ReceiveLot"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.LotNumber"]</span>
+                <input class="input mono strong @Refused(InventoryScreenRules.LotNumberField)" type="text" dir="ltr" autocomplete="off"
+                       maxlength="@InventoryScreenRules.LotNumberMaxLength" data-field="@InventoryScreenRules.LotNumberField"
+                       @bind="Form.LotNumber" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@InventoryScreenRules.LotNumberField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.Expiry"]</span>
+                <input class="input @Refused(InventoryScreenRules.ExpiryField)" type="date" min="@Today.ToString("yyyy-MM-dd")"
+                       data-field="@InventoryScreenRules.ExpiryField" @bind="Form.ExpiryDate" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@InventoryScreenRules.ExpiryField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.Quantity"] <span class="muted">(@Item.UnitOfMeasure)</span></span>
+                <input class="input mono strong num @Refused(InventoryScreenRules.QuantityField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@InventoryScreenRules.QuantityMaxLength" data-field="@InventoryScreenRules.QuantityField"
+                       @bind="Form.Quantity" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@InventoryScreenRules.QuantityField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.Supplier"]</span>
+                <select class="input" data-field="supplier" @bind="Form.SupplierId">
+                    <option value="">—</option>
+                    @foreach (var supplier in Suppliers.OrderBy(s => s.Name, StringComparer.CurrentCulture))
+                    {
+                        <option value="@supplier.Id">@supplier.Name</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.DeliveryNote"]</span>
+                <input class="input mono" type="text" dir="ltr" autocomplete="off" maxlength="@InventoryScreenRules.DeliveryNoteMaxLength"
+                       data-field="delivery-note" @bind="Form.DeliveryNote" @bind:event="oninput" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.Price"]</span>
+                <input class="input mono num @Refused(InventoryScreenRules.PriceField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@InventoryScreenRules.PriceMaxLength" data-field="@InventoryScreenRules.PriceField"
+                       @bind="Form.UnitPrice" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@InventoryScreenRules.PriceField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Sample.Storage"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@InventoryScreenRules.StorageMaxLength"
+                       data-field="storage" @bind="Form.StorageLocation" @bind:event="oninput" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.OpenStabilityDays"]</span>
+                <input class="input mono num" type="number" min="0" max="@InventoryScreenRules.OpenStabilityMax" data-field="open-stability"
+                       @bind="Form.OpenStabilityDays" />
+            </label>
+
+            <fieldset class="stock-checks field-span-2 form-grid form-grid-2" data-card="reception-checks">
+                <legend>@Texts["Web.StockReceptionChecks"]</legend>
+                <label class="field field-span-2">
+                    <span class="field-label">@Texts["Reception.Scan"]</span>
+                    <input class="input mono @Refused(InventoryScreenRules.ScanField)" type="text" dir="ltr" autocomplete="off" maxlength="200"
+                           data-field="@InventoryScreenRules.ScanField" title="@Texts["Web.StockScanHint"]"
+                           @bind="Form.Scan" @bind:event="oninput" @onkeydown="ScanKeyAsync" />
+                    @if (_scanNote is { } note)
+                    {
+                        <span class="message @(note.Warning ? "is-warning" : "is-info") small" role="status" data-state="scan-note">@note.Text</span>
+                    }
+                </label>
+                @if (_otherItem is { } other)
+                {
+                    <div class="field-span-2 message is-warning" role="alert" data-state="gtin-other">
+                        <p class="prompt-text">@Texts.T("Reception.GtinOtherItem", other.Code, Item.Code)</p>
+                        <div class="card-actions">
+                            <ActionButton Key="Action.No" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" OnClick="() => _otherItem = null" />
+                            <ActionButton Key="Action.Yes" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" OnClick="SwitchAsync" />
+                        </div>
+                    </div>
+                }
+                <label class="field">
+                    <span class="field-label">@Texts["Reception.ArrivalTemperature"]</span>
+                    <input class="input mono strong num @Refused(InventoryScreenRules.TemperatureField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                           maxlength="@InventoryScreenRules.TemperatureMaxLength" data-field="@InventoryScreenRules.TemperatureField"
+                           @bind="Form.ArrivalTemperature" @bind:event="oninput" />
+                    <FieldMessage Refusal="Shown" Field="@InventoryScreenRules.TemperatureField" />
+                </label>
+                @{ var range = InventoryScreenRules.Range(Item.StorageCondition); }
+                <span class="small stock-range @(range.Required ? "abnormal strong" : "muted")" data-state="range">@Texts.T(range.Key, range.Range)</span>
+                <label class="field-check"><input type="checkbox" data-field="matches-order" @bind="Form.MatchesOrder" /><span>@Texts["Reception.MatchesOrder"]</span></label>
+                <label class="field-check"><input type="checkbox" data-field="packaging" @bind="Form.PackagingIntact" /><span>@Texts["Reception.PackagingIntact"]</span></label>
+                <label class="field-check"><input type="checkbox" data-field="french" @bind="Form.FrenchLabelling" /><span>@Texts["Reception.FrenchLabelling"]</span></label>
+                <label class="field-check"><input type="checkbox" data-field="certificate" @bind="Form.CertificateReceived" /><span>@Texts["Reception.CertificateReceived"]</span></label>
+                <p class="field-span-2 small muted">@Texts["Reception.ChecklistNotice"]</p>
+            </fieldset>
+            <p class="field-span-2 small abnormal strong" data-state="quarantine-notice">@Texts["Inventory.ReceivedQuarantined"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Reception.Refuse" Danger="true" Disabled="Busy" OnClick="() => OnRefuse.InvokeAsync()" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public StockRow Item { get; set; } = default!;
+    [Parameter, EditorRequired] public ReceiveLotForm Form { get; set; } = default!;
+
+    /// <summary>The articles of the screen, one of which a scanned GTIN may designate instead.</summary>
+    [Parameter] public IReadOnlyList<StockRow> Items { get; set; } = [];
+    [Parameter] public IReadOnlyList<Supplier> Suppliers { get; set; } = [];
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public Func<string, Task<GtinMatch?>>? FindByGtin { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>The delivery checked, for the article now in hand.</summary>
+    [Parameter] public EventCallback<ReceptionVerdict> OnSave { get; set; }
+
+    /// <summary>The scanned box is another article's, and the storeman takes that one.</summary>
+    [Parameter] public EventCallback<StockRow> OnSwitch { get; set; }
+    [Parameter] public EventCallback OnRefuse { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private FieldRefusal? _refusal;
+    private bool _checked;
+    private (string Text, bool Warning)? _scanNote;
+    private StockRow? _otherItem;
+
+    /// <summary>The refusal of this editor's check, else the service's.</summary>
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnParametersSet()
+    {
+        // A refusal of the service arrives with a new render: it replaces this editor's own.
+        if (FieldRefusal is not null) _checked = false;
+    }
+
+    private Task SaveAsync()
+    {
+        var verdict = InventoryScreenRules.CheckReception(Form, Item.StockItemId, Item.StorageCondition, Today);
+        _refusal = verdict.Refusal;
+        _checked = true;
+        return verdict.Refusal is null ? OnSave.InvokeAsync(verdict) : Task.CompletedTask;
+    }
+
+    private async Task ScanKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+
+        _scanNote = null;
+        _otherItem = null;
+        var parsed = Gs1Parser.Parse(Form.Scan ?? string.Empty);
+        if (parsed.IsFailure)
+        {
+            _scanNote = (Texts.Describe(parsed.Errors), true);
+            return;
+        }
+
+        // The lot and the expiry go into their boxes; an expiry already past is not taken.
+        _refusal = InventoryScreenRules.ApplyScan(Form, parsed.Value, Today);
+        _checked = true;
+
+        if (parsed.Value.Gtin is not { } gtin || FindByGtin is null) return;
+        try
+        {
+            var match = await FindByGtin(gtin);
+            if (match is null)
+            {
+                _scanNote = (Texts.T("Reception.GtinUnknown", gtin), false);
+                return;
+            }
+
+            if (match.StockItemId == Item.StockItemId) return;
+
+            // The box in hand decides: a GTIN of another article offers to receive that one instead.
+            _otherItem = Items.FirstOrDefault(i => i.StockItemId == match.StockItemId);
+            if (_otherItem is null) _scanNote = (Texts.T("Reception.GtinOtherItem", match.Code, Item.Code), true);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Looking up a scanned GTIN failed.");
+            _scanNote = (Texts["Message.UnexpectedError"], true);
+        }
+    }
+
+    private async Task SwitchAsync()
+    {
+        if (_otherItem is not { } other) return;
+        _otherItem = null;
+        await OnSwitch.InvokeAsync(other);
+    }
+}

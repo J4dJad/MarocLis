@@ -1,0 +1,82 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@inject WebTexts Texts
+
+@*
+    « Paramètres de stock », the workstation's StockSettingsDialog: the variance threshold of the
+    consumption reconciliation, the window the average consumption is taken over and the two expiry
+    alert levels — each refused next to its box when out of range (ConsumptionScreenRules.Check).
+*@
+<Modal Name="stock-settings" Title="@Texts["Stock.Settings"]" Hint="@Texts["StocksUi.Dialog.StockSettings"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Stock.VarianceThreshold"]</span>
+                <input class="input num @Refused(ConsumptionScreenRules.ThresholdField)" type="number" min="0" max="@ConsumptionScreenRules.ThresholdMax" step="0.1"
+                       data-field="@ConsumptionScreenRules.ThresholdField" @bind="_form.VarianceThresholdPercent" />
+                <FieldMessage Refusal="Shown" Field="@ConsumptionScreenRules.ThresholdField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Stock.ConsumptionWindow"]</span>
+                <input class="input num @Refused(ConsumptionScreenRules.WindowField)" type="number" min="@ConsumptionScreenRules.WindowMin" max="@ConsumptionScreenRules.WindowMax"
+                       data-field="@ConsumptionScreenRules.WindowField" @bind="_form.ConsumptionWindowDays" />
+                <FieldMessage Refusal="Shown" Field="@ConsumptionScreenRules.WindowField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Stock.ExpiryWarningDays"]</span>
+                <input class="input num @Refused(ConsumptionScreenRules.WarningField)" type="number" min="1" max="@ConsumptionScreenRules.ExpiryMax"
+                       data-field="@ConsumptionScreenRules.WarningField" @bind="_form.ExpiryWarningDays" />
+                <FieldMessage Refusal="Shown" Field="@ConsumptionScreenRules.WarningField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Stock.ExpiryCriticalDays"]</span>
+                <input class="input num @Refused(ConsumptionScreenRules.CriticalField)" type="number" min="0" max="@ConsumptionScreenRules.ExpiryMax"
+                       data-field="@ConsumptionScreenRules.CriticalField" @bind="_form.ExpiryCriticalDays" />
+                <FieldMessage Refusal="Shown" Field="@ConsumptionScreenRules.CriticalField" />
+            </label>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The settings to save, with the form they were typed in: a refusal of the service names its box from it.</summary>
+    public sealed record Saved(StockSettings Settings, StockSettingsForm Form);
+
+    [Parameter, EditorRequired] public StockSettings Current { get; set; } = default!;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<Saved> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private StockSettingsForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised, _checked;
+
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = false;
+        if (_initialised) return;
+        _initialised = true;
+        _form = ConsumptionScreenRules.Form(Current);
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = ConsumptionScreenRules.Check(_form);
+        _checked = true;
+        return _refusal is null ? OnSave.InvokeAsync(new Saved(ConsumptionScreenRules.ToSettings(Current, _form), _form)) : Task.CompletedTask;
+    }
+}

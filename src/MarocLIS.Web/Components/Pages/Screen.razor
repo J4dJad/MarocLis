@@ -119,6 +119,22 @@
             <MarocLIS.Web.Components.Screens.Quality.QualityDocuments />
             break;
 
+        case ScreenDecision.Open when Key == "inventory":
+            <MarocLIS.Web.Components.Screens.Stock.InventoryScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "consumption":
+            <MarocLIS.Web.Components.Screens.Stock.ConsumptionScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "inventorycounts":
+            <MarocLIS.Web.Components.Screens.Stock.InventoryCounts />
+            break;
+
+        case ScreenDecision.Open when Key == "temperatures":
+            <MarocLIS.Web.Components.Screens.Stock.Temperatures />
+            break;
+
         case ScreenDecision.Open when Key == "migration":
             <MarocLIS.Web.Components.Screens.Migration.DataMigration />
             break;

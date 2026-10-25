@@ -1,0 +1,180 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject IJSRuntime JS
+@inject ILogger<LotCertificatesDialog> Logger
+
+@*
+    The certificates kept with a lot, the workstation's LotCertificatesDialog: one opened — here
+    downloaded — or a PDF or a scan attached, handed over by the browser where the workstation
+    reads it from its disk, and refused next to its box when it is not one (CheckCertificate).
+*@
+<Modal Name="lot-certificates" Title="@Texts.T("Certificates.Title", LotNumber)" Hint="@Texts["StocksUi.Dialog.Certificates"]" Wide="true" OnCancel="OnClose">
+    <ChildContent>
+        <ul class="cert-list" role="listbox" data-list="certificates">
+            @foreach (var row in _rows)
+            {
+                <li class="@(row.Id == _selectedId ? "is-selected" : null)" role="option" aria-selected="@(row.Id == _selectedId ? "true" : "false")"
+                    data-row="@row.FileName" @onclick="() => _selectedId = row.Id" @ondblclick="() => OpenAsync(row)">
+                    <span dir="ltr">@InventoryScreenRules.CertificateLine(row)</span>
+                </li>
+            }
+        </ul>
+        @if (_loaded && _rows.Count == 0)
+        {
+            <p class="muted small" data-state="empty">@Texts["Web.StockNoCertificate"]</p>
+        }
+        @if (MayAttach)
+        {
+            <div class="field" data-field="@InventoryScreenRules.CertificateField">
+                <div class="file-pick">
+                    <label class="btn btn-secondary @(_busy ? "is-disabled" : null)" data-action="Certificates.Attach">
+                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" />
+                        @Texts["Certificates.Attach"]
+                        <InputFile class="file-input" accept="@InventoryScreenRules.CertificateAccept" disabled="@_busy" OnChange="AttachAsync" />
+                    </label>
+                    <span class="small muted">@Texts["Credential.ScanFiles"] (@InventoryScreenRules.CertificateAccept)</span>
+                </div>
+                <FieldMessage Refusal="_refusal" Field="@InventoryScreenRules.CertificateField" />
+            </div>
+        }
+        @if (_message is { } message)
+        {
+            <p class="message @(message.Critical ? "is-critical" : "is-info")" role="status" data-state="certificate-message">@message.Text</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Close" OnClick="OnClose" />
+        <ActionButton Key="Certificates.Open" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FolderOpen" Primary="true"
+                      Disabled="@(Selected is null || _busy)" OnClick="() => Selected is { } s ? OpenAsync(s) : Task.CompletedTask" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public Guid LotId { get; set; }
+    [Parameter, EditorRequired] public string LotNumber { get; set; } = string.Empty;
+
+    /// <summary>A certificate may be attached: the reception right.</summary>
+    [Parameter] public bool MayAttach { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private IReadOnlyList<LotCertificateRow> _rows = [];
+    private Guid? _selectedId;
+    private FieldRefusal? _refusal;
+    private (string Text, bool Critical)? _message;
+    private bool _busy, _loaded;
+
+    private LotCertificateRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var lotId = LotId;
+            var rows = await Scopes.RunAsync<ReceptionService, Result<IReadOnlyList<LotCertificateRow>>>(s => s.GetCertificatesAsync(lotId));
+            if (rows.IsFailure)
+            {
+                _message = (Texts.Describe(rows.Errors), true);
+                return;
+            }
+
+            _rows = rows.Value;
+            if (Selected is null) _selectedId = _rows.Count > 0 ? _rows[0].Id : null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the lot certificates failed.");
+            _message = (Texts["Message.UnexpectedError"], true);
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task OpenAsync(LotCertificateRow row)
+    {
+        if (_busy) return;
+        _busy = true;
+        _message = null;
+        try
+        {
+            var id = row.Id;
+            var content = await Scopes.RunAsync<ReceptionService, Result<LotCertificateContent>>(s => s.GetCertificateAsync(id));
+            if (content.IsFailure)
+            {
+                _message = (Texts.Describe(content.Errors), true);
+                return;
+            }
+
+            await JS.InvokeVoidAsync("marocLis.download", content.Value.FileName, content.Value.ContentType, content.Value.Content);
+            _message = (Texts.T("Web.StockDownloaded", content.Value.FileName), false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Opening a lot certificate failed.");
+            _message = (Texts["Message.UnexpectedError"], true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AttachAsync(InputFileChangeEventArgs e)
+    {
+        if (_busy || !MayAttach) return;
+        _message = null;
+        _refusal = InventoryScreenRules.CheckCertificate(e.File.Name, e.File.Size);
+        if (_refusal is not null) return;
+
+        _busy = true;
+        try
+        {
+            byte[] content;
+            try
+            {
+                await using var stream = e.File.OpenReadStream(maxAllowedSize: LotCertificateFile.MaximumBytes);
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer);
+                content = buffer.ToArray();
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or JSException)
+            {
+                // The browser could not hand the file over (it was moved, or the connection dropped).
+                Logger.LogWarning(ex, "A certificate file could not be read from the browser.");
+                _refusal = new FieldRefusal(InventoryScreenRules.CertificateField, "Documents.FileUnreadable");
+                return;
+            }
+
+            var lotId = LotId;
+            var name = Path.GetFileName(e.File.Name);
+            var attached = await Scopes.RunAsync<ReceptionService, Result>(s => s.AttachCertificateAsync(lotId, name, content));
+            if (attached.IsFailure)
+            {
+                if (InventoryScreenRules.FieldOf(attached.FirstError) is { } field)
+                    _refusal = new FieldRefusal(field, attached.FirstError.ResourceKey, attached.FirstError.Args.FirstOrDefault()?.ToString());
+                else
+                    _message = (Texts.Describe(attached.Errors), true);
+                return;
+            }
+
+            await LoadAsync();
+            _selectedId = _rows.OrderByDescending(r => r.AddedAt).FirstOrDefault(r => r.FileName == name)?.Id ?? _selectedId;
+            _message = (Texts["Message.Saved"], false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Attaching a lot certificate failed.");
+            _message = (Texts["Message.UnexpectedError"], true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

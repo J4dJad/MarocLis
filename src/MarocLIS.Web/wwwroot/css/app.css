@@ -1086,3 +1086,30 @@ html[dir=rtl] .quality-main .grid td:last-child[dir=ltr], html[dir=rtl] .quality
 html[dir=rtl] .eqa .grid td:last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
 html[dir=rtl] .nc [data-state=completed-on] { text-align: right; }
 .grid .doc-read { text-align: center; min-inline-size: 48px; }
+
+/*
+   The stock screens (stock, consumption, counts, temperatures): a line below its safety stock, an
+   expired lot or an out-of-range reading in the alarm's colours on the whole row, in bold for a
+   critical article; a warning said on the cells concerned only.
+*/
+.grid tr.stock-alarm td { background: var(--critical-bg); color: var(--critical-ink); }
+.grid tr.stock-alarm.is-selected td { background: #F9D9D5; }
+.grid tr.stock-alarm-strong td { font-weight: 600; }
+.grid td.stock-glyphs { font-weight: 700; white-space: nowrap; text-align: center; min-inline-size: 40px; }
+.grid td.stock-count { min-inline-size: 104px; }
+.grid td.stock-count .input { inline-size: 96px; text-align: end; }
+.grid td.stock-comment .input { inline-size: 100%; min-inline-size: 120px; }
+.stock-checks { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px 10px; margin: 0; min-inline-size: 0; }
+.stock-checks legend { padding: 0 4px; font-weight: 600; }
+.stock-range { align-self: end; padding-block-end: 8px; }
+.stock-sheet-time { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.stock-sheet-time .input { inline-size: auto; }
+.input-month { inline-size: 150px; }
+.input-date { inline-size: 150px; }
+.list-tools .field-inline { display: inline-flex; align-items: center; gap: 6px; }
+.stock-dialog-list { max-block-size: 260px; }
+.cert-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); max-block-size: 220px; overflow-y: auto; }
+.cert-list li { padding: 6px 10px; cursor: pointer; overflow-wrap: anywhere; }
+.cert-list li + li { border-block-start: 1px solid var(--border); }
+.cert-list li.is-selected { background: var(--accent-subtle); box-shadow: inset 3px 0 0 var(--accent); }
+html[dir="rtl"] .cert-list li.is-selected { box-shadow: inset -3px 0 0 var(--accent); }

@@ -1,0 +1,51 @@
+@using MarocLIS.Application.Inventory
+@inject WebTexts Texts
+
+@*
+    The new lot against the previous one, the workstation's LotComparisonDialog: per control level,
+    the number of values, their mean and SD on each lot and the shift of the mean.
+*@
+<Modal Name="lot-comparison" Title="@InventoryScreenRules.ComparisonTitle(Comparison, Texts.T)" Hint="@Texts["StocksUi.Dialog.LotComparison"]" Large="true" OnCancel="OnClose">
+    <ChildContent>
+        <div class="table-scroll stock-dialog-list">
+            <table class="grid" data-grid="lot-comparison">
+                <thead>
+                    <tr>
+                        <th>@Texts["LotComparison.Level"]</th>
+                        <th class="num">@Texts["LotComparison.NewN"]</th>
+                        <th class="num">@Texts["LotComparison.NewMean"]</th>
+                        <th class="num">@Texts["LotComparison.NewSd"]</th>
+                        <th class="num">@Texts["LotComparison.OldN"]</th>
+                        <th class="num">@Texts["LotComparison.OldMean"]</th>
+                        <th class="num">@Texts["LotComparison.OldSd"]</th>
+                        <th class="num">@Texts["LotComparison.Difference"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Comparison.Rows)
+                    {
+                        <tr data-row="@r.Label">
+                            <td><span class="cell-wrap">@r.Label</span></td>
+                            <td class="num">@r.NewCount</td>
+                            <td class="num mono">@InventoryScreenRules.Statistic(r.NewMean, Texts.Culture)</td>
+                            <td class="num mono">@InventoryScreenRules.Statistic(r.NewSd, Texts.Culture)</td>
+                            <td class="num">@r.OldCount</td>
+                            <td class="num mono">@InventoryScreenRules.Statistic(r.OldMean, Texts.Culture)</td>
+                            <td class="num mono">@InventoryScreenRules.Statistic(r.OldSd, Texts.Culture)</td>
+                            <td class="num mono strong" dir="ltr">@InventoryScreenRules.Difference(r.DifferencePercent, Texts.Culture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="small muted" data-state="comparison-notice">@Texts[InventoryScreenRules.ComparisonNoticeKey(Comparison)]</p>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Close" Primary="true" OnClick="OnClose" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public LotComparisonView Comparison { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+}

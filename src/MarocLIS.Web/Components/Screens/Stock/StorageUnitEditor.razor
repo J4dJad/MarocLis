@@ -1,0 +1,113 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+
+@*
+    A monitored fridge, freezer or room, the workstation's StorageUnitDialog: its name, its kind —
+    a new unit takes the usual range of its kind — its acceptable range, the readings expected each
+    day, where it is and its serial number; an inactive unit takes no reading. Refusals are said
+    next to their box (TemperatureScreenRules.Check).
+*@
+<Modal Name="storage-unit" Title="@Title" Hint="@Texts["StocksUi.Dialog.StorageUnit"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Name"]</span>
+                <input class="input @Refused(TemperatureScreenRules.NameField)" type="text" autocomplete="off" maxlength="@TemperatureScreenRules.NameMaxLength"
+                       data-field="@TemperatureScreenRules.NameField" @bind="_form.Name" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@TemperatureScreenRules.NameField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Temperatures.Kind"]</span>
+                <select class="input" data-field="unit-kind" @bind="_form.Kind" @bind:after="KindChanged">
+                    @foreach (var value in Enum.GetValues<StorageUnitKind>())
+                    {
+                        <option value="@value">@Texts[$"StorageUnitKind.{value}"]</option>
+                    }
+                </select>
+            </label>
+            <div class="field field-span-2">
+                <div class="form-grid form-grid-3">
+                    <label class="field">
+                        <span class="field-label">@Texts["Temperatures.Minimum"]</span>
+                        <input class="input mono num @Refused(TemperatureScreenRules.RangeField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                               maxlength="@TemperatureScreenRules.ValueMaxLength" data-field="@TemperatureScreenRules.RangeField" @bind="_form.Minimum" @bind:event="oninput" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Temperatures.Maximum"]</span>
+                        <input class="input mono num @Refused(TemperatureScreenRules.RangeField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                               maxlength="@TemperatureScreenRules.ValueMaxLength" data-field="unit-max" @bind="_form.Maximum" @bind:event="oninput" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Temperatures.ReadingsPerDay"]</span>
+                        <input class="input num @Refused(TemperatureScreenRules.PerDayField)" type="number" min="1" max="@TemperatureScreenRules.ReadingsPerDayMax"
+                               data-field="@TemperatureScreenRules.PerDayField" @bind="_form.ReadingsPerDay" />
+                        <FieldMessage Refusal="Shown" Field="@TemperatureScreenRules.PerDayField" />
+                    </label>
+                </div>
+                <FieldMessage Refusal="Shown" Field="@TemperatureScreenRules.RangeField" />
+            </div>
+            <label class="field">
+                <span class="field-label">@Texts["Temperatures.Location"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@TemperatureScreenRules.LocationMaxLength"
+                       data-field="unit-location" @bind="_form.Location" @bind:event="oninput" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Temperatures.SerialNumber"]</span>
+                <input class="input mono" type="text" dir="ltr" autocomplete="off" maxlength="@TemperatureScreenRules.SerialMaxLength"
+                       data-field="unit-serial" @bind="_form.SerialNumber" @bind:event="oninput" />
+            </label>
+            <label class="field-check">
+                <input type="checkbox" data-field="unit-active" @bind="_form.IsActive" />
+                <span>@Texts["Field.Active"]</span>
+            </label>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The unit edited; none for a new one.</summary>
+    [Parameter] public StorageUnitRow? Unit { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<StorageUnitRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private StorageUnitForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised, _checked;
+
+    private string Title => Unit is { } unit ? $"{Texts["Temperatures.EditUnit"]} — {unit.Name}" : Texts["Temperatures.NewUnit"];
+
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = false;
+        if (_initialised) return;
+        _initialised = true;
+        _form = TemperatureScreenRules.Form(Unit, Texts.Culture);
+    }
+
+    private void KindChanged() => TemperatureScreenRules.KindChanged(_form, Unit is null, Texts.Culture);
+
+    private Task SaveAsync()
+    {
+        var (refused, request) = TemperatureScreenRules.Check(_form, Unit?.StorageUnitId);
+        _refusal = refused;
+        _checked = true;
+        return request is not null ? OnSave.InvokeAsync(request) : Task.CompletedTask;
+    }
+}

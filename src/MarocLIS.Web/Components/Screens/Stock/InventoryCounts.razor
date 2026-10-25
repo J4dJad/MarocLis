@@ -1,0 +1,632 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Common
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Inventory
+@using MarocLIS.Reporting
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IListPdfRenderer Lists
+@inject IJSRuntime JS
+@inject ILogger<InventoryCounts> Logger
+
+@*
+    « Inventaires », the workstation's InventoryCountView: the counts, and under them the sheet of
+    the one selected — each lot with the stock frozen at the start, the stock when its shelf was
+    counted, the figure found, the variance and a comment. A count is opened on a scope, started
+    (which freezes the expected quantities), counted line by line — each figure saved as it is
+    typed, with the time a paper sheet was filled in when it is keyed afterwards — and closed, its
+    variances becoming stock adjustments; or cancelled with a reason. The sheet to fill in on paper
+    and the variance report are downloaded. What is shown, offered and refused is
+    InventoryCountScreenRules'; every step goes through InventoryCountService.
+*@
+<div class="screen inventorycounts" data-screen="inventorycounts">
+    @{ var actions = Actions; var visible = Visible; var mayCount = InventoryCountScreenRules.MayCount(Context.User.Has, _detail); }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchCounts"]" aria-label="@Texts["StocksUi.SearchCounts"]"
+                   data-field="count-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="SearchedAsync" />
+        </div>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_includeClosed ? "is-pressed" : null)" aria-pressed="@(_includeClosed ? "true" : "false")"
+                    data-chip="include-closed" @onclick="ToggleClosedAsync">@Texts["InventoryCount.IncludeClosed"]</button>
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@InventoryCountScreenRules.CountLabel(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => LoadAsync()" />
+        </span>
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush quality-sub" data-card="counts">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="counts">
+                    <thead>
+                        <tr>
+                            <th>@Texts["InventoryCount.Number"]</th>
+                            <th>@Texts["Field.Date"]</th>
+                            <th>@Texts["InventoryCount.Scope"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                            <th class="num">@Texts["InventoryCount.Lines"]</th>
+                            <th class="num">@Texts["InventoryCount.Counted"]</th>
+                            <th class="num">@Texts["InventoryCount.Variance"]</th>
+                            <th>@Texts["InventoryCount.ClosedAt"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in visible)
+                        {
+                            var tone = InventoryCountScreenRules.StatusTone(row.Status);
+                            <tr class="@(row.InventoryCountId == _selectedId ? "is-selected" : null) @(row.Status == InventoryCountStatus.Cancelled ? "is-tone-muted" : null)"
+                                data-row="@row.Number" data-count-status="@row.Status" @onclick="() => SelectAsync(row)">
+                                <td class="mono strong nowrap" dir="ltr">@row.Number</td>
+                                <td class="mono nowrap" dir="ltr">@InventoryCountScreenRules.Date(row.CountDate)</td>
+                                <td><span class="cell-wrap">@InventoryCountScreenRules.Scope(row, Texts.T)</span></td>
+                                <td><Pill Text="@StockTones.Label(tone, Texts[$"InventoryCountStatus.{row.Status}"])" Tone="@StockTones.Pill(tone)" /></td>
+                                <td class="num">@row.Lines</td>
+                                <td class="num">@row.Counted</td>
+                                <td class="num @(row.WithVariance > 0 ? "critical strong" : null)">@row.WithVariance</td>
+                                <td class="mono small nowrap" dir="ltr">@InventoryCountScreenRules.When(row.ClosedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && visible.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.StockNoCount"]</p>
+                }
+            </div>
+        </section>
+
+        <section class="card card-flush card-fill" data-card="lines">
+            <div class="card-heading card-pad">
+                <h2 class="card-title cell-wrap">
+                    @Texts["InventoryCount.Lines"]
+                    @if (_detail is { } d)
+                    {
+                        <span class="muted small mono" dir="ltr" data-state="lines-note">@InventoryCountScreenRules.Note(d.Count)</span>
+                    }
+                </h2>
+                <div class="card-actions">
+                    <ActionButton Key="InventoryCount.Sheet" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Printer" Disabled="@(!actions.Sheet || _busy)" OnClick="() => SheetAsync(true)" />
+                    <ActionButton Key="InventoryCount.SheetCsv" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download" Disabled="@(!actions.Sheet || _busy)" OnClick="() => SheetAsync(false)" />
+                    <ActionButton Key="InventoryCount.VarianceReport" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileText" Disabled="@(!actions.Variances || _busy)" OnClick="VariancesAsync" />
+                    @if (mayCount)
+                    {
+                        <span class="stock-sheet-time" title="@Texts["InventoryCount.SheetTimeNotice"]">
+                            <label class="field-check">
+                                <input type="checkbox" data-field="sheet-time-on" @bind="_useSheetTime" />
+                                <span>@Texts["InventoryCount.SheetTime"]</span>
+                            </label>
+                            <input class="input mono" type="datetime-local" data-field="sheet-time" disabled="@(!_useSheetTime)"
+                                   max="@Clock.Now.LocalDateTime.ToString("yyyy-MM-ddTHH:mm")" aria-label="@Texts["InventoryCount.SheetTime"]"
+                                   @bind="_sheetTime" @bind:format="yyyy-MM-ddTHH:mm" />
+                        </span>
+                    }
+                    <ActionButton Key="InventoryCount.Close" Primary="true" Hidden="@(!Context.User.Has(Permissions.Inventory.CloseCounts))"
+                                  Disabled="@(!actions.Close || _busy || _saving)" OnClick="AskClose" />
+                </div>
+            </div>
+            <div class="table-scroll">
+                <table class="grid" data-grid="count-lines">
+                    <thead>
+                        <tr>
+                            <th class="num">#</th>
+                            <th>@Texts["Sample.Storage"]</th>
+                            <th>@Texts["Inventory.Item"]</th>
+                            <th>@Texts["Inventory.LotNumber"]</th>
+                            <th class="num">@Texts["InventoryCount.ExpectedAtStart"]</th>
+                            <th class="num">@Texts["InventoryCount.StockAtCount"]</th>
+                            <th class="num">@Texts["InventoryCount.Counted"]</th>
+                            <th class="num">@Texts["InventoryCount.Variance"]</th>
+                            <th>@Texts["Field.Comment"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_detail is { } detail)
+                        {
+                            foreach (var line in detail.Lines)
+                            {
+                                var ink = InventoryCountScreenRules.LineInk(line);
+                                var field = InventoryCountScreenRules.CountedField(line.LineId);
+                                <tr data-row="@line.LineNumber" class="@(ink == StockInk.Critical ? "is-tone-critical" : null)">
+                                    <td class="num mono">@line.LineNumber</td>
+                                    <td class="small"><span class="cell-wrap">@line.StorageLocation</span></td>
+                                    <td>
+                                        <span class="mono strong" dir="ltr">@line.ItemCode</span>
+                                        <span class="cell-sub list-name" title="@line.ItemName">@line.ItemName</span>
+                                    </td>
+                                    <td class="nowrap">
+                                        <span class="mono" dir="ltr">@line.LotNumber</span>
+                                        <span class="cell-sub mono" dir="ltr" title="@Texts["Inventory.Expiry"]">@InventoryCountScreenRules.Date(line.ExpiryDate)</span>
+                                    </td>
+                                    <td class="num mono nowrap">@InventoryCountScreenRules.Quantity(line.ExpectedQuantity, Texts.Culture)</td>
+                                    <td class="num mono nowrap">@InventoryCountScreenRules.Quantity(line.StockAtCount, Texts.Culture)</td>
+                                    <td class="num stock-count">
+                                        @if (mayCount)
+                                        {
+                                            <input class="input mono @(_lineRefusal?.Field == field ? "is-refused" : null)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                                                   maxlength="@InventoryCountScreenRules.CountedMaxLength" data-field="@field" aria-label="@($"{Texts["InventoryCount.Counted"]} {line.LineNumber}")"
+                                                   value="@Typed(line).Counted" @onchange="e => CountedChangedAsync(line, e.Value as string)" />
+                                            <FieldMessage Refusal="_lineRefusal" Field="@field" />
+                                        }
+                                        else
+                                        {
+                                            <span class="mono strong">@InventoryCountScreenRules.Quantity(line.CountedQuantity, Texts.Culture)</span>
+                                        }
+                                        @if (line.CountedAt is { } at)
+                                        {
+                                            <span class="cell-sub mono" dir="ltr" title="@Texts["InventoryCount.CountedAt"]">@InventoryCountScreenRules.When(at)</span>
+                                        }
+                                    </td>
+                                    <td class="num mono strong nowrap">@InventoryCountScreenRules.Quantity(line.Variance, Texts.Culture)</td>
+                                    <td class="stock-comment">
+                                        @if (mayCount)
+                                        {
+                                            <input class="input" type="text" autocomplete="off" maxlength="@InventoryCountScreenRules.CommentMaxLength"
+                                                   data-field="@($"comment-{line.LineId:N}")" aria-label="@($"{Texts["Field.Comment"]} {line.LineNumber}")"
+                                                   title="@Typed(line).Comment" value="@Typed(line).Comment" @onchange="e => CommentChangedAsync(line, e.Value as string)" />
+                                        }
+                                        else
+                                        {
+                                            <span class="clamp-2 small" title="@line.Comment">@line.Comment</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+                @if (_detail is { Lines.Count: 0 })
+                {
+                    <p class="muted small card-pad" data-state="no-line">@Texts["Web.StockNoCountLine"]</p>
+                }
+            </div>
+            @if (InventoryCountScreenRules.CountingNotice(_detail, Texts.T) is { } notice)
+            {
+                <p class="card-pad small grid-footer muted" data-state="counting-notice">@notice</p>
+            }
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="InventoryCount.Start" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Play" Hidden="@(!actions.New)" Disabled="@(!actions.Start || _busy)" OnClick="StartAsync" />
+        </Secondary>
+        <Destructive>
+            <ActionButton Key="Action.Cancel" Text="@Texts["Web.CountCancel"]" Title="@Texts["Web.CountCancel"]" Danger="true" Hidden="@(!actions.New)"
+                          Disabled="@(!actions.Cancel || _busy)" OnClick="AskCancel" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="InventoryCount.New" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" Primary="true" Hidden="@(!actions.New)" Disabled="_busy" OnClick="AskNewAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.New:
+        <InventoryCountEditor Today="Clock.Today" Locations="_locations" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                              OnSave="CreateAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Close when Selected is { } c1:
+        <ConfirmPrompt Title="@Texts["InventoryCount.Close"]" Message="@Texts.T("InventoryCount.CloseConfirm", c1.Number)" OnYes="CloseAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Cancel when Selected is { } c2:
+        <ReasonPrompt Title="@Texts["Web.CountCancel"]" Prompt="@Texts.T("InventoryCount.CancelPrompt", c2.Number)" OnConfirm="CancelAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="stock-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="stock-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, New, Close, Cancel, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private sealed record PendingCount(Guid CountId, Guid LineId, decimal Counted, string? Comment, DateTimeOffset? ShelfAt);
+
+    private IReadOnlyList<InventoryCountRow> _rows = [];
+    private InventoryCountDetail? _detail;
+    private IReadOnlyList<string> _locations = [];
+
+    private string? _search;
+    private bool _includeClosed, _loaded;
+    private Guid? _selectedId;
+
+    // What is typed on each line, kept while it is saved: a figure and a comment.
+    private readonly Dictionary<Guid, (string? Counted, string? Comment)> _typed = [];
+    private readonly Queue<PendingCount> _pending = new();
+    private FieldRefusal? _lineRefusal;
+    private bool _useSheetTime, _saving;
+    private DateTime _sheetTime;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<InventoryCountRow> Visible =>
+        [.. _rows.Where(r => StockSearch.Matches(_search, r.Number, InventoryCountScreenRules.Date(r.CountDate), InventoryCountScreenRules.Scope(r, Texts.T),
+                                                  Texts[$"InventoryCountStatus.{r.Status}"], InventoryCountScreenRules.When(r.ClosedAt)))];
+
+    private InventoryCountRow? Selected => _rows.FirstOrDefault(r => r.InventoryCountId == _selectedId);
+
+    private InventoryCountScreenActions Actions => InventoryCountScreenRules.Actions(Context.User, Selected, _detail);
+
+    protected override Task OnInitializedAsync()
+    {
+        _sheetTime = TrimToMinute(Clock.Now.LocalDateTime);
+        return LoadAsync();
+    }
+
+    private static DateTime TrimToMinute(DateTime at) => new(at.Year, at.Month, at.Day, at.Hour, at.Minute, 0, at.Kind);
+
+    private async Task LoadAsync(Guid? keep = null)
+    {
+        try
+        {
+            var closed = _includeClosed;
+            var counts = await Scopes.RunAsync<InventoryCountService, Result<IReadOnlyList<InventoryCountRow>>>(s => s.GetCountsAsync(closed));
+            if (counts.IsFailure)
+            {
+                _status = (Texts.Describe(counts.Errors), "critical");
+                return;
+            }
+
+            _rows = counts.Value;
+            _selectedId = InventoryCountScreenRules.Keep(_rows, keep ?? _selectedId)?.InventoryCountId;
+            await LoadDetailAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the inventories failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadDetailAsync()
+    {
+        var previous = _detail?.Count.InventoryCountId;
+        if (_selectedId is not { } id)
+        {
+            _detail = null;
+            _typed.Clear();
+            return;
+        }
+
+        var detail = await Scopes.RunAsync<InventoryCountService, Result<InventoryCountDetail>>(s => s.GetDetailAsync(id));
+        if (_selectedId != id) return;
+        if (detail.IsFailure)
+        {
+            _status = (Texts.Describe(detail.Errors), "critical");
+            return;
+        }
+
+        _detail = detail.Value;
+        if (previous != id)
+        {
+            _typed.Clear();
+            _lineRefusal = null;
+        }
+
+        foreach (var line in _detail.Lines) _typed.Remove(line.LineId);
+        if (InventoryCountScreenRules.CountingNotice(_detail, Texts.T) is null && _status?.Tone == "muted") _status = null;
+    }
+
+    private async Task SelectAsync(InventoryCountRow row)
+    {
+        if (row.InventoryCountId == _selectedId) return;
+        _selectedId = row.InventoryCountId;
+        await LoadDetailAsync();
+    }
+
+    /// <summary>The current line moves to the first one shown when the search hides it, as at the workstation.</summary>
+    private async Task SearchedAsync()
+    {
+        var visible = Visible;
+        if (visible.Count > 0 && visible.All(r => r.InventoryCountId != _selectedId)) await SelectAsync(visible[0]);
+    }
+
+    private Task ToggleClosedAsync()
+    {
+        _includeClosed = !_includeClosed;
+        return LoadAsync();
+    }
+
+    // ---- Counting ----------------------------------------------------------------------------------
+
+    private (string? Counted, string? Comment) Typed(InventoryCountLineRow line) =>
+        _typed.TryGetValue(line.LineId, out var typed)
+            ? typed
+            : (InventoryCountScreenRules.Quantity(line.CountedQuantity, Texts.Culture), line.Comment);
+
+    private Task CountedChangedAsync(InventoryCountLineRow line, string? counted)
+    {
+        _typed[line.LineId] = (counted, Typed(line).Comment);
+        return QueueAsync(line);
+    }
+
+    private Task CommentChangedAsync(InventoryCountLineRow line, string? comment)
+    {
+        _typed[line.LineId] = (Typed(line).Counted, comment);
+        return QueueAsync(line);
+    }
+
+    /// <summary>
+    /// A figure saved as it is typed, one line after the other: only that line and the progress are
+    /// refreshed, what is being typed on the next line is kept.
+    /// </summary>
+    private async Task QueueAsync(InventoryCountLineRow typedOn)
+    {
+        if (_detail is not { } detail || !InventoryCountScreenRules.MayCount(Context.User.Has, detail)) return;
+
+        // The line as last recorded: its figure decides whether the sheet's time goes with this one.
+        var line = detail.Lines.FirstOrDefault(l => l.LineId == typedOn.LineId) ?? typedOn;
+        var typed = Typed(line);
+        var (read, refused) = InventoryCountScreenRules.ReadCount(line.LineId, typed.Counted);
+        if (refused is not null)
+        {
+            _lineRefusal = refused;
+            return;
+        }
+
+        if (_lineRefusal?.Field == InventoryCountScreenRules.CountedField(line.LineId)) _lineRefusal = null;
+        if (read is not { } counted || !InventoryCountScreenRules.Changed(line, counted, typed.Comment)) return;
+
+        var shelf = InventoryCountScreenRules.ShelfTime(line, _useSheetTime ? new DateTimeOffset(_sheetTime) : null);
+        _pending.Enqueue(new PendingCount(detail.Count.InventoryCountId, line.LineId, counted, typed.Comment, shelf));
+        if (_saving) return;
+
+        _saving = true;
+        try
+        {
+            while (_pending.TryDequeue(out var next)) await SaveLineAsync(next);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving an inventory count line failed.");
+            _pending.Clear();
+            _status = (Texts["Message.UnexpectedError"], "critical");
+            await LoadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task SaveLineAsync(PendingCount count)
+    {
+        var saved = await Scopes.RunAsync<InventoryCountService, Result>(s =>
+            s.RecordCountAsync(count.CountId, count.LineId, count.Counted, count.Comment, count.ShelfAt));
+        if (saved.IsFailure)
+        {
+            // A negative figure is the line's; the rest (a sheet time in the future, a count no
+            // longer open) is said for the sheet.
+            if (saved.FirstError.ResourceKey == "InventoryCount_NegativeQuantity")
+                _lineRefusal = new FieldRefusal(InventoryCountScreenRules.CountedField(count.LineId), saved.FirstError.ResourceKey);
+            else
+                _status = (Texts.Describe(saved.Errors), "critical");
+        }
+        else
+        {
+            _status = (Texts["Message.Saved"], "normal");
+        }
+
+        // The saved line as recorded — or as it still is, after a refusal — with its variance.
+        var detail = await Scopes.RunAsync<InventoryCountService, Result<InventoryCountDetail>>(s => s.GetDetailAsync(count.CountId));
+        if (detail.IsFailure || _detail?.Count.InventoryCountId != count.CountId) return;
+
+        _detail = detail.Value;
+        if (saved.IsSuccess) _typed.Remove(count.LineId);
+        var progress = _detail.Count;
+        _rows = [.. _rows.Select(r => r.InventoryCountId == progress.InventoryCountId ? progress : r)];
+    }
+
+    // ---- The count's life --------------------------------------------------------------------------
+
+    private Task AskNewAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.New) return;
+            var locations = await Scopes.RunAsync<InventoryCountService, Result<IReadOnlyList<string>>>(s => s.GetStorageLocationsAsync());
+            if (locations.IsFailure)
+            {
+                Say(Texts["InventoryCount.New"], Texts.Describe(locations.Errors), true);
+                return;
+            }
+
+            _locations = locations.Value;
+            Open(Prompt.New);
+        });
+
+    private Task CreateAsync(CreateInventoryCountRequest request) =>
+        RunAsync(async () =>
+        {
+            var created = await Scopes.RunAsync<InventoryCountService, Result<string>>(s => s.CreateAsync(request));
+            if (created.IsFailure)
+            {
+                var error = created.FirstError;
+                if (InventoryCountScreenRules.FieldOf(error) is { } field)
+                {
+                    _fieldRefusal = new FieldRefusal(field, error.ResourceKey);
+                    _dialogRefusal = null;
+                }
+                else
+                {
+                    _fieldRefusal = null;
+                    _dialogRefusal = Texts.Describe(created.Errors);
+                }
+
+                return;
+            }
+
+            ClosePrompt();
+            _selectedId = null;
+            await LoadAsync();
+            var number = created.Value;
+            if (_rows.FirstOrDefault(r => r.Number == number) is { } row)
+            {
+                _selectedId = row.InventoryCountId;
+                await LoadDetailAsync();
+            }
+
+            _status = (Texts.T("InventoryCount.Created", number), "normal");
+        });
+
+    private Task StartAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Start || Selected is not { } row) return;
+            var id = row.InventoryCountId;
+            var started = await Scopes.RunAsync<InventoryCountService, Result<int>>(s => s.StartCountingAsync(id));
+            if (started.IsFailure)
+            {
+                Say(Texts["InventoryCount.Start"], Texts.Describe(started.Errors), true);
+                return;
+            }
+
+            await LoadAsync(id);
+            _status = (Texts.T("InventoryCount.Started", started.Value), "normal");
+        });
+
+    private void AskClose()
+    {
+        if (!Actions.Close || _busy || _saving) return;
+        _prompt = Prompt.Close;
+    }
+
+    private Task CloseAsync() =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } row) return;
+            var id = row.InventoryCountId;
+            var closed = await Scopes.RunAsync<InventoryCountService, Result<int>>(s => s.CloseAsync(id));
+            if (closed.IsFailure)
+            {
+                Say(Texts["InventoryCount.Close"], Texts.Describe(closed.Errors), true);
+                return;
+            }
+
+            await LoadAsync(id);
+            _status = (Texts.T("InventoryCount.Closed", row.Number, closed.Value), "normal");
+        });
+
+    private void AskCancel()
+    {
+        if (!Actions.Cancel || _busy) return;
+        _prompt = Prompt.Cancel;
+    }
+
+    private Task CancelAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } row) return;
+            var id = row.InventoryCountId;
+            var cancelled = await Scopes.RunAsync<InventoryCountService, Result>(s => s.CancelAsync(id, reason));
+            if (cancelled.IsFailure)
+            {
+                Say(Texts["Web.CountCancel"], Texts.Describe(cancelled.Errors), true);
+                return;
+            }
+
+            await LoadAsync(id);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- The sheet and the variances ---------------------------------------------------------------
+
+    /// <summary>The count sheet, without the expected quantities, to fill in on paper.</summary>
+    private Task SheetAsync(bool pdf) =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { Lines.Count: > 0 } detail) return;
+            var rows = InventoryCountScreenRules.SheetRows(detail);
+            var headers = InventoryCountScreenRules.SheetHeaders(false, Texts.T);
+            var content = pdf
+                ? Lists.Render(new ListDocument(InventoryCountScreenRules.SheetTitle(detail.Count, Texts.T),
+                                                InventoryCountScreenRules.SheetCaption(detail.Count, Texts.T),
+                                                headers, rows, Texts.Language == AppLanguage.Arabic))
+                : StockCsv.Table(headers, rows);
+            var name = InventoryCountScreenRules.FileName(detail.Count, "feuille", pdf ? "pdf" : "csv");
+            await JS.InvokeVoidAsync("marocLis.download", name, pdf ? "application/pdf" : "text/csv", content);
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    /// <summary>The lots whose count differs from the stock, with the difference.</summary>
+    private Task VariancesAsync() =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { Lines.Count: > 0 } detail) return;
+            var rows = InventoryCountScreenRules.VarianceRows(detail);
+            var document = new ListDocument(InventoryCountScreenRules.VarianceTitle(detail.Count, Texts.T),
+                                            InventoryCountScreenRules.VarianceCaption(detail, rows.Count, Texts.T),
+                                            InventoryCountScreenRules.SheetHeaders(true, Texts.T), rows, Texts.Language == AppLanguage.Arabic);
+            var name = InventoryCountScreenRules.FileName(detail.Count, "ecarts", "pdf");
+            await JS.InvokeVoidAsync("marocLis.download", name, "application/pdf", Lists.Render(document));
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    // ---- Plumbing ----------------------------------------------------------------------------------
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An inventory count step failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

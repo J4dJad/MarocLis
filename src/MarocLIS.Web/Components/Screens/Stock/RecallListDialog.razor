@@ -1,0 +1,101 @@
+@using MarocLIS.Application.Inventory
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<RecallListDialog> Logger
+
+@*
+    The patients' results produced with a lot — what a recall has to review — the workstation's
+    RecallListDialog. Its CSV is downloaded where the workstation opens it, and the export is
+    journalled (LotQualityService.LogRecallExportAsync), as there.
+*@
+<Modal Name="recall-list" Title="@Texts.T("Recall.Title", LotNumber, Rows.Count)" Hint="@Texts["StocksUi.Dialog.RecallList"]" Large="true" OnCancel="OnClose">
+    <ChildContent>
+        @if (Warning is { Length: > 0 } warning)
+        {
+            <p class="message is-warning prompt-text" role="alert" data-state="recall-warning">@warning</p>
+        }
+        <div class="table-scroll stock-dialog-list">
+            <table class="grid" data-grid="recall">
+                <thead>
+                    <tr>
+                        @foreach (var header in InventoryScreenRules.RecallHeaders(Texts.T))
+                        {
+                            <th>@header</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Rows)
+                    {
+                        <tr data-row="@r.TestResultId">
+                            <td><span class="list-name" title="@r.PatientName">@r.PatientName</span></td>
+                            <td class="mono nowrap" dir="ltr">@r.MedicalRecordNumber</td>
+                            <td class="mono nowrap" dir="ltr">@r.AccessionNumber</td>
+                            <td class="mono nowrap" dir="ltr">@r.AnalysisCode</td>
+                            <td class="mono nowrap" dir="ltr">@r.ParameterCode</td>
+                            <td class="mono nowrap small" dir="ltr">@InventoryScreenRules.ResultDate(r)</td>
+                            <td class="nowrap @(r.IsValidated ? "ink-normal" : "muted")">@InventoryScreenRules.Validated(r, Texts.T)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (Rows.Count == 0)
+            {
+                <p class="muted small card-pad" data-state="empty">@Texts["Inventory.RecallNoResults"]</p>
+            }
+        </div>
+        @if (_status is { } status)
+        {
+            <p class="small @(status.Critical ? "critical" : "muted")" role="status" data-state="recall-status">@status.Text</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Close" OnClick="OnClose" />
+        <ActionButton Key="Recall.ExportCsv" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download" Primary="true"
+                      Disabled="@(Rows.Count == 0 || _busy)" OnClick="ExportAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public Guid LotId { get; set; }
+    [Parameter, EditorRequired] public string LotNumber { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public IReadOnlyList<RecallResultRow> Rows { get; set; } = [];
+
+    /// <summary>What the recall just recorded said: how many results must be reviewed.</summary>
+    [Parameter] public string? Warning { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private (string Text, bool Critical)? _status;
+    private bool _busy;
+
+    private async Task ExportAsync()
+    {
+        if (_busy || Rows.Count == 0) return;
+        _busy = true;
+        try
+        {
+            var bytes = PurchasingCsv.Recall(Rows, InventoryScreenRules.RecallHeaders(Texts.T));
+            var lotId = LotId;
+            var count = Rows.Count;
+            await Scopes.RunAsync<LotQualityService, bool>(async s =>
+            {
+                await s.LogRecallExportAsync(lotId, count);
+                return true;
+            });
+            var name = InventoryScreenRules.RecallFileName(LotNumber, Clock.Today);
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", bytes);
+            _status = (Texts.T("Web.StockDownloaded", name), false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Exporting the recall list failed.");
+            _status = (Texts["Message.UnexpectedError"], true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

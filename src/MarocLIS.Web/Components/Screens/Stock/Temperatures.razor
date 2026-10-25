@@ -1,0 +1,453 @@
+@using System.Globalization
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Common
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Reporting
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IListPdfRenderer Lists
+@inject IJSRuntime JS
+@inject ILogger<Temperatures> Logger
+
+@*
+    « Températures », the workstation's TemperatureView: the monitored fridges, freezers and rooms —
+    their range, today's readings against those expected, the last reading and the state, a unit
+    whose last reading was out of range in the alarm's colours — and under them the month's
+    readings of the one selected. A reading is typed by hand from the thermometer, here as at the
+    workstation; an excursion asks for its comment and opens a non-conformity on its own. The
+    month's sheet for the ISO 15189 file is downloaded as a PDF or a CSV. What is shown, offered and
+    refused is TemperatureScreenRules'; every step goes through TemperatureMonitoringService.
+*@
+<div class="screen temperatures" data-screen="temperatures">
+    @{ var actions = Actions; var visible = Visible; var missing = TemperatureScreenRules.MissingNotice(_units, Texts.T); }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchUnits"]" aria-label="@Texts["StocksUi.SearchUnits"]"
+                   data-field="unit-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="SearchedAsync" />
+        </div>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_includeInactive ? "is-pressed" : null)" aria-pressed="@(_includeInactive ? "true" : "false")"
+                    data-chip="include-inactive" @onclick="ToggleInactiveAsync">@Texts["Temperatures.IncludeInactive"]</button>
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@TemperatureScreenRules.Count(_units, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => LoadAsync()" />
+        </span>
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush card-fill" data-card="units">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="units">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Field.Name"]</th>
+                            <th>@Texts["Temperatures.Kind"]</th>
+                            <th>@Texts["Temperatures.Location"]</th>
+                            <th>@Texts["Temperatures.Range"]</th>
+                            <th class="num">@Texts["Temperatures.Today"]</th>
+                            <th class="num">@Texts["Temperatures.Last"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var unit in visible)
+                        {
+                            var tone = TemperatureScreenRules.StateTone(unit);
+                            <tr class="@(unit.StorageUnitId == _selectedId ? "is-selected" : null) @StockTones.Row(TemperatureScreenRules.RowInk(unit))"
+                                data-row="@unit.Name" @onclick="() => SelectAsync(unit)">
+                                <td><span class="list-name strong" title="@unit.Name">@unit.Name</span></td>
+                                <td class="small"><span class="cell-wrap">@Texts[$"StorageUnitKind.{unit.Kind}"]</span></td>
+                                <td class="small"><span class="cell-wrap">@unit.Location</span></td>
+                                <td class="mono nowrap small" dir="ltr">@TemperatureScreenRules.Range(unit, Texts.Culture)</td>
+                                <td class="num mono nowrap @StockTones.Ink(TemperatureScreenRules.TodayInk(unit))" dir="ltr">@TemperatureScreenRules.Today(unit)</td>
+                                <td class="num nowrap">
+                                    <span class="mono strong" dir="ltr">@TemperatureScreenRules.Celsius(unit.LastCelsius, Texts.Culture)</span>
+                                    <span class="cell-sub mono" dir="ltr" title="@Texts["Field.Date"]">@TemperatureScreenRules.LastAt(unit)</span>
+                                </td>
+                                <td><Pill Text="@StockTones.Label(tone, Texts[TemperatureScreenRules.StateKey(unit)])" Tone="@StockTones.Pill(tone)" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && visible.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.StockNoUnit"]</p>
+                }
+            </div>
+            @if (missing is not null)
+            {
+                <p class="card-pad small grid-footer abnormal strong" data-state="missing">@missing</p>
+            }
+        </section>
+
+        <section class="card card-flush quality-sub" data-card="readings">
+            <div class="card-heading card-pad">
+                <h2 class="card-title cell-wrap">
+                    @Texts["Temperatures.Readings"]
+                    <span class="muted small" data-state="readings-note">@TemperatureScreenRules.ReadingsNote(Selected, _readings.Count)</span>
+                </h2>
+                <div class="card-actions">
+                    <input class="input input-month mono" type="month" data-field="readings-month" aria-label="@Texts["Web.TemperatureMonth"]"
+                           max="@Clock.Today.ToString("yyyy-MM")" value="@_month" @onchange="MonthChangedAsync" />
+                    <ActionButton Key="Temperatures.MonthPdf" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Printer" Disabled="@(!actions.Sheet || _busy)" OnClick="() => SheetAsync(true)" />
+                    <ActionButton Key="Temperatures.MonthCsv" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download" Disabled="@(!actions.Sheet || _busy)" OnClick="() => SheetAsync(false)" />
+                </div>
+            </div>
+            <div class="table-scroll">
+                <table class="grid" data-grid="readings">
+                    <thead>
+                        <tr>
+                            @{ var headers = TemperatureScreenRules.ReadingHeaders(Texts.T); }
+                            <th>@headers[0]</th>
+                            <th class="num">@headers[1]</th>
+                            <th class="num">@headers[2]</th>
+                            <th class="num">@headers[3]</th>
+                            <th>@headers[4]</th>
+                            <th>@headers[5]</th>
+                            <th>@headers[6]</th>
+                            <th>@headers[7]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var reading in _readings)
+                        {
+                            var cells = TemperatureScreenRules.ReadingCells(reading, Texts.T, Texts.Culture);
+                            var tone = TemperatureScreenRules.ReadingTone(reading);
+                            <tr class="@(reading.IsOutOfRange ? "stock-alarm" : null)" data-row="@cells[0]">
+                                <td class="mono nowrap small" dir="ltr">@cells[0]</td>
+                                <td class="num mono strong nowrap" dir="ltr">@cells[1]</td>
+                                <td class="num mono nowrap" dir="ltr">@cells[2]</td>
+                                <td class="num mono nowrap" dir="ltr">@cells[3]</td>
+                                <td><Pill Text="@StockTones.Label(tone, cells[4])" Tone="@StockTones.Pill(tone)" /></td>
+                                <td class="small"><span class="cell-wrap">@cells[5]</span></td>
+                                <td><span class="clamp-2 small" title="@cells[6]">@cells[6]</span></td>
+                                <td class="mono small nowrap" dir="ltr">@cells[7]</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (Selected is not null && _readings.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="no-reading">@Texts["Web.TemperatureNoReading"]</p>
+                }
+            </div>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Temperatures.NewUnit" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" Hidden="@(!actions.NewUnit)" Disabled="_busy" OnClick="() => AskUnit(true)" />
+            <ActionButton Key="Temperatures.EditUnit" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Pencil" Hidden="@(!actions.NewUnit)" Disabled="@(!actions.EditUnit || _busy)" OnClick="() => AskUnit(false)" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Temperatures.Record" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Refrigerator" Primary="true"
+                          Hidden="@(!Context.User.Has(Permissions.Inventory.RecordTemperatures))" Disabled="@(!actions.Record || _busy)" OnClick="AskRecord" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Record when Selected is { } u1:
+        <TemperatureReadingEditor Unit="u1" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="RecordAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Unit:
+        <StorageUnitEditor Unit="_editing" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SaveUnitAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Excursion when _message is { } excursion:
+        <Modal Name="temperature-excursion" Title="@excursion.Title" OnCancel="ClosePrompt">
+            <ChildContent>
+                <p class="message is-critical prompt-text text-full" role="alert" data-state="excursion-recorded">@excursion.Text</p>
+            </ChildContent>
+            <Footer>
+                @if (MaySeeNonConformities)
+                {
+                    <a class="btn btn-secondary" href="ecran/nonconformities" data-action="open-nonconformities">@Texts["Nav.NonConformities"]</a>
+                }
+                <ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" />
+            </Footer>
+        </Modal>
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="stock-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="stock-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Record, Unit, Excursion, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<StorageUnitRow> _units = [];
+    private IReadOnlyList<TemperatureReadingRow> _readings = [];
+
+    private string? _search;
+    private string _month = string.Empty;
+    private bool _includeInactive, _loaded;
+    private Guid? _selectedId;
+    private StorageUnitRow? _editing;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<StorageUnitRow> Visible =>
+        [.. _units.Where(u => StockSearch.Matches(_search, u.Name, Texts[$"StorageUnitKind.{u.Kind}"], u.Location,
+                                                  TemperatureScreenRules.Range(u, Texts.Culture), Texts[TemperatureScreenRules.StateKey(u)]))];
+
+    private StorageUnitRow? Selected => _units.FirstOrDefault(u => u.StorageUnitId == _selectedId);
+
+    private TemperatureScreenActions Actions => TemperatureScreenRules.Actions(Context.User, Selected);
+
+    private bool MaySeeNonConformities =>
+        Context.User.Has(Permissions.Quality.ManageNonConformity) || Context.User.Has(Permissions.Quality.View);
+
+    /// <summary>The month shown: « 2026-10 » as the month box writes it, this month when it is cleared.</summary>
+    private (int Year, int Month) MonthShown =>
+        DateOnly.TryParseExact(_month + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var first)
+            ? (first.Year, first.Month)
+            : (Clock.Today.Year, Clock.Today.Month);
+
+    protected override Task OnInitializedAsync()
+    {
+        _month = Clock.Today.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync(Guid? keep = null)
+    {
+        try
+        {
+            var inactive = _includeInactive;
+            var units = await Scopes.RunAsync<TemperatureMonitoringService, Result<IReadOnlyList<StorageUnitRow>>>(s => s.GetUnitsAsync(inactive));
+            if (units.IsFailure)
+            {
+                _status = (Texts.Describe(units.Errors), "critical");
+                return;
+            }
+
+            _units = units.Value;
+            _selectedId = TemperatureScreenRules.Keep(_units, keep ?? _selectedId)?.StorageUnitId;
+            await LoadReadingsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the storage units failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadReadingsAsync()
+    {
+        if (_selectedId is not { } id)
+        {
+            _readings = [];
+            return;
+        }
+
+        var (year, month) = MonthShown;
+        var readings = await Scopes.RunAsync<TemperatureMonitoringService, Result<IReadOnlyList<TemperatureReadingRow>>>(s => s.GetMonthAsync(id, year, month));
+        if (_selectedId != id) return;
+        if (readings.IsFailure)
+        {
+            _status = (Texts.Describe(readings.Errors), "critical");
+            return;
+        }
+
+        _readings = readings.Value;
+    }
+
+    private async Task SelectAsync(StorageUnitRow unit)
+    {
+        if (unit.StorageUnitId == _selectedId) return;
+        _selectedId = unit.StorageUnitId;
+        await LoadReadingsAsync();
+    }
+
+    /// <summary>The current line moves to the first one shown when the search hides it, as at the workstation.</summary>
+    private async Task SearchedAsync()
+    {
+        var visible = Visible;
+        if (visible.Count > 0 && visible.All(u => u.StorageUnitId != _selectedId)) await SelectAsync(visible[0]);
+    }
+
+    private Task ToggleInactiveAsync()
+    {
+        _includeInactive = !_includeInactive;
+        return LoadAsync();
+    }
+
+    private async Task MonthChangedAsync(ChangeEventArgs e)
+    {
+        _month = e.Value as string ?? string.Empty;
+        try
+        {
+            await LoadReadingsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the month's readings failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    // ---- A reading ---------------------------------------------------------------------------------
+
+    private void AskRecord()
+    {
+        if (!Actions.Record || _busy) return;
+        Open(Prompt.Record);
+    }
+
+    private Task RecordAsync(TemperatureReadingRequest request) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } unit) return;
+            var recorded = await Scopes.RunAsync<TemperatureMonitoringService, Result<TemperatureReadingOutcome>>(s => s.RecordReadingAsync(request));
+            if (recorded.IsFailure)
+            {
+                var error = recorded.FirstError;
+                if (TemperatureScreenRules.ReadingFieldOf(error) is { } field)
+                {
+                    _fieldRefusal = new FieldRefusal(field, error.ResourceKey, error.Args.FirstOrDefault()?.ToString());
+                    _dialogRefusal = null;
+                }
+                else
+                {
+                    _fieldRefusal = null;
+                    _dialogRefusal = Texts.Describe(recorded.Errors);
+                }
+
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync(unit.StorageUnitId);
+
+            // An excursion opened its non-conformity on its own: said, with the way to it.
+            if (TemperatureScreenRules.Excursion(recorded.Value, unit, Texts.T) is { } excursion)
+            {
+                _status = (excursion, "critical");
+                _message = new Message(Texts["Temperatures.Record"], excursion, true);
+                _prompt = Prompt.Excursion;
+            }
+            else
+            {
+                _status = (Texts["Message.Saved"], "normal");
+            }
+        });
+
+    // ---- A unit ------------------------------------------------------------------------------------
+
+    private void AskUnit(bool isNew)
+    {
+        var actions = Actions;
+        if (_busy || (isNew ? !actions.NewUnit : !actions.EditUnit)) return;
+        _editing = isNew ? null : Selected;
+        Open(Prompt.Unit);
+    }
+
+    private Task SaveUnitAsync(StorageUnitRequest request) =>
+        RunAsync(async () =>
+        {
+            var saved = await Scopes.RunAsync<TemperatureMonitoringService, Result<Guid>>(s => s.SaveUnitAsync(request));
+            if (saved.IsFailure)
+            {
+                var error = saved.FirstError;
+                if (TemperatureScreenRules.UnitFieldOf(error) is { } field)
+                {
+                    _fieldRefusal = new FieldRefusal(field, error.ResourceKey, error.Args.FirstOrDefault()?.ToString());
+                    _dialogRefusal = null;
+                }
+                else
+                {
+                    _fieldRefusal = null;
+                    _dialogRefusal = Texts.Describe(saved.Errors);
+                }
+
+                return;
+            }
+
+            ClosePrompt();
+            // A unit made inactive leaves the list unless the inactive ones are shown.
+            await LoadAsync(saved.Value);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- The month's sheet -------------------------------------------------------------------------
+
+    /// <summary>The month's sheet of the unit: every reading, who took it, and the excursions.</summary>
+    private Task SheetAsync(bool pdf) =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Sheet || Selected is not { } unit) return;
+            var (year, month) = MonthShown;
+            var headers = TemperatureScreenRules.ReadingHeaders(Texts.T);
+            var rows = _readings.Select(r => TemperatureScreenRules.ReadingCells(r, Texts.T, Texts.Culture)).ToList();
+            var content = pdf
+                ? Lists.Render(new ListDocument(TemperatureScreenRules.SheetTitle(unit, year, month, Texts.T),
+                                                TemperatureScreenRules.SheetCaption(unit, _readings, Texts.T, Texts.Culture),
+                                                headers, rows, Texts.Language == AppLanguage.Arabic))
+                : StockCsv.Table(headers, rows);
+            var name = TemperatureScreenRules.FileName(unit, year, month, pdf ? "pdf" : "csv");
+            await JS.InvokeVoidAsync("marocLis.download", name, pdf ? "application/pdf" : "text/csv", content);
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    // ---- Plumbing ----------------------------------------------------------------------------------
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A temperature step failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _editing = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

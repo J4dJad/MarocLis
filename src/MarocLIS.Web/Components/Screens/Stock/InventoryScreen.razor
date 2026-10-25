@@ -1,0 +1,836 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject NavigationManager Navigation
+@inject ILogger<InventoryScreen> Logger
+
+@*
+    « Stocks », the workstation's InventoryView: the articles with their quantity, reorder point,
+    lots and earliest expiry — the alarm's colours on a line below its safety stock or with an
+    expired lot, glyphs that say what is wrong — and under them the lots of the article selected,
+    or every lot waiting in quarantine. A lot is received quarantined and released with the evidence
+    of its check; it may be refused, recalled, written off, its patients' results listed, its QC
+    compared with the previous lot's and its certificates kept. What is shown, offered and refused
+    is InventoryScreenRules'; every operation goes through InventoryService, ReceptionService and
+    LotQualityService, which check each right and journal each change.
+*@
+<div class="screen inventory" data-screen="inventory">
+    @{ var actions = Actions; var visible = Visible; }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchStock"]" aria-label="@Texts["StocksUi.SearchStock"]"
+                   data-field="stock-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="SearchedAsync" />
+        </div>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_onlyAlerts ? "is-pressed" : null)" aria-pressed="@(_onlyAlerts ? "true" : "false")"
+                    data-chip="only-alerts" @onclick="ToggleAlertsAsync">@Texts["Inventory.OnlyAlerts"]</button>
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@InventoryScreenRules.Count(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="ActivateAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush card-fill" data-card="stock">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="stock">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Field.Code"]</th>
+                            <th>@Texts["Inventory.Item"]</th>
+                            <th class="num">@Texts["Inventory.QuantityOnHand"]</th>
+                            <th class="num">@Texts["Inventory.ReorderPoint"]</th>
+                            <th>@Texts["Inventory.Lot"]</th>
+                            <th>@Texts["Inventory.Expiry"]</th>
+                            <th>@Texts["Inventory.Supplier"]</th>
+                            <th class="stock-glyphs" title="@Texts["Web.StockAlertColumn"]">!</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in visible)
+                        {
+                            var name = row.Name.For(Texts.Language);
+                            var tone = InventoryScreenRules.Tone(row);
+                            var warn = tone == StockRowTone.Warning ? "abnormal strong" : null;
+                            <tr class="@(row.StockItemId == _selectedId ? "is-selected" : null) @StockTones.Row(tone)" data-row="@row.Code"
+                                @onclick="() => SelectAsync(row)">
+                                <td class="mono nowrap" dir="ltr">@row.Code</td>
+                                <td>
+                                    <span class="list-name" title="@name">@name</span>
+                                    <span class="cell-sub">@Texts[$"StockItemKind.{row.Kind}"]</span>
+                                </td>
+                                <td class="num nowrap @warn">@InventoryScreenRules.OnHand(row, Texts.Culture)</td>
+                                <td class="num nowrap">@InventoryScreenRules.ReorderPoint(row, Texts.Culture)</td>
+                                <td class="nowrap @warn" dir="ltr">@InventoryScreenRules.Lots(row)</td>
+                                <td class="mono nowrap small @warn" dir="ltr">@InventoryScreenRules.Expiry(row)</td>
+                                <td class="small"><span class="cell-wrap">@row.SupplierName</span></td>
+                                <td class="stock-glyphs @warn" title="@string.Join("\n", InventoryScreenRules.AlertMeanings(row, Texts.T))">@InventoryScreenRules.AlertGlyphs(row)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && visible.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.StockNone"]</p>
+                }
+            </div>
+        </section>
+
+        <section class="card card-flush quality-sub" data-card="lots">
+            <div class="card-heading card-pad">
+                <h2 class="card-title cell-wrap">
+                    @Texts["Inventory.Lots"]
+                    <span class="muted small" data-state="lot-note">@InventoryScreenRules.LotNote(Selected, _lots, _onlyQuarantined, Texts.T)</span>
+                </h2>
+                <div class="card-actions">
+                    <div class="chips" role="group">
+                        <button type="button" class="chip @(_onlyQuarantined ? "is-pressed" : null)" aria-pressed="@(_onlyQuarantined ? "true" : "false")"
+                                data-chip="only-quarantined" @onclick="ToggleQuarantinedAsync">@Texts["Inventory.Quarantined"]</button>
+                    </div>
+                    <ActionButton Key="Action.Release" Primary="true" Disabled="@(!actions.Release || _busy)" OnClick="AskRelease" />
+                </div>
+            </div>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="lots">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Inventory.LotNumber"]</th>
+                            <th>@Texts["Inventory.Expiry"]</th>
+                            <th class="num">@Texts["Inventory.DaysToExpiry"]</th>
+                            <th class="num">@Texts["Field.Quantity"]</th>
+                            <th>@Texts["Inventory.Receipt"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                            <th>@Texts["Sample.Storage"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var lot in _lots)
+                        {
+                            var tone = InventoryScreenRules.LotTone(lot);
+                            <tr class="@(lot.ReagentLotId == _lotId ? "is-selected" : null) @StockTones.Row(InventoryScreenRules.LotInk(lot, "lot"))"
+                                data-row="@lot.LotNumber" @onclick="() => _lotId = lot.ReagentLotId">
+                                <td class="nowrap">
+                                    <span class="mono strong" dir="ltr">@lot.LotNumber</span>
+                                    <span class="cell-sub mono" dir="ltr" title="@lot.ItemName.For(Texts.Language)">@lot.ItemCode</span>
+                                </td>
+                                <td class="mono nowrap @StockTones.Ink(InventoryScreenRules.LotInk(lot, "expiry"))" dir="ltr">@InventoryScreenRules.Date(lot.ExpiryDate)</td>
+                                <td class="num @StockTones.Ink(InventoryScreenRules.LotInk(lot, "days"))">@lot.DaysToExpiry</td>
+                                <td class="num nowrap">@InventoryScreenRules.Quantity(lot.QuantityRemaining, Texts.Culture)</td>
+                                <td class="nowrap small">
+                                    <span class="mono" dir="ltr">@InventoryScreenRules.Date(lot.ReceivedOn)</span>
+                                    @if (lot.OpenedOn is { } opened)
+                                    {
+                                        <span class="cell-sub mono" dir="ltr" title="@Texts["Inventory.OpenedOn"]">@Texts["Inventory.OpenedOn"] @InventoryScreenRules.Date(opened)</span>
+                                    }
+                                </td>
+                                <td><Pill Text="@StockTones.Label(tone, Texts[InventoryScreenRules.LotStateKey(lot)])" Tone="@StockTones.Pill(tone)" /></td>
+                                <td class="small"><span class="cell-wrap">@lot.StorageLocation</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _lots.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="no-lot">@Texts["Web.StockNoLot"]</p>
+                }
+            </div>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Stock.Alerts" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.TriangleAlert" Hidden="@(!actions.Alerts)" Disabled="_busy" OnClick="ShowAlertsAsync" />
+            <ActionButton Key="Inventory.Issue" Hidden="@(!Context.User.Has(Permissions.Inventory.Issue))" Disabled="@(!actions.Issue || _busy)" OnClick="AskIssue" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Inventory.ClearRejection" Hidden="@(!Context.User.Has(Permissions.Inventory.Adjust))" Disabled="@(!actions.ClearRejection || _busy)" OnClick="AskClearRejection" />
+            <ActionButton Key="Inventory.Recall" Hidden="@(!Context.User.Has(Permissions.Inventory.Adjust))" Disabled="@(!actions.Recall || _busy)" OnClick="AskRecall" />
+            <ActionButton Key="Inventory.WriteOff" Hidden="@(!Context.User.Has(Permissions.Inventory.Adjust))" Disabled="@(!actions.WriteOff || _busy)" OnClick="AskWriteOff" />
+            <ActionButton Key="Recall.Menu" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileSearch" Hidden="@(!Context.User.Has(Permissions.Results.View))"
+                          Disabled="@(!actions.RecallList || _busy)" OnClick="() => ShowRecallListAsync(null, null)" />
+            <ActionButton Key="LotComparison.Menu" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.ChartColumn" Disabled="@(!actions.Compare || _busy)" OnClick="CompareAsync" />
+            <ActionButton Key="Certificates.Menu" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileCheck" Disabled="@(!actions.Certificates || _busy)" OnClick="ShowCertificates" />
+        </More>
+        <Destructive>
+            <ActionButton Key="Action.Reject" Danger="true" Hidden="@(!RejectRight)" Disabled="@(!actions.Reject || _busy)" OnClick="AskReject" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Inventory.ReceiveLot" Primary="true" Hidden="@(!Context.User.Has(Permissions.Inventory.Receive))"
+                          Disabled="@(!actions.Receive || _busy)" OnClick="AskReceiveAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Receive when _receiveItem is { } item:
+        <ReceiveLotEditor Item="item" Form="_form" Items="_rows" Suppliers="_suppliers" Today="Clock.Today" FindByGtin="FindByGtinAsync"
+                          Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                          OnSave="AfterCheckAsync" OnSwitch="SwitchItem" OnRefuse="AskRefuseDelivery" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.NonConformity:
+        <ConfirmPrompt Title="@Texts["Inventory.ReceiveLot"]" Message="@NonConformityQuestion" OnYes="ReceiveAsync" OnNo="BackToReception" />
+        break;
+
+    case Prompt.RefuseDelivery:
+        <ReasonPrompt Title="@Texts["Reception.Refuse"]" Prompt="@Texts["Reception.RefusePrompt"]"
+                      MinimumLength="InventoryScreenRules.RefusalMinLength" MaxLength="InventoryScreenRules.RefusalMaxLength"
+                      OnConfirm="RefuseDeliveryAsync" OnCancel="BackToReception" />
+        break;
+
+    case Prompt.Issue when Selected is { } i:
+        <TextPrompt Name="issue" Title="@Texts["Inventory.Issue"]" Prompt="@InventoryScreenRules.IssuePrompt(i, Texts.T, Texts.Culture)"
+                    MaxLength="InventoryScreenRules.QuantityMaxLength" Required="true" Refusal="@_dialogRefusal"
+                    OnConfirm="IssueAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Release when SelectedLot is { } l1:
+        <ReasonPrompt Title="@Texts["Action.Release"]" Prompt="@Texts.T("Inventory.ReleaseEvidencePrompt", l1.LotNumber)"
+                      MinimumLength="InventoryScreenRules.ReleaseEvidenceMinLength" MaxLength="InventoryScreenRules.ReleaseEvidenceMaxLength"
+                      OnConfirm="ReleaseAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Override when SelectedLot is { } l2:
+        <ReasonPrompt Title="@Texts["Lot.QcOverrideTitle"]" Prompt="@InventoryScreenRules.OverridePrompt(_overrideRefusal ?? string.Empty, l2, Texts.T)"
+                      MinimumLength="ReagentLot.QcOverrideJustificationMinLength" MaxLength="InventoryScreenRules.OverrideMaxLength"
+                      OnConfirm="OverrideAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Reject when SelectedLot is { } l3:
+        <ReasonPrompt Title="@Texts["Action.Reject"]" Prompt="@Texts.T("Inventory.RejectLotPrompt", l3.LotNumber)"
+                      MaxLength="InventoryScreenRules.RejectMaxLength" OnConfirm="RejectAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.ClearRejection when SelectedLot is { } l4:
+        <ReasonPrompt Title="@Texts["Inventory.ClearRejection"]" Prompt="@Texts.T("Inventory.ClearRejectionPrompt", l4.LotNumber)"
+                      MinimumLength="InventoryScreenRules.ClearRejectionMinLength" OnConfirm="ClearRejectionAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Recall when SelectedLot is { } l5:
+        <TextPrompt Name="recall" Title="@Texts["Inventory.Recall"]" Prompt="@Texts.T("Inventory.RecallReferencePrompt", l5.LotNumber)"
+                    MaxLength="InventoryScreenRules.RecallReferenceMaxLength" Required="true" OnConfirm="RecallAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.WriteOff when SelectedLot is { } l6:
+        <ReasonPrompt Title="@Texts["Inventory.WriteOff"]" Prompt="@InventoryScreenRules.WriteOffPrompt(l6, Texts.T, Texts.Culture)"
+                      MaxLength="InventoryScreenRules.WriteOffMaxLength" OnConfirm="WriteOffAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Alerts when _alerts is { } alerts:
+        <StockAlertsDialog Alerts="alerts" OnClose="ClosePrompt" />
+        break;
+
+    case Prompt.RecallList when _recallList is { } list:
+        <RecallListDialog LotId="list.LotId" LotNumber="@list.LotNumber" Rows="list.Rows" Warning="@list.Warning" OnClose="ClosePrompt" />
+        break;
+
+    case Prompt.Comparison when _comparison is { } comparison:
+        <LotComparisonDialog Comparison="comparison" OnClose="ClosePrompt" />
+        break;
+
+    case Prompt.Certificates when SelectedLot is { } l7:
+        <LotCertificatesDialog LotId="l7.ReagentLotId" LotNumber="@l7.LotNumber" MayAttach="actions.AttachCertificate" OnClose="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="stock-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="stock-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt
+    {
+        None, Receive, NonConformity, RefuseDelivery, Issue, Release, Override, Reject, ClearRejection, Recall, WriteOff,
+        Alerts, RecallList, Comparison, Certificates, Message
+    }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private sealed record RecallList(Guid LotId, string LotNumber, IReadOnlyList<RecallResultRow> Rows, string? Warning);
+
+    private IReadOnlyList<StockRow> _rows = [];
+    private IReadOnlyList<LotRow> _lots = [];
+    private IReadOnlyList<Supplier> _suppliers = [];
+
+    private string? _search;
+    private bool _onlyAlerts, _onlyQuarantined, _loaded;
+    private Guid? _selectedId, _lotId;
+
+    // The delivery being typed: kept while the non-conformity is asked about or the refusal's reason typed.
+    private ReceiveLotForm _form = new();
+    private StockRow? _receiveItem;
+    private ReceptionVerdict? _verdict;
+    private string? _releaseEvidence, _overrideRefusal;
+
+    private StockAlertSummary? _alerts;
+    private RecallList? _recallList;
+    private LotComparisonView? _comparison;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<StockRow> Visible =>
+        [.. _rows.Where(r => StockSearch.Matches(_search, r.Code, r.Name.For(Texts.Language), Texts[$"StockItemKind.{r.Kind}"],
+                                                  r.SupplierName, InventoryScreenRules.Expiry(r), InventoryScreenRules.AlertGlyphs(r)))];
+
+    private StockRow? Selected => _rows.FirstOrDefault(r => r.StockItemId == _selectedId);
+
+    private LotRow? SelectedLot => _lots.FirstOrDefault(l => l.ReagentLotId == _lotId);
+
+    private InventoryScreenActions Actions => InventoryScreenRules.Actions(Context.User, Selected, SelectedLot);
+
+    private bool RejectRight => Context.User.Has(Permissions.Inventory.Receive) || Context.User.Has(Permissions.Quality.ReviewQc);
+
+    private string NonConformityQuestion =>
+        _verdict is { AmbientWarning: true } && _receiveItem is { } item
+            ? $"{Texts.T("Reception.AmbientWarning", ColdChain.RangeText(item.StorageCondition))}\n\n{Texts["Reception.NonConformityQuestion"]}"
+            : Texts["Reception.NonConformityQuestion"];
+
+    protected override Task OnInitializedAsync() => ActivateAsync();
+
+    /// <summary>
+    /// Lots that expired since the last pass lower the usable stock without any operation, so the
+    /// reorder check also runs whenever the screen is shown — and on « Actualiser ».
+    /// </summary>
+    private async Task ActivateAsync()
+    {
+        try
+        {
+            var drafted = await Scopes.RunAsync<InventoryService, ReorderOutcome>(s => s.RaiseReorderDraftsAsync());
+            _status = InventoryScreenRules.ReorderMessage(drafted, Texts.T) is { } message ? (message, "critical") : null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Drafting the reorders failed.");
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(Guid? keepItem = null, Guid? keepLot = null)
+    {
+        try
+        {
+            var onlyAlerts = _onlyAlerts;
+            var stock = await Scopes.RunAsync<InventoryService, Result<IReadOnlyList<StockRow>>>(s => s.GetStockAsync(onlyAlerts));
+            if (stock.IsFailure)
+            {
+                _status = (Texts.Describe(stock.Errors), "critical");
+                return;
+            }
+
+            _rows = stock.Value;
+            _selectedId = InventoryScreenRules.Keep(_rows, keepItem ?? _selectedId)?.StockItemId;
+            await LoadLotsAsync(keepLot ?? _lotId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the stock failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadLotsAsync(Guid? keep = null)
+    {
+        var quarantined = _onlyQuarantined;
+        var itemId = quarantined ? null : _selectedId;
+        if (!quarantined && itemId is null)
+        {
+            _lots = [];
+            _lotId = null;
+            return;
+        }
+
+        var lots = await Scopes.RunAsync<InventoryService, Result<IReadOnlyList<LotRow>>>(s => s.GetLotsAsync(itemId, quarantined));
+        if (!quarantined && _selectedId != itemId) return;
+        _lots = lots.IsSuccess ? lots.Value : [];
+
+        // The lot just released, refused or recalled stays the current one, its new state in view.
+        _lotId = (InventoryScreenRules.KeepLot(_lots, keep) ?? (_lots.Count > 0 ? _lots[0] : null))?.ReagentLotId;
+    }
+
+    private async Task SelectAsync(StockRow row)
+    {
+        if (row.StockItemId == _selectedId) return;
+        _selectedId = row.StockItemId;
+        if (!_onlyQuarantined) await LoadLotsAsync();
+    }
+
+    /// <summary>The current line moves to the first one shown when the search hides it, as at the workstation.</summary>
+    private async Task SearchedAsync()
+    {
+        var visible = Visible;
+        if (visible.Count > 0 && visible.All(r => r.StockItemId != _selectedId)) await SelectAsync(visible[0]);
+    }
+
+    private Task ToggleAlertsAsync()
+    {
+        _onlyAlerts = !_onlyAlerts;
+        return LoadAsync();
+    }
+
+    private async Task ToggleQuarantinedAsync()
+    {
+        _onlyQuarantined = !_onlyQuarantined;
+        try
+        {
+            await LoadLotsAsync(_lotId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the lots failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    // ---- A reception -------------------------------------------------------------------------------
+
+    private async Task AskReceiveAsync()
+    {
+        if (!Actions.Receive || _busy || Selected is not { } item) return;
+        try
+        {
+            var suppliers = await Scopes.RunAsync<InventoryService, Result<IReadOnlyList<Supplier>>>(s => s.GetSuppliersAsync());
+            _suppliers = suppliers.IsSuccess ? suppliers.Value : [];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the suppliers failed.");
+            _suppliers = [];
+        }
+
+        _receiveItem = item;
+        _form = InventoryScreenRules.NewReception(Clock.Today);
+        Open(Prompt.Receive);
+    }
+
+    private Task<GtinMatch?> FindByGtinAsync(string gtin) =>
+        Scopes.RunAsync<ReceptionService, GtinMatch?>(s => s.FindByGtinAsync(gtin));
+
+    /// <summary>The scanned box is another article's: the reception goes on for that one, as the workstation's.</summary>
+    private void SwitchItem(StockRow other) => _receiveItem = other;
+
+    /// <summary>
+    /// The checks passed: a failed check or an out-of-range temperature opens a supplier
+    /// non-conformity, which is asked about first; « Non » goes back to the delivery as typed.
+    /// </summary>
+    private Task AfterCheckAsync(ReceptionVerdict verdict)
+    {
+        _verdict = verdict;
+        if (verdict.NeedsNonConformity)
+        {
+            _prompt = Prompt.NonConformity;
+            return Task.CompletedTask;
+        }
+
+        return ReceiveAsync();
+    }
+
+    private Task ReceiveAsync() =>
+        RunAsync(async () =>
+        {
+            if (_verdict?.Request is not { } request || _receiveItem is not { } item) return;
+            var received = await Scopes.RunAsync<InventoryService, Result<Guid>>(s => s.ReceiveLotAsync(request));
+            if (received.IsFailure)
+            {
+                // Said in the delivery, next to the box the refusal names.
+                _prompt = Prompt.Receive;
+                Refused(received);
+                return;
+            }
+
+            var ambient = _verdict.AmbientWarning && !_verdict.NeedsNonConformity
+                ? Texts.T("Reception.AmbientWarning", ColdChain.RangeText(item.StorageCondition)) + "\n\n"
+                : string.Empty;
+            _verdict = null;
+            await LoadAsync(item.StockItemId, received.Value);
+            _status = (Texts["Message.Saved"], "normal");
+
+            // Stated explicitly: a storeman who does not know the lot is quarantined will wonder why
+            // the bench cannot draw from it.
+            Say(Texts["Inventory.ReceiveLot"], ambient + Texts["Inventory.ReceivedQuarantined"]);
+        });
+
+    private void BackToReception()
+    {
+        _prompt = _receiveItem is null ? Prompt.None : Prompt.Receive;
+    }
+
+    private void AskRefuseDelivery()
+    {
+        if (_busy) return;
+        _prompt = Prompt.RefuseDelivery;
+    }
+
+    /// <summary>Refused at the door: nothing goes into stock, the refusal and its non-conformity are kept.</summary>
+    private Task RefuseDeliveryAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            if (_receiveItem is not { } item) return;
+            var request = InventoryScreenRules.Refusal(_form, item.StockItemId, reason);
+            var refused = await Scopes.RunAsync<ReceptionService, Result<string>>(s => s.RefuseDeliveryAsync(request));
+            if (refused.IsFailure)
+            {
+                Say(Texts["Reception.Refuse"], Texts.Describe(refused.Errors), true);
+                return;
+            }
+
+            _receiveItem = null;
+            Say(Texts["Reception.Refuse"], Texts.T("Reception.Refused", refused.Value));
+        });
+
+    // ---- An issue ----------------------------------------------------------------------------------
+
+    private void AskIssue()
+    {
+        if (!Actions.Issue || _busy) return;
+        Open(Prompt.Issue);
+    }
+
+    private Task IssueAsync(string answer) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } item) return;
+            var (issued, refused) = InventoryScreenRules.ReadIssue(answer);
+            if (issued is not { } quantity)
+            {
+                _dialogRefusal = FieldMessage.Say(Texts, refused!);
+                return;
+            }
+
+            var itemId = item.StockItemId;
+            var (result, drafted) = await Scopes.RunAsync<InventoryService, (Result<string>, ReorderOutcome)>(async s =>
+            {
+                var r = await s.IssueAsync(itemId, quantity);
+                return (r, s.LastReorder);
+            });
+            if (result.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(result.Errors);
+                return;
+            }
+
+            // FEFO: the operator did not choose the lots, and traceability needs to know which went to the bench.
+            _prompt = Prompt.None;
+            await LoadAsync(itemId);
+            _status = (Join(InventoryScreenRules.Issued(result.Value, Texts.T), InventoryScreenRules.ReorderMessage(drafted, Texts.T)),
+                       drafted.Any ? "critical" : "normal");
+        });
+
+    // ---- The lot's operations ----------------------------------------------------------------------
+
+    private void AskRelease()
+    {
+        if (!Actions.Release || _busy) return;
+        Open(Prompt.Release);
+    }
+
+    private Task ReleaseAsync(string evidence) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (SelectedLot is not { } lot) return;
+            var lotId = lot.ReagentLotId;
+            var released = await Scopes.RunAsync<InventoryService, Result>(s => s.ReleaseLotAsync(lotId, evidence));
+
+            // Refused for want of conforming QC on the lot: a biologist may release it by derogation,
+            // with a justification that stays on the lot and in the audit trail.
+            if (released.IsFailure && InventoryScreenRules.OffersQcOverride(released.FirstError, Context.User.Has))
+            {
+                _releaseEvidence = evidence;
+                _overrideRefusal = Texts.Describe(released.Errors);
+                _prompt = Prompt.Override;
+                return;
+            }
+
+            await AfterReleaseAsync(released, lot);
+        });
+
+    private Task OverrideAsync(string justification) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (SelectedLot is not { } lot || _releaseEvidence is not { } evidence) return;
+            var lotId = lot.ReagentLotId;
+            var released = await Scopes.RunAsync<InventoryService, Result>(s => s.ReleaseLotOverridingQcAsync(lotId, evidence, justification));
+            await AfterReleaseAsync(released, lot);
+        });
+
+    private async Task AfterReleaseAsync(Result released, LotRow lot)
+    {
+        _releaseEvidence = _overrideRefusal = null;
+        if (released.IsFailure)
+        {
+            Say(Texts["Action.Release"], Texts.Describe(released.Errors), true);
+            return;
+        }
+
+        await LoadAsync(keepLot: lot.ReagentLotId);
+        _status = (InventoryScreenRules.StateAfter(lot, "Inventory.Usable", Texts.T), "normal");
+    }
+
+    private void AskReject()
+    {
+        if (!Actions.Reject || _busy) return;
+        Open(Prompt.Reject);
+    }
+
+    private Task RejectAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (SelectedLot is not { } lot) return;
+            var lotId = lot.ReagentLotId;
+            var rejected = await Scopes.RunAsync<InventoryService, Result>(s => s.RejectLotAsync(lotId, reason));
+            if (rejected.IsFailure)
+            {
+                Say(Texts["Action.Reject"], Texts.Describe(rejected.Errors), true);
+                return;
+            }
+
+            await LoadAsync(keepLot: lotId);
+            _status = (InventoryScreenRules.StateAfter(lot, "Lot_Rejected", Texts.T), "critical");
+        });
+
+    private void AskClearRejection()
+    {
+        if (!Actions.ClearRejection || _busy) return;
+        Open(Prompt.ClearRejection);
+    }
+
+    /// <summary>A rejection recorded against the wrong lot withdrawn: the lot returns to quarantine, not to service.</summary>
+    private Task ClearRejectionAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (SelectedLot is not { } lot) return;
+            var lotId = lot.ReagentLotId;
+            var cleared = await Scopes.RunAsync<InventoryService, Result>(s => s.ClearLotRejectionAsync(lotId, reason));
+            if (cleared.IsFailure)
+            {
+                Say(Texts["Inventory.ClearRejection"], Texts.Describe(cleared.Errors), true);
+                return;
+            }
+
+            await LoadAsync(keepLot: lotId);
+            _status = (InventoryScreenRules.StateAfter(lot, "Inventory.Quarantined", Texts.T), "abnormal");
+        });
+
+    private void AskRecall()
+    {
+        if (!Actions.Recall || _busy) return;
+        Open(Prompt.Recall);
+    }
+
+    /// <summary>
+    /// A manufacturer recall recorded, and how many patient results were produced with the lot — the
+    /// question a recall raises; the list says who, which is what the recall needs.
+    /// </summary>
+    private Task RecallAsync(string reference) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (SelectedLot is not { } lot || string.IsNullOrWhiteSpace(reference)) return;
+            var lotId = lot.ReagentLotId;
+            var trimmed = reference.Trim();
+            var (recalled, drafted) = await Scopes.RunAsync<InventoryService, (Result<int>, ReorderOutcome)>(async s =>
+            {
+                var r = await s.RecallLotAsync(lotId, trimmed);
+                return (r, s.LastReorder);
+            });
+            if (recalled.IsFailure)
+            {
+                Say(Texts["Inventory.Recall"], Texts.Describe(recalled.Errors), true);
+                return;
+            }
+
+            await LoadAsync(keepLot: lotId);
+            _status = InventoryScreenRules.ReorderMessage(drafted, Texts.T) is { } reorder ? (reorder, "critical") : (Texts["Message.Saved"], "normal");
+
+            if (recalled.Value == 0)
+            {
+                Say(Texts["Inventory.Recall"], Texts["Inventory.RecallNoResults"]);
+                return;
+            }
+
+            var warning = Texts.T("Inventory.RecallAffectedResults", recalled.Value, lot.LotNumber);
+            if (Context.User.Has(Permissions.Results.View)) await ShowRecallListCoreAsync(lot, warning);
+            else Say(Texts["Inventory.Recall"], warning, true);
+        });
+
+    private void AskWriteOff()
+    {
+        if (!Actions.WriteOff || _busy) return;
+        Open(Prompt.WriteOff);
+    }
+
+    /// <summary>What is left of the lot written off: as an expiry when it expired, as damage otherwise.</summary>
+    private Task WriteOffAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (SelectedLot is not { } lot) return;
+            var lotId = lot.ReagentLotId;
+            var quantity = lot.QuantityRemaining;
+            var kind = InventoryScreenRules.WriteOffKind(lot);
+            var (written, drafted) = await Scopes.RunAsync<InventoryService, (Result, ReorderOutcome)>(async s =>
+            {
+                var r = await s.AdjustAsync(lotId, quantity, kind, reason);
+                return (r, s.LastReorder);
+            });
+            if (written.IsFailure)
+            {
+                Say(Texts["Inventory.WriteOff"], Texts.Describe(written.Errors), true);
+                return;
+            }
+
+            await LoadAsync(keepLot: lotId);
+            _status = InventoryScreenRules.ReorderMessage(drafted, Texts.T) is { } reorder ? (reorder, "critical") : (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- The lot's quality records -----------------------------------------------------------------
+
+    private Task ShowAlertsAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Alerts) return;
+            var alerts = await Scopes.RunAsync<StockPlanningService, Result<StockAlertSummary>>(s => s.GetAlertsAsync());
+            if (alerts.IsFailure)
+            {
+                Say(Texts["Stock.Alerts"], Texts.Describe(alerts.Errors), true);
+                return;
+            }
+
+            _alerts = alerts.Value;
+            _prompt = Prompt.Alerts;
+        });
+
+    private Task ShowRecallListAsync(LotRow? lot, string? warning) =>
+        RunAsync(async () =>
+        {
+            if (!Actions.RecallList || (lot ?? SelectedLot) is not { } row) return;
+            await ShowRecallListCoreAsync(row, warning);
+        });
+
+    private async Task ShowRecallListCoreAsync(LotRow lot, string? warning)
+    {
+        var lotId = lot.ReagentLotId;
+        var list = await Scopes.RunAsync<LotQualityService, Result<IReadOnlyList<RecallResultRow>>>(s => s.GetRecallListAsync(lotId));
+        if (list.IsFailure)
+        {
+            Say(Texts["Recall.Menu"], Texts.Describe(list.Errors), true);
+            return;
+        }
+
+        _recallList = new RecallList(lotId, lot.LotNumber, list.Value, warning);
+        _prompt = Prompt.RecallList;
+    }
+
+    private Task CompareAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Compare || SelectedLot is not { } lot) return;
+            var lotId = lot.ReagentLotId;
+            var comparison = await Scopes.RunAsync<LotQualityService, Result<LotComparisonView>>(s => s.CompareWithPreviousLotAsync(lotId));
+            if (comparison.IsFailure)
+            {
+                Say(Texts["LotComparison.Menu"], Texts.Describe(comparison.Errors), true);
+                return;
+            }
+
+            _comparison = comparison.Value;
+            _prompt = Prompt.Comparison;
+        });
+
+    private void ShowCertificates()
+    {
+        if (!Actions.Certificates || _busy) return;
+        _prompt = Prompt.Certificates;
+    }
+
+    // ---- Plumbing ----------------------------------------------------------------------------------
+
+    private static string Join(string first, string? second) => second is null ? first : $"{first}  ·  {second}";
+
+    /// <summary>A refusal of the service kept in the delivery, next to the box it names when it names one.</summary>
+    private void Refused(Result result)
+    {
+        var error = result.FirstError;
+        if (InventoryScreenRules.FieldOf(error) is { } field)
+        {
+            _fieldRefusal = new FieldRefusal(field, error.ResourceKey, error.Args.FirstOrDefault()?.ToString());
+            _dialogRefusal = null;
+        }
+        else
+        {
+            _fieldRefusal = null;
+            _dialogRefusal = Texts.Describe(result.Errors);
+        }
+    }
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A stock operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _alerts = null;
+        _recallList = null;
+        _comparison = null;
+        _receiveItem = null;
+        _verdict = null;
+    }
+}

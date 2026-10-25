@@ -1,0 +1,70 @@
+@using MarocLIS.Application.Inventory
+@inject WebTexts Texts
+
+@*
+    A line's breakdown, the workstation's ConsumptionDetailDialog: where the theoretical
+    consumption comes from — patients, QC, calibrations, reruns, the dead volume of each opening —
+    in tests and in the article's unit, then the theoretical, the real and the variance; under it,
+    the activity analysis by analysis.
+*@
+<Modal Name="consumption-detail" Title="@ConsumptionScreenRules.DetailTitle(Row, From, To, Texts.T)" Hint="@Texts["StocksUi.Dialog.ConsumptionDetail"]" Large="true" OnCancel="OnClose">
+    <ChildContent>
+        <div class="table-scroll">
+            <table class="grid" data-grid="consumption-summary">
+                <thead>
+                    <tr>
+                        <th>@Texts["Consumption.Origin"]</th>
+                        <th class="num">@Texts["Consumption.Tests"]</th>
+                        <th class="num">@Row.UnitOfMeasure</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in ConsumptionScreenRules.DetailLines(Row, Texts.T, Texts.Culture))
+                    {
+                        <tr class="@(line.Total ? "strong" : null)">
+                            <td><span class="cell-wrap">@line.Label</span></td>
+                            <td class="num mono nowrap" dir="ltr">@line.Tests</td>
+                            <td class="num mono nowrap" dir="ltr">@line.Units</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="table-scroll stock-dialog-list">
+            <table class="grid" data-grid="consumption-activity">
+                <thead>
+                    <tr>
+                        <th>@Texts["Consumption.Analysis"]</th>
+                        <th class="num">@Texts["Consumption.Patients"]</th>
+                        <th class="num">@Texts["Consumption.Qc"]</th>
+                        <th class="num">@Texts["Consumption.Calibrations"]</th>
+                        <th class="num">@Texts["Consumption.Reruns"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in Row.Activity)
+                    {
+                        <tr data-row="@a.AnalysisCode">
+                            <td class="mono" dir="ltr">@a.AnalysisCode</td>
+                            <td class="num">@a.PatientTests</td>
+                            <td class="num">@a.QcTests</td>
+                            <td class="num">@a.Calibrations</td>
+                            <td class="num">@a.Reruns</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="small muted" data-state="detail-notice">@Texts[ConsumptionScreenRules.DetailNoticeKey(Row)]</p>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Close" Primary="true" OnClick="OnClose" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public ConsumptionRow Row { get; set; } = default!;
+    [Parameter] public DateOnly From { get; set; }
+    [Parameter] public DateOnly To { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+}

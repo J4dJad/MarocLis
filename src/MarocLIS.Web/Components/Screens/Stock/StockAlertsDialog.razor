@@ -1,0 +1,90 @@
+@using MarocLIS.Application.Inventory
+@inject WebTexts Texts
+
+@*
+    « Alertes de stock », the workstation's StockAlertsDialog: the articles whose usable stock runs
+    out before an order placed today would arrive, in the alarm's colours, then the lots reaching
+    their expiry, in the alarm's colours when expired or at the critical level and the warning's
+    otherwise. The thresholds are said under them (StockPlanningService's settings).
+*@
+<Modal Name="stock-alerts" Title="@Texts["Stock.Alerts"]" Hint="@Texts["StocksUi.Dialog.StockAlerts"]" Large="true" OnCancel="OnClose">
+    <ChildContent>
+        <h3 class="card-title" data-state="stockouts-heading">@Texts.T("Stock.StockOuts", Alerts.StockOuts.Count)</h3>
+        <div class="table-scroll stock-dialog-list">
+            <table class="grid" data-grid="stock-outs">
+                <thead>
+                    <tr>
+                        <th>@Texts["Field.Code"]</th>
+                        <th>@Texts["Inventory.Item"]</th>
+                        <th class="num">@Texts["Stock.Usable"]</th>
+                        <th class="num">@Texts["Stock.AverageDaily"]</th>
+                        <th>@Texts["Stock.StockOutDate"]</th>
+                        <th>@Texts["Stock.LeadTime"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in Alerts.StockOuts)
+                    {
+                        var name = s.Name.For(Texts.Language);
+                        <tr class="stock-alarm @(s.IsCritical ? "stock-alarm-strong" : null)" data-row="@s.Code">
+                            <td class="mono nowrap" dir="ltr">@s.Code</td>
+                            <td><span class="list-name" title="@name">@name</span></td>
+                            <td class="num nowrap">@InventoryScreenRules.Amount(s.Usable, Texts.Culture) @s.UnitOfMeasure</td>
+                            <td class="num nowrap">@InventoryScreenRules.Amount(s.AverageDailyConsumption, Texts.Culture)</td>
+                            <td class="mono nowrap" dir="ltr">@InventoryScreenRules.LongDate(s.StockOutDate)</td>
+                            <td class="nowrap">@Texts.T("Stock.Days", s.LeadTimeDays)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (Alerts.StockOuts.Count == 0)
+            {
+                <p class="muted small card-pad" data-state="no-stockout">@Texts["Web.StockNoAlert"]</p>
+            }
+        </div>
+
+        <h3 class="card-title" data-state="expiring-heading">@Texts.T("Stock.ExpiringLots", Alerts.ExpiringLots.Count)</h3>
+        <div class="table-scroll stock-dialog-list">
+            <table class="grid" data-grid="expiring-lots">
+                <thead>
+                    <tr>
+                        <th>@Texts["Field.Code"]</th>
+                        <th>@Texts["Inventory.Item"]</th>
+                        <th>@Texts["Inventory.LotNumber"]</th>
+                        <th>@Texts["Inventory.Expiry"]</th>
+                        <th class="num">@Texts["Field.Quantity"]</th>
+                        <th>@Texts["Stock.ExpiryLevel"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in Alerts.ExpiringLots)
+                    {
+                        var name = l.ItemName.For(Texts.Language);
+                        var tone = InventoryScreenRules.ExpiryTone(l.Level);
+                        <tr class="@(tone == StockTone.Critical ? "stock-alarm" : null)" data-row="@l.LotNumber">
+                            <td class="mono nowrap" dir="ltr">@l.ItemCode</td>
+                            <td><span class="list-name" title="@name">@name</span></td>
+                            <td class="mono nowrap" dir="ltr">@l.LotNumber</td>
+                            <td class="mono nowrap @(tone == StockTone.Critical ? null : "abnormal strong")" dir="ltr">@InventoryScreenRules.LongDate(l.ExpiryDate)</td>
+                            <td class="num nowrap">@InventoryScreenRules.Amount(l.QuantityRemaining, Texts.Culture) @l.UnitOfMeasure</td>
+                            <td><Pill Text="@StockTones.Label(tone, Texts[$"ExpiryAlertLevel.{l.Level}"])" Tone="@StockTones.Pill(tone)" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (Alerts.ExpiringLots.Count == 0)
+            {
+                <p class="muted small card-pad" data-state="no-expiring">@Texts["Web.StockNoAlert"]</p>
+            }
+        </div>
+        <p class="small muted" data-state="alerts-notice">@InventoryScreenRules.AlertsNotice(Alerts, Texts.T)</p>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Close" Primary="true" OnClick="OnClose" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public StockAlertSummary Alerts { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+}

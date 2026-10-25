@@ -1,0 +1,310 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Common
+@using MarocLIS.Reporting
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IListPdfRenderer Lists
+@inject IJSRuntime JS
+@inject ILogger<ConsumptionScreen> Logger
+
+@*
+    « Consommation », the workstation's ConsumptionView: over a period, each article's opening
+    stock, receipts, the tests the activity consumed, the theoretical and the real consumption,
+    the closing stocks and their variance — a line beyond the threshold in the alarm's colours, one
+    the activity cannot explain muted. A line's breakdown says where the theoretical consumption
+    comes from. The report is downloaded as a PDF or a CSV where the workstation opens it; the
+    thresholds are the administrator's. The figures are StockPlanningService's; what is shown and
+    refused is ConsumptionScreenRules'.
+*@
+<div class="screen consumption" data-screen="consumption">
+    @{ var visible = Visible; var notice = ConsumptionScreenRules.Notice(_rows, Texts.T); }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchStock"]" aria-label="@Texts["StocksUi.SearchStock"]"
+                   data-field="consumption-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="Searched" />
+        </div>
+        <label class="field-inline">
+            <span class="small">@Texts["Consumption.From"]</span>
+            <input class="input input-date" type="date" data-field="period-from" max="@Clock.Today.ToString("yyyy-MM-dd")"
+                   @bind="_from" @bind:format="yyyy-MM-dd" @bind:after="LoadAsync" />
+        </label>
+        <label class="field-inline">
+            <span class="small">@Texts["Consumption.To"]</span>
+            <input class="input input-date @(_periodRefused ? "is-refused" : null)" type="date" data-field="period-to"
+                   @bind="_to" @bind:format="yyyy-MM-dd" @bind:after="LoadAsync" />
+        </label>
+        @if (_periodRefused)
+        {
+            <span class="message is-warning small" role="alert" data-refusal="period-to">@Texts["Stock_PeriodInvalid"]</span>
+        }
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@ConsumptionScreenRules.Count(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush card-fill" data-card="consumption">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="consumption">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Inventory.Item"]</th>
+                            @foreach (var header in Headers.Skip(3).Take(9))
+                            {
+                                <th class="num">@header</th>
+                            }
+                            <th>@Headers[12]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in visible)
+                        {
+                            var cells = ConsumptionCells(row);
+                            var ink = ConsumptionScreenRules.Ink(row);
+                            <tr class="@(row.StockItemId == _selectedId ? "is-selected" : null) @StockTones.Row(ink)" data-row="@row.Code"
+                                @onclick="() => _selectedId = row.StockItemId" @ondblclick="() => ShowDetail(row)">
+                                <td>
+                                    <span class="mono strong" dir="ltr">@cells[0]</span>
+                                    <span class="cell-sub list-name" title="@($"{cells[1]} · {cells[2]}")">@cells[1] · @cells[2]</span>
+                                </td>
+                                @for (var i = 3; i < 12; i++)
+                                {
+                                    <td class="num mono nowrap" dir="ltr">@cells[i]</td>
+                                }
+                                <td class="mono small nowrap" dir="ltr">@cells[12]</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && visible.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.StockNone"]</p>
+                }
+            </div>
+            <p class="card-pad small grid-footer @(notice.Critical ? "critical strong" : "muted")" data-state="notice">@notice.Text</p>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Consumption.Pdf" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Printer" Disabled="@(_rows.Count == 0 || _busy)" OnClick="PrintAsync" />
+            <ActionButton Key="Consumption.Csv" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download" Disabled="@(_rows.Count == 0 || _busy)" OnClick="ExportAsync" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Stock.Settings" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Settings" Hidden="@(!MayEditSettings)" Disabled="_busy" OnClick="AskSettingsAsync" />
+        </More>
+        <Primary>
+            <ActionButton Key="Consumption.Detail" Primary="true" Shortcut="@Texts["StocksUi.EnterKey"]" Disabled="@(Selected is null || _busy)"
+                          OnClick="() => Selected is { } s ? ShowDetail(s) : Task.CompletedTask" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Detail when _detail is { } row:
+        <ConsumptionDetailDialog Row="row" From="_from" To="_to" OnClose="ClosePrompt" />
+        break;
+
+    case Prompt.Settings when _settings is { } settings:
+        <StockSettingsEditor Current="settings" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                             OnSave="SaveSettingsAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="stock-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="stock-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Detail, Settings, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<ConsumptionRow> _rows = [];
+    private string? _search;
+    private DateOnly _from, _to;
+    private bool _loaded, _periodRefused;
+    private Guid? _selectedId;
+
+    private ConsumptionRow? _detail;
+    private StockSettings? _settings;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<string> Headers => ConsumptionScreenRules.Headers(Texts.T);
+
+    private IReadOnlyList<string> ConsumptionCells(ConsumptionRow row) => StockCsv.ConsumptionCells(row, Texts.Language);
+
+    private IReadOnlyList<ConsumptionRow> Visible => [.. _rows.Where(r => StockSearch.Matches(_search, [.. ConsumptionCells(r)]))];
+
+    private ConsumptionRow? Selected => Visible.FirstOrDefault(r => r.StockItemId == _selectedId);
+
+    private bool MayEditSettings => ConsumptionScreenRules.MayEditSettings(Context.User.Has);
+
+    protected override Task OnInitializedAsync()
+    {
+        (_from, _to) = ConsumptionScreenRules.DefaultPeriod(Clock.Today);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _periodRefused = !ConsumptionScreenRules.IsPeriodValid(_from, _to);
+        if (_periodRefused) return;
+
+        try
+        {
+            var (from, to) = (_from, _to);
+            var rows = await Scopes.RunAsync<StockPlanningService, Result<IReadOnlyList<ConsumptionRow>>>(s => s.GetConsumptionAsync(from, to));
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+            if (_rows.All(r => r.StockItemId != _selectedId)) _selectedId = _rows.Count > 0 ? _rows[0].StockItemId : null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Computing the consumption failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    /// <summary>The current line moves to the first one shown when the search hides it, as at the workstation.</summary>
+    private void Searched()
+    {
+        var visible = Visible;
+        if (visible.Count > 0 && visible.All(r => r.StockItemId != _selectedId)) _selectedId = visible[0].StockItemId;
+    }
+
+    private Task ShowDetail(ConsumptionRow row)
+    {
+        if (_busy) return Task.CompletedTask;
+        _selectedId = row.StockItemId;
+        _detail = row;
+        _prompt = Prompt.Detail;
+        return Task.CompletedTask;
+    }
+
+    private Task PrintAsync() =>
+        RunAsync(async () =>
+        {
+            var document = new ListDocument(
+                ConsumptionScreenRules.ReportTitle(_from, _to, Texts.T),
+                ConsumptionScreenRules.ReportCaption(Clock.Now, Texts.T),
+                Headers,
+                [.. _rows.Select(ConsumptionCells)],
+                Texts.Language == AppLanguage.Arabic);
+            var name = ConsumptionScreenRules.FileName(_from, _to, "pdf");
+            await JS.InvokeVoidAsync("marocLis.download", name, "application/pdf", Lists.Render(document));
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    private Task ExportAsync() =>
+        RunAsync(async () =>
+        {
+            var name = ConsumptionScreenRules.FileName(_from, _to, "csv");
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", StockCsv.Table(Headers, _rows.Select(ConsumptionCells)));
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    private Task AskSettingsAsync() =>
+        RunAsync(async () =>
+        {
+            if (!MayEditSettings) return;
+            var current = await Scopes.RunAsync<StockPlanningService, Result<StockSettings>>(s => s.GetSettingsAsync());
+            if (current.IsFailure)
+            {
+                Say(Texts["Stock.Settings"], Texts.Describe(current.Errors), true);
+                return;
+            }
+
+            _settings = current.Value;
+            _dialogRefusal = null;
+            _fieldRefusal = null;
+            _prompt = Prompt.Settings;
+        });
+
+    private Task SaveSettingsAsync(StockSettingsEditor.Saved saved) =>
+        RunAsync(async () =>
+        {
+            var settings = saved.Settings;
+            var result = await Scopes.RunAsync<StockPlanningService, Result>(s => s.SaveSettingsAsync(settings));
+            if (result.IsFailure)
+            {
+                if (ConsumptionScreenRules.FieldOf(result.FirstError, saved.Form) is { } field)
+                {
+                    _fieldRefusal = new FieldRefusal(field, result.FirstError.ResourceKey);
+                    _dialogRefusal = null;
+                }
+                else
+                {
+                    _fieldRefusal = null;
+                    _dialogRefusal = Texts.Describe(result.Errors);
+                }
+
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A consumption operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _detail = null;
+        _settings = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}
