@@ -385,7 +385,7 @@
                     }
                     else
                     {
-                        <p class="muted card-pad" data-state="no-source">@Texts["Migration.StatusStart"]</p>
+                        <p class="muted card-pad" data-state="no-source">@Texts["Web.MigrationStart"]</p>
                     }
                 </section>
                 break;
@@ -497,7 +497,9 @@
     /// <summary>A long operation, the sources, the profiles and the lookups take the migration right, as the workstation's PermissionGate.</summary>
     private bool CanRun => DataMigrationScreenRules.CanRun(Context.User);
 
-    private string? StatusText => Running ? _progressText : _message?.Text ?? DataMigrationScreenRules.Status(_source, _analysis, _summary, Texts.T).Text;
+    // Before a file, the workstation's opening line names the old database, which is not offered here.
+    private string? StatusText => Running ? _progressText
+        : _message?.Text ?? (_source is null && _summary is null ? Texts["Web.MigrationStart"] : DataMigrationScreenRules.Status(_source, _analysis, _summary, Texts.T).Text);
 
     private string StatusTone => Running ? "muted"
         : _message?.Tone ?? (DataMigrationScreenRules.Status(_source, _analysis, _summary, Texts.T).Critical ? "critical" : "muted");

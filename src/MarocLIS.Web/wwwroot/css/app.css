@@ -938,3 +938,7 @@ fieldset.subcard:disabled { opacity: .7; }
 .run-progress { display: inline-flex; align-items: center; gap: 8px; }
 .run-progress progress { inline-size: 160px; block-size: 8px; }
 .more-menu .btn-file { position: relative; }
+
+/* « Interfaces automates »: the link's facts kept short, so its codes and its log keep the height. */
+.facts-compact { gap: 4px 20px; font-size: 13px; }
+.facts-compact dd.mono { font-weight: 500; }

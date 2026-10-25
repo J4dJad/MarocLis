@@ -29,6 +29,7 @@
                     <input class="input" type="search" placeholder="@Texts["App.SearchPlaceholder"]" aria-label="@Texts["App.SearchPlaceholder"]"
                            data-field="link-search" autocomplete="off" @bind="_search" @bind:event="oninput" />
                 </div>
+                <span class="muted small" data-state="count">@Texts["Nav.Instruments"] — @Shown.Count</span>
                 <span class="list-tools-end">
                     <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
                 </span>
@@ -41,7 +42,6 @@
                     @Texts["Web.InterfaceToWatch"] · @_rows.Count(r => InstrumentInterfaceScreenRules.NeedsAttention(r, null))
                 </button>
             </div>
-            <span class="muted small" data-state="count">@Texts["Nav.Instruments"] — @Shown.Count</span>
             <div class="table-scroll">
                 <table class="grid grid-select" data-grid="links">
                     <tbody>
@@ -82,7 +82,7 @@
                         <Pill Text="@Texts[InstrumentInterfaceScreenRules.LiveKey(DrivenHere, link, null)]"
                               Tone="@RowTones.Pill(InstrumentInterfaceScreenRules.LiveTone(DrivenHere, link, null))" />
                     </div>
-                    <dl class="facts facts-columns" data-state="facts">
+                    <dl class="facts facts-columns facts-compact" data-state="facts">
                         <dt>@Texts["Interface.Protocol"]</dt><dd>@Texts[$"InstrumentProtocol.{link.Protocol}"]</dd>
                         <dt>@Texts["Interface.Transport"]</dt><dd>@Texts[$"InstrumentTransportKind.{link.Transport}"]</dd>
                         <dt>@Texts["Interface.Endpoint"]</dt><dd class="mono" dir="ltr">@link.Endpoint</dd>
@@ -91,8 +91,15 @@
                         <dt>@Texts["Interface.AckTimeout"]</dt><dd class="mono">@link.AcknowledgementTimeoutSeconds · @Texts["Interface.MaxRetries"] @link.MaxRetries</dd>
                         <dt>@Texts["Interface.FormatProfile"]</dt><dd>@Texts[InterfaceEditorRules.ProfileFor(link.Protocol, link.Format)]</dd>
                         <dt>@Texts["Interface.Mappings"]</dt><dd class="mono">@InstrumentInterfaceScreenRules.MappingCount(link)</dd>
-                        <dt>@Texts["Interface.LastMessage"]</dt><dd class="mono">@InstrumentInterfaceScreenRules.LastMessage(link, Texts.Culture)</dd>
-                        <dt>@Texts["Field.Status"]</dt><dd>@(InstrumentInterfaceScreenRules.Flags(link, Texts.T) is { Count: > 0 } linkFlags ? string.Join(" · ", linkFlags) : "—")</dd>
+                        @* What the link has to say, only when it says something: the list already shows it, the codes and the log need the height. *@
+                        @if (link.LastMessageAt is not null)
+                        {
+                            <dt>@Texts["Interface.LastMessage"]</dt><dd class="mono">@InstrumentInterfaceScreenRules.LastMessage(link, Texts.Culture)</dd>
+                        }
+                        @if (InstrumentInterfaceScreenRules.Flags(link, Texts.T) is { Count: > 0 } linkFlags)
+                        {
+                            <dt>@Texts["Field.Status"]</dt><dd>@string.Join(" · ", linkFlags)</dd>
+                        }
                     </dl>
                     @if (link.LastError is { Length: > 0 } error)
                     {
@@ -200,21 +207,21 @@
 
     @{ var actions = Actions; }
     <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        @* The tab's own two first; « Tester une trame », the switch and the other tab's in « Plus d'actions ». *@
         <Secondary>
             @if (_tab == DetailTab.Messages)
             {
                 <ActionButton Key="Interface.ViewRaw" Disabled="@(!actions.ViewRaw || _busy)" OnClick="ViewRawAsync" />
                 <ActionButton Key="Interface.Replay" Disabled="@(!actions.Replay || _busy)" OnClick="AskReplay" />
-                <ActionButton Key="Interface.TestFrame" Disabled="@(!actions.TestFrame || _busy)" OnClick="TestFrameAsync" />
             }
             else
             {
                 <ActionButton Key="Interface.Edit" Disabled="@(!actions.EditLink || _busy)" OnClick="EditLinkAsync" />
                 <ActionButton Key="Interface.EditMappings" Disabled="@(!actions.EditMappings || _busy)" OnClick="EditMappingsAsync" />
-                <ActionButton Key="Interface.TestFrame" Disabled="@(!actions.TestFrame || _busy)" OnClick="TestFrameAsync" />
             }
         </Secondary>
         <More>
+            <ActionButton Key="Interface.TestFrame" Disabled="@(!actions.TestFrame || _busy)" OnClick="TestFrameAsync" />
             <ActionButton Key="@actions.ToggleKey" Disabled="@(!actions.Toggle || _busy)" OnClick="AskToggle" />
             @if (_tab == DetailTab.Messages)
             {
