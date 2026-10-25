@@ -56,7 +56,7 @@
     @* The reagent lot the run is recorded against: a new lot under evaluation, or the lot in use; and the analyser it is loaded on. *@
     <div class="list-tools qc-lot" data-tools="lot">
         <label class="field-inline">
-            <span>@Texts["QualityHr.Qc.ReagentLot"]</span>
+            <span class="nowrap">@Texts["QualityHr.Qc.ReagentLot"]</span>
             <select class="input" data-field="reagent-lot" disabled="@(!actions.ChooseReagentLot || _busy)" @onchange="LotChanged">
                 <option value="" selected="@(_lot is null)">@QualityControlScreenRules.LotLabel(null, Texts.T)</option>
                 @foreach (var lot in _lots)
@@ -76,6 +76,10 @@
         <ActionButton Key="Qc.StartEvaluation" Disabled="@(!actions.StartEvaluation || _busy)" OnClick="() => ChangeEvaluationAsync(true)" />
         <ActionButton Key="Qc.StopEvaluation" Disabled="@(!actions.StopEvaluation || _busy)" OnClick="() => ChangeEvaluationAsync(false)" />
         <FieldMessage Refusal="_refusal" Field="@QualityControlScreenRules.LotAnalyserField" />
+        @* The analysers are driven by the Windows workstation: their controls arrive through it, never through this server. *@
+        <p class="qc-notice small muted" data-state="instruments">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Cpu" /><span>@Texts["Web.QcInstrumentsNotice"]</span>
+        </p>
     </div>
 
     <div class="screen-body">
@@ -142,9 +146,6 @@
                         <p class="muted small card-pad" data-state="no-control">@Texts[_rows.Count == 0 ? "Web.QcNoControl" : "Web.QcNoneShown"]</p>
                     }
                 </div>
-                <p class="key-hints-note small muted card-pad" data-state="instruments">
-                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Cpu" />@Texts["Web.QcInstrumentsNotice"]
-                </p>
             </section>
 
             <section class="card qc-chart" data-card="chart">
@@ -319,8 +320,14 @@
     private IReadOnlyList<QcReviewRow> ShownReview =>
         [.. _pending.Where(r => QualityControlScreenRules.Matches(r, _search, Texts.Language, _analyserFilter, _levelFilter, _rows))];
 
-    /// <summary>The rejection the review acts on: the one picked, or the first, as the workstation's current row.</summary>
-    private QcReviewRow? SelectedReview => ShownReview.FirstOrDefault(r => r.QcResultId == _reviewId) ?? ShownReview.FirstOrDefault();
+    /// <summary>
+    /// The rejection the review acts on: the one picked; else the latest of the control charted,
+    /// the one on screen; else the first, as the workstation's current row.
+    /// </summary>
+    private QcReviewRow? SelectedReview =>
+        ShownReview.FirstOrDefault(r => r.QcResultId == _reviewId)
+        ?? ShownReview.Where(r => r.QcTargetId == _chartTargetId).MaxBy(r => r.MeasuredAt)
+        ?? ShownReview.FirstOrDefault();
 
     /// <summary>The control the chart shows: its limits and rules are the ones « Plus d'actions » changes.</summary>
     private QcEntryRow? ChartedRow => _rows.FirstOrDefault(r => r.QcTargetId == _chartTargetId);
@@ -364,11 +371,11 @@
             var review = await Scopes.RunAsync<QualityControlService, Result<IReadOnlyList<QcReviewRow>>>(s => s.GetPendingReviewAsync());
             if (review.IsSuccess) _pending = review.Value;
 
-            // The control charted stays charted; else the first rejection — the chart then shows the
-            // violation the reviewer has to act on — or the first control of the sheet.
+            // The control charted stays charted; else the latest rejection — the chart then shows the
+            // violation the bench is dealing with — or the first control of the sheet.
             var charted = _chartTargetId is { } current && (_rows.Any(r => r.QcTargetId == current) || _pending.Any(p => p.QcTargetId == current))
                 ? current
-                : _pending.FirstOrDefault()?.QcTargetId ?? Shown.FirstOrDefault()?.QcTargetId;
+                : _pending.MaxBy(p => p.MeasuredAt)?.QcTargetId ?? Shown.FirstOrDefault()?.QcTargetId;
 
             await ShowChartAsync(charted);
         }

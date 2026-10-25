@@ -1000,8 +1000,13 @@ fieldset.subcard:disabled { opacity: .7; }
 .qc-entry, .qc-review { display: flex; flex-direction: column; }
 .qc-entry > .table-scroll, .qc-review > .table-scroll { flex: 1 1 auto; max-block-size: none; border: 0; border-block-start: 1px solid var(--border); border-radius: 0; }
 .qc-entry .card-heading, .qc-review .card-heading { margin: 0; }
-.qc-entry .input-value { inline-size: 92px; }
-.qc-entry td .message { display: block; margin-block-start: 4px; white-space: normal; text-align: start; }
+.qc-entry .input-value { inline-size: 92px; min-block-size: 30px; padding-block: 2px; }
+.qc-entry .grid td { padding-block: 4px; }
+.qc-lot .nowrap { white-space: nowrap; }
+.qc-notice { flex: 1 1 260px; display: flex; align-items: flex-start; gap: 6px; margin: 0; margin-inline-start: auto; }
+.qc-notice > .icon { flex: none; margin-block-start: 2px; }
+.qc-entry td .message { display: block; margin-block-start: 4px; white-space: normal; text-align: start; inline-size: 140px; max-inline-size: 140px; margin-inline-start: auto; }
+.qc-entry td:first-child .cell-sub { white-space: nowrap; }
 .qc-no-target { white-space: normal; text-align: start; font-family: inherit; font-size: 12px; }
 .qc-lot .field-inline > .input { min-inline-size: 260px; }
 .input.is-refused { border-color: var(--critical); box-shadow: 0 0 0 1px var(--critical); }
