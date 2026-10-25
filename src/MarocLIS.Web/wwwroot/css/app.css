@@ -989,3 +989,5 @@ fieldset.subcard:disabled { opacity: .7; }
 .pane-fill { min-block-size: 360px; }
 /* A bar with no button and no message (a read-only tab): not drawn, no empty band at the foot of the screen. */
 .action-bar:not(:has(.btn, summary, .action-bar-info, .action-bar-status:not(:empty))) { display: none; }
+/* « Journal d'audit »: the reason keeps the width to be read on two lines. */
+.grid td.col-reason { inline-size: 26%; min-inline-size: 220px; }

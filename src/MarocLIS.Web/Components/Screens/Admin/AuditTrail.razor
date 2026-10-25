@@ -82,8 +82,9 @@
                                         <td><Pill Text="@Texts[$"AuditOperation.{row.Operation}"]" Tone="@(AuditTrailRules.IsDeletion(row) ? "Critical" : "Waiting")" /></td>
                                         <td class="mono small nowrap">@row.PatientRecordNumber</td>
                                         @* The list of field names keeps one line; the row opened shows each field with its values. *@
-                                        <td class="small cell-clip cell-clip-wide" dir="ltr" title="@row.ChangedProperties">@row.ChangedProperties</td>
-                                        <td class="small cell-wrap">@row.Reason</td>
+                                        <td class="small cell-clip cell-clip-mid" dir="ltr" title="@row.ChangedProperties">@row.ChangedProperties</td>
+                                        @* The reason: two lines at most in the list, whole in the tooltip and in the row's detail. *@
+                                        <td class="small col-reason"><span class="clamp-2" title="@row.Reason">@row.Reason</span></td>
                                     </tr>
                                 }
                             </tbody>
