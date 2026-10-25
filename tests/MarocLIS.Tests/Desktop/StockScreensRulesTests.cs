@@ -287,4 +287,14 @@ public sealed class StockScreensRulesTests
         request!.Should().Match<StorageUnitRequest>(r => r.Name == "Congélateur −20" && r.ReadingsPerDay == 24 && r.MinimumCelsius == -25m);
         TemperatureScreenRules.UnitFieldOf(Error.Conflict("StorageUnit_NameTaken")).Should().Be(TemperatureScreenRules.NameField);
     }
+
+    [Fact]
+    public void The_search_keeps_a_line_when_any_of_its_cells_contains_what_was_typed()
+    {
+        StockSearch.Matches(null, "BIO-GLU").Should().BeTrue();
+        StockSearch.Matches("  ", "BIO-GLU").Should().BeTrue();
+        StockSearch.Matches(" glu ", "BIO-GLU", null, "Glucose").Should().BeTrue();
+        StockSearch.Matches("edta", "BIO-GLU", null, "Glucose").Should().BeFalse();
+        StockSearch.Matches("réfrigérateur", "Réfrigérateur réactifs").Should().BeTrue();
+    }
 }
