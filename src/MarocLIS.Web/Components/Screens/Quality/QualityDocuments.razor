@@ -1,0 +1,484 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<QualityDocuments> Logger
+
+@*
+    « Documents qualité », the workstation's QualityDocumentsView: the register — which version is
+    in force, is its review due, has the user read it — over the life of the selected document,
+    version by version. The steps follow a version's life — draft, review, approval, entry into
+    force — and the service refuses any step out of order, or the author reviewing their own text,
+    with a message that says why. A version's file is handed over by the browser where the
+    workstation reads it from its disk, and downloaded where the workstation opens it in its viewer.
+    What is shown, offered and refused is QualityDocumentScreenRules'; every step goes through
+    DocumentControlService, which checks each right and journals each change.
+*@
+<div class="screen documents" data-screen="documents">
+    @{ var actions = Actions; }
+    <div class="list-tools" data-tools="filters">
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_includeInactive ? "is-pressed" : null)" aria-pressed="@(_includeInactive ? "true" : "false")"
+                    data-chip="include-inactive" @onclick="ToggleInactiveAsync">@Texts["Documents.IncludeInactive"]</button>
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@QualityDocumentScreenRules.Count(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="ReloadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush card-fill" data-card="register">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="documents">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Documents.Reference"]</th>
+                            <th>@Texts["Documents.DocumentTitle"]</th>
+                            <th>@Texts["Documents.EffectiveVersion"]</th>
+                            <th>@Texts["Documents.NextReview"]</th>
+                            <th>@Texts["Documents.LatestVersion"]</th>
+                            <th>@Texts["Documents.Owner"]</th>
+                            <th class="num">@Texts["Documents.Read"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            var title = row.Title.For(Texts.Language);
+                            var read = QualityDocumentScreenRules.Read(row);
+                            <tr class="@(row.Id == Selected?.Id ? "is-selected" : null) @(row.IsActive ? null : "is-tone-muted")" data-row="@row.Reference"
+                                @onclick="() => SelectAsync(row)">
+                                <td class="mono nowrap @QualityTones.Ink(QualityDocumentScreenRules.Ink(row, "reference"))" dir="ltr">@row.Reference</td>
+                                <td>
+                                    <span class="list-name" title="@title">@title</span>
+                                    <span class="cell-sub">@Texts[$"DocumentKind.{row.Kind}"]@(row.ProcessCode is { } process ? $" · {process}" : null)</span>
+                                </td>
+                                <td class="nowrap">
+                                    <span class="mono strong @QualityTones.Ink(QualityDocumentScreenRules.Ink(row, "effective"))">@QualityDocumentScreenRules.Effective(row)</span>
+                                    <span class="cell-sub mono @QualityTones.Ink(QualityDocumentScreenRules.Ink(row, "effectiveFrom"))" dir="ltr" title="@Texts["Documents.EffectiveFrom"]">@QualityDocumentScreenRules.EffectiveFrom(row)</span>
+                                </td>
+                                <td class="mono small nowrap @QualityTones.Ink(QualityDocumentScreenRules.Ink(row, "review"))" dir="ltr">@QualityDocumentScreenRules.NextReview(row)</td>
+                                <td class="small cell-wrap">@QualityDocumentScreenRules.Latest(row, Texts.T)</td>
+                                <td class="small cell-wrap">@row.OwnerName</td>
+                                <td class="num strong @(read == "!" ? "abnormal" : read.Length > 0 ? "ink-normal" : null)"
+                                    title="@(read == "!" ? Texts["Documents.ToRead"] : null)">@read</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_rows.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.DocNone"]</p>
+                }
+            </div>
+            @if (QualityDocumentScreenRules.Warning(Selected) is { } warning)
+            {
+                <p class="card-pad small grid-footer @(warning.Abnormal ? "abnormal strong" : "muted")" data-state="warning">@Texts[warning.Key]</p>
+            }
+        </section>
+
+        <section class="card card-flush quality-sub" data-card="versions">
+            <div class="card-heading card-pad">
+                <h2 class="card-title cell-wrap" data-state="versions-heading">@QualityDocumentScreenRules.VersionsHeading(Selected, Texts.T)</h2>
+                <div class="card-actions">
+                    <ActionButton Key="Documents.NewVersion" Disabled="@(!actions.NewVersion || _busy)" OnClick="AskVersion" />
+                    <ActionButton Key="Documents.Submit" Disabled="@(!actions.Submit || _busy)" OnClick="SubmitAsync" />
+                    <ActionButton Key="Documents.Review" Disabled="@(!actions.Review || _busy)" OnClick="ReviewAsync" />
+                    <ActionButton Key="Documents.Approve" Disabled="@(!actions.Approve || _busy)" OnClick="ApproveAsync" />
+                    <ActionButton Key="Documents.MakeEffective" Disabled="@(!actions.MakeEffective || _busy)" OnClick="AskEffective" />
+                </div>
+            </div>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="versions">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Documents.Version"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                            <th>@Texts["Documents.ChangeSummary"]</th>
+                            <th>@Texts["Documents.File"]</th>
+                            <th>@Texts["Documents.Author"]</th>
+                            <th>@Texts["Documents.Reviewer"]</th>
+                            <th>@Texts["Documents.Approver"]</th>
+                            <th>@Texts["Documents.EffectiveFrom"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var version in _versions)
+                        {
+                            var summary = version.ChangeSummary?.For(Texts.Language);
+                            <tr class="@(version.Id == SelectedVersion?.Id ? "is-selected" : null)" data-row="@($"v{version.VersionNumber}")" data-version-status="@version.Status"
+                                @onclick="() => _versionId = version.Id">
+                                <td class="mono strong">v@(version.VersionNumber)</td>
+                                <td><Pill Text="@Texts[$"DocumentVersionStatus.{version.Status}"]" Tone="@QualityTones.Pill(QualityDocumentScreenRules.VersionTone(version.Status))" /></td>
+                                <td><span class="clamp-2" title="@summary">@summary</span></td>
+                                <td class="small mono cell-wrap" dir="ltr">@version.FileName</td>
+                                <td class="small">
+                                    <span class="cell-wrap">@version.AuthorName</span>
+                                    <span class="cell-sub mono" dir="ltr" title="@Texts["Field.CreatedAt"]">@QualityDocumentScreenRules.Date(version.CreatedAt)</span>
+                                </td>
+                                <td class="small cell-wrap">@version.ReviewedByName</td>
+                                <td class="small cell-wrap">@version.ApprovedByName</td>
+                                <td class="small nowrap">
+                                    @if (version.EffectiveFrom is { } from)
+                                    {
+                                        <span class="mono" dir="ltr">@QualityDocumentScreenRules.Date(from)</span>
+                                    }
+                                    @if (version.WithdrawnOn is { } withdrawn)
+                                    {
+                                        <span class="cell-sub mono" dir="ltr" title="@Texts["Documents.WithdrawnOn"]">@Texts["Documents.WithdrawnOn"] @QualityDocumentScreenRules.Date(withdrawn)</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (Selected is not null && _versions.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="no-version">@Texts["Web.DocNoVersion"]</p>
+                }
+            </div>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Documents.OpenFile" Text="@Texts["Web.DocDownload"]" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.ExternalLink"
+                          Title="@Texts["Documents.OpenFile"]" Disabled="@(!actions.Open || _busy)" OnClick="DownloadAsync" />
+            <ActionButton Key="Documents.Acknowledge" Disabled="@(!actions.Acknowledge || _busy)" OnClick="AskAcknowledge" />
+        </Secondary>
+        <Destructive>
+            <ActionButton Key="@actions.WithdrawKey" Danger="@(Selected is { IsActive: true })" Disabled="@(!actions.Withdraw || _busy)" OnClick="AskWithdraw" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Documents.NewDocument" Primary="true" Disabled="@(!actions.NewDocument || _busy)" OnClick="AskDocument" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Document:
+        <ControlledDocumentEditor Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="CreateAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.FirstVersion:
+        <ConfirmPrompt Title="@Texts["Documents.NewDocument"]" Message="@Texts["Documents.AddFirstVersionQuestion"]" OnYes="AskVersion" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Version when Selected is { } d1:
+        <DocumentVersionEditor Reference="@d1.Reference" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="AddVersionAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Effective when Selected is { } d2 && SelectedVersion is { } v2:
+        <EffectiveDateEditor Subject="@QualityDocumentScreenRules.Subject(d2, v2)" ReplacedVersion="d2.EffectiveVersion" Today="Clock.Today"
+                             Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="MakeEffectiveAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Acknowledge when Selected is { EffectiveVersion: { } effective } d4:
+        <ConfirmPrompt Title="@Texts["Documents.Acknowledge"]" Message="@Texts.T("Documents.AcknowledgeQuestion", d4.Reference, effective)"
+                       OnYes="AcknowledgeAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Withdraw when Selected is { } d3:
+        <ReasonPrompt Title="@Texts[QualityDocumentScreenRules.WithdrawKey(d3)]" Prompt="@Texts.T(QualityDocumentScreenRules.WithdrawPromptKey(d3), d3.Reference)"
+                      OnConfirm="WithdrawAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="doc-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="doc-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Document, FirstVersion, Version, Effective, Acknowledge, Withdraw, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<ControlledDocumentRow> _rows = [];
+    private IReadOnlyList<DocumentVersionRow> _versions = [];
+
+    private bool _includeInactive;
+    private Guid? _selectedId, _versionId;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private ControlledDocumentRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId);
+
+    /// <summary>The version the steps act on: the one selected, else the newest.</summary>
+    private DocumentVersionRow? SelectedVersion => QualityDocumentScreenRules.SelectedVersion(_versions, _versionId);
+
+    private QualityDocumentScreenActions Actions => QualityDocumentScreenRules.Actions(Context.User, Selected, SelectedVersion);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task ReloadAsync() => LoadAsync();
+
+    private async Task LoadAsync(Guid? keep = null)
+    {
+        try
+        {
+            var inactive = _includeInactive;
+            var register = await Scopes.RunAsync<DocumentControlService, Result<IReadOnlyList<ControlledDocumentRow>>>(s => s.GetRegisterAsync(inactive));
+            if (register.IsFailure)
+            {
+                _status = (Texts.Describe(register.Errors), "critical");
+                return;
+            }
+
+            _rows = register.Value;
+            _selectedId = QualityDocumentScreenRules.Keep(_rows, keep ?? _selectedId)?.Id;
+            await LoadVersionsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the document register failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task LoadVersionsAsync()
+    {
+        // The newest version is the one work happens on: it is the one selected after a load.
+        _versionId = null;
+        if (_selectedId is not { } id)
+        {
+            _versions = [];
+            return;
+        }
+
+        var versions = await Scopes.RunAsync<DocumentControlService, Result<IReadOnlyList<DocumentVersionRow>>>(s => s.GetVersionsAsync(id));
+        if (_selectedId != id) return;
+        _versions = versions.IsSuccess ? versions.Value : [];
+    }
+
+    private async Task SelectAsync(ControlledDocumentRow row)
+    {
+        if (row.Id == _selectedId) return;
+        _selectedId = row.Id;
+        await LoadVersionsAsync();
+    }
+
+    private Task ToggleInactiveAsync()
+    {
+        _includeInactive = !_includeInactive;
+        return LoadAsync();
+    }
+
+    // ---- The register ------------------------------------------------------------------------------
+
+    private void AskDocument()
+    {
+        if (!Actions.NewDocument || _busy) return;
+        Open(Prompt.Document);
+    }
+
+    private Task CreateAsync(CreateControlledDocumentRequest request) =>
+        RunAsync(async () =>
+        {
+            var created = await Scopes.RunAsync<DocumentControlService, Result<Guid>>(s => s.CreateAsync(request));
+            if (Refused(created)) return;
+
+            _prompt = Prompt.None;
+            await LoadAsync(created.Value);
+            _status = (Texts["Message.Saved"], "normal");
+
+            // A new document has no text yet: the next thing to do is attach its first draft.
+            if (QualityDocumentScreenRules.AsksForFirstVersion(Actions)) _prompt = Prompt.FirstVersion;
+        });
+
+    private Task DownloadAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Open || Selected is not { } document || SelectedVersion is not { } version) return;
+            var number = version.VersionNumber;
+            var content = await Scopes.RunAsync<DocumentControlService, Result<DocumentContent>>(s => s.GetContentAsync(document.Id, number));
+            if (content.IsFailure)
+            {
+                Say(Texts["Documents.OpenFile"], Texts.Describe(content.Errors), true);
+                return;
+            }
+
+            // Handed to the browser as the workstation hands it to the program that opens its kind.
+            await JS.InvokeVoidAsync("marocLis.download", QualityDocumentScreenRules.DownloadName(document, version, content.Value),
+                                     QualityDocumentScreenRules.ContentType(content.Value), content.Value.Content);
+            _status = (Texts.T("Web.DocDownloaded", QualityDocumentScreenRules.Subject(document, version)), "muted");
+        });
+
+    private void AskAcknowledge()
+    {
+        if (!Actions.Acknowledge || _busy) return;
+        _prompt = Prompt.Acknowledge;
+    }
+
+    private Task AcknowledgeAsync() =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } document) return;
+            var acknowledged = await Scopes.RunAsync<DocumentControlService, Result>(s => s.AcknowledgeAsync(document.Id));
+            await AfterAsync(acknowledged, Texts["Documents.Acknowledge"], document.Id);
+        });
+
+    private void AskWithdraw()
+    {
+        if (!Actions.Withdraw || _busy) return;
+        _prompt = Prompt.Withdraw;
+    }
+
+    private Task WithdrawAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } document) return;
+            var active = !document.IsActive;
+            var changed = await Scopes.RunAsync<DocumentControlService, Result>(s => s.SetActiveAsync(document.Id, active, reason));
+            await AfterAsync(changed, Texts[QualityDocumentScreenRules.WithdrawKey(document)], document.Id);
+        });
+
+    // ---- A version's life --------------------------------------------------------------------------
+
+    private void AskVersion()
+    {
+        if (!Actions.NewVersion || _busy)
+        {
+            _prompt = Prompt.None;
+            return;
+        }
+
+        Open(Prompt.Version);
+    }
+
+    private Task AddVersionAsync(DocumentVersionEditor.Draft draft) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } document) return;
+            var added = await Scopes.RunAsync<DocumentControlService, Result<int>>(s => s.AddDraftAsync(document.Id, draft.ChangeSummary, draft.Content, draft.FileName));
+            if (Refused(added)) return;
+
+            _prompt = Prompt.None;
+            await LoadAsync(document.Id);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private Task SubmitAsync() => StepAsync(Actions.Submit, Texts["Documents.Submit"], (s, d, v) => s.SubmitForReviewAsync(d, v));
+
+    private Task ReviewAsync() => StepAsync(Actions.Review, Texts["Documents.Review"], (s, d, v) => s.ReviewAsync(d, v));
+
+    private Task ApproveAsync() => StepAsync(Actions.Approve, Texts["Documents.Approve"], (s, d, v) => s.ApproveAsync(d, v));
+
+    private Task StepAsync(bool offered, string title, Func<DocumentControlService, Guid, int, Task<Result>> step) =>
+        RunAsync(async () =>
+        {
+            if (!offered || Selected is not { } document || SelectedVersion is not { } version) return;
+            var number = version.VersionNumber;
+            var result = await Scopes.RunAsync<DocumentControlService, Result>(s => step(s, document.Id, number));
+            await AfterAsync(result, title, document.Id);
+        });
+
+    private void AskEffective()
+    {
+        if (!Actions.MakeEffective || _busy) return;
+        Open(Prompt.Effective);
+    }
+
+    private Task MakeEffectiveAsync(DateOnly from) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } document || SelectedVersion is not { } version) return;
+            var number = version.VersionNumber;
+            var made = await Scopes.RunAsync<DocumentControlService, Result>(s => s.MakeEffectiveAsync(document.Id, number, from));
+            if (Refused(made)) return;
+
+            _prompt = Prompt.None;
+            await LoadAsync(document.Id);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Plumbing ----------------------------------------------------------------------------------
+
+    private async Task AfterAsync(Result result, string title, Guid keep)
+    {
+        if (result.IsFailure)
+        {
+            Say(title, Texts.Describe(result.Errors), true);
+            return;
+        }
+
+        await LoadAsync(keep);
+        _status = (Texts["Message.Saved"], "normal");
+    }
+
+    /// <summary>A refusal of the service kept in its dialog, next to the box it names when it names one.</summary>
+    private bool Refused(Result result)
+    {
+        if (result.IsSuccess) return false;
+        var error = result.FirstError;
+        if (QualityDocumentScreenRules.FieldOf(error) is { } field)
+        {
+            _fieldRefusal = new FieldRefusal(field, error.ResourceKey, error.Args.FirstOrDefault()?.ToString());
+            _dialogRefusal = null;
+        }
+        else
+        {
+            _fieldRefusal = null;
+            _dialogRefusal = Texts.Describe(result.Errors);
+        }
+
+        return true;
+    }
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A document control step failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

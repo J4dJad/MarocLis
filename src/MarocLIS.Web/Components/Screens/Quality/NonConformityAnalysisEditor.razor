@@ -1,0 +1,76 @@
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+
+@*
+    The analysis of a file, the workstation's NonConformityAnalysisDialog: the root cause, the
+    clinical impact — emphasised when released results were affected, the domain then requiring
+    it — and the verification that the actions worked; one dialog, because closure needs them
+    together. It opens on what was already recorded. NonConformityScreenRules' form.
+*@
+<Modal Name="nc-analysis" Title="@NonConformityScreenRules.AnalysisTitle(File, Texts.T)" Hint="@Texts["QualityHr.Hint.NcAnalysis"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["NonConformity.RootCauseCategory"]</span>
+                <select class="input" data-field="root-cause" @bind="_form.RootCause">
+                    @foreach (var value in Enum.GetValues<RootCauseCategory>())
+                    {
+                        <option value="@value">@Texts[$"RootCause.{value}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["NonConformity.RootCause"]</span>
+                <textarea class="input" rows="3" maxlength="@NonConformityScreenRules.TextMaxLength" data-field="root-cause-analysis"
+                          @bind="_form.RootCauseAnalysis" @bind:event="oninput"></textarea>
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label @(NonConformityScreenRules.ClinicalImpactRequired(File) ? "critical" : null)" data-state="clinical-label">@Texts["NonConformity.ClinicalImpact"]</span>
+                <textarea class="input" rows="3" maxlength="@NonConformityScreenRules.TextMaxLength" data-field="clinical-impact"
+                          @bind="_form.ClinicalImpact" @bind:event="oninput"></textarea>
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["NonConformity.Effectiveness"]</span>
+                <textarea class="input" rows="3" maxlength="@NonConformityScreenRules.TextMaxLength" data-field="effectiveness"
+                          @bind="_form.Effectiveness" @bind:event="oninput"></textarea>
+            </label>
+            @if (NonConformityScreenRules.AmendedReportsAsked(File))
+            {
+                <label class="field-check field-span-2">
+                    <input type="checkbox" data-field="amended" @bind="_form.AmendedReportsIssued" />
+                    <span>@Texts["NonConformity.AmendedReportsIssued"]</span>
+                </label>
+            }
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public NonConformityRow File { get; set; } = null!;
+    [Parameter] public NonConformityAnalysis? Recorded { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<NonConformityAnalysisInput> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private NonConformityAnalysisForm _form = new();
+    private bool _initialised;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = NonConformityScreenRules.FormOf(Recorded);
+    }
+
+    private Task SaveAsync() => OnSave.InvokeAsync(NonConformityScreenRules.Read(_form));
+}

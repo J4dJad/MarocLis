@@ -108,6 +108,10 @@ public static class WebServiceCollectionExtensions
         // « Contrôle qualité »: the reagent lots a control run can be recorded against (a new lot
         // under evaluation, or the lot in use).
         services.AddScoped<Application.Inventory.IPurchasingQualityQueries, PurchasingQualityQueries>();
+        // « Évaluation externe de la qualité » and « Documents qualité »: the rounds and their
+        // participations, the controlled documents, their versions and their files.
+        services.AddScoped<Application.Quality.IEqaQueries, EqaQueries>();
+        services.AddScoped<Application.Quality.IDocumentControlQueries, DocumentControlQueries>();
 
         // ---- « Interfaces automates »: configuring the links, replaying a held transmission and
         // trying a frame, through the workstation's services. Never the host: the web server opens

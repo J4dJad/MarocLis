@@ -107,6 +107,18 @@
             <MarocLIS.Web.Components.Screens.Quality.QualityControl />
             break;
 
+        case ScreenDecision.Open when Key == "nonconformities":
+            <MarocLIS.Web.Components.Screens.Quality.NonConformities />
+            break;
+
+        case ScreenDecision.Open when Key == "eqa":
+            <MarocLIS.Web.Components.Screens.Quality.ExternalQuality />
+            break;
+
+        case ScreenDecision.Open when Key == "documents":
+            <MarocLIS.Web.Components.Screens.Quality.QualityDocuments />
+            break;
+
         case ScreenDecision.Open when Key == "migration":
             <MarocLIS.Web.Components.Screens.Migration.DataMigration />
             break;

@@ -1,0 +1,67 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Quality
+@inject WebTexts Texts
+
+@*
+    The value sent to the organiser, as sent — the workstation's EqaSubmissionDialog: a figure, not
+    a figure with its unit, on a day not in the future. EqaScreenRules reads and refuses it.
+*@
+<Modal Name="eqa-submission" Title="@($"{Texts["Eqa.RecordSubmission"]} — {Row.RoundReference} · {Row.ParameterCode}")" Hint="@Texts["QualityHr.Hint.EqaSubmission"]" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Eqa.ReportedValue"]</span>
+                <input class="input mono num @Refused(EqaScreenRules.ValueField)" dir="ltr" inputmode="decimal" autocomplete="off"
+                       data-field="@EqaScreenRules.ValueField" maxlength="@EqaScreenRules.ValueMaxLength" @bind="_form.Value" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@EqaScreenRules.ValueField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Eqa.SubmittedOn"]</span>
+                <input class="input @Refused(EqaScreenRules.SubmittedOnField)" type="date" data-field="@EqaScreenRules.SubmittedOnField"
+                       max="@Today.ToString("yyyy-MM-dd")" @bind="_form.SubmittedOn" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@EqaScreenRules.SubmittedOnField" />
+            </label>
+            <p class="field-span-2 small muted">@Texts["Eqa.SubmissionNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public EqaRow Row { get; set; } = null!;
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<(decimal Value, DateOnly SubmittedOn)> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private EqaSubmissionForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private FieldRefusal? Shown => _refusal ?? FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = EqaScreenRules.SubmissionOf(Row, Today);
+    }
+
+    private Task SaveAsync()
+    {
+        var (value, refusal) = EqaScreenRules.Read(_form, Today);
+        _refusal = refusal;
+        return refusal is null ? OnSave.InvokeAsync((value!.Value, _form.SubmittedOn)) : Task.CompletedTask;
+    }
+}

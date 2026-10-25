@@ -1,0 +1,58 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Quality
+@inject WebTexts Texts
+
+@*
+    When an approved version comes into force, the workstation's EffectiveDateDialog: today or
+    later — a procedure is often approved before the day staff are trained on it — never earlier,
+    which would back-date the version used for past work. Says the version it replaces.
+*@
+<Modal Name="doc-effective" Title="@($"{Texts["Documents.MakeEffective"]} — {Subject}")" Hint="@Texts["QualityHr.Hint.EffectiveDate"]" OnCancel="OnCancel">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label">@Texts["Documents.EffectiveFrom"]</span>
+            <input class="input input-date @(Shown is not null ? "is-refused" : null)" type="date" data-field="@QualityDocumentScreenRules.EffectiveFromField"
+                   min="@QualityDocumentScreenRules.EarliestEffective(Today).ToString("yyyy-MM-dd")" @bind="_date" @bind:format="yyyy-MM-dd" />
+            <FieldMessage Refusal="Shown" Field="@QualityDocumentScreenRules.EffectiveFromField" />
+        </label>
+        <p class="small muted" data-state="effective-notice">@QualityDocumentScreenRules.EffectiveNotice(ReplacedVersion, Texts.T)</p>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string Subject { get; set; } = string.Empty;
+    [Parameter] public int? ReplacedVersion { get; set; }
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<DateOnly> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private DateOnly _date;
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private FieldRefusal? Shown => _refusal ?? FieldRefusal;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _date = Today;
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = QualityDocumentScreenRules.CheckEffective(_date, Today);
+        return _refusal is null ? OnSave.InvokeAsync(_date) : Task.CompletedTask;
+    }
+}

@@ -1,0 +1,103 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Quality
+@inject WebTexts Texts
+@inject ILogger<DocumentVersionEditor> Logger
+
+@*
+    A new draft, the workstation's DocumentVersionDialog: the file and what changed. Where the
+    workstation reads a file from its disk, the browser hands one over: a PDF, an image, a Word or
+    Excel file, within the size DocumentControlService accepts — read here, once, and refused next
+    to its box otherwise (QualityDocumentScreenRules.CheckFile).
+*@
+<Modal Name="doc-version" Title="@($"{Texts["Documents.NewVersion"]} — {Reference}")" Hint="@Texts["QualityHr.Hint.DocumentVersion"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <div class="field field-span-2" data-field="@QualityDocumentScreenRules.FileField">
+                <span class="field-label">@Texts["Documents.File"]</span>
+                <div class="file-pick">
+                    <label class="btn btn-secondary" data-action="Documents.Browse">
+                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FolderOpen" />
+                        @Texts["Documents.Browse"]
+                        <InputFile class="file-input" accept="@QualityDocumentScreenRules.AcceptedExtensions" OnChange="PickAsync" />
+                    </label>
+                    <span class="mono small cell-wrap @(Shown?.Field == QualityDocumentScreenRules.FileField ? "abnormal" : null)" dir="ltr" data-state="file-name">@(_fileName ?? Texts["Web.DocNoFile"])</span>
+                </div>
+                <FieldMessage Refusal="Shown" Field="@QualityDocumentScreenRules.FileField" />
+            </div>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Documents.ChangeSummaryFr"]</span>
+                <textarea class="input" rows="2" maxlength="@QualityDocumentScreenRules.SummaryMaxLength" data-field="summary-fr" @bind="_summaryFr" @bind:event="oninput"></textarea>
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Documents.ChangeSummaryAr"]</span>
+                <textarea class="input" rows="2" dir="rtl" maxlength="@QualityDocumentScreenRules.SummaryMaxLength" data-field="summary-ar" @bind="_summaryAr" @bind:event="oninput"></textarea>
+            </label>
+            <p class="field-span-2 small muted">@Texts["Documents.NewVersionNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="@(Busy || _reading)" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The draft as handed over: the file, its name and what changed.</summary>
+    public sealed record Draft(byte[] Content, string FileName, MarocLIS.Domain.Common.MultilingualText? ChangeSummary);
+
+    [Parameter, EditorRequired] public string Reference { get; set; } = string.Empty;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<Draft> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private byte[]? _content;
+    private string? _fileName;
+    private string? _summaryFr, _summaryAr;
+    private FieldRefusal? _refusal;
+    private bool _reading;
+
+    private FieldRefusal? Shown => _refusal ?? FieldRefusal;
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        _content = null;
+        _fileName = e.File.Name;
+        _refusal = QualityDocumentScreenRules.CheckFile(e.File.Name, e.File.Size);
+        if (_refusal is not null) return;
+
+        _reading = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: QualityDocumentScreenRules.MaximumContentBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            _content = buffer.ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or JSException)
+        {
+            // The browser could not hand the file over (it was moved, or the connection dropped).
+            Logger.LogWarning(ex, "A document file could not be read from the browser.");
+            _refusal = new FieldRefusal(QualityDocumentScreenRules.FileField, "Documents.FileUnreadable");
+        }
+        finally
+        {
+            _reading = false;
+        }
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = _content is null
+            ? Shown?.Field == QualityDocumentScreenRules.FileField ? Shown : QualityDocumentScreenRules.CheckFile(null, 0)
+            : QualityDocumentScreenRules.CheckFile(_fileName, _content.Length);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(new Draft(_content!, _fileName!, QualityDocumentScreenRules.ChangeSummary(_summaryFr, _summaryAr)));
+    }
+}

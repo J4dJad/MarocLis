@@ -1,0 +1,116 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+
+@*
+    The organiser's report for one analyte, the workstation's EqaEvaluationDialog: the assigned
+    value, the peer group, the Z-score as published (worked out from the peer group otherwise),
+    the two verdicts a score cannot express, and the investigation. An unsatisfactory verdict opens
+    a non-conformity, as the notice says. EqaScreenRules reads it figure by figure.
+*@
+<Modal Name="eqa-evaluation" Title="@($"{Texts["Eqa.RecordEvaluation"]} — {Row.RoundReference} · {Row.ParameterCode}")" Hint="@Texts["QualityHr.Hint.EqaEvaluation"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            @foreach (var (field, key) in Figures)
+            {
+                var box = field;
+                <label class="field">
+                    <span class="field-label">@Texts[key]</span>
+                    <input class="input mono num @Refused(box)" dir="ltr" inputmode="decimal" autocomplete="off" data-field="@box"
+                           maxlength="@EqaScreenRules.ValueMaxLength" value="@Get(box)" @oninput="e => Set(box, e.Value?.ToString())" />
+                    <FieldMessage Refusal="Shown" Field="@box" />
+                </label>
+            }
+            <p class="field-span-4 small muted">@Texts["Eqa.ScoreNotice"]</p>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Quality.Outcome"]</span>
+                <select class="input" data-field="outcome" @onchange="OutcomeChanged">
+                    <option value="" selected="@(_form.Outcome is null)">@Texts["Eqa.OutcomeFromScore"]</option>
+                    @foreach (var outcome in EqaScreenRules.OverridableOutcomes)
+                    {
+                        <option value="@outcome" selected="@(outcome == _form.Outcome)">@Texts[$"EqaOutcome.{outcome}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field field-span-4">
+                <span class="field-label">@Texts["Eqa.InvestigationFr"]</span>
+                <textarea class="input" rows="2" maxlength="@EqaScreenRules.NotesMaxLength" data-field="notes-fr" @bind="_form.NotesFr" @bind:event="oninput"></textarea>
+            </label>
+            <label class="field field-span-4">
+                <span class="field-label">@Texts["Eqa.InvestigationAr"]</span>
+                <textarea class="input" rows="2" dir="rtl" maxlength="@EqaScreenRules.NotesMaxLength" data-field="notes-ar" @bind="_form.NotesAr" @bind:event="oninput"></textarea>
+            </label>
+            <p class="field-span-4 small abnormal" data-state="unsatisfactory-notice">@Texts["Eqa.UnsatisfactoryNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    private static readonly (string Field, string Key)[] Figures =
+    [
+        (EqaScreenRules.AssignedField, "Quality.AssignedValue"), (EqaScreenRules.PeerMeanField, "Eqa.PeerMean"),
+        (EqaScreenRules.PeerSdField, "Eqa.PeerSd"), (EqaScreenRules.ZScoreField, "Quality.ZScore")
+    ];
+
+    [Parameter, EditorRequired] public EqaRow Row { get; set; } = null!;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<EqaEvaluation> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private EqaEvaluationForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private FieldRefusal? Shown => _refusal ?? FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = EqaScreenRules.EvaluationOf(Row);
+    }
+
+    private string? Get(string field) => field switch
+    {
+        EqaScreenRules.AssignedField => _form.Assigned,
+        EqaScreenRules.PeerMeanField => _form.PeerMean,
+        EqaScreenRules.PeerSdField => _form.PeerSd,
+        _ => _form.ZScore
+    };
+
+    private void Set(string field, string? text)
+    {
+        switch (field)
+        {
+            case EqaScreenRules.AssignedField: _form.Assigned = text; break;
+            case EqaScreenRules.PeerMeanField: _form.PeerMean = text; break;
+            case EqaScreenRules.PeerSdField: _form.PeerSd = text; break;
+            default: _form.ZScore = text; break;
+        }
+
+        if (_refusal?.Field == field) _refusal = null;
+    }
+
+    private void OutcomeChanged(ChangeEventArgs e) =>
+        _form.Outcome = Enum.TryParse<EqaOutcome>(e.Value?.ToString(), out var outcome) ? outcome : null;
+
+    private Task SaveAsync()
+    {
+        var reading = EqaScreenRules.Read(_form);
+        _refusal = reading.Refusal;
+        return reading.Value is { } evaluation ? OnSave.InvokeAsync(evaluation) : Task.CompletedTask;
+    }
+}

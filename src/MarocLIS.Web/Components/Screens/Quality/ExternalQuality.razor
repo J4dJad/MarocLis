@@ -1,0 +1,346 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<ExternalQuality> Logger
+
+@*
+    « Évaluation externe de la qualité », the workstation's EqaView: the rounds of the year, one
+    line per analyte per round — the unit the organiser scores and an assessor samples — with the
+    value sent, the target, the Z-score, the bias and the verdict. An unsatisfactory verdict opens a
+    non-conformity on the spot, and the screen says which, so its investigation is written at once.
+    The organisers' reports arrive by post or on their own sites: they are typed here, as on the
+    workstation, which imports none either. What is shown, offered and refused is EqaScreenRules';
+    every step goes through EqaService, which checks each right and journals each change.
+*@
+<div class="screen eqa" data-screen="eqa">
+    @{ var actions = Actions; }
+    <div class="list-tools" data-tools="filters">
+        <label class="field-inline">
+            <span>@Texts["Eqa.Year"]</span>
+            <input class="input input-year mono" type="number" min="@EqaScreenRules.YearMin" max="@EqaScreenRules.YearMax" dir="ltr"
+                   data-field="year" value="@_year" @onchange="YearChangedAsync" />
+        </label>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_onlyPending ? "is-pressed" : null)" aria-pressed="@(_onlyPending ? "true" : "false")"
+                    data-chip="only-pending" @onclick="TogglePendingAsync">@Texts["Eqa.OnlyPending"]</button>
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@EqaScreenRules.Count(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body">
+        <section class="card card-flush card-fill" data-card="participations">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="participations">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Quality.Scheme"]</th>
+                            <th>@Texts["Eqa.Parameter"]</th>
+                            <th>@Texts["Eqa.Deadline"]</th>
+                            <th class="num">@Texts["Eqa.ReportedValue"]</th>
+                            <th class="num">@Texts["Quality.AssignedValue"]</th>
+                            <th class="num">Z</th>
+                            <th class="num">@Texts["Quality.Bias"]</th>
+                            <th>@Texts["Quality.Outcome"]</th>
+                            <th>@Texts["Eqa.NonConformity"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr class="@(row.Id == Selected?.Id ? "is-selected" : null)" data-row="@($"{row.RoundReference}-{row.ParameterCode}")" data-outcome="@row.Outcome"
+                                @onclick="() => _selectedId = row.Id">
+                                <td>
+                                    <span class="list-name" title="@row.SchemeName">@row.SchemeName</span>
+                                    <span class="cell-sub mono" dir="ltr">@row.RoundReference · @EqaScreenRules.Date(row.RoundDate)</span>
+                                </td>
+                                <td>
+                                    <span class="list-name" title="@EqaScreenRules.Parameter(row, Texts.Language)">@EqaScreenRules.Parameter(row, Texts.Language)</span>
+                                    @if (row.InstrumentCode is { } instrument)
+                                    {
+                                        <span class="cell-sub mono" dir="ltr">@instrument</span>
+                                    }
+                                </td>
+                                <td class="mono small nowrap @QualityTones.Ink(EqaScreenRules.DeadlineInk(row))" dir="ltr">@EqaScreenRules.Deadline(row)</td>
+                                <td class="num mono">@EqaScreenRules.Number(row.ReportedValue, Texts.Culture)</td>
+                                <td class="num mono">@EqaScreenRules.Assigned(row, Texts.Culture)</td>
+                                <td class="num mono strong @QualityTones.Ink(EqaScreenRules.ZInk(row))">@EqaScreenRules.ZScore(row.ZScore, Texts.Culture)</td>
+                                <td class="num mono">@EqaScreenRules.Bias(row.BiasPercent, Texts.Culture)</td>
+                                <td><Pill Text="@Texts[$"EqaOutcome.{row.Outcome}"]" Tone="@QualityTones.Pill(EqaScreenRules.OutcomeTone(row))" /></td>
+                                <td class="mono small nowrap" dir="ltr">@row.NonConformityReference</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_rows.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.EqaNone"]</p>
+                }
+            </div>
+        </section>
+
+        <section class="card eqa-detail" data-card="detail">
+            @if (Selected is { } picked)
+            {
+                <div class="card-heading">
+                    <h2 class="card-title cell-wrap">@picked.SchemeName · <bdi class="mono" dir="ltr">@picked.RoundReference</bdi> · @EqaScreenRules.Parameter(picked, Texts.Language)</h2>
+                    <Pill Text="@Texts[$"EqaOutcome.{picked.Outcome}"]" Tone="@QualityTones.Pill(EqaScreenRules.OutcomeTone(picked))" />
+                </div>
+                var detail = EqaScreenRules.Detail(picked, Texts.Language, Texts.T, Texts.Culture);
+                @if (detail.Count > 0)
+                {
+                    <p class="small text-full" data-state="detail">@string.Join("  ·  ", detail)</p>
+                }
+                else
+                {
+                    <p class="small muted" data-state="detail">@Texts["Web.EqaNothingYet"]</p>
+                }
+            }
+            else
+            {
+                <p class="small muted" data-state="detail">@Texts["Message.NothingSelected"]</p>
+            }
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Eqa.RecordSubmission" Disabled="@(!actions.Submission || _busy)" OnClick="AskSubmission" />
+            <ActionButton Key="Eqa.RecordEvaluation" Disabled="@(!actions.Evaluation || _busy)" OnClick="AskEvaluation" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Eqa.RegisterRound" Primary="true" Disabled="@(!actions.Register || _busy)" OnClick="AskRoundAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Round:
+        <EqaRoundEditor Parameters="_parameters" Instruments="_instruments" Today="Clock.Today" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal"
+                        Busy="_busy" OnSave="RegisterAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Submission when Selected is { } forSubmission:
+        <EqaSubmissionEditor Row="forSubmission" Today="Clock.Today" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                             OnSave="SubmitAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Evaluation when Selected is { } forEvaluation:
+        <EqaEvaluationEditor Row="forEvaluation" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="EvaluateAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="eqa-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="eqa-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Round, Submission, Evaluation, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<EqaRow> _rows = [];
+    private IReadOnlyList<EqaOption> _parameters = [];
+    private IReadOnlyList<EqaOption> _instruments = [];
+
+    private int _year;
+    private bool _onlyPending;
+    private Guid? _selectedId;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private EqaRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId);
+
+    private EqaScreenActions Actions => EqaScreenRules.Actions(Context.User, Selected);
+
+    protected override Task OnInitializedAsync()
+    {
+        _year = Clock.Today.Year;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var year = _year;
+            var onlyPending = _onlyPending;
+            var result = await Scopes.RunAsync<EqaService, Result<IReadOnlyList<EqaRow>>>(s => s.GetParticipationsAsync(year, onlyPending));
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            // The participation just worked on stays current, so its verdict is read where it was given.
+            _rows = result.Value;
+            _selectedId = EqaScreenRules.Keep(_rows, _selectedId)?.Id;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading EQA participations failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private Task YearChangedAsync(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var typed)) return Task.CompletedTask;
+        _year = EqaScreenRules.Year(typed);
+        return LoadAsync();
+    }
+
+    private Task TogglePendingAsync()
+    {
+        _onlyPending = !_onlyPending;
+        return LoadAsync();
+    }
+
+    // ---- Steps -------------------------------------------------------------------------------------
+
+    private Task AskRoundAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Register) return;
+            var parameters = await Scopes.RunAsync<EqaService, Result<IReadOnlyList<EqaOption>>>(s => s.GetParameterOptionsAsync());
+            var instruments = await Scopes.RunAsync<EqaService, Result<IReadOnlyList<EqaOption>>>(s => s.GetInstrumentOptionsAsync());
+            if (parameters.IsFailure || instruments.IsFailure)
+            {
+                Say(Texts["Eqa.RegisterRound"], Texts.Describe(parameters.IsFailure ? parameters.Errors : instruments.Errors), true);
+                return;
+            }
+
+            _parameters = parameters.Value;
+            _instruments = instruments.Value;
+            Open(Prompt.Round);
+        });
+
+    private Task RegisterAsync(RegisterEqaRoundRequest request) =>
+        RunAsync(async () =>
+        {
+            var registered = await Scopes.RunAsync<EqaService, Result<int>>(s => s.RegisterRoundAsync(request));
+            if (Refused(registered)) return;
+
+            _prompt = Prompt.None;
+            _year = EqaScreenRules.YearAfterRegistering(request);
+            await LoadAsync();
+            Say(Texts["Eqa.RegisterRound"], Texts.T("Eqa.RoundRegistered", registered.Value));
+        });
+
+    private void AskSubmission()
+    {
+        if (!Actions.Submission || _busy) return;
+        Open(Prompt.Submission);
+    }
+
+    private Task SubmitAsync((decimal Value, DateOnly SubmittedOn) sent) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } row) return;
+            var recorded = await Scopes.RunAsync<EqaService, Result>(s => s.RecordSubmissionAsync(row.Id, sent.Value, sent.SubmittedOn));
+            if (Refused(recorded)) return;
+
+            _prompt = Prompt.None;
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private void AskEvaluation()
+    {
+        if (!Actions.Evaluation || _busy) return;
+        Open(Prompt.Evaluation);
+    }
+
+    /// <summary>The service opens the non-conformity of an unsatisfactory verdict; the operator is told which, the investigation being theirs to write.</summary>
+    private Task EvaluateAsync(EqaEvaluation evaluation) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } row) return;
+            var evaluated = await Scopes.RunAsync<EqaService, Result<string?>>(s => s.RecordEvaluationAsync(row.Id, evaluation));
+            if (Refused(evaluated)) return;
+
+            _prompt = Prompt.None;
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+            if (EqaScreenRules.NonConformityOpened(evaluated.Value, Texts.T) is { } opened)
+                Say(Texts["Eqa.RecordEvaluation"], opened, true);
+        });
+
+    // ---- Plumbing ----------------------------------------------------------------------------------
+
+    /// <summary>A refusal of the service kept in its dialog, next to the box it names when it names one.</summary>
+    private bool Refused(Result result)
+    {
+        if (result.IsSuccess) return false;
+        var error = result.FirstError;
+        if (EqaScreenRules.FieldOf(error) is { } field)
+        {
+            _fieldRefusal = new FieldRefusal(field, error.ResourceKey, error.Args.FirstOrDefault()?.ToString());
+            _dialogRefusal = null;
+        }
+        else
+        {
+            _fieldRefusal = null;
+            _dialogRefusal = Texts.Describe(result.Errors);
+        }
+
+        return true;
+    }
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An EQA step failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

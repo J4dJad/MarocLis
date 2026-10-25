@@ -1,0 +1,572 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<NonConformities> Logger
+
+@*
+    « Non-conformités », the workstation's NonConformityView: the register over the selected file's
+    corrective actions, the file's facts beside them. ISO 15189 asks for more than a list: the
+    clinical impact assessed, actions taken, and their effectiveness verified — and closure is
+    refused, naming what is missing, until those exist for a major or critical file. A recurrence
+    and released results affected are marked on the reference. The action-level steps sit over the
+    actions, away from the file-level ones in the bar: « annuler cette action » and « classer sans
+    suite » are very different acts. What is shown, offered and refused is
+    NonConformityScreenRules'; every step goes through NonConformityService, which checks each
+    right and journals each change.
+*@
+<div class="screen nc" data-screen="nonconformities">
+    @{ var actions = Actions; }
+    <div class="list-tools" data-tools="filters">
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_onlyOpen ? "is-pressed" : null)" aria-pressed="@(_onlyOpen ? "true" : "false")"
+                    data-chip="only-open" @onclick="ToggleOpenAsync">@Texts["NcStatus.Open"]</button>
+        </div>
+        <select class="input input-narrow" data-field="filter-category" aria-label="@Texts["NonConformity.Category"]" @onchange="CategoryChangedAsync">
+            <option value="" selected="@(_category is null)">@Texts["NonConformity.AllCategories"]</option>
+            @foreach (var category in Enum.GetValues<NonConformityCategory>())
+            {
+                <option value="@category" selected="@(category == _category)">@Texts[$"NcCategory.{category}"]</option>
+            }
+        </select>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@NonConformityScreenRules.Count(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body split">
+        <div class="split-main quality-main">
+            <section class="card card-flush card-fill" data-card="register">
+                <div class="table-scroll">
+                    <table class="grid grid-select" data-grid="register">
+                        <thead>
+                            <tr>
+                                <th>@Texts["NonConformity.Reference"]</th>
+                                <th>@Texts["NonConformity.Severity"]</th>
+                                <th>@Texts["Field.Description"]</th>
+                                <th>@Texts["NonConformity.AssignedTo"]</th>
+                                <th class="num">@Texts["NonConformity.Actions"]</th>
+                                <th>@Texts["Field.Status"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _rows)
+                            {
+                                var emphasis = NonConformityScreenRules.Emphasis(row);
+                                var description = row.Description.For(Texts.Language);
+                                <tr class="@(row.Id == Selected?.Id ? "is-selected" : null) @(emphasis == NonConformityEmphasis.Closed ? "is-tone-muted" : emphasis == NonConformityEmphasis.Overdue ? "is-tone-strong nc-overdue" : null)"
+                                    data-row="@row.Reference" @onclick="() => SelectAsync(row)">
+                                    <td class="nowrap">
+                                        <span class="mono strong @(row.AffectedReleasedResults ? "critical" : null)" dir="ltr">@NonConformityScreenRules.Reference(row)</span>
+                                        <span class="cell-sub mono" dir="ltr" title="@Texts["NonConformity.DetectedAt"]">@NonConformityScreenRules.ShortDate(row.DetectedAt)</span>
+                                    </td>
+                                    <td>
+                                        <Pill Text="@Texts[$"NcSeverity.{row.Severity}"]" Tone="@QualityTones.Pill(NonConformityScreenRules.SeverityTone(row.Severity))" />
+                                        <span class="cell-sub">@Texts[$"NcCategory.{row.Category}"]</span>
+                                    </td>
+                                    <td class="nc-description"><span class="clamp-2" title="@string.Join("\n", NonConformityScreenRules.Tooltip(row, Texts.Language, Texts.T))">@description</span></td>
+                                    <td class="small">
+                                        <span class="cell-wrap">@row.AssignedToName</span>
+                                        <span class="cell-sub mono @(emphasis == NonConformityEmphasis.Overdue ? "critical strong" : null)" dir="ltr" title="@Texts["NonConformity.DueDate"]">@NonConformityScreenRules.ShortDate(row.DueDate)</span>
+                                    </td>
+                                    <td class="num mono">@NonConformityScreenRules.ActionsCell(row)</td>
+                                    <td><Pill Text="@Texts[$"NcStatus.{row.Status}"]" Tone="@QualityTones.Pill(NonConformityScreenRules.StatusTone(row.Status))" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_rows.Count == 0)
+                    {
+                        <p class="muted small card-pad" data-state="empty">@Texts["Web.NcNone"]</p>
+                    }
+                </div>
+            </section>
+
+            <section class="card card-flush quality-sub" data-card="actions">
+                <div class="card-heading card-pad">
+                    <h2 class="card-title cell-wrap" data-state="actions-heading">@Texts["NonConformity.Actions"] · @NonConformityScreenRules.ActionsHeading(Selected, Texts.T)</h2>
+                    <div class="card-actions">
+                        <ActionButton Key="NonConformity.AddAction" Disabled="@(!actions.AddAction || _busy)" OnClick="AskAction" />
+                        <ActionButton Key="NonConformity.StartAction" Disabled="@(!actions.StartAction || _busy)" OnClick="StartActionAsync" />
+                        <ActionButton Key="NonConformity.CompleteAction" Disabled="@(!actions.CompleteAction || _busy)" OnClick="AskComplete" />
+                        <ActionButton Key="NonConformity.CancelAction" Disabled="@(!actions.CancelAction || _busy)" OnClick="AskCancelAction" />
+                    </div>
+                </div>
+                <div class="table-scroll">
+                    <table class="grid grid-select" data-grid="actions">
+                        <thead>
+                            <tr>
+                                <th>@Texts["NonConformity.ActionKind"]</th>
+                                <th>@Texts["Field.Description"]</th>
+                                <th>@Texts["NonConformity.AssignedTo"]</th>
+                                <th>@Texts["Field.Status"]</th>
+                                <th>@Texts["Field.Date"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var action in _actions)
+                            {
+                                var ink = QualityTones.Ink(NonConformityScreenRules.ActionInk(action));
+                                var text = action.Description.For(Texts.Language);
+                                <tr class="@(action.Id == SelectedAction?.Id ? "is-selected" : null)" data-row="@action.Id" data-action-status="@action.Status"
+                                    @onclick="() => _actionId = action.Id">
+                                    <td class="small @ink">@Texts[$"ActionKind.{action.Kind}"]</td>
+                                    <td class="@ink"><span class="clamp-2" title="@text">@text</span></td>
+                                    <td class="small">
+                                        <span class="cell-wrap">@action.ResponsibleName</span>
+                                        <span class="cell-sub mono @ink" dir="ltr" title="@Texts["NonConformity.DueDate"]">@NonConformityScreenRules.ShortDate(action.TargetDate)</span>
+                                    </td>
+                                    <td><Pill Text="@Texts[$"ActionStatus.{action.Status}"]" Tone="@QualityTones.Pill(NonConformityScreenRules.ActionTone(action))" /></td>
+                                    <td class="mono small nowrap" dir="ltr">@NonConformityScreenRules.ShortDate(action.CompletedOn)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (Selected is not null && _actions.Count == 0)
+                    {
+                        <p class="muted small card-pad" data-state="no-action">@Texts["Web.NcNoAction"]</p>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <aside class="card split-side quality-aside" data-card="file">
+            @if (Selected is { } shown)
+            {
+                <div class="identity">
+                    <span class="identity-name mono @(shown.AffectedReleasedResults ? "critical" : null)" dir="ltr" data-state="reference">@NonConformityScreenRules.Reference(shown)</span>
+                    <span class="small muted">@NonConformityScreenRules.Subtitle(shown, Texts.T)</span>
+                    <span><Pill Text="@Texts[$"NcStatus.{shown.Status}"]" Tone="@QualityTones.Pill(NonConformityScreenRules.StatusTone(shown.Status))" /></span>
+                </div>
+                <dl class="facts facts-compact" data-state="facts">
+                    @foreach (var fact in NonConformityScreenRules.Facts(shown, Texts.T))
+                    {
+                        <dt class="@(fact.Critical ? "critical" : null)">@fact.Label</dt>
+                        <dd class="@(fact.Mono ? "mono" : null) @(fact.Critical ? "critical" : null)" dir="@(fact.Mono ? "ltr" : null)">@(fact.Value.Length > 0 ? fact.Value : "—")</dd>
+                    }
+                </dl>
+                <p class="text-full small @(shown.AffectedReleasedResults ? "critical" : null)" data-state="description">@shown.Description.For(Texts.Language)</p>
+            }
+            else
+            {
+                <p class="muted" data-state="no-file">@Texts["App.NoData"]</p>
+            }
+        </aside>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="NonConformity.RecordAnalysis" Disabled="@(!actions.RecordAnalysis || _busy)" OnClick="AskAnalysisAsync" />
+            <ActionButton Key="NonConformity.Close" Disabled="@(!actions.Close || _busy)" OnClick="AskClose" />
+            <ActionButton Key="NonConformity.Reopen" Disabled="@(!actions.Reopen || _busy)" OnClick="AskReopen" />
+        </Secondary>
+        <Destructive>
+            <ActionButton Key="NonConformity.Dismiss" Danger="true" Disabled="@(!actions.Dismiss || _busy)" OnClick="AskDismiss" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="NonConformity.OpenNew" Primary="true" Disabled="@(!actions.OpenNew || _busy)" OnClick="AskOpen" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Open:
+        <NonConformityEditor Today="Clock.Today" Refusal="@_dialogRefusal" Busy="_busy" OnSave="OpenAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.AddAction when Selected is { } nc1:
+        <CorrectiveActionEditor Reference="@nc1.Reference" Today="Clock.Today" Refusal="@_dialogRefusal" Busy="_busy" OnSave="AddActionAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Analysis when Selected is { } nc2:
+        <NonConformityAnalysisEditor File="nc2" Recorded="_analysis" Refusal="@_dialogRefusal" Busy="_busy" OnSave="RecordAnalysisAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Complete:
+        <TextPrompt Name="evidence" Title="@Texts["NonConformity.CompleteAction"]" Prompt="@Texts["NonConformity.EvidencePrompt"]"
+                    Multiline="true" MaxLength="NonConformityScreenRules.TextMaxLength" OnConfirm="CompleteActionAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.CancelAction:
+        <ReasonPrompt Title="@Texts["NonConformity.CancelAction"]" Prompt="@Texts["NonConformity.CancelActionPrompt"]"
+                      MaxLength="NonConformityScreenRules.CancelReasonMaxLength" OnConfirm="CancelActionAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Close when Selected is { } nc3:
+        <ConfirmPrompt Title="@Texts["NonConformity.Close"]" Message="@Texts.T("NonConformity.ConfirmClose", nc3.Reference)" OnYes="CloseAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Reopen when Selected is { } nc4:
+        <ReasonPrompt Title="@Texts["NonConformity.Reopen"]" Prompt="@Texts.T("NonConformity.ReopenPrompt", nc4.Reference)"
+                      MinimumLength="NonConformityScreenRules.ReopenReasonMinimumLength" OnConfirm="ReopenAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Dismiss when Selected is { } nc5:
+        <ConfirmPrompt Title="@Texts["NonConformity.Dismiss"]" Message="@Texts.T("NonConformity.ConfirmDismiss", nc5.Reference)"
+                       OnYes="() => _prompt = Prompt.DismissReason" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.DismissReason when Selected is { } nc6:
+        <ReasonPrompt Title="@Texts["NonConformity.Dismiss"]" Prompt="@Texts.T("NonConformity.DismissPrompt", nc6.Reference)"
+                      MinimumLength="NonConformityScreenRules.DismissReasonMinimumLength" OnConfirm="DismissAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="nc-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="nc-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Open, AddAction, Analysis, Complete, CancelAction, Close, Reopen, Dismiss, DismissReason, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<NonConformityRow> _rows = [];
+    private IReadOnlyList<CorrectiveActionRow> _actions = [];
+    private NonConformityAnalysis? _analysis;
+
+    private bool _onlyOpen = true;
+    private NonConformityCategory? _category;
+    private Guid? _selectedId, _actionId;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private NonConformityRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId);
+
+    private CorrectiveActionRow? SelectedAction => _actions.FirstOrDefault(a => a.Id == _actionId);
+
+    private NonConformityScreenActions Actions => NonConformityScreenRules.Actions(Context.User, Selected, SelectedAction);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    // ---- Loading -----------------------------------------------------------------------------------
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var onlyOpen = _onlyOpen;
+            var category = _category;
+            var register = await Scopes.RunAsync<NonConformityService, Result<IReadOnlyList<NonConformityRow>>>(
+                s => s.GetRegisterAsync(onlyOpen, category));
+            if (register.IsFailure)
+            {
+                _status = (Texts.Describe(register.Errors), "critical");
+                return;
+            }
+
+            // The file being worked on stays current: the next action goes to the same file.
+            _rows = register.Value;
+            _selectedId = NonConformityScreenRules.Keep(_rows, _selectedId)?.Id;
+            await LoadActionsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the non-conformity register failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task LoadActionsAsync()
+    {
+        if (_selectedId is not { } id)
+        {
+            _actions = [];
+            _actionId = null;
+            return;
+        }
+
+        var actions = await Scopes.RunAsync<NonConformityService, Result<IReadOnlyList<CorrectiveActionRow>>>(s => s.GetActionsAsync(id));
+        _actions = actions.IsSuccess ? actions.Value : [];
+        if (_actions.All(a => a.Id != _actionId)) _actionId = null;
+    }
+
+    private async Task SelectAsync(NonConformityRow row)
+    {
+        if (row.Id == _selectedId) return;
+        _selectedId = row.Id;
+        _actionId = null;
+        await LoadActionsAsync();
+    }
+
+    private Task ToggleOpenAsync()
+    {
+        _onlyOpen = !_onlyOpen;
+        return LoadAsync();
+    }
+
+    private Task CategoryChangedAsync(ChangeEventArgs e)
+    {
+        _category = Enum.TryParse<NonConformityCategory>(e.Value?.ToString(), out var category) ? category : null;
+        return LoadAsync();
+    }
+
+    // ---- Steps -------------------------------------------------------------------------------------
+
+    private void AskOpen()
+    {
+        if (!Actions.OpenNew || _busy) return;
+        _dialogRefusal = null;
+        _prompt = Prompt.Open;
+    }
+
+    private Task OpenAsync(CreateNonConformityRequest request) =>
+        RunAsync(async () =>
+        {
+            var opened = await Scopes.RunAsync<NonConformityService, Result<string>>(s => s.OpenAsync(request));
+            if (opened.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(opened.Errors);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            _selectedId = null;
+            await LoadAsync();
+            _selectedId = _rows.FirstOrDefault(r => r.Reference == opened.Value)?.Id ?? _selectedId;
+            await LoadActionsAsync();
+            _status = (NonConformityScreenRules.Opened(opened.Value, Texts.T), "normal");
+        });
+
+    private void AskAction()
+    {
+        if (!Actions.AddAction || _busy) return;
+        _dialogRefusal = null;
+        _prompt = Prompt.AddAction;
+    }
+
+    private Task AddActionAsync(CorrectiveActionForm form) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } file) return;
+            var request = NonConformityScreenRules.ToRequest(form, file.Id);
+            var added = await Scopes.RunAsync<NonConformityService, Result>(s => s.AddActionAsync(request));
+            if (added.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(added.Errors);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private Task StartActionAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.StartAction || Selected is not { } file || SelectedAction is not { } action) return;
+            var started = await Scopes.RunAsync<NonConformityService, Result>(s => s.StartActionAsync(file.Id, action.Id));
+            await AfterAsync(started, Texts["NonConformity.StartAction"]);
+        });
+
+    private void AskComplete()
+    {
+        if (_busy) return;
+        if (SelectedAction is null)
+        {
+            _status = (Texts["Message.NothingSelected"], "muted");
+            return;
+        }
+
+        if (NonConformityScreenRules.AlreadyCompleted(SelectedAction))
+        {
+            Say(Texts["NonConformity.CompleteAction"], Texts["ActionStatus.Completed"]);
+            return;
+        }
+
+        if (Actions.CompleteAction) _prompt = Prompt.Complete;
+    }
+
+    /// <summary>Evidence rather than a tick: « what shows this was done? » is what an assessor asks.</summary>
+    private Task CompleteActionAsync(string evidence) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } file || SelectedAction is not { } action) return;
+            var proof = NonConformityScreenRules.Evidence(evidence);
+            var completed = await Scopes.RunAsync<NonConformityService, Result>(s => s.CompleteActionAsync(file.Id, action.Id, proof));
+            await AfterAsync(completed, Texts["NonConformity.CompleteAction"]);
+        });
+
+    private void AskCancelAction()
+    {
+        if (!Actions.CancelAction || _busy) return;
+        _prompt = Prompt.CancelAction;
+    }
+
+    /// <summary>Withdraws an action entered in error: closure needs every action finished, and one wrong entry would hold the file open.</summary>
+    private Task CancelActionAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } file || SelectedAction is not { } action) return;
+            var cancelled = await Scopes.RunAsync<NonConformityService, Result>(s => s.CancelActionAsync(file.Id, action.Id, reason));
+            await AfterAsync(cancelled, Texts["NonConformity.CancelAction"], "muted");
+        });
+
+    private Task AskAnalysisAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.RecordAnalysis || Selected is not { } file) return;
+            var recorded = await Scopes.RunAsync<NonConformityService, Result<NonConformityAnalysis>>(s => s.GetAnalysisAsync(file.Id));
+            if (recorded.IsFailure)
+            {
+                Say(Texts["NonConformity.RecordAnalysis"], Texts.Describe(recorded.Errors), true);
+                return;
+            }
+
+            _analysis = recorded.Value;
+            _dialogRefusal = null;
+            _prompt = Prompt.Analysis;
+        });
+
+    private Task RecordAnalysisAsync(NonConformityAnalysisInput input) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } file) return;
+            var saved = await Scopes.RunAsync<NonConformityService, Result>(s => s.RecordAnalysisAsync(
+                file.Id, input.RootCause, input.RootCauseAnalysis, input.ClinicalImpact, input.EffectivenessVerification, input.AmendedReportsIssued));
+            if (saved.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private void AskClose()
+    {
+        if (!Actions.Close || _busy) return;
+        _prompt = Prompt.Close;
+    }
+
+    /// <summary>
+    /// Attempts closure. A refusal is shown in full: each error names an ISO 15189 obligation the
+    /// file has not met yet — the root cause, the effectiveness check, an unfinished action.
+    /// </summary>
+    private Task CloseAsync() =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } file) return;
+            var closed = await Scopes.RunAsync<NonConformityService, Result>(s => s.CloseAsync(file.Id));
+            if (closed.IsFailure)
+            {
+                Say(Texts["NonConformity.Close"], Texts.Describe(closed.Errors), true);
+                return;
+            }
+
+            await LoadAsync();
+            _status = (NonConformityScreenRules.StatusLine(file, NonConformityStatus.Closed, Texts.T), "normal");
+        });
+
+    private void AskReopen()
+    {
+        if (!Actions.Reopen || _busy) return;
+        _prompt = Prompt.Reopen;
+    }
+
+    /// <summary>Resumed rather than restarted: the actions and analysis stay, and the days open keep running.</summary>
+    private Task ReopenAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } file) return;
+            var reopened = await Scopes.RunAsync<NonConformityService, Result>(s => s.ReopenAsync(file.Id, reason));
+            if (reopened.IsFailure)
+            {
+                Say(Texts["NonConformity.Reopen"], Texts.Describe(reopened.Errors), true);
+                return;
+            }
+
+            await LoadAsync();
+            _status = (NonConformityScreenRules.StatusLine(file, NonConformityStatus.InProgress, Texts.T), "abnormal");
+        });
+
+    private void AskDismiss()
+    {
+        if (!Actions.Dismiss || _busy) return;
+        _prompt = Prompt.Dismiss;
+    }
+
+    /// <summary>A report judged unfounded: kept apart from closure so the quality indicators stay honest.</summary>
+    private Task DismissAsync(string justification) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } file) return;
+            var dismissed = await Scopes.RunAsync<NonConformityService, Result>(s => s.DismissAsync(file.Id, justification));
+            if (dismissed.IsFailure)
+            {
+                Say(Texts["NonConformity.Dismiss"], Texts.Describe(dismissed.Errors), true);
+                return;
+            }
+
+            await LoadAsync();
+            _status = (NonConformityScreenRules.StatusLine(file, NonConformityStatus.Rejected, Texts.T), "muted");
+        });
+
+    // ---- Plumbing ----------------------------------------------------------------------------------
+
+    private async Task AfterAsync(Result result, string title, string tone = "normal")
+    {
+        if (result.IsFailure)
+        {
+            Say(title, Texts.Describe(result.Errors), true);
+            return;
+        }
+
+        await LoadAsync();
+        _status = (Texts["Message.Saved"], tone);
+    }
+
+    /// <summary>One write at a time: a double click records one action.</summary>
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A non-conformity step failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+    }
+}

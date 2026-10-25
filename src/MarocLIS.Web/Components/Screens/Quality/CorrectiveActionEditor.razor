@@ -1,0 +1,70 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+
+@*
+    An action added to a file, the workstation's CorrectiveActionDialog: a correction, a corrective
+    or a preventive action, an improvement — corrective by default, the one ISO 15189 asks for —
+    what it is, and by when. Its owner is whoever records it. NonConformityScreenRules' form.
+*@
+<Modal Name="nc-action-editor" Title="@($"{Texts["NonConformity.AddAction"]} — {Reference}")" Hint="@Texts["QualityHr.Hint.CorrectiveAction"]" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["NonConformity.ActionKind"]</span>
+                <select class="input" data-field="kind" @bind="_form.Kind">
+                    @foreach (var value in Enum.GetValues<ActionKind>())
+                    {
+                        <option value="@value">@Texts[$"ActionKind.{value}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["NonConformity.DueDate"]</span>
+                <input class="input" type="date" data-field="target" @bind="_form.TargetDate" @bind:format="yyyy-MM-dd" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.Description"]</span>
+                <textarea class="input @(_refusal?.Field == NonConformityScreenRules.ActionDescriptionField ? "is-refused" : null)" rows="4"
+                          maxlength="@NonConformityScreenRules.TextMaxLength" data-field="@NonConformityScreenRules.ActionDescriptionField"
+                          @bind="_form.Description" @bind:event="oninput"></textarea>
+                <FieldMessage Refusal="_refusal" Field="@NonConformityScreenRules.ActionDescriptionField" />
+            </label>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string Reference { get; set; } = string.Empty;
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<CorrectiveActionForm> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private CorrectiveActionForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = NonConformityScreenRules.NewAction(Today);
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = NonConformityScreenRules.Check(_form);
+        return _refusal is null ? OnSave.InvokeAsync(_form) : Task.CompletedTask;
+    }
+}

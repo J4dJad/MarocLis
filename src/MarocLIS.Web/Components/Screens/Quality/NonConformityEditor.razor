@@ -1,0 +1,102 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+
+@*
+    Opening a non-conformity, the workstation's NonConformityDialog: what happened, how bad, where
+    it was found, what was done at once, and whether it reached patients. The patient count is
+    asked only when released results were affected. The form, its check and its request are
+    NonConformityScreenRules'; a refusal is said next to its box.
+*@
+<Modal Name="nc-editor" Title="@Texts["NonConformity.OpenNew"]" Hint="@Texts["QualityHr.Hint.NonConformity"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["NonConformity.Category"]</span>
+                <select class="input" data-field="category" @bind="_form.Category">
+                    @foreach (var value in Enum.GetValues<NonConformityCategory>())
+                    {
+                        <option value="@value">@Texts[$"NcCategory.{value}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["NonConformity.Severity"]</span>
+                <select class="input" data-field="severity" @bind="_form.Severity">
+                    @foreach (var value in Enum.GetValues<NonConformitySeverity>())
+                    {
+                        <option value="@value">@Texts[$"NcSeverity.{value}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["NonConformity.DetectionSource"]</span>
+                <select class="input" data-field="source" @bind="_form.Source">
+                    @foreach (var value in Enum.GetValues<DetectionSource>())
+                    {
+                        <option value="@value">@Texts[$"DetectionSource.{value}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.Description"]</span>
+                <textarea class="input @(_refusal?.Field == NonConformityScreenRules.DescriptionField ? "is-refused" : null)" rows="3"
+                          maxlength="@NonConformityScreenRules.TextMaxLength" data-field="@NonConformityScreenRules.DescriptionField"
+                          @bind="_form.Description" @bind:event="oninput"></textarea>
+                <FieldMessage Refusal="_refusal" Field="@NonConformityScreenRules.DescriptionField" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["NonConformity.ImmediateAction"]</span>
+                <textarea class="input" rows="2" maxlength="@NonConformityScreenRules.TextMaxLength" data-field="immediate"
+                          @bind="_form.ImmediateAction" @bind:event="oninput"></textarea>
+            </label>
+            <label class="field-check strong critical">
+                <input type="checkbox" data-field="affected" @bind="_form.AffectedResults" />
+                <span>@Texts["NonConformity.AffectedResults"]</span>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Web.NcPatientCount"]</span>
+                <input class="input mono num" type="number" min="0" max="@NonConformityScreenRules.PatientCountMax" data-field="patients"
+                       disabled="@(!NonConformityScreenRules.PatientCountEnabled(_form))" @bind="_form.PatientCount" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["NonConformity.DueDate"]</span>
+                <input class="input" type="date" data-field="due" @bind="_form.DueDate" @bind:format="yyyy-MM-dd" />
+            </label>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<CreateNonConformityRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private NonConformityForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = NonConformityScreenRules.NewForm(Today);
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = NonConformityScreenRules.Check(_form);
+        return _refusal is null ? OnSave.InvokeAsync(NonConformityScreenRules.ToRequest(_form)) : Task.CompletedTask;
+    }
+}

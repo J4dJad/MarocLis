@@ -1,0 +1,89 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+
+@*
+    A controlled document created in the register, the workstation's ControlledDocumentDialog: its
+    reference, kind and process, its title in three languages, how often it is reviewed and whether
+    staff must acknowledge reading it — before any text, which comes as its first draft.
+    QualityDocumentScreenRules' form and check; a refusal is said next to its box.
+*@
+<Modal Name="doc-editor" Title="@Texts["Documents.NewDocument"]" Hint="@Texts["QualityHr.Hint.Document"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-3">
+            <label class="field">
+                <span class="field-label">@Texts["Documents.Reference"]</span>
+                <input class="input mono @Refused(QualityDocumentScreenRules.ReferenceField)" dir="ltr" autocomplete="off" data-field="@QualityDocumentScreenRules.ReferenceField"
+                       maxlength="@QualityDocumentScreenRules.ReferenceMaxLength" @bind="_form.Reference" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@QualityDocumentScreenRules.ReferenceField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Documents.Kind"]</span>
+                <select class="input" data-field="kind" @bind="_form.Kind">
+                    @foreach (var kind in Enum.GetValues<DocumentKind>())
+                    {
+                        <option value="@kind">@Texts[$"DocumentKind.{kind}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Documents.Process"]</span>
+                <input class="input" dir="ltr" autocomplete="off" data-field="process" maxlength="@QualityDocumentScreenRules.ProcessMaxLength" @bind="_form.Process" />
+            </label>
+            <label class="field field-span-4">
+                <span class="field-label">@Texts["Documents.TitleFr"]</span>
+                <input class="input @Refused(QualityDocumentScreenRules.TitleFrField)" autocomplete="off" data-field="@QualityDocumentScreenRules.TitleFrField"
+                       maxlength="@QualityDocumentScreenRules.TitleMaxLength" @bind="_form.TitleFr" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@QualityDocumentScreenRules.TitleFrField" />
+            </label>
+            <label class="field field-span-4">
+                <span class="field-label">@Texts["Documents.TitleAr"]</span>
+                <input class="input" dir="rtl" autocomplete="off" data-field="title-ar" maxlength="@QualityDocumentScreenRules.TitleMaxLength" @bind="_form.TitleAr" />
+            </label>
+            <label class="field field-span-4">
+                <span class="field-label">@Texts["Documents.TitleEn"]</span>
+                <input class="input" dir="ltr" autocomplete="off" data-field="title-en" maxlength="@QualityDocumentScreenRules.TitleMaxLength" @bind="_form.TitleEn" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Documents.ReviewPeriod"]</span>
+                <input class="input mono num" type="number" min="@QualityDocumentScreenRules.ReviewPeriodMin" max="@QualityDocumentScreenRules.ReviewPeriodMax"
+                       data-field="review-period" @bind="_form.ReviewPeriodMonths" />
+            </label>
+            <label class="field-check field-span-2 field-align-end">
+                <input type="checkbox" data-field="acknowledgement" @bind="_form.RequiresAcknowledgement" />
+                <span>@Texts["Documents.RequiresAcknowledgement"]</span>
+            </label>
+            <p class="field-span-4 small muted">@Texts["Documents.NewDocumentNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<CreateControlledDocumentRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private readonly ControlledDocumentForm _form = new();
+    private FieldRefusal? _refusal;
+
+    private FieldRefusal? Shown => _refusal ?? FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    private Task SaveAsync()
+    {
+        _refusal = QualityDocumentScreenRules.Check(_form);
+        return _refusal is null ? OnSave.InvokeAsync(QualityDocumentScreenRules.ToRequest(_form)) : Task.CompletedTask;
+    }
+}

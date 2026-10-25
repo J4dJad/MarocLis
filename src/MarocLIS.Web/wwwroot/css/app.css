@@ -1043,3 +1043,31 @@ fieldset.subcard:disabled { opacity: .7; }
 .lj-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; list-style: none; }
 .lj-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .lj-legend svg { inline-size: 12px; block-size: 12px; }
+
+/*
+   The quality registers (non-conformities, EQA, controlled documents): the register fills what the
+   screen leaves, the sub-list under it (actions, versions) keeps a bounded height of its own.
+*/
+.quality-main { display: flex; flex-direction: column; gap: var(--gap); overflow: hidden !important; }
+.quality-main > .card-fill, .quality-stack > .card-fill { flex: 1 1 auto; display: flex; flex-direction: column; min-block-size: 200px; }
+.quality-main > .card-fill > .table-scroll, .quality-stack > .card-fill > .table-scroll { flex: 1 1 auto; min-block-size: 0; max-block-size: none; border: 0; border-radius: 0; }
+.quality-sub { flex: none; display: flex; flex-direction: column; }
+.quality-sub > .card-heading { margin: 0; flex-wrap: wrap; align-items: flex-start; }
+.quality-sub > .card-heading > .card-title { flex: 1 1 220px; min-inline-size: 0; }
+.quality-sub > .table-scroll { max-block-size: 190px; border: 0; border-block-start: 1px solid var(--border); border-radius: 0; }
+.card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.quality-aside { display: flex; flex-direction: column; gap: 10px; }
+.quality-aside .facts { margin: 0; }
+.nc-description { min-inline-size: 220px; }
+.grid td.nc-description { white-space: normal; }
+.pill-muted { background: var(--surface-sunken); color: var(--text-muted); }
+.ink-normal { color: var(--normal); }
+.input-year { inline-size: 96px; }
+.eqa-detail { flex: none; }
+.eqa-detail .card-heading { flex-wrap: wrap; }
+.eqa-detail p { margin: 0; }
+.eqa-parameters { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px 8px; margin: 0; min-inline-size: 0; }
+.eqa-parameters.is-refused { border-color: var(--critical); }
+.eqa-check-list { max-block-size: 200px; }
+.file-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-inline-size: 0; }
+.file-pick > .btn { position: relative; overflow: hidden; }
