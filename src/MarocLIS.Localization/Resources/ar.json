@@ -6748,6 +6748,17 @@
     "Done": "اكتملت الاستعادة."
   },
   "Web": {
+    "EquipmentNone": "لا يوجد أي تجهيز لعرضه.",
+    "EquipmentNoneDue": "لا يوجد أي أجل متجاوز ولا أي تجهيز خارج الخدمة.",
+    "ContractNone": "لا يوجد أي عقد لعرضه.",
+    "ContractNoIntervention": "لا يوجد أي تدخل مسجل على أجهزة هذا العقد.",
+    "ContractNoInstrument": "لا يوجد أي جهاز لربطه: أنشئه في البيانات المرجعية.",
+    "ContractFile": "العقد مرفق",
+    "ContractExpected": "المتوقع {0}",
+    "ContractCommittedAmount": "الملتزم به (درهم دون ضريبة)",
+    "ContractPenaltyAmount": "الغرامة (درهم)",
+    "ContractPrice": "سعر العقد دون ضريبة / وحدة (درهم)",
+    "ContractCostPerTest": "التكلفة لكل اختبار (درهم)",
     "PurchaseNoOrder": "لا يوجد سند طلب لعرضه.",
     "PurchaseNoLine": "لا يوجد سطر في هذه الطلبية: أضف الأصناف المراد طلبها.",
     "PurchaseTotals": "المجموع دون ضريبة {0} · الضريبة {1} · المجموع شامل الضريبة {2}",

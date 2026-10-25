@@ -1915,8 +1915,8 @@
   },
 
   "CommitmentBasis": {
-    "PurchaseAmountTotal": "Achats de réactifs sur la durée (MAD HT)",
-    "PurchaseAmountPerYear": "Achats de réactifs par an (MAD HT)",
+    "PurchaseAmountTotal": "Achats de réactifs sur la durée (DH HT)",
+    "PurchaseAmountPerYear": "Achats de réactifs par an (DH HT)",
     "TestsTotal": "Tests sur la durée",
     "TestsPerYear": "Tests par an",
     "None": "Sans engagement"
@@ -6749,6 +6749,17 @@
     "Done": "Restauration terminée."
   },
   "Web": {
+    "EquipmentNone": "Aucun équipement à afficher.",
+    "EquipmentNoneDue": "Aucune échéance dépassée et aucun équipement hors service.",
+    "ContractNone": "Aucun contrat à afficher.",
+    "ContractNoIntervention": "Aucune intervention enregistrée sur les automates de ce contrat.",
+    "ContractNoInstrument": "Aucun automate à rattacher : créez-le dans Données de référence.",
+    "ContractFile": "Contrat joint",
+    "ContractExpected": "attendu {0}",
+    "ContractCommittedAmount": "Engagé (DH HT)",
+    "ContractPenaltyAmount": "Pénalité (DH)",
+    "ContractPrice": "Prix contrat HT / unité (DH)",
+    "ContractCostPerTest": "Coût par test (DH)",
     "PurchaseNoOrder": "Aucune commande à afficher.",
     "PurchaseNoLine": "Aucune ligne sur cette commande : ajoutez les articles à commander.",
     "PurchaseTotals": "Total HT {0} · TVA {1} · Total TTC {2}",

@@ -6748,6 +6748,17 @@
     "Done": "Restore finished."
   },
   "Web": {
+    "EquipmentNone": "No equipment to show.",
+    "EquipmentNoneDue": "Nothing overdue and no equipment out of service.",
+    "ContractNone": "No contract to show.",
+    "ContractNoIntervention": "No intervention recorded on this contract's analysers.",
+    "ContractNoInstrument": "No analyser to attach: create it in Reference data.",
+    "ContractFile": "Contract attached",
+    "ContractExpected": "expected {0}",
+    "ContractCommittedAmount": "Committed (MAD excl. VAT)",
+    "ContractPenaltyAmount": "Penalty (MAD)",
+    "ContractPrice": "Contract price excl. VAT / unit (MAD)",
+    "ContractCostPerTest": "Cost per test (MAD)",
     "PurchaseNoOrder": "No purchase order to show.",
     "PurchaseNoLine": "No line on this order: add the items to order.",
     "PurchaseTotals": "Total excl. VAT {0} · VAT {1} · Total incl. VAT {2}",
