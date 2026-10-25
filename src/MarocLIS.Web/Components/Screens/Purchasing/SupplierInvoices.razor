@@ -29,7 +29,7 @@
     <div class="list-tools" data-tools="filters">
         <div class="search-box">
             <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
-            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchInvoices"]" aria-label="@Texts["StocksUi.SearchInvoices"]"
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchInvoices"]" aria-label="@Texts["StocksUi.SearchInvoices"]" title="@Texts["StocksUi.SearchInvoices"]"
                    data-field="invoice-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="SearchedAsync" />
         </div>
         <div class="chips" role="group">

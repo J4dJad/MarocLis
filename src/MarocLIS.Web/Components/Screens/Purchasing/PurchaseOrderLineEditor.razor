@@ -23,7 +23,7 @@
                 <FieldMessage Refusal="Shown" Field="@PurchaseOrderScreenRules.ItemField" />
             </label>
             <label class="field">
-                <span class="field-label">@Texts["Field.Quantity"] @if (Current is { } current) { <span class="muted">(@current.UnitOfMeasure)</span> }</span>
+                <span class="field-label">@Texts["Field.Quantity"] @if (Current is { } current) { <span class="muted">&nbsp;(@current.UnitOfMeasure)</span> }</span>
                 <input class="input mono strong num @Refused(PurchaseOrderScreenRules.QuantityField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
                        maxlength="@PurchaseOrderScreenRules.QuantityMaxLength" data-field="@PurchaseOrderScreenRules.QuantityField"
                        @bind="Form.Quantity" @bind:event="oninput" />

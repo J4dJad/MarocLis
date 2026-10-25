@@ -1104,7 +1104,7 @@ html[dir=rtl] .nc [data-state=completed-on] { text-align: right; }
 .stock-range { align-self: end; padding-block-end: 8px; }
 .stock-person { display: block; min-inline-size: 9em; overflow-wrap: break-word; }
 .stock-heading { flex-wrap: wrap; flex-shrink: 0; align-items: center; margin: 0; }
-.stock-heading > .card-title { flex: 1 1 200px; min-inline-size: 0; }
+.stock-heading > .card-title { flex: 1 1 200px; min-inline-size: 0; flex-wrap: wrap; row-gap: 2px; }
 .stock-heading > .card-actions { justify-content: flex-end; align-items: center; }
 .stock-sheet-time { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .stock-sheet-time .input { inline-size: auto; }
@@ -1128,11 +1128,13 @@ html[dir=rtl] :is([data-screen=inventory], [data-screen=consumption], [data-scre
    offers side by side next to the suppliers asked, the cheapest net price on the normal fill, the
    offer chosen set apart; the totals under the lines.
 */
+.supplier-invoices .list-tools > .search-box { flex-basis: 300px; min-inline-size: 300px; }
 .purchase-totals { margin: 0; border-block-start: 1px solid var(--border); text-align: end; }
 .quote-detail { flex: none; display: flex; flex-direction: column; }
+.quality-stack > .quote-requests.card-fill { min-block-size: 150px; }
 .quote-detail > .card-heading { margin: 0; }
 .quote-sides { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); border-block-start: 1px solid var(--border); }
-.quote-sides > .table-scroll { max-block-size: 200px; border: 0; border-radius: 0; min-inline-size: 0; }
+.quote-sides > .table-scroll { max-block-size: 290px; border: 0; border-radius: 0; min-inline-size: 0; }
 .quote-sides > .table-scroll + .table-scroll { border-inline-start: 1px solid var(--border); }
 .quote-legend { margin: 0; border-block-start: 1px solid var(--border); }
 .grid td.quote-cell { white-space: normal; min-inline-size: 90px; }
