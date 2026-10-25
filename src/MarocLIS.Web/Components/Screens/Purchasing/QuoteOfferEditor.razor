@@ -1,0 +1,180 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+@inject ILogger<QuoteOfferEditor> Logger
+
+@*
+    A supplier's answer, the workstation's QuoteOfferDialog: when it came, how long it holds, the
+    delivery delay, the supplier's reference, a price, discount and VAT per article (a blank price is
+    an article not quoted), the conditions, and the quotation file it sent, uploaded from this
+    computer. What is checked and refused box by box is QuoteScreenRules'.
+*@
+<Modal Name="quote-offer" Title="@($"{Texts["Quotes.RecordOffer"]} — {Number} · {SupplierName}")" Hint="@Texts["StocksUi.Dialog.QuoteOffer"]" Large="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field">
+                <span class="field-label">@Texts["Quotes.ReceivedOn"]</span>
+                <input class="input @Refused(QuoteScreenRules.ReceivedField)" type="date" max="@Today.ToString("yyyy-MM-dd")"
+                       data-field="@QuoteScreenRules.ReceivedField" @bind="Form.ReceivedOn" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@QuoteScreenRules.ReceivedField" />
+            </label>
+            <div class="field">
+                <label class="field-check">
+                    <input type="checkbox" data-field="offer-has-valid" @bind="Form.HasValidUntil" />
+                    <span>@Texts["Quotes.ValidUntil"]</span>
+                </label>
+                <input class="input @Refused(QuoteScreenRules.ValidField)" type="date" aria-label="@Texts["Quotes.ValidUntil"]" disabled="@(!Form.HasValidUntil)"
+                       data-field="@QuoteScreenRules.ValidField" @bind="Form.ValidUntil" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@QuoteScreenRules.ValidField" />
+            </div>
+            <label class="field">
+                <span class="field-label">@Texts["Quotes.DelayDays"]</span>
+                <input class="input mono num @Refused(QuoteScreenRules.DelayField)" type="text" inputmode="numeric" dir="ltr" autocomplete="off"
+                       maxlength="@QuoteScreenRules.DelayMaxLength" data-field="@QuoteScreenRules.DelayField" @bind="Form.DelayDays" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@QuoteScreenRules.DelayField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Quotes.SupplierReference"]</span>
+                <input class="input mono" type="text" dir="ltr" autocomplete="off" maxlength="@QuoteScreenRules.ReferenceMaxLength"
+                       data-field="offer-reference" @bind="Form.SupplierReference" @bind:event="oninput" />
+            </label>
+        </div>
+        <div class="field">
+            <span class="field-label">@Texts["Quotes.Prices"]</span>
+            <div class="table-scroll quote-offer-lines @Refused(QuoteScreenRules.LinesField)" data-field="@QuoteScreenRules.LinesField">
+                <table class="grid" data-grid="offer-lines">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Inventory.Item"]</th>
+                            <th class="num">@Texts["Field.Quantity"]</th>
+                            <th class="num">@Texts["PurchaseOrders.UnitPrice"]</th>
+                            <th class="num">@Texts["PurchaseOrders.DiscountPercent"]</th>
+                            <th class="num">@Texts["PurchaseOrders.VatPercent"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < Form.Lines.Count; i++)
+                        {
+                            var line = Form.Lines[i];
+                            var (label, quantity) = QuoteScreenRules.OfferLineLabels(line.Item, Texts.Culture);
+                            var price = QuoteScreenRules.OfferField("price", i);
+                            var discount = QuoteScreenRules.OfferField("discount", i);
+                            var vat = QuoteScreenRules.OfferField("vat", i);
+                            <tr data-row="@line.Item.Code">
+                                <td><span class="cell-wrap" title="@label">@label</span></td>
+                                <td class="num nowrap"><span dir="ltr">@quantity</span></td>
+                                <td class="num stock-count">
+                                    <input class="input mono num @Refused(price)" type="text" inputmode="decimal" dir="ltr" autocomplete="off" aria-label="@Texts["PurchaseOrders.UnitPrice"]"
+                                           maxlength="@QuoteScreenRules.PriceMaxLength" data-field="@price" @bind="line.UnitPrice" @bind:event="oninput" />
+                                    <FieldMessage Refusal="Shown" Field="@price" />
+                                </td>
+                                <td class="num stock-rate">
+                                    <input class="input mono num @Refused(discount)" type="text" inputmode="decimal" dir="ltr" autocomplete="off" aria-label="@Texts["PurchaseOrders.DiscountPercent"]"
+                                           maxlength="@QuoteScreenRules.RateMaxLength" data-field="@discount" @bind="line.DiscountPercent" @bind:event="oninput" />
+                                    <FieldMessage Refusal="Shown" Field="@discount" />
+                                </td>
+                                <td class="num stock-rate">
+                                    <input class="input mono num @Refused(vat)" type="text" inputmode="decimal" dir="ltr" autocomplete="off" aria-label="@Texts["PurchaseOrders.VatPercent"]"
+                                           maxlength="@QuoteScreenRules.RateMaxLength" data-field="@vat" @bind="line.VatPercent" @bind:event="oninput" />
+                                    <FieldMessage Refusal="Shown" Field="@vat" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <FieldMessage Refusal="Shown" Field="@QuoteScreenRules.LinesField" />
+        </div>
+        <p class="small muted">@Texts["Quotes.PriceNotice"]</p>
+        <label class="field">
+            <span class="field-label">@Texts["Quotes.Conditions"]</span>
+            <input class="input" type="text" autocomplete="off" maxlength="@QuoteScreenRules.ConditionsMaxLength"
+                   data-field="offer-conditions" @bind="Form.Conditions" @bind:event="oninput" />
+        </label>
+        <div class="file-pick">
+            <label class="btn btn-secondary @(Busy || _reading ? "is-disabled" : null)" data-action="Quotes.AttachFile">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" />
+                @Texts["Quotes.AttachFile"]
+                <InputFile class="file-input" accept="@QuoteScreenRules.FileAccept" disabled="@(Busy || _reading)" OnChange="PickAsync" />
+            </label>
+            @if (Form.FileName is { } name)
+            {
+                <span class="small cell-wrap" dir="ltr" data-state="offer-file">@name</span>
+            }
+            else
+            {
+                <span class="small muted">@QuoteScreenRules.FileAccept</span>
+            }
+        </div>
+        <FieldMessage Refusal="Shown" Field="@QuoteScreenRules.FileField" />
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="@(Busy || _reading)" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public QuoteOfferForm Form { get; set; } = default!;
+    [Parameter, EditorRequired] public string Number { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string SupplierName { get; set; } = string.Empty;
+    [Parameter] public Guid SupplierId { get; set; }
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<RecordQuoteOfferRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private FieldRefusal? _refusal;
+    private bool _checked, _reading;
+
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = false;
+    }
+
+    /// <summary>The quotation file, refused for its type or its size before it is read, as the workstation's.</summary>
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        _checked = true;
+        _refusal = QuoteScreenRules.CheckFile(e.File.Name, e.File.Size);
+        if (_refusal is not null) return;
+
+        _reading = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: PurchasingDocument.MaximumBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            Form.FileContent = buffer.ToArray();
+            Form.FileName = e.File.Name;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reading the quotation file failed.");
+            _refusal = new FieldRefusal(QuoteScreenRules.FileField, "Documents.FileUnreadable");
+        }
+        finally
+        {
+            _reading = false;
+        }
+    }
+
+    private Task SaveAsync()
+    {
+        var (refusal, request) = QuoteScreenRules.CheckOffer(Form, SupplierId, Today);
+        _refusal = refusal;
+        _checked = true;
+        return request is null ? Task.CompletedTask : OnSave.InvokeAsync(request);
+    }
+}

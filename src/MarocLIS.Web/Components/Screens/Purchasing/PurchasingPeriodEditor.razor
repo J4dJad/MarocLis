@@ -1,0 +1,70 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+
+@*
+    The period of the late payments declared under loi 69-21, or of the accounting export with its
+    layout, the workstation's PurchasingPeriodDialog: the last calendar quarter offered. The file is
+    downloaded.
+*@
+<Modal Name="purchasing-period" Title="@Texts[TitleKey]" Hint="@Texts["StocksUi.Dialog.PurchasingPeriod"]" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Field.From"]</span>
+                <input class="input" type="date" data-field="period-from" @bind="Form.From" @bind:format="yyyy-MM-dd" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.To"]</span>
+                <input class="input @Refused(SupplierInvoiceScreenRules.PeriodField)" type="date" data-field="@SupplierInvoiceScreenRules.PeriodField"
+                       @bind="Form.To" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="_refusal" Field="@SupplierInvoiceScreenRules.PeriodField" />
+            </label>
+            @if (WithLayout)
+            {
+                <label class="field field-span-2">
+                    <span class="field-label">@Texts["SupplierInvoices.ExportLayout"]</span>
+                    <select class="input" data-field="export-layout" @bind="Form.Layout">
+                        @foreach (var kind in Enum.GetValues<AccountingExportLayout>())
+                        {
+                            <option value="@kind">@Texts[$"AccountingExportLayout.{kind}"]</option>
+                        }
+                    </select>
+                </label>
+            }
+            else
+            {
+                <p class="field-span-2 small muted">@Texts["SupplierInvoices.LatePaymentsNotice"]</p>
+            }
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Export" Primary="true" Disabled="Busy" OnClick="ExportAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string TitleKey { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public PurchasingPeriodForm Form { get; set; } = default!;
+    [Parameter] public bool WithLayout { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<PurchasingPeriodForm> OnExport { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private FieldRefusal? _refusal;
+
+    private string? Refused(string field) => _refusal?.Field == field ? "is-refused" : null;
+
+    private Task ExportAsync()
+    {
+        _refusal = SupplierInvoiceScreenRules.CheckPeriod(Form);
+        return _refusal is null ? OnExport.InvokeAsync(Form) : Task.CompletedTask;
+    }
+}

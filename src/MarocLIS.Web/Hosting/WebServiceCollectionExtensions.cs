@@ -69,6 +69,9 @@ public static class WebServiceCollectionExtensions
         // The lists of the stock screens — the consumption report, the count sheet and its
         // variances, a storage unit's monthly temperature sheet — downloaded rather than opened.
         services.AddSingleton<IListPdfRenderer, ListPdfRenderer>();
+        // The purchase order of « Bons de commande », downloaded to be printed or sent, and e-mailed
+        // to the supplier through the laboratory's mail account, as at the workstation.
+        services.AddSingleton<Application.Inventory.IPurchaseOrderRenderer, QuestPdfPurchaseOrderRenderer>();
 
         // ---- The read side of the screens: the workstation's queries, one per scope. The
         // workstation isolates each call on a context of its own (IsolatedQueries); a page here runs
@@ -122,6 +125,12 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<Application.Inventory.IPurchaseOrderQueries, PurchaseOrderQueries>();
         services.AddScoped<Application.Inventory.IInventoryCountQueries, InventoryCountQueries>();
         services.AddScoped<Application.Inventory.ITemperatureQueries, TemperatureQueries>();
+        // « Bons de commande », « Demandes de devis », « Factures fournisseurs » and « Évaluation
+        // fournisseurs »: the order's document, the requests and their offers, the invoices, their
+        // matching and their payments.
+        services.AddScoped<Application.Inventory.IPurchaseOrderDocumentQueries, PurchaseOrderDocumentQueries>();
+        services.AddScoped<Application.Inventory.IQuoteQueries, QuoteQueries>();
+        services.AddScoped<Application.Inventory.ISupplierInvoiceQueries, SupplierInvoiceQueries>();
 
         // ---- « Interfaces automates »: configuring the links, replaying a held transmission and
         // trying a frame, through the workstation's services. Never the host: the web server opens

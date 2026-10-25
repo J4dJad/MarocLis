@@ -1,0 +1,819 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Inventory
+@using MarocLIS.Web.Components.Screens.Stock
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<PurchaseOrders> Logger
+
+@*
+    « Bons de commande », the workstation's PurchaseOrderView: the orders — the pending priorities
+    first, a late delivery said on its date, the state's pill — and under them the lines of the order
+    selected with its totals. An order is raised, its lines added, approved by someone other than its
+    author, sent to the supplier (by e-mail with its PDF through the laboratory's mail account, or by
+    hand and confirmed), received line by line into stock as quarantined lots with the checks at the
+    door — or the delivery refused —, cancelled with its reason. Its PDF is downloaded to be printed
+    on this computer's printer. What is shown, offered and refused is PurchaseOrderScreenRules';
+    every operation goes through PurchaseOrderService, PurchaseOrderDocumentService and
+    ReceptionService, which check each right and journal each change.
+*@
+<div class="screen purchase-orders" data-screen="purchaseorders">
+    @{ var actions = Actions; var visible = Visible; }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchOrders"]" aria-label="@Texts["StocksUi.SearchOrders"]"
+                   data-field="order-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="SearchedAsync" />
+        </div>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_onlyOpen ? "is-pressed" : null)" aria-pressed="@(_onlyOpen ? "true" : "false")"
+                    data-chip="only-open" @onclick="ToggleOpenAsync">@Texts["PurchaseOrders.OnlyOpen"]</button>
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@PurchaseOrderScreenRules.Count(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => LoadAsync()" />
+        </span>
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush card-fill" data-card="orders">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="orders">
+                    <thead>
+                        <tr>
+                            <th>@Texts["PurchaseOrders.Number"]</th>
+                            <th>@Texts["Inventory.Supplier"]</th>
+                            <th>@Texts["Field.Date"]</th>
+                            <th>@Texts["PurchaseOrders.ExpectedDelivery"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                            <th class="num">@Texts["PurchaseOrders.Lines"]</th>
+                            <th class="num">@Texts["PurchaseOrders.TotalExcludingVat"]</th>
+                            <th class="num">@Texts["PurchaseOrders.TotalIncludingVat"]</th>
+                            <th>@Texts["PurchaseOrders.RaisedBy"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in visible)
+                        {
+                            var priority = PurchaseOrderScreenRules.PriorityKey(row);
+                            <tr class="@(row.Id == _selectedId ? "is-selected" : null) @StockTones.Row(PurchaseOrderScreenRules.RowInk(row))" data-row="@row.Number"
+                                @onclick="() => SelectAsync(row)">
+                                <td class="nowrap">
+                                    <span class="mono strong @StockTones.Ink(PurchaseOrderScreenRules.Ink(row, "number"))" dir="ltr">@row.Number</span>
+                                    @if (priority is not null)
+                                    {
+                                        var tone = PurchaseOrderScreenRules.PriorityTone(row);
+                                        <span class="cell-sub" data-state="priority"><Pill Text="@StockTones.Label(tone, Texts[priority])" Tone="@StockTones.Pill(tone)" /></span>
+                                    }
+                                </td>
+                                <td><span class="cell-wrap">@row.SupplierName</span></td>
+                                <td class="mono nowrap small" dir="ltr">@PurchaseOrderScreenRules.Date(row.OrderDate)</td>
+                                <td class="mono nowrap small @StockTones.Ink(PurchaseOrderScreenRules.Ink(row, "expected"))" dir="ltr"
+                                    title="@(row.IsOverdue ? Texts["PurchaseOrders.Late"] : null)">@PurchaseOrderScreenRules.Expected(row)</td>
+                                <td>
+                                    @{ var status = PurchaseOrderScreenRules.StatusTone(row.Status); }
+                                    <Pill Text="@StockTones.Label(status, Texts[PurchaseOrderScreenRules.StatusKey(row.Status)])" Tone="@StockTones.Pill(status)" />
+                                </td>
+                                <td class="num">@row.LineCount</td>
+                                <td class="num nowrap">@Mad(row.TotalExcludingVat)</td>
+                                <td class="num nowrap strong">@Mad(row.TotalIncludingVat)</td>
+                                <td class="small">
+                                    <span class="cell-wrap">@row.RaisedByName</span>
+                                    @if (row.ApprovedByName is { } approver)
+                                    {
+                                        <span class="cell-sub" title="@Texts["PurchaseOrders.ApprovedBy"]">@Texts["PurchaseOrders.ApprovedBy"] : @approver</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && visible.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.PurchaseNoOrder"]</p>
+                }
+            </div>
+        </section>
+
+        <section class="card card-flush quality-sub" data-card="lines">
+            <div class="card-heading card-pad stock-heading">
+                <h2 class="card-title cell-wrap">
+                    @Texts["PurchaseOrders.Lines"]
+                    <span class="muted small" data-state="lines-note">@PurchaseOrderScreenRules.LinesNote(Selected, Texts.T)</span>
+                </h2>
+                <div class="card-actions">
+                    <ActionButton Key="PurchaseOrders.AddLine" Hidden="@(!actions.New)" Disabled="@(!actions.AddLine || _busy)" OnClick="AskLineAsync" />
+                    <ActionButton Key="PurchaseOrders.ReceiveLine" Primary="true" Hidden="@(!Context.User.Has(Permissions.Inventory.Receive))"
+                                  Disabled="@(!actions.Receive || _busy)" OnClick="AskReceiveAsync" />
+                </div>
+            </div>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="lines">
+                    <thead>
+                        <tr>
+                            <th class="num">#</th>
+                            <th>@Texts["Inventory.Item"]</th>
+                            <th class="num">@Texts["PurchaseOrders.Ordered"]</th>
+                            <th class="num">@Texts["PurchaseOrders.Received"]</th>
+                            <th class="num">@Texts["PurchaseOrders.Outstanding"]</th>
+                            <th class="num">@Texts["PurchaseOrders.UnitPrice"]</th>
+                            <th class="num">@Texts["PurchaseOrders.Discount"]</th>
+                            <th class="num">@Texts["PurchaseOrders.Vat"]</th>
+                            <th class="num">@Texts["PurchaseOrders.TotalExcludingVat"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            <tr class="@(line.Id == _lineId ? "is-selected" : null) @(line.QuantityOutstanding == 0m ? "is-tone-muted" : null)" data-row="@line.LineNumber"
+                                @onclick="() => _lineId = line.Id">
+                                <td class="num mono">@line.LineNumber</td>
+                                <td>
+                                    <span class="list-name" title="@line.Description">@line.Description</span>
+                                    <span class="cell-sub mono" dir="ltr">@line.ItemCode</span>
+                                </td>
+                                <td class="num nowrap">@Qty(line.QuantityOrdered) <span class="muted small">@line.UnitOfMeasure</span></td>
+                                <td class="num nowrap">@Qty(line.QuantityReceived)</td>
+                                <td class="num nowrap strong">@Qty(line.QuantityOutstanding)</td>
+                                <td class="num nowrap">@Mad(line.UnitPriceMad)</td>
+                                <td class="num nowrap"><span dir="ltr">@PurchaseOrderScreenRules.Rate(line.DiscountRate, true, Texts.Culture)</span></td>
+                                <td class="num nowrap"><span dir="ltr">@PurchaseOrderScreenRules.Rate(line.VatRate, false, Texts.Culture)</span></td>
+                                <td class="num nowrap">@Mad(line.LineTotalExcludingVat)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && Selected is not null && _lines.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="no-line">@Texts["Web.PurchaseNoLine"]</p>
+                }
+            </div>
+            @if (Selected is { } order)
+            {
+                var totals = PurchaseOrderScreenRules.Totals(order);
+                <p class="card-pad small strong purchase-totals" data-state="totals">@Texts.T("Web.PurchaseTotals", Mad(totals.ExcludingVat), Mad(totals.Vat), Mad(totals.IncludingVat))</p>
+            }
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="PurchaseOrders.PrintPdf" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Printer" Title="@Texts["Web.PrintersOnWorkstation"]"
+                          Disabled="@(!actions.Print || _busy)" OnClick="DownloadPdfAsync" />
+            <ActionButton Key="PurchaseOrders.Approve" Hidden="@(!Context.User.Has(Permissions.Inventory.ApprovePurchaseOrders))"
+                          Title="@(actions.OwnOrder ? Texts["PurchaseOrders.ApproveOwnOrderTip"] : null)"
+                          Disabled="@(!actions.Approve || _busy)" OnClick="AskApproveAsync" />
+            <ActionButton Key="PurchaseOrders.SendToSupplier" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Send" Hidden="@(!actions.New)"
+                          Disabled="@(!actions.Send || _busy)" OnClick="SendAsync" />
+        </Secondary>
+        <Destructive>
+            <ActionButton Key="PurchaseOrders.CancelOrder" Danger="true" Hidden="@(!actions.New)" Disabled="@(!actions.Cancel || _busy)" OnClick="AskCancel" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="PurchaseOrders.NewOrder" Primary="true" Hidden="@(!actions.New)" Disabled="_busy" OnClick="AskNewAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.New:
+        <PurchaseOrderEditor Form="_orderForm" Suppliers="_suppliers" Today="Clock.Today" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                             OnSave="AfterOrderCheckAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Registration when _registration is { } registration:
+        <ConfirmPrompt Title="@registration.Title" Message="@registration.Text" OnYes="registration.Go" OnNo="registration.Back" />
+        break;
+
+    case Prompt.Line when Selected is { } o1:
+        <PurchaseOrderLineEditor Form="_lineForm" Number="@o1.Number" Items="_items" SupplierId="_lineSupplierId"
+                                 Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="AddLineAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Receive when Selected is { } o2 && _receiptLine is { } line:
+        <PurchaseOrderReceiptEditor Line="line" Form="_receiptForm" Number="@o2.Number" Condition="_condition" Today="Clock.Today" FindByGtin="FindByGtinAsync"
+                                    Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                                    OnSave="AfterReceiptCheckAsync" OnRefuse="AskRefuseDelivery" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.NonConformity:
+        <ConfirmPrompt Title="@Texts["PurchaseOrders.ReceiveLine"]" Message="@NonConformityQuestion" OnYes="ReceiveAsync" OnNo="BackToReceipt" />
+        break;
+
+    case Prompt.RefuseDelivery:
+        <ReasonPrompt Title="@Texts["Reception.Refuse"]" Prompt="@Texts["Reception.RefusePrompt"]"
+                      MinimumLength="InventoryScreenRules.RefusalMinLength" MaxLength="InventoryScreenRules.RefusalMaxLength"
+                      OnConfirm="RefuseDeliveryAsync" OnCancel="BackToReceipt" />
+        break;
+
+    case Prompt.Email when _email is { } email:
+        <ConfirmPrompt Title="@Texts["PurchaseOrders.SendToSupplier"]" Message="@email.Question" OnYes="EmailAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.ManualSend when _manualQuestion is { } question:
+        <Modal Name="manual-send" Title="@Texts["PurchaseOrders.SendToSupplier"]" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full" data-state="manual-send">@question</p></ChildContent>
+            <Footer>
+                <ActionButton Key="PurchaseOrders.PrintPdf" Text="@Texts["Web.PurchaseDownloadPdf"]" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download"
+                              Disabled="_busy" OnClick="DownloadPdfAsync" />
+                <ActionButton Key="Action.No" OnClick="ClosePrompt" />
+                <ActionButton Key="Action.Yes" Primary="true" Disabled="_busy" OnClick="MarkSentAsync" />
+            </Footer>
+        </Modal>
+        break;
+
+    case Prompt.Cancel when Selected is { } o3:
+        <ReasonPrompt Title="@Texts["PurchaseOrders.CancelOrder"]" Prompt="@Texts.T("PurchaseOrders.CancelPrompt", o3.Number)"
+                      MaxLength="PurchaseOrderScreenRules.CancelReasonMaxLength" OnConfirm="CancelAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="purchase-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="purchase-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, New, Registration, Line, Receive, NonConformity, RefuseDelivery, Email, ManualSend, Cancel, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    /// <summary>The supplier's lapsed registration, asked about before going on.</summary>
+    private sealed record Registration(string Title, string Text, EventCallback Go, EventCallback Back);
+
+    private sealed record Email(Guid OrderId, string Address, string Question);
+
+    private IReadOnlyList<PurchaseOrderRow> _rows = [];
+    private IReadOnlyList<PurchaseOrderLineRow> _lines = [];
+    private IReadOnlyList<SupplierOption> _suppliers = [];
+    private IReadOnlyList<OrderableItem> _items = [];
+
+    private string? _search;
+    private bool _onlyOpen = true, _loaded;
+    private Guid? _selectedId, _lineId;
+
+    private PurchaseOrderForm _orderForm = new();
+    private CreatePurchaseOrderRequest? _orderRequest;
+    private PurchaseOrderLineForm _lineForm = new();
+    private Guid? _lineSupplierId;
+
+    // The delivery being typed: kept while the non-conformity is asked about or the refusal's reason typed.
+    private ReceiveLotForm _receiptForm = new();
+    private PurchaseOrderLineRow? _receiptLine;
+    private StorageCondition _condition;
+    private PurchaseOrderReceiptVerdict? _verdict;
+
+    private Registration? _registration;
+    private Email? _email;
+    private string? _manualQuestion;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<PurchaseOrderRow> Visible =>
+        [.. PurchaseOrderScreenRules.Ordered(_rows).Where(r => StockSearch.Matches(_search, r.Number, r.SupplierName, PurchaseOrderScreenRules.Date(r.OrderDate),
+                                                                                   PurchaseOrderScreenRules.Expected(r), Texts[PurchaseOrderScreenRules.StatusKey(r.Status)],
+                                                                                   PurchaseOrderScreenRules.PriorityKey(r) is { } p ? Texts[p] : null,
+                                                                                   r.RaisedByName, r.ApprovedByName, r.SupplierReference))];
+
+    private PurchaseOrderRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId);
+
+    private PurchaseOrderLineRow? SelectedLine => _lines.FirstOrDefault(l => l.Id == _lineId);
+
+    private PurchaseOrderScreenActions Actions => PurchaseOrderScreenRules.Actions(Context.User, Selected, SelectedLine);
+
+    private string NonConformityQuestion =>
+        _verdict is { AmbientWarning: true }
+            ? $"{Texts.T("Reception.AmbientWarning", ColdChain.RangeText(_condition))}\n\n{Texts["Reception.NonConformityQuestion"]}"
+            : Texts["Reception.NonConformityQuestion"];
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string Qty(decimal value) => PurchaseOrderScreenRules.Quantity(value, Texts.Culture);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync(Guid? keep = null)
+    {
+        try
+        {
+            var onlyOpen = _onlyOpen;
+            var orders = await Scopes.RunAsync<PurchaseOrderService, Result<IReadOnlyList<PurchaseOrderRow>>>(s => s.GetOrdersAsync(onlyOpen));
+            if (orders.IsFailure)
+            {
+                _status = (Texts.Describe(orders.Errors), "critical");
+                return;
+            }
+
+            _rows = orders.Value;
+            var kept = PurchaseOrderScreenRules.Keep(_rows, keep ?? _selectedId);
+
+            // The first order shown when the one kept is gone: the priorities first, as listed.
+            _selectedId = (kept?.Id == (keep ?? _selectedId) ? kept : Visible.FirstOrDefault())?.Id;
+            await LoadLinesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the purchase orders failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadLinesAsync()
+    {
+        if (_selectedId is not { } orderId)
+        {
+            _lines = [];
+            _lineId = null;
+            return;
+        }
+
+        var lines = await Scopes.RunAsync<PurchaseOrderService, Result<IReadOnlyList<PurchaseOrderLineRow>>>(s => s.GetLinesAsync(orderId));
+        if (_selectedId != orderId) return;
+        _lines = lines.IsSuccess ? lines.Value : [];
+
+        // The first line still awaiting goods is the one a receipt most likely concerns.
+        _lineId = PurchaseOrderScreenRules.FirstOutstanding(_lines)?.Id;
+    }
+
+    private async Task SelectAsync(PurchaseOrderRow row)
+    {
+        if (row.Id == _selectedId) return;
+        _selectedId = row.Id;
+        try
+        {
+            await LoadLinesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the purchase order's lines failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task SearchedAsync()
+    {
+        var visible = Visible;
+        if (visible.Count > 0 && visible.All(r => r.Id != _selectedId)) await SelectAsync(visible[0]);
+    }
+
+    private Task ToggleOpenAsync()
+    {
+        _onlyOpen = !_onlyOpen;
+        return LoadAsync();
+    }
+
+    // ---- A new order and its lines -------------------------------------------------------------
+
+    private Task AskNewAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.New) return;
+            var suppliers = await Scopes.RunAsync<PurchaseOrderService, Result<IReadOnlyList<SupplierOption>>>(s => s.GetSuppliersAsync());
+            if (suppliers.IsFailure)
+            {
+                Say(Texts["PurchaseOrders.NewOrder"], Texts.Describe(suppliers.Errors), true);
+                return;
+            }
+
+            if (suppliers.Value.Count == 0)
+            {
+                Say(Texts["PurchaseOrders.NewOrder"], Texts["PurchaseOrders.NoApprovedSupplier"], true);
+                return;
+            }
+
+            _suppliers = suppliers.Value;
+            _orderForm = PurchaseOrderScreenRules.NewOrder(Clock.Today);
+            Open(Prompt.New);
+        });
+
+    /// <summary>A supplier whose AMMPS / DMP registration has lapsed is said, and the order raised only on « Oui ».</summary>
+    private Task AfterOrderCheckAsync(CreatePurchaseOrderRequest request) =>
+        RunAsync(async () =>
+        {
+            _orderRequest = request;
+            var supplierId = request.SupplierId;
+            var warning = await Scopes.RunAsync<ReceptionService, Error?>(s => s.RegistrationWarningAsync(supplierId));
+            if (warning is not null)
+            {
+                _registration = new Registration(Texts["PurchaseOrders.NewOrder"], $"{Texts.Describe(warning)}\n\n{Texts["Supplier.ContinueAnyway"]}",
+                                                 EventCallback.Factory.Create(this, CreateAsync), EventCallback.Factory.Create(this, () => _prompt = Prompt.New));
+                _prompt = Prompt.Registration;
+                return;
+            }
+
+            await CreateCoreAsync();
+        });
+
+    private Task CreateAsync() => RunAsync(CreateCoreAsync);
+
+    private async Task CreateCoreAsync()
+    {
+        if (_orderRequest is not { } request) return;
+        var created = await Scopes.RunAsync<PurchaseOrderService, Result<string>>(s => s.CreateAsync(request));
+        if (created.IsFailure)
+        {
+            _prompt = Prompt.New;
+            Refused(created);
+            return;
+        }
+
+        _orderRequest = null;
+        _registration = null;
+        _onlyOpen = true;
+        await LoadAsync();
+        if (_rows.FirstOrDefault(r => r.Number == created.Value) is { } order)
+        {
+            _selectedId = order.Id;
+            await LoadLinesAsync();
+        }
+
+        _status = (Texts["Message.Saved"], "normal");
+
+        // An order without lines can do nothing; the next step is obvious, so it is offered.
+        await OpenLineAsync(request.SupplierId);
+    }
+
+    private Task AskLineAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.AddLine || Selected is not { } order) return;
+            await OpenLineAsync(SupplierOf(order));
+        });
+
+    /// <summary>The order's supplier, for the articles usually bought from it and their usual discount.</summary>
+    private static Guid? SupplierOf(PurchaseOrderRow order) => order.SupplierId == Guid.Empty ? null : order.SupplierId;
+
+    private async Task OpenLineAsync(Guid? supplierId)
+    {
+        if (Selected is not { Status: PurchaseOrderStatus.Draft }) return;
+        var items = await Scopes.RunAsync<PurchaseOrderService, Result<IReadOnlyList<OrderableItem>>>(s => s.GetOrderableItemsAsync());
+        if (items.IsFailure)
+        {
+            Say(Texts["PurchaseOrders.AddLine"], Texts.Describe(items.Errors), true);
+            return;
+        }
+
+        _lineSupplierId = supplierId;
+        _items = PurchaseOrderScreenRules.ItemsFor(items.Value, supplierId);
+        _lineForm = PurchaseOrderScreenRules.NewLine(_items, supplierId);
+        Open(Prompt.Line);
+    }
+
+    private Task AddLineAsync(AddPurchaseOrderLineRequest request) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } order) return;
+            var orderId = order.Id;
+            var added = await Scopes.RunAsync<PurchaseOrderService, Result>(s => s.AddLineAsync(orderId, request));
+            if (added.IsFailure)
+            {
+                Refused(added);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            await LoadAsync(orderId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Approval, sending, the PDF ------------------------------------------------------------
+
+    /// <summary>Approval, with a warning when the supplier's AMMPS / DMP registration has lapsed.</summary>
+    private Task AskApproveAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Approve || Selected is not { } order) return;
+            var orderId = order.Id;
+            var warning = await Scopes.RunAsync<ReceptionService, Error?>(s => s.RegistrationWarningForOrderAsync(orderId));
+            if (warning is not null)
+            {
+                _registration = new Registration(Texts["PurchaseOrders.Approve"], $"{Texts.Describe(warning)}\n\n{Texts["Supplier.ContinueAnyway"]}",
+                                                 EventCallback.Factory.Create(this, ApproveAsync), EventCallback.Factory.Create(this, ClosePrompt));
+                _prompt = Prompt.Registration;
+                return;
+            }
+
+            await ApproveCoreAsync(orderId);
+        });
+
+    private Task ApproveAsync() =>
+        RunAsync(async () =>
+        {
+            if (Selected is { } order) await ApproveCoreAsync(order.Id);
+        });
+
+    private async Task ApproveCoreAsync(Guid orderId)
+    {
+        _prompt = Prompt.None;
+        _registration = null;
+        var approved = await Scopes.RunAsync<PurchaseOrderService, Result>(s => s.ApproveAsync(orderId));
+        if (approved.IsFailure)
+        {
+            Say(Texts["PurchaseOrders.Approve"], Texts.Describe(approved.Errors), true);
+            return;
+        }
+
+        await LoadAsync(orderId);
+        _status = (Texts["Message.Saved"], "normal");
+    }
+
+    /// <summary>
+    /// The approved order to its supplier: by e-mail with its PDF when the laboratory has a mail
+    /// account and the supplier an address, otherwise by hand — then marked sent only once the
+    /// operator confirms having sent it, as at the workstation.
+    /// </summary>
+    private Task SendAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Send || Selected is not { Status: PurchaseOrderStatus.Approved } order) return;
+            var orderId = order.Id;
+            var canEmail = await Scopes.RunAsync<PurchaseOrderDocumentService, bool>(s => Task.FromResult(s.CanEmail));
+            string reason;
+            if (canEmail)
+            {
+                var pdf = await Scopes.RunAsync<PurchaseOrderDocumentService, Result<PurchaseOrderPdf>>(s => s.RenderAsync(orderId));
+                if (pdf.IsFailure)
+                {
+                    Say(Texts["PurchaseOrders.SendToSupplier"], Texts.Describe(pdf.Errors), true);
+                    return;
+                }
+
+                if (PurchaseOrderScreenRules.SendRoute(canEmail, pdf.Value.SupplierEmail) == PurchaseOrderSendRoute.Email
+                    && pdf.Value.SupplierEmail is { } address)
+                {
+                    _email = new Email(orderId, address, Texts.T("PurchaseOrders.EmailQuestion", order.Number, order.SupplierName, address));
+                    _prompt = Prompt.Email;
+                    return;
+                }
+
+                reason = PurchaseOrderScreenRules.ManualReason(true, order.SupplierName, Texts.T);
+            }
+            else
+            {
+                reason = PurchaseOrderScreenRules.ManualReason(false, order.SupplierName, Texts.T);
+            }
+
+            AskManual(reason, order);
+        });
+
+    private void AskManual(string reason, PurchaseOrderRow order)
+    {
+        _manualQuestion = PurchaseOrderScreenRules.ManualQuestion(reason, order, Texts.T);
+        _prompt = Prompt.ManualSend;
+    }
+
+    /// <summary>The mail goes first, the order marked sent by the service only once it left; refused, the order may still go by hand.</summary>
+    private Task EmailAsync() =>
+        RunAsync(async () =>
+        {
+            if (_email is not { } email || Selected is not { } order) return;
+            _prompt = Prompt.None;
+            var emailed = await Scopes.RunAsync<PurchaseOrderDocumentService, Result>(s => s.EmailAsync(email.OrderId));
+            _email = null;
+            if (emailed.IsFailure)
+            {
+                AskManual(Texts.Describe(emailed.Errors), order);
+                return;
+            }
+
+            await LoadAsync(email.OrderId);
+            Say(Texts["PurchaseOrders.SendToSupplier"], Texts.T("PurchaseOrders.EmailSent", order.Number, email.Address));
+        });
+
+    private Task MarkSentAsync() =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } order) return;
+            var orderId = order.Id;
+            _prompt = Prompt.None;
+            _manualQuestion = null;
+            var sent = await Scopes.RunAsync<PurchaseOrderService, Result>(s => s.SendAsync(orderId));
+            if (sent.IsFailure)
+            {
+                Say(Texts["PurchaseOrders.SendToSupplier"], Texts.Describe(sent.Errors), true);
+                return;
+            }
+
+            await LoadAsync(orderId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    /// <summary>The order's PDF downloaded, to be printed on this computer's printer or sent by hand.</summary>
+    private async Task DownloadPdfAsync()
+    {
+        if (_busy || Selected is not { } order || !PurchaseOrderDocumentService.IsPrintable(order.Status)) return;
+        _busy = true;
+        try
+        {
+            var orderId = order.Id;
+            var pdf = await Scopes.RunAsync<PurchaseOrderDocumentService, Result<PurchaseOrderPdf>>(s => s.RenderAsync(orderId));
+            if (pdf.IsFailure)
+            {
+                Say(Texts["PurchaseOrders.PrintPdf"], Texts.Describe(pdf.Errors), true);
+                return;
+            }
+
+            await JS.InvokeVoidAsync("marocLis.download", pdf.Value.FileName, "application/pdf", pdf.Value.Content);
+            _status = (Texts.T("Web.StockDownloaded", pdf.Value.FileName), "muted");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Rendering the purchase order failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- A delivery ------------------------------------------------------------------------------
+
+    private Task AskReceiveAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Receive || SelectedLine is not { } line) return;
+            var itemId = line.StockItemId;
+            _condition = await Scopes.RunAsync<ReceptionService, StorageCondition>(s => s.StorageConditionOfAsync(itemId));
+            _receiptLine = line;
+            _receiptForm = PurchaseOrderScreenRules.NewReceipt(line, Clock.Today);
+            _verdict = null;
+            Open(Prompt.Receive);
+        });
+
+    private Task<GtinMatch?> FindByGtinAsync(string gtin) =>
+        Scopes.RunAsync<ReceptionService, GtinMatch?>(s => s.FindByGtinAsync(gtin));
+
+    /// <summary>A failed check or an out-of-range temperature opens a supplier non-conformity, asked about first.</summary>
+    private Task AfterReceiptCheckAsync(PurchaseOrderReceiptVerdict verdict)
+    {
+        _verdict = verdict;
+        if (verdict.NeedsNonConformity)
+        {
+            _prompt = Prompt.NonConformity;
+            return Task.CompletedTask;
+        }
+
+        return ReceiveAsync();
+    }
+
+    private Task ReceiveAsync() =>
+        RunAsync(async () =>
+        {
+            if (_verdict?.Request is not { } request || Selected is not { } order) return;
+            var orderId = order.Id;
+            var received = await Scopes.RunAsync<PurchaseOrderService, Result>(s => s.ReceiveLineAsync(orderId, request));
+            if (received.IsFailure)
+            {
+                _prompt = Prompt.Receive;
+                Refused(received);
+                return;
+            }
+
+            var ambient = _verdict.AmbientWarning && !_verdict.NeedsNonConformity
+                ? Texts.T("Reception.AmbientWarning", ColdChain.RangeText(_condition)) + "\n\n"
+                : string.Empty;
+            _verdict = null;
+            _receiptLine = null;
+            await LoadAsync(orderId);
+            _status = (Texts["Message.Saved"], "normal");
+            Say(Texts["PurchaseOrders.ReceiveLine"], ambient + Texts["Inventory.ReceivedQuarantined"]);
+        });
+
+    private void BackToReceipt()
+    {
+        _prompt = _receiptLine is null ? Prompt.None : Prompt.Receive;
+    }
+
+    private void AskRefuseDelivery()
+    {
+        if (_busy) return;
+        _prompt = Prompt.RefuseDelivery;
+    }
+
+    /// <summary>Refused at the door: nothing is received on the order, the refusal and its non-conformity are kept.</summary>
+    private Task RefuseDeliveryAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } order || _receiptLine is not { } line) return;
+            var request = PurchaseOrderScreenRules.Refusal(_receiptForm, order, line, reason);
+            var refused = await Scopes.RunAsync<ReceptionService, Result<string>>(s => s.RefuseDeliveryAsync(request));
+            if (refused.IsFailure)
+            {
+                Say(Texts["Reception.Refuse"], Texts.Describe(refused.Errors), true);
+                return;
+            }
+
+            _receiptLine = null;
+            Say(Texts["Reception.Refuse"], Texts.T("Reception.Refused", refused.Value));
+        });
+
+    // ---- Cancelling ------------------------------------------------------------------------------
+
+    private void AskCancel()
+    {
+        if (!Actions.Cancel || _busy) return;
+        Open(Prompt.Cancel);
+    }
+
+    private Task CancelAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } order) return;
+            var orderId = order.Id;
+            var cancelled = await Scopes.RunAsync<PurchaseOrderService, Result>(s => s.CancelAsync(orderId, reason));
+            if (cancelled.IsFailure)
+            {
+                Say(Texts["PurchaseOrders.CancelOrder"], Texts.Describe(cancelled.Errors), true);
+                return;
+            }
+
+            await LoadAsync(orderId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Plumbing --------------------------------------------------------------------------------
+
+    /// <summary>A refusal of the service kept in the dialog, next to the box it names when it names one.</summary>
+    private void Refused(Result result)
+    {
+        var error = result.FirstError;
+        var field = PurchaseOrderScreenRules.FieldOf(error) ?? InventoryScreenRules.FieldOf(error);
+        if (field is not null)
+        {
+            _fieldRefusal = new FieldRefusal(field, error.ResourceKey, error.Args.FirstOrDefault()?.ToString());
+            _dialogRefusal = null;
+        }
+        else
+        {
+            _fieldRefusal = null;
+            _dialogRefusal = Texts.Describe(result.Errors);
+        }
+    }
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A purchase order operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _registration = null;
+        _orderRequest = null;
+        _email = null;
+        _manualQuestion = null;
+        _receiptLine = null;
+        _verdict = null;
+    }
+}

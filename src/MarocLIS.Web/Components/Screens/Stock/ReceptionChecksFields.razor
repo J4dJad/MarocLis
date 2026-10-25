@@ -1,0 +1,52 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+
+@*
+    The checks at the door, the workstation's ReceptionChecksPanel: the GS1 DataMatrix scanned (a
+    wedge scanner types the symbol and presses Enter in the box), the temperature on arrival against
+    the article's range, and the checklist. Shared by the delivery of « Stocks » and the receipt of
+    a purchase order's line; what the scan does is the editor's (OnScanKey), what it says below the
+    box too (ScanContent).
+*@
+<fieldset class="stock-checks field-span-2 form-grid form-grid-2" data-card="reception-checks">
+    <legend>@Texts["Web.StockReceptionChecks"]</legend>
+    <label class="field field-span-2">
+        <span class="field-label">@Texts["Reception.Scan"]</span>
+        <input class="input mono @Refused(InventoryScreenRules.ScanField)" type="text" dir="ltr" autocomplete="off" maxlength="200"
+               data-field="@InventoryScreenRules.ScanField" title="@Texts["Web.StockScanHint"]"
+               @bind="Form.Scan" @bind:event="oninput" @onkeydown="OnScanKey" />
+        @ScanContent
+    </label>
+    @ChildContent
+    <label class="field">
+        <span class="field-label">@Texts["Reception.ArrivalTemperature"]</span>
+        <input class="input mono strong num @Refused(InventoryScreenRules.TemperatureField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+               maxlength="@InventoryScreenRules.TemperatureMaxLength" data-field="@InventoryScreenRules.TemperatureField"
+               @bind="Form.ArrivalTemperature" @bind:event="oninput" />
+        <FieldMessage Refusal="Refusal" Field="@InventoryScreenRules.TemperatureField" />
+    </label>
+    @{ var range = InventoryScreenRules.Range(Condition); }
+    <span class="small stock-range @(range.Required ? "abnormal strong" : "muted")" data-state="range">@Texts.T(range.Key, range.Range)</span>
+    <label class="field-check"><input type="checkbox" data-field="matches-order" @bind="Form.MatchesOrder" /><span>@Texts["Reception.MatchesOrder"]</span></label>
+    <label class="field-check"><input type="checkbox" data-field="packaging" @bind="Form.PackagingIntact" /><span>@Texts["Reception.PackagingIntact"]</span></label>
+    <label class="field-check"><input type="checkbox" data-field="french" @bind="Form.FrenchLabelling" /><span>@Texts["Reception.FrenchLabelling"]</span></label>
+    <label class="field-check"><input type="checkbox" data-field="certificate" @bind="Form.CertificateReceived" /><span>@Texts["Reception.CertificateReceived"]</span></label>
+    <p class="field-span-2 small muted">@Texts["Reception.ChecklistNotice"]</p>
+</fieldset>
+
+@code {
+    [Parameter, EditorRequired] public ReceiveLotForm Form { get; set; } = default!;
+    [Parameter] public StorageCondition Condition { get; set; }
+    [Parameter] public FieldRefusal? Refusal { get; set; }
+    [Parameter] public EventCallback<KeyboardEventArgs> OnScanKey { get; set; }
+
+    /// <summary>What the scan said, under its box.</summary>
+    [Parameter] public RenderFragment? ScanContent { get; set; }
+
+    /// <summary>What comes between the scan and the temperature (the other article a GTIN designates).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string? Refused(string field) => Refusal?.Field == field ? "is-refused" : null;
+}

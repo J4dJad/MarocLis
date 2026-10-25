@@ -1,0 +1,799 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Inventory
+@using MarocLIS.Web.Components.Screens.Stock
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<SupplierInvoices> Logger
+
+@*
+    « Factures fournisseurs », the workstation's SupplierInvoiceView: the invoices filtered by what is
+    due (overdue in the alarm's colours, due within 7 or 15 days, blocked), the due-date dashboard
+    under them, and the invoice selected — its totals, terms and due date, its lines, the variances of
+    the three-way match against the order and the receptions, its payments. An invoice is entered
+    against received order lines and matched; a blocked one is matched again or released for payment
+    with a justification by someone other than whoever entered it; one good to pay is paid; its scan
+    is uploaded and downloaded; it is cancelled with its reason. The late payments of loi 69-21 and the
+    accounting export are downloaded as CSV; the purchasing parameters are set here. What is shown,
+    offered and refused is SupplierInvoiceScreenRules'; every operation goes through
+    SupplierInvoiceService, which checks each right and journals each change.
+*@
+<div class="screen supplier-invoices" data-screen="supplierinvoices">
+    @{ var actions = Actions; var visible = Visible; }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchInvoices"]" aria-label="@Texts["StocksUi.SearchInvoices"]"
+                   data-field="invoice-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="SearchedAsync" />
+        </div>
+        <div class="chips" role="group">
+            @foreach (var filter in Enum.GetValues<SupplierInvoiceFilter>())
+            {
+                var f = filter;
+                <button type="button" class="chip @(_filter == f ? "is-pressed" : null)" aria-pressed="@(_filter == f ? "true" : "false")"
+                        data-chip="@f" @onclick="() => FilterAsync(f)">@SupplierInvoiceScreenRules.Chip(f, _due, Texts.T)</button>
+            }
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@Texts.T("StocksUi.Invoices", _rows.Count)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => LoadAsync()" />
+        </span>
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush card-fill" data-card="invoices">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="invoices">
+                    <thead>
+                        <tr>
+                            <th>@Texts["SupplierInvoices.Number"]</th>
+                            <th>@Texts["Inventory.Supplier"]</th>
+                            <th>@Texts["SupplierInvoices.InvoiceDate"]</th>
+                            <th>@Texts["SupplierInvoices.DueDate"]</th>
+                            <th class="num">@Texts["SupplierInvoices.DaysToDue"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                            <th class="num">@Texts["PurchaseOrders.TotalIncludingVat"]</th>
+                            <th class="num">@Texts["SupplierInvoices.Paid"]</th>
+                            <th class="num">@Texts["SupplierInvoices.Outstanding"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in visible)
+                        {
+                            var tone = SupplierInvoiceScreenRules.StatusTone(row);
+                            <tr class="@(row.Id == _selectedId ? "is-selected" : null) @StockTones.Row(SupplierInvoiceScreenRules.RowInk(row))" data-row="@row.InvoiceNumber"
+                                @onclick="() => SelectAsync(row)">
+                                <td class="nowrap">
+                                    <span class="mono strong @StockTones.Ink(SupplierInvoiceScreenRules.NumberInk(row))" dir="ltr">@row.InvoiceNumber</span>
+                                    @if (row.HasScan)
+                                    {
+                                        <span class="cell-sub" title="@Texts["SupplierInvoices.Scan"]"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileText" /> @Texts["SupplierInvoices.Scan"]</span>
+                                    }
+                                </td>
+                                <td><span class="cell-wrap">@row.SupplierName</span></td>
+                                <td class="mono nowrap small" dir="ltr">
+                                    @SupplierInvoiceScreenRules.Date(row.InvoiceDate)
+                                    @if (row.DeliveryDate is { } delivered)
+                                    {
+                                        <span class="cell-sub" title="@Texts["SupplierInvoices.DeliveryDate"]">@SupplierInvoiceScreenRules.Date(delivered)</span>
+                                    }
+                                </td>
+                                <td class="mono nowrap small" dir="ltr">@SupplierInvoiceScreenRules.Date(row.DueDate)</td>
+                                <td class="num nowrap strong"><span dir="ltr">@SupplierInvoiceScreenRules.Days(row, Texts.T)</span></td>
+                                <td><Pill Text="@StockTones.Label(tone, Texts[SupplierInvoiceScreenRules.StatusKey(row.Status)])" Tone="@StockTones.Pill(tone)" /></td>
+                                <td class="num nowrap">@Mad(row.TotalIncludingVat)</td>
+                                <td class="num nowrap">@Mad(row.AmountPaid)</td>
+                                <td class="num nowrap strong">@Mad(row.AmountOutstanding)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && visible.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.InvoiceNone"]</p>
+                }
+            </div>
+            @{ var summary = SupplierInvoiceScreenRules.DueSummary(_due, Texts.T, Mad, "Web.InvoiceDueSummary"); }
+            <p class="card-pad small @(summary.Alarm ? "critical strong" : "muted") invoice-due" data-state="due-summary">@summary.Text</p>
+        </section>
+
+        <section class="card card-flush quality-sub invoice-detail" data-card="invoice">
+            <div class="card-heading card-pad stock-heading">
+                <h2 class="card-title cell-wrap">
+                    @Texts["StocksUi.SelectedInvoice"]
+                    <span class="muted small" data-state="detail-note">@SupplierInvoiceScreenRules.DetailNote(_detail, Texts.T)</span>
+                </h2>
+                <div class="card-actions">
+                    <ActionButton Key="SupplierInvoices.Rematch" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.RefreshCw" Hidden="@(!actions.LatePayments)"
+                                  Disabled="@(!actions.Rematch || _busy)" OnClick="RematchAsync" />
+                    <ActionButton Key="SupplierInvoices.Unblock" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.LockOpen" Hidden="@(!ApproveRight)"
+                                  Title="@(actions.UnblockOwn ? Texts["SupplierInvoice_UnblockerMustDifferFromEnterer"] : null)"
+                                  Disabled="@(!actions.Unblock || _busy)" OnClick="AskUnblock" />
+                    <ActionButton Key="SupplierInvoices.RecordPayment" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Banknote" Hidden="@(!ApproveRight)"
+                                  Disabled="@(!actions.Pay || _busy)" OnClick="AskPay" />
+                </div>
+            </div>
+            @if (_detail is { } detail)
+            {
+                <div class="card-pad small muted invoice-info" data-state="detail-info">
+                    @foreach (var info in SupplierInvoiceScreenRules.DetailInfo(detail, Texts.T, Mad, "Web.InvoiceDetailInfo"))
+                    {
+                        <p class="cell-wrap">@info</p>
+                    }
+                </div>
+            }
+            <div class="tabs invoice-tabs" role="tablist">
+                @foreach (var tab in Enum.GetValues<DetailTab>())
+                {
+                    var t = tab;
+                    <button type="button" role="tab" class="tab @(t == _tab ? "is-selected" : null)" aria-selected="@(t == _tab ? "true" : "false")"
+                            data-tab="@t" @onclick="() => _tab = t">@TabCaption(t)</button>
+                }
+            </div>
+            <div class="table-scroll" role="tabpanel">
+                @switch (_tab)
+                {
+                    case DetailTab.Lines:
+                        <table class="grid" data-grid="invoice-lines">
+                            <thead>
+                                <tr>
+                                    <th class="num">#</th>
+                                    <th>@Texts["PurchaseOrders.Number"]</th>
+                                    <th>@Texts["Inventory.Item"]</th>
+                                    <th class="num">@Texts["Field.Quantity"]</th>
+                                    <th class="num">@Texts["PurchaseOrders.UnitPrice"]</th>
+                                    <th class="num">@Texts["PurchaseOrders.Vat"]</th>
+                                    <th class="num">@Texts["PurchaseOrders.TotalExcludingVat"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in _detail?.Lines ?? [])
+                                {
+                                    <tr data-row="@line.LineNumber">
+                                        <td class="num mono">@line.LineNumber</td>
+                                        <td class="mono nowrap small" dir="ltr">@line.OrderNumber</td>
+                                        <td>
+                                            <span class="list-name" title="@line.Description">@line.Description</span>
+                                            <span class="cell-sub mono" dir="ltr">@line.ItemCode</span>
+                                        </td>
+                                        <td class="num nowrap">@SupplierInvoiceScreenRules.Quantity(line.Quantity, Texts.Culture)</td>
+                                        <td class="num nowrap">@Mad(line.UnitPriceMad)</td>
+                                        <td class="num nowrap"><span dir="ltr">@SupplierInvoiceScreenRules.Percent(line.VatRate, Texts.Culture)</span></td>
+                                        <td class="num nowrap">@Mad(line.TotalExcludingVat)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        break;
+
+                    case DetailTab.Variances:
+                        <table class="grid" data-grid="invoice-variances">
+                            <thead>
+                                <tr>
+                                    <th class="num">#</th>
+                                    <th>@Texts["SupplierInvoices.Variance"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var variance in _detail?.Variances ?? [])
+                                {
+                                    <tr class="stock-warn" data-row="@variance.LineNumber">
+                                        <td class="num mono">@variance.LineNumber</td>
+                                        <td class="abnormal"><span class="cell-wrap">@SupplierInvoiceScreenRules.Variance(variance, Texts.T, Mad, Texts.Culture, "Web.InvoicePriceDiffers")</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (_detail is { Variances.Count: 0 })
+                        {
+                            <p class="muted small card-pad" data-state="no-variance">@Texts["Web.InvoiceNoVariance"]</p>
+                        }
+                        break;
+
+                    case DetailTab.Payments:
+                        <table class="grid" data-grid="invoice-payments">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Date"]</th>
+                                    <th class="num">@Texts["Web.InvoicePaymentAmount"]</th>
+                                    <th>@Texts["SupplierInvoices.Method"]</th>
+                                    <th>@Texts["SupplierInvoices.Reference"]</th>
+                                    <th>@Texts["Field.CreatedBy"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var payment in _detail?.Payments ?? [])
+                                {
+                                    <tr>
+                                        <td class="mono nowrap small" dir="ltr">@SupplierInvoiceScreenRules.Date(payment.PaidOn)</td>
+                                        <td class="num nowrap strong">@Mad(payment.AmountMad)</td>
+                                        <td>@Texts[$"SupplierPaymentMethod.{payment.Method}"]</td>
+                                        <td class="mono small"><span class="cell-wrap" dir="ltr">@payment.Reference</span></td>
+                                        <td class="small"><span class="cell-wrap">@payment.RecordedByName</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (_detail is { Payments.Count: 0 })
+                        {
+                            <p class="muted small card-pad" data-state="no-payment">@Texts["Web.InvoiceNoPayment"]</p>
+                        }
+                        break;
+                }
+            </div>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="SupplierInvoices.ViewScan" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileText" Disabled="@(!actions.ViewScan || _busy)" OnClick="ViewScanAsync" />
+            <ActionButton Key="SupplierInvoices.AttachScan" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" Hidden="@(!actions.New)"
+                          Disabled="@(!actions.Attach || _busy)" OnClick="AskAttach" />
+        </Secondary>
+        <More>
+            <ActionButton Key="SupplierInvoices.LatePayments" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileSpreadsheet" Hidden="@(!actions.LatePayments)"
+                          Disabled="_busy" OnClick="() => AskPeriod(false)" />
+            <ActionButton Key="SupplierInvoices.AccountingExport" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download" Hidden="@(!actions.Export)"
+                          Disabled="_busy" OnClick="() => AskPeriod(true)" />
+            <ActionButton Key="SupplierInvoices.Settings" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Settings2" Hidden="@(!actions.Settings)"
+                          Disabled="_busy" OnClick="AskSettingsAsync" />
+        </More>
+        <Destructive>
+            <ActionButton Key="SupplierInvoices.Cancel" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Ban" Danger="true" Hidden="@(!actions.New)"
+                          Disabled="@(!actions.Cancel || _busy)" OnClick="AskCancel" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="SupplierInvoices.New" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" Hidden="@(!actions.New)"
+                          Disabled="_busy" OnClick="AskNewAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.New:
+        <SupplierInvoiceEditor Form="_invoiceForm" Suppliers="_suppliers" Today="Clock.Today" LoadLines="LoadInvoiceableAsync"
+                               ScanName="@_scan?.Name" OnScan="s => _scan = s" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                               OnSave="CreateAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Unblock when Selected is { } r1:
+        <ReasonPrompt Title="@Texts["SupplierInvoices.Unblock"]" Prompt="@SupplierInvoiceScreenRules.UnblockPrompt(r1, Texts.T)"
+                      MinimumLength="SupplierInvoiceScreenRules.UnblockMinLength" MaxLength="SupplierInvoiceScreenRules.UnblockMaxLength"
+                      OnConfirm="UnblockAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Pay when Selected is { } r2:
+        <SupplierPaymentEditor Row="r2" Form="_paymentForm" Today="Clock.Today" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                               OnSave="PayAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.ReplaceScan:
+        <ConfirmPrompt Title="@Texts["SupplierInvoices.AttachScan"]" Message="@Texts["SupplierInvoices.ReplaceScan"]" OnYes="() => Open(Prompt.Attach)" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Attach when Selected is { } r3:
+        <Modal Name="invoice-scan" Title="@($"{Texts["SupplierInvoices.AttachScan"]} — {r3.InvoiceNumber}")" OnCancel="ClosePrompt">
+            <ChildContent>
+                <div class="file-pick">
+                    <label class="btn btn-secondary @(_busy ? "is-disabled" : null)" data-action="SupplierInvoices.AttachScan">
+                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" />
+                        @Texts["SupplierInvoices.AttachScan"]
+                        <InputFile class="file-input" accept="@SupplierInvoiceScreenRules.ScanAccept" disabled="@_busy" OnChange="AttachAsync" />
+                    </label>
+                    <span class="small muted">@Texts["Credential.ScanFiles"] (@SupplierInvoiceScreenRules.ScanAccept)</span>
+                </div>
+                <FieldMessage Refusal="_fieldRefusal" Field="@SupplierInvoiceScreenRules.ScanField" />
+                @if (_dialogRefusal is { Length: > 0 } refused)
+                {
+                    <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+                }
+            </ChildContent>
+            <Footer><ActionButton Key="Action.Close" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+
+    case Prompt.Period:
+        <PurchasingPeriodEditor TitleKey="@(_withLayout ? "SupplierInvoices.AccountingExport" : "SupplierInvoices.LatePayments")" Form="_period"
+                                WithLayout="_withLayout" Refusal="@_dialogRefusal" Busy="_busy" OnExport="ExportAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Settings when _settings is { } current:
+        <PurchasingSettingsEditor Form="_settingsForm" Current="current" Refusal="@_dialogRefusal" Busy="_busy" OnSave="SaveSettingsAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Cancel when Selected is { } r4:
+        <ReasonPrompt Title="@Texts["SupplierInvoices.Cancel"]" Prompt="@Texts.T("SupplierInvoices.CancelPrompt", r4.InvoiceNumber)"
+                      MaxLength="SupplierInvoiceScreenRules.CancelReasonMaxLength" OnConfirm="CancelAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="invoice-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="invoice-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, New, Unblock, Pay, ReplaceScan, Attach, Period, Settings, Cancel, Message }
+
+    private enum DetailTab { Lines, Variances, Payments }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<SupplierInvoiceRow> _rows = [];
+    private SupplierInvoiceDetail? _detail;
+    private SupplierDueSummary? _due;
+    private IReadOnlyList<SupplierOption> _suppliers = [];
+
+    private string? _search;
+    private SupplierInvoiceFilter _filter = SupplierInvoiceFilter.Open;
+    private DetailTab _tab;
+    private bool _loaded, _withLayout;
+    private Guid? _selectedId;
+
+    private SupplierInvoiceForm _invoiceForm = new();
+    private (string Name, byte[] Content)? _scan;
+    private SupplierPaymentForm _paymentForm = new();
+    private PurchasingPeriodForm _period = new();
+    private PurchasingSettings? _settings;
+    private PurchasingSettingsForm _settingsForm = new();
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<SupplierInvoiceRow> Visible =>
+        [.. _rows.Where(r => StockSearch.Matches(_search, r.InvoiceNumber, r.SupplierName, SupplierInvoiceScreenRules.Date(r.InvoiceDate),
+                                                  SupplierInvoiceScreenRules.Date(r.DueDate), Texts[SupplierInvoiceScreenRules.StatusKey(r.Status)],
+                                                  SupplierInvoiceScreenRules.Days(r, Texts.T), r.EnteredByName))];
+
+    private SupplierInvoiceRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId);
+
+    private SupplierInvoiceScreenActions Actions => SupplierInvoiceScreenRules.Actions(Context.User, Selected);
+
+    private bool ApproveRight => Context.User.Has(Permissions.Inventory.ApprovePayments);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string TabCaption(DetailTab tab) => tab switch
+    {
+        DetailTab.Lines => Texts["PurchaseOrders.Lines"],
+        DetailTab.Variances => SupplierInvoiceScreenRules.VariancesTab(_detail, Texts.T),
+        _ => Texts["SupplierInvoices.Payments"]
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync(Guid? keep = null)
+    {
+        try
+        {
+            var due = await Scopes.RunAsync<SupplierInvoiceService, Result<SupplierDueSummary>>(s => s.GetDueSummaryAsync());
+            if (due.IsSuccess) _due = due.Value;
+
+            var filter = _filter;
+            var invoices = await Scopes.RunAsync<SupplierInvoiceService, Result<IReadOnlyList<SupplierInvoiceRow>>>(s => s.GetInvoicesAsync(filter));
+            if (invoices.IsFailure)
+            {
+                _status = (Texts.Describe(invoices.Errors), "critical");
+                return;
+            }
+
+            _rows = invoices.Value;
+            _selectedId = SupplierInvoiceScreenRules.Keep(_rows, keep ?? _selectedId)?.Id;
+            await LoadDetailAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the supplier invoices failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadDetailAsync()
+    {
+        if (_selectedId is not { } invoiceId)
+        {
+            _detail = null;
+            return;
+        }
+
+        var detail = await Scopes.RunAsync<SupplierInvoiceService, Result<SupplierInvoiceDetail>>(s => s.GetDetailAsync(invoiceId));
+        if (_selectedId != invoiceId) return;
+        _detail = detail.IsSuccess ? detail.Value : null;
+    }
+
+    private async Task SelectAsync(SupplierInvoiceRow row)
+    {
+        if (row.Id == _selectedId) return;
+        _selectedId = row.Id;
+        try
+        {
+            await LoadDetailAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading a supplier invoice failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task SearchedAsync()
+    {
+        var visible = Visible;
+        if (visible.Count > 0 && visible.All(r => r.Id != _selectedId)) await SelectAsync(visible[0]);
+    }
+
+    private Task FilterAsync(SupplierInvoiceFilter filter)
+    {
+        if (_filter == filter) return Task.CompletedTask;
+        _filter = filter;
+        return LoadAsync();
+    }
+
+    // ---- A new invoice ---------------------------------------------------------------------------
+
+    private Task AskNewAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.New) return;
+            var suppliers = await Scopes.RunAsync<SupplierInvoiceService, Result<IReadOnlyList<SupplierOption>>>(s => s.GetSuppliersAsync());
+            if (suppliers.IsFailure)
+            {
+                Say(Texts["SupplierInvoices.New"], Texts.Describe(suppliers.Errors), true);
+                return;
+            }
+
+            if (suppliers.Value.Count == 0)
+            {
+                Say(Texts["SupplierInvoices.New"], Texts["SupplierInvoices.NoSupplierWithOrders"], true);
+                return;
+            }
+
+            _suppliers = suppliers.Value;
+            _invoiceForm = SupplierInvoiceScreenRules.NewInvoice(Clock.Today);
+            _scan = null;
+            Open(Prompt.New);
+        });
+
+    private Task<Result<IReadOnlyList<InvoiceableOrderLine>>> LoadInvoiceableAsync(Guid supplierId) =>
+        Scopes.RunAsync<SupplierInvoiceService, Result<IReadOnlyList<InvoiceableOrderLine>>>(s => s.GetInvoiceableLinesAsync(supplierId));
+
+    /// <summary>Saved, then matched three ways: blocked with its variances, or good to pay — said; the scan chosen attached after.</summary>
+    private Task CreateAsync(CreateSupplierInvoiceRequest request) =>
+        RunAsync(async () =>
+        {
+            var created = await Scopes.RunAsync<SupplierInvoiceService, Result<SupplierInvoiceOutcome>>(s => s.CreateAsync(request));
+            if (created.IsFailure)
+            {
+                Refused(created);
+                return;
+            }
+
+            var outcome = created.Value;
+            var (said, blocked) = SupplierInvoiceScreenRules.Outcome(outcome, Texts.T);
+            if (_scan is { } scan)
+            {
+                var invoiceId = outcome.InvoiceId;
+                var attached = await Scopes.RunAsync<SupplierInvoiceService, Result>(s => s.AttachScanAsync(invoiceId, scan.Name, scan.Content));
+                if (attached.IsFailure) said += "\n\n" + Texts.Describe(attached.Errors);
+            }
+
+            _scan = null;
+            _filter = SupplierInvoiceFilter.Open;
+            await LoadAsync(outcome.InvoiceId);
+            if (blocked) _tab = DetailTab.Variances;
+            Say(Texts["SupplierInvoices.New"], said, blocked);
+        });
+
+    // ---- Matching, release, payment --------------------------------------------------------------
+
+    private Task RematchAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Rematch || Selected is not { } row) return;
+            var invoiceId = row.Id;
+            var matched = await Scopes.RunAsync<SupplierInvoiceService, Result<SupplierInvoiceOutcome>>(s => s.RematchAsync(invoiceId));
+            if (matched.IsFailure)
+            {
+                Say(Texts["SupplierInvoices.Rematch"], Texts.Describe(matched.Errors), true);
+                return;
+            }
+
+            await LoadAsync(invoiceId);
+            var (said, blocked) = SupplierInvoiceScreenRules.Outcome(matched.Value, Texts.T, rematch: true);
+            Say(Texts["SupplierInvoices.Rematch"], said, blocked);
+        });
+
+    /// <summary>Whoever entered the invoice cannot release it: said before the justification is typed, as at the workstation.</summary>
+    private void AskUnblock()
+    {
+        if (!Actions.Unblock || _busy) return;
+        if (Actions.UnblockOwn)
+        {
+            Say(Texts["SupplierInvoices.Unblock"], Texts["SupplierInvoice_UnblockerMustDifferFromEnterer"], true);
+            return;
+        }
+
+        Open(Prompt.Unblock);
+    }
+
+    private Task UnblockAsync(string justification) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } row) return;
+            var invoiceId = row.Id;
+            var released = await Scopes.RunAsync<SupplierInvoiceService, Result>(s => s.UnblockAsync(invoiceId, justification));
+            if (released.IsFailure)
+            {
+                Say(Texts["SupplierInvoices.Unblock"], Texts.Describe(released.Errors), true);
+                return;
+            }
+
+            await LoadAsync(invoiceId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private void AskPay()
+    {
+        if (!Actions.Pay || _busy || Selected is not { } row) return;
+        _paymentForm = SupplierInvoiceScreenRules.NewPayment(row, Clock.Today);
+        Open(Prompt.Pay);
+    }
+
+    private Task PayAsync(RecordSupplierPaymentRequest request) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } row) return;
+            var invoiceId = row.Id;
+            var paid = await Scopes.RunAsync<SupplierInvoiceService, Result>(s => s.RecordPaymentAsync(invoiceId, request));
+            if (paid.IsFailure)
+            {
+                Refused(paid);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            _tab = DetailTab.Payments;
+            await LoadAsync(invoiceId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- The scan --------------------------------------------------------------------------------
+
+    private void AskAttach()
+    {
+        if (!Actions.Attach || _busy || Selected is not { } row) return;
+        Open(row.HasScan ? Prompt.ReplaceScan : Prompt.Attach);
+    }
+
+    private Task AttachAsync(InputFileChangeEventArgs e) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } row) return;
+            _dialogRefusal = null;
+            _fieldRefusal = SupplierInvoiceScreenRules.CheckScan(e.File.Name, e.File.Size);
+            if (_fieldRefusal is not null) return;
+
+            byte[] content;
+            await using (var stream = e.File.OpenReadStream(maxAllowedSize: SupplierInvoiceFile.MaximumBytes))
+            {
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer);
+                content = buffer.ToArray();
+            }
+
+            var invoiceId = row.Id;
+            var name = e.File.Name;
+            var attached = await Scopes.RunAsync<SupplierInvoiceService, Result>(s => s.AttachScanAsync(invoiceId, name, content));
+            if (attached.IsFailure)
+            {
+                Refused(attached);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            await LoadAsync(invoiceId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    /// <summary>The scan downloaded, to be read in the browser or printed on this computer.</summary>
+    private Task ViewScanAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.ViewScan || Selected is not { } row) return;
+            var invoiceId = row.Id;
+            var scan = await Scopes.RunAsync<SupplierInvoiceService, Result<SupplierInvoiceScan>>(s => s.GetScanAsync(invoiceId));
+            if (scan.IsFailure)
+            {
+                Say(Texts["SupplierInvoices.ViewScan"], Texts.Describe(scan.Errors), true);
+                return;
+            }
+
+            await JS.InvokeVoidAsync("marocLis.download", scan.Value.FileName, scan.Value.ContentType, scan.Value.Content);
+            _status = (Texts.T("Web.StockDownloaded", scan.Value.FileName), "muted");
+        });
+
+    // ---- Cancelling --------------------------------------------------------------------------------
+
+    private void AskCancel()
+    {
+        if (!Actions.Cancel || _busy) return;
+        Open(Prompt.Cancel);
+    }
+
+    private Task CancelAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (Selected is not { } row) return;
+            var invoiceId = row.Id;
+            var cancelled = await Scopes.RunAsync<SupplierInvoiceService, Result>(s => s.CancelAsync(invoiceId, reason));
+            if (cancelled.IsFailure)
+            {
+                Say(Texts["SupplierInvoices.Cancel"], Texts.Describe(cancelled.Errors), true);
+                return;
+            }
+
+            await LoadAsync(invoiceId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Late payments, the accounting export, the parameters ------------------------------------
+
+    private void AskPeriod(bool withLayout)
+    {
+        if (_busy || (withLayout ? !Actions.Export : !Actions.LatePayments)) return;
+        _withLayout = withLayout;
+        _period = SupplierInvoiceScreenRules.DefaultPeriod(Clock.Today);
+        Open(Prompt.Period);
+    }
+
+    private Task ExportAsync(PurchasingPeriodForm period) =>
+        RunAsync(async () =>
+        {
+            var (from, to, layout) = (period.From, period.To, period.Layout);
+            string name;
+            Result<byte[]> file;
+            if (_withLayout)
+            {
+                name = SupplierInvoiceScreenRules.ExportFileName(period);
+                file = await Scopes.RunAsync<SupplierInvoiceService, Result<byte[]>>(s => s.ExportAccountingAsync(from, to, layout));
+            }
+            else
+            {
+                var late = await Scopes.RunAsync<SupplierInvoiceService, Result<IReadOnlyList<LatePaymentRow>>>(s => s.GetLatePaymentsAsync(from, to));
+                if (late.IsFailure)
+                {
+                    _dialogRefusal = Texts.Describe(late.Errors);
+                    return;
+                }
+
+                if (late.Value.Count == 0)
+                {
+                    Say(Texts["SupplierInvoices.LatePayments"], Texts["SupplierInvoices.NoLatePayments"]);
+                    return;
+                }
+
+                name = SupplierInvoiceScreenRules.LatePaymentsFileName(period);
+                file = await Scopes.RunAsync<SupplierInvoiceService, Result<byte[]>>(s => s.ExportLatePaymentsAsync(from, to));
+            }
+
+            if (file.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(file.Errors);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", file.Value);
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    private Task AskSettingsAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Settings) return;
+            var current = await Scopes.RunAsync<SupplierInvoiceService, Result<PurchasingSettings>>(s => s.GetSettingsAsync());
+            if (current.IsFailure)
+            {
+                Say(Texts["SupplierInvoices.Settings"], Texts.Describe(current.Errors), true);
+                return;
+            }
+
+            _settings = current.Value;
+            _settingsForm = SupplierInvoiceScreenRules.SettingsForm(current.Value);
+            Open(Prompt.Settings);
+        });
+
+    private Task SaveSettingsAsync(PurchasingSettings settings) =>
+        RunAsync(async () =>
+        {
+            var saved = await Scopes.RunAsync<SupplierInvoiceService, Result>(s => s.SaveSettingsAsync(settings));
+            if (saved.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            _settings = null;
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Plumbing --------------------------------------------------------------------------------
+
+    private void Refused(Result result)
+    {
+        var error = result.FirstError;
+        if (SupplierInvoiceScreenRules.FieldOf(error) is { } field)
+        {
+            _fieldRefusal = new FieldRefusal(field, error.ResourceKey, error.Args.FirstOrDefault()?.ToString());
+            _dialogRefusal = null;
+        }
+        else
+        {
+            _fieldRefusal = null;
+            _dialogRefusal = Texts.Describe(result.Errors);
+        }
+    }
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A supplier invoice operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _scan = null;
+        _settings = null;
+    }
+}

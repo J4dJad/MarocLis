@@ -1,0 +1,104 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+
+@*
+    A payment on an invoice good to pay, the workstation's SupplierPaymentDialog: when, how much (the
+    outstanding amount offered), how — a transfer, a cheque, a bill of exchange (LCN) or cash —, its
+    reference, and the maturity of a cheque or an LCN. What is checked is SupplierInvoiceScreenRules'.
+*@
+<Modal Name="supplier-payment" Title="@($"{Texts["SupplierInvoices.RecordPayment"]} — {Row.InvoiceNumber} · {Row.SupplierName}")"
+       Hint="@Texts["StocksUi.Dialog.SupplierPayment"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <p class="small" data-state="outstanding">
+            @Texts["SupplierInvoices.Outstanding"] : <span class="strong">@Mad(Row.AmountOutstanding)</span>
+        </p>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Date"]</span>
+                <input class="input @Refused(SupplierInvoiceScreenRules.PaidOnField)" type="date" max="@Today.ToString("yyyy-MM-dd")"
+                       data-field="@SupplierInvoiceScreenRules.PaidOnField" @bind="Form.PaidOn" @bind:format="yyyy-MM-dd" @bind:after="Bump" />
+                <FieldMessage Refusal="Shown" Field="@SupplierInvoiceScreenRules.PaidOnField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Web.InvoicePaymentAmount"]</span>
+                <input class="input mono strong num @Refused(SupplierInvoiceScreenRules.AmountField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@SupplierInvoiceScreenRules.AmountMaxLength" data-field="@SupplierInvoiceScreenRules.AmountField"
+                       @bind="Form.Amount" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@SupplierInvoiceScreenRules.AmountField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["SupplierInvoices.Method"]</span>
+                <select class="input" data-field="payment-method" @bind="Form.Method" @bind:after="Bump">
+                    @foreach (var method in Enum.GetValues<SupplierPaymentMethod>())
+                    {
+                        <option value="@method">@Texts[$"SupplierPaymentMethod.{method}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["SupplierInvoices.Reference"]</span>
+                <input class="input mono @Refused(SupplierInvoiceScreenRules.ReferenceField)" type="text" dir="ltr" autocomplete="off"
+                       maxlength="@SupplierInvoiceScreenRules.ReferenceMaxLength" data-field="@SupplierInvoiceScreenRules.ReferenceField"
+                       @bind="Form.Reference" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@SupplierInvoiceScreenRules.ReferenceField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["SupplierInvoices.MaturityDate"]</span>
+                <input class="input @Refused(SupplierInvoiceScreenRules.MaturityField)" type="date" disabled="@(!SupplierInvoiceScreenRules.HasMaturity(Form.Method))"
+                       min="@Form.PaidOn.ToString("yyyy-MM-dd")" data-field="@SupplierInvoiceScreenRules.MaturityField"
+                       @bind="Form.MaturityDate" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@SupplierInvoiceScreenRules.MaturityField" />
+            </label>
+            <p class="field-span-2 small muted">@Texts["SupplierInvoices.PaymentNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public SupplierInvoiceRow Row { get; set; } = default!;
+    [Parameter, EditorRequired] public SupplierPaymentForm Form { get; set; } = default!;
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<RecordSupplierPaymentRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private FieldRefusal? _refusal;
+    private bool _checked;
+
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = false;
+    }
+
+    /// <summary>The maturity never before the payment, as the workstation's date boxes keep it.</summary>
+    private void Bump()
+    {
+        if (Form.MaturityDate < Form.PaidOn) Form.MaturityDate = Form.PaidOn;
+    }
+
+    private Task SaveAsync()
+    {
+        var (refusal, request) = SupplierInvoiceScreenRules.CheckPayment(Form);
+        _refusal = refusal;
+        _checked = true;
+        return request is null ? Task.CompletedTask : OnSave.InvokeAsync(request);
+    }
+}

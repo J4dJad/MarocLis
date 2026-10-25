@@ -1122,3 +1122,35 @@ html[dir="rtl"] .cert-list li.is-selected { box-shadow: inset -3px 0 0 var(--acc
     [data-modal=consumption-detail], [data-modal=stock-alerts], [data-modal=recall-list], [data-modal=lot-comparison]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
 html[dir=rtl] :is([data-screen=inventory], [data-screen=consumption], [data-screen=inventorycounts], [data-screen=temperatures],
     [data-modal=consumption-detail], [data-modal=stock-alerts], [data-modal=recall-list], [data-modal=lot-comparison]) .grid td:last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
+
+/*
+   The purchasing screens (purchase orders, quotations, supplier invoices, supplier evaluation): the
+   offers side by side next to the suppliers asked, the cheapest net price on the normal fill, the
+   offer chosen set apart; the totals under the lines.
+*/
+.purchase-totals { margin: 0; border-block-start: 1px solid var(--border); text-align: end; }
+.quote-detail { flex: none; display: flex; flex-direction: column; }
+.quote-detail > .card-heading { margin: 0; }
+.quote-sides { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); border-block-start: 1px solid var(--border); }
+.quote-sides > .table-scroll { max-block-size: 200px; border: 0; border-radius: 0; min-inline-size: 0; }
+.quote-sides > .table-scroll + .table-scroll { border-inline-start: 1px solid var(--border); }
+.quote-legend { margin: 0; border-block-start: 1px solid var(--border); }
+.grid td.quote-cell { white-space: normal; min-inline-size: 90px; }
+.grid td.quote-cheapest { background: var(--normal-bg); color: var(--normal); }
+.grid tr.quote-awarded td { background: var(--accent-subtle); font-weight: 600; }
+.quote-pick { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin-block: 12px; }
+.quote-pick-list { max-block-size: 300px; border: 1px solid var(--border); border-radius: var(--radius); }
+.quote-pick-list.is-refused, .invoice-entry-lines.is-refused, .quote-offer-lines.is-refused { border-color: var(--critical); }
+.quote-offer-lines, .invoice-entry-lines { max-block-size: 300px; border: 1px solid var(--border); border-radius: var(--radius); }
+.grid td.stock-rate .input { inline-size: 72px; text-align: end; }
+.grid .cell-check { inline-size: 32px; text-align: center; }
+.field-span-all { grid-column: 1 / -1; margin: 0; }
+.invoice-info p { margin: 0; }
+.invoice-info { padding-block: 0 6px; }
+.invoice-detail > .tabs { padding-inline: 8px; }
+.invoice-due { margin: 0; border-block-start: 1px solid var(--border); }
+/* Purchasing screens and their dialogs: the last column keeps clear of the box's edge, in either direction. */
+:is([data-screen=purchaseorders], [data-screen=quotes], [data-screen=supplierinvoices], [data-screen=supplierevaluation],
+    [data-modal=quote-request], [data-modal=quote-offer], [data-modal=supplier-invoice]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
+html[dir=rtl] :is([data-screen=purchaseorders], [data-screen=quotes], [data-screen=supplierinvoices], [data-screen=supplierevaluation],
+    [data-modal=quote-request], [data-modal=quote-offer], [data-modal=supplier-invoice]) .grid td:last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }

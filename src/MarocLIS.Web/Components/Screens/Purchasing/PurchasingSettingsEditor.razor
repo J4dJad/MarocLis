@@ -1,0 +1,113 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+
+@*
+    The purchasing parameters, the workstation's PurchasingSettingsDialog: the price tolerance of the
+    three-way match, the Bank Al-Maghrib key rate, the penalty margin and the fines of loi 69-21, and
+    the journals and accounts of the accounting export — one charge account per kind of article. A
+    code left blank keeps the current one. What is checked is SupplierInvoiceScreenRules'.
+*@
+<Modal Name="purchasing-settings" Title="@Texts["SupplierInvoices.Settings"]" Hint="@Texts["StocksUi.Dialog.PurchasingSettings"]" Large="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-3">
+            @foreach (var (name, key) in Rates)
+            {
+                var field = SupplierInvoiceScreenRules.SettingField(name);
+                <label class="field">
+                    <span class="field-label">@Texts[key]</span>
+                    <input class="input mono num @Refused(field)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                           maxlength="@SupplierInvoiceScreenRules.AmountMaxLength" data-field="@field"
+                           value="@Rate(name)" @oninput="e => SetRate(name, e.Value?.ToString())" />
+                    <FieldMessage Refusal="_refusal" Field="@field" />
+                </label>
+            }
+            <p class="field-span-all small abnormal">@Texts["SupplierInvoices.RatesNotice"]</p>
+        </div>
+        <div class="form-grid form-grid-4">
+            <label class="field"><span class="field-label">@Texts["SupplierInvoices.PurchaseJournal"]</span>
+                <input class="input mono" type="text" dir="ltr" maxlength="@SupplierInvoiceScreenRules.CodeMaxLength" data-field="setting-purchase-journal" @bind="Form.PurchaseJournal" /></label>
+            <label class="field"><span class="field-label">@Texts["SupplierInvoices.BankJournal"]</span>
+                <input class="input mono" type="text" dir="ltr" maxlength="@SupplierInvoiceScreenRules.CodeMaxLength" data-field="setting-bank-journal" @bind="Form.BankJournal" /></label>
+            <label class="field"><span class="field-label">@Texts["SupplierInvoices.CashJournal"]</span>
+                <input class="input mono" type="text" dir="ltr" maxlength="@SupplierInvoiceScreenRules.CodeMaxLength" data-field="setting-cash-journal" @bind="Form.CashJournal" /></label>
+            <label class="field"><span class="field-label">@Texts["SupplierInvoices.SuppliersAccount"]</span>
+                <input class="input mono" type="text" dir="ltr" maxlength="@SupplierInvoiceScreenRules.CodeMaxLength" data-field="setting-supplier-account" @bind="Form.SupplierAccount" /></label>
+            <label class="field"><span class="field-label">@Texts["SupplierInvoices.VatAccount"]</span>
+                <input class="input mono" type="text" dir="ltr" maxlength="@SupplierInvoiceScreenRules.CodeMaxLength" data-field="setting-vat-account" @bind="Form.VatAccount" /></label>
+            <label class="field"><span class="field-label">@Texts["SupplierInvoices.BankAccount"]</span>
+                <input class="input mono" type="text" dir="ltr" maxlength="@SupplierInvoiceScreenRules.CodeMaxLength" data-field="setting-bank-account" @bind="Form.BankAccount" /></label>
+            <label class="field"><span class="field-label">@Texts["SupplierInvoices.CashAccount"]</span>
+                <input class="input mono" type="text" dir="ltr" maxlength="@SupplierInvoiceScreenRules.CodeMaxLength" data-field="setting-cash-account" @bind="Form.CashAccount" /></label>
+        </div>
+        <fieldset class="stock-checks form-grid form-grid-4" data-card="charge-accounts">
+            <legend>@Texts["SupplierInvoices.ChargeAccounts"]</legend>
+            @foreach (var kind in Enum.GetValues<StockItemKind>())
+            {
+                var k = kind;
+                <label class="field"><span class="field-label">@Texts[$"StockItemKind.{k}"]</span>
+                    <input class="input mono" type="text" dir="ltr" maxlength="@SupplierInvoiceScreenRules.CodeMaxLength" data-field="setting-charge-@k"
+                           value="@Form.ChargeAccounts.GetValueOrDefault(k)" @onchange="e => Form.ChargeAccounts[k] = e.Value?.ToString()" /></label>
+            }
+        </fieldset>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public PurchasingSettingsForm Form { get; set; } = default!;
+    [Parameter, EditorRequired] public PurchasingSettings Current { get; set; } = default!;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<PurchasingSettings> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private static readonly (string Name, string Key)[] Rates =
+    [
+        ("tolerance-percent", "SupplierInvoices.TolerancePercent"), ("tolerance-mad", "Web.InvoiceToleranceAmount"),
+        ("key-rate", "SupplierInvoices.KeyRate"), ("penalty-margin", "SupplierInvoices.PenaltyMargin"),
+        ("fine-first", "SupplierInvoices.FineFirstMonth"), ("fine-next", "SupplierInvoices.FineNextMonths")
+    ];
+
+    private FieldRefusal? _refusal;
+
+    private string? Refused(string field) => _refusal?.Field == field ? "is-refused" : null;
+
+    private string? Rate(string name) => name switch
+    {
+        "tolerance-percent" => Form.TolerancePercent,
+        "tolerance-mad" => Form.ToleranceMad,
+        "key-rate" => Form.KeyRate,
+        "penalty-margin" => Form.PenaltyMargin,
+        "fine-first" => Form.FineFirstMonth,
+        _ => Form.FineNextMonths
+    };
+
+    private void SetRate(string name, string? value)
+    {
+        switch (name)
+        {
+            case "tolerance-percent": Form.TolerancePercent = value; break;
+            case "tolerance-mad": Form.ToleranceMad = value; break;
+            case "key-rate": Form.KeyRate = value; break;
+            case "penalty-margin": Form.PenaltyMargin = value; break;
+            case "fine-first": Form.FineFirstMonth = value; break;
+            default: Form.FineNextMonths = value; break;
+        }
+    }
+
+    private Task SaveAsync()
+    {
+        var (refusal, settings) = SupplierInvoiceScreenRules.CheckSettings(Form, Current);
+        _refusal = refusal;
+        return settings is null ? Task.CompletedTask : OnSave.InvokeAsync(settings);
+    }
+}

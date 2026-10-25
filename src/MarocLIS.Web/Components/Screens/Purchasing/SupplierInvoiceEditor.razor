@@ -1,0 +1,248 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+@inject ILogger<SupplierInvoiceEditor> Logger
+
+@*
+    A supplier's invoice entered, the workstation's SupplierInvoiceEntryDialog: the supplier, its
+    number and dates, then the order lines it bills — those received and not yet invoiced ticked
+    with that quantity, at the ordered net price and VAT, corrected to what the invoice says — and
+    the totals as typed. Its scan may be uploaded with it. Saved, the invoice is matched three ways
+    against the order and the receptions by the service. What is checked is SupplierInvoiceScreenRules'.
+*@
+<Modal Name="supplier-invoice" Title="@Texts["SupplierInvoices.New"]" Hint="@Texts["StocksUi.Dialog.SupplierInvoiceEntry"]" Large="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Inventory.Supplier"]</span>
+                <select class="input @Refused(SupplierInvoiceScreenRules.SupplierField)" data-field="@SupplierInvoiceScreenRules.SupplierField"
+                        value="@Form.SupplierId" @onchange="SupplierChangedAsync">
+                    @foreach (var supplier in Suppliers)
+                    {
+                        <option value="@supplier.Id">@PurchaseOrderScreenRules.SupplierLabel(supplier)</option>
+                    }
+                </select>
+                <FieldMessage Refusal="Shown" Field="@SupplierInvoiceScreenRules.SupplierField" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["SupplierInvoices.Number"]</span>
+                <input class="input mono strong @Refused(SupplierInvoiceScreenRules.NumberField)" type="text" dir="ltr" autocomplete="off"
+                       maxlength="@SupplierInvoiceScreenRules.NumberMaxLength" data-field="@SupplierInvoiceScreenRules.NumberField"
+                       @bind="Form.InvoiceNumber" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@SupplierInvoiceScreenRules.NumberField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["SupplierInvoices.InvoiceDate"]</span>
+                <input class="input @Refused(SupplierInvoiceScreenRules.InvoiceDateField)" type="date" max="@Today.ToString("yyyy-MM-dd")"
+                       data-field="@SupplierInvoiceScreenRules.InvoiceDateField" @bind="Form.InvoiceDate" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@SupplierInvoiceScreenRules.InvoiceDateField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["SupplierInvoices.ReceivedOn"]</span>
+                <input class="input @Refused(SupplierInvoiceScreenRules.ReceivedField)" type="date" max="@Today.ToString("yyyy-MM-dd")"
+                       data-field="@SupplierInvoiceScreenRules.ReceivedField" @bind="Form.ReceivedOn" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@SupplierInvoiceScreenRules.ReceivedField" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.Notes"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@SupplierInvoiceScreenRules.NotesMaxLength"
+                       data-field="invoice-notes" @bind="Form.Notes" @bind:event="oninput" />
+            </label>
+        </div>
+        <p class="small muted">@Texts["SupplierInvoices.EntryNotice"]</p>
+        <div class="table-scroll invoice-entry-lines @Refused(SupplierInvoiceScreenRules.LinesField)" data-field="@SupplierInvoiceScreenRules.LinesField">
+            <table class="grid" data-grid="invoice-lines">
+                <thead>
+                    <tr>
+                        <th class="cell-check"><span class="visually-hidden">@Texts["SupplierInvoices.QuantityInvoiced"]</span></th>
+                        <th>@Texts["PurchaseOrders.Number"]</th>
+                        <th>@Texts["Inventory.Item"]</th>
+                        <th class="num">@Texts["PurchaseOrders.Ordered"]</th>
+                        <th class="num">@Texts["PurchaseOrders.Received"]</th>
+                        <th class="num">@Texts["SupplierInvoices.AlreadyInvoiced"]</th>
+                        <th class="num">@Texts["SupplierInvoices.QuantityInvoiced"]</th>
+                        <th class="num">@Texts["SupplierInvoices.InvoicedUnitPrice"]</th>
+                        <th class="num">@Texts["PurchaseOrders.VatPercent"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < Form.Lines.Count; i++)
+                    {
+                        var line = Form.Lines[i];
+                        var l = line.Line;
+                        var label = $"{l.ItemCode} — {l.Description}";
+                        var quantity = SupplierInvoiceScreenRules.LineField("quantity", i);
+                        var price = SupplierInvoiceScreenRules.LineField("price", i);
+                        var vat = SupplierInvoiceScreenRules.LineField("vat", i);
+                        <tr data-row="@($"{l.OrderNumber}-{l.ItemCode}")">
+                            <td class="cell-check"><input type="checkbox" aria-label="@label" data-field="invoice-include-@i" @bind="line.Included" /></td>
+                            <td class="mono nowrap small" dir="ltr">@l.OrderNumber</td>
+                            <td><span class="cell-wrap" title="@label">@label</span></td>
+                            <td class="num nowrap">@Qty(l.QuantityOrdered)</td>
+                            <td class="num nowrap">@Qty(l.QuantityReceived)</td>
+                            <td class="num nowrap">@Qty(l.QuantityInvoiced)</td>
+                            <td class="num stock-count">
+                                <input class="input mono strong num @Refused(quantity)" type="text" inputmode="decimal" dir="ltr" autocomplete="off" aria-label="@Texts["SupplierInvoices.QuantityInvoiced"]"
+                                       maxlength="@SupplierInvoiceScreenRules.QuantityMaxLength" data-field="@quantity" @bind="line.Quantity" @bind:event="oninput" />
+                                <FieldMessage Refusal="Shown" Field="@quantity" />
+                            </td>
+                            <td class="num stock-count">
+                                <input class="input mono strong num @Refused(price)" type="text" inputmode="decimal" dir="ltr" autocomplete="off" aria-label="@Texts["SupplierInvoices.InvoicedUnitPrice"]"
+                                       maxlength="@SupplierInvoiceScreenRules.AmountMaxLength" data-field="@price" @bind="line.UnitPrice" @bind:event="oninput" />
+                                <FieldMessage Refusal="Shown" Field="@price" />
+                            </td>
+                            <td class="num stock-rate">
+                                <input class="input mono num @Refused(vat)" type="text" inputmode="decimal" dir="ltr" autocomplete="off" aria-label="@Texts["PurchaseOrders.VatPercent"]"
+                                       maxlength="@SupplierInvoiceScreenRules.QuantityMaxLength" data-field="@vat" @bind="line.VatPercent" @bind:event="oninput" />
+                                <FieldMessage Refusal="Shown" Field="@vat" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (!_loading && Form.SupplierId is not null && Form.Lines.Count == 0)
+            {
+                <p class="muted small card-pad" data-state="no-line">@Texts["Web.InvoiceNoOrderLine"]</p>
+            }
+        </div>
+        <FieldMessage Refusal="Shown" Field="@SupplierInvoiceScreenRules.LinesField" />
+        @{ var totals = SupplierInvoiceScreenRules.Totals(Form); }
+        <p class="small strong purchase-totals" data-state="totals">@Texts.T("Web.PurchaseTotals", Mad(totals.ExcludingVat), Mad(totals.Vat), Mad(totals.IncludingVat))</p>
+        <div class="file-pick">
+            <label class="btn btn-secondary @(Busy || _reading ? "is-disabled" : null)" data-action="SupplierInvoices.AttachScan">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" />
+                @Texts["SupplierInvoices.AttachScan"]
+                <InputFile class="file-input" accept="@SupplierInvoiceScreenRules.ScanAccept" disabled="@(Busy || _reading)" OnChange="PickScanAsync" />
+            </label>
+            @if (ScanName is { } name)
+            {
+                <span class="small cell-wrap" dir="ltr" data-state="invoice-scan">@name</span>
+            }
+            else
+            {
+                <span class="small muted">@Texts["Credential.ScanFiles"] (@SupplierInvoiceScreenRules.ScanAccept)</span>
+            }
+        </div>
+        <FieldMessage Refusal="Shown" Field="@SupplierInvoiceScreenRules.ScanField" />
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="@(Busy || _reading || _loading)" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public SupplierInvoiceForm Form { get; set; } = default!;
+    [Parameter] public IReadOnlyList<SupplierOption> Suppliers { get; set; } = [];
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public Func<Guid, Task<Result<IReadOnlyList<InvoiceableOrderLine>>>>? LoadLines { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>The scan uploaded with the invoice, attached once it is saved.</summary>
+    [Parameter] public string? ScanName { get; set; }
+    [Parameter] public EventCallback<(string Name, byte[] Content)> OnScan { get; set; }
+    [Parameter] public EventCallback<CreateSupplierInvoiceRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private FieldRefusal? _refusal;
+    private bool _checked, _reading, _loading;
+    private string? _loadRefusal;
+
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string Qty(decimal value) => SupplierInvoiceScreenRules.Quantity(value, Texts.Culture);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Form.SupplierId is null && Suppliers.Count > 0) Form.SupplierId = Suppliers[0].Id;
+        await LoadLinesAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = false;
+    }
+
+    private async Task SupplierChangedAsync(ChangeEventArgs e)
+    {
+        Form.SupplierId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _checked = false;
+        _refusal = null;
+        await LoadLinesAsync();
+    }
+
+    /// <summary>The supplier's order lines to tick, as the workstation's dialog reloads them on each supplier.</summary>
+    private async Task LoadLinesAsync()
+    {
+        Form.Lines = [];
+        if (Form.SupplierId is not { } supplierId || LoadLines is null) return;
+        _loading = true;
+        try
+        {
+            var lines = await LoadLines(supplierId);
+            if (Form.SupplierId != supplierId) return;
+            if (lines.IsFailure)
+            {
+                _checked = true;
+                _refusal = new FieldRefusal(SupplierInvoiceScreenRules.LinesField, lines.FirstError.ResourceKey);
+                return;
+            }
+
+            Form.Lines = SupplierInvoiceScreenRules.Lines(lines.Value);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the invoiceable order lines failed.");
+            _checked = true;
+            _refusal = new FieldRefusal(SupplierInvoiceScreenRules.LinesField, "Message.UnexpectedError");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task PickScanAsync(InputFileChangeEventArgs e)
+    {
+        _checked = true;
+        _refusal = SupplierInvoiceScreenRules.CheckScan(e.File.Name, e.File.Size);
+        if (_refusal is not null) return;
+
+        _reading = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: SupplierInvoiceFile.MaximumBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            await OnScan.InvokeAsync((e.File.Name, buffer.ToArray()));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reading the invoice scan failed.");
+            _refusal = new FieldRefusal(SupplierInvoiceScreenRules.ScanField, "Documents.FileUnreadable");
+        }
+        finally
+        {
+            _reading = false;
+        }
+    }
+
+    private Task SaveAsync()
+    {
+        var (refusal, request) = SupplierInvoiceScreenRules.CheckInvoice(Form, Today);
+        _refusal = refusal;
+        _checked = true;
+        return request is null ? Task.CompletedTask : OnSave.InvokeAsync(request);
+    }
+}

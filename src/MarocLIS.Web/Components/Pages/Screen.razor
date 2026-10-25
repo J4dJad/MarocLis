@@ -135,6 +135,22 @@
             <MarocLIS.Web.Components.Screens.Stock.Temperatures />
             break;
 
+        case ScreenDecision.Open when Key == "purchaseorders":
+            <MarocLIS.Web.Components.Screens.Purchasing.PurchaseOrders />
+            break;
+
+        case ScreenDecision.Open when Key == "quotes":
+            <MarocLIS.Web.Components.Screens.Purchasing.QuoteRequests />
+            break;
+
+        case ScreenDecision.Open when Key == "supplierinvoices":
+            <MarocLIS.Web.Components.Screens.Purchasing.SupplierInvoices />
+            break;
+
+        case ScreenDecision.Open when Key == "supplierevaluation":
+            <MarocLIS.Web.Components.Screens.Purchasing.SupplierEvaluation />
+            break;
+
         case ScreenDecision.Open when Key == "migration":
             <MarocLIS.Web.Components.Screens.Migration.DataMigration />
             break;

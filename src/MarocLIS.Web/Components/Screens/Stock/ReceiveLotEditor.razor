@@ -68,43 +68,26 @@
                        @bind="Form.OpenStabilityDays" />
             </label>
 
-            <fieldset class="stock-checks field-span-2 form-grid form-grid-2" data-card="reception-checks">
-                <legend>@Texts["Web.StockReceptionChecks"]</legend>
-                <label class="field field-span-2">
-                    <span class="field-label">@Texts["Reception.Scan"]</span>
-                    <input class="input mono @Refused(InventoryScreenRules.ScanField)" type="text" dir="ltr" autocomplete="off" maxlength="200"
-                           data-field="@InventoryScreenRules.ScanField" title="@Texts["Web.StockScanHint"]"
-                           @bind="Form.Scan" @bind:event="oninput" @onkeydown="ScanKeyAsync" />
+            <ReceptionChecksFields Form="Form" Condition="Item.StorageCondition" Refusal="Shown" OnScanKey="ScanKeyAsync">
+                <ScanContent>
                     @if (_scanNote is { } note)
                     {
                         <span class="message @(note.Warning ? "is-warning" : "is-info") small" role="status" data-state="scan-note">@note.Text</span>
                     }
-                </label>
-                @if (_otherItem is { } other)
-                {
-                    <div class="field-span-2 message is-warning" role="alert" data-state="gtin-other">
-                        <p class="prompt-text">@Texts.T("Reception.GtinOtherItem", other.Code, Item.Code)</p>
-                        <div class="card-actions">
-                            <ActionButton Key="Action.No" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" OnClick="() => _otherItem = null" />
-                            <ActionButton Key="Action.Yes" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" OnClick="SwitchAsync" />
+                </ScanContent>
+                <ChildContent>
+                    @if (_otherItem is { } other)
+                    {
+                        <div class="field-span-2 message is-warning" role="alert" data-state="gtin-other">
+                            <p class="prompt-text">@Texts.T("Reception.GtinOtherItem", other.Code, Item.Code)</p>
+                            <div class="card-actions">
+                                <ActionButton Key="Action.No" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" OnClick="() => _otherItem = null" />
+                                <ActionButton Key="Action.Yes" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" OnClick="SwitchAsync" />
+                            </div>
                         </div>
-                    </div>
-                }
-                <label class="field">
-                    <span class="field-label">@Texts["Reception.ArrivalTemperature"]</span>
-                    <input class="input mono strong num @Refused(InventoryScreenRules.TemperatureField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
-                           maxlength="@InventoryScreenRules.TemperatureMaxLength" data-field="@InventoryScreenRules.TemperatureField"
-                           @bind="Form.ArrivalTemperature" @bind:event="oninput" />
-                    <FieldMessage Refusal="Shown" Field="@InventoryScreenRules.TemperatureField" />
-                </label>
-                @{ var range = InventoryScreenRules.Range(Item.StorageCondition); }
-                <span class="small stock-range @(range.Required ? "abnormal strong" : "muted")" data-state="range">@Texts.T(range.Key, range.Range)</span>
-                <label class="field-check"><input type="checkbox" data-field="matches-order" @bind="Form.MatchesOrder" /><span>@Texts["Reception.MatchesOrder"]</span></label>
-                <label class="field-check"><input type="checkbox" data-field="packaging" @bind="Form.PackagingIntact" /><span>@Texts["Reception.PackagingIntact"]</span></label>
-                <label class="field-check"><input type="checkbox" data-field="french" @bind="Form.FrenchLabelling" /><span>@Texts["Reception.FrenchLabelling"]</span></label>
-                <label class="field-check"><input type="checkbox" data-field="certificate" @bind="Form.CertificateReceived" /><span>@Texts["Reception.CertificateReceived"]</span></label>
-                <p class="field-span-2 small muted">@Texts["Reception.ChecklistNotice"]</p>
-            </fieldset>
+                    }
+                </ChildContent>
+            </ReceptionChecksFields>
             <p class="field-span-2 small abnormal strong" data-state="quarantine-notice">@Texts["Inventory.ReceivedQuarantined"]</p>
         </div>
         @if (Refusal is { Length: > 0 } refused)

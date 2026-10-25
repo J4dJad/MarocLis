@@ -1,0 +1,706 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Inventory
+@using MarocLIS.Web.Components.Screens.Stock
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<QuoteRequests> Logger
+
+@*
+    « Demandes de devis », the workstation's QuoteRequestView: the requests, and under them the one
+    selected — its answers side by side, one column per supplier that answered (the cheapest net
+    price of each line on the normal fill, the shortest delay in bold, an expired offer muted and
+    never chosen), and the suppliers asked with their total, delay, validity and file. A request is
+    raised, sent to its suppliers by e-mail through the laboratory's mail account (or marked sent
+    by hand), widened to another supplier, answered, cancelled; the offer chosen drafts a purchase
+    order at its prices. What is shown, offered and refused is QuoteScreenRules'; every operation
+    goes through QuoteService, which checks each right and journals each change.
+*@
+<div class="screen quotes" data-screen="quotes">
+    @{ var actions = Actions; var visible = Visible; }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchQuotes"]" aria-label="@Texts["StocksUi.SearchQuotes"]"
+                   data-field="quote-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="SearchedAsync" />
+        </div>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_onlyOpen ? "is-pressed" : null)" aria-pressed="@(_onlyOpen ? "true" : "false")"
+                    data-chip="only-open" @onclick="ToggleOpenAsync">@Texts["Quotes.OnlyOpen"]</button>
+        </div>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@QuoteScreenRules.Count(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => LoadAsync()" />
+        </span>
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush card-fill quote-requests" data-card="requests">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="requests">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Quotes.Number"]</th>
+                            <th>@Texts["Quotes.Subject"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                            <th>@Texts["Quotes.ResponseDue"]</th>
+                            <th class="num">@Texts["Quotes.Items"]</th>
+                            <th class="num">@Texts["Quotes.Answers"]</th>
+                            <th>@Texts["PurchaseOrders.RaisedBy"]</th>
+                            <th>@Texts["Quotes.AwardedTo"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in visible)
+                        {
+                            var tone = QuoteScreenRules.StatusTone(row.Status);
+                            <tr class="@(row.Id == _selectedId ? "is-selected" : null) @StockTones.Row(QuoteScreenRules.RowInk(row))" data-row="@row.Number"
+                                @onclick="() => SelectAsync(row)">
+                                <td class="nowrap">
+                                    <span class="mono strong" dir="ltr">@row.Number</span>
+                                    <span class="cell-sub mono" dir="ltr" title="@Texts["Field.Date"]">@QuoteScreenRules.Date(row.RequestedOn)</span>
+                                </td>
+                                <td><span class="cell-wrap">@row.Subject</span></td>
+                                <td><Pill Text="@StockTones.Label(tone, Texts[QuoteScreenRules.StatusKey(row.Status)])" Tone="@StockTones.Pill(tone)" /></td>
+                                <td class="mono nowrap small" dir="ltr">@QuoteScreenRules.Date(row.ResponseDueDate)</td>
+                                <td class="num">@row.ItemCount</td>
+                                <td class="num mono nowrap" dir="ltr">@QuoteScreenRules.Answers(row)</td>
+                                <td class="small"><span class="cell-wrap">@row.RaisedByName</span></td>
+                                <td class="small">
+                                    <span class="cell-wrap">@row.AwardedSupplierName</span>
+                                    @if (row.PurchaseOrderNumber is { } number)
+                                    {
+                                        <span class="cell-sub mono" dir="ltr" title="@Texts["PurchaseOrders.Number"]">@number</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && visible.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.QuoteNone"]</p>
+                }
+            </div>
+        </section>
+
+        <section class="card card-flush quote-detail" data-card="comparison">
+            <div class="card-heading card-pad stock-heading">
+                <h2 class="card-title cell-wrap">
+                    @Texts["Quotes.Comparison"]
+                    <span class="muted small" data-state="detail-note">@QuoteScreenRules.DetailNote(_detail)</span>
+                </h2>
+                <div class="card-actions">
+                    <ActionButton Key="Quotes.RecordOffer" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Pencil" Hidden="@(!actions.New)"
+                                  Disabled="@(!actions.RecordOffer || _busy)" OnClick="AskOfferAsync" />
+                    <ActionButton Key="Quotes.Award" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.BadgeCheck" Hidden="@(!AwardRight)"
+                                  Disabled="@(!actions.Award || _busy)" OnClick="AskAward" />
+                </div>
+            </div>
+            <div class="quote-sides">
+                <div class="table-scroll" data-part="comparison">
+                    <table class="grid" data-grid="comparison">
+                        <thead>
+                            <tr>
+                                <th class="num">#</th>
+                                <th>@Texts["Inventory.Item"]</th>
+                                <th class="num">@Texts["Field.Quantity"]</th>
+                                @if (_detail is { } d1)
+                                {
+                                    @foreach (var offer in d1.Offers)
+                                    {
+                                        var header = QuoteScreenRules.OfferHeader(offer, Texts.T);
+                                        <th class="num @(offer.IsExpired ? "muted" : null)" title="@header"><span class="cell-wrap">@header</span></th>
+                                    }
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_detail is { } d2)
+                            {
+                                @foreach (var line in d2.Comparison)
+                                {
+                                    var label = QuoteScreenRules.ItemLabel(d2, line);
+                                    <tr data-row="@line.LineNumber">
+                                        <td class="num mono">@line.LineNumber</td>
+                                        <td><span class="cell-wrap" title="@label">@label</span></td>
+                                        <td class="num nowrap"><span dir="ltr">@QuoteScreenRules.LineQuantity(d2, line, Texts.Culture)</span></td>
+                                        @foreach (var offer in d2.Offers)
+                                        {
+                                            var look = QuoteScreenRules.Cell(line, offer, Texts.T, Mad);
+                                            <td class="num quote-cell @CellClass(look)" data-cell="@offer.SupplierName"
+                                                title="@CellTitle(look)">@look.Text</td>
+                                        }
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                    @if (_detail is { Offers.Count: 0 })
+                    {
+                        <p class="muted small card-pad" data-state="no-offer">@Texts["Web.QuoteNoOffer"]</p>
+                    }
+                </div>
+                <div class="table-scroll" data-part="suppliers">
+                    <table class="grid grid-select" data-grid="suppliers">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Quotes.SuppliersAsked"]</th>
+                                <th>@Texts["Quotes.Sent"]</th>
+                                <th class="num">@Texts["PurchaseOrders.TotalExcludingVat"]</th>
+                                <th class="num">@Texts["Quotes.DelayDays"]</th>
+                                <th>@Texts["Quotes.ValidUntil"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_detail is { } d3)
+                            {
+                                @foreach (var supplier in d3.Suppliers)
+                                {
+                                    var offer = d3.Offers.FirstOrDefault(o => o.SupplierId == supplier.SupplierId);
+                                    var awarded = QuoteScreenRules.IsAwarded(d3, supplier);
+                                    <tr class="@(supplier.SupplierId == _supplierId ? "is-selected" : null) @(awarded ? "quote-awarded" : null) @StockTones.Row(QuoteScreenRules.SupplierInk(d3, supplier))"
+                                        data-row="@supplier.Code" @onclick="() => _supplierId = supplier.SupplierId">
+                                        <td>
+                                            <span class="cell-wrap">@QuoteScreenRules.SupplierName(supplier, Texts.T)</span>
+                                            @if (awarded)
+                                            {
+                                                <span class="cell-sub" data-state="awarded"><Pill Text="@StockTones.Label(StockTone.Done, Texts["Quotes.AwardedTo"])" Tone="Ok" /></span>
+                                            }
+                                            else if (offer is { MissingItems: > 0 })
+                                            {
+                                                <span class="cell-sub abnormal" title="@Texts["Quotes.MissingItems"]">@Texts["Quotes.MissingItems"] : @offer.MissingItems</span>
+                                            }
+                                        </td>
+                                        <td class="small nowrap" dir="@(supplier.SentAt is null ? null : "ltr")">@QuoteScreenRules.Sent(supplier, Texts.T)</td>
+                                        <td class="num nowrap">@(offer is null ? Texts["Quotes.Awaiting"] : Mad(offer.TotalExcludingVat))</td>
+                                        <td class="num mono">@offer?.DeliveryDelayDays</td>
+                                        <td class="mono nowrap small @(offer is { IsExpired: true } ? "muted" : null)" dir="ltr">
+                                            @QuoteScreenRules.Date(offer?.ValidUntil)
+                                            @if (offer?.FileName is { } file)
+                                            {
+                                                <span class="cell-sub" title="@file"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileText" /> @Texts["Quotes.File"]</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <p class="card-pad small muted quote-legend" data-state="legend">@Texts["Quotes.Legend"]</p>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Quotes.SendByEmail" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.MailCheck" Hidden="@(!actions.New)"
+                          Disabled="@(!actions.SendByEmail || _busy)" OnClick="AskSendAsync" />
+            <ActionButton Key="Quotes.AddSupplier" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" Hidden="@(!actions.New)"
+                          Disabled="@(!actions.AddSupplier || _busy)" OnClick="AskSupplierAsync" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Quotes.MarkSent" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Send" Hidden="@(!actions.New)"
+                          Disabled="@(!actions.MarkSent || _busy)" OnClick="AskMarkSent" />
+            <ActionButton Key="Quotes.OpenFile" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FolderOpen" Disabled="@(!actions.OpenFile || _busy)" OnClick="OpenFileAsync" />
+        </More>
+        <Destructive>
+            <ActionButton Key="Quotes.Cancel" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Undo2" Danger="true" Hidden="@(!actions.New)"
+                          Disabled="@(!actions.Cancel || _busy)" OnClick="AskCancel" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Quotes.New" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" Hidden="@(!actions.New)" Disabled="_busy" OnClick="AskNewAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.New:
+        <QuoteRequestEditor Form="_requestForm" Suppliers="_options" Today="Clock.Today" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                            OnSave="CreateAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Send when _detail is { } p1:
+        <ConfirmPrompt Title="@Texts["Quotes.SendByEmail"]" Message="@Texts.T("Quotes.SendQuestion", p1.Number)" OnYes="SendAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.MarkSent when _detail is { } p2 && SelectedSupplier is { } s1:
+        <ConfirmPrompt Title="@Texts["Quotes.MarkSent"]" Message="@Texts.T("Quotes.MarkSentQuestion", p2.Number, s1.Name)" OnYes="MarkSentAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.AddSupplier when _detail is { } p3:
+        <Modal Name="quote-supplier" Title="@($"{Texts["Quotes.AddSupplier"]} — {p3.Number}")" Hint="@Texts["StocksUi.Dialog.QuoteSupplierPick"]" OnCancel="ClosePrompt">
+            <ChildContent>
+                <label class="field">
+                    <span class="field-label">@Texts["Inventory.Supplier"]</span>
+                    <select class="input" data-field="quote-add-supplier" @bind="_pickedSupplierId">
+                        @foreach (var option in _options)
+                        {
+                            <option value="@option.Id">@($"{option.Code} — {option.Name}")</option>
+                        }
+                    </select>
+                </label>
+                @if (_dialogRefusal is { Length: > 0 } refused)
+                {
+                    <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+                }
+            </ChildContent>
+            <Footer>
+                <ActionButton Key="Action.Cancel" OnClick="ClosePrompt" />
+                <ActionButton Key="Action.Save" Primary="true" Disabled="_busy" OnClick="AddSupplierAsync" />
+            </Footer>
+        </Modal>
+        break;
+
+    case Prompt.ReplaceOffer when SelectedSupplier is { } s2:
+        <ConfirmPrompt Title="@Texts["Quotes.RecordOffer"]" Message="@Texts.T("Quotes.ReplaceOfferQuestion", s2.Name)" OnYes="OpenOffer" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Offer when _detail is { } p4 && SelectedSupplier is { } s3:
+        <QuoteOfferEditor Form="_offerForm" Number="@p4.Number" SupplierName="@s3.Name" SupplierId="s3.SupplierId" Today="Clock.Today"
+                          Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="RecordOfferAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Award when SelectedOffer is { } offer:
+        <ConfirmPrompt Title="@Texts["Quotes.Award"]" Message="@QuoteScreenRules.AwardQuestion(offer, Mad(offer.TotalExcludingVat), Texts.T, "Web.QuoteAwardQuestion")"
+                       OnYes="AwardAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Cancel when _detail is { } p5:
+        <ReasonPrompt Title="@Texts["Quotes.Cancel"]" Prompt="@Texts.T("Quotes.CancelPrompt", p5.Number)"
+                      MaxLength="QuoteScreenRules.CancelReasonMaxLength" OnConfirm="CancelAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="quote-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="quote-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, New, Send, MarkSent, AddSupplier, ReplaceOffer, Offer, Award, Cancel, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<QuoteRequestRow> _rows = [];
+    private QuoteRequestDetail? _detail;
+    private IReadOnlyList<QuoteSupplierOption> _options = [];
+
+    private string? _search;
+    private bool _onlyOpen = true, _loaded;
+    private Guid? _selectedId, _supplierId;
+    private Guid _pickedSupplierId;
+
+    private QuoteRequestForm _requestForm = new();
+    private QuoteOfferForm _offerForm = new();
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<QuoteRequestRow> Visible =>
+        [.. _rows.Where(r => StockSearch.Matches(_search, r.Number, r.Subject, Texts[QuoteScreenRules.StatusKey(r.Status)], QuoteScreenRules.Date(r.RequestedOn),
+                                                  QuoteScreenRules.Date(r.ResponseDueDate), r.RaisedByName, r.AwardedSupplierName, r.PurchaseOrderNumber))];
+
+    private QuoteSupplierRow? SelectedSupplier => _detail?.Suppliers.FirstOrDefault(s => s.SupplierId == _supplierId);
+
+    private QuoteOfferRow? SelectedOffer => QuoteScreenRules.OfferOf(_detail, SelectedSupplier);
+
+    private QuoteScreenActions Actions => QuoteScreenRules.Actions(Context.User, _detail, SelectedSupplier);
+
+    /// <summary>Choosing the offer drafts a purchase order: both rights are needed, as at the workstation.</summary>
+    private bool AwardRight => Context.User.Has(Permissions.Inventory.ManageQuotes) && Context.User.Has(Permissions.Inventory.ManagePurchaseOrders);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private static string? CellClass(QuoteCellLook look) =>
+        look.Expired ? "muted" : string.Join(' ', new[] { look.Cheapest ? "quote-cheapest" : null, look.Fastest ? "strong" : null }.Where(c => c is not null));
+
+    private string? CellTitle(QuoteCellLook look) =>
+        look.Expired ? Texts["Quotes.Expired"] : look.Cheapest || look.Fastest ? Texts["Quotes.Legend"] : null;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync(Guid? keep = null)
+    {
+        try
+        {
+            var onlyOpen = _onlyOpen;
+            var requests = await Scopes.RunAsync<QuoteService, Result<IReadOnlyList<QuoteRequestRow>>>(s => s.GetRequestsAsync(onlyOpen));
+            if (requests.IsFailure)
+            {
+                _status = (Texts.Describe(requests.Errors), "critical");
+                return;
+            }
+
+            _rows = requests.Value;
+            _selectedId = QuoteScreenRules.Keep(_rows, keep ?? _selectedId)?.Id;
+            await LoadDetailAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the quotation requests failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadDetailAsync()
+    {
+        if (_selectedId is not { } requestId)
+        {
+            _detail = null;
+            _supplierId = null;
+            return;
+        }
+
+        var detail = await Scopes.RunAsync<QuoteService, Result<QuoteRequestDetail>>(s => s.GetDetailAsync(requestId));
+        if (_selectedId != requestId) return;
+        if (detail.IsFailure)
+        {
+            _status = (Texts.Describe(detail.Errors), "critical");
+            return;
+        }
+
+        _detail = detail.Value;
+        _supplierId = QuoteScreenRules.KeepSupplier(_detail, _supplierId)?.SupplierId;
+    }
+
+    private async Task SelectAsync(QuoteRequestRow row)
+    {
+        if (row.Id == _selectedId) return;
+        _selectedId = row.Id;
+        _supplierId = null;
+        try
+        {
+            await LoadDetailAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading a quotation request failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task SearchedAsync()
+    {
+        var visible = Visible;
+        if (visible.Count > 0 && visible.All(r => r.Id != _selectedId)) await SelectAsync(visible[0]);
+    }
+
+    private Task ToggleOpenAsync()
+    {
+        _onlyOpen = !_onlyOpen;
+        return LoadAsync();
+    }
+
+    // ---- A new request -------------------------------------------------------------------------
+
+    private Task AskNewAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.New) return;
+            var items = await Scopes.RunAsync<QuoteService, Result<IReadOnlyList<QuotableItem>>>(s => s.GetQuotableItemsAsync());
+            if (items.IsFailure)
+            {
+                Say(Texts["Quotes.New"], Texts.Describe(items.Errors), true);
+                return;
+            }
+
+            var suppliers = await Scopes.RunAsync<QuoteService, Result<IReadOnlyList<QuoteSupplierOption>>>(s => s.GetSuppliersAsync());
+            if (suppliers.IsFailure)
+            {
+                Say(Texts["Quotes.New"], Texts.Describe(suppliers.Errors), true);
+                return;
+            }
+
+            _options = suppliers.Value;
+            _requestForm = QuoteScreenRules.NewRequest(items.Value, Clock.Today);
+            Open(Prompt.New);
+        });
+
+    private Task CreateAsync(CreateQuoteRequest request) =>
+        RunAsync(async () =>
+        {
+            var created = await Scopes.RunAsync<QuoteService, Result<Guid>>(s => s.CreateAsync(request));
+            if (created.IsFailure)
+            {
+                Refused(created);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            _onlyOpen = true;
+            _supplierId = null;
+            await LoadAsync(created.Value);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Sending ---------------------------------------------------------------------------------
+
+    /// <summary>Without a mail account, the request goes by phone or fax and each supplier is marked sent by hand.</summary>
+    private Task AskSendAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.SendByEmail) return;
+            var canEmail = await Scopes.RunAsync<QuoteService, bool>(s => Task.FromResult(s.CanEmail));
+            if (!canEmail)
+            {
+                Say(Texts["Quotes.SendByEmail"], QuoteScreenRules.NoEmail(Texts.T), true);
+                return;
+            }
+
+            _prompt = Prompt.Send;
+        });
+
+    private Task SendAsync() =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (_detail is not { } detail) return;
+            var requestId = detail.Id;
+            var sent = await Scopes.RunAsync<QuoteService, Result<QuoteSendOutcome>>(s => s.SendByEmailAsync(requestId));
+            if (sent.IsFailure)
+            {
+                Say(Texts["Quotes.SendByEmail"], Texts.Describe(sent.Errors), true);
+                return;
+            }
+
+            await LoadAsync(requestId);
+            Say(Texts["Quotes.SendByEmail"], QuoteScreenRules.SendOutcome(sent.Value, Texts.T), sent.Value.Failed.Count > 0);
+        });
+
+    private void AskMarkSent()
+    {
+        if (!Actions.MarkSent || _busy) return;
+        Open(Prompt.MarkSent);
+    }
+
+    private Task MarkSentAsync() =>
+        StepAsync(Texts["Quotes.MarkSent"], (s, requestId, supplierId) => s.MarkSentAsync(requestId, supplierId!.Value), needsSupplier: true);
+
+    // ---- Suppliers and answers -------------------------------------------------------------------
+
+    private Task AskSupplierAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.AddSupplier || _detail is not { } detail) return;
+            var suppliers = await Scopes.RunAsync<QuoteService, Result<IReadOnlyList<QuoteSupplierOption>>>(s => s.GetSuppliersAsync());
+            if (suppliers.IsFailure)
+            {
+                Say(Texts["Quotes.AddSupplier"], Texts.Describe(suppliers.Errors), true);
+                return;
+            }
+
+            _options = QuoteScreenRules.Addable(suppliers.Value, detail);
+            if (_options.Count == 0)
+            {
+                Say(Texts["Quotes.AddSupplier"], Texts["Quotes.AllSuppliersAsked"]);
+                return;
+            }
+
+            _pickedSupplierId = _options[0].Id;
+            Open(Prompt.AddSupplier);
+        });
+
+    private Task AddSupplierAsync() =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { } detail) return;
+            var requestId = detail.Id;
+            var supplierId = _pickedSupplierId;
+            var added = await Scopes.RunAsync<QuoteService, Result>(s => s.AddSupplierAsync(requestId, supplierId));
+            if (added.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(added.Errors);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            _supplierId = supplierId;
+            await LoadAsync(requestId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    /// <summary>A supplier that already answered: its new answer replaces the previous one, asked first.</summary>
+    private void AskOfferAsync()
+    {
+        if (!Actions.RecordOffer || _busy) return;
+        if (SelectedOffer is not null)
+        {
+            Open(Prompt.ReplaceOffer);
+            return;
+        }
+
+        OpenOffer();
+    }
+
+    private void OpenOffer()
+    {
+        if (_detail is not { } detail) return;
+        _offerForm = QuoteScreenRules.NewOffer(detail, Clock.Today);
+        Open(Prompt.Offer);
+    }
+
+    private Task RecordOfferAsync(RecordQuoteOfferRequest request) =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { } detail) return;
+            var requestId = detail.Id;
+            var recorded = await Scopes.RunAsync<QuoteService, Result>(s => s.RecordOfferAsync(requestId, request));
+            if (recorded.IsFailure)
+            {
+                Refused(recorded);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            await LoadAsync(requestId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    /// <summary>The quotation file the supplier sent, downloaded.</summary>
+    private Task OpenFileAsync() =>
+        RunAsync(async () =>
+        {
+            if (SelectedOffer is not { FileName: not null } offer) return;
+            var offerId = offer.Id;
+            var file = await Scopes.RunAsync<QuoteService, Result<(string FileName, byte[] Content)>>(s => s.GetOfferFileAsync(offerId));
+            if (file.IsFailure)
+            {
+                Say(Texts["Quotes.OpenFile"], Texts.Describe(file.Errors), true);
+                return;
+            }
+
+            await JS.InvokeVoidAsync("marocLis.download", file.Value.FileName, SafeDocumentFile.ContentTypeFor(file.Value.FileName) ?? "application/octet-stream", file.Value.Content);
+            _status = (Texts.T("Web.StockDownloaded", file.Value.FileName), "muted");
+        });
+
+    // ---- The choice, the cancellation ------------------------------------------------------------
+
+    private void AskAward()
+    {
+        if (!Actions.Award || _busy) return;
+        Open(Prompt.Award);
+    }
+
+    private Task AwardAsync() =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (_detail is not { } detail || SelectedOffer is not { } offer) return;
+            var requestId = detail.Id;
+            var offerId = offer.Id;
+            var awarded = await Scopes.RunAsync<QuoteService, Result<string>>(s => s.AwardAsync(requestId, offerId));
+            if (awarded.IsFailure)
+            {
+                Say(Texts["Quotes.Award"], Texts.Describe(awarded.Errors), true);
+                return;
+            }
+
+            await LoadAsync(requestId);
+            Say(Texts["Quotes.Award"], Texts.T("Quotes.Awarded", awarded.Value));
+        });
+
+    private void AskCancel()
+    {
+        if (!Actions.Cancel || _busy) return;
+        Open(Prompt.Cancel);
+    }
+
+    private Task CancelAsync(string reason) =>
+        StepAsync(Texts["Quotes.Cancel"], (s, requestId, _) => s.CancelAsync(requestId, reason));
+
+    // ---- Plumbing --------------------------------------------------------------------------------
+
+    private Task StepAsync(string title, Func<QuoteService, Guid, Guid?, Task<Result>> step, bool needsSupplier = false) =>
+        RunAsync(async () =>
+        {
+            _prompt = Prompt.None;
+            if (_detail is not { } detail) return;
+            var supplierId = SelectedSupplier?.SupplierId;
+            if (needsSupplier && supplierId is null) return;
+            var requestId = detail.Id;
+            var done = await Scopes.RunAsync<QuoteService, Result>(s => step(s, requestId, supplierId));
+            if (done.IsFailure)
+            {
+                Say(title, Texts.Describe(done.Errors), true);
+                return;
+            }
+
+            await LoadAsync(requestId);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private void Refused(Result result)
+    {
+        var error = result.FirstError;
+        if (QuoteScreenRules.FieldOf(error) is { } field)
+        {
+            _fieldRefusal = new FieldRefusal(field, error.ResourceKey, error.Args.FirstOrDefault()?.ToString());
+            _dialogRefusal = null;
+        }
+        else
+        {
+            _fieldRefusal = null;
+            _dialogRefusal = Texts.Describe(result.Errors);
+        }
+    }
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A quotation operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

@@ -1,0 +1,269 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Reporting
+@using MarocLIS.Web.Components.Screens.Stock
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IListPdfRenderer Lists
+@inject IJSRuntime JS
+@inject ILogger<SupplierEvaluation> Logger
+
+@*
+    « Évaluation fournisseurs », the workstation's SupplierEvaluationView: for the year chosen, each
+    supplier's deliveries, the share on time, the average delay, the deliveries refused and the
+    non-conformities, the score they propose (the formula under the list), the score in force and the
+    AMMPS / DMP registration — a lapsed registration or a proposed score under 50 in the alarm's
+    colours. The proposed score, or one the evaluator types, is applied as today's evaluation; the
+    year's report is downloaded as PDF or CSV for the management review. What is shown, offered and
+    refused is SupplierEvaluationScreenRules'; SupplierEvaluationService computes and records.
+*@
+<div class="screen supplier-evaluation" data-screen="supplierevaluation">
+    @{ var actions = Actions; var visible = Visible; var headers = SupplierEvaluationScreenRules.Headers(Texts.T); }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["StocksUi.SearchSuppliers"]" aria-label="@Texts["StocksUi.SearchSuppliers"]"
+                   data-field="supplier-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" @bind:after="Searched" />
+        </div>
+        <label class="field-inline">
+            <span>@Texts["SupplierEvaluation.Year"]</span>
+            <input class="input input-year mono" type="number" min="@SupplierEvaluationScreenRules.YearMin" max="@SupplierEvaluationScreenRules.YearMax" dir="ltr"
+                   data-field="year" value="@_year" @onchange="YearChangedAsync" />
+        </label>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@SupplierEvaluationScreenRules.Count(_rows, _year, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush card-fill" data-card="evaluation">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="evaluation">
+                    <thead>
+                        <tr>
+                            @for (var i = 0; i < headers.Count; i++)
+                            {
+                                <th class="@(Numeric(i) ? "num" : null)" title="@headers[i]">@headers[i]</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in visible)
+                        {
+                            var cells = SupplierEvaluationScreenRules.Cells(row);
+                            var ink = SupplierEvaluationScreenRules.Ink(row);
+                            <tr class="@(row.SupplierId == _selectedId ? "is-selected" : null) @StockTones.Row(ink)" data-row="@row.Code"
+                                @onclick="() => _selectedId = row.SupplierId">
+                                <td class="mono strong nowrap" dir="ltr">@cells[0]</td>
+                                <td><span class="cell-wrap">@cells[1]</span></td>
+                                @for (var i = 2; i <= 8; i++)
+                                {
+                                    <td class="num nowrap @(i == 7 ? "strong" : null)"><span dir="ltr">@cells[i]</span></td>
+                                }
+                                <td class="small"><span class="cell-wrap" dir="ltr">@cells[9]</span></td>
+                                <td class="mono nowrap small @(row.RegistrationExpired ? "critical strong" : null)" dir="ltr">@cells[10]</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && visible.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.EvaluationNone"]</p>
+                }
+            </div>
+            <p class="card-pad small muted" data-state="formula">@Texts["SupplierEvaluation.Formula"]</p>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="SupplierEvaluation.Pdf" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Printer" Title="@Texts["Web.PrintersOnWorkstation"]"
+                          Hidden="@(!actions.Pdf)" Disabled="@(_rows.Count == 0 || _busy)" OnClick="PrintAsync" />
+            <ActionButton Key="SupplierEvaluation.Csv" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download" Hidden="@(!actions.Csv)"
+                          Disabled="@(_rows.Count == 0 || _busy)" OnClick="ExportAsync" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="SupplierEvaluation.Apply" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.BadgeCheck"
+                          Hidden="@(!Context.User.Has(Permissions.Inventory.ManagePurchaseOrders))" Disabled="@(!actions.Apply || _busy)" OnClick="AskApply" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Apply when Selected is { } row:
+        <TextPrompt Name="evaluation-score" Title="@Texts["SupplierEvaluation.Apply"]" Prompt="@SupplierEvaluationScreenRules.ApplyPrompt(row, Texts.T)"
+                    Initial="@SupplierEvaluationScreenRules.Initial(row)" MaxLength="SupplierEvaluationScreenRules.ScoreMaxLength" Required="true"
+                    Refusal="@_dialogRefusal" OnConfirm="ApplyAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="evaluation-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full critical" data-state="evaluation-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Apply, Message }
+
+    private sealed record Message(string Title, string Text);
+
+    private IReadOnlyList<SupplierEvaluationRow> _rows = [];
+    private string? _search;
+    private int _year;
+    private bool _loaded;
+    private Guid? _selectedId;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private IReadOnlyList<SupplierEvaluationRow> Visible =>
+        [.. _rows.Where(r => StockSearch.Matches(_search, [.. SupplierEvaluationScreenRules.Cells(r)]))];
+
+    private SupplierEvaluationRow? Selected => _rows.FirstOrDefault(r => r.SupplierId == _selectedId);
+
+    private SupplierEvaluationScreenActions Actions => SupplierEvaluationScreenRules.Actions(Context.User, Selected);
+
+    /// <summary>The counts, the rates and the scores read right-aligned, as at the workstation.</summary>
+    private static bool Numeric(int column) => column is >= 2 and <= 8;
+
+    protected override Task OnInitializedAsync()
+    {
+        _year = SupplierEvaluationScreenRules.Year(Clock.Today.Year);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var year = _year;
+            var rows = await Scopes.RunAsync<SupplierEvaluationService, Result<IReadOnlyList<SupplierEvaluationRow>>>(s => s.EvaluateAsync(year));
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+            _selectedId = SupplierEvaluationScreenRules.Keep(_rows, _selectedId)?.SupplierId;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Computing the supplier evaluation failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private Task YearChangedAsync(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var typed)) return Task.CompletedTask;
+        _year = SupplierEvaluationScreenRules.Year(typed);
+        return LoadAsync();
+    }
+
+    private void Searched()
+    {
+        var visible = Visible;
+        if (visible.Count > 0 && visible.All(r => r.SupplierId != _selectedId)) _selectedId = visible[0].SupplierId;
+    }
+
+    private void AskApply()
+    {
+        if (!Actions.Apply || _busy) return;
+        _dialogRefusal = null;
+        _prompt = Prompt.Apply;
+    }
+
+    /// <summary>The proposed score, or one the evaluator types instead, applied as today's evaluation.</summary>
+    private Task ApplyAsync(string answer) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { Kpis.ProposedScore: { } proposed } row) return;
+            var (typed, refusal) = SupplierEvaluationScreenRules.ReadScore(answer);
+            if (typed is not { } score)
+            {
+                _dialogRefusal = FieldMessage.Say(Texts, refusal!);
+                return;
+            }
+
+            var supplierId = row.SupplierId;
+            var year = _year;
+            var applied = await Scopes.RunAsync<SupplierEvaluationService, Result>(s => s.ApplyScoreAsync(supplierId, score, proposed, year));
+            if (applied.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(applied.Errors);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private Task PrintAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Pdf) return;
+            var document = new ListDocument(
+                SupplierEvaluationScreenRules.ReportTitle(_year, Texts.T),
+                SupplierEvaluationScreenRules.ReportSubtitle(Clock.Now, Texts.T),
+                SupplierEvaluationScreenRules.Headers(Texts.T),
+                [.. _rows.Select(SupplierEvaluationScreenRules.Cells)],
+                Texts.Language == AppLanguage.Arabic);
+            var name = SupplierEvaluationScreenRules.FileName(_year, "pdf");
+            await JS.InvokeVoidAsync("marocLis.download", name, "application/pdf", Lists.Render(document));
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    private Task ExportAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Csv) return;
+            var name = SupplierEvaluationScreenRules.FileName(_year, "csv");
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", PurchasingCsv.SupplierReport(_rows, SupplierEvaluationScreenRules.Headers(Texts.T)));
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A supplier evaluation operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+    }
+}
