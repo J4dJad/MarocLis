@@ -255,7 +255,7 @@ public sealed class EquipmentScreenRulesTests
         InstrumentContractScreenRules.Period(tests).Should().Be("01/01/26–31/12/26");
 
         var money = Contract(basis: CommitmentBasis.PurchaseAmountPerYear).Commitment;
-        InstrumentContractScreenRules.Figure(26_000m, money, m => $"{m:0.00} DH", culture).Should().Be("26000.00 DH");
+        InstrumentContractScreenRules.Figure(26_000m, money, m => m.ToString("0.00", culture) + " DH", culture).Should().Be("26000.00 DH");
 
         var none = Contract(basis: CommitmentBasis.None).Commitment;
         InstrumentContractScreenRules.Figure(26_000m, none, m => "x", culture).Should().BeEmpty();
