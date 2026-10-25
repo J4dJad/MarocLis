@@ -67,7 +67,7 @@
                                     <span class="list-name" title="@name">@name</span>
                                     <span class="cell-sub">@Texts[$"StockItemKind.{row.Kind}"]</span>
                                 </td>
-                                <td class="num nowrap @warn">@InventoryScreenRules.OnHand(row, Texts.Culture)</td>
+                                <td class="num nowrap @warn"><span dir="ltr">@InventoryScreenRules.OnHand(row, Texts.Culture)</span></td>
                                 <td class="num nowrap">@InventoryScreenRules.ReorderPoint(row, Texts.Culture)</td>
                                 <td class="nowrap @warn" dir="ltr">@InventoryScreenRules.Lots(row)</td>
                                 <td class="mono nowrap small @warn" dir="ltr">@InventoryScreenRules.Expiry(row)</td>
@@ -85,7 +85,7 @@
         </section>
 
         <section class="card card-flush quality-sub" data-card="lots">
-            <div class="card-heading card-pad">
+            <div class="card-heading card-pad stock-heading">
                 <h2 class="card-title cell-wrap">
                     @Texts["Inventory.Lots"]
                     <span class="muted small" data-state="lot-note">@InventoryScreenRules.LotNote(Selected, _lots, _onlyQuarantined, Texts.T)</span>

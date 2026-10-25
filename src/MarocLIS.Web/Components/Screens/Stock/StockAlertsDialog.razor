@@ -29,7 +29,7 @@
                         <tr class="stock-alarm @(s.IsCritical ? "stock-alarm-strong" : null)" data-row="@s.Code">
                             <td class="mono nowrap" dir="ltr">@s.Code</td>
                             <td><span class="list-name" title="@name">@name</span></td>
-                            <td class="num nowrap">@InventoryScreenRules.Amount(s.Usable, Texts.Culture) @s.UnitOfMeasure</td>
+                            <td class="num nowrap"><span dir="ltr">@InventoryScreenRules.Amount(s.Usable, Texts.Culture) @s.UnitOfMeasure</span></td>
                             <td class="num nowrap">@InventoryScreenRules.Amount(s.AverageDailyConsumption, Texts.Culture)</td>
                             <td class="mono nowrap" dir="ltr">@InventoryScreenRules.LongDate(s.StockOutDate)</td>
                             <td class="nowrap">@Texts.T("Stock.Days", s.LeadTimeDays)</td>
@@ -66,7 +66,7 @@
                             <td><span class="list-name" title="@name">@name</span></td>
                             <td class="mono nowrap" dir="ltr">@l.LotNumber</td>
                             <td class="mono nowrap @(tone == StockTone.Critical ? null : "abnormal strong")" dir="ltr">@InventoryScreenRules.LongDate(l.ExpiryDate)</td>
-                            <td class="num nowrap">@InventoryScreenRules.Amount(l.QuantityRemaining, Texts.Culture) @l.UnitOfMeasure</td>
+                            <td class="num nowrap"><span dir="ltr">@InventoryScreenRules.Amount(l.QuantityRemaining, Texts.Culture) @l.UnitOfMeasure</span></td>
                             <td><Pill Text="@StockTones.Label(tone, Texts[$"ExpiryAlertLevel.{l.Level}"])" Tone="@StockTones.Pill(tone)" /></td>
                         </tr>
                     }

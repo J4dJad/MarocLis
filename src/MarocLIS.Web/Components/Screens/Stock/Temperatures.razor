@@ -87,7 +87,7 @@
         </section>
 
         <section class="card card-flush quality-sub" data-card="readings">
-            <div class="card-heading card-pad">
+            <div class="card-heading card-pad stock-heading">
                 <h2 class="card-title cell-wrap">
                     @Texts["Temperatures.Readings"]
                     <span class="muted small" data-state="readings-note">@TemperatureScreenRules.ReadingsNote(Selected, _readings.Count)</span>
@@ -125,7 +125,7 @@
                                 <td class="num mono nowrap" dir="ltr">@cells[2]</td>
                                 <td class="num mono nowrap" dir="ltr">@cells[3]</td>
                                 <td><Pill Text="@StockTones.Label(tone, cells[4])" Tone="@StockTones.Pill(tone)" /></td>
-                                <td class="small"><span class="cell-wrap">@cells[5]</span></td>
+                                <td class="small"><span class="stock-person">@cells[5]</span></td>
                                 <td><span class="clamp-2 small" title="@cells[6]">@cells[6]</span></td>
                                 <td class="mono small nowrap" dir="ltr">@cells[7]</td>
                             </tr>
