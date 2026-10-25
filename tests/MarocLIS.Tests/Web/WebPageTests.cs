@@ -80,6 +80,18 @@ public sealed class WebPageTests : BunitContext
     }
 
     [Fact]
+    public void QualityControl_TypedWithoutTheRight_IsRefused()
+    {
+        SignIn(AppLanguage.French, Permissions.Quality.View);
+
+        var page = Render<Screen>(p => p.Add(x => x.Key, "qc"));
+
+        page.FindAll("[data-screen=qc]").Should().BeEmpty();
+        page.Find("[data-state=refused]").TextContent.Should().Contain("Vous n'avez pas le droit");
+        page.Find("h1").TextContent.Should().NotContain("Contrôle", "a screen refused is not named");
+    }
+
+    [Fact]
     public void AScreenOfAModuleOutsideTheLicence_IsRefused_AndTheRefusalRecorded()
     {
         _licence = FullStatus() with
