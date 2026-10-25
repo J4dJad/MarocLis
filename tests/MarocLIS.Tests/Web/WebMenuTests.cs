@@ -78,6 +78,19 @@ public sealed class WebMenuTests
     }
 
     [Fact]
+    public void TheEquipmentScreens_AreInTheMenu_ByTheirRights()
+    {
+        var technician = Keys(WebMenu.Build(new User(permissions: Permissions.Equipment.View), FullStatus())).ToList();
+        technician.Should().Contain("equipment").And.NotContain("contracts");
+
+        var manager = Keys(WebMenu.Build(new User(permissions: Permissions.Equipment.ViewContracts), FullStatus())).ToList();
+        manager.Should().Contain("contracts").And.NotContain("equipment");
+
+        var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();
+        collector.Should().NotContain(["equipment", "contracts"]);
+    }
+
+    [Fact]
     public void EveryScreen_LinksToItsPlaceholder_WithTheShellsIcon()
     {
         var items = WebMenu.Build(new User(permissions: [.. Permissions.All]), FullStatus()).SelectMany(g => g.Items).ToList();
