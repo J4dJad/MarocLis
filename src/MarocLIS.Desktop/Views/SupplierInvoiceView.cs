@@ -812,7 +812,7 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
         {
             var line = form.Line;
             var index = _grid.Rows.Add(
-                form.Included, line.OrderNumber, $"{line.ItemCode} — {line.Description}",
+                form.Included, line.OrderNumber, SupplierInvoiceScreenRules.OrderLineLabel(line.ItemCode, line.Description),
                 N(line.QuantityOrdered), N(line.QuantityReceived), N(line.QuantityInvoiced),
                 form.Quantity ?? string.Empty, form.UnitPrice ?? string.Empty, form.VatPercent ?? string.Empty);
             _grid.Rows[index].Tag = line;

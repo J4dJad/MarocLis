@@ -392,7 +392,7 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
         if (payment.Amount <= 0m)
             return Result.Failure(Error.Validation("Payment_AmountMustBePositive"));
         if (payment.Amount > OutstandingAmount)
-            return Result.Failure(Error.Validation("Payment_ExceedsOutstanding", OutstandingAmount));
+            return Result.Failure(Error.Validation("Payment_ExceedsOutstanding", Money.Of(OutstandingAmount)));
         // The payer's own settlement and the write-off of its refused share are what close that
         // share; anything else is paid by the patient, who owes only their part.
         if (payment.Method is not (PaymentMethod.ThirdPartyPayer or PaymentMethod.WriteOff)

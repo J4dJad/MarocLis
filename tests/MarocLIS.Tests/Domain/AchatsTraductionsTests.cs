@@ -67,4 +67,14 @@ public sealed class AchatsTraductionsTests
         FieldRefusal.Of("q", Error.Validation("K", 3)).Should().Be(new FieldRefusal("q", "K", "3"));
         FieldRefusal.Of("q", Error.Validation("K")).Should().Be(new FieldRefusal("q", "K"));
     }
+
+    [Theory]
+    [InlineData("DEMO-REA-GLU", "DEMO-REA-GLU — Glucose HK", "DEMO-REA-GLU — Glucose HK")]
+    [InlineData("DEMO-REA-GLU", "Glucose HK", "DEMO-REA-GLU — Glucose HK")]
+    [InlineData("GLU", "GLUCOSE oxydase", "GLU — GLUCOSE oxydase")]
+    [InlineData("GLU", "GLU", "GLU")]
+    [InlineData("GLU", "", "GLU")]
+    [InlineData("GLU", null, "GLU")]
+    public void AnInvoicedOrderLine_NamesItsCodeOnce(string code, string? description, string expected) =>
+        Application.Inventory.SupplierInvoiceScreenRules.OrderLineLabel(code, description).Should().Be(expected);
 }

@@ -71,7 +71,7 @@
                     {
                         var line = Form.Lines[i];
                         var l = line.Line;
-                        var label = $"{l.ItemCode} — {l.Description}";
+                        var label = SupplierInvoiceScreenRules.OrderLineLabel(l.ItemCode, l.Description);
                         var quantity = SupplierInvoiceScreenRules.LineField("quantity", i);
                         var price = SupplierInvoiceScreenRules.LineField("price", i);
                         var vat = SupplierInvoiceScreenRules.LineField("vat", i);

@@ -422,6 +422,20 @@ public static class SupplierInvoiceScreenRules
         return length > SupplierInvoiceFile.MaximumBytes ? new FieldRefusal(ScanField, "SupplierInvoice_ScanTooLarge", megabytes) : null;
     }
 
+    /// <summary>
+    /// An order line as the invoice entry names it: "code — description". The order service already
+    /// writes "code — name" into a line's description, so the code is not put in front a second time.
+    /// </summary>
+    public static string OrderLineLabel(string itemCode, string? description)
+    {
+        var text = description?.Trim() ?? string.Empty;
+        if (text.Length == 0) return itemCode;
+        var named = text.StartsWith(itemCode, StringComparison.OrdinalIgnoreCase)
+                    && (text.Length == itemCode.Length || !char.IsLetterOrDigit(text[itemCode.Length]));
+        if (itemCode.Length == 0 || named) return text;
+        return $"{itemCode} — {text}";
+    }
+
     /// <summary>The box a refusal of the service names.</summary>
     public static string? FieldOf(Error? error) => error?.ResourceKey switch
     {

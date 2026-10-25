@@ -91,6 +91,24 @@ public sealed class ReviewFixesBillingTests
         invoice.Status.Should().Be(InvoiceStatus.Paid);
     }
 
+    [Theory]
+    [InlineData(MarocLIS.Domain.Common.AppLanguage.French, "60,00 DH")]
+    [InlineData(MarocLIS.Domain.Common.AppLanguage.English, "MAD")]
+    [InlineData(MarocLIS.Domain.Common.AppLanguage.Arabic, "د.م.")]
+    public void AnOverpayment_NamesWhatIsOwed_InTheScreensCurrencyNotation(MarocLIS.Domain.Common.AppLanguage language, string expected)
+    {
+        var invoice = Issued(100m);
+        invoice.ApplyCreditNote(40m).IsSuccess.Should().BeTrue();
+
+        var error = invoice.RecordPayment(Cash(61m)).FirstError;
+        error.Args.Single().Should().Be(MarocLIS.Domain.Common.Money.Of(60m));
+
+        var localizer = new MarocLIS.Localization.JsonLocalizer(new MarocLIS.Localization.LocalizationOptions { MarkMissingKeys = true });
+        var text = localizer.Format(language, error.ResourceKey, error.Args);
+        text.Should().Contain(expected).And.NotContain("[");
+        if (language != MarocLIS.Domain.Common.AppLanguage.English) text.Should().NotContain("MAD");
+    }
+
     [Fact]
     public void ACreditNote_OwesNothingAndCannotBePaid()
     {
