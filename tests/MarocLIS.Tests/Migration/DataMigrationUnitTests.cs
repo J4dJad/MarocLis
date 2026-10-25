@@ -650,7 +650,7 @@ public sealed class DataMigrationUnitTests
         var folder = Path.Combine(Path.GetTempPath(), "reprise-profils-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var store = new MigrationProfileStore(folder);
+            var store = MigrationProfilePasswords.Store(folder);
             var profile = new MigrationProfile
             {
                 Name = "LABOWIN / site 1",
@@ -672,7 +672,7 @@ public sealed class DataMigrationUnitTests
             loaded.For(DataMigrationKind.History).TableName.Should().Be("resultats");
             loaded.Correspondences.TargetOf(MigrationCodeList.Analysis, "glyc").Should().Be("GLY/GLY");
             loaded.Connection!.Password.Should().BeNull();
-            if (OperatingSystem.IsWindows()) MigrationProfileStore.PasswordOf(loaded).Should().Be("s3cret");
+            if (OperatingSystem.IsWindows()) MigrationProfilePasswords.PasswordOf(loaded).Should().Be("s3cret");
             else loaded.ProtectedPassword.Should().BeNull("without DPAPI the password is not kept at all");
 
             var exported = Encoding.UTF8.GetString(MigrationProfileStore.Export(loaded));

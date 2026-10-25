@@ -1,3 +1,4 @@
+using System.Globalization;
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Instruments;
 using MarocLIS.Desktop.Infrastructure;
@@ -64,23 +65,17 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _id = existing?.Id;
         _instrumentId = existing?.InstrumentId ?? newInstrument?.Id ?? Guid.Empty;
 
-        _protocol = Choice("Interface.Protocol", 20, 16, 200,
-                           existing?.Protocol ?? InstrumentProtocol.AstmE1394,
-                           "InstrumentProtocol",
-                           // Only the protocols this build has drivers for. Offering one with no
-                           // driver behind it would be a setting that silently does nothing.
-                           [InstrumentProtocol.AstmE1394, InstrumentProtocol.Hl7V2,
-                            InstrumentProtocol.Poct1A, InstrumentProtocol.RocheIntegra]);
+        // The choices, the presets and the checks are InterfaceEditorRules', shared with the web.
+        var form = InterfaceEditorRules.FormOf(existing);
 
-        _transport = Choice("Interface.Transport", 232, 16, 200,
-                            existing?.Transport ?? InstrumentTransportKind.Serial,
-                            "InstrumentTransportKind",
-                            [InstrumentTransportKind.Serial, InstrumentTransportKind.Tcp,
-                             InstrumentTransportKind.FileDrop]);
+        _protocol = Choice("Interface.Protocol", 20, 16, 200, form.Protocol, "InstrumentProtocol",
+                           // Only the protocols this build has drivers for.
+                           [.. InterfaceEditorRules.Protocols]);
 
-        _direction = Choice("Interface.Direction", 444, 16, 232,
-                            existing?.Direction ?? InstrumentDirection.Unidirectional,
-                            "InstrumentDirection");
+        _transport = Choice("Interface.Transport", 232, 16, 200, form.Transport, "InstrumentTransportKind",
+                            [.. InterfaceEditorRules.Transports]);
+
+        _direction = Choice("Interface.Direction", 444, 16, 232, form.Direction, "InstrumentDirection");
 
         _transportNotice = Notice(20, 62, 656, 30, "Interface.SerialNotice");
 
@@ -89,24 +84,20 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _serialPort = TextField("Interface.SerialPort", 20, 96, 120, existing?.SerialPortName,
                            latin: true, mono: true);
 
-        _baud = Picker("Interface.BaudRate", 152, 96, 110,
-                       ["1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200"],
-                       (existing?.BaudRate ?? 9600).ToString());
+        _baud = Picker("Interface.BaudRate", 152, 96, 110, [.. InterfaceEditorRules.BaudRates], form.BaudRate);
 
-        _dataBits = Picker("Interface.DataBits", 274, 96, 90, ["7", "8"],
-                           (existing?.DataBits ?? 8).ToString());
+        _dataBits = Picker("Interface.DataBits", 274, 96, 90, [.. InterfaceEditorRules.DataBitChoices], form.DataBits);
 
         // Stored under the serial port's own names (« None », « XOnXOff »), shown in the
         // operator's language: the French screen showed the English words.
         _parity = Picker("Interface.Parity", 376, 96, 110,
-                         SerialValues("Parity", "None", "Even", "Odd", "Mark", "Space"), existing?.Parity ?? "None");
+                         SerialValues("Parity", InterfaceEditorRules.Parities), form.Parity);
 
         _stopBits = Picker("Interface.StopBits", 498, 96, 80,
-                           SerialValues("StopBits", "One", "OnePointFive", "Two"), existing?.StopBits ?? "One");
+                           SerialValues("StopBits", InterfaceEditorRules.StopBitChoices), form.StopBits);
 
         _handshake = Picker("Interface.Handshake", 590, 96, 86,
-                            SerialValues("Handshake", "None", "XOnXOff", "RequestToSend", "RequestToSendXOnXOff"),
-                            existing?.Handshake ?? "None");
+                            SerialValues("Handshake", InterfaceEditorRules.Handshakes), form.Handshake);
         _handshake.DropDownWidth = 170;
 
         // --- TCP -------------------------------------------------------------------------------
@@ -137,23 +128,21 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
         // As long as the interface's columns: a longer path or host failed the save of the whole
         // configuration with no word on which field.
-        _serialPort.MaxLength = 20;
-        _host.MaxLength = 150;
-        _inbound.MaxLength = _processed.MaxLength = _outbound.MaxLength = 300;
-        _pattern.MaxLength = 60;
-        _tcpPort.MaxLength = 5;
+        _serialPort.MaxLength = InterfaceEditorRules.SerialPortMaxLength;
+        _host.MaxLength = InterfaceEditorRules.HostMaxLength;
+        _inbound.MaxLength = _processed.MaxLength = _outbound.MaxLength = InterfaceEditorRules.DirectoryMaxLength;
+        _pattern.MaxLength = InterfaceEditorRules.FilePatternMaxLength;
+        _tcpPort.MaxLength = InterfaceEditorRules.TcpPortMaxLength;
 
         // --- protocol settings -----------------------------------------------------------------
 
-        _encoding = Picker("Interface.Encoding", 20, 326, 160,
-                           ["ISO-8859-1", "UTF-8", "ASCII", "Windows-1252", "Windows-1256"],
-                           existing?.Encoding ?? "ISO-8859-1");
+        _encoding = Picker("Interface.Encoding", 20, 326, 160, [.. InterfaceEditorRules.Encodings], form.Encoding);
 
         _ackTimeout = Number("Interface.AckTimeout", 196, 326, 160,
-                              existing?.AcknowledgementTimeoutSeconds ?? 15, max: 300);
+                              existing?.AcknowledgementTimeoutSeconds ?? 15, max: InterfaceEditorRules.AcknowledgementTimeoutMax);
 
         _maxRetries = Number("Interface.MaxRetries", 372, 326, 120, existing?.MaxRetries ?? 3,
-                              max: 10);
+                              max: InterfaceEditorRules.MaxRetriesMax);
 
         Notice(20, 374, 656, 30, "Interface.EncodingNotice");
 
@@ -195,8 +184,8 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         });
 
         _profile = Picker("Interface.FormatProfile", fx, 40, fw,
-                          [.. FormatProfiles.Select(p => Localizer[p.Key])],
-                          Localizer[ProfileFor(existing?.Protocol ?? InstrumentProtocol.AstmE1394, format).Key]);
+                          [.. InterfaceEditorRules.FormatProfiles.Select(p => Localizer[p.Key])],
+                          Localizer[InterfaceEditorRules.ProfileFor(form.Protocol, format)]);
         _profile.Font = UiTheme.Body;
 
         _codeComponent = Picker("Interface.FormatCodeComponent", fx, 88, 150, Components(),
@@ -211,8 +200,8 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _resultTypes = TextField("Interface.FormatResultTypes", fx, 184, fw,
                                  format.AcceptedResultTypes, latin: true, mono: true);
         // The lengths the service accepts: past them the save refused the whole configuration.
-        _codeSuffix.MaxLength = 10;
-        _resultTypes.MaxLength = 60;
+        _codeSuffix.MaxLength = InterfaceEditorRules.CodeSuffixMaxLength;
+        _resultTypes.MaxLength = InterfaceEditorRules.ResultTypesMaxLength;
 
         Notice(fx, 230, fw, 46, "Interface.FormatResultTypesNotice");
 
@@ -264,50 +253,10 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
     private const string Auto = "Auto";
 
-    /// <summary>
-    /// Presets for the vendors whose layout is known to depart from the standard. A preset fills
-    /// the fields; the fields are what is saved, so a preset is never a hidden setting.
-    /// </summary>
-    private static readonly (string Key, MessageFormatSettings? Format)[] FormatProfiles =
-    [
-        ("Interface.FormatProfile.Custom", null),
-        ("Interface.FormatProfile.Standard", MessageFormatSettings.Default),
-        // cobas c 311 / c 501 / e 411: "^^^GLY/" — the dilution after the slash.
-        ("Interface.FormatProfile.RocheCobas", MessageFormatSettings.Default with { TestCodeSuffix = "/" }),
-        // Architect / Alinity: "^^^16^TSH^UNDILUTED^F" — keep the final value, not the
-        // interpretation (I) or the preliminary one (P).
-        ("Interface.FormatProfile.Abbott", MessageFormatSettings.Default with { AcceptedResultTypes = "F" }),
-        // COBAS INTEGRA 400 plus: its own host protocol, not ASTM. Choosing it also sets the
-        // protocol and the serial line (see ApplyIntegraPreset); the format stays "Auto".
-        (IntegraProfile, MessageFormatSettings.Default)
-    ];
+    private static string[] Components() =>
+        [.. InterfaceEditorRules.Components.Select(c => c?.ToString(CultureInfo.InvariantCulture) ?? Auto)];
 
-    private const string IntegraProfile = "Interface.FormatProfile.RocheIntegra";
-
-    private static (string Key, MessageFormatSettings? Format) ProfileFor(InstrumentProtocol protocol,
-                                                                          MessageFormatSettings format)
-    {
-        // The INTEGRA preset is its protocol: shown for an INTEGRA link, and for no other.
-        if (protocol == InstrumentProtocol.RocheIntegra)
-            return FormatProfiles.First(p => p.Key == IntegraProfile);
-
-        foreach (var profile in FormatProfiles.Skip(1).Where(p => p.Key != IntegraProfile))
-        {
-            var p = profile.Format!;
-            if (p.TestCodeComponent == format.TestCodeComponent
-                && string.Equals(p.TestCodeSuffix ?? "", format.TestCodeSuffix ?? "", StringComparison.Ordinal)
-                && string.Equals(p.SpecimenIdField ?? "", format.SpecimenIdField ?? "", StringComparison.OrdinalIgnoreCase)
-                && p.SpecimenIdComponent == format.SpecimenIdComponent
-                && string.Equals(p.AcceptedResultTypes ?? "", format.AcceptedResultTypes ?? "", StringComparison.OrdinalIgnoreCase))
-                return profile;
-        }
-
-        return FormatProfiles[0];
-    }
-
-    private static string[] Components() => [Auto, "1", "2", "3", "4", "5", "6"];
-
-    private static string Component(int? value) => value?.ToString() ?? Auto;
+    private static string Component(int? value) => value?.ToString(CultureInfo.InvariantCulture) ?? Auto;
 
     private static int? ComponentOf(ComboBox combo) =>
         int.TryParse(combo.SelectedItem?.ToString(), out var value) ? value : null;
@@ -315,24 +264,22 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
     private void RefreshSpecimenFields(string? current)
     {
         var protocol = Selected<InstrumentProtocol>(_protocol);
-        var fields = MessageFormatSettings.SpecimenFieldsFor(protocol);
+        var kept = InterfaceEditorRules.OfferedField(protocol, current);
 
         _specimenField.Items.Clear();
         _specimenField.Items.Add(Auto);
 
-        foreach (var field in fields)
+        foreach (var (value, caption) in InterfaceEditorRules.SpecimenFields(protocol))
         {
             // ASTM fields are named by their place in the O record, which is what the manuals print.
-            var index = _specimenField.Items.Add(protocol == InstrumentProtocol.AstmE1394 ? $"O-{field}" : field);
-            if (string.Equals(field, current?.Replace("O-", ""), StringComparison.OrdinalIgnoreCase))
-                _specimenField.SelectedIndex = index;
+            var index = _specimenField.Items.Add(caption);
+            if (string.Equals(value, kept, StringComparison.OrdinalIgnoreCase)) _specimenField.SelectedIndex = index;
         }
 
         if (_specimenField.SelectedIndex < 0) _specimenField.SelectedIndex = 0;
 
-        // POCT1-A is XML: an element holds one value, so there is no component to choose. The
-        // INTEGRA's lines have fixed fields: test number, barcode, value.
-        var delimited = protocol is not (InstrumentProtocol.Poct1A or InstrumentProtocol.RocheIntegra);
+        // POCT1-A is XML and the INTEGRA's lines have fixed fields: no component to choose.
+        var delimited = InterfaceEditorRules.IsDelimited(protocol);
         _codeComponent.Enabled = _specimenComponent.Enabled = delimited;
 
         if (!delimited)
@@ -346,22 +293,15 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
     {
         if (_applyingProfile) return;
 
-        var (key, format) = FormatProfiles.ElementAtOrDefault(_profile.SelectedIndex);
-        if (format is null) return;
+        var key = InterfaceEditorRules.FormatProfiles.ElementAtOrDefault(_profile.SelectedIndex)?.Key;
+        if (key is null || key == InterfaceEditorRules.CustomProfile) return;
 
         _applyingProfile = true;
         try
         {
-            if (key == IntegraProfile) ApplyIntegraPreset();
-            else if (Selected<InstrumentProtocol>(_protocol) == InstrumentProtocol.RocheIntegra)
-                // A vendor format chosen on an INTEGRA link: that format is ASTM's.
-                SelectValue(_protocol, InstrumentProtocol.AstmE1394);
-
-            Select(_codeComponent, Component(format.TestCodeComponent));
-            _codeSuffix.Text = format.TestCodeSuffix ?? string.Empty;
-            Select(_specimenField, Auto);
-            Select(_specimenComponent, Component(format.SpecimenIdComponent));
-            _resultTypes.Text = format.AcceptedResultTypes ?? string.Empty;
+            var form = ReadForm();
+            InterfaceEditorRules.ApplyProfile(form, key);
+            WriteForm(form);
         }
         finally
         {
@@ -377,37 +317,14 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _applyingProfile = true;
         try
         {
-            var index = Array.FindIndex(FormatProfiles,
-                p => p.Key == ProfileFor(Selected<InstrumentProtocol>(_protocol), CurrentFormat()).Key);
+            var key = InterfaceEditorRules.ProfileFor(Selected<InstrumentProtocol>(_protocol), CurrentFormat());
+            var index = InterfaceEditorRules.FormatProfiles.ToList().FindIndex(p => p.Key == key);
             if (index >= 0) _profile.SelectedIndex = index;
         }
         finally
         {
             _applyingProfile = false;
         }
-    }
-
-    /// <summary>
-    /// The COBAS INTEGRA 400 plus preset: its host protocol, and an RS-232 line the analyser's
-    /// "Configuration &gt; General &gt; Interface" screen offers. The manual lists the choices but
-    /// recommends no speed, so 9600 8N1 is a starting point to align with the analyser, not a
-    /// fact; it does recommend the software handshake and a host time-out of 180 s.
-    /// </summary>
-    private void ApplyIntegraPreset()
-    {
-        SelectValue(_protocol, InstrumentProtocol.RocheIntegra);
-        SelectValue(_transport, InstrumentTransportKind.Serial);
-        SelectValue(_direction, InstrumentDirection.HostQueryDownload);
-
-        Select(_baud, "9600");
-        Select(_dataBits, "8");
-        Select(_parity, "None");
-        Select(_stopBits, "One");
-        Select(_handshake, "XOnXOff");
-        Select(_encoding, "ASCII");
-
-        _ackTimeout.Value = Math.Min(_ackTimeout.Maximum, 180);
-        _maxRetries.Value = Math.Min(_maxRetries.Maximum, 3);
     }
 
     /// <summary>Selects an enum value in a combo filled by <c>Choice</c>.</summary>
@@ -425,9 +342,7 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
     /// <summary>On an INTEGRA link the notice says where its own settings are, instead of the ASTM advice.</summary>
     private void RefreshFormatNotice() =>
-        _formatNotice.Text = Localizer[Selected<InstrumentProtocol>(_protocol) == InstrumentProtocol.RocheIntegra
-            ? "Interface.IntegraNotice"
-            : "Interface.FormatNotice"];
+        _formatNotice.Text = Localizer[InterfaceEditorRules.FormatNoticeKey(Selected<InstrumentProtocol>(_protocol))];
 
     private static void Select(ComboBox combo, string value)
     {
@@ -443,23 +358,76 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         public override string ToString() => Text;
     }
 
-    private SerialChoice[] SerialValues(string setting, params string[] values) =>
-        [.. values.Select(v => new SerialChoice(v, Localizer[$"Interface.{setting}{v}"]))];
+    private SerialChoice[] SerialValues(string setting, IEnumerable<string> values) =>
+        [.. values.Select(v => new SerialChoice(v, Localizer[InterfaceEditorRules.SerialKey(setting, v)]))];
 
     private static string? SerialValue(ComboBox combo) => (combo.SelectedItem as SerialChoice)?.Value;
 
-    private MessageFormatSettings CurrentFormat()
+    private MessageFormatSettings CurrentFormat() => InterfaceEditorRules.Format(ReadForm());
+
+    /// <summary>The form as the boxes stand, for the shared rules.</summary>
+    private InterfaceForm ReadForm()
     {
         var field = _specimenField.SelectedItem?.ToString();
 
-        return new MessageFormatSettings(
-            ComponentOf(_codeComponent),
-            Blank(_codeSuffix),
-            field is null or Auto ? null : field.Replace("O-", ""),
-            ComponentOf(_specimenComponent),
-            Blank(_resultTypes),
-            Selected<UnmappedNonNumericHandling>(_unmappedNonNumeric),
-            _keepFlags.Checked);
+        return new InterfaceForm
+        {
+            Protocol = Selected<InstrumentProtocol>(_protocol),
+            Transport = Selected<InstrumentTransportKind>(_transport),
+            Direction = Selected<InstrumentDirection>(_direction),
+            IsEnabled = _enabled.Checked,
+            SerialPortName = _serialPort.Text,
+            BaudRate = _baud.SelectedItem?.ToString() ?? string.Empty,
+            DataBits = _dataBits.SelectedItem?.ToString() ?? string.Empty,
+            Parity = SerialValue(_parity) ?? "None",
+            StopBits = SerialValue(_stopBits) ?? "One",
+            Handshake = SerialValue(_handshake) ?? "None",
+            Host = _host.Text,
+            TcpPort = _tcpPort.Text,
+            ListenAsServer = _listenAsServer.Checked,
+            InboundDirectory = _inbound.Text,
+            FilePattern = _pattern.Text,
+            ProcessedDirectory = _processed.Text,
+            OutboundDirectory = _outbound.Text,
+            Encoding = _encoding.SelectedItem?.ToString() ?? "ISO-8859-1",
+            AcknowledgementTimeoutSeconds = (int)_ackTimeout.Value,
+            MaxRetries = (int)_maxRetries.Value,
+            RaiseIssueOnUnmappedCode = _raiseOnUnmapped.Checked,
+            RouteControlResultsToQc = _routeControls.Checked,
+            AutoAcceptResults = _autoAccept.Checked,
+            TestCodeComponent = ComponentOf(_codeComponent),
+            TestCodeSuffix = _codeSuffix.Text,
+            SpecimenIdField = field is null or Auto ? null : field.Replace("O-", ""),
+            SpecimenIdComponent = ComponentOf(_specimenComponent),
+            AcceptedResultTypes = _resultTypes.Text,
+            UnmappedNonNumeric = Selected<UnmappedNonNumericHandling>(_unmappedNonNumeric),
+            KeepInstrumentFlags = _keepFlags.Checked
+        };
+    }
+
+    /// <summary>Puts a preset's values back in the boxes it changes: the protocol, the line and the format.</summary>
+    private void WriteForm(InterfaceForm form)
+    {
+        SelectValue(_protocol, form.Protocol);
+        SelectValue(_transport, form.Transport);
+        SelectValue(_direction, form.Direction);
+
+        Select(_baud, form.BaudRate);
+        Select(_dataBits, form.DataBits);
+        Select(_parity, form.Parity);
+        Select(_stopBits, form.StopBits);
+        Select(_handshake, form.Handshake);
+        Select(_encoding, form.Encoding);
+
+        _ackTimeout.Value = Math.Min(_ackTimeout.Maximum, form.AcknowledgementTimeoutSeconds);
+        _maxRetries.Value = Math.Min(_maxRetries.Maximum, form.MaxRetries);
+
+        Select(_codeComponent, Component(form.TestCodeComponent));
+        _codeSuffix.Text = form.TestCodeSuffix;
+        Select(_specimenField, form.SpecimenIdField is null ? Auto
+                               : InterfaceEditorRules.SpecimenFields(form.Protocol).First(f => f.Value == form.SpecimenIdField).Caption);
+        Select(_specimenComponent, Component(form.SpecimenIdComponent));
+        _resultTypes.Text = form.AcceptedResultTypes;
     }
 
     /// <summary>A fixed list of values, where free text would only be a way to mistype one.</summary>
@@ -493,31 +461,22 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
     private void RefreshTransport()
     {
-        var transport = Selected<InstrumentTransportKind>(_transport);
+        var fields = InterfaceEditorRules.Fields(Selected<InstrumentTransportKind>(_transport), _listenAsServer.Checked);
 
-        var serial = transport == InstrumentTransportKind.Serial;
-        var tcp = transport == InstrumentTransportKind.Tcp;
-        var file = transport == InstrumentTransportKind.FileDrop;
-
-        Enable(_serialPort, serial);
+        Enable(_serialPort, fields.Serial);
         foreach (var combo in new[] { _baud, _dataBits, _parity, _stopBits, _handshake })
-            combo.Enabled = serial;
+            combo.Enabled = fields.Serial;
 
-        Enable(_host, tcp && !_listenAsServer.Checked);
-        Enable(_tcpPort, tcp);
-        _listenAsServer.Enabled = tcp;
+        Enable(_host, fields.Host);
+        Enable(_tcpPort, fields.TcpPort);
+        _listenAsServer.Enabled = fields.Listen;
 
-        Enable(_inbound, file);
-        Enable(_pattern, file);
-        Enable(_processed, file);
-        Enable(_outbound, file);
+        Enable(_inbound, fields.File);
+        Enable(_pattern, fields.File);
+        Enable(_processed, fields.File);
+        Enable(_outbound, fields.File);
 
-        _transportNotice.Text = Localizer[transport switch
-        {
-            InstrumentTransportKind.Serial => "Interface.SerialNotice",
-            InstrumentTransportKind.Tcp => "Interface.TcpNotice",
-            _ => "Interface.FileDropNotice"
-        }];
+        _transportNotice.Text = Localizer[fields.NoticeKey];
     }
 
     private static void Enable(TextBox box, bool enabled)
@@ -528,96 +487,36 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (_instrumentId == Guid.Empty)
+        var form = ReadForm();
+
+        // A link exists for an analyser, not on its own: chosen first, from the equipment screen.
+        if (InterfaceEditorRules.Check(form, _instrumentId) is { } refusal)
         {
-            // A link exists for an analyser, not on its own. Creating one needs the instrument
-            // chosen first, which is done from the equipment screen.
-            Dialogs.Warn(Localizer["Interface_InstrumentRequired"], Text);
-            return;
-        }
-
-        var transport = Selected<InstrumentTransportKind>(_transport);
-
-        if (transport == InstrumentTransportKind.Serial
-            && string.IsNullOrWhiteSpace(_serialPort.Text))
-        {
-            Dialogs.Warn(Localizer["Interface_SerialPortRequired"], Text);
-            _serialPort.Focus();
-            return;
-        }
-
-        int? tcpPort = int.TryParse(_tcpPort.Text.Trim(), out var parsedPort) ? parsedPort : null;
-
-        if (transport == InstrumentTransportKind.Tcp)
-        {
-            if (tcpPort is null or < 1 or > 65535)
-            {
-                Dialogs.Warn(Localizer["Interface_PortInvalid"], Text);
-                _tcpPort.Focus();
-                return;
-            }
-
-            if (!_listenAsServer.Checked && string.IsNullOrWhiteSpace(_host.Text))
-            {
-                Dialogs.Warn(Localizer["Interface_HostRequired"], Text);
-                _host.Focus();
-                return;
-            }
-        }
-
-        if (transport == InstrumentTransportKind.FileDrop
-            && string.IsNullOrWhiteSpace(_inbound.Text))
-        {
-            Dialogs.Warn(Localizer["Interface_InboundDirectoryRequired"], Text);
-            _inbound.Focus();
+            Dialogs.Warn(Localizer[refusal.Key], Text);
+            FieldOf(refusal.Field)?.Focus();
             return;
         }
 
         // Said before the save, not after the refusal. Auto-acceptance is the setting that can put
         // an analyser's number in a patient file with nobody looking at it.
-        if (_autoAccept.Checked
+        if (InterfaceEditorRules.NeedsAutoAcceptConfirmation(form)
             && !Dialogs.Confirm(Localizer["Interface.ConfirmAutoAccept"], Text))
             return;
 
-        Request = new InterfaceRequest
-        {
-            Id = _id,
-            InstrumentId = _instrumentId,
-            Protocol = Selected<InstrumentProtocol>(_protocol),
-            Transport = transport,
-            Direction = Selected<InstrumentDirection>(_direction),
-            IsEnabled = _enabled.Checked,
-
-            SerialPortName = Blank(_serialPort),
-            BaudRate = int.TryParse(_baud.SelectedItem?.ToString(), out var baud) ? baud : 9600,
-            DataBits = int.TryParse(_dataBits.SelectedItem?.ToString(), out var bits) ? bits : 8,
-            Parity = SerialValue(_parity) ?? "None",
-            StopBits = SerialValue(_stopBits) ?? "One",
-            Handshake = SerialValue(_handshake) ?? "None",
-
-            Host = Blank(_host),
-            TcpPort = tcpPort,
-            ListenAsServer = _listenAsServer.Checked,
-
-            InboundDirectory = Blank(_inbound),
-            OutboundDirectory = Blank(_outbound),
-            FilePattern = Blank(_pattern),
-            ProcessedDirectory = Blank(_processed),
-
-            Encoding = _encoding.SelectedItem?.ToString() ?? "ISO-8859-1",
-            AcknowledgementTimeoutSeconds = (int)_ackTimeout.Value,
-            MaxRetries = (int)_maxRetries.Value,
-
-            AutoAcceptResults = _autoAccept.Checked,
-            RaiseIssueOnUnmappedCode = _raiseOnUnmapped.Checked,
-            RouteControlResultsToQc = _routeControls.Checked,
-
-            Format = CurrentFormat()
-        };
+        Request = InterfaceEditorRules.ToRequest(form, _id, _instrumentId);
 
         DialogResult = DialogResult.OK;
         Close();
     }
+
+    private TextBox? FieldOf(string field) => field switch
+    {
+        "serialport" => _serialPort,
+        "tcpport" => _tcpPort,
+        "host" => _host,
+        "inbound" => _inbound,
+        _ => null
+    };
 }
 
 /// <summary>
@@ -694,20 +593,21 @@ internal sealed class InstrumentMappingDialog : Form
 
         // A removed code is kept, switched off, so old messages can still be read through it; it
         // is not shown again. Re-adding the parameter under the same code brings it back.
-        _retired = existing.Count(m => !m.IsEnabled);
+        // The lines and the retired count are InterfaceEditorRules', shared with the web.
+        _retired = InterfaceEditorRules.Retired(existing);
 
-        foreach (var mapping in existing.Where(m => m.IsEnabled))
+        foreach (var line in InterfaceEditorRules.Lines(existing))
         {
             var index = _grid.Rows.Add(
-                mapping.InstrumentTestCode,
-                $"{mapping.AnalysisCode}/{mapping.ParameterCode}  {mapping.ParameterName.For(language)}",
-                mapping.InstrumentUnit ?? string.Empty,
-                mapping.CatalogueUnit ?? string.Empty,
-                mapping.ConversionFactor is { } factor ? EditorValues.FormatForEditing(factor, 0) : string.Empty,
-                mapping.ConversionOffset is { } offset ? EditorValues.FormatForEditing(offset, 0) : string.Empty,
-                mapping.CodedValueMap ?? string.Empty);
+                line.Code,
+                InterfaceEditorRules.ParameterLabel(line.Original, language),
+                line.InstrumentUnit,
+                line.Original.CatalogueUnit ?? string.Empty,
+                line.Factor,
+                line.Offset,
+                line.CodedValueMap);
 
-            _grid.Rows[index].Tag = mapping;
+            _grid.Rows[index].Tag = line.Original;
         }
 
         _summary.Font = UiTheme.Small;
@@ -787,9 +687,10 @@ internal sealed class InstrumentMappingDialog : Form
 
         foreach (var parameter in picker.Picked)
         {
+            var line = InterfaceEditorRules.NewLine(parameter, _link.Id);
             var index = _grid.Rows.Add(
-                parameter.ParameterCode,
-                $"{parameter.AnalysisCode}/{parameter.ParameterCode}  {parameter.ParameterName.For(language)}",
+                line.Code,
+                InterfaceEditorRules.ParameterLabel(line.Original, language),
                 string.Empty,
                 parameter.UnitSymbol ?? string.Empty,
                 string.Empty,
@@ -797,10 +698,7 @@ internal sealed class InstrumentMappingDialog : Form
                 string.Empty);
 
             var row = _grid.Rows[index];
-            row.Tag = new MappingRow(
-                Guid.Empty, _link.Id, parameter.ParameterCode, parameter.TestParameterId,
-                parameter.ParameterCode, parameter.ParameterName, parameter.AnalysisCode,
-                parameter.ValueType, parameter.UnitSymbol, null, null, null, null, true);
+            row.Tag = line.Original;
 
             // The code to check: it is the laboratory's, not yet the analyser's.
             row.Cells["code"].Style.BackColor = UiTheme.AbnormalBackground;
@@ -824,7 +722,7 @@ internal sealed class InstrumentMappingDialog : Form
         {
             Name = "code", HeaderText = _localizer["Interface.InstrumentCode"], FillWeight = 11,
             // Each editable column as long as its field: a longer entry failed the whole table's save.
-            MaxInputLength = 40,
+            MaxInputLength = InterfaceEditorRules.MappingCodeMaxLength,
             DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.MonospaceBold }
         });
 
@@ -839,7 +737,7 @@ internal sealed class InstrumentMappingDialog : Form
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = "instrumentUnit", HeaderText = _localizer["Interface.InstrumentUnit"],
-            FillWeight = 11, MaxInputLength = 40,
+            FillWeight = 11, MaxInputLength = InterfaceEditorRules.MappingUnitMaxLength,
             DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.Monospace }
         });
 
@@ -873,7 +771,7 @@ internal sealed class InstrumentMappingDialog : Form
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = "codeMap", HeaderText = _localizer["Interface.CodedValueMap"], FillWeight = 12,
-            MaxInputLength = 1000,
+            MaxInputLength = InterfaceEditorRules.CodedValueMapMaxLength,
             DefaultCellStyle = new DataGridViewCellStyle { Font = UiTheme.Monospace }
         });
     }
@@ -883,19 +781,9 @@ internal sealed class InstrumentMappingDialog : Form
         if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count) return;
 
         var row = _grid.Rows[e.RowIndex];
-        if (row.IsNewRow) return;
+        if (row.IsNewRow || LineOf(row) is not { } line) return;
 
-        var instrumentUnit = row.Cells["instrumentUnit"].Value?.ToString();
-        var catalogueUnit = row.Cells["catalogueUnit"].Value?.ToString();
-        var factor = row.Cells["factor"].Value?.ToString();
-
-        var mismatch = !string.IsNullOrWhiteSpace(instrumentUnit)
-                       && !string.IsNullOrWhiteSpace(catalogueUnit)
-                       && !string.Equals(instrumentUnit, catalogueUnit,
-                                          StringComparison.OrdinalIgnoreCase)
-                       && string.IsNullOrWhiteSpace(factor);
-
-        if (mismatch)
+        if (InterfaceEditorRules.IsUnitMismatch(line))
         {
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
@@ -906,72 +794,37 @@ internal sealed class InstrumentMappingDialog : Form
     {
         var total = _grid.Rows.Cast<DataGridViewRow>().Count(r => !r.IsNewRow);
 
-        _summary.Text = _localizer.Format("Interface.MappingSummary", total, _retired);
+        _summary.Text = InterfaceEditorRules.Summary(total, _retired, _localizer.Format);
     }
+
+    /// <summary>A line of the grid as the shared rules read it.</summary>
+    private static MappingLine? LineOf(DataGridViewRow row) => row.Tag is MappingRow original
+        ? new MappingLine
+        {
+            Original = original,
+            Code = row.Cells["code"].Value?.ToString() ?? string.Empty,
+            InstrumentUnit = row.Cells["instrumentUnit"].Value?.ToString() ?? string.Empty,
+            Factor = row.Cells["factor"].Value?.ToString() ?? string.Empty,
+            Offset = row.Cells["offset"].Value?.ToString() ?? string.Empty,
+            CodedValueMap = row.Cells["codeMap"].Value?.ToString() ?? string.Empty
+        }
+        : null;
 
     private void Accept()
     {
-        var mappings = new List<MappingRequest>();
+        var rows = _grid.Rows.Cast<DataGridViewRow>().Where(r => !r.IsNewRow && r.Tag is MappingRow).ToList();
+        var (mappings, refusal, _) = InterfaceEditorRules.Check([.. rows.Select(r => LineOf(r)!)]);
 
-        foreach (DataGridViewRow row in _grid.Rows)
+        if (refusal is not null)
         {
-            if (row.IsNewRow) continue;
-            if (row.Tag is not MappingRow original) continue;
-
-            var code = row.Cells["code"].Value?.ToString();
-
-            if (string.IsNullOrWhiteSpace(code))
-            {
-                _dialogs.Warn(_localizer["Interface_MappingCodeRequired"], Text);
-                return;
-            }
-
-            if (!TryParse(row.Cells["factor"].Value?.ToString(), out var factor)
-                || !TryParse(row.Cells["offset"].Value?.ToString(), out var offset))
-            {
-                _dialogs.Warn(_localizer["Interface_ConversionNotNumeric"], Text);
-                return;
-            }
-
-            if (factor is 0m)
-            {
-                _dialogs.Warn(_localizer["Interface_ConversionFactorZero"], Text);
-                return;
-            }
-
-            if (Math.Abs(factor ?? 0m) >= InstrumentInterfaceService.MaximumConversion
-                || Math.Abs(offset ?? 0m) >= InstrumentInterfaceService.MaximumConversion)
-            {
-                _dialogs.Warn(_localizer["Interface_ConversionOutOfRange"], Text);
-                return;
-            }
-
-            mappings.Add(new MappingRequest(
-                code.Trim(),
-                original.TestParameterId,
-                row.Cells["instrumentUnit"].Value?.ToString(),
-                factor,
-                offset,
-                row.Cells["codeMap"].Value?.ToString(),
-                true));
+            _dialogs.Warn(_localizer[refusal.Key], Text);
+            return;
         }
 
         Mappings = mappings;
 
         DialogResult = DialogResult.OK;
         Close();
-    }
-
-    private static bool TryParse(string? text, out decimal? value)
-    {
-        value = null;
-
-        if (string.IsNullOrWhiteSpace(text)) return true;
-
-        // The shared reader: the grid shows the offsets in the current culture, whose Arabic form
-        // of "-2,5" starts with a direction mark the invariant parse refused as "not numeric".
-        value = EditorValues.ParseDecimal(text);
-        return value is not null;
     }
 }
 
@@ -1204,12 +1057,7 @@ internal sealed class InstrumentRawMessageDialog : Form
 
         var header = new Label
         {
-            Text = $"{localizer[$"MessageDirection.{message.Direction}"]}"
-                   + $"   ·   {localizer[$"InstrumentMessageProcessingStatus.{message.Status}"]}"
-                   + (message.ResultCount is { } total
-                       ? $"   ·   {message.ImportedCount ?? 0}/{total} {localizer["Result.Plural"].ToLowerInvariant()}"
-                       : string.Empty)
-                   + (message.SpecimenIds is { Length: > 0 } specimens ? $"   ·   {specimens}" : string.Empty),
+            Text = InstrumentInterfaceScreenRules.RawHeader(message, localizer.Format),
             Font = UiTheme.SmallBold,
             ForeColor = UiTheme.Accent,
             Dock = DockStyle.Top,
@@ -1237,7 +1085,7 @@ internal sealed class InstrumentRawMessageDialog : Form
             // A Latin wire format. Mirrored in Arabic it would be unreadable and, worse,
             // misleading — the operator needs to see the byte order the analyser actually sent.
             Tag = UiTags.LatinValue,
-            Text = MakeControlCharactersVisible(raw)
+            Text = InstrumentInterfaceScreenRules.MakeControlCharactersVisible(raw)
         };
 
         var close = UiTheme.SecondaryButton(localizer["Action.Close"]);
@@ -1253,40 +1101,6 @@ internal sealed class InstrumentRawMessageDialog : Form
         CancelButton = close;
         AcceptButton = close;
         AdminDialogFrame.Attach(this, localizer, AdminDialogFrame.Lead(localizer, nameof(InstrumentRawMessageDialog)));
-    }
-
-    /// <summary>
-    /// Replaces the ASTM and MLLP control characters with their names.
-    /// <para>
-    /// Shown rather than stripped: half of all interface faults are a framing problem, and an
-    /// &lt;ENQ&gt; that never got its &lt;ACK&gt; is the diagnosis. Stripped, the frame looks fine
-    /// and the fault is invisible.
-    /// </para>
-    /// </summary>
-    private static string MakeControlCharactersVisible(string raw)
-    {
-        var builder = new System.Text.StringBuilder(raw.Length + 32);
-
-        foreach (var character in raw)
-        {
-            builder.Append(character switch
-            {
-                '\x05' => "<ENQ>",
-                '\x06' => "<ACK>",
-                '\x15' => "<NAK>",
-                '\x04' => "<EOT>" + Environment.NewLine,
-                '\x02' => "<STX>",
-                '\x03' => "<ETX>",
-                '\x17' => "<ETB>",
-                '\x0B' => "<VT>",
-                '\x1C' => "<FS>",
-                '\r' => "<CR>" + Environment.NewLine,
-                '\n' => string.Empty,
-                _ => character.ToString()
-            });
-        }
-
-        return builder.ToString();
     }
 }
 

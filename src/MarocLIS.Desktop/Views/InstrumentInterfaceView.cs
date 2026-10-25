@@ -4,7 +4,6 @@ using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Equipment;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Instruments.Hosting;
-using MarocLIS.Instruments.Protocol;
 using MarocLIS.Instruments.Simulator;
 using MarocLIS.Localization;
 using Microsoft.Extensions.Logging;
@@ -201,29 +200,12 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         _mappings.CellFormatting += OnMappingFormatting;
 
-        AdminLayout.PillColumn(_links, "live", r =>
-        {
-            if (r.Tag is not InterfaceRow link || !_options.EnableInstrumentHost || !link.IsEnabled)
-                return AdminLayout.Wait;
-            return _monitor.For(link.Id)?.Status switch
-            {
-                InstrumentLinkStatus.Running => AdminLayout.Ok,
-                InstrumentLinkStatus.Failed or InstrumentLinkStatus.Misconfigured => AdminLayout.Crit,
-                InstrumentLinkStatus.Stopped => AdminLayout.Wait,
-                _ => AdminLayout.Run
-            };
-        });
+        AdminLayout.PillColumn(_links, "live", r => r.Tag is InterfaceRow link
+            ? Pill(InstrumentInterfaceScreenRules.LiveTone(_options.EnableInstrumentHost, link, LiveStatus(link)))
+            : AdminLayout.Wait);
 
         AdminLayout.PillColumn(_messages, "status", r => r.Tag is MessageLogRow message
-            ? message.Status switch
-            {
-                InstrumentMessageProcessingStatus.Imported => AdminLayout.Ok,
-                InstrumentMessageProcessingStatus.Failed => AdminLayout.Crit,
-                InstrumentMessageProcessingStatus.PartiallyImported
-                    or InstrumentMessageProcessingStatus.AwaitingAcceptance => AdminLayout.Warn,
-                InstrumentMessageProcessingStatus.Received => AdminLayout.Run,
-                _ => AdminLayout.Wait
-            }
+            ? Pill(InstrumentInterfaceScreenRules.StatusTone(message))
             : null);
         _messages.CellFormatting += OnMessageFormatting;
         _messages.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0 && _viewRaw.Enabled) await ViewRawAsync(); };
@@ -396,29 +378,16 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         foreach (var row in _rows)
         {
-            var live = _monitor.For(row.Id);
-
-            var flags = new List<string>(4);
-
-            if (row.EquipmentBlockKey is { } blocked) flags.Add(T(blocked, row.InstrumentCode));
-            if (!row.IsEnabled) flags.Add(T("Interface.Disabled"));
-            if (row.IsUnusable) flags.Add(T("Interface.NoMappings"));
-            if (row.AutoAcceptResults) flags.Add(T("Interface.AutoAccept"));
-            if (row.LastError is { Length: > 0 }) flags.Add(T("Interface.HasError"));
-
             var index = _links.Rows.Add(
                 $"{row.InstrumentCode}  {row.InstrumentName.For(language)}",
                 T($"InstrumentProtocol.{row.Protocol}"),
                 row.Endpoint,
                 T($"InstrumentDirection.{row.Direction}"),
-                DescribeLive(row, live),
-                row.EnabledMappingCount == row.MappingCount
-                    ? row.MappingCount.ToString()
-                    : $"{row.EnabledMappingCount}/{row.MappingCount}",
-                row.FailedToday > 0 ? $"{row.MessagesToday} ({row.FailedToday})"
-                                    : row.MessagesToday.ToString(),
-                row.LastMessageAt?.ToLocalTime().ToString("dd/MM HH:mm") ?? "—",
-                string.Join(" · ", flags));
+                T(InstrumentInterfaceScreenRules.LiveKey(_options.EnableInstrumentHost, row, LiveStatus(row))),
+                InstrumentInterfaceScreenRules.MappingCount(row),
+                InstrumentInterfaceScreenRules.MessagesToday(row),
+                InstrumentInterfaceScreenRules.LastMessage(row),
+                string.Join(" · ", InstrumentInterfaceScreenRules.Flags(row, T)));
 
             _links.Rows[index].Tag = row;
         }
@@ -449,14 +418,40 @@ public sealed class InstrumentInterfaceView : LocalizedView
         RefreshActions();
     }
 
-    private string DescribeLive(InterfaceRow row, InstrumentLinkState? live)
-    {
-        if (!_options.EnableInstrumentHost) return T("Interface.NotDrivenHere");
-        if (!row.IsEnabled) return T("Interface.Disabled");
+    /// <summary>The host's state of a link, by name, for the shared rules; null before it reported.</summary>
+    private string? LiveStatus(InterfaceRow row) => _monitor.For(row.Id)?.Status.ToString();
 
-        return live is null
-            ? T("Interface.Starting")
-            : T($"InstrumentLinkStatus.{live.Status}");
+    private static (Color Back, Color Fore) Pill(InterfaceTone tone) => tone switch
+    {
+        InterfaceTone.Ok => AdminLayout.Ok,
+        InterfaceTone.Critical => AdminLayout.Crit,
+        InterfaceTone.Warning => AdminLayout.Warn,
+        InterfaceTone.Info => AdminLayout.Run,
+        _ => AdminLayout.Wait
+    };
+
+    /// <summary>A row's tone as the workstation paints it: grey, the alarm's fill, the warning's or the normal colour.</summary>
+    private static void PaintTone(DataGridViewCellFormattingEventArgs e, InterfaceTone tone)
+    {
+        switch (tone)
+        {
+            case InterfaceTone.Muted:
+                e.CellStyle!.ForeColor = UiTheme.TextMuted;
+                break;
+
+            case InterfaceTone.Critical:
+                e.CellStyle!.BackColor = UiTheme.CriticalBackground;
+                e.CellStyle.ForeColor = UiTheme.Critical;
+                break;
+
+            case InterfaceTone.Warning:
+                e.CellStyle!.ForeColor = UiTheme.Abnormal;
+                break;
+
+            case InterfaceTone.Ok:
+                e.CellStyle!.ForeColor = UiTheme.Normal;
+                break;
+        }
     }
 
     private async Task LoadDetailAsync(CancellationToken ct = default)
@@ -480,25 +475,13 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         foreach (var mapping in mappings.Value)
         {
-            var flags = new List<string>(3);
-
-            if (!mapping.IsEnabled) flags.Add(T("Interface.MappingDisabled"));
-            if (mapping.UnitMismatchWithoutConversion) flags.Add(T("Interface.UnitMismatch"));
-            if (mapping.CodedWithoutMap) flags.Add(T("Interface.NoCodeMap"));
-
             var index = _mappings.Rows.Add(
                 mapping.InstrumentTestCode,
-                $"{mapping.AnalysisCode}/{mapping.ParameterCode}",
+                InstrumentInterfaceScreenRules.Parameter(mapping),
                 mapping.ParameterName.For(language),
-                mapping.InstrumentUnit is { Length: > 0 } instrumentUnit
-                    && !string.Equals(instrumentUnit, mapping.CatalogueUnit,
-                                       StringComparison.OrdinalIgnoreCase)
-                    ? $"{instrumentUnit} → {mapping.CatalogueUnit ?? "—"}"
-                    : mapping.CatalogueUnit ?? string.Empty,
-                mapping.ConversionFactor is { } factor
-                    ? $"×{factor:0.####}{(mapping.ConversionOffset is { } offset and not 0m ? $" {offset:+0.###;-0.###}" : string.Empty)}"
-                    : string.Empty,
-                string.Join(" · ", flags));
+                InstrumentInterfaceScreenRules.Units(mapping),
+                InstrumentInterfaceScreenRules.Conversion(mapping),
+                string.Join(" · ", InstrumentInterfaceScreenRules.Flags(mapping, T)));
 
             _mappings.Rows[index].Tag = mapping;
         }
@@ -507,7 +490,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         _mappingHeading.Text = $"{T("Interface.Mappings")} — {row.InstrumentCode}";
 
-        var messages = await _interfaces.GetMessagesAsync(row.Id, 200, ct);
+        var messages = await _interfaces.GetMessagesAsync(row.Id, InstrumentInterfaceScreenRules.MessagesShown, ct);
 
         if (messages.IsFailure) { _dialogs.ShowFailure(messages); return; }
 
@@ -516,14 +499,11 @@ public sealed class InstrumentInterfaceView : LocalizedView
         foreach (var message in messages.Value)
         {
             var index = _messages.Rows.Add(
-                message.OccurredAt.ToLocalTime().ToString("dd/MM HH:mm:ss"),
+                InstrumentInterfaceScreenRules.When(message),
                 T($"MessageDirection.{message.Direction}"),
                 message.SpecimenIds ?? string.Empty,
-                message.ResultCount is { } total
-                    ? $"{message.ImportedCount ?? 0}/{total}"
-                    : string.Empty,
-                T($"InstrumentMessageProcessingStatus.{message.Status}")
-                + (message.WasReplayed ? $" · {T("Interface.Replayed")}" : string.Empty),
+                InstrumentInterfaceScreenRules.Counts(message),
+                InstrumentInterfaceScreenRules.Status(message, T),
                 FormatIssues(message.Issues));
 
             _messages.Rows[index].Tag = message;
@@ -540,28 +520,8 @@ public sealed class InstrumentInterfaceView : LocalizedView
     /// Issues are stored as resource keys with a tab-separated detail, so the log reads in whichever
     /// language the operator is using rather than in whatever language the sink was written in.
     /// </summary>
-    private string FormatIssues(string? issues)
-    {
-        if (string.IsNullOrWhiteSpace(issues)) return string.Empty;
-
-        var lines = issues.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(line =>
-            {
-                var parts = line.Trim().Split('\t', 2);
-
-                var text = Localizer[parts[0]];
-
-                if (parts.Length < 2) return text;
-
-                // A message that names its value ("La valeur {0} est…") takes the detail in place;
-                // the others get it after, in brackets.
-                return text.Contains("{0}", StringComparison.Ordinal)
-                    ? text.Replace("{0}", parts[1], StringComparison.Ordinal)
-                    : $"{text} ({parts[1]})";
-            });
-
-        return string.Join(" · ", lines);
-    }
+    private string FormatIssues(string? issues) =>
+        InstrumentInterfaceScreenRules.Issues(issues, (key, args) => args.Length == 0 ? Localizer[key] : T(key, args));
 
     // ---- Formatting ----------------------------------------------------------------------------
 
@@ -570,28 +530,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _links.Rows.Count) return;
         if (_links.Rows[e.RowIndex].Tag is not InterfaceRow row) return;
 
-        if (!row.IsEnabled)
-        {
-            e.CellStyle!.ForeColor = UiTheme.TextMuted;
-            return;
-        }
-
-        var live = _monitor.For(row.Id);
-
-        if (live?.Status is InstrumentLinkStatus.Failed or InstrumentLinkStatus.Misconfigured
-            || row.IsUnusable || row.EquipmentBlockKey is not null)
-        {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (row.HasRecentFailures || row.LastError is { Length: > 0 })
-        {
-            e.CellStyle!.ForeColor = UiTheme.Abnormal;
-        }
-        else if (live?.Status == InstrumentLinkStatus.Running)
-        {
-            e.CellStyle!.ForeColor = UiTheme.Normal;
-        }
+        PaintTone(e, InstrumentInterfaceScreenRules.Tone(row, LiveStatus(row)));
     }
 
     private void OnMappingFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -599,17 +538,8 @@ public sealed class InstrumentInterfaceView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _mappings.Rows.Count) return;
         if (_mappings.Rows[e.RowIndex].Tag is not MappingRow mapping) return;
 
-        if (!mapping.IsEnabled) e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        else if (mapping.UnitMismatchWithoutConversion)
-        {
-            // The one mapping fault that produces a plausible wrong number rather than an error.
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (mapping.CodedWithoutMap)
-        {
-            e.CellStyle!.ForeColor = UiTheme.Abnormal;
-        }
+        // The unit mismatch: the one mapping fault that produces a plausible wrong number rather than an error.
+        PaintTone(e, InstrumentInterfaceScreenRules.Tone(mapping));
     }
 
     private void OnMessageFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -617,26 +547,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _messages.Rows.Count) return;
         if (_messages.Rows[e.RowIndex].Tag is not MessageLogRow message) return;
 
-        switch (message.Status)
-        {
-            case InstrumentMessageProcessingStatus.Failed:
-                e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-                e.CellStyle.ForeColor = UiTheme.Critical;
-                break;
-
-            case InstrumentMessageProcessingStatus.PartiallyImported
-                 or InstrumentMessageProcessingStatus.AwaitingAcceptance:
-                e.CellStyle!.ForeColor = UiTheme.Abnormal;
-                break;
-
-            case InstrumentMessageProcessingStatus.Imported:
-                e.CellStyle!.ForeColor = UiTheme.Normal;
-                break;
-
-            case InstrumentMessageProcessingStatus.Ignored:
-                e.CellStyle!.ForeColor = UiTheme.TextMuted;
-                break;
-        }
+        PaintTone(e, InstrumentInterfaceScreenRules.Tone(message));
     }
 
     // ---- Selection and actions -----------------------------------------------------------------
@@ -646,30 +557,19 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
     private void RefreshActions()
     {
-        var configure = _currentUser.Has(Permissions.Instruments.Configure);
-
-        _newLink.Enabled = configure;
-        _editLink.Enabled = configure && Selected is not null;
-        _editMappings.Enabled = configure && Selected is not null;
-        _testFrame.Enabled = configure && Selected is not null
-                             && _currentUser.Has(Permissions.Results.View);
-
-        _toggleLink.Enabled = Selected is not null
-                              && _currentUser.Has(Permissions.Instruments.StartStop);
-
-        _toggleLink.Text = Selected is { IsEnabled: true } ? T("Interface.Disable")
-                                                            : T("Interface.Enable");
-
-        _viewRaw.Enabled = SelectedMessage is not null;
-
         // Disabled is a hint, not the control: the service re-checks the permission and the sink
         // re-checks the status. Clicking a stale row gets a refusal with a reason, not a wrong write.
-        _replay.Enabled = SelectedMessage is { CanReplay: true }
-                          && _currentUser.Has(Permissions.Instruments.ReplayMessages);
+        var actions = InstrumentInterfaceScreenRules.Actions(_currentUser, Selected, SelectedMessage);
 
-        // Not tied to a selected row: the purge acts on the whole log, by age, and is available
-        // whether or not the operator has clicked a line.
-        _purgeLog.Enabled = _currentUser.Has(Permissions.Administration.RunMaintenance);
+        _newLink.Enabled = actions.NewLink;
+        _editLink.Enabled = actions.EditLink;
+        _editMappings.Enabled = actions.EditMappings;
+        _testFrame.Enabled = actions.TestFrame;
+        _toggleLink.Enabled = actions.Toggle;
+        _toggleLink.Text = T(actions.ToggleKey);
+        _viewRaw.Enabled = actions.ViewRaw;
+        _replay.Enabled = actions.Replay;
+        _purgeLog.Enabled = actions.PurgeLog;
     }
 
     private async Task EditLinkAsync(bool create = false)
@@ -688,10 +588,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
             if (instruments.IsFailure) { _dialogs.ShowFailure(instruments); return; }
 
-            var free = instruments.Value
-                .Where(i => !i.HasInterfaceConfigured && i.Kind == EquipmentKind.Analyser)
-                .OrderBy(i => i.Code)
-                .ToList();
+            var free = InstrumentInterfaceScreenRules.FreeInstruments(instruments.Value);
 
             if (free.Count == 0)
             {
@@ -760,25 +657,22 @@ public sealed class InstrumentInterfaceView : LocalizedView
         var mappings = await _interfaces.GetMappingsAsync(link.Id);
         if (mappings.IsFailure) { _dialogs.ShowFailure(mappings); return; }
 
-        var parameters = mappings.Value
-            .GroupBy(m => m.TestParameterId)
-            .ToDictionary(g => g.Key, g => g.First().ParameterCode);
+        var parameters = InstrumentInterfaceScreenRules.ParameterLabels(mappings.Value);
 
         string? initial = null;
 
-        if (message is { Direction: MessageDirection.Inbound })
+        if (InstrumentInterfaceScreenRules.OpensOn(message))
         {
-            var raw = await _interfaces.GetRawMessageAsync(message.Id);
+            var raw = await _interfaces.GetRawMessageAsync(message!.Id);
             if (raw.IsSuccess) initial = raw.Value;
         }
 
         async Task<string?> LoadLastAsync()
         {
-            var recent = await _interfaces.GetMessagesAsync(link.Id, 50);
+            var recent = await _interfaces.GetMessagesAsync(link.Id, InstrumentInterfaceScreenRules.RecentMessages);
             if (recent.IsFailure) return null;
 
-            var inbound = recent.Value.FirstOrDefault(
-                m => m.Direction == MessageDirection.Inbound && (m.ResultCount ?? 0) > 0);
+            var inbound = InstrumentInterfaceScreenRules.LastInboundWithResults(recent.Value);
             if (inbound is null) return null;
 
             var raw = await _interfaces.GetRawMessageAsync(inbound.Id);
@@ -790,30 +684,19 @@ public sealed class InstrumentInterfaceView : LocalizedView
         // numbers, so the mapping can be tried at once.
         async Task<string> SampleAsync()
         {
-            var recent = await _interfaces.GetMessagesAsync(link.Id, 50);
-            var tube = recent.IsSuccess
-                ? recent.Value.Where(m => m.Direction == MessageDirection.Inbound)
-                              .Select(m => m.SpecimenIds?.Split(',')[0].Trim())
-                              .FirstOrDefault(id => !string.IsNullOrWhiteSpace(id))
-                : null;
+            var recent = await _interfaces.GetMessagesAsync(link.Id, InstrumentInterfaceScreenRules.RecentMessages);
 
-            var tests = mappings.Value
-                .Where(m => m.IsEnabled)
-                .Select(m => RocheIntegra.TestNumber(m.InstrumentTestCode))
-                .OfType<int>()
-                .Distinct()
-                .Take(3)
-                .ToList();
-
-            return IntegraInstrumentEmulator.SampleTranscript(tube ?? "TUBE-0001", tests.Count > 0 ? tests : null);
+            return IntegraInstrumentEmulator.SampleTranscript(
+                InstrumentInterfaceScreenRules.SampleTube(recent.IsSuccess ? recent.Value : []),
+                InstrumentInterfaceScreenRules.SampleTests(mappings.Value));
         }
 
         using var dialog = new InstrumentFrameTestDialog(
             Localizer, _dialogs,
-            $"{link.InstrumentCode} · {T($"InstrumentProtocol.{protocol}")}",
+            InstrumentInterfaceScreenRules.FrameTestSubtitle(link, protocol, T),
             frame => _interfaces.PreviewMessageAsync(link.Id, protocol, format, frame),
             LoadLastAsync, parameters, initial,
-            protocol == InstrumentProtocol.RocheIntegra ? SampleAsync : null);
+            InstrumentInterfaceScreenRules.HasSample(protocol) ? SampleAsync : null);
 
         dialog.ShowDialog(owner);
     }
@@ -834,7 +717,8 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T(enabling ? "Interface.EnablePrompt" : "Interface.DisablePrompt", row.InstrumentCode),
-            T(enabling ? "Interface.Enable" : "Interface.Disable"), maxLength: 500);
+            T(enabling ? "Interface.Enable" : "Interface.Disable"),
+            maxLength: InstrumentInterfaceScreenRules.ToggleReasonMaxLength);
 
         if (reason is null) return;
 
@@ -896,11 +780,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         // Zero stored is not a failure: the frame may have been re-parsed and every value still
         // refused. Saying "done" without the count would hide that.
-        _dialogs.Info(
-            result.Value == 0
-                ? T("Interface.ReplayNothing")
-                : Localizer.Format("Interface.ReplayDone", result.Value),
-            T("Interface.Replay"));
+        _dialogs.Info(InstrumentInterfaceScreenRules.ReplayOutcome(result.Value, T), T("Interface.Replay"));
 
         // Reloaded rather than patched in place: the replay changes the row's status, its imported
         // count and its replayed stamp, and re-reading is the only way the grid shows what the
@@ -925,32 +805,25 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         var scope = census.Value;
 
-        if (scope.Purgeable == 0)
+        if (InstrumentInterfaceScreenRules.NothingToPurge(scope))
         {
             // Said plainly rather than shown as a no-op: an operator who clicks and sees nothing
             // happen assumes the button is broken, not that the log is within retention.
             _dialogs.Info(T("Interface.PurgeLogNothing", _options.MessageLogRetentionDays),
                           T("Interface.PurgeLog"));
 
-            if (scope.RetainedReplayable > 0)
-                _dialogs.Warn(T("Interface.PurgeLogRetained", scope.RetainedReplayable),
-                              T("Interface.PurgeLog"));
+            if (InstrumentInterfaceScreenRules.RetainedWarning(scope, T) is { } kept)
+                _dialogs.Warn(kept, T("Interface.PurgeLog"));
 
             return;
         }
 
-        var cutoff = scope.OldestPurgeable is { } oldest
-            ? oldest.ToLocalTime().ToString("dd/MM/yyyy")
-            : string.Empty;
-
-        if (!_dialogs.Confirm(
-                T("Interface.PurgeLogScope", scope.Purgeable, cutoff, scope.RetainedReplayable),
-                T("Interface.PurgeLog")))
+        if (!_dialogs.Confirm(InstrumentInterfaceScreenRules.PurgeScope(scope, T), T("Interface.PurgeLog")))
             return;
 
         // Within the security journal's details, after the count and the cut-off it records.
-        var reason = _dialogs.PromptForReason(T("Interface.PurgeLogPrompt"),
-                                               T("Interface.PurgeLog"), maxLength: 1000);
+        var reason = _dialogs.PromptForReason(T("Interface.PurgeLogPrompt"), T("Interface.PurgeLog"),
+                                               maxLength: InstrumentInterfaceScreenRules.PurgeReasonMaxLength);
 
         if (string.IsNullOrWhiteSpace(reason)) return;
 
@@ -960,9 +833,8 @@ public sealed class InstrumentInterfaceView : LocalizedView
 
         _dialogs.Info(T("Interface.PurgeLogDone", result.Value), T("Interface.PurgeLog"));
 
-        if (scope.RetainedReplayable > 0)
-            _dialogs.Warn(T("Interface.PurgeLogRetained", scope.RetainedReplayable),
-                          T("Interface.PurgeLog"));
+        if (InstrumentInterfaceScreenRules.RetainedWarning(scope, T) is { } retained)
+            _dialogs.Warn(retained, T("Interface.PurgeLog"));
 
         await LoadDetailAsync();
     }

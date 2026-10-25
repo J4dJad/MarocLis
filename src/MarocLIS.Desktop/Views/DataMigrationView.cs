@@ -22,8 +22,7 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class DataMigrationView : LocalizedView
 {
-    private const string NotMapped = "";
-    private const int PreviewRows = DataMigrationService.PreviewRows;
+    private const string NotMapped = DataMigrationScreenRules.NotMapped;
 
     private readonly DataMigrationService _migration;
     private readonly IMigrationWorkbook _workbook;
@@ -115,7 +114,7 @@ public sealed class DataMigrationView : LocalizedView
         _dialogs = dialogs;
         _cultureManager = cultureManager;
         _logger = logger;
-        _profiles = new MigrationProfileStore();
+        _profiles = MigrationProfilePasswords.Store();
 
         BuildLayout();
         Wire();
@@ -583,8 +582,7 @@ public sealed class DataMigrationView : LocalizedView
         _table.Enabled = _settings is not null;
         _query.Enabled = _settings is not null && PermissionGate.Allows(Permissions.Administration.Migration);
 
-        var rows = _source?.Rows.Count ?? 0;
-        _previewCount.Text = _source is null ? string.Empty : T("Migration.RowsRead", rows, _source.Columns.Count);
+        _previewCount.Text = DataMigrationScreenRules.RowsRead(_source, T);
         _deleteProfile.Enabled = _exportProfile.Enabled = _currentProfile is not null;
     }
 
@@ -615,9 +613,8 @@ public sealed class DataMigrationView : LocalizedView
                     return;
                 }
 
-                var preferred = _currentProfile?.For(Kind).Sheet;
-                var index = preferred is null ? -1 : _sheet.Items.IndexOf(preferred);
-                _sheet.SelectedIndex = _sheet.Items.Count == 0 ? -1 : Math.Max(0, index);
+                var preferred = DataMigrationScreenRules.PreferredSheet([.. _sheet.Items.Cast<string>()], _currentProfile, Kind);
+                _sheet.SelectedIndex = preferred is null ? -1 : _sheet.Items.IndexOf(preferred);
             }
         }
         finally
@@ -628,8 +625,7 @@ public sealed class DataMigrationView : LocalizedView
         await ReadFileAsync(picker.FileName, SelectedSheet());
     }
 
-    private static bool IsWorkbook(string path) =>
-        string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase);
+    private static bool IsWorkbook(string path) => DataMigrationScreenRules.IsWorkbook(path);
 
     private string? SelectedSheet() => _sheet.SelectedItem as string;
 
@@ -646,7 +642,7 @@ public sealed class DataMigrationView : LocalizedView
             }, ct);
 
             _filePath = path;
-            await UseSourceAsync(table, sheet is null ? Path.GetFileName(path) : $"{Path.GetFileName(path)} › {sheet}");
+            await UseSourceAsync(table, DataMigrationScreenRules.FileLabel(path, sheet));
         }, onFailure: ex => ex is IOException or UnauthorizedAccessException or InvalidDataException or FormatException
                             or ArgumentException
             ? T("Migration.FileUnreadable", ex.Message is { } m && m.StartsWith("Migration_", StringComparison.Ordinal) ? T(m) : ex.Message)
@@ -657,7 +653,7 @@ public sealed class DataMigrationView : LocalizedView
     {
         var initial = _settings?.Clone() ?? _currentProfile?.Connection?.Clone();
         if (initial is not null && _currentProfile is not null && initial.Password is null)
-            initial.Password = MigrationProfileStore.PasswordOf(_currentProfile);
+            initial.Password = MigrationProfilePasswords.PasswordOf(_currentProfile);
 
         using var dialog = new SourceConnectionDialog(_migration, _dialogs, Localizer, _cultureManager, initial,
                                                       _rememberPassword || _currentProfile?.ProtectedPassword is not null);
@@ -747,7 +743,7 @@ public sealed class DataMigrationView : LocalizedView
     internal async Task UseSourceAsync(SourceTable table, string label)
     {
         _source = table;
-        _sourceLabel = label.Length > MigrationBatch.SourceLabelMaxLength ? label[..MigrationBatch.SourceLabelMaxLength] : label;
+        _sourceLabel = DataMigrationScreenRules.SourceLabel(label);
 
         if (table.Truncated)
             _dialogs.Warn(T("Migration_TooManyRows", DataMigrationService.MaxRows), Title);
@@ -785,7 +781,7 @@ public sealed class DataMigrationView : LocalizedView
                 : DataGridViewAutoSizeColumnsMode.Fill;
             if (_source.Columns.Count > 8) foreach (DataGridViewColumn column in _preview.Columns) column.Width = 140;
 
-            foreach (var row in _source.Rows.Take(PreviewRows))
+            foreach (var row in DataMigrationScreenRules.Preview(_source))
                 _preview.Rows.Add([.. row.Select(v => (object?)v ?? string.Empty)]);
         }
 
@@ -797,19 +793,7 @@ public sealed class DataMigrationView : LocalizedView
     /// <summary>The saved matching of the profile where its columns exist, the automatic one for the rest.</summary>
     private void MatchColumns()
     {
-        if (_source is null) { _columns = new(StringComparer.Ordinal); RenderMapping(); return; }
-
-        var automatic = ColumnMatcher.AutoMatch(Kind, _source.Columns);
-        var saved = _currentProfile?.For(Kind).Columns ?? [];
-
-        _columns = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var field in MigrationSchema.Fields(Kind))
-        {
-            if (saved.TryGetValue(field.Key, out var column) && _source.IndexOf(column) >= 0) _columns[field.Key] = _source.Columns[_source.IndexOf(column)];
-            else if (saved.ContainsKey(field.Key) && string.IsNullOrEmpty(saved[field.Key])) continue;
-            else if (automatic.TryGetValue(field.Key, out var matched)) _columns[field.Key] = matched;
-        }
-
+        _columns = DataMigrationScreenRules.MatchColumns(Kind, _source, _currentProfile);
         RenderMapping();
     }
 
@@ -828,8 +812,7 @@ public sealed class DataMigrationView : LocalizedView
         try
         {
             _mapping.Rows.Clear();
-            var choices = new List<Choice> { new(NotMapped, T("Migration.NotMapped")) };
-            if (_source is not null) choices.AddRange(_source.Columns.Select(c => new Choice(c, c)));
+            var choices = DataMigrationScreenRules.ColumnChoices(_source, T).Select(c => new Choice(c.Value, c.Display)).ToList();
             ((DataGridViewComboBoxColumn)_mapping.Columns["column"]!).DataSource = choices;
 
             foreach (var field in MigrationSchema.Fields(Kind))
@@ -838,12 +821,11 @@ public sealed class DataMigrationView : LocalizedView
                 var index = _mapping.Rows.Add(T(field.LabelKey), field.Required ? T("Migration.Required") : string.Empty,
                                               column, Sample(column));
                 _mapping.Rows[index].Tag = field;
-                if (field.Required && column.Length == 0)
+                if (DataMigrationScreenRules.IsMissing(field, _columns))
                     _mapping.Rows[index].Cells["field"].Style.ForeColor = UiTheme.Critical;
             }
 
-            var mapped = _columns.Count;
-            _mappingCount.Text = T("Migration.ColumnsMapped", mapped, MigrationSchema.Fields(Kind).Count);
+            _mappingCount.Text = DataMigrationScreenRules.ColumnsMapped(Kind, _columns, T);
         }
         finally
         {
@@ -852,18 +834,7 @@ public sealed class DataMigrationView : LocalizedView
     }
 
     /// <summary>The first values of a column, for the operator to recognise it.</summary>
-    private string Sample(string column)
-    {
-        if (_source is null || column.Length == 0) return string.Empty;
-        var index = _source.IndexOf(column);
-        if (index < 0) return string.Empty;
-
-        var values = _source.Rows.Select(r => index < r.Length ? r[index] : null)
-                            .Where(v => !string.IsNullOrWhiteSpace(v))
-                            .Take(3)
-                            .ToList();
-        return string.Join(" · ", values);
-    }
+    private string Sample(string column) => DataMigrationScreenRules.Sample(_source, column);
 
     private void OnMappingChanged(int rowIndex)
     {
@@ -872,13 +843,12 @@ public sealed class DataMigrationView : LocalizedView
         if (row.Tag is not MigrationField field) return;
 
         var column = row.Cells["column"].Value as string ?? NotMapped;
-        if (column.Length == 0) _columns.Remove(field.Key);
-        else _columns[field.Key] = column;
+        DataMigrationScreenRules.SetColumn(_columns, field.Key, column);
 
         _filling = true;
         row.Cells["sample"].Value = Sample(column);
-        row.Cells["field"].Style.ForeColor = field.Required && column.Length == 0 ? UiTheme.Critical : UiTheme.TextPrimary;
-        _mappingCount.Text = T("Migration.ColumnsMapped", _columns.Count, MigrationSchema.Fields(Kind).Count);
+        row.Cells["field"].Style.ForeColor = DataMigrationScreenRules.IsMissing(field, _columns) ? UiTheme.Critical : UiTheme.TextPrimary;
+        _mappingCount.Text = DataMigrationScreenRules.ColumnsMapped(Kind, _columns, T);
         _filling = false;
 
         if (field.Type == MigrationFieldType.Coded) RenderCorrespondences();
@@ -886,14 +856,6 @@ public sealed class DataMigrationView : LocalizedView
     }
 
     // ---- Correspondences --------------------------------------------------------------------------------
-
-    private enum CorrespondenceState
-    {
-        Settled,
-        Suggested,
-        Missing,
-        Ignored
-    }
 
     private async Task LoadTargetsAsync()
     {
@@ -929,9 +891,8 @@ public sealed class DataMigrationView : LocalizedView
                                                       row.Count.ToString(CultureInfo.CurrentCulture), null, string.Empty);
                 var gridRow = _correspondences.Rows[index];
 
-                var choices = Choices(row.List);
-                var target = row.Target ?? (row.List == MigrationCodeList.Unit ? CorrespondenceTables.KeepAsIs : NotMapped);
-                if (target.Length > 0 && choices.All(c => c.Value != target)) choices.Add(new Choice(target, target));
+                var target = DataMigrationScreenRules.InitialTarget(row);
+                var choices = Choices(row.List, target);
 
                 var cell = new DataGridViewComboBoxCell
                 {
@@ -945,16 +906,14 @@ public sealed class DataMigrationView : LocalizedView
                 cell.Value = target;
                 gridRow.Cells["target"].ReadOnly = false;
 
-                var state = State(row.List, target, row.Suggested);
+                var state = DataMigrationScreenRules.State(row.List, target, row.Suggested);
                 if (state == CorrespondenceState.Missing) missing++;
                 gridRow.Tag = state;
                 gridRow.Cells["state"].Value = T($"Migration.State{state}");
                 gridRow.Cells["list"].Tag = row.List;
             }
 
-            _correspondenceCount.Text = rows.Count == 0
-                ? T("Migration.NoCodedValues")
-                : T("Migration.CorrespondencesCount", rows.Count, missing);
+            _correspondenceCount.Text = DataMigrationScreenRules.CorrespondencesCount(rows.Count, missing, T);
             _correspondenceCount.ForeColor = missing > 0 ? UiTheme.Critical : UiTheme.TextSecondary;
         }
         finally
@@ -963,34 +922,9 @@ public sealed class DataMigrationView : LocalizedView
         }
     }
 
-    private static CorrespondenceState State(MigrationCodeList list, string target, bool suggested)
-    {
-        if (target.Length == 0) return list == MigrationCodeList.Unit ? CorrespondenceState.Settled : CorrespondenceState.Missing;
-        if (target == CorrespondenceTables.Ignore) return CorrespondenceState.Ignored;
-        return suggested ? CorrespondenceState.Suggested : CorrespondenceState.Settled;
-    }
-
     /// <summary>What a value of <paramref name="list"/> can become, in the operator's language.</summary>
-    private List<Choice> Choices(MigrationCodeList list)
-    {
-        var choices = new List<Choice> { new(NotMapped, T("Migration.ChooseTarget")) };
-
-        foreach (var target in _targets.GetValueOrDefault(list) ?? [])
-        {
-            var display = list switch
-            {
-                MigrationCodeList.Sex => T($"Migration.Sex.{target.Value}"),
-                MigrationCodeList.Specialty => T($"PrescriberKind.{target.Value}"),
-                _ => target.Label
-            };
-            choices.Add(new Choice(target.Value, display));
-        }
-
-        if (list == MigrationCodeList.Unit) choices.Add(new Choice(CorrespondenceTables.KeepAsIs, T("Migration.KeepAsIs")));
-        if (list is MigrationCodeList.Analysis or MigrationCodeList.Payer)
-            choices.Add(new Choice(CorrespondenceTables.Ignore, T("Migration.IgnoreRows")));
-        return choices;
-    }
+    private List<Choice> Choices(MigrationCodeList list, string current) =>
+        [.. DataMigrationScreenRules.TargetChoices(list, _targets, current, T).Select(c => new Choice(c.Value, c.Display))];
 
     private void OnCorrespondenceChanged(int rowIndex)
     {
@@ -1003,31 +937,25 @@ public sealed class DataMigrationView : LocalizedView
         _correspondenceTables.Set(list, source, target.Length == 0 ? null : target);
 
         _filling = true;
-        var state = State(list, target, suggested: false);
+        var state = DataMigrationScreenRules.State(list, target, suggested: false);
         row.Tag = state;
         row.Cells["state"].Value = T($"Migration.State{state}");
         _filling = false;
         _correspondences.InvalidateRow(rowIndex);
 
         var missing = _correspondences.Rows.Cast<DataGridViewRow>().Count(r => r.Tag is CorrespondenceState.Missing);
-        _correspondenceCount.Text = T("Migration.CorrespondencesCount", _correspondences.Rows.Count, missing);
+        _correspondenceCount.Text = DataMigrationScreenRules.CorrespondencesCount(_correspondences.Rows.Count, missing, T);
         _correspondenceCount.ForeColor = missing > 0 ? UiTheme.Critical : UiTheme.TextSecondary;
         Invalidate(analysisOnly: true);
     }
 
     /// <summary>The correspondences shown, the suggestions accepted as they stand, for the request.</summary>
-    private CorrespondenceTables SettledCorrespondences()
-    {
-        var tables = _correspondenceTables.Clone();
-        foreach (DataGridViewRow row in _correspondences.Rows)
-        {
-            if (row.Cells["list"].Tag is not MigrationCodeList list) continue;
-            var target = row.Cells["target"].Value as string;
-            if (string.IsNullOrEmpty(target)) continue;
-            tables.Set(list, row.Cells["value"].Value as string ?? string.Empty, target);
-        }
-        return tables;
-    }
+    private CorrespondenceTables SettledCorrespondences() =>
+        DataMigrationScreenRules.Settled(_correspondenceTables,
+            _correspondences.Rows.Cast<DataGridViewRow>()
+                .Where(r => r.Cells["list"].Tag is MigrationCodeList)
+                .Select(r => ((MigrationCodeList)r.Cells["list"].Tag!, r.Cells["value"].Value as string ?? string.Empty,
+                              r.Cells["target"].Value as string)));
 
     // ---- Simulation and import ------------------------------------------------------------------------
 
@@ -1035,27 +963,18 @@ public sealed class DataMigrationView : LocalizedView
 
     private MigrationRequest? Request()
     {
-        if (_source is null) { _dialogs.Warn(T("Migration.ReadSourceFirst"), _simulate.Text); return null; }
-        if (SourceSystem().Length == 0)
+        if (DataMigrationScreenRules.RequestRefusal(_source, SourceSystem()) is { } refused)
         {
-            _dialogs.Warn(T("Migration_SourceSystemRequired"), _simulate.Text);
-            _system.Focus();
+            _dialogs.Warn(T(refused), _simulate.Text);
+            if (_source is not null) _system.Focus();
             return null;
         }
 
         _mapping.EndEdit();
         _correspondences.EndEdit();
 
-        return new MigrationRequest
-        {
-            Kind = Kind,
-            SourceSystem = SourceSystem(),
-            SourceLabel = _sourceLabel,
-            Table = _source,
-            Columns = new Dictionary<string, string>(_columns, StringComparer.Ordinal),
-            Correspondences = SettledCorrespondences(),
-            LinkByNameAndBirthDate = _linkByName.Checked
-        };
+        return DataMigrationScreenRules.Request(Kind, SourceSystem(), _sourceLabel, _source!, _columns,
+                                                SettledCorrespondences(), _linkByName.Checked);
     }
 
     private async Task SimulateAsync()
@@ -1077,13 +996,10 @@ public sealed class DataMigrationView : LocalizedView
 
     private async Task ImportAsync()
     {
-        if (_analysis is null) { _dialogs.Warn(T("Migration.SimulateFirst"), _import.Text); return; }
-        if (_analysis.IsBlocked) { _dialogs.Warn(T("Migration_ImportBlocked", Blocking(_analysis)), _import.Text); return; }
+        if (DataMigrationScreenRules.ImportRefusal(_analysis, T) is { } refused) { _dialogs.Warn(refused, _import.Text); return; }
         if (Request() is not { } request) return;
 
-        var question = T("Migration.ConfirmImport", _analysis.ToCreate, _analysis.ToUpdate, _analysis.Skipped,
-                         _analysis.InError, T($"MigrationKind.{Kind}"));
-        if (!_dialogs.Confirm(question, _import.Text)) return;
+        if (!_dialogs.Confirm(DataMigrationScreenRules.ConfirmImport(_analysis!, Kind, T), _import.Text)) return;
 
         await Run(T("Migration.StepImport"), async ct =>
         {
@@ -1095,24 +1011,18 @@ public sealed class DataMigrationView : LocalizedView
             RenderReport();
             ShowStatus();
 
-            var message = T(_summary.Interrupted ? "Migration.SummaryInterrupted" : "Migration.Summary",
-                            T($"MigrationKind.{_summary.Kind}"), _summary.Created, _summary.Updated, _summary.Skipped,
-                            _summary.Failed);
-            _dialogs.Info(message, _import.Text);
+            _dialogs.Info(DataMigrationScreenRules.SummaryMessage(_summary, T), _import.Text);
         });
 
         await LoadJournalAsync();
         if (Kind == DataMigrationKind.OpeningBalances) await LoadBalancesAsync();
     }
 
-    private static int Blocking(MigrationAnalysis analysis) =>
-        analysis.Anomalies.Count(a => a.Severity == MigrationSeverity.Blocking);
-
     private IProgress<MigrationProgress> Progress() => new Progress<MigrationProgress>(p =>
     {
         if (IsDisposed) return;
-        _progress.Value = p.Total == 0 ? 0 : (int)Math.Clamp(1000L * p.Done / p.Total, 0, 1000);
-        _status.Text = $"{T(p.StepKey)} {p.Done.ToString("N0", CultureInfo.CurrentCulture)} / {p.Total.ToString("N0", CultureInfo.CurrentCulture)}";
+        _progress.Value = DataMigrationScreenRules.Thousandths(p);
+        _status.Text = DataMigrationScreenRules.Progress(p, T);
     });
 
     /// <summary>Settings changed since the simulation: it no longer says what an import would do.</summary>
@@ -1131,55 +1041,22 @@ public sealed class DataMigrationView : LocalizedView
         _report.SuspendLayout();
         _report.Rows.Clear();
 
-        var anomalies = _summary?.Anomalies ?? _analysis?.Anomalies ?? [];
-        foreach (var anomaly in anomalies.OrderBy(a => a.Row).ThenByDescending(a => a.Severity).Take(5000))
+        var anomalies = DataMigrationScreenRules.Anomalies(_summary, _analysis);
+        foreach (var line in DataMigrationScreenRules.ReportLines(anomalies, T))
         {
-            var index = _report.Rows.Add(
-                anomaly.Row == 0 ? "—" : anomaly.Row.ToString(CultureInfo.InvariantCulture),
-                anomaly.FieldKey is null ? "—" : T($"Migration.Field.{anomaly.FieldKey}"),
-                T($"MigrationSeverity.{anomaly.Severity}"),
-                Problem(anomaly),
-                Suggestion(anomaly));
-            _report.Rows[index].Tag = anomaly.Severity;
+            var index = _report.Rows.Add(line.Row, line.Field, T($"MigrationSeverity.{line.Severity}"), line.Problem, line.Suggestion);
+            _report.Rows[index].Tag = line.Severity;
         }
 
         _report.ResumeLayout(performLayout: true);
 
-        if (_summary is { } summary)
-        {
-            _reportCount.Text = T("Migration.ImportCounts", summary.Created, summary.Updated, summary.Skipped, summary.Failed);
-            _reportCount.ForeColor = summary.Interrupted ? UiTheme.Critical : UiTheme.TextSecondary;
-        }
-        else if (_analysis is { } analysis)
-        {
-            _reportCount.Text = T("Migration.SimulationCounts", analysis.ToCreate, analysis.ToUpdate, analysis.Skipped,
-                                  analysis.InError, Blocking(analysis));
-            _reportCount.ForeColor = analysis.IsBlocked ? UiTheme.Critical : UiTheme.TextSecondary;
-        }
-        else
-        {
-            _reportCount.Text = T("Migration.NoSimulation");
-            _reportCount.ForeColor = UiTheme.TextSecondary;
-        }
+        var (counts, critical) = DataMigrationScreenRules.ReportCounts(_summary, _analysis, T);
+        _reportCount.Text = counts;
+        _reportCount.ForeColor = critical ? UiTheme.Critical : UiTheme.TextSecondary;
 
         _exportReport.Enabled = anomalies.Count > 0;
-        _import.Enabled = _analysis is { IsBlocked: false } a && a.ToCreate + a.ToUpdate > 0
-                          && PermissionGate.Allows(Permissions.Administration.Migration);
+        _import.Enabled = PermissionGate.User is { } user && DataMigrationScreenRules.CanImport(user, _analysis);
     }
-
-    private string Problem(MigrationAnomaly anomaly) => T(anomaly.ProblemKey, Args(anomaly.ProblemArgs));
-
-    private string Suggestion(MigrationAnomaly anomaly) =>
-        anomaly.SuggestionKey is null ? string.Empty : T(anomaly.SuggestionKey, Args(anomaly.SuggestionArgs));
-
-    /// <summary>Arguments naming a field or a list are resource keys: shown in the operator's language.</summary>
-    private object?[] Args(object?[] args) =>
-    [
-        .. args.Select(a => a is string s && (s.StartsWith("Migration.Field.", StringComparison.Ordinal)
-                                              || s.StartsWith("MigrationCodeList.", StringComparison.Ordinal))
-            ? T(s)
-            : a is decimal d ? d.ToString("N2", CultureInfo.CurrentCulture) : a)
-    ];
 
     private void ShowStatus(string? message = null)
     {
@@ -1189,29 +1066,20 @@ public sealed class DataMigrationView : LocalizedView
 
         if (message is not null) { _status.Text = message; _status.ForeColor = UiTheme.TextSecondary; return; }
 
-        if (_source is null)
-            _status.Text = T("Migration.StatusStart");
-        else if (_summary is not null)
-            _status.Text = T("Migration.StatusImported");
-        else if (_analysis is null)
-            _status.Text = T("Migration.StatusSimulate");
-        else if (_analysis.IsBlocked)
-            _status.Text = T("Migration_ImportBlocked", Blocking(_analysis));
-        else
-            _status.Text = T("Migration.StatusReady", _analysis.ToCreate, _analysis.ToUpdate);
-
-        _status.ForeColor = _analysis?.IsBlocked == true ? UiTheme.Critical : UiTheme.TextSecondary;
+        var (text, critical) = DataMigrationScreenRules.Status(_source, _analysis, _summary, T);
+        _status.Text = text;
+        _status.ForeColor = critical ? UiTheme.Critical : UiTheme.TextSecondary;
     }
 
     private void ExportReport()
     {
-        var anomalies = _summary?.Anomalies ?? _analysis?.Anomalies ?? [];
+        var anomalies = DataMigrationScreenRules.Anomalies(_summary, _analysis);
         if (anomalies.Count == 0) return;
 
         using var dialog = new SaveFileDialog
         {
             Title = UserDialogs.CaptionOf(_exportReport.Text, _exportReport.Text),
-            FileName = $"rapport-anomalies-{Kind.ToString().ToLowerInvariant()}-{DateTime.Now:yyyyMMdd-HHmm}.csv",
+            FileName = DataMigrationScreenRules.ReportFileName(Kind, DateTime.Now),
             Filter = "CSV (*.csv)|*.csv",
             DefaultExt = "csv",
             AddExtension = true,
@@ -1231,21 +1099,7 @@ public sealed class DataMigrationView : LocalizedView
     }
 
     /// <summary>The anomaly report as a « ; » CSV a French Excel opens: row, field, severity, problem, suggestion.</summary>
-    internal byte[] ReportCsv(IReadOnlyList<MigrationAnomaly> anomalies)
-    {
-        var text = new StringBuilder();
-        text.Append(CsvSource.Line([T("Migration.ColRow"), T("Migration.ColField"), T("Migration.ColSeverity"),
-                                    T("Migration.ColProblem"), T("Migration.ColSuggestion")])).Append("\r\n");
-        foreach (var anomaly in anomalies.OrderBy(a => a.Row))
-            text.Append(CsvSource.Line([
-                anomaly.Row == 0 ? string.Empty : anomaly.Row.ToString(CultureInfo.InvariantCulture),
-                anomaly.FieldKey is null ? string.Empty : T($"Migration.Field.{anomaly.FieldKey}"),
-                T($"MigrationSeverity.{anomaly.Severity}"),
-                Problem(anomaly),
-                Suggestion(anomaly)
-            ])).Append("\r\n");
-        return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(text.ToString())];
-    }
+    internal byte[] ReportCsv(IReadOnlyList<MigrationAnomaly> anomalies) => DataMigrationScreenRules.ReportCsv(anomalies, T);
 
     // ---- Kind and profile -----------------------------------------------------------------------------
 
@@ -1321,7 +1175,7 @@ public sealed class DataMigrationView : LocalizedView
         if (profile.Connection is not null)
         {
             _settings = profile.Connection.Clone();
-            _settings.Password = MigrationProfileStore.PasswordOf(profile);
+            _settings.Password = MigrationProfilePasswords.PasswordOf(profile);
             _fromDatabase.Checked = true;
         }
 
@@ -1338,42 +1192,18 @@ public sealed class DataMigrationView : LocalizedView
 
     private MigrationProfile CurrentAsProfile(string name)
     {
-        var profile = _currentProfile is not null && _currentProfile.Name == name ? _currentProfile : new MigrationProfile();
-        profile.Name = name;
-        profile.SourceSystem = SourceSystem();
-        profile.LinkByNameAndBirthDate = _linkByName.Checked;
-        profile.Correspondences = SettledCorrespondences();
+        var table = _settings is not null && _table.SelectedIndex >= 0 && _table.SelectedIndex < _tables.Count
+            ? _tables[_table.SelectedIndex]
+            : null;
 
-        if (_settings is not null)
-        {
-            profile.Connection = _settings.Clone();
-            profile.Connection.Password = null;
-        }
-
-        var kind = profile.For(Kind);
-        if (_source is not null)
-        {
-            // Every field, mapped or not: an empty column says « non reprise » next time too.
-            kind.Columns = MigrationSchema.Fields(Kind)
-                .ToDictionary(f => f.Key, f => _columns.GetValueOrDefault(f.Key) ?? NotMapped, StringComparer.Ordinal);
-        }
-
-        if (_filePath is not null) kind.Sheet = SelectedSheet();
-        if (_settings is not null)
-        {
-            var table = _table.SelectedIndex >= 0 && _table.SelectedIndex < _tables.Count ? _tables[_table.SelectedIndex] : null;
-            kind.TableSchema = table?.Schema;
-            kind.TableName = table?.Name;
-            kind.TableIsView = table?.IsView ?? false;
-            kind.Query = table is null ? _customQuery : null;
-        }
-
-        return profile;
+        return DataMigrationScreenRules.ToProfile(_currentProfile, name, Kind, SourceSystem(), _linkByName.Checked,
+                                                  SettledCorrespondences(), _columns, _source is not null,
+                                                  SelectedSheet(), _filePath is not null, _settings, table, _customQuery);
     }
 
     private void SaveProfile()
     {
-        var suggested = _currentProfile?.Name ?? (SourceSystem().Length > 0 ? SourceSystem() : null);
+        var suggested = DataMigrationScreenRules.SuggestedProfileName(_currentProfile, SourceSystem());
         var name = _dialogs.PromptForText(T("Migration.ProfileNamePrompt"), _saveProfile.Text, suggested,
                                           MigrationProfile.NameMaxLength);
         name = MigrationProfileStore.CleanName(name);
@@ -1421,7 +1251,7 @@ public sealed class DataMigrationView : LocalizedView
         using var dialog = new SaveFileDialog
         {
             Title = UserDialogs.CaptionOf(_exportProfile.Text, _exportProfile.Text),
-            FileName = $"profil-reprise-{_currentProfile.Name}.json",
+            FileName = DataMigrationScreenRules.ProfileFileName(_currentProfile),
             Filter = "JSON (*.json)|*.json",
             DefaultExt = "json",
             AddExtension = true,
@@ -1452,7 +1282,7 @@ public sealed class DataMigrationView : LocalizedView
 
         try
         {
-            if (new FileInfo(picker.FileName).Length > 5 * 1024 * 1024) { _dialogs.Warn(T("Migration.ProfileUnreadable", "> 5 Mo"), _importProfile.Text); return; }
+            if (!DataMigrationScreenRules.IsReadableProfileSize(new FileInfo(picker.FileName).Length)) { _dialogs.Warn(T("Migration.ProfileUnreadable", "> 5 Mo"), _importProfile.Text); return; }
 
             var profile = MigrationProfileStore.Import(File.ReadAllBytes(picker.FileName));
             if (profile.Name.Length == 0) profile.Name = Path.GetFileNameWithoutExtension(picker.FileName);
@@ -1539,17 +1369,15 @@ public sealed class DataMigrationView : LocalizedView
         _journal.Rows.Clear();
         foreach (var batch in batches.Value)
         {
-            var state = batch.Undone ? "Undone" : batch.Interrupted ? "Interrupted" : batch.CompletedAt is null ? "Running" : "Done";
             var index = _journal.Rows.Add(
                 batch.StartedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", culture),
                 T($"MigrationKind.{batch.Kind}"), batch.SourceSystem, batch.SourceLabel, batch.UserName ?? string.Empty,
                 batch.Rows.ToString("N0", culture), batch.Created.ToString("N0", culture), batch.Updated.ToString("N0", culture),
-                batch.Skipped.ToString("N0", culture), batch.Failed.ToString("N0", culture), T($"Migration.Batch{state}"));
+                batch.Skipped.ToString("N0", culture), batch.Failed.ToString("N0", culture), T(DataMigrationScreenRules.BatchState(batch)));
             _journal.Rows[index].Tag = batch;
         }
 
-        _undoLast.Enabled = batches.Value.Any(b => !b.Undone && b.CompletedAt is not null && b.Created > 0)
-                            && PermissionGate.Allows(Permissions.Administration.Migration);
+        _undoLast.Enabled = PermissionGate.User is { } user && DataMigrationScreenRules.CanUndo(user, batches.Value);
     }
 
     private async Task UndoLastAsync()
@@ -1557,12 +1385,10 @@ public sealed class DataMigrationView : LocalizedView
         var batches = await _migration.GetBatchesAsync();
         if (batches.IsFailure) { _dialogs.ShowFailure(batches, _undoLast.Text); return; }
 
-        var last = batches.Value.FirstOrDefault(b => !b.Undone && b.CompletedAt is not null);
+        var last = DataMigrationScreenRules.LastUndoable(batches.Value);
         if (last is null) { _dialogs.Info(T("Migration_NothingToUndo"), _undoLast.Text); return; }
 
-        var question = T("Migration.ConfirmUndo", T($"MigrationKind.{last.Kind}"),
-                         last.StartedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.CurrentCulture), last.Created);
-        if (!_dialogs.Confirm(question, _undoLast.Text)) return;
+        if (!_dialogs.Confirm(DataMigrationScreenRules.ConfirmUndo(last, T), _undoLast.Text)) return;
 
         try
         {
@@ -1601,26 +1427,11 @@ public sealed class DataMigrationView : LocalizedView
 
     internal void RenderOldNumbers(IReadOnlyList<OldNumberMatch> matches)
     {
-        var culture = CultureInfo.CurrentCulture;
         _oldNumbers.Rows.Clear();
 
-        foreach (var match in matches)
-        {
-            var birth = match.DateOfBirth?.ToString("dd/MM/yyyy", culture) ?? string.Empty;
-            if (match.History.Count == 0)
-            {
-                _oldNumbers.Rows.Add(match.RecordNumber, match.FullName, birth, match.OldNumber ?? string.Empty,
-                                     string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
-                continue;
-            }
-
-            foreach (var result in match.History)
-                _oldNumbers.Rows.Add(match.RecordNumber, match.FullName, birth, match.OldNumber ?? string.Empty,
-                                     result.Date.ToLocalTime().ToString("dd/MM/yyyy", culture),
-                                     $"{result.ParameterCode} — {result.ParameterName}",
-                                     result.Unit is null ? result.Value : $"{result.Value} {result.Unit}",
-                                     result.ReferenceRange ?? string.Empty, result.OldAccessionNumber ?? string.Empty);
-        }
+        foreach (var line in DataMigrationScreenRules.OldNumberLines(matches))
+            _oldNumbers.Rows.Add(line.Record, line.Patient, line.Birth, line.OldNumber, line.Date, line.Analysis,
+                                 line.Value, line.Range, line.Accession);
     }
 
     private async Task LoadBalancesAsync()
@@ -1638,8 +1449,7 @@ public sealed class DataMigrationView : LocalizedView
                 balance.Amount.ToString("N2", culture), balance.OldInvoiceNumber ?? string.Empty,
                 balance.OldInvoiceDate?.ToString("dd/MM/yyyy", culture) ?? string.Empty, balance.Label ?? string.Empty);
 
-        _balanceCount.Text = T("Migration.BalancesTotal", balances.Value.Count,
-                               balances.Value.Sum(b => b.Amount).ToString("N2", culture));
+        _balanceCount.Text = DataMigrationScreenRules.BalancesTotal(balances.Value, T);
     }
 
     // ---- Long operations ------------------------------------------------------------------------------

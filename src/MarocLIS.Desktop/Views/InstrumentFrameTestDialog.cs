@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Instruments;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Localization;
@@ -169,8 +170,7 @@ internal sealed class InstrumentFrameTestDialog : Form
     }
 
     /// <summary>A stored frame keeps CR between records; a text box needs a full line break.</summary>
-    private static string Displayable(string? frame) =>
-        (frame ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", Environment.NewLine);
+    private static string Displayable(string? frame) => InstrumentInterfaceScreenRules.Displayable(frame);
 
     private void BuildColumns()
     {
@@ -239,47 +239,18 @@ internal sealed class InstrumentFrameTestDialog : Form
 
         foreach (var line in preview.Lines)
         {
-            var specimen = line.IsControl
-                ? $"{_localizer["Interface.TestFrameControl"]} {line.SpecimenId}"
-                : line.SpecimenId ?? "—";
-
-            var order = string.Join(" · ", new[] { line.AccessionNumber, line.PatientName }
-                .Where(s => !string.IsNullOrWhiteSpace(s)));
-
-            var parameter = line.ParameterCode
-                            ?? (line.TestParameterId is { } id && _parameters.TryGetValue(id, out var known)
-                                ? known
-                                : string.Empty);
-
-            var outcome = _localizer[$"PreviewOutcome.{line.Outcome}"]
-                          + (line.Detail is { Length: > 0 } detail ? $" ({detail})" : string.Empty);
-
-            var index = _grid.Rows.Add(specimen, order, line.RawTestId ?? string.Empty,
-                                       line.Code ?? string.Empty, parameter,
-                                       ((line.Value ?? string.Empty) + " " + (line.Unit ?? string.Empty)).Trim(),
+            var index = _grid.Rows.Add(InstrumentInterfaceScreenRules.Specimen(line, _localizer.Format),
+                                       InstrumentInterfaceScreenRules.Order(line), line.RawTestId ?? string.Empty,
+                                       line.Code ?? string.Empty, InstrumentInterfaceScreenRules.Parameter(line, _parameters),
+                                       InstrumentInterfaceScreenRules.Value(line),
                                        line.StoredValue ?? string.Empty, line.Flags ?? string.Empty,
-                                       line.ResultType ?? string.Empty, outcome);
+                                       line.ResultType ?? string.Empty, InstrumentInterfaceScreenRules.Outcome(line, _localizer.Format));
 
             _grid.Rows[index].Tag = line;
         }
 
-        var issues = string.Join("  ·  ", preview.Issues.Select(Issue));
-
-        _summary.ForeColor = preview.WouldStore > 0 ? UiTheme.Normal : UiTheme.Abnormal;
-        _summary.Text = string.Format(_localizer["Interface.TestFrameSummary"],
-                                      preview.WouldStore, preview.Lines.Count(l => l.Code is not null))
-                        + (issues.Length > 0 ? $"  ·  {issues}" : string.Empty);
-    }
-
-    private string Issue(string stored)
-    {
-        var tab = stored.IndexOf('\t');
-        if (tab < 0) return _localizer[stored];
-
-        var text = _localizer[stored[..tab]];
-        var detail = stored[(tab + 1)..];
-
-        return text.Contains("{0}") ? string.Format(text, detail) : $"{text} : {detail}";
+        _summary.ForeColor = InstrumentInterfaceScreenRules.SummaryTone(preview) == InterfaceTone.Ok ? UiTheme.Normal : UiTheme.Abnormal;
+        _summary.Text = InstrumentInterfaceScreenRules.Summary(preview, _localizer.Format);
     }
 
     private void Colour(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -287,11 +258,10 @@ internal sealed class InstrumentFrameTestDialog : Form
         if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not PreviewLine line) return;
         if (_grid.Columns[e.ColumnIndex].Name != "outcome") return;
 
-        e.CellStyle!.ForeColor = line.Outcome switch
+        e.CellStyle!.ForeColor = InstrumentInterfaceScreenRules.OutcomeTone(line) switch
         {
-            PreviewOutcome.WouldStore or PreviewOutcome.WouldStoreControl
-                or PreviewOutcome.WouldMarkNotDone => UiTheme.Normal,
-            PreviewOutcome.ExcludedType or PreviewOutcome.IgnoredNonNumeric => UiTheme.TextMuted,
+            InterfaceTone.Ok => UiTheme.Normal,
+            InterfaceTone.Muted => UiTheme.TextMuted,
             _ => UiTheme.Critical
         };
     }
