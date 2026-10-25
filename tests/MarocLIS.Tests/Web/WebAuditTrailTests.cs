@@ -70,7 +70,14 @@ public sealed class WebAuditTrailTests : WebAdminContext
 
         var page = Render<AuditTrail>();
         page.Find($"[data-grid=changes] tr[data-row='{change.AuditEntryId}']").Click();
-        page.Find("[data-state=detail]").TextContent.Should().Contain("\"Status\"").And.Contain("Paiement en espèces");
+        // The change read one field a line, its value before and after, never the raw payload; the reason and the
+        // workstation (a column of little use in the list) beside it.
+        var line = page.Find("[data-state=detail] tbody tr");
+        line.QuerySelectorAll("td").Select(c => c.TextContent.Trim()).Should().Equal("Status", "1", "2");
+        page.Find("[data-state=detail]").TextContent.Should().NotContain("{");
+        page.Find("[data-state=reason]").TextContent.Should().Be("Paiement en espèces");
+        page.Find("[data-state=workstation]").TextContent.Should().Be("ACCUEIL-01");
+        page.Find("[data-grid=changes] td[title='Status,PaidAmount']").TextContent.Should().Be("Status,PaidAmount");
 
         page.Find("[data-tab=Security]").Click();
         page.FindAll("[data-grid=security] tbody tr").Should().ContainSingle();

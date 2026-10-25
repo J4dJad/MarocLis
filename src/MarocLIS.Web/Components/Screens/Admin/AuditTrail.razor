@@ -69,7 +69,6 @@
                                     <th>@Texts["Patient.RecordNumber"]</th>
                                     <th>@Texts["Audit.ChangedProperties"]</th>
                                     <th>@Texts["Field.Reason"]</th>
-                                    <th>@Texts["Audit.Workstation"]</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -77,14 +76,14 @@
                                 {
                                     <tr class="@RowClass(AuditTrailRules.Emphasis(row), row.AuditEntryId == _selected)" data-row="@row.AuditEntryId"
                                         @onclick="() => _selected = row.AuditEntryId">
-                                        <td class="mono small">@When(row.OccurredAt)</td>
+                                        <td class="mono small nowrap">@When(row.OccurredAt)</td>
                                         <td>@(row.UserName ?? "—")</td>
                                         <td class="small strong">@AuditTrailRules.Entity(row)</td>
                                         <td><Pill Text="@Texts[$"AuditOperation.{row.Operation}"]" Tone="@(AuditTrailRules.IsDeletion(row) ? "Critical" : "Waiting")" /></td>
                                         <td class="mono small">@row.PatientRecordNumber</td>
-                                        <td class="small">@row.ChangedProperties</td>
-                                        <td class="small">@row.Reason</td>
-                                        <td class="small">@row.Workstation</td>
+                                        @* The list of field names keeps one line; the row opened shows each field with its values. *@
+                                        <td class="small cell-clip cell-clip-wide" title="@row.ChangedProperties">@row.ChangedProperties</td>
+                                        <td class="small cell-wrap">@row.Reason</td>
                                     </tr>
                                 }
                             </tbody>
@@ -103,7 +102,6 @@
                                     <th>@Texts["Audit.Query"]</th>
                                     <th>@Texts["Audit.Context"]</th>
                                     <th>@Texts["Audit.BreakGlass"]</th>
-                                    <th>@Texts["Audit.Workstation"]</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -111,20 +109,19 @@
                                 {
                                     <tr class="@RowClass(AuditTrailRules.Emphasis(row), row.DataAccessLogId == _selected)" data-row="@row.DataAccessLogId"
                                         @onclick="() => _selected = row.DataAccessLogId">
-                                        <td class="mono small">@When(row.OccurredAt)</td>
+                                        <td class="mono small nowrap">@When(row.OccurredAt)</td>
                                         <td>@(row.UserName ?? "—")</td>
                                         <td class="small">@Texts[$"DataAccessKind.{row.Kind}"]</td>
                                         <td class="mono small">@row.PatientRecordNumber</td>
                                         <td class="num mono">@row.RecordCount?.ToString(CultureInfo.InvariantCulture)</td>
-                                        <td class="small">@row.QueryDescription</td>
-                                        <td class="small">@row.Context</td>
+                                        <td class="small cell-clip cell-clip-wide" title="@row.QueryDescription">@row.QueryDescription</td>
+                                        <td class="small cell-wrap">@row.Context</td>
                                         <td>
                                             @if (row.IsBreakGlass)
                                             {
                                                 <Pill Text="@Texts["Audit.BreakGlass"]" Tone="Critical" />
                                             }
                                         </td>
-                                        <td class="small">@row.Workstation</td>
                                     </tr>
                                 }
                             </tbody>
@@ -141,7 +138,6 @@
                                     <th>@Texts["Field.Status"]</th>
                                     <th>@Texts["Field.Reason"]</th>
                                     <th>@Texts["Field.Notes"]</th>
-                                    <th>@Texts["Audit.Workstation"]</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -149,14 +145,13 @@
                                 {
                                     <tr class="@RowClass(AuditTrailRules.Emphasis(row), row.SecurityEventId == _selected)" data-row="@row.SecurityEventId"
                                         @onclick="() => _selected = row.SecurityEventId">
-                                        <td class="mono small">@When(row.OccurredAt)</td>
+                                        <td class="mono small nowrap">@When(row.OccurredAt)</td>
                                         <td>@(row.UserName ?? "—")</td>
                                         <td class="small">@Texts[$"SecurityEventKind.{row.Kind}"]</td>
                                         <td><Pill Text="@(row.Succeeded ? Texts["Action.Yes"] : Texts["Audit.Refused"])" Tone="@(row.Succeeded ? "Ok" : "Critical")" /></td>
                                         @* The failure reason is itself a key: read in the operator's language. *@
                                         <td class="small">@(row.FailureReasonKey is { Length: > 0 } key ? Texts[key] : null)</td>
-                                        <td class="small">@row.Details</td>
-                                        <td class="small">@row.Workstation</td>
+                                        <td class="small cell-clip cell-clip-wide" title="@row.Details">@row.Details</td>
                                     </tr>
                                 }
                             </tbody>
@@ -170,10 +165,50 @@
             }
         </div>
 
-        @* The selected row's full payload: a change's before-and-after, a break-glass justification. *@
+        @* The selected row's full payload: a change's before-and-after, a break-glass justification, read in full. *@
         <div class="card audit-detail" data-card="detail">
             <h2 class="card-title">@Texts["AdminA.RowDetail"]</h2>
-            <p class="mono small muted audit-detail-text" data-state="detail">@(Detail is { Length: > 0 } detail ? detail : "—")</p>
+            @if (SelectedWorkstation is { Length: > 0 } || SelectedChange?.Reason is { Length: > 0 })
+            {
+                <dl class="facts facts-compact">
+                    @if (SelectedWorkstation is { Length: > 0 } workstation)
+                    {
+                        <dt>@Texts["Audit.Workstation"]</dt>
+                        <dd data-state="workstation">@workstation</dd>
+                    }
+                    @if (SelectedChange?.Reason is { Length: > 0 } reason)
+                    {
+                        <dt>@Texts["Field.Reason"]</dt>
+                        <dd class="text-full" data-state="reason">@reason</dd>
+                    }
+                </dl>
+            }
+            @if (SelectedChange is { } change && AuditTrailRules.ChangeLines(change) is { Count: > 0 } lines)
+            {
+                <table class="change-list" data-state="detail">
+                    <thead>
+                        <tr>
+                            <th class="col-field">@Texts["Audit.ChangeField"]</th>
+                            <th>@Texts["Audit.ChangeBefore"]</th>
+                            <th>@Texts["Audit.ChangeAfter"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in lines)
+                        {
+                            <tr>
+                                <td class="mono small">@line.Field</td>
+                                <td class="@(line.Before is null ? "empty" : "old")">@(line.Before ?? "—")</td>
+                                <td class="@(line.After is null ? "empty" : null)">@(line.After ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p class="mono small muted text-full" data-state="detail">@(Detail is { Length: > 0 } detail ? detail : "—")</p>
+            }
         </div>
     </div>
 
@@ -205,6 +240,16 @@
         AuditTab.Consultations => AuditTrailRules.Status(_access.Count, _accessTruncated),
         AuditTab.Security => AuditTrailRules.Status(_security.Count, _securityTruncated),
         _ => AuditTrailRules.Status(_changes.Count, _changesTruncated)
+    };
+
+    private AuditEntryRow? SelectedChange => _tab == AuditTab.Changes ? _changes.FirstOrDefault(r => r.AuditEntryId == _selected) : null;
+
+    /// <summary>The workstation of the selected row: a column of little use in the list, read in the row's detail.</summary>
+    private string? SelectedWorkstation => _tab switch
+    {
+        AuditTab.Consultations => _access.FirstOrDefault(r => r.DataAccessLogId == _selected)?.Workstation,
+        AuditTab.Security => _security.FirstOrDefault(r => r.SecurityEventId == _selected)?.Workstation,
+        _ => SelectedChange?.Workstation
     };
 
     private string? Detail => _tab switch
