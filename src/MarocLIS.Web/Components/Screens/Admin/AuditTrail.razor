@@ -1,0 +1,287 @@
+@using System.Globalization
+@using MarocLIS.Application.Administration
+@using MarocLIS.Domain.Audit
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<AuditTrail> Logger
+
+@*
+    « Journal d'audit », the workstation's AuditTrailView: the changes, the consultations and the
+    security events of the period, filtered by user and by text, a file number turning the
+    consultations into that patient's complete history; the selected row opened under the list,
+    and the count said truncated when the ceiling cut it. Read-only, as on the workstation: the
+    tables refuse any change themselves, and the workstation offers no export, so neither does
+    this page. The filter, the emphasis, the detail and the count are AuditTrailRules'; the reading,
+    AuditTrailService's.
+*@
+<div class="screen audit" data-screen="audit">
+    <div class="list-tools">
+        <div class="tabs" role="tablist">
+            @foreach (var tab in Enum.GetValues<AuditTab>())
+            {
+                <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                        data-tab="@tab" @onclick="() => _tab = tab">@TabCaption(tab)</button>
+            }
+        </div>
+        <span class="list-tools-end">
+            <span class="@(Status.Truncated ? "abnormal strong" : "muted")" data-state="count">@(Status.Truncated ? "⚠ " : null)@Texts.T(Status.Key, Status.Count)</span>
+        </span>
+    </div>
+
+    <div class="list-tools" data-tools="filters">
+        <label class="field-inline">
+            <span class="field-label">@Texts["Field.From"]</span>
+            <input class="input input-date" type="date" data-field="from" @bind="_from" @bind:format="yyyy-MM-dd" />
+        </label>
+        <label class="field-inline">
+            <span class="field-label">@Texts["Field.To"]</span>
+            <input class="input input-date" type="date" data-field="to" @bind="_to" @bind:format="yyyy-MM-dd" />
+        </label>
+        <input class="input input-narrow" type="text" placeholder="@Texts["Admin.UserName"]" aria-label="@Texts["Admin.UserName"]" dir="ltr"
+               data-field="user" autocomplete="off" @bind="_user" @onkeydown="KeyAsync" />
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["App.SearchPlaceholder"]" aria-label="@Texts["App.SearchPlaceholder"]"
+                   data-field="search" autocomplete="off" @bind="_search" @onkeydown="KeyAsync" />
+        </div>
+        @* The file number is a Latin value, read back to the person at the counter: never mirrored. *@
+        <input class="input input-narrow mono" type="text" placeholder="@Texts["Patient.RecordNumber"]" aria-label="@Texts["Patient.RecordNumber"]" dir="ltr"
+               data-field="record" autocomplete="off" @bind="_record" @onkeydown="KeyAsync" />
+        <span class="list-tools-end">
+            <ActionButton Key="Action.Apply" Disabled="@_busy" OnClick="ActivateAsync" />
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="ActivateAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body split split-stack">
+        <div class="card card-flush">
+            <div class="table-scroll">
+                @switch (_tab)
+                {
+                    case AuditTab.Changes:
+                        <table class="grid grid-select" data-grid="changes">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Date"]</th>
+                                    <th>@Texts["Admin.UserName"]</th>
+                                    <th>@Texts["Audit.Entity"]</th>
+                                    <th>@Texts["Audit.Operation"]</th>
+                                    <th>@Texts["Patient.RecordNumber"]</th>
+                                    <th>@Texts["Audit.ChangedProperties"]</th>
+                                    <th>@Texts["Field.Reason"]</th>
+                                    <th>@Texts["Audit.Workstation"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _changes)
+                                {
+                                    <tr class="@RowClass(AuditTrailRules.Emphasis(row), row.AuditEntryId == _selected)" data-row="@row.AuditEntryId"
+                                        @onclick="() => _selected = row.AuditEntryId">
+                                        <td class="mono small">@When(row.OccurredAt)</td>
+                                        <td>@(row.UserName ?? "—")</td>
+                                        <td class="small strong">@AuditTrailRules.Entity(row)</td>
+                                        <td><Pill Text="@Texts[$"AuditOperation.{row.Operation}"]" Tone="@(AuditTrailRules.IsDeletion(row) ? "Critical" : "Waiting")" /></td>
+                                        <td class="mono small">@row.PatientRecordNumber</td>
+                                        <td class="small">@row.ChangedProperties</td>
+                                        <td class="small">@row.Reason</td>
+                                        <td class="small">@row.Workstation</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        break;
+
+                    case AuditTab.Consultations:
+                        <table class="grid grid-select" data-grid="consultations">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Date"]</th>
+                                    <th>@Texts["Admin.UserName"]</th>
+                                    <th>@Texts["Audit.AccessKind"]</th>
+                                    <th>@Texts["Patient.RecordNumber"]</th>
+                                    <th class="num">@Texts["Audit.RecordCount"]</th>
+                                    <th>@Texts["Audit.Query"]</th>
+                                    <th>@Texts["Audit.Context"]</th>
+                                    <th>@Texts["Audit.BreakGlass"]</th>
+                                    <th>@Texts["Audit.Workstation"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _access)
+                                {
+                                    <tr class="@RowClass(AuditTrailRules.Emphasis(row), row.DataAccessLogId == _selected)" data-row="@row.DataAccessLogId"
+                                        @onclick="() => _selected = row.DataAccessLogId">
+                                        <td class="mono small">@When(row.OccurredAt)</td>
+                                        <td>@(row.UserName ?? "—")</td>
+                                        <td class="small">@Texts[$"DataAccessKind.{row.Kind}"]</td>
+                                        <td class="mono small">@row.PatientRecordNumber</td>
+                                        <td class="num mono">@row.RecordCount?.ToString(CultureInfo.InvariantCulture)</td>
+                                        <td class="small">@row.QueryDescription</td>
+                                        <td class="small">@row.Context</td>
+                                        <td>
+                                            @if (row.IsBreakGlass)
+                                            {
+                                                <Pill Text="@Texts["Audit.BreakGlass"]" Tone="Critical" />
+                                            }
+                                        </td>
+                                        <td class="small">@row.Workstation</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        break;
+
+                    default:
+                        <table class="grid grid-select" data-grid="security">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Date"]</th>
+                                    <th>@Texts["Admin.UserName"]</th>
+                                    <th>@Texts["Audit.EventKind"]</th>
+                                    <th>@Texts["Field.Status"]</th>
+                                    <th>@Texts["Field.Reason"]</th>
+                                    <th>@Texts["Field.Notes"]</th>
+                                    <th>@Texts["Audit.Workstation"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _security)
+                                {
+                                    <tr class="@RowClass(AuditTrailRules.Emphasis(row), row.SecurityEventId == _selected)" data-row="@row.SecurityEventId"
+                                        @onclick="() => _selected = row.SecurityEventId">
+                                        <td class="mono small">@When(row.OccurredAt)</td>
+                                        <td>@(row.UserName ?? "—")</td>
+                                        <td class="small">@Texts[$"SecurityEventKind.{row.Kind}"]</td>
+                                        <td><Pill Text="@(row.Succeeded ? Texts["Action.Yes"] : Texts["Audit.Refused"])" Tone="@(row.Succeeded ? "Ok" : "Critical")" /></td>
+                                        @* The failure reason is itself a key: read in the operator's language. *@
+                                        <td class="small">@(row.FailureReasonKey is { Length: > 0 } key ? Texts[key] : null)</td>
+                                        <td class="small">@row.Details</td>
+                                        <td class="small">@row.Workstation</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        break;
+                }
+            </div>
+            @if (_loaded && CurrentCount == 0)
+            {
+                <p class="card-pad muted" data-state="empty">@Texts["Web.AuditNone"]</p>
+            }
+        </div>
+
+        @* The selected row's full payload: a change's before-and-after, a break-glass justification. *@
+        <div class="card audit-detail" data-card="detail">
+            <h2 class="card-title">@Texts["AdminA.RowDetail"]</h2>
+            <p class="mono small muted audit-detail-text" data-state="detail">@(Detail is { Length: > 0 } detail ? detail : "—")</p>
+        </div>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")" />
+</div>
+
+@code {
+    private AuditTab _tab = AuditTab.Changes;
+    private DateOnly _from, _to;
+    private string _user = string.Empty, _search = string.Empty, _record = string.Empty;
+
+    private IReadOnlyList<AuditEntryRow> _changes = [];
+    private IReadOnlyList<DataAccessRow> _access = [];
+    private IReadOnlyList<SecurityEventRow> _security = [];
+    private bool _changesTruncated, _accessTruncated, _securityTruncated;
+    private Guid? _selected;
+    private bool _loaded, _busy;
+    private (string Text, string Tone)? _status;
+
+    private int CurrentCount => _tab switch
+    {
+        AuditTab.Consultations => _access.Count,
+        AuditTab.Security => _security.Count,
+        _ => _changes.Count
+    };
+
+    private (string Key, int Count, bool Truncated) Status => _tab switch
+    {
+        AuditTab.Consultations => AuditTrailRules.Status(_access.Count, _accessTruncated),
+        AuditTab.Security => AuditTrailRules.Status(_security.Count, _securityTruncated),
+        _ => AuditTrailRules.Status(_changes.Count, _changesTruncated)
+    };
+
+    private string? Detail => _tab switch
+    {
+        AuditTab.Consultations => _access.FirstOrDefault(r => r.DataAccessLogId == _selected) is { } access ? AuditTrailRules.Detail(access) : null,
+        AuditTab.Security => _security.FirstOrDefault(r => r.SecurityEventId == _selected) is { } security ? AuditTrailRules.Detail(security) : null,
+        _ => _changes.FirstOrDefault(r => r.AuditEntryId == _selected) is { } change ? AuditTrailRules.Detail(change) : null
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var defaults = await Scopes.RunAsync<AuditTrailService, AuditTrailFilter>(s => Task.FromResult(s.DefaultFilter()));
+        (_from, _to) = (defaults.From, defaults.To);
+        await ActivateAsync();
+    }
+
+    private string TabCaption(AuditTab tab) => tab switch
+    {
+        AuditTab.Consultations => Texts["Audit.Consultations"],
+        AuditTab.Security => Texts["Audit.SecurityEvents"],
+        _ => Texts["Audit.Changes"]
+    };
+
+    private static string When(DateTimeOffset at) => at.ToString("dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture);
+
+    private static string? RowClass(AuditEmphasis emphasis, bool selected) =>
+        string.Join(" ", new[]
+        {
+            selected ? "is-selected" : null,
+            emphasis switch { AuditEmphasis.Critical => "is-critical-row", AuditEmphasis.Notable => "is-abnormal", _ => null }
+        }.Where(c => c is not null)) is { Length: > 0 } classes ? classes : null;
+
+    private Task KeyAsync(KeyboardEventArgs e) => e.Key == "Enter" ? ActivateAsync() : Task.CompletedTask;
+
+    private async Task ActivateAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var filter = AuditTrailRules.Filter(_from, _to, _user, _search);
+
+            var changes = await Scopes.RunAsync<AuditTrailService, Result<AuditPage<AuditEntryRow>>>(s => s.GetChangesAsync(filter));
+            if (changes.IsFailure)
+            {
+                _status = (Texts.Describe(changes.Errors), "critical");
+                return;
+            }
+
+            // A file number turns the consultations into that patient's complete history.
+            var record = AuditTrailRules.PatientRecordNumber(_record);
+            var access = await Scopes.RunAsync<AuditTrailService, Result<AuditPage<DataAccessRow>>>(s => record is null
+                ? s.GetDataAccessAsync(filter)
+                : s.GetPatientAccessHistoryAsync(record, filter.From, filter.To));
+            if (access.IsFailure)
+            {
+                _status = (Texts.Describe(access.Errors), "critical");
+                return;
+            }
+
+            var security = await Scopes.RunAsync<AuditTrailService, Result<AuditPage<SecurityEventRow>>>(s => s.GetSecurityEventsAsync(filter));
+
+            (_changes, _changesTruncated) = (changes.Value.Rows, changes.Value.Truncated);
+            (_access, _accessTruncated) = (access.Value.Rows, access.Value.Truncated);
+            if (security.IsSuccess) (_security, _securityTruncated) = (security.Value.Rows, security.Value.Truncated);
+            _status = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the audit trail failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+            _loaded = true;
+        }
+    }
+}
