@@ -1,0 +1,177 @@
+@using System.Globalization
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Domain.Catalog
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<TariffsTab> Logger
+
+@*
+    « Catalogue › Tarifs »: the price history of the analysis chosen in the same list as
+    « Analyses ». The tariff in force is the one that matters; the closed ones are grey behind it.
+    There is no edit of a price, only a new version from a date, or the correction of one entered
+    by mistake — which the service allows and records. The reimbursement base and the excess are
+    shown on every line, as the patient queries them.
+*@
+<div class="screen-body split split-list-wide">
+    @ListPane
+
+    <section class="card card-flush" data-card="tariffs">
+        <h2 class="card-title card-pad">
+            @(Analysis is { } analysis ? $"{Texts["Catalog.Tariffs"]} — {analysis.Code} {analysis.Name.For(Texts.Language)}" : Texts["Catalog.Tariffs"])
+        </h2>
+        <p class="message is-info small card-pad">@Texts["Catalog.TariffNotice"]</p>
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="tariffs">
+                <thead>
+                    <tr>
+                        <th>@Texts["Coverage.Payer"]</th>
+                        <th>@Texts["Catalog.Validity"]</th>
+                        <th>@Texts["Billing.LetterKey"]</th>
+                        <th class="num">@Texts["Billing.Coefficient"]</th>
+                        <th class="num">@Texts["Billing.ReferenceTariff"]</th>
+                        <th class="num">@Texts["Field.Price"]</th>
+                        <th class="num">@Texts["Billing.ExcessOverTariff"]</th>
+                        <th>@Texts["Billing.Vat"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _tariffs)
+                    {
+                        <tr class="@(row.Id == SelectedTariff?.Id ? "is-selected" : null) @RowTones.Class(CatalogScreenRules.Tone(row, Screen.Today))" data-row="@row.Id"
+                            @onclick="() => _tariffId = row.Id" @ondblclick="() => EditAsync(create: false)">
+                            <td>@(row.PayerName ?? Texts["Catalog.DefaultPriceList"])</td>
+                            <td class="mono small" dir="ltr">@CatalogScreenRules.Validity(row.ValidFrom, row.ValidUntil)</td>
+                            <td class="mono">@row.LetterKey</td>
+                            <td class="num mono">@row.Coefficient.ToString("0.##", Texts.Culture)</td>
+                            <td class="num mono">@Money.Of(row.NationalReferenceBase).Format(Texts.Language, Texts.Culture)</td>
+                            <td class="num mono strong">@Money.Of(row.Price).Format(Texts.Language, Texts.Culture)</td>
+                            <td class="num mono @(row.ExcessOverReference > 0m ? "abnormal" : null)">@(row.ExcessOverReference > 0m ? Money.Of(row.ExcessOverReference).Format(Texts.Language, Texts.Culture) : null)</td>
+                            <td class="small">@CatalogScreenRules.Vat(row, Texts.T, Texts.Culture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (Analysis is null)
+            {
+                <p class="muted card-pad" data-state="no-row">@Texts["Message.NothingSelected"]</p>
+            }
+        </div>
+    </section>
+</div>
+
+@{ var actions = Actions; }
+<ActionBar StatusText="@Screen.Status?.Text" StatusClass="@Screen.StatusClass">
+    <Secondary>
+        <ActionButton Key="Catalog.EditTariff" Disabled="@(!actions.EditTariff || _busy)" OnClick="() => EditAsync(create: false)" />
+    </Secondary>
+    <Primary>
+        <ActionButton Key="Catalog.NewTariff" Primary="true" Disabled="@(!actions.NewTariff || _busy)" OnClick="() => EditAsync(create: true)" />
+    </Primary>
+</ActionBar>
+
+@if (_editor is { } editor && Analysis is { } edited)
+{
+    <TariffEditorDialog Analysis="edited" Existing="editor.Existing" Editing="editor.Editing" PayerOptions="editor.Payers"
+                        NationalLetterKeyValue="editor.National" Today="Screen.Today" Refusal="@_refusal"
+                        OnSave="SaveAsync" OnCancel="Close" />
+}
+
+@code {
+    /// <summary>The tariff editor opened, with what it is filled from, read fresh.</summary>
+    private sealed record TariffEditing(IReadOnlyList<TariffRow> Existing, TariffRow? Editing,
+                                        IReadOnlyList<TariffPayerOption> Payers, decimal? National);
+
+    [CascadingParameter] public CatalogScreen Screen { get; set; } = default!;
+    [Parameter] public AnalysisRow? Analysis { get; set; }
+    [Parameter] public int Version { get; set; }
+    [Parameter] public RenderFragment? ListPane { get; set; }
+
+    private IReadOnlyList<TariffRow> _tariffs = [];
+    private Guid? _tariffId;
+    private (Guid? Analysis, int Version)? _loadedFor;
+    private TariffEditing? _editor;
+    private string? _refusal;
+    private bool _busy;
+
+    private TariffRow? SelectedTariff => _tariffs.FirstOrDefault(t => t.Id == _tariffId) ?? _tariffs.FirstOrDefault();
+
+    private CatalogActions Actions => Screen.Actions(new CatalogSelection(Analysis: Analysis is not null, Tariff: SelectedTariff is not null));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == (Analysis?.Id, Version)) return;
+        _loadedFor = (Analysis?.Id, Version);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _tariffs = Analysis is { } analysis
+            ? await Screen.ReadAsync<CatalogMaintenanceService, IReadOnlyList<TariffRow>>(s => s.GetTariffsAsync(analysis.Id), "tariffs") ?? []
+            : [];
+    }
+
+    /// <summary>The tariffs and the payers read again when the editor opens, as the workstation does, so the revision closes the right one.</summary>
+    private async Task EditAsync(bool create)
+    {
+        if (Analysis is not { } analysis || _busy) return;
+        if (create ? !Actions.NewTariff : !Actions.EditTariff) return;
+
+        var editing = create ? null : SelectedTariff;
+
+        var current = await Screen.ReadAsync<CatalogMaintenanceService, IReadOnlyList<TariffRow>>(s => s.GetTariffsAsync(analysis.Id), "tariffs");
+        if (current is null) return;
+
+        var payers = await Screen.ReadAsync<CatalogMaintenanceService, IReadOnlyList<TariffPayerOption>>(s => s.GetPayerOptionsAsync(), "payers");
+        if (payers is null) return;
+
+        var national = await Scopes.RunAsync<CatalogMaintenanceService, Result<decimal?>>(s => s.GetLatestLetterKeyValueAsync(NationalBiologyAct.BiologyLetterKey));
+
+        _refusal = null;
+        _editor = new TariffEditing(current, editing is null ? null : current.FirstOrDefault(t => t.Id == editing.Id) ?? editing,
+                                    payers, national.IsSuccess ? national.Value : null);
+    }
+
+    private void Close()
+    {
+        _editor = null;
+        _refusal = null;
+    }
+
+    /// <summary>A correction is made in place; a new version starts on its date and closes the one before.</summary>
+    private async Task SaveAsync(TariffRequest request)
+    {
+        if (_editor is not { } editor || _busy) return;
+        _busy = true;
+
+        try
+        {
+            Result result = editor.Editing is { } corrected
+                ? await Scopes.RunAsync<CatalogMaintenanceService, Result>(s => s.UpdateTariffAsync(corrected.Id, request))
+                : await Scopes.RunAsync<CatalogMaintenanceService, Result<Guid>>(s => s.AddTariffAsync(request));
+
+            if (result.IsFailure)
+            {
+                _refusal = Texts.Describe(result.Errors);
+                return;
+            }
+
+            Close();
+            Screen.Say(editor.Editing is null
+                ? Texts.T("Catalog.TariffAdded", request.ValidFrom.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture))
+                : Texts["Catalog.TariffCorrected"], "normal");
+
+            // The price shown in the list of analyses is the one in force: read again with the tariffs.
+            await Screen.LoadAnalysesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a tariff failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,180 @@
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Catalog
+@using MarocLIS.Domain.Patients
+@inject WebTexts Texts
+
+@*
+    Creating or revising a reference interval, the workstation's ReferenceRangeEditorDialog. The
+    population fields are what make an interval usable — a haemoglobin interval that ignores sex
+    flags half the healthy population as anaemic — and the specificity shown below is the number
+    the resolver picks between two matching intervals by, so an operator building a pregnancy
+    interval on top of a female one sees that it will win. The age band is typed in the unit the
+    interval is written in and stored in days. An interval in force with interpreted results is
+    not rewritten: the service opens a revision, and the notice says so before saving.
+*@
+<Modal Name="range-editor" Title="@Title" Hint="@Texts["AdminDialog.ReferenceRangeEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Gender"]</span>
+                <select class="input" data-field="gender" @bind="_form.Gender">
+                    @foreach (var gender in new[] { Gender.Unknown, Gender.Male, Gender.Female })
+                    {
+                        <option value="@gender">@Texts[$"Gender.{gender}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.Pregnancy"]</span>
+                <select class="input" data-field="pregnancy" @onchange="PregnancyChanged">
+                    <option value="" selected="@(_form.Pregnancy is null)">@Texts["Catalog.PregnancyAny"]</option>
+                    <option value="yes" selected="@(_form.Pregnancy == true)">@Texts["Patient.Pregnant"]</option>
+                    <option value="no" selected="@(_form.Pregnancy == false)">@Texts["Catalog.NotPregnant"]</option>
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.TrimesterLabel"]</span>
+                <select class="input" data-field="trimester" @bind="_form.Trimester">
+                    <option value="">—</option>
+                    @for (var t = 1; t <= 3; t++)
+                    {
+                        <option value="@t">@Texts.T("Catalog.Trimester", t)</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Result.Instrument"]</span>
+                <select class="input" data-field="instrument" @bind="_form.InstrumentId">
+                    <option value="">—</option>
+                    @foreach (var instrument in Lookups.Instruments)
+                    {
+                        <option value="@instrument.Id">@instrument.Code  @instrument.Name.For(Texts.Language)</option>
+                    }
+                </select>
+            </label>
+
+            <div class="field field-span-2">
+                <span class="field-label">@Texts["Catalog.AgeBand"]</span>
+                <span class="input-pair input-pair-3">
+                    <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.AgeMax" data-field="agefrom" aria-label="@Texts["Catalog.AgeBand"]" @bind="_form.AgeFrom" />
+                    <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.AgeMax" data-field="ageto" aria-label="@Texts["Catalog.AgeBand"]" @bind="_form.AgeTo" />
+                    @* Entered in the unit the interval is written in: forcing a conversion is how a paediatric band ends up out by a factor of 365. *@
+                    <select class="input" data-field="ageunit" aria-label="@Texts["Catalog.AgeBand"]" @bind="_form.AgeUnitDays">
+                        @foreach (var (days, key) in CatalogEditorRules.AgeUnits.Zip(new[] { "Catalog.Days", "Catalog.Months", "Catalog.Years" }))
+                        {
+                            <option value="@days">@Texts[key]</option>
+                        }
+                    </select>
+                </span>
+                <FieldMessage Refusal="_refusal" Field="agefrom" />
+            </div>
+            <p class="field-span-2 small muted field-align-end">@Texts["Catalog.InstrumentRangeNotice"]</p>
+            @* Saved before the unit was kept: shown in the unit it is read in, which saving confirms. *@
+            @if (Existing is { HasUnconfirmedAgeUnit: true })
+            {
+                <p class="field-span-4 message is-warning small" data-state="age-notice">@Texts["Catalog.AgeUnitToConfirmNotice"]</p>
+            }
+        </div>
+
+        <div class="subcard form-grid form-grid-4" data-card="interval">
+            <div class="field field-span-2">
+                <span class="field-label">@Texts["Result.ReferenceRange"]</span>
+                <span class="input-pair">
+                    <input class="input mono num" dir="ltr" inputmode="decimal" data-field="lower" aria-label="@Texts["Result.ReferenceRange"]" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Lower" />
+                    <input class="input mono num" dir="ltr" inputmode="decimal" data-field="upper" aria-label="@Texts["Result.ReferenceRange"]" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Upper" />
+                </span>
+                <FieldMessage Refusal="_refusal" Field="lower" />
+                <FieldMessage Refusal="_refusal" Field="upper" />
+            </div>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.ExpectedCodedValue"]</span>
+                <input class="input mono" dir="ltr" data-field="expected" maxlength="@CatalogEditorRules.CodedValueMaxLength" @bind="_form.ExpectedCoded" />
+            </label>
+            <label class="field-check field-align-end"><input type="checkbox" data-field="decision" @bind="_form.DecisionThreshold" /><span>@Texts["Catalog.DecisionThreshold"]</span></label>
+
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Catalog.PrintedInterval"]</span>
+                <input class="input" data-field="displayfr" maxlength="@CatalogEditorRules.PrintedIntervalMaxLength" @bind="_form.DisplayFr" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.NameAr"]</span>
+                <input class="input" dir="rtl" data-field="displayar" maxlength="@CatalogEditorRules.PrintedIntervalMaxLength" @bind="_form.DisplayAr" />
+            </label>
+            <p class="field-span-4 small muted">@Texts["Catalog.PrintedIntervalNotice"]</p>
+        </div>
+
+        <div class="form-grid form-grid-4">
+            <label class="field field-span-3">
+                <span class="field-label">@Texts["Catalog.RangeSource"]</span>
+                <input class="input" data-field="source" maxlength="@CatalogEditorRules.SourceMaxLength" @bind="_form.Source" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.LastReviewed"]</span>
+                <input class="input" type="date" data-field="reviewed" max="@Today.ToString("yyyy-MM-dd")" @bind="_form.LastReviewedOn" @bind:format="yyyy-MM-dd" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.ValidFrom"]</span>
+                <input class="input" type="date" data-field="validfrom" required @bind="_form.ValidFrom" @bind:format="yyyy-MM-dd" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.ValidUntil"]</span>
+                <input class="input" type="date" data-field="validuntil" @bind="_form.ValidUntil" @bind:format="yyyy-MM-dd" />
+            </label>
+            <label class="field-check strong field-align-end"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+        </div>
+
+        <p class="small accent" data-state="specificity">@Texts.T("Catalog.SpecificityNotice", CatalogEditorRules.Specificity(_form))</p>
+        <p class="message is-warning small">@Texts["Catalog.RangeRevisionNotice"]</p>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public ParameterRow Parameter { get; set; } = default!;
+
+    /// <summary>The interval edited; null for a new one.</summary>
+    [Parameter] public ReferenceRangeRow? Existing { get; set; }
+
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public CatalogLookups Lookups { get; set; } = CatalogLookups.Empty;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<ReferenceRangeRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private RangeForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private string Title => $"{Texts[Existing is null ? "Catalog.NewRange" : "Catalog.EditRange"]} — {Parameter.Code}";
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = CatalogEditorRules.FormOf(Existing, Parameter.Decimals, Today, Texts.Culture);
+    }
+
+    private void PregnancyChanged(ChangeEventArgs e) => _form.Pregnancy = e.Value?.ToString() switch
+    {
+        "yes" => true,
+        "no" => false,
+        _ => null
+    };
+
+    private Task SaveAsync()
+    {
+        _refusal = CatalogEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(CatalogEditorRules.ToRequest(_form, Existing?.Id, Parameter.Id));
+    }
+}

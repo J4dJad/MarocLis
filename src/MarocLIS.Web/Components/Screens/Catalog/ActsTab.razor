@@ -1,0 +1,77 @@
+@using System.Globalization
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Domain.Catalog
+@inject WebTexts Texts
+
+@*
+    « Catalogue › Nomenclature des actes »: the official list of biology acts (NABM), read-only, by
+    code or label and by decree, with how many analyses of the catalogue cite each act. The list is
+    the decrees', not the laboratory's: there is nothing to change here, only to read. The search,
+    the decrees and how a line reads are CatalogScreenRules'.
+*@
+<div class="screen-body">
+    <section class="card card-flush" data-card="acts">
+        <div class="list-tools card-pad">
+            <div class="search-box">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                <input class="input" type="search" placeholder="@Texts["Nabm.SearchPlaceholder"]" aria-label="@Texts["Nabm.SearchPlaceholder"]"
+                       data-field="act-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" />
+            </div>
+            <div class="chips" data-state="chips">
+                @foreach (var year in Years)
+                {
+                    <button type="button" class="chip @(year == _decree ? "is-pressed" : null)" data-chip="@(year?.ToString(CultureInfo.InvariantCulture) ?? "all")"
+                            title="@(year is { } y ? NationalBiologyAct.DecreeReference(y) : null)" @onclick="() => _decree = year">
+                        @(year?.ToString(CultureInfo.InvariantCulture) ?? Texts["Nabm.ChipAll"]) · @Filtered.Matching.Count(a => year is null || a.DecreeYear == year)
+                    </button>
+                }
+            </div>
+            <span class="list-tools-end muted small" data-state="count">@Texts["Nabm.ActsHeading"] — @Filtered.Shown.Count</span>
+        </div>
+        <p class="message is-info small card-pad">@Texts["Nabm.ActsNote"]</p>
+        <div class="table-scroll">
+            <table class="grid" data-grid="acts">
+                <thead>
+                    <tr>
+                        <th>@Texts["Nabm.ActCode"]</th>
+                        <th>@Texts["Nabm.ActLabel"]</th>
+                        <th class="num">@Texts["Billing.Coefficient"]</th>
+                        <th>@Texts["Nabm.Chapter"]</th>
+                        <th>@Texts["Nabm.Decree"]</th>
+                        <th class="num">@Texts["Catalog.UsedBy"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var act in Filtered.Shown)
+                    {
+                        <tr class="@(act.IsActive ? null : "is-tone-muted")" data-row="@act.Code">
+                            <td class="mono strong">@act.Code</td>
+                            <td>@act.Label</td>
+                            <td class="num mono">@CatalogScreenRules.Coefficient(act, Texts.Culture)</td>
+                            <td class="small">@CatalogScreenRules.Chapter(act)</td>
+                            <td class="mono small" title="@NationalBiologyAct.DecreeReference(act.DecreeYear)">@act.DecreeYear.ToString(CultureInfo.InvariantCulture)</td>
+                            <td class="num mono">@(act.AnalysisCount == 0 ? null : act.AnalysisCount)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<ActionBar StatusText="@Screen.Status?.Text" StatusClass="@Screen.StatusClass" />
+
+@code {
+    [CascadingParameter] public CatalogScreen Screen { get; set; } = default!;
+
+    /// <summary>The acts, read once by the screen and again after an analysis is saved (« Utilisé par »).</summary>
+    [Parameter] public IReadOnlyList<NationalActRow> Acts { get; set; } = [];
+
+    private string _search = string.Empty;
+    private int? _decree;
+
+    private IEnumerable<int?> Years => [null, .. CatalogScreenRules.DecreeYears.Select(y => (int?)y)];
+
+    private (IReadOnlyList<NationalActRow> Matching, IReadOnlyList<NationalActRow> Shown) Filtered =>
+        CatalogScreenRules.Acts(Acts, _search, _decree);
+}

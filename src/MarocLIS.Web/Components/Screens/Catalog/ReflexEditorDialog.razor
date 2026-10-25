@@ -1,0 +1,168 @@
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Catalog
+@inject WebTexts Texts
+@inject UserScopes Scopes
+
+@*
+    Creating or editing a reflex rule (analyse en cascade), the workstation's
+    ReflexRuleEditorDialog. The trigger parameter is picked through its analysis, as a biologist
+    thinks of it: « a positive HBs antigen triggers a confirmation ». The boxes follow the
+    condition, so a « greater than » cannot be saved with an upper bound it never reads. Whether
+    the reflex act is billed is an explicit choice: an analysis added silently and charged to a
+    patient who never asked for it is a complaint the laboratory cannot answer. The fields, the
+    checks and the request are CatalogEditorRules'.
+*@
+<Modal Name="reflex-editor" Title="@Title" Hint="@Texts["AdminDialog.ReflexRuleEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Catalog.TriggerAnalysis"]</span>
+                <select class="input" data-field="trigger-analysis" @onchange="TriggerAnalysisChangedAsync">
+                    @foreach (var analysis in Analyses)
+                    {
+                        <option value="@analysis.Id" selected="@(analysis.Id == _form.TriggerAnalysisId)">@analysis.Code  @analysis.Name.For(Texts.Language)</option>
+                    }
+                </select>
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Catalog.TriggerParameter"]</span>
+                <select class="input" data-field="parameter" @bind="_form.TriggerParameterId">
+                    @foreach (var parameter in _parameters)
+                    {
+                        <option value="@parameter.Id">@parameter.Code  @parameter.Name.For(Texts.Language)</option>
+                    }
+                </select>
+                <FieldMessage Refusal="_refusal" Field="parameter" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.ReflexCondition"]</span>
+                <select class="input" data-field="condition" @onchange="ConditionChanged">
+                    @foreach (var condition in Enum.GetValues<ReflexCondition>())
+                    {
+                        <option value="@condition" selected="@(condition == _form.Condition)">@Texts[$"ReflexCondition.{condition}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.Threshold"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="threshold" disabled="@(!Fields.Threshold)" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Threshold" />
+                <FieldMessage Refusal="_refusal" Field="threshold" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.ThresholdUpper"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="thresholdupper" disabled="@(!Fields.ThresholdUpper)" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.ThresholdUpper" />
+                <FieldMessage Refusal="_refusal" Field="thresholdupper" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.TriggerCodedValue"]</span>
+                <input class="input mono upper" dir="ltr" data-field="codedvalue" disabled="@(!Fields.CodedValue)" maxlength="@CatalogEditorRules.CodedValueMaxLength" @bind="_form.CodedValue" />
+                <FieldMessage Refusal="_refusal" Field="codedvalue" />
+            </label>
+            <p class="field-span-4 small accent" data-state="condition-notice">@Texts[Fields.NoticeKey]</p>
+
+            <label class="field field-span-4">
+                <span class="field-label">@Texts["Catalog.ReflexAdds"]</span>
+                <select class="input" data-field="target" @bind="_form.TargetAnalysisId">
+                    @foreach (var analysis in Analyses)
+                    {
+                        <option value="@analysis.Id">@analysis.Code  @analysis.Name.For(Texts.Language)</option>
+                    }
+                </select>
+                <FieldMessage Refusal="_refusal" Field="target" />
+            </label>
+
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.DescriptionFr"]</span>
+                <input class="input" data-field="descriptionfr" maxlength="@CatalogEditorRules.DescriptionMaxLength" @bind="_form.DescriptionFr" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="descriptionfr" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.DescriptionAr"]</span>
+                <input class="input" dir="rtl" data-field="descriptionar" maxlength="@CatalogEditorRules.DescriptionMaxLength" @bind="_form.DescriptionAr" />
+            </label>
+
+            <label class="field-check"><input type="checkbox" data-field="automatic" @bind="_form.AddAutomatically" /><span>@Texts["Catalog.AddAutomatically"]</span></label>
+            <label class="field-check"><input type="checkbox" data-field="billable" @bind="_form.Billable" /><span>@Texts["Catalog.ReflexBillable"]</span></label>
+            <label class="field-check strong"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+        </div>
+
+        <p class="message is-warning small">@Texts["Catalog.ReflexBillingNotice"]</p>
+        <p class="small muted">@Texts["Catalog.ReflexAutomaticNotice"]</p>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The rule edited; null for a new one.</summary>
+    [Parameter] public ReflexRuleRow? Existing { get; set; }
+
+    /// <summary>The active analyses: the trigger's and the one added are picked among them.</summary>
+    [Parameter] public IReadOnlyList<AnalysisRow> Analyses { get; set; } = [];
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<ReflexRuleRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private ReflexForm _form = new();
+    private IReadOnlyList<ParameterRow> _parameters = [];
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private string Title => Existing is null
+        ? Texts["Catalog.NewReflexRule"]
+        : $"{Texts["Catalog.EditReflexRule"]} — {Existing.Description.Fr}";
+
+    private ReflexFields Fields => CatalogEditorRules.Fields(_form.Condition);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_initialised) return;
+        _initialised = true;
+
+        _form = CatalogEditorRules.FormOf(Existing, Analyses, Texts.Culture);
+        await LoadParametersAsync(Existing?.TriggerParameterId);
+    }
+
+    /// <summary>The parameters of the trigger's analysis, headings left out; the one chosen kept when it is listed.</summary>
+    private async Task LoadParametersAsync(Guid? preselect)
+    {
+        if (_form.TriggerAnalysisId is not { } analysisId) return;
+
+        var result = await Scopes.RunAsync<CatalogMaintenanceService, Result<IReadOnlyList<ParameterRow>>>(s => s.GetParametersAsync(analysisId));
+        if (result.IsFailure) return;
+
+        _parameters = CatalogEditorRules.TriggerParameters(result.Value);
+        _form.TriggerParameterId = CatalogEditorRules.TriggerParameter(_parameters, preselect ?? _form.TriggerParameterId);
+    }
+
+    private async Task TriggerAnalysisChangedAsync(ChangeEventArgs e)
+    {
+        _form.TriggerAnalysisId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadParametersAsync(null);
+    }
+
+    /// <summary>A new condition empties the boxes it does not read, as they are turned off.</summary>
+    private void ConditionChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ReflexCondition>(e.Value?.ToString(), out var condition))
+            _form = CatalogEditorRules.WithCondition(_form, condition);
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = CatalogEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(CatalogEditorRules.ToRequest(_form, Existing?.Id));
+    }
+}

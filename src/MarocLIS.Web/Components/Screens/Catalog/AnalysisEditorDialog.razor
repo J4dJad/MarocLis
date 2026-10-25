@@ -1,0 +1,340 @@
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Catalog
+@using MarocLIS.Domain.Patients
+@inject WebTexts Texts
+
+@*
+    Creating or editing an analysis, the workstation's AnalysisEditorDialog. The code is entered
+    once and then read-only: it is the join between the catalogue, the instrument mappings, the
+    worklists and every result ever stored, and the notice says so. The national act is a second
+    code beside it, picked from the nomenclature or typed and said back; the laboratory's own price
+    is edited here with the reimbursement base and the patient's excess computed as it is typed,
+    read-only for whoever may not set prices. The checks, the price read and the request are
+    CatalogEditorRules'; a code the nomenclature does not know is asked about before saving.
+*@
+<Modal Name="analysis-editor" Title="@Title" Hint="@Texts["AdminDialog.AnalysisEditorDialog"]" Wide="true" OnCancel="CancelAsync">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Code"]</span>
+                <input class="input mono upper" dir="ltr" data-field="code" disabled="@(Existing is not null)" maxlength="@CatalogEditorRules.CodeMaxLength"
+                       @bind="_form.Code" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="code" />
+            </label>
+            <p class="field-span-3 small @(Existing is null ? "muted" : "abnormal") field-align-end" data-state="code-notice">
+                @Texts[Existing is null ? "Catalog.CodeSetOnce" : "Catalog.CodeImmutableNotice"]
+            </p>
+
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.NameFr"]</span>
+                <input class="input" data-field="namefr" maxlength="@CatalogEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="namefr" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.NameAr"]</span>
+                <input class="input" dir="rtl" data-field="namear" maxlength="@CatalogEditorRules.NameMaxLength" @bind="_form.NameAr" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.NameEn"]</span>
+                <input class="input" dir="ltr" data-field="nameen" maxlength="@CatalogEditorRules.NameMaxLength" @bind="_form.NameEn" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.ShortName"]</span>
+                <input class="input" data-field="shortname" maxlength="@CatalogEditorRules.ShortNameMaxLength" @bind="_form.ShortName" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.Loinc"]</span>
+                <input class="input mono" dir="ltr" data-field="loinc" maxlength="@CatalogEditorRules.LoincMaxLength" @bind="_form.Loinc" />
+            </label>
+            <label class="field field-span-4">
+                <span class="field-label">@Texts["Catalog.SearchAliases"]</span>
+                <input class="input" data-field="aliases" maxlength="@CatalogEditorRules.AliasesMaxLength" @bind="_form.Aliases" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Field.Department"]</span>
+                <select class="input" data-field="department" @bind="_form.DepartmentId">
+                    <option value="">—</option>
+                    @foreach (var row in Lookups.Departments.Where(d => d.IsActive || d.Id == _form.DepartmentId))
+                    {
+                        <option value="@row.Id">@row.Name.For(Texts.Language)</option>
+                    }
+                </select>
+                <FieldMessage Refusal="_refusal" Field="department" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Sample.SpecimenType"]</span>
+                <select class="input" data-field="specimen" @bind="_form.SpecimenTypeId">
+                    <option value="">—</option>
+                    @foreach (var row in Lookups.SpecimenTypes.Where(s => s.IsActive || s.Id == _form.SpecimenTypeId))
+                    {
+                        <option value="@row.Id">@row.Name.For(Texts.Language)</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Sample.ContainerType"]</span>
+                <span class="input-with-swatch">
+                    <span class="tube-swatch" style="background: @(Container?.CapColourHex is { } hex && CatalogScreenRules.IsRenderableColour(hex) ? hex : "transparent")" aria-hidden="true"></span>
+                    <select class="input" data-field="container" @bind="_form.ContainerTypeId">
+                        <option value="">—</option>
+                        @foreach (var row in Lookups.ContainerTypes.Where(c => c.IsActive || c.Id == _form.ContainerTypeId))
+                        {
+                            <option value="@row.Id">@row.Name.For(Texts.Language)</option>
+                        }
+                    </select>
+                </span>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.RequiredVolume"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="volume" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Volume" />
+                <FieldMessage Refusal="_refusal" Field="volume" />
+            </label>
+
+            <div class="field">
+                <span class="field-label">@Texts["Catalog.NationalActCode"]</span>
+                <span class="input-with-button">
+                    <input class="input mono upper" dir="ltr" data-field="actcode" maxlength="@CatalogEditorRules.CodeMaxLength"
+                           @bind="_form.ActCode" @bind:event="oninput" @onkeydown="ActKeyAsync" />
+                    @* The ellipsis of the workstation, or F4 in the box: the nomenclature to pick from. *@
+                    <button type="button" class="btn btn-secondary" data-action="Nabm.PickAct" title="@Texts["Nabm.PickAct"]"
+                            aria-label="@Texts["Nabm.PickAct"]" disabled="@(Acts.Count == 0)" @onclick="() => _picking = true">…</button>
+                </span>
+            </div>
+            <p class="field-span-2 small field-align-end @ActInfoClass" data-state="act-info">@ActInfoText</p>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.ConsentRequired"]</span>
+                <select class="input" data-field="consent" @bind="_form.Consent">
+                    @foreach (var value in Enum.GetValues<ConsentRequirement>())
+                    {
+                        <option value="@value">@Texts[$"ConsentRequirement.{value}"]</option>
+                    }
+                </select>
+            </label>
+
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Catalog.Method"]</span>
+                <input class="input" data-field="method" maxlength="@CatalogEditorRules.MethodMaxLength" @bind="_form.Method" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Catalog.ReagentReference"]</span>
+                <input class="input" data-field="reagent" maxlength="@CatalogEditorRules.MethodMaxLength" @bind="_form.Reagent" />
+            </label>
+
+            <div class="field field-span-2 check-column">
+                <label class="field-check"><input type="checkbox" data-field="accredited" @bind="_form.Accredited" /><span>@Texts["Catalog.Accredited"]</span></label>
+                <label class="field-check"><input type="checkbox" data-field="subcontracted" @bind="_form.Subcontracted" /><span>@Texts["Catalog.Subcontracted"]</span></label>
+                <label class="field-check"><input type="checkbox" data-field="notifiable" @bind="_form.Notifiable" /><span>@Texts["Catalog.Notifiable"]</span></label>
+            </div>
+            @* The partner follows the tick box: subcontracted with no partner is refused, and with none configured there is nothing to pick. *@
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Catalog.SubcontractorSite"]</span>
+                <select class="input" data-field="subcontractor" disabled="@(!CatalogEditorRules.SubcontractorEnabled(_form, Lookups.PartnerSites.Count))"
+                        @bind="_form.SubcontractorSiteId">
+                    <option value="">—</option>
+                    @foreach (var site in Lookups.PartnerSites)
+                    {
+                        <option value="@site.Id">@site.Code  @site.Name.For(Texts.Language)</option>
+                    }
+                </select>
+                <FieldMessage Refusal="_refusal" Field="subcontractor" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.RoutineTurnaround"]</span>
+                <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.TurnaroundHoursMax" data-field="routine" @bind="_form.RoutineTurnaroundHours" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.UrgentTurnaround"]</span>
+                <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.UrgentMinutesMax" data-field="urgent" @bind="_form.UrgentTurnaroundMinutes" />
+            </label>
+            <label class="field-check field-span-2 field-align-end"><input type="checkbox" data-field="urgent-available" @bind="_form.AvailableUrgently" /><span>@Texts["Catalog.AvailableUrgently"]</span></label>
+            <p class="field-span-4 small muted">@Texts["Catalog.TurnaroundNotice"]</p>
+
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.FastingOverride"]</span>
+                <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.FastingHoursMax" data-field="fasting" @bind="_form.FastingHours" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.StabilityRoom"]</span>
+                <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.StabilityHoursMax" data-field="stability-room" @bind="_form.StabilityRoomHours" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.StabilityFridge"]</span>
+                <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.StabilityHoursMax" data-field="stability-fridge" @bind="_form.StabilityFridgeHours" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.DisplayOrder"]</span>
+                <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.DisplayOrderMax" data-field="display-order" @bind="_form.DisplayOrder" />
+            </label>
+            <label class="field field-span-4">
+                <span class="field-label">@Texts["Catalog.RequiredClinicalInformation"]</span>
+                <input class="input" data-field="clinical" maxlength="@CatalogEditorRules.ClinicalInformationMaxLength" @bind="_form.ClinicalInformation" />
+            </label>
+        </div>
+
+        @* The laboratory's own price list: patients paying themselves, and the fallback for any payer without a tariff of its own. *@
+        <fieldset class="subcard form-grid form-grid-4" data-card="lab-price" disabled="@(!CanPrice)">
+            <legend class="section-title accent">@Texts["Catalog.LabPriceSection"]</legend>
+            <label class="field">
+                <span class="field-label">@Texts["Billing.LetterKey"]</span>
+                <input class="input mono upper" dir="ltr" data-field="letterkey" maxlength="@CatalogEditorRules.LetterKeyMaxLength" @bind="_form.LetterKey" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="letterkey" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Billing.Coefficient"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="coefficient" maxlength="@TypedNumber.MeasureMaxLength"
+                       @bind="_form.Coefficient" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="coefficient" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.LetterKeyValue"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="letterkeyvalue" maxlength="@TypedNumber.MeasureMaxLength"
+                       @bind="_form.LetterKeyValue" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="letterkeyvalue" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.LabPrice"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="price" maxlength="@TypedNumber.AmountMaxLength"
+                       @bind="_form.Price" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="price" />
+            </label>
+            <p class="field-span-4 small @(Computed.Excess > 0m ? "abnormal" : "accent")" data-state="computed">
+                @Texts.T("Catalog.TariffComputedNotice", Money.Of(Computed.Reference).Format(Texts.Language, Texts.Culture),
+                         Money.Of(Computed.Excess).Format(Texts.Language, Texts.Culture))
+            </p>
+        </fieldset>
+
+        <label class="field-check strong"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@if (_picking)
+{
+    <ActPickerDialog Acts="Acts" Current="@_form.ActCode" OnPick="Picked" OnCancel="() => _picking = false" />
+}
+
+@if (_unknownAct is { } unknown)
+{
+    <ConfirmPrompt Title="@Title" Message="@Texts.T("Nabm.CodeNotInListConfirm", unknown)" OnYes="ContinueAsync" OnNo="() => _unknownAct = null" />
+}
+
+@code {
+    /// <summary>What the editor hands back: the analysis, and the laboratory price when it was changed.</summary>
+    public sealed record Outcome(AnalysisRequest Request, TariffRequest? Price);
+
+    /// <summary>The analysis edited; null for a new one.</summary>
+    [Parameter] public AnalysisRow? Existing { get; set; }
+
+    /// <summary>The whole stored analysis when editing: the fields are filled from it, and the request is built on it.</summary>
+    [Parameter] public AnalysisRequest? Stored { get; set; }
+
+    /// <summary>The laboratory price-list tariff in force, if any.</summary>
+    [Parameter] public TariffRow? LabTariff { get; set; }
+
+    /// <summary>The latest letter-key value known, to prefill a first tariff.</summary>
+    [Parameter] public decimal? KnownLetterKeyValue { get; set; }
+
+    /// <summary>Whether the operator may set tariffs; the price fields are read-only otherwise.</summary>
+    [Parameter] public bool CanPrice { get; set; }
+
+    [Parameter] public CatalogLookups Lookups { get; set; } = CatalogLookups.Empty;
+
+    /// <summary>The acts to pick the act code from; empty when they could not be read, the code then typed without the check.</summary>
+    [Parameter] public IReadOnlyList<NationalActRow> Acts { get; set; } = [];
+
+    /// <summary>What the service refused, said in the dialog, which stays open with what was typed.</summary>
+    [Parameter] public string? Refusal { get; set; }
+
+    [Parameter] public EventCallback<Outcome> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private AnalysisForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised, _picking;
+    private string? _unknownAct;
+
+    private string Title => Existing is null ? Texts["Catalog.NewAnalysis"] : $"{Texts["Catalog.EditAnalysis"]} — {Existing.Code}";
+
+    private NomenclatureRow? Container => Lookups.ContainerTypes.FirstOrDefault(c => c.Id == _form.ContainerTypeId);
+
+    private (decimal Reference, decimal Excess) Computed => CatalogEditorRules.Computed(_form.Coefficient, _form.LetterKeyValue, _form.Price);
+
+    private ActInfo Info => CatalogEditorRules.Act(_form.ActCode, Acts);
+
+    private string ActInfoText => Info switch
+    {
+        { Kind: ActInfoKind.Known, Act: { } act } => Texts.T("Nabm.ActInfo", act.Code, act.Label, act.Coefficient.ToString("0.##", Texts.Culture)),
+        { Kind: ActInfoKind.Unknown } => Texts.T("Nabm.CodeNotInList", Info.Code!),
+        { Kind: ActInfoKind.Hint } => Texts["Nabm.NoActHint"],
+        _ => string.Empty
+    };
+
+    private string ActInfoClass => Info.Kind switch
+    {
+        ActInfoKind.Known => "accent",
+        ActInfoKind.Unknown => "abnormal",
+        _ => "muted"
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = CatalogEditorRules.FormOf(Existing, Stored, LabTariff, KnownLetterKeyValue, Texts.Culture);
+    }
+
+    private void ActKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "F4" && Acts.Count > 0) _picking = true;
+    }
+
+    /// <summary>The act picked fills the code and proposes the official coefficient for the laboratory price.</summary>
+    private void Picked(NationalActRow act)
+    {
+        _picking = false;
+        _form = CatalogEditorRules.WithAct(_form, act, CanPrice, Texts.Culture);
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+
+    private Task SaveAsync()
+    {
+        _refusal = CatalogEditorRules.Check(_form, Lookups.PartnerSites.Count);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        // A code typed by hand that the nomenclature does not know: asked before saving; it may be kept.
+        if (CatalogEditorRules.UnknownActCode(_form, Acts) is { } unknown)
+        {
+            _unknownAct = unknown;
+            return Task.CompletedTask;
+        }
+
+        return SendAsync();
+    }
+
+    private Task ContinueAsync()
+    {
+        _unknownAct = null;
+        return SendAsync();
+    }
+
+    private Task SendAsync()
+    {
+        var (refusal, price) = CatalogEditorRules.ReadPrice(_form, CanPrice, LabTariff);
+        _refusal = refusal;
+        if (refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(new Outcome(CatalogEditorRules.ToRequest(_form, Existing?.Id, Existing is null ? null : Stored), price));
+    }
+}

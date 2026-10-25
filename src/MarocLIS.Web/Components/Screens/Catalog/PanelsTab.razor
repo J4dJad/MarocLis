@@ -1,0 +1,200 @@
+@using MarocLIS.Application.Catalog
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<PanelsTab> Logger
+
+@*
+    « Catalogue › Profils »: the panels at the start, the members of the one chosen filling the
+    rest, with what the bundle costs bought one by one against its package price. A member switched
+    off since the panel was built is said on its line: the panel still lists it, and registration
+    leaves it out.
+*@
+<div class="screen-body split split-list-wide">
+    <aside class="card list-pane" data-card="panels">
+        <div class="list-tools">
+            <label class="field-check small">
+                <input type="checkbox" data-field="include-inactive" checked="@Screen.IncludeInactive" @onchange="IncludeInactiveChangedAsync" />
+                <span>@Texts["Catalog.IncludeInactive"]</span>
+            </label>
+            <span class="list-tools-end">
+                <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="LoadAsync" />
+            </span>
+        </div>
+        <span class="muted small" data-state="count">@Texts["Catalog.Panels"] — @_panels.Count</span>
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="panels">
+                <tbody>
+                    @foreach (var row in _panels)
+                    {
+                        <tr class="@(row.Id == SelectedPanel?.Id ? "is-selected" : null) @RowTones.Class(CatalogScreenRules.Tone(row))" data-row="@row.Code"
+                            @onclick="() => _panelId = row.Id" @ondblclick="() => EditAsync(create: false)">
+                            <td>
+                                <span class="cell-name"><span class="mono">@row.Code</span> · @row.Name.For(Texts.Language)</span>
+                                <span class="cell-sub">@Texts["Catalog.Analyses"] @CatalogScreenRules.MemberCount(row) · @Money.Of(row.ComponentTotal).Format(Texts.Language, Texts.Culture)</span>
+                                @if (CatalogScreenRules.Flags(row, Texts.T) is { Count: > 0 } flags)
+                                {
+                                    <span class="cell-sub strong" data-state="flags">@string.Join(" · ", flags)</span>
+                                }
+                            </td>
+                            <td class="cell-action num mono">@(row.PackagePrice is { } package ? Money.Of(package).Format(Texts.Language, Texts.Culture) : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </aside>
+
+    <div class="detail-stack" data-card="panel-detail">
+        @if (SelectedPanel is { } panel)
+        {
+            <section class="card" data-card="panel">
+                <div class="card-heading">
+                    <h2 class="card-title"><span class="mono">@panel.Code</span> · @panel.Name.For(Texts.Language)</h2>
+                    <Pill Text="@Texts[panel.IsActive ? "Admin.Active" : "Catalog.Inactive"]" Tone="@RowTones.Pill(CatalogScreenRules.Tone(panel))" />
+                </div>
+                <dl class="facts facts-columns" data-state="facts">
+                    <dt>@Texts["Catalog.Analyses"]</dt><dd class="mono">@CatalogScreenRules.MemberCount(panel)</dd>
+                    <dt>@Texts["Catalog.ComponentTotal"]</dt><dd class="mono">@Money.Of(panel.ComponentTotal).Format(Texts.Language, Texts.Culture)</dd>
+                    <dt>@Texts["Catalog.PackagePrice"]</dt>
+                    <dd class="mono @(panel.PackageAboveComponents ? "critical" : null)">@(panel.PackagePrice is { } package ? Money.Of(package).Format(Texts.Language, Texts.Culture) : "—")</dd>
+                    <dt>@Texts["Catalog.ItemizeOnInvoice"]</dt><dd>@Texts[panel.ItemizeOnInvoice ? "Action.Yes" : "Action.No"]</dd>
+                    <dt>@Texts["Catalog.GroupOnReport"]</dt><dd>@Texts[panel.GroupOnReport ? "Action.Yes" : "Action.No"]</dd>
+                </dl>
+                @if (CatalogScreenRules.Flags(panel, Texts.T) is { Count: > 0 } flags)
+                {
+                    <p class="message is-warning small" data-state="panel-flags">@string.Join(" · ", flags)</p>
+                }
+            </section>
+
+            <section class="card card-flush" data-card="panel-members">
+                <h2 class="card-title card-pad">@Texts["AdminA.PanelMembers"] — @panel.Code</h2>
+                <div class="table-scroll">
+                    <table class="grid" data-grid="panel-members">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Field.Code"]</th>
+                                <th>@Texts["Field.Name"]</th>
+                                <th class="num">@Texts["Field.Price"]</th>
+                                <th>@Texts["Field.Status"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var member in panel.Members)
+                            {
+                                <tr class="@(member.IsAnalysisActive ? null : "is-tone-muted")" data-row="@member.Code">
+                                    <td class="mono strong">@member.Code</td>
+                                    <td>@member.Name.For(Texts.Language)</td>
+                                    <td class="num mono">@Money.Of(member.Price).Format(Texts.Language, Texts.Culture)</td>
+                                    <td class="small strong">@string.Join(" · ", CatalogScreenRules.Flags(member, Texts.T))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+        else
+        {
+            <section class="card"><p class="muted" data-state="no-row">@Texts["Message.NothingSelected"]</p></section>
+        }
+    </div>
+</div>
+
+@{ var actions = Actions; }
+<ActionBar StatusText="@Screen.Status?.Text" StatusClass="@Screen.StatusClass">
+    <Secondary>
+        <ActionButton Key="Catalog.EditPanel" Disabled="@(!actions.EditPanel || _busy)" OnClick="() => EditAsync(create: false)" />
+    </Secondary>
+    <Primary>
+        <ActionButton Key="Catalog.NewPanel" Primary="true" Disabled="@(!actions.NewPanel || _busy)" OnClick="() => EditAsync(create: true)" />
+    </Primary>
+</ActionBar>
+
+@if (_candidates is { } candidates)
+{
+    <PanelEditorDialog Existing="_editing" Analyses="candidates" Refusal="@_refusal" OnSave="SaveAsync" OnCancel="Close" />
+}
+
+@code {
+    [CascadingParameter] public CatalogScreen Screen { get; set; } = default!;
+    [Parameter] public int Version { get; set; }
+
+    private IReadOnlyList<PanelRow> _panels = [];
+    private Guid? _panelId;
+    private int? _loadedFor;
+
+    private IReadOnlyList<AnalysisRow>? _candidates;
+    private PanelRow? _editing;
+    private string? _refusal;
+    private bool _busy;
+
+    private PanelRow? SelectedPanel => _panels.FirstOrDefault(p => p.Id == _panelId) ?? _panels.FirstOrDefault();
+
+    private CatalogActions Actions => Screen.Actions(new CatalogSelection(Panel: SelectedPanel is not null));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == Version) return;
+        _loadedFor = Version;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _panels = await Screen.ReadAsync<CatalogMaintenanceService, IReadOnlyList<PanelRow>>(
+            s => s.GetPanelsAsync(Screen.IncludeInactive), "panels") ?? _panels;
+    }
+
+    private Task IncludeInactiveChangedAsync(ChangeEventArgs e) => Screen.SetIncludeInactiveAsync(e.Value is true);
+
+    /// <summary>The members are picked among the active analyses, read when the editor opens.</summary>
+    private async Task EditAsync(bool create)
+    {
+        if (_busy || (create ? !Actions.NewPanel : !Actions.EditPanel)) return;
+
+        var analyses = await Screen.ReadAsync<CatalogMaintenanceService, IReadOnlyList<AnalysisRow>>(
+            s => s.GetAnalysesAsync(includeInactive: false), "candidates");
+        if (analyses is null) return;
+
+        _editing = create ? null : SelectedPanel;
+        _refusal = null;
+        _candidates = analyses;
+    }
+
+    private void Close()
+    {
+        _candidates = null;
+        _editing = null;
+        _refusal = null;
+    }
+
+    private async Task SaveAsync(PanelRequest request)
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var saved = await Scopes.RunAsync<CatalogMaintenanceService, Result<Guid>>(s => s.SavePanelAsync(request));
+            if (saved.IsFailure)
+            {
+                _refusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            Close();
+            _panelId = saved.Value;
+            Screen.Saved(request.Code);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a panel failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

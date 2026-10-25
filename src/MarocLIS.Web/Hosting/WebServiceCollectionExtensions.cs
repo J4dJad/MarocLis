@@ -93,6 +93,12 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<IAuditQueries, AuditQueries>();
         services.AddScoped<Application.Treasury.ITreasuryQueries, TreasuryQueries>();
         services.AddScoped<ISampleStorageLocationQueries, SampleStorageLocationQueries>();
+        // « Catalogue » and « Référentiels »: the analyses and what hangs from them, the national
+        // nomenclature of acts and its gaps, and the consumption a stock article's reorder point is
+        // proposed from.
+        services.AddScoped<Application.Catalog.ICatalogMaintenanceQueries, CatalogMaintenanceQueries>();
+        services.AddScoped<Application.Catalog.INationalActQueries, NationalActQueries>();
+        services.AddScoped<Application.Inventory.IStockPlanningQueries, StockPlanningQueries>();
 
         // ---- Sessions: the browsers signed in, their workstations, and each scope's session.
         services.AddSingleton<WebSessionStore>();

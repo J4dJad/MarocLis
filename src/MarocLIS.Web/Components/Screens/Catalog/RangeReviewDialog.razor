@@ -1,0 +1,57 @@
+@using System.Globalization
+@using MarocLIS.Application.Catalog
+@inject WebTexts Texts
+
+@*
+    Recording a periodic review that left a reference interval unchanged, the workstation's
+    RangeReviewDialog. A separate act from editing it: ISO 15189 §5.5.2 obliges the laboratory to
+    review its intervals and « reviewed, unchanged » is the commonest outcome — routing it through
+    the editor would open a form full of limits the operator must not touch. Only the source may be
+    corrected; the date of the review is today's, stamped by the service.
+*@
+<Modal Name="range-review" Title="@Texts["Catalog.RecordReview"]" Hint="@Texts["AdminDialog.RangeReviewDialog"]" OnCancel="OnCancel">
+    <ChildContent>
+        <p class="strong @(Range.NeedsReview(Today) ? "abnormal" : null)" data-state="last-review">
+            @(Range.LastReviewedOn is { } reviewed
+                ? Texts.T("Catalog.LastReviewedOn", reviewed.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture))
+                : Texts["Catalog.NeverReviewed"])
+        </p>
+        <p class="small muted">@Texts["Catalog.ReviewNotice"]</p>
+        <label class="field">
+            <span class="field-label">@Texts["Catalog.RangeSource"]</span>
+            <input class="input" data-field="source" maxlength="@CatalogEditorRules.SourceMaxLength" @bind="_source" />
+        </label>
+        <p class="small accent">@Texts.T("Catalog.ReviewWillBeStamped", Today.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture))</p>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Catalog.RecordReview" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public ReferenceRangeRow Range { get; set; } = default!;
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+
+    /// <summary>The source as corrected, nothing when left blank.</summary>
+    [Parameter] public EventCallback<string?> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _source = string.Empty;
+    private bool _initialised;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _source = Range.Source ?? string.Empty;
+    }
+
+    private Task SaveAsync() => OnSave.InvokeAsync(string.IsNullOrWhiteSpace(_source) ? null : _source.Trim());
+}

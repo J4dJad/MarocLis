@@ -1,0 +1,143 @@
+@using MarocLIS.Application.Catalog
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<ReflexTab> Logger
+
+@*
+    « Catalogue › Règles réflexes »: every rule on one list, its trigger, its condition, the
+    analysis it adds and how. A rule active and impossible — a condition that can never be met — is
+    said in red: it looks configured here and does nothing at the bench, which is worse than not
+    existing, since somebody relies on it.
+*@
+<div class="screen-body">
+    <section class="card card-flush" data-card="reflex">
+        <div class="card-heading card-pad">
+            <h2 class="card-title">@Texts["Catalog.ReflexRules"] — @_rules.Count</h2>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="LoadAsync" />
+        </div>
+        <p class="message is-info small card-pad">@Texts["Catalog.ReflexNotice"]</p>
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="reflex">
+                <thead>
+                    <tr>
+                        <th>@Texts["Catalog.ReflexTrigger"]</th>
+                        <th>@Texts["Catalog.ReflexCondition"]</th>
+                        <th>@Texts["Catalog.ReflexAdds"]</th>
+                        <th>@Texts["Field.Description"]</th>
+                        <th>@Texts["Catalog.ReflexMode"]</th>
+                        <th>@Texts["Field.Status"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rules)
+                    {
+                        <tr class="@(row.Id == SelectedRule?.Id ? "is-selected" : null) @RowTones.Class(CatalogScreenRules.Tone(row))" data-row="@row.Id"
+                            @onclick="() => _ruleId = row.Id" @ondblclick="() => EditAsync(create: false)">
+                            <td class="mono strong">@row.TriggerAnalysisCode/@row.TriggerParameterCode</td>
+                            <td class="mono" dir="ltr">@CatalogScreenRules.DescribeCondition(row, Texts.Culture)</td>
+                            <td class="mono">@row.AnalysisToAddCode</td>
+                            <td>@row.Description.For(Texts.Language)</td>
+                            <td class="small">@Texts[CatalogScreenRules.ModeKey(row)]</td>
+                            <td class="small strong">@string.Join(" · ", CatalogScreenRules.Flags(row, Texts.T))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+@{ var actions = Actions; }
+<ActionBar StatusText="@Screen.Status?.Text" StatusClass="@Screen.StatusClass">
+    <Secondary>
+        <ActionButton Key="Catalog.EditReflexRule" Disabled="@(!actions.EditReflex || _busy)" OnClick="() => EditAsync(create: false)" />
+    </Secondary>
+    <Primary>
+        <ActionButton Key="Catalog.NewReflexRule" Primary="true" Disabled="@(!actions.NewReflex || _busy)" OnClick="() => EditAsync(create: true)" />
+    </Primary>
+</ActionBar>
+
+@if (_analyses is { } analyses)
+{
+    <ReflexEditorDialog Existing="_editing" Analyses="analyses" Refusal="@_refusal" OnSave="SaveAsync" OnCancel="Close" />
+}
+
+@code {
+    [CascadingParameter] public CatalogScreen Screen { get; set; } = default!;
+    [Parameter] public int Version { get; set; }
+
+    private IReadOnlyList<ReflexRuleRow> _rules = [];
+    private Guid? _ruleId;
+    private int? _loadedFor;
+
+    private IReadOnlyList<AnalysisRow>? _analyses;
+    private ReflexRuleRow? _editing;
+    private string? _refusal;
+    private bool _busy;
+
+    private ReflexRuleRow? SelectedRule => _rules.FirstOrDefault(r => r.Id == _ruleId) ?? _rules.FirstOrDefault();
+
+    private CatalogActions Actions => Screen.Actions(new CatalogSelection(Reflex: SelectedRule is not null));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == Version) return;
+        _loadedFor = Version;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _rules = await Screen.ReadAsync<CatalogMaintenanceService, IReadOnlyList<ReflexRuleRow>>(s => s.GetReflexRulesAsync(), "reflex") ?? _rules;
+    }
+
+    private async Task EditAsync(bool create)
+    {
+        if (_busy || (create ? !Actions.NewReflex : !Actions.EditReflex)) return;
+
+        var analyses = await Screen.ReadAsync<CatalogMaintenanceService, IReadOnlyList<AnalysisRow>>(
+            s => s.GetAnalysesAsync(includeInactive: false), "analyses");
+        if (analyses is null) return;
+
+        _editing = create ? null : SelectedRule;
+        _refusal = null;
+        _analyses = analyses;
+    }
+
+    private void Close()
+    {
+        _analyses = null;
+        _editing = null;
+        _refusal = null;
+    }
+
+    private async Task SaveAsync(ReflexRuleRequest request)
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var saved = await Scopes.RunAsync<CatalogMaintenanceService, Result<Guid>>(s => s.SaveReflexRuleAsync(request));
+            if (saved.IsFailure)
+            {
+                _refusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            Close();
+            _ruleId = saved.Value;
+            Screen.Say(Texts["Message.Saved"], "normal");
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a reflex rule failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

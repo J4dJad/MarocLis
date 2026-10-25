@@ -1,0 +1,171 @@
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Catalog
+@inject WebTexts Texts
+
+@*
+    Creating or editing a panel, the workstation's PanelEditorDialog. Only orderable analyses are
+    offered as members: a panel built on an analysis with no tariff or no parameter fails at
+    registration, on a component the operator did not pick. The members' total is shown against
+    the package price, which is a discount in practice — a package above the sum of its parts is
+    almost always a typing slip, and seeing both numbers together is what catches it. The
+    candidates, the total, the checks and the request are CatalogEditorRules'.
+*@
+<Modal Name="panel-editor" Title="@Title" Hint="@Texts["AdminDialog.PanelEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Code"]</span>
+                <input class="input mono upper" dir="ltr" data-field="code" disabled="@(Existing is not null)" maxlength="@CatalogEditorRules.CodeMaxLength"
+                       @bind="_form.Code" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="code" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameFr"]</span>
+                <input class="input" data-field="namefr" maxlength="@CatalogEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="namefr" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameAr"]</span>
+                <input class="input" dir="rtl" data-field="namear" maxlength="@CatalogEditorRules.NameMaxLength" @bind="_form.NameAr" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameEn"]</span>
+                <input class="input" dir="ltr" data-field="nameen" maxlength="@CatalogEditorRules.NameMaxLength" @bind="_form.NameEn" />
+            </label>
+
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Catalog.SearchAliases"]</span>
+                <input class="input" data-field="aliases" maxlength="@CatalogEditorRules.AliasesMaxLength" @bind="_form.Aliases" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.PackagePrice"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="package" maxlength="@TypedNumber.AmountMaxLength"
+                       @bind="_form.PackagePrice" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="package" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.DisplayOrder"]</span>
+                <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.DisplayOrderMax" data-field="display-order" @bind="_form.DisplayOrder" />
+            </label>
+
+            <label class="field-check"><input type="checkbox" data-field="itemize" @bind="_form.ItemizeOnInvoice" /><span>@Texts["Catalog.ItemizeOnInvoice"]</span></label>
+            <label class="field-check"><input type="checkbox" data-field="group" @bind="_form.GroupOnReport" /><span>@Texts["Catalog.GroupOnReport"]</span></label>
+            <label class="field-check strong"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+            <span></span>
+            <p class="field-span-4 small muted">@Texts["Catalog.ItemizeNotice"]</p>
+        </div>
+
+        <div class="subcard" data-card="members">
+            <div class="list-tools">
+                <span class="section-title accent">@Texts["Catalog.Analyses"]</span>
+                <div class="search-box">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                    <input class="input" type="search" placeholder="@Texts["Order.CatalogSearchPlaceholder"]" aria-label="@Texts["Action.Search"]"
+                           data-field="member-search" autocomplete="off" @bind="_search" @bind:event="oninput" />
+                </div>
+            </div>
+            <div class="table-scroll table-scroll-short">
+                <table class="grid" data-grid="candidates">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>@Texts["Catalog.Optional"]</th>
+                            <th>@Texts["Field.Code"]</th>
+                            <th>@Texts["Field.Name"]</th>
+                            <th>@Texts["Field.Department"]</th>
+                            <th class="num">@Texts["Field.Price"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var candidate in Visible)
+                        {
+                            var member = _form.Members.FirstOrDefault(m => m.AnalysisTestId == candidate.Id);
+                            <tr class="@(member is null ? null : "is-selected")" data-row="@candidate.Code">
+                                <td><input type="checkbox" data-field="included" aria-label="@candidate.Code" checked="@(member is not null)" @onchange="e => Include(candidate, e.Value is true)" /></td>
+                                <td><input type="checkbox" data-field="optional" aria-label="@Texts["Catalog.Optional"]" disabled="@(member is null)" checked="@(member?.IsOptional ?? false)" @onchange="e => Optional(candidate, e.Value is true)" /></td>
+                                <td class="mono strong">@candidate.Code</td>
+                                <td>@candidate.Name.For(Texts.Language)</td>
+                                <td class="small">@candidate.DepartmentCode</td>
+                                <td class="num mono">@(candidate.CurrentPrice is { } price ? Money.Of(price).Format(Texts.Language, Texts.Culture) : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <FieldMessage Refusal="_refusal" Field="members" />
+            <p class="small @(Total.PackageAbove ? "critical" : "accent")" data-state="total">
+                @Texts.T("Catalog.ComponentTotalNotice", Total.Count, Money.Of(Total.Total).Format(Texts.Language, Texts.Culture),
+                         TypedNumber.Parse(_form.PackagePrice) is { } package ? Money.Of(package).Format(Texts.Language, Texts.Culture) : "—")
+            </p>
+        </div>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The panel edited; null for a new one.</summary>
+    [Parameter] public PanelRow? Existing { get; set; }
+
+    /// <summary>The active analyses; only the orderable ones are offered (CatalogEditorRules.Candidates).</summary>
+    [Parameter] public IReadOnlyList<AnalysisRow> Analyses { get; set; } = [];
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<PanelRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private PanelForm _form = new();
+    private IReadOnlyList<AnalysisRow> _candidates = [];
+    private string _search = string.Empty;
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private string Title => Existing is null ? Texts["Catalog.NewPanel"] : $"{Texts["Catalog.EditPanel"]} — {Existing.Code}";
+
+    private (int Count, decimal Total, bool PackageAbove) Total => CatalogEditorRules.Total(_candidates, _form);
+
+    /// <summary>The candidates the search finds by code or name; the members ticked stay ticked when hidden.</summary>
+    private IEnumerable<AnalysisRow> Visible => string.IsNullOrWhiteSpace(_search)
+        ? _candidates
+        : _candidates.Where(c => c.Code.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
+                                 || c.Name.For(Texts.Language).Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+
+        _candidates = CatalogEditorRules.Candidates(Analyses);
+        _form = CatalogEditorRules.FormOf(Existing, Texts.Culture);
+    }
+
+    /// <summary>The members in the order of the list, as the workstation reads its grid.</summary>
+    private void SetMembers(Func<AnalysisRow, PanelMemberRequest?, PanelMemberRequest?> change) =>
+        _form.Members = [.. _candidates.Select(c => change(c, _form.Members.FirstOrDefault(m => m.AnalysisTestId == c.Id)))
+                                       .OfType<PanelMemberRequest>()];
+
+    private void Include(AnalysisRow candidate, bool included) =>
+        SetMembers((c, m) => c.Id != candidate.Id ? m : included ? m ?? new PanelMemberRequest(c.Id, false) : null);
+
+    private void Optional(AnalysisRow candidate, bool optional) =>
+        SetMembers((c, m) => c.Id != candidate.Id || m is null ? m : m with { IsOptional = optional });
+
+    private Task SaveAsync()
+    {
+        // Only the members the list offers are saved, as the workstation reads them from its grid.
+        SetMembers((_, m) => m);
+
+        _refusal = CatalogEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(CatalogEditorRules.ToRequest(_form, Existing?.Id));
+    }
+}

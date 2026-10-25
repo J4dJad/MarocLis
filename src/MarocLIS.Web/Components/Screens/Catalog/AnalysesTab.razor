@@ -1,0 +1,358 @@
+@using System.Globalization
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Domain.Catalog
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<AnalysesTab> Logger
+
+@*
+    « Catalogue › Analyses »: master over detail, as the workstation's. A parameter has no meaning
+    away from its analysis and an interval none away from its parameter, so the analysis chosen in
+    the list drives the parameters, and the parameter chosen drives the intervals. The analysis's
+    identity heads the detail — its national act beside its own code, its specimen, its tube, its
+    turnaround and its price — with what it lacks to be ordered. A periodic review that leaves an
+    interval unchanged is recorded on its own (ISO 15189 §5.5.2), not through the editor.
+*@
+<div class="screen-body split split-list-wide">
+    @ListPane
+
+    <div class="detail-stack" data-card="analysis-detail">
+        @if (Analysis is { } analysis)
+        {
+            <section class="card" data-card="analysis">
+                <div class="card-heading">
+                    <h2 class="card-title"><span class="mono">@analysis.Code</span> · @analysis.Name.For(Texts.Language)</h2>
+                    <Pill Text="@Texts[analysis.IsActive ? (analysis.IsOrderable ? "Admin.Active" : "Catalog.NotOrderable") : "Catalog.Inactive"]"
+                          Tone="@RowTones.Pill(CatalogScreenRules.Tone(analysis))" />
+                </div>
+                <dl class="facts facts-columns" data-state="facts">
+                    <dt>@Texts["Nabm.ActCode"]</dt><dd class="mono">@(analysis.NationalActCode ?? "—")</dd>
+                    <dt>@Texts["Field.Department"]</dt><dd>@analysis.DepartmentName.For(Texts.Language)</dd>
+                    <dt>@Texts["Sample.SpecimenType"]</dt><dd>@analysis.SpecimenTypeName.For(Texts.Language)</dd>
+                    <dt>@Texts["Sample.ContainerType"]</dt><dd>@(analysis.ContainerName ?? "—")</dd>
+                    <dt>@Texts["Catalog.Turnaround"]</dt><dd class="mono">@analysis.RoutineTurnaroundHours h</dd>
+                    <dt>@Texts["Field.Price"]</dt>
+                    <dd class="mono">@(analysis.CurrentPrice is { } price ? Money.Of(price).Format(Texts.Language, Texts.Culture) : "—")@(analysis.CurrentCoefficient is { } coefficient ? $" · B {coefficient.ToString("0.##", Texts.Culture)}" : null)</dd>
+                </dl>
+                @if (CatalogScreenRules.Flags(analysis, Texts.T) is { Count: > 0 } flags)
+                {
+                    <p class="message @(analysis.IsOrderable || !analysis.IsActive ? "is-muted" : "is-warning") small" data-state="analysis-flags">@string.Join(" · ", flags)</p>
+                }
+            </section>
+
+            <section class="card card-flush" data-card="parameters">
+                <h2 class="card-title card-pad">@Texts["Catalog.Parameters"] — @analysis.Code</h2>
+                <div class="table-scroll table-scroll-short">
+                    <table class="grid grid-select" data-grid="parameters">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Field.Code"]</th>
+                                <th>@Texts["Field.Name"]</th>
+                                <th>@Texts["Catalog.ValueType"]</th>
+                                <th>@Texts["Field.Unit"]</th>
+                                <th>@Texts["Catalog.MeasuringRange"]</th>
+                                <th>@Texts["Catalog.CriticalLimits"]</th>
+                                <th class="num">@Texts["Catalog.DeltaCheck"]</th>
+                                <th>@Texts["Field.Status"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _parameters)
+                            {
+                                <tr class="@(row.Id == SelectedParameter?.Id ? "is-selected" : null) @RowTones.Class(CatalogScreenRules.Tone(row))" data-row="@row.Code"
+                                    @onclick="() => SelectParameterAsync(row)" @ondblclick="() => EditParameterAsync(create: false)">
+                                    <td class="mono strong" style="padding-inline-start: @(8 + row.IndentLevel * 14)px">@row.Code</td>
+                                    <td>@row.Name.For(Texts.Language)</td>
+                                    <td class="small">@Texts[$"ResultValueType.{row.ValueType}"]</td>
+                                    <td class="mono" dir="ltr">@row.UnitSymbol</td>
+                                    <td class="mono small" dir="ltr">@CatalogScreenRules.Interval(row.MeasuringRangeLow, row.MeasuringRangeHigh, Texts.Culture)</td>
+                                    <td class="mono small" dir="ltr">@CatalogScreenRules.Interval(row.CriticalLow, row.CriticalHigh, Texts.Culture)</td>
+                                    <td class="num mono small">@CatalogScreenRules.DeltaCheck(row, Texts.Culture)</td>
+                                    <td class="small strong">@string.Join(" · ", CatalogScreenRules.Flags(row, Texts.T))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card card-flush" data-card="ranges">
+                <h2 class="card-title card-pad">@(SelectedParameter is { } parameter ? $"{Texts["Result.ReferenceRange"]} — {parameter.Code}" : Texts["Result.ReferenceRange"])</h2>
+                <div class="table-scroll table-scroll-short">
+                    <table class="grid grid-select" data-grid="ranges">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Catalog.Population"]</th>
+                                <th>@Texts["Result.ReferenceRange"]</th>
+                                <th>@Texts["Catalog.Validity"]</th>
+                                <th>@Texts["Catalog.LastReviewed"]</th>
+                                <th>@Texts["Catalog.RangeSource"]</th>
+                                <th>@Texts["Field.Status"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _ranges)
+                            {
+                                <tr class="@(row.Id == SelectedRange?.Id ? "is-selected" : null) @RangeClass(row)" data-row="@row.Id"
+                                    @onclick="() => _rangeId = row.Id" @ondblclick="() => EditRange(create: false)">
+                                    <td class="small">@CatalogScreenRules.DescribePopulation(row, Texts.T)</td>
+                                    <td class="mono strong" dir="ltr">@CatalogScreenRules.FormatInterval(row, SelectedParameter?.Decimals ?? 2, Texts.Language, Texts.Culture)</td>
+                                    <td class="mono small" dir="ltr">@CatalogScreenRules.Validity(row.ValidFrom, row.ValidUntil)</td>
+                                    <td class="mono small">@(row.LastReviewedOn?.ToString("dd/MM/yy", CultureInfo.InvariantCulture) ?? "—")</td>
+                                    <td class="small">@row.Source</td>
+                                    <td class="small strong">@string.Join(" · ", CatalogScreenRules.Flags(row, Screen.Today, Texts.T))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+        else
+        {
+            <section class="card"><p class="muted" data-state="no-row">@Texts["Message.NothingSelected"]</p></section>
+        }
+    </div>
+</div>
+
+@{ var actions = Actions; }
+<ActionBar StatusText="@Screen.Status?.Text" StatusClass="@Screen.StatusClass">
+    <Secondary>
+        <ActionButton Key="Catalog.EditAnalysis" Disabled="@(!actions.EditAnalysis || _busy)" OnClick="() => Screen.EditAnalysisAsync(Analysis)" />
+        <ActionButton Key="Catalog.NewParameter" Disabled="@(!actions.NewParameter || _busy)" OnClick="() => EditParameterAsync(create: true)" />
+        <ActionButton Key="Catalog.EditParameter" Disabled="@(!actions.EditParameter || _busy)" OnClick="() => EditParameterAsync(create: false)" />
+        <ActionButton Key="Catalog.NewRange" Disabled="@(!actions.NewRange || _busy)" OnClick="() => EditRange(create: true)" />
+        <ActionButton Key="Catalog.EditRange" Disabled="@(!actions.EditRange || _busy)" OnClick="() => EditRange(create: false)" />
+    </Secondary>
+    @* The review that leaves the interval as it was: a separate act, done periodically. *@
+    <More>
+        <ActionButton Key="Catalog.RecordReview" Disabled="@(!actions.ReviewRange || _busy)" OnClick="OpenReview" />
+    </More>
+    <Primary>
+        <ActionButton Key="Catalog.NewAnalysis" Primary="true" Disabled="@(!actions.NewAnalysis || _busy)" OnClick="() => Screen.EditAnalysisAsync(null)" />
+    </Primary>
+</ActionBar>
+
+@switch (_dialog)
+{
+    case AnalysisDialog.Parameter when Analysis is { } owner:
+        <ParameterEditorDialog Analysis="owner" Existing="_editingParameter" Stored="_storedParameter" Lookups="Screen.Lookups"
+                               Siblings="@([.. _parameters.Where(p => _editingParameter is null || p.Id != _editingParameter.Id)])"
+                               Refusal="@_refusal" OnSave="SaveParameterAsync" OnCancel="Close" />
+        break;
+
+    case AnalysisDialog.Range when SelectedParameter is { } parameter:
+        <RangeEditorDialog Parameter="parameter" Existing="_editingRange" Today="Screen.Today" Lookups="Screen.Lookups"
+                           Refusal="@_refusal" OnSave="SaveRangeAsync" OnCancel="Close" />
+        break;
+
+    case AnalysisDialog.Review when SelectedRange is { } range:
+        <RangeReviewDialog Range="range" Today="Screen.Today" Refusal="@_refusal" OnSave="RecordReviewAsync" OnCancel="Close" />
+        break;
+}
+
+@code {
+    private enum AnalysisDialog { None, Parameter, Range, Review }
+
+    [CascadingParameter] public CatalogScreen Screen { get; set; } = default!;
+
+    /// <summary>The analysis chosen in the list, whose parameters and intervals are shown.</summary>
+    [Parameter] public AnalysisRow? Analysis { get; set; }
+
+    /// <summary>The catalogue's reload count: the detail is read again after every reload.</summary>
+    [Parameter] public int Version { get; set; }
+
+    [Parameter] public RenderFragment? ListPane { get; set; }
+
+    private IReadOnlyList<ParameterRow> _parameters = [];
+    private IReadOnlyList<ReferenceRangeRow> _ranges = [];
+    private Guid? _parameterId, _rangeId;
+    private (Guid? Analysis, int Version)? _loadedFor;
+
+    private AnalysisDialog _dialog;
+    private ParameterRow? _editingParameter;
+    private ParameterRequest? _storedParameter;
+    private ReferenceRangeRow? _editingRange;
+    private string? _refusal;
+    private bool _busy;
+
+    private ParameterRow? SelectedParameter => _parameters.FirstOrDefault(p => p.Id == _parameterId) ?? _parameters.FirstOrDefault();
+
+    private ReferenceRangeRow? SelectedRange => _ranges.FirstOrDefault(r => r.Id == _rangeId) ?? _ranges.FirstOrDefault();
+
+    private CatalogActions Actions => Screen.Actions(new CatalogSelection(
+        Analysis: Analysis is not null, Parameter: SelectedParameter is not null, Range: SelectedRange is not null));
+
+    /// <summary>A review due is said in the warning's colour on an otherwise plain row; the age unit to confirm fills it.</summary>
+    private string? RangeClass(ReferenceRangeRow row) =>
+        CatalogScreenRules.Tone(row, Screen.Today) == CatalogTone.Abnormal && !row.HasUnconfirmedAgeUnit
+            ? "is-tone-warning"
+            : RowTones.Class(CatalogScreenRules.Tone(row, Screen.Today));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == (Analysis?.Id, Version)) return;
+        _loadedFor = (Analysis?.Id, Version);
+        await LoadParametersAsync();
+    }
+
+    private async Task LoadParametersAsync()
+    {
+        if (Analysis is not { } analysis)
+        {
+            _parameters = [];
+            _ranges = [];
+            return;
+        }
+
+        _parameters = await Screen.ReadAsync<CatalogMaintenanceService, IReadOnlyList<ParameterRow>>(
+            s => s.GetParametersAsync(analysis.Id), "parameters") ?? [];
+        await LoadRangesAsync();
+    }
+
+    private async Task LoadRangesAsync()
+    {
+        if (SelectedParameter is not { } parameter)
+        {
+            _ranges = [];
+            return;
+        }
+
+        _ranges = await Screen.ReadAsync<CatalogMaintenanceService, IReadOnlyList<ReferenceRangeRow>>(
+            s => s.GetRangesAsync(parameter.Id), "ranges") ?? [];
+        _rangeId = _ranges.FirstOrDefault()?.Id;
+    }
+
+    private async Task SelectParameterAsync(ParameterRow row)
+    {
+        if (row.Id == SelectedParameter?.Id) return;
+        _parameterId = row.Id;
+        await LoadRangesAsync();
+    }
+
+    private void Close()
+    {
+        _dialog = AnalysisDialog.None;
+        _refusal = null;
+    }
+
+    // ---- Parameters ----------------------------------------------------------------------------
+
+    /// <summary>The whole stored parameter, allowed answers included, which the list row does not carry.</summary>
+    private async Task EditParameterAsync(bool create)
+    {
+        if (Analysis is not { } analysis || _busy) return;
+        if (create ? !Actions.NewParameter : !Actions.EditParameter) return;
+
+        _editingParameter = create ? null : SelectedParameter;
+        _storedParameter = null;
+
+        if (_editingParameter is { } existing)
+        {
+            _storedParameter = await Screen.ReadAsync<CatalogMaintenanceService, ParameterRequest>(
+                s => s.GetParameterForEditAsync(analysis.Id, existing.Id), "parameter");
+            if (_storedParameter is null) return;
+        }
+
+        _refusal = null;
+        _dialog = AnalysisDialog.Parameter;
+    }
+
+    private Task SaveParameterAsync(ParameterRequest request) =>
+        WriteAsync(async s =>
+        {
+            var saved = await s.SaveParameterAsync(request);
+            if (saved.IsSuccess) _parameterId = saved.Value;
+            return saved;
+        }, () =>
+        {
+            Screen.Saved(request.Code);
+            return LoadParametersAsync();
+        });
+
+    // ---- Reference intervals ---------------------------------------------------------------------
+
+    private void EditRange(bool create)
+    {
+        if (create ? !Actions.NewRange : !Actions.EditRange) return;
+
+        _editingRange = create ? null : SelectedRange;
+        _refusal = null;
+        _dialog = AnalysisDialog.Range;
+    }
+
+    /// <summary>
+    /// A supersession returns a different id from the one edited, which is the operator's cue that
+    /// the change opened a revision rather than rewriting the interval.
+    /// </summary>
+    private Task SaveRangeAsync(ReferenceRangeRequest request)
+    {
+        var edited = _editingRange;
+        var savedId = Guid.Empty;
+
+        return WriteAsync(async s =>
+        {
+            var saved = await s.SaveRangeAsync(request);
+            if (saved.IsSuccess) savedId = saved.Value;
+            return saved;
+        }, async () =>
+        {
+            var superseded = CatalogEditorRules.Superseded(edited, savedId);
+            Screen.Say(Texts[superseded ? "Catalog.RangeSuperseded" : "Message.Saved"], superseded ? "abnormal" : "normal");
+
+            await LoadParametersAsync();
+            _rangeId = savedId;
+        });
+    }
+
+    private void OpenReview()
+    {
+        if (!Actions.ReviewRange) return;
+        _refusal = null;
+        _dialog = AnalysisDialog.Review;
+    }
+
+    private Task RecordReviewAsync(string? source)
+    {
+        if (SelectedParameter is not { } parameter || SelectedRange is not { } range) return Task.CompletedTask;
+
+        return WriteAsync(s => s.RecordRangeReviewAsync(parameter.Id, range.Id, source), async () =>
+        {
+            Screen.Say(Texts.T("Catalog.ReviewRecorded", Screen.Today.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)), "normal");
+            await LoadRangesAsync();
+            _rangeId = range.Id;
+        });
+    }
+
+    /// <summary>Runs a write once at a time; a refusal keeps the dialog open with what was typed.</summary>
+    private async Task WriteAsync(Func<CatalogMaintenanceService, Task<Result>> write, Func<Task> after)
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<CatalogMaintenanceService, Result>(write);
+            if (result.IsFailure)
+            {
+                _refusal = Texts.Describe(result.Errors);
+                return;
+            }
+
+            Close();
+            await after();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving in « Analyses » failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task WriteAsync(Func<CatalogMaintenanceService, Task<Result<Guid>>> write, Func<Task> after) =>
+        WriteAsync(async s => (Result)await write(s), after);
+}

@@ -1,0 +1,183 @@
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+
+@*
+    Creating or editing an entry of one of the four lists the catalogue is built on — departments,
+    specimen types, tubes, units — the workstation's NomenclatureEditorDialog: one dialog showing
+    only the fields the chosen list has, since four near-identical ones are four places to forget
+    the immutable code or the in-use check. A unit has no translated name: « mg/dL » is the same
+    in every language, so its symbol is its name. The fields, the checks and the request are
+    CatalogEditorRules'.
+*@
+<Modal Name="nomenclature-editor" Title="@Title" Hint="@Texts["AdminDialog.NomenclatureEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Code"]</span>
+                <input class="input mono upper" dir="ltr" data-field="code" disabled="@(Existing is not null)" maxlength="@CatalogEditorRules.CodeMaxLengthOf(Kind)"
+                       @bind="_form.Code" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="code" />
+            </label>
+            <p class="field-span-3 small field-align-end @(Existing is null ? "muted" : "abnormal")">
+                @Texts[Existing is null ? "Catalog.CodeSetOnce" : "Catalog.CodeImmutableNotice"]
+            </p>
+
+            @if (Kind == NomenclatureKind.MeasurementUnit)
+            {
+                <label class="field">
+                    <span class="field-label">@Texts["Catalog.UnitSymbol"]</span>
+                    <input class="input mono" dir="ltr" data-field="symbol" maxlength="@CatalogEditorRules.NameMaxLengthOf(Kind)" @bind="_form.Symbol" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="symbol" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Catalog.UnitSymbolArabic"]</span>
+                    <input class="input" dir="rtl" data-field="symbolar" maxlength="@CatalogEditorRules.NameMaxLengthOf(Kind)" @bind="_form.SymbolArabic" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Catalog.Ucum"]</span>
+                    <input class="input mono" dir="ltr" data-field="ucum" maxlength="40" @bind="_form.Ucum" />
+                </label>
+                <span></span>
+                <label class="field">
+                    <span class="field-label">@Texts["Catalog.FactorToSi"]</span>
+                    <input class="input mono num" dir="ltr" inputmode="decimal" data-field="factor" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.FactorToSi" />
+                    <FieldMessage Refusal="_refusal" Field="factor" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Catalog.SiUnitCode"]</span>
+                    <input class="input mono" dir="ltr" data-field="siunit" maxlength="30" @bind="_form.SiUnit" />
+                </label>
+                <p class="field-span-2 small muted field-align-end">@Texts["Catalog.ConversionNotice"]</p>
+            }
+            else
+            {
+                <label class="field">
+                    <span class="field-label">@Texts["Field.NameFr"]</span>
+                    <input class="input" data-field="namefr" maxlength="@CatalogEditorRules.NameMaxLengthOf(Kind)" @bind="_form.NameFr" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="namefr" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Field.NameAr"]</span>
+                    <input class="input" dir="rtl" data-field="namear" maxlength="@CatalogEditorRules.NameMaxLengthOf(Kind)" @bind="_form.NameAr" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Field.NameEn"]</span>
+                    <input class="input" dir="ltr" data-field="nameen" maxlength="@CatalogEditorRules.NameMaxLengthOf(Kind)" @bind="_form.NameEn" />
+                </label>
+                <span></span>
+            }
+
+            @switch (Kind)
+            {
+                case NomenclatureKind.Department:
+                    <label class="field">
+                        <span class="field-label">@Texts["Field.DisplayOrder"]</span>
+                        <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.DepartmentOrderMax" data-field="display-order" @bind="_form.DisplayOrder" />
+                    </label>
+                    <label class="field-check field-span-3 field-align-end"><input type="checkbox" data-field="scope" @bind="_form.InAccreditationScope" /><span>@Texts["Catalog.InAccreditationScope"]</span></label>
+                    <p class="field-span-4 small muted">@Texts["Catalog.AccreditationScopeNotice"]</p>
+                    break;
+
+                case NomenclatureKind.SpecimenType:
+                    <label class="field">
+                        <span class="field-label">@Texts["Catalog.FastingHours"]</span>
+                        <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.FastingHoursMax" data-field="fasting" @bind="_form.FastingHours" />
+                    </label>
+                    <label class="field field-span-3">
+                        <span class="field-label">@Texts["Catalog.CollectionInstructions"]</span>
+                        <input class="input" data-field="collection" maxlength="1000" @bind="_form.CollectionInstructions" />
+                    </label>
+                    <label class="field field-span-4">
+                        <span class="field-label">@Texts["Catalog.PatientInstructions"]</span>
+                        <input class="input" data-field="patient" maxlength="1000" @bind="_form.PatientInstructions" />
+                    </label>
+                    <p class="field-span-4 small muted">@Texts["Catalog.PatientInstructionsNotice"]</p>
+                    break;
+
+                case NomenclatureKind.ContainerType:
+                    <label class="field">
+                        <span class="field-label">@Texts["Catalog.CapColour"]</span>
+                        <span class="input-with-swatch">
+                            <span class="tube-swatch" style="background: @(CatalogEditorRules.Swatch(_form.CapColour) ?? "transparent")" aria-hidden="true"></span>
+                            <input class="input mono upper" dir="ltr" data-field="cap" maxlength="9" @bind="_form.CapColour" @bind:event="oninput" />
+                        </span>
+                    </label>
+                    <label class="field field-span-2">
+                        <span class="field-label">@Texts["Catalog.Additive"]</span>
+                        <input class="input" data-field="additive" maxlength="200" @bind="_form.Additive" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Sample.DrawOrder"]</span>
+                        <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.DrawOrderMax" data-field="draworder" @bind="_form.DrawOrder" />
+                        <FieldMessage Refusal="_refusal" Field="draworder" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Catalog.NominalVolume"]</span>
+                        <input class="input mono num" dir="ltr" inputmode="decimal" data-field="nominalvolume" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.NominalVolume" />
+                        <FieldMessage Refusal="_refusal" Field="nominalvolume" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Catalog.MinimumVolume"]</span>
+                        <input class="input mono num" dir="ltr" inputmode="decimal" data-field="minimumvolume" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.MinimumVolume" />
+                        <FieldMessage Refusal="_refusal" Field="minimumvolume" />
+                    </label>
+                    <label class="field-check field-align-end"><input type="checkbox" data-field="light" @bind="_form.ProtectFromLight" /><span>@Texts["Collection.ProtectFromLight"]</span></label>
+                    <label class="field-check field-align-end"><input type="checkbox" data-field="ice" @bind="_form.IceTransport" /><span>@Texts["Collection.TransportOnIce"]</span></label>
+                    <p class="field-span-4 small muted">@Texts["Catalog.DrawOrderNotice"]</p>
+                    break;
+            }
+
+            <label class="field-check strong"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+            @if (Existing is { UsageCount: > 0 } used)
+            {
+                <p class="field-span-3 small abnormal field-align-end" data-state="in-use">@Texts.T("Catalog.NomenclatureInUseNotice", used.UsageCount)</p>
+            }
+        </div>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public NomenclatureKind Kind { get; set; }
+
+    /// <summary>The entry edited; null for a new one.</summary>
+    [Parameter] public NomenclatureRow? Existing { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<NomenclatureRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private NomenclatureForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private string Title => $"{Texts[Existing is null ? "Action.Add" : "Action.Edit"]} — {Texts[$"NomenclatureKind.{Kind}"]}"
+                            + (Existing is null ? string.Empty : $" — {Existing.Code}");
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = CatalogEditorRules.FormOf(Existing, Texts.Culture);
+
+        // A unit is edited through its symbol: its name boxes are not shown and stay empty, as the workstation reads them.
+        if (Kind == NomenclatureKind.MeasurementUnit) _form = _form with { NameFr = string.Empty, NameAr = string.Empty, NameEn = string.Empty };
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = CatalogEditorRules.Check(Kind, _form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(CatalogEditorRules.ToRequest(Kind, _form, Existing?.Id));
+    }
+}

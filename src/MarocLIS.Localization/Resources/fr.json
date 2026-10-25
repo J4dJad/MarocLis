@@ -6753,6 +6753,7 @@
       "Intro": "Choisissez un écran dans le menu. Les écrans sont proposés selon vos droits et les modules de la licence.",
       "Today": "Aujourd'hui"
     },
+    "ParameterCount": "{0} paramètre(s)",
     "ScreenUnavailable": "Cet écran n'est pas encore disponible dans la version Web. Utilisez la version Windows.",
     "InstrumentsFromWorkstation": "Les valeurs des analyseurs arrivent par le poste Windows qui les pilote ; elles s'affichent ici dès leur réception.",
     "ScreenNotFound": "Cet écran n'existe pas.",

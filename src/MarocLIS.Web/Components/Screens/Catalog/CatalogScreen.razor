@@ -1,0 +1,435 @@
+@using System.Globalization
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Domain.Catalog
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Application.Abstractions
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<CatalogScreen> Logger
+
+@*
+    « Catalogue des analyses », the workstation's CatalogView: the analyses with their parameters
+    and reference intervals, their tariffs, the panels, the reflex rules, the lists the catalogue is
+    built on, the national nomenclature of acts (NABM) and the analyses that depart from it. Every
+    tab is shown to whoever may read the catalogue; each action is offered with its right and with
+    what is selected (CatalogScreenRules.Actions), as the workstation greys its buttons. The list of
+    analyses is the work list of the first two tabs, at the start; the selected analysis's detail
+    fills the rest. What is shown, offered and checked is CatalogScreenRules' and
+    CatalogEditorRules'; what is done, CatalogMaintenanceService's and NationalActService's, which
+    record each change in the audit trail.
+*@
+<div class="screen catalog" data-screen="catalog">
+    <div class="tabs" role="tablist">
+        @foreach (var tab in Enum.GetValues<CatalogTab>())
+        {
+            <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                    data-tab="@tab" @onclick="() => SelectTab(tab)">@TabCaption(tab)</button>
+        }
+    </div>
+
+    <CascadingValue Value="this" IsFixed="true">
+        @switch (_tab)
+        {
+            case CatalogTab.Tariffs:
+                <TariffsTab Analysis="SelectedAnalysis" Version="_version" ListPane="AnalysisListPane" />
+                break;
+
+            case CatalogTab.Panels:
+                <PanelsTab Version="_version" />
+                break;
+
+            case CatalogTab.ReflexRules:
+                <ReflexTab Version="_version" />
+                break;
+
+            case CatalogTab.Nomenclature:
+                <NomenclatureTab Version="_version" />
+                break;
+
+            case CatalogTab.Acts:
+                <ActsTab Acts="Acts" />
+                break;
+
+            case CatalogTab.Gaps:
+                <GapsTab Version="_version" />
+                break;
+
+            default:
+                <AnalysesTab Analysis="SelectedAnalysis" Version="_version" ListPane="AnalysisListPane" />
+                break;
+        }
+    </CascadingValue>
+</div>
+
+@if (_editing is { } editing)
+{
+    <AnalysisEditorDialog Existing="editing.Existing" Stored="editing.Stored" LabTariff="editing.LabTariff"
+                          KnownLetterKeyValue="editing.KnownLetterKeyValue" CanPrice="editing.CanPrice"
+                          Lookups="Lookups" Acts="Acts" Refusal="@_editRefusal" OnSave="SaveAnalysisAsync" OnCancel="CloseEditor" />
+}
+
+@code {
+    /// <summary>An analysis opened in its editor, with what the editor is filled from.</summary>
+    private sealed record AnalysisEditing(AnalysisRow? Existing, AnalysisRequest? Stored, TariffRow? LabTariff,
+                                          decimal? KnownLetterKeyValue, bool CanPrice, Func<Task>? After);
+
+    private CatalogTab _tab = CatalogTab.Analyses;
+
+    // The work list of « Analyses » and « Tarifs »: the filters of the workstation's search row.
+    private IReadOnlyList<AnalysisRow> _analysisRows = [];
+    private string _search = string.Empty;
+    private Guid? _departmentId;
+    private bool _includeInactive = true;
+    private bool _onlyToComplete;
+    private Guid? _analysisId;
+
+    /// <summary>Raised on every reload of the catalogue, so a tab reads its detail again.</summary>
+    private int _version;
+
+    private AnalysisEditing? _editing;
+    private string? _editRefusal;
+    private bool _busy;
+
+    /// <summary>The lists the editors pick from, read once and again after a list is changed.</summary>
+    public CatalogLookups Lookups { get; private set; } = CatalogLookups.Empty;
+
+    /// <summary>The acts of the national nomenclature: the analysis editor picks from them, « Nomenclature des actes » lists them.</summary>
+    public IReadOnlyList<NationalActRow> Acts { get; private set; } = [];
+
+    /// <summary>The last action's message, shown in the action bar of whichever tab is open.</summary>
+    public (string Text, string Tone)? Status { get; private set; }
+
+    public string StatusClass => $"is-{Status?.Tone ?? "muted"}";
+
+    /// <summary>Whether switched-off entries are listed, the workstation's one tick box for the analyses and the panels.</summary>
+    public bool IncludeInactive => _includeInactive;
+
+    public DateOnly Today => Clock.Today;
+
+    public ICurrentUser User => Context.User;
+
+    /// <summary>Kept on the record being worked on across a reload, made current rather than only highlighted.</summary>
+    public AnalysisRow? SelectedAnalysis => Shown.FirstOrDefault(a => a.Id == _analysisId) ?? Shown.FirstOrDefault();
+
+    private IReadOnlyList<AnalysisRow> Shown => CatalogScreenRules.Shown(_analysisRows, _onlyToComplete);
+
+    /// <summary>What « Catalogue » offers on the selection, by right — the workstation's RefreshActions.</summary>
+    public CatalogActions Actions(CatalogSelection selection) => CatalogScreenRules.Actions(Context.User, selection);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Lookups = await Scopes.RunAsync<CatalogMaintenanceService, CatalogLookups>(s => CatalogLookups.LoadAsync(s));
+            await LoadActsAsync();
+            await LoadAnalysesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the catalogue failed.");
+            Say(Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private string TabCaption(CatalogTab tab) => tab switch
+    {
+        CatalogTab.Tariffs => Texts["Catalog.Tariffs"],
+        CatalogTab.Panels => Texts["Catalog.Panels"],
+        CatalogTab.ReflexRules => Texts["Catalog.ReflexRules"],
+        CatalogTab.Nomenclature => Texts["Catalog.Nomenclature"],
+        CatalogTab.Acts => Texts["Nabm.ActsTab"],
+        CatalogTab.Gaps => Texts["Nabm.GapsTab"],
+        _ => Texts["Catalog.Analyses"]
+    };
+
+    private void SelectTab(CatalogTab tab)
+    {
+        _tab = tab;
+        Status = null;
+    }
+
+    // ---- Shared with the tabs ------------------------------------------------------------------
+
+    public void Say(string text, string tone)
+    {
+        Status = (text, tone);
+        StateHasChanged();
+    }
+
+    public void ClearStatus() => Status = null;
+
+    /// <summary>« GLY — Enregistré ».</summary>
+    public void Saved(string code) => Say($"{code} — {Texts["Message.Saved"]}", "normal");
+
+    /// <summary>A read or a write the service refused, said in the bar; an exception, logged and said.</summary>
+    public async Task<T?> ReadAsync<TService, T>(Func<TService, Task<Result<T>>> read, string what) where TService : notnull
+    {
+        try
+        {
+            var result = await Scopes.RunAsync<TService, Result<T>>(read);
+            if (result.IsSuccess) return result.Value;
+
+            Say(Texts.Describe(result.Errors), "critical");
+            return default;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reading the catalogue failed ({What}).", what);
+            Say(Texts["Message.UnexpectedError"], "critical");
+            return default;
+        }
+    }
+
+    /// <summary>The lists the other editors offer come from « Listes de référence »: read again after one is changed.</summary>
+    public async Task ReloadLookupsAsync()
+    {
+        Lookups = await Scopes.RunAsync<CatalogMaintenanceService, CatalogLookups>(s => CatalogLookups.LoadAsync(s));
+        StateHasChanged();
+    }
+
+    /// <summary>A failure leaves the editor without the picker, not the screen without a catalogue.</summary>
+    private async Task LoadActsAsync()
+    {
+        var result = await Scopes.RunAsync<NationalActService, Result<IReadOnlyList<NationalActRow>>>(s => s.GetActsAsync(null));
+        if (result.IsSuccess) Acts = result.Value;
+    }
+
+    public async Task LoadAnalysesAsync()
+    {
+        var search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
+        var rows = await ReadAsync<CatalogMaintenanceService, IReadOnlyList<AnalysisRow>>(
+            s => s.GetAnalysesAsync(search, _departmentId, _includeInactive), "analyses");
+
+        if (rows is not null) _analysisRows = rows;
+        _version++;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The analysis of a line of « Écarts », made current on « Analyses »: the filters that hid it
+    /// are cleared, as the workstation clears them, so it can be shown.
+    /// </summary>
+    public async Task<AnalysisRow?> FindAnalysisAsync(Guid id)
+    {
+        if (_analysisRows.FirstOrDefault(a => a.Id == id) is not { } row || !Shown.Contains(row))
+        {
+            _search = string.Empty;
+            _onlyToComplete = false;
+            _departmentId = null;
+            await LoadAnalysesAsync();
+        }
+
+        _analysisId = id;
+        return _analysisRows.FirstOrDefault(a => a.Id == id);
+    }
+
+    // ---- The list of analyses ------------------------------------------------------------------
+
+    private async Task SearchKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await LoadAnalysesAsync();
+    }
+
+    private async Task DepartmentChangedAsync(ChangeEventArgs e)
+    {
+        _departmentId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadAnalysesAsync();
+    }
+
+    private Task IncludeInactiveChangedAsync(ChangeEventArgs e) => SetIncludeInactiveAsync(e.Value is true);
+
+    /// <summary>The one tick box of the analyses and the panels: both lists are read again.</summary>
+    public async Task SetIncludeInactiveAsync(bool include)
+    {
+        _includeInactive = include;
+        await LoadAnalysesAsync();
+    }
+
+    private void ChooseChip(bool onlyToComplete)
+    {
+        _onlyToComplete = onlyToComplete;
+        _version++;
+    }
+
+    private void SelectAnalysis(AnalysisRow row)
+    {
+        _analysisId = row.Id;
+        Status = null;
+    }
+
+    private Task EditSelectedAsync() =>
+        SelectedAnalysis is { } row && Actions(new CatalogSelection(Analysis: true)).EditAnalysis ? EditAnalysisAsync(row) : Task.CompletedTask;
+
+    /// <summary>The work list of « Analyses » and « Tarifs »: search, sector, chips, count and refresh, then the analyses.</summary>
+    private RenderFragment AnalysisListPane => @<aside class="card list-pane" data-card="analyses">
+        <div class="list-tools">
+            <div class="search-box">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                <input class="input" type="search" placeholder="@Texts["Order.CatalogSearchPlaceholder"]" aria-label="@Texts["Order.CatalogSearchPlaceholder"]"
+                       data-field="analysis-search" autocomplete="off" @bind="_search" @onkeydown="SearchKeyAsync" />
+            </div>
+            <select class="input" data-field="department" aria-label="@Texts["Field.Department"]" @onchange="DepartmentChangedAsync">
+                <option value="" selected="@(_departmentId is null)">@Texts["Catalog.AllDepartments"]</option>
+                @foreach (var department in Lookups.Departments)
+                {
+                    <option value="@department.Id" selected="@(department.Id == _departmentId)">@department.Name.For(Texts.Language)</option>
+                }
+            </select>
+            <span class="list-tools-end">
+                <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="LoadAnalysesAsync" />
+            </span>
+        </div>
+        <div class="chips" data-state="chips">
+            <button type="button" class="chip @(_onlyToComplete ? null : "is-pressed")" data-chip="all" @onclick="() => ChooseChip(false)">
+                @Texts["AdminA.ChipAll"] · @_analysisRows.Count
+            </button>
+            <button type="button" class="chip @(_onlyToComplete ? "is-pressed" : null)" data-chip="to-complete" @onclick="() => ChooseChip(true)">
+                @Texts["AdminA.ChipToComplete"] · @_analysisRows.Count(CatalogRules.NeedsAttention)
+            </button>
+            <label class="field-check small">
+                <input type="checkbox" data-field="include-inactive" checked="@_includeInactive" @onchange="IncludeInactiveChangedAsync" />
+                <span>@Texts["Catalog.IncludeInactive"]</span>
+            </label>
+        </div>
+        <span class="muted small" data-state="count">@CatalogScreenRules.Heading(_analysisRows, Texts.T)</span>
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="analyses">
+                <tbody>
+                    @foreach (var row in Shown)
+                    {
+                        var tone = CatalogScreenRules.Tone(row);
+                        <tr class="@(row.Id == SelectedAnalysis?.Id ? "is-selected" : null) @RowTones.Class(tone)" data-row="@row.Code"
+                            @onclick="() => SelectAnalysis(row)" @ondblclick="EditSelectedAsync">
+                            <td>
+                                <span class="cell-name"><span class="mono">@row.Code</span> · @row.Name.For(Texts.Language)</span>
+                                <span class="cell-sub">
+                                    @* The national act beside the laboratory's own code: two keys, never one for the other. *@
+                                    @if (row.NationalActCode is { Length: > 0 } act)
+                                    {
+                                        <span class="mono">@act</span><text> · </text>
+                                    }
+                                    @row.DepartmentCode · @row.SpecimenTypeName.For(Texts.Language) · @Texts.T("Web.ParameterCount", CatalogScreenRules.ParameterCount(row))
+                                </span>
+                                @if (CatalogScreenRules.Flags(row, Texts.T) is { Count: > 0 } flags)
+                                {
+                                    <span class="cell-sub strong" data-state="flags">@string.Join(" · ", flags)</span>
+                                }
+                            </td>
+                            <td class="cell-action num mono">@(row.CurrentPrice is { } price ? Money.Of(price).Format(Texts.Language, Texts.Culture) : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </aside>;
+
+    // ---- The analysis editor ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Opens the analysis editor on the whole stored analysis — the list row is a summary, and an
+    /// editor filled from it saved blanks over every field the row does not carry — with the
+    /// laboratory price-list tariff in force; the letter-key value is national, so a first tariff
+    /// starts from the latest one known on any analysis.
+    /// </summary>
+    public async Task EditAnalysisAsync(AnalysisRow? existing, Func<Task>? after = null)
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var canPrice = Context.User.Has(Permissions.Billing.ManageTariffs);
+            TariffRow? labTariff = null;
+            decimal? known = null;
+            AnalysisRequest? stored = null;
+
+            if (existing is not null)
+            {
+                stored = await ReadAsync<CatalogMaintenanceService, AnalysisRequest>(s => s.GetAnalysisForEditAsync(existing.Id), "analysis");
+                if (stored is null) return;
+
+                var tariffs = await ReadAsync<CatalogMaintenanceService, IReadOnlyList<TariffRow>>(s => s.GetTariffsAsync(existing.Id), "tariffs");
+                if (tariffs is null) return;
+
+                labTariff = CatalogEditorRules.LabTariff(tariffs, Today);
+            }
+
+            if (labTariff is not { LetterKeyValue: > 0m })
+            {
+                var key = labTariff?.LetterKey ?? NationalBiologyAct.BiologyLetterKey;
+                var latest = await Scopes.RunAsync<CatalogMaintenanceService, Result<decimal?>>(s => s.GetLatestLetterKeyValueAsync(key));
+                if (latest.IsSuccess) known = latest.Value;
+            }
+
+            _editRefusal = null;
+            _editing = new AnalysisEditing(existing, stored, labTariff, known, canPrice, after);
+        }
+        finally
+        {
+            _busy = false;
+
+            // Opened from a tab's button: the editor belongs to the screen, drawn again here.
+            StateHasChanged();
+        }
+    }
+
+    private void CloseEditor()
+    {
+        _editing = null;
+        _editRefusal = null;
+    }
+
+    /// <summary>
+    /// Saves the analysis, then its laboratory price: a price set earlier today is corrected in
+    /// place; otherwise the new price starts today and the previous one closes yesterday, so orders
+    /// already billed keep their price. A refusal keeps the editor open with what was typed.
+    /// </summary>
+    private async Task SaveAnalysisAsync(AnalysisEditorDialog.Outcome outcome)
+    {
+        if (_editing is not { } editing || _busy) return;
+        _busy = true;
+
+        try
+        {
+            var saved = await Scopes.RunAsync<CatalogMaintenanceService, Result<Guid>>(s => s.SaveAnalysisAsync(outcome.Request));
+            if (saved.IsFailure)
+            {
+                _editRefusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            CloseEditor();
+            _analysisId = editing.Existing?.Id ?? saved.Value;
+            Saved(outcome.Request.Code);
+
+            if (outcome.Price is { } price)
+            {
+                var (request, correctInPlace) = CatalogEditorRules.PriceRevision(price, _analysisId.Value, editing.LabTariff, Today);
+
+                Result priced = correctInPlace
+                    ? await Scopes.RunAsync<CatalogMaintenanceService, Result>(s => s.UpdateTariffAsync(editing.LabTariff!.Id, request))
+                    : await Scopes.RunAsync<CatalogMaintenanceService, Result<Guid>>(s => s.AddTariffAsync(request));
+
+                if (priced.IsFailure) Say(Texts.Describe(priced.Errors), "critical");
+                else Say(Texts.T("Catalog.AnalysisPriceSaved", outcome.Request.Code, Today.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)), "normal");
+            }
+
+            // « Utilisé par » counts the analyses citing each act: read again, or the act just
+            // linked (or unlinked) stayed counted as before until the screen reopened.
+            await LoadActsAsync();
+            await LoadAnalysesAsync();
+            if (editing.After is { } after) await after();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving an analysis failed.");
+            _editRefusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

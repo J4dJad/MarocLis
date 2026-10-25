@@ -1,0 +1,180 @@
+@using MarocLIS.Application.Catalog
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<GapsTab> Logger
+
+@*
+    « Catalogue › Écarts avec la nomenclature »: the analyses that depart from the national list —
+    no act code, a code the list does not know, or a tariff in force whose coefficient is not the
+    official one. Only a coefficient gap is put right from here, after saying what will happen: a
+    new tariff version from today for each tariff that departs, past invoices untouched, the change
+    audited with the coefficients it replaced. The others open the analysis editor. A line put right
+    leaves the list and its neighbour becomes current, so the analyses are corrected one after the
+    other. The kinds, the question and the outcome are CatalogScreenRules'; the change is
+    NationalActService's.
+*@
+<div class="screen-body">
+    <section class="card card-flush" data-card="gaps">
+        <div class="list-tools card-pad">
+            <div class="chips" data-state="chips">
+                @foreach (var kind in Kinds)
+                {
+                    <button type="button" class="chip @(kind == _kind ? "is-pressed" : null)" data-chip="@(kind?.ToString() ?? "all")" @onclick="() => _kind = kind">
+                        @(kind is { } k ? Texts[$"NabmGap.{k}"] : Texts["Nabm.ChipAll"]) · @CatalogScreenRules.Gaps(_gaps, kind).Count
+                    </button>
+                }
+            </div>
+            <span class="list-tools-end">
+                <span class="muted small" data-state="count">@Texts["Nabm.GapsHeading"] — @Shown.Count</span>
+                <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="LoadAsync" />
+            </span>
+        </div>
+        <p class="message is-info small card-pad">@Texts["Nabm.GapsNote"]</p>
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="gaps">
+                <thead>
+                    <tr>
+                        <th>@Texts["Nabm.InternalCode"]</th>
+                        <th>@Texts["Field.Name"]</th>
+                        <th>@Texts["Nabm.ActCode"]</th>
+                        <th>@Texts["Nabm.ActLabel"]</th>
+                        <th class="num">@Texts["Nabm.OfficialCoefficient"]</th>
+                        <th class="num">@Texts["Nabm.CurrentCoefficient"]</th>
+                        <th>@Texts["Nabm.Gap"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var gap in Shown)
+                    {
+                        <tr class="@(gap.AnalysisId == SelectedGap?.AnalysisId ? "is-selected" : null) @RowTones.Class(CatalogScreenRules.Tone(gap))" data-row="@gap.AnalysisCode"
+                            @onclick="() => _analysisId = gap.AnalysisId" @ondblclick="EditAnalysisAsync">
+                            <td class="mono strong">@gap.AnalysisCode</td>
+                            <td>@gap.AnalysisName.For(Texts.Language)</td>
+                            <td class="mono">@(gap.NationalActCode ?? "—")</td>
+                            <td class="small">@gap.ActLabel</td>
+                            <td class="num mono">@(gap.OfficialCoefficient is { } official ? $"B {official.ToString("0.##", Texts.Culture)}" : null)</td>
+                            <td class="num mono">@(gap.CurrentCoefficient is { } current ? current.ToString("0.##", Texts.Culture) : "—")</td>
+                            <td class="small strong">@CatalogScreenRules.GapText(gap, Texts.T)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+@{ var actions = Actions; }
+<ActionBar StatusText="@Screen.Status?.Text" StatusClass="@Screen.StatusClass">
+    <Secondary>
+        <ActionButton Key="Catalog.EditAnalysis" Disabled="@(!actions.EditGapAnalysis || _busy)" OnClick="EditAnalysisAsync" />
+    </Secondary>
+    <Primary>
+        <ActionButton Key="Nabm.ApplyOfficial" Primary="true" Disabled="@(!actions.ApplyOfficial || _busy)" OnClick="AskApply" />
+    </Primary>
+</ActionBar>
+
+@if (_confirming is { } asked)
+{
+    <ConfirmPrompt Title="@Texts["Nabm.ApplyOfficial"]" Message="@CatalogScreenRules.ConfirmApply(asked, Screen.Today, Texts.T, Texts.Culture)"
+                   OnYes="ApplyAsync" OnNo="() => _confirming = null" />
+}
+
+@code {
+    [CascadingParameter] public CatalogScreen Screen { get; set; } = default!;
+    [Parameter] public int Version { get; set; }
+
+    private static readonly NomenclatureGapKind?[] Kinds =
+        [null, NomenclatureGapKind.MissingCode, NomenclatureGapKind.UnknownCode, NomenclatureGapKind.CoefficientDiffers];
+
+    private IReadOnlyList<NomenclatureGapRow> _gaps = [];
+    private NomenclatureGapKind? _kind;
+    private Guid? _analysisId;
+    private int? _loadedFor;
+    private NomenclatureGapRow? _confirming;
+    private bool _busy;
+
+    private IReadOnlyList<NomenclatureGapRow> Shown => CatalogScreenRules.Gaps(_gaps, _kind);
+
+    private NomenclatureGapRow? SelectedGap => Shown.FirstOrDefault(g => g.AnalysisId == _analysisId) ?? Shown.FirstOrDefault();
+
+    private CatalogActions Actions => Screen.Actions(new CatalogSelection(Gap: SelectedGap));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == Version) return;
+        _loadedFor = Version;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _gaps = await Screen.ReadAsync<NationalActService, IReadOnlyList<NomenclatureGapRow>>(s => s.GetGapsAsync(), "gaps") ?? _gaps;
+    }
+
+    /// <summary>
+    /// A line put right leaves the list, and the selection went back to the top of it: its
+    /// neighbour becomes current instead.
+    /// </summary>
+    private void KeepPlace(NomenclatureGapRow done, NomenclatureGapRow? neighbour)
+    {
+        if (neighbour is null || Shown.Any(g => g.AnalysisId == done.AnalysisId)) return;
+        _analysisId = neighbour.AnalysisId;
+    }
+
+    private void AskApply()
+    {
+        if (SelectedGap is { CanApplyOfficialCoefficient: true } gap && Actions.ApplyOfficial) _confirming = gap;
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (_confirming is not { } gap || _busy) return;
+        _confirming = null;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<NationalActService, Result<OfficialCoefficientOutcome>>(s => s.ApplyOfficialCoefficientAsync(gap.AnalysisId));
+            if (result.IsFailure)
+            {
+                Screen.Say(Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            var next = CatalogScreenRules.Neighbour(Shown, gap.AnalysisId);
+            Screen.Say(CatalogScreenRules.Applied(gap, result.Value, Screen.Today, Texts.T), "normal");
+
+            // The analyses' prices change with their tariffs: the catalogue is read again, and this list with it.
+            await Screen.LoadAnalysesAsync();
+            await LoadAsync();
+            KeepPlace(gap, next);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Applying the official coefficient failed.");
+            Screen.Say(Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>The analysis editor on the analysis of the line, to set or correct its act code; the list read again after.</summary>
+    private async Task EditAnalysisAsync()
+    {
+        if (SelectedGap is not { } gap || !Actions.EditGapAnalysis || _busy) return;
+
+        var next = CatalogScreenRules.Neighbour(Shown, gap.AnalysisId);
+        if (await Screen.FindAnalysisAsync(gap.AnalysisId) is not { } row) return;
+
+        await Screen.EditAnalysisAsync(row, after: async () =>
+        {
+            await LoadAsync();
+            KeepPlace(gap, next);
+
+            // Run from the screen's editor, not from an event of this tab: drawn again by hand.
+            StateHasChanged();
+        });
+    }
+}

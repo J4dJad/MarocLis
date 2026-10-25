@@ -1,0 +1,169 @@
+@using MarocLIS.Application.Catalog
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<NomenclatureTab> Logger
+
+@*
+    « Catalogue › Listes de référence »: the departments, specimen types, tubes and units the
+    analyses are built on, one list at a time, with how many analyses use each entry. A tube whose
+    cap colour cannot be painted is said on its line. A change here is read again by the other
+    editors at once: a new specimen type invisible in the analysis editor gets reported as « it
+    did not save ».
+*@
+<div class="screen-body">
+    <section class="card card-flush" data-card="nomenclature">
+        <div class="list-tools card-pad">
+            <div class="chips" role="tablist" data-state="kinds">
+                @foreach (var kind in Enum.GetValues<NomenclatureKind>())
+                {
+                    <button type="button" class="chip @(kind == _kind ? "is-pressed" : null)" data-chip="@kind" @onclick="() => ChooseKindAsync(kind)">
+                        @Texts[$"NomenclatureKind.{kind}"]
+                    </button>
+                }
+            </div>
+            <span class="list-tools-end">
+                <span class="muted small" data-state="count">@Texts[$"NomenclatureKind.{_kind}"] — @_rows.Count</span>
+                <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="LoadAsync" />
+            </span>
+        </div>
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="nomenclature">
+                <thead>
+                    <tr>
+                        <th>@Texts["Field.Code"]</th>
+                        <th>@Texts["Field.Name"]</th>
+                        <th>@Texts["Field.Description"]</th>
+                        <th class="num">@Texts["Catalog.UsedBy"]</th>
+                        <th>@Texts["Field.Status"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        var flags = CatalogScreenRules.Flags(_kind, row, Texts.T);
+                        <tr class="@(row.Id == SelectedRow?.Id ? "is-selected" : null) @(row.IsActive ? null : "is-tone-muted")" data-row="@row.Code"
+                            @onclick="() => _rowId = row.Id" @ondblclick="() => Edit(create: false)">
+                            <td class="mono strong">
+                                @if (_kind == NomenclatureKind.ContainerType)
+                                {
+                                    <span class="tube-swatch" style="background: @(CatalogScreenRules.IsRenderableColour(row.CapColourHex) ? row.CapColourHex : "transparent")" aria-hidden="true"></span>
+                                }
+                                @row.Code
+                            </td>
+                            <td>@CatalogScreenRules.Name(_kind, row, Texts.Language)</td>
+                            <td class="small">@CatalogScreenRules.Detail(_kind, row, Texts.Language, Texts.T, Texts.Culture)</td>
+                            <td class="num mono">@(row.UsageCount == 0 ? null : row.UsageCount)</td>
+                            <td class="small strong @(flags.Count > 0 && row.IsActive ? "abnormal" : null)">@string.Join(" · ", flags)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+@{ var actions = Actions; }
+<ActionBar StatusText="@Screen.Status?.Text" StatusClass="@Screen.StatusClass">
+    <Secondary>
+        <ActionButton Key="Action.Edit" Disabled="@(!actions.EditNomenclature || _busy)" OnClick="() => Edit(create: false)" />
+    </Secondary>
+    <Primary>
+        <ActionButton Key="Action.Add" Primary="true" Disabled="@(!actions.NewNomenclature || _busy)" OnClick="() => Edit(create: true)" />
+    </Primary>
+</ActionBar>
+
+@if (_open)
+{
+    <NomenclatureEditorDialog Kind="_kind" Existing="_editing" Refusal="@_refusal" OnSave="SaveAsync" OnCancel="Close" />
+}
+
+@code {
+    [CascadingParameter] public CatalogScreen Screen { get; set; } = default!;
+    [Parameter] public int Version { get; set; }
+
+    private NomenclatureKind _kind = NomenclatureKind.Department;
+    private IReadOnlyList<NomenclatureRow> _rows = [];
+    private Guid? _rowId;
+    private int? _loadedFor;
+
+    private bool _open;
+    private NomenclatureRow? _editing;
+    private string? _refusal;
+    private bool _busy;
+
+    private NomenclatureRow? SelectedRow => _rows.FirstOrDefault(r => r.Id == _rowId) ?? _rows.FirstOrDefault();
+
+    private CatalogActions Actions => Screen.Actions(new CatalogSelection(Nomenclature: SelectedRow is not null));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == Version) return;
+        _loadedFor = Version;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var kind = _kind;
+        _rows = await Screen.ReadAsync<CatalogMaintenanceService, IReadOnlyList<NomenclatureRow>>(s => s.GetNomenclatureAsync(kind), "nomenclature") ?? [];
+    }
+
+    private async Task ChooseKindAsync(NomenclatureKind kind)
+    {
+        if (kind == _kind) return;
+        _kind = kind;
+        _rowId = null;
+        Screen.ClearStatus();
+        await LoadAsync();
+    }
+
+    private void Edit(bool create)
+    {
+        if (_busy || (create ? !Actions.NewNomenclature : !Actions.EditNomenclature)) return;
+
+        _editing = create ? null : SelectedRow;
+        _refusal = null;
+        _open = true;
+    }
+
+    private void Close()
+    {
+        _open = false;
+        _editing = null;
+        _refusal = null;
+    }
+
+    private async Task SaveAsync(NomenclatureRequest request)
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var kind = _kind;
+            var saved = await Scopes.RunAsync<CatalogMaintenanceService, Result<Guid>>(s => s.SaveNomenclatureAsync(kind, request));
+            if (saved.IsFailure)
+            {
+                _refusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            Close();
+            _rowId = saved.Value;
+            Screen.Saved(request.Code);
+
+            // The lists the other editors offer come from these: read again rather than left stale.
+            await Screen.ReloadLookupsAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a list entry failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

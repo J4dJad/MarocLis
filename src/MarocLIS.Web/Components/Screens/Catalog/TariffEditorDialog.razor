@@ -1,0 +1,156 @@
+@using System.Globalization
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Catalog
+@inject WebTexts Texts
+
+@*
+    Entering a tariff revision, or correcting one, the workstation's TariffEditorDialog. A price is
+    versioned, not overwritten: an invoice issued last year must reprint with the price it charged,
+    so a new price closes the one in force and the dialog says which. The reimbursement base is
+    computed from the coefficient and the letter-key value as they are typed, with the excess the
+    patient bears — the figure a reception clerk is most often asked to explain. A correction
+    keeps its payer and its dates. The fields, the checks and the request are CatalogEditorRules'.
+*@
+<Modal Name="tariff-editor" Title="@Title" Hint="@Texts["AdminDialog.TariffEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Coverage.Payer"]</span>
+                <select class="input" data-field="payer" disabled="@(Editing is not null)" @onchange="PayerChanged">
+                    <option value="" selected="@(_form.PayerId is null)">@Texts["Catalog.DefaultPriceList"]</option>
+                    @foreach (var (id, display) in _payers)
+                    {
+                        <option value="@id" selected="@(id == _form.PayerId)">@display</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.ValidFrom"]</span>
+                <input class="input" type="date" data-field="validfrom" disabled="@(Editing is not null)" required
+                       @bind="_form.ValidFrom" @bind:format="yyyy-MM-dd" />
+            </label>
+            <span></span>
+            <p class="field-span-4 small @(Current is null ? "muted" : null)" data-state="current-tariff">@CurrentText</p>
+
+            <label class="field">
+                <span class="field-label">@Texts["Billing.LetterKey"]</span>
+                <input class="input mono upper" dir="ltr" data-field="letterkey" maxlength="@CatalogEditorRules.LetterKeyMaxLength" @bind="_form.LetterKey" />
+                <FieldMessage Refusal="_refusal" Field="letterkey" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Billing.Coefficient"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="coefficient" maxlength="@TypedNumber.MeasureMaxLength"
+                       @bind="_form.Coefficient" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="coefficient" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.LetterKeyValue"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="letterkeyvalue" maxlength="@TypedNumber.MeasureMaxLength"
+                       @bind="_form.LetterKeyValue" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="letterkeyvalue" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.Price"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="price" maxlength="@TypedNumber.AmountMaxLength"
+                       @bind="_form.Price" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="price" />
+            </label>
+            <p class="field-span-4 small @(Computed.Excess > 0m ? "abnormal" : "accent")" data-state="computed">
+                @Texts.T("Catalog.TariffComputedNotice", Money.Of(Computed.Reference).Format(Texts.Language, Texts.Culture),
+                         Money.Of(Computed.Excess).Format(Texts.Language, Texts.Culture))
+            </p>
+
+            <label class="field-check strong field-span-3 field-align-end">
+                <input type="checkbox" data-field="vatexempt" @bind="_form.VatExempt" @bind:after="VatChanged" /><span>@Texts["Billing.VatExempt"]</span>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Billing.Vat"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="vatrate" disabled="@_form.VatExempt" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.VatRate" />
+                <FieldMessage Refusal="_refusal" Field="vatrate" />
+            </label>
+            <p class="field-span-4 small muted">@Texts["Catalog.VatNotice"]</p>
+        </div>
+
+        <p class="message is-warning small">@Texts[Editing is null ? "Catalog.TariffVersioningNotice" : "Catalog.TariffCorrectionNotice"]</p>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public AnalysisRow Analysis { get; set; } = default!;
+
+    /// <summary>The analysis's tariffs, history included: the one this revision closes is among them.</summary>
+    [Parameter] public IReadOnlyList<TariffRow> Existing { get; set; } = [];
+
+    /// <summary>The tariff corrected in place; null when a new version is entered.</summary>
+    [Parameter] public TariffRow? Editing { get; set; }
+
+    [Parameter] public IReadOnlyList<TariffPayerOption> PayerOptions { get; set; } = [];
+
+    /// <summary>The latest letter-key value known on any analysis.</summary>
+    [Parameter] public decimal? NationalLetterKeyValue { get; set; }
+
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<TariffRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private TariffForm _form = new();
+    private IReadOnlyList<(Guid Id, string Display)> _payers = [];
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private string Title => $"{Texts[Editing is null ? "Catalog.NewTariff" : "Catalog.EditTariff"]} — {Analysis.Code}";
+
+    private TariffRow? Current => CatalogEditorRules.CurrentTariff(Editing, Existing, _form.PayerId);
+
+    /// <summary>The tariff this revision closes, so the operator sees what is superseded and that backdating behind it is refused.</summary>
+    private string CurrentText => Current is { } current
+        ? Texts.T("Catalog.CurrentTariffNotice", Money.Of(current.Price).Format(Texts.Language, Texts.Culture),
+                  current.ValidFrom.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                  $"{current.LetterKey} {current.Coefficient.ToString("0.##", Texts.Culture)}")
+        : Texts["Catalog.NoCurrentTariff"];
+
+    private (decimal Reference, decimal Excess) Computed => CatalogEditorRules.Computed(_form.Coefficient, _form.LetterKeyValue, _form.Price);
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+
+        _form = CatalogEditorRules.FormOf(Analysis, Existing, Today, Editing, NationalLetterKeyValue, Texts.Culture);
+        _payers = CatalogEditorRules.Payers(PayerOptions, Existing, Texts.Language);
+    }
+
+    private void PayerChanged(ChangeEventArgs e)
+    {
+        _form.PayerId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        KeepAfterCurrent();
+    }
+
+    /// <summary>A new version starts after the one it closes: the date moves to the day after when the payer has a later tariff.</summary>
+    private void KeepAfterCurrent() =>
+        _form.ValidFrom = CatalogEditorRules.ValidFrom(_form.ValidFrom, Current, correcting: Editing is not null);
+
+    private void VatChanged()
+    {
+        if (_form.VatExempt) _form.VatRate = string.Empty;
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = CatalogEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(CatalogEditorRules.ToRequest(_form, Analysis.Id));
+    }
+}

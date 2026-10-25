@@ -1,0 +1,117 @@
+@using System.Globalization
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Domain.Catalog
+@inject WebTexts Texts
+
+@*
+    Picking an act of the national nomenclature for the analysis editor, by code or by label, the
+    workstation's NationalActPickerDialog. Only the act code goes back; the analysis keeps the
+    internal code the laboratory gave it. The arrow keys move in the list while the search keeps
+    the focus, so the act is chosen without leaving the keyboard. What is offered is
+    CatalogScreenRules.Pickable's: the active acts the search finds.
+*@
+<Modal Name="act-picker" Title="@Texts["Nabm.PickerTitle"]" Hint="@Texts["AdminDialog.NationalActPickerDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="list-tools">
+            <div class="search-box">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                <input class="input" type="search" placeholder="@Texts["Nabm.SearchPlaceholder"]" aria-label="@Texts["Action.Search"]"
+                       data-field="act-search" autocomplete="off" maxlength="100"
+                       @bind="_search" @bind:event="oninput" @bind:after="Render" @onkeydown="KeyAsync" />
+            </div>
+            <span class="list-tools-end muted small" data-state="count">@Texts["Nabm.ActsHeading"] — @_shown.Count</span>
+        </div>
+        <div class="table-scroll table-scroll-short">
+            <table class="grid grid-select" data-grid="act-picker">
+                <thead>
+                    <tr>
+                        <th>@Texts["Nabm.ActCode"]</th>
+                        <th>@Texts["Nabm.ActLabel"]</th>
+                        <th class="num">@Texts["Billing.Coefficient"]</th>
+                        <th>@Texts["Nabm.Decree"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var act in _shown)
+                    {
+                        <tr class="@(act.Id == Chosen?.Id ? "is-selected" : null)" data-row="@act.Code" title="@CatalogScreenRules.Chapter(act)"
+                            @onclick="() => _chosenId = act.Id" @ondblclick="() => PickAsync(act)">
+                            <td class="mono strong">@act.Code</td>
+                            <td>@act.Label</td>
+                            <td class="num mono">@CatalogScreenRules.Coefficient(act, Texts.Culture)</td>
+                            <td class="mono small">@act.DecreeYear.ToString(CultureInfo.InvariantCulture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (_warned)
+        {
+            <p class="message is-warning" role="alert" data-state="refusal">@Texts["Nabm_PickAnAct"]</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Select" Primary="true" OnClick="() => PickAsync(Chosen)" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public IReadOnlyList<NationalActRow> Acts { get; set; } = [];
+
+    /// <summary>The code already typed: the list opens on it when it is one of the list.</summary>
+    [Parameter] public string? Current { get; set; }
+
+    [Parameter] public EventCallback<NationalActRow> OnPick { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _search = string.Empty;
+    private IReadOnlyList<NationalActRow> _shown = [];
+    private Guid? _chosenId;
+    private bool _initialised, _warned;
+
+    private NationalActRow? Chosen => _shown.FirstOrDefault(a => a.Id == _chosenId) ?? _shown.FirstOrDefault();
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+
+        Render();
+        var code = NationalBiologyAct.Normalize(Current);
+        _chosenId = _shown.FirstOrDefault(a => a.Code == code)?.Id;
+    }
+
+    private void Render()
+    {
+        _shown = CatalogScreenRules.Pickable(Acts, _search);
+        _chosenId = null;
+    }
+
+    private async Task KeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await PickAsync(Chosen);
+            return;
+        }
+
+        if (e.Key is not ("ArrowDown" or "ArrowUp") || _shown.Count == 0) return;
+
+        var at = Chosen is { } chosen ? _shown.ToList().IndexOf(chosen) : -1;
+        var next = Math.Clamp(at + (e.Key == "ArrowDown" ? 1 : -1), 0, _shown.Count - 1);
+        _chosenId = _shown[next].Id;
+    }
+
+    private Task PickAsync(NationalActRow? act)
+    {
+        if (act is null)
+        {
+            _warned = true;
+            return Task.CompletedTask;
+        }
+
+        return OnPick.InvokeAsync(act);
+    }
+}

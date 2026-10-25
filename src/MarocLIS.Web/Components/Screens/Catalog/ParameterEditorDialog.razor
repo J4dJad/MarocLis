@@ -1,0 +1,290 @@
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Catalog
+@inject WebTexts Texts
+
+@*
+    Creating or editing a parameter of an analysis, the workstation's ParameterEditorDialog. The
+    fields the value type cannot use are turned off rather than hidden, so the form does not jump
+    and an operator switching type sees what they have just lost; the type itself is frozen once a
+    result exists. The answers of a coded parameter are listed in their order, the usual
+    negative / positive pair offered while the list is empty. The formula is checked against the
+    sibling codes before saving, so the wrong code is named while the formula is still in front of
+    the operator. The fields, the checks and the request are CatalogEditorRules'.
+*@
+<Modal Name="parameter-editor" Title="@Title" Hint="@Texts["AdminDialog.ParameterEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Code"]</span>
+                <input class="input mono upper" dir="ltr" data-field="code" disabled="@(Existing is not null)" maxlength="@CatalogEditorRules.CodeMaxLength"
+                       @bind="_form.Code" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="code" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.ValueType"]</span>
+                <select class="input" data-field="valuetype" disabled="@(!CatalogEditorRules.ValueTypeEditable(Existing))" @bind="_form.ValueType">
+                    @foreach (var type in Enum.GetValues<ResultValueType>())
+                    {
+                        <option value="@type">@Texts[$"ResultValueType.{type}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.Unit"]</span>
+                <select class="input" data-field="unit" disabled="@(!Fields.Numeric)" @bind="_form.UnitId">
+                    <option value="">—</option>
+                    @foreach (var unit in Lookups.Units.Where(u => u.IsActive || u.Id == _form.UnitId))
+                    {
+                        <option value="@unit.Id">@unit.DisplaySymbol</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.Decimals"]</span>
+                <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.DecimalsMax" data-field="decimals" disabled="@(!Fields.Numeric)" @bind="_form.Decimals" />
+            </label>
+            <p class="field-span-4 small @(Existing is { HasResults: true } ? "abnormal" : "muted")" data-state="type-notice">
+                @(Existing is { HasResults: true } frozen ? Texts.T("Catalog.ValueTypeFrozenNotice", frozen.ResultCount) : Texts["Catalog.ValueTypeNotice"])
+            </p>
+
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.NameFr"]</span>
+                <input class="input" data-field="namefr" maxlength="@CatalogEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="namefr" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameAr"]</span>
+                <input class="input" dir="rtl" data-field="namear" maxlength="@CatalogEditorRules.NameMaxLength" @bind="_form.NameAr" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameEn"]</span>
+                <input class="input" dir="ltr" data-field="nameen" maxlength="@CatalogEditorRules.NameMaxLength" @bind="_form.NameEn" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.ShortName"]</span>
+                <input class="input" data-field="shortname" maxlength="@CatalogEditorRules.ShortNameMaxLength" @bind="_form.ShortName" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.Loinc"]</span>
+                <input class="input mono" dir="ltr" data-field="loinc" maxlength="@CatalogEditorRules.LoincMaxLength" @bind="_form.Loinc" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.AnalyticalCv"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="cv" disabled="@(!Fields.Numeric)" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Cv" />
+                <FieldMessage Refusal="_refusal" Field="cv" />
+            </label>
+            <div class="form-grid form-grid-2">
+                <label class="field">
+                    <span class="field-label">@Texts["Field.DisplayOrder"]</span>
+                    <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.DisplayOrderMax" data-field="display-order" @bind="_form.DisplayOrder" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Catalog.IndentLevel"]</span>
+                    <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.IndentMax" data-field="indent" @bind="_form.IndentLevel" />
+                </label>
+            </div>
+        </div>
+
+        @* The limits, each a pair low / high, read only for a number. *@
+        <fieldset class="subcard form-grid form-grid-3" data-card="limits" disabled="@(!Fields.Numeric)">
+            @foreach (var (label, low, high) in LimitPairs)
+            {
+                <div class="field">
+                    <span class="field-label">@label</span>
+                    <span class="input-pair">
+                        @foreach (var field in new[] { low, high })
+                        {
+                            <input class="input mono num" dir="ltr" inputmode="decimal" data-field="@field" maxlength="@TypedNumber.MeasureMaxLength"
+                                   aria-label="@label" value="@Limit(field)" @onchange="e => SetLimit(field, e.Value?.ToString())" />
+                        }
+                    </span>
+                    <FieldMessage Refusal="_refusal" Field="@low" />
+                    <FieldMessage Refusal="_refusal" Field="@high" />
+                </div>
+            }
+            <p class="field-span-3 small muted">@Texts["Catalog.LimitsNotice"]</p>
+
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.DeltaCheck"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="delta" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Delta" />
+                <FieldMessage Refusal="_refusal" Field="delta" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Catalog.DeltaWindow"]</span>
+                <input class="input mono num" type="number" min="0" max="@CatalogEditorRules.DeltaWindowMax" data-field="delta-window" @bind="_form.DeltaWindowDays" />
+            </label>
+            <p class="small muted field-align-end">@Texts["Catalog.DeltaNotice"]</p>
+
+            <label class="field field-span-3">
+                <span class="field-label">@Texts["Catalog.Formula"]</span>
+                <input class="input mono" dir="ltr" data-field="formula" maxlength="@CatalogEditorRules.FormulaMaxLength" @bind="_form.Formula" />
+                <FieldMessage Refusal="_refusal" Field="formula" />
+            </label>
+            <p class="field-span-3 small muted">@Texts["Catalog.FormulaNotice"]</p>
+        </fieldset>
+
+        @* The answers of a coded or semi-quantitative parameter, in the order they are listed. *@
+        <fieldset class="subcard" data-card="options" disabled="@(!Fields.Coded)">
+            <legend class="section-title accent">@Texts["Catalog.CodedOptions"]</legend>
+            <div class="table-scroll table-scroll-short">
+                <table class="grid" data-grid="options">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Field.Code"]</th>
+                            <th>@Texts["Field.NameFr"]</th>
+                            <th>@Texts["Field.NameAr"]</th>
+                            <th>@Texts["Catalog.ExpectedNormal"]</th>
+                            <th>@Texts["Flag.Abnormal"]</th>
+                            <th>@Texts["Catalog.CriticalOption"]</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < _options.Count; i++)
+                        {
+                            var line = _options[i];
+                            <tr data-row="@i">
+                                <td><input class="input mono upper" dir="ltr" data-field="option-code" aria-label="@Texts["Field.Code"]" maxlength="@CatalogEditorRules.CodedValueMaxLength" @bind="line.Code" /></td>
+                                <td><input class="input" data-field="option-label" aria-label="@Texts["Field.NameFr"]" @bind="line.LabelFr" /></td>
+                                <td><input class="input" dir="rtl" data-field="option-label-ar" aria-label="@Texts["Field.NameAr"]" @bind="line.LabelAr" /></td>
+                                <td><input type="checkbox" data-field="option-normal" aria-label="@Texts["Catalog.ExpectedNormal"]" @bind="line.ExpectedNormal" /></td>
+                                <td><input type="checkbox" data-field="option-abnormal" aria-label="@Texts["Flag.Abnormal"]" @bind="line.Abnormal" /></td>
+                                <td><input type="checkbox" data-field="option-critical" aria-label="@Texts["Catalog.CriticalOption"]" @bind="line.Critical" /></td>
+                                <td class="cell-action">
+                                    <ActionButton Key="Action.Remove" Text="" Title="@Texts["Action.Remove"]" OnClick="() => _options.Remove(line)" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <FieldMessage Refusal="_refusal" Field="options" />
+            <div class="list-tools">
+                <ActionButton Key="Action.Add" OnClick="() => _options.Add(new Line())" />
+                <ActionButton Key="Catalog.AddNegativePositive" Disabled="@(_options.Count > 0)" OnClick="AddPreset" />
+            </div>
+        </fieldset>
+
+        <div class="check-column">
+            <label class="field-check"><input type="checkbox" data-field="internal-only" @bind="_form.InternalOnly" /><span>@Texts["Catalog.InternalOnly"]</span></label>
+            <label class="field-check"><input type="checkbox" data-field="always-show" disabled="@Fields.Heading" @bind="_form.AlwaysShowOnReport" /><span>@Texts["Catalog.AlwaysShowOnReport"]</span></label>
+            <label class="field-check strong"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+        </div>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>A line of the answer list, edited in place before it is read as a <see cref="CodedOptionLine"/>.</summary>
+    private sealed class Line
+    {
+        public string Code { get; set; } = string.Empty;
+        public string LabelFr { get; set; } = string.Empty;
+        public string LabelAr { get; set; } = string.Empty;
+        public bool ExpectedNormal { get; set; }
+        public bool Abnormal { get; set; }
+        public bool Critical { get; set; }
+
+        public static Line Of(CodedOptionLine o) => new()
+        {
+            Code = o.Code, LabelFr = o.LabelFr, LabelAr = o.LabelAr,
+            ExpectedNormal = o.ExpectedNormal, Abnormal = o.Abnormal, Critical = o.Critical
+        };
+
+        public CodedOptionLine Read() => new(Code, LabelFr, LabelAr, ExpectedNormal, Abnormal, Critical);
+    }
+
+    [Parameter, EditorRequired] public AnalysisRow Analysis { get; set; } = default!;
+
+    /// <summary>The parameter edited; null for a new one.</summary>
+    [Parameter] public ParameterRow? Existing { get; set; }
+
+    /// <summary>The whole stored parameter when editing, allowed answers included.</summary>
+    [Parameter] public ParameterRequest? Stored { get; set; }
+
+    [Parameter] public CatalogLookups Lookups { get; set; } = CatalogLookups.Empty;
+
+    /// <summary>The other parameters of the analysis, whose codes a formula may cite.</summary>
+    [Parameter] public IReadOnlyList<ParameterRow> Siblings { get; set; } = [];
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<ParameterRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private ParameterForm _form = new();
+    private List<Line> _options = [];
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private string Title => Existing is null
+        ? $"{Texts["Catalog.NewParameter"]} — {Analysis.Code}"
+        : $"{Texts["Catalog.EditParameter"]} — {Analysis.Code} / {Existing.Code}";
+
+    private ParameterFields Fields => CatalogEditorRules.Fields(_form.ValueType);
+
+    /// <summary>The three pairs of limits, low then high, as the workstation lays them out.</summary>
+    private IEnumerable<(string Label, string Low, string High)> LimitPairs =>
+    [
+        (Texts["Catalog.MeasuringRange"], "measuringlow", "measuringhigh"),
+        (Texts["Catalog.TechnicalLimits"], "technicallow", "technicalhigh"),
+        (Texts["Catalog.CriticalLimits"], "criticallow", "criticalhigh")
+    ];
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = CatalogEditorRules.FormOf(Existing, Stored, Texts.Culture);
+        _options = [.. _form.Options.Select(Line.Of)];
+    }
+
+    private string Limit(string field) => field switch
+    {
+        "measuringlow" => _form.MeasuringLow,
+        "measuringhigh" => _form.MeasuringHigh,
+        "technicallow" => _form.TechnicalLow,
+        "technicalhigh" => _form.TechnicalHigh,
+        "criticallow" => _form.CriticalLow,
+        _ => _form.CriticalHigh
+    };
+
+    private void SetLimit(string field, string? value)
+    {
+        value ??= string.Empty;
+        switch (field)
+        {
+            case "measuringlow": _form.MeasuringLow = value; break;
+            case "measuringhigh": _form.MeasuringHigh = value; break;
+            case "technicallow": _form.TechnicalLow = value; break;
+            case "technicalhigh": _form.TechnicalHigh = value; break;
+            case "criticallow": _form.CriticalLow = value; break;
+            default: _form.CriticalHigh = value; break;
+        }
+    }
+
+    private void AddPreset()
+    {
+        if (_options.Count > 0) return;
+        _options = [.. CatalogEditorRules.NegativePositive(Texts.T).Select(Line.Of)];
+    }
+
+    private Task SaveAsync()
+    {
+        _form.Options = [.. _options.Select(l => l.Read())];
+
+        _refusal = CatalogEditorRules.Check(_form, Siblings.Select(s => s.Code));
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(CatalogEditorRules.ToRequest(_form, Existing?.Id, Analysis.Id, Existing is null ? null : Stored));
+    }
+}

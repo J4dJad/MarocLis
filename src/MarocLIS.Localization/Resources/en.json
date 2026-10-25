@@ -6752,6 +6752,7 @@
       "Intro": "Choose a screen from the menu. Screens are offered according to your rights and the licence modules.",
       "Today": "Today"
     },
+    "ParameterCount": "{0} parameter(s)",
     "ScreenUnavailable": "This screen is not yet available in the Web version. Use the Windows version.",
     "InstrumentsFromWorkstation": "Analyser values arrive through the Windows workstation that drives the analysers; they show here as soon as they are received.",
     "ScreenNotFound": "This screen does not exist.",
