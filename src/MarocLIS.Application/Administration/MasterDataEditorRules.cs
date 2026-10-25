@@ -14,167 +14,168 @@ namespace MarocLIS.Application.Administration;
 // ---- Forms -------------------------------------------------------------------------------------
 // What each editor of « Référentiels » holds while it is typed in: the boxes as text, the lists as
 // their ids, the ticks and the spinners as they are. The workstation's dialogs and the web's forms
-// fill one, check it and turn it into the service's request with the same rules.
+// fill one, check it and turn it into the service's request with the same rules. The properties can
+// be set, so the web's fields write into the form they show.
 
 public sealed record InstrumentForm
 {
-    public string Code { get; init; } = string.Empty;
-    public string NameFr { get; init; } = string.Empty;
-    public string NameAr { get; init; } = string.Empty;
-    public EquipmentKind Kind { get; init; } = EquipmentKind.Analyser;
-    public string Location { get; init; } = string.Empty;
-    public string SerialNumber { get; init; } = string.Empty;
-    public string Manufacturer { get; init; } = string.Empty;
-    public string Model { get; init; } = string.Empty;
-    public string SoftwareVersion { get; init; } = string.Empty;
-    public Guid? SupplierId { get; init; }
-    public string Contract { get; init; } = string.Empty;
-    public string SupportPhone { get; init; } = string.Empty;
-    public DateOnly? ContractValidUntil { get; init; }
-    public DateOnly? CommissioningDate { get; init; }
-    public int MaintenanceIntervalDays { get; init; }
-    public int CalibrationIntervalDays { get; init; }
-    public int VerificationIntervalDays { get; init; }
-    public DateOnly? LastMaintenanceOn { get; init; }
-    public DateOnly? LastCalibrationOn { get; init; }
-    public DateOnly? LastVerificationOn { get; init; }
+    public string Code { get; set; } = string.Empty;
+    public string NameFr { get; set; } = string.Empty;
+    public string NameAr { get; set; } = string.Empty;
+    public EquipmentKind Kind { get; set; } = EquipmentKind.Analyser;
+    public string Location { get; set; } = string.Empty;
+    public string SerialNumber { get; set; } = string.Empty;
+    public string Manufacturer { get; set; } = string.Empty;
+    public string Model { get; set; } = string.Empty;
+    public string SoftwareVersion { get; set; } = string.Empty;
+    public Guid? SupplierId { get; set; }
+    public string Contract { get; set; } = string.Empty;
+    public string SupportPhone { get; set; } = string.Empty;
+    public DateOnly? ContractValidUntil { get; set; }
+    public DateOnly? CommissioningDate { get; set; }
+    public int MaintenanceIntervalDays { get; set; }
+    public int CalibrationIntervalDays { get; set; }
+    public int VerificationIntervalDays { get; set; }
+    public DateOnly? LastMaintenanceOn { get; set; }
+    public DateOnly? LastCalibrationOn { get; set; }
+    public DateOnly? LastVerificationOn { get; set; }
 }
 
 public sealed record QcMaterialForm
 {
-    public string LotNumber { get; init; } = string.Empty;
-    public QcLevel Level { get; init; } = QcLevel.Normal;
-    public DateOnly ExpiryDate { get; init; }
-    public string NameFr { get; init; } = string.Empty;
-    public string NameAr { get; init; } = string.Empty;
-    public string Manufacturer { get; init; } = string.Empty;
-    public string CatalogueReference { get; init; } = string.Empty;
-    public DateOnly? OpenedOn { get; init; }
-    public int StabilityAfterOpeningDays { get; init; }
-    public bool Active { get; init; } = true;
+    public string LotNumber { get; set; } = string.Empty;
+    public QcLevel Level { get; set; } = QcLevel.Normal;
+    public DateOnly ExpiryDate { get; set; }
+    public string NameFr { get; set; } = string.Empty;
+    public string NameAr { get; set; } = string.Empty;
+    public string Manufacturer { get; set; } = string.Empty;
+    public string CatalogueReference { get; set; } = string.Empty;
+    public DateOnly? OpenedOn { get; set; }
+    public int StabilityAfterOpeningDays { get; set; }
+    public bool Active { get; set; } = true;
 }
 
 public sealed record QcTargetForm
 {
-    public Guid? MaterialId { get; init; }
-    public Guid? InstrumentId { get; init; }
-    public Guid? ParameterId { get; init; }
-    public string Mean { get; init; } = string.Empty;
-    public string Sd { get; init; } = string.Empty;
-    public string MaxCv { get; init; } = string.Empty;
-    public WestgardRule Rules { get; init; } = MasterDataScreenRules.ClassicMultirule;
-    public bool Active { get; init; } = true;
+    public Guid? MaterialId { get; set; }
+    public Guid? InstrumentId { get; set; }
+    public Guid? ParameterId { get; set; }
+    public string Mean { get; set; } = string.Empty;
+    public string Sd { get; set; } = string.Empty;
+    public string MaxCv { get; set; } = string.Empty;
+    public WestgardRule Rules { get; set; } = MasterDataScreenRules.ClassicMultirule;
+    public bool Active { get; set; } = true;
 }
 
 public sealed record StockItemForm
 {
-    public string Code { get; init; } = string.Empty;
-    public string NameFr { get; init; } = string.Empty;
-    public string NameAr { get; init; } = string.Empty;
-    public StockItemKind Kind { get; init; } = StockItemKind.Reagent;
-    public string Unit { get; init; } = "u";
-    public int TestsPerPack { get; init; }
-    public StorageCondition Storage { get; init; } = StorageCondition.RoomTemperature;
-    public string Manufacturer { get; init; } = string.Empty;
-    public Guid? SupplierId { get; init; }
-    public string SupplierReference { get; init; } = string.Empty;
-    public string UsedByAnalyses { get; init; } = string.Empty;
-    public string Location { get; init; } = string.Empty;
-    public string Minimum { get; init; } = string.Empty;
-    public string Reorder { get; init; } = string.Empty;
-    public string ReorderQuantity { get; init; } = string.Empty;
-    public string Maximum { get; init; } = string.Empty;
-    public bool Critical { get; init; }
-    public bool Hazardous { get; init; }
-    public string HazardClass { get; init; } = string.Empty;
-    public bool Active { get; init; } = true;
-    public string Gtin { get; init; } = string.Empty;
-    public bool CeMarked { get; init; }
-    public string TestsPerResult { get; init; } = string.Empty;
-    public string DeadVolumePercent { get; init; } = string.Empty;
-    public string DeadVolumeTests { get; init; } = string.Empty;
-    public int TestsPerCalibration { get; init; }
-    public int SafetyStockDays { get; init; }
-    public int ShelfLifeDays { get; init; }
-    public bool ReorderPointComputed { get; init; }
+    public string Code { get; set; } = string.Empty;
+    public string NameFr { get; set; } = string.Empty;
+    public string NameAr { get; set; } = string.Empty;
+    public StockItemKind Kind { get; set; } = StockItemKind.Reagent;
+    public string Unit { get; set; } = "u";
+    public int TestsPerPack { get; set; }
+    public StorageCondition Storage { get; set; } = StorageCondition.RoomTemperature;
+    public string Manufacturer { get; set; } = string.Empty;
+    public Guid? SupplierId { get; set; }
+    public string SupplierReference { get; set; } = string.Empty;
+    public string UsedByAnalyses { get; set; } = string.Empty;
+    public string Location { get; set; } = string.Empty;
+    public string Minimum { get; set; } = string.Empty;
+    public string Reorder { get; set; } = string.Empty;
+    public string ReorderQuantity { get; set; } = string.Empty;
+    public string Maximum { get; set; } = string.Empty;
+    public bool Critical { get; set; }
+    public bool Hazardous { get; set; }
+    public string HazardClass { get; set; } = string.Empty;
+    public bool Active { get; set; } = true;
+    public string Gtin { get; set; } = string.Empty;
+    public bool CeMarked { get; set; }
+    public string TestsPerResult { get; set; } = string.Empty;
+    public string DeadVolumePercent { get; set; } = string.Empty;
+    public string DeadVolumeTests { get; set; } = string.Empty;
+    public int TestsPerCalibration { get; set; }
+    public int SafetyStockDays { get; set; }
+    public int ShelfLifeDays { get; set; }
+    public bool ReorderPointComputed { get; set; }
 }
 
 public sealed record SupplierForm
 {
-    public string Code { get; init; } = string.Empty;
-    public string Name { get; init; } = string.Empty;
-    public string Ice { get; init; } = string.Empty;
-    public string FiscalId { get; init; } = string.Empty;
-    public string CommercialRegister { get; init; } = string.Empty;
-    public string Contact { get; init; } = string.Empty;
-    public string Phone { get; init; } = string.Empty;
-    public string Email { get; init; } = string.Empty;
-    public string City { get; init; } = string.Empty;
-    public string Address { get; init; } = string.Empty;
-    public MoroccanRegion Region { get; init; } = MoroccanRegion.Unspecified;
-    public int LeadTimeDays { get; init; } = 7;
-    public int PaymentTermsDays { get; init; } = PaymentTerms.DefaultDays;
-    public string AccountingAccount { get; init; } = string.Empty;
-    public bool Approved { get; init; }
-    public DateOnly? LastEvaluationDate { get; init; }
-    public int EvaluationScore { get; init; }
-    public string Notes { get; init; } = string.Empty;
-    public bool Active { get; init; } = true;
-    public string Registration { get; init; } = string.Empty;
-    public DateOnly? RegistrationValidUntil { get; init; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Ice { get; set; } = string.Empty;
+    public string FiscalId { get; set; } = string.Empty;
+    public string CommercialRegister { get; set; } = string.Empty;
+    public string Contact { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string Address { get; set; } = string.Empty;
+    public MoroccanRegion Region { get; set; } = MoroccanRegion.Unspecified;
+    public int LeadTimeDays { get; set; } = 7;
+    public int PaymentTermsDays { get; set; } = PaymentTerms.DefaultDays;
+    public string AccountingAccount { get; set; } = string.Empty;
+    public bool Approved { get; set; }
+    public DateOnly? LastEvaluationDate { get; set; }
+    public int EvaluationScore { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public bool Active { get; set; } = true;
+    public string Registration { get; set; } = string.Empty;
+    public DateOnly? RegistrationValidUntil { get; set; }
 }
 
 public sealed record PrescriberForm
 {
-    public string LastName { get; init; } = string.Empty;
-    public string FirstName { get; init; } = string.Empty;
-    public string NameArabic { get; init; } = string.Empty;
-    public PrescriberKind Kind { get; init; } = PrescriberKind.GeneralPractitioner;
-    public string Speciality { get; init; } = string.Empty;
-    public string Institution { get; init; } = string.Empty;
-    public string OrderNumber { get; init; } = string.Empty;
-    public string Inpe { get; init; } = string.Empty;
-    public string Ice { get; init; } = string.Empty;
-    public string Phone { get; init; } = string.Empty;
-    public string Mobile { get; init; } = string.Empty;
-    public string Fax { get; init; } = string.Empty;
-    public string Email { get; init; } = string.Empty;
-    public string City { get; init; } = string.Empty;
-    public string Address { get; init; } = string.Empty;
-    public string CriticalPhone { get; init; } = string.Empty;
-    public ReportDeliveryPreference Delivery { get; init; } = ReportDeliveryPreference.PatientCollects;
-    public bool SendPartial { get; init; }
-    public string Discount { get; init; } = string.Empty;
-    public string Notes { get; init; } = string.Empty;
-    public bool Active { get; init; } = true;
+    public string LastName { get; set; } = string.Empty;
+    public string FirstName { get; set; } = string.Empty;
+    public string NameArabic { get; set; } = string.Empty;
+    public PrescriberKind Kind { get; set; } = PrescriberKind.GeneralPractitioner;
+    public string Speciality { get; set; } = string.Empty;
+    public string Institution { get; set; } = string.Empty;
+    public string OrderNumber { get; set; } = string.Empty;
+    public string Inpe { get; set; } = string.Empty;
+    public string Ice { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
+    public string Mobile { get; set; } = string.Empty;
+    public string Fax { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string Address { get; set; } = string.Empty;
+    public string CriticalPhone { get; set; } = string.Empty;
+    public ReportDeliveryPreference Delivery { get; set; } = ReportDeliveryPreference.PatientCollects;
+    public bool SendPartial { get; set; }
+    public string Discount { get; set; } = string.Empty;
+    public string Notes { get; set; } = string.Empty;
+    public bool Active { get; set; } = true;
 }
 
 public sealed record PayerForm
 {
-    public string Code { get; init; } = string.Empty;
-    public string NameFr { get; init; } = string.Empty;
-    public string NameAr { get; init; } = string.Empty;
-    public string NameEn { get; init; } = string.Empty;
-    public PayerKind Kind { get; init; } = PayerKind.AmoCnss;
+    public string Code { get; set; } = string.Empty;
+    public string NameFr { get; set; } = string.Empty;
+    public string NameAr { get; set; } = string.Empty;
+    public string NameEn { get; set; } = string.Empty;
+    public PayerKind Kind { get; set; } = PayerKind.AmoCnss;
 
     /// <summary>The rate as a percentage, the unit a convention is written in.</summary>
-    public decimal RatePercent { get; init; } = 70m;
+    public decimal RatePercent { get; set; } = 70m;
 
-    public int PaymentTermsDays { get; init; } = 60;
-    public string Ice { get; init; } = string.Empty;
-    public bool UsesReferenceTariff { get; init; } = true;
-    public bool RequiresPrescription { get; init; } = true;
-    public bool RequiresInpe { get; init; }
-    public bool ThirdParty { get; init; }
-    public string AgreementNumber { get; init; } = string.Empty;
-    public DateOnly? AgreementValidUntil { get; init; }
-    public string AccountingAccount { get; init; } = string.Empty;
-    public string Contact { get; init; } = string.Empty;
-    public string Phone { get; init; } = string.Empty;
-    public string Email { get; init; } = string.Empty;
-    public string Address { get; init; } = string.Empty;
-    public string City { get; init; } = string.Empty;
-    public bool Active { get; init; } = true;
+    public int PaymentTermsDays { get; set; } = 60;
+    public string Ice { get; set; } = string.Empty;
+    public bool UsesReferenceTariff { get; set; } = true;
+    public bool RequiresPrescription { get; set; } = true;
+    public bool RequiresInpe { get; set; }
+    public bool ThirdParty { get; set; }
+    public string AgreementNumber { get; set; } = string.Empty;
+    public DateOnly? AgreementValidUntil { get; set; }
+    public string AccountingAccount { get; set; } = string.Empty;
+    public string Contact { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Address { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public bool Active { get; set; } = true;
 }
 
 /// <summary>What a payer's kind does to the form: the boxes it locks and why.</summary>

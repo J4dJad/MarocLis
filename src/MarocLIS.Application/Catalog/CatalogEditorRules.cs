@@ -10,44 +10,45 @@ namespace MarocLIS.Application.Catalog;
 // ---- Forms -------------------------------------------------------------------------------------
 // What each editor of « Catalogue » holds while it is typed in: the boxes as text, the lists as
 // their ids, the ticks as booleans. The workstation's dialogs and the web's forms fill one, check it
-// and turn it into the service's request with the same rules.
+// and turn it into the service's request with the same rules. The properties can be set, so the
+// web's fields write into the form they show.
 
 /// <summary>An analysis as typed, with the laboratory's own price beside it.</summary>
 public sealed record AnalysisForm
 {
-    public string Code { get; init; } = string.Empty;
-    public string NameFr { get; init; } = string.Empty;
-    public string NameAr { get; init; } = string.Empty;
-    public string NameEn { get; init; } = string.Empty;
-    public string ShortName { get; init; } = string.Empty;
-    public string Aliases { get; init; } = string.Empty;
-    public Guid? DepartmentId { get; init; }
-    public Guid? SpecimenTypeId { get; init; }
-    public Guid? ContainerTypeId { get; init; }
-    public string Volume { get; init; } = string.Empty;
-    public string Loinc { get; init; } = string.Empty;
-    public string ActCode { get; init; } = string.Empty;
-    public ConsentRequirement Consent { get; init; } = ConsentRequirement.None;
-    public string Method { get; init; } = string.Empty;
-    public string Reagent { get; init; } = string.Empty;
-    public bool Accredited { get; init; }
-    public bool Subcontracted { get; init; }
-    public bool Notifiable { get; init; }
-    public Guid? SubcontractorSiteId { get; init; }
-    public int RoutineTurnaroundHours { get; init; } = 24;
-    public int UrgentTurnaroundMinutes { get; init; } = 120;
-    public bool AvailableUrgently { get; init; } = true;
-    public int FastingHours { get; init; }
-    public int StabilityRoomHours { get; init; }
-    public int StabilityFridgeHours { get; init; }
-    public int DisplayOrder { get; init; }
-    public string ClinicalInformation { get; init; } = string.Empty;
-    public bool Active { get; init; } = true;
+    public string Code { get; set; } = string.Empty;
+    public string NameFr { get; set; } = string.Empty;
+    public string NameAr { get; set; } = string.Empty;
+    public string NameEn { get; set; } = string.Empty;
+    public string ShortName { get; set; } = string.Empty;
+    public string Aliases { get; set; } = string.Empty;
+    public Guid? DepartmentId { get; set; }
+    public Guid? SpecimenTypeId { get; set; }
+    public Guid? ContainerTypeId { get; set; }
+    public string Volume { get; set; } = string.Empty;
+    public string Loinc { get; set; } = string.Empty;
+    public string ActCode { get; set; } = string.Empty;
+    public ConsentRequirement Consent { get; set; } = ConsentRequirement.None;
+    public string Method { get; set; } = string.Empty;
+    public string Reagent { get; set; } = string.Empty;
+    public bool Accredited { get; set; }
+    public bool Subcontracted { get; set; }
+    public bool Notifiable { get; set; }
+    public Guid? SubcontractorSiteId { get; set; }
+    public int RoutineTurnaroundHours { get; set; } = 24;
+    public int UrgentTurnaroundMinutes { get; set; } = 120;
+    public bool AvailableUrgently { get; set; } = true;
+    public int FastingHours { get; set; }
+    public int StabilityRoomHours { get; set; }
+    public int StabilityFridgeHours { get; set; }
+    public int DisplayOrder { get; set; }
+    public string ClinicalInformation { get; set; } = string.Empty;
+    public bool Active { get; set; } = true;
 
-    public string LetterKey { get; init; } = NationalBiologyAct.BiologyLetterKey;
-    public string Coefficient { get; init; } = string.Empty;
-    public string LetterKeyValue { get; init; } = string.Empty;
-    public string Price { get; init; } = string.Empty;
+    public string LetterKey { get; set; } = NationalBiologyAct.BiologyLetterKey;
+    public string Coefficient { get; set; } = string.Empty;
+    public string LetterKeyValue { get; set; } = string.Empty;
+    public string Price { get; set; } = string.Empty;
 }
 
 /// <summary>An allowed answer of a coded parameter, as a line of the editor's list.</summary>
@@ -57,31 +58,31 @@ public sealed record CodedOptionLine(string Code, string LabelFr, string LabelAr
 /// <summary>A parameter as typed, with its allowed answers.</summary>
 public sealed record ParameterForm
 {
-    public string Code { get; init; } = string.Empty;
-    public ResultValueType ValueType { get; init; } = ResultValueType.Numeric;
-    public Guid? UnitId { get; init; }
-    public int Decimals { get; init; } = 2;
-    public string NameFr { get; init; } = string.Empty;
-    public string NameAr { get; init; } = string.Empty;
-    public string NameEn { get; init; } = string.Empty;
-    public string ShortName { get; init; } = string.Empty;
-    public string Loinc { get; init; } = string.Empty;
-    public string Cv { get; init; } = string.Empty;
-    public int DisplayOrder { get; init; }
-    public int IndentLevel { get; init; }
-    public string MeasuringLow { get; init; } = string.Empty;
-    public string MeasuringHigh { get; init; } = string.Empty;
-    public string TechnicalLow { get; init; } = string.Empty;
-    public string TechnicalHigh { get; init; } = string.Empty;
-    public string CriticalLow { get; init; } = string.Empty;
-    public string CriticalHigh { get; init; } = string.Empty;
-    public string Delta { get; init; } = string.Empty;
-    public int DeltaWindowDays { get; init; }
-    public string Formula { get; init; } = string.Empty;
-    public bool InternalOnly { get; init; }
-    public bool AlwaysShowOnReport { get; init; } = true;
-    public bool Active { get; init; } = true;
-    public IReadOnlyList<CodedOptionLine> Options { get; init; } = [];
+    public string Code { get; set; } = string.Empty;
+    public ResultValueType ValueType { get; set; } = ResultValueType.Numeric;
+    public Guid? UnitId { get; set; }
+    public int Decimals { get; set; } = 2;
+    public string NameFr { get; set; } = string.Empty;
+    public string NameAr { get; set; } = string.Empty;
+    public string NameEn { get; set; } = string.Empty;
+    public string ShortName { get; set; } = string.Empty;
+    public string Loinc { get; set; } = string.Empty;
+    public string Cv { get; set; } = string.Empty;
+    public int DisplayOrder { get; set; }
+    public int IndentLevel { get; set; }
+    public string MeasuringLow { get; set; } = string.Empty;
+    public string MeasuringHigh { get; set; } = string.Empty;
+    public string TechnicalLow { get; set; } = string.Empty;
+    public string TechnicalHigh { get; set; } = string.Empty;
+    public string CriticalLow { get; set; } = string.Empty;
+    public string CriticalHigh { get; set; } = string.Empty;
+    public string Delta { get; set; } = string.Empty;
+    public int DeltaWindowDays { get; set; }
+    public string Formula { get; set; } = string.Empty;
+    public bool InternalOnly { get; set; }
+    public bool AlwaysShowOnReport { get; set; } = true;
+    public bool Active { get; set; } = true;
+    public IReadOnlyList<CodedOptionLine> Options { get; set; } = [];
 }
 
 /// <summary>Which fields a value type uses: the others are turned off, not hidden, so the form does not jump.</summary>
@@ -90,73 +91,73 @@ public sealed record ParameterFields(bool Numeric, bool Coded, bool Heading);
 /// <summary>A reference interval as typed: its population, its limits, its provenance and its validity.</summary>
 public sealed record RangeForm
 {
-    public Gender Gender { get; init; } = Gender.Unknown;
-    public bool? Pregnancy { get; init; }
-    public int? Trimester { get; init; }
-    public int AgeFrom { get; init; }
-    public int AgeTo { get; init; }
+    public Gender Gender { get; set; } = Gender.Unknown;
+    public bool? Pregnancy { get; set; }
+    public int? Trimester { get; set; }
+    public int AgeFrom { get; set; }
+    public int AgeTo { get; set; }
 
     /// <summary>The unit the band is typed in, in days: 1, 30 or 365.</summary>
-    public int AgeUnitDays { get; init; } = 365;
+    public int AgeUnitDays { get; set; } = 365;
 
-    public Guid? InstrumentId { get; init; }
-    public string Lower { get; init; } = string.Empty;
-    public string Upper { get; init; } = string.Empty;
-    public string ExpectedCoded { get; init; } = string.Empty;
-    public bool DecisionThreshold { get; init; }
-    public string DisplayFr { get; init; } = string.Empty;
-    public string DisplayAr { get; init; } = string.Empty;
-    public string Source { get; init; } = string.Empty;
-    public DateOnly? LastReviewedOn { get; init; }
-    public DateOnly ValidFrom { get; init; }
-    public DateOnly? ValidUntil { get; init; }
-    public bool Active { get; init; } = true;
+    public Guid? InstrumentId { get; set; }
+    public string Lower { get; set; } = string.Empty;
+    public string Upper { get; set; } = string.Empty;
+    public string ExpectedCoded { get; set; } = string.Empty;
+    public bool DecisionThreshold { get; set; }
+    public string DisplayFr { get; set; } = string.Empty;
+    public string DisplayAr { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public DateOnly? LastReviewedOn { get; set; }
+    public DateOnly ValidFrom { get; set; }
+    public DateOnly? ValidUntil { get; set; }
+    public bool Active { get; set; } = true;
 }
 
 /// <summary>A tariff revision (or a correction of one entered today) as typed.</summary>
 public sealed record TariffForm
 {
-    public Guid? PayerId { get; init; }
-    public DateOnly ValidFrom { get; init; }
-    public string LetterKey { get; init; } = NationalBiologyAct.BiologyLetterKey;
-    public string Coefficient { get; init; } = string.Empty;
-    public string LetterKeyValue { get; init; } = string.Empty;
-    public string Price { get; init; } = string.Empty;
-    public bool VatExempt { get; init; } = true;
-    public string VatRate { get; init; } = string.Empty;
+    public Guid? PayerId { get; set; }
+    public DateOnly ValidFrom { get; set; }
+    public string LetterKey { get; set; } = NationalBiologyAct.BiologyLetterKey;
+    public string Coefficient { get; set; } = string.Empty;
+    public string LetterKeyValue { get; set; } = string.Empty;
+    public string Price { get; set; } = string.Empty;
+    public bool VatExempt { get; set; } = true;
+    public string VatRate { get; set; } = string.Empty;
 }
 
 /// <summary>A panel as typed: its identity, its package price and the analyses it orders.</summary>
 public sealed record PanelForm
 {
-    public string Code { get; init; } = string.Empty;
-    public string NameFr { get; init; } = string.Empty;
-    public string NameAr { get; init; } = string.Empty;
-    public string NameEn { get; init; } = string.Empty;
-    public string Aliases { get; init; } = string.Empty;
-    public string PackagePrice { get; init; } = string.Empty;
-    public int DisplayOrder { get; init; }
-    public bool ItemizeOnInvoice { get; init; } = true;
-    public bool GroupOnReport { get; init; }
-    public bool Active { get; init; } = true;
-    public IReadOnlyList<PanelMemberRequest> Members { get; init; } = [];
+    public string Code { get; set; } = string.Empty;
+    public string NameFr { get; set; } = string.Empty;
+    public string NameAr { get; set; } = string.Empty;
+    public string NameEn { get; set; } = string.Empty;
+    public string Aliases { get; set; } = string.Empty;
+    public string PackagePrice { get; set; } = string.Empty;
+    public int DisplayOrder { get; set; }
+    public bool ItemizeOnInvoice { get; set; } = true;
+    public bool GroupOnReport { get; set; }
+    public bool Active { get; set; } = true;
+    public IReadOnlyList<PanelMemberRequest> Members { get; set; } = [];
 }
 
 /// <summary>A reflex rule as typed.</summary>
 public sealed record ReflexForm
 {
-    public Guid? TriggerAnalysisId { get; init; }
-    public Guid? TriggerParameterId { get; init; }
-    public ReflexCondition Condition { get; init; } = ReflexCondition.GreaterThan;
-    public string Threshold { get; init; } = string.Empty;
-    public string ThresholdUpper { get; init; } = string.Empty;
-    public string CodedValue { get; init; } = string.Empty;
-    public Guid? TargetAnalysisId { get; init; }
-    public string DescriptionFr { get; init; } = string.Empty;
-    public string DescriptionAr { get; init; } = string.Empty;
-    public bool AddAutomatically { get; init; }
-    public bool Billable { get; init; } = true;
-    public bool Active { get; init; } = true;
+    public Guid? TriggerAnalysisId { get; set; }
+    public Guid? TriggerParameterId { get; set; }
+    public ReflexCondition Condition { get; set; } = ReflexCondition.GreaterThan;
+    public string Threshold { get; set; } = string.Empty;
+    public string ThresholdUpper { get; set; } = string.Empty;
+    public string CodedValue { get; set; } = string.Empty;
+    public Guid? TargetAnalysisId { get; set; }
+    public string DescriptionFr { get; set; } = string.Empty;
+    public string DescriptionAr { get; set; } = string.Empty;
+    public bool AddAutomatically { get; set; }
+    public bool Billable { get; set; } = true;
+    public bool Active { get; set; } = true;
 }
 
 /// <summary>Which threshold boxes a condition reads, and the sentence that says what it means.</summary>
@@ -165,36 +166,36 @@ public sealed record ReflexFields(bool Threshold, bool ThresholdUpper, bool Code
 /// <summary>An entry of one of the four lists the catalogue is built on, as typed.</summary>
 public sealed record NomenclatureForm
 {
-    public string Code { get; init; } = string.Empty;
-    public string NameFr { get; init; } = string.Empty;
-    public string NameAr { get; init; } = string.Empty;
-    public string NameEn { get; init; } = string.Empty;
-    public bool Active { get; init; } = true;
+    public string Code { get; set; } = string.Empty;
+    public string NameFr { get; set; } = string.Empty;
+    public string NameAr { get; set; } = string.Empty;
+    public string NameEn { get; set; } = string.Empty;
+    public bool Active { get; set; } = true;
 
     // Department
-    public int DisplayOrder { get; init; }
-    public bool InAccreditationScope { get; init; }
+    public int DisplayOrder { get; set; }
+    public bool InAccreditationScope { get; set; }
 
     // Specimen type
-    public int FastingHours { get; init; }
-    public string CollectionInstructions { get; init; } = string.Empty;
-    public string PatientInstructions { get; init; } = string.Empty;
+    public int FastingHours { get; set; }
+    public string CollectionInstructions { get; set; } = string.Empty;
+    public string PatientInstructions { get; set; } = string.Empty;
 
     // Container type
-    public string CapColour { get; init; } = "#FFFFFF";
-    public string Additive { get; init; } = string.Empty;
-    public string NominalVolume { get; init; } = string.Empty;
-    public string MinimumVolume { get; init; } = string.Empty;
-    public int DrawOrder { get; init; }
-    public bool ProtectFromLight { get; init; }
-    public bool IceTransport { get; init; }
+    public string CapColour { get; set; } = "#FFFFFF";
+    public string Additive { get; set; } = string.Empty;
+    public string NominalVolume { get; set; } = string.Empty;
+    public string MinimumVolume { get; set; } = string.Empty;
+    public int DrawOrder { get; set; }
+    public bool ProtectFromLight { get; set; }
+    public bool IceTransport { get; set; }
 
     // Measurement unit
-    public string Symbol { get; init; } = string.Empty;
-    public string SymbolArabic { get; init; } = string.Empty;
-    public string Ucum { get; init; } = string.Empty;
-    public string FactorToSi { get; init; } = string.Empty;
-    public string SiUnit { get; init; } = string.Empty;
+    public string Symbol { get; set; } = string.Empty;
+    public string SymbolArabic { get; set; } = string.Empty;
+    public string Ucum { get; set; } = string.Empty;
+    public string FactorToSi { get; set; } = string.Empty;
+    public string SiUnit { get; set; } = string.Empty;
 }
 
 /// <summary>What the code box of the analysis editor names: nothing, a known act, or a code the list does not know.</summary>
