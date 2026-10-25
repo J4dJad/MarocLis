@@ -1,4 +1,5 @@
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Input;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Equipment;
@@ -345,6 +346,22 @@ internal abstract class MasterDataEditor : Form
 
     protected abstract void Accept();
 
+    /// <summary>
+    /// Says the refusal a shared editor rule returned and puts the cursor back in the box it names.
+    /// False when there is none, and the save goes on.
+    /// </summary>
+    protected bool Refused(FieldRefusal? refusal, params (string Field, Control? Box)[] boxes)
+    {
+        if (refusal is null) return false;
+
+        Dialogs.Warn(refusal.Typed is { } typed ? Localizer.Format(refusal.Key, typed) : Localizer[refusal.Key], Text);
+
+        var box = boxes.FirstOrDefault(b => b.Field == refusal.Field).Box;
+        box?.Focus();
+        if (box is TextBox text && refusal.Key == "Result_NotANumber") text.SelectAll();
+        return true;
+    }
+
     private readonly List<TextBox> _numbers = [];
 
     /// <summary>
@@ -449,45 +466,44 @@ internal sealed class InstrumentEditorDialog : MasterDataEditor
         _id = row?.InstrumentId;
         _stored = row is null ? null : stored;
 
-        _code = TextField("Field.Code", 20, 14, 160, row?.Code, latin: true, mono: true);
-        _nameFr = TextField("Field.NameFr", 200, 14, 240, row?.Name.Fr);
-        _nameAr = TextField("Field.NameAr", 460, 14, 240, row?.Name.Ar, arabic: true);
+        var form = MasterDataEditorRules.FormOf(row, stored);
 
-        _kind = Choice("Equipment.Kind", 20, 68, 200, row?.Kind ?? EquipmentKind.Analyser,
-                        "EquipmentKind");
+        _code = TextField("Field.Code", 20, 14, 160, form.Code, latin: true, mono: true);
+        _nameFr = TextField("Field.NameFr", 200, 14, 240, form.NameFr);
+        _nameAr = TextField("Field.NameAr", 460, 14, 240, form.NameAr, arabic: true);
+
+        _kind = Choice("Equipment.Kind", 20, 68, 200, form.Kind, "EquipmentKind");
         _kind.SelectedIndexChanged += (_, _) => RefreshKindNotice();
 
-        _location = TextField("Equipment.Location", 240, 68, 200, row?.Location);
-        _serial = TextField("Equipment.SerialNumber", 460, 68, 240, row?.SerialNumber,
+        _location = TextField("Equipment.Location", 240, 68, 200, form.Location);
+        _serial = TextField("Equipment.SerialNumber", 460, 68, 240, form.SerialNumber,
                         latin: true, mono: true);
 
-        _manufacturer = TextField("Equipment.Manufacturer", 20, 122, 200, row?.Manufacturer);
-        _model = TextField("Equipment.Model", 240, 122, 200, row?.Model);
-        _software = TextField("Equipment.SoftwareVersion", 460, 122, 240, _stored?.SoftwareVersion,
+        _manufacturer = TextField("Equipment.Manufacturer", 20, 122, 200, form.Manufacturer);
+        _model = TextField("Equipment.Model", 240, 122, 200, form.Model);
+        _software = TextField("Equipment.SoftwareVersion", 460, 122, 240, form.SoftwareVersion,
                               latin: true);
 
         _supplier = Lookup("Inventory.Supplier", 20, 176, 300,
                             suppliers.Select(s => (s.SupplierId, $"{s.Code} — {s.Name}")),
-                            _stored?.SupplierId);
+                            form.SupplierId);
 
-        _contract = TextField("Equipment.Contract", 340, 176, 200,
-                              _stored?.MaintenanceContractReference, latin: true);
-        _support = TextField("Equipment.SupportPhone", 560, 176, 140, _stored?.SupportPhone,
+        _contract = TextField("Equipment.Contract", 340, 176, 200, form.Contract, latin: true);
+        _support = TextField("Equipment.SupportPhone", 560, 176, 140, form.SupportPhone,
                              latin: true, mono: true);
         // The lengths of the columns: a longer value was refused by the database with an unexpected
         // error, and the form was lost with it.
-        _code.MaxLength = 30;
-        _nameFr.MaxLength = _nameAr.MaxLength = 300;
-        _location.MaxLength = _manufacturer.MaxLength = _model.MaxLength = 150;
-        _serial.MaxLength = _contract.MaxLength = 100;
-        _software.MaxLength = 60;
-        _support.MaxLength = 30;
+        _code.MaxLength = MasterDataEditorRules.CodeMaxLength;
+        _nameFr.MaxLength = _nameAr.MaxLength = MasterDataEditorRules.NameMaxLength;
+        _location.MaxLength = _manufacturer.MaxLength = _model.MaxLength = MasterDataEditorRules.ManufacturerMaxLength;
+        _serial.MaxLength = _contract.MaxLength = MasterDataEditorRules.ReferenceMaxLength;
+        _software.MaxLength = MasterDataEditorRules.SoftwareMaxLength;
+        _support.MaxLength = MasterDataEditorRules.PhoneMaxLength;
 
-        _contractUntil = OptionalDate("Equipment.ContractValidUntil", 20, 232,
-                                       row?.ContractValidUntil);
+        _contractUntil = OptionalDate("Equipment.ContractValidUntil", 20, 232, form.ContractValidUntil);
 
         _commissioning = OptionalDate("Equipment.Commissioning", 240, 232,
-                                       _stored?.CommissioningDate, max: DateTime.Today);
+                                       form.CommissioningDate, max: DateTime.Today);
 
         // Interval block, set apart because it is the part that matters.
         var intervalHeading = new Label
@@ -504,22 +520,22 @@ internal sealed class InstrumentEditorDialog : MasterDataEditor
                               UiTheme.Abnormal);
 
         _maintenanceInterval = Number("Equipment.MaintenanceInterval", 20, 366, 180,
-                                       row?.PreventiveMaintenanceIntervalDays, 3650);
+                                       form.MaintenanceIntervalDays, MasterDataEditorRules.IntervalMaxDays);
 
         _calibrationInterval = Number("Equipment.CalibrationInterval", 240, 366, 180,
-                                       row?.CalibrationIntervalDays, 3650);
+                                       form.CalibrationIntervalDays, MasterDataEditorRules.IntervalMaxDays);
 
         _verificationInterval = Number("Equipment.VerificationInterval", 460, 366, 180,
-                                        row?.VerificationIntervalDays, 3650);
+                                        form.VerificationIntervalDays, MasterDataEditorRules.IntervalMaxDays);
 
         _lastMaintenance = OptionalDate("Equipment.LastMaintenance", 20, 420,
-                                         _stored?.LastPreventiveMaintenanceOn, max: DateTime.Today);
+                                         form.LastMaintenanceOn, max: DateTime.Today);
 
         _lastCalibration = OptionalDate("Equipment.LastCalibration", 240, 420,
-                                         row?.LastCalibrationOn, max: DateTime.Today);
+                                         form.LastCalibrationOn, max: DateTime.Today);
 
         _lastVerification = OptionalDate("Equipment.LastVerification", 460, 420,
-                                          _stored?.LastVerificationOn, max: DateTime.Today);
+                                          form.LastVerificationOn, max: DateTime.Today);
 
         Notice(20, 486, 680, 46, "Equipment.LastDatesNotice");
 
@@ -533,62 +549,41 @@ internal sealed class InstrumentEditorDialog : MasterDataEditor
     /// rather than letting the service refuse after Save.
     /// </summary>
     private void RefreshKindNotice() =>
-        _kindNotice.Visible = Selected<EquipmentKind>(_kind) == EquipmentKind.Analyser;
+        _kindNotice.Visible = MasterDataEditorRules.NeedsCalibrationInterval(Selected<EquipmentKind>(_kind));
+
+    private InstrumentForm Form() => new()
+    {
+        Code = _code.Text,
+        NameFr = _nameFr.Text,
+        NameAr = _nameAr.Text,
+        Kind = Selected<EquipmentKind>(_kind),
+        Location = _location.Text,
+        SerialNumber = _serial.Text,
+        Manufacturer = _manufacturer.Text,
+        Model = _model.Text,
+        SoftwareVersion = _software.Text,
+        SupplierId = SelectedId(_supplier),
+        Contract = _contract.Text,
+        SupportPhone = _support.Text,
+        ContractValidUntil = DateOrNull(_contractUntil.Toggle, _contractUntil.Picker),
+        CommissioningDate = DateOrNull(_commissioning.Toggle, _commissioning.Picker),
+        MaintenanceIntervalDays = (int)_maintenanceInterval.Value,
+        CalibrationIntervalDays = (int)_calibrationInterval.Value,
+        VerificationIntervalDays = (int)_verificationInterval.Value,
+        LastMaintenanceOn = DateOrNull(_lastMaintenance.Toggle, _lastMaintenance.Picker),
+        LastCalibrationOn = DateOrNull(_lastCalibration.Toggle, _lastCalibration.Picker),
+        LastVerificationOn = DateOrNull(_lastVerification.Toggle, _lastVerification.Picker)
+    };
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_code.Text))
-        {
-            Dialogs.Warn(Localizer["Equipment_CodeRequired"]);
-            _code.Focus();
+        var form = Form();
+
+        if (Refused(MasterDataEditorRules.Check(form), ("code", _code), ("namefr", _nameFr),
+                    ("calibration", _calibrationInterval)))
             return;
-        }
 
-        if (string.IsNullOrWhiteSpace(_nameFr.Text))
-        {
-            Dialogs.Warn(Localizer["Equipment_NameRequired"]);
-            _nameFr.Focus();
-            return;
-        }
-
-        if (Selected<EquipmentKind>(_kind) == EquipmentKind.Analyser
-            && _calibrationInterval.Value <= 0)
-        {
-            Dialogs.Warn(Localizer["Equipment_AnalyserNeedsCalibrationInterval"]);
-            _calibrationInterval.Focus();
-            return;
-        }
-
-        // Built on the stored instrument, so a field this dialog does not show (the department, the
-        // purchase date) is saved as it was rather than reset.
-        var basis = _stored ?? new InstrumentRequest { Code = string.Empty, Name = new MultilingualText() };
-
-        Request = basis with
-        {
-            InstrumentId = _id,
-            Code = _code.Text.Trim(),
-            // No English box: the stored English name is kept while the French one is unchanged.
-            Name = new MultilingualText(
-                _nameFr.Text.Trim(), _nameAr.Text.Trim(),
-                _stored?.Name.Fr == _nameFr.Text.Trim() ? _stored.Name.En : null),
-            Kind = Selected<EquipmentKind>(_kind),
-            Manufacturer = Blank(_manufacturer),
-            Model = Blank(_model),
-            SerialNumber = Blank(_serial),
-            SoftwareVersion = Blank(_software),
-            Location = Blank(_location),
-            SupplierId = SelectedId(_supplier),
-            MaintenanceContractReference = Blank(_contract),
-            MaintenanceContractValidUntil = DateOrNull(_contractUntil.Toggle, _contractUntil.Picker),
-            SupportPhone = Blank(_support),
-            CommissioningDate = DateOrNull(_commissioning.Toggle, _commissioning.Picker),
-            PreventiveMaintenanceIntervalDays = IntOrNull(_maintenanceInterval),
-            CalibrationIntervalDays = IntOrNull(_calibrationInterval),
-            VerificationIntervalDays = IntOrNull(_verificationInterval),
-            LastPreventiveMaintenanceOn = DateOrNull(_lastMaintenance.Toggle, _lastMaintenance.Picker),
-            LastCalibrationOn = DateOrNull(_lastCalibration.Toggle, _lastCalibration.Picker),
-            LastVerificationOn = DateOrNull(_lastVerification.Toggle, _lastVerification.Picker)
-        };
+        Request = MasterDataEditorRules.ToRequest(form, _id, _stored);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -614,11 +609,13 @@ internal sealed class QcMaterialEditorDialog : MasterDataEditor
     {
         _id = row?.QcMaterialId;
 
-        _lot = TextField("Quality.QcLot", 20, 14, 200, row?.LotNumber, latin: true, mono: true);
-        _lot.Enabled = row is null;   // Lot plus level is the natural key.
+        var form = MasterDataEditorRules.FormOf(row, DateOnly.FromDateTime(DateTime.Today));
 
-        _level = Choice("Quality.QcLevel", 240, 14, 180, row?.Level ?? QcLevel.Normal, "QcLevel");
-        _level.Enabled = row is null;
+        _lot = TextField("Quality.QcLot", 20, 14, 200, form.LotNumber, latin: true, mono: true);
+        _lot.Enabled = MasterDataEditorRules.KeyEditable(row);   // Lot plus level is the natural key.
+
+        _level = Choice("Quality.QcLevel", 240, 14, 180, form.Level, "QcLevel");
+        _level.Enabled = MasterDataEditorRules.KeyEditable(row);
 
         Label("Inventory.Expiry", 440, 14);
         _expiry = new DateTimePicker
@@ -630,32 +627,32 @@ internal sealed class QcMaterialEditorDialog : MasterDataEditor
         // An already-lapsed expiry cannot be shown by a picker whose minimum is today, and
         // clamping it silently would edit the record just by opening it. The minimum is therefore
         // chosen before the value is assigned: assigning a lapsed date first throws.
-        var expiryDate = row?.ExpiryDate.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today.AddMonths(12);
+        var expiryDate = form.ExpiryDate.ToDateTime(TimeOnly.MinValue);
 
         _expiry.MinDate = expiryDate < DateTime.Today ? new DateTime(2000, 1, 1) : DateTime.Today;
         _expiry.Value = expiryDate;
 
         Controls.Add(_expiry);
 
-        _nameFr = TextField("Field.NameFr", 20, 68, 260, row?.Name.Fr);
-        _nameAr = TextField("Field.NameAr", 300, 68, 300, row?.Name.Ar, arabic: true);
+        _nameFr = TextField("Field.NameFr", 20, 68, 260, form.NameFr);
+        _nameAr = TextField("Field.NameAr", 300, 68, 300, form.NameAr, arabic: true);
 
-        _manufacturer = TextField("Equipment.Manufacturer", 20, 122, 260, row?.Manufacturer);
-        _reference = TextField("Inventory.SupplierReference", 300, 122, 300, row?.CatalogueReference,
+        _manufacturer = TextField("Equipment.Manufacturer", 20, 122, 260, form.Manufacturer);
+        _reference = TextField("Inventory.SupplierReference", 300, 122, 300, form.CatalogueReference,
                            latin: true);
 
         // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
-        _lot.MaxLength = 60;
-        _nameFr.MaxLength = _nameAr.MaxLength = 300;
-        _manufacturer.MaxLength = 150;
-        _reference.MaxLength = 100;
+        _lot.MaxLength = MasterDataEditorRules.LotMaxLength;
+        _nameFr.MaxLength = _nameAr.MaxLength = MasterDataEditorRules.NameMaxLength;
+        _manufacturer.MaxLength = MasterDataEditorRules.ManufacturerMaxLength;
+        _reference.MaxLength = MasterDataEditorRules.ReferenceMaxLength;
 
-        _opened = OptionalDate("Inventory.OpenedOn", 20, 180, row?.OpenedOn, max: DateTime.Today);
+        _opened = OptionalDate("Inventory.OpenedOn", 20, 180, form.OpenedOn, max: DateTime.Today);
 
         _stability = Number("Inventory.OpenStabilityDays", 240, 180, 120,
-                             row?.StabilityAfterOpeningDays, 3650);
+                             form.StabilityAfterOpeningDays, MasterDataEditorRules.IntervalMaxDays);
 
-        _active = Check("Field.Active", 20, 250, row?.IsActive ?? true);
+        _active = Check("Field.Active", 20, 250, form.Active);
 
         Notice(20, 276, 580, 46, "Quality.MaterialStabilityNotice");
 
@@ -663,35 +660,27 @@ internal sealed class QcMaterialEditorDialog : MasterDataEditor
         UseAdminFrame();
     }
 
+    private QcMaterialForm Form() => new()
+    {
+        LotNumber = _lot.Text,
+        Level = Selected<QcLevel>(_level),
+        ExpiryDate = DateOnly.FromDateTime(_expiry.Value.Date),
+        NameFr = _nameFr.Text,
+        NameAr = _nameAr.Text,
+        Manufacturer = _manufacturer.Text,
+        CatalogueReference = _reference.Text,
+        OpenedOn = DateOrNull(_opened.Toggle, _opened.Picker),
+        StabilityAfterOpeningDays = (int)_stability.Value,
+        Active = _active.Checked
+    };
+
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_lot.Text))
-        {
-            Dialogs.Warn(Localizer["QcMaterial_LotRequired"]);
-            _lot.Focus();
-            return;
-        }
+        var form = Form();
 
-        if (string.IsNullOrWhiteSpace(_nameFr.Text))
-        {
-            Dialogs.Warn(Localizer["QcMaterial_NameRequired"]);
-            _nameFr.Focus();
-            return;
-        }
+        if (Refused(MasterDataEditorRules.Check(form), ("lot", _lot), ("namefr", _nameFr))) return;
 
-        Request = new QcMaterialRequest
-        {
-            QcMaterialId = _id,
-            LotNumber = _lot.Text.Trim(),
-            Name = new MultilingualText(_nameFr.Text.Trim(), _nameAr.Text.Trim()),
-            Level = Selected<QcLevel>(_level),
-            ExpiryDate = DateOnly.FromDateTime(_expiry.Value.Date),
-            Manufacturer = Blank(_manufacturer),
-            CatalogueReference = Blank(_reference),
-            OpenedOn = DateOrNull(_opened.Toggle, _opened.Picker),
-            StabilityAfterOpeningDays = IntOrNull(_stability),
-            IsActive = _active.Checked
-        };
+        Request = MasterDataEditorRules.ToRequest(form, _id);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -727,39 +716,33 @@ internal sealed class QcTargetEditorDialog : MasterDataEditor
     {
         _id = row?.QcTargetId;
 
-        _rules = row?.ActiveRules
-                 ?? (WestgardRule.OneTwoS | WestgardRule.OneThreeS | WestgardRule.TwoTwoS
-                     | WestgardRule.R4S | WestgardRule.FourOneS | WestgardRule.TenX);
+        var form = MasterDataEditorRules.FormOf(row);
+        _rules = form.Rules;
 
         _material = Lookup("Quality.QcMaterial", 20, 14, 280,
                             materials.Select(m => (m.QcMaterialId,
                                 $"{m.LotNumber} — {localizer[$"QcLevel.{m.Level}"]}")),
-                            row?.QcMaterialId, allowNone: false);
+                            form.MaterialId, allowNone: false);
 
         _instrument = Lookup("Result.Instrument", 320, 14, 280,
                               instruments.Select(i => (i.InstrumentId, $"{i.Code} — {i.Name.Fr}")),
-                              row?.InstrumentId, allowNone: false);
+                              form.InstrumentId, allowNone: false);
 
         _parameter = Lookup("Result.Parameter", 20, 68, 580,
                              parameters.Select(p => (p.TestParameterId,
                                  $"{p.AnalysisCode} · {p.ParameterCode} — {p.ParameterName.Fr}"
                                  + (p.UnitSymbol is { Length: > 0 } u ? $" ({u})" : string.Empty))),
-                             row?.TestParameterId, allowNone: false);
+                             form.ParameterId, allowNone: false);
 
-        _material.Enabled = row is null;
-        _instrument.Enabled = row is null;
-        _parameter.Enabled = row is null;
+        _material.Enabled = _instrument.Enabled = _parameter.Enabled = MasterDataEditorRules.KeyEditable(row);
 
         Notice(20, 122, 580, 32, "Quality.AssignedLimitsNotice", UiTheme.Accent);
 
-        _mean = TextField("Quality.AssignedMean", 20, 162, 140,
-                      row?.AssignedMean?.ToString("0.###"), latin: true, mono: true, right: true);
+        _mean = TextField("Quality.AssignedMean", 20, 162, 140, form.Mean, latin: true, mono: true, right: true);
 
-        _sd = TextField("Quality.AssignedSd", 180, 162, 140,
-                    row?.AssignedSd?.ToString("0.###"), latin: true, mono: true, right: true);
+        _sd = TextField("Quality.AssignedSd", 180, 162, 140, form.Sd, latin: true, mono: true, right: true);
 
-        _cv = TextField("Quality.MaxCv", 340, 162, 140,
-                    row?.MaxAcceptableCvPercent?.ToString("0.##"), latin: true, right: true);
+        _cv = TextField("Quality.MaxCv", 340, 162, 140, form.MaxCv, latin: true, right: true);
 
         Numeric(EditorValues.MeasureMaxLength, _mean, _sd, _cv);
 
@@ -774,7 +757,7 @@ internal sealed class QcTargetEditorDialog : MasterDataEditor
         _ruleButton.Click += (_, _) => PickRules();
         Controls.Add(_ruleButton);
 
-        _active = Check("Field.Active", 20, 286, row?.IsActive ?? true);
+        _active = Check("Field.Active", 20, 286, form.Active);
 
         Notice(20, 316, 580, 46, "Quality.TargetLifecycleNotice");
 
@@ -789,15 +772,7 @@ internal sealed class QcTargetEditorDialog : MasterDataEditor
     /// Echoes the coefficient of variation the entered mean and SD imply. It is the number a
     /// biologist judges a method by, and computing it in their head from two boxes is friction.
     /// </summary>
-    private void RefreshCv()
-    {
-        var mean = DecimalOrNull(_mean);
-        var sd = DecimalOrNull(_sd);
-
-        _cvEcho.Text = mean is > 0m && sd is > 0m
-            ? $"CV {sd.Value / mean.Value * 100m:0.##} %"
-            : string.Empty;
-    }
+    private void RefreshCv() => _cvEcho.Text = MasterDataEditorRules.CvEcho(_mean.Text, _sd.Text);
 
     private void PickRules()
     {
@@ -815,47 +790,35 @@ internal sealed class QcTargetEditorDialog : MasterDataEditor
 
     private void RefreshRuleButton()
     {
-        var count = Enum.GetValues<WestgardRule>()
-                        .Count(r => r != WestgardRule.None && _rules.HasFlag(r));
+        var count = MasterDataScreenRules.CountRules(_rules);
 
-        _ruleButton.Text = count == 0
-            ? Localizer["Quality.NoRulesWarning"]
-            : Localizer.Format("Quality.RuleCount", count);
+        _ruleButton.Text = MasterDataScreenRules.RuleSummary(_rules, Localizer.Format);
 
         _ruleButton.ForeColor = count == 0 ? UiTheme.Critical : UiTheme.TextPrimary;
         _ruleButton.Font = count == 0 ? UiTheme.BodyBold : UiTheme.Body;
     }
 
+    private QcTargetForm Form() => new()
+    {
+        MaterialId = SelectedId(_material),
+        InstrumentId = SelectedId(_instrument),
+        ParameterId = SelectedId(_parameter),
+        Mean = _mean.Text,
+        Sd = _sd.Text,
+        MaxCv = _cv.Text,
+        Rules = _rules,
+        Active = _active.Checked
+    };
+
     protected override void Accept()
     {
-        var material = SelectedId(_material);
-        var instrument = SelectedId(_instrument);
-        var parameter = SelectedId(_parameter);
+        var form = Form();
 
-        if (material is null || instrument is null || parameter is null)
-        {
-            Dialogs.Warn(Localizer["Message.NothingSelected"]);
+        if (Refused(MasterDataEditorRules.Check(form), ("mean", _mean), ("sd", _sd), ("cv", _cv),
+                    ("material", _material), ("rules", _ruleButton)))
             return;
-        }
 
-        if (_rules == WestgardRule.None)
-        {
-            Dialogs.Warn(Localizer["QcTarget_AtLeastOneRuleRequired"]);
-            return;
-        }
-
-        Request = new QcTargetRequest
-        {
-            QcTargetId = _id,
-            QcMaterialId = material.Value,
-            InstrumentId = instrument.Value,
-            TestParameterId = parameter.Value,
-            AssignedMean = DecimalOrNull(_mean),
-            AssignedSd = DecimalOrNull(_sd),
-            MaxAcceptableCvPercent = DecimalOrNull(_cv),
-            ActiveRules = _rules,
-            IsActive = _active.Checked
-        };
+        Request = MasterDataEditorRules.ToRequest(form, _id);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -888,89 +851,87 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
     {
         _id = row?.StockItemId;
 
-        _code = TextField("Field.Code", 20, 14, 160, row?.Code, latin: true, mono: true);
-        _nameFr = TextField("Field.NameFr", 200, 14, 240, row?.Name.Fr);
-        _nameAr = TextField("Field.NameAr", 460, 14, 240, row?.Name.Ar, arabic: true);
+        var form = MasterDataEditorRules.FormOf(row, System.Globalization.CultureInfo.CurrentCulture);
 
-        _kind = Choice("Field.Name", 20, 68, 200, row?.Kind ?? StockItemKind.Reagent,
-                        "StockItemKind");
-        _unit = TextField("Field.Unit", 240, 68, 100, row?.UnitOfMeasure ?? "u");
-        _tests = Number("Inventory.TestsPerPack", 360, 68, 100, row?.TestsPerPack, 100_000);
+        _code = TextField("Field.Code", 20, 14, 160, form.Code, latin: true, mono: true);
+        _nameFr = TextField("Field.NameFr", 200, 14, 240, form.NameFr);
+        _nameAr = TextField("Field.NameAr", 460, 14, 240, form.NameAr, arabic: true);
 
-        _storage = Choice("Sample.Storage", 480, 68, 220,
-                           row?.StorageCondition ?? StorageCondition.RoomTemperature,
-                           "StorageCondition");
+        _kind = Choice("Field.Name", 20, 68, 200, form.Kind, "StockItemKind");
+        _unit = TextField("Field.Unit", 240, 68, 100, form.Unit);
+        _tests = Number("Inventory.TestsPerPack", 360, 68, 100, form.TestsPerPack, MasterDataEditorRules.TestsPerPackMax);
 
-        _manufacturer = TextField("Equipment.Manufacturer", 20, 122, 200, row?.Manufacturer);
+        _storage = Choice("Sample.Storage", 480, 68, 220, form.Storage, "StorageCondition");
+
+        _manufacturer = TextField("Equipment.Manufacturer", 20, 122, 200, form.Manufacturer);
         _supplier = Lookup("Inventory.Supplier", 240, 122, 240,
                             suppliers.Select(s => (s.SupplierId, $"{s.Code} — {s.Name}")),
-                            row?.PreferredSupplierId);
-        _reference = TextField("Inventory.SupplierReference", 500, 122, 200, row?.SupplierCatalogueReference,
+                            form.SupplierId);
+        _reference = TextField("Inventory.SupplierReference", 500, 122, 200, form.SupplierReference,
                                latin: true);
 
-        _analyses = TextField("Inventory.UsedByAnalyses", 20, 176, 460, row?.UsedByAnalysisCodesCsv, latin: true);
-        _location = TextField("Inventory.DefaultLocation", 500, 176, 200, row?.DefaultStorageLocation);
+        _analyses = TextField("Inventory.UsedByAnalyses", 20, 176, 460, form.UsedByAnalyses, latin: true);
+        _location = TextField("Inventory.DefaultLocation", 500, 176, 200, form.Location);
 
         Notice(20, 230, 680, 30, "Inventory.ReorderNotice", UiTheme.Accent);
 
         // The reorder point's caption is the longest: its column is wider so it no longer runs
         // into « Quantité à commander ».
-        _minimum = TextField("Inventory.MinimumStock", 20, 266, 130,
-                         row?.MinimumStock.ToString("0.##"), latin: true, right: true);
-        _reorder = TextField("Inventory.ReorderPoint", 170, 266, 170,
-                         row?.ReorderPoint.ToString("0.##"), latin: true, right: true);
-        _reorderQuantity = TextField("Inventory.ReorderQuantity", 360, 266, 160,
-                                 row is null ? null : row.ReorderQuantity.ToString("0.##"),
+        _minimum = TextField("Inventory.MinimumStock", 20, 266, 130, form.Minimum, latin: true, right: true);
+        _reorder = TextField("Inventory.ReorderPoint", 170, 266, 170, form.Reorder, latin: true, right: true);
+        _reorderQuantity = TextField("Inventory.ReorderQuantity", 360, 266, 160, form.ReorderQuantity,
                                  latin: true, right: true);
-        _maximum = TextField("Inventory.MaximumStock", 540, 266, 160, row?.MaximumStock?.ToString("0.##"),
-                             latin: true, right: true);
+        _maximum = TextField("Inventory.MaximumStock", 540, 266, 160, form.Maximum, latin: true, right: true);
 
         Numeric(EditorValues.MeasureMaxLength, _minimum, _reorder, _reorderQuantity, _maximum);
 
-        _critical = Check("Inventory.IsCritical", 20, 330, row?.IsCritical ?? false, bold: true);
+        _critical = Check("Inventory.IsCritical", 20, 330, form.Critical, bold: true);
         Notice(20, 354, 680, 30, "Inventory.CriticalNotice");
 
-        _hazardous = Check("Inventory.IsHazardous", 20, 392, row?.IsHazardous ?? false);
-        _hazardClass = TextField("Inventory.HazardClass", 240, 386, 200, row?.HazardClass, latin: true);
-        _hazardClass.Enabled = row?.IsHazardous ?? false;
-        _hazardous.CheckedChanged += (_, _) => _hazardClass.Enabled = _hazardous.Checked;
+        _hazardous = Check("Inventory.IsHazardous", 20, 392, form.Hazardous);
+        _hazardClass = TextField("Inventory.HazardClass", 240, 386, 200, form.HazardClass, latin: true);
+        _hazardClass.Enabled = MasterDataEditorRules.HazardClassEnabled(form);
+        _hazardous.CheckedChanged += (_, _) =>
+            _hazardClass.Enabled = MasterDataEditorRules.HazardClassEnabled(new StockItemForm { Hazardous = _hazardous.Checked });
 
-        _active = Check("Field.Active", 480, 392, row?.IsActive ?? true);
+        _active = Check("Field.Active", 480, 392, form.Active);
 
         // GS1: the GTIN printed in the DataMatrix, so a scan at reception picks this article.
-        _gtin = TextField("Inventory.Gtin", 20, 446, 200, row?.Gtin, latin: true, mono: true);
-        _ceMarked = Check("Inventory.IsCeMarked", 240, 470, row?.IsCeMarked ?? false);
+        _gtin = TextField("Inventory.Gtin", 20, 446, 200, form.Gtin, latin: true, mono: true);
+        _ceMarked = Check("Inventory.IsCeMarked", 240, 470, form.CeMarked);
         Notice(20, 500, 680, 30, "Inventory.GtinNotice");
 
         // What a result costs in tests and what an opening loses, for the theoretical consumption;
         // the safety margin and the shelf life, for the computed reorder point and the order cap.
-        var policy = row?.ConsumptionPolicy ?? new StockConsumptionPolicy();
         static string N(decimal? v) => v?.ToString("0.###", System.Globalization.CultureInfo.CurrentCulture) ?? string.Empty;
 
         Notice(20, 540, 680, 20, "Inventory.ConsumptionNotice", UiTheme.Accent);
-        _testsPerResult = TextField("Inventory.TestsPerResult", 20, 562, 300, policy.TestsPerResultCsv, latin: true, mono: true);
+        _testsPerResult = TextField("Inventory.TestsPerResult", 20, 562, 300, form.TestsPerResult, latin: true, mono: true);
 
         // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
-        _code.MaxLength = 40;
-        _nameFr.MaxLength = _nameAr.MaxLength = 300;
-        _unit.MaxLength = 30;
-        _manufacturer.MaxLength = 150;
-        _reference.MaxLength = _location.MaxLength = 100;
-        _analyses.MaxLength = 2000;
-        _hazardClass.MaxLength = 60;
-        _gtin.MaxLength = 14;
-        _testsPerResult.MaxLength = 500;
-        _deadPercent = TextField("Inventory.DeadVolumePercent", 340, 562, 170, N(policy.DeadVolumePercent),
+        _code.MaxLength = MasterDataEditorRules.StockCodeMaxLength;
+        _nameFr.MaxLength = _nameAr.MaxLength = MasterDataEditorRules.NameMaxLength;
+        _unit.MaxLength = MasterDataEditorRules.UnitMaxLength;
+        _manufacturer.MaxLength = MasterDataEditorRules.ManufacturerMaxLength;
+        _reference.MaxLength = _location.MaxLength = MasterDataEditorRules.ReferenceMaxLength;
+        _analyses.MaxLength = MasterDataEditorRules.AnalysesMaxLength;
+        _hazardClass.MaxLength = MasterDataEditorRules.HazardClassMaxLength;
+        _gtin.MaxLength = MasterDataEditorRules.GtinMaxLength;
+        _testsPerResult.MaxLength = MasterDataEditorRules.TestsPerResultMaxLength;
+        _deadPercent = TextField("Inventory.DeadVolumePercent", 340, 562, 170, form.DeadVolumePercent,
                                  latin: true, right: true);
-        _deadTests = TextField("Inventory.DeadVolumeTests", 530, 562, 170, N(policy.DeadVolumeTestsPerOpening),
+        _deadTests = TextField("Inventory.DeadVolumeTests", 530, 562, 170, form.DeadVolumeTests,
                                latin: true, right: true);
         Numeric(EditorValues.MeasureMaxLength, _deadPercent, _deadTests);
 
-        _calibrationTests = Number("Inventory.TestsPerCalibration", 20, 616, 150, policy.TestsPerCalibration, 1000m);
-        _safetyDays = Number("Inventory.SafetyStockDays", 190, 616, 150, policy.SafetyStockDays, 365m);
-        _shelfLife = Number("Inventory.ShelfLifeDays", 360, 616, 150, policy.TypicalShelfLifeDays, 3650m);
+        _calibrationTests = Number("Inventory.TestsPerCalibration", 20, 616, 150, form.TestsPerCalibration,
+                                   MasterDataEditorRules.TestsPerCalibrationMax);
+        _safetyDays = Number("Inventory.SafetyStockDays", 190, 616, 150, form.SafetyStockDays,
+                             MasterDataEditorRules.SafetyDaysMax);
+        _shelfLife = Number("Inventory.ShelfLifeDays", 360, 616, 150, form.ShelfLifeDays,
+                            MasterDataEditorRules.IntervalMaxDays);
 
-        _computed = Check("Inventory.ReorderPointComputed", 20, 672, policy.ReorderPointComputed, bold: true);
+        _computed = Check("Inventory.ReorderPointComputed", 20, 672, form.ReorderPointComputed, bold: true);
 
         var suggestion = Notice(20, 696, 520, 40, "Inventory.NoReorderProposal");
         var apply = UiTheme.SecondaryButton(Localizer["Inventory.ApplyReorderProposal"]);
@@ -990,95 +951,58 @@ internal sealed class StockItemEditorDialog : MasterDataEditor
         UseAdminFrame();
     }
 
+    private StockItemForm Form() => new()
+    {
+        Code = _code.Text,
+        NameFr = _nameFr.Text,
+        NameAr = _nameAr.Text,
+        Kind = Selected<StockItemKind>(_kind),
+        Unit = _unit.Text,
+        TestsPerPack = (int)_tests.Value,
+        Storage = Selected<StorageCondition>(_storage),
+        Manufacturer = _manufacturer.Text,
+        SupplierId = SelectedId(_supplier),
+        SupplierReference = _reference.Text,
+        UsedByAnalyses = _analyses.Text,
+        Location = _location.Text,
+        Minimum = _minimum.Text,
+        Reorder = _reorder.Text,
+        ReorderQuantity = _reorderQuantity.Text,
+        Maximum = _maximum.Text,
+        Critical = _critical.Checked,
+        Hazardous = _hazardous.Checked,
+        HazardClass = _hazardClass.Text,
+        Active = _active.Checked,
+        Gtin = _gtin.Text,
+        CeMarked = _ceMarked.Checked,
+        TestsPerResult = _testsPerResult.Text,
+        DeadVolumePercent = _deadPercent.Text,
+        DeadVolumeTests = _deadTests.Text,
+        TestsPerCalibration = (int)_calibrationTests.Value,
+        SafetyStockDays = (int)_safetyDays.Value,
+        ShelfLifeDays = (int)_shelfLife.Value,
+        ReorderPointComputed = _computed.Checked
+    };
+
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_code.Text))
-        {
-            Dialogs.Warn(Localizer["Stock_CodeRequired"]);
-            _code.Focus();
+        var form = Form();
+
+        // The reorder point below the safety stock is caught here as well as in the service: the
+        // alert would fire after the laboratory is already below the level it meant to hold.
+        if (Refused(MasterDataEditorRules.Check(form), ("minimum", _minimum), ("reorder", _reorder),
+                    ("reorderquantity", _reorderQuantity), ("maximum", _maximum), ("code", _code),
+                    ("namefr", _nameFr), ("unit", _unit), ("deadpercent", _deadPercent)))
             return;
-        }
 
-        if (string.IsNullOrWhiteSpace(_nameFr.Text))
-        {
-            Dialogs.Warn(Localizer["Stock_NameRequired"]);
-            _nameFr.Focus();
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_unit.Text))
-        {
-            Dialogs.Warn(Localizer["Stock_UnitRequired"]);
-            _unit.Focus();
-            return;
-        }
-
-        var minimum = DecimalOrNull(_minimum) ?? 0m;
-        var reorder = DecimalOrNull(_reorder) ?? 0m;
-
-        // Caught here as well as in the service: a reorder point below the safety stock means the
-        // alert fires after the laboratory is already below the level it meant to hold.
-        if (reorder < minimum)
-        {
-            Dialogs.Warn(Localizer["Stock_ReorderBelowMinimum"]);
-            _reorder.Focus();
-            return;
-        }
-
-        var deadPercent = DecimalOrNull(_deadPercent);
-        var deadTests = DecimalOrNull(_deadTests);
-        if (!string.IsNullOrWhiteSpace(_deadPercent.Text) && deadPercent is null
-            || !string.IsNullOrWhiteSpace(_deadTests.Text) && deadTests is null)
-        {
-            Dialogs.Warn(Localizer["Stock_DeadVolumeOutOfRange"]);
-            _deadPercent.Focus();
-            return;
-        }
-
-        var policy = new StockConsumptionPolicy
-        {
-            TestsPerResultCsv = Blank(_testsPerResult),
-            DeadVolumePercent = deadPercent,
-            DeadVolumeTestsPerOpening = deadTests,
-            TestsPerCalibration = IntOrNull(_calibrationTests),
-            SafetyStockDays = IntOrNull(_safetyDays),
-            TypicalShelfLifeDays = IntOrNull(_shelfLife),
-            ReorderPointComputed = _computed.Checked
-        };
-
-        if (policy.Validate() is { IsFailure: true } invalid)
+        if (MasterDataEditorRules.Policy(form).Validate() is { IsFailure: true } invalid)
         {
             Dialogs.Warn(Localizer.Describe(invalid.Errors));
             _testsPerResult.Focus();
             return;
         }
 
-        Request = new StockItemRequest
-        {
-            StockItemId = _id,
-            Code = _code.Text.Trim(),
-            Name = new MultilingualText(_nameFr.Text.Trim(), _nameAr.Text.Trim()),
-            Kind = Selected<StockItemKind>(_kind),
-            UnitOfMeasure = _unit.Text.Trim(),
-            TestsPerPack = IntOrNull(_tests),
-            PreferredSupplierId = SelectedId(_supplier),
-            SupplierCatalogueReference = Blank(_reference),
-            Manufacturer = Blank(_manufacturer),
-            UsedByAnalysisCodesCsv = Blank(_analyses),
-            ReorderPoint = reorder,
-            ReorderQuantity = DecimalOrNull(_reorderQuantity) ?? 0m,
-            MinimumStock = minimum,
-            MaximumStock = DecimalOrNull(_maximum),
-            StorageCondition = Selected<StorageCondition>(_storage),
-            DefaultStorageLocation = Blank(_location),
-            IsHazardous = _hazardous.Checked,
-            HazardClass = Blank(_hazardClass),
-            IsCritical = _critical.Checked,
-            IsActive = _active.Checked,
-            Gtin = Blank(_gtin),
-            IsCeMarked = _ceMarked.Checked,
-            ConsumptionPolicy = policy
-        };
+        Request = MasterDataEditorRules.ToRequest(form, _id);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -1107,63 +1031,63 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
     {
         _id = row?.SupplierId;
 
-        _code = TextField("Field.Code", 20, 14, 140, row?.Code, latin: true, mono: true);
-        _name = TextField("Field.Name", 180, 14, 300, row?.Name);
-        _ice = TextField("Site.Ice", 500, 14, 180, row?.Ice, latin: true, mono: true);
+        var form = MasterDataEditorRules.FormOf(row);
 
-        _fiscalId = TextField("Site.FiscalId", 20, 68, 160, row?.FiscalId, latin: true, mono: true);
-        _rc = TextField("Site.CommercialRegister", 200, 68, 160, row?.CommercialRegisterNumber, latin: true);
-        _contact = TextField("Inventory.SupplierContact", 380, 68, 300, row?.ContactName);
+        _code = TextField("Field.Code", 20, 14, 140, form.Code, latin: true, mono: true);
+        _name = TextField("Field.Name", 180, 14, 300, form.Name);
+        _ice = TextField("Site.Ice", 500, 14, 180, form.Ice, latin: true, mono: true);
 
-        _phone = TextField("Site.Phone", 20, 122, 180, row?.Phone, latin: true, mono: true);
-        _email = TextField("Field.Email", 220, 122, 240, row?.Email, latin: true);
-        _city = TextField("Patient.City", 480, 122, 200, row?.City);
+        _fiscalId = TextField("Site.FiscalId", 20, 68, 160, form.FiscalId, latin: true, mono: true);
+        _rc = TextField("Site.CommercialRegister", 200, 68, 160, form.CommercialRegister, latin: true);
+        _contact = TextField("Inventory.SupplierContact", 380, 68, 300, form.Contact);
 
-        _address = TextField("Patient.Address", 20, 176, 440, row?.AddressLine);
-        _region = Choice("Patient.Region", 480, 176, 200, row?.Region ?? MoroccanRegion.Unspecified,
-                          "MoroccanRegion");
+        _phone = TextField("Site.Phone", 20, 122, 180, form.Phone, latin: true, mono: true);
+        _email = TextField("Field.Email", 220, 122, 240, form.Email, latin: true);
+        _city = TextField("Patient.City", 480, 122, 200, form.City);
 
-        _lead = Number("Inventory.LeadTime", 20, 230, 120, row?.LeadTimeDays ?? 7, 365);
+        _address = TextField("Patient.Address", 20, 176, 440, form.Address);
+        _region = Choice("Patient.Region", 480, 176, 200, form.Region, "MoroccanRegion");
+
+        _lead = Number("Inventory.LeadTime", 20, 230, 120, form.LeadTimeDays, MasterDataEditorRules.LeadTimeMax);
         // Loi n° 69-21: 60 days by default, 120 at most by agreement; the field cannot go beyond.
-        _terms = Number("Billing.PaymentTerms", 160, 230, 120, row?.PaymentTermsDays ?? PaymentTerms.DefaultDays,
-                        PaymentTerms.MaximumDays);
-        _account = TextField("SupplierInvoices.SupplierAccount", 300, 230, 160, row?.AccountingAccount,
+        _terms = Number("Billing.PaymentTerms", 160, 230, 120, form.PaymentTermsDays, PaymentTerms.MaximumDays);
+        _account = TextField("SupplierInvoices.SupplierAccount", 300, 230, 160, form.AccountingAccount,
                              latin: true, mono: true);
         Notice(480, 236, 200, 50, "SupplierInvoices.PaymentTermsNotice");
 
         Notice(20, 294, 660, 30, "Inventory.SupplierEvaluationNotice", UiTheme.Accent);
 
-        _approved = Check("Inventory.Approved", 20, 332, row?.IsApproved ?? false, bold: true);
+        _approved = Check("Inventory.Approved", 20, 332, form.Approved, bold: true);
         _approved.CheckedChanged += (_, _) => RefreshApproval();
 
-        _evaluated = OptionalDate("Inventory.LastEvaluation", 240, 330, row?.LastEvaluationDate,
+        _evaluated = OptionalDate("Inventory.LastEvaluation", 240, 330, form.LastEvaluationDate,
                                    max: DateTime.Today);
 
-        _score = Number("Inventory.EvaluationScore", 460, 330, 100, row?.EvaluationScore, 100);
+        _score = Number("Inventory.EvaluationScore", 460, 330, 100, form.EvaluationScore, MasterDataEditorRules.ScoreMax);
 
         _approvalNotice = Notice(20, 386, 660, 30, "Supplier_ApprovalNeedsEvaluation",
                                   UiTheme.Abnormal);
 
-        _notes = TextField("Field.Notes", 20, 420, 440, row?.Notes);
-        _active = Check("Field.Active", 480, 434, row?.IsActive ?? true);
+        _notes = TextField("Field.Notes", 20, 420, 440, form.Notes);
+        _active = Check("Field.Active", 480, 434, form.Active);
 
         // Loi 84-12: the establishment's registration with the AMMPS / DMP to sell IVD devices.
-        _registration = TextField("Inventory.RegulatoryRegistration", 20, 478, 300, row?.RegistrationNumber,
+        _registration = TextField("Inventory.RegulatoryRegistration", 20, 478, 300, form.Registration,
                                   latin: true);
 
         // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
-        _code.MaxLength = 30;
-        _name.MaxLength = _contact.MaxLength = _email.MaxLength = 200;
-        _ice.MaxLength = 15;
-        _fiscalId.MaxLength = _account.MaxLength = 20;
-        _rc.MaxLength = 40;
-        _phone.MaxLength = 30;
-        _address.MaxLength = 400;
-        _city.MaxLength = 100;
-        _notes.MaxLength = 1000;
-        _registration.MaxLength = 60;
+        _code.MaxLength = MasterDataEditorRules.CodeMaxLength;
+        _name.MaxLength = _contact.MaxLength = _email.MaxLength = MasterDataEditorRules.LongNameMaxLength;
+        _ice.MaxLength = MasterDataEditorRules.IceMaxLength;
+        _fiscalId.MaxLength = _account.MaxLength = MasterDataEditorRules.FiscalIdMaxLength;
+        _rc.MaxLength = MasterDataEditorRules.RegisterMaxLength;
+        _phone.MaxLength = MasterDataEditorRules.PhoneMaxLength;
+        _address.MaxLength = MasterDataEditorRules.AddressMaxLength;
+        _city.MaxLength = MasterDataEditorRules.CityMaxLength;
+        _notes.MaxLength = MasterDataEditorRules.NotesMaxLength;
+        _registration.MaxLength = MasterDataEditorRules.RegistrationMaxLength;
         _registrationValidUntil = OptionalDate("Inventory.RegulatoryRegistrationValidUntil", 340, 478,
-                                               row?.RegistrationValidUntil);
+                                               form.RegistrationValidUntil);
         _registrationNotice = Notice(20, 530, 660, 30, "Supplier_RegistrationExpiredNotice", UiTheme.Abnormal);
         _registrationValidUntil.Toggle.CheckedChanged += (_, _) => RefreshApproval();
         _registrationValidUntil.Picker.ValueChanged += (_, _) => RefreshApproval();
@@ -1180,61 +1104,48 @@ internal sealed class SupplierEditorDialog : MasterDataEditor
     /// </summary>
     private void RefreshApproval()
     {
-        _approvalNotice.Visible = _approved.Checked && !_evaluated.Toggle.Checked;
+        // Built once all the boxes exist: the handlers fire while the dialog is being laid out.
+        if (_registrationNotice is null) return;
+
+        var form = Form();
+        _approvalNotice.Visible = MasterDataEditorRules.ApprovalNeedsEvaluation(form);
 
         // Approving a supplier whose registration has lapsed is allowed, but said.
-        if (_registrationNotice is not null)
-            _registrationNotice.Visible = _registrationValidUntil.Toggle.Checked
-                                          && _registrationValidUntil.Picker.Value.Date < DateTime.Today;
+        _registrationNotice.Visible = MasterDataEditorRules.RegistrationExpired(form, DateOnly.FromDateTime(DateTime.Today));
     }
+
+    private SupplierForm Form() => new()
+    {
+        Code = _code.Text,
+        Name = _name.Text,
+        Ice = _ice.Text,
+        FiscalId = _fiscalId.Text,
+        CommercialRegister = _rc.Text,
+        Contact = _contact.Text,
+        Phone = _phone.Text,
+        Email = _email.Text,
+        City = _city.Text,
+        Address = _address.Text,
+        Region = Selected<MoroccanRegion>(_region),
+        LeadTimeDays = (int)_lead.Value,
+        PaymentTermsDays = (int)_terms.Value,
+        AccountingAccount = _account.Text,
+        Approved = _approved.Checked,
+        LastEvaluationDate = DateOrNull(_evaluated.Toggle, _evaluated.Picker),
+        EvaluationScore = (int)_score.Value,
+        Notes = _notes.Text,
+        Active = _active.Checked,
+        Registration = _registration.Text,
+        RegistrationValidUntil = DateOrNull(_registrationValidUntil.Toggle, _registrationValidUntil.Picker)
+    };
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_code.Text))
-        {
-            Dialogs.Warn(Localizer["Supplier_CodeRequired"]);
-            _code.Focus();
-            return;
-        }
+        var form = Form();
 
-        if (string.IsNullOrWhiteSpace(_name.Text))
-        {
-            Dialogs.Warn(Localizer["Supplier_NameRequired"]);
-            _name.Focus();
-            return;
-        }
+        if (Refused(MasterDataEditorRules.Check(form), ("code", _code), ("name", _name))) return;
 
-        if (_approved.Checked && !_evaluated.Toggle.Checked)
-        {
-            Dialogs.Warn(Localizer["Supplier_ApprovalNeedsEvaluation"]);
-            return;
-        }
-
-        Request = new SupplierRequest
-        {
-            SupplierId = _id,
-            Code = _code.Text.Trim(),
-            Name = _name.Text.Trim(),
-            Ice = Blank(_ice),
-            FiscalId = Blank(_fiscalId),
-            CommercialRegisterNumber = Blank(_rc),
-            ContactName = Blank(_contact),
-            Phone = Blank(_phone),
-            Email = Blank(_email),
-            AddressLine = Blank(_address),
-            City = Blank(_city),
-            Region = Selected<MoroccanRegion>(_region),
-            LeadTimeDays = IntOrNull(_lead),
-            PaymentTermsDays = (int)_terms.Value,
-            AccountingAccount = Blank(_account),
-            IsApproved = _approved.Checked,
-            LastEvaluationDate = DateOrNull(_evaluated.Toggle, _evaluated.Picker),
-            EvaluationScore = IntOrNull(_score),
-            Notes = Blank(_notes),
-            IsActive = _active.Checked,
-            RegulatoryRegistrationNumber = Blank(_registration),
-            RegulatoryRegistrationValidUntil = DateOrNull(_registrationValidUntil.Toggle, _registrationValidUntil.Picker)
-        };
+        Request = MasterDataEditorRules.ToRequest(form, _id);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -1280,70 +1191,63 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
 
         // The stored names as they are: splitting the displayed full name at its first space moved
         // half of a compound surname ("El Amrani") into the first name on every save.
-        var (last, first) = PrescriberEntryRules.SplitTypedName(row?.FullName ?? typedName);
+        var form = MasterDataEditorRules.FormOf(row, stored, typedName, System.Globalization.CultureInfo.CurrentCulture);
 
-        _lastName = TextField("Patient.LastName", 20, 14, 200, _stored?.LastName ?? last);
-        _firstName = TextField("Patient.FirstName", 240, 14, 200, _stored?.FirstName ?? first);
-        _nameAr = TextField("Patient.LastNameArabic", 460, 14, 240, row?.FullNameArabic, arabic: true);
+        _lastName = TextField("Patient.LastName", 20, 14, 200, form.LastName);
+        _firstName = TextField("Patient.FirstName", 240, 14, 200, form.FirstName);
+        _nameAr = TextField("Patient.LastNameArabic", 460, 14, 240, form.NameArabic, arabic: true);
 
-        _kind = Choice("Field.Name", 20, 68, 220, row?.Kind ?? PrescriberKind.GeneralPractitioner,
-                        "PrescriberKind");
+        _kind = Choice("Field.Name", 20, 68, 220, form.Kind, "PrescriberKind");
         _kind.SelectedIndexChanged += (_, _) => RefreshNotices();
 
-        _specialityFr = TextField("Order.Speciality", 260, 68, 200, row?.Speciality?.Fr);
-        _institution = TextField("Order.Institution", 480, 68, 220, row?.InstitutionName);
+        _specialityFr = TextField("Order.Speciality", 260, 68, 200, form.Speciality);
+        _institution = TextField("Order.Institution", 480, 68, 220, form.Institution);
 
-        _order = TextField("Admin.OrderNumber", 20, 122, 200, row?.ProfessionalOrderNumber,
-                       latin: true, mono: true);
-        _inpe = TextField("Site.Inpe", 240, 122, 170, row?.Inpe, latin: true, mono: true);
+        _order = TextField("Admin.OrderNumber", 20, 122, 200, form.OrderNumber, latin: true, mono: true);
+        _inpe = TextField("Site.Inpe", 240, 122, 170, form.Inpe, latin: true, mono: true);
         // Clear of the INPE caption, which runs past its box in Arabic.
-        _ice = TextField("Site.Ice", 470, 122, 170, _stored?.Ice, latin: true, mono: true);
+        _ice = TextField("Site.Ice", 470, 122, 170, form.Ice, latin: true, mono: true);
 
         _inpeNotice = Notice(20, 174, 680, 30, "Order.InpeNotice", UiTheme.Abnormal);
 
         // Each number in its own box. The row carries one telephone (the mobile, else the
         // landline), which used to be offered as the mobile.
-        _phone = TextField("Site.Phone", 20, 210, 180, _stored?.Phone, latin: true, mono: true);
-        _mobile = TextField("Patient.MobilePhone", 220, 210, 180,
-                            _stored is null ? row?.Phone : _stored.MobilePhone,
-                            latin: true, mono: true);
-        _fax = TextField("Site.Fax", 420, 210, 160, _stored?.Fax, latin: true, mono: true);
-        _email = TextField("Field.Email", 20, 264, 280, row?.Email, latin: true);
-        _city = TextField("Patient.City", 320, 264, 180, row?.City);
-        _address = TextField("Patient.Address", 520, 264, 180, _stored?.AddressLine);
+        _phone = TextField("Site.Phone", 20, 210, 180, form.Phone, latin: true, mono: true);
+        _mobile = TextField("Patient.MobilePhone", 220, 210, 180, form.Mobile, latin: true, mono: true);
+        _fax = TextField("Site.Fax", 420, 210, 160, form.Fax, latin: true, mono: true);
+        _email = TextField("Field.Email", 20, 264, 280, form.Email, latin: true);
+        _city = TextField("Patient.City", 320, 264, 180, form.City);
+        _address = TextField("Patient.Address", 520, 264, 180, form.Address);
 
         _criticalPhone = TextField("Order.CriticalResultPhone", 20, 318, 220,
-                                   _stored?.CriticalResultPhone, latin: true, mono: true);
+                                   form.CriticalPhone, latin: true, mono: true);
 
         Notice(260, 336, 440, 30, "Order.CriticalPhoneNotice");
 
-        _delivery = Choice("Report.Delivery", 20, 372, 240,
-                            row?.DeliveryPreference ?? ReportDeliveryPreference.PatientCollects,
-                            "ReportDeliveryPreference");
+        _delivery = Choice("Report.Delivery", 20, 372, 240, form.Delivery, "ReportDeliveryPreference");
         _delivery.SelectedIndexChanged += (_, _) => RefreshNotices();
 
-        _partial = Check("Report.SendPartial", 280, 390, row?.SendPartialReports ?? false);
+        _partial = Check("Report.SendPartial", 280, 390, form.SendPartial);
 
         _deliveryNotice = Notice(20, 424, 680, 30, "Order.DeliveryContactNotice", UiTheme.Abnormal);
 
-        _discount = TextField("Billing.Discount", 20, 458, 120,
-                          row?.DiscountPercent?.ToString("0.##"), latin: true, right: true);
+        _discount = TextField("Billing.Discount", 20, 458, 120, form.Discount, latin: true, right: true);
         Numeric(EditorValues.MeasureMaxLength, _discount);
 
-        _notes = TextField("Field.Notes", 160, 458, 380, _stored?.Notes);
+        _notes = TextField("Field.Notes", 160, 458, 380, form.Notes);
 
         // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
-        _lastName.MaxLength = _firstName.MaxLength = 120;
-        _nameAr.MaxLength = _email.MaxLength = _institution.MaxLength = 200;
-        _specialityFr.MaxLength = 150;
-        _order.MaxLength = 40;
-        _inpe.MaxLength = _mobile.MaxLength = _criticalPhone.MaxLength = 20;
-        _ice.MaxLength = 15;
-        _phone.MaxLength = _fax.MaxLength = 30;
-        _address.MaxLength = 400;
-        _city.MaxLength = 100;
-        _notes.MaxLength = 1000;
-        _active = Check("Field.Active", 560, 476, row?.IsActive ?? true);
+        _lastName.MaxLength = _firstName.MaxLength = MasterDataEditorRules.PersonNameMaxLength;
+        _nameAr.MaxLength = _email.MaxLength = _institution.MaxLength = MasterDataEditorRules.LongNameMaxLength;
+        _specialityFr.MaxLength = MasterDataEditorRules.SpecialityMaxLength;
+        _order.MaxLength = MasterDataEditorRules.OrderNumberMaxLength;
+        _inpe.MaxLength = _mobile.MaxLength = _criticalPhone.MaxLength = MasterDataEditorRules.ShortPhoneMaxLength;
+        _ice.MaxLength = MasterDataEditorRules.IceMaxLength;
+        _phone.MaxLength = _fax.MaxLength = MasterDataEditorRules.PhoneMaxLength;
+        _address.MaxLength = MasterDataEditorRules.AddressMaxLength;
+        _city.MaxLength = MasterDataEditorRules.CityMaxLength;
+        _notes.MaxLength = MasterDataEditorRules.NotesMaxLength;
+        _active = Check("Field.Active", 560, 476, form.Active);
 
         Buttons(560, 720);
         UseAdminFrame();
@@ -1352,59 +1256,48 @@ internal sealed class PrescriberEditorDialog : MasterDataEditor
 
     private void RefreshNotices()
     {
-        var kind = Selected<PrescriberKind>(_kind);
+        var form = Form();
 
         // Only a physician files an AMO claim, so the INPE warning is scoped to those kinds rather
         // than nagging on a dentist or an institution.
-        _inpeNotice.Visible = PrescriberEntryRules.WarnsOfMissingInpe(kind, _inpe.Text);
-
-        var delivery = Selected<ReportDeliveryPreference>(_delivery);
-
-        _deliveryNotice.Visible =
-            (delivery == ReportDeliveryPreference.Email && string.IsNullOrWhiteSpace(_email.Text))
-            || (delivery == ReportDeliveryPreference.SmsLink
-                && string.IsNullOrWhiteSpace(_mobile.Text))
-            || (delivery == ReportDeliveryPreference.Fax && string.IsNullOrWhiteSpace(_fax.Text));
+        _inpeNotice.Visible = PrescriberEntryRules.WarnsOfMissingInpe(form.Kind, form.Inpe);
+        _deliveryNotice.Visible = MasterDataEditorRules.DeliveryContactMissing(form);
     }
+
+    private PrescriberForm Form() => new()
+    {
+        LastName = _lastName.Text,
+        FirstName = _firstName.Text,
+        NameArabic = _nameAr.Text,
+        Kind = Selected<PrescriberKind>(_kind),
+        Speciality = _specialityFr.Text,
+        Institution = _institution.Text,
+        OrderNumber = _order.Text,
+        Inpe = _inpe.Text,
+        Ice = _ice.Text,
+        Phone = _phone.Text,
+        Mobile = _mobile.Text,
+        Fax = _fax.Text,
+        Email = _email.Text,
+        City = _city.Text,
+        Address = _address.Text,
+        CriticalPhone = _criticalPhone.Text,
+        Delivery = Selected<ReportDeliveryPreference>(_delivery),
+        SendPartial = _partial.Checked,
+        Discount = _discount.Text,
+        Notes = _notes.Text,
+        Active = _active.Checked
+    };
 
     protected override void Accept()
     {
-        if (PrescriberEntryRules.Problem(_lastName.Text) is { } problem)
-        {
-            Dialogs.Warn(Localizer[problem]);
-            _lastName.Focus();
-            return;
-        }
+        var form = Form();
+
+        if (Refused(MasterDataEditorRules.Check(form), ("discount", _discount), ("lastname", _lastName))) return;
 
         // Built on the stored prescriber, so a field this dialog does not show (the default payer)
         // is saved as it was rather than reset.
-        var basis = _stored ?? new PrescriberRequest { LastName = string.Empty, FirstName = string.Empty };
-
-        Request = basis with
-        {
-            PrescriberId = _id,
-            LastName = _lastName.Text.Trim(),
-            FirstName = _firstName.Text.Trim(),
-            FullNameArabic = Blank(_nameAr),
-            Kind = Selected<PrescriberKind>(_kind),
-            Speciality = FrenchEdited(_stored?.Speciality, Blank(_specialityFr)),
-            ProfessionalOrderNumber = Blank(_order),
-            Inpe = Blank(_inpe),
-            Ice = Blank(_ice),
-            Phone = Blank(_phone),
-            MobilePhone = Blank(_mobile),
-            Email = Blank(_email),
-            Fax = Blank(_fax),
-            AddressLine = Blank(_address),
-            City = Blank(_city),
-            InstitutionName = Blank(_institution),
-            DeliveryPreference = Selected<ReportDeliveryPreference>(_delivery),
-            SendPartialReports = _partial.Checked,
-            CriticalResultPhone = Blank(_criticalPhone),
-            DiscountPercent = DecimalOrNull(_discount),
-            Notes = Blank(_notes),
-            IsActive = _active.Checked
-        };
+        Request = MasterDataEditorRules.ToRequest(form, _id, _stored);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -1451,66 +1344,62 @@ internal sealed class PayerEditorDialog : MasterDataEditor
     {
         _id = row?.PayerId;
 
-        _code = TextField("Field.Code", 20, 14, 130, row?.Code, latin: true, mono: true);
-        _nameFr = TextField("Field.NameFr", 170, 14, 240, row?.Name.Fr);
-        _nameAr = TextField("Field.NameAr", 430, 14, 240, row?.Name.Ar, arabic: true);
+        var form = MasterDataEditorRules.FormOf(row);
 
-        _nameEn = TextField("Field.NameEn", 20, 68, 240, row?.Name.En);
-        _kind = Choice("Coverage.PayerKind", 280, 68, 240, row?.Kind ?? PayerKind.AmoCnss,
-                        "PayerKind");
+        _code = TextField("Field.Code", 20, 14, 130, form.Code, latin: true, mono: true);
+        _nameFr = TextField("Field.NameFr", 170, 14, 240, form.NameFr);
+        _nameAr = TextField("Field.NameAr", 430, 14, 240, form.NameAr, arabic: true);
+
+        _nameEn = TextField("Field.NameEn", 20, 68, 240, form.NameEn);
+        _kind = Choice("Coverage.PayerKind", 280, 68, 240, form.Kind, "PayerKind");
 
         // A column each as wide as its caption: 132 pixels apart, « Taux de remboursement (%) »,
         // « Délai de règlement (jours) » and « ICE » were written over one another.
         _rate = Number("Coverage.ReimbursementRatePercent", 20, 122, 120,
-                        row?.ReimbursementPercent ?? 70m, max: 100m, decimals: 2);
+                        form.RatePercent, max: 100m, decimals: 2);
 
         _terms = Number("Coverage.PaymentTermsDays", 230, 122, 120,
-                         row?.PaymentTermsDays ?? 60, max: 365m);
+                         form.PaymentTermsDays, max: MasterDataEditorRules.PayerTermsMax);
 
-        _ice = TextField("Site.Ice", 440, 122, 180, row?.Ice, latin: true, mono: true);
+        _ice = TextField("Site.Ice", 440, 122, 180, form.Ice, latin: true, mono: true);
 
-        _tnr = Check("Coverage.ReferenceTariff", 20, 190,
-                      row?.UsesNationalReferenceTariff ?? true, bold: true);
-        _requiresPrescription = Check("Coverage.RequiresPrescription", 284, 190,
-                                       row?.RequiresPrescription ?? true);
-        _requiresInpe = Check("Coverage.RequiresInpe", 520, 190,
-                               row?.RequiresInpeOnClaim ?? false);
+        _tnr = Check("Coverage.ReferenceTariff", 20, 190, form.UsesReferenceTariff, bold: true);
+        _requiresPrescription = Check("Coverage.RequiresPrescription", 284, 190, form.RequiresPrescription);
+        _requiresInpe = Check("Coverage.RequiresInpe", 520, 190, form.RequiresInpe);
 
-        _thirdParty = Check("Coverage.ThirdPartyPayment", 20, 218,
-                             row?.ThirdPartyPaymentAgreement ?? false, bold: true);
+        _thirdParty = Check("Coverage.ThirdPartyPayment", 20, 218, form.ThirdParty, bold: true);
 
         _kindNotice = Notice(20, 244, 690, 30, "Coverage.AmoTariffNotice", UiTheme.Abnormal);
 
-        _agreementNumber = TextField("Coverage.AgreementNumber", 20, 282, 220,
-                                      row?.AgreementNumber, latin: true);
+        _agreementNumber = TextField("Coverage.AgreementNumber", 20, 282, 220, form.AgreementNumber, latin: true);
 
         (_validUntilToggle, _validUntil) = OptionalDate("Coverage.AgreementValidUntil", 270, 300,
-                                                          row?.AgreementValidUntil);
+                                                          form.AgreementValidUntil);
 
-        _accountingAccount = TextField("Coverage.AccountingAccount", 500, 282, 210, row?.AccountingAccount,
+        _accountingAccount = TextField("Coverage.AccountingAccount", 500, 282, 210, form.AccountingAccount,
                                        latin: true, mono: true);
 
-        _contact = TextField("Inventory.SupplierContact", 20, 360, 220, row?.ContactName);
-        _phone = TextField("Site.Phone", 260, 360, 170, row?.Phone, latin: true, mono: true);
-        _email = TextField("Field.Email", 450, 360, 260, row?.Email, latin: true);
+        _contact = TextField("Inventory.SupplierContact", 20, 360, 220, form.Contact);
+        _phone = TextField("Site.Phone", 260, 360, 170, form.Phone, latin: true, mono: true);
+        _email = TextField("Field.Email", 450, 360, 260, form.Email, latin: true);
 
-        _address = TextField("Patient.Address", 20, 414, 410, row?.AddressLine);
-        _city = TextField("Patient.City", 450, 414, 260, row?.City);
+        _address = TextField("Patient.Address", 20, 414, 410, form.Address);
+        _city = TextField("Patient.City", 450, 414, 260, form.City);
 
         // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
-        _code.MaxLength = 30;
-        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = 300;
-        _agreementNumber.MaxLength = 60;
-        _ice.MaxLength = 15;
-        _contact.MaxLength = _email.MaxLength = 200;
-        _phone.MaxLength = 30;
-        _address.MaxLength = 400;
-        _city.MaxLength = 100;
-        _accountingAccount.MaxLength = 20;
+        _code.MaxLength = MasterDataEditorRules.CodeMaxLength;
+        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = MasterDataEditorRules.NameMaxLength;
+        _agreementNumber.MaxLength = MasterDataEditorRules.AgreementMaxLength;
+        _ice.MaxLength = MasterDataEditorRules.IceMaxLength;
+        _contact.MaxLength = _email.MaxLength = MasterDataEditorRules.LongNameMaxLength;
+        _phone.MaxLength = MasterDataEditorRules.PhoneMaxLength;
+        _address.MaxLength = MasterDataEditorRules.AddressMaxLength;
+        _city.MaxLength = MasterDataEditorRules.CityMaxLength;
+        _accountingAccount.MaxLength = MasterDataEditorRules.FiscalIdMaxLength;
 
         Notice(20, 476, 690, 30, "Coverage.PayerRateNotice");
 
-        _active = Check("Field.Active", 20, 512, row?.IsActive ?? true);
+        _active = Check("Field.Active", 20, 512, form.Active);
 
         _kind.SelectedIndexChanged += (_, _) => ApplyKindRules();
         _thirdParty.CheckedChanged += (_, _) => ApplyAgreementRules();
@@ -1527,92 +1416,63 @@ internal sealed class PayerEditorDialog : MasterDataEditor
     private void ApplyKindRules()
     {
         var kind = Selected<PayerKind>(_kind);
+        var fields = MasterDataEditorRules.Fields(kind);
+        var applied = MasterDataEditorRules.WithKind(Form(), kind);
 
-        var compulsory = kind is PayerKind.AmoCnss or PayerKind.AmoCnops
-                              or PayerKind.AmoTadamon or PayerKind.AmoAchamil;
+        // Self-pay: the patient settles in cash, nothing is reimbursed and there is no convention.
+        // AMO settles against the TNR: not the laboratory's choice, so not the operator's.
+        _rate.Value = applied.RatePercent;
+        _rate.Enabled = fields.RateEnabled;
+        _thirdParty.Checked = applied.ThirdParty;
+        _thirdParty.Enabled = fields.ThirdPartyEnabled;
+        _tnr.Checked = applied.UsesReferenceTariff;
+        _tnr.Enabled = !fields.ReferenceTariffLocked;
 
-        if (kind == PayerKind.SelfPay)
-        {
-            // The patient settles in cash: nothing is reimbursed and there is no convention.
-            _rate.Value = 0m;
-            _rate.Enabled = false;
-            _thirdParty.Checked = false;
-            _thirdParty.Enabled = false;
-        }
-        else
-        {
-            _rate.Enabled = true;
-            _thirdParty.Enabled = true;
-        }
-
-        if (compulsory)
-        {
-            // AMO settles against the TNR. Not the laboratory's choice, so not the operator's.
-            _tnr.Checked = true;
-            _tnr.Enabled = false;
-        }
-        else
-        {
-            _tnr.Enabled = true;
-        }
-
-        _kindNotice.Visible = compulsory;
+        _kindNotice.Visible = MasterDataEditorRules.IsCompulsory(kind);
         ApplyAgreementRules();
     }
 
     private void ApplyAgreementRules()
     {
-        var enabled = _thirdParty.Checked && _thirdParty.Enabled;
+        var enabled = MasterDataEditorRules.AgreementEnabled(Form());
 
         _agreementNumber.Enabled = enabled;
         _validUntilToggle.Enabled = enabled;
         _validUntil.Enabled = enabled && _validUntilToggle.Checked;
     }
 
+    private PayerForm Form() => new()
+    {
+        Code = _code.Text,
+        NameFr = _nameFr.Text,
+        NameAr = _nameAr.Text,
+        NameEn = _nameEn.Text,
+        Kind = Selected<PayerKind>(_kind),
+        RatePercent = _rate.Value,
+        PaymentTermsDays = (int)_terms.Value,
+        Ice = _ice.Text,
+        UsesReferenceTariff = _tnr.Checked,
+        RequiresPrescription = _requiresPrescription.Checked,
+        RequiresInpe = _requiresInpe.Checked,
+        ThirdParty = _thirdParty.Checked,
+        AgreementNumber = _agreementNumber.Text,
+        AgreementValidUntil = DateOrNull(_validUntilToggle, _validUntil),
+        AccountingAccount = _accountingAccount.Text,
+        Contact = _contact.Text,
+        Phone = _phone.Text,
+        Email = _email.Text,
+        Address = _address.Text,
+        City = _city.Text,
+        Active = _active.Checked
+    };
+
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_code.Text))
-        {
-            Dialogs.Warn(Localizer["Payer_CodeRequired"], Text);
-            _code.Focus();
-            return;
-        }
+        var form = Form();
 
-        if (string.IsNullOrWhiteSpace(_nameFr.Text))
-        {
-            Dialogs.Warn(Localizer["Payer_NameFrenchRequired"], Text);
-            _nameFr.Focus();
-            return;
-        }
+        if (Refused(MasterDataEditorRules.Check(form), ("code", _code), ("namefr", _nameFr))) return;
 
-        Request = new PayerRequest
-        {
-            PayerId = _id,
-            Code = _code.Text.Trim().ToUpperInvariant(),
-            Name = new MultilingualText(_nameFr.Text.Trim(), Blank(_nameAr), Blank(_nameEn)),
-            Kind = Selected<PayerKind>(_kind),
-
-            // Percentage in, fraction out — the one conversion this dialog exists to get right.
-            DefaultReimbursementRate = _rate.Value / 100m,
-
-            UsesNationalReferenceTariff = _tnr.Checked,
-            ThirdPartyPaymentAgreement = _thirdParty.Checked,
-            AgreementNumber = _thirdParty.Checked ? Blank(_agreementNumber) : null,
-            AgreementValidUntil = _thirdParty.Checked
-                ? DateOrNull(_validUntilToggle, _validUntil)
-                : null,
-            PaymentTermsDays = (int)_terms.Value,
-            RequiresPrescription = _requiresPrescription.Checked,
-            RequiresInpeOnClaim = _requiresInpe.Checked,
-            Ice = Blank(_ice),
-            ContactName = Blank(_contact),
-            Phone = Blank(_phone),
-            Email = Blank(_email),
-            AddressLine = Blank(_address),
-            City = Blank(_city),
-            AccountingAccount = Blank(_accountingAccount),
-            IsActive = _active.Checked
-        };
+        Request = MasterDataEditorRules.ToRequest(form, _id);
 
         DialogResult = DialogResult.OK;
         Close();

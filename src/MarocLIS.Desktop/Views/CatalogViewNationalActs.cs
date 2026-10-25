@@ -110,13 +110,14 @@ public sealed partial class CatalogView
             ("current", 9, UiTheme.Monospace, true),
             ("gap", 18, UiTheme.SmallBold, false));
 
-        AdminLayout.PillColumn(_gapGrid, "gap", row => (row.Tag as NomenclatureGapRow)?.Kind switch
-        {
-            NomenclatureGapKind.CoefficientDiffers => AdminLayout.Warn,
-            NomenclatureGapKind.UnknownCode => AdminLayout.Crit,
-            NomenclatureGapKind.MissingCode => AdminLayout.Wait,
-            _ => null
-        });
+        AdminLayout.PillColumn(_gapGrid, "gap", row => row.Tag is NomenclatureGapRow gap
+            ? CatalogScreenRules.Tone(gap) switch
+            {
+                CatalogTone.Abnormal => AdminLayout.Warn,
+                CatalogTone.Critical => AdminLayout.Crit,
+                _ => AdminLayout.Wait
+            }
+            : null);
 
         page.Controls.Add(Below(Section(_gapHeading, _gapGrid, [_editGapAnalysis], _applyOfficial)));
         page.Controls.Add(AdminLayout.Note(_gapNote, 40));
@@ -196,8 +197,7 @@ public sealed partial class CatalogView
     private void RenderActs()
     {
         var selected = (_actGrid.CurrentRow?.Tag as NationalActRow)?.Id;
-        var matching = _acts.Where(a => NationalActSearch.Matches(a, _actSearch.Text)).ToList();
-        var shown = matching.Where(a => _decreeFilter is null || a.DecreeYear == _decreeFilter).ToList();
+        var (matching, shown) = CatalogScreenRules.Acts(_acts, _actSearch.Text, _decreeFilter);
 
         _actGrid.SuspendLayout();
         _actGrid.Rows.Clear();
@@ -207,8 +207,8 @@ public sealed partial class CatalogView
             var index = _actGrid.Rows.Add(
                 act.Code,
                 act.Label,
-                $"{act.LetterKey} {act.Coefficient:0.##}",
-                act.SubChapter is { Length: > 0 } sub ? $"{act.Chapter} · {sub}" : act.Chapter,
+                CatalogScreenRules.Coefficient(act),
+                CatalogScreenRules.Chapter(act),
                 act.DecreeYear.ToString(CultureInfo.InvariantCulture),
                 act.AnalysisCount == 0 ? string.Empty : act.AnalysisCount.ToString(CultureInfo.InvariantCulture));
 
@@ -221,7 +221,7 @@ public sealed partial class CatalogView
         _actGrid.ResumeLayout(performLayout: true);
         RestoreSelection(_actGrid, selected, r => (r as NationalActRow)?.Id);
 
-        string[] captions = [T("Nabm.ChipAll"), "2005", "2012", "2016"];
+        string[] captions = [T("Nabm.ChipAll"), .. CatalogScreenRules.DecreeYears.Select(y => y.ToString(CultureInfo.InvariantCulture))];
         for (var i = 0; i < _decreeChips.Length; i++)
         {
             var year = _decreeChips[i].Value is { } y ? int.Parse(y, CultureInfo.InvariantCulture) : (int?)null;
@@ -258,7 +258,7 @@ public sealed partial class CatalogView
         for (var i = 0; i < _gapChips.Length; i++)
         {
             var kind = _gapChips[i].Value is { } k ? Enum.Parse<NomenclatureGapKind>(k) : (NomenclatureGapKind?)null;
-            _gapChips[i].Text = $"{captions[i]} · {_gapRows.Count(g => kind is null || g.Kind == kind)}";
+            _gapChips[i].Text = $"{captions[i]} · {CatalogScreenRules.Gaps(_gapRows, kind).Count}";
             _gapChips[i].Selected = kind == _gapFilter;
         }
     }
@@ -267,7 +267,7 @@ public sealed partial class CatalogView
     {
         var language = Localizer.CurrentLanguage;
         var selected = SelectedGap?.AnalysisId;
-        var shown = _gapRows.Where(g => _gapFilter is null || g.Kind == _gapFilter).ToList();
+        var shown = CatalogScreenRules.Gaps(_gapRows, _gapFilter);
 
         _gapGrid.SuspendLayout();
         _gapGrid.Rows.Clear();
@@ -281,9 +281,7 @@ public sealed partial class CatalogView
                 gap.ActLabel ?? string.Empty,
                 gap.OfficialCoefficient is { } official ? $"B {official:0.##}" : string.Empty,
                 gap.CurrentCoefficient is { } current ? $"{current:0.##}" : "—",
-                gap.Kind == NomenclatureGapKind.CoefficientDiffers && gap.DifferingTariffCount > 1
-                    ? $"{T($"NabmGap.{gap.Kind}")} ({gap.DifferingTariffCount})"
-                    : T($"NabmGap.{gap.Kind}"));
+                CatalogScreenRules.GapText(gap, T));
 
             _gapGrid.Rows[index].Tag = gap;
         }
@@ -298,9 +296,9 @@ public sealed partial class CatalogView
 
     private void RefreshNationalActActions()
     {
-        _applyOfficial.Enabled = _currentUser.Has(Permissions.Billing.ManageTariffs)
-                                 && SelectedGap is { CanApplyOfficialCoefficient: true };
-        _editGapAnalysis.Enabled = _currentUser.Has(Permissions.Catalog.Manage) && SelectedGap is not null;
+        var actions = CatalogScreenRules.Actions(_currentUser, new CatalogSelection(Gap: SelectedGap));
+        _applyOfficial.Enabled = actions.ApplyOfficial;
+        _editGapAnalysis.Enabled = actions.EditGapAnalysis;
     }
 
     /// <summary>
@@ -312,11 +310,7 @@ public sealed partial class CatalogView
     {
         if (SelectedGap is not { CanApplyOfficialCoefficient: true } gap) return;
 
-        var today = _clock.Today.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
-        var message = T("Nabm.ConfirmApply", gap.NationalActCode!, gap.OfficialCoefficient!.Value.ToString("0.##"),
-                        gap.AnalysisCode, gap.DifferingTariffCount, today);
-
-        if (!_dialogs.Confirm(message, _applyOfficial.Text)) return;
+        if (!_dialogs.Confirm(CatalogScreenRules.ConfirmApply(gap, _clock.Today, T), _applyOfficial.Text)) return;
 
         var result = await _nationalActs.ApplyOfficialCoefficientAsync(gap.AnalysisId);
 
@@ -324,11 +318,8 @@ public sealed partial class CatalogView
 
         var next = NeighbourGap();
 
-        var outcome = result.Value;
         _status.ForeColor = UiTheme.Normal;
-        _status.Text = T("Nabm.Applied", gap.AnalysisCode, gap.NationalActCode!,
-                         outcome.NewVersions + outcome.Corrected, today)
-                       + (outcome.SkippedFutureDated > 0 ? " " + T("Nabm.SkippedScheduled", outcome.SkippedFutureDated) : string.Empty);
+        _status.Text = CatalogScreenRules.Applied(gap, result.Value, _clock.Today, T);
 
         await LoadGapsAsync();
         KeepPlace(gap, next);
@@ -336,13 +327,8 @@ public sealed partial class CatalogView
     }
 
     /// <summary>The line below the current one, or above it for the last: where to go once the current line is put right.</summary>
-    private NomenclatureGapRow? NeighbourGap()
-    {
-        var at = _gapGrid.CurrentRow?.Index ?? -1;
-        if (at < 0) return null;
-        var row = at + 1 < _gapGrid.Rows.Count ? _gapGrid.Rows[at + 1] : at > 0 ? _gapGrid.Rows[at - 1] : null;
-        return row?.Tag as NomenclatureGapRow;
-    }
+    private NomenclatureGapRow? NeighbourGap() =>
+        SelectedGap is { } gap ? CatalogScreenRules.Neighbour(CatalogScreenRules.Gaps(_gapRows, _gapFilter), gap.AnalysisId) : null;
 
     /// <summary>
     /// A line put right leaves the list, and the selection went back to the top of it: its neighbour
@@ -473,13 +459,12 @@ internal sealed class NationalActPickerDialog : MasterDataEditor
         _grid.SuspendLayout();
         _grid.Rows.Clear();
 
-        foreach (var act in _acts.Where(a => a.IsActive && NationalActSearch.Matches(a, _search.Text)))
+        foreach (var act in CatalogScreenRules.Pickable(_acts, _search.Text))
         {
-            var index = _grid.Rows.Add(act.Code, act.Label, $"{act.LetterKey} {act.Coefficient:0.##}",
+            var index = _grid.Rows.Add(act.Code, act.Label, CatalogScreenRules.Coefficient(act),
                                        act.DecreeYear.ToString(CultureInfo.InvariantCulture));
             _grid.Rows[index].Tag = act;
-            _grid.Rows[index].Cells["label"].ToolTipText =
-                act.SubChapter is { Length: > 0 } sub ? $"{act.Chapter} · {sub}" : act.Chapter;
+            _grid.Rows[index].Cells["label"].ToolTipText = CatalogScreenRules.Chapter(act);
         }
 
         _grid.ResumeLayout(performLayout: true);

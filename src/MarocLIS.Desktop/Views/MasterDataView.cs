@@ -370,13 +370,14 @@ public sealed class MasterDataView : LocalizedView
             if (e.RowIndex >= 0 && _editPayer.Enabled) await EditPayerAsync(_payers.CurrentRow?.Tag as PayerRow);
         };
 
-        // Each tab is kept by its own right; greyed out for a user without it, as the service
-        // refuses them in any case.
-        PermissionGate.Require(Permissions.Equipment.Manage, _newInstrument, _editInstrument);
-        PermissionGate.Require(Permissions.Quality.ManageQcRules, _newMaterial, _editMaterial, _newTarget, _editTarget);
-        PermissionGate.Require(Permissions.Inventory.ManagePurchaseOrders, _newStock, _editStock, _newSupplier, _editSupplier);
-        PermissionGate.Require(Permissions.Catalog.Manage, _newPrescriber, _editPrescriber);
-        PermissionGate.Require(Permissions.Billing.ManageTariffs, _newPayer, _editPayer);
+        // Each tab is kept by its own right (MasterDataScreenRules.ManageRight); greyed out for a
+        // user without it, as the service refuses them in any case.
+        PermissionGate.Require(MasterDataScreenRules.ManageRight(MasterDataTab.Instruments), _newInstrument, _editInstrument);
+        PermissionGate.Require(MasterDataScreenRules.ManageRight(MasterDataTab.QualityControl), _newMaterial, _editMaterial, _newTarget, _editTarget);
+        PermissionGate.Require(MasterDataScreenRules.ManageRight(MasterDataTab.Stock), _newStock, _editStock);
+        PermissionGate.Require(MasterDataScreenRules.ManageRight(MasterDataTab.Suppliers), _newSupplier, _editSupplier);
+        PermissionGate.Require(MasterDataScreenRules.ManageRight(MasterDataTab.Prescribers), _newPrescriber, _editPrescriber);
+        PermissionGate.Require(MasterDataScreenRules.ManageRight(MasterDataTab.Payers), _newPayer, _editPayer);
     }
 
     /// <summary>Each card's title: its tab's name and the number of lines it holds.</summary>
@@ -400,119 +401,67 @@ public sealed class MasterDataView : LocalizedView
         // Bounds check then index, as everywhere else: DataGridViewRowCollection is a non-generic
         // IList, so the LINQ operators do not apply to it.
         if (e.RowIndex < 0 || e.RowIndex >= _instruments.Rows.Count) return;
-        if (_instruments.Rows[e.RowIndex].Tag is not InstrumentMasterRow row) return;
-
-        // A missing interval is the sharpest defect on this screen: the overdue indicators and the
-        // calibration guard are both computed from it, so a null silently disarms them.
-        if (row.IntervalsIncomplete)
-        {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (row.Status == EquipmentStatus.Decommissioned)
-        {
-            e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        }
+        if (_instruments.Rows[e.RowIndex].Tag is InstrumentMasterRow row) PaintRow(e.CellStyle!, MasterDataScreenRules.Tone(row));
     }
 
     private void OnMaterialFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _qcMaterials.Rows.Count) return;
-        if (_qcMaterials.Rows[e.RowIndex].Tag is not QcMaterialRow row) return;
-
-        if (!row.IsUsable)
-        {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (row.DaysToExpiry <= 30 || row.TargetCount == 0)
-        {
-            // No target means the material cannot be entered against anything, so it is present
-            // but unusable in practice.
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
-        }
+        if (_qcMaterials.Rows[e.RowIndex].Tag is QcMaterialRow row) PaintRow(e.CellStyle!, MasterDataScreenRules.Tone(row));
     }
 
     private void OnTargetFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _qcTargets.Rows.Count) return;
-        if (_qcTargets.Rows[e.RowIndex].Tag is not QcTargetRow row) return;
-
-        if (!row.HasUsableLimits)
-        {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (!row.IsActive)
-        {
-            e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        }
-        else if (row.LaboratoryMean is null)
-        {
-            e.CellStyle!.ForeColor = UiTheme.Abnormal;
-        }
+        if (_qcTargets.Rows[e.RowIndex].Tag is QcTargetRow row) PaintRow(e.CellStyle!, MasterDataScreenRules.Tone(row));
     }
 
     private void OnStockFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _stock.Rows.Count) return;
-        if (_stock.Rows[e.RowIndex].Tag is not StockItemMasterRow row) return;
-
-        if (!row.IsActive) e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        else if (row.IsCritical) e.CellStyle!.Font = UiTheme.BodyBold;
+        if (_stock.Rows[e.RowIndex].Tag is StockItemMasterRow row) PaintRow(e.CellStyle!, MasterDataScreenRules.Tone(row));
     }
 
     private void OnSupplierFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _suppliers.Rows.Count) return;
-        if (_suppliers.Rows[e.RowIndex].Tag is not SupplierRow row) return;
-
-        if (row.IsEvaluationOverdue)
-        {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
-        }
-        else if (!row.IsActive)
-        {
-            e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        }
+        if (_suppliers.Rows[e.RowIndex].Tag is SupplierRow row) PaintRow(e.CellStyle!, MasterDataScreenRules.Tone(row));
     }
 
     private void OnPrescriberFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _prescribers.Rows.Count) return;
-        if (_prescribers.Rows[e.RowIndex].Tag is not PrescriberRow row) return;
-
-        if (!row.IsActive) { e.CellStyle!.ForeColor = UiTheme.TextMuted; return; }
-
-        // No INPE means an AMO claim carrying this prescriber's prescription cannot be filed.
-        if (string.IsNullOrWhiteSpace(row.Inpe)
-            && row.Kind is PrescriberKind.GeneralPractitioner or PrescriberKind.Specialist)
-        {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
-        }
+        if (_prescribers.Rows[e.RowIndex].Tag is PrescriberRow row) PaintRow(e.CellStyle!, MasterDataScreenRules.Tone(row));
     }
 
     private void OnPayerFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _payers.Rows.Count) return;
-        if (_payers.Rows[e.RowIndex].Tag is not PayerRow row) return;
+        if (_payers.Rows[e.RowIndex].Tag is PayerRow row) PaintRow(e.CellStyle!, MasterDataScreenRules.Tone(row));
+    }
 
-        if (!row.IsActive) { e.CellStyle!.ForeColor = UiTheme.TextMuted; return; }
-
-        // An expired convention is the sharpest defect here: invoices keep being raised against
-        // the payer and every one of them will come back rejected.
-        if (row.IsAgreementExpired)
+    /// <summary>The colours of a tone the reference-data rules gave a row.</summary>
+    private static void PaintRow(DataGridViewCellStyle style, MasterDataTone tone)
+    {
+        switch (tone)
         {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (row.Problems.Count > 0)
-        {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
+            case MasterDataTone.Muted:
+                style.ForeColor = UiTheme.TextMuted;
+                break;
+            case MasterDataTone.Warning:
+                style.ForeColor = UiTheme.Abnormal;
+                break;
+            case MasterDataTone.Abnormal:
+                style.BackColor = UiTheme.AbnormalBackground;
+                style.ForeColor = UiTheme.Abnormal;
+                break;
+            case MasterDataTone.Critical:
+                style.BackColor = UiTheme.CriticalBackground;
+                style.ForeColor = UiTheme.Critical;
+                break;
+            case MasterDataTone.Strong:
+                style.Font = UiTheme.BodyBold;
+                break;
         }
     }
 
@@ -660,27 +609,11 @@ public sealed class MasterDataView : LocalizedView
     /// </summary>
     private void ShowCompleteness()
     {
-        var blockers = new List<string>(4);
+        var blockers = MasterDataScreenRules.Blockers(_instrumentRows.Count, _materialRows.Count, _targetRows.Count,
+                                                      _stockRows.Count, _prescriberRows.Count, _payerRows);
 
-        if (_instrumentRows.Count == 0) blockers.Add(T("Nav.Equipment"));
-        if (_materialRows.Count == 0 || _targetRows.Count == 0) blockers.Add(T("Nav.QualityControl"));
-        if (_stockRows.Count == 0) blockers.Add(T("Nav.Inventory"));
-        if (_prescriberRows.Count == 0) blockers.Add(T("Order.Prescribers"));
-
-        // A payer carrying a problem is listed here too. Unlike the others this is not an empty
-        // grid — the seeder ships ten payers — so nothing on screen would otherwise suggest that
-        // the rates they were seeded with have never been confirmed against the convention.
-        if (_payerRows.Any(p => p.Problems.Count > 0)) blockers.Add(T("Coverage.Payers"));
-
-        if (blockers.Count == 0)
-        {
-            _status.ForeColor = UiTheme.Normal;
-            _status.Text = "✓ " + T("Admin.MasterDataComplete");
-            return;
-        }
-
-        _status.ForeColor = UiTheme.Abnormal;
-        _status.Text = "⚠ " + T("Admin.MasterDataIncomplete") + " — " + string.Join(" · ", blockers);
+        _status.ForeColor = blockers.Count == 0 ? UiTheme.Normal : UiTheme.Abnormal;
+        _status.Text = MasterDataScreenRules.Completeness(blockers, T);
     }
 
     private async Task LoadPrescribersAsync(CancellationToken ct = default)
@@ -727,8 +660,8 @@ public sealed class MasterDataView : LocalizedView
                     row.Code, row.Name.For(Localizer.CurrentLanguage),
                     T($"EquipmentKind.{row.Kind}"), T($"EquipmentStatus.{row.Status}"),
                     row.SerialNumber ?? string.Empty, row.Location ?? string.Empty,
-                    row.PreventiveMaintenanceIntervalDays is { } m ? T("Stock.Days", m) : "—",
-                    row.CalibrationIntervalDays is { } c ? T("Stock.Days", c) : "—",
+                    MasterDataScreenRules.Interval(row.PreventiveMaintenanceIntervalDays, T),
+                    MasterDataScreenRules.Interval(row.CalibrationIntervalDays, T),
                     row.QcTargetCount.ToString(),
                     row.HasInterfaceConfigured ? "✓" : string.Empty);
 
@@ -753,10 +686,7 @@ public sealed class MasterDataView : LocalizedView
 
             foreach (var row in _materialRows)
             {
-                var state = !row.IsActive ? T("Admin.Inactive")
-                    : row.DaysToExpiry < 0 ? T("Inventory.Expired")
-                    : row.TargetCount == 0 ? T("Quality.NoTarget")
-                    : T("Inventory.Usable");
+                var state = T(MasterDataScreenRules.StateKey(row));
 
                 var index = _qcMaterials.Rows.Add(
                     row.LotNumber, row.Name.For(Localizer.CurrentLanguage),
@@ -784,21 +714,16 @@ public sealed class MasterDataView : LocalizedView
 
             foreach (var row in _targetRows)
             {
-                var state = !row.HasUsableLimits ? T("Qc_NoTargetEstablished")
-                    : !row.IsActive ? T("Admin.Inactive")
-                    : row.LaboratoryMean is null ? T("Quality.SupplierLimits")
-                    : T("Quality.LaboratoryLimits");
+                var state = T(MasterDataScreenRules.StateKey(row));
 
                 var index = _qcTargets.Rows.Add(
                     row.MaterialLotNumber, T($"QcLevel.{row.Level}"),
                     $"{row.ParameterCode} — {row.ParameterName.For(Localizer.CurrentLanguage)}",
                     row.InstrumentCode,
-                    row.AssignedMean is { } am && row.AssignedSd is { } asd
-                        ? $"{am:N3} ± {asd:N3}" : "—",
-                    row.LaboratoryMean is { } lm && row.LaboratorySd is { } lsd
-                        ? $"{lm:N3} ± {lsd:N3}" : "—",
+                    MasterDataScreenRules.Limits(row.AssignedMean, row.AssignedSd),
+                    MasterDataScreenRules.Limits(row.LaboratoryMean, row.LaboratorySd),
                     row.LaboratoryPointCount.ToString(),
-                    CountRules(row.ActiveRules).ToString(),
+                    MasterDataScreenRules.CountRules(row.ActiveRules).ToString(),
                     state);
 
                 _qcTargets.Rows[index].Tag = row;
@@ -808,10 +733,6 @@ public sealed class MasterDataView : LocalizedView
         _editTarget.Enabled = _qcTargets.Rows.Count > 0;
         RefreshHeadings();
     }
-
-    private static int CountRules(WestgardRule rules) =>
-        Enum.GetValues<WestgardRule>()
-            .Count(r => r != WestgardRule.None && rules.HasFlag(r));
 
     private void RenderStock()
     {
@@ -824,17 +745,12 @@ public sealed class MasterDataView : LocalizedView
 
             foreach (var row in _stockRows)
             {
-                var flags = new List<string>(3);
-                if (row.IsCritical) flags.Add("★");
-                if (row.IsHazardous) flags.Add("☣");
-                if (row.LotCount == 0) flags.Add("∅");
-
                 var index = _stock.Rows.Add(
                     row.Code, row.Name.For(Localizer.CurrentLanguage),
                     T($"StockItemKind.{row.Kind}"), row.UnitOfMeasure,
                     row.ReorderPoint.ToString("N2"), row.MinimumStock.ToString("N2"),
                     T($"StorageCondition.{row.StorageCondition}"),
-                    row.SupplierName ?? string.Empty, string.Join(" ", flags));
+                    row.SupplierName ?? string.Empty, MasterDataScreenRules.Flags(row));
 
                 _stock.Rows[index].Tag = row;
             }
@@ -859,9 +775,7 @@ public sealed class MasterDataView : LocalizedView
                     row.Code, row.Name, row.Ice ?? string.Empty, row.ContactName ?? string.Empty,
                     row.Phone ?? string.Empty, T("Stock.Days", row.LeadTimeDays),
                     row.IsApproved ? T("Inventory.Approved") : string.Empty,
-                    row.LastEvaluationDate is { } date
-                        ? $"{date:dd/MM/yy}" + (row.EvaluationScore is { } score ? $" ({score})" : string.Empty)
-                        : "—",
+                    MasterDataScreenRules.Evaluation(row),
                     row.StockItemCount.ToString());
 
                 _suppliers.Rows[index].Tag = row;
@@ -884,9 +798,7 @@ public sealed class MasterDataView : LocalizedView
             foreach (var row in _prescriberRows)
             {
                 var index = _prescribers.Rows.Add(
-                    Localizer.CurrentLanguage == Domain.Common.AppLanguage.Arabic
-                        && row.FullNameArabic is { Length: > 0 }
-                            ? row.FullNameArabic : row.FullName,
+                    MasterDataScreenRules.Name(row, Localizer.CurrentLanguage),
                     T($"PrescriberKind.{row.Kind}"),
                     row.Speciality?.For(Localizer.CurrentLanguage) ?? string.Empty,
                     row.ProfessionalOrderNumber ?? string.Empty,
@@ -921,14 +833,14 @@ public sealed class MasterDataView : LocalizedView
                     T($"PayerKind.{row.Kind}"),
                     // The percentage, because that is the unit a convention is written in. The stored
                     // value is the fraction the pricing calculator needs.
-                    $"{row.ReimbursementPercent:0.##} %",
+                    MasterDataScreenRules.Rate(row),
                     row.UsesNationalReferenceTariff ? T("Coverage.Tnr") : string.Empty,
                     row.ThirdPartyPaymentAgreement ? T("Action.Yes") : string.Empty,
                     row.AgreementNumber ?? string.Empty,
                     T("Stock.Days", row.PaymentTermsDays),
                     row.CoveredPatientCount.ToString(CultureInfo.CurrentCulture),
                     row.OpenInvoiceCount.ToString(CultureInfo.CurrentCulture),
-                    string.Join(" · ", row.Problems.Select(T)));
+                    MasterDataScreenRules.Problems(row, T));
 
                 _payers.Rows[index].Tag = row;
             }
@@ -980,21 +892,9 @@ public sealed class MasterDataView : LocalizedView
 
     private async Task EditTargetAsync(QcTargetRow? row)
     {
-        if (_materialRows.Count == 0)
+        if (MasterDataEditorRules.MissingPrerequisite(_materialRows.Count, _instrumentRows.Count, _parameters.Count) is { } missing)
         {
-            _dialogs.Warn(T("Quality.NeedMaterialFirst"), T("Quality.NewQcTarget"));
-            return;
-        }
-
-        if (_instrumentRows.Count == 0)
-        {
-            _dialogs.Warn(T("Quality.NeedInstrumentFirst"), T("Quality.NewQcTarget"));
-            return;
-        }
-
-        if (_parameters.Count == 0)
-        {
-            _dialogs.Warn(T("Quality.NeedParameterFirst"), T("Quality.NewQcTarget"));
+            _dialogs.Warn(T(missing), T("Quality.NewQcTarget"));
             return;
         }
 

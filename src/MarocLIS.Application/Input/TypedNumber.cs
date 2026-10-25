@@ -17,6 +17,31 @@ public static class TypedNumber
     public const decimal Limit = 1_000_000_000_000m;
 
     /// <summary>
+    /// The longest amount a money box takes: "999 999 999 999" and its decimals still fit the
+    /// decimal(18,2) columns, where a longer figure was refused by the database with an unexpected
+    /// error and the form lost with it.
+    /// </summary>
+    public const int AmountMaxLength = 15;
+
+    /// <summary>The same for the decimal(18,6) columns of the catalogue (limits, volumes, coefficients): twelve figures.</summary>
+    public const int MeasureMaxLength = 12;
+
+    /// <summary>
+    /// Writes a value for an editable box: at least <paramref name="decimals"/> decimals, any
+    /// further significant ones kept so opening and saving does not round the stored value, and no
+    /// thousands separator.
+    /// </summary>
+    public static string ForEditing(decimal value, int decimals, IFormatProvider? provider = null)
+    {
+        var fixedPart = new string('0', Math.Max(0, decimals));
+        var format = "0." + fixedPart + "##########";
+
+        // Without the direction mark the Arabic culture puts before the minus sign: the boxes are
+        // laid out left to right, and the text must read back as the value it shows.
+        return WithoutDirectionMarks(value.ToString(format, provider ?? CultureInfo.CurrentCulture));
+    }
+
+    /// <summary>
     /// Reads a number typed, pasted or pre-filled in any of the cultures the application runs in.
     /// <para>
     /// The cultures write "150 000,5" with a space (or a no-break space, which the framework uses

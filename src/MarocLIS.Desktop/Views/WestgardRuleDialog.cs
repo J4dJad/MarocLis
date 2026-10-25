@@ -1,3 +1,4 @@
+using MarocLIS.Application.Administration;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Quality;
 using MarocLIS.Localization;
@@ -20,33 +21,13 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 internal sealed class WestgardRuleDialog : Form
 {
-    /// <summary>
-    /// The Westgard multirule set: warning rule plus the rejection rules that detect random and
-    /// systematic error. What most laboratories run on a two-level control.
-    /// </summary>
-    private const WestgardRule ClassicMultirule =
-        WestgardRule.OneTwoS | WestgardRule.OneThreeS | WestgardRule.TwoTwoS |
-        WestgardRule.R4S | WestgardRule.FourOneS | WestgardRule.TenX;
-
     private readonly CheckedListBox _list = new();
     private readonly Label _summary = new();
     private readonly ILocalizer _localizer;
     private Button? _ok;
 
-    private readonly (WestgardRule Rule, string LabelKey, string DescriptionKey)[] _rules =
-    [
-        (WestgardRule.OneTwoS,         "Qc.Rule_1_2s",    "Qc_Rule_1_2s"),
-        (WestgardRule.OneThreeS,       "Qc.Rule_1_3s",    "Qc_Rule_1_3s"),
-        (WestgardRule.TwoTwoS,         "Qc.Rule_2_2s",    "Qc_Rule_2_2s"),
-        (WestgardRule.R4S,             "Qc.Rule_R_4s",    "Qc_Rule_R_4s"),
-        (WestgardRule.ThreeOneS,       "Qc.Rule_3_1s",    "Qc_Rule_3_1s"),
-        (WestgardRule.FourOneS,        "Qc.Rule_4_1s",    "Qc_Rule_4_1s"),
-        (WestgardRule.TwoOfThreeTwoS,  "Qc.Rule_2of3_2s", "Qc_Rule_2of3_2s"),
-        (WestgardRule.SevenT,          "Qc.Rule_7T",      "Qc_Rule_7T"),
-        (WestgardRule.EightX,          "Qc.Rule_8x",      "Qc_Rule_8x"),
-        (WestgardRule.TenX,            "Qc.Rule_10x",     "Qc_Rule_10x"),
-        (WestgardRule.TwelveX,         "Qc.Rule_12x",     "Qc_Rule_12x")
-    ];
+    /// <summary>The rules a control can run, each with its description (MasterDataScreenRules.WestgardRules).</summary>
+    private readonly IReadOnlyList<WestgardRuleChoice> _rules = MasterDataScreenRules.WestgardRules;
 
     internal WestgardRule Rules { get; private set; }
 
@@ -79,10 +60,10 @@ internal sealed class WestgardRuleDialog : Form
         _list.BorderStyle = BorderStyle.FixedSingle;
         _list.Font = UiTheme.Body;
 
-        foreach (var (rule, labelKey, _) in _rules)
+        foreach (var rule in _rules)
         {
-            var index = _list.Items.Add(localizer[labelKey]);
-            _list.SetItemChecked(index, current.HasFlag(rule));
+            var index = _list.Items.Add(localizer[rule.LabelKey]);
+            _list.SetItemChecked(index, current.HasFlag(rule.Rule));
         }
 
         _list.SelectedIndexChanged += (_, _) => ShowDescription();
@@ -95,11 +76,11 @@ internal sealed class WestgardRuleDialog : Form
 
         var classic = UiTheme.SecondaryButton(localizer["Quality.ClassicMultirule"]);
         classic.Bounds = new Rectangle(20, 356, 350, UiTheme.ButtonHeight);
-        classic.Click += (_, _) => Apply(ClassicMultirule);
+        classic.Click += (_, _) => Apply(MasterDataScreenRules.ClassicMultirule);
 
         var minimal = UiTheme.SecondaryButton(localizer["Quality.SingleRuleOnly"]);
         minimal.Bounds = new Rectangle(380, 356, 220, UiTheme.ButtonHeight);
-        minimal.Click += (_, _) => Apply(WestgardRule.OneThreeS);
+        minimal.Click += (_, _) => Apply(MasterDataScreenRules.SingleRule);
 
         var ok = _ok = UiTheme.PrimaryButton(localizer["Action.Save"]);
         ok.Bounds = new Rectangle(20, 420, 280, UiTheme.ButtonHeight);
@@ -135,7 +116,7 @@ internal sealed class WestgardRuleDialog : Form
 
     private void Apply(WestgardRule preset)
     {
-        for (var i = 0; i < _rules.Length; i++)
+        for (var i = 0; i < _rules.Count; i++)
             _list.SetItemChecked(i, preset.HasFlag(_rules[i].Rule));
 
         ShowDescription();
@@ -150,21 +131,14 @@ internal sealed class WestgardRuleDialog : Form
     {
         var lines = new List<string>(2);
 
-        if (_list.SelectedIndex >= 0 && _list.SelectedIndex < _rules.Length)
+        if (_list.SelectedIndex >= 0 && _list.SelectedIndex < _rules.Count)
             lines.Add(_localizer[_rules[_list.SelectedIndex].DescriptionKey]);
 
-        var count = _list.CheckedIndices.Count;
+        var ticked = Ticked();
+        var count = MasterDataScreenRules.CountRules(ticked);
 
-        if (count == 0)
-        {
-            _summary.ForeColor = UiTheme.Critical;
-            lines.Add(_localizer["Quality.NoRulesWarning"]);
-        }
-        else
-        {
-            _summary.ForeColor = UiTheme.TextSecondary;
-            lines.Add(_localizer.Format("Quality.RuleCount", count));
-        }
+        _summary.ForeColor = count == 0 ? UiTheme.Critical : UiTheme.TextSecondary;
+        lines.Add(MasterDataScreenRules.RuleSummary(ticked, _localizer.Format));
 
         _summary.Text = string.Join(Environment.NewLine, lines);
 
@@ -172,14 +146,13 @@ internal sealed class WestgardRuleDialog : Form
         if (_ok is not null) _ok.Enabled = count > 0;
     }
 
+    private WestgardRule Ticked() =>
+        MasterDataScreenRules.Combine(_list.CheckedIndices.Cast<int>().Select(i => _rules[i].Rule));
+
     private void Accept()
     {
-        if (_list.CheckedIndices.Count == 0) return;
-
-        var selected = WestgardRule.None;
-
-        foreach (var index in _list.CheckedIndices.Cast<int>())
-            selected |= _rules[index].Rule;
+        var selected = Ticked();
+        if (selected == WestgardRule.None) return;
 
         Rules = selected;
         DialogResult = DialogResult.OK;

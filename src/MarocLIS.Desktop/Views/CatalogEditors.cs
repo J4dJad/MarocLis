@@ -1,3 +1,4 @@
+using System.Globalization;
 using MarocLIS.Application.Catalog;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Catalog;
@@ -32,6 +33,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
     private readonly Label _computed;
     private readonly TariffRow? _labTariff;
     private readonly bool _canPrice;
+    private readonly int _partnerSiteCount;
 
     // The national nomenclature (NABM): the act is picked from it or typed, and said back here.
     private readonly IReadOnlyList<NationalActRow> _acts;
@@ -71,59 +73,61 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         _id = existing?.Id;
         _isNew = existing is null;
         _stored = existing is null ? null : stored;
+        _partnerSiteCount = lookups.PartnerSites.Count;
 
         var language = localizer.CurrentLanguage;
+        var form = CatalogEditorRules.FormOf(existing, stored, labTariff, knownLetterKeyValue, CultureInfo.CurrentCulture);
 
         // --- identity --------------------------------------------------------------------------
 
-        _code = TextField("Field.Code", 20, 16, 140, existing?.Code, latin: true, mono: true);
+        _code = TextField("Field.Code", 20, 16, 140, form.Code, latin: true, mono: true);
         _code.ReadOnly = !_isNew;
         if (!_isNew) _code.BackColor = UiTheme.SurfaceSunken;
         _code.CharacterCasing = CharacterCasing.Upper;
-        _code.MaxLength = 30;
+        _code.MaxLength = CatalogEditorRules.CodeMaxLength;
 
         Notice(170, 34, 560, 26,
                _isNew ? "Catalog.CodeSetOnce" : "Catalog.CodeImmutableNotice",
                _isNew ? UiTheme.TextSecondary : UiTheme.Abnormal);
 
-        _nameFr = TextField("Field.NameFr", 20, 60, 340, existing?.Name.Fr);
-        _nameAr = TextField("Field.NameAr", 372, 60, 340, existing?.Name.Ar, arabic: true);
-        _nameEn = TextField("Field.NameEn", 20, 104, 340, existing?.Name.En);
-        _shortName = TextField("Catalog.ShortName", 372, 104, 160, _stored?.ShortName?.Fr);
-        _aliases = TextField("Catalog.SearchAliases", 20, 148, 692, _stored?.SearchAliases);
+        _nameFr = TextField("Field.NameFr", 20, 60, 340, form.NameFr);
+        _nameAr = TextField("Field.NameAr", 372, 60, 340, form.NameAr, arabic: true);
+        _nameEn = TextField("Field.NameEn", 20, 104, 340, form.NameEn);
+        _shortName = TextField("Catalog.ShortName", 372, 104, 160, form.ShortName);
+        _aliases = TextField("Catalog.SearchAliases", 20, 148, 692, form.Aliases);
         // The lengths of the columns: a longer value was refused by the database with an unexpected
         // error, and the form was lost with it.
-        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = 300;
-        _shortName.MaxLength = 60;
-        _aliases.MaxLength = 500;
+        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = CatalogEditorRules.NameMaxLength;
+        _shortName.MaxLength = CatalogEditorRules.ShortNameMaxLength;
+        _aliases.MaxLength = CatalogEditorRules.AliasesMaxLength;
 
         // --- classification --------------------------------------------------------------------
 
         _department = Lookup("Field.Department", 20, 192, 220,
                              lookups.Departments.Where(d => d.IsActive)
                                     .Select(d => (d.Id, d.Name.For(language))),
-                             existing?.DepartmentId, allowNone: false);
+                             form.DepartmentId, allowNone: false);
 
         _specimen = Lookup("Sample.SpecimenType", 252, 192, 220,
                            lookups.SpecimenTypes.Where(s => s.IsActive)
                                   .Select(s => (s.Id, s.Name.For(language))),
-                           existing?.SpecimenTypeId, allowNone: false);
+                           form.SpecimenTypeId, allowNone: false);
 
         _container = Lookup("Sample.ContainerType", 484, 192, 228,
                             lookups.ContainerTypes.Where(c => c.IsActive)
                                    .Select(c => (c.Id, c.Name.For(language))),
-                            existing?.ContainerTypeId);
+                            form.ContainerTypeId);
 
-        _volume = TextField("Catalog.RequiredVolume", 20, 236, 120, Editable(_stored?.RequiredVolumeMl),
+        _volume = TextField("Catalog.RequiredVolume", 20, 236, 120, form.Volume,
                             latin: true, right: true);
         Numeric(EditorValues.MeasureMaxLength, _volume);
-        _loinc = TextField("Catalog.Loinc", 152, 236, 160, _stored?.LoincCode, latin: true, mono: true);
+        _loinc = TextField("Catalog.Loinc", 152, 236, 160, form.Loinc, latin: true, mono: true);
         // The national act is a second code beside the laboratory's own: picked from the
         // nomenclature (the button, or F4), or typed. It never replaces the internal code above.
-        _actCode = TextField("Catalog.NationalActCode", 324, 236, 120, existing?.NationalActCode,
+        _actCode = TextField("Catalog.NationalActCode", 324, 236, 120, form.ActCode,
                         latin: true, mono: true);
-        _loinc.MaxLength = 20;
-        _actCode.MaxLength = 30;
+        _loinc.MaxLength = CatalogEditorRules.LoincMaxLength;
+        _actCode.MaxLength = CatalogEditorRules.CodeMaxLength;
         _actCode.CharacterCasing = CharacterCasing.Upper;
 
         _pickAct = UiTheme.SecondaryButton("…");
@@ -145,22 +149,21 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         };
 
         _consent = Choice("Catalog.ConsentRequired", 496, 236, 216,
-                          existing?.ConsentRequirement ?? ConsentRequirement.None,
-                          "ConsentRequirement");
+                          form.Consent, "ConsentRequirement");
 
         // --- method ----------------------------------------------------------------------------
 
-        _methodFr = TextField("Catalog.Method", 20, 280, 340, _stored?.Method?.Fr);
-        _reagent = TextField("Catalog.ReagentReference", 372, 280, 340, _stored?.ReagentReference);
-        _methodFr.MaxLength = _reagent.MaxLength = 200;
+        _methodFr = TextField("Catalog.Method", 20, 280, 340, form.Method);
+        _reagent = TextField("Catalog.ReagentReference", 372, 280, 340, form.Reagent);
+        _methodFr.MaxLength = _reagent.MaxLength = CatalogEditorRules.MethodMaxLength;
 
-        _accredited = Check("Catalog.Accredited", 20, 334, existing?.IsAccredited ?? false);
-        _subcontracted = Check("Catalog.Subcontracted", 20, 358, existing?.IsSubcontracted ?? false);
-        _notifiable = Check("Catalog.Notifiable", 20, 382, _stored?.IsNotifiableDisease ?? false);
+        _accredited = Check("Catalog.Accredited", 20, 334, form.Accredited);
+        _subcontracted = Check("Catalog.Subcontracted", 20, 358, form.Subcontracted);
+        _notifiable = Check("Catalog.Notifiable", 20, 382, form.Notifiable);
 
         _subcontractor = Lookup("Catalog.SubcontractorSite", 372, 334, 340,
                                 lookups.PartnerSites.Select(s => (s.Id, $"{s.Code}  {s.Name.For(language)}")),
-                                _stored?.SubcontractorSiteId);
+                                form.SubcontractorSiteId);
 
         // The picker follows the tick box: an analysis marked subcontracted with no partner site is
         // refused by the domain, and a laboratory with no partner configured needs to be told that
@@ -170,30 +173,29 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
         // --- turnaround ------------------------------------------------------------------------
 
         _routine = Number("Catalog.RoutineTurnaround", 20, 412, 140,
-                          existing?.RoutineTurnaroundHours ?? 24, max: 8760);
+                          form.RoutineTurnaroundHours, max: CatalogEditorRules.TurnaroundHoursMax);
 
         _urgent = Number("Catalog.UrgentTurnaround", 180, 412, 140,
-                         _stored?.UrgentTurnaroundMinutes ?? 120, max: 10080);
+                         form.UrgentTurnaroundMinutes, max: CatalogEditorRules.UrgentMinutesMax);
 
-        _urgentAvailable = Check("Catalog.AvailableUrgently", 340, 432,
-                                 _stored?.IsAvailableUrgently ?? true);
+        _urgentAvailable = Check("Catalog.AvailableUrgently", 340, 432, form.AvailableUrgently);
 
         Notice(20, 460, 692, 20, "Catalog.TurnaroundNotice");
 
         // --- pre-analytical --------------------------------------------------------------------
 
         _fasting = Number("Catalog.FastingOverride", 20, 488, 140,
-                          _stored?.FastingHoursOverride, max: 48);
+                          form.FastingHours, max: CatalogEditorRules.FastingHoursMax);
         _stabilityRoom = Number("Catalog.StabilityRoom", 180, 488, 140,
-                                _stored?.StabilityAtRoomTemperatureHours, max: 8760);
+                                form.StabilityRoomHours, max: CatalogEditorRules.StabilityHoursMax);
         _stabilityFridge = Number("Catalog.StabilityFridge", 340, 488, 140,
-                                  _stored?.StabilityRefrigeratedHours, max: 8760);
-        _displayOrder = Number("Field.DisplayOrder", 500, 488, 120, _stored?.DisplayOrder ?? 0,
-                               max: 9999);
+                                  form.StabilityFridgeHours, max: CatalogEditorRules.StabilityHoursMax);
+        _displayOrder = Number("Field.DisplayOrder", 500, 488, 120, form.DisplayOrder,
+                               max: CatalogEditorRules.DisplayOrderMax);
 
         _clinicalInfo = TextField("Catalog.RequiredClinicalInformation", 20, 540, 692,
-                                  _stored?.RequiredClinicalInformation?.Fr);
-        _clinicalInfo.MaxLength = 500;
+                                  form.ClinicalInformation);
+        _clinicalInfo.MaxLength = CatalogEditorRules.ClinicalInformationMaxLength;
 
         // --- price ------------------------------------------------------------------------------
         // The laboratory's own price list (patients paying themselves, and the fallback for any
@@ -201,25 +203,20 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         Notice(20, 588, 692, 20, "Catalog.LabPriceSection", UiTheme.Accent);
 
-        _letterKey = TextField("Billing.LetterKey", 20, 612, 70, labTariff?.LetterKey ?? "B",
+        _letterKey = TextField("Billing.LetterKey", 20, 612, 70, form.LetterKey,
                                latin: true, mono: true);
-        _letterKey.MaxLength = 5;
+        _letterKey.MaxLength = CatalogEditorRules.LetterKeyMaxLength;
         _letterKey.CharacterCasing = CharacterCasing.Upper;
 
-        _coefficient = TextField("Billing.Coefficient", 102, 612, 100,
-                                 labTariff?.Coefficient.ToString("0.##"),
+        _coefficient = TextField("Billing.Coefficient", 102, 612, 100, form.Coefficient,
                                  latin: true, right: true, mono: true);
         Numeric(EditorValues.MeasureMaxLength, _coefficient);
 
-        _letterKeyValue = TextField("Catalog.LetterKeyValue", 214, 612, 120,
-                                    (labTariff is { LetterKeyValue: > 0m }
-                                         ? labTariff.LetterKeyValue
-                                         : knownLetterKeyValue)?.ToString("0.####"),
+        _letterKeyValue = TextField("Catalog.LetterKeyValue", 214, 612, 120, form.LetterKeyValue,
                                     latin: true, right: true, mono: true);
         Numeric(EditorValues.MeasureMaxLength, _letterKeyValue);
 
-        _price = TextField("Catalog.LabPrice", 346, 612, 130,
-                           labTariff?.Price.ToString("0.00"),
+        _price = TextField("Catalog.LabPrice", 346, 612, 130, form.Price,
                            latin: true, right: true, mono: true);
         Numeric(EditorValues.AmountMaxLength, _price);
 
@@ -236,7 +233,7 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
         RefreshComputed();
 
-        _active = Check("Field.Active", 20, 670, existing?.IsActive ?? true, bold: true);
+        _active = Check("Field.Active", 20, 670, form.Active, bold: true);
 
         _actInfo = Notice(140, 672, 572, 20, "Catalog.NationalActCode");
         _actCode.TextChanged += (_, _) => RefreshActInfo();
@@ -254,72 +251,80 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
     private readonly ToolTip _pickActTip = new();
 
-    /// <summary>The act the code box names, or null for an empty box or a code outside the list.</summary>
-    private NationalActRow? CurrentAct()
+    /// <summary>The analysis as typed, for the rules shared with the web.</summary>
+    private AnalysisForm Form() => new()
     {
-        var code = NationalBiologyAct.Normalize(_actCode.Text);
-        return code is null ? null : _acts.FirstOrDefault(a => a.Code == code);
-    }
+        Code = _code.Text,
+        NameFr = _nameFr.Text,
+        NameAr = _nameAr.Text,
+        NameEn = _nameEn.Text,
+        ShortName = _shortName.Text,
+        Aliases = _aliases.Text,
+        DepartmentId = SelectedId(_department),
+        SpecimenTypeId = SelectedId(_specimen),
+        ContainerTypeId = SelectedId(_container),
+        Volume = _volume.Text,
+        Loinc = _loinc.Text,
+        ActCode = _actCode.Text,
+        Consent = Selected<ConsentRequirement>(_consent),
+        Method = _methodFr.Text,
+        Reagent = _reagent.Text,
+        Accredited = _accredited.Checked,
+        Subcontracted = _subcontracted.Checked,
+        Notifiable = _notifiable.Checked,
+        SubcontractorSiteId = SelectedId(_subcontractor),
+        RoutineTurnaroundHours = (int)_routine.Value,
+        UrgentTurnaroundMinutes = (int)_urgent.Value,
+        AvailableUrgently = _urgentAvailable.Checked,
+        FastingHours = (int)_fasting.Value,
+        StabilityRoomHours = (int)_stabilityRoom.Value,
+        StabilityFridgeHours = (int)_stabilityFridge.Value,
+        DisplayOrder = (int)_displayOrder.Value,
+        ClinicalInformation = _clinicalInfo.Text,
+        Active = _active.Checked,
+        LetterKey = _letterKey.Text,
+        Coefficient = _coefficient.Text,
+        LetterKeyValue = _letterKeyValue.Text,
+        Price = _price.Text
+    };
 
     /// <summary>Says which act the code is, with its official coefficient, or that the list does not know it.</summary>
     private void RefreshActInfo()
     {
-        var code = NationalBiologyAct.Normalize(_actCode.Text);
+        var info = CatalogEditorRules.Act(_actCode.Text, _acts);
 
-        if (code is null || _acts.Count == 0)
+        (_actInfo.Text, _actInfo.ForeColor) = info switch
         {
-            _actInfo.Text = code is null && _acts.Count > 0 ? Localizer["Nabm.NoActHint"] : string.Empty;
-            _actInfo.ForeColor = UiTheme.TextSecondary;
-            return;
-        }
-
-        if (CurrentAct() is { } act)
-        {
-            _actInfo.Text = Localizer.Format("Nabm.ActInfo", act.Code, act.Label, act.Coefficient.ToString("0.##"));
-            _actInfo.ForeColor = UiTheme.Accent;
-        }
-        else
-        {
-            _actInfo.Text = Localizer.Format("Nabm.CodeNotInList", code);
-            _actInfo.ForeColor = UiTheme.Abnormal;
-        }
+            { Kind: ActInfoKind.Known, Act: { } act } =>
+                (Localizer.Format("Nabm.ActInfo", act.Code, act.Label, act.Coefficient.ToString("0.##")), UiTheme.Accent),
+            { Kind: ActInfoKind.Unknown } => (Localizer.Format("Nabm.CodeNotInList", info.Code!), UiTheme.Abnormal),
+            { Kind: ActInfoKind.Hint } => (Localizer["Nabm.NoActHint"], UiTheme.TextSecondary),
+            _ => (string.Empty, UiTheme.TextSecondary)
+        };
     }
 
     /// <summary>
     /// Picks the act from the nomenclature: fills the act code and proposes the official coefficient
-    /// for the laboratory price. A price that followed the old base follows the new one; a price the
-    /// laboratory set apart from the base is left for the operator to decide.
+    /// for the laboratory price (<see cref="CatalogEditorRules.WithAct"/>).
     /// </summary>
     private void PickAct()
     {
         using var picker = new NationalActPickerDialog(Localizer, Dialogs, _acts, _actCode.Text);
         if (picker.ShowDialog(this) != DialogResult.OK || picker.Chosen is not { } act) return;
 
-        _actCode.Text = act.Code;
+        var picked = CatalogEditorRules.WithAct(Form(), act, _canPrice, CultureInfo.CurrentCulture);
 
-        if (!_canPrice) return;
-
-        var keyValue = DecimalOrNull(_letterKeyValue);
-        var oldCoefficient = DecimalOrNull(_coefficient);
-        var oldPrice = DecimalOrNull(_price);
-
-        _letterKey.Text = act.LetterKey;
-        _coefficient.Text = EditorValues.FormatForEditing(act.Coefficient, 0);
-
-        if (keyValue is > 0m
-            && (oldPrice is null
-                || (oldCoefficient is { } coefficient && oldPrice == Money.Round(coefficient * keyValue.Value))))
-            _price.Text = EditorValues.FormatForEditing(Money.Round(act.Coefficient * keyValue.Value), 2);
+        _actCode.Text = picked.ActCode;
+        _letterKey.Text = picked.LetterKey;
+        _coefficient.Text = picked.Coefficient;
+        _price.Text = picked.Price;
 
         RefreshComputed();
     }
 
     private void RefreshComputed()
     {
-        var reference = Math.Round((DecimalOrNull(_coefficient) ?? 0m)
-                                   * (DecimalOrNull(_letterKeyValue) ?? 0m), 2);
-        var excess = Math.Max(0m, (DecimalOrNull(_price) ?? 0m) - reference);
-
+        var (reference, excess) = CatalogEditorRules.Computed(_coefficient.Text, _letterKeyValue.Text, _price.Text);
         var language = Localizer.CurrentLanguage;
 
         _computed.ForeColor = excess > 0m ? UiTheme.Abnormal : UiTheme.Accent;
@@ -328,65 +333,9 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
                                           Money.Of(excess).Format(language));
     }
 
-    /// <summary>
-    /// Reads the price fields. False when they are invalid (the operator has been told); true with
-    /// a null request when there is nothing to save.
-    /// </summary>
-    private bool TryReadPrice(out TariffRequest? request)
-    {
-        request = null;
-
-        if (!_canPrice) return true;
-
-        var price = DecimalOrNull(_price);
-
-        // Left blank on an analysis that has no price yet: nothing to record.
-        if (price is null && string.IsNullOrWhiteSpace(_price.Text) && _labTariff is null) return true;
-
-        if (price is null or < 0m)
-        {
-            Dialogs.Warn(Localizer["Tariff_NegativePrice"], Text);
-            _price.Focus();
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(_letterKey.Text))
-        {
-            Dialogs.Warn(Localizer["Tariff_LetterKeyRequired"], Text);
-            _letterKey.Focus();
-            return false;
-        }
-
-        var letterKey = _letterKey.Text.Trim().ToUpperInvariant();
-        var coefficient = DecimalOrNull(_coefficient) ?? 0m;
-        var letterKeyValue = DecimalOrNull(_letterKeyValue) ?? 0m;
-
-        if (_labTariff is not null
-            && _labTariff.LetterKey == letterKey
-            && _labTariff.Coefficient == coefficient
-            && _labTariff.LetterKeyValue == letterKeyValue
-            && _labTariff.Price == price.Value)
-            return true;
-
-        request = new TariffRequest
-        {
-            AnalysisTestId = _id ?? Guid.Empty,
-            PayerId = null,
-            ValidFrom = DateOnly.MinValue,
-            LetterKey = letterKey,
-            Coefficient = coefficient,
-            LetterKeyValue = letterKeyValue,
-            Price = price.Value,
-            IsVatExempt = _labTariff?.IsVatExempt ?? true,
-            VatRate = _labTariff?.VatRate ?? 0m
-        };
-
-        return true;
-    }
-
     private void RefreshSubcontracting()
     {
-        _subcontractor.Enabled = _subcontracted.Checked && _subcontractor.Items.Count > 1;
+        _subcontractor.Enabled = CatalogEditorRules.SubcontractorEnabled(Form(), _partnerSiteCount);
 
         _subcontractor.BackColor = _subcontractor.Enabled
             ? UiTheme.SurfaceRaised
@@ -395,94 +344,27 @@ internal sealed class AnalysisEditorDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_code.Text))
-        {
-            Dialogs.Warn(Localizer["Test_CodeRequired"], Text);
-            _code.Focus();
-            return;
-        }
+        var form = Form();
 
-        if (string.IsNullOrWhiteSpace(_nameFr.Text))
-        {
-            Dialogs.Warn(Localizer["Test_NameFrenchRequired"], Text);
-            _nameFr.Focus();
+        if (Refused(CatalogEditorRules.Check(form, _partnerSiteCount),
+                    ("volume", _volume), ("coefficient", _coefficient), ("letterkeyvalue", _letterKeyValue),
+                    ("price", _price), ("code", _code), ("namefr", _nameFr), ("subcontractor", _subcontractor)))
             return;
-        }
 
-        if (SelectedId(_department) is null || SelectedId(_specimen) is null)
-        {
-            Dialogs.Warn(Localizer["Catalog_DepartmentAndSpecimenRequired"], Text);
-            return;
-        }
-
-        // Refused here rather than by the service, so the operator is told which of the two
-        // problems they have: no partner chosen, or no partner site configured at all.
-        if (_subcontracted.Checked && SelectedId(_subcontractor) is null)
-        {
-            Dialogs.Warn(Localizer[_subcontractor.Items.Count > 1
-                                       ? "Test_SubcontractorRequired"
-                                       : "Catalog_NoPartnerSiteConfigured"],
-                          Text);
-            return;
-        }
-
-        // A code typed by hand that the nomenclature does not know: a slip, an old code, or the
-        // internal code typed in the wrong box. Said before saving; the operator may still keep it.
-        var actCode = NationalBiologyAct.Normalize(_actCode.Text);
-        if (actCode is not null && _acts.Count > 0 && CurrentAct() is null
-            && !Dialogs.Confirm(Localizer.Format("Nabm.CodeNotInListConfirm", actCode), Text))
+        // A code typed by hand that the nomenclature does not know: said before saving; the
+        // operator may still keep it.
+        if (CatalogEditorRules.UnknownActCode(form, _acts) is { } unknown
+            && !Dialogs.Confirm(Localizer.Format("Nabm.CodeNotInListConfirm", unknown), Text))
         {
             _actCode.Focus();
             return;
         }
 
-        if (!TryReadPrice(out var priceRequest)) return;
+        var (refusal, priceRequest) = CatalogEditorRules.ReadPrice(form, _canPrice, _labTariff);
+        if (Refused(refusal, ("price", _price), ("letterkey", _letterKey))) return;
 
         PriceRequest = priceRequest;
-
-        // Built on the stored analysis, so a field this dialog does not show (the execution days)
-        // is saved as it was rather than reset.
-        var basis = _stored ?? new AnalysisRequest
-        {
-            Code = string.Empty,
-            Name = new MultilingualText(),
-            DepartmentId = Guid.Empty,
-            SpecimenTypeId = Guid.Empty
-        };
-
-        Request = basis with
-        {
-            Id = _id,
-            Code = _code.Text.Trim().ToUpperInvariant(),
-            Name = new MultilingualText(_nameFr.Text.Trim(), Blank(_nameAr), Blank(_nameEn)),
-            ShortName = FrenchEdited(_stored?.ShortName, Blank(_shortName)),
-            SearchAliases = Blank(_aliases),
-            DepartmentId = SelectedId(_department)!.Value,
-            SpecimenTypeId = SelectedId(_specimen)!.Value,
-            ContainerTypeId = SelectedId(_container),
-            RequiredVolumeMl = DecimalOrNull(_volume),
-            LoincCode = Blank(_loinc),
-            NationalActCode = actCode,
-            Method = FrenchEdited(_stored?.Method, Blank(_methodFr)),
-            ReagentReference = Blank(_reagent),
-            IsAccredited = _accredited.Checked,
-            IsSubcontracted = _subcontracted.Checked,
-            SubcontractorSiteId = _subcontracted.Checked ? SelectedId(_subcontractor) : null,
-            RoutineTurnaroundHours = (int)_routine.Value,
-            UrgentTurnaroundMinutes = (int)_urgent.Value,
-            IsAvailableUrgently = _urgentAvailable.Checked,
-            FastingHoursOverride = IntOrStored(_fasting, _stored?.FastingHoursOverride),
-            StabilityAtRoomTemperatureHours =
-                IntOrStored(_stabilityRoom, _stored?.StabilityAtRoomTemperatureHours),
-            StabilityRefrigeratedHours =
-                IntOrStored(_stabilityFridge, _stored?.StabilityRefrigeratedHours),
-            RequiredClinicalInformation =
-                FrenchEdited(_stored?.RequiredClinicalInformation, Blank(_clinicalInfo)),
-            ConsentRequirement = Selected<ConsentRequirement>(_consent),
-            IsNotifiableDisease = _notifiable.Checked,
-            IsActive = _active.Checked,
-            DisplayOrder = (int)_displayOrder.Value
-        };
+        Request = CatalogEditorRules.ToRequest(form, _id, _stored);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -537,25 +419,24 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _siblings = siblings;
         _stored = existing is null ? null : stored;
 
-        var language = localizer.CurrentLanguage;
+        var form = CatalogEditorRules.FormOf(existing, stored, CultureInfo.CurrentCulture);
 
-        _code = TextField("Field.Code", 20, 16, 140, existing?.Code, latin: true, mono: true);
+        _code = TextField("Field.Code", 20, 16, 140, form.Code, latin: true, mono: true);
         _code.ReadOnly = !_isNew;
         if (!_isNew) _code.BackColor = UiTheme.SurfaceSunken;
         _code.CharacterCasing = CharacterCasing.Upper;
-        _code.MaxLength = 30;
+        _code.MaxLength = CatalogEditorRules.CodeMaxLength;
 
-        _valueType = Choice("Catalog.ValueType", 172, 16, 200,
-                            existing?.ValueType ?? ResultValueType.Numeric, "ResultValueType");
+        _valueType = Choice("Catalog.ValueType", 172, 16, 200, form.ValueType, "ResultValueType");
 
-        _valueType.Enabled = existing is null || !existing.HasResults;
+        _valueType.Enabled = CatalogEditorRules.ValueTypeEditable(existing);
 
         _unit = Lookup("Field.Unit", 384, 16, 160,
                        lookups.Units.Where(u => u.IsActive)
                               .Select(u => (u.Id, u.DisplaySymbol)),
-                       existing?.UnitId);
+                       form.UnitId);
 
-        _decimals = Number("Catalog.Decimals", 556, 16, 80, existing?.Decimals ?? 2, max: 6);
+        _decimals = Number("Catalog.Decimals", 556, 16, 80, form.Decimals, max: CatalogEditorRules.DecimalsMax);
 
         _typeNotice = Notice(20, 62, 712, 20,
                              existing is { HasResults: true }
@@ -568,64 +449,62 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
             _typeNotice.Text = localizer.Format("Catalog.ValueTypeFrozenNotice",
                                                  existing.ResultCount);
 
-        _nameFr = TextField("Field.NameFr", 20, 86, 230, existing?.Name.Fr);
-        _nameAr = TextField("Field.NameAr", 262, 86, 230, existing?.Name.Ar, arabic: true);
-        _nameEn = TextField("Field.NameEn", 504, 86, 228, existing?.Name.En);
+        _nameFr = TextField("Field.NameFr", 20, 86, 230, form.NameFr);
+        _nameAr = TextField("Field.NameAr", 262, 86, 230, form.NameAr, arabic: true);
+        _nameEn = TextField("Field.NameEn", 504, 86, 228, form.NameEn);
 
-        _shortName = TextField("Catalog.ShortName", 20, 130, 160, _stored?.ShortName?.Fr);
-        _loinc = TextField("Catalog.Loinc", 192, 130, 160, _stored?.LoincCode,
+        _shortName = TextField("Catalog.ShortName", 20, 130, 160, form.ShortName);
+        _loinc = TextField("Catalog.Loinc", 192, 130, 160, form.Loinc,
                            latin: true, mono: true);
         // The lengths of the columns: a longer value was refused by the database with an unexpected
         // error, and the form was lost with it.
-        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = 300;
-        _shortName.MaxLength = 60;
-        _loinc.MaxLength = 20;
-        _cv = TextField("Catalog.AnalyticalCv", 364, 130, 100,
-                   existing?.AnalyticalCvPercent?.ToString("0.##"), latin: true, right: true);
+        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = CatalogEditorRules.NameMaxLength;
+        _shortName.MaxLength = CatalogEditorRules.ShortNameMaxLength;
+        _loinc.MaxLength = CatalogEditorRules.LoincMaxLength;
+        _cv = TextField("Catalog.AnalyticalCv", 364, 130, 100, form.Cv, latin: true, right: true);
         Numeric(EditorValues.MeasureMaxLength, _cv);
 
         _displayOrder = Number("Field.DisplayOrder", 476, 130, 100,
-                               existing?.DisplayOrder ?? 0, max: 9999);
-        _indent = Number("Catalog.IndentLevel", 588, 130, 80, existing?.IndentLevel ?? 0, max: 5);
+                               form.DisplayOrder, max: CatalogEditorRules.DisplayOrderMax);
+        _indent = Number("Catalog.IndentLevel", 588, 130, 80, form.IndentLevel, max: CatalogEditorRules.IndentMax);
 
         // --- limits ----------------------------------------------------------------------------
 
         Label("Catalog.MeasuringRange", 20, 182);
-        _measuringLow = Bare(20, 200, 100, existing?.MeasuringRangeLow);
+        _measuringLow = Bare(20, 200, 100, form.MeasuringLow);
         Numeric(EditorValues.MeasureMaxLength, _measuringLow);
-        _measuringHigh = Bare(128, 200, 100, existing?.MeasuringRangeHigh);
+        _measuringHigh = Bare(128, 200, 100, form.MeasuringHigh);
         Numeric(EditorValues.MeasureMaxLength, _measuringHigh);
 
         Label("Catalog.TechnicalLimits", 244, 182);
-        _technicalLow = Bare(244, 200, 100, existing?.TechnicalLimitLow);
+        _technicalLow = Bare(244, 200, 100, form.TechnicalLow);
         Numeric(EditorValues.MeasureMaxLength, _technicalLow);
-        _technicalHigh = Bare(352, 200, 100, existing?.TechnicalLimitHigh);
+        _technicalHigh = Bare(352, 200, 100, form.TechnicalHigh);
         Numeric(EditorValues.MeasureMaxLength, _technicalHigh);
 
         Label("Catalog.CriticalLimits", 468, 182);
-        _criticalLow = Bare(468, 200, 100, existing?.CriticalLow);
+        _criticalLow = Bare(468, 200, 100, form.CriticalLow);
         Numeric(EditorValues.MeasureMaxLength, _criticalLow);
-        _criticalHigh = Bare(576, 200, 100, existing?.CriticalHigh);
+        _criticalHigh = Bare(576, 200, 100, form.CriticalHigh);
         Numeric(EditorValues.MeasureMaxLength, _criticalHigh);
 
         Notice(20, 234, 712, 26, "Catalog.LimitsNotice");
 
         // --- delta check -----------------------------------------------------------------------
 
-        _delta = TextField("Catalog.DeltaCheck", 20, 262, 100,
-                      existing?.DeltaCheckPercent?.ToString("0.##"), latin: true, right: true);
+        _delta = TextField("Catalog.DeltaCheck", 20, 262, 100, form.Delta, latin: true, right: true);
         Numeric(EditorValues.MeasureMaxLength, _delta);
 
         _deltaWindow = Number("Catalog.DeltaWindow", 132, 262, 100,
-                              existing?.DeltaCheckWindowDays, max: 3650);
+                              form.DeltaWindowDays, max: CatalogEditorRules.DeltaWindowMax);
 
         Notice(244, 280, 488, 34, "Catalog.DeltaNotice");
 
         // --- formula ---------------------------------------------------------------------------
 
-        _formula = TextField("Catalog.Formula", 20, 320, 712, existing?.CalculationFormula,
+        _formula = TextField("Catalog.Formula", 20, 320, 712, form.Formula,
                         latin: true, mono: true);
-        _formula.MaxLength = 1000;
+        _formula.MaxLength = CatalogEditorRules.FormulaMaxLength;
 
         _formulaNotice = Notice(20, 366, 712, 34, "Catalog.FormulaNotice");
 
@@ -643,9 +522,9 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
 
         // The stored answers, so a coded parameter is not saved with a list to retype from memory:
         // the list is replaced as a whole on save, and an empty grid was refused or dropped them.
-        foreach (var option in _stored?.CodedOptions ?? [])
-            _options.Rows.Add(option.Code, option.Label.Fr, option.Label.Ar ?? string.Empty,
-                              option.IsExpectedNormal, option.IsAbnormal, option.IsCritical);
+        foreach (var option in form.Options)
+            _options.Rows.Add(option.Code, option.LabelFr, option.LabelAr,
+                              option.ExpectedNormal, option.Abnormal, option.Critical);
 
         Controls.Add(_options);
 
@@ -657,10 +536,9 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _removeOption.Bounds = new Rectangle(250, 580, 140, UiTheme.ButtonHeight - 4);
         _removeOption.Click += (_, _) => RemoveOption();
 
-        _internalOnly = Check("Catalog.InternalOnly", 404, 584, existing?.IsInternalOnly ?? false);
-        _alwaysShow = Check("Catalog.AlwaysShowOnReport", 556, 584,
-                            existing?.AlwaysShowOnReport ?? true);
-        _active = Check("Field.Active", 20, 616, existing?.IsActive ?? true, bold: true);
+        _internalOnly = Check("Catalog.InternalOnly", 404, 584, form.InternalOnly);
+        _alwaysShow = Check("Catalog.AlwaysShowOnReport", 556, 584, form.AlwaysShowOnReport);
+        _active = Check("Field.Active", 20, 616, form.Active, bold: true);
 
         Controls.AddRange([_addOption, _removeOption]);
 
@@ -672,16 +550,14 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         UseAdminFrame();
     }
 
-    private TextBox Bare(int x, int y, int width, decimal? value)
+    private TextBox Bare(int x, int y, int width, string value)
     {
         var box = UiTheme.Input(width);
         box.Location = new Point(x, y);
         box.Tag = UiTags.LatinValue;
         box.TextAlign = HorizontalAlignment.Right;
         box.Font = UiTheme.Monospace;
-        // Through the editing format: the culture's own text for a negative limit carries a
-        // direction mark in Arabic, and "0.###" also rounded the stored value on the next save.
-        box.Text = value is { } number ? EditorValues.FormatForEditing(number, 0) : string.Empty;
+        box.Text = value;
 
         Controls.Add(box);
         return box;
@@ -732,8 +608,8 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
     {
         if (_options.Rows.Cast<DataGridViewRow>().Any(r => !r.IsNewRow)) return;
 
-        _options.Rows.Add("NEG", Localizer["Catalog.OptionNegative"], "سالب", true, false, false);
-        _options.Rows.Add("POS", Localizer["Catalog.OptionPositive"], "موجب", false, true, false);
+        foreach (var option in CatalogEditorRules.NegativePositive((key, _) => Localizer[key]))
+            _options.Rows.Add(option.Code, option.LabelFr, option.LabelAr, option.ExpectedNormal, option.Abnormal, option.Critical);
     }
 
     private void RemoveOption()
@@ -747,11 +623,7 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
     /// </summary>
     private void RefreshEnablement()
     {
-        var type = Selected<ResultValueType>(_valueType);
-
-        var numeric = type is ResultValueType.Numeric or ResultValueType.NumericWithOperator;
-        var coded = type is ResultValueType.Coded or ResultValueType.SemiQuantitative;
-        var heading = type == ResultValueType.Heading;
+        var (numeric, coded, heading) = CatalogEditorRules.Fields(Selected<ResultValueType>(_valueType));
 
         foreach (var box in new[] { _measuringLow, _measuringHigh, _technicalLow, _technicalHigh,
                                     _criticalLow, _criticalHigh, _cv, _delta })
@@ -776,136 +648,57 @@ internal sealed class ParameterEditorDialog : MasterDataEditor
         _formulaNotice.ForeColor = numeric ? UiTheme.TextSecondary : UiTheme.TextMuted;
     }
 
+    /// <summary>The parameter as typed, its answers in the order listed, for the rules shared with the web.</summary>
+    private ParameterForm Form() => new()
+    {
+        Code = _code.Text,
+        ValueType = Selected<ResultValueType>(_valueType),
+        UnitId = SelectedId(_unit),
+        Decimals = (int)_decimals.Value,
+        NameFr = _nameFr.Text,
+        NameAr = _nameAr.Text,
+        NameEn = _nameEn.Text,
+        ShortName = _shortName.Text,
+        Loinc = _loinc.Text,
+        Cv = _cv.Text,
+        DisplayOrder = (int)_displayOrder.Value,
+        IndentLevel = (int)_indent.Value,
+        MeasuringLow = _measuringLow.Text,
+        MeasuringHigh = _measuringHigh.Text,
+        TechnicalLow = _technicalLow.Text,
+        TechnicalHigh = _technicalHigh.Text,
+        CriticalLow = _criticalLow.Text,
+        CriticalHigh = _criticalHigh.Text,
+        Delta = _delta.Text,
+        DeltaWindowDays = (int)_deltaWindow.Value,
+        Formula = _formula.Text,
+        InternalOnly = _internalOnly.Checked,
+        AlwaysShowOnReport = _alwaysShow.Checked,
+        Active = _active.Checked,
+        Options = [.. _options.Rows.Cast<DataGridViewRow>().Where(r => !r.IsNewRow).Select(r => new CodedOptionLine(
+            r.Cells["code"].Value?.ToString() ?? string.Empty,
+            r.Cells["label"].Value?.ToString() ?? string.Empty,
+            r.Cells["labelAr"].Value?.ToString() ?? string.Empty,
+            r.Cells["normal"].Value is true, r.Cells["abnormal"].Value is true, r.Cells["critical"].Value is true))]
+    };
+
     protected override void Accept()
     {
-        var type = Selected<ResultValueType>(_valueType);
+        var form = Form();
 
-        if (string.IsNullOrWhiteSpace(_code.Text))
-        {
-            Dialogs.Warn(Localizer["Parameter_CodeRequired"], Text);
-            _code.Focus();
+        // The formula is checked against the sibling codes here as well as in the service, so the
+        // operator is told which code is wrong while the formula is still in front of them.
+        if (Refused(CatalogEditorRules.Check(form, _siblings.Select(s => s.Code)),
+                    ("cv", _cv), ("measuringlow", _measuringLow), ("measuringhigh", _measuringHigh),
+                    ("technicallow", _technicalLow), ("technicalhigh", _technicalHigh),
+                    ("criticallow", _criticalLow), ("criticalhigh", _criticalHigh), ("delta", _delta),
+                    ("code", _code), ("namefr", _nameFr), ("formula", _formula)))
             return;
-        }
 
-        if (string.IsNullOrWhiteSpace(_nameFr.Text))
-        {
-            Dialogs.Warn(Localizer["Parameter_NameFrenchRequired"], Text);
-            _nameFr.Focus();
-            return;
-        }
-
-        var options = ReadOptions();
-
-        if (type is ResultValueType.Coded or ResultValueType.SemiQuantitative && options.Count == 0)
-        {
-            Dialogs.Warn(Localizer["Parameter_CodedNeedsOptions"], Text);
-            return;
-        }
-
-        // Checked here as well as in the service so the operator is told which code is wrong while
-        // the formula is still in front of them.
-        if (Blank(_formula) is { } formula)
-        {
-            var known = _siblings.Select(s => s.Code)
-                                 .Append(_code.Text.Trim().ToUpperInvariant())
-                                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var unknown = System.Text.RegularExpressions.Regex
-                .Matches(formula, @"\[([A-Za-z0-9_]+)\]")
-                .Select(m => m.Groups[1].Value)
-                .Where(code => !known.Contains(code))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            if (unknown.Count > 0)
-            {
-                Dialogs.Warn(
-                    Localizer.Format("Parameter_FormulaUnknownReference", string.Join(", ", unknown)),
-                    Text);
-                _formula.Focus();
-                return;
-            }
-        }
-
-        // Built on the stored parameter, so a field this dialog does not show is saved as it was.
-        var basis = _stored ?? new ParameterRequest
-        {
-            AnalysisTestId = _analysisId,
-            Code = string.Empty,
-            Name = new MultilingualText(),
-            ValueType = type
-        };
-
-        Request = basis with
-        {
-            Id = _id,
-            AnalysisTestId = _analysisId,
-            Code = _code.Text.Trim().ToUpperInvariant(),
-            Name = new MultilingualText(_nameFr.Text.Trim(), Blank(_nameAr), Blank(_nameEn)),
-            ShortName = FrenchEdited(_stored?.ShortName, Blank(_shortName)),
-            ValueType = type,
-            LoincCode = Blank(_loinc),
-            UnitId = SelectedId(_unit),
-            Decimals = (int)_decimals.Value,
-            MeasuringRangeLow = DecimalOrNull(_measuringLow),
-            MeasuringRangeHigh = DecimalOrNull(_measuringHigh),
-            TechnicalLimitLow = DecimalOrNull(_technicalLow),
-            TechnicalLimitHigh = DecimalOrNull(_technicalHigh),
-            CriticalLow = DecimalOrNull(_criticalLow),
-            CriticalHigh = DecimalOrNull(_criticalHigh),
-            AnalyticalCvPercent = DecimalOrNull(_cv),
-            DeltaCheckPercent = DecimalOrNull(_delta),
-            DeltaCheckWindowDays = IntOrNull(_deltaWindow),
-            CalculationFormula = Blank(_formula),
-            IsInternalOnly = _internalOnly.Checked,
-            AlwaysShowOnReport = _alwaysShow.Checked,
-            DisplayOrder = (int)_displayOrder.Value,
-            IndentLevel = (int)_indent.Value,
-            IsActive = _active.Checked,
-            CodedOptions = options
-        };
+        Request = CatalogEditorRules.ToRequest(form, _id, _analysisId, _stored);
 
         DialogResult = DialogResult.OK;
         Close();
-    }
-
-    private List<CodedOptionRequest> ReadOptions()
-    {
-        var options = new List<CodedOptionRequest>();
-        var order = 1;
-
-        foreach (DataGridViewRow row in _options.Rows)
-        {
-            if (row.IsNewRow) continue;
-
-            var code = row.Cells["code"].Value?.ToString();
-            var label = row.Cells["label"].Value?.ToString();
-
-            if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(label)) continue;
-
-            var arabic = row.Cells["labelAr"].Value?.ToString();
-            code = code.Trim().ToUpperInvariant();
-
-            var text = new MultilingualText(label.Trim(),
-                                            string.IsNullOrWhiteSpace(arabic) ? null : arabic.Trim());
-
-            // The grid has no English column: a stored answer whose French and Arabic are unchanged
-            // keeps its English label rather than losing it on save.
-            if (_stored?.CodedOptions.FirstOrDefault(
-                    o => string.Equals(o.Code, code, StringComparison.OrdinalIgnoreCase)) is { } stored
-                && stored.Label.Fr == text.Fr && stored.Label.Ar == text.Ar)
-                text = stored.Label;
-
-            options.Add(new CodedOptionRequest(
-                code,
-                text,
-                order++,
-                row.Cells["abnormal"].Value is true,
-                row.Cells["critical"].Value is true,
-                row.Cells["normal"].Value is true));
-        }
-
-        return options;
     }
 }
 
@@ -948,7 +741,9 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
         _id = existing?.Id;
         _parameterId = parameter.Id;
 
-        _gender = Choice("Field.Gender", 20, 16, 180, existing?.AppliesToGender ?? Gender.Unknown,
+        var form = CatalogEditorRules.FormOf(existing, parameter.Decimals, today, CultureInfo.CurrentCulture);
+
+        _gender = Choice("Field.Gender", 20, 16, 180, form.Gender,
                          "Gender", [Gender.Unknown, Gender.Male, Gender.Female]);
 
         _pregnancy = new ComboBox
@@ -964,7 +759,7 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
         _pregnancy.Items.Add(new EnumChoice(1, localizer["Patient.Pregnant"]));
         _pregnancy.Items.Add(new EnumChoice(2, localizer["Catalog.NotPregnant"]));
 
-        _pregnancy.SelectedIndex = existing?.AppliesToPregnancy switch
+        _pregnancy.SelectedIndex = form.Pregnancy switch
         {
             true => 1,
             false => 2,
@@ -986,7 +781,7 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
         for (var t = 1; t <= 3; t++)
             _trimester.Items.Add(new EnumChoice(t, localizer.Format("Catalog.Trimester", t)));
 
-        _trimester.SelectedIndex = existing?.PregnancyTrimester ?? 0;
+        _trimester.SelectedIndex = form.Trimester ?? 0;
 
         Controls.Add(_trimester);
 
@@ -996,12 +791,12 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
 
         _ageFrom = new NumericUpDown
         {
-            Bounds = new Rectangle(20, 92, 100, UiTheme.InputHeight), Maximum = 40_000
+            Bounds = new Rectangle(20, 92, 100, UiTheme.InputHeight), Maximum = CatalogEditorRules.AgeMax
         };
 
         _ageTo = new NumericUpDown
         {
-            Bounds = new Rectangle(128, 92, 100, UiTheme.InputHeight), Maximum = 40_000
+            Bounds = new Rectangle(128, 92, 100, UiTheme.InputHeight), Maximum = CatalogEditorRules.AgeMax
         };
 
         _ageUnit = new ComboBox
@@ -1014,80 +809,67 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
         // Entered in the unit the interval is written in, stored in days. A neonatal interval is
         // published in days and an adult one in years, and forcing the operator to convert is how
         // a paediatric band ends up out by a factor of 365.
-        _ageUnit.Items.Add(new EnumChoice(1, localizer["Catalog.Days"]));
-        _ageUnit.Items.Add(new EnumChoice(30, localizer["Catalog.Months"]));
-        _ageUnit.Items.Add(new EnumChoice(365, localizer["Catalog.Years"]));
-        _ageUnit.SelectedIndex = 2;
+        string[] units = ["Catalog.Days", "Catalog.Months", "Catalog.Years"];
+        for (var i = 0; i < units.Length; i++)
+            _ageUnit.Items.Add(new EnumChoice(CatalogEditorRules.AgeUnits[i], localizer[units[i]]));
 
-        if (existing is not null)
-        {
-            // The unit it was typed in; for a band saved before the unit was kept, the largest
-            // unit that holds both bounds exactly, or the band would be re-saved truncated.
-            var divisor = existing.AgeUnitDays is { } typed and (1 or 30 or 365)
-                          && (existing.AgeFromDays ?? 0) % typed == 0
-                          && (existing.AgeToDays ?? 0) % typed == 0
-                ? typed
-                : EditorValues.AgeUnitDays(existing.AgeFromDays, existing.AgeToDays);
+        // The unit it was typed in; for a band saved before the unit was kept, the largest unit
+        // that holds both bounds exactly, or the band would be re-saved truncated.
+        _ageUnit.SelectedIndex = Math.Max(0, CatalogEditorRules.AgeUnits.ToList().IndexOf(form.AgeUnitDays));
+        _ageFrom.Value = form.AgeFrom;
+        _ageTo.Value = form.AgeTo;
 
-            _ageUnit.SelectedIndex = divisor switch { 1 => 0, 30 => 1, _ => 2 };
-            _ageFrom.Value = (existing.AgeFromDays ?? 0) / divisor;
-            _ageTo.Value = (existing.AgeToDays ?? 0) / divisor;
-
-            // Saved before the unit was kept: shown in the unit it is read in, which may not be
-            // the one it was written in. Saving confirms the unit chosen here.
-            if (existing.HasUnconfirmedAgeUnit)
-                Notice(20, 118, 356, 36, "Catalog.AgeUnitToConfirmNotice", UiTheme.Abnormal);
-        }
+        // Saved before the unit was kept: shown in the unit it is read in, which may not be the one
+        // it was written in. Saving confirms the unit chosen here.
+        if (existing is { HasUnconfirmedAgeUnit: true })
+            Notice(20, 118, 356, 36, "Catalog.AgeUnitToConfirmNotice", UiTheme.Abnormal);
 
         Controls.AddRange([_ageFrom, _ageTo, _ageUnit]);
 
         _instrument = Lookup("Result.Instrument", 388, 74, 280,
                              lookups.Instruments.Select(
                                  i => (i.Id, $"{i.Code}  {i.Name.For(localizer.CurrentLanguage)}")),
-                             existing?.InstrumentId);
+                             form.InstrumentId);
 
         Notice(388, 118, 280, 38, "Catalog.InstrumentRangeNotice");
 
         // --- the interval -----------------------------------------------------------------------
 
         Label("Result.ReferenceRange", 20, 158);
-        _lower = Bare(20, 176, 120, existing?.LowerLimit, parameter.Decimals);
+        _lower = Bare(20, 176, 120, form.Lower);
         Numeric(EditorValues.MeasureMaxLength, _lower);
-        _upper = Bare(148, 176, 120, existing?.UpperLimit, parameter.Decimals);
+        _upper = Bare(148, 176, 120, form.Upper);
         Numeric(EditorValues.MeasureMaxLength, _upper);
 
-        _expectedCoded = TextField("Catalog.ExpectedCodedValue", 284, 158, 180,
-                              existing?.ExpectedCodedValue);
-        _expectedCoded.MaxLength = 60;
+        _expectedCoded = TextField("Catalog.ExpectedCodedValue", 284, 158, 180, form.ExpectedCoded);
+        _expectedCoded.MaxLength = CatalogEditorRules.CodedValueMaxLength;
 
-        _decisionThreshold = Check("Catalog.DecisionThreshold", 480, 176,
-                                   existing?.IsDecisionThreshold ?? false);
+        _decisionThreshold = Check("Catalog.DecisionThreshold", 480, 176, form.DecisionThreshold);
 
-        _displayFr = TextField("Catalog.PrintedInterval", 20, 212, 320,
-                          existing?.DisplayText?.Fr);
-        _displayAr = TextField("Field.NameAr", 352, 212, 316, existing?.DisplayText?.Ar, arabic: true);
+        _displayFr = TextField("Catalog.PrintedInterval", 20, 212, 320, form.DisplayFr);
+        _displayAr = TextField("Field.NameAr", 352, 212, 316, form.DisplayAr, arabic: true);
         // The lengths of the columns: a longer value was refused by the database with an unexpected
         // error, and the form was lost with it.
-        _displayFr.MaxLength = _displayAr.MaxLength = 200;
+        _displayFr.MaxLength = _displayAr.MaxLength = CatalogEditorRules.PrintedIntervalMaxLength;
 
         Notice(20, 256, 648, 20, "Catalog.PrintedIntervalNotice");
 
         // --- provenance and validity -------------------------------------------------------------
 
-        _source = TextField("Catalog.RangeSource", 20, 284, 400, existing?.Source);
-        _source.MaxLength = 300;
+        _source = TextField("Catalog.RangeSource", 20, 284, 400, form.Source);
+        _source.MaxLength = CatalogEditorRules.SourceMaxLength;
 
-        _reviewed = OptionalDate("Catalog.LastReviewed", 436, 302, existing?.LastReviewedOn,
+        _reviewed = OptionalDate("Catalog.LastReviewed", 436, 302, form.LastReviewedOn,
                                   max: today.ToDateTime(TimeOnly.MinValue));
 
-        _validFrom = OptionalDate("Catalog.ValidFrom", 20, 350, existing?.ValidFrom ?? today);
+        _validFrom = OptionalDate("Catalog.ValidFrom", 20, 350, form.ValidFrom);
         _validFrom.Toggle.Checked = true;
         _validFrom.Toggle.Enabled = false;
         _validFrom.Picker.Enabled = true;
 
-        _validUntil = OptionalDate("Catalog.ValidUntil", 236, 350, existing?.ValidUntil);
+        _validUntil = OptionalDate("Catalog.ValidUntil", 236, 350, form.ValidUntil);
 
-        _active = Check("Field.Active", 452, 352, existing?.IsActive ?? true, bold: true);
+        _active = Check("Field.Active", 452, 352, form.Active, bold: true);
 
         _specificity = Notice(20, 400, 648, 20, "Catalog.SpecificityNotice", UiTheme.Accent);
 
@@ -1107,15 +889,14 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
         UseAdminFrame();
     }
 
-    private TextBox Bare(int x, int y, int width, decimal? value, int decimals)
+    private TextBox Bare(int x, int y, int width, string value)
     {
         var box = UiTheme.Input(width);
         box.Location = new Point(x, y);
         box.Tag = UiTags.LatinValue;
         box.TextAlign = HorizontalAlignment.Right;
         box.Font = UiTheme.Monospace;
-        // No thousands separator: the box is read back as typed, and "150 000" did not survive it.
-        box.Text = value is { } number ? EditorValues.FormatForEditing(number, decimals) : string.Empty;
+        box.Text = value;
 
         Controls.Add(box);
         return box;
@@ -1133,73 +914,39 @@ internal sealed class ReferenceRangeEditorDialog : MasterDataEditor
     private int? Trimester => (_trimester.SelectedItem as EnumChoice)?.Value is { } value and > 0
         ? value : null;
 
-    private void RefreshSpecificity()
+    /// <summary>The interval as typed, for the rules shared with the web.</summary>
+    private RangeForm Form() => new()
     {
-        var score = (Trimester is not null ? 8 : 0)
-                    + (Pregnancy is not null ? 4 : 0)
-                    + (SelectedId(_instrument) is not null ? 3 : 0)
-                    + (Selected<Gender>(_gender) != Gender.Unknown ? 2 : 0)
-                    + (_ageFrom.Value > 0 || _ageTo.Value > 0 ? 1 : 0);
+        Gender = Selected<Gender>(_gender),
+        Pregnancy = Pregnancy,
+        Trimester = Trimester,
+        AgeFrom = (int)_ageFrom.Value,
+        AgeTo = (int)_ageTo.Value,
+        AgeUnitDays = AgeUnitDays,
+        InstrumentId = SelectedId(_instrument),
+        Lower = _lower.Text,
+        Upper = _upper.Text,
+        ExpectedCoded = _expectedCoded.Text,
+        DecisionThreshold = _decisionThreshold.Checked,
+        DisplayFr = _displayFr.Text,
+        DisplayAr = _displayAr.Text,
+        Source = _source.Text,
+        LastReviewedOn = DateOrNull(_reviewed.Toggle, _reviewed.Picker),
+        ValidFrom = DateOnly.FromDateTime(_validFrom.Picker.Value.Date),
+        ValidUntil = DateOrNull(_validUntil.Toggle, _validUntil.Picker),
+        Active = _active.Checked
+    };
 
-        _specificity.Text = Localizer.Format("Catalog.SpecificityNotice", score);
-    }
+    private void RefreshSpecificity() =>
+        _specificity.Text = Localizer.Format("Catalog.SpecificityNotice", CatalogEditorRules.Specificity(Form()));
 
     protected override void Accept()
     {
-        var lower = DecimalOrNull(_lower);
-        var upper = DecimalOrNull(_upper);
+        var form = Form();
 
-        if (lower is null && upper is null
-            && string.IsNullOrWhiteSpace(_expectedCoded.Text)
-            && string.IsNullOrWhiteSpace(_displayFr.Text))
-        {
-            Dialogs.Warn(Localizer["Range_EmptyInterval"], Text);
-            _lower.Focus();
-            return;
-        }
+        if (Refused(CatalogEditorRules.Check(form), ("lower", _lower), ("upper", _upper), ("agefrom", _ageFrom))) return;
 
-        if (lower is { } low && upper is { } high && low > high)
-        {
-            Dialogs.Warn(Localizer["Range_LowerAboveUpper"], Text);
-            _lower.Focus();
-            return;
-        }
-
-        var unit = AgeUnitDays;
-
-        var ageFrom = _ageFrom.Value > 0 ? (int)_ageFrom.Value * unit : (int?)null;
-        var ageTo = _ageTo.Value > 0 ? (int)_ageTo.Value * unit : (int?)null;
-
-        if (ageFrom is { } from && ageTo is { } to && from >= to)
-        {
-            Dialogs.Warn(Localizer["Range_InvalidAgeBand"], Text);
-            _ageFrom.Focus();
-            return;
-        }
-
-        Request = new ReferenceRangeRequest
-        {
-            Id = _id,
-            TestParameterId = _parameterId,
-            AppliesToGender = Selected<Gender>(_gender),
-            AgeFromDays = ageFrom,
-            AgeToDays = ageTo,
-            AgeUnitDays = unit,
-            AppliesToPregnancy = Pregnancy,
-            PregnancyTrimester = Trimester,
-            InstrumentId = SelectedId(_instrument),
-            LowerLimit = lower,
-            UpperLimit = upper,
-            DisplayText = Blank(_displayFr) is { } printed
-                ? new MultilingualText(printed, Blank(_displayAr)) : null,
-            ExpectedCodedValue = Blank(_expectedCoded),
-            IsDecisionThreshold = _decisionThreshold.Checked,
-            Source = Blank(_source),
-            LastReviewedOn = DateOrNull(_reviewed.Toggle, _reviewed.Picker),
-            ValidFrom = DateOnly.FromDateTime(_validFrom.Picker.Value.Date),
-            ValidUntil = DateOrNull(_validUntil.Toggle, _validUntil.Picker),
-            IsActive = _active.Checked
-        };
+        Request = CatalogEditorRules.ToRequest(form, _id, _parameterId);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -1327,19 +1074,14 @@ internal sealed class TariffEditorDialog : MasterDataEditor
         _existing = existing;
         _editing = editing;
 
-        // Every active payer, plus any this analysis already has a tariff for (one since switched
-        // off still has its history here). Offering only the latter meant the first tariff for a
-        // payer could never be entered.
-        var language = localizer.CurrentLanguage;
-        var payers = payerOptions
-            .Select(p => (p.Id, $"{p.Code} — {p.Name.For(language)}"))
-            .Concat(existing.Where(t => t.PayerId is not null
-                                        && payerOptions.All(p => p.Id != t.PayerId))
-                            .GroupBy(t => t.PayerId!.Value)
-                            .Select(g => (g.Key, g.First().PayerName ?? g.Key.ToString())))
-            .ToList();
+        var form = CatalogEditorRules.FormOf(analysis, existing, today, editing, nationalLetterKeyValue,
+                                             CultureInfo.CurrentCulture);
 
-        _payer = Lookup("Coverage.Payer", 20, 16, 280, payers, editing?.PayerId);
+        // Every active payer, plus any this analysis already has a tariff for (one since switched
+        // off still has its history here).
+        var payers = CatalogEditorRules.Payers(payerOptions, existing, localizer.CurrentLanguage);
+
+        _payer = Lookup("Coverage.Payer", 20, 16, 280, payers, form.PayerId);
         _payer.Items[0] = new LookupChoice(null, localizer["Catalog.DefaultPriceList"]);
         if (editing is { PayerId: null }) _payer.SelectedIndex = 0;
 
@@ -1349,50 +1091,38 @@ internal sealed class TariffEditorDialog : MasterDataEditor
         {
             Bounds = new Rectangle(312, 34, 180, UiTheme.InputHeight),
             Format = DateTimePickerFormat.Short,
-            Value = (editing?.ValidFrom ?? today).ToDateTime(TimeOnly.MinValue)
+            Value = form.ValidFrom.ToDateTime(TimeOnly.MinValue)
         };
 
         Controls.Add(_validFrom);
 
         _currentTariff = Notice(20, 66, 580, 34, "Catalog.NoCurrentTariff", UiTheme.TextSecondary);
 
-        // The letter-key value is national, the same for every analysis: it is taken from the
-        // most recent tariff that has one, so a new tariff does not start with a reimbursement
-        // base of zero and the whole price shown as excess.
-        var knownLetterKeyValue = editing?.LetterKeyValue
-            ?? existing.Where(t => t.LetterKeyValue > 0m)
-                       .OrderByDescending(t => t.ValidFrom)
-                       .Select(t => (decimal?)t.LetterKeyValue)
-                       .FirstOrDefault()
-            ?? nationalLetterKeyValue;
-
-        _letterKey = TextField("Billing.LetterKey", 20, 110, 80, editing?.LetterKey ?? "B",
+        // The letter-key value is national, the same for every analysis
+        // (CatalogEditorRules.KnownLetterKeyValue), so a new tariff does not start with a
+        // reimbursement base of zero and the whole price shown as excess.
+        _letterKey = TextField("Billing.LetterKey", 20, 110, 80, form.LetterKey,
                                latin: true, mono: true);
-        _letterKey.MaxLength = 5;
+        _letterKey.MaxLength = CatalogEditorRules.LetterKeyMaxLength;
         _letterKey.CharacterCasing = CharacterCasing.Upper;
 
-        _coefficient = TextField("Billing.Coefficient", 112, 110, 120,
-                            (editing?.Coefficient ?? analysis.CurrentCoefficient)?.ToString("0.##"),
+        _coefficient = TextField("Billing.Coefficient", 112, 110, 120, form.Coefficient,
                             latin: true, right: true, mono: true);
         Numeric(EditorValues.MeasureMaxLength, _coefficient);
 
-        _letterKeyValue = TextField("Catalog.LetterKeyValue", 244, 110, 120,
-                               knownLetterKeyValue?.ToString("0.####"),
+        _letterKeyValue = TextField("Catalog.LetterKeyValue", 244, 110, 120, form.LetterKeyValue,
                                latin: true, right: true, mono: true);
         Numeric(EditorValues.MeasureMaxLength, _letterKeyValue);
 
-        _price = TextField("Field.Price", 376, 110, 140,
-                      (editing?.Price ?? analysis.CurrentPrice)?.ToString("0.00"),
+        _price = TextField("Field.Price", 376, 110, 140, form.Price,
                       latin: true, right: true, mono: true);
         Numeric(EditorValues.AmountMaxLength, _price);
 
         _computed = Notice(20, 158, 580, 44, "Catalog.TariffComputedNotice", UiTheme.Accent);
 
         // The rate box sits clear of the check box's caption, which is long and bold.
-        _vatExempt = Check("Billing.VatExempt", 20, 214, editing?.IsVatExempt ?? true, bold: true);
-        _vatRate = TextField("Billing.Vat", 440, 206, 100,
-                             editing is { IsVatExempt: false } ? editing.VatRate.ToString("0.####") : null,
-                             latin: true, right: true);
+        _vatExempt = Check("Billing.VatExempt", 20, 214, form.VatExempt, bold: true);
+        _vatRate = TextField("Billing.Vat", 440, 206, 100, form.VatRate, latin: true, right: true);
         Numeric(EditorValues.MeasureMaxLength, _vatRate);
 
         Notice(20, 244, 580, 44, "Catalog.VatNotice");
@@ -1435,10 +1165,7 @@ internal sealed class TariffEditorDialog : MasterDataEditor
     /// </summary>
     private void RefreshCurrent()
     {
-        var payerId = SelectedId(_payer);
-
-        var current = _editing
-                      ?? _existing.FirstOrDefault(t => t.PayerId == payerId && t.ValidUntil is null);
+        var current = CatalogEditorRules.CurrentTariff(_editing, _existing, SelectedId(_payer));
 
         if (current is null)
         {
@@ -1455,20 +1182,27 @@ internal sealed class TariffEditorDialog : MasterDataEditor
             current.ValidFrom.ToString("dd/MM/yyyy"),
             $"{current.LetterKey} {current.Coefficient:0.##}");
 
-        if (_editing is null
-            && _validFrom.Value.Date <= current.ValidFrom.ToDateTime(TimeOnly.MinValue))
-            _validFrom.Value = current.ValidFrom.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        var typed = DateOnly.FromDateTime(_validFrom.Value.Date);
+        var from = CatalogEditorRules.ValidFrom(typed, current, correcting: _editing is not null);
+        if (from != typed) _validFrom.Value = from.ToDateTime(TimeOnly.MinValue);
     }
+
+    /// <summary>The tariff as typed, for the rules shared with the web.</summary>
+    private TariffForm Form() => new()
+    {
+        PayerId = SelectedId(_payer),
+        ValidFrom = DateOnly.FromDateTime(_validFrom.Value.Date),
+        LetterKey = _letterKey.Text,
+        Coefficient = _coefficient.Text,
+        LetterKeyValue = _letterKeyValue.Text,
+        Price = _price.Text,
+        VatExempt = _vatExempt.Checked,
+        VatRate = _vatRate.Text
+    };
 
     private void RefreshComputed()
     {
-        var coefficient = DecimalOrNull(_coefficient) ?? 0m;
-        var letterKeyValue = DecimalOrNull(_letterKeyValue) ?? 0m;
-        var price = DecimalOrNull(_price) ?? 0m;
-
-        var reference = Math.Round(coefficient * letterKeyValue, 2);
-        var excess = Math.Max(0m, price - reference);
-
+        var (reference, excess) = CatalogEditorRules.Computed(_coefficient.Text, _letterKeyValue.Text, _price.Text);
         var language = Localizer.CurrentLanguage;
 
         _computed.ForeColor = excess > 0m ? UiTheme.Abnormal : UiTheme.Accent;
@@ -1481,41 +1215,13 @@ internal sealed class TariffEditorDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        var price = DecimalOrNull(_price);
+        var form = Form();
 
-        if (price is null or < 0m)
-        {
-            Dialogs.Warn(Localizer["Tariff_NegativePrice"], Text);
-            _price.Focus();
+        if (Refused(CatalogEditorRules.Check(form), ("coefficient", _coefficient), ("letterkeyvalue", _letterKeyValue),
+                    ("price", _price), ("letterkey", _letterKey), ("vatrate", _vatRate)))
             return;
-        }
 
-        if (string.IsNullOrWhiteSpace(_letterKey.Text))
-        {
-            Dialogs.Warn(Localizer["Tariff_LetterKeyRequired"], Text);
-            _letterKey.Focus();
-            return;
-        }
-
-        if (!_vatExempt.Checked && DecimalOrNull(_vatRate) is null or <= 0m)
-        {
-            Dialogs.Warn(Localizer["Tariff_VatRateRequired"], Text);
-            _vatRate.Focus();
-            return;
-        }
-
-        Request = new TariffRequest
-        {
-            AnalysisTestId = _analysisId,
-            PayerId = SelectedId(_payer),
-            ValidFrom = DateOnly.FromDateTime(_validFrom.Value.Date),
-            LetterKey = _letterKey.Text.Trim().ToUpperInvariant(),
-            Coefficient = DecimalOrNull(_coefficient) ?? 0m,
-            LetterKeyValue = DecimalOrNull(_letterKeyValue) ?? 0m,
-            Price = price.Value,
-            IsVatExempt = _vatExempt.Checked,
-            VatRate = _vatExempt.Checked ? 0m : DecimalOrNull(_vatRate) ?? 0m
-        };
+        Request = CatalogEditorRules.ToRequest(form, _analysisId);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -1556,37 +1262,37 @@ internal sealed class PanelEditorDialog : MasterDataEditor
     {
         _id = existing?.Id;
         _isNew = existing is null;
-        _available = [.. candidates.Where(c => c.IsOrderable)];
+        _available = CatalogEditorRules.Candidates(candidates);
 
         var language = localizer.CurrentLanguage;
+        var form = CatalogEditorRules.FormOf(existing, CultureInfo.CurrentCulture);
 
-        _code = TextField("Field.Code", 20, 16, 140, existing?.Code, latin: true, mono: true);
+        _code = TextField("Field.Code", 20, 16, 140, form.Code, latin: true, mono: true);
         _code.ReadOnly = !_isNew;
         if (!_isNew) _code.BackColor = UiTheme.SurfaceSunken;
         _code.CharacterCasing = CharacterCasing.Upper;
 
-        _nameFr = TextField("Field.NameFr", 172, 16, 240, existing?.Name.Fr);
-        _nameAr = TextField("Field.NameAr", 424, 16, 160, existing?.Name.Ar, arabic: true);
-        _nameEn = TextField("Field.NameEn", 596, 16, 160, existing?.Name.En);
+        _nameFr = TextField("Field.NameFr", 172, 16, 240, form.NameFr);
+        _nameAr = TextField("Field.NameAr", 424, 16, 160, form.NameAr, arabic: true);
+        _nameEn = TextField("Field.NameEn", 596, 16, 160, form.NameEn);
 
-        _aliases = TextField("Catalog.SearchAliases", 20, 60, 392, null);
+        _aliases = TextField("Catalog.SearchAliases", 20, 60, 392, form.Aliases);
 
         // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
-        _code.MaxLength = 30;
-        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = 300;
-        _aliases.MaxLength = 500;
+        _code.MaxLength = CatalogEditorRules.CodeMaxLength;
+        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = CatalogEditorRules.NameMaxLength;
+        _aliases.MaxLength = CatalogEditorRules.AliasesMaxLength;
 
-        _packagePrice = TextField("Catalog.PackagePrice", 424, 60, 160,
-                             existing?.PackagePrice?.ToString("0.00"),
+        _packagePrice = TextField("Catalog.PackagePrice", 424, 60, 160, form.PackagePrice,
                              latin: true, right: true, mono: true);
         Numeric(EditorValues.AmountMaxLength, _packagePrice);
 
         _displayOrder = Number("Field.DisplayOrder", 596, 60, 100,
-                               existing?.DisplayOrder ?? 0, max: 9999);
+                               form.DisplayOrder, max: CatalogEditorRules.DisplayOrderMax);
 
-        _itemize = Check("Catalog.ItemizeOnInvoice", 20, 108, existing?.ItemizeOnInvoice ?? true);
-        _groupOnReport = Check("Catalog.GroupOnReport", 260, 108, existing?.GroupOnReport ?? false);
-        _active = Check("Field.Active", 500, 108, existing?.IsActive ?? true, bold: true);
+        _itemize = Check("Catalog.ItemizeOnInvoice", 20, 108, form.ItemizeOnInvoice);
+        _groupOnReport = Check("Catalog.GroupOnReport", 260, 108, form.GroupOnReport);
+        _active = Check("Field.Active", 500, 108, form.Active, bold: true);
 
         Notice(20, 134, 736, 20, "Catalog.ItemizeNotice");
 
@@ -1631,7 +1337,7 @@ internal sealed class PanelEditorDialog : MasterDataEditor
 
         foreach (var candidate in _available)
         {
-            var member = existing?.Members.FirstOrDefault(m => m.AnalysisTestId == candidate.Id);
+            var member = form.Members.FirstOrDefault(m => m.AnalysisTestId == candidate.Id);
 
             var index = _candidates.Rows.Add(
                 member is not null,
@@ -1665,30 +1371,36 @@ internal sealed class PanelEditorDialog : MasterDataEditor
         UseAdminFrame();
     }
 
+    /// <summary>The panel as typed, its ticked members in the order listed, for the rules shared with the web.</summary>
+    private PanelForm Form() => new()
+    {
+        Code = _code.Text,
+        NameFr = _nameFr.Text,
+        NameAr = _nameAr.Text,
+        NameEn = _nameEn.Text,
+        Aliases = _aliases.Text,
+        PackagePrice = _packagePrice.Text,
+        DisplayOrder = (int)_displayOrder.Value,
+        ItemizeOnInvoice = _itemize.Checked,
+        GroupOnReport = _groupOnReport.Checked,
+        Active = _active.Checked,
+        Members = [.. _candidates.Rows.Cast<DataGridViewRow>()
+                                 .Where(r => r.Cells["included"].Value is true && r.Tag is AnalysisRow)
+                                 .Select(r => new PanelMemberRequest(((AnalysisRow)r.Tag!).Id, r.Cells["optional"].Value is true))]
+    };
+
+    /// <summary>
+    /// The members ticked and what they cost bought one by one, the optional ones left out, against
+    /// the package price (<see cref="CatalogEditorRules.Total"/>).
+    /// </summary>
     private void RefreshTotal()
     {
         var language = Localizer.CurrentLanguage;
-
-        var total = 0m;
-        var count = 0;
-
-        foreach (DataGridViewRow row in _candidates.Rows)
-        {
-            if (row.Cells["included"].Value is not true) continue;
-            if (row.Tag is not AnalysisRow analysis) continue;
-
-            count++;
-
-            // The optional members are excluded from the total: they are not added when the panel
-            // is selected, so they are not part of what the bundle costs.
-            if (row.Cells["optional"].Value is true) continue;
-
-            total += analysis.CurrentPrice ?? 0m;
-        }
-
+        var form = Form();
+        var (count, total, packageAbove) = CatalogEditorRules.Total(_available, form);
         var package = DecimalOrNull(_packagePrice);
 
-        _total.ForeColor = package is { } price && price > total ? UiTheme.Critical : UiTheme.Accent;
+        _total.ForeColor = packageAbove ? UiTheme.Critical : UiTheme.Accent;
 
         _total.Text = Localizer.Format("Catalog.ComponentTotalNotice", count,
                                         Money.Of(total).Format(language),
@@ -1699,55 +1411,13 @@ internal sealed class PanelEditorDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_code.Text))
-        {
-            Dialogs.Warn(Localizer["Panel_CodeRequired"], Text);
-            _code.Focus();
+        var form = Form();
+
+        if (Refused(CatalogEditorRules.Check(form), ("package", _packagePrice), ("code", _code), ("namefr", _nameFr),
+                    ("members", _candidates)))
             return;
-        }
 
-        if (string.IsNullOrWhiteSpace(_nameFr.Text))
-        {
-            Dialogs.Warn(Localizer["Panel_NameFrenchRequired"], Text);
-            _nameFr.Focus();
-            return;
-        }
-
-        var members = new List<PanelMemberRequest>();
-
-        foreach (DataGridViewRow row in _candidates.Rows)
-        {
-            if (row.Cells["included"].Value is not true) continue;
-            if (row.Tag is not AnalysisRow analysis) continue;
-
-            members.Add(new PanelMemberRequest(analysis.Id, row.Cells["optional"].Value is true));
-        }
-
-        if (members.Count == 0)
-        {
-            Dialogs.Warn(Localizer["Panel_AtLeastOneAnalysisRequired"], Text);
-            return;
-        }
-
-        if (members.All(m => m.IsOptional))
-        {
-            Dialogs.Warn(Localizer["Panel_AllMembersOptional"], Text);
-            return;
-        }
-
-        Request = new PanelRequest
-        {
-            Id = _id,
-            Code = _code.Text.Trim().ToUpperInvariant(),
-            Name = new MultilingualText(_nameFr.Text.Trim(), Blank(_nameAr), Blank(_nameEn)),
-            SearchAliases = Blank(_aliases),
-            PackagePrice = DecimalOrNull(_packagePrice),
-            ItemizeOnInvoice = _itemize.Checked,
-            GroupOnReport = _groupOnReport.Checked,
-            DisplayOrder = (int)_displayOrder.Value,
-            IsActive = _active.Checked,
-            Members = members
-        };
+        Request = CatalogEditorRules.ToRequest(form, _id);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -1794,55 +1464,43 @@ internal sealed class ReflexRuleEditorDialog : MasterDataEditor
         _selectedParameterId = existing?.TriggerParameterId ?? Guid.Empty;
 
         var language = localizer.CurrentLanguage;
+        var form = CatalogEditorRules.FormOf(existing, analyses, CultureInfo.CurrentCulture);
 
         var options = analyses.Select(a => (a.Id, $"{a.Code}  {a.Name.For(language)}")).ToList();
 
         _triggerAnalysis = Lookup("Catalog.TriggerAnalysis", 20, 16, 300, options,
-                                   existing is null
-                                       ? null
-                                       : analyses.FirstOrDefault(
-                                             a => a.Code == existing.TriggerAnalysisCode)?.Id,
-                                   allowNone: false);
+                                   form.TriggerAnalysisId, allowNone: false);
 
         _triggerParameter = Lookup("Catalog.TriggerParameter", 332, 16, 288, [], null,
                                     allowNone: false);
 
-        _condition = Choice("Catalog.ReflexCondition", 20, 64, 220,
-                            existing?.Condition ?? ReflexCondition.GreaterThan, "ReflexCondition");
+        _condition = Choice("Catalog.ReflexCondition", 20, 64, 220, form.Condition, "ReflexCondition");
 
-        _threshold = TextField("Catalog.Threshold", 252, 64, 120,
-                          existing?.Threshold?.ToString("0.###"),
+        _threshold = TextField("Catalog.Threshold", 252, 64, 120, form.Threshold,
                           latin: true, right: true, mono: true);
         Numeric(EditorValues.MeasureMaxLength, _threshold);
 
-        _thresholdUpper = TextField("Catalog.ThresholdUpper", 384, 64, 120,
-                               existing?.ThresholdUpper?.ToString("0.###"),
+        _thresholdUpper = TextField("Catalog.ThresholdUpper", 384, 64, 120, form.ThresholdUpper,
                                latin: true, right: true, mono: true);
         Numeric(EditorValues.MeasureMaxLength, _thresholdUpper);
 
         _codedValue = TextField("Catalog.TriggerCodedValue", 516, 64, 104,
-                           existing?.TriggerCodedValue, latin: true, mono: true);
+                           form.CodedValue, latin: true, mono: true);
 
         _conditionNotice = Notice(20, 112, 600, 34, "Catalog.ReflexConditionNotice");
 
-        _target = Lookup("Catalog.ReflexAdds", 20, 154, 600, options,
-                         existing is null
-                             ? null
-                             : analyses.FirstOrDefault(
-                                   a => a.Code == existing.AnalysisToAddCode)?.Id,
-                         allowNone: false);
+        _target = Lookup("Catalog.ReflexAdds", 20, 154, 600, options, form.TargetAnalysisId, allowNone: false);
 
-        _descriptionFr = TextField("Field.DescriptionFr", 20, 202, 300, existing?.Description.Fr);
-        _descriptionAr = TextField("Field.DescriptionAr", 332, 202, 288, existing?.Description.Ar,
+        _descriptionFr = TextField("Field.DescriptionFr", 20, 202, 300, form.DescriptionFr);
+        _descriptionAr = TextField("Field.DescriptionAr", 332, 202, 288, form.DescriptionAr,
                               arabic: true);
-        _descriptionFr.MaxLength = _descriptionAr.MaxLength = 500;
-        _codedValue.MaxLength = 60;
+        _descriptionFr.MaxLength = _descriptionAr.MaxLength = CatalogEditorRules.DescriptionMaxLength;
+        _codedValue.MaxLength = CatalogEditorRules.CodedValueMaxLength;
 
-        _automatic = Check("Catalog.AddAutomatically", 20, 250,
-                           existing?.AddAutomatically ?? false);
+        _automatic = Check("Catalog.AddAutomatically", 20, 250, form.AddAutomatically);
 
-        _billable = Check("Catalog.ReflexBillable", 260, 250, existing?.IsBillable ?? true);
-        _active = Check("Field.Active", 480, 250, existing?.IsActive ?? true, bold: true);
+        _billable = Check("Catalog.ReflexBillable", 260, 250, form.Billable);
+        _active = Check("Field.Active", 480, 250, form.Active, bold: true);
 
         Notice(20, 278, 600, 44, "Catalog.ReflexBillingNotice", UiTheme.Abnormal);
         Notice(20, 330, 600, 44, "Catalog.ReflexAutomaticNotice");
@@ -1874,42 +1532,30 @@ internal sealed class ReflexRuleEditorDialog : MasterDataEditor
         _triggerParameter.Items.Clear();
 
         // Headings carry no result and cannot trigger anything, so they are not offered.
-        foreach (var parameter in result.Value.Where(
-                     p => p.IsActive && p.ValueType != ResultValueType.Heading))
+        var offered = CatalogEditorRules.TriggerParameters(result.Value);
+        var kept = CatalogEditorRules.TriggerParameter(offered, preselect ?? _selectedParameterId);
+
+        foreach (var parameter in offered)
         {
             var index = _triggerParameter.Items.Add(
                 new LookupChoice(parameter.Id,
                                   $"{parameter.Code}  {parameter.Name.For(language)}"));
 
-            if (parameter.Id == (preselect ?? _selectedParameterId))
-                _triggerParameter.SelectedIndex = index;
+            if (parameter.Id == kept) _triggerParameter.SelectedIndex = index;
         }
-
-        if (_triggerParameter.SelectedIndex < 0 && _triggerParameter.Items.Count > 0)
-            _triggerParameter.SelectedIndex = 0;
 
         _selectedParameterId = SelectedId(_triggerParameter) ?? Guid.Empty;
     }
 
     private void RefreshCondition()
     {
-        var condition = Selected<ReflexCondition>(_condition);
+        var fields = CatalogEditorRules.Fields(Selected<ReflexCondition>(_condition));
 
-        var numeric = condition != ReflexCondition.EqualsCoded;
-        var twoBounds = condition is ReflexCondition.Between or ReflexCondition.Outside;
+        Enable(_threshold, fields.Threshold);
+        Enable(_thresholdUpper, fields.ThresholdUpper);
+        Enable(_codedValue, fields.CodedValue);
 
-        Enable(_threshold, numeric);
-        Enable(_thresholdUpper, twoBounds);
-        Enable(_codedValue, !numeric);
-
-        _conditionNotice.Text = Localizer[condition switch
-        {
-            ReflexCondition.GreaterThan => "Catalog.ReflexGreaterNotice",
-            ReflexCondition.LessThan => "Catalog.ReflexLessNotice",
-            ReflexCondition.Between => "Catalog.ReflexBetweenNotice",
-            ReflexCondition.Outside => "Catalog.ReflexOutsideNotice",
-            _ => "Catalog.ReflexCodedNotice"
-        }];
+        _conditionNotice.Text = Localizer[fields.NoticeKey];
 
         static void Enable(TextBox box, bool enabled)
         {
@@ -1919,65 +1565,32 @@ internal sealed class ReflexRuleEditorDialog : MasterDataEditor
         }
     }
 
+    /// <summary>The rule as typed, for the rules shared with the web.</summary>
+    private ReflexForm Form() => new()
+    {
+        TriggerAnalysisId = SelectedId(_triggerAnalysis),
+        TriggerParameterId = _selectedParameterId,
+        Condition = Selected<ReflexCondition>(_condition),
+        Threshold = _threshold.Text,
+        ThresholdUpper = _thresholdUpper.Text,
+        CodedValue = _codedValue.Text,
+        TargetAnalysisId = SelectedId(_target),
+        DescriptionFr = _descriptionFr.Text,
+        DescriptionAr = _descriptionAr.Text,
+        AddAutomatically = _automatic.Checked,
+        Billable = _billable.Checked,
+        Active = _active.Checked
+    };
+
     protected override void Accept()
     {
-        var condition = Selected<ReflexCondition>(_condition);
+        var form = Form();
 
-        if (_selectedParameterId == Guid.Empty)
-        {
-            Dialogs.Warn(Localizer["Catalog_TriggerParameterRequired"], Text);
+        if (Refused(CatalogEditorRules.Check(form), ("threshold", _threshold), ("thresholdupper", _thresholdUpper),
+                    ("descriptionfr", _descriptionFr), ("codedvalue", _codedValue)))
             return;
-        }
 
-        if (SelectedId(_target) is not { } target)
-        {
-            Dialogs.Warn(Localizer["Catalog_ReflexTargetRequired"], Text);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_descriptionFr.Text))
-        {
-            Dialogs.Warn(Localizer["Reflex_DescriptionRequired"], Text);
-            _descriptionFr.Focus();
-            return;
-        }
-
-        var threshold = DecimalOrNull(_threshold);
-        var upper = DecimalOrNull(_thresholdUpper);
-
-        switch (condition)
-        {
-            case ReflexCondition.GreaterThan or ReflexCondition.LessThan when threshold is null:
-                Dialogs.Warn(Localizer["Reflex_ThresholdRequired"], Text);
-                _threshold.Focus();
-                return;
-
-            case ReflexCondition.Between or ReflexCondition.Outside
-                when threshold is null || upper is null:
-                Dialogs.Warn(Localizer["Reflex_TwoThresholdsRequired"], Text);
-                _threshold.Focus();
-                return;
-
-            case ReflexCondition.EqualsCoded when string.IsNullOrWhiteSpace(_codedValue.Text):
-                Dialogs.Warn(Localizer["Reflex_CodedValueRequired"], Text);
-                _codedValue.Focus();
-                return;
-        }
-
-        Request = new ReflexRuleRequest
-        {
-            Id = _id,
-            TriggerParameterId = _selectedParameterId,
-            AnalysisToAddId = target,
-            Description = new MultilingualText(_descriptionFr.Text.Trim(), Blank(_descriptionAr)),
-            Condition = condition,
-            Threshold = threshold,
-            ThresholdUpper = upper,
-            TriggerCodedValue = Blank(_codedValue),
-            AddAutomatically = _automatic.Checked,
-            IsBillable = _billable.Checked,
-            IsActive = _active.Checked
-        };
+        Request = CatalogEditorRules.ToRequest(form, _id);
 
         DialogResult = DialogResult.OK;
         Close();
@@ -2034,7 +1647,9 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
         _id = existing?.Id;
         _isNew = existing is null;
 
-        _code = TextField("Field.Code", 20, 16, 160, existing?.Code, latin: true, mono: true);
+        var form = CatalogEditorRules.FormOf(existing, CultureInfo.CurrentCulture);
+
+        _code = TextField("Field.Code", 20, 16, 160, form.Code, latin: true, mono: true);
         _code.ReadOnly = !_isNew;
         if (!_isNew) _code.BackColor = UiTheme.SurfaceSunken;
         _code.CharacterCasing = CharacterCasing.Upper;
@@ -2049,20 +1664,19 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
         {
             // A unit has no translated name: "mg/dL" is the same in every language, and the Arabic
             // field exists only for the few units Moroccan practice writes in Arabic script.
-            _symbol = TextField("Catalog.UnitSymbol", 20, y, 160, existing?.DisplaySymbol,
+            _symbol = TextField("Catalog.UnitSymbol", 20, y, 160, form.Symbol,
                            latin: true, mono: true);
             _symbolArabic = TextField("Catalog.UnitSymbolArabic", 192, y, 160,
-                                 existing?.DisplaySymbolArabic, arabic: true);
-            _ucum = TextField("Catalog.Ucum", 364, y, 160, existing?.UcumCode, latin: true, mono: true);
+                                 form.SymbolArabic, arabic: true);
+            _ucum = TextField("Catalog.Ucum", 364, y, 160, form.Ucum, latin: true, mono: true);
 
             y += 48;
 
-            _factor = TextField("Catalog.FactorToSi", 20, y, 160,
-                           existing?.FactorToSi?.ToString("0.######"),
+            _factor = TextField("Catalog.FactorToSi", 20, y, 160, form.FactorToSi,
                            latin: true, right: true, mono: true);
             Numeric(EditorValues.MeasureMaxLength, _factor);
 
-            _siUnit = TextField("Catalog.SiUnitCode", 192, y, 160, existing?.SiUnitCode,
+            _siUnit = TextField("Catalog.SiUnitCode", 192, y, 160, form.SiUnit,
                            latin: true, mono: true);
 
             y += 48;
@@ -2078,17 +1692,16 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
         }
         else
         {
-            _nameFr = TextField("Field.NameFr", 20, y, 180, existing?.Name.Fr);
-            _nameAr = TextField("Field.NameAr", 212, y, 180, existing?.Name.Ar, arabic: true);
-            _nameEn = TextField("Field.NameEn", 404, y, 180, existing?.Name.En);
+            _nameFr = TextField("Field.NameFr", 20, y, 180, form.NameFr);
+            _nameAr = TextField("Field.NameAr", 212, y, 180, form.NameAr, arabic: true);
+            _nameEn = TextField("Field.NameEn", 404, y, 180, form.NameEn);
 
             y += 48;
         }
 
         // Each box holds no more than its column: a longer entry otherwise ends in « Erreur inattendue » at the save.
-        _code.MaxLength = kind == NomenclatureKind.Department ? 20 : 30;
-        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength =
-            kind == NomenclatureKind.MeasurementUnit ? 40 : 300;
+        _code.MaxLength = CatalogEditorRules.CodeMaxLengthOf(kind);
+        _nameFr.MaxLength = _nameAr.MaxLength = _nameEn.MaxLength = CatalogEditorRules.NameMaxLengthOf(kind);
         if (_ucum is not null) _ucum.MaxLength = 40;
         if (_siUnit is not null) _siUnit.MaxLength = 30;
 
@@ -2096,10 +1709,10 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
         {
             case NomenclatureKind.Department:
                 _displayOrder = Number("Field.DisplayOrder", 20, y, 100,
-                                        existing?.DisplayOrder ?? 0, max: 999);
+                                        form.DisplayOrder, max: CatalogEditorRules.DepartmentOrderMax);
 
                 _accreditationScope = Check("Catalog.InAccreditationScope", 140, y + 20,
-                                             existing?.IsInAccreditationScope ?? false);
+                                             form.InAccreditationScope);
 
                 y += 48;
 
@@ -2109,16 +1722,16 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
 
             case NomenclatureKind.SpecimenType:
                 _fastingHours = Number("Catalog.FastingHours", 20, y, 100,
-                                        existing?.FastingHours ?? 0, max: 48);
+                                        form.FastingHours, max: CatalogEditorRules.FastingHoursMax);
                 y += 48;
 
                 _collectionInstructions = TextField("Catalog.CollectionInstructions", 20, y, 580,
-                                                existing?.CollectionInstructions?.Fr);
+                                                form.CollectionInstructions);
                 _collectionInstructions.MaxLength = 1000;
                 y += 48;
 
                 _patientInstructions = TextField("Catalog.PatientInstructions", 20, y, 580,
-                                             existing?.PatientInstructions?.Fr);
+                                             form.PatientInstructions);
                 _patientInstructions.MaxLength = 1000;
                 y += 48;
 
@@ -2128,7 +1741,7 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
 
             case NomenclatureKind.ContainerType:
                 _capColour = TextField("Catalog.CapColour", 20, y, 110,
-                                   existing?.CapColourHex ?? "#FFFFFF", latin: true, mono: true);
+                                   form.CapColour, latin: true, mono: true);
                 _capColour.MaxLength = 9;
 
                 _colourSwatch = new Panel
@@ -2139,29 +1752,25 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
 
                 Controls.Add(_colourSwatch);
 
-                _additive = TextField("Catalog.Additive", 176, y, 200, existing?.Additive?.Fr);
+                _additive = TextField("Catalog.Additive", 176, y, 200, form.Additive);
                 _additive.MaxLength = 200;
 
-                _drawOrder = Number("Sample.DrawOrder", 388, y, 90, existing?.DrawOrder ?? 0,
-                                     max: 99);
+                _drawOrder = Number("Sample.DrawOrder", 388, y, 90, form.DrawOrder,
+                                     max: CatalogEditorRules.DrawOrderMax);
 
                 y += 48;
 
-                _nominalVolume = TextField("Catalog.NominalVolume", 20, y, 110,
-                                       existing?.NominalVolumeMl?.ToString("0.#"),
+                _nominalVolume = TextField("Catalog.NominalVolume", 20, y, 110, form.NominalVolume,
                                        latin: true, right: true);
                 Numeric(EditorValues.MeasureMaxLength, _nominalVolume);
 
-                _minimumVolume = TextField("Catalog.MinimumVolume", 142, y, 110,
-                                       existing?.MinimumVolumeMl?.ToString("0.#"),
+                _minimumVolume = TextField("Catalog.MinimumVolume", 142, y, 110, form.MinimumVolume,
                                        latin: true, right: true);
                 Numeric(EditorValues.MeasureMaxLength, _minimumVolume);
 
-                _protectFromLight = Check("Collection.ProtectFromLight", 264, y + 20,
-                                           existing?.RequiresProtectionFromLight ?? false);
+                _protectFromLight = Check("Collection.ProtectFromLight", 264, y + 20, form.ProtectFromLight);
 
-                _iceTransport = Check("Collection.TransportOnIce", 440, y + 20,
-                                       existing?.RequiresIceTransport ?? false);
+                _iceTransport = Check("Collection.TransportOnIce", 440, y + 20, form.IceTransport);
 
                 y += 48;
 
@@ -2173,7 +1782,7 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
                 break;
         }
 
-        _active = Check("Field.Active", 20, y, existing?.IsActive ?? true, bold: true);
+        _active = Check("Field.Active", 20, y, form.Active, bold: true);
 
         if (existing is { UsageCount: > 0 })
             Notice(160, y - 4, 440, 30, "Catalog.NomenclatureInUseNotice", UiTheme.Abnormal)
@@ -2183,13 +1792,35 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
         UseAdminFrame();
     }
 
-    /// <summary>
-    /// <see cref="MasterDataEditor.Blank"/> for a field this dialog may not have created at all:
-    /// four lists share one form, so most of its boxes are null on any given opening.
-    /// </summary>
-    private static string? Optional(TextBox? box) => box is null ? null : Blank(box);
+    /// <summary>The text of a box this dialog may not have created at all: four lists share one form.</summary>
+    private static string Optional(TextBox? box) => box?.Text ?? string.Empty;
 
-    private static decimal? OptionalDecimal(TextBox? box) => box is null ? null : DecimalOrNull(box);
+    /// <summary>The entry as typed, for the rules shared with the web.</summary>
+    private NomenclatureForm Form() => new()
+    {
+        Code = _code.Text,
+        NameFr = _kind == NomenclatureKind.MeasurementUnit ? string.Empty : _nameFr.Text,
+        NameAr = _kind == NomenclatureKind.MeasurementUnit ? string.Empty : _nameAr.Text,
+        NameEn = _kind == NomenclatureKind.MeasurementUnit ? string.Empty : _nameEn.Text,
+        Active = _active.Checked,
+        DisplayOrder = _displayOrder is null ? 0 : (int)_displayOrder.Value,
+        InAccreditationScope = _accreditationScope?.Checked ?? false,
+        FastingHours = _fastingHours is null ? 0 : (int)_fastingHours.Value,
+        CollectionInstructions = Optional(_collectionInstructions),
+        PatientInstructions = Optional(_patientInstructions),
+        CapColour = _capColour?.Text ?? "#FFFFFF",
+        Additive = Optional(_additive),
+        NominalVolume = Optional(_nominalVolume),
+        MinimumVolume = Optional(_minimumVolume),
+        DrawOrder = _drawOrder is null ? 0 : (int)_drawOrder.Value,
+        ProtectFromLight = _protectFromLight?.Checked ?? false,
+        IceTransport = _iceTransport?.Checked ?? false,
+        Symbol = Optional(_symbol),
+        SymbolArabic = Optional(_symbolArabic),
+        Ucum = Optional(_ucum),
+        FactorToSi = Optional(_factor),
+        SiUnit = Optional(_siUnit)
+    };
 
     private void RefreshSwatch()
     {
@@ -2209,72 +1840,14 @@ internal sealed class NomenclatureEditorDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_code.Text))
-        {
-            Dialogs.Warn(Localizer["Nomenclature_CodeRequired"], Text);
-            _code.Focus();
+        var form = Form();
+
+        if (Refused(CatalogEditorRules.Check(_kind, form), ("factor", _factor), ("nominalvolume", _nominalVolume),
+                    ("minimumvolume", _minimumVolume), ("code", _code), ("symbol", _symbol), ("namefr", _nameFr),
+                    ("draworder", _drawOrder)))
             return;
-        }
 
-        if (_kind == NomenclatureKind.MeasurementUnit)
-        {
-            if (string.IsNullOrWhiteSpace(_symbol?.Text))
-            {
-                Dialogs.Warn(Localizer["Unit_SymbolRequired"], Text);
-                _symbol?.Focus();
-                return;
-            }
-        }
-        else if (string.IsNullOrWhiteSpace(_nameFr.Text))
-        {
-            Dialogs.Warn(Localizer["Nomenclature_NameFrenchRequired"], Text);
-            _nameFr.Focus();
-            return;
-        }
-
-        if (_kind == NomenclatureKind.ContainerType && _drawOrder is { Value: <= 0 })
-        {
-            Dialogs.Warn(Localizer["Container_DrawOrderRequired"], Text);
-            _drawOrder.Focus();
-            return;
-        }
-
-        Request = new NomenclatureRequest
-        {
-            Id = _id,
-            Code = _code.Text.Trim().ToUpperInvariant(),
-            Name = _kind == NomenclatureKind.MeasurementUnit
-                ? new MultilingualText(_symbol?.Text.Trim() ?? string.Empty, Optional(_symbolArabic))
-                : new MultilingualText(_nameFr.Text.Trim(), Blank(_nameAr), Blank(_nameEn)),
-
-            DisplayOrder = _displayOrder is null ? 0 : (int)_displayOrder.Value,
-            IsInAccreditationScope = _accreditationScope?.Checked ?? false,
-            SupervisorUserId = null,
-
-            CollectionInstructions = Optional(_collectionInstructions) is { } collection
-                ? new MultilingualText(collection) : null,
-            PatientInstructions = Optional(_patientInstructions) is { } patient
-                ? new MultilingualText(patient) : null,
-            FastingHours = _fastingHours is null ? 0 : (int)_fastingHours.Value,
-
-            CapColourHex = _capColour is null
-                ? "#FFFFFF"
-                : _capColour.Text.Trim().ToUpperInvariant(),
-            Additive = Optional(_additive) is { } additive ? new MultilingualText(additive) : null,
-            NominalVolumeMl = OptionalDecimal(_nominalVolume),
-            MinimumVolumeMl = OptionalDecimal(_minimumVolume),
-            DrawOrder = _drawOrder is null ? 0 : (int)_drawOrder.Value,
-            RequiresProtectionFromLight = _protectFromLight?.Checked ?? false,
-            RequiresIceTransport = _iceTransport?.Checked ?? false,
-
-            DisplaySymbol = _symbol?.Text.Trim() ?? string.Empty,
-            DisplaySymbolArabic = Optional(_symbolArabic),
-            UcumCode = Optional(_ucum),
-            FactorToSi = OptionalDecimal(_factor),
-            SiUnitCode = Optional(_siUnit),
-
-            IsActive = _active.Checked
-        };
+        Request = CatalogEditorRules.ToRequest(_kind, form, _id);
 
         DialogResult = DialogResult.OK;
         Close();

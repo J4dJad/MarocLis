@@ -1,4 +1,3 @@
-using System.Globalization;
 using MarocLIS.Application.Billing;
 using MarocLIS.Application.Input;
 using MarocLIS.Domain.Catalog;
@@ -16,10 +15,10 @@ internal static class EditorValues
     /// decimal(18,2) columns, where a longer figure was refused by the database with an unexpected
     /// error and the form lost with it.
     /// </summary>
-    public const int AmountMaxLength = 15;
+    public const int AmountMaxLength = TypedNumber.AmountMaxLength;
 
     /// <summary>The same for the decimal(18,6) columns of the catalogue (limits, volumes, coefficients): twelve figures.</summary>
-    public const int MeasureMaxLength = 12;
+    public const int MeasureMaxLength = TypedNumber.MeasureMaxLength;
 
     /// <summary>
     /// The first magnitude no number box takes: a decimal(18,6) column holds twelve figures before
@@ -85,15 +84,8 @@ internal static class EditorValues
     /// further significant ones kept so opening and saving does not round the stored value, and no
     /// thousands separator.
     /// </summary>
-    public static string FormatForEditing(decimal value, int decimals, IFormatProvider? provider = null)
-    {
-        var fixedPart = new string('0', Math.Max(0, decimals));
-        var format = "0." + fixedPart + "##########";
-
-        // Without the direction mark the Arabic culture puts before the minus sign: the boxes are
-        // laid out left to right, and the text must read back as the value it shows.
-        return WithoutDirectionMarks(value.ToString(format, provider ?? CultureInfo.CurrentCulture));
-    }
+    public static string FormatForEditing(decimal value, int decimals, IFormatProvider? provider = null) =>
+        TypedNumber.ForEditing(value, decimals, provider);
 
     /// <summary>
     /// The invisible Unicode characters that only steer the display direction — LRM, RLM, the

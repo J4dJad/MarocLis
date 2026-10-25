@@ -656,17 +656,11 @@ public sealed partial class CatalogView : LocalizedView
         }
     }
 
-    /// <summary>
-    /// An analysis somebody has to come back to: one that cannot be ordered (no tariff, no active
-    /// parameter) or has age bands whose unit is still to confirm — the warnings of the list.
-    /// </summary>
-    private static bool NeedsAttention(AnalysisRow row) => CatalogRules.NeedsAttention(row);
-
     /// <summary>The two chips above the list, with the number of analyses each one shows.</summary>
     private void RefreshChips()
     {
         _allChip.Text = $"{T("AdminA.ChipAll")} · {_analysisRows.Count}";
-        _toCompleteChip.Text = $"{T("AdminA.ChipToComplete")} · {_analysisRows.Count(NeedsAttention)}";
+        _toCompleteChip.Text = $"{T("AdminA.ChipToComplete")} · {_analysisRows.Count(CatalogRules.NeedsAttention)}";
         _allChip.Selected = !_onlyToComplete;
         _toCompleteChip.Selected = _onlyToComplete;
     }
@@ -704,33 +698,18 @@ public sealed partial class CatalogView : LocalizedView
         _analyses.SuspendLayout();
         _analyses.Rows.Clear();
 
-        foreach (var row in _onlyToComplete ? _analysisRows.Where(NeedsAttention) : _analysisRows)
+        foreach (var row in CatalogScreenRules.Shown(_analysisRows, _onlyToComplete))
         {
-            var flags = new List<string>(4);
-
-            if (!row.IsActive) flags.Add(T("Catalog.Inactive"));
-            if (row.ActiveParameterCount == 0) flags.Add(T("Catalog.NoParameter"));
-            if (row.TariffCount == 0) flags.Add(T("Catalog.NoTariff"));
-            if (row.IsAccredited) flags.Add("ISO");
-            if (row.IsSubcontracted) flags.Add(T("Catalog.Subcontracted"));
-            if (row.ConsentRequirement != ConsentRequirement.None) flags.Add(T("Consent.Required"));
-            // Age bands saved before their unit was kept, which may be read in months although
-            // they were typed in days: listed here so the biologist can find and re-save them.
-            if (row.UnconfirmedAgeBandCount > 0)
-                flags.Add($"{T("Catalog.AgeUnitToConfirm")} ({row.UnconfirmedAgeBandCount})");
-
             var index = _analyses.Rows.Add(
                 row.Code,
                 row.NationalActCode ?? string.Empty,
                 row.Name.For(language),
                 row.DepartmentCode,
                 row.SpecimenTypeName.For(language),
-                row.ActiveParameterCount == row.ParameterCount
-                    ? row.ParameterCount.ToString()
-                    : $"{row.ActiveParameterCount}/{row.ParameterCount}",
+                CatalogScreenRules.ParameterCount(row),
                 row.CurrentPrice is { } price ? Money.Of(price).Format(language) : "—",
                 $"{row.RoutineTurnaroundHours} h",
-                string.Join(" · ", flags));
+                string.Join(" · ", CatalogScreenRules.Flags(row, T)));
 
             _analyses.Rows[index].Tag = row;
         }
@@ -741,14 +720,7 @@ public sealed partial class CatalogView : LocalizedView
 
         RefreshChips();
 
-        _analysisHeading.Text =
-            $"{T("Catalog.Analyses")} — {_analysisRows.Count}"
-            + (_analysisRows.Count(a => !a.IsOrderable) is var blocked and > 0
-                ? $" · {blocked} {T("Catalog.NotOrderable").ToLowerInvariant()}"
-                : string.Empty)
-            + (_analysisRows.Count(a => a.UnconfirmedAgeBandCount > 0) is var unconfirmed and > 0
-                ? $" · {unconfirmed} {T("Catalog.AgeUnitToConfirm").ToLowerInvariant()}"
-                : string.Empty);
+        _analysisHeading.Text = CatalogScreenRules.Heading(_analysisRows, T);
     }
 
     private async Task OnAnalysisSelectedAsync(CancellationToken ct = default)
@@ -786,24 +758,15 @@ public sealed partial class CatalogView : LocalizedView
 
         foreach (var row in _parameterRows)
         {
-            var flags = new List<string>(4);
-
-            if (!row.IsActive) flags.Add(T("Catalog.Inactive"));
-            if (row.IsCalculated) flags.Add("ƒ");
-            if (row.IsInternalOnly) flags.Add(T("Catalog.InternalOnly"));
-            if (row.IsUnusable) flags.Add(T("Catalog.Unusable"));
-            if (row.UnconfirmedAgeBandCount > 0) flags.Add(T("Catalog.AgeUnitToConfirm"));
-            if (row.HasResults) flags.Add($"{row.ResultCount}");
-
             var index = _parameters.Rows.Add(
                 new string(' ', row.IndentLevel * 2) + row.Code,
                 row.Name.For(language),
                 T($"ResultValueType.{row.ValueType}"),
                 row.UnitSymbol ?? string.Empty,
-                Interval(row.MeasuringRangeLow, row.MeasuringRangeHigh),
-                Interval(row.CriticalLow, row.CriticalHigh),
-                row.DeltaCheckPercent is { } delta ? $"{delta:0.#} %" : string.Empty,
-                string.Join(" · ", flags));
+                CatalogScreenRules.Interval(row.MeasuringRangeLow, row.MeasuringRangeHigh),
+                CatalogScreenRules.Interval(row.CriticalLow, row.CriticalHigh),
+                CatalogScreenRules.DeltaCheck(row),
+                string.Join(" · ", CatalogScreenRules.Flags(row, T)));
 
             _parameters.Rows[index].Tag = row;
         }
@@ -846,22 +809,13 @@ public sealed partial class CatalogView : LocalizedView
 
         foreach (var row in _rangeRows)
         {
-            var flags = new List<string>(3);
-
-            if (!row.IsInForce(today)) flags.Add(T("Catalog.Superseded"));
-            if (row.NeedsReview(today)) flags.Add(T("Catalog.ReviewDue"));
-            if (row.HasUnconfirmedAgeUnit) flags.Add(T("Catalog.AgeUnitToConfirm"));
-            if (row.IsDecisionThreshold) flags.Add(T("Catalog.DecisionThreshold"));
-
             var index = _ranges.Rows.Add(
-                DescribePopulation(row, language),
-                FormatInterval(row, decimals),
-                row.ValidUntil is { } until
-                    ? $"{row.ValidFrom:dd/MM/yy} → {until:dd/MM/yy}"
-                    : $"{row.ValidFrom:dd/MM/yy} →",
+                CatalogScreenRules.DescribePopulation(row, T),
+                CatalogScreenRules.FormatInterval(row, decimals, language),
+                CatalogScreenRules.Validity(row.ValidFrom, row.ValidUntil),
                 row.LastReviewedOn?.ToString("dd/MM/yy") ?? "—",
                 row.Source ?? string.Empty,
-                string.Join(" · ", flags));
+                string.Join(" · ", CatalogScreenRules.Flags(row, today, T)));
 
             _ranges.Rows[index].Tag = row;
         }
@@ -901,9 +855,7 @@ public sealed partial class CatalogView : LocalizedView
         {
             var index = _tariffs.Rows.Add(
                 row.PayerName ?? T("Catalog.DefaultPriceList"),
-                row.ValidUntil is { } until
-                    ? $"{row.ValidFrom:dd/MM/yy} → {until:dd/MM/yy}"
-                    : $"{row.ValidFrom:dd/MM/yy} →",
+                CatalogScreenRules.Validity(row.ValidFrom, row.ValidUntil),
                 row.LetterKey,
                 row.Coefficient.ToString("0.##"),
                 Money.Of(row.NationalReferenceBase).Format(language),
@@ -911,13 +863,13 @@ public sealed partial class CatalogView : LocalizedView
                 row.ExcessOverReference > 0m
                     ? Money.Of(row.ExcessOverReference).Format(language)
                     : string.Empty,
-                row.IsVatExempt ? T("Billing.VatExempt") : $"{row.VatRate:P0}");
+                CatalogScreenRules.Vat(row, T));
 
             var grid = _tariffs.Rows[index];
             grid.Tag = row;
 
             // In force is the one that matters; the history is grey behind it.
-            if (!row.IsInForce(today))
+            if (CatalogScreenRules.Tone(row, today) == CatalogTone.Muted)
                 grid.DefaultCellStyle.ForeColor = UiTheme.TextMuted;
         }
 
@@ -949,23 +901,13 @@ public sealed partial class CatalogView : LocalizedView
 
         foreach (var row in _panelRows)
         {
-            var flags = new List<string>(4);
-
-            if (!row.IsActive) flags.Add(T("Catalog.Inactive"));
-            if (row.InactiveMemberCount > 0)
-                flags.Add(T("Catalog.PanelHasInactiveMember", row.InactiveMemberCount));
-            if (row.PackageAboveComponents) flags.Add(T("Catalog.PackageAboveComponents"));
-            if (!row.ItemizeOnInvoice) flags.Add(T("Catalog.NotItemized"));
-
             var index = _panels.Rows.Add(
                 row.Code,
                 row.Name.For(language),
-                row.OptionalCount > 0
-                    ? $"{row.MemberCount - row.OptionalCount}+{row.OptionalCount}"
-                    : row.MemberCount.ToString(),
+                CatalogScreenRules.MemberCount(row),
                 Money.Of(row.ComponentTotal).Format(language),
                 row.PackagePrice is { } package ? Money.Of(package).Format(language) : "—",
-                string.Join(" · ", flags));
+                string.Join(" · ", CatalogScreenRules.Flags(row, T)));
 
             _panels.Rows[index].Tag = row;
         }
@@ -987,16 +929,11 @@ public sealed partial class CatalogView : LocalizedView
         {
             foreach (var member in panel.Members)
             {
-                var flags = new List<string>(2);
-
-                if (member.IsOptional) flags.Add(T("Catalog.Optional"));
-                if (!member.IsAnalysisActive) flags.Add(T("Catalog.Inactive"));
-
                 var index = _panelMembers.Rows.Add(
                     member.Code,
                     member.Name.For(language),
                     Money.Of(member.Price).Format(language),
-                    string.Join(" · ", flags));
+                    string.Join(" · ", CatalogScreenRules.Flags(member, T)));
 
                 _panelMembers.Rows[index].Tag = member;
             }
@@ -1024,19 +961,13 @@ public sealed partial class CatalogView : LocalizedView
 
         foreach (var row in result.Value)
         {
-            var flags = new List<string>(3);
-
-            if (!row.IsActive) flags.Add(T("Catalog.Inactive"));
-            if (row.CanNeverFire) flags.Add(T("Catalog.RuleCanNeverFire"));
-            if (!row.IsBillable) flags.Add(T("Catalog.NotBilled"));
-
             var index = _reflex.Rows.Add(
                 $"{row.TriggerAnalysisCode}/{row.TriggerParameterCode}",
-                DescribeCondition(row),
+                CatalogScreenRules.DescribeCondition(row),
                 row.AnalysisToAddCode,
                 row.Description.For(language),
-                row.AddAutomatically ? T("Catalog.Automatic") : T("Catalog.NeedsConfirmation"),
-                string.Join(" · ", flags));
+                T(CatalogScreenRules.ModeKey(row)),
+                string.Join(" · ", CatalogScreenRules.Flags(row, T)));
 
             _reflex.Rows[index].Tag = row;
         }
@@ -1064,42 +995,12 @@ public sealed partial class CatalogView : LocalizedView
 
         foreach (var row in result.Value)
         {
-            var flags = new List<string>(3);
-            if (!row.IsActive) flags.Add(T("Catalog.Inactive"));
-
-            var detail = kind switch
-            {
-                NomenclatureKind.Department =>
-                    (row.IsInAccreditationScope ? "ISO 15189" : string.Empty)
-                    + (row.SupervisorName is { Length: > 0 } supervisor ? $" · {supervisor}" : string.Empty),
-
-                NomenclatureKind.SpecimenType =>
-                    (row.FastingHours > 0 ? $"{T("Order.Fasted")} {row.FastingHours} h" : string.Empty)
-                    + (row.CollectionInstructions is { } instructions
-                        ? $" · {instructions.For(language)}"
-                        : string.Empty),
-
-                NomenclatureKind.ContainerType =>
-                    $"{T("Sample.DrawOrder")} {row.DrawOrder}"
-                    + (row.Additive is { } additive ? $" · {additive.For(language)}" : string.Empty)
-                    + (row.NominalVolumeMl is { } volume ? $" · {volume:0.#} mL" : string.Empty)
-                    + (row.RequiresProtectionFromLight ? $" · {T("Collection.ProtectFromLight")}" : string.Empty)
-                    + (row.RequiresIceTransport ? $" · {T("Collection.TransportOnIce")}" : string.Empty),
-
-                _ => row.UcumCode is { Length: > 0 } ucum ? $"UCUM {ucum}" : string.Empty
-            };
-
-            if (kind == NomenclatureKind.ContainerType && !IsRenderableColour(row.CapColourHex))
-                flags.Add(T("Catalog.InvalidColour"));
-
             var index = _nomenclature.Rows.Add(
                 row.Code,
-                kind == NomenclatureKind.MeasurementUnit
-                    ? row.DisplaySymbol
-                    : row.Name.For(language),
-                detail.Trim(' ', '·'),
+                CatalogScreenRules.Name(kind, row, language),
+                CatalogScreenRules.Detail(kind, row, language, T),
                 row.UsageCount == 0 ? string.Empty : row.UsageCount.ToString(),
-                string.Join(" · ", flags));
+                string.Join(" · ", CatalogScreenRules.Flags(kind, row, T)));
 
             _nomenclature.Rows[index].Tag = row;
         }
@@ -1117,28 +1018,13 @@ public sealed partial class CatalogView : LocalizedView
     private void OnAnalysisFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _analyses.Rows.Count) return;
-        if (_analyses.Rows[e.RowIndex].Tag is not AnalysisRow row) return;
-
-        if (!row.IsActive) e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        else if (!row.IsOrderable)
-        {
-            // Active but not orderable: it appears in the picker and fails at the counter.
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
-        }
+        if (_analyses.Rows[e.RowIndex].Tag is AnalysisRow row) PaintRow(e.CellStyle!, CatalogScreenRules.Tone(row));
     }
 
     private void OnParameterFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _parameters.Rows.Count) return;
-        if (_parameters.Rows[e.RowIndex].Tag is not ParameterRow row) return;
-
-        if (!row.IsActive) e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        else if (row.IsUnusable)
-        {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
-        }
+        if (_parameters.Rows[e.RowIndex].Tag is ParameterRow row) PaintRow(e.CellStyle!, CatalogScreenRules.Tone(row));
     }
 
     private void OnRangeFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -1146,40 +1032,41 @@ public sealed partial class CatalogView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _ranges.Rows.Count) return;
         if (_ranges.Rows[e.RowIndex].Tag is not ReferenceRangeRow row) return;
 
-        if (!row.IsInForce(_clock.Today)) e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        else if (row.HasUnconfirmedAgeUnit)
-        {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
-        }
-        else if (row.NeedsReview(_clock.Today)) e.CellStyle!.ForeColor = UiTheme.Abnormal;
+        // A review due is said in the warning's colour on an otherwise plain row; the age unit to
+        // confirm fills it.
+        var tone = CatalogScreenRules.Tone(row, _clock.Today);
+        if (tone == CatalogTone.Abnormal && !row.HasUnconfirmedAgeUnit) e.CellStyle!.ForeColor = UiTheme.Abnormal;
+        else PaintRow(e.CellStyle!, tone);
     }
 
     private void OnReflexFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _reflex.Rows.Count) return;
-        if (_reflex.Rows[e.RowIndex].Tag is not ReflexRuleRow row) return;
-
-        if (!row.IsActive) e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        else if (row.CanNeverFire)
-        {
-            // Active and impossible: the worst of the three states, because somebody is relying on
-            // a confirmation that will never be ordered.
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
+        if (_reflex.Rows[e.RowIndex].Tag is ReflexRuleRow row) PaintRow(e.CellStyle!, CatalogScreenRules.Tone(row));
     }
 
     private void OnPanelFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _panels.Rows.Count) return;
-        if (_panels.Rows[e.RowIndex].Tag is not PanelRow row) return;
+        if (_panels.Rows[e.RowIndex].Tag is PanelRow row) PaintRow(e.CellStyle!, CatalogScreenRules.Tone(row));
+    }
 
-        if (!row.IsActive) e.CellStyle!.ForeColor = UiTheme.TextMuted;
-        else if (row.InactiveMemberCount > 0)
+    /// <summary>The colours of a tone the catalogue rules gave a row.</summary>
+    internal static void PaintRow(DataGridViewCellStyle style, CatalogTone tone)
+    {
+        switch (tone)
         {
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
+            case CatalogTone.Muted:
+                style.ForeColor = UiTheme.TextMuted;
+                break;
+            case CatalogTone.Abnormal:
+                style.BackColor = UiTheme.AbnormalBackground;
+                style.ForeColor = UiTheme.Abnormal;
+                break;
+            case CatalogTone.Critical:
+                style.BackColor = UiTheme.CriticalBackground;
+                style.ForeColor = UiTheme.Critical;
+                break;
         }
     }
 
@@ -1220,31 +1107,33 @@ public sealed partial class CatalogView : LocalizedView
 
     private void RefreshActions()
     {
-        var manage = _currentUser.Has(Permissions.Catalog.Manage);
-        var ranges = _currentUser.Has(Permissions.Catalog.ManageReferenceRanges);
-        var tariffs = _currentUser.Has(Permissions.Billing.ManageTariffs);
+        var actions = CatalogScreenRules.Actions(_currentUser, new CatalogSelection(
+            Analysis: SelectedAnalysis is not null, Parameter: SelectedParameter is not null,
+            Range: SelectedRange is not null, Tariff: SelectedTariff is not null,
+            Panel: SelectedPanel is not null, Reflex: SelectedReflex is not null,
+            Nomenclature: SelectedNomenclature is not null));
 
-        _newAnalysis.Enabled = manage;
-        _editAnalysis.Enabled = manage && SelectedAnalysis is not null;
+        _newAnalysis.Enabled = actions.NewAnalysis;
+        _editAnalysis.Enabled = actions.EditAnalysis;
 
-        _newParameter.Enabled = manage && SelectedAnalysis is not null;
-        _editParameter.Enabled = manage && SelectedParameter is not null;
+        _newParameter.Enabled = actions.NewParameter;
+        _editParameter.Enabled = actions.EditParameter;
 
-        _newRange.Enabled = ranges && SelectedParameter is not null;
-        _editRange.Enabled = ranges && SelectedRange is not null;
-        _reviewRange.Enabled = ranges && SelectedRange is not null;
+        _newRange.Enabled = actions.NewRange;
+        _editRange.Enabled = actions.EditRange;
+        _reviewRange.Enabled = actions.ReviewRange;
 
-        _newTariff.Enabled = tariffs && SelectedAnalysis is not null;
-        _editTariff.Enabled = tariffs && SelectedAnalysis is not null && SelectedTariff is not null;
+        _newTariff.Enabled = actions.NewTariff;
+        _editTariff.Enabled = actions.EditTariff;
 
-        _newPanel.Enabled = manage;
-        _editPanel.Enabled = manage && SelectedPanel is not null;
+        _newPanel.Enabled = actions.NewPanel;
+        _editPanel.Enabled = actions.EditPanel;
 
-        _newReflex.Enabled = manage;
-        _editReflex.Enabled = manage && SelectedReflex is not null;
+        _newReflex.Enabled = actions.NewReflex;
+        _editReflex.Enabled = actions.EditReflex;
 
-        _newNomenclature.Enabled = manage;
-        _editNomenclature.Enabled = manage && SelectedNomenclature is not null;
+        _newNomenclature.Enabled = actions.NewNomenclature;
+        _editNomenclature.Enabled = actions.EditNomenclature;
 
         RefreshNationalActActions();
     }
@@ -1278,8 +1167,7 @@ public sealed partial class CatalogView : LocalizedView
             var tariffs = await _catalog.GetTariffsAsync(existing.Id);
             if (tariffs.IsFailure) { _dialogs.ShowFailure(tariffs); return; }
 
-            labTariff = tariffs.Value.Where(t => t.PayerId is null && t.IsInForce(today))
-                                     .MaxBy(t => t.ValidFrom);
+            labTariff = CatalogEditorRules.LabTariff(tariffs.Value, today);
         }
 
         if (labTariff is not { LetterKeyValue: > 0m })
@@ -1306,12 +1194,12 @@ public sealed partial class CatalogView : LocalizedView
 
         if (dialog.PriceRequest is { } price)
         {
-            var request = price with { AnalysisTestId = existing?.Id ?? result.Value, ValidFrom = today };
-
             // A price set earlier today is corrected in place; otherwise the new price starts today
             // and the previous one closes yesterday, so orders already billed keep their price.
-            Result priced = labTariff is not null && labTariff.ValidFrom == today
-                ? await _catalog.UpdateTariffAsync(labTariff.Id, request)
+            var (request, correctInPlace) = CatalogEditorRules.PriceRevision(price, existing?.Id ?? result.Value, labTariff, today);
+
+            Result priced = correctInPlace
+                ? await _catalog.UpdateTariffAsync(labTariff!.Id, request)
                 : await _catalog.AddTariffAsync(request);
 
             if (priced.IsFailure)
@@ -1387,7 +1275,7 @@ public sealed partial class CatalogView : LocalizedView
 
         // A supersession returns a different id from the one edited, which is the operator's cue
         // that the change opened a revision rather than rewriting the interval.
-        var superseded = existing is not null && result.Value != existing.Id;
+        var superseded = CatalogEditorRules.Superseded(existing, result.Value);
 
         _status.ForeColor = superseded ? UiTheme.Abnormal : UiTheme.Normal;
         _status.Text = superseded ? T("Catalog.RangeSuperseded") : T("Message.Saved");
@@ -1463,8 +1351,7 @@ public sealed partial class CatalogView : LocalizedView
 
         if (!create && existing is null) return;
 
-        // Only orderable analyses are offered as members: a panel built on an analysis with no
-        // tariff or no parameter fails at registration, on a component the operator did not pick.
+        // Only orderable analyses are offered as members (CatalogEditorRules.Candidates).
         var candidates = await _catalog.GetAnalysesAsync(includeInactive: false);
 
         if (candidates.IsFailure) { _dialogs.ShowFailure(candidates); return; }
@@ -1538,97 +1425,6 @@ public sealed partial class CatalogView : LocalizedView
         _status.ForeColor = UiTheme.Normal;
         _status.Text = $"{code} — {T("Message.Saved")}";
     }
-
-    // ---- Presentation helpers ------------------------------------------------------------------
-
-    private static string Interval(decimal? low, decimal? high) => (low, high) switch
-    {
-        ({ } l, { } h) => $"{l:0.###} – {h:0.###}",
-        (null, { } h) => $"≤ {h:0.###}",
-        ({ } l, null) => $"≥ {l:0.###}",
-        _ => string.Empty
-    };
-
-    private string FormatInterval(ReferenceRangeRow row, int decimals)
-    {
-        if (row.DisplayText is { } text && text.For(Localizer.CurrentLanguage).Length > 0)
-            return text.For(Localizer.CurrentLanguage);
-
-        if (row.ExpectedCodedValue is { Length: > 0 } coded) return coded;
-
-        var format = "N" + decimals;
-
-        return (row.LowerLimit, row.UpperLimit) switch
-        {
-            ({ } low, { } high) => $"{low.ToString(format)} - {high.ToString(format)}",
-            (null, { } high) => $"< {high.ToString(format)}",
-            ({ } low, null) => $"> {low.ToString(format)}",
-            _ => "—"
-        };
-    }
-
-    /// <summary>
-    /// Who the interval applies to, in the order that decides which of two overlapping intervals
-    /// wins — trimester, pregnancy, instrument, sex, age. The same order as the resolver's.
-    /// </summary>
-    private string DescribePopulation(ReferenceRangeRow row, AppLanguage language)
-    {
-        var parts = new List<string>(5);
-
-        if (row.PregnancyTrimester is { } trimester)
-            parts.Add(T("Catalog.Trimester", trimester));
-        else if (row.AppliesToPregnancy is { } pregnant)
-            parts.Add(pregnant ? T("Patient.Pregnant") : T("Catalog.NotPregnant"));
-
-        if (row.InstrumentName is { Length: > 0 } instrument) parts.Add(instrument);
-
-        if (row.AppliesToGender != Domain.Patients.Gender.Unknown)
-            parts.Add(T($"Gender.{row.AppliesToGender}"));
-
-        if (row.AgeFromDays is not null || row.AgeToDays is not null)
-            parts.Add(DescribeAgeBand(row.AgeFromDays, row.AgeToDays));
-
-        return parts.Count == 0 ? T("Catalog.AllPatients") : string.Join(" · ", parts);
-    }
-
-    /// <summary>
-    /// An age band in the unit a human would use for it. Neonatal intervals are written in days and
-    /// adult ones in years, and printing "0 – 10950 jours" for an adult band is how a reviewer
-    /// stops reading the column.
-    /// </summary>
-    private string DescribeAgeBand(int? fromDays, int? toDays)
-    {
-        var from = fromDays is { } f ? Age(f) : null;
-        var to = toDays is { } t ? Age(t) : null;
-
-        return (from, to) switch
-        {
-            ({ } a, { } b) => $"{a} – {b}",
-            (null, { } b) => $"< {b}",
-            ({ } a, null) => $"≥ {a}",
-            _ => string.Empty
-        };
-
-        string Age(int days) => days switch
-        {
-            < 31 => $"{days} {T("Catalog.Days")}",
-            < 731 => $"{days / 30} {T("Catalog.Months")}",
-            _ => $"{days / 365} {T("Catalog.Years")}"
-        };
-    }
-
-    private static string DescribeCondition(ReflexRuleRow row) => row.Condition switch
-    {
-        ReflexCondition.GreaterThan => $"> {row.Threshold:0.###}",
-        ReflexCondition.LessThan => $"< {row.Threshold:0.###}",
-        ReflexCondition.Between => $"{row.Threshold:0.###} – {row.ThresholdUpper:0.###}",
-        ReflexCondition.Outside => $"∉ [{row.Threshold:0.###} ; {row.ThresholdUpper:0.###}]",
-        ReflexCondition.EqualsCoded => $"= {row.TriggerCodedValue}",
-        _ => string.Empty
-    };
-
-    private static bool IsRenderableColour(string? value) =>
-        value is { Length: 7 } colour && colour[0] == '#' && colour[1..].All(Uri.IsHexDigit);
 }
 
 /// <summary>A nullable-Guid choice for a combo box — "all departments" needs the null.</summary>
