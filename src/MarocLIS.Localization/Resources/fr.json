@@ -1,5 +1,6 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Calibration_ValidUntilPast": "La date de validité de l'étalonnage ne peut pas être antérieure à aujourd'hui.",
   "Po_SupplierRequired": "Choisissez le fournisseur de la commande.",
   "Po_ItemRequired": "Choisissez l'article à commander.",
   "Interface_IntegraNoResult": "Bloc de résultats COBAS INTEGRA sans résultat.",

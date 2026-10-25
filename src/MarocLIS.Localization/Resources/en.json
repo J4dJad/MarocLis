@@ -1,5 +1,6 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Calibration_ValidUntilPast": "The calibration's validity date cannot be earlier than today.",
   "Po_SupplierRequired": "Choose the supplier of the order.",
   "Po_ItemRequired": "Choose the item to order.",
   "Interface_IntegraNoResult": "COBAS INTEGRA result block with no result.",

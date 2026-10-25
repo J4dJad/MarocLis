@@ -105,10 +105,7 @@ public sealed class InstrumentContractView : LocalizedView
     }
 
     private static StockPill? AlertPill(InstrumentContractRow row) =>
-        row.Commitment.AtRisk ? StockPill.Critical
-        : row.IsEndingSoon || row.DelaysExceeded > 0 ? StockPill.Warning
-        : !row.IsActive || row.DaysToEnd < 0 ? StockPill.Waiting
-        : null;
+        InstrumentContractScreenRules.AlertTone(row) is { } tone ? StockPill.Of(tone) : null;
 
     private static void AddColumn(DataGridView grid, string name, int weight, Font? font = null,
                                   DataGridViewContentAlignment align = DataGridViewContentAlignment.MiddleLeft) =>
@@ -186,8 +183,7 @@ public sealed class InstrumentContractView : LocalizedView
         _attach.Text = T("Contracts.AttachFile");
         _openFile.Text = T("Contracts.OpenFile");
         _times.Text = T("Contracts.InterventionTimes");
-        _rule.Text = T("Contracts.AlertRule", (int)(ContractCommitment.RiskThreshold * 100m),
-                       InstrumentContract.EndingSoonDays);
+        _rule.Text = InstrumentContractScreenRules.AlertRule(T);
 
         _grid.Column("reference").HeaderText = T("Contracts.Reference");
         _grid.Column("supplier").HeaderText = T("Inventory.Supplier");
@@ -226,10 +222,9 @@ public sealed class InstrumentContractView : LocalizedView
     private InstrumentContractRow? SelectedContract => _grid.CurrentRow?.Tag as InstrumentContractRow;
     private ContractInterventionRow? SelectedIntervention => _interventions.CurrentRow?.Tag as ContractInterventionRow;
 
-    private static string Number(decimal value, CommitmentBasis basis) =>
-        ContractCommitment.CountsPurchases(basis)
-            ? value.ToString("N2", CultureInfo.CurrentCulture)
-            : value.ToString("N0", CultureInfo.CurrentCulture);
+    /// <summary>Tests counted whole, an amount bought with two decimals (InstrumentContractScreenRules.Figure).</summary>
+    private static string Number(decimal value, CommitmentStatus commitment) =>
+        InstrumentContractScreenRules.Figure(value, commitment, v => v.ToString("N2", CultureInfo.CurrentCulture));
 
     private async Task LoadAsync(Guid? keep = null, CancellationToken ct = default)
     {
@@ -261,23 +256,22 @@ public sealed class InstrumentContractView : LocalizedView
         foreach (var row in _rows)
         {
             var c = row.Commitment;
-            var hasCommitment = c.Basis != CommitmentBasis.None;
 
             var index = _grid.Rows.Add(
                 row.Reference,
                 row.SupplierName,
                 T($"InstrumentContractKind.{row.Kind}"),
                 row.Instruments,
-                row.DaysToEnd >= 0 ? $"{row.EndDate:dd/MM/yy} ({row.DaysToEnd} {T("Quotes.DaysShort")})" : row.EndDate.ToString("dd/MM/yy"),
+                InstrumentContractScreenRules.End(row, T),
                 T($"CommitmentBasis.{c.Basis}"),
-                hasCommitment ? $"{c.PeriodStart:dd/MM/yy}–{c.PeriodEnd:dd/MM/yy}" : string.Empty,
-                hasCommitment ? Number(c.Committed, c.Basis) : string.Empty,
-                hasCommitment ? Number(c.ExpectedToDate, c.Basis) : string.Empty,
-                hasCommitment ? Number(c.Consumed, c.Basis) : string.Empty,
-                hasCommitment ? Number(c.Projected, c.Basis) : string.Empty,
-                c.ProjectedRatio is { } ratio && hasCommitment ? $"{ratio * 100m:0} %" : string.Empty,
-                AlertText(row),
-                MaintenanceText(row));
+                InstrumentContractScreenRules.Period(c),
+                Number(c.Committed, c),
+                Number(c.ExpectedToDate, c),
+                Number(c.Consumed, c),
+                Number(c.Projected, c),
+                InstrumentContractScreenRules.Ratio(c, CultureInfo.CurrentCulture),
+                InstrumentContractScreenRules.Alerts(row, T),
+                InstrumentContractScreenRules.Maintenance(row, T, CultureInfo.CurrentCulture));
 
             _grid.Rows[index].Tag = row;
             if (row.Id == keep) _grid.CurrentCell = _grid.Rows[index].Cells[0];
@@ -297,55 +291,31 @@ public sealed class InstrumentContractView : LocalizedView
         RefreshButtons();
     }
 
-    private string AlertText(InstrumentContractRow row)
-    {
-        var alerts = new List<string>();
-        if (!row.IsActive) alerts.Add(T("Contracts.Inactive"));
-        else if (row.DaysToEnd < 0) alerts.Add(T("Contracts.Expired"));
-        if (row.Commitment.AtRisk) alerts.Add(T("Contracts.AtRisk"));
-        if (row.IsEndingSoon) alerts.Add(T("Contracts.EndingSoon"));
-        if (row.DelaysExceeded > 0) alerts.Add(T("Contracts.DelaysExceeded", row.DelaysExceeded));
-        return string.Join(" · ", alerts);
-    }
-
-    private string MaintenanceText(InstrumentContractRow row) =>
-        row.Interventions == 0
-            ? string.Empty
-            : T("Contracts.MaintenanceSummary", row.Interventions,
-                row.DowntimeHours.ToString("0.#", CultureInfo.CurrentCulture));
-
-    private void RenderHeading()
-    {
-        var atRisk = _rows.Count(r => r.Commitment.AtRisk);
-        var ending = _rows.Count(r => r.IsEndingSoon);
-
-        var text = T("StocksUi.Contracts", _rows.Count);
-        if (atRisk > 0) text += $" · {T("Contracts.AtRisk")} {atRisk}";
-        if (ending > 0) text += $" · {T("Contracts.EndingSoon")} {ending}";
-        _count.Text = text;
-    }
+    private void RenderHeading() => _count.Text = InstrumentContractScreenRules.Count(_rows, T);
 
     private void OnContractFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not InstrumentContractRow row) return;
 
-        if (row.Commitment.AtRisk)
+        var column = _grid.Columns[e.ColumnIndex].Name;
+        switch (InstrumentContractScreenRules.RowInk(row))
         {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            if (_grid.Columns[e.ColumnIndex].Name is "alert" or "ratio") e.CellStyle.ForeColor = UiTheme.Critical;
+            case StockInk.Critical:
+                e.CellStyle!.BackColor = UiTheme.CriticalBackground;
+                if (column is "alert" or "ratio" && InstrumentContractScreenRules.RatioInk(row) == StockInk.CriticalBold)
+                    e.CellStyle.ForeColor = UiTheme.Critical;
+                return;
+
+            case StockInk.Muted:
+                e.CellStyle!.ForeColor = UiTheme.TextMuted;
+                return;
         }
-        else if (row.IsEndingSoon || row.DelaysExceeded > 0)
+
+        // A reminder, not an emergency: the alert pill and the end date carry it, not the row.
+        if (column == "end" && InstrumentContractScreenRules.EndInk(row) == StockInk.AbnormalBold)
         {
-            // A reminder, not an emergency: the alert pill and the end date carry it, not the row.
-            if (row.IsEndingSoon && _grid.Columns[e.ColumnIndex].Name == "end")
-            {
-                e.CellStyle!.ForeColor = UiTheme.Abnormal;
-                e.CellStyle.Font = UiTheme.MonospaceBold;
-            }
-        }
-        else if (!row.IsActive || row.DaysToEnd < 0)
-        {
-            e.CellStyle!.ForeColor = UiTheme.TextMuted;
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
+            e.CellStyle.Font = UiTheme.MonospaceBold;
         }
     }
 
@@ -354,7 +324,7 @@ public sealed class InstrumentContractView : LocalizedView
         if (e.RowIndex < 0 || _interventions.Rows[e.RowIndex].Tag is not ContractInterventionRow row) return;
 
         // The delay beyond what the contract allows is marked on its own cell, not on the row.
-        if (row.DelayExceeded && _interventions.Columns[e.ColumnIndex].Name == "delay")
+        if (InstrumentContractScreenRules.DelayInk(row) == StockInk.CriticalBold && _interventions.Columns[e.ColumnIndex].Name == "delay")
         {
             e.CellStyle!.ForeColor = UiTheme.Critical;
             e.CellStyle.BackColor = UiTheme.CriticalBackground;
@@ -396,16 +366,7 @@ public sealed class InstrumentContractView : LocalizedView
 
         foreach (var row in _interventionRows)
         {
-            var index = _interventions.Rows.Add(
-                row.PerformedOn.ToString("dd/MM/yy"),
-                row.InstrumentCode,
-                T($"MaintenanceKind.{row.Kind}"),
-                row.Description,
-                row.DowntimeHours?.ToString("0.#", CultureInfo.CurrentCulture) ?? string.Empty,
-                row.RequestedAt?.ToLocalTime().ToString("dd/MM/yy HH:mm") ?? string.Empty,
-                row.ArrivedAt?.ToLocalTime().ToString("dd/MM/yy HH:mm") ?? string.Empty,
-                row.DelayHours?.ToString("0.#", CultureInfo.CurrentCulture) ?? string.Empty,
-                row.Technician ?? string.Empty);
+            var index = _interventions.Rows.Add([.. InstrumentContractScreenRules.InterventionCells(row, T, CultureInfo.CurrentCulture)]);
 
             _interventions.Rows[index].Tag = row;
             if (row.MaintenanceRecordId == keep) _interventions.CurrentCell = _interventions.Rows[index].Cells[0];
@@ -414,11 +375,7 @@ public sealed class InstrumentContractView : LocalizedView
         _interventions.ResumeLayout(performLayout: true);
 
         var contract = SelectedContract;
-        _interventionsCard.Note.Text = contract is null
-            ? string.Empty
-            : contract.MaxInterventionDelayHours is { } max
-                ? $"{contract.Reference} · {T("Contracts.MaxDelayShort", max)}"
-                : contract.Reference;
+        _interventionsCard.Note.Text = InstrumentContractScreenRules.InterventionsNote(contract, T);
 
         RefreshButtons();
     }
@@ -427,12 +384,13 @@ public sealed class InstrumentContractView : LocalizedView
     {
         // Nothing that writes is offered while a write is in flight (see RunActionAsync).
         var idle = !IsBusy;
+        var actions = InstrumentContractScreenRules.Actions(p => PermissionGate.Allows(p), SelectedContract, SelectedIntervention);
 
-        _new.Enabled = idle;
-        _edit.Enabled = idle && SelectedContract is not null;
-        _attach.Enabled = idle && SelectedContract is not null;
-        _openFile.Enabled = idle && SelectedContract is { FileName: not null };
-        _times.Enabled = idle && SelectedIntervention is not null;
+        _new.Enabled = idle && actions.New;
+        _edit.Enabled = idle && actions.Edit;
+        _attach.Enabled = idle && actions.Attach;
+        _openFile.Enabled = idle && actions.OpenFile;
+        _times.Enabled = idle && actions.Times;
     }
 
     /// <summary>
@@ -486,14 +444,14 @@ public sealed class InstrumentContractView : LocalizedView
     {
         if (SelectedContract is not { } contract) return;
 
-        if (contract.FileName is not null
-            && !_dialogs.Confirm(T("Contracts.ReplaceFileQuestion", contract.FileName), _attach.Text))
+        if (InstrumentContractScreenRules.ReplaceQuestion(contract, T) is { } question
+            && !_dialogs.Confirm(question, _attach.Text))
             return;
 
         using var picker = new OpenFileDialog
         {
             Title = UserDialogs.CaptionOf(_attach.Text, _attach.Text),
-            Filter = "PDF, images, Office (*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.docx)|*.pdf;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.docx",
+            Filter = FileFilter,
             CheckFileExists = true
         };
         if (picker.ShowDialog(this) != DialogResult.OK) return;
@@ -502,9 +460,9 @@ public sealed class InstrumentContractView : LocalizedView
         try
         {
             var info = new FileInfo(picker.FileName);
-            if (info.Length > PurchasingDocument.MaximumBytes)
+            if (InstrumentContractScreenRules.CheckFile(info.Name, info.Length) is { } refused)
             {
-                _dialogs.Warn(T("Purchasing_FileTooLarge", PurchasingDocument.MaximumBytes / (1024 * 1024)), _attach.Text);
+                _dialogs.Warn(T(refused.Key, refused.Typed ?? string.Empty), _attach.Text);
                 return;
             }
             content = await File.ReadAllBytesAsync(info.FullName);
@@ -519,6 +477,16 @@ public sealed class InstrumentContractView : LocalizedView
         if (attached.IsFailure) { _dialogs.ShowFailure(attached, _attach.Text); return; }
 
         await LoadAsync(contract.Id);
+    }
+
+    /// <summary>The kinds of file a contract is kept as (InstrumentContractScreenRules.FileExtensions).</summary>
+    private static string FileFilter
+    {
+        get
+        {
+            var pattern = string.Join(";", InstrumentContractScreenRules.FileExtensions.Select(e => "*" + e));
+            return $"PDF, images, Office ({pattern})|{pattern}";
+        }
     }
 
     private async Task OpenFileAsync()
@@ -571,50 +539,42 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
     {
         _id = detail?.Id;
         var language = localizer.CurrentLanguage;
-        var inactive = localizer["Contracts.InactiveSuffix"];
-        string Display(ContractLookup entry) =>
-            entry.IsActive
-                ? $"{entry.Code} — {entry.Name.For(language)}"
-                : $"{entry.Code} — {entry.Name.For(language)} {inactive}";
+        string Display(ContractLookup entry) => InstrumentContractScreenRules.Display(entry, language, localizer.Format);
+        // What the boxes show, new or edited: InstrumentContractScreenRules.Form, as the web's form.
+        var form = InstrumentContractScreenRules.Form(detail, DateOnly.FromDateTime(DateTime.Today), options);
 
         _instrumentOptions = options.Instruments;
         _itemOptions = options.StockItems;
 
-        _reference = TextField("Contracts.Reference", 20, 14, 180, detail?.Reference, latin: true);
+        _reference = TextField("Contracts.Reference", 20, 14, 180, form.Reference, latin: true);
         _supplier = Lookup("Inventory.Supplier", 220, 14, 280,
                            options.Suppliers.Select(s => (s.Id, Display(s))), detail?.SupplierId,
                            allowNone: false);
-        _kind = Choice("Contracts.Kind", 520, 14, 180, detail?.Kind ?? InstrumentContractKind.Placement,
-                       "InstrumentContractKind");
+        _kind = Choice("Contracts.Kind", 520, 14, 180, form.Kind, "InstrumentContractKind");
         // 220 pixels to the edge: in Arabic the caption ran past the window's edge from 740.
-        _active = Check("Contracts.Active", 720, 34, detail?.IsActive ?? true);
+        _active = Check("Contracts.Active", 720, 34, form.IsActive);
 
         Label("Contracts.Start", 20, 68);
         _start = new DateTimePicker
         {
             Bounds = new Rectangle(20, 86, 160, UiTheme.InputHeight),
             Format = DateTimePickerFormat.Short,
-            Value = (detail?.StartDate ?? DateOnly.FromDateTime(DateTime.Today)).ToDateTime(TimeOnly.MinValue)
+            Value = form.Start.ToDateTime(TimeOnly.MinValue)
         };
         Controls.Add(_start);
-        _duration = Number("Contracts.DurationMonths", 200, 68, 120, detail?.DurationMonths ?? 60, 240);
+        _duration = Number("Contracts.DurationMonths", 200, 68, 120, form.DurationMonths, InstrumentContractScreenRules.DurationMax);
 
-        _basis = Choice("Contracts.Basis", 340, 68, 240, detail?.CommitmentBasis ?? CommitmentBasis.TestsPerYear,
-                        "CommitmentBasis");
-        _committed = TextField("Contracts.Committed", 600, 68, 140,
-                               detail?.CommittedVolume is { } v and > 0m ? v.ToString("0.##", CultureInfo.InvariantCulture) : null,
+        _basis = Choice("Contracts.Basis", 340, 68, 240, form.Basis, "CommitmentBasis");
+        _committed = TextField("Contracts.Committed", 600, 68, 140, form.Committed,
                                latin: true, mono: true, right: true);
-        _penaltyAmount = TextField("Contracts.PenaltyAmount", 760, 68, 160,
-                                   detail?.PenaltyAmountMad?.ToString("0.00", CultureInfo.InvariantCulture),
+        _penaltyAmount = TextField("Contracts.PenaltyAmount", 760, 68, 160, form.PenaltyAmount,
                                    latin: true, mono: true, right: true);
 
         // The two short boxes are wider than their figures need: their captions, in Arabic, ran
         // into each other over 140 pixels.
-        _codes = TextField("Contracts.CountedAnalyses", 20, 122, 440, detail?.CountedAnalysisCodesCsv, latin: true, mono: true);
-        _visits = TextField("Contracts.PreventiveVisits", 480, 122, 200,
-                            detail?.PreventiveVisitsPerYear?.ToString(CultureInfo.InvariantCulture), latin: true, mono: true, right: true);
-        _maxDelay = TextField("Contracts.MaxDelayHours", 700, 122, 220,
-                              detail?.MaxInterventionDelayHours?.ToString(CultureInfo.InvariantCulture), latin: true, mono: true, right: true);
+        _codes = TextField("Contracts.CountedAnalyses", 20, 122, 440, form.CountedAnalyses, latin: true, mono: true);
+        _visits = TextField("Contracts.PreventiveVisits", 480, 122, 200, form.PreventiveVisits, latin: true, mono: true, right: true);
+        _maxDelay = TextField("Contracts.MaxDelayHours", 700, 122, 220, form.MaxDelayHours, latin: true, mono: true, right: true);
 
         Label("Contracts.Instruments", 20, 176);
         _instruments.Bounds = new Rectangle(20, 196, 300, 220);
@@ -622,7 +582,7 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
         foreach (var instrument in options.Instruments)
         {
             var index = _instruments.Items.Add(Display(instrument));
-            if (detail?.InstrumentIds.Contains(instrument.Id) == true) _instruments.SetItemChecked(index, true);
+            if (form.InstrumentIds.Contains(instrument.Id)) _instruments.SetItemChecked(index, true);
         }
         Controls.Add(_instruments);
 
@@ -642,29 +602,24 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
         _reagents.Columns.Add(itemColumn);
         _reagents.Columns.Add(new DataGridViewTextBoxColumn { Name = "price", HeaderText = localizer["Contracts.ContractPrice"], FillWeight = 22 });
         _reagents.Columns.Add(new DataGridViewTextBoxColumn { Name = "costPerTest", HeaderText = localizer["Contracts.CostPerTest"], FillWeight = 22 });
-        foreach (var reagent in detail?.Reagents ?? [])
-        {
-            if (options.StockItems.All(i => i.Id != reagent.StockItemId)) continue;
-            _reagents.Rows.Add(reagent.StockItemId,
-                               reagent.ContractPriceMad?.ToString("0.00", CultureInfo.InvariantCulture) ?? string.Empty,
-                               reagent.CostPerTestMad?.ToString("0.00", CultureInfo.InvariantCulture) ?? string.Empty);
-        }
+        foreach (var reagent in form.Reagents)
+            _reagents.Rows.Add(reagent.StockItemId.GetValueOrDefault(), reagent.Price ?? string.Empty, reagent.CostPerTest ?? string.Empty);
         _reagents.DataError += (_, e) => e.ThrowException = false;
         Controls.Add(_reagents);
 
-        _maintenance = TextField("Contracts.MaintenanceTerms", 20, 426, 440, detail?.MaintenanceTerms);
-        _training = TextField("Contracts.TrainingTerms", 480, 426, 440, detail?.TrainingTerms);
-        _exit = TextField("Contracts.ExitConditions", 20, 480, 440, detail?.ExitConditions);
-        _penalty = TextField("Contracts.PenaltyTerms", 480, 480, 440, detail?.PenaltyTerms);
-        _notes = TextField("Field.Notes", 20, 534, 900, detail?.Notes);
+        _maintenance = TextField("Contracts.MaintenanceTerms", 20, 426, 440, form.MaintenanceTerms);
+        _training = TextField("Contracts.TrainingTerms", 480, 426, 440, form.TrainingTerms);
+        _exit = TextField("Contracts.ExitConditions", 20, 480, 440, form.ExitConditions);
+        _penalty = TextField("Contracts.PenaltyTerms", 480, 480, 440, form.PenaltyTerms);
+        _notes = TextField("Field.Notes", 20, 534, 900, form.Notes);
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
-        _reference.MaxLength = 60;
-        _codes.MaxLength = 1000;
-        _maintenance.MaxLength = _exit.MaxLength = _penalty.MaxLength = 2000;
-        _training.MaxLength = _notes.MaxLength = 1000;
+        _reference.MaxLength = InstrumentContractScreenRules.ReferenceMaxLength;
+        _codes.MaxLength = InstrumentContractScreenRules.CodesMaxLength;
+        _maintenance.MaxLength = _exit.MaxLength = _penalty.MaxLength = InstrumentContractScreenRules.LongTermsMaxLength;
+        _training.MaxLength = _notes.MaxLength = InstrumentContractScreenRules.ShortTermsMaxLength;
         // A penalty typed with its currency (« 5000 DH ») was saved as no penalty.
         Numeric(EditorValues.AmountMaxLength, _committed, _penaltyAmount);
-        Numeric(6, _visits, _maxDelay);
+        Numeric(InstrumentContractScreenRules.IntegerMaxLength, _visits, _maxDelay);
 
         Notice(20, 590, 900, 60, "Contracts.EditorNotice");
 
@@ -679,97 +634,69 @@ internal sealed class InstrumentContractDialog : MasterDataEditor
     {
         _reagents.EndEdit();
 
-        if (string.IsNullOrWhiteSpace(_reference.Text))
+        var form = new InstrumentContractForm
         {
-            Dialogs.Warn(Localizer["Contract_ReferenceRequired"], Text);
-            _reference.Focus();
-            return;
-        }
+            Reference = _reference.Text,
+            SupplierId = SelectedId(_supplier),
+            Kind = Selected<InstrumentContractKind>(_kind),
+            IsActive = _active.Checked,
+            Start = DateOnly.FromDateTime(_start.Value.Date),
+            DurationMonths = (int)_duration.Value,
+            Basis = Selected<CommitmentBasis>(_basis),
+            Committed = _committed.Text,
+            PenaltyAmount = _penaltyAmount.Text,
+            CountedAnalyses = _codes.Text,
+            PreventiveVisits = _visits.Text,
+            MaxDelayHours = _maxDelay.Text,
+            InstrumentIds = [.. _instruments.CheckedIndices.Cast<int>().Select(i => _instrumentOptions[i].Id)],
+            MaintenanceTerms = _maintenance.Text,
+            TrainingTerms = _training.Text,
+            ExitConditions = _exit.Text,
+            PenaltyTerms = _penalty.Text,
+            Notes = _notes.Text
+        };
 
-        if (SelectedId(_supplier) is not { } supplierId)
-        {
-            Dialogs.Warn(Localizer["Contract_SupplierRequired"], Text);
-            return;
-        }
-
-        var basis = Selected<CommitmentBasis>(_basis);
-        var committed = DecimalOrNull(_committed) ?? 0m;
-        if (basis != CommitmentBasis.None && committed <= 0m)
-        {
-            Dialogs.Warn(Localizer["Contract_CommitmentRequired"], Text);
-            _committed.Focus();
-            return;
-        }
-
-        if (!TryInt(_visits, out var visits) || !TryInt(_maxDelay, out var maxDelay))
-        {
-            Dialogs.Warn(Localizer["Contract_NegativeTerm"], Text);
-            return;
-        }
-
-        var reagents = new List<InstrumentContractReagentInput>();
+        var lines = new List<DataGridViewRow>();
         foreach (DataGridViewRow row in _reagents.Rows)
         {
             if (row.IsNewRow || row.Cells["item"].Value is not Guid itemId) continue;
-
-            // An unreadable contract price was saved as no price, and the reagent then ordered at
-            // whatever the last order said.
-            foreach (var column in new[] { "price", "costPerTest" })
+            lines.Add(row);
+            form.Reagents.Add(new ContractReagentForm
             {
-                var typed = row.Cells[column].Value?.ToString();
-                if (!EditorValues.IsUnreadable(typed)) continue;
-
-                Dialogs.Warn(Localizer.Format("Result_NotANumber", typed!.Trim()), Text);
-                _reagents.CurrentCell = row.Cells[column];
-                return;
-            }
-
-            var price = EditorValues.ParseDecimal(row.Cells["price"].Value?.ToString());
-            var cost = EditorValues.ParseDecimal(row.Cells["costPerTest"].Value?.ToString());
-            if (price < 0m || cost < 0m)
-            {
-                Dialogs.Warn(Localizer["Po_PriceMustNotBeNegative"], Text);
-                return;
-            }
-
-            reagents.Add(new InstrumentContractReagentInput(itemId, price, cost));
+                StockItemId = itemId,
+                Price = row.Cells["price"].Value?.ToString(),
+                CostPerTest = row.Cells["costPerTest"].Value?.ToString()
+            });
         }
 
-        Request = new SaveInstrumentContractRequest
+        // A reference, a supplier, the commitment unless « Sans engagement », whole positive terms and
+        // readable reagent prices (InstrumentContractScreenRules.Check, as the web's form).
+        var (refusal, request) = InstrumentContractScreenRules.Check(form, _id);
+        if (refusal is not null)
         {
-            Id = _id,
-            Reference = _reference.Text.Trim(),
-            SupplierId = supplierId,
-            Kind = Selected<InstrumentContractKind>(_kind),
-            StartDate = DateOnly.FromDateTime(_start.Value.Date),
-            DurationMonths = (int)_duration.Value,
-            CommitmentBasis = basis,
-            CommittedVolume = committed,
-            CountedAnalysisCodesCsv = Blank(_codes),
-            PreventiveVisitsPerYear = visits,
-            MaxInterventionDelayHours = maxDelay,
-            MaintenanceTerms = Blank(_maintenance),
-            TrainingTerms = Blank(_training),
-            ExitConditions = Blank(_exit),
-            PenaltyTerms = Blank(_penalty),
-            PenaltyAmountMad = DecimalOrNull(_penaltyAmount),
-            Notes = Blank(_notes),
-            IsActive = _active.Checked,
-            InstrumentIds = [.. _instruments.CheckedIndices.Cast<int>().Select(i => _instrumentOptions[i].Id)],
-            Reagents = reagents
-        };
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            switch (refusal.Field)
+            {
+                case InstrumentContractScreenRules.ReferenceField: _reference.Focus(); break;
+                case InstrumentContractScreenRules.CommittedField: _committed.Focus(); break;
+                case InstrumentContractScreenRules.PenaltyAmountField: _penaltyAmount.Focus(); break;
+                case InstrumentContractScreenRules.VisitsField: _visits.Focus(); break;
+                case InstrumentContractScreenRules.MaxDelayField: _maxDelay.Focus(); break;
+                default:
+                    for (var i = 0; i < lines.Count; i++)
+                    {
+                        if (refusal.Field == InstrumentContractScreenRules.ReagentField("price", i)) _reagents.CurrentCell = lines[i].Cells["price"];
+                        else if (refusal.Field == InstrumentContractScreenRules.ReagentField("cost", i)) _reagents.CurrentCell = lines[i].Cells["costPerTest"];
+                    }
+                    break;
+            }
 
+            return;
+        }
+
+        Request = request;
         DialogResult = DialogResult.OK;
         Close();
-    }
-
-    private static bool TryInt(TextBox box, out int? value)
-    {
-        value = null;
-        if (string.IsNullOrWhiteSpace(box.Text)) return true;
-        if (!int.TryParse(box.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)) return false;
-        value = parsed;
-        return true;
     }
 }
 
@@ -785,10 +712,13 @@ internal sealed class InterventionTimesDialog : MasterDataEditor
     internal InterventionTimesDialog(ILocalizer localizer, IUserDialogs dialogs, ContractInterventionRow row)
         : base(localizer, dialogs, "Contracts.InterventionTimes", $"{row.InstrumentCode} · {row.PerformedOn:dd/MM/yyyy}", 480, 200)
     {
-        (_hasRequested, _requested) = Moment("Contracts.RequestedAt", 20, row.RequestedAt,
-                                             row.PerformedOn.ToDateTime(new TimeOnly(8, 0)));
-        (_hasArrived, _arrived) = Moment("Contracts.ArrivedAt", 250, row.ArrivedAt,
-                                         row.PerformedOn.ToDateTime(new TimeOnly(10, 0)));
+        // One reading of the clock: read twice, the second was later than the limit set from the
+        // first, and an intervention entered the same morning (before 08:00 or 10:00) opened on an
+        // exception instead of the dialog.
+        var now = DateTime.Now;
+        var form = InstrumentContractScreenRules.TimesForm(row, now);
+        (_hasRequested, _requested) = Moment("Contracts.RequestedAt", 20, form.HasRequested, form.Requested, now);
+        (_hasArrived, _arrived) = Moment("Contracts.ArrivedAt", 250, form.HasArrived, form.Arrived, now);
 
         Notice(20, 76, 440, 40, "Contracts.InterventionTimesNotice");
         Buttons(140, 480);
@@ -796,14 +726,9 @@ internal sealed class InterventionTimesDialog : MasterDataEditor
         StockDialog.Frame(this, localizer, "StocksUi.Dialog.InterventionTimes");
     }
 
-    private (CheckBox, DateTimePicker) Moment(string key, int x, DateTimeOffset? value, DateTime fallback)
+    private (CheckBox, DateTimePicker) Moment(string key, int x, bool recorded, DateTime shown, DateTime now)
     {
-        var toggle = Check(key, x, 14, value is not null);
-        // One reading of the clock: read twice, the second was later than the limit set from the
-        // first, and an intervention entered the same morning (before 08:00 or 10:00) opened on an
-        // exception instead of the dialog.
-        var now = DateTime.Now;
-        var shown = value?.LocalDateTime ?? fallback;
+        var toggle = Check(key, x, 14, recorded);
         var picker = new DateTimePicker
         {
             Bounds = new Rectangle(x, 36, 210, UiTheme.InputHeight),
@@ -811,7 +736,7 @@ internal sealed class InterventionTimesDialog : MasterDataEditor
             CustomFormat = "dd/MM/yyyy HH:mm",
             MaxDate = now,
             Value = shown > now ? now : shown,
-            Enabled = value is not null
+            Enabled = recorded
         };
         toggle.CheckedChanged += (_, _) => picker.Enabled = toggle.Checked;
         Controls.Add(picker);
@@ -820,14 +745,23 @@ internal sealed class InterventionTimesDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        RequestedAt = _hasRequested.Checked ? new DateTimeOffset(_requested.Value) : null;
-        ArrivedAt = _hasArrived.Checked ? new DateTimeOffset(_arrived.Value) : null;
-
-        if (RequestedAt is { } requested && ArrivedAt is { } arrived && arrived < requested)
+        // The arrival cannot precede the call (InstrumentContractScreenRules.Check, as the web's form).
+        var (refusal, requested, arrived) = InstrumentContractScreenRules.Check(new InterventionTimesForm
         {
-            Dialogs.Warn(Localizer["Contract_ArrivalBeforeRequest"], Text);
+            HasRequested = _hasRequested.Checked,
+            Requested = _requested.Value,
+            HasArrived = _hasArrived.Checked,
+            Arrived = _arrived.Value
+        }, DateTimeOffset.Now.AddMinutes(1));
+
+        if (refusal is not null)
+        {
+            Dialogs.Warn(Localizer[refusal.Key], Text);
             return;
         }
+
+        RequestedAt = requested;
+        ArrivedAt = arrived;
 
         DialogResult = DialogResult.OK;
         Close();

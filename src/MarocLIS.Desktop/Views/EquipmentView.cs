@@ -183,38 +183,36 @@ public sealed class EquipmentView : LocalizedView
         if (_grid.Rows[e.RowIndex].Tag is not EquipmentRow row) return;
 
         // A lapsed calibration is the serious one: results produced on that instrument are not
-        // defensible, so it is coloured as critical rather than as a reminder.
-        if (row.CalibrationOverdue || row.Status == EquipmentStatus.OutOfService)
+        // defensible, so it is coloured as critical rather than as a reminder (EquipmentScreenRules).
+        switch (EquipmentScreenRules.RowInk(row))
         {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-            e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
+            case StockInk.CriticalBold:
+                e.CellStyle!.BackColor = UiTheme.CriticalBackground;
+                e.CellStyle.ForeColor = UiTheme.Critical;
+                e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
+                return;
+
+            case StockInk.Muted:
+                e.CellStyle!.ForeColor = UiTheme.TextMuted;
+                return;
         }
-        else if (row.MaintenanceOverdue || row.ContractExpired
-                 || row.Status == EquipmentStatus.UnderMaintenance)
+
+        // A reminder, not an emergency: the late date and the status pill carry it, not the row.
+        var column = _grid.Columns[e.ColumnIndex].Name;
+        var ink = column switch
         {
-            // A reminder, not an emergency: the late date and the status pill carry it, not the row.
-            var column = _grid.Columns[e.ColumnIndex].Name;
-            if (column == "maintenance" && row.MaintenanceOverdue || column == "contract" && row.ContractExpired)
-            {
-                e.CellStyle!.ForeColor = UiTheme.Abnormal;
-                e.CellStyle.Font = UiTheme.MonospaceBold;
-            }
-        }
-        else if (row.Status == EquipmentStatus.Decommissioned)
+            "maintenance" => EquipmentScreenRules.MaintenanceInk(row),
+            "contract" => EquipmentScreenRules.ContractInk(row),
+            _ => StockInk.Plain
+        };
+        if (ink == StockInk.AbnormalBold)
         {
-            e.CellStyle!.ForeColor = UiTheme.TextMuted;
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
+            e.CellStyle.Font = UiTheme.MonospaceBold;
         }
     }
 
-    private static StockPill StatusPill(EquipmentStatus status) => status switch
-    {
-        EquipmentStatus.Operational => StockPill.Done,
-        EquipmentStatus.OutOfService => StockPill.Critical,
-        EquipmentStatus.UnderMaintenance => StockPill.Warning,
-        EquipmentStatus.Commissioning => StockPill.Running,
-        _ => StockPill.Waiting
-    };
+    private static StockPill StatusPill(EquipmentStatus status) => StockPill.Of(EquipmentScreenRules.StatusTone(status));
 
     protected override void ApplyTexts()
     {
@@ -284,24 +282,20 @@ public sealed class EquipmentView : LocalizedView
             var index = _grid.Rows.Add(
                 row.Code,
                 row.Name.For(Localizer.CurrentLanguage),
-                T($"EquipmentKind.{row.Kind}"),
-                T($"EquipmentStatus.{row.Status}"),
+                T(EquipmentScreenRules.KindKey(row.Kind)),
+                T(EquipmentScreenRules.StatusKey(row.Status)),
                 row.SerialNumber ?? string.Empty,
                 row.Location ?? string.Empty,
-                Due(row.NextMaintenanceDue, row.MaintenanceOverdue),
-                Due(row.NextCalibrationDue, row.CalibrationOverdue),
-                Due(row.ContractValidUntil, row.ContractExpired));
+                EquipmentScreenRules.MaintenanceDue(row),
+                EquipmentScreenRules.CalibrationDue(row),
+                EquipmentScreenRules.ContractDue(row));
 
             _grid.Rows[index].Tag = row;
         }
 
         _grid.ResumeLayout(performLayout: true);
 
-        var overdue = _rows.Count(r => r.CalibrationOverdue || r.MaintenanceOverdue);
-
-        _count.Text = overdue > 0
-            ? $"{T("StocksUi.Instruments", _rows.Count)} · {T("Equipment.Overdue")} {overdue}"
-            : T("StocksUi.Instruments", _rows.Count);
+        _count.Text = EquipmentScreenRules.Count(_rows, T);
 
         var kept = _grid.Rows.Cast<DataGridViewRow>()
                         .FirstOrDefault(r => keep is not null && r.Tag is EquipmentRow row && row.InstrumentId == keep);
@@ -312,23 +306,16 @@ public sealed class EquipmentView : LocalizedView
         ShowDetail();
     }
 
-    /// <summary>
-    /// A due date with its glyph. The marker matters more than the colour: this list gets printed
-    /// for the equipment file, and a red cell prints as a grey one.
-    /// </summary>
-    private static string Due(DateOnly? date, bool overdue) =>
-        date is not { } value ? "—" : overdue ? $"! {value:dd/MM/yy}" : value.ToString("dd/MM/yy");
-
     private void ShowDetail()
     {
         var row = _grid.CurrentRow?.Tag as EquipmentRow;
 
         // Decommissioning is final: nothing more is recorded on the instrument, and its status
         // no longer changes (the service refuses it too).
-        var active = row is { Status: not EquipmentStatus.Decommissioned };
-        _maintenance.Enabled = active;
-        _calibration.Enabled = active;
-        _status.Enabled = active;
+        var actions = EquipmentScreenRules.Actions(p => PermissionGate.Allows(p), row);
+        _maintenance.Enabled = actions.Maintenance;
+        _calibration.Enabled = actions.Calibration;
+        _status.Enabled = actions.Status;
 
         if (row is null)
         {
@@ -344,49 +331,21 @@ public sealed class EquipmentView : LocalizedView
         var pill = StatusPill(row.Status);
         _asideCard.Title.Text = row.Name.For(Localizer.CurrentLanguage);
         _asideCard.Note.Text = row.Code;
-        _statusPill.Show($"{pill.Symbol} {T($"EquipmentStatus.{row.Status}")}", pill.Tone);
-        _facts.Show(
-        [
-            (T("Equipment.Kind"), T($"EquipmentKind.{row.Kind}"), false),
-            (T("Equipment.SerialNumber"), row.SerialNumber ?? string.Empty, true),
-            (T("Equipment.Location"), row.Location ?? string.Empty, false),
-            (T("Equipment.NextMaintenance"), Due(row.NextMaintenanceDue, row.MaintenanceOverdue), true),
-            (T("Equipment.NextCalibration"), Due(row.NextCalibrationDue, row.CalibrationOverdue), true),
-            (T("Equipment.Contract"), Due(row.ContractValidUntil, row.ContractExpired), true)
-        ]);
+        _statusPill.Show($"{pill.Symbol} {T(EquipmentScreenRules.StatusKey(row.Status))}", pill.Tone);
+        _facts.Show([.. EquipmentScreenRules.Facts(row, T).Select(f => (f.Label, f.Value, f.Mono))]);
 
-        var parts = new List<string>(5);
-
-        if (!string.IsNullOrWhiteSpace(row.Manufacturer)) parts.Add(row.Manufacturer);
-        if (!string.IsNullOrWhiteSpace(row.Model)) parts.Add(row.Model);
-        if (!string.IsNullOrWhiteSpace(row.SerialNumber))
-            parts.Add($"{T("Equipment.SerialNumber")} {row.SerialNumber}");
-        if (!string.IsNullOrWhiteSpace(row.Location)) parts.Add(row.Location);
-        if (!string.IsNullOrWhiteSpace(row.LastStatusReason))
-            parts.Add($"{T("Field.Reason")} : {row.LastStatusReason}");
-
-        _detail.Text = string.Join("  ·  ", parts);
+        _detail.Text = EquipmentScreenRules.Detail(row, T);
 
         // Says what is wrong, rather than leaving the operator to compare two dates in a row.
-        if (row.Status == EquipmentStatus.Decommissioned)
+        if (EquipmentScreenRules.Warning(row) is { } warning)
         {
-            _message.ForeColor = UiTheme.TextMuted;
-            _message.Text = T("Equipment.DecommissionedFinal");
-        }
-        else if (row.CalibrationOverdue)
-        {
-            _message.ForeColor = UiTheme.Critical;
-            _message.Text = T("Equipment.CalibrationOverdueWarning");
-        }
-        else if (row.MaintenanceOverdue)
-        {
-            _message.ForeColor = UiTheme.Abnormal;
-            _message.Text = T("Equipment.MaintenanceOverdueWarning");
-        }
-        else if (row.ContractExpired)
-        {
-            _message.ForeColor = UiTheme.Abnormal;
-            _message.Text = T("Equipment.ContractExpiredWarning");
+            _message.ForeColor = warning.Ink switch
+            {
+                StockInk.Muted => UiTheme.TextMuted,
+                StockInk.Critical => UiTheme.Critical,
+                _ => UiTheme.Abnormal
+            };
+            _message.Text = T(warning.Key);
         }
         else
         {
@@ -404,9 +363,11 @@ public sealed class EquipmentView : LocalizedView
         using var dialog = new MaintenanceDialog(Localizer, _dialogs, row);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
+        if (dialog.Entry is not { } entry) return;
+
         var result = await _equipment.RecordMaintenanceAsync(
-            row.InstrumentId, dialog.Kind, dialog.Description, dialog.DowntimeHours,
-            dialog.PartsReplaced, dialog.PostCheckPassed, dialog.ExternalTechnician);
+            row.InstrumentId, entry.Kind, entry.Description, entry.DowntimeHours,
+            entry.PartsReplaced, entry.PostCheckPassed, entry.ExternalTechnician);
 
         if (result.IsFailure)
         {
@@ -416,7 +377,7 @@ public sealed class EquipmentView : LocalizedView
 
         await LoadAsync();
 
-        if (!dialog.PostCheckPassed) await OfferNonConformityAsync(row);
+        if (!entry.PostCheckPassed) await OfferNonConformityAsync(row);
     }
 
     /// <summary>
@@ -425,13 +386,11 @@ public sealed class EquipmentView : LocalizedView
     /// </summary>
     private async Task OfferNonConformityAsync(EquipmentRow row)
     {
-        var question = row.Status == EquipmentStatus.Operational
-            ? $"{T("Equipment.PostCheckFailedOutOfService")}\n\n{T("Equipment.PostCheckFailedOfferNc")}"
-            : T("Equipment.PostCheckFailedOfferNc");
+        var question = EquipmentScreenRules.PostCheckQuestion(row, T);
 
-        if (!PermissionGate.Allows(Permissions.Quality.ReportNonConformity, Permissions.Quality.ManageNonConformity))
+        if (!EquipmentScreenRules.MayReportNonConformity(p => PermissionGate.Allows(p)))
         {
-            if (row.Status == EquipmentStatus.Operational) _dialogs.Info(T("Equipment.PostCheckFailedOutOfService"));
+            if (EquipmentScreenRules.TakenOutOfService(row)) _dialogs.Info(T("Equipment.PostCheckFailedOutOfService"));
             return;
         }
 
@@ -439,8 +398,7 @@ public sealed class EquipmentView : LocalizedView
 
         using var dialog = new NonConformityDialog(Localizer, _dialogs);
         dialog.Prefill(NonConformityCategory.Equipment, NonConformitySeverity.Major, DetectionSource.StaffObservation,
-                       Localizer.Format("Equipment.PostCheckFailedNcDescription", row.Code,
-                                        row.Name.For(Localizer.CurrentLanguage)),
+                       EquipmentScreenRules.NonConformityDescription(row, Localizer.CurrentLanguage, T),
                        row.InstrumentId);
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Request is null) return;
 
@@ -461,9 +419,11 @@ public sealed class EquipmentView : LocalizedView
         using var dialog = new CalibrationDialog(Localizer, _dialogs, row);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
+        if (dialog.Entry is not { } entry) return;
+
         var result = await _equipment.RecordCalibrationAsync(
-            row.InstrumentId, testParameterId: null, dialog.Outcome, dialog.CalibratorLotNumber,
-            dialog.ValidUntil, dialog.Slope, dialog.Intercept, dialog.Comment);
+            row.InstrumentId, testParameterId: null, entry.Outcome, entry.CalibratorLotNumber,
+            entry.ValidUntil, entry.Slope, entry.Intercept, entry.Comment);
 
         if (result.IsFailure)
         {
@@ -511,21 +471,19 @@ internal sealed class MaintenanceDialog : Form
     private readonly TextBox _technician = UiTheme.Input(200);
     private readonly CheckBox _postCheck = new();
 
-    internal MaintenanceKind Kind => (MaintenanceKind)(_kind.SelectedItem as EnumChoice)!.Value;
-    internal MultilingualText Description { get; private set; } = new(string.Empty);
-    internal decimal? DowntimeHours { get; private set; }
-    internal string? PartsReplaced { get; private set; }
-    internal string? ExternalTechnician { get; private set; }
-    internal bool PostCheckPassed => _postCheck.Checked;
+    private MaintenanceKind Kind => (MaintenanceKind)(_kind.SelectedItem as EnumChoice)!.Value;
+
+    /// <summary>The intervention read and checked by EquipmentScreenRules, once « Enregistrer » is accepted.</summary>
+    internal MaintenanceEntry? Entry { get; private set; }
 
     internal MaintenanceDialog(ILocalizer localizer, IUserDialogs dialogs, EquipmentRow row)
     {
         _localizer = localizer;
         _dialogs = dialogs;
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue » after the dialog closed.
-        _descriptionFr.MaxLength = _descriptionAr.MaxLength = _descriptionEn.MaxLength = 2000;
-        _parts.MaxLength = 1000;
-        _technician.MaxLength = 200;
+        _descriptionFr.MaxLength = _descriptionAr.MaxLength = _descriptionEn.MaxLength = EquipmentScreenRules.DescriptionMaxLength;
+        _parts.MaxLength = EquipmentScreenRules.PartsMaxLength;
+        _technician.MaxLength = EquipmentScreenRules.TechnicianMaxLength;
         _downtime.MaxLength = EditorValues.MeasureMaxLength;
 
         Text = $"{localizer["Equipment.RecordMaintenance"]} — {row.Code}";
@@ -557,7 +515,7 @@ internal sealed class MaintenanceDialog : Form
 
         // A breakdown repair is the commonest thing recorded off the cuff; preventive work is
         // usually recorded from a plan, so corrective is the safer default to land on.
-        _kind.SelectedIndex = (int)MaintenanceKind.Corrective;
+        _kind.SelectedIndex = (int)EquipmentScreenRules.NewMaintenance().Kind;
 
         Field("Equipment.DowntimeHours", y, 250);
         _downtime.Location = new Point(250, y + 18);
@@ -587,7 +545,7 @@ internal sealed class MaintenanceDialog : Form
         y += 56;
 
         _postCheck.Text = localizer["Equipment.PostCheckPassed"];
-        _postCheck.Checked = true;
+        _postCheck.Checked = EquipmentScreenRules.NewMaintenance().PostCheckPassed;
         _postCheck.AutoSize = true;
         _postCheck.Font = UiTheme.Body;
         _postCheck.Location = new Point(20, y);
@@ -624,31 +582,28 @@ internal sealed class MaintenanceDialog : Form
 
     private void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_descriptionFr.Text))
+        // A description is required, and « 2 h » or « 1e20 » in the downtime is no number
+        // (EquipmentScreenRules.Check, as the web's form).
+        var (refusal, entry) = EquipmentScreenRules.Check(new MaintenanceForm
         {
-            _dialogs.Warn(_localizer["Equipment_DescriptionRequired"]);
-            _descriptionFr.Focus();
+            Kind = Kind,
+            DescriptionFr = _descriptionFr.Text,
+            DescriptionAr = _descriptionAr.Text,
+            DescriptionEn = _descriptionEn.Text,
+            Downtime = _downtime.Text,
+            PartsReplaced = _parts.Text,
+            Technician = _technician.Text,
+            PostCheckPassed = _postCheck.Checked
+        });
+
+        if (refusal is not null)
+        {
+            _dialogs.Warn(_localizer.Format(refusal.Key, refusal.Typed ?? string.Empty));
+            (refusal.Field == EquipmentScreenRules.DowntimeField ? _downtime : _descriptionFr).Focus();
             return;
         }
 
-        Description = new MultilingualText(_descriptionFr.Text.Trim(),
-                                            _descriptionAr.Text.Trim(),
-                                            _descriptionEn.Text.Trim());
-
-        // « 2 h » was saved as no downtime, and « 1e20 » failed the save with « Erreur inattendue ».
-        if (EditorValues.IsUnreadable(_downtime.Text))
-        {
-            _dialogs.Warn(_localizer.Format("Result_NotANumber", _downtime.Text.Trim()));
-            _downtime.Focus();
-            return;
-        }
-
-        DowntimeHours = EditorValues.ParseDecimal(_downtime.Text) is { } hours && hours > 0m ? hours : null;
-
-        PartsReplaced = string.IsNullOrWhiteSpace(_parts.Text) ? null : _parts.Text.Trim();
-        ExternalTechnician = string.IsNullOrWhiteSpace(_technician.Text)
-            ? null : _technician.Text.Trim();
-
+        Entry = entry;
         DialogResult = DialogResult.OK;
         Close();
     }
@@ -672,21 +627,18 @@ internal sealed class CalibrationDialog : Form
     private readonly TextBox _comment = UiTheme.Input(440);
     private readonly Label _lotNotice = new();
 
-    internal CalibrationOutcome Outcome =>
+    private CalibrationOutcome Outcome =>
         (CalibrationOutcome)(_outcome.SelectedItem as EnumChoice)!.Value;
 
-    internal string? CalibratorLotNumber { get; private set; }
-    internal DateOnly? ValidUntil { get; private set; }
-    internal decimal? Slope { get; private set; }
-    internal decimal? Intercept { get; private set; }
-    internal string? Comment { get; private set; }
+    /// <summary>The calibration read and checked by EquipmentScreenRules, once « Enregistrer » is accepted.</summary>
+    internal CalibrationEntry? Entry { get; private set; }
 
     internal CalibrationDialog(ILocalizer localizer, IUserDialogs dialogs, EquipmentRow row)
     {
         _localizer = localizer;
         _dialogs = dialogs;
-        _calibratorLot.MaxLength = 60;
-        _comment.MaxLength = 1000;
+        _calibratorLot.MaxLength = EquipmentScreenRules.CalibratorLotMaxLength;
+        _comment.MaxLength = EquipmentScreenRules.CommentMaxLength;
         _slope.MaxLength = _intercept.MaxLength = EditorValues.MeasureMaxLength;
 
         Text = $"{localizer["Equipment.RecordCalibration"]} — {row.Code}";
@@ -743,7 +695,7 @@ internal sealed class CalibrationDialog : Form
         _validUntil.Bounds = new Rectangle(250, y + 18, 200, UiTheme.InputHeight);
         _validUntil.Format = DateTimePickerFormat.Short;
         _validUntil.MinDate = DateTime.Today;
-        _validUntil.Value = DateTime.Today.AddMonths(1);
+        _validUntil.Value = EquipmentScreenRules.NewCalibration(DateOnly.FromDateTime(DateTime.Today)).ValidUntil.ToDateTime(TimeOnly.MinValue);
 
         y += 56;
         Field("Calibration.Slope", y);
@@ -786,42 +738,41 @@ internal sealed class CalibrationDialog : Form
     /// </summary>
     private void RefreshLotRequirement()
     {
-        var required = Outcome is CalibrationOutcome.Passed
-                                or CalibrationOutcome.PassedWithReservation;
+        var required = EquipmentScreenRules.LotRequired(Outcome);
 
         _lotNotice.Text = required ? _localizer["Calibration.CalibratorLotRequiredNotice"] : string.Empty;
     }
 
     private void Accept()
     {
-        if (Outcome is CalibrationOutcome.Passed or CalibrationOutcome.PassedWithReservation
-            && string.IsNullOrWhiteSpace(_calibratorLot.Text))
+        // A passing calibration names its calibrator lot, and a slip in the slope or the intercept
+        // is no figure (EquipmentScreenRules.Check, as the web's form).
+        var (refusal, entry) = EquipmentScreenRules.Check(new CalibrationForm
         {
-            _dialogs.Warn(_localizer["Calibration_CalibratorLotRequired"]);
-            _calibratorLot.Focus();
-            return;
-        }
+            Outcome = Outcome,
+            CalibratorLot = _calibratorLot.Text,
+            HasValidity = _hasValidity.Checked,
+            ValidUntil = DateOnly.FromDateTime(_validUntil.Value.Date),
+            Slope = _slope.Text,
+            Intercept = _intercept.Text,
+            Comment = _comment.Text
+        }, DateOnly.FromDateTime(DateTime.Today));
 
-        CalibratorLotNumber = string.IsNullOrWhiteSpace(_calibratorLot.Text)
-            ? null : _calibratorLot.Text.Trim();
-
-        ValidUntil = _hasValidity.Checked
-            ? DateOnly.FromDateTime(_validUntil.Value.Date) : null;
-
-        // A slip in the slope or the intercept was saved as no figure, and « 1e20 » failed the save.
-        foreach (var box in new[] { _slope, _intercept })
+        if (refusal is not null)
         {
-            if (!EditorValues.IsUnreadable(box.Text)) continue;
-
-            _dialogs.Warn(_localizer.Format("Result_NotANumber", box.Text.Trim()));
+            _dialogs.Warn(_localizer.Format(refusal.Key, refusal.Typed ?? string.Empty));
+            Control box = refusal.Field switch
+            {
+                EquipmentScreenRules.SlopeField => _slope,
+                EquipmentScreenRules.InterceptField => _intercept,
+                EquipmentScreenRules.ValidUntilField => _validUntil,
+                _ => _calibratorLot
+            };
             box.Focus();
             return;
         }
 
-        Slope = EditorValues.ParseDecimal(_slope.Text);
-        Intercept = EditorValues.ParseDecimal(_intercept.Text);
-        Comment = string.IsNullOrWhiteSpace(_comment.Text) ? null : _comment.Text.Trim();
-
+        Entry = entry;
         DialogResult = DialogResult.OK;
         Close();
     }
@@ -845,7 +796,7 @@ internal sealed class EquipmentStatusDialog : Form
     {
         _localizer = localizer;
         _dialogs = dialogs;
-        _reason.MaxLength = 500;
+        _reason.MaxLength = EquipmentScreenRules.ReasonMaxLength;
 
         Text = $"{localizer["Equipment.ChangeStatus"]} — {row.Code}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -856,8 +807,7 @@ internal sealed class EquipmentStatusDialog : Form
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
-        var current = UiTheme.FieldLabel(
-            $"{localizer["Field.Status"]} : {localizer[$"EquipmentStatus.{row.Status}"]}");
+        var current = UiTheme.FieldLabel(EquipmentScreenRules.CurrentStatus(row, localizer.Format));
         current.Location = new Point(20, 14);
         current.Font = UiTheme.BodyBold;
         current.ForeColor = UiTheme.TextPrimary;
@@ -873,16 +823,10 @@ internal sealed class EquipmentStatusDialog : Form
 
         // Only the four statuses the service actually applies. Commissioning and Backup are set
         // when the instrument record is created, and offering them here would produce a refusal.
-        foreach (var status in new[]
-                 {
-                     EquipmentStatus.Operational,
-                     EquipmentStatus.UnderMaintenance,
-                     EquipmentStatus.OutOfService,
-                     EquipmentStatus.Decommissioned
-                 })
+        foreach (var status in EquipmentScreenRules.StatusChoices)
         {
             _statusChoice.Items.Add(new EnumChoice((int)status,
-                                                    localizer[$"EquipmentStatus.{status}"]));
+                                                    localizer[EquipmentScreenRules.StatusKey(status)]));
         }
 
         _statusChoice.SelectedIndex = 0;
@@ -926,25 +870,21 @@ internal sealed class EquipmentStatusDialog : Form
     {
         if (Controls["notice"] is not Label notice) return;
 
-        notice.Text = Status switch
-        {
-            // Both of these are consequential enough to warn about before the operator commits.
-            EquipmentStatus.Operational => _localizer["Equipment.ReturnToServiceNotice"],
-            EquipmentStatus.Decommissioned => _localizer["Equipment.DecommissionNotice"],
-            _ => string.Empty
-        };
+        // A return to service and a decommissioning are warned about before the operator commits.
+        notice.Text = EquipmentScreenRules.StatusNoticeKey(Status) is { } key ? _localizer[key] : string.Empty;
     }
 
     private void Accept()
     {
-        if (_reason.Text.Trim().Length < 5)
+        var (refusal, reason) = EquipmentScreenRules.Check(new EquipmentStatusForm { Status = Status, Reason = _reason.Text });
+        if (refusal is not null)
         {
-            _dialogs.Warn(_localizer["Equipment_StatusReasonRequired"]);
+            _dialogs.Warn(_localizer[refusal.Key]);
             _reason.Focus();
             return;
         }
 
-        Reason = _reason.Text.Trim();
+        Reason = reason!;
 
         DialogResult = DialogResult.OK;
         Close();
