@@ -17,7 +17,7 @@
         <p class="muted small">@(Detail.PayerName ?? Texts["Billing.PayerNotCovered"]) — @Texts["Order.CoverageNotEditable"]</p>
         <div class="form-grid">
             <label class="field"><span class="field-label">@Texts["Order.Prescriber"]</span>
-                <input class="input" maxlength="200" data-field="prescriber" readonly="@(Detail.PrescriberId is not null)"
+                <input class="input" maxlength="200" data-field="prescriber" readonly="@(Detail.PrescriberId is not null)" title="@_prescriber"
                        @bind="_prescriber" /></label>
             <div class="field">
                 <label class="field-check"><input type="checkbox" data-field="has-prescription-date" @bind="_hasPrescriptionDate" />
@@ -39,8 +39,9 @@
                         <option value="@l">@Texts[$"AppLanguage.{l}"]</option>
                     }
                 </select></label>
-            <label class="field field-wide"><span class="field-label">@Texts["Order.ClinicalInformation"]</span>
-                <input class="input" maxlength="2000" data-field="clinical" @bind="_clinical" /></label>
+            @* Up to two thousand characters: read whole, on the full width, over several lines. *@
+            <label class="field field-span-4"><span class="field-label">@Texts["Order.ClinicalInformation"]</span>
+                <textarea class="input" rows="3" maxlength="2000" data-field="clinical" @bind="_clinical"></textarea></label>
             <label class="field"><span class="field-label">@Texts["Order.DiagnosisCode"]</span>
                 <input class="input mono" dir="ltr" maxlength="20" data-field="diagnosis" @bind="_diagnosis" /></label>
             <label class="field"><span class="field-label">@Texts["Order.Ward"]</span>

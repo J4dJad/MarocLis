@@ -61,7 +61,7 @@
                     <li class="@(order.AccessionNumber == _sheet?.AccessionNumber ? "is-selected" : null)" title="@WorklistTip(order)"
                         data-order="@order.AccessionNumber" @onclick="() => LoadAsync(order.AccessionNumber, skipIfOpen: true)">
                         <div class="file-list-line">
-                            <span class="strong @(order.IsUrgent ? "critical" : null)">@order.PatientName</span>
+                            <span class="list-name strong @(order.IsUrgent ? "critical" : null)" title="@order.PatientName">@order.PatientName</span>
                             @switch (pill)
                             {
                                 case EntryWorklistPill.ReadyToValidate:
@@ -144,8 +144,7 @@
                                     <th>@Texts["Result.Unit"]</th>
                                     <th>@Texts["Result.ReferenceRange"]</th>
                                     <th>@Texts["Result.Previous"]</th>
-                                    <th>@Texts["ResultEntry.Origin"]</th>
-                                    <th>@Texts["Result.TechnicalComment"]</th>
+                                    <th class="col-comment">@Texts["Result.TechnicalComment"]</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -153,7 +152,7 @@
                                 {
                                     if (line.Row is not { } row)
                                     {
-                                        <tr class="section-row" data-section="@line.Section"><td colspan="8">@line.Section</td></tr>
+                                        <tr class="section-row" data-section="@line.Section"><td colspan="7">@line.Section</td></tr>
                                         continue;
                                     }
 
@@ -166,6 +165,11 @@
                                         @onclick="() => Select(row)" @ondblclick="() => ShowHistoryAsync(row)">
                                         <td style="padding-inline-start: @(8 + row.IndentLevel * 16)px">
                                             @row.ParameterName.For(Texts.Language)@(row.IsCalculated ? "  ƒ" : null)@(string.IsNullOrWhiteSpace(comment) ? null : "  ✎")
+                                            @* Where the value came from, under its parameter: the comment keeps the width to be read. *@
+                                            @if ((ResultEntryRules.Origin(row, origin, Texts.Language) ?? Texts["ResultEntry.Manual"]) is { Length: > 0 } source && source != "—")
+                                            {
+                                                <span class="cell-sub" data-state="origin">@source</span>
+                                            }
                                         </td>
                                         <td class="num">
                                             @if (!row.IsHeading)
@@ -185,14 +189,14 @@
                                             <span class="mono small">@ValidationScreenRules.FlagGlyphs(row.Flags)</span>
                                         </td>
                                         <td class="small">@row.UnitSymbol</td>
-                                        <td class="small mono"><bdi dir="ltr">@row.ReferenceRangeText</bdi></td>
+                                        @* A range of figures keeps one line: its two bounds are never split. *@
+                                    <td class="small mono"><bdi dir="ltr">@row.ReferenceRangeText?.Replace(" - ", "\u00A0-\u00A0")</bdi></td>
                                         <td class="small mono">@Previous(row)</td>
-                                        <td class="small">@(ResultEntryRules.Origin(row, origin, Texts.Language) ?? Texts["ResultEntry.Manual"])</td>
                                         <td>
                                             @if (!row.IsHeading)
                                             {
                                                 <input class="input input-comment" type="text" autocomplete="off" data-field="comment" maxlength="2000"
-                                                       aria-label="@Texts["Result.TechnicalComment"]" readonly="@(!ResultEntryRules.TakesComment(row))"
+                                                       aria-label="@Texts["Result.TechnicalComment"]" readonly="@(!ResultEntryRules.TakesComment(row))" title="@comment"
                                                        value="@comment" @oninput="e => _comments[id] = e.Value?.ToString()" @onfocus="() => Select(row)" />
                                             }
                                         </td>
@@ -221,7 +225,8 @@
         var actions = selected is null ? ResultRowActions.None : ResultEntryRules.RowActions(selected, Context.User);
     }
     @* The bench sheet is always at hand; what acts on a file waits until one is open. *@
-    <ActionBar ShowStatus="@(_sheet is not null)" ShowMore="@(_sheet is not null)" StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+    <ActionBar ShowStatus="@(_sheet is not null)" ShowMore="@(_sheet is not null)" StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")"
+               InfoTitle="@(_sheet is not null ? Remaining : null)">
         <Secondary>
             <ActionButton Key="BenchSheet.Open" Disabled="@(!Context.User.Has(Permissions.Results.Enter))" OnClick="OpenBenchSheetAsync" />
             @if (_sheet is { } open)

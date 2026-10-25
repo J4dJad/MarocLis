@@ -183,13 +183,13 @@
                     <span class="field-label">@Texts["Site.Fax"]</span>
                     <input class="input mono" dir="ltr" data-field="fax" maxlength="@SettingsScreenRules.ContactMaxLength" @bind="_form.Fax" />
                 </label>
-                <label class="field">
+                <label class="field field-span-2">
                     <span class="field-label">@Texts["Field.Email"]</span>
-                    <input class="input" dir="ltr" data-field="email" maxlength="@SettingsScreenRules.ContactMaxLength" @bind="_form.Email" />
+                    <input class="input" dir="ltr" data-field="email" maxlength="@SettingsScreenRules.ContactMaxLength" title="@_form.Email" @bind="_form.Email" />
                 </label>
                 <label class="field field-span-2">
                     <span class="field-label">@Texts["Site.Website"]</span>
-                    <input class="input" dir="ltr" data-field="website" maxlength="@SettingsScreenRules.ContactMaxLength" @bind="_form.Website" />
+                    <input class="input" dir="ltr" data-field="website" maxlength="@SettingsScreenRules.ContactMaxLength" title="@_form.Website" @bind="_form.Website" />
                 </label>
             </div>
 

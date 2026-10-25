@@ -49,7 +49,7 @@
                     <li class="@(group.Key == _orderId ? "is-selected" : null) @(alerted ? "is-alerted" : null) @(toDraw == 0 ? "is-drawn" : null)"
                         data-order="@first.AccessionNumber" @onclick="() => SelectPatient(group.Key)">
                         <div class="file-list-line">
-                            <span class="strong @(first.Priority != OrderPriority.Routine ? "critical" : null)">@(alerted ? "⚠ " : null)@DisplayName(first)</span>
+                            <span class="list-name strong @(first.Priority != OrderPriority.Routine ? "critical" : null)" title="@DisplayName(first)">@(alerted ? "⚠ " : null)@DisplayName(first)</span>
                             <Pill Text="@(toDraw > 0 ? Texts.T("Collection.ToDraw", toDraw) : Texts["Collection.ReadyToDispatch"])"
                                   Tone="@(toDraw > 0 ? "Waiting" : "Ok")" />
                         </div>

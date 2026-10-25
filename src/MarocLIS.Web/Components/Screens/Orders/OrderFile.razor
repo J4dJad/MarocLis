@@ -52,7 +52,7 @@
                     <li class="@(row.OrderId == OrderId ? "is-selected" : null) @(row.Status == LabOrderStatus.Cancelled ? "is-cancelled" : null)"
                         data-order="@row.AccessionNumber" title="@ListTooltip(row)" @onclick="() => OpenAsync(row.OrderId)">
                         <div class="file-list-line">
-                            <span class="strong">@row.PatientName.ToUpper(Texts.Culture)</span>
+                            <span class="list-name strong" title="@row.PatientName.ToUpper(Texts.Culture)">@row.PatientName.ToUpper(Texts.Culture)</span>
                             <span class="muted small">@row.RegisteredAt.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</span>
                         </div>
                         <div class="file-list-line">
@@ -153,8 +153,6 @@
                                     <thead>
                                         <tr>
                                             <th>@Texts["Catalog.Analysis"]</th>
-                                            <th>@Texts["Field.Name"]</th>
-                                            <th>@Texts["Field.Department"]</th>
                                             <th>@Texts["Field.Status"]</th>
                                             <th>@Texts["Result.Plural"]</th>
                                             <th>@Texts["OrderEntry.Tube"]</th>
@@ -168,9 +166,11 @@
                                         {
                                             <tr class="@(item.ItemId == SelectedItem?.ItemId ? "is-selected" : null) @(item.IsCancelled ? "is-cancelled" : null)"
                                                 data-item="@item.Code" @onclick="() => _itemId = item.ItemId">
-                                                <td class="mono strong">@item.Code</td>
-                                                <td>@item.Name.For(Texts.Language)</td>
-                                                <td class="small">@item.DepartmentCode</td>
+                                                @* The code, the name and the department in one cell: the file's nine facts fit its card. *@
+                                                <td class="cell-wrap">
+                                                    <span class="mono strong">@item.Code</span> · @item.Name.For(Texts.Language)
+                                                    <span class="cell-sub">@item.DepartmentCode</span>
+                                                </td>
                                                 <td>
                                                     <Pill Text="@ItemStatus(item)" Tone="@OrderFileRules.ItemTone(item, Clock.Now).ToString()" />
                                                 </td>
@@ -178,7 +178,7 @@
                                                 <td class="mono small">@item.SampleBarcode</td>
                                                 <td class="num">@Money.Of(item.ChargedPrice).Format(Texts.Language, Texts.Culture)</td>
                                                 <td class="num">@Money.Of(item.PatientShare).Format(Texts.Language, Texts.Culture)</td>
-                                                <td class="small">@ItemNote(item)</td>
+                                                <td class="small cell-wrap">@ItemNote(item)</td>
                                             </tr>
                                         }
                                     </tbody>

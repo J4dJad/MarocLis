@@ -38,8 +38,7 @@
                         <table class="grid grid-select" data-grid="roles">
                             <thead>
                                 <tr>
-                                    <th>@Texts["Field.Code"]</th>
-                                    <th>@Texts["Field.Name"]</th>
+                                    <th>@Texts["Field.Name"] · @Texts["Field.Code"]</th>
                                     <th class="num">@Texts["Nav.Users"]</th>
                                     <th class="num">@Texts["Admin.Permissions"]</th>
                                 </tr>
@@ -49,9 +48,10 @@
                                 {
                                     <tr class="@(role.RoleId == SelectedRole?.RoleId ? "is-selected" : null) @(role.IsActive ? null : "is-inactive")"
                                         data-row="@role.Code" @onclick="() => SelectRole(role)">
-                                        <td class="mono small strong">@role.Code</td>
-                                        <td>
-                                            @role.Name.For(Texts.Language)
+                                        @* The code under the name: the narrow list keeps its three columns within its card. *@
+                                        <td class="cell-wrap">
+                                            <span class="strong">@role.Name.For(Texts.Language)</span>
+                                            <span class="cell-sub mono">@role.Code</span>
                                             @if (role.IsBuiltIn)
                                             {
                                                 <span class="cell-sub">@Texts["Admin.BuiltIn"]</span>

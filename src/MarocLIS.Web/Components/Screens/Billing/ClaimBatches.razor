@@ -74,7 +74,8 @@
         </div>
     </div>
 
-    <div class="split split-even">
+    @* The batches over the selected batch's invoices, each the full width: their columns fit at 1366 pixels. *@
+    <div class="stack-cards">
         <div class="card card-flush" data-card="batches">
             <div class="card-heading card-pad">
                 <h2 class="card-title @(Chasing > 0 ? "critical" : null)">@BatchHeading</h2>

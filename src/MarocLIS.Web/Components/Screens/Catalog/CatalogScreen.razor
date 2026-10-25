@@ -303,8 +303,8 @@
                         <tr class="@(row.Id == SelectedAnalysis?.Id ? "is-selected" : null) @RowTones.Class(tone)" data-row="@row.Code"
                             @onclick="() => SelectAnalysis(row)" @ondblclick="EditSelectedAsync">
                             <td>
-                                <span class="cell-name"><span class="mono">@row.Code</span> · @row.Name.For(Texts.Language)</span>
-                                <span class="cell-sub">
+                                <span class="cell-name list-name" title="@($"{row.Code} · {row.Name.For(Texts.Language)}")"><span class="mono">@row.Code</span> · @row.Name.For(Texts.Language)</span>
+                                <span class="cell-sub list-name" title="@AnalysisSubLine(row)">
                                     @* The national act beside the laboratory's own code: two keys, never one for the other. *@
                                     @if (row.NationalActCode is { Length: > 0 } act)
                                     {
@@ -314,7 +314,7 @@
                                 </span>
                                 @if (CatalogScreenRules.Flags(row, Texts.T) is { Count: > 0 } flags)
                                 {
-                                    <span class="cell-sub strong" data-state="flags">@string.Join(" · ", flags)</span>
+                                    <span class="cell-sub strong list-name" data-state="flags" title="@string.Join(" · ", flags)">@string.Join(" · ", flags)</span>
                                 }
                             </td>
                             <td class="cell-action num mono">@(row.CurrentPrice is { } price ? Money.Of(price).Format(Texts.Language, Texts.Culture) : "—")</td>
@@ -324,6 +324,11 @@
             </table>
         </div>
     </aside>;
+
+    /// <summary>The line under an analysis in the list, whole, for its tooltip.</summary>
+    private string AnalysisSubLine(AnalysisRow row) =>
+        string.Join(" · ", new[] { row.NationalActCode, row.DepartmentCode, row.SpecimenTypeName.For(Texts.Language),
+                                   Texts.T("Web.ParameterCount", CatalogScreenRules.ParameterCount(row)) }.Where(p => !string.IsNullOrEmpty(p)));
 
     // ---- The analysis editor ---------------------------------------------------------------------
 
